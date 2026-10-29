@@ -1992,7 +1992,7 @@ var Operations = []Operation{
 }
 
 // ToolPrefix is prepended to every operation name in the MCP adapter (schema/operations.json x-mcp-prefix).
-const ToolPrefix = "commonly_"
+const ToolPrefix = "jm_"
 
 // ToolNames lists the MCP tools in schema order.
-var ToolNames = []string{"commonly_whoami", "commonly_read", "commonly_task_list", "commonly_task_claim", "commonly_task_update", "commonly_evidence", "commonly_post"}
+var ToolNames = []string{"jm_whoami", "jm_read", "jm_task_list", "jm_task_claim", "jm_task_update", "jm_evidence", "jm_post"}

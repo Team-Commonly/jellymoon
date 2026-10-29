@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonly.me/v4/schema/events.json",
+  "$id": "https://jellymoon.dev/schema/v1/events.json",
   "title": "Socket events",
   "description": "Every WebSocket frame, in both directions, is an Envelope. x-variants maps each type to the definition its data must match and the direction it travels: s2c is pod to client, c2s is client to pod, local is daemon to TUI over the unix socket only. The TUI talks to the daemon with this same envelope.",
   "x-rules": [

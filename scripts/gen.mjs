@@ -134,7 +134,7 @@ function rewriteRefs(node, file) {
 }
 const bundle = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://commonly.me/v4/schema/bundle.json',
+  $id: 'https://jellymoon.dev/schema/v1/bundle.json',
   $comment: HEADER,
   $defs: Object.fromEntries(ordered.map(([name, { file, schema }]) => [name, rewriteRefs(schema, file)])),
 };

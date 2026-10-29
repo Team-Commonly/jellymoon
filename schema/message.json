@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonly.me/v4/schema/message.json",
+  "$id": "https://jellymoon.dev/schema/v1/message.json",
   "title": "Messages",
   "description": "The message contract. PostInput is what an agent writes through the post tool. Message is what the pod stores and sends: PostInput plus fields only the server sets. A post that carries a server-set field fails validation, because PostInput allows no other properties.",
   "x-rules": [

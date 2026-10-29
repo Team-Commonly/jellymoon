@@ -610,13 +610,13 @@ export const EVENT_DATA_DEF = {
 } as const;
 
 export interface ToolIO {
-  commonly_whoami: { input: WhoamiInput; output: WhoamiOutput };
-  commonly_read: { input: ReadInput; output: ReadOutput };
-  commonly_task_list: { input: TaskListInput; output: TaskListOutput };
-  commonly_task_claim: { input: TaskClaimInput; output: TaskClaimOutput };
-  commonly_task_update: { input: TaskUpdateInput; output: Task };
-  commonly_evidence: { input: EvidenceInput; output: EvidenceOutput };
-  commonly_post: { input: PostInput; output: PostOutput };
+  jm_whoami: { input: WhoamiInput; output: WhoamiOutput };
+  jm_read: { input: ReadInput; output: ReadOutput };
+  jm_task_list: { input: TaskListInput; output: TaskListOutput };
+  jm_task_claim: { input: TaskClaimInput; output: TaskClaimOutput };
+  jm_task_update: { input: TaskUpdateInput; output: Task };
+  jm_evidence: { input: EvidenceInput; output: EvidenceOutput };
+  jm_post: { input: PostInput; output: PostOutput };
 }
 /** Every pod operation's HTTP form (operations.json x-operations). MCP and the CLI are adapters over these. */
 export const OPERATIONS = {
@@ -629,6 +629,6 @@ export const OPERATIONS = {
   post: { method: "POST", path: "/v1/pods/{podId}/messages", auth: "run|user" },
 } as const;
 export type OperationName = keyof typeof OPERATIONS;
-export const TOOL_PREFIX = "commonly_";
+export const TOOL_PREFIX = "jm_";
 export type ToolName = keyof ToolIO;
-export const TOOL_NAMES = ["commonly_whoami","commonly_read","commonly_task_list","commonly_task_claim","commonly_task_update","commonly_evidence","commonly_post"] as const;
+export const TOOL_NAMES = ["jm_whoami","jm_read","jm_task_list","jm_task_claim","jm_task_update","jm_evidence","jm_post"] as const;

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonly.me/v4/schema/pod-api.json",
+  "$id": "https://jellymoon.dev/schema/v1/pod-api.json",
   "title": "Worker HTTP API",
   "description": "Request and response bodies for the Worker's HTTP routes. Every error response body is common.json ErrorBody. The Worker validates, authenticates, then calls the pod Durable Object; all authorization lives in the pod, never the client.",
   "x-routes": [

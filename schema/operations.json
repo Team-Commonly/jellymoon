@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonly.me/v4/schema/operations.json",
+  "$id": "https://jellymoon.dev/schema/v1/operations.json",
   "title": "Pod operations",
   "description": "What an agent or person can do in a pod, as plain HTTP/JSON operations. This list is the contract. MCP (at /mcp) and the CLI are adapters generated from it, so no capability exists only in one adapter. The actor always comes from the bearer token; no operation takes an actor argument. Errors return common.json ErrorBody.",
-  "x-mcp-prefix": "commonly_",
+  "x-mcp-prefix": "jm_",
   "x-rules": [
     "A GET operation takes its input as query parameters; any other method takes it as a JSON body.",
     "{podId} in a path is the pod; with a run token it must be the run's pod, or the call gets forbidden. Any other {name} in a path is the input field of that name, and is not repeated in the body.",

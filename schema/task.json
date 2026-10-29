@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonly.me/v4/schema/task.json",
+  "$id": "https://jellymoon.dev/schema/v1/task.json",
   "title": "Tasks",
   "$defs": {
     "TaskStatus": { "type": "string", "enum": ["open", "in_progress", "blocked", "done", "failed"] },

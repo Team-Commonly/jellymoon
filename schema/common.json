@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commonly.me/v4/schema/common.json",
+  "$id": "https://jellymoon.dev/schema/v1/common.json",
   "title": "Common types",
   "description": "Ids, actors, timestamps and errors shared by every other schema file. Ids are a type prefix plus a ULID.",
   "$defs": {

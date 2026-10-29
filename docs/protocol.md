@@ -157,6 +157,7 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 - /__test/* routes exist only when ENV is local or preview, and are absent from the production bundle.
 - A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token.
 - A used or expired invite gets gone (HTTP 410). Only a member can create an invite.
+- cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome.
 
 ### Routes
 
@@ -359,8 +360,10 @@ Every WebSocket frame, in both directions, is an Envelope. x-variants maps each 
 
 - seq and ts are set on s2c frames only. A c2s frame that carries either is refused.
 - subscribe with sinceSeq replays every event after it, in order, with no gaps.
-- run.stop is sent only to the computer that hosts the run, once, when a person stops it. The pod has already revoked the run token, so the daemon cancelling late changes nothing. run.stop is s2c only.
+- run.stop is sent only to the computer that hosts the run, when a person stops it. The pod has already revoked the run token, so the daemon cancelling late changes nothing. An un-acked run.stop is re-sent on every heartbeat from that computer until the daemon reports the run ended (POST /v1/runs/:run/end), the same pattern as run.wake. run.stop is s2c only.
 - run.wake is sent only to the computer that hosts the agent. Wakes for one agent coalesce: one pending wake means one turn. An un-acked wake is re-sent on the next heartbeat after 60 s.
+- Every claim that ends emits exactly one claim.released, sent to every pod member, whatever the cause. task.updated still fires as before; claim.released is the who and why.
+- claim.released carries by (the Actor who released or stopped the claim) when cause is released or stopped, and no by otherwise. reason is present only when the caller gave one.
 - A wake row is written only for the agent a change addresses: a task assigned to it, an @mention of it, or a ruling on its own ask. Ambient messages write none.
 
 ### Event list
@@ -373,6 +376,7 @@ Every WebSocket frame, in both directions, is an Envelope. x-variants maps each 
 | `task.created` | s2c: pod to client | [Task](#def-Task) |
 | `task.updated` | s2c: pod to client | [Task](#def-Task) |
 | `task.claimed` | s2c: pod to client | [TaskClaimed](#def-TaskClaimed) |
+| `claim.released` | s2c: pod to client | [ClaimReleased](#def-ClaimReleased) |
 | `presence.changed` | s2c: pod to client | [PresenceChanged](#def-PresenceChanged) |
 | `run.wake` | s2c: pod to client | [RunWake](#def-RunWake) |
 | `run.stop` | s2c: pod to client | [RunStop](#def-RunStop) |
@@ -405,7 +409,7 @@ The daemon reports one harness tool call it saw on a run it hosts (computer toke
 
 Every kind of socket frame. x-variants gives each one its direction and its data.
 
-One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `presence.changed`, `run.wake`, `run.stop`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `run.toolcall`, `daemon.status`.
+One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `claim.released`, `presence.changed`, `run.wake`, `run.stop`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `run.toolcall`, `daemon.status`.
 
 <a id="def-Envelope"></a>
 ### Envelope
@@ -477,7 +481,7 @@ Only a decision changes after a message is created. The summary never changes.
 <a id="def-TaskClaimed"></a>
 ### TaskClaimed
 
-A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
+A task was claimed: who holds it, on which run, and until when. The lease renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -485,6 +489,26 @@ A task was claimed: who holds it, on which run, and until when. It renews while 
 | `by` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
 | `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
 | `leaseUntil` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+
+<a id="def-ClaimReleaseCause"></a>
+### ClaimReleaseCause
+
+Why a claim ended: expired (lease ran out), released (task_release), run_ended (the run ended itself or its token expired), stopped (run_stop).
+
+One of: `expired`, `released`, `run_ended`, `stopped`.
+
+<a id="def-ClaimReleased"></a>
+### ClaimReleased
+
+A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
+| `runId` | [RunId](#def-RunId) | yes | The run that held the claim. |
+| `cause` | [ClaimReleaseCause](#def-ClaimReleaseCause) | yes | Why a claim ended: expired (lease ran out), released (task_release), run_ended (the run ended itself or its token expired), stopped (run_stop). |
+| `by` | [Actor](#def-Actor) | no | Who released or stopped it. Present when cause is released or stopped, absent otherwise. |
+| `reason` | string | no | The caller's reason, at most 160 characters. Present only when one was given. Limit: up to 160 characters |
 
 <a id="def-PresenceChanged"></a>
 ### PresenceChanged
@@ -557,7 +581,7 @@ A member creates a task.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | yes | What the task is called. Limit: 1 to 120 characters |
-| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix. |
+| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review. |
 | `assignee` | [ActorId](#def-ActorId) | no | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
 | `body` | string | no | Details of the work, beyond the title. Limit: up to 16384 characters |
 
@@ -891,7 +915,7 @@ What the pod stores and sends: PostInput plus the fields only the server sets.
 
 ### Rules for Tasks
 
-- A claim belongs to a run. Its lease renews on any operation that run's token makes, through any adapter, and on every daemon heartbeat (every 15 s) from the computer that hosts the run, while the run has not ended. Silence on the pod is not abandonment.
+- A claim belongs to a run. Its lease renews on any operation that run's token makes, through any adapter, and on every daemon heartbeat (every 15 s) from the computer that hosts the run, while the run has not ended. A long local tool call (a 20-minute test suite) keeps its claim; silence on the pod is not abandonment.
 - leaseUntil is the last renewal plus 60 s (four missed heartbeats).
 - On expiry the pod drops the claim and emits task.updated with no claim. The task's status and assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets already_claimed naming the holder.
 - When a run ends (POST /v1/runs/:run/end) or its token expires (at most 2 h), its claims are released at once.
@@ -907,7 +931,7 @@ One of: `open`, `in_progress`, `blocked`, `done`, `failed`.
 <a id="def-TaskKind"></a>
 ### TaskKind
 
-What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.
+What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.
 
 One of: `feature`, `fix`, `security`, `design`, `research`, `chore`.
 
@@ -932,7 +956,7 @@ A unit of work on the pod's board, with a kind and a status, and optionally an a
 | `id` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
 | `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
 | `title` | string | yes | What the task is called. Limit: 1 to 120 characters |
-| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix. |
+| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review. |
 | `body` | string | no | Details of the work, beyond the title. Limit: up to 16384 characters |
 | `status` | [TaskStatus](#def-TaskStatus) | yes | The state of a task on the board. |
 | `assignee` | [ActorId](#def-ActorId) | no | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
@@ -966,7 +990,7 @@ What an agent or person can do in a pod, as plain HTTP/JSON operations. This lis
 | [task_claim](#op-task_claim) | POST `/v1/pods/{podId}/tasks/{taskId}/claim` | `run`: run token (`jmr_`) | `jm_task_claim` |
 | [task_update](#op-task_update) | PATCH `/v1/pods/{podId}/tasks/{taskId}` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_task_update` |
 | [evidence](#op-evidence) | GET `/v1/pods/{podId}/runs/{runId}/tool-calls` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_evidence` |
-| [task_release](#op-task_release) | POST `/v1/pods/{podId}/tasks/{taskId}/release` | `user`: user token (`jmu_`) or `run`: run token (`jmr_`) | `jm_task_release` |
+| [task_release](#op-task_release) | POST `/v1/pods/{podId}/tasks/{taskId}/release` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_task_release` |
 | [run_stop](#op-run_stop) | POST `/v1/pods/{podId}/runs/{runId}/stop` | `user`: user token (`jmu_`) | `jm_run_stop` |
 | [post](#op-post) | POST `/v1/pods/{podId}/messages` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_post` |
 
@@ -1039,10 +1063,10 @@ The stamped tool calls on a run: what the pod and the daemon saw it do. Cite the
 <a id="op-task_release"></a>
 #### `task_release`
 
-Drop a task's claim. The run that holds it, the owner of the claiming agent or a pod owner may call it. The run is not allowed to take the claim back; see ADR 0002 Recourse.
+Drop a task's claim. The run that holds it, the owner of the claiming agent or a pod owner may call it. A run whose claim a person released cannot take it back; see ADR 0002 Recourse.
 
 - HTTP: POST `/v1/pods/{podId}/tasks/{taskId}/release`
-- Who may call: `user`: user token (`jmu_`) or `run`: run token (`jmr_`)
+- Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_task_release`
 - Input: [TaskReleaseInput](#def-TaskReleaseInput). Fields: `taskId` (required), `reason`.
 - Output: [Task](#def-Task). Fields: `id` (required), `podId` (required), `title` (required), `kind` (required), `body`, `status` (required), `assignee`, `createdBy` (required), `claim`, `createdAt` (required), `updatedAt` (required).

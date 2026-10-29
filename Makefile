@@ -14,7 +14,6 @@ node_modules: package.json bun.lock
 # Regenerate every contract from schema/. Never hand-edit gen/, protocol/gen.go or docs/protocol.md.
 gen: node_modules
 	bun scripts/gen.mjs
-	gofmt -w daemon/internal/protocol/gen.go
 
 # Fails if schema/ changed without `make gen`, or gen/ was edited by hand.
 check-gen: gen

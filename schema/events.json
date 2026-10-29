@@ -6,8 +6,10 @@
   "x-rules": [
     "seq and ts are set on s2c frames only. A c2s frame that carries either is refused.",
     "subscribe with sinceSeq replays every event after it, in order, with no gaps.",
-    "run.stop is sent only to the computer that hosts the run, once, when a person stops it. The pod has already revoked the run token, so the daemon cancelling late changes nothing. run.stop is s2c only.",
+    "run.stop is sent only to the computer that hosts the run, when a person stops it. The pod has already revoked the run token, so the daemon cancelling late changes nothing. An un-acked run.stop is re-sent on every heartbeat from that computer until the daemon reports the run ended (POST /v1/runs/:run/end), the same pattern as run.wake. run.stop is s2c only.",
     "run.wake is sent only to the computer that hosts the agent. Wakes for one agent coalesce: one pending wake means one turn. An un-acked wake is re-sent on the next heartbeat after 60 s.",
+    "Every claim that ends emits exactly one claim.released, sent to every pod member, whatever the cause. task.updated still fires as before; claim.released is the who and why.",
+    "claim.released carries by (the Actor who released or stopped the claim) when cause is released or stopped, and no by otherwise. reason is present only when the caller gave one.",
     "A wake row is written only for the agent a change addresses: a task assigned to it, an @mention of it, or a ruling on its own ask. Ambient messages write none."
   ],
   "x-variants": {
@@ -17,6 +19,7 @@
     "task.created": { "dir": "s2c", "data": "task.json#/$defs/Task" },
     "task.updated": { "dir": "s2c", "data": "task.json#/$defs/Task" },
     "task.claimed": { "dir": "s2c", "data": "TaskClaimed" },
+    "claim.released": { "dir": "s2c", "data": "ClaimReleased" },
     "presence.changed": { "dir": "s2c", "data": "PresenceChanged" },
     "run.wake": { "dir": "s2c", "data": "RunWake" },
     "run.stop": { "dir": "s2c", "data": "RunStop" },
@@ -55,6 +58,7 @@
         "task.created",
         "task.updated",
         "task.claimed",
+        "claim.released",
         "presence.changed",
         "run.wake",
         "run.stop",
@@ -125,7 +129,7 @@
       "properties": { "id": { "$ref": "common.json#/$defs/MessageId" }, "decision": { "$ref": "message.json#/$defs/Decision" } }
     },
     "TaskClaimed": {
-      "description": "A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
+      "description": "A task was claimed: who holds it, on which run, and until when. The lease renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId", "by", "runId", "leaseUntil"],
@@ -134,6 +138,24 @@
         "by": { "$ref": "common.json#/$defs/Actor" },
         "runId": { "$ref": "common.json#/$defs/RunId" },
         "leaseUntil": { "$ref": "common.json#/$defs/Timestamp" }
+      }
+    },
+    "ClaimReleaseCause": {
+      "description": "Why a claim ended: expired (lease ran out), released (task_release), run_ended (the run ended itself or its token expired), stopped (run_stop).",
+      "type": "string",
+      "enum": ["expired", "released", "run_ended", "stopped"]
+    },
+    "ClaimReleased": {
+      "description": "A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId", "runId", "cause"],
+      "properties": {
+        "taskId": { "$ref": "common.json#/$defs/TaskId" },
+        "runId": { "description": "The run that held the claim.", "$ref": "common.json#/$defs/RunId" },
+        "cause": { "$ref": "#/$defs/ClaimReleaseCause" },
+        "by": { "description": "Who released or stopped it. Present when cause is released or stopped, absent otherwise.", "$ref": "common.json#/$defs/Actor" },
+        "reason": { "description": "The caller's reason, at most 160 characters. Present only when one was given.", "type": "string", "maxLength": 160 }
       }
     },
     "PresenceChanged": {

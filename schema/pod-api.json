@@ -19,7 +19,8 @@
   "x-rules": [
     "/__test/* routes exist only when ENV is local or preview, and are absent from the production bundle.",
     "A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token.",
-    "A used or expired invite gets gone (HTTP 410). Only a member can create an invite."
+    "A used or expired invite gets gone (HTTP 410). Only a member can create an invite.",
+    "cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome."
   ],
   "$defs": {
     "DeviceStartResponse": {

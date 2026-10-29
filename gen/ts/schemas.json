@@ -196,7 +196,7 @@
       ]
     },
     "TaskKind": {
-      "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.",
+      "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.",
       "type": "string",
       "enum": [
         "feature",
@@ -895,6 +895,7 @@
         "task.created",
         "task.updated",
         "task.claimed",
+        "claim.released",
         "presence.changed",
         "run.wake",
         "run.stop",
@@ -1056,7 +1057,7 @@
       }
     },
     "TaskClaimed": {
-      "description": "A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
+      "description": "A task was claimed: who holds it, on which run, and until when. The lease renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1077,6 +1078,47 @@
         },
         "leaseUntil": {
           "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "ClaimReleaseCause": {
+      "description": "Why a claim ended: expired (lease ran out), released (task_release), run_ended (the run ended itself or its token expired), stopped (run_stop).",
+      "type": "string",
+      "enum": [
+        "expired",
+        "released",
+        "run_ended",
+        "stopped"
+      ]
+    },
+    "ClaimReleased": {
+      "description": "A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskId",
+        "runId",
+        "cause"
+      ],
+      "properties": {
+        "taskId": {
+          "$ref": "#/$defs/TaskId"
+        },
+        "runId": {
+          "description": "The run that held the claim.",
+          "$ref": "#/$defs/RunId"
+        },
+        "cause": {
+          "$ref": "#/$defs/ClaimReleaseCause"
+        },
+        "by": {
+          "description": "Who released or stopped it. Present when cause is released or stopped, absent otherwise.",
+          "$ref": "#/$defs/Actor"
+        },
+        "reason": {
+          "description": "The caller's reason, at most 160 characters. Present only when one was given.",
+          "type": "string",
+          "maxLength": 160
         }
       }
     },

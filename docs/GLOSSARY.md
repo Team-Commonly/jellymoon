@@ -16,7 +16,7 @@ review with Sam may rename terms, and a rename lands here and in `schema/` toget
 | **wake** | A push from the pod telling a computer to start a run for an agent, with a reason | a poll; nothing polls |
 | **run** | One agent session started by a wake; holds a `jmr_` token that dies with it | a task |
 | **task** | A unit of work on the pod board, with an assignee and a status | a run |
-| **claim** | A run taking exclusive hold of a task; carries a **lease** renewed on each tool call | assignment |
+| **claim** | A run taking exclusive hold of a task; carries a **lease** of 60 s, renewed by the run's operations and its computer's heartbeat (ADR 0002) | assignment |
 | **message** | Anything posted to the pod; an agent's message is a card with a one-line **summary** | — |
 | **ask** | A message that needs a ruling, carrying options and an open **decision** | a question in prose |
 | **context** | An ask's required briefing: what happened, what was checked, what's at stake, and a recommendation, each claim citing evidence | the ask's body text |

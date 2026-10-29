@@ -451,7 +451,7 @@ button.g:hover{background:var(--concrete)}
 <dialog id="dlg-receipt" aria-labelledby="rc-title"><div id="rc-body"></div></dialog>
 <dialog id="dlg-redirect" aria-labelledby="rd-title">
   <form method="dialog" id="rd-form">
-    <div class="dh"><div><h3 id="rd-title">Redirect Wren mid-run</h3><p>Lands at Wren's next tool call; the lease renews with your note attached.</p></div><button class="btn btn-s" value="cancel" type="submit" formnovalidate>Close</button></div>
+    <div class="dh"><div><h3 id="rd-title">Redirect Wren mid-run</h3><p>Lands at Wren's next tool call; the claim's 60 s lease renews on the daemon heartbeat, not on your note.</p></div><button class="btn btn-s" value="cancel" type="submit" formnovalidate>Close</button></div>
     <div class="db">
       <p class="claimed" id="rd-now"></p>
       <fieldset class="preset" style="border:0;padding:0;margin:0"><legend class="sr">Redirect</legend>
@@ -485,7 +485,7 @@ const RC={
   r1189:{title:'Otto · ask on PR #418',line:'read 6 files · 9 tool calls · 4m 02s · review of #418',run:'cmr_31d0…7c02',agent:'otto',wake:'handoff from Wren (seq 1186)',claim:'T-40 review · lease held while waiting on ruling',win:'10:15:40 → 10:19:42',
     tools:[['Read','PR #418 diff · 6 files'],['Bash','npm test -- invoices → exit 0 · 212 passed'],['Bash','npm run pdf:snap → 3 snapshots changed'],['Read','billing/money.ts roundHalfEven'],['gh','pr review #418 --comment']],
     says:['“Three PDF snapshots moved by one cent.” Matches pdf:snap output above.']},
-  r1191:{title:'Wren · live run on T-43',line:'',run:'cmr_b9e0…12aa',agent:'wren',wake:'task.assigned by Lily Shen (seq 1183)',claim:'T-43 · lease live, renewed each tool call',win:'10:16:05 → now',
+  r1191:{title:'Wren · live run on T-43',line:'',run:'cmr_b9e0…12aa',agent:'wren',wake:'task.assigned by Lily Shen (seq 1183)',claim:'T-43 · lease live, renewed by heartbeat (60 s)',win:'10:16:05 → now',
     tools:[['Read','billing/export/csv.ts'],['Bash','npm test -- export.large → timeout at 31s'],['Grep','"buildRows" · 2 hits'],['Read','billing/export/rows.ts'],['Edit','billing/export/rows.ts'],['Bash','npm test -- export.large → timeout at 29s'],['Read','node_modules/csv-stringify/README'],['Edit','billing/export/chunk.ts (new)'],['Bash','npm test -- export.chunk → 4 passed']],
     says:['Plan and step labels are agent-reported.']}
 };
@@ -1173,7 +1173,7 @@ document.addEventListener('keydown',e=>{
   else if(k==='j'||k==='k'){e.preventDefault();const list=[...$('#proto-'+cur).querySelectorAll('[data-nav]')];if(!list.length)return;let i=list.indexOf(document.activeElement);i=i<0?0:Math.min(list.length-1,Math.max(0,i+(k==='j'?1:-1)));list[i].focus();list[i].scrollIntoView({block:'nearest'})}
 });
 
-/* live tool-call ticker: lease renews on each tool call */
+/* live tool-call ticker: the lease renews on the daemon heartbeat, 60 s (ADR 0002) */
 setInterval(()=>{S.forEach((st,i)=>{if(st.wren.state!=='run'||st.wren.tools>=48)return;const nx=LIVE[(st.wren.tools-9)%LIVE.length];st.wren.tools++;st.wren.live.push(nx);
   const host=$('#proto-'+i);if(host)host.querySelectorAll('[data-live="wt"]').forEach(n=>n.textContent=st.wren.tools)})},4000);
 </script>

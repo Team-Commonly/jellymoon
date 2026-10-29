@@ -208,7 +208,7 @@ func (x TaskStatus) Valid() bool {
 	return false
 }
 
-// What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.
+// What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.
 type TaskKind string
 
 const (
@@ -841,6 +841,7 @@ const (
 	EventTypeTaskCreated       EventType = "task.created"
 	EventTypeTaskUpdated       EventType = "task.updated"
 	EventTypeTaskClaimed       EventType = "task.claimed"
+	EventTypeClaimReleased     EventType = "claim.released"
 	EventTypePresenceChanged   EventType = "presence.changed"
 	EventTypeRunWake           EventType = "run.wake"
 	EventTypeRunStop           EventType = "run.stop"
@@ -858,7 +859,7 @@ const (
 // Valid reports whether x is one of the schema's values.
 func (x EventType) Valid() bool {
 	switch x {
-	case EventTypeHello, EventTypeMessageCreated, EventTypeMessageUpdated, EventTypeTaskCreated, EventTypeTaskUpdated, EventTypeTaskClaimed, EventTypePresenceChanged, EventTypeRunWake, EventTypeRunStop, EventTypeError, EventTypeSubscribe, EventTypeMessagePost, EventTypeTaskCreate, EventTypeDecisionRule, EventTypePresenceHeartbeat, EventTypeWakeAck, EventTypeRunToolcall, EventTypeDaemonStatus:
+	case EventTypeHello, EventTypeMessageCreated, EventTypeMessageUpdated, EventTypeTaskCreated, EventTypeTaskUpdated, EventTypeTaskClaimed, EventTypeClaimReleased, EventTypePresenceChanged, EventTypeRunWake, EventTypeRunStop, EventTypeError, EventTypeSubscribe, EventTypeMessagePost, EventTypeTaskCreate, EventTypeDecisionRule, EventTypePresenceHeartbeat, EventTypeWakeAck, EventTypeRunToolcall, EventTypeDaemonStatus:
 		return true
 	}
 	return false
@@ -1004,7 +1005,7 @@ func (x *MessageUpdated) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
+// A task was claimed: who holds it, on which run, and until when. The lease renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 type TaskClaimed struct {
 	TaskID     TaskID    `json:"taskId"`
 	By         Actor     `json:"by"`
@@ -1024,6 +1025,52 @@ func (x *TaskClaimed) UnmarshalJSON(b []byte) error {
 		}
 	}
 	type plain TaskClaimed
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// Why a claim ended: expired (lease ran out), released (task_release), run_ended (the run ended itself or its token expired), stopped (run_stop).
+type ClaimReleaseCause string
+
+const (
+	ClaimReleaseCauseExpired  ClaimReleaseCause = "expired"
+	ClaimReleaseCauseReleased ClaimReleaseCause = "released"
+	ClaimReleaseCauseRunEnded ClaimReleaseCause = "run_ended"
+	ClaimReleaseCauseStopped  ClaimReleaseCause = "stopped"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x ClaimReleaseCause) Valid() bool {
+	switch x {
+	case ClaimReleaseCauseExpired, ClaimReleaseCauseReleased, ClaimReleaseCauseRunEnded, ClaimReleaseCauseStopped:
+		return true
+	}
+	return false
+}
+
+// A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause.
+type ClaimReleased struct {
+	TaskID TaskID `json:"taskId"`
+	// The run that held the claim.
+	RunID RunID             `json:"runId"`
+	Cause ClaimReleaseCause `json:"cause"`
+	// Who released or stopped it. Present when cause is released or stopped, absent otherwise.
+	By *Actor `json:"by,omitempty"`
+	// The caller's reason, at most 160 characters. Present only when one was given.
+	Reason *string `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ClaimReleased) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"taskId", "runId", "cause"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ClaimReleased: missing required field %q", k)
+		}
+	}
+	type plain ClaimReleased
 	return json.Unmarshal(b, (*plain)(x))
 }
 
@@ -2024,6 +2071,7 @@ var Registry = map[string]func() any{
 	"Hello":                    func() any { return new(Hello) },
 	"MessageUpdated":           func() any { return new(MessageUpdated) },
 	"TaskClaimed":              func() any { return new(TaskClaimed) },
+	"ClaimReleased":            func() any { return new(ClaimReleased) },
 	"PresenceChanged":          func() any { return new(PresenceChanged) },
 	"WakeRefs":                 func() any { return new(WakeRefs) },
 	"RunWake":                  func() any { return new(RunWake) },
@@ -2077,6 +2125,7 @@ var EventDirection = map[EventType]string{
 	EventTypeTaskCreated:       "s2c",
 	EventTypeTaskUpdated:       "s2c",
 	EventTypeTaskClaimed:       "s2c",
+	EventTypeClaimReleased:     "s2c",
 	EventTypePresenceChanged:   "s2c",
 	EventTypeRunWake:           "s2c",
 	EventTypeRunStop:           "s2c",
@@ -2126,6 +2175,12 @@ func DecodeEventData(t EventType, raw json.RawMessage) (any, error) {
 		return &v, nil
 	case EventTypeTaskClaimed:
 		var v TaskClaimed
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s: %w", t, err)
+		}
+		return &v, nil
+	case EventTypeClaimReleased:
+		var v ClaimReleased
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return nil, fmt.Errorf("%s: %w", t, err)
 		}
@@ -2219,7 +2274,7 @@ var Operations = []Operation{
 	{"task_claim", "POST", "/v1/pods/{podId}/tasks/{taskId}/claim", "run"},
 	{"task_update", "PATCH", "/v1/pods/{podId}/tasks/{taskId}", "run|user"},
 	{"evidence", "GET", "/v1/pods/{podId}/runs/{runId}/tool-calls", "run|user"},
-	{"task_release", "POST", "/v1/pods/{podId}/tasks/{taskId}/release", "user|run"},
+	{"task_release", "POST", "/v1/pods/{podId}/tasks/{taskId}/release", "run|user"},
 	{"run_stop", "POST", "/v1/pods/{podId}/runs/{runId}/stop", "user"},
 	{"post", "POST", "/v1/pods/{podId}/messages", "run|user"},
 }

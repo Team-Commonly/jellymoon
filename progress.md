@@ -4,6 +4,17 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · claim.released and cleanup (unit P05)
+- **Changed:** s2c event `claim.released` (`ClaimReleased`, `ClaimReleaseCause`: expired, released, run_ended,
+  stopped) with fixtures; ADR 0002 names the cause each path emits. Closed 12 verifier findings: glossary and
+  three `ux-concepts.html` lease lines, gen formats Go in memory (a parse failure writes nothing, `gofmt -w`
+  step gone, `write` is now `queueOutput`), TaskKind and lease-rule text restored, `run.stop` re-send, cancelled
+  is final after `run/end`, task_release auth `run|user`.
+- **Feature text:** F10 gained one step (claim.released per way a claim ends). No other feature changed.
+- **Evidence:** `make gen` twice is clean; `make preflight` green. Not enforced by schema: `by` required for
+  released/stopped (no oneOf); the Worker tests it.
+- **Next:** F02. **Open:** `ux-concepts.html` still says "lease renewed 23x" (line 482) and in a JS reply (1053).
+
 ## 2026-10-29 · human release and stop (unit P04)
 - **Changed:** operations `task_release` and `run_stop`, s2c event `run.stop`, their input/output defs and
   fixtures; `x-rules` in `operations.json`, `events.json` and `task.json` say who may call each and that a

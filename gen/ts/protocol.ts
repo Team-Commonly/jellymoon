@@ -88,7 +88,7 @@ export type RunToken = string;
 export type TaskStatus = "open" | "in_progress" | "blocked" | "done" | "failed";
 export const TaskStatusValues = ["open","in_progress","blocked","done","failed"] as const;
 
-/** What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix. */
+/** What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review. */
 export type TaskKind = "feature" | "fix" | "security" | "design" | "research" | "chore";
 export const TaskKindValues = ["feature","fix","security","design","research","chore"] as const;
 
@@ -317,8 +317,8 @@ export interface RunToolCall {
 }
 
 /** Every kind of socket frame. x-variants gives each one its direction and its data. */
-export type EventType = "hello" | "message.created" | "message.updated" | "task.created" | "task.updated" | "task.claimed" | "presence.changed" | "run.wake" | "run.stop" | "error" | "subscribe" | "message.post" | "task.create" | "decision.rule" | "presence.heartbeat" | "wake.ack" | "run.toolcall" | "daemon.status";
-export const EventTypeValues = ["hello","message.created","message.updated","task.created","task.updated","task.claimed","presence.changed","run.wake","run.stop","error","subscribe","message.post","task.create","decision.rule","presence.heartbeat","wake.ack","run.toolcall","daemon.status"] as const;
+export type EventType = "hello" | "message.created" | "message.updated" | "task.created" | "task.updated" | "task.claimed" | "claim.released" | "presence.changed" | "run.wake" | "run.stop" | "error" | "subscribe" | "message.post" | "task.create" | "decision.rule" | "presence.heartbeat" | "wake.ack" | "run.toolcall" | "daemon.status";
+export const EventTypeValues = ["hello","message.created","message.updated","task.created","task.updated","task.claimed","claim.released","presence.changed","run.wake","run.stop","error","subscribe","message.post","task.create","decision.rule","presence.heartbeat","wake.ack","run.toolcall","daemon.status"] as const;
 
 /** The frame every socket message is sent in. */
 export interface Envelope {
@@ -371,12 +371,28 @@ export interface MessageUpdated {
   decision: Decision;
 }
 
-/** A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002. */
+/** A task was claimed: who holds it, on which run, and until when. The lease renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002. */
 export interface TaskClaimed {
   taskId: TaskId;
   by: Actor;
   runId: RunId;
   leaseUntil: Timestamp;
+}
+
+/** Why a claim ended: expired (lease ran out), released (task_release), run_ended (the run ended itself or its token expired), stopped (run_stop). */
+export type ClaimReleaseCause = "expired" | "released" | "run_ended" | "stopped";
+export const ClaimReleaseCauseValues = ["expired","released","run_ended","stopped"] as const;
+
+/** A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause. */
+export interface ClaimReleased {
+  taskId: TaskId;
+  /** The run that held the claim. */
+  runId: RunId;
+  cause: ClaimReleaseCause;
+  /** Who released or stopped it. Present when cause is released or stopped, absent otherwise. */
+  by?: Actor;
+  /** The caller's reason, at most 160 characters. Present only when one was given. */
+  reason?: string;
 }
 
 /** A member's presence changed. */
@@ -712,6 +728,7 @@ export interface EventDataMap {
   "task.created": Task;
   "task.updated": Task;
   "task.claimed": TaskClaimed;
+  "claim.released": ClaimReleased;
   "presence.changed": PresenceChanged;
   "run.wake": RunWake;
   "run.stop": RunStop;
@@ -736,6 +753,7 @@ export const EVENT_DIRECTION = {
   "task.created": "s2c",
   "task.updated": "s2c",
   "task.claimed": "s2c",
+  "claim.released": "s2c",
   "presence.changed": "s2c",
   "run.wake": "s2c",
   "run.stop": "s2c",
@@ -757,6 +775,7 @@ export const EVENT_DATA_DEF = {
   "task.created": "Task",
   "task.updated": "Task",
   "task.claimed": "TaskClaimed",
+  "claim.released": "ClaimReleased",
   "presence.changed": "PresenceChanged",
   "run.wake": "RunWake",
   "run.stop": "RunStop",
@@ -790,7 +809,7 @@ export const OPERATIONS = {
   task_claim: { method: "POST", path: "/v1/pods/{podId}/tasks/{taskId}/claim", auth: "run" },
   task_update: { method: "PATCH", path: "/v1/pods/{podId}/tasks/{taskId}", auth: "run|user" },
   evidence: { method: "GET", path: "/v1/pods/{podId}/runs/{runId}/tool-calls", auth: "run|user" },
-  task_release: { method: "POST", path: "/v1/pods/{podId}/tasks/{taskId}/release", auth: "user|run" },
+  task_release: { method: "POST", path: "/v1/pods/{podId}/tasks/{taskId}/release", auth: "run|user" },
   run_stop: { method: "POST", path: "/v1/pods/{podId}/runs/{runId}/stop", auth: "user" },
   post: { method: "POST", path: "/v1/pods/{podId}/messages", auth: "run|user" },
 } as const;

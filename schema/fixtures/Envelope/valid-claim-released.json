@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "type": "claim.released",
+  "seq": 106,
+  "ts": "2026-10-29T09:20:00Z",
+  "podId": "pod_01JCZK7Q8XG4M2B9V5T3W6RH01",
+  "data": {
+    "taskId": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH01",
+    "runId": "run_01JCZK7Q8XG4M2B9V5T3W6RH01",
+    "cause": "stopped",
+    "by": {
+      "kind": "human",
+      "id": "usr_01JCZK7Q8XG4M2B9V5T3W6RH01",
+      "displayName": "Sam"
+    },
+    "reason": "stuck for 40 minutes"
+  }
+}

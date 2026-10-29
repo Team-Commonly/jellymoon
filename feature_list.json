@@ -128,7 +128,8 @@
         "members receive task.claimed with leaseUntil",
         "an operation on the winning run, or a heartbeat from its computer, moves leaseUntil forward",
         "with the daemon stopped, the claim is dropped 60 s after the last renewal and members receive task.updated with no claim",
-        "the claiming agent's owner releases the claim; the holding run's next operation on the task gets forbidden"
+        "the claiming agent's owner releases the claim; the holding run's next operation on the task gets forbidden",
+        "each way a claim ends (expiry, release, run end, stop) sends members one claim.released with that cause"
       ],
       "test": "go test ./e2e -run TestF10",
       "passes": false

@@ -5,10 +5,11 @@
 //   gen/ts/tools.json             the MCP adapter's tool list: one tool per operation, schemas fully inlined
 //   docs/protocol.md              the human-readable protocol reference (scripts/protocol-doc.mjs)
 //   daemon/internal/protocol/gen.go   Go structs, enums, required-key checks, event decode
-// Deterministic: same schema in, same bytes out. `make gen` runs gofmt on the Go file afterwards.
+// Deterministic: same schema in, same bytes out. The Go output is formatted with gofmt in memory before anything is written.
 // All-or-nothing: every check runs before the first file is written, so a failing run changes nothing.
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { renderProtocol } from './protocol-doc.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -274,11 +275,17 @@ go += `// ToolNames lists the MCP tools in schema order.\nvar ToolNames = []stri
 
 // ---------- render everything, check, then write ----------
 const outputs = [];
-const write = (rel, content) => outputs.push([rel, content]);
-write('gen/ts/protocol.ts', ts);
-write('gen/ts/schemas.json', JSON.stringify(bundle, null, 2) + '\n');
-write('gen/ts/tools.json', JSON.stringify({ $comment: HEADER, tools: mcpTools }, null, 2) + '\n');
-write('daemon/internal/protocol/gen.go', go);
+const queueOutput = (rel, content) => outputs.push([rel, content]);
+queueOutput('gen/ts/protocol.ts', ts);
+queueOutput('gen/ts/schemas.json', JSON.stringify(bundle, null, 2) + '\n');
+queueOutput('gen/ts/tools.json', JSON.stringify({ $comment: HEADER, tools: mcpTools }, null, 2) + '\n');
+// gofmt reads stdin and writes stdout. A Go file that does not parse fails here, before any write.
+// The Go toolchain's formatter (pinned by .tool-versions); not an npm binary, so knip must not list it.
+const GOFMT = 'gofmt';
+const gofmt = spawnSync(GOFMT, [], { input: go, encoding: 'utf8' });
+if (gofmt.error) fail(`cannot run gofmt: ${gofmt.error.message}`);
+if (gofmt.status !== 0) fail(`gofmt rejected the generated Go; nothing was written:\n${gofmt.stderr}`);
+queueOutput('daemon/internal/protocol/gen.go', gofmt.stdout);
 const protocolDoc = renderProtocol({ docs, defs, eventTypes, variants, variantData, operations, prefix: TOOL_PREFIX });
 // Every def is rendered exactly once: the anchors in the doc must be the defs, no more, no fewer, none twice.
 const anchors = [...protocolDoc.matchAll(/id="def-([A-Za-z0-9]+)"/g)].map((m) => m[1]);
@@ -289,7 +296,7 @@ const doubled = [...anchorSet].filter((n) => anchors.indexOf(n) !== anchors.last
 if (missingAnchors.length || extraAnchors.length || doubled.length) {
   fail(`docs/protocol.md anchors differ from the defs: missing [${missingAnchors}], unknown [${extraAnchors}], rendered twice [${doubled}]`);
 }
-write('docs/protocol.md', protocolDoc);
+queueOutput('docs/protocol.md', protocolDoc);
 for (const [rel, content] of outputs) {
   const p = path.join(ROOT, rel);
   fs.mkdirSync(path.dirname(p), { recursive: true });

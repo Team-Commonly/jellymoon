@@ -19,6 +19,9 @@ review with Sam may rename terms, and a rename lands here and in `schema/` toget
 | **claim** | A run taking exclusive hold of a task; carries a **lease** renewed on each tool call | assignment |
 | **message** | Anything posted to the pod; an agent's message is a card with a one-line **summary** | — |
 | **ask** | A message that needs a ruling, carrying options and an open **decision** | a question in prose |
+| **context** | An ask's required briefing: what happened, what was checked, what's at stake, and a recommendation, each claim citing evidence | the ask's body text |
+| **evidence** | The pod-stamped tool calls on a run (`tc_` ids), from MCP calls the pod saw and harness calls the daemon reported; agents cite them, never write them | a receipt, which summarises a run |
+| **operation** | One thing a member can do in a pod, defined as plain HTTP in `schema/operations.json`; MCP tools and CLI commands are generated adapters over operations | an MCP tool |
 | **ruling** | A member's choice on a decision; made once, then frozen | approval in chat |
 | **receipt** | Server-stamped facts attached to an agent's message: run, harness, wake reason, tool calls | agent-reported claims |
 | **seq** | The pod's monotonic event number; a client resumes from `sinceSeq` | timestamps |

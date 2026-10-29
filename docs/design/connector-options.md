@@ -26,6 +26,34 @@ v3 already contains each piece, in about 3,000 lines across `toolBrokerService.t
 3. **The gate:** classify each call from the pin, park writes as a decision card, release exactly one call on approval, and write the server-stamped receipt.
 4. **Grant model** (who may use which connection in which pod).
 
+### Operations, not MCP
+A founder ruling after this paper was first written: the protocol is plain HTTP operations, and MCP
+is one adapter over them, so the connector layer must not be MCP-shaped either. An upstream is
+modelled as **a set of operations**, whatever it speaks:
+
+| Upstream speaks | How its operations are listed | How one is called |
+|---|---|---|
+| Remote MCP (Linear) | `tools/list` | `tools/call` |
+| OpenAPI | the spec's `operationId`s | HTTP, per the spec |
+| Plain REST, no spec (or a spec too large to pin whole) | a hand-written list in the pin file | HTTP |
+
+The vault, the catalogue pin, the drift check, the write gate and the receipt all key on
+`(connection, operationName, argsHash)` and never on a protocol. Each protocol is one adapter file
+with two functions (`list`, `call`). Linear's remote MCP stays the slice upstream because it is the
+fastest path to a working read, not because the layer depends on MCP.
+
+**The same gate, over plain REST (GitHub):** a pod connects GitHub with a fine-grained token held in
+the DO. The pin file lists the operations the pod allows, e.g. `issues.list` as
+`GET /repos/{owner}/{repo}/issues` (read) and `issues.create` as `POST /repos/{owner}/{repo}/issues`
+(write). The agent calls our `connector_call` operation (or its MCP form) with `issues.create` and
+the arguments. The gate classifies it from the pin as a write, parks `{runId, operation, argsHash}`,
+and posts a decision card with the exact arguments. On approval the DO makes that one HTTP call
+with the token and writes the receipt. Nothing in that path knows MCP exists.
+
+**Agents SDK lock-in check:** the SDK is used only inside the MCP adapter file (its OAuth client and
+`tools/list`/`tools/call`). The vault, pin, gate and receipts are ours. Swapping or dropping the
+SDK touches that one file, and a REST upstream never loads it.
+
 ## 2. The Linear READ path under this choice
 
 1. A pod admin clicks Connect Linear. The pod's DO (one connection object per pod) calls `addMcpServer("linear", "https://mcp.linear.app/mcp/readonly")`. The vendor runs OAuth 2.1 with dynamic client registration ([Linear docs](https://linear.app/docs/mcp)); the Agents SDK handles the redirect and callback.
@@ -67,7 +95,7 @@ v3 already contains each piece, in about 3,000 lines across `toolBrokerService.t
 
 ## 5. Risks
 
-1. **Agents SDK churn.** It is 0.x (npm 0.31.0) and `McpAgent` was deprecated within about a year. Pin the version and keep the gate behind our own interface so a client swap touches one file.
+1. **Agents SDK churn.** It is 0.x (npm 0.31.0) and `McpAgent` was deprecated within about a year. Pin the version and keep it inside the MCP adapter file: the gate, vault and pin are ours and protocol-neutral (see "Operations, not MCP"), so a client swap touches one file.
 2. **Tool drift and silent zero tools.** v3 bit on both: a grant with `audience: []` surfaced zero tools (observed on v3), and Linear added parameters that made calls fail until re-pinned. Reject empty audiences at grant time, assert a non-empty `tools/list` after connect, and pass the vendor's real error through.
 3. **Token refresh and OAuth edge cases in a DO.** Concurrent refresh, DCR registration tied to the callback host (v3 kept a per-host registry), and the missing workspace picker on Linear's consent.
 4. **Prompt injection in results.** Linear issue text flows to the agent. The read path is safe from writes only because of `/mcp/readonly`; the write path needs the gate to key on args, not on the agent's explanation.

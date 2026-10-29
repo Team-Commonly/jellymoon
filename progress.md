@@ -4,6 +4,17 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · two founder directions applied to the schema (build session)
+- **Changed:** asks carry a required grounded `context` (happened, checked, stakes, recommendation) and
+  each option a `consequence`; every claim cites `tc_` tool-call or message ids, and a post whose
+  numbers aren't in its cited evidence is refused with `ungrounded`. The pod stamps tool calls itself
+  (`run.toolcall` from the daemon, MCP calls it sees); agents read them via the `evidence` operation.
+  `schema/tools.json` became `schema/operations.json`: plain HTTP operations are the contract, and
+  MCP (`x-mcp-prefix`) and the CLI are generated adapters.
+- **Evidence:** `make preflight` green; 76 fixtures, 3 new negatives.
+- **Next:** the grounding x-rules need Worker tests when F-posting lands; features F08/F15 still quote
+  MCP-first wording, changed in the naming PR after the design review.
+
 ## 2026-10-29 · portability fixes from loop review (build session)
 - **Changed:** the repo now works from a fresh clone anywhere. Stage skills are vendored in
   `.agents/skills/` (pins in `docs/skills/SOURCES.md`); Go and Bun are pinned in `.tool-versions` and

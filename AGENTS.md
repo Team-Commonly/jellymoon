@@ -2,7 +2,7 @@
 
 A multiplayer harness for the agents people already use: a pod where humans and their Claude Code or Codex
 agents share tasks, ask for decisions and leave receipts. Cloudflare Workers with one Durable Object per pod;
-a headless Go daemon runs local agents over ACP; agents use pod tools through one remote MCP server. The main
+a headless Go daemon runs local agents over ACP; agents use pod operations over HTTP; MCP and the CLI are generated adapters. The main
 check is an API-level e2e. Terms are defined in `docs/GLOSSARY.md`; use them exactly.
 
 ## Start every session here
@@ -45,6 +45,6 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 
 ## Map
 - `schema/` wire shapes; `schema/fixtures/` examples every test loads. `gen/`, `daemon/internal/protocol/gen.go`
-  are generated. `worker/` Worker, PodDO, MCP, auth. `daemon/` Go daemon, ACP. `e2e/` slice tests.
+  are generated. `worker/` Worker, PodDO, the operations and their MCP adapter, auth. `daemon/` Go daemon, ACP. `e2e/` slice tests.
 - `docs/INDEX.md` lists every doc. Go and Bun are pinned in `.tool-versions`; `init.sh` installs them into
   `.tools/` (repo-local). Never install anything globally. No machine-local paths (`make portable`).

@@ -6,8 +6,19 @@ this. This paper lists what the schema already decides and what is still open, e
 recommendation.
 
 ## Decided in the schema
-- **One contract.** Every shape is defined once in `schema/`. TypeScript, Go and the MCP tool list
-  are generated from it, and CI fails if they drift.
+- **One contract, over HTTP.** Every shape is defined once in `schema/`. What an agent or person can
+  do is a list of plain HTTP/JSON operations (`schema/operations.json`: name, method, path, auth,
+  input, output). The MCP server and the CLI are adapters generated from that list, so no capability
+  exists only in MCP, and any other client can call the operations directly. TypeScript, Go and the
+  MCP tool list are generated, and CI fails if they drift.
+- **Asks carry their context.** Work happens while people are away, so an `ask` must let someone
+  rule in about 30 seconds without having been there. Its required `context` holds what happened,
+  what was already checked, what is at stake, and a recommendation; each option states its
+  consequence. **Every claim cites stamped evidence:** a tool-call id or a message id. The pod stamps
+  tool calls itself (MCP calls it sees, and harness calls the daemon reports over `run.toolcall`);
+  agents read them through the `evidence` operation and never write them. A post whose claim cites
+  nothing, or whose numbers don't appear in what it cites, is refused with `ungrounded`. The model
+  arranges and summarizes evidence; it never asserts an unstamped fact.
 - **Who did what comes from the server.** An actor always comes from the bearer token; no tool
   takes an actor argument. Every agent post carries a receipt (run, agent, computer, harness, wake
   reason, tool calls) stamped by the pod from the run record. An agent can't write any of it.
@@ -25,7 +36,7 @@ recommendation.
 
 | # | Question | Recommendation | Who decides |
 |---|---|---|---|
-| 1 | MCP tool prefix | `jm_` (e.g. `jm_post`, `jm_task_claim`) | owner, at this review |
+| 1 | MCP adapter prefix | `jm_` (e.g. `jm_post`, `jm_task_claim`); MCP naming only | owner, at this review |
 | 2 | Token prefixes (`cmu_`, `cmc_`, `cmr_`) | Rename to `jmu_`, `jmc_`, `jmr_` now | owner, at this review |
 | 3 | Schema `$id` host (`commonly.me/v4/schema/...`) | `https://jellymoon.dev/schema/v1/...` | owner, at this review |
 | 4 | Task kinds | `feature`, `fix`, `security`, `design`, `research`, `chore` (added) | owner asked; set |
@@ -36,7 +47,8 @@ recommendation.
 an empty prefix would work in Claude Code and Codex. A short prefix still earns its two characters.
 Transcripts, receipts and agent prompts say "call `jm_post`", and a bare `post` or `read` is
 ambiguous there and in any client that flattens names. The prefix is one constant
-(`x-tool-prefix` in `schema/tools.json`), so this is a single edit plus `make gen`.
+(`x-mcp-prefix` in `schema/operations.json`), so this is a single edit plus `make gen`. It names
+MCP tools only; the operations themselves are unprefixed (`post` at `POST /v1/pods/{podId}/messages`).
 The binary is decided: `jellymoon`, alias `jm`. Features F08 and F15 change their
 wording in the same PR as the prefix.
 
@@ -47,7 +59,7 @@ migration once any token exists.
 **3. Schema `$id` and hostnames.** The ids name a host. They never need to resolve, but they should be
 a host we control. We now own jellymoon.dev and jellymoon.ai. The plan, with nothing public until the
 name is cleared:
-- `api.jellymoon.dev`: the Worker (HTTP routes, the pod WebSocket, and the one remote MCP server at `/mcp`).
+- `api.jellymoon.dev`: the Worker (the HTTP operations, the pod WebSocket, and the MCP adapter at `/mcp`).
 - `app.jellymoon.dev`: the web client.
 - PR previews stay on Cloudflare's own preview URLs, so a preview never needs DNS.
 - jellymoon.ai is held and will redirect to jellymoon.dev.

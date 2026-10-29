@@ -63,9 +63,10 @@ code{font-family:var(--mono);font-size:.88em;background:var(--concrete);padding:
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:14px}
 .ex{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:2px 8px;border:1px dashed var(--ink-3);color:var(--ink-2);background:var(--enamel)}
 .ex-banner{display:block;margin-top:12px;padding:8px 12px;font-family:var(--mono);font-size:12px;border:1px dashed var(--ink-3);background:var(--enamel);color:var(--ink-2)}
-.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:16px 0 0;position:sticky;top:0;z-index:5;background:var(--concrete);padding:8px 0}
-.tab{min-height:44px;padding:6px 6px;border:1px solid var(--rule-2);background:var(--enamel);border-radius:2px;font-weight:700;font-size:13.5px;color:var(--ink-2);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;text-align:center}
+.tabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin:16px 0 0;position:sticky;top:0;z-index:5;background:var(--concrete);padding:8px 0}
+.tab{min-height:44px;padding:6px 3px;border:1px solid var(--rule-2);background:var(--enamel);border-radius:2px;font-weight:700;font-size:13.5px;color:var(--ink-2);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;text-align:center}
 .tab .tn{font-family:var(--mono);font-size:11px;font-weight:500}
+@media (max-width:420px){.tab{font-size:12.5px}}
 .tab .tl-long{display:none}
 .tab[aria-selected="true"]{color:var(--on-ink);background:var(--ink);border-color:var(--ink)}
 @media (min-width:760px){.tab .tl-long{display:inline}.tab .tl-short{display:none}.tab{flex-direction:row;gap:8px;font-size:14px}}
@@ -381,16 +382,56 @@ dialog::backdrop{background:oklch(10% 0 0 / .45)}
 .screen-h{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
 .feedmini{display:grid;gap:4px;font-size:13px;margin-top:8px}
 .feedmini li{padding-left:10px;border-left:2px solid var(--rule-2)}
+/* =========== 6 · ROUND TABLE =========== */
+.away{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:12px;border:2px solid var(--ink);background:var(--concrete)}
+.away span{font-size:14px;min-width:0}
+.rtbl{padding:14px;min-width:0}
+.rt-top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
+.rt-top h3{font-weight:800;font-size:clamp(22px,5.5vw,30px);letter-spacing:-.025em;line-height:1.05}
+.prog{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:12px}
+.pg{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;padding:6px 8px;border:0;border-top:4px solid var(--rule-2);background:none;text-align:left;font-size:13px;font-weight:700;color:var(--ink-2)}
+.pg small{font-size:11.5px;font-weight:600;color:var(--ink-3)}
+.pg.done{border-top-color:var(--ink)}
+.pg.needs small{color:var(--signal)}
+.pg[aria-current="step"]{color:var(--ink);background:var(--concrete);border-top-color:var(--ink);box-shadow:inset 0 -2px 0 var(--ink)}
+.turn{margin-top:14px;border:1px solid var(--rule-2);background:var(--enamel);min-width:0}
+.turn-h{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px;border-bottom:3px solid var(--ink)}
+.turn-h h4{font-weight:800;font-size:20px;line-height:1.1}
+.turn-h .of{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.big{width:44px;height:44px;font-size:16px}
+.t3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+.t3>section{padding:12px;border-bottom:1px solid var(--rule);min-width:0}
+@media (min-width:760px){.t3>section{border-bottom:0;border-right:1px solid var(--rule)}.t3>section:last-child{border-right:0}}
+.t3 h5{font-size:12px;font-weight:800;letter-spacing:.02em;color:var(--ink-2);margin:0 0 6px}
+.t3 h5.needs{color:var(--signal)}
+.claims{display:grid;gap:8px;font-size:14px}
+.claims li>span{display:block}
+.g{display:inline-flex;align-items:center;gap:4px;margin:4px 4px 0 0;padding:1px 7px;border:1px solid var(--ink-2);border-radius:2px;background:var(--enamel);font-family:var(--mono);font-size:11.5px;color:var(--ink);text-align:left;min-height:24px}
+button.g:hover{background:var(--concrete)}
+.g.no{border-style:dashed;border-color:var(--ink-3);color:var(--ink-3)}
+.turn-ask{padding:12px;border-top:1px solid var(--rule)}
+.turn-f{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:12px;border-top:1px solid var(--rule);background:var(--concrete)}
+.ctx{margin-top:10px;border:1px solid var(--rule-2);background:var(--concrete)}
+.ctx>summary{cursor:pointer;padding:8px 10px;font-size:13px;font-weight:800}
+.ctx dl{display:grid;grid-template-columns:minmax(0,8.2em) minmax(0,1fr);gap:6px 10px;padding:4px 10px 10px;font-size:13.5px}
+.ctx dt{font-weight:800;font-size:12px;padding-top:2px}
+.ctx.open dl{padding-top:10px}
+@media (max-width:520px){.ctx dl{grid-template-columns:minmax(0,1fr);gap:2px}.ctx dd{margin-bottom:6px}}
+.then{display:block;font-size:13px;color:var(--ink-2);margin-top:2px}
+.then b{font-weight:800;color:var(--ink)}
+.recline{margin-top:8px;font-size:13.5px;padding:6px 10px;border-left:3px solid var(--ink)}
+.wrapup{display:grid;gap:8px;font-size:14.5px;padding:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <h1>Five ways to work with agents in a pod</h1>
-    <p>Jellymoon (Commonly v4) concept prototypes. One pod, one cast, five interaction paradigms. Each tab answers the same five questions with working controls, then shows a one-screen TUI sketch and a five-line verdict. Nothing here talks to a server; state lives in memory per tab and resets with the Reset button.</p>
+    <h1>Six ways to work with agents in a pod</h1>
+    <p>Jellymoon (Commonly v4) concept prototypes. One pod, one cast, six interaction paradigms. Each tab answers the same five questions with working controls, then shows a one-screen TUI sketch and a five-line verdict. Nothing here talks to a server; state lives in memory per tab and resets with the Reset button.</p>
+    <p style="margin-top:10px;padding:10px 12px;border-left:3px solid var(--ink);background:var(--enamel);color:var(--ink);font-size:14.5px"><b>Current lean (revised for tab 6).</b> Inbox stays home. <b>Round table</b> is how you re-enter after time away, and every ask carries a context block (what happened, what was checked, what is at stake, each option’s consequence). Chat is the pod surface between round tables; Transit’s handoff and receipt routes live inside the cards. Map and Room stay later views.</p>
     <span class="ex-banner">Example data. Every person, agent, PR, number and receipt on this page is invented for the mock.</span>
     <div class="bar">
-      <p style="margin:0;font-size:13px;color:var(--ink-3)">Keys on every tab: <span class="kbd">A</span> approve recommended · <span class="kbd">1</span>–<span class="kbd">3</span> rule · <span class="kbd">U</span> undo · <span class="kbd">R</span> redirect Wren · <span class="kbd">T</span> receipt · <span class="kbd">C</span> catch up · <span class="kbd">J</span>/<span class="kbd">K</span> move</p>
+      <p style="margin:0;font-size:13px;color:var(--ink-3)">Keys on every tab: <span class="kbd">A</span> approve recommended · <span class="kbd">1</span>–<span class="kbd">3</span> rule · <span class="kbd">U</span> undo · <span class="kbd">R</span> redirect Wren · <span class="kbd">T</span> receipt · <span class="kbd">C</span> catch up · <span class="kbd">J</span>/<span class="kbd">K</span> move · <span class="kbd">N</span>/<span class="kbd">P</span> next/previous turn (tab 6)</p>
       <button class="btn btn-s" type="button" data-act="theme" id="themeBtn" aria-label="Theme">Theme: auto</button>
     </div>
   </header>
@@ -400,6 +441,7 @@ dialog::backdrop{background:oklch(10% 0 0 / .45)}
     <button class="tab" role="tab" id="tab-2" aria-controls="panel-2" aria-selected="false" tabindex="-1" data-act="tab" data-arg="2"><span class="tn">3</span><span class="tl-short">Map</span><span class="tl-long">Work-map</span></button>
     <button class="tab" role="tab" id="tab-3" aria-controls="panel-3" aria-selected="false" tabindex="-1" data-act="tab" data-arg="3"><span class="tn">4</span><span class="tl-short">Lines</span><span class="tl-long">Transit-line</span></button>
     <button class="tab" role="tab" id="tab-4" aria-controls="panel-4" aria-selected="false" tabindex="-1" data-act="tab" data-arg="4"><span class="tn">5</span><span class="tl-short">Room</span><span class="tl-long">Room / presence</span></button>
+    <button class="tab" role="tab" id="tab-5" aria-controls="panel-5" aria-selected="false" tabindex="-1" data-act="tab" data-arg="5"><span class="tn">6</span><span class="tl-short">Table</span><span class="tl-long">Round table</span></button>
   </div>
   <main id="panels"></main>
 </div>
@@ -431,7 +473,10 @@ dialog::backdrop{background:oklch(10% 0 0 / .45)}
 /* ---------- example data (invented) ---------- */
 const PPL={lily:{n:'Lily Shen',i:'LS',sub:'you · pod lead'},marco:{n:'Marco Ruiz',i:'MR',sub:'billing engineer'}};
 const AG={wren:{n:'Wren',h:'Claude Code',hk:'claude-code',owner:'Lily',pc:'lily-mbp'},otto:{n:'Otto',h:'Codex',hk:'codex',owner:'Marco',pc:'marco-linux'}};
-const OPTS={1:{l:'Merge as is',d:'Half-even rounding everywhere; update the 3 PDF snapshots.',rec:1},2:{l:'Merge, keep PDF rounding',d:'Wren splits the helper so only CSV rounds half-even. About 20 min.'},3:{l:'Hold for finance',d:'Wait for Marco’s sign-off on totals (T-42) before merging.'}};
+const OPTS={1:{l:'Merge as is',d:'Half-even rounding everywhere; update the 3 PDF snapshots.',rec:1,then:'Otto merges now. PDFs round half-even from the next deploy; 3 of 212 fixture totals drop by one cent. Marco’s T-42 sign-off has to cover the PDF change too.'},
+  2:{l:'Merge, keep PDF rounding',d:'Wren splits the helper so only CSV rounds half-even. About 20 min.',then:'Wren splits the helper after its current T-43 step (about 20 min), Otto re-reviews, merge mid-morning. PDFs do not change.'},
+  3:{l:'Hold for finance',d:'Wait for Marco’s sign-off on totals (T-42) before merging.',then:'Nothing merges until Marco signs off T-42 (back 13:00). CSV export slips to the afternoon; T-43 keeps running.'}};
+const REC_WHY='Otto recommends 1: one rounding rule for both formats is what Marco’s “match to the cent” rule needs, and half-even is the finance standard.';
 const ASK_TEXT='I reviewed all 6 files. One change reaches past CSV: rounding moved into a shared helper, so PDF totals now round half-even too. Three PDF snapshots moved by one cent.';
 const RC={
   r1184:{title:'Wren · result on T-40',line:'read 14 files · 23 tool calls · 6m 41s · T-40',run:'cmr_8f2c…a41f',agent:'wren',wake:'mention by Marco Ruiz (seq 1180)',claim:'T-40 · lease renewed 23×, released 10:04:12',win:'09:57:31 → 10:04:12',
@@ -444,6 +489,18 @@ const RC={
     tools:[['Read','billing/export/csv.ts'],['Bash','npm test -- export.large → timeout at 31s'],['Grep','"buildRows" · 2 hits'],['Read','billing/export/rows.ts'],['Edit','billing/export/rows.ts'],['Bash','npm test -- export.large → timeout at 29s'],['Read','node_modules/csv-stringify/README'],['Edit','billing/export/chunk.ts (new)'],['Bash','npm test -- export.chunk → 4 passed']],
     says:['Plan and step labels are agent-reported.']}
 };
+const OVN={win8F:'00:57:31 → 01:04:12',win31:'01:15:40 → 01:19:42'};
+Object.assign(RC,{
+  r8F:{...RC.r1184,title:'Wren · run r_8F (overnight)',win:OVN.win8F},
+  r31:{...RC.r1189,title:'Otto · run r_31 (overnight)',win:OVN.win31},
+  rB9:{...RC.r1191,title:'Wren · run r_B9, live on T-43',win:'01:16:05 → now'},
+  t2C:{title:'Test run t_2C (inside run r_8F)',run:'cmr_8f2c…a41f · tool call #6',agent:'wren',wake:RC.r1184.wake,claim:'T-40',win:'01:02:10 → 01:02:56',tools:[['Bash','npm test -- invoices'],['exit','0 · 212 passed, 0 failed, 0 skipped · 46 s']],says:['“Totals match the PDF”: the suite asserts CSV total equals PDF total for each fixture.']},
+  p4D:{title:'Preflight p_4D (before opening PR #418)',run:'cmr_8f2c…a41f · tool calls #19–21',agent:'wren',wake:RC.r1184.wake,claim:'T-40',win:'01:03:20 → 01:03:58',tools:[['Bash','npm run lint → exit 0'],['Bash','npm run typecheck → exit 0'],['Bash','npm run build → exit 0']],says:['Lint, types and build are the pod’s required preflight before a PR.']},
+  t5A:{title:'Test run t_5A (inside run r_31)',run:'cmr_31d0…7c02 · tool call #2',agent:'otto',wake:RC.r1189.wake,claim:'T-40 review',win:'01:16:30 → 01:17:15',tools:[['Bash','npm test -- invoices'],['exit','0 · 212 passed · 45 s']],says:['An independent re-run by a second harness on a second computer.']},
+  s7E:{title:'Snapshot diff s_7E (inside run r_31)',run:'cmr_31d0…7c02 · tool call #3',agent:'otto',wake:RC.r1189.wake,claim:'T-40 review',win:'01:17:20 → 01:18:02',tools:[['Bash','npm run pdf:snap → 3 changed'],['diff','inv-0031 total 1,204.35 → 1,204.34'],['diff','inv-0107 total 88.65 → 88.64'],['diff','inv-0188 total 15.05 → 15.04']],says:['“One cent”: each diff above is exactly 0.01, all on a half-cent tie.']},
+  c9A:{title:'Commit c_9A by Marco',stamp:'STAMPED BY GITHUB, LINKED BY THE POD',run:'git c9a1e07 (push)',agent:'marco',wake:'none: a person, not a run',claim:'T-42',win:'23:38:02',tools:[['git','add billing/test/invoices/*.json (8 files)'],['git','push origin fixtures']],says:['Marco also says he checked PDF totals by hand. No receipt covers that.']},
+  m1180:{title:'Pod message seq 1180 by Marco',run:'message seq 1180',agent:'marco',wake:'none: a person, not a run',claim:'—',win:'23:40:11',tools:[['post','invoice-export · mentions Wren']],says:['Sets the rule Wren and Otto worked to: CSV totals match the PDF to the cent.']}
+});
 const LIVE=[['Edit','billing/export/csv.ts'],['Bash','npm test -- export.large → 22s'],['Read','billing/test/invoices/big-2000.json'],['Bash','npm test -- export.chunk → 6 passed'],['Edit','billing/export/chunk.ts'],['Grep','"flushEvery" · 1 hit']];
 const FEED=[
   {seq:1180,t:'09:12',k:'human',who:'marco',text:'Finance checks one thing first: CSV totals have to match the PDF to the cent. <b>@Wren</b>, the fixtures are in <code>billing/test/invoices</code>.'},
@@ -465,8 +522,8 @@ const PLAN={'T-43':[['Find where the export times out','done'],['Split rows into
   'T-44':[['Build a 2,000-line invoice fixture','doing'],['Time the export end to end','todo'],['Post the numbers','todo']]};
 const clone=o=>JSON.parse(JSON.stringify(o));
 function fresh(){return{feed:clone(FEED),tasks:clone(TASKS),seq:1191,min:12*60+14,lastSeen:1183,recap:false,ruling:null,
-  wren:{state:'run',task:'T-43',tools:9,plan:clone(PLAN['T-43']),live:[]},otto:{state:'wait'},sel:null,marco:null,replay:false};}
-const S=[0,1,2,3,4].map(fresh);
+  wren:{state:'run',task:'T-43',tools:9,plan:clone(PLAN['T-43']),live:[]},otto:{state:'wait'},sel:null,marco:null,replay:false,rt:0,rtDone:null};}
+const S=[0,1,2,3,4,5].map(fresh);S[5].min=8*60+34;
 let cur=0;
 const timers=new Map();
 
@@ -487,11 +544,19 @@ const kbd=k=>`<span class="kbd">${k}</span>`;
 function sinceCounts(st){const n=st.feed.filter(f=>f.seq>st.lastSeen);return{needs:st.ruling?0:1,done:n.filter(f=>f.k==='result').length,hand:n.filter(f=>f.k==='handoff').length,run:st.wren.state==='run'?1:0,newCount:n.length}}
 const extra=st=>st.feed.filter(f=>f.seq>1191);
 
-function askBlock(st,{compact=false,anchor=true}={}){
+const gc=(id,label)=>`<button type="button" class="g" data-act="receipt" data-arg="${id}">${label}</button>`;
+const gno=label=>`<span class="g no" title="No receipt backs this claim">${label}</span>`;
+function ctxBlock(open){
+  const body=`<dl><dt>What happened</dt><dd>Wren built CSV export (PR #418) and handed review to Otto. Otto found rounding moved into a shared helper, so PDF totals change too. ${gc('r8F','run r_8F · 23 tool calls')}${gc('r31','run r_31 · 9 tool calls')}</dd>
+    <dt>What was checked</dt><dd>212 fixtures pass on both agents’ runs; 3 PDF snapshots move by exactly one cent. Not checked: invoices over 480 lines. ${gc('t2C','test t_2C · 212 passed')}${gc('s7E','snapshots s_7E · 3 changed')}${gno('480+ lines · no run')}</dd>
+    <dt>What’s at stake</dt><dd>PDF totals customers already get change by one cent on 3 of 212 fixtures from the next deploy. CSV stays off behind <code>export_csv</code>. Marco’s rule: totals match to the cent.</dd></dl>`;
+  return open?`<div class="ctx open">${body}</div>`:`<details class="ctx"><summary>Context: what happened, what was checked, what’s at stake</summary>${body}</details>`;
+}
+function askBlock(st,{compact=false,anchor=true,ctx=false}={}){
   const r=st.ruling;
-  const opts=[1,2,3].map(i=>`<button type="button" class="opt" data-act="rule" data-arg="${i}" ${r?'disabled':''} aria-pressed="${r&&r.opt===i}" aria-keyshortcuts="${i}${OPTS[i].rec?' A':''}" ${anchor&&i===1?'data-anchor="ask"':''}>${kbd(i)}<span><b>${OPTS[i].l}</b>${OPTS[i].rec?'<span class="rec">Otto recommends</span>':''}<span class="opt-d">${OPTS[i].d}</span></span></button>`).join('');
+  const opts=[1,2,3].map(i=>`<button type="button" class="opt" data-act="rule" data-arg="${i}" ${r?'disabled':''} aria-pressed="${r&&r.opt===i}" aria-keyshortcuts="${i}${OPTS[i].rec?' A':''}" ${anchor&&i===1?'data-anchor="ask"':''}>${kbd(i)}<span><b>${OPTS[i].l}</b>${OPTS[i].rec?'<span class="rec">Otto recommends</span>':''}<span class="opt-d">${OPTS[i].d}</span><span class="then opt-d"><b>Then:</b> ${OPTS[i].then}</span></span></button>`).join('');
   const ruled=r?`<p class="ruled" role="status">Ruled by you at ${r.t}: <b>${OPTS[r.opt].l}</b> · decision d-77 · seq ${r.seq} · ${r.frozen?'<b>frozen</b>':`<button type="button" class="lnk" data-act="undo">Undo (U)</button> before it freezes`}</p>`:'';
-  return `<div class="${compact?'compact':''}">${r?'':'<p class="need-l">Needs you · asks Lily, PR owner</p>'}<p class="sum">Merge PR #418?</p><p class="txt">${ASK_TEXT}</p><div class="opts" role="group" aria-label="Options for merging PR #418">${opts}</div>${ruled}${r?'':`<p class="keys">${kbd('A')} approve recommended · ${kbd('1')}–${kbd('3')} pick · ${kbd('U')} undo within 5 s</p>`}</div>`;
+  return `<div class="${compact?'compact':''}">${r?'':'<p class="need-l">Needs you · asks Lily, PR owner</p>'}<p class="sum">Merge PR #418?</p><p class="txt">${ASK_TEXT}</p>${compact?'':ctxBlock(ctx)}<div class="opts" role="group" aria-label="Options for merging PR #418">${opts}</div>${compact?'':`<p class="recline">${REC_WHY}</p>`}${ruled}${r?'':`<p class="keys">${kbd('A')} approve recommended · ${kbd('1')}–${kbd('3')} pick · ${kbd('U')} undo within 5 s</p>`}</div>`;
 }
 function resultBlock(st){return `<p class="sum">CSV export works for all four invoice states, and totals match the PDF on 212 fixtures.</p><div class="chips"><span class="chip">Ready for review</span><span class="chip">PR #418</span><span class="chip"><span class="add">+182</span> <span class="del">−14</span> · 6 files</span></div><p class="cav"><b>Caveat</b>Not tested above 480 line items; the largest fixture stops there.</p>${rcptBtn(st,'r1184')}`}
 function wrenRunBlock(st,{acts=true}={}){
@@ -566,6 +631,7 @@ function rInbox(st){
   const zero=!c.needs&&!newItems?`<div class="zero" data-anchor="catchup" tabindex="-1"><b>You're caught up.</b><span>Agents surface here only when they need you. ${st.wren.state==='run'?'1 agent is':'No agent is'} working quietly.</span></div>`:'';
   return `<div class="inbox"><div class="ib-list">
     <p class="row" style="justify-content:space-between"><span class="hint">Home · all pods</span><span class="ex">Example data</span></p>
+    ${S[5]&&!S[5].rtDone?`<div class="away" data-anchor="away"><span><b>Away 9h 04m.</b> Marco, Wren and Otto worked overnight; 1 of 3 turns needs you.</span><button type="button" class="btn btn-s btn-p" data-act="gort">Start round table</button></div>`:`<p class="hint" style="margin:6px 0 10px">Round table finished at ${S[5]?S[5].rtDone:''}. <button type="button" class="lnk" data-act="gort">Open it again</button></p>`}
     <h3 class="ib-big" style="margin-top:6px">Needs you <span class="n ${c.needs?'':'z'}">${c.needs}</span></h3>
     ${zero}${needs}${st.ruling?`<p class="ruled" style="margin-top:10px">Ruled at ${st.ruling.t}: <b>${OPTS[st.ruling.opt].l}</b> · ${st.ruling.frozen?'frozen':'<button type="button" class="lnk" data-act="undo">Undo (U)</button>'}</p>`:''}
     ${since}${just}
@@ -656,7 +722,7 @@ function rTransit(st){
   else if(r.opt===1)ahead40=[['Live behind export_csv']];
   else if(r.opt===2)ahead40=[['Wren splits rounding helper'],['Otto re-reviews'],['Merge']];
   else ahead40=[['Marco: finance sign-off (T-42)'],['Merge']];
-  const signal=stop(r?r.t:'now',r?'clear':'sig',`<div class="sig-box ${r?'clear':''}"><p class="stamp" style="color:${r?'var(--ink)':'var(--signal)'}">${r?'SIGNAL CLEARED':'SIGNAL · HELD FOR YOUR RULING'}</p>${askBlock(st,{compact:true})}</div>`,'', 'sig');
+  const signal=stop(r?r.t:'now',r?'clear':'sig',`<div class="sig-box ${r?'clear':''}"><p class="stamp" style="color:${r?'var(--ink)':'var(--signal)'}">${r?'SIGNAL CLEARED':'SIGNAL · HELD FOR YOUR RULING'}</p>${askBlock(st)}</div>`,'', 'sig');
   const w=st.wren;const doing=w.plan.findIndex(p=>p[1]==='doing');
   const pts=`<div class="pts-box"><p class="stamp">POINTS · switch Wren's route mid-run</p><div class="row" style="margin-top:6px">
     <button type="button" class="btn btn-s" aria-pressed="${!st.routed}" disabled>${w.task==='T-43'?'Chunk at 500 (current)':'Current route'}</button>
@@ -713,9 +779,57 @@ function roomVisit(st,last){
   if(s==='wren')return `<h3>At Wren's desk</h3><p class="hint">Lily's agent · Claude Code on lily-mbp</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'wren')}</p>${wrenRunBlock(st,{acts:false})}</div><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="redirect" data-arg="wren" data-anchor="redirect">Tap on the shoulder ${kbd('R')}</button>${st.wren.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Ask Wren to stop</button>'}<button type="button" class="btn btn-s" data-act="receipt" data-arg="r1184">Open the binder (last result)</button></div>${last('wren')?`<ul class="feedmini"><li>${last('wren')}</li></ul>`:''}`;
   if(s==='otto')return `<h3>At Otto's desk</h3><p class="hint">Marco's agent · Codex on marco-linux</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'otto')}</p>${askBlock(st,{compact:false})}${rcptBtn(st,'r1189')}</div><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Otto is Marco's: what can I do?</button></div>${last('otto')?`<ul class="feedmini"><li>${last('otto')}</li></ul>`:''}`;
   if(s==='marco')return `<h3>At Marco's desk</h3><p class="txt">Marco is away until 13:00. Otto sits with Marco: to change what Otto is doing, leave Marco a note.</p><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Leave a note for Marco</button></div>`;
-  if(s==='you')return `<h3>Your desk</h3><p class="txt">${st.ruling?'Nothing is waiting on you.':'One lamp is up. You can rule from here without walking over.'}</p>${st.ruling?'':`<div class="card needs" style="margin-top:8px">${askBlock(st,{compact:true})}</div>`}`;
+  if(s==='you')return `<h3>Your desk</h3><p class="txt">${st.ruling?'Nothing is waiting on you.':'One lamp is up. You can rule from here without walking over.'}</p>${st.ruling?'':`<div class="card needs" style="margin-top:8px">${askBlock(st,{anchor:false})}</div>`}`;
   return '';
 }
+
+/* ---------- 6 · ROUND TABLE ---------- */
+const TURNS=[
+ {who:'marco',kind:'p',role:'billing engineer · person',time:'23:38–23:40',needs:0,
+  did:[['Added 8 invoice fixtures covering all four invoice states',[['c9A','commit c_9A · 8 files']]],['Set the rule: CSV totals must match the PDF to the cent',[['m1180','message seq 1180']]]],
+  chk:[['Checked PDF totals on the new fixtures by hand: all match',[[null,'person-reported · no receipt']]]],
+  need:'Nothing tonight. Marco holds T-42, finance sign-off, and is back 13:00.'},
+ {who:'wren',kind:'a',role:'Claude Code · Lily’s agent',time:'00:57–now',needs:0,
+  did:[['Built CSV export for all four invoice states: PR #418, +182 −14 in 6 files',[['r8F','run r_8F · 23 tool calls']]],['Handed review of PR #418 to Otto at 01:15',[['r31','handoff · seq 1186']]],['Started T-43, chunking exports over 500 lines; still running',[['rB9','run r_B9 · live']]]],
+  chk:[['CSV totals match the PDF on 212 fixtures',[['t2C','test t_2C · 212 passed']]],['Preflight before the PR: lint, types, build',[['p4D','preflight p_4D · 3 of 3 ok']]],['Not checked: invoices above 480 line items',[[null,'no run covers this']]]],
+  need:'Nothing. Wren keeps going on T-43 unless you redirect it.'},
+ {who:'otto',kind:'a',role:'Codex · Marco’s agent',time:'01:15–01:19',needs:1,
+  did:[['Reviewed all 6 files of PR #418',[['r31','run r_31 · 9 tool calls']]]],
+  chk:[['Re-ran the invoice tests on a second computer: 212 passed',[['t5A','test t_5A · 212 passed']]],['Found the PDF side effect: 3 snapshots moved by one cent',[['s7E','snapshots s_7E · 3 changed']]]],
+  need:'A ruling: merge PR #418?'}
+];
+const tname=t=>t.kind==='p'?PPL[t.who].n:AG[t.who].n;
+function rRound(st){
+  const n=st.rt,r=st.ruling;
+  const steps=[...TURNS.map((t,i)=>({l:tname(t).split(' ')[0],s:t.needs?(r?'ruled':'needs you'):'FYI',needs:t.needs&&!r})),{l:'Wrap-up',s:'what’s next'}];
+  const prog=`<ol class="prog" aria-label="Turns">${steps.map((x,i)=>`<li style="display:flex"><button type="button" class="pg ${i<n?'done':''} ${x.needs?'needs':''}" style="flex:1" data-act="rtgo" data-arg="${i}" ${i===n?'aria-current="step"':''}>${i+1} · ${x.l}<small>${i<n&&!x.needs?'done · ':''}${x.s}</small></button></li>`).join('')}</ol>`;
+  let body;
+  if(n<TURNS.length){const t=TURNS[n];
+    const mark=t.kind==='p'?`<span class="av big" aria-hidden="true">${PPL[t.who].i}</span>`:`<span class="sg big ${sgState(st,t.who)}" aria-hidden="true">${AG[t.who].n[0]}</span>`;
+    const list=a=>`<ul class="claims">${a.map(([c,g])=>`<li><span>${c}</span>${g.map(([id,l])=>id?gc(id,l):gno(l)).join('')}</li>`).join('')}</ul>`;
+    const blocked=t.needs&&!r;
+    body=`<article class="turn" aria-labelledby="turn-h"><header class="turn-h">${mark}<div><h4 id="turn-h" tabindex="-1" data-anchor="turn">${tname(t)}</h4><span class="own">${t.role} · worked ${t.time}</span></div><span class="of">turn ${n+1} of ${TURNS.length+1}</span></header>
+      <div class="t3"><section><h5>WHAT I DID</h5>${list(t.did)}</section><section><h5>WHAT I CHECKED (PREFLIGHT)</h5>${list(t.chk)}</section>
+      <section><h5 class="${blocked?'needs':''}">WHAT I NEED FROM YOU</h5><p style="font-size:14px">${t.need}</p>
+        ${t.who==='wren'?`<div class="acts">${st.wren.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':`<button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Redirect ${kbd('R')}</button>`}</div>`:''}
+        ${t.who==='otto'?`<p class="hint" style="margin-top:6px">Otto works for Marco: you rule on its ask; changing its course goes through Marco. <button type="button" class="lnk" data-act="mate">Talk to Otto or Marco</button></p>`:''}</section></div>
+      ${t.needs?`<div class="turn-ask ${r?'':'needs'}">${askBlock(st,{ctx:true})}${rcptBtn(st,'r31')}</div>`:''}
+      <footer class="turn-f"><span class="row">${n>0?`<button type="button" class="btn btn-s" data-act="rtprev">Previous ${kbd('P')}</button>`:''}${blocked?'<button type="button" class="btn btn-s" data-act="rtskip">Skip; leave it in Inbox</button>':''}</span>
+        <button type="button" class="btn btn-p" data-act="rtnext" ${blocked?'aria-disabled="true"':''}>${blocked?'Rule to continue':'Next turn'} ${kbd('N')}</button></footer></article>`;
+  }else{
+    const ex=extra(st);
+    body=`<article class="turn" aria-labelledby="turn-h"><header class="turn-h"><span class="av big" aria-hidden="true">LS</span><div><h4 id="turn-h" tabindex="-1" data-anchor="turn">Wrap-up: you’re current</h4><span class="own">what changed because you sat down</span></div><span class="of">turn ${TURNS.length+1} of ${TURNS.length+1}</span></header>
+      <div class="wrapup"><p><b>Your ruling.</b> ${r?`${OPTS[r.opt].l} at ${r.t} (${r.frozen?'frozen':'undo still open'}). Then: ${OPTS[r.opt].then}`:'Otto’s ask is still open. It stays at the top of your Inbox with its context.'}</p>
+      <p><b>Still running.</b> Wren on ${st.wren.task}, step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1} of ${st.wren.plan.length}. ${rcptBtn(st,'r1191')}</p>
+      <p><b>Unverified, carried forward.</b> Invoices above 480 lines (no run); Marco’s hand check of PDF totals (no receipt). T-44’s load test would cover the first.</p>
+      ${ex.length?`<ul class="feedmini">${ex.slice(-4).map(f=>`<li>${feedLine(st,f)}</li>`).join('')}</ul>`:''}</div>
+      <footer class="turn-f"><button type="button" class="btn btn-s" data-act="rtprev">Previous ${kbd('P')}</button><button type="button" class="btn btn-p" data-act="rtdone">Back to Inbox</button></footer></article>`;
+  }
+  return `<div class="rtbl"><div class="rt-top"><h3>Round table</h3><span class="row"><span class="hint">Away 9h 04m · last seen 23:30 · now 08:34</span><span class="ex">Example data</span></span></div>
+    <p class="hint" style="margin-top:4px">Same events as the other tabs, replayed as overnight work. Each member who worked takes one turn; every claim shows what grounds it.</p>${prog}${body}</div>`;
+}
+function rtGo(i){const st=S[5];st.rt=Math.max(0,Math.min(TURNS.length,i));render(5);focusAnchor('turn')}
+function rtNext(){const st=S[5];const t=TURNS[st.rt];if(t&&t.needs&&!st.ruling){toast('Rule first (1–3 or A), or skip and leave it in your Inbox.');goask();return}rtGo(st.rt+1)}
 
 /* ---------- shared: teammate card ---------- */
 function mateCard(st){
@@ -850,7 +964,35 @@ const PANELS=[
     ['Worst failure','Theatre. Poses suggest more than the lease knows, walking to a desk is slower than reading a list, and space is not keyboard-native.'],
     ['New teammate','Instant charm, slow real work: delightful on day one, tiring by day five.'],
     ['At 10 agents','Poor. The floor crowds and scrolls; needs zones or rooms, which brings back navigation.'],
-    ['Verification cost','Highest. Animated poses and spatial layout; tests must assert on state text, never on pose.']]}
+    ['Verification cost','Highest. Animated poses and spatial layout; tests must assert on state text, never on pose.']]},
+ {name:'Round table',thesis:'The morning catch-up after time away. Each member who worked overnight takes a turn: what I did, what I checked, what I need from you. Every claim carries its grounding; asks arrive with their context.',render:rRound,
+  qa:[['Direct or redirect mid-run','Wren’s turn ends with Redirect; the note lands at its next tool call.','redirect','wren','Redirect Wren'],
+      ['Trust its work','Every claim has a chip: a run, a test run, a preflight, or a dashed “no receipt”.','receipt','t2C','Open a test run'],
+      ['Catch up','Turns in order with a progress strip; N for next, P for previous. Entered from the Inbox banner.','rtnext','','Next turn'],
+      ['Work with a teammate’s agent','Otto’s turn says it is Marco’s; you rule, Marco steers.','mate','','Work with Otto'],
+      ['Agent asks, you rule','The ask sits in Otto’s turn with what happened, what was checked, what’s at stake, and each option’s consequence.','goask','','Go to Otto’s turn']],
+  tui:` jellymoon > round table  away 9h04m  example data
+ [x] Marco  [x] Wren  [>] Otto !  [ ] wrap-up
+ =================================================
+ <O> OTTO  codex . Marco's agent      turn 3 of 4
+ DID      reviewed PR #418, 6 files   [r_31 9tc]
+ CHECKED  invoice tests 212 passed    [t_5A]
+          3 PDF snapshots move 1c     [s_7E]
+ NEEDS    merge PR #418?
+ -------------------------------------------------
+ happened  Wren built, Otto reviewed; rounding
+           moved to a shared helper   [r_8F]
+ checked   212 pass . 480+ lines: no run
+ at stake  3 of 212 PDF totals drop 1 cent
+ [1] merge as is *  PDFs half-even next deploy
+ [2] keep PDF       Wren splits helper, ~20 min
+ [3] hold           waits for Marco, 13:00
+ a approve*  1-3 rule  n next  t receipt`,
+  verdict:[['Best at','Re-entry after time away. Claims arrive with their grounding and asks with their context, so a ruling at 08:34 does not start with reading 47 messages.'],
+    ['Worst failure','It becomes a ritual. If agents pad their “checked” lists or turns run long, people skip to the asks; and a claim without a receipt must look different, or it borrows trust it has not earned.'],
+    ['New teammate','Fastest of the six to understand a pod: one turn per member is a standup.'],
+    ['At 10 agents','Holds only if FYI-only turns fold into one “nothing needs you” turn and turns with asks go first; ten full turns is a meeting.'],
+    ['Verification cost','Low to medium. A fixed sequence: Playwright steps with N, rules with A, and checks that each chip opens a known receipt id.']]}
 ];
 
 /* ---------- render ---------- */
@@ -921,6 +1063,7 @@ function moveWren(target){
 }
 function catchup(){
   const st=S[cur];
+  if(cur===5){rtNext();return}
   if(cur===0){st.recap=true;render();focusAnchor('catchup');return}
   if(cur===2){st.replay=true;render();toast('Replaying since 10:00: Wren finished T-40, handed it to Otto, then took T-43.');return}
   if(cur===4){st.sel=null;render();focusAnchor('catchup');return}
@@ -929,16 +1072,16 @@ function catchup(){
   markread();
 }
 function markread(){const st=S[cur];st.lastSeen=st.seq;st.recap=false;st.wiped=tm(st);render();toast(cur===1?'All read. Only asks will surface now.':'Marked caught up.');focusAnchor('catchup')}
-function goask(){const st=S[cur];if(cur===1)st.sel='ask';if(cur===2)st.sel='T-40';if(cur===4)st.sel='otto';render();
+function goask(){const st=S[cur];if(cur===1)st.sel='ask';if(cur===2)st.sel='T-40';if(cur===4)st.sel='otto';if(cur===5)st.rt=2;render();
   if(st.ruling){toast('Already ruled.');}
   if(cur===3)focusAnchor('sig');const el=$('#proto-'+cur).querySelector('.opt:not(:disabled)');if(el){el.scrollIntoView({block:'center'});el.focus({preventScroll:true})}}
 
 /* receipt dialog */
 function openReceipt(id){
-  const st=S[cur];const r=RC[id];const a=AG[r.agent];
+  const st=S[cur];const r=RC[id];const a=AG[r.agent]||{n:PPL[r.agent].n,owner:'themself (a person)',hk:'— (no harness)',pc:'—'};
   const tools=id==='r1191'?[...r.tools,...st.wren.live]:r.tools;
   $('#rc-body').innerHTML=`<div class="dh"><div><h3 id="rc-title">Receipt · ${r.title}</h3><p>Written by the pod when the run reported, not by the agent. <span class="ex">Example data</span></p></div><form method="dialog"><button class="btn btn-s" autofocus>Close</button></form></div>
-  <div class="db"><p class="stamp">SERVER-STAMPED</p><dl class="kv"><dt>run</dt><dd>${r.run}</dd><dt>agent</dt><dd>${a.n} · works for ${a.owner}</dd><dt>harness</dt><dd>${a.hk}</dd><dt>computer</dt><dd>${a.pc}</dd><dt>wake reason</dt><dd>${r.wake}</dd><dt>claim</dt><dd>${r.claim}</dd><dt>window</dt><dd>${r.win}</dd></dl>
+  <div class="db"><p class="stamp">${r.stamp||'SERVER-STAMPED'}</p><dl class="kv"><dt>run</dt><dd>${r.run}</dd><dt>agent</dt><dd>${a.n} · works for ${a.owner}</dd><dt>harness</dt><dd>${a.hk}</dd><dt>computer</dt><dd>${a.pc}</dd><dt>wake reason</dt><dd>${r.wake}</dd><dt>claim</dt><dd>${r.claim}</dd><dt>window</dt><dd>${r.win}</dd></dl>
   <p class="stamp">TOOL CALLS (${id==='r1191'?st.wren.tools:tools.length})</p><ol class="tools">${tools.map(([k,v])=>`<li><span class="tk">${k}</span><span>${esc(v)}</span></li>`).join('')}${id==='r1191'&&st.wren.tools>tools.length?`<li><span class="tk">…</span><span>${st.wren.tools-tools.length} more while you watched</span></li>`:''}</ol>
   <p class="stamp">AGENT-REPORTED, CHECK AGAINST THE ABOVE</p><ul class="feedmini">${r.says.map(s=>`<li>${s}</li>`).join('')}</ul></div>`;
   $('#dlg-receipt').showModal();
@@ -986,7 +1129,7 @@ document.addEventListener('click',e=>{
   switch(act){
     case 'tab':setTab(+arg);break;
     case 'theme':setTheme();break;
-    case 'reset':{clearTimeout(timers.get(st));S[cur]=fresh();render();toast('Tab reset to the example state.');break}
+    case 'reset':{clearTimeout(timers.get(st));S[cur]=fresh();if(cur===5)S[5].min=8*60+34;render();toast('Tab reset to the example state.');break}
     case 'rule':rule(+arg);break;
     case 'undo':undo();break;
     case 'receipt':openReceipt(arg);break;
@@ -1002,11 +1145,17 @@ document.addEventListener('click',e=>{
     case 'move':moveWren(arg);break;
     case 'points':redirectWren(arg);break;
     case 'jump':focusAnchor(arg);break;
+    case 'gort':setTab(5);focusAnchor('turn');break;
+    case 'rtgo':rtGo(+arg);break;
+    case 'rtnext':rtNext();break;
+    case 'rtprev':rtGo(S[5].rt-1);break;
+    case 'rtskip':rtGo(TURNS.length);toast('Left in your Inbox, with its context.');break;
+    case 'rtdone':S[5].rtDone=tm(S[5]);setTab(1);toast('Round table done. Inbox is home.');break;
   }
 });
 
 /* keyboard */
-document.querySelector('.tabs').addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;const n=(cur+(e.key==='ArrowRight'?1:4))%5;setTab(n);$('#tab-'+n).focus()});
+document.querySelector('.tabs').addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;const n=(cur+(e.key==='ArrowRight'?1:5))%6;setTab(n);$('#tab-'+n).focus()});
 document.addEventListener('keydown',e=>{
   if(document.querySelector('dialog[open]'))return;
   const t=e.target;if(t.matches('input,textarea,select,[contenteditable]'))return;
@@ -1019,6 +1168,8 @@ document.addEventListener('keydown',e=>{
   else if(k==='r'){e.preventDefault();openRedirect('wren')}
   else if(k==='t'){e.preventDefault();openReceipt('r1184')}
   else if(k==='c'){e.preventDefault();catchup()}
+  else if(k==='n'&&cur===5){e.preventDefault();rtNext()}
+  else if(k==='p'&&cur===5){e.preventDefault();rtGo(S[5].rt-1)}
   else if(k==='j'||k==='k'){e.preventDefault();const list=[...$('#proto-'+cur).querySelectorAll('[data-nav]')];if(!list.length)return;let i=list.indexOf(document.activeElement);i=i<0?0:Math.min(list.length-1,Math.max(0,i+(k==='j'?1:-1)));list[i].focus();list[i].scrollIntoView({block:'nearest'})}
 });
 

@@ -10,3 +10,7 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `development/verifier.md` | The verifier protocol: what a fresh-context reviewer checks, and its verdict format |
 | `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the slice LOC caps |
 | `skills/SOURCES.md` | Where the vendored stage skills in `.agents/skills/` come from, their pins and how to update them |
+| `design/protocol.md` | Protocol review: what the schema decides, the open questions and recommendations |
+| `design/connector-options.md` | Connectors options paper (OSS-first): Linear read through a pod grant, the write gate |
+| `design/client-options.md` | Client strategy options paper: web-first slice, four screens |
+| `design/ux-concepts.html` | Five interaction paradigms as clickable prototypes on one scenario, with verdicts |

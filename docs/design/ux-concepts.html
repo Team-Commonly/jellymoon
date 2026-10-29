@@ -1,0 +1,1030 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jellymoon UX Paradigms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400..900&family=Overpass+Mono:wght@400..700&display=swap">
+<style>
+/* Tokens: Timetable direction from v4-design-directions-r2, plus a derived dark set.
+   One colour rule: --signal means a person is needed. Everything else is ink on concrete/enamel. */
+:root{
+  --concrete:oklch(93.6% 0.003 170);
+  --concrete-2:oklch(90.4% 0.004 170);
+  --enamel:oklch(99.2% 0.001 170);
+  --rule:oklch(86% 0.004 170);
+  --rule-2:oklch(76% 0.005 170);
+  --ink:oklch(21% 0.006 170);
+  --ink-2:oklch(40% 0.006 170);
+  --ink-3:oklch(48.5% 0.006 170);
+  --signal:oklch(56.5% 0.215 28);
+  --signal-tint:oklch(95.6% 0.022 28);
+  --on-ink:oklch(99.2% 0.001 170);
+  --body:"Overpass",ui-sans-serif,system-ui,sans-serif;
+  --mono:"Overpass Mono",ui-monospace,Menlo,monospace;
+  --tui:ui-monospace,"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --concrete:oklch(22% 0.004 170);--concrete-2:oklch(26.5% 0.005 170);--enamel:oklch(17.5% 0.004 170);
+    --rule:oklch(32% 0.005 170);--rule-2:oklch(44% 0.006 170);
+    --ink:oklch(94.5% 0.004 170);--ink-2:oklch(80% 0.005 170);--ink-3:oklch(71% 0.006 170);
+    --signal:oklch(69% 0.19 28);--signal-tint:oklch(28% 0.06 28);--on-ink:oklch(17.5% 0.004 170);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --concrete:oklch(22% 0.004 170);--concrete-2:oklch(26.5% 0.005 170);--enamel:oklch(17.5% 0.004 170);
+  --rule:oklch(32% 0.005 170);--rule-2:oklch(44% 0.006 170);
+  --ink:oklch(94.5% 0.004 170);--ink-2:oklch(80% 0.005 170);--ink-3:oklch(71% 0.006 170);
+  --signal:oklch(69% 0.19 28);--signal-tint:oklch(28% 0.06 28);--on-ink:oklch(17.5% 0.004 170);
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--concrete);color:var(--ink);font:15px/1.5 var(--body);overflow-wrap:anywhere}
+h1,h2,h3,h4,p,ul,ol,dl,dd,figure{margin:0}
+ul,ol{padding:0;list-style:none}
+button,input,textarea{font:inherit;color:inherit;letter-spacing:inherit}
+button{cursor:pointer}
+code{font-family:var(--mono);font-size:.88em;background:var(--concrete);padding:0 4px;border-radius:2px}
+:focus-visible{outline:2.5px solid var(--ink);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* page */
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+.top{padding:24px 0 14px}
+.top h1{font-weight:800;font-size:clamp(26px,6vw,40px);line-height:1.05;letter-spacing:-.03em}
+.top p{color:var(--ink-2);max-width:820px;margin-top:8px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:14px}
+.ex{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:2px 8px;border:1px dashed var(--ink-3);color:var(--ink-2);background:var(--enamel)}
+.ex-banner{display:block;margin-top:12px;padding:8px 12px;font-family:var(--mono);font-size:12px;border:1px dashed var(--ink-3);background:var(--enamel);color:var(--ink-2)}
+.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:16px 0 0;position:sticky;top:0;z-index:5;background:var(--concrete);padding:8px 0}
+.tab{min-height:44px;padding:6px 6px;border:1px solid var(--rule-2);background:var(--enamel);border-radius:2px;font-weight:700;font-size:13.5px;color:var(--ink-2);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;text-align:center}
+.tab .tn{font-family:var(--mono);font-size:11px;font-weight:500}
+.tab .tl-long{display:none}
+.tab[aria-selected="true"]{color:var(--on-ink);background:var(--ink);border-color:var(--ink)}
+@media (min-width:760px){.tab .tl-long{display:inline}.tab .tl-short{display:none}.tab{flex-direction:row;gap:8px;font-size:14px}}
+
+.panel{padding:6px 0 48px}
+.p-head{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-end;justify-content:space-between;padding:14px 0 12px;border-bottom:3px solid var(--ink)}
+.p-head h2{font-weight:800;font-size:clamp(22px,5vw,30px);line-height:1.1;letter-spacing:-.02em}
+.p-head p{color:var(--ink-2);font-size:14.5px;margin-top:4px;max-width:720px}
+.p-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.proto{background:var(--enamel);border:1px solid var(--rule);margin-top:14px;min-width:0}
+.sect{margin-top:22px}
+.sect>h3{font-size:13px;font-weight:800;letter-spacing:.02em;color:var(--ink-2);margin-bottom:8px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:6px 12px;border:1px solid var(--rule-2);background:var(--enamel);border-radius:2px;font-weight:700;font-size:13.5px;color:var(--ink);text-align:center}
+.btn:hover{background:var(--concrete)}
+.btn-p{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.btn-p:hover{background:var(--ink-2)}
+.btn-s{min-height:30px;padding:3px 9px;font-size:12.5px}
+.btn:disabled,.opt:disabled{cursor:default;opacity:.55}
+@media (pointer:coarse){.btn{min-height:44px}.btn-s{min-height:36px}}
+.lnk{background:none;border:0;padding:0;font-weight:700;text-decoration:underline;text-underline-offset:2px;color:var(--ink)}
+.kbd{display:inline-block;min-width:20px;padding:0 5px;font-family:var(--mono);font-size:11px;line-height:18px;text-align:center;border:1px solid var(--rule-2);border-bottom-width:2px;border-radius:2px;background:var(--enamel);color:var(--ink-2)}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+/* identity marks */
+.av,.sg{flex:none;display:inline-grid;place-items:center;width:30px;height:30px;font-size:11.5px;font-weight:800;background:var(--enamel);color:var(--ink)}
+.av{border-radius:50%;box-shadow:inset 0 0 0 2.5px var(--ink)}
+.sg{position:relative;background:var(--ink);color:var(--on-ink);clip-path:polygon(29% 0,71% 0,100% 29%,100% 71%,71% 100%,29% 100%,0 71%,0 29%)}
+.sg.wait{background:var(--signal);color:#fff}
+.sg.stopped,.sg.idle{background:var(--ink-3)}
+.sm{width:22px;height:22px;font-size:10px}
+.lamp{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--ink-2);white-space:nowrap}
+.lamp::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink);flex:none}
+.lamp.run::before{animation:hop 1.6s step-end infinite}
+.lamp.wait{color:var(--signal)}.lamp.wait::before{background:var(--signal)}
+.lamp.idle::before,.lamp.stopped::before{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.lamp.ack::before{background:transparent;box-shadow:inset 0 0 0 2px var(--ink)}
+@keyframes hop{0%{transform:translateX(-2px)}50%{transform:translateX(2px)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.rt{font-family:var(--mono);font-size:11px;padding:0 5px;border:1px solid var(--rule-2);color:var(--ink-2);border-radius:2px;white-space:nowrap}
+.own{font-size:12px;color:var(--ink-3)}
+
+/* shared card bits */
+.card{border:1px solid var(--rule);background:var(--enamel);padding:12px;min-width:0}
+.card.needs{border-color:var(--signal);box-shadow:inset 3px 0 0 var(--signal)}
+.ch{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.nm{font-weight:800}
+.sum{font-weight:700;font-size:15.5px;line-height:1.35;margin-top:6px}
+.txt{color:var(--ink-2);margin-top:6px;font-size:14.5px}
+.need-l{font-size:12px;font-weight:800;color:var(--signal);letter-spacing:.02em;margin-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:12.5px;font-weight:600;padding:2px 8px;border:1px solid var(--rule-2);border-radius:2px;background:var(--enamel)}
+.add{font-family:var(--mono)}.del{font-family:var(--mono);color:var(--ink-3)}
+.cav{font-size:13px;color:var(--ink-2);margin-top:8px}.cav b{font-size:11.5px;margin-right:6px;color:var(--ink)}
+.rcpt{display:block;white-space:normal;width:100%;text-align:left;margin-top:10px;padding:6px 8px;border:0;border-top:1px dashed var(--rule-2);background:none;font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.rcpt:hover{background:var(--concrete);color:var(--ink)}
+.rcpt::after{content:"  open receipt";font-weight:700;color:var(--ink)}
+.plan{margin-top:8px;display:grid;gap:3px;font-size:13.5px}
+.plan li{display:flex;gap:8px;align-items:baseline}
+.plan li::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--ink-3);transform:translateY(1px)}
+.plan li.done{color:var(--ink-3);text-decoration:line-through}
+.plan li.done::before{background:var(--ink-3)}
+.plan li.doing{font-weight:700}
+.plan li.doing::before{background:var(--ink);box-shadow:none}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+
+/* ask */
+.opts{display:grid;gap:6px;margin-top:10px}
+.opt{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;text-align:left;width:100%;padding:9px 10px;border:1px solid var(--rule-2);background:var(--enamel);border-radius:2px;min-height:44px}
+.opt:hover:not(:disabled){border-color:var(--ink);background:var(--concrete)}
+.opt[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink);opacity:1}
+.opt b{font-weight:800}
+.opt-d{display:block;font-size:13px;color:var(--ink-2)}
+.rec{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;padding:0 5px;border:1px solid var(--ink);border-radius:2px}
+.ruled{margin-top:10px;padding:8px 10px;background:var(--concrete);font-size:13.5px}
+.keys{margin-top:8px;font-size:12.5px;color:var(--ink-3)}
+.compact .txt,.compact .opt-d{display:none}
+
+/* five questions */
+.qs{display:grid;gap:0;border-top:1px solid var(--rule)}
+.q{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule)}
+.q b{display:block;font-size:14px}
+.q span{display:block;font-size:13.5px;color:var(--ink-2)}
+@media (max-width:520px){.q{grid-template-columns:minmax(0,1fr)}.q .btn{justify-self:start}}
+
+/* TUI */
+.tui{margin:0;padding:12px;background:var(--ink);color:var(--enamel);font-family:var(--tui);font-size:clamp(8.5px,calc((100vw - 60px) / 30.5),13px);line-height:1.45;white-space:pre;overflow-x:auto;border-radius:2px}
+.tui-note{font-size:13px;color:var(--ink-3);margin-top:6px}
+
+/* verdict */
+.verdict{display:grid;border-top:3px solid var(--ink)}
+.verdict div{display:grid;grid-template-columns:minmax(0,10.5em) minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid var(--rule)}
+.verdict dt{font-weight:800;font-size:13.5px}
+.verdict dd{font-size:14px;color:var(--ink-2)}
+@media (max-width:520px){.verdict div{grid-template-columns:minmax(0,1fr);gap:2px}}
+
+/* toast + dialogs */
+.toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:20;width:max-content;max-width:calc(100vw - 32px);display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:var(--ink);color:var(--on-ink);border-radius:2px;font-size:14px;font-weight:600}
+.toast[hidden]{display:none}
+.toast .lnk{color:var(--on-ink)}
+dialog{width:min(580px,calc(100vw - 24px));max-height:calc(100vh - 48px);padding:0;border:1px solid var(--rule-2);background:var(--enamel);color:var(--ink);border-radius:2px}
+dialog::backdrop{background:oklch(10% 0 0 / .45)}
+.dh{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--rule)}
+.dh h3{font-weight:800;font-size:18px;line-height:1.2}
+.dh p{font-size:13px;color:var(--ink-3)}
+.db{padding:14px 16px;display:grid;gap:12px}
+.kv{display:grid;grid-template-columns:minmax(0,8.5em) minmax(0,1fr);gap:4px 10px;font-size:13.5px}
+.kv dt{color:var(--ink-3);font-family:var(--mono);font-size:12px;padding-top:2px}
+.kv dd{font-family:var(--mono);font-size:12.5px}
+.tools{counter-reset:t;display:grid;gap:3px;font-family:var(--mono);font-size:12.5px}
+.tools li{counter-increment:t;display:grid;grid-template-columns:2.6em 3.6em minmax(0,1fr);gap:6px}
+.tools li::before{content:"#" counter(t);color:var(--ink-3)}
+.tools .tk{font-weight:700}
+.stamp{font-size:12px;font-weight:800;letter-spacing:.02em}
+.claimed{font-size:13px;color:var(--ink-2);padding:8px 10px;border:1px dashed var(--rule-2)}
+.preset{display:grid;gap:6px}
+.preset label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--rule);font-size:14px;cursor:pointer}
+.preset input{margin-top:4px;accent-color:var(--ink)}
+.field{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--rule-2);background:var(--enamel);border-radius:2px}
+.hint{font-size:12.5px;color:var(--ink-3)}
+
+/* =========== 1 · CHAT =========== */
+.chat{display:grid;grid-template-columns:minmax(0,1fr)}
+@media (min-width:960px){.chat{grid-template-columns:minmax(0,1fr) 280px}}
+.chat-main{min-width:0;display:flex;flex-direction:column}
+.podhead{padding:14px 14px 12px;border-bottom:1px solid var(--rule)}
+.podhead h3{font-weight:800;font-size:clamp(24px,6vw,34px);line-height:1;letter-spacing:-.03em}
+.podhead p{color:var(--ink-2);font-size:14px;margin-top:6px}
+.since{display:grid;grid-template-columns:minmax(0,1fr);border-bottom:1px solid var(--rule);border-top:3px solid var(--ink)}
+.since-t{padding:8px 14px;font-weight:800;font-size:14px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;justify-content:space-between}
+.since-t small{font-family:var(--mono);font-weight:400;font-size:11.5px;color:var(--ink-3)}
+.counts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.cnt{display:flex;flex-direction:column-reverse;align-items:flex-start;padding:6px 10px 8px;border:0;border-left:1px solid var(--rule);border-top:1px solid var(--rule);background:none;text-align:left;min-width:0}
+.cnt:first-child{border-left:0}
+.cnt:hover{background:var(--concrete)}
+.cnt-n{font-weight:800;font-size:26px;line-height:1}
+.cnt-l{font-size:12px;font-weight:700;color:var(--ink-2)}
+.cnt.needs .cnt-n{color:var(--signal)}
+.cnt.zero .cnt-n{color:var(--ink-3);font-weight:500}
+.recap{margin:12px 14px 0;padding:12px;border:1px solid var(--ink);background:var(--concrete)}
+.recap h4{font-size:14px;font-weight:800}
+.recap dl{display:grid;grid-template-columns:minmax(0,7em) minmax(0,1fr);gap:4px 10px;font-size:13.5px;margin-top:8px}
+.recap dt{font-weight:800;font-size:12px;padding-top:2px}
+.recap dt.needs{color:var(--signal)}
+.stream{padding:6px 14px 10px;display:grid;gap:12px}
+.msg{display:grid;grid-template-columns:38px 30px minmax(0,1fr);gap:8px;align-items:start}
+.tm{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);padding-top:6px}
+.by{font-weight:800;font-size:14px}
+.mtext{font-size:14.5px}
+.divider{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--ink-2)}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--ink)}
+.handoff{display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px;align-items:center;font-size:13.5px}
+.handoff p{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;padding:6px 10px;border:1.5px solid var(--ink);border-radius:999px;width:fit-content;max-width:100%}
+.handoff .tag{font-size:11px;font-weight:800;padding:0 6px;background:var(--ink);color:var(--on-ink);border-radius:999px}
+.sys{font-size:13px;color:var(--ink-2);padding:4px 0 4px 46px}
+.composer{display:flex;gap:8px;padding:10px 14px 14px;border-top:1px solid var(--rule);margin-top:auto}
+.composer input{flex:1;min-width:0}
+.chat-side{border-left:1px solid var(--rule);padding:14px;display:none;min-width:0}
+@media (min-width:960px){.chat-side{display:block}}
+.mem{display:flex;gap:10px;align-items:center;padding:6px 0;min-width:0}
+.mem>span:last-child{min-width:0}
+.mem small{display:block;font-size:12px;color:var(--ink-3)}
+.side-h{font-size:12.5px;font-weight:800;color:var(--ink-2);margin:14px 0 4px}
+.side-h:first-child{margin-top:0}
+.mini-task{display:flex;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid var(--rule)}
+.mini-task .id{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);flex:none;width:3.4em}
+
+/* =========== 2 · INBOX =========== */
+.inbox{display:grid;grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){.inbox{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}.ib-detail{border-left:1px solid var(--rule)}}
+.ib-list{min-width:0;padding:14px}
+.ib-detail{min-width:0;padding:14px;border-top:1px solid var(--rule)}
+@media (min-width:900px){.ib-detail{border-top:0}}
+.ib-big{display:flex;align-items:baseline;gap:10px;font-weight:800;font-size:clamp(24px,6vw,34px);letter-spacing:-.03em;line-height:1}
+.ib-big .n{color:var(--signal)}
+.ib-big .n.z{color:var(--ink-3)}
+.grp{margin-top:16px}
+.grp-h{display:flex;flex-wrap:wrap;gap:6px 10px;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:800;color:var(--ink-2);padding-bottom:4px;border-bottom:1px solid var(--ink)}
+.it{border-bottom:1px solid var(--rule);padding:8px 0;min-width:0}
+.it.on{background:var(--concrete);box-shadow:-6px 0 0 var(--concrete),6px 0 0 var(--concrete)}
+.it-main{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;width:100%;text-align:left;background:none;border:0;padding:2px 0}
+.it-t{font-weight:700;font-size:14.5px;display:block}
+.it-m{display:block;font-size:12.5px;color:var(--ink-3)}
+.it.needs .it-t{color:var(--ink)}
+.it.needs .it-m b{color:var(--signal)}
+.it .opts{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-left:40px;margin-top:6px}
+.it .opt{padding:6px 8px;min-height:40px;font-size:13.5px}
+.zero{padding:24px 0;text-align:left}
+.zero b{display:block;font-size:20px;font-weight:800}
+.zero span{color:var(--ink-2);font-size:14px}
+
+/* =========== 3 · MAP =========== */
+.map{display:grid;grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){.map{grid-template-columns:minmax(0,560px) minmax(0,1fr)}.map-insp{border-left:1px solid var(--rule)}}
+.map-g{padding:10px;min-width:0}
+.map-bar{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between;padding:4px 4px 8px;font-size:13px}
+.map-bar b{font-weight:800}
+.map svg{display:block;width:100%;height:auto;font-family:var(--body)}
+.nd{cursor:pointer}
+.nd rect{fill:var(--enamel);stroke:var(--ink);stroke-width:1.6}
+.nd.done rect{fill:var(--concrete);stroke:var(--rule-2)}
+.nd.todo rect{stroke-dasharray:5 4}
+.nd.needs rect{stroke:var(--signal);stroke-width:3}
+.nd.on rect{stroke-width:3.2}
+.nd:focus{outline:none}.nd:focus-visible rect{stroke-width:3.5;stroke:var(--ink)}
+.nid{font-family:var(--mono);font-size:10.5px;fill:var(--ink-3)}
+.nt{font-size:12.5px;font-weight:700;fill:var(--ink)}
+.nneed{font-size:11px;font-weight:800;fill:var(--signal)}
+.edge{fill:none;stroke:var(--ink-2);stroke-width:1.6}
+.edge.dashed{stroke-dasharray:4 4;stroke:var(--ink-3)}
+.arrow{fill:var(--ink-2)}
+.nnew{fill:var(--ink)}
+.bench{fill:none;stroke:var(--rule-2);stroke-dasharray:3 3}
+.bench-t{font-size:10.5px;fill:var(--ink-3);font-family:var(--mono)}
+.tok{cursor:pointer;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.tok polygon{fill:var(--ink);stroke:var(--enamel);stroke-width:2}
+.tok.wait polygon{fill:var(--signal)}
+.tok.idle polygon,.tok.stopped polygon{fill:var(--ink-3)}
+.tok text{fill:var(--on-ink);font-size:12px;font-weight:800;text-anchor:middle;pointer-events:none}
+.tok .own-t{fill:var(--ink-2);font-size:9.5px;font-weight:700}
+.tok:focus{outline:none}.tok:focus-visible polygon{stroke:var(--ink);stroke-width:3}
+.ho-t{font-size:10.5px;fill:var(--ink-2);font-family:var(--mono)}
+.map-insp{padding:14px;min-width:0;border-top:1px solid var(--rule)}
+@media (min-width:900px){.map-insp{border-top:0}}
+.ticker{padding:8px 14px 12px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-2);display:grid;gap:2px}
+
+/* =========== 4 · TRANSIT =========== */
+.tr{display:grid;grid-template-columns:minmax(0,1fr)}
+@media (min-width:960px){.tr{grid-template-columns:minmax(0,320px) minmax(0,1fr)}.depart{border-right:1px solid var(--rule);border-bottom:0!important}}
+.depart{padding:14px;border-bottom:1px solid var(--rule);min-width:0}
+.depart h3{font-weight:800;font-size:16px}
+.dep-rows{margin-top:8px;border-top:3px solid var(--ink)}
+.dep{display:grid;grid-template-columns:3.2em minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid var(--rule);font-size:13.5px;width:100%;text-align:left;background:none;border-left:0;border-right:0;border-top:0}
+.dep:hover{background:var(--concrete)}
+.dep .t{font-family:var(--mono);font-size:12px;color:var(--ink-3);padding-top:1px}
+.dep.needs b{color:var(--signal)}
+.dep.old{opacity:.55}
+.lines{padding:14px;display:grid;gap:22px;min-width:0}
+.line-h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:6px 10px;background:var(--ink);color:var(--on-ink)}
+.line-h b{font-weight:800}
+.line-h span{font-size:12.5px;opacity:.85}
+.stops{position:relative;margin-top:4px;padding-left:0}
+.stops::before{content:"";position:absolute;left:calc(3.4em + 20.5px);top:6px;bottom:6px;width:3px;background:var(--ink)}
+.stp{position:relative;display:grid;grid-template-columns:3.4em 28px minmax(0,1fr);gap:0 8px;padding:7px 0;align-items:start}
+.stp .t{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);padding-top:3px;text-align:right}
+.mk{position:relative;z-index:1;justify-self:center;width:16px;height:16px;margin-top:2px;background:var(--enamel);box-shadow:inset 0 0 0 2.5px var(--ink);border-radius:50%}
+.mk.ag{border-radius:0;background:var(--ink);box-shadow:none;clip-path:polygon(29% 0,71% 0,100% 29%,100% 71%,71% 100%,29% 100%,0 71%,0 29%)}
+.mk.sig{border-radius:0;width:18px;height:18px;background:var(--signal);box-shadow:0 0 0 3px var(--enamel)}
+.mk.clear{border-radius:0;background:var(--ink);box-shadow:0 0 0 3px var(--enamel)}
+.mk.ghost{background:var(--enamel);box-shadow:inset 0 0 0 2px var(--ink-3)}
+.mk.train{width:22px;height:14px;border-radius:7px;background:var(--enamel);box-shadow:inset 0 0 0 2.5px var(--ink);margin-top:3px}
+.mk.train.run{animation:hop 2.4s step-end infinite}
+.mk.pts{border-radius:0;transform:rotate(45deg);width:13px;height:13px;margin-top:4px;background:var(--enamel);box-shadow:inset 0 0 0 2.5px var(--ink)}
+.stp.ghost .sb{color:var(--ink-3)}
+.stp.ghost{padding:4px 0}
+.xfer{display:inline-flex;flex-wrap:wrap;gap:4px 6px;align-items:center;padding:3px 10px;border:2px solid var(--ink);border-radius:999px;font-size:13.5px;font-weight:700}
+.sb{min-width:0;font-size:14px}
+.sb .who{font-weight:800}
+.route{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:6px;padding:4px 8px;border:1px dashed var(--rule-2);font-family:var(--mono);font-size:12px;background:none;text-align:left;width:100%}
+.route:hover{background:var(--concrete)}
+.route i{font-style:normal;color:var(--ink-3)}
+.route .term{width:8px;height:8px;border-radius:50%;background:var(--ink);display:inline-block}
+.sig-box{margin-top:6px;padding:10px;border:2px solid var(--signal);background:var(--signal-tint)}
+.sig-box.clear{border-color:var(--ink);background:var(--concrete)}
+.pts-box{margin-top:6px;padding:8px;border:1px dashed var(--ink-2)}
+.pts-box .row .btn[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+
+/* =========== 5 · ROOM =========== */
+.room{display:grid;grid-template-columns:minmax(0,1fr)}
+@media (min-width:960px){.room{grid-template-columns:minmax(0,1fr) minmax(0,400px)}.visit{border-left:1px solid var(--rule);border-top:0!important}}
+.floor{padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0;background:repeating-linear-gradient(0deg,transparent 0 27px,var(--concrete) 27px 28px)}
+.desk{display:flex;flex-direction:column;gap:4px;min-width:0;padding:10px;border:1px solid var(--rule-2);background:var(--enamel);text-align:left;border-radius:2px}
+.desk:hover{border-color:var(--ink)}
+.desk[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.desk.wait{border-color:var(--signal)}
+.scene{position:relative;display:block;height:78px;width:100%;max-width:150px}
+.fh{position:absolute;left:14px;top:12px;width:22px;height:22px;background:var(--enamel);box-shadow:inset 0 0 0 2.5px var(--ink);border-radius:50%}
+.agent .fh{border-radius:0;background:var(--ink);clip-path:polygon(29% 0,71% 0,100% 29%,100% 71%,71% 100%,29% 100%,0 71%,0 29%)}
+.wait .fh{background:var(--signal)}
+.fb{position:absolute;left:8px;top:36px;width:34px;height:28px;border-radius:12px 12px 2px 2px;background:var(--ink)}
+.ftab{position:absolute;left:0;right:0;bottom:10px;height:3px;background:var(--ink-2)}
+.fmon{position:absolute;left:56px;bottom:13px;width:58px;height:38px;border:2.5px solid var(--ink);background:var(--concrete);display:block;padding:4px}
+.fmon i{display:block;height:3px;margin:3px 0;background:var(--ink-3)}
+.typing .fmon i:nth-child(2){animation:type 1.2s step-end infinite}
+.typing .fmon i:nth-child(3){animation:type 1.2s step-end infinite .6s}
+@keyframes type{0%{width:30%}50%{width:85%}}
+.farm{position:absolute;left:34px;top:30px;width:18px;height:5px;background:var(--ink);border-radius:3px}
+.typing .farm{animation:tap .5s step-end infinite}
+@keyframes tap{50%{transform:translateY(2px)}}
+.wait .farm{left:36px;top:6px;width:5px;height:26px}
+.flamp{display:none;position:absolute;left:31px;top:-4px;width:15px;height:15px;border-radius:50%;background:var(--signal);box-shadow:0 0 0 3px var(--signal-tint)}
+.wait .flamp{display:block}
+.away .fh,.away .fb,.away .farm{display:none}
+.fchair{position:absolute;left:6px;top:46px;width:38px;height:20px;border:2.5px solid var(--ink-3);border-bottom:0;border-radius:6px 6px 0 0;display:none}
+.away .fchair{display:block}
+.idle .fh{top:16px}.idle .farm{top:40px;transform:rotate(10deg)}
+.dn{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-weight:800;font-size:14.5px}
+.ds{font-size:12.5px;color:var(--ink-2)}
+.bub{font-size:12.5px;padding:4px 8px;background:var(--concrete);border-radius:2px;color:var(--ink-2);margin-top:2px}
+.aisle{grid-column:1 / -1;display:flex;justify-content:center}
+.aisle span{font-family:var(--mono);font-size:12px;padding:3px 10px;border:1.5px dashed var(--ink);background:var(--enamel);border-radius:999px;text-align:center}
+.wb{grid-column:1 / -1;padding:12px;border:2px solid var(--ink);background:var(--enamel)}
+.wb h4{font-size:14px;font-weight:800;display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;align-items:center}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:8px}
+.note{padding:8px;background:var(--concrete);font-size:13px;border-top:3px solid var(--ink);text-align:left;border-left:0;border-right:0;border-bottom:0}
+.note.needs{border-top-color:var(--signal)}
+.note b{display:block;font-size:11.5px}
+.wb.clean .notes{opacity:.4}
+.visit{padding:14px;border-top:1px solid var(--rule);min-width:0}
+.visit h3{font-weight:800;font-size:18px}
+.screen{margin-top:10px;padding:10px;border:2.5px solid var(--ink);background:var(--concrete)}
+.screen-h{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+.feedmini{display:grid;gap:4px;font-size:13px;margin-top:8px}
+.feedmini li{padding-left:10px;border-left:2px solid var(--rule-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Five ways to work with agents in a pod</h1>
+    <p>Jellymoon (Commonly v4) concept prototypes. One pod, one cast, five interaction paradigms. Each tab answers the same five questions with working controls, then shows a one-screen TUI sketch and a five-line verdict. Nothing here talks to a server; state lives in memory per tab and resets with the Reset button.</p>
+    <span class="ex-banner">Example data. Every person, agent, PR, number and receipt on this page is invented for the mock.</span>
+    <div class="bar">
+      <p style="margin:0;font-size:13px;color:var(--ink-3)">Keys on every tab: <span class="kbd">A</span> approve recommended · <span class="kbd">1</span>–<span class="kbd">3</span> rule · <span class="kbd">U</span> undo · <span class="kbd">R</span> redirect Wren · <span class="kbd">T</span> receipt · <span class="kbd">C</span> catch up · <span class="kbd">J</span>/<span class="kbd">K</span> move</p>
+      <button class="btn btn-s" type="button" data-act="theme" id="themeBtn" aria-label="Theme">Theme: auto</button>
+    </div>
+  </header>
+  <div class="tabs" role="tablist" aria-label="Paradigms">
+    <button class="tab" role="tab" id="tab-0" aria-controls="panel-0" aria-selected="true" data-act="tab" data-arg="0"><span class="tn">1</span><span class="tl-short">Chat</span><span class="tl-long">Chat-first</span></button>
+    <button class="tab" role="tab" id="tab-1" aria-controls="panel-1" aria-selected="false" tabindex="-1" data-act="tab" data-arg="1"><span class="tn">2</span><span class="tl-short">Inbox</span><span class="tl-long">Inbox-first</span></button>
+    <button class="tab" role="tab" id="tab-2" aria-controls="panel-2" aria-selected="false" tabindex="-1" data-act="tab" data-arg="2"><span class="tn">3</span><span class="tl-short">Map</span><span class="tl-long">Work-map</span></button>
+    <button class="tab" role="tab" id="tab-3" aria-controls="panel-3" aria-selected="false" tabindex="-1" data-act="tab" data-arg="3"><span class="tn">4</span><span class="tl-short">Lines</span><span class="tl-long">Transit-line</span></button>
+    <button class="tab" role="tab" id="tab-4" aria-controls="panel-4" aria-selected="false" tabindex="-1" data-act="tab" data-arg="4"><span class="tn">5</span><span class="tl-short">Room</span><span class="tl-long">Room / presence</span></button>
+  </div>
+  <main id="panels"></main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog id="dlg-receipt" aria-labelledby="rc-title"><div id="rc-body"></div></dialog>
+<dialog id="dlg-redirect" aria-labelledby="rd-title">
+  <form method="dialog" id="rd-form">
+    <div class="dh"><div><h3 id="rd-title">Redirect Wren mid-run</h3><p>Lands at Wren's next tool call; the lease renews with your note attached.</p></div><button class="btn btn-s" value="cancel" type="submit" formnovalidate>Close</button></div>
+    <div class="db">
+      <p class="claimed" id="rd-now"></p>
+      <fieldset class="preset" style="border:0;padding:0;margin:0"><legend class="sr">Redirect</legend>
+        <label><input type="radio" name="rp" value="stream" checked><span><b>Stream rows instead of chunking</b><span class="hint" style="display:block">Drop the 500-line chunks; write rows straight to the CSV writer.</span></span></label>
+        <label><input type="radio" name="rp" value="tests"><span><b>Write the 2,000-line test first</b><span class="hint" style="display:block">Prove the timeout before changing code.</span></span></label>
+        <label><input type="radio" name="rp" value="cap"><span><b>Cap exports at 2,000 lines for now</b><span class="hint" style="display:block">Ship a clear error above the cap; chunking later.</span></span></label>
+        <label><input type="radio" name="rp" value="custom"><span><b>Something else</b></span></label>
+      </fieldset>
+      <label class="sr" for="rd-text">Your note to Wren</label>
+      <input class="field" id="rd-text" placeholder="Note to Wren (used with “Something else”)">
+      <div class="row"><button class="btn btn-p" type="submit" value="send">Send redirect</button><button class="btn" type="submit" value="stop" id="rd-stop">Stop Wren</button></div>
+    </div>
+  </form>
+</dialog>
+<dialog id="dlg-mate" aria-labelledby="tm-title"><div id="tm-body"></div></dialog>
+
+<script>
+"use strict";
+/* ---------- example data (invented) ---------- */
+const PPL={lily:{n:'Lily Shen',i:'LS',sub:'you · pod lead'},marco:{n:'Marco Ruiz',i:'MR',sub:'billing engineer'}};
+const AG={wren:{n:'Wren',h:'Claude Code',hk:'claude-code',owner:'Lily',pc:'lily-mbp'},otto:{n:'Otto',h:'Codex',hk:'codex',owner:'Marco',pc:'marco-linux'}};
+const OPTS={1:{l:'Merge as is',d:'Half-even rounding everywhere; update the 3 PDF snapshots.',rec:1},2:{l:'Merge, keep PDF rounding',d:'Wren splits the helper so only CSV rounds half-even. About 20 min.'},3:{l:'Hold for finance',d:'Wait for Marco’s sign-off on totals (T-42) before merging.'}};
+const ASK_TEXT='I reviewed all 6 files. One change reaches past CSV: rounding moved into a shared helper, so PDF totals now round half-even too. Three PDF snapshots moved by one cent.';
+const RC={
+  r1184:{title:'Wren · result on T-40',line:'read 14 files · 23 tool calls · 6m 41s · T-40',run:'cmr_8f2c…a41f',agent:'wren',wake:'mention by Marco Ruiz (seq 1180)',claim:'T-40 · lease renewed 23×, released 10:04:12',win:'09:57:31 → 10:04:12',
+    tools:[['Read','billing/export/*.ts (6 files)'],['Read','billing/test/invoices (8 fixtures)'],['Grep','"roundTotal" · 3 hits'],['Edit','billing/money.ts'],['Edit','billing/export/csv.ts +5 files'],['Bash','npm test -- invoices → exit 0 · 212 passed'],['Bash','git push origin csv-export'],['gh','pr create → #418']],
+    says:['“Totals match the PDF on 212 fixtures.” Matches the test run above.','Caveat: not tested above 480 line items. Not checkable by the server.']},
+  r1189:{title:'Otto · ask on PR #418',line:'read 6 files · 9 tool calls · 4m 02s · review of #418',run:'cmr_31d0…7c02',agent:'otto',wake:'handoff from Wren (seq 1186)',claim:'T-40 review · lease held while waiting on ruling',win:'10:15:40 → 10:19:42',
+    tools:[['Read','PR #418 diff · 6 files'],['Bash','npm test -- invoices → exit 0 · 212 passed'],['Bash','npm run pdf:snap → 3 snapshots changed'],['Read','billing/money.ts roundHalfEven'],['gh','pr review #418 --comment']],
+    says:['“Three PDF snapshots moved by one cent.” Matches pdf:snap output above.']},
+  r1191:{title:'Wren · live run on T-43',line:'',run:'cmr_b9e0…12aa',agent:'wren',wake:'task.assigned by Lily Shen (seq 1183)',claim:'T-43 · lease live, renewed each tool call',win:'10:16:05 → now',
+    tools:[['Read','billing/export/csv.ts'],['Bash','npm test -- export.large → timeout at 31s'],['Grep','"buildRows" · 2 hits'],['Read','billing/export/rows.ts'],['Edit','billing/export/rows.ts'],['Bash','npm test -- export.large → timeout at 29s'],['Read','node_modules/csv-stringify/README'],['Edit','billing/export/chunk.ts (new)'],['Bash','npm test -- export.chunk → 4 passed']],
+    says:['Plan and step labels are agent-reported.']}
+};
+const LIVE=[['Edit','billing/export/csv.ts'],['Bash','npm test -- export.large → 22s'],['Read','billing/test/invoices/big-2000.json'],['Bash','npm test -- export.chunk → 6 passed'],['Edit','billing/export/chunk.ts'],['Grep','"flushEvery" · 1 hit']];
+const FEED=[
+  {seq:1180,t:'09:12',k:'human',who:'marco',text:'Finance checks one thing first: CSV totals have to match the PDF to the cent. <b>@Wren</b>, the fixtures are in <code>billing/test/invoices</code>.'},
+  {seq:1182,t:'09:26',k:'human',who:'lily',text:'Menu label is settled: “Download CSV”, right under “Download PDF”. No new icon.'},
+  {seq:1183,t:'09:40',k:'human',who:'lily',text:'<b>@Wren</b> after the export lands, take T-43: exports over 500 lines time out.'},
+  {seq:1184,t:'10:04',k:'result',who:'wren',task:'T-40'},
+  {seq:1186,t:'10:15',k:'handoff',from:'wren',to:'otto',what:'review of PR #418'},
+  {seq:1189,t:'10:19',k:'ask',who:'otto',task:'T-40'},
+  {seq:1191,t:'10:16',k:'progress',who:'wren',task:'T-43'}
+];
+const TASKS={
+  'T-41':{id:'T-41',title:['Menu label:','Download CSV'],status:'done',who:'lily'},
+  'T-40':{id:'T-40',title:['CSV export','for invoices'],status:'review',who:'otto'},
+  'T-42':{id:'T-42',title:['Finance sign-off','on totals'],status:'doing',who:'marco'},
+  'T-43':{id:'T-43',title:['Chunk exports','over 500 lines'],status:'doing',who:'wren'},
+  'T-44':{id:'T-44',title:['Load-test a','2,000-line invoice'],status:'todo',who:null}
+};
+const PLAN={'T-43':[['Find where the export times out','done'],['Split rows into 500-line chunks','doing'],['Test a 2,000-line fixture','todo'],['Open a PR','todo']],
+  'T-44':[['Build a 2,000-line invoice fixture','doing'],['Time the export end to end','todo'],['Post the numbers','todo']]};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function fresh(){return{feed:clone(FEED),tasks:clone(TASKS),seq:1191,min:12*60+14,lastSeen:1183,recap:false,ruling:null,
+  wren:{state:'run',task:'T-43',tools:9,plan:clone(PLAN['T-43']),live:[]},otto:{state:'wait'},sel:null,marco:null,replay:false};}
+const S=[0,1,2,3,4].map(fresh);
+let cur=0;
+const timers=new Map();
+
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tm=st=>{const m=st.min++;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};
+const av=p=>`<span class="av" aria-hidden="true">${PPL[p].i}</span>`;
+const sgState=(st,a)=>a==='wren'?st.wren.state:st.otto.state;
+const sg=(st,a,cls='')=>`<span class="sg ${sgState(st,a)} ${cls}" aria-hidden="true">${AG[a].n[0]}</span>`;
+const STL={run:'Running',ack:'Redirect queued',stopped:'Paused, no run',wait:'Waiting on you',idle:'Idle'};
+const lamp=(st,a)=>{const s=sgState(st,a);let l=STL[s];if(a==='wren'&&s==='run')l+=' · '+st.wren.task;return `<span class="lamp ${s}">${l}</span>`};
+const who=(st,a)=>`<span class="nm">${AG[a].n}</span><span class="rt">${AG[a].h}</span><span class="own">agent · works for ${AG[a].owner}</span>`;
+const rcptBtn=(st,id)=>id==='r1191'
+  ?`<button type="button" class="rcpt" data-act="receipt" data-arg="r1191" aria-label="Open receipt for Wren's live run">read 9 files · <span data-live="wt">${st.wren.tools}</span> tool calls · ${st.wren.state==='run'?'running':STL[st.wren.state].toLowerCase()} · ${st.wren.task}</button>`
+  :`<button type="button" class="rcpt" data-act="receipt" data-arg="${id}" aria-label="Open receipt: ${RC[id].title}">${RC[id].line}</button>`;
+const kbd=k=>`<span class="kbd">${k}</span>`;
+function sinceCounts(st){const n=st.feed.filter(f=>f.seq>st.lastSeen);return{needs:st.ruling?0:1,done:n.filter(f=>f.k==='result').length,hand:n.filter(f=>f.k==='handoff').length,run:st.wren.state==='run'?1:0,newCount:n.length}}
+const extra=st=>st.feed.filter(f=>f.seq>1191);
+
+function askBlock(st,{compact=false,anchor=true}={}){
+  const r=st.ruling;
+  const opts=[1,2,3].map(i=>`<button type="button" class="opt" data-act="rule" data-arg="${i}" ${r?'disabled':''} aria-pressed="${r&&r.opt===i}" aria-keyshortcuts="${i}${OPTS[i].rec?' A':''}" ${anchor&&i===1?'data-anchor="ask"':''}>${kbd(i)}<span><b>${OPTS[i].l}</b>${OPTS[i].rec?'<span class="rec">Otto recommends</span>':''}<span class="opt-d">${OPTS[i].d}</span></span></button>`).join('');
+  const ruled=r?`<p class="ruled" role="status">Ruled by you at ${r.t}: <b>${OPTS[r.opt].l}</b> · decision d-77 · seq ${r.seq} · ${r.frozen?'<b>frozen</b>':`<button type="button" class="lnk" data-act="undo">Undo (U)</button> before it freezes`}</p>`:'';
+  return `<div class="${compact?'compact':''}">${r?'':'<p class="need-l">Needs you · asks Lily, PR owner</p>'}<p class="sum">Merge PR #418?</p><p class="txt">${ASK_TEXT}</p><div class="opts" role="group" aria-label="Options for merging PR #418">${opts}</div>${ruled}${r?'':`<p class="keys">${kbd('A')} approve recommended · ${kbd('1')}–${kbd('3')} pick · ${kbd('U')} undo within 5 s</p>`}</div>`;
+}
+function resultBlock(st){return `<p class="sum">CSV export works for all four invoice states, and totals match the PDF on 212 fixtures.</p><div class="chips"><span class="chip">Ready for review</span><span class="chip">PR #418</span><span class="chip"><span class="add">+182</span> <span class="del">−14</span> · 6 files</span></div><p class="cav"><b>Caveat</b>Not tested above 480 line items; the largest fixture stops there.</p>${rcptBtn(st,'r1184')}`}
+function wrenRunBlock(st,{acts=true}={}){
+  const w=st.wren;const plan=w.plan.map(([s,x])=>`<li class="${x}">${esc(s)}</li>`).join('');
+  return `<p class="sum">${w.task==='T-43'?'Chunking exports over 500 lines':'Load-testing a 2,000-line invoice'} (${w.task})</p><ol class="plan" aria-label="Wren's plan">${plan}</ol>${rcptBtn(st,'r1191')}${acts?`<div class="acts"><button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Redirect ${kbd('R')}</button>${w.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Stop</button>'}</div>`:''}`;
+}
+function feedLine(st,f){
+  if(f.k==='redirect')return `<b>Lily → Wren (redirect):</b> ${esc(f.text)}`;
+  if(f.k==='reply')return `<b>${f.who==='marco'?'Marco':AG[f.who].n}:</b> ${f.text}`;
+  if(f.k==='human')return `<b>${PPL[f.who].n.split(' ')[0]}:</b> ${f.text}`;
+  return f.text;
+}
+
+/* ---------- 1 · CHAT ---------- */
+function rChat(st){
+  const c=sinceCounts(st);
+  const items=[];let dividerDone=false;
+  const order=[...st.feed].sort((a,b)=>(a.k==='progress'?1:0)-(b.k==='progress'?1:0)||a.seq-b.seq);
+  // progress card updates in place, so it sits after the ask; later items follow it
+  const base=order.filter(f=>f.seq<=1191),later=st.feed.filter(f=>f.seq>1191);
+  for(const f of [...base,...later]){
+    if(!dividerDone&&f.seq>st.lastSeen){items.push(`<li class="divider" role="separator">New since ${st.lastSeen===1183?'10:00':'you caught up'}</li>`);dividerDone=true}
+    items.push(chatItem(st,f));
+  }
+  const recap=st.recap?`<section class="recap" data-anchor="catchup" tabindex="-1" aria-label="Catch-up recap"><h4>Since you were here (10:00 · 2h 14m ago)</h4><dl>
+    <dt class="${c.needs?'needs':''}">Needs you</dt><dd>${c.needs?'Otto: merge PR #418? <button type="button" class="lnk" data-act="goask">Rule it</button>':'Nothing. You ruled on PR #418.'}</dd>
+    <dt>Done</dt><dd>Wren: CSV export ready for review, 212 fixtures match. <button type="button" class="lnk" data-act="receipt" data-arg="r1184">Receipt</button></dd>
+    <dt>Handoff</dt><dd>Wren passed PR #418 review to Otto (Marco's agent) at 10:15.</dd>
+    <dt>Running</dt><dd>Wren on T-43, step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1} of ${st.wren.plan.length}.</dd>
+    <dt>People</dt><dd>Nothing new from Marco.</dd></dl>
+    <p class="hint" style="margin-top:8px">Built from stored summaries. No model rewrote anything.</p>
+    <div class="acts"><button type="button" class="btn btn-s btn-p" data-act="markread">Mark caught up</button></div></section>`:'';
+  const side=`<aside class="chat-side" aria-label="Members and board"><h4 class="side-h">In this pod · 2 people, 2 agents</h4>
+    <div class="mem">${av('lily')}<span><b>Lily Shen</b><small>you · pod lead</small></span></div>
+    <div class="mem">${av('marco')}<span><b>Marco Ruiz</b><small>billing engineer</small></span></div>
+    <div class="mem">${sg(st,'wren')}<span><b>Wren</b> <span class="rt">Claude Code</span><small>agent · works for Lily</small>${lamp(st,'wren')}</span></div>
+    <div class="mem">${sg(st,'otto')}<span><b>Otto</b> <span class="rt">Codex</span><small>agent · works for Marco · <button type="button" class="lnk" data-act="mate">how to work with it</button></small>${lamp(st,'otto')}</span></div>
+    <h4 class="side-h">Board</h4>${Object.values(st.tasks).map(t=>`<div class="mini-task"><span class="id">${t.id}</span><span>${t.title.join(' ')} · <i>${t.status}</i></span></div>`).join('')}</aside>`;
+  return `<div class="chat"><div class="chat-main">
+    <header class="podhead"><h3>invoice-export</h3><p>Ship CSV export for invoices behind the <code>export_csv</code> flag. <span class="ex">Example data</span></p></header>
+    ${c.newCount||c.needs?`<section class="since" aria-label="Since you were here"><div class="since-t"><span>Since you were here <small>10:00 · 2h 14m ago</small></span><button type="button" class="btn btn-s" data-act="catchup">Catch me up ${kbd('C')}</button></div>
+      <div class="counts"><button type="button" class="cnt ${c.needs?'needs':'zero'}" data-act="goask"><span class="cnt-l">Needs you</span><span class="cnt-n">${c.needs}</span></button><button type="button" class="cnt ${c.done?'':'zero'}" data-act="jump" data-arg="result"><span class="cnt-l">Done</span><span class="cnt-n">${c.done}</span></button><button type="button" class="cnt ${c.hand?'':'zero'}" data-act="jump" data-arg="handoff"><span class="cnt-l">Handoffs</span><span class="cnt-n">${c.hand}</span></button><button type="button" class="cnt ${c.run?'':'zero'}" data-act="jump" data-arg="redirect"><span class="cnt-l">Running</span><span class="cnt-n">${c.run}</span></button></div></section>`:''}
+    ${recap}
+    <ol class="stream" aria-label="Messages">${items.join('')}</ol>
+    <form class="composer" data-form="compose"><label class="sr" for="compose-0">Message invoice-export</label><input class="field" id="compose-0" name="m" placeholder="Message, or @Wren to redirect, @Otto to ask" autocomplete="off"><button class="btn btn-p" type="submit">Send</button></form>
+  </div>${side}</div>`;
+}
+function chatItem(st,f){
+  if(f.k==='human')return `<li class="msg"><time class="tm">${f.t}</time>${av(f.who)}<div><p class="by">${PPL[f.who].n}</p><p class="mtext">${f.text}</p></div></li>`;
+  if(f.k==='handoff')return `<li class="handoff" data-anchor="handoff" tabindex="-1"><time class="tm">${f.t}</time><p><span class="tag">Handoff</span><b>Wren</b> → <b>Otto</b> <span>${f.what}</span><span class="own">Lily's agent to Marco's</span></p></li>`;
+  if(f.k==='result')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'wren')}<article class="card" data-nav tabindex="0" data-anchor="result" aria-label="Wren result on T-40"><header class="ch">${who(st,'wren')}</header>${resultBlock(st)}</article></li>`;
+  if(f.k==='ask')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'otto')}<article class="card ${st.ruling?'':'needs'}" data-nav tabindex="0" aria-label="Otto asks: merge PR 418?"><header class="ch">${who(st,'otto')}${lamp(st,'otto')}</header>${askBlock(st)}${rcptBtn(st,'r1189')}<div class="acts"><button type="button" class="btn btn-s" data-act="mate">Otto is Marco's agent</button></div></article></li>`;
+  if(f.k==='progress')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'wren')}<article class="card" data-nav tabindex="0" aria-label="Wren running on ${st.wren.task}"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}<p class="hint" style="margin-top:6px">One card per run; it updates in place.</p></article></li>`;
+  if(f.k==='redirect')return `<li class="msg"><time class="tm">${f.t}</time>${av('lily')}<div><p class="by">Lily Shen <span class="rt">redirect → Wren</span></p><p class="mtext">${esc(f.text)}</p></div></li>`;
+  if(f.k==='reply'){const a=f.who;return a==='marco'?`<li class="msg"><time class="tm">${f.t}</time>${av('marco')}<div><p class="by">Marco Ruiz</p><p class="mtext">${f.text}</p></div></li>`:`<li class="msg"><time class="tm">${f.t}</time>${sg(st,a)}<article class="card"><header class="ch">${who(st,a)}</header><p class="mtext" style="margin-top:6px">${f.text}</p>${f.wake?`<p class="hint" style="margin-top:4px;font-family:var(--mono)">wake: ${f.wake}</p>`:''}</article></li>`}
+  if(f.k==='sys')return `<li class="sys">${f.text}</li>`;
+  return '';
+}
+
+/* ---------- 2 · INBOX ---------- */
+function rInbox(st){
+  const c=sinceCounts(st);const sel=st.sel||'ask';
+  const it=(id,cls,main,after='')=>`<li class="it ${cls} ${sel===id?'on':''}"><button type="button" class="it-main" data-act="sel" data-arg="${id}" data-nav aria-current="${sel===id}">${main}</button>${after}</li>`;
+  const askOpts=st.ruling?'':`<div class="opts" role="group" aria-label="Rule from the queue">${[1,2,3].map(i=>`<button type="button" class="opt" data-act="rule" data-arg="${i}" ${i===1?'data-anchor="ask"':''}>${kbd(i)}<span><b>${OPTS[i].l}</b>${OPTS[i].rec?'<span class="rec">rec.</span>':''}</span></button>`).join('')}</div>`;
+  const needs=st.ruling?'':`<ul>${it('ask','needs',`${sg(st,'otto')}<span><span class="it-t">Merge PR #418?</span><span class="it-m"><b>Needs you</b> · Otto, Marco's agent · invoice-export · waiting 1h 55m</span></span>`,askOpts)}</ul>`;
+  const newItems=c.newCount&&st.feed.some(f=>f.seq>st.lastSeen&&f.seq<=1191);
+  const since=newItems?`<section class="grp" data-anchor="catchup" tabindex="-1"><h4 class="grp-h"><span>Since 10:00 · FYI, no action</span><button type="button" class="btn btn-s" data-act="markread">Mark all read</button></h4><ul>
+    ${it('wren-result','',`${sg(st,'wren')}<span><span class="it-t">CSV export ready for review</span><span class="it-m">Wren · T-40 · 212 fixtures match the PDF</span></span>`)}
+    ${it('handoff','',`<span class="av sm" aria-hidden="true">⇄</span><span><span class="it-t">Wren handed PR #418 to Otto</span><span class="it-m">10:15 · Lily's agent to Marco's</span></span>`)}</ul></section>`:'';
+  const ex=extra(st).slice(-4);
+  const just=ex.length?`<section class="grp"><h4 class="grp-h"><span>Just now</span></h4><ul class="feedmini">${ex.map(f=>`<li>${feedLine(st,f)}</li>`).join('')}</ul></section>`:'';
+  const zero=!c.needs&&!newItems?`<div class="zero" data-anchor="catchup" tabindex="-1"><b>You're caught up.</b><span>Agents surface here only when they need you. ${st.wren.state==='run'?'1 agent is':'No agent is'} working quietly.</span></div>`:'';
+  return `<div class="inbox"><div class="ib-list">
+    <p class="row" style="justify-content:space-between"><span class="hint">Home · all pods</span><span class="ex">Example data</span></p>
+    <h3 class="ib-big" style="margin-top:6px">Needs you <span class="n ${c.needs?'':'z'}">${c.needs}</span></h3>
+    ${zero}${needs}${st.ruling?`<p class="ruled" style="margin-top:10px">Ruled at ${st.ruling.t}: <b>${OPTS[st.ruling.opt].l}</b> · ${st.ruling.frozen?'frozen':'<button type="button" class="lnk" data-act="undo">Undo (U)</button>'}</p>`:''}
+    ${since}${just}
+    <section class="grp"><h4 class="grp-h"><span>Working quietly</span><span class="hint">agents stay out of the way until they need you</span></h4><ul>
+      ${it('wren','',`${sg(st,'wren')}<span><span class="it-t">Wren · ${st.wren.task}</span><span class="it-m">${lamp(st,'wren')} · <span data-live="wt">${st.wren.tools}</span> tool calls</span></span>`,`<div class="acts" style="margin:4px 0 0 40px"><button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Redirect ${kbd('R')}</button><button type="button" class="btn btn-s" data-act="receipt" data-arg="r1191">Receipt</button></div>`)}
+      ${it('otto','',`${sg(st,'otto')}<span><span class="it-t">Otto · Marco's agent</span><span class="it-m">${lamp(st,'otto')}</span></span>`,`<div class="acts" style="margin:4px 0 0 40px"><button type="button" class="btn btn-s" data-act="mate">Ask Otto or Marco</button></div>`)}</ul></section>
+    <section class="grp"><h4 class="grp-h"><span>Waiting on others</span></h4><ul>${it('t42','',`${av('marco')}<span><span class="it-t">Finance sign-off on totals</span><span class="it-m">Marco · T-42 · not yours</span></span>`)}</ul></section>
+  </div><div class="ib-detail" aria-live="polite">${inboxDetail(st,sel)}</div></div>`;
+}
+function inboxDetail(st,sel){
+  if(sel==='ask')return `<div class="card ${st.ruling?'':'needs'}"><header class="ch">${who(st,'otto')}</header>${askBlock(st,{anchor:false})}${rcptBtn(st,'r1189')}<p class="hint" style="margin-top:8px">Context: Wren built it (10:04) → handed to Otto (10:15) → Otto asks you (10:19). <button type="button" class="lnk" data-act="receipt" data-arg="r1184">Wren's receipt</button></p></div>`;
+  if(sel==='wren-result')return `<div class="card"><header class="ch">${who(st,'wren')}</header>${resultBlock(st)}</div>`;
+  if(sel==='handoff')return `<div class="card"><p class="sum">Handoff 10:15: Wren → Otto, review of PR #418</p><p class="txt">Wren's claim on T-40 ended; Otto's run was woken with reason “handoff from Wren (seq 1186)”. Otto works for Marco, so its ask on merging came to you, the PR owner.</p></div>`;
+  if(sel==='wren')return `<div class="card"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}</div>`;
+  if(sel==='otto')return mateCard(st);
+  if(sel==='t42')return `<div class="card"><p class="sum">T-42 · Finance sign-off on totals</p><p class="txt">Marco holds this. You can see it; nothing here needs you.</p></div>`;
+  return '';
+}
+
+/* ---------- 3 · MAP ---------- */
+const POS={'T-41':[10,40],'T-40':[180,40],'T-42':[10,170],'T-43':[180,170],'T-44':[95,300]};
+const W=150,H=64;
+const OCT=(()=>{const p=[];for(let k=0;k<8;k++){const a=(22.5+45*k)*Math.PI/180;p.push((14*Math.cos(a)).toFixed(1)+','+(14*Math.sin(a)).toFixed(1))}return p.join(' ')})();
+function tokPos(st,a){
+  if(a==='wren'){const [x,y]=POS[st.wren.task];return [x+W-12,y+2]}
+  const frozen1=st.ruling&&st.ruling.frozen&&st.ruling.opt!==2;
+  if(frozen1)return [296,386];
+  const [x,y]=POS['T-40'];return [x+W-44,y+2];
+}
+function rMap(st){
+  const ch=sinceCounts(st);
+  const isNew=id=>st.lastSeen===1183&&(id==='T-40'||id==='T-43');
+  const nodes=Object.values(st.tasks).map(t=>{const [x,y]=POS[t.id];const needs=t.id==='T-40'&&!st.ruling;
+    const owner=t.who?(t.who==='wren'||t.who==='otto'?AG[t.who].n:PPL[t.who].n.split(' ')[0]):'open';
+    const stl={done:'Done',review:'Review',doing:'Doing',todo:'To do'}[t.status];
+    return `<g class="nd ${t.status}${needs?' needs':''}${st.sel===t.id?' on':''}" data-act="sel" data-arg="${t.id}" role="button" tabindex="0" data-nav aria-label="${t.id} ${t.title.join(' ')}, ${stl}, ${owner}${needs?', needs you':''}">
+      <rect x="${x}" y="${y}" width="${W}" height="${H}" rx="2"/>
+      <text class="nid" x="${x+9}" y="${y+16}">${t.id} · ${stl} · ${owner}</text>
+      <text class="nt" x="${x+9}" y="${y+34}">${t.title[0]}</text><text class="nt" x="${x+9}" y="${y+50}">${t.title[1]}</text>
+      ${needs?`<text class="nneed" x="${x}" y="${y-7}">Needs you</text>`:''}
+      ${isNew(t.id)?`<circle class="nnew" cx="${x+W-10}" cy="${y+H-10}" r="4"><title>changed since 10:00</title></circle>`:''}</g>`}).join('');
+  const e=(a,b,d='')=>{const [x1,y1]=POS[a],[x2,y2]=POS[b];let p;
+    if(y1===y2)p=`M${x1+W},${y1+H/2} L${x2-6},${y2+H/2}`;else{const sx=x1+W/2,sy=y1+H,ex=x2+W/2,ey=y2-6;p=`M${sx},${sy} C${sx},${sy+30} ${ex},${ey-30} ${ex},${ey}`}
+    return `<path class="edge ${d}" d="${p}" marker-end="url(#ar)"/>`};
+  const tok=a=>{const [x,y]=st.replay?(a==='wren'?[POS['T-40'][0]+W-12,POS['T-40'][1]+2]:[296,386]):tokPos(st,a);const s=sgState(st,a);
+    return `<g class="tok ${s}" data-act="sel" data-arg="${a}" role="button" tabindex="0" data-nav data-tok="${a}" style="transform:translate(${x}px,${y}px)" aria-label="${AG[a].n}, ${AG[a].h} agent, works for ${AG[a].owner}, ${STL[s]}"><polygon points="${OCT}"/><text y="4">${AG[a].n[0]}</text><text class="own-t" y="27">${a==='otto'?'Marco’s':'Lily’s'}</text></g>`};
+  const ex=extra(st).slice(-3);
+  return `<div class="map"><div class="map-g">
+    <div class="map-bar"><span><b>invoice-export</b> · 5 tasks · 2 agents <span class="ex">Example data</span></span>
+      <span class="row">${st.lastSeen===1183?`<button type="button" class="btn btn-s" data-act="catchup" data-anchor="catchup">Replay since 10:00 ${kbd('C')}</button><button type="button" class="btn btn-s" data-act="markread">Mark caught up</button>`:'<span class="hint">Caught up</span>'}</span></div>
+    <svg viewBox="0 0 340 420" role="group" aria-label="Task graph with agent tokens">
+      <defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="arrow" d="M0,0 L8,4 L0,8 z"/></marker></defs>
+      ${e('T-41','T-40')}${e('T-40','T-42')}${e('T-40','T-43')}${e('T-42','T-44','dashed')}${e('T-43','T-44','dashed')}
+      <text class="ho-t" x="190" y="122">10:15 handoff W→O</text>
+      ${nodes}
+      <text class="bench-t" x="256" y="366">idle bench</text><rect class="bench" x="252" y="370" width="86" height="34" rx="2"/>
+      ${tok('wren')}${tok('otto')}
+    </svg>
+    <p class="hint" style="padding:0 4px">Click a task or an agent token. Move an agent by picking it, then “Move to…”. Dot = changed since 10:00.</p>
+  </div><div class="map-insp" aria-live="polite">${mapInsp(st)}</div></div>
+  ${ex.length?`<div class="ticker"><b style="color:var(--ink)">Latest</b>${ex.map(f=>`<span>${feedLine(st,f)}</span>`).join('')}</div>`:''}`;
+}
+function mapInsp(st){
+  const s=st.sel;
+  if(!s)return `<h3 style="font-weight:800">Inspector</h3><p class="txt">Nothing selected. Try T-40 (red ring: needs you) or the W token.</p><div class="acts"><button type="button" class="btn btn-s" data-act="sel" data-arg="T-40">Open T-40</button><button type="button" class="btn btn-s" data-act="sel" data-arg="wren">Pick Wren</button></div>`;
+  if(s==='T-40')return `<p class="hint">T-40 · CSV export for invoices</p><div class="card ${st.ruling?'':'needs'}" style="margin-top:6px"><header class="ch">${who(st,'otto')}</header>${askBlock(st)}${rcptBtn(st,'r1189')}</div><div class="card" style="margin-top:10px"><header class="ch">${who(st,'wren')}<span class="own">10:04, before handoff</span></header>${resultBlock(st)}</div>`;
+  if(s==='T-43'||s==='T-44'){const t=st.tasks[s];if(t.who==='wren')return `<p class="hint">${s} · ${t.title.join(' ')}</p><div class="card" style="margin-top:6px"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}</div>`;
+    return `<p class="hint">${s} · ${t.title.join(' ')}</p><p class="sum">Unclaimed</p><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="move" data-arg="${s}">Move Wren here</button></div>`}
+  if(s==='T-42')return `<p class="hint">T-42</p><p class="sum">Finance sign-off on totals</p><p class="txt">Held by Marco. Blocks T-44 only if finance asks for a load test.</p>`;
+  if(s==='T-41')return `<p class="hint">T-41</p><p class="sum">Menu label: Download CSV · Done by Lily</p>`;
+  if(s==='wren'){const targets=Object.values(st.tasks).filter(t=>t.id!==st.wren.task&&!t.who);
+    return `<div class="card"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}<p class="stamp" style="margin-top:12px">Move to…</p><div class="acts" style="margin-top:4px">${targets.map(t=>`<button type="button" class="btn btn-s" data-act="move" data-arg="${t.id}">${t.id} ${t.title.join(' ')}</button>`).join('')||'<span class="hint">No unclaimed tasks.</span>'}</div><p class="hint" style="margin-top:6px">A move ends the claim on ${st.wren.task} after the current tool call and claims the target.</p></div>`}
+  if(s==='otto')return mateCard(st);
+  return '';
+}
+
+/* ---------- 4 · TRANSIT ---------- */
+function rTransit(st){
+  const r=st.ruling;
+  const dep=[['10:04','Wren arrived at <b>Ready for review</b> · T-40','result',''],['10:15','Interchange: Wren → Otto · PR #418','handoff',''],['10:19',r?'Signal cleared by you':'<b>Otto held at signal · needs you</b>','ask',r?'':'needs'],['10:16','Wren departed on T-43','run','']];
+  const old=st.lastSeen>1183;
+  const stop=(t,mk,body,cls='',anchor='')=>`<li class="stp ${cls}" ${anchor?`data-anchor="${anchor}" tabindex="-1"`:''}><span class="t">${t}</span><span class="mk ${mk}" aria-hidden="true"></span><div class="sb">${body}</div></li>`;
+  const ex=extra(st);
+  const ex40=ex.filter(f=>f.line==='T-40').map(f=>stop(f.t,f.who==='marco'||f.who==='lily'||f.k==='human'?'':'ag',feedLine(st,f)));
+  const ex43=ex.filter(f=>f.line==='T-43').map(f=>stop(f.t,f.k==='redirect'?'pts':'ag',feedLine(st,f)));
+  let ahead40;
+  if(!r||!r.frozen)ahead40=[['Merge'],['Live behind export_csv']];
+  else if(r.opt===1)ahead40=[['Live behind export_csv']];
+  else if(r.opt===2)ahead40=[['Wren splits rounding helper'],['Otto re-reviews'],['Merge']];
+  else ahead40=[['Marco: finance sign-off (T-42)'],['Merge']];
+  const signal=stop(r?r.t:'now',r?'clear':'sig',`<div class="sig-box ${r?'clear':''}"><p class="stamp" style="color:${r?'var(--ink)':'var(--signal)'}">${r?'SIGNAL CLEARED':'SIGNAL · HELD FOR YOUR RULING'}</p>${askBlock(st,{compact:true})}</div>`,'', 'sig');
+  const w=st.wren;const doing=w.plan.findIndex(p=>p[1]==='doing');
+  const pts=`<div class="pts-box"><p class="stamp">POINTS · switch Wren's route mid-run</p><div class="row" style="margin-top:6px">
+    <button type="button" class="btn btn-s" aria-pressed="${!st.routed}" disabled>${w.task==='T-43'?'Chunk at 500 (current)':'Current route'}</button>
+    <button type="button" class="btn btn-s" data-act="points" data-arg="stream" ${st.routed==='stream'?'aria-pressed="true"':''}>Stream rows</button>
+    <button type="button" class="btn btn-s" data-act="points" data-arg="tests" ${st.routed==='tests'?'aria-pressed="true"':''}>Test first</button>
+    <button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Other… ${kbd('R')}</button>
+    ${w.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Release train</button>':'<button type="button" class="btn btn-s" data-act="stop">Hold train</button>'}</div></div>`;
+  return `<div class="tr"><section class="depart" aria-label="Departures and arrivals" data-anchor="catchup" tabindex="-1">
+      <h3>Since 10:00</h3><p class="hint">Arrivals while you were away. <span class="ex">Example data</span></p>
+      <div class="dep-rows">${dep.map(([t,txt,j,c])=>`<button type="button" class="dep ${c} ${old?'old':''}" data-act="jump" data-arg="${j==='ask'?'sig':j==='run'?'train':j}"><span class="t">${t}</span><span>${txt}</span></button>`).join('')}</div>
+      <div class="acts">${old?'<span class="hint">Caught up. Board dims what you have seen.</span>':`<button type="button" class="btn btn-s" data-act="markread">Mark caught up ${kbd('C')}</button>`}</div>
+    </section>
+    <div class="lines">
+      <section aria-label="Line T-40"><p class="line-h"><b>T-40 · CSV export</b><span>Wren (Lily's) ⇄ Otto (Marco's)</span></p><ol class="stops">
+        ${stop('09:12','',`<span class="who">Marco</span> boarded the brief: totals must match the PDF to the cent.`)}
+        ${stop('10:04','ag',`<span class="who">Wren</span> built it · ready for review<button type="button" class="route" data-act="receipt" data-arg="r1184" data-anchor="result" aria-label="Open Wren's receipt: read 14 files, ran 212 tests passed, took 6 min 41 s"><span>read 14</span><i>→</i><span>ran 212 ✓</span><i>→</i><span>took 6m 41s</span><span class="term"></span></button>`)}
+        ${stop('10:15','',`<span class="xfer">Interchange · Wren → Otto</span> <span class="own">review of PR #418</span>`,'','handoff')}
+        ${stop('10:19','ag',`<span class="who">Otto</span> reviewed: 3 PDF snapshots move by one cent. <button type="button" class="lnk" data-act="mate">Marco's agent</button><button type="button" class="route" data-act="receipt" data-arg="r1189"><span>read 6</span><i>→</i><span>ran 212 ✓ · pdf:snap 3Δ</span><i>→</i><span>took 4m 02s</span><span class="term"></span></button>`)}
+        ${signal}${ex40.join('')}
+        ${ahead40.map(([s])=>stop('','ghost',s,'ghost')).join('')}
+      </ol></section>
+      <section aria-label="Line T-43"><p class="line-h"><b>${w.task} · ${w.task==='T-43'?'Chunk exports over 500 lines':'Load-test 2,000 lines'}</b><span>Wren (Lily's)</span></p><ol class="stops">
+        ${stop('09:40','',`<span class="who">Lily</span> assigned it before stepping out.`)}
+        ${stop('10:16','ag',`<span class="who">Wren</span> departed · claim on ${w.task}`)}
+        ${w.plan.slice(0,Math.max(doing,0)).map(p=>stop('','ag',`<span style="color:var(--ink-3)">${esc(p[0])}</span>`)).join('')}
+        ${ex43.join('')}
+        ${stop('now',`train ${w.state==='run'?'run':''}`,`<span class="who">Wren</span> ${w.state==='run'?'at':w.state==='ack'?'switching at':'held at'} “${esc((w.plan[doing]||['—'])[0])}” · ${lamp(st,'wren')}${rcptBtn(st,'r1191')}${pts}`,'','train')}
+        ${w.plan.slice(doing+1).map(p=>stop('','ghost',esc(p[0]),'ghost')).join('')}
+      </ol></section>
+    </div></div>`;
+}
+
+/* ---------- 5 · ROOM ---------- */
+function rRoom(st){
+  const fig=(cls,agent)=>`<span class="scene ${cls} ${agent?'agent':''}" aria-hidden="true"><span class="fchair"></span><span class="fh"></span><span class="fb"></span><span class="farm"></span><span class="flamp"></span><span class="ftab"></span><span class="fmon"><i></i><i></i><i></i></span></span>`;
+  const ws=st.wren.state,os=st.otto.state;
+  const pose={run:'typing',ack:'typing',stopped:'idle',wait:'wait',idle:'idle'};
+  const last=a=>{const f=[...st.feed].reverse().find(x=>(x.who===a&&x.k!=='human')||(x.to===a));return f?feedLine(st,f):''};
+  const desk=(id,cls,figHtml,name,sub,bub='')=>`<button type="button" class="desk ${cls}" data-act="sel" data-arg="${id}" data-nav aria-pressed="${st.sel===id}">${figHtml}<span class="dn">${name}</span><span class="ds">${sub}</span>${bub?`<span class="bub">${bub}</span>`:''}</button>`;
+  const caught=st.lastSeen>1183;
+  return `<div class="room"><div class="floor" aria-label="Pod floor">
+    ${desk('wren',ws==='run'?'':ws,fig(pose[ws],1),'Wren <span class="rt">Claude Code</span>',`Lily's · ${lamp(st,'wren')}`,ws==='run'?`${st.wren.task} · tool call #<span data-live="wt">${st.wren.tools}</span>`:'')}
+    ${desk('otto',os==='wait'?'wait':'',fig(pose[os],1),'Otto <span class="rt">Codex</span>',`Marco's · ${lamp(st,'otto')}`,os==='wait'?'Lamp up: has a question for you':'')}
+    <div class="aisle"><span>10:15 · Wren passed PR #418 across the aisle to Otto</span></div>
+    ${desk('marco','',fig('away',0),'Marco Ruiz','away · back 13:00','Otto sits with Marco')}
+    ${desk('you','',fig('idle',0),'Lily Shen','you · just walked in',st.ruling?'Nothing waiting':'1 lamp is up for you')}
+    <section class="wb ${caught?'clean':''}" data-anchor="catchup" tabindex="-1" aria-label="Whiteboard: while you were out"><h4><span>Whiteboard · while you were out <span class="ex">Example data</span></span>${caught?'<span class="hint">wiped at '+st.wiped+'</span>':`<button type="button" class="btn btn-s" data-act="markread">Wipe board ${kbd('C')}</button>`}</h4>
+      <div class="notes"><button type="button" class="note ${st.ruling?'':'needs'}" data-act="sel" data-arg="otto"><b>${st.ruling?'RULED':'NEEDS YOU'}</b>Otto: merge PR #418?</button><button type="button" class="note" data-act="receipt" data-arg="r1184"><b>DONE 10:04</b>Wren: CSV export, 212 fixtures match</button><button type="button" class="note" data-act="sel" data-arg="otto"><b>HANDOFF 10:15</b>Wren → Otto, review #418</button><button type="button" class="note" data-act="sel" data-arg="wren"><b>RUNNING</b>Wren on ${st.wren.task}</button></div></section>
+  </div><div class="visit" aria-live="polite">${roomVisit(st,last)}</div></div>`;
+}
+function roomVisit(st,last){
+  const s=st.sel;
+  if(!s)return `<h3>Walk up to a desk</h3><p class="txt">Click a desk to stand at it and see the screen. Otto's lamp is up: it has a question for you.</p><div class="acts"><button type="button" class="btn btn-s" data-act="sel" data-arg="otto">Walk to Otto</button><button type="button" class="btn btn-s" data-act="sel" data-arg="wren">Walk to Wren</button></div>`;
+  if(s==='wren')return `<h3>At Wren's desk</h3><p class="hint">Lily's agent · Claude Code on lily-mbp</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'wren')}</p>${wrenRunBlock(st,{acts:false})}</div><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="redirect" data-arg="wren" data-anchor="redirect">Tap on the shoulder ${kbd('R')}</button>${st.wren.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Ask Wren to stop</button>'}<button type="button" class="btn btn-s" data-act="receipt" data-arg="r1184">Open the binder (last result)</button></div>${last('wren')?`<ul class="feedmini"><li>${last('wren')}</li></ul>`:''}`;
+  if(s==='otto')return `<h3>At Otto's desk</h3><p class="hint">Marco's agent · Codex on marco-linux</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'otto')}</p>${askBlock(st,{compact:false})}${rcptBtn(st,'r1189')}</div><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Otto is Marco's: what can I do?</button></div>${last('otto')?`<ul class="feedmini"><li>${last('otto')}</li></ul>`:''}`;
+  if(s==='marco')return `<h3>At Marco's desk</h3><p class="txt">Marco is away until 13:00. Otto sits with Marco: to change what Otto is doing, leave Marco a note.</p><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Leave a note for Marco</button></div>`;
+  if(s==='you')return `<h3>Your desk</h3><p class="txt">${st.ruling?'Nothing is waiting on you.':'One lamp is up. You can rule from here without walking over.'}</p>${st.ruling?'':`<div class="card needs" style="margin-top:8px">${askBlock(st,{compact:true})}</div>`}`;
+  return '';
+}
+
+/* ---------- shared: teammate card ---------- */
+function mateCard(st){
+  return `<div class="card"><header class="ch">${who(st,'otto')}${lamp(st,'otto')}</header>
+  <p class="txt">Otto works for <b>Marco Ruiz</b>. In this pod you can talk to it and rule on asks addressed to you. Redirecting or stopping it goes through Marco.</p>
+  <div class="acts"><button type="button" class="btn btn-s" data-act="mate">Ask Otto · suggest to Marco</button>${st.ruling?'':'<button type="button" class="btn btn-s" data-act="goask">Rule on its ask</button>'}</div>
+  ${st.marco?`<p class="ruled">${st.marco==='sent'?'Suggestion sent to Marco. Waiting on him.':'Marco said yes; Otto took the redirect from him.'}</p>`:''}</div>`;
+}
+
+/* ---------- five questions, TUI, verdicts ---------- */
+const PANELS=[
+ {name:'Chat-first with smart cards',thesis:'The pod is a conversation. Agent output arrives as one-line cards with receipts folded under them; you steer by talking.',render:rChat,
+  qa:[['Direct or redirect mid-run','Redirect on Wren’s running card, or type “@Wren …” in the composer. Both land at the next tool call.','redirect','wren','Redirect Wren'],
+      ['Trust its work','Each card ends in a mono receipt line that opens the server’s record.','receipt','r1184','Open receipt'],
+      ['Catch up','The since-strip counts; “Catch me up” writes a recap card from stored summaries.','catchup','','Catch me up'],
+      ['Work with a teammate’s agent','Otto is Marco’s. Mention it freely; redirecting asks Marco.','mate','','Work with Otto'],
+      ['Agent asks, you rule','The ask is a card with options. 1–3 or A, undo for 5 s, then frozen.','goask','','Go to the ask']],
+  tui:` jellymoon > invoice-export        example data
+ -------------------------------------------------
+ since 10:00   needs you 1 . done 1 . running 1
+ -------------------------------------------------
+ 09:12 (M) Marco  totals must match PDF to cent
+ ---------------- new since 10:00 ----------------
+ 10:04 <W> Wren   CSV export works, 212 match
+           read 14 . 23 tools . 6m41s    [t]rail
+ 10:15  W => O    handoff: review of PR #418
+ 10:19 <O> Otto   NEEDS YOU  merge PR #418?
+         [1] merge as is* [2] keep PDF [3] hold
+ 10:16 <W> Wren   T-43 chunking  step 2/4  running
+ -------------------------------------------------
+ > @Wren stream rows instead_
+ a approve*  1-3 rule  r redirect  c catch up`,
+  verdict:[['Best at','Zero learning curve. People talk, agents report, and one stream holds both; “@Wren …” as a redirect feels like talking.'],
+    ['Worst failure','Volume. At 10 agents the one ask scrolls away under progress cards and the stream turns into the log (today’s 2,698-char median).'],
+    ['New teammate','Minutes. It reads as a chat app with better cards.'],
+    ['At 10 agents','Weak alone. Holds only if cards fold to one line, runs update in place, and the since-strip plus an inbox sit beside it.'],
+    ['Verification cost','Low. Linear DOM with stable roles; Playwright asserts card text and a keypress. Cheapest of the five.']]},
+ {name:'Inbox-first',thesis:'Home is the needs-you queue across pods. Agents work quietly and surface only when they need a person.',render:rInbox,
+  qa:[['Direct or redirect mid-run','“Working quietly” lists running agents; Redirect opens the note that lands at the next tool call.','redirect','wren','Redirect Wren'],
+      ['Trust its work','The detail pane carries the ask plus the full chain of receipts (Wren built, Otto reviewed).','receipt','r1189','Open receipt'],
+      ['Catch up','Since-10:00 FYI group; “Mark all read” reaches inbox zero.','catchup','','Catch up'],
+      ['Work with a teammate’s agent','Otto is labelled Marco’s; its row offers “Ask Otto or Marco”.','mate','','Work with Otto'],
+      ['Agent asks, you rule','Rule from the queue row itself. J/K to move, 1–3 or A to rule.','goask','','Go to the ask']],
+  tui:` jellymoon > needs you (1)          example data
+ =================================================
+ > <O> Otto . Marco's   merge PR #418?    1h55m
+       [1] merge as is *  [2] keep PDF  [3] hold
+ -- since 10:00 . fyi ---------------- [m]ark read
+   ok  Wren   T-40 ready for review   invoice-exp
+   =>  Wren -> Otto   PR #418 review
+ -- working quietly ------------------------------
+   *   Wren   T-43 chunking  tool #12  [r]edirect
+   !   Otto   waiting on you
+ -- waiting on others ----------------------------
+   o   Marco  T-42 finance sign-off
+ =================================================
+ j/k move  enter open  a approve*  1-3 rule`,
+  verdict:[['Best at','Fast, keyboard-only rulings across every pod. The path from “agent needs me” to a frozen ruling is one keystroke.'],
+    ['Worst failure','Agents disappear from view, so asks get rubber-stamped without context, and the team conversation has no home.'],
+    ['New teammate','Fast to act, slow to understand: the queue says what to decide, never why the pod exists.'],
+    ['At 10 agents','Best of the five. The queue grows with asks, not with agents.'],
+    ['Verification cost','Low. A sorted list plus keys; deterministic order makes Playwright specs short.']]},
+ {name:'Work-map',thesis:'The board is a live graph of tasks. Agents are tokens that sit on the task they hold; you move a token to redirect.',render:rMap,
+  qa:[['Direct or redirect mid-run','Pick the W token, then “Move to…” another task, or send a note. The token travels when the claim changes.','sel','wren','Pick Wren'],
+      ['Trust its work','Select a task; its inspector shows every card on it with receipts.','receipt','r1184','Open receipt'],
+      ['Catch up','Dots mark changed nodes; Replay animates the tokens since 10:00.','catchup','','Replay'],
+      ['Work with a teammate’s agent','The O token is labelled Marco’s; selecting it shows what you may do.','sel','otto','Pick Otto'],
+      ['Agent asks, you rule','A red ring marks the task waiting on you; rule in the inspector or press A.','goask','','Go to the ask']],
+  tui:` jellymoon > invoice-export > map   example data
+  +-T-41--------+     +-T-40-----------+  ! you
+  | label  done |---->| csv export <O> |
+  +-------------+     +---+--------+---+
+           +--------------+        +------+
+     +-T-42-v------+          +-T-43--v-----+
+     | finance  MR |          | chunk   <W> |
+     +------+------+          +------+------+
+            +---------+   +----------+
+                   +-T-44-v---v--+
+                   | load test   | unclaimed
+                   +-------------+
+ tab node  m move agent  t trail  a approve*`,
+  verdict:[['Best at','Dependencies and who-holds-what at a glance; reassigning by moving a token matches how a lead thinks.'],
+    ['Worst failure','The graph lies when work is not a DAG (discussion, ad-hoc questions), and layout churn makes people lose their place.'],
+    ['New teammate','Slow. Nodes, edges, tokens and rings all need a legend.'],
+    ['At 10 agents','Tokens pile up on busy nodes; needs a real layout engine and is comfortable to about 20 tasks.'],
+    ['Verification cost','High. SVG positions and motion need aria labels on every node and screenshot baselines.']]},
+ {name:'Transit-line',thesis:'Each task is a line; people and agents are stops, a handoff is an interchange, the ask is a signal, and redirecting is switching points.',render:rTransit,
+  qa:[['Direct or redirect mid-run','At the train, the Points box switches Wren’s route; upcoming stops rewrite.','jump','train','Go to the points'],
+      ['Trust its work','Each agent stop carries its receipt as a three-stop route: read, ran, took.','receipt','r1184','Open receipt'],
+      ['Catch up','The departures board lists arrivals since 10:00; each row jumps to its stop.','catchup','','Catch up'],
+      ['Work with a teammate’s agent','Line T-40 changes operator at the interchange; Otto’s stops say Marco’s.','mate','','Work with Otto'],
+      ['Agent asks, you rule','The ask is a red signal holding the line; clearing it shows which stops come next.','goask','','Go to the signal']],
+  tui:` jellymoon > lines                 example data
+ T-40 csv export =================================
+  09:12  o  Marco   totals to the cent
+  10:04  #  Wren    built   read > ran > took .
+  10:15 (=) interchange  Wren => Otto
+  10:19  #  Otto    3 PDF snapshots move 1 cent
+         X  SIGNAL  your ruling   [1] [2] [3]
+         :  merge  :  live behind export_csv
+ T-43 chunk exports ==============================
+  09:40  o  Lily    assigned
+  10:16  #  Wren    departed
+   now  [>] train   step 2 . tool #12
+         Y  points  [s]tream rows  [h]old train
+         :  test 2,000 lines  :  open PR
+ a clear signal*  p switch points  t trail`,
+  verdict:[['Best at','Handoffs and provenance: who touched the work, in what order, and what comes next after your ruling.'],
+    ['Worst failure','Work that is not a flow (discussion, a quick question) has no line; ghost stops imply a plan the agent never committed to.'],
+    ['New teammate','Medium. The metaphor lands in a minute once seen, but it needs a one-line legend.'],
+    ['At 10 agents','Good. Lines stack vertically per task, agents are trains, and the departures board stays one screen.'],
+    ['Verification cost','Medium. Ordered lists with stable text; the only motion is the train hop.']]},
+ {name:'Room / presence',thesis:'Agents are characters at desks whose pose is their true state. You walk up to a desk to see its screen and talk to it.',render:rRoom,
+  qa:[['Direct or redirect mid-run','Walk to Wren’s desk and tap it on the shoulder.','redirect','wren','Tap Wren'],
+      ['Trust its work','Open the binder on a desk, or a whiteboard note, to get the receipt.','receipt','r1184','Open binder'],
+      ['Catch up','The whiteboard holds what changed while you were out; wipe it when read.','catchup','','Read the board'],
+      ['Work with a teammate’s agent','Otto’s desk sits beside Marco’s; changing Otto means a note to Marco.','sel','marco','Walk to Marco'],
+      ['Agent asks, you rule','A raised lamp means an ask; rule at its desk or from yours. A works anywhere.','goask','','Walk to the lamp']],
+  tui:` jellymoon > room                  example data
+ +----------------+   +----------------+
+ | <W> Wren   ... |   | <O> Otto   (!) |
+ | T-43 tool #12  |   | lamp up: ask   |
+ +----------------+   +----------------+
+     \\__ 10:15  PR #418 passed across __/
+ +----------------+   +----------------+
+ | (M) Marco away |   | (L) you        |
+ | back 13:00     |   | just walked in |
+ +----------------+   +----------------+
+ whiteboard: 1 ask . 1 done . 1 handoff
+ arrows walk  enter visit  a approve*  r tap`,
+  verdict:[['Best at','Presence and warmth: who is busy and who wants you reads from across the room, and ownership is spatial.'],
+    ['Worst failure','Theatre. Poses suggest more than the lease knows, walking to a desk is slower than reading a list, and space is not keyboard-native.'],
+    ['New teammate','Instant charm, slow real work: delightful on day one, tiring by day five.'],
+    ['At 10 agents','Poor. The floor crowds and scrolls; needs zones or rooms, which brings back navigation.'],
+    ['Verification cost','Highest. Animated poses and spatial layout; tests must assert on state text, never on pose.']]}
+];
+
+/* ---------- render ---------- */
+function shell(i){
+  const p=PANELS[i];
+  return `<section class="panel" id="panel-${i}" role="tabpanel" aria-labelledby="tab-${i}" ${i===cur?'':'hidden'}>
+    <header class="p-head"><div><h2>${i+1} · ${p.name}</h2><p>${p.thesis}</p></div><div class="p-tools"><span class="ex">Example data</span><button type="button" class="btn btn-s" data-act="reset">Reset tab</button></div></header>
+    <div class="proto" id="proto-${i}"></div>
+    <section class="sect" aria-labelledby="q-${i}"><h3 id="q-${i}">The five questions, answered here</h3><ol class="qs">${p.qa.map(([q,how,act,arg,label])=>`<li class="q"><div><b>${q}</b><span>${how}</span></div><button type="button" class="btn btn-s" data-act="${act}" data-arg="${arg}">${label}</button></li>`).join('')}</ol></section>
+    <section class="sect" aria-labelledby="t-${i}"><h3 id="t-${i}">One-screen TUI sketch</h3><pre class="tui" aria-label="Terminal sketch of the ${p.name} paradigm">${esc(p.tui)}</pre><p class="tui-note">Same model, 50 columns. Keys match the web prototype.</p></section>
+    <section class="sect" aria-labelledby="v-${i}"><h3 id="v-${i}">Verdict</h3><dl class="verdict">${p.verdict.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></section>
+  </section>`;
+}
+function render(i=cur){
+  const host=$('#proto-'+i);if(!host)return;
+  const a=document.activeElement;let key=null;
+  if(a&&host.contains(a))key=[a.getAttribute('data-act'),a.getAttribute('data-arg')];
+  host.innerHTML=PANELS[i].render(S[i]);
+  if(key&&key[0]){const m=host.querySelector(`[data-act="${key[0]}"]${key[1]?`[data-arg="${key[1]}"]`:''}`);if(m&&!m.disabled)m.focus({preventScroll:true})}
+  if(i===2&&S[2].replay){requestAnimationFrame(()=>requestAnimationFrame(()=>{S[2].replay=false;for(const a of ['wren','otto']){const g=host.querySelector(`[data-tok="${a}"]`);const [x,y]=tokPos(S[2],a);if(g)g.style.transform=`translate(${x}px,${y}px)`}}))}
+}
+$('#panels').innerHTML=PANELS.map((_,i)=>shell(i)).join('');
+PANELS.forEach((_,i)=>render(i));
+
+/* ---------- actions ---------- */
+let toastT;
+function toast(msg,undo){const t=$('#toast');t.innerHTML=`<span>${msg}</span>${undo?'<button type="button" class="lnk" data-act="undo">Undo</button>':''}`;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,undo?5000:3200)}
+function focusAnchor(name){const el=$('#proto-'+cur).querySelector(`[data-anchor="${name}"]`);if(el){el.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});el.focus({preventScroll:true})}}
+function later(st,ms,fn){const id=setTimeout(()=>{if(S.includes(st)){fn();render(S.indexOf(st))}},ms);return id}
+function push(st,o){o.seq=++st.seq;o.t=o.t||tm(st);st.feed.push(o);return o}
+
+function rule(opt){
+  const st=S[cur];
+  if(st.ruling){toast(st.ruling.frozen?'Already ruled. Rulings are frozen.':'Already ruled. Press U to undo.');return}
+  st.ruling={opt,t:tm(st),seq:++st.seq,frozen:false};st.otto.state='idle';
+  render();toast(`Ruled: ${OPTS[opt].l}. Freezes in 5 s.`,true);
+  timers.set(st,later(st,5000,()=>freeze(st)));
+}
+function freeze(st){
+  if(!st.ruling||st.ruling.frozen)return;st.ruling.frozen=true;timers.delete(st);
+  const o=st.ruling.opt;
+  if(o===1){st.tasks['T-40'].status='done';st.tasks['T-40'].who=null;push(st,{k:'reply',who:'otto',line:'T-40',text:'Merged PR #418 behind <code>export_csv</code>; 3 PDF snapshots updated. T-40 is done.',wake:'ruling on d-77 by Lily'})}
+  else if(o===2){st.tasks['T-40'].status='doing';push(st,{k:'reply',who:'wren',line:'T-40',text:'Woken by your ruling. I will split the rounding helper after my current T-43 step, then hand back to Otto.',wake:'ruling on d-77 by Lily'})}
+  else{st.tasks['T-40'].status='review';push(st,{k:'sys',line:'T-40',text:'T-40 held for Marco’s finance sign-off (T-42). Marco is notified.'})}
+}
+function undo(){const st=S[cur];if(!st.ruling)return;if(st.ruling.frozen){toast('Frozen. A ruling cannot be undone once frozen.');return}clearTimeout(timers.get(st));timers.delete(st);st.ruling=null;st.otto.state='wait';render();toast('Ruling undone. The ask is open again.')}
+
+const ROUTES={stream:{note:'Stream rows instead of chunking.',plan:[['Stream rows straight to the CSV writer','doing'],['Test a 2,000-line fixture','todo'],['Open a PR','todo']],ack:'Dropping the 500-line chunks; streaming rows to the writer instead.'},
+  tests:{note:'Write the 2,000-line test first.',plan:[['Write a failing 2,000-line test','doing'],['Split rows into 500-line chunks','todo'],['Open a PR','todo']],ack:'Writing the 2,000-line test first; chunking after it fails.'},
+  cap:{note:'Cap exports at 2,000 lines for now.',plan:[['Add a 2,000-line cap with a clear error','doing'],['Test the cap','todo'],['Open a PR','todo']],ack:'Adding a cap with a clear error; chunking moves to a follow-up.'}};
+function redirectWren(key,text){
+  const st=S[cur];const r=ROUTES[key];const note=r?r.note:text;if(!note)return;
+  const done=st.wren.plan.filter(p=>p[1]==='done');
+  push(st,{k:'redirect',who:'lily',to:'wren',line:'T-43',text:note});
+  st.wren.state='ack';st.routed=key;render();toast('Redirect sent. It lands at Wren’s next tool call.');
+  later(st,1400,()=>{st.wren.tools++;st.wren.state='run';
+    st.wren.plan=r?[...done,...r.plan]:[...done,['Lily: '+note,'doing'],...st.wren.plan.filter(p=>p[1]==='todo')];
+    push(st,{k:'reply',who:'wren',line:'T-43',text:`Got it at tool call #${st.wren.tools}. ${r?r.ack:'Plan updated with your note.'}`,wake:'redirect by Lily (lease renewal)'})});
+}
+function stopWren(){const st=S[cur];st.wren.state='stopped';push(st,{k:'sys',line:'T-43',text:`Lily stopped Wren’s run on ${st.wren.task}. Lease released; the task stays assigned to Wren with no run.`});render();toast('Wren stopped at its current tool call.')}
+function resumeWren(){const st=S[cur];st.wren.state='run';push(st,{k:'reply',who:'wren',line:'T-43',text:`Resumed on ${st.wren.task} from step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1}.`,wake:'resume by Lily'});render()}
+function moveWren(target){
+  const st=S[cur];const from=st.wren.task;if(from===target)return;
+  st.tasks[from].who=null;st.tasks[from].status='todo';st.tasks[target].who='wren';st.tasks[target].status='doing';
+  st.wren.task=target;st.wren.state='ack';st.wren.plan=clone(PLAN[target]||[['Start '+target,'doing']]);
+  push(st,{k:'redirect',who:'lily',to:'wren',line:'T-43',text:`Move from ${from} to ${target}.`});st.sel='wren';render();toast(`Wren will release ${from} after its current tool call.`);
+  later(st,1400,()=>{st.wren.state='run';st.wren.tools++;push(st,{k:'reply',who:'wren',line:'T-43',text:`Released ${from}, claimed ${target}.`,wake:'reassign by Lily'})});
+}
+function catchup(){
+  const st=S[cur];
+  if(cur===0){st.recap=true;render();focusAnchor('catchup');return}
+  if(cur===2){st.replay=true;render();toast('Replaying since 10:00: Wren finished T-40, handed it to Otto, then took T-43.');return}
+  if(cur===4){st.sel=null;render();focusAnchor('catchup');return}
+  if(cur===3&&st.lastSeen>1183){focusAnchor('catchup');return}
+  if(cur===1&&!st.feed.some(f=>f.seq>st.lastSeen&&f.seq<=1191)){focusAnchor('catchup');return}
+  markread();
+}
+function markread(){const st=S[cur];st.lastSeen=st.seq;st.recap=false;st.wiped=tm(st);render();toast(cur===1?'All read. Only asks will surface now.':'Marked caught up.');focusAnchor('catchup')}
+function goask(){const st=S[cur];if(cur===1)st.sel='ask';if(cur===2)st.sel='T-40';if(cur===4)st.sel='otto';render();
+  if(st.ruling){toast('Already ruled.');}
+  if(cur===3)focusAnchor('sig');const el=$('#proto-'+cur).querySelector('.opt:not(:disabled)');if(el){el.scrollIntoView({block:'center'});el.focus({preventScroll:true})}}
+
+/* receipt dialog */
+function openReceipt(id){
+  const st=S[cur];const r=RC[id];const a=AG[r.agent];
+  const tools=id==='r1191'?[...r.tools,...st.wren.live]:r.tools;
+  $('#rc-body').innerHTML=`<div class="dh"><div><h3 id="rc-title">Receipt · ${r.title}</h3><p>Written by the pod when the run reported, not by the agent. <span class="ex">Example data</span></p></div><form method="dialog"><button class="btn btn-s" autofocus>Close</button></form></div>
+  <div class="db"><p class="stamp">SERVER-STAMPED</p><dl class="kv"><dt>run</dt><dd>${r.run}</dd><dt>agent</dt><dd>${a.n} · works for ${a.owner}</dd><dt>harness</dt><dd>${a.hk}</dd><dt>computer</dt><dd>${a.pc}</dd><dt>wake reason</dt><dd>${r.wake}</dd><dt>claim</dt><dd>${r.claim}</dd><dt>window</dt><dd>${r.win}</dd></dl>
+  <p class="stamp">TOOL CALLS (${id==='r1191'?st.wren.tools:tools.length})</p><ol class="tools">${tools.map(([k,v])=>`<li><span class="tk">${k}</span><span>${esc(v)}</span></li>`).join('')}${id==='r1191'&&st.wren.tools>tools.length?`<li><span class="tk">…</span><span>${st.wren.tools-tools.length} more while you watched</span></li>`:''}</ol>
+  <p class="stamp">AGENT-REPORTED, CHECK AGAINST THE ABOVE</p><ul class="feedmini">${r.says.map(s=>`<li>${s}</li>`).join('')}</ul></div>`;
+  $('#dlg-receipt').showModal();
+}
+/* redirect dialog */
+function openRedirect(a){
+  if(a==='otto'){openMate();return}
+  const st=S[cur];$('#rd-now').innerHTML=`Now: ${STL[st.wren.state]} on ${st.wren.task}, step “${esc((st.wren.plan.find(p=>p[1]==='doing')||['—'])[0])}” · tool call #${st.wren.tools}`;
+  $('#rd-text').value='';$('#rd-form').querySelector('input[value="stream"]').checked=true;$('#rd-stop').disabled=st.wren.state==='stopped';
+  $('#dlg-redirect').showModal();
+}
+$('#rd-form').addEventListener('submit',e=>{const v=e.submitter&&e.submitter.value;if(v==='send'){const k=$('#rd-form').querySelector('input[name=rp]:checked').value;const txt=$('#rd-text').value.trim();if(k==='custom'&&!txt){e.preventDefault();$('#rd-text').focus();return}setTimeout(()=>redirectWren(k==='custom'?null:k,txt))}else if(v==='stop')setTimeout(stopWren)});
+$('#rd-text').addEventListener('input',()=>{if($('#rd-text').value)$('#rd-form').querySelector('input[value="custom"]').checked=true});
+/* teammate dialog */
+function openMate(){
+  const st=S[cur];
+  $('#tm-body').innerHTML=`<div class="dh"><div><h3 id="tm-title">Otto is Marco's agent</h3><p>Codex on marco-linux · ${STL[st.otto.state]}</p></div><form method="dialog"><button class="btn btn-s">Close</button></form></div>
+  <div class="db"><dl class="kv"><dt>you can</dt><dd>mention it, ask it questions, read its receipts, rule on asks addressed to you</dd><dt>via Marco</dt><dd>redirect, stop, or reassign it</dd></dl>
+  <form id="mate-q" class="db" style="padding:0"><label class="stamp" for="mq">ASK OTTO A QUESTION (wakes it with reason “mention by Lily”)</label><input class="field" id="mq" value="Which helper does the rounding now?"><div class="row"><button class="btn btn-p btn-s" type="submit">Ask Otto</button></div></form>
+  <form id="mate-s" class="db" style="padding:0"><label class="stamp" for="ms">SUGGEST A REDIRECT TO MARCO</label><input class="field" id="ms" value="Have Otto also check the 480+ line case before merge."><div class="row"><button class="btn btn-s" type="submit" ${st.marco?'disabled':''}>Send to Marco</button>${st.marco?`<span class="hint">${st.marco==='sent'?'Sent; waiting on Marco.':'Marco approved it.'}</span>`:''}</div></form></div>`;
+  $('#dlg-mate').showModal();
+  $('#mate-q').onsubmit=e=>{e.preventDefault();const q=$('#mq').value.trim();if(!q)return;$('#dlg-mate').close();
+    push(st,{k:'human',who:'lily',line:'T-40',text:'<b>@Otto</b> '+esc(q)});render();toast('Asked Otto. Mentions wake any agent in the pod.');
+    later(st,1300,()=>push(st,{k:'reply',who:'otto',line:'T-40',text:'<code>roundHalfEven</code> in <code>billing/money.ts</code>. CSV and PDF both call it since PR #418.',wake:'mention by Lily'}))};
+  $('#mate-s').onsubmit=e=>{e.preventDefault();const q=$('#ms').value.trim();if(!q)return;$('#dlg-mate').close();st.marco='sent';
+    push(st,{k:'human',who:'lily',line:'T-40',text:'<b>@Marco</b> suggestion for Otto: '+esc(q)});render();toast('Sent to Marco. Otto changes course only on his word.');
+    later(st,2200,()=>{st.marco='ok';push(st,{k:'reply',who:'marco',line:'T-40',text:'Fine by me. <b>@Otto</b> go ahead.'});push(st,{k:'reply',who:'otto',line:'T-40',text:'Checking the 480+ line case now, at Marco’s word.',wake:'mention by Marco (owner)'})})};
+}
+
+/* composer (chat) */
+document.addEventListener('submit',e=>{const f=e.target;if(f.dataset.form!=='compose')return;e.preventDefault();const v=f.m.value.trim();if(!v)return;const st=S[cur];f.m.value='';
+  if(/^@wren\b/i.test(v)){redirectWren(null,v.replace(/^@wren\s*/i,'')||'Check in.');return}
+  if(/^@otto\b/i.test(v)){push(st,{k:'human',who:'lily',line:'T-40',text:'<b>@Otto</b> '+esc(v.replace(/^@otto\s*/i,''))});render();later(st,1300,()=>push(st,{k:'reply',who:'otto',line:'T-40',text:'Answering you directly; I work for Marco, so a change of course goes through him.',wake:'mention by Lily'}));return}
+  push(st,{k:'human',who:'lily',text:esc(v)});render();$('#compose-0').focus()});
+
+/* tabs + theme */
+function setTab(i){cur=i;document.querySelectorAll('.tab').forEach((t,j)=>{t.setAttribute('aria-selected',j===i);t.tabIndex=j===i?0:-1});document.querySelectorAll('.panel').forEach((p,j)=>p.hidden=j!==i);render(i)}
+const THEMES=['auto','light','dark'];let th=0;
+function setTheme(){th=(th+1)%3;const v=THEMES[th];if(v==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',v);$('#themeBtn').textContent='Theme: '+v;try{localStorage.setItem('jm-theme',v)}catch(e){}}
+try{const v=localStorage.getItem('jm-theme');if(v&&v!=='auto'){th=THEMES.indexOf(v)-1;setTheme()}}catch(e){}
+
+/* click dispatch */
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;const act=el.dataset.act,arg=el.dataset.arg;const st=S[cur];
+  switch(act){
+    case 'tab':setTab(+arg);break;
+    case 'theme':setTheme();break;
+    case 'reset':{clearTimeout(timers.get(st));S[cur]=fresh();render();toast('Tab reset to the example state.');break}
+    case 'rule':rule(+arg);break;
+    case 'undo':undo();break;
+    case 'receipt':openReceipt(arg);break;
+    case 'redirect':openRedirect(arg);break;
+    case 'stop':stopWren();break;
+    case 'resume':resumeWren();break;
+    case 'catchup':catchup();break;
+    case 'markread':markread();break;
+    case 'mate':openMate();break;
+    case 'goask':goask();break;
+    case 'sel':st.sel=(st.sel===arg&&cur!==1&&!e.target.closest('.qs'))?null:arg;render();
+      if(e.target.closest('.qs')){const ins=$('#proto-'+cur).querySelector('.map-insp,.visit,.ib-detail');if(ins)ins.scrollIntoView({block:'nearest'})}break;
+    case 'move':moveWren(arg);break;
+    case 'points':redirectWren(arg);break;
+    case 'jump':focusAnchor(arg);break;
+  }
+});
+
+/* keyboard */
+document.querySelector('.tabs').addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;const n=(cur+(e.key==='ArrowRight'?1:4))%5;setTab(n);$('#tab-'+n).focus()});
+document.addEventListener('keydown',e=>{
+  if(document.querySelector('dialog[open]'))return;
+  const t=e.target;if(t.matches('input,textarea,select,[contenteditable]'))return;
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  if((e.key==='Enter'||e.key===' ')&&t.getAttribute('role')==='button'&&t.tagName!=='BUTTON'){e.preventDefault();t.dispatchEvent(new MouseEvent('click',{bubbles:true}));return}
+  const k=e.key.toLowerCase();
+  if(k==='1'||k==='2'||k==='3'){e.preventDefault();rule(+k)}
+  else if(k==='a'){e.preventDefault();rule(1)}
+  else if(k==='u'){e.preventDefault();undo()}
+  else if(k==='r'){e.preventDefault();openRedirect('wren')}
+  else if(k==='t'){e.preventDefault();openReceipt('r1184')}
+  else if(k==='c'){e.preventDefault();catchup()}
+  else if(k==='j'||k==='k'){e.preventDefault();const list=[...$('#proto-'+cur).querySelectorAll('[data-nav]')];if(!list.length)return;let i=list.indexOf(document.activeElement);i=i<0?0:Math.min(list.length-1,Math.max(0,i+(k==='j'?1:-1)));list[i].focus();list[i].scrollIntoView({block:'nearest'})}
+});
+
+/* live tool-call ticker: lease renews on each tool call */
+setInterval(()=>{S.forEach((st,i)=>{if(st.wren.state!=='run'||st.wren.tools>=48)return;const nx=LIVE[(st.wren.tools-9)%LIVE.length];st.wren.tools++;st.wren.live.push(nx);
+  const host=$('#proto-'+i);if(host)host.querySelectorAll('[data-live="wt"]').forEach(n=>n.textContent=st.wren.tools)})},4000);
+</script>
+</body>
+</html>

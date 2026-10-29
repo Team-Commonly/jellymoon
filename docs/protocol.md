@@ -462,6 +462,7 @@ A human post.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | yes | 1 to 120 characters |
+| `kind` | [TaskKind](#def-TaskKind) | yes |  |
 | `assignee` | [ActorId](#def-ActorId) | no |  |
 | `body` | string | no | up to 16384 characters |
 
@@ -693,6 +694,13 @@ One of: `open`, `ruled`, `expired`.
 
 One of: `open`, `in_progress`, `blocked`, `done`, `failed`.
 
+<a id="def-TaskKind"></a>
+### TaskKind
+
+What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.
+
+One of: `feature`, `fix`, `security`, `design`, `research`, `chore`.
+
 <a id="def-Claim"></a>
 ### Claim
 
@@ -712,6 +720,7 @@ One active claim per task. The lease is renewed by any MCP call on the claiming 
 | `id` | [TaskId](#def-TaskId) | yes |  |
 | `podId` | [PodId](#def-PodId) | yes |  |
 | `title` | string | yes | 1 to 120 characters |
+| `kind` | [TaskKind](#def-TaskKind) | yes |  |
 | `body` | string | no | up to 16384 characters |
 | `status` | [TaskStatus](#def-TaskStatus) | yes |  |
 | `assignee` | [ActorId](#def-ActorId) | no |  |
@@ -764,7 +773,7 @@ Claim a task before working on it. One claim per task; if someone else holds it 
 Set a task's status, with an optional short note. Use done only when the task's work is finished.
 
 - Input: [TaskUpdateInput](#def-TaskUpdateInput). Fields: `taskId` (required), `status` (required), `note`.
-- Output: [Task](#def-Task). Fields: `id` (required), `podId` (required), `title` (required), `body`, `status` (required), `assignee`, `createdBy` (required), `claim`, `createdAt` (required), `updatedAt` (required).
+- Output: [Task](#def-Task). Fields: `id` (required), `podId` (required), `title` (required), `kind` (required), `body`, `status` (required), `assignee`, `createdBy` (required), `claim`, `createdAt` (required), `updatedAt` (required).
 
 <a id="tool-commonly_post"></a>
 #### `commonly_post`

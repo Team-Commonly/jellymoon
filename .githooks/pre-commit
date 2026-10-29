@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Installed by `make hooks`. The fast half of preflight: contracts in sync, entropy budgets, no secrets.
+set -euo pipefail
+export PATH="$HOME/.commonly/toolchains/v4/bin:$PATH"
+make --no-print-directory check-gen entropy secrets

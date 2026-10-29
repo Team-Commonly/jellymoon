@@ -2,7 +2,7 @@
 # toolchain prefix; CI installs them with setup-go and setup-bun.
 export PATH := $(HOME)/.commonly/toolchains/v4/bin:$(PATH)
 
-.PHONY: gen check-gen test test-ts test-go preflight
+.PHONY: gen check-gen test test-ts test-go entropy secrets hooks preflight
 
 node_modules: package.json bun.lock
 	bun install --frozen-lockfile
@@ -28,4 +28,26 @@ test-go:
 
 test: test-ts test-go
 
-preflight: check-gen test
+# Entropy gate (docs/development/workflow.md): budgets and ratchets in entropy.json,
+# dead code (knip, staticcheck, deadcode), TS module boundaries (dependency-cruiser).
+STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.2
+DEADCODE := golang.org/x/tools/cmd/deadcode@v0.51.0
+entropy: node_modules
+	bun run check:entropy
+	bun run check:dead
+	bun run check:boundaries
+	go run $(STATICCHECK) ./...
+	@if [ -n "$$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)" ]; then go run $(DEADCODE) -test ./...; fi
+
+# No secrets or infrastructure ids, from the first commit (gitleaks over the full history).
+GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
+secrets:
+	go run $(GITLEAKS) git --log-opts=HEAD --redact --no-banner .
+
+# Per worktree: pre-commit runs the fast gates; fence=1 also blocks pushes (worker worktrees).
+hooks:
+	git config extensions.worktreeConfig true
+	git config --worktree core.hooksPath .githooks
+	@if [ "$(fence)" = "1" ]; then git config --worktree commonly.pushFence 1; echo "push fence on"; fi
+
+preflight: check-gen test entropy secrets

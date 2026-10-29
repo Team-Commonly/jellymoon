@@ -1,0 +1,8 @@
+# Protected paths (AGENTS.md, Merging) need a maintainer review in addition to green CI.
+*                       @lilyshen0722
+/schema/                @lilyshen0722
+/worker/src/auth/       @lilyshen0722
+/worker/src/mcp/        @lilyshen0722
+/daemon/internal/acp/   @lilyshen0722
+/daemon/internal/run/   @lilyshen0722
+/.github/workflows/     @lilyshen0722

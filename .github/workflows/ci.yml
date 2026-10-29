@@ -1,6 +1,6 @@
 name: CI
 
-# v4 verification loop (the build plan). Every required check on `main` is a
+# Verification loop (docs/development/workflow.md). Every required check on `main` is a
 # job here, so a check name never goes missing. A job whose code does not exist
 # yet passes with a notice; it starts enforcing the moment its directory lands.
 # Budget: 5 minutes wall clock for the whole workflow. The review gate is
@@ -23,9 +23,11 @@ permissions:
 jobs:
   gen-drift:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
@@ -36,6 +38,10 @@ jobs:
         run: make check-gen
       - name: Fixtures validate (ajv) and generated TS type-checks
         run: make test-ts
+      - name: Entropy gate (budgets, ratchet, dead code, boundaries)
+        run: make entropy
+      - name: No secrets in history (gitleaks)
+        run: make secrets
 
   worker:
     runs-on: ubuntu-latest

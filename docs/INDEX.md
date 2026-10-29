@@ -7,7 +7,8 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 |---|---|
 | `GLOSSARY.md` | Terms used precisely across code, schema and docs |
 | `protocol.md` | The wire protocol in plain words: ids, tokens, HTTP routes, events, messages, tasks, operations (MCP is an adapter over them) and errors. Generated from `schema/` by `make gen`; never edit by hand |
-| `development/workflow.md` | How Jellymoon is built: the long-running harness, stage skills, entropy gate, review and merge |
+| `development/workflow.md` | How Jellymoon is built: the long-running harness, stage skills, entropy gate, review and merge (local verification is the authority) |
+| `development/landing.md` | `make land`: the only merge path, its environment variables, the ledger format and the verdict message a reviewer posts |
 | `development/verifier.md` | The verifier protocol: what a fresh-context reviewer checks, and its verdict format |
 | `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the slice LOC caps |
 | `adr/0002-claims-and-leases.md` | When a task claim's lease renews, expires and is released; the unknowns left open |

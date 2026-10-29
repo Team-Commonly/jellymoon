@@ -30,7 +30,7 @@ FINDINGS <n blocking> <n non-blocking>
 GATE: PASS | GATE: FAIL
 ```
 - `GATE: PASS` requires zero blocking findings.
-- The verifier never pushes, comments on GitHub or merges. The coordinator records the ledger row and
-  posts the review.
-- A protected-path PR still needs an Opus `GATE: PASS` at the same head from an accepted reviewer
-  (`workflow.md`, Review and merge).
+- The verifier never pushes, comments on GitHub or merges. The coordinator records the ledger row
+  (`<pr> <head> PASS <model>-verifier ...`, `landing.md`); `make land` reads it.
+- A protected-path PR still needs the reviewer's pod verdict at the same head
+  (`landing.md`).

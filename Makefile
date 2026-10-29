@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: tools gen check-gen test test-ts test-go entropy portable secrets hooks preflight
+.PHONY: land tools gen check-gen test test-ts test-go entropy portable secrets hooks preflight
 
 tools:
 	scripts/tools.sh
@@ -27,6 +27,7 @@ check-gen: gen
 test-ts: node_modules
 	$(BUN) scripts/check-fixtures.mjs
 	$(BUN) scripts/check-review-gate.mjs
+	$(BUN) scripts/check-land.mjs
 	$(BUN) run check:types
 
 test-go:
@@ -60,5 +61,10 @@ hooks:
 # Works from a fresh clone anywhere: no symlink out of the repo, no machine-local path.
 portable:
 	scripts/check-portable.sh
+
+# The only merge path (docs/development/landing.md): make land PR=<n> [ARGS="--stack --dry-run"]. Needs the JM_* env.
+land:
+	@test -n "$(PR)" || (echo "usage: make land PR=<n> [ARGS=--stack]"; exit 1)
+	$(BUN) scripts/land.mjs $(PR) $(ARGS)
 
 preflight: portable check-gen test entropy secrets

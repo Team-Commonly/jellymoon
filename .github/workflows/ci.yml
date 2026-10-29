@@ -1,4 +1,8 @@
 name: CI
+# DISABLED (owner ruling): CI is a bottleneck and not unlimited on a private repo, so this workflow is turned off
+# and kept. GitHub checks are not consulted at all: `make land` is the only merge path and nothing GitHub
+# reports counts (a PR touching .github/workflows/ can fake any check). It returns at public launch only as a
+# thin mirror of `make preflight` for outside contributors. See docs/development/landing.md.
 
 # Verification loop (docs/development/workflow.md). Every required check on `main` is a
 # job here, so a check name never goes missing. A job whose code does not exist

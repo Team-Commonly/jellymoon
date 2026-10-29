@@ -31,40 +31,37 @@ installed, so the loop works from a fresh clone; pins and update rules are in `d
 after a surprise.
 
 ## Review and merge
-- Only the coordinator merges, on green CI plus a verifier ledger verdict at the PR head
-  (`docs/development/verifier.md`). Workers never merge.
-- A PR touching a protected path also needs two reviews before it merges:
-  - one fresh-context review: a subagent given the diff and the feature, not the builder's reasoning;
-  - an Opus `GATE: PASS` at the PR head from an accepted reviewer (below).
+Local verification is the authority. **GitHub checks are not consulted at all, and nothing GitHub reports counts:**
+both workflows are disabled while the repo is private (owner ruling:CI is a bottleneck and not unlimited), and any PR
+that touches `.github/workflows/` could fake a green check anyway. `make land PR=<n>` is the only merge path
+(`docs/development/landing.md`). It merges only when all of these hold at the exact PR head:
+- a clean-shell `make preflight` passes at that head;
+- the verifier's ledger line at the head is `PASS` (the check of record, `docs/development/verifier.md`);
+- for a protected path, the reviewer's pod verdict also passes. It is a message by a listed reviewer's
+  server-stamped username that names `jellymoon#<pr>` and the full 40-character head and ends `GATE: PASS`.
+- Workers never merge. GitHub review text is not consulted.
 - Protected paths: `schema/`, `worker/src/auth`, `worker/src/mcp`, `daemon/internal/{acp,run}`,
   `install.sh`, `.github/workflows`, `.github/opus-reviewers.txt` and `scripts/review-gate.mjs`. A rename out
-  of a protected path counts. Listing the gate's own files here means a change to them needs a review; it does
-  not protect them from the gate (see below).
-- **Accepted Opus reviewers:** the names in `.github/opus-reviewers.txt`, the only place they are written
-  (today Ben, Ada, Eli, Cleo and Dana; Ada is the usual gate). The gate reads that file from the base
-  branch.
-- **How the gate decides** (`.github/workflows/review-gate.yml` runs the base branch's copy of
-  `scripts/review-gate.mjs`; the cases are `scripts/check-review-gate.mjs`, its own `make test` step). It fails
-  closed, at the exact PR head, ignoring code fences and blockquotes: a review is credited to N when a
-  `Written by <N>, a Commonly agent` line names a listed reviewer; one credited to two names blocks; dismissed
-  reviews are ignored; each reviewer's latest credited review decides, and it passes only with a last line of
-  exactly `GATE: PASS` (case and markdown emphasis ignored) and a state other than CHANGES_REQUESTED. The gate
-  passes when at least one reviewer's latest review passes and none blocks.
-- **The gate cannot judge its own change.** The script and reviewer list come from the base branch, so a PR
-  cannot rewrite its judge, but `review-gate.yml` itself runs from the PR's merge ref. Any PR touching
-  `review-gate.yml`, `scripts/review-gate.mjs` or `.github/opus-reviewers.txt` is judged by a person at press
-  time, never by the green check. Bootstrap: when the base branch has no `scripts/review-gate.mjs` (the first
-  merge of the gate into `main`), the check fails closed; a person verifies the Opus `GATE: PASS` at the head
-  by hand, merges that one PR by hand and records it in `progress.md`.
-- **Advisory, not required:** GitHub Free has no required checks on a private repo, so a red gate does not stop
-  a merge by itself. The coordinator's press rule above does.
-- **Known limit:** the credit line is a pointer, not an identity. Every reviewer posts to GitHub as one account,
-  so the gate does not verify who reviewed. Until it checks a server-stamped verdict (the reviewer's
-  post in the pod, naming the PR and head SHA), any holder of the shared GitHub token can satisfy it.
-  That check is the next unit.
-- **Why no merge queue:** the repo is private on GitHub Free, which allows no rulesets or merge queue.
-  The coordinator presses by hand under the rule above. When the repo goes public or moves to GitHub
-  Team, a ruleset plus merge queue takes over and this section changes.
+  of a protected path counts. `scripts/land.mjs` is not protected, so its own change is judged by a person.
+- **Accepted reviewers:** `.github/opus-reviewers.txt` is the only place they are written (`Name username`);
+  the test asserts the file parses and pins no name.
+- **How the verdict is read** (`scripts/review-gate.mjs`, shared with land). The verdict is the message's LAST
+  non-empty line, with HTML comments removed and emphasis and list or heading markers stripped. It passes only
+  if that is exactly `GATE: PASS` (case-insensitive). A missing line, a FAIL after the PASS, prose after it, an
+  indented line, or a fullwidth or zero-width variant blocks. Cases: `scripts/check-review-gate.mjs`; land's
+  cases: `scripts/check-land.mjs`.
+- **CI** returns at public launch only as a thin mirror of `make preflight` for outside contributors, never as
+  the gate. The workflow files are kept, with a disabled header.
+- **Why no merge queue:** the repo is private on GitHub Free. `make land` serialises by being the one door.
+
+### Temporary: remove when the reviewers return
+While the reviewers are down, `make land PR=<n> ARGS=--reviewer-gate-unavailable` lets a protected-path PR
+land without a pod verdict. It needs a second ledger row at the same PR and head: `PASS`, by a verifier on a
+different model from the first PASS, with a note starting `reviewer-gate-unavailable`; the latest row decides. The
+second verifier is fresh-context: it has never seen the builder's or the first verifier's reasoning. Every such
+land appends a `REGATE-OWED` row; `make land ARGS=--owed` lists the PRs still owed a reviewer re-gate (it blocks
+nothing). Whatever a later reviewer re-gate fails is fixed forward. The ledger `by` column is `<model>-verifier`
+(`opus-verifier`, `sonnet-verifier`), `coordinator` or `land`.
 
 ## Design-gated features
 - **F18 (client) and F19 (connectors)** stay blocked until their options docs are reviewed with Sam.

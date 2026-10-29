@@ -1,7 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
-    "scripts/check-review-gate.mjs"
+    "scripts/check-review-gate.mjs",
+    "scripts/check-land.mjs",
+    "scripts/land.mjs"
   ],
   "project": [
     "scripts/**/*.mjs",

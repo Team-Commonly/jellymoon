@@ -4,6 +4,17 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · local landing (unit P08)
+- **Changed:** `make land PR=<n>` (scripts/land.mjs, pure decisions in land-decide.mjs): clean-shell preflight at
+  the exact head, verifier ledger line, and for protected paths the reviewer's pod verdict matched by
+  server-stamped username. Both workflows disabled (headers only). Temporary `--reviewer-gate-unavailable` second
+  verifier plus `--owed`. P07 round-2 carry-overs fixed here: verdict is the last non-empty line (N1), credit
+  lines normalised (N2), 14 new gate cases (N3), check-portable case-insensitive again (N4), reviewer names in
+  `.github/opus-reviewers.txt` only (N5); B1 is moot with CI off and is stated in workflow.md, AGENTS.md and the ymls.
+- **Evidence:** `make test` runs 44 gate cases and 37 land cases; the accept-any-username mutation turns two red.
+- **Next:** the coordinator's live dry-run; verify the usernames in opus-reviewers.txt against the pod.
+- **Surprising:** the clean shell has no `gh` or `node`, so land runs under bun and the dry-run needs a normal PATH.
+
 ## 2026-10-29 · loop fixes from the PR #1 and #2 verifiers (unit P07)
 - **Changed:** `make` finds `.tools/bin` by path (GNU Make 3.81 ignores the exported PATH for command lookup).
   Review gate decision moved to `scripts/review-gate.mjs`, run from the base branch, fail closed (multi-credit

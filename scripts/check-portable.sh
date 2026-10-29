@@ -10,7 +10,7 @@ while IFS= read -r f; do
   case "$target/" in "$root"/*) ;; *) echo "symlink leaves the repo: $f -> $(readlink "$f")"; bad=1 ;; esac
 done < <(git ls-files -s | awk '$1=="120000"{print $4}')
 pattern='(~/[.A-Za-z]|/home/[a-z]|/opt/homebrew|/private/t[m]p|\$HOME/|\$\(HOME\)|(^|[^A-Za-z0-9_./-])/Users/[A-Za-z])'
-if git grep -nIE "$pattern" -- . ':!scripts/check-portable.sh'; then
+if git grep -nIiE "$pattern" -- . ':!scripts/check-portable.sh'; then
   echo "machine-local path in a tracked file (above); use a repo-relative path"; bad=1
 fi
 if git ls-files | grep -E '(^|/)(\.tools|node_modules)/' | head -3 | grep .; then

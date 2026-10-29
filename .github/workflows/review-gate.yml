@@ -1,14 +1,15 @@
 name: Review gate
+# DISABLED (owner ruling): CI is a bottleneck and not unlimited on a private repo, so this workflow is turned off
+# and kept. GitHub checks are not consulted at all: `make land` is the only merge path and nothing GitHub
+# reports counts (a PR touching .github/workflows/ can fake any check). It returns at public launch only as a
+# thin mirror of `make preflight` for outside contributors. See docs/development/landing.md.
 
 # One Opus reviewer only for protocol or security changes (the build plan).
 #
 # This check cannot judge its own change: a PR touching review-gate.yml (run from the PR's merge ref)
 # or scripts/review-gate.mjs is judged by a person at press time, never by the green tick.
 #
-# KNOWN LIMIT: the credit line is a pointer, not an identity. Every reviewer posts to GitHub as one
-# account, so this gate cannot verify who reviewed: until it checks a server-stamped verdict (the
-# reviewer's post in the pod, naming the PR and head SHA), any holder of the shared GitHub
-# token can satisfy it by writing "Written by <name>". That check is the next unit.
+# (The credit-line limit is closed in `make land`, which reads the server-stamped pod verdict.)
 
 on:
   pull_request:

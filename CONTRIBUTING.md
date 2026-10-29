@@ -14,9 +14,11 @@ The first `feature_list.json` feature with `passes: false` and no `blockedBy`, o
 ## Pull requests
 - Base `main`. Fill in [`.github/pull_request_template.md`](.github/pull_request_template.md): the
   feature, the done-test with its output, lines added and removed.
-- `make preflight` must pass locally; CI runs the same targets.
-- A maintainer merges once CI is green and the PR has a review verdict at its head. Changes to protocol
-  or security paths (listed in `AGENTS.md`) also need a maintainer's gate review at the PR head.
+- `make preflight` must pass locally. CI is disabled while the repo is private; when it returns at public launch
+  it is a thin mirror of `make preflight` for outside contributors, never the gate.
+- A maintainer lands it with `make land` once a verifier's ledger line passes at the PR head. Changes to
+  protocol or security paths (listed in `AGENTS.md`) also need the reviewer's pod verdict at the head.
+  Local verification is the authority; GitHub checks and review text are not consulted.
 - A new dependency or module needs a short note in `docs/adr/`.
 
 ## Reporting a security issue

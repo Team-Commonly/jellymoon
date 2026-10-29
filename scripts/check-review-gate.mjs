@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Tests the review-gate decision (scripts/review-gate.mjs) against review lists. Own step in `make test`.
 import fs from 'node:fs';
-import { decide, readReviewers, touchesProtected } from './review-gate.mjs';
+import { decide, readReviewerEntries, readReviewers, touchesProtected } from './review-gate.mjs';
 
 const HEAD = 'a'.repeat(40);
 const OLD = 'b'.repeat(40);
@@ -53,6 +53,19 @@ const cases = [
   ['latest is by submitted_at, not list order',
     [rev('Ada', 'FAIL', { submitted_at: '2026-10-29T09:00:00Z' }), rev('Ada', 'PASS', { submitted_at: '2026-10-29T08:00:00Z' })], false],
   ['two reviewers both PASS passes', [rev('Ada', 'PASS'), rev('Ben', 'PASS')], true],
+  ['lowercase gate: pass passes', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\ngate: pass' })], true],
+  ['a heading FAIL after the PASS blocks', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\nGATE: PASS\n## GATE: FAIL' })], false],
+  ['a list FAIL after the PASS blocks', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\nGATE: PASS\n- GATE: FAIL' })], false],
+  ['a zero-width-space FAIL after the PASS blocks', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\nGATE: PASS\n\u200bGATE: FAIL' })], false],
+  ['a fullwidth colon FAIL after the PASS blocks', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\nGATE: PASS\nGATE\uff1a FAIL' })], false],
+  ['GATE : FAIL after the PASS blocks', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\nGATE: PASS\nGATE : FAIL' })], false],
+  ['prose after the PASS blocks', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\nGATE: PASS\n\nScratch that: found a token leak, FAIL.' })], false],
+  ['a PASS hidden in an HTML comment after a FAIL blocks', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\nGATE: FAIL\n<!-- GATE: PASS -->' })], false],
+  ['a PASS in an indented code block after a FAIL blocks', [rev('Ada', 'x', { body: 'Written by Ada, a Commonly agent\nGATE: FAIL\n\n    GATE: PASS' })], false],
+  ['a ~~~ line inside a ``` fence does not close it', [rev('Ada', 'x', { body: '```\n~~~\nWritten by Ada, a Commonly agent\n```\nGATE: PASS' })], false],
+  ['a malformed credit (bold, lowercase) still credits the reviewer', [rev('Ada', 'x', { body: 'Written by **ada**, a Commonly agent\nGATE: PASS' })], true],
+  ['a malformed credit on a FAIL cannot hide behind an earlier PASS', [rev('Ada', 'PASS'), rev('Ada', 'x', { body: 'Written by [Ada](http://x)\u00a0, a Commonly agent\nGATE: FAIL' })], false],
+  ['an unrecognised credit on a FAIL blocks beside a PASS', [rev('Ada', 'PASS'), rev('Mallory', 'FAIL')], false],
 ];
 const paths = [
   ['a schema edit is protected', [{ filename: 'schema/x.json' }], true],
@@ -65,9 +78,10 @@ const paths = [
 ];
 const badPaths = paths.filter(([, files, want]) => touchesProtected(files) !== want).map(([t]) => t);
 if (badPaths.length) { console.error(`check-review-gate: protected-path cases wrong\n  ${badPaths.join('\n  ')}`); process.exit(1); }
-const listed = readReviewers(fs.readFileSync(new URL('../.github/opus-reviewers.txt', import.meta.url), 'utf8'));
-const fileOk = ['Ada', 'Ben', 'Eli', 'Cleo', 'Dana'].every((n) => listed.includes(n)) && listed.length === 5;
-if (!fileOk) { console.error(`check-review-gate: .github/opus-reviewers.txt parsed to ${JSON.stringify(listed)}`); process.exit(1); }
+const text = fs.readFileSync(new URL('../.github/opus-reviewers.txt', import.meta.url), 'utf8');
+const entries = readReviewerEntries(text);
+const fileOk = entries.length > 0 && entries.every((e) => e.name && /^[a-z0-9][a-z0-9-]*$/.test(e.username || '')) && readReviewers(text).length === entries.length;
+if (!fileOk) { console.error(`check-review-gate: .github/opus-reviewers.txt does not parse as 'Name username' lines: ${JSON.stringify(entries)}`); process.exit(1); }
 const bad = cases.filter(([, reviews, want]) => decide(reviews, { head: HEAD, names }).pass !== want).map(([t]) => t);
 if (bad.length) { console.error(`check-review-gate: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${cases.length} gate cases and ${paths.length} path cases ok`);

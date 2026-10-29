@@ -35,12 +35,13 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 - **Stay small.** `make entropy` enforces `entropy.json`: files ≤ 400 lines, functions ≤ 60, LOC caps per
   area, `TODO(F07)`-style ids, import boundaries. A new dependency or module gets a `docs/adr/` note.
   Every report states lines added and removed, and what it deleted.
-- **Merging.** Only the coordinator merges, and only on green CI plus a verifier ledger verdict at the head.
-  Protected paths also need an Opus `GATE: PASS` at the head from one of the accepted reviewers
-  (`docs/development/workflow.md`, Review and merge): `schema/`, `worker/src/auth`, `worker/src/mcp`,
-  `daemon/internal/{acp,run}`, `install.sh`, `.github/workflows`, `.github/opus-reviewers.txt`,
-  `scripts/review-gate.mjs`. The gate check is advisory (GitHub Free has no required checks or merge queue on a
-  private repo); the coordinator's press enforces it, and this changes when the repo goes public or moves to Team.
+- **Merging.** Local verification is the authority. `make land PR=<n>` is the only merge path: it proves the
+  exact head green in a clean shell, requires the verifier's ledger line at that head, and for protected paths
+  (`schema/`, `worker/src/auth`, `worker/src/mcp`, `daemon/internal/{acp,run}`, `install.sh`,
+  `.github/workflows`, `.github/opus-reviewers.txt`, `scripts/review-gate.mjs`) also the reviewer's pod
+  verdict naming the PR and head. GitHub checks are not consulted and nothing GitHub reports counts. CI is
+  disabled while the repo is private; it returns at public launch only as a thin mirror of `make preflight`.
+  Only the coordinator lands (`docs/development/landing.md`, `workflow.md`).
 - **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new
   worktree runs `./init.sh` first (it installs `.tools/`; the pre-commit hook fails without it), then
   `make hooks fence=1` to install the push fence; plain `make hooks` installs only the pre-commit. The

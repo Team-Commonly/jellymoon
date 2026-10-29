@@ -153,9 +153,10 @@
     "TaskCreate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["title"],
+      "required": ["title", "kind"],
       "properties": {
         "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "kind": { "$ref": "task.json#/$defs/TaskKind" },
         "assignee": { "$ref": "common.json#/$defs/ActorId" },
         "body": { "type": "string", "maxLength": 16384 }
       }

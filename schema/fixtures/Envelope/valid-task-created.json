@@ -13,6 +13,7 @@
     "id": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH02",
     "podId": "pod_01JCZK7Q8XG4M2B9V5T3W6RH01",
     "title": "Write the README",
+    "kind": "fix",
     "status": "open",
     "createdBy": {
       "kind": "human",

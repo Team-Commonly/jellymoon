@@ -62,6 +62,7 @@
               "id",
               "podId",
               "title",
+              "kind",
               "status",
               "createdBy",
               "createdAt",
@@ -80,6 +81,18 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 120
+              },
+              "kind": {
+                "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+                "type": "string",
+                "enum": [
+                  "feature",
+                  "fix",
+                  "security",
+                  "design",
+                  "research",
+                  "chore"
+                ]
               },
               "body": {
                 "type": "string",
@@ -612,6 +625,7 @@
                 "id",
                 "podId",
                 "title",
+                "kind",
                 "status",
                 "createdBy",
                 "createdAt",
@@ -630,6 +644,18 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 120
+                },
+                "kind": {
+                  "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+                  "type": "string",
+                  "enum": [
+                    "feature",
+                    "fix",
+                    "security",
+                    "design",
+                    "research",
+                    "chore"
+                  ]
                 },
                 "body": {
                   "type": "string",
@@ -784,6 +810,7 @@
                 "id",
                 "podId",
                 "title",
+                "kind",
                 "status",
                 "createdBy",
                 "createdAt",
@@ -802,6 +829,18 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 120
+                },
+                "kind": {
+                  "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+                  "type": "string",
+                  "enum": [
+                    "feature",
+                    "fix",
+                    "security",
+                    "design",
+                    "research",
+                    "chore"
+                  ]
                 },
                 "body": {
                   "type": "string",
@@ -990,6 +1029,7 @@
           "id",
           "podId",
           "title",
+          "kind",
           "status",
           "createdBy",
           "createdAt",
@@ -1008,6 +1048,18 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120
+          },
+          "kind": {
+            "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+            "type": "string",
+            "enum": [
+              "feature",
+              "fix",
+              "security",
+              "design",
+              "research",
+              "chore"
+            ]
           },
           "body": {
             "type": "string",

@@ -173,6 +173,18 @@
         "failed"
       ]
     },
+    "TaskKind": {
+      "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+      "type": "string",
+      "enum": [
+        "feature",
+        "fix",
+        "security",
+        "design",
+        "research",
+        "chore"
+      ]
+    },
     "Claim": {
       "description": "One active claim per task. The lease is renewed by any MCP call on the claiming run.",
       "type": "object",
@@ -201,6 +213,7 @@
         "id",
         "podId",
         "title",
+        "kind",
         "status",
         "createdBy",
         "createdAt",
@@ -217,6 +230,9 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 120
+        },
+        "kind": {
+          "$ref": "#/$defs/TaskKind"
         },
         "body": {
           "type": "string",
@@ -906,13 +922,17 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "title"
+        "title",
+        "kind"
       ],
       "properties": {
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 120
+        },
+        "kind": {
+          "$ref": "#/$defs/TaskKind"
         },
         "assignee": {
           "$ref": "#/$defs/ActorId"

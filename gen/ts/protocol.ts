@@ -69,6 +69,10 @@ export type RunToken = string;
 export type TaskStatus = "open" | "in_progress" | "blocked" | "done" | "failed";
 export const TaskStatusValues = ["open","in_progress","blocked","done","failed"] as const;
 
+/** What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review. */
+export type TaskKind = "feature" | "fix" | "security" | "design" | "research" | "chore";
+export const TaskKindValues = ["feature","fix","security","design","research","chore"] as const;
+
 /** One active claim per task. The lease is renewed by any MCP call on the claiming run. */
 export interface Claim {
   by: Actor;
@@ -80,6 +84,7 @@ export interface Task {
   id: TaskId;
   podId: PodId;
   title: string;
+  kind: TaskKind;
   body?: string;
   status: TaskStatus;
   assignee?: ActorId;
@@ -286,6 +291,7 @@ export interface MessagePost {
 
 export interface TaskCreate {
   title: string;
+  kind: TaskKind;
   assignee?: ActorId;
   body?: string;
 }

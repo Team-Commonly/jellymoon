@@ -188,6 +188,27 @@ func (x TaskStatus) Valid() bool {
 	return false
 }
 
+// What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.
+type TaskKind string
+
+const (
+	TaskKindFeature  TaskKind = "feature"
+	TaskKindFix      TaskKind = "fix"
+	TaskKindSecurity TaskKind = "security"
+	TaskKindDesign   TaskKind = "design"
+	TaskKindResearch TaskKind = "research"
+	TaskKindChore    TaskKind = "chore"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x TaskKind) Valid() bool {
+	switch x {
+	case TaskKindFeature, TaskKindFix, TaskKindSecurity, TaskKindDesign, TaskKindResearch, TaskKindChore:
+		return true
+	}
+	return false
+}
+
 // One active claim per task. The lease is renewed by any MCP call on the claiming run.
 type Claim struct {
 	By         Actor     `json:"by"`
@@ -214,6 +235,7 @@ type Task struct {
 	ID        TaskID     `json:"id"`
 	PodID     PodID      `json:"podId"`
 	Title     string     `json:"title"`
+	Kind      TaskKind   `json:"kind"`
 	Body      *string    `json:"body,omitempty"`
 	Status    TaskStatus `json:"status"`
 	Assignee  *ActorID   `json:"assignee,omitempty"`
@@ -229,7 +251,7 @@ func (x *Task) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &keys); err != nil {
 		return err
 	}
-	for _, k := range []string{"id", "podId", "title", "status", "createdBy", "createdAt", "updatedAt"} {
+	for _, k := range []string{"id", "podId", "title", "kind", "status", "createdBy", "createdAt", "updatedAt"} {
 		if _, ok := keys[k]; !ok {
 			return fmt.Errorf("Task: missing required field %q", k)
 		}
@@ -879,6 +901,7 @@ func (x *MessagePost) UnmarshalJSON(b []byte) error {
 
 type TaskCreate struct {
 	Title    string   `json:"title"`
+	Kind     TaskKind `json:"kind"`
 	Assignee *ActorID `json:"assignee,omitempty"`
 	Body     *string  `json:"body,omitempty"`
 }
@@ -889,7 +912,7 @@ func (x *TaskCreate) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &keys); err != nil {
 		return err
 	}
-	for _, k := range []string{"title"} {
+	for _, k := range []string{"title", "kind"} {
 		if _, ok := keys[k]; !ok {
 			return fmt.Errorf("TaskCreate: missing required field %q", k)
 		}

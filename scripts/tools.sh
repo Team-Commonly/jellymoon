@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Installs the pinned Go and Bun from .tool-versions into .tools/ (repo-local, gitignored).
-# Never installs anything outside the repo. A matching go/bun already on PATH is used as is.
+# Installs the pinned Go and Bun from .tool-versions. Never installs anything outside the repo
+# or the cache below. A matching go/bun already on PATH is used as is (unset-cache mode only).
+#
+#   JM_TOOLCHAIN_CACHE unset  -> everything under .tools/ (what CI and a fresh clone get)
+#   JM_TOOLCHAIN_CACHE=/abs   -> versions live in $JM_TOOLCHAIN_CACHE/{go,bun}-<ver>-<os>-<arch>/,
+#                                shared by every worktree; .tools/ keeps only bin/ symlinks.
+#                                See docs/development/toolchain-cache.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$PWD/.tools/bin:$PATH"
@@ -8,23 +13,81 @@ want() { awk -v t="$1" '$1==t{print $2}' .tool-versions; }
 GO=$(want go); BUN=$(want bun)
 os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m)
 case "$arch" in x86_64|amd64) goarch=amd64; bunarch=x64 ;; arm64|aarch64) goarch=arm64; bunarch=aarch64 ;; *) echo "unsupported arch $arch"; exit 1 ;; esac
-mkdir -p .tools/bin .tools/dl
+mkdir -p .tools/bin
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
+die() { echo "tools: $*" >&2; exit 1; }
 
-if [ "$(go env GOVERSION 2>/dev/null)" != "go$GO" ]; then
-  f=go$GO.$os-$goarch.tar.gz
-  curl -fsSL "https://dl.google.com/go/$f" -o ".tools/dl/$f"
-  [ "$(sha ".tools/dl/$f")" = "$(curl -fsSL "https://dl.google.com/go/$f.sha256")" ] || { echo "go checksum mismatch"; exit 1; }
-  rm -rf ".tools/go-$GO" && mkdir -p ".tools/go-$GO" && tar -xzf ".tools/dl/$f" -C ".tools/go-$GO" --strip-components 1
-  ln -sf "../go-$GO/bin/go" .tools/bin/go && ln -sf "../go-$GO/bin/gofmt" .tools/bin/gofmt
+CACHE=${JM_TOOLCHAIN_CACHE:-}
+if [ -n "$CACHE" ]; then
+  case "$CACHE" in /*) ;; *) die "JM_TOOLCHAIN_CACHE must be an absolute path (got $CACHE)" ;; esac
+  mkdir -p "$CACHE"
+  ROOT=$CACHE
+  godir="$CACHE/go-$GO-$os-$goarch"; bundir="$CACHE/bun-$BUN-$os-$arch"
+else
+  ROOT=.tools
+  godir=".tools/go-$GO"; bundir=".tools/bun-$os-$bunarch"
 fi
 
-if [ "$(bun --version 2>/dev/null)" != "$BUN" ]; then
-  d=bun-$os-$bunarch; base=https://github.com/oven-sh/bun/releases/download/bun-v$BUN
-  curl -fsSL "$base/$d.zip" -o ".tools/dl/$d.zip"
-  curl -fsSL "$base/SHASUMS256.txt" -o .tools/dl/bun-SHASUMS256.txt
-  grep -q "$(sha ".tools/dl/$d.zip")  $d.zip" .tools/dl/bun-SHASUMS256.txt || { echo "bun checksum mismatch"; exit 1; }
-  rm -rf ".tools/$d" && unzip -q -o ".tools/dl/$d.zip" -d .tools
-  ln -sf "../$d/bun" .tools/bin/bun
+go_ok() { [ "$("$1/bin/go" version 2>/dev/null | cut -d' ' -f3)" = "go$GO" ]; }
+bun_ok() { [ "$("$1/bun" --version 2>/dev/null)" = "$BUN" ]; }
+
+# A cache entry is trusted only with a stamp and the pinned version. Anything else is refused,
+# never re-downloaded over, because another worktree may be running it.
+check_cached() { # dir checker
+  [ -s "$1/.sha256" ] || die "$1 has no .sha256 stamp; remove it deliberately if it is stale"
+  "$2" "$1" || die "$1 does not report the pinned version; remove it deliberately if it is stale"
+}
+
+# install <dir> <fetch-fn>: download+verify+unpack into a sibling temp dir, stamp, then rename into
+# place under a lock, so a concurrent installer never sees a half-unpacked dir.
+install_into() {
+  local dir=$1 fetch=$2 checker=$3 lock="$ROOT/.lock-$(basename "$1")" n=0
+  until mkdir "$lock" 2>/dev/null; do
+    n=$((n+1)); [ "$n" -le 600 ] || die "waited 10 min for $lock; remove it if no installer is running"
+    sleep 1
+  done
+  trap "rmdir '$lock' 2>/dev/null || true" EXIT
+  if [ -n "$CACHE" ] && [ -e "$dir" ]; then check_cached "$dir" "$checker"; else
+    local work unpack; work=$(mktemp -d "$ROOT/.dl.XXXXXX"); unpack=$(mktemp -d "$ROOT/.unpack.XXXXXX")
+    "$fetch" "$work" "$unpack"
+    rm -rf "$work"                                   # the archive is dead weight once verified
+    "$checker" "$unpack" || { rm -rf "$unpack"; die "unpacked toolchain does not report the pinned version"; }
+    [ -z "$CACHE" ] && rm -rf "$dir"
+    [ -z "$CACHE" ] || chmod -R a+rX,a-w "$unpack"        # a unit must not modify a shared toolchain
+    mv "$unpack" "$dir"
+  fi
+  rmdir "$lock"; trap - EXIT
+}
+
+fetch_go() { # workdir unpackdir
+  local f=go$GO.$os-$goarch.tar.gz
+  curl -fsSL "https://dl.google.com/go/$f" -o "$1/$f"
+  local got; got=$(sha "$1/$f")
+  [ "$got" = "$(curl -fsSL "https://dl.google.com/go/$f.sha256")" ] || die "go checksum mismatch"
+  tar -xzf "$1/$f" -C "$2" --strip-components 1
+  echo "$got" > "$2/.sha256"
+}
+
+fetch_bun() {
+  local d=bun-$os-$bunarch base=https://github.com/oven-sh/bun/releases/download/bun-v$BUN
+  curl -fsSL "$base/$d.zip" -o "$1/$d.zip"
+  curl -fsSL "$base/SHASUMS256.txt" -o "$1/SHASUMS256.txt"
+  local got; got=$(sha "$1/$d.zip")
+  grep -q "$got  $d.zip" "$1/SHASUMS256.txt" || die "bun checksum mismatch"
+  unzip -q -j -o "$1/$d.zip" -d "$2"
+  echo "$got" > "$2/.sha256"
+}
+
+# Cache mode links to the absolute cache path; unset mode keeps today's relative links.
+put_link() { if [ -n "$CACHE" ]; then ln -sfn "$1" ".tools/bin/$2"; else ln -sf "$3" ".tools/bin/$2"; fi; }
+
+if [ -n "$CACHE" ] || [ "$(go env GOVERSION 2>/dev/null)" != "go$GO" ]; then
+  install_into "$godir" fetch_go go_ok
+  for b in go gofmt; do put_link "$godir/bin/$b" "$b" "../go-$GO/bin/$b"; done
+fi
+
+if [ -n "$CACHE" ] || [ "$(bun --version 2>/dev/null)" != "$BUN" ]; then
+  install_into "$bundir" fetch_bun bun_ok
+  put_link "$bundir/bun" bun "../bun-$os-$bunarch/bun"
 fi
 echo "tools: $(go env GOVERSION) bun $(bun --version)"

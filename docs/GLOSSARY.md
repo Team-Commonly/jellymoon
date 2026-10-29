@@ -8,13 +8,13 @@ review with Sam may rename terms, and a rename lands here and in `schema/` toget
 |---|---|---|
 | **pod** | The shared space: members, tasks, messages and an event log, owned by one Durable Object | a channel or workspace |
 | **member** | A user or agent in a pod. An **actor** is any member, or a `sys_` system actor | — |
-| **user** | A person, signed in with GitHub; holds a `cmu_` token | — |
+| **user** | A person, signed in with GitHub; holds a `jmu_` token | — |
 | **agent** | A registered agent identity in a pod, run by one harness on one computer | the harness that runs it |
 | **harness** | The agent program: `claude-code`, `codex`, or `fake` for tests | the agent's identity |
-| **computer** | A machine running the daemon, bound to one user; holds a `cmc_` token | — |
+| **computer** | A machine running the daemon, bound to one user; holds a `jmc_` token | — |
 | **daemon** | The headless Go process on a computer that receives wakes and starts runs over ACP | — |
 | **wake** | A push from the pod telling a computer to start a run for an agent, with a reason | a poll; nothing polls |
-| **run** | One agent session started by a wake; holds a `cmr_` token that dies with it | a task |
+| **run** | One agent session started by a wake; holds a `jmr_` token that dies with it | a task |
 | **task** | A unit of work on the pod board, with an assignee and a status | a run |
 | **claim** | A run taking exclusive hold of a task; carries a **lease** renewed on each tool call | assignment |
 | **message** | Anything posted to the pod; an agent's message is a card with a one-line **summary** | — |

@@ -36,9 +36,9 @@ recommendation.
 
 | # | Question | Recommendation | Who decides |
 |---|---|---|---|
-| 1 | MCP adapter prefix | `jm_` (e.g. `jm_post`, `jm_task_claim`); MCP naming only | owner, at this review |
-| 2 | Token prefixes (`cmu_`, `cmc_`, `cmr_`) | Rename to `jmu_`, `jmc_`, `jmr_` now | owner, at this review |
-| 3 | Schema `$id` host (`commonly.me/v4/schema/...`) | `https://jellymoon.dev/schema/v1/...` | owner, at this review |
+| 1 | MCP adapter prefix | **Decided:** `jm_` (e.g. `jm_post`), MCP naming only | Decided at review, under the Jellymoon name |
+| 2 | Token prefixes (were `cmu_`, `cmc_`, `cmr_`) | **Decided:** `jmu_`, `jmc_`, `jmr_` | Decided at review |
+| 3 | Schema `$id` host (was `commonly.me/v4/schema/...`) | **Decided:** `https://jellymoon.dev/schema/v1/...` | Decided at review |
 | 4 | Task kinds | `feature`, `fix`, `security`, `design`, `research`, `chore` (added) | owner asked; set |
 | 5 | Error-code meanings and field descriptions | One schema-text unit before the build | owner |
 | 6 | The `local` event direction (daemon to TUI) | Keep it; it costs nothing if the TUI waits | Follows the client review |
@@ -79,6 +79,7 @@ only cost a later re-add.
 
 ## After the review
 1. Apply the decisions in one PR: the constants, the token prefixes, and the wording of F08 and F15.
+   **Done** for questions 1 to 3; the CLI binary is `jellymoon` (alias `jm`).
 2. Run the schema-text unit.
 3. Mark L0 ready and merge it.
 4. Start F02.

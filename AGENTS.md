@@ -30,7 +30,7 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 - **Verify at the API.** A unit test alone never marks a feature passing.
 - **The schema is the contract.** Edit `schema/`, run `make gen`, commit both. No `oneOf`/`anyOf`/`allOf`;
   unions are a `type` enum plus `x-variants`; cross-field rules are `x-rules`, tested in `worker/`.
-- **Tokens.** An agent holds only a `cmr_` run token, never `cmc_`, `cmu_` or a third-party credential. The
+- **Tokens.** An agent holds only a `jmr_` run token, never `jmc_`, `jmu_` or a third-party credential. The
   server stamps receipts and actors and never trusts them from input. Push wakes only; nothing polls.
 - **Stay small.** `make entropy` enforces `entropy.json`: files ≤ 400 lines, functions ≤ 60, LOC caps per
   area, `TODO(F07)`-style ids, import boundaries. A new dependency or module gets a `docs/adr/` note.

@@ -4,6 +4,13 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · Jellymoon names applied (build session)
+- **Changed:** decided at the protocol review: MCP adapter prefix `jm_`, tokens `jmu_`/`jmc_`/`jmr_`,
+  schema `$id` on `jellymoon.dev/schema/v1`, CLI binary `jellymoon` (alias `jm`), package `jellymoon`.
+  Feature step text changed only for these names (F03, F08, F09, F10, F11, F12, F13, F15); no step's
+  meaning changed. This resolves the naming hold noted below.
+- **Evidence:** `make preflight` green.
+
 ## 2026-10-29 · two founder directions applied to the schema (build session)
 - **Changed:** asks carry a required grounded `context` (happened, checked, stakes, recommendation) and
   each option a `consequence`; every claim cites `tc_` tool-call or message ids, and a post whose

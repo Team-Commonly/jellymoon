@@ -32,7 +32,7 @@
       "category": "pod",
       "description": "A test user creates a pod and receives hello over the pod WebSocket",
       "steps": [
-        "POST /__test/seed mints a user and returns a cmu_ token (local and preview builds only)",
+        "POST /__test/seed mints a user and returns a jmu_ token (local and preview builds only)",
         "POST /v1/pods with that token creates a pod and returns its id",
         "GET /v1/pods/:pod/ws with the token upgrades and the first frame is hello with headSeq 0 and the user as owner"
       ],
@@ -96,8 +96,8 @@
       "category": "daemon",
       "description": "The daemon registers its computer and an agent, and the pod shows the agent online",
       "steps": [
-        "commonly daemon start --foreground registers the computer and stores cmc_ at mode 0600",
-        "commonly agent add fake registers an agent in the pod",
+        "jellymoon daemon start --foreground registers the computer and stores jmc_ at mode 0600",
+        "jellymoon agent add fake registers an agent in the pod",
         "members receive presence.changed online for the agent within 5 s",
         "killing the daemon produces presence.changed offline within 45 s"
       ],
@@ -110,10 +110,10 @@
       "description": "On run.wake the daemon claims a run and starts the agent with a run token and the pod MCP server",
       "steps": [
         "the daemon receives run.wake and calls POST /v1/runs",
-        "the response carries runId, a cmr_ token, a brief and the MCP URL",
+        "the response carries runId, a jmr_ token, a brief and the MCP URL",
         "the fake ACP agent starts with the MCP server passed in session/new",
-        "commonly_whoami over MCP returns the agent, pod and run",
-        "the agent's argv and env contain cmr_ and never cmc_"
+        "jm_whoami over MCP returns the agent, pod and run",
+        "the agent's argv and env contain jmr_ and never jmc_"
       ],
       "test": "go test ./e2e -run TestF09",
       "passes": false
@@ -121,7 +121,7 @@
     {
       "id": "F10",
       "category": "board",
-      "description": "commonly_task_claim is exclusive and its lease renews on every tool call",
+      "description": "jm_task_claim is exclusive and its lease renews on every tool call",
       "steps": [
         "two runs claim the same task concurrently; exactly one wins",
         "the loser gets already_claimed naming the holder",
@@ -134,7 +134,7 @@
     {
       "id": "F11",
       "category": "cards",
-      "description": "commonly_post enforces the headline contract and the pod stamps the receipt",
+      "description": "jm_post enforces the headline contract and the pod stamps the receipt",
       "steps": [
         "a post without summary gets summary_required; one over 120 chars gets invalid_input",
         "an ask without options, or a non-ask with needs, gets invalid_input",
@@ -154,7 +154,7 @@
         "members receive message.updated with the decision ruled and frozen",
         "a second ruling returns already_ruled and changes nothing",
         "the agent receives run.wake with reason decision_ruled",
-        "the agent calls commonly_task_update done and members receive task.updated done"
+        "the agent calls jm_task_update done and members receive task.updated done"
       ],
       "test": "go test ./e2e -run TestF12",
       "passes": false
@@ -164,8 +164,8 @@
       "category": "security",
       "description": "Tokens are scoped: a run cannot cross pods, an ended run is dead, and test routes are absent in production",
       "steps": [
-        "a cmr_ for pod A posting to pod B gets forbidden",
-        "after POST /v1/runs/:run/end the same cmr_ gets unauthorized",
+        "a jmr_ for pod A posting to pod B gets forbidden",
+        "after POST /v1/runs/:run/end the same jmr_ gets unauthorized",
         "an actor field in MCP tool arguments is ignored",
         "the production build of the Worker contains no /__test handler"
       ],
@@ -190,10 +190,10 @@
     {
       "id": "F15",
       "category": "auth",
-      "description": "commonly login signs in with GitHub's device flow and stores a user token safely",
+      "description": "jellymoon login signs in with GitHub's device flow and stores a user token safely",
       "steps": [
-        "against a stub GitHub, commonly login prints the user code and verification URL",
-        "after the stub approves, the CLI exchanges the GitHub token at POST /v1/auth/github for a cmu_",
+        "against a stub GitHub, jellymoon login prints the user code and verification URL",
+        "after the stub approves, the CLI exchanges the GitHub token at POST /v1/auth/github for a jmu_",
         "the token file is mode 0600 and the token is never printed",
         "a revoked or invalid GitHub token gets unauthorized"
       ],

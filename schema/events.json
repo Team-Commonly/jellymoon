@@ -6,6 +6,7 @@
   "x-rules": [
     "seq and ts are set on s2c frames only. A c2s frame that carries either is refused.",
     "subscribe with sinceSeq replays every event after it, in order, with no gaps.",
+    "run.stop is sent only to the computer that hosts the run, once, when a person stops it. The pod has already revoked the run token, so the daemon cancelling late changes nothing. run.stop is s2c only.",
     "run.wake is sent only to the computer that hosts the agent. Wakes for one agent coalesce: one pending wake means one turn. An un-acked wake is re-sent on the next heartbeat after 60 s.",
     "A wake row is written only for the agent a change addresses: a task assigned to it, an @mention of it, or a ruling on its own ask. Ambient messages write none."
   ],
@@ -18,6 +19,7 @@
     "task.claimed": { "dir": "s2c", "data": "TaskClaimed" },
     "presence.changed": { "dir": "s2c", "data": "PresenceChanged" },
     "run.wake": { "dir": "s2c", "data": "RunWake" },
+    "run.stop": { "dir": "s2c", "data": "RunStop" },
     "error": { "dir": "s2c", "data": "common.json#/$defs/ErrorBody" },
     "subscribe": { "dir": "c2s", "data": "Subscribe" },
     "message.post": { "dir": "c2s", "data": "MessagePost" },
@@ -55,6 +57,7 @@
         "task.claimed",
         "presence.changed",
         "run.wake",
+        "run.stop",
         "error",
         "subscribe",
         "message.post",
@@ -160,6 +163,16 @@
         "agentId": { "$ref": "common.json#/$defs/AgentId" },
         "reason": { "$ref": "message.json#/$defs/WakeReason" },
         "refs": { "$ref": "#/$defs/WakeRefs" }
+      }
+    },
+    "RunStop": {
+      "description": "A person stopped a run. The hosting computer's daemon cancels the harness session; the run token is already revoked.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId"],
+      "properties": {
+        "runId": { "$ref": "common.json#/$defs/RunId" },
+        "reason": { "description": "Why the run was stopped, at most 160 characters.", "type": "string", "maxLength": 160 }
       }
     },
     "Subscribe": {

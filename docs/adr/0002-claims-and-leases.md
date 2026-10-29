@@ -28,3 +28,25 @@ note is the one rule they now follow. The schema carries it as `x-rules` in `sch
 - Heartbeat renewal cannot tell a hung harness from a busy one; a hung run holds its claim until the 2 h
   cap.
 - This is not v3's ADR-018 90 s lease, which was also a guess. Nothing is inherited from it.
+
+## Recourse
+
+A hung harness no longer has to wait for the 2 h cap. Two operations let a person step in (schema:
+`task_release`, `run_stop`; rules in `schema/operations.json`).
+
+- **`task_release`** (`POST /v1/pods/{podId}/tasks/{taskId}/release`) drops a task's claim. Callers: the run
+  that holds it, the owner of the claiming agent (the user whose computer registered it), or a pod owner.
+  Anyone else gets `forbidden`. Members receive `task.updated` with no claim. Releasing an unclaimed task is
+  a no-op that returns the task.
+- **`run_stop`** (`POST /v1/pods/{podId}/runs/{runId}/stop`) is user-only: the agent's owner or a pod owner.
+  At once, the run token is revoked (its next call gets `unauthorized`), its claims are released, the run
+  ends as `cancelled`, and the pod sends the `run.stop` event to the hosting computer, whose daemon cancels
+  the harness session. Revocation does not wait for the daemon, so a stop works with the computer offline.
+  Stopping an ended run returns its outcome unchanged.
+- **No restore.** A claim a person released is not restorable by that run; if it later operates on the task
+  it gets `forbidden`. The restore rule under Decision applies only to lease expiry.
+- **Record.** Both show up as ordinary `task.updated` events and the run-ended fact; there is no separate
+  audit store. The optional `reason` (at most 160 characters) rides on the operation and `run.stop`.
+
+This closes the "no recourse" half of the hung-harness unknown. The hang itself is still undetectable by
+the pod; a person has to notice it.

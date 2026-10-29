@@ -317,8 +317,8 @@ export interface RunToolCall {
 }
 
 /** Every kind of socket frame. x-variants gives each one its direction and its data. */
-export type EventType = "hello" | "message.created" | "message.updated" | "task.created" | "task.updated" | "task.claimed" | "presence.changed" | "run.wake" | "error" | "subscribe" | "message.post" | "task.create" | "decision.rule" | "presence.heartbeat" | "wake.ack" | "run.toolcall" | "daemon.status";
-export const EventTypeValues = ["hello","message.created","message.updated","task.created","task.updated","task.claimed","presence.changed","run.wake","error","subscribe","message.post","task.create","decision.rule","presence.heartbeat","wake.ack","run.toolcall","daemon.status"] as const;
+export type EventType = "hello" | "message.created" | "message.updated" | "task.created" | "task.updated" | "task.claimed" | "presence.changed" | "run.wake" | "run.stop" | "error" | "subscribe" | "message.post" | "task.create" | "decision.rule" | "presence.heartbeat" | "wake.ack" | "run.toolcall" | "daemon.status";
+export const EventTypeValues = ["hello","message.created","message.updated","task.created","task.updated","task.claimed","presence.changed","run.wake","run.stop","error","subscribe","message.post","task.create","decision.rule","presence.heartbeat","wake.ack","run.toolcall","daemon.status"] as const;
 
 /** The frame every socket message is sent in. */
 export interface Envelope {
@@ -399,6 +399,13 @@ export interface RunWake {
   agentId: AgentId;
   reason: WakeReason;
   refs: WakeRefs;
+}
+
+/** A person stopped a run. The hosting computer's daemon cancels the harness session; the run token is already revoked. */
+export interface RunStop {
+  runId: RunId;
+  /** Why the run was stopped, at most 160 characters. */
+  reason?: string;
 }
 
 /** A client asks to receive the events after a sequence number. */
@@ -670,6 +677,26 @@ export interface TaskUpdateInput {
   note?: string;
 }
 
+/** Which task to release, and an optional reason. */
+export interface TaskReleaseInput {
+  taskId: TaskId;
+  /** Why the claim is being dropped, at most 160 characters. */
+  reason?: string;
+}
+
+/** Which run to stop, and an optional reason. */
+export interface RunStopInput {
+  runId: RunId;
+  /** Why the run is being stopped, at most 160 characters. */
+  reason?: string;
+}
+
+/** The run and how it ended: cancelled, or its earlier outcome if it had already ended. */
+export interface RunStopOutput {
+  runId: RunId;
+  outcome: RunOutcome;
+}
+
 /** The stored message's id and sequence number, and the decision id when the post is an ask. */
 export interface PostOutput {
   messageId: MessageId;
@@ -687,6 +714,7 @@ export interface EventDataMap {
   "task.claimed": TaskClaimed;
   "presence.changed": PresenceChanged;
   "run.wake": RunWake;
+  "run.stop": RunStop;
   "error": ErrorBody;
   "subscribe": Subscribe;
   "message.post": MessagePost;
@@ -710,6 +738,7 @@ export const EVENT_DIRECTION = {
   "task.claimed": "s2c",
   "presence.changed": "s2c",
   "run.wake": "s2c",
+  "run.stop": "s2c",
   "error": "s2c",
   "subscribe": "c2s",
   "message.post": "c2s",
@@ -730,6 +759,7 @@ export const EVENT_DATA_DEF = {
   "task.claimed": "TaskClaimed",
   "presence.changed": "PresenceChanged",
   "run.wake": "RunWake",
+  "run.stop": "RunStop",
   "error": "ErrorBody",
   "subscribe": "Subscribe",
   "message.post": "MessagePost",
@@ -748,6 +778,8 @@ export interface ToolIO {
   jm_task_claim: { input: TaskClaimInput; output: TaskClaimOutput };
   jm_task_update: { input: TaskUpdateInput; output: Task };
   jm_evidence: { input: EvidenceInput; output: EvidenceOutput };
+  jm_task_release: { input: TaskReleaseInput; output: Task };
+  jm_run_stop: { input: RunStopInput; output: RunStopOutput };
   jm_post: { input: PostInput; output: PostOutput };
 }
 /** Every pod operation's HTTP form (operations.json x-operations). MCP and the CLI are adapters over these. */
@@ -758,6 +790,8 @@ export const OPERATIONS = {
   task_claim: { method: "POST", path: "/v1/pods/{podId}/tasks/{taskId}/claim", auth: "run" },
   task_update: { method: "PATCH", path: "/v1/pods/{podId}/tasks/{taskId}", auth: "run|user" },
   evidence: { method: "GET", path: "/v1/pods/{podId}/runs/{runId}/tool-calls", auth: "run|user" },
+  task_release: { method: "POST", path: "/v1/pods/{podId}/tasks/{taskId}/release", auth: "user|run" },
+  run_stop: { method: "POST", path: "/v1/pods/{podId}/runs/{runId}/stop", auth: "user" },
   post: { method: "POST", path: "/v1/pods/{podId}/messages", auth: "run|user" },
 } as const;
 export type OperationName = keyof typeof OPERATIONS;
@@ -781,4 +815,4 @@ export const ERROR_STATUS = {
 } as const;
 export const TOOL_PREFIX = "jm_";
 export type ToolName = keyof ToolIO;
-export const TOOL_NAMES = ["jm_whoami","jm_read","jm_task_list","jm_task_claim","jm_task_update","jm_evidence","jm_post"] as const;
+export const TOOL_NAMES = ["jm_whoami","jm_read","jm_task_list","jm_task_claim","jm_task_update","jm_evidence","jm_task_release","jm_run_stop","jm_post"] as const;

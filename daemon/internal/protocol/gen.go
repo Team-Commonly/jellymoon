@@ -843,6 +843,7 @@ const (
 	EventTypeTaskClaimed       EventType = "task.claimed"
 	EventTypePresenceChanged   EventType = "presence.changed"
 	EventTypeRunWake           EventType = "run.wake"
+	EventTypeRunStop           EventType = "run.stop"
 	EventTypeError             EventType = "error"
 	EventTypeSubscribe         EventType = "subscribe"
 	EventTypeMessagePost       EventType = "message.post"
@@ -857,7 +858,7 @@ const (
 // Valid reports whether x is one of the schema's values.
 func (x EventType) Valid() bool {
 	switch x {
-	case EventTypeHello, EventTypeMessageCreated, EventTypeMessageUpdated, EventTypeTaskCreated, EventTypeTaskUpdated, EventTypeTaskClaimed, EventTypePresenceChanged, EventTypeRunWake, EventTypeError, EventTypeSubscribe, EventTypeMessagePost, EventTypeTaskCreate, EventTypeDecisionRule, EventTypePresenceHeartbeat, EventTypeWakeAck, EventTypeRunToolcall, EventTypeDaemonStatus:
+	case EventTypeHello, EventTypeMessageCreated, EventTypeMessageUpdated, EventTypeTaskCreated, EventTypeTaskUpdated, EventTypeTaskClaimed, EventTypePresenceChanged, EventTypeRunWake, EventTypeRunStop, EventTypeError, EventTypeSubscribe, EventTypeMessagePost, EventTypeTaskCreate, EventTypeDecisionRule, EventTypePresenceHeartbeat, EventTypeWakeAck, EventTypeRunToolcall, EventTypeDaemonStatus:
 		return true
 	}
 	return false
@@ -1081,6 +1082,28 @@ func (x *RunWake) UnmarshalJSON(b []byte) error {
 		}
 	}
 	type plain RunWake
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// A person stopped a run. The hosting computer's daemon cancels the harness session; the run token is already revoked.
+type RunStop struct {
+	RunID RunID `json:"runId"`
+	// Why the run was stopped, at most 160 characters.
+	Reason *string `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *RunStop) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"runId"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("RunStop: missing required field %q", k)
+		}
+	}
+	type plain RunStop
 	return json.Unmarshal(b, (*plain)(x))
 }
 
@@ -1888,6 +1911,71 @@ func (x *TaskUpdateInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Which task to release, and an optional reason.
+type TaskReleaseInput struct {
+	TaskID TaskID `json:"taskId"`
+	// Why the claim is being dropped, at most 160 characters.
+	Reason *string `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *TaskReleaseInput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"taskId"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("TaskReleaseInput: missing required field %q", k)
+		}
+	}
+	type plain TaskReleaseInput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// Which run to stop, and an optional reason.
+type RunStopInput struct {
+	RunID RunID `json:"runId"`
+	// Why the run is being stopped, at most 160 characters.
+	Reason *string `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *RunStopInput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"runId"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("RunStopInput: missing required field %q", k)
+		}
+	}
+	type plain RunStopInput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// The run and how it ended: cancelled, or its earlier outcome if it had already ended.
+type RunStopOutput struct {
+	RunID   RunID      `json:"runId"`
+	Outcome RunOutcome `json:"outcome"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *RunStopOutput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"runId", "outcome"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("RunStopOutput: missing required field %q", k)
+		}
+	}
+	type plain RunStopOutput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // The stored message's id and sequence number, and the decision id when the post is an ask.
 type PostOutput struct {
 	MessageID  MessageID   `json:"messageId"`
@@ -1939,6 +2027,7 @@ var Registry = map[string]func() any{
 	"PresenceChanged":          func() any { return new(PresenceChanged) },
 	"WakeRefs":                 func() any { return new(WakeRefs) },
 	"RunWake":                  func() any { return new(RunWake) },
+	"RunStop":                  func() any { return new(RunStop) },
 	"Subscribe":                func() any { return new(Subscribe) },
 	"MessagePost":              func() any { return new(MessagePost) },
 	"TaskCreate":               func() any { return new(TaskCreate) },
@@ -1974,6 +2063,9 @@ var Registry = map[string]func() any{
 	"TaskClaimInput":           func() any { return new(TaskClaimInput) },
 	"TaskClaimOutput":          func() any { return new(TaskClaimOutput) },
 	"TaskUpdateInput":          func() any { return new(TaskUpdateInput) },
+	"TaskReleaseInput":         func() any { return new(TaskReleaseInput) },
+	"RunStopInput":             func() any { return new(RunStopInput) },
+	"RunStopOutput":            func() any { return new(RunStopOutput) },
 	"PostOutput":               func() any { return new(PostOutput) },
 }
 
@@ -1987,6 +2079,7 @@ var EventDirection = map[EventType]string{
 	EventTypeTaskClaimed:       "s2c",
 	EventTypePresenceChanged:   "s2c",
 	EventTypeRunWake:           "s2c",
+	EventTypeRunStop:           "s2c",
 	EventTypeError:             "s2c",
 	EventTypeSubscribe:         "c2s",
 	EventTypeMessagePost:       "c2s",
@@ -2045,6 +2138,12 @@ func DecodeEventData(t EventType, raw json.RawMessage) (any, error) {
 		return &v, nil
 	case EventTypeRunWake:
 		var v RunWake
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s: %w", t, err)
+		}
+		return &v, nil
+	case EventTypeRunStop:
+		var v RunStop
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return nil, fmt.Errorf("%s: %w", t, err)
 		}
@@ -2120,6 +2219,8 @@ var Operations = []Operation{
 	{"task_claim", "POST", "/v1/pods/{podId}/tasks/{taskId}/claim", "run"},
 	{"task_update", "PATCH", "/v1/pods/{podId}/tasks/{taskId}", "run|user"},
 	{"evidence", "GET", "/v1/pods/{podId}/runs/{runId}/tool-calls", "run|user"},
+	{"task_release", "POST", "/v1/pods/{podId}/tasks/{taskId}/release", "user|run"},
+	{"run_stop", "POST", "/v1/pods/{podId}/runs/{runId}/stop", "user"},
 	{"post", "POST", "/v1/pods/{podId}/messages", "run|user"},
 }
 
@@ -2146,4 +2247,4 @@ var ErrorStatus = map[ErrorCode]int{
 const ToolPrefix = "jm_"
 
 // ToolNames lists the MCP tools in schema order.
-var ToolNames = []string{"jm_whoami", "jm_read", "jm_task_list", "jm_task_claim", "jm_task_update", "jm_evidence", "jm_post"}
+var ToolNames = []string{"jm_whoami", "jm_read", "jm_task_list", "jm_task_claim", "jm_task_update", "jm_evidence", "jm_task_release", "jm_run_stop", "jm_post"}

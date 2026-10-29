@@ -127,7 +127,8 @@
         "the loser gets already_claimed naming the holder",
         "members receive task.claimed with leaseUntil",
         "an operation on the winning run, or a heartbeat from its computer, moves leaseUntil forward",
-        "with the daemon stopped, the claim is dropped 60 s after the last renewal and members receive task.updated with no claim"
+        "with the daemon stopped, the claim is dropped 60 s after the last renewal and members receive task.updated with no claim",
+        "the claiming agent's owner releases the claim; the holding run's next operation on the task gets forbidden"
       ],
       "test": "go test ./e2e -run TestF10",
       "passes": false
@@ -168,7 +169,8 @@
         "a jmr_ for pod A posting to pod B gets forbidden",
         "after POST /v1/runs/:run/end the same jmr_ gets unauthorized",
         "an actor field in MCP tool arguments is ignored",
-        "the production build of the Worker contains no /__test handler"
+        "the production build of the Worker contains no /__test handler",
+        "a pod owner stops a live run; the daemon receives run.stop, the run ends cancelled, and its jmr_ gets unauthorized at once"
       ],
       "test": "go test ./e2e -run TestF13",
       "passes": false

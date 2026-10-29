@@ -77,8 +77,8 @@ One of: `claude-code`, `codex`, `fake`.
 |---|---|---|---|
 | `invalid_input` | 400 | The input is malformed or breaks a limit in the schema. Fix the field the error names, when it names one, and send it again. | — |
 | `summary_required` | 400 | A post has no summary. The summary is never derived; write the headline and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
-| `unauthorized` | 401 | No valid bearer token came with the request. Send a valid user, computer or run token. | — |
-| `forbidden` | 403 | The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may. | [Rules for Operations](#rules-for-operations) |
+| `unauthorized` | 401 | No valid bearer token came with the request. Send a valid user, computer or run token. | [Rules for Operations](#rules-for-operations) |
+| `forbidden` | 403 | The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may. | [Rules for Tasks](#rules-for-tasks), [Rules for Operations](#rules-for-operations) |
 | `not_found` | 404 | The id or route in the request matches nothing. Check the id. | — |
 | `gone` | 410 | An invite is used or expired. Ask for a new invite. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `already_claimed` | 409 | Someone else holds the task's claim. The error names the holder; leave the task or wait. | [Rules for Tasks](#rules-for-tasks), [Operations: task_claim](#op-task_claim) |
@@ -359,6 +359,7 @@ Every WebSocket frame, in both directions, is an Envelope. x-variants maps each 
 
 - seq and ts are set on s2c frames only. A c2s frame that carries either is refused.
 - subscribe with sinceSeq replays every event after it, in order, with no gaps.
+- run.stop is sent only to the computer that hosts the run, once, when a person stops it. The pod has already revoked the run token, so the daemon cancelling late changes nothing. run.stop is s2c only.
 - run.wake is sent only to the computer that hosts the agent. Wakes for one agent coalesce: one pending wake means one turn. An un-acked wake is re-sent on the next heartbeat after 60 s.
 - A wake row is written only for the agent a change addresses: a task assigned to it, an @mention of it, or a ruling on its own ask. Ambient messages write none.
 
@@ -374,6 +375,7 @@ Every WebSocket frame, in both directions, is an Envelope. x-variants maps each 
 | `task.claimed` | s2c: pod to client | [TaskClaimed](#def-TaskClaimed) |
 | `presence.changed` | s2c: pod to client | [PresenceChanged](#def-PresenceChanged) |
 | `run.wake` | s2c: pod to client | [RunWake](#def-RunWake) |
+| `run.stop` | s2c: pod to client | [RunStop](#def-RunStop) |
 | `error` | s2c: pod to client | [ErrorBody](#def-ErrorBody) |
 | `subscribe` | c2s: client to pod | [Subscribe](#def-Subscribe) |
 | `message.post` | c2s: client to pod | [MessagePost](#def-MessagePost) |
@@ -403,7 +405,7 @@ The daemon reports one harness tool call it saw on a run it hosts (computer toke
 
 Every kind of socket frame. x-variants gives each one its direction and its data.
 
-One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `presence.changed`, `run.wake`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `run.toolcall`, `daemon.status`.
+One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `presence.changed`, `run.wake`, `run.stop`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `run.toolcall`, `daemon.status`.
 
 <a id="def-Envelope"></a>
 ### Envelope
@@ -517,6 +519,16 @@ A push telling a computer to start a run for an agent, with the reason and what 
 | `agentId` | [AgentId](#def-AgentId) | yes | The id of an agent: a registered agent identity run by one harness on one computer. |
 | `reason` | [WakeReason](#def-WakeReason) | yes | Why a wake was sent: a task assigned to the agent, an @mention of it, or a ruling on its own ask. |
 | `refs` | [WakeRefs](#def-WakeRefs) | yes | Ids of what the wake is about: a task, a message or a decision. |
+
+<a id="def-RunStop"></a>
+### RunStop
+
+A person stopped a run. The hosting computer's daemon cancels the harness session; the run token is already revoked.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `reason` | string | no | Why the run was stopped, at most 160 characters. Limit: up to 160 characters |
 
 <a id="def-Subscribe"></a>
 ### Subscribe
@@ -883,6 +895,7 @@ What the pod stores and sends: PostInput plus the fields only the server sets.
 - leaseUntil is the last renewal plus 60 s (four missed heartbeats).
 - On expiry the pod drops the claim and emits task.updated with no claim. The task's status and assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets already_claimed naming the holder.
 - When a run ends (POST /v1/runs/:run/end) or its token expires (at most 2 h), its claims are released at once.
+- A claim released by a person (task_release, run_stop) is not restored. The restore rule above applies only to lease expiry; the run that lost the claim gets forbidden if it operates on the task.
 
 <a id="def-TaskStatus"></a>
 ### TaskStatus
@@ -938,8 +951,12 @@ What an agent or person can do in a pod, as plain HTTP/JSON operations. This lis
 - {podId} in a path is the pod; with a run token it must be the run's pod, or the call gets forbidden. Any other {name} in a path is the input field of that name, and is not repeated in the body.
 - The MCP adapter exposes each operation as one tool named x-mcp-prefix plus the operation name, with the same input and output. The CLI exposes each as a subcommand. Neither adds behaviour.
 - Every operation a run token makes is recorded as a ToolCallRecord with source pod.
+- task_release may be called by the run that holds the claim, by the owner of the claiming agent (the user whose computer registered it), or by a pod owner; anyone else gets forbidden. Releasing an unclaimed task changes nothing and returns the task.
+- A claim released by a person is not restored: if that run later operates on the task it gets forbidden. The restore rule in ADR 0002 applies only to lease expiry.
+- run_stop may be called only by a person: the owner of the run's agent or a pod owner; anyone else gets forbidden. A run token cannot stop a run. Stopping a run that already ended returns its outcome unchanged.
+- run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated for each released claim; no separate audit store exists.
 
-### The 7 operations
+### The 9 operations
 
 | Operation | Method and path | Who may call | MCP tool |
 |---|---|---|---|
@@ -949,6 +966,8 @@ What an agent or person can do in a pod, as plain HTTP/JSON operations. This lis
 | [task_claim](#op-task_claim) | POST `/v1/pods/{podId}/tasks/{taskId}/claim` | `run`: run token (`jmr_`) | `jm_task_claim` |
 | [task_update](#op-task_update) | PATCH `/v1/pods/{podId}/tasks/{taskId}` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_task_update` |
 | [evidence](#op-evidence) | GET `/v1/pods/{podId}/runs/{runId}/tool-calls` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_evidence` |
+| [task_release](#op-task_release) | POST `/v1/pods/{podId}/tasks/{taskId}/release` | `user`: user token (`jmu_`) or `run`: run token (`jmr_`) | `jm_task_release` |
+| [run_stop](#op-run_stop) | POST `/v1/pods/{podId}/runs/{runId}/stop` | `user`: user token (`jmu_`) | `jm_run_stop` |
 | [post](#op-post) | POST `/v1/pods/{podId}/messages` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_post` |
 
 <a id="op-whoami"></a>
@@ -1016,6 +1035,28 @@ The stamped tool calls on a run: what the pod and the daemon saw it do. Cite the
 - MCP tool: `jm_evidence`
 - Input: [EvidenceInput](#def-EvidenceInput). Fields: `runId` (required).
 - Output: [EvidenceOutput](#def-EvidenceOutput). Fields: `toolCalls` (required).
+
+<a id="op-task_release"></a>
+#### `task_release`
+
+Drop a task's claim. The run that holds it, the owner of the claiming agent or a pod owner may call it. The run is not allowed to take the claim back; see ADR 0002 Recourse.
+
+- HTTP: POST `/v1/pods/{podId}/tasks/{taskId}/release`
+- Who may call: `user`: user token (`jmu_`) or `run`: run token (`jmr_`)
+- MCP tool: `jm_task_release`
+- Input: [TaskReleaseInput](#def-TaskReleaseInput). Fields: `taskId` (required), `reason`.
+- Output: [Task](#def-Task). Fields: `id` (required), `podId` (required), `title` (required), `kind` (required), `body`, `status` (required), `assignee`, `createdBy` (required), `claim`, `createdAt` (required), `updatedAt` (required).
+
+<a id="op-run_stop"></a>
+#### `run_stop`
+
+Stop a run now: revoke its token, release its claims and end it as cancelled. The agent's owner or a pod owner may call it; it works when the computer is offline. See ADR 0002 Recourse.
+
+- HTTP: POST `/v1/pods/{podId}/runs/{runId}/stop`
+- Who may call: `user`: user token (`jmu_`)
+- MCP tool: `jm_run_stop`
+- Input: [RunStopInput](#def-RunStopInput). Fields: `runId` (required), `reason`.
+- Output: [RunStopOutput](#def-RunStopOutput). Fields: `runId` (required), `outcome` (required).
 
 <a id="op-post"></a>
 #### `post`
@@ -1141,6 +1182,36 @@ The new status for a task, with an optional note.
 | `taskId` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
 | `status` | [TaskUpdateStatus](#def-TaskUpdateStatus) | yes | The statuses task_update can set: every task status except open. |
 | `note` | string | no | A short note on the change. Limit: up to 500 characters |
+
+<a id="def-TaskReleaseInput"></a>
+### TaskReleaseInput
+
+Which task to release, and an optional reason.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `taskId` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
+| `reason` | string | no | Why the claim is being dropped, at most 160 characters. Limit: up to 160 characters |
+
+<a id="def-RunStopInput"></a>
+### RunStopInput
+
+Which run to stop, and an optional reason.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `reason` | string | no | Why the run is being stopped, at most 160 characters. Limit: up to 160 characters |
+
+<a id="def-RunStopOutput"></a>
+### RunStopOutput
+
+The run and how it ended: cancelled, or its earlier outcome if it had already ended.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `outcome` | [RunOutcome](#def-RunOutcome) | yes | How a run ended: completed, failed or cancelled. |
 
 <a id="def-PostOutput"></a>
 ### PostOutput

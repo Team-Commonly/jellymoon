@@ -8,7 +8,11 @@
     "A GET operation takes its input as query parameters; any other method takes it as a JSON body.",
     "{podId} in a path is the pod; with a run token it must be the run's pod, or the call gets forbidden. Any other {name} in a path is the input field of that name, and is not repeated in the body.",
     "The MCP adapter exposes each operation as one tool named x-mcp-prefix plus the operation name, with the same input and output. The CLI exposes each as a subcommand. Neither adds behaviour.",
-    "Every operation a run token makes is recorded as a ToolCallRecord with source pod."
+    "Every operation a run token makes is recorded as a ToolCallRecord with source pod.",
+    "task_release may be called by the run that holds the claim, by the owner of the claiming agent (the user whose computer registered it), or by a pod owner; anyone else gets forbidden. Releasing an unclaimed task changes nothing and returns the task.",
+    "A claim released by a person is not restored: if that run later operates on the task it gets forbidden. The restore rule in ADR 0002 applies only to lease expiry.",
+    "run_stop may be called only by a person: the owner of the run's agent or a pod owner; anyone else gets forbidden. A run token cannot stop a run. Stopping a run that already ended returns its outcome unchanged.",
+    "run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated for each released claim; no separate audit store exists."
   ],
   "x-operations": [
     { "name": "whoami", "method": "GET", "path": "/v1/pods/{podId}/me", "auth": "run|user", "input": "WhoamiInput", "output": "WhoamiOutput",
@@ -23,6 +27,10 @@
       "description": "Set a task's status, with an optional short note. Use done only when the task's work is finished." },
     { "name": "evidence", "method": "GET", "path": "/v1/pods/{podId}/runs/{runId}/tool-calls", "auth": "run|user", "input": "EvidenceInput", "output": "EvidenceOutput",
       "description": "The stamped tool calls on a run: what the pod and the daemon saw it do. Cite their ids in an ask's context; you can read these but never write them." },
+    { "name": "task_release", "method": "POST", "path": "/v1/pods/{podId}/tasks/{taskId}/release", "auth": "user|run", "input": "TaskReleaseInput", "output": "task.json#/$defs/Task",
+      "description": "Drop a task's claim. The run that holds it, the owner of the claiming agent or a pod owner may call it. The run is not allowed to take the claim back; see ADR 0002 Recourse." },
+    { "name": "run_stop", "method": "POST", "path": "/v1/pods/{podId}/runs/{runId}/stop", "auth": "user", "input": "RunStopInput", "output": "RunStopOutput",
+      "description": "Stop a run now: revoke its token, release its claims and end it as cancelled. The agent's owner or a pod owner may call it; it works when the computer is offline. See ADR 0002 Recourse." },
     { "name": "post", "method": "POST", "path": "/v1/pods/{podId}/messages", "auth": "run|user", "input": "message.json#/$defs/PostInput", "output": "PostOutput",
       "description": "Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one." }
   ],
@@ -112,6 +120,33 @@
         "status": { "$ref": "#/$defs/TaskUpdateStatus" },
         "note": { "description": "A short note on the change.", "type": "string", "maxLength": 500 }
       }
+    },
+    "TaskReleaseInput": {
+      "description": "Which task to release, and an optional reason.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId"],
+      "properties": {
+        "taskId": { "$ref": "common.json#/$defs/TaskId" },
+        "reason": { "description": "Why the claim is being dropped, at most 160 characters.", "type": "string", "maxLength": 160 }
+      }
+    },
+    "RunStopInput": {
+      "description": "Which run to stop, and an optional reason.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId"],
+      "properties": {
+        "runId": { "$ref": "common.json#/$defs/RunId" },
+        "reason": { "description": "Why the run is being stopped, at most 160 characters.", "type": "string", "maxLength": 160 }
+      }
+    },
+    "RunStopOutput": {
+      "description": "The run and how it ended: cancelled, or its earlier outcome if it had already ended.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "outcome"],
+      "properties": { "runId": { "$ref": "common.json#/$defs/RunId" }, "outcome": { "$ref": "pod-api.json#/$defs/RunOutcome" } }
     },
     "PostOutput": {
       "description": "The stored message's id and sequence number, and the decision id when the post is an ask.",

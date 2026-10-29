@@ -897,6 +897,7 @@
         "task.claimed",
         "presence.changed",
         "run.wake",
+        "run.stop",
         "error",
         "subscribe",
         "message.post",
@@ -1137,6 +1138,24 @@
         },
         "refs": {
           "$ref": "#/$defs/WakeRefs"
+        }
+      }
+    },
+    "RunStop": {
+      "description": "A person stopped a run. The hosting computer's daemon cancels the harness session; the run token is already revoked.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        },
+        "reason": {
+          "description": "Why the run was stopped, at most 160 characters.",
+          "type": "string",
+          "maxLength": 160
         }
       }
     },
@@ -1868,6 +1887,59 @@
           "description": "A short note on the change.",
           "type": "string",
           "maxLength": 500
+        }
+      }
+    },
+    "TaskReleaseInput": {
+      "description": "Which task to release, and an optional reason.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskId"
+      ],
+      "properties": {
+        "taskId": {
+          "$ref": "#/$defs/TaskId"
+        },
+        "reason": {
+          "description": "Why the claim is being dropped, at most 160 characters.",
+          "type": "string",
+          "maxLength": 160
+        }
+      }
+    },
+    "RunStopInput": {
+      "description": "Which run to stop, and an optional reason.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        },
+        "reason": {
+          "description": "Why the run is being stopped, at most 160 characters.",
+          "type": "string",
+          "maxLength": 160
+        }
+      }
+    },
+    "RunStopOutput": {
+      "description": "The run and how it ended: cancelled, or its earlier outcome if it had already ended.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "outcome"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        },
+        "outcome": {
+          "$ref": "#/$defs/RunOutcome"
         }
       }
     },

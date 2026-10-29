@@ -4,6 +4,16 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · human release and stop (unit P04)
+- **Changed:** operations `task_release` and `run_stop`, s2c event `run.stop`, their input/output defs and
+  fixtures; `x-rules` in `operations.json`, `events.json` and `task.json` say who may call each and that a
+  person-released claim is not restored. ADR 0002 gains "Recourse". Nothing deleted.
+- **Feature text:** appended one step to F10 (owner releases the claim; the run gets forbidden) and one to
+  F13, the feature that tests `POST /v1/runs/:run/end` (pod owner stops a live run). No other text changed.
+- **Evidence:** `make gen` twice is clean; `make preflight` green. The fixture harness checks data, not
+  direction, so there is no fixture for a c2s `run.stop`; direction is only in `x-variants` and an x-rule.
+- **Next:** F02. **Open:** the hang is still undetectable by the pod; a person must notice it.
+
 ## 2026-10-29 · gen is all-or-nothing, claims and leases (unit P03)
 - **Changed:** `make gen` renders and checks everything, then writes; a failing run leaves the tree as it
   was. It also fails on an auth value outside `none|user|computer|run` (joined with `|`). The nine P02

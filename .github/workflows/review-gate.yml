@@ -4,7 +4,6 @@ name: Review gate
 
 on:
   pull_request:
-    branches: [v4]
   pull_request_review:
     types: [submitted, dismissed]
   merge_group:

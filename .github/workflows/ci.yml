@@ -1,6 +1,6 @@
 name: CI
 
-# v4 verification loop (the build plan). Every required check on `v4` is a
+# v4 verification loop (the build plan). Every required check on `main` is a
 # job here, so a check name never goes missing. A job whose code does not exist
 # yet passes with a notice; it starts enforcing the moment its directory lands.
 # Budget: 5 minutes wall clock for the whole workflow. The review gate is
@@ -8,10 +8,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [v4]
   merge_group:
   push:
-    branches: [v4]
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}

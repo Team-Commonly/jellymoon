@@ -94,7 +94,7 @@
                 "maxLength": 120
               },
               "kind": {
-                "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.",
+                "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.",
                 "type": "string",
                 "enum": [
                   "feature",
@@ -905,7 +905,7 @@
                   "maxLength": 120
                 },
                 "kind": {
-                  "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.",
+                  "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.",
                   "type": "string",
                   "enum": [
                     "feature",
@@ -1108,7 +1108,7 @@
                   "maxLength": 120
                 },
                 "kind": {
-                  "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.",
+                  "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.",
                   "type": "string",
                   "enum": [
                     "feature",
@@ -1348,7 +1348,7 @@
             "maxLength": 120
           },
           "kind": {
-            "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.",
+            "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.",
             "type": "string",
             "enum": [
               "feature",
@@ -1631,7 +1631,7 @@
             "maxLength": 120
           },
           "kind": {
-            "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.",
+            "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.",
             "type": "string",
             "enum": [
               "feature",

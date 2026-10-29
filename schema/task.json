@@ -5,14 +5,14 @@
   "x-rules": [
     "A claim belongs to a run. Its lease renews on any operation that run's token makes, through any adapter, and on every daemon heartbeat (every 15 s) from the computer that hosts the run, while the run has not ended. A long local tool call (a 20-minute test suite) keeps its claim; silence on the pod is not abandonment.",
     "leaseUntil is the last renewal plus 60 s (four missed heartbeats).",
-    "On expiry the pod drops the claim and emits task.updated with no claim. The task's status and assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets already_claimed naming the holder.",
-    "When a run ends (POST /v1/runs/:run/end) or its token expires (at most 2 h), its claims are released at once.",
+    "On expiry the pod drops the claim and emits task.updated with no claim and claim.released with cause expired. The task's status and assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets already_claimed naming the holder.",
+    "When a run ends (POST /v1/runs/:run/end) or its token expires (at most 2 h), its claims are released at once, and members receive claim.released with cause run_ended.",
     "A claim released by a person (task_release, run_stop) is not restored. The restore rule above applies only to lease expiry; the run that lost the claim gets forbidden if it operates on the task."
   ],
   "$defs": {
     "TaskStatus": { "description": "The state of a task on the board.", "type": "string", "enum": ["open", "in_progress", "blocked", "done", "failed"] },
     "TaskKind": {
-      "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.",
+      "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.",
       "type": "string",
       "enum": ["feature", "fix", "security", "design", "research", "chore"]
     },

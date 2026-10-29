@@ -6,6 +6,7 @@
     "e2e/**/*.ts"
   ],
   "ignoreBinaries": [
-    "go"
+    "go",
+    "gofmt"
   ]
 }

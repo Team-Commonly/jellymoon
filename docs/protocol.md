@@ -500,7 +500,7 @@ One of: `expired`, `released`, `run_ended`, `stopped`.
 <a id="def-ClaimReleased"></a>
 ### ClaimReleased
 
-A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause.
+A task's claim ended: which task and run, the cause, and who released or stopped it, and why. Sent whenever a claim ends, for any cause.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -581,7 +581,7 @@ A member creates a task.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | yes | What the task is called. Limit: 1 to 120 characters |
-| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review. |
+| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review. |
 | `assignee` | [ActorId](#def-ActorId) | no | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
 | `body` | string | no | Details of the work, beyond the title. Limit: up to 16384 characters |
 
@@ -917,8 +917,8 @@ What the pod stores and sends: PostInput plus the fields only the server sets.
 
 - A claim belongs to a run. Its lease renews on any operation that run's token makes, through any adapter, and on every daemon heartbeat (every 15 s) from the computer that hosts the run, while the run has not ended. A long local tool call (a 20-minute test suite) keeps its claim; silence on the pod is not abandonment.
 - leaseUntil is the last renewal plus 60 s (four missed heartbeats).
-- On expiry the pod drops the claim and emits task.updated with no claim. The task's status and assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets already_claimed naming the holder.
-- When a run ends (POST /v1/runs/:run/end) or its token expires (at most 2 h), its claims are released at once.
+- On expiry the pod drops the claim and emits task.updated with no claim and claim.released with cause expired. The task's status and assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets already_claimed naming the holder.
+- When a run ends (POST /v1/runs/:run/end) or its token expires (at most 2 h), its claims are released at once, and members receive claim.released with cause run_ended.
 - A claim released by a person (task_release, run_stop) is not restored. The restore rule above applies only to lease expiry; the run that lost the claim gets forbidden if it operates on the task.
 
 <a id="def-TaskStatus"></a>
@@ -931,7 +931,7 @@ One of: `open`, `in_progress`, `blocked`, `done`, `failed`.
 <a id="def-TaskKind"></a>
 ### TaskKind
 
-What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.
+What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.
 
 One of: `feature`, `fix`, `security`, `design`, `research`, `chore`.
 
@@ -956,7 +956,7 @@ A unit of work on the pod's board, with a kind and a status, and optionally an a
 | `id` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
 | `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
 | `title` | string | yes | What the task is called. Limit: 1 to 120 characters |
-| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review. |
+| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review. |
 | `body` | string | no | Details of the work, beyond the title. Limit: up to 16384 characters |
 | `status` | [TaskStatus](#def-TaskStatus) | yes | The state of a task on the board. |
 | `assignee` | [ActorId](#def-ActorId) | no | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
@@ -978,7 +978,7 @@ What an agent or person can do in a pod, as plain HTTP/JSON operations. This lis
 - task_release may be called by the run that holds the claim, by the owner of the claiming agent (the user whose computer registered it), or by a pod owner; anyone else gets forbidden. Releasing an unclaimed task changes nothing and returns the task.
 - A claim released by a person is not restored: if that run later operates on the task it gets forbidden. The restore rule in ADR 0002 applies only to lease expiry.
 - run_stop may be called only by a person: the owner of the run's agent or a pod owner; anyone else gets forbidden. A run token cannot stop a run. Stopping a run that already ended returns its outcome unchanged.
-- run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated for each released claim; no separate audit store exists.
+- run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated and claim.released with cause stopped for each released claim; no separate audit store exists.
 
 ### The 9 operations
 

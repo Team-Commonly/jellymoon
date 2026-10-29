@@ -208,7 +208,7 @@ func (x TaskStatus) Valid() bool {
 	return false
 }
 
-// What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.
+// What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.
 type TaskKind string
 
 const (
@@ -1047,7 +1047,7 @@ func (x ClaimReleaseCause) Valid() bool {
 	return false
 }
 
-// A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause.
+// A task's claim ended: which task and run, the cause, and who released or stopped it, and why. Sent whenever a claim ends, for any cause.
 type ClaimReleased struct {
 	TaskID TaskID `json:"taskId"`
 	// The run that held the claim.

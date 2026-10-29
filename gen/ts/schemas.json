@@ -196,7 +196,7 @@
       ]
     },
     "TaskKind": {
-      "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth) never guesses from the title. security is never folded into fix, so it always gets its own review.",
+      "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix; it gets its own review.",
       "type": "string",
       "enum": [
         "feature",
@@ -1092,7 +1092,7 @@
       ]
     },
     "ClaimReleased": {
-      "description": "A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause.",
+      "description": "A task's claim ended: which task and run, the cause, and who released or stopped it, and why. Sent whenever a claim ends, for any cause.",
       "type": "object",
       "additionalProperties": false,
       "required": [

@@ -146,7 +146,7 @@
       "enum": ["expired", "released", "run_ended", "stopped"]
     },
     "ClaimReleased": {
-      "description": "A task's claim ended: which task and run, the cause, and who and why when a person ended it. Sent whenever a claim ends, for any cause.",
+      "description": "A task's claim ended: which task and run, the cause, and who released or stopped it, and why. Sent whenever a claim ends, for any cause.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId", "runId", "cause"],

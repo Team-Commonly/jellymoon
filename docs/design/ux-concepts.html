@@ -479,7 +479,7 @@ const OPTS={1:{l:'Merge as is',d:'Half-even rounding everywhere; update the 3 PD
 const REC_WHY='Otto recommends 1: one rounding rule for both formats is what Marco’s “match to the cent” rule needs, and half-even is the finance standard.';
 const ASK_TEXT='I reviewed all 6 files. One change reaches past CSV: rounding moved into a shared helper, so PDF totals now round half-even too. Three PDF snapshots moved by one cent.';
 const RC={
-  r1184:{title:'Wren · result on T-40',line:'read 14 files · 23 tool calls · 6m 41s · T-40',run:'cmr_8f2c…a41f',agent:'wren',wake:'mention by Marco Ruiz (seq 1180)',claim:'T-40 · lease renewed 23×, released 10:04:12',win:'09:57:31 → 10:04:12',
+  r1184:{title:'Wren · result on T-40',line:'read 14 files · 23 tool calls · 6m 41s · T-40',run:'cmr_8f2c…a41f',agent:'wren',wake:'mention by Marco Ruiz (seq 1180)',claim:'T-40 · 23 tool calls, released 10:04:12',win:'09:57:31 → 10:04:12',
     tools:[['Read','billing/export/*.ts (6 files)'],['Read','billing/test/invoices (8 fixtures)'],['Grep','"roundTotal" · 3 hits'],['Edit','billing/money.ts'],['Edit','billing/export/csv.ts +5 files'],['Bash','npm test -- invoices → exit 0 · 212 passed'],['Bash','git push origin csv-export'],['gh','pr create → #418']],
     says:['“Totals match the PDF on 212 fixtures.” Matches the test run above.','Caveat: not tested above 480 line items. Not checkable by the server.']},
   r1189:{title:'Otto · ask on PR #418',line:'read 6 files · 9 tool calls · 4m 02s · review of #418',run:'cmr_31d0…7c02',agent:'otto',wake:'handoff from Wren (seq 1186)',claim:'T-40 review · lease held while waiting on ruling',win:'10:15:40 → 10:19:42',
@@ -1050,7 +1050,7 @@ function redirectWren(key,text){
   st.wren.state='ack';st.routed=key;render();toast('Redirect sent. It lands at Wren’s next tool call.');
   later(st,1400,()=>{st.wren.tools++;st.wren.state='run';
     st.wren.plan=r?[...done,...r.plan]:[...done,['Lily: '+note,'doing'],...st.wren.plan.filter(p=>p[1]==='todo')];
-    push(st,{k:'reply',who:'wren',line:'T-43',text:`Got it at tool call #${st.wren.tools}. ${r?r.ack:'Plan updated with your note.'}`,wake:'redirect by Lily (lease renewal)'})});
+    push(st,{k:'reply',who:'wren',line:'T-43',text:`Got it at tool call #${st.wren.tools}. ${r?r.ack:'Plan updated with your note.'}`,wake:'redirect by Lily'})});
 }
 function stopWren(){const st=S[cur];st.wren.state='stopped';push(st,{k:'sys',line:'T-43',text:`Lily stopped Wren’s run on ${st.wren.task}. Lease released; the task stays assigned to Wren with no run.`});render();toast('Wren stopped at its current tool call.')}
 function resumeWren(){const st=S[cur];st.wren.state='run';push(st,{k:'reply',who:'wren',line:'T-43',text:`Resumed on ${st.wren.task} from step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1}.`,wake:'resume by Lily'});render()}

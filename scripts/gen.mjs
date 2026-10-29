@@ -280,9 +280,7 @@ queueOutput('gen/ts/protocol.ts', ts);
 queueOutput('gen/ts/schemas.json', JSON.stringify(bundle, null, 2) + '\n');
 queueOutput('gen/ts/tools.json', JSON.stringify({ $comment: HEADER, tools: mcpTools }, null, 2) + '\n');
 // gofmt reads stdin and writes stdout. A Go file that does not parse fails here, before any write.
-// The Go toolchain's formatter (pinned by .tool-versions); not an npm binary, so knip must not list it.
-const GOFMT = 'gofmt';
-const gofmt = spawnSync(GOFMT, [], { input: go, encoding: 'utf8' });
+const gofmt = spawnSync('gofmt', [], { input: go, encoding: 'utf8' });
 if (gofmt.error) fail(`cannot run gofmt: ${gofmt.error.message}`);
 if (gofmt.status !== 0) fail(`gofmt rejected the generated Go; nothing was written:\n${gofmt.stderr}`);
 queueOutput('daemon/internal/protocol/gen.go', gofmt.stdout);

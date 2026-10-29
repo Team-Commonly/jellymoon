@@ -13,9 +13,10 @@ note is the one rule they now follow. The schema carries it as `x-rules` in `sch
   run has not ended. A long local tool call (a 20-minute test suite) keeps its claim; silence on the pod is
   not abandonment.
 - `leaseUntil` is the last renewal plus 60 s (four missed heartbeats).
-- On expiry the pod drops the claim, emits `task.updated` with no claim and sends members `claim.released` with cause `expired`. The task's status and
-  assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody
-  else has claimed it, its claim is restored; if someone has, it gets `already_claimed` naming the holder.
+- On expiry the pod drops the claim, emits `task.updated` with no claim and sends members `claim.released`
+  with cause `expired`. The task's status and assignee are unchanged and the run is not stopped. If that run
+  later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets
+  `already_claimed` naming the holder.
 - When a run ends (`POST /v1/runs/:run/end`) or its token expires (at most 2 h), its claims are released
   at once, and members receive `claim.released` with cause `run_ended`.
 
@@ -36,19 +37,21 @@ A hung harness no longer has to wait for the 2 h cap. Two operations let a perso
 
 - **`task_release`** (`POST /v1/pods/{podId}/tasks/{taskId}/release`) drops a task's claim. Callers: the run
   that holds it, the owner of the claiming agent (the user whose computer registered it), or a pod owner.
-  Anyone else gets `forbidden`. Members receive `task.updated` with no claim and `claim.released` with cause `released` and `by`. Releasing an unclaimed task is
-  a no-op that returns the task.
+  Anyone else gets `forbidden`. Members receive `task.updated` with no claim and `claim.released` with cause
+  `released` and `by`. Releasing an unclaimed task is a no-op that returns the task.
 - **`run_stop`** (`POST /v1/pods/{podId}/runs/{runId}/stop`) is user-only: the agent's owner or a pod owner.
   At once, the run token is revoked (its next call gets `unauthorized`), its claims are released, the run
   ends as `cancelled`, and the pod sends the `run.stop` event to the hosting computer, whose daemon cancels
-  the harness session, and members receive `claim.released` with cause `stopped` and `by`. Revocation does not wait for the daemon, so a stop works with the computer offline.
-  Stopping an ended run returns its outcome unchanged.
+  the harness session, and members receive `claim.released` with cause `stopped` and `by`. Revocation does
+  not wait for the daemon, so a stop works with the computer offline. Stopping an ended run returns its
+  outcome unchanged.
 - **No restore.** A claim a person released is not restorable by that run; if it later operates on the task
   it gets `forbidden`. The restore rule under Decision applies only to lease expiry.
-- **Record.** Every claim that ends sends members one `claim.released` event: `{ taskId, runId, cause, by?, reason? }`,
-  with cause `expired`, `released`, `run_ended` or `stopped`. `by` names who acted for `released` and `stopped`. `task.updated`
-  still fires; `claim.released` is the who and why. There is no separate audit store. The optional `reason`
-  (at most 160 characters) rides on the operation, `run.stop` and `claim.released`.
+- **Record.** Every claim that ends sends members one `claim.released` event: `{ taskId, runId, cause, by?,
+  reason? }`, with cause `expired`, `released`, `run_ended` or `stopped`. `by` names who acted for
+  `released` and `stopped`. `task.updated` still fires; `claim.released` is the who and why. There is no
+  separate audit store. The optional `reason` (at most 160 characters) rides on the operation, `run.stop`
+  and `claim.released`.
 
 This closes the "no recourse" half of the hung-harness unknown. The hang itself is still undetectable by
 the pod; a person has to notice it.

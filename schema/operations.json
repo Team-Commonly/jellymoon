@@ -12,7 +12,7 @@
     "task_release may be called by the run that holds the claim, by the owner of the claiming agent (the user whose computer registered it), or by a pod owner; anyone else gets forbidden. Releasing an unclaimed task changes nothing and returns the task.",
     "A claim released by a person is not restored: if that run later operates on the task it gets forbidden. The restore rule in ADR 0002 applies only to lease expiry.",
     "run_stop may be called only by a person: the owner of the run's agent or a pod owner; anyone else gets forbidden. A run token cannot stop a run. Stopping a run that already ended returns its outcome unchanged.",
-    "run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated for each released claim; no separate audit store exists."
+    "run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated and claim.released with cause stopped for each released claim; no separate audit store exists."
   ],
   "x-operations": [
     { "name": "whoami", "method": "GET", "path": "/v1/pods/{podId}/me", "auth": "run|user", "input": "WhoamiInput", "output": "WhoamiOutput",

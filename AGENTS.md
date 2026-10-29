@@ -38,8 +38,9 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 - **Merging.** Local verification is the authority. `make land PR=<n>` is the only merge path: it proves the
   exact head green in a clean shell, requires the verifier's ledger line at that head, and for protected paths
   (`schema/`, `worker/src/auth`, `worker/src/mcp`, `daemon/internal/{acp,run}`, `install.sh`,
-  `.github/workflows`, `.github/opus-reviewers.txt`, `scripts/review-gate.mjs`) also the reviewer's pod
-  verdict naming the PR and head. GitHub checks are not consulted and nothing GitHub reports counts. CI is
+  `.github/workflows`, `.github/opus-reviewers.txt`, `scripts/{review-gate,land,land-decide}.mjs`, `Makefile`,
+  `init.sh`, `scripts/tools.sh`) also the reviewer's pod verdict naming the PR and head. The stack lands as
+  one PR retargeted to `main`. GitHub checks are not consulted and nothing GitHub reports counts. CI is
   disabled while the repo is private; it returns at public launch only as a thin mirror of `make preflight`.
   Only the coordinator lands (`docs/development/landing.md`, `workflow.md`).
 - **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new

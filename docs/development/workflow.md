@@ -36,13 +36,13 @@ both workflows are disabled while the repo is private (owner ruling:CI is a bott
 that touches `.github/workflows/` could fake a green check anyway. `make land PR=<n>` is the only merge path
 (`docs/development/landing.md`). It merges only when all of these hold at the exact PR head:
 - a clean-shell `make preflight` passes at that head;
-- the verifier's ledger line at the head is `PASS` (the check of record, `docs/development/verifier.md`);
+- the verifier's ledger line at the head is `PASS` (the check of record, `docs/development/verifier.md`), and the
+  preflight ran on the merge result (main plus the head);
 - for a protected path, the reviewer's pod verdict also passes. It is a message by a listed reviewer's
-  server-stamped username that names `jellymoon#<pr>` and the full 40-character head and ends `GATE: PASS`.
+  server-stamped username, whose first line is `jellymoon#<pr> <full head>` and whose last line is `GATE: PASS`.
 - Workers never merge. GitHub review text is not consulted.
-- Protected paths: `schema/`, `worker/src/auth`, `worker/src/mcp`, `daemon/internal/{acp,run}`,
-  `install.sh`, `.github/workflows`, `.github/opus-reviewers.txt` and `scripts/review-gate.mjs`. A rename out
-  of a protected path counts. `scripts/land.mjs` is not protected, so its own change is judged by a person.
+- Protected paths are listed in `landing.md`; they include `land.mjs`, `land-decide.mjs`, `review-gate.mjs`,
+  `Makefile`, `init.sh` and `scripts/tools.sh`. A rename out of a protected path counts. Run land from main.
 - **Accepted reviewers:** `.github/opus-reviewers.txt` is the only place they are written (`Name username`);
   the test asserts the file parses and pins no name.
 - **How the verdict is read** (`scripts/review-gate.mjs`, shared with land). The verdict is the message's LAST
@@ -52,16 +52,16 @@ that touches `.github/workflows/` could fake a green check anyway. `make land PR
   cases: `scripts/check-land.mjs`.
 - **CI** returns at public launch only as a thin mirror of `make preflight` for outside contributors, never as
   the gate. The workflow files are kept, with a disabled header.
-- **Why no merge queue:** the repo is private on GitHub Free. `make land` serialises by being the one door.
+- **Why no merge queue:** the repo is private on GitHub Free. `make land` is the one door, with a lock so two lands cannot run at once.
 
 ### Temporary: remove when the reviewers return
 While the reviewers are down, `make land PR=<n> ARGS=--reviewer-gate-unavailable` lets a protected-path PR
 land without a pod verdict. It needs a second ledger row at the same PR and head: `PASS`, by a verifier on a
-different model from the first PASS, with a note starting `reviewer-gate-unavailable`; the latest row decides. The
+different model family from the first PASS, with a note starting `reviewer-gate-unavailable`; the latest row decides. The
 second verifier is fresh-context: it has never seen the builder's or the first verifier's reasoning. Every such
 land appends a `REGATE-OWED` row; `make land ARGS=--owed` lists the PRs still owed a reviewer re-gate (it blocks
 nothing). Whatever a later reviewer re-gate fails is fixed forward. The ledger `by` column is `<model>-verifier`
-(`opus-verifier`, `sonnet-verifier`), `coordinator` or `land`.
+(`opus`, `sonnet`, `haiku` or `fable`) and `land`; the coordinator never writes `PASS` or `FAIL`.
 
 ## Design-gated features
 - **F18 (client) and F19 (connectors)** stay blocked until their options docs are reviewed with Sam.

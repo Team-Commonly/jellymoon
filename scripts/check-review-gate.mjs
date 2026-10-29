@@ -73,6 +73,11 @@ const paths = [
   ['the gate script and reviewer list are protected', [{ filename: 'scripts/review-gate.mjs' }, { filename: '.github/opus-reviewers.txt' }], true],
   ['a rename OUT of schema/ is protected (previous_filename)', [{ filename: 'elsewhere/x.json', previous_filename: 'schema/x.json' }], true],
   ['a rename INTO schema/ is protected', [{ filename: 'schema/x.json', previous_filename: 'elsewhere/x.json' }], true],
+  ['land and its decisions are protected', [{ filename: 'scripts/land.mjs' }, { filename: 'scripts/land-decide.mjs' }], true],
+  ['the Makefile, init.sh and tools.sh are protected', [{ filename: 'Makefile' }], true],
+  ['init.sh is protected', [{ filename: 'init.sh' }], true],
+  ['tools.sh is protected', [{ filename: 'scripts/tools.sh' }], true],
+  ['a rename out of land.mjs is protected', [{ filename: 'scripts/x.mjs', previous_filename: 'scripts/land.mjs' }], true],
   ['an unrelated edit is not protected', [{ filename: 'docs/INDEX.md' }, { filename: 'scripts/gen.mjs' }], false],
   ['a rename between unprotected paths is not protected', [{ filename: 'docs/b.md', previous_filename: 'docs/a.md' }], false],
 ];

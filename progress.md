@@ -4,6 +4,15 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · P08 review fixes (unit P08, round 2)
+- **Changed:** land simplified to one PR based on `main` (no `--stack`, chains or FIXED-FWD). It now tests main plus
+  the head in a throwaway worktree, takes changed files from the local `git diff --name-status -M`, re-reads the
+  ledger and pod right before the merge, refuses if main moved, and takes a lock. Pod verdicts count only with a
+  first line `jellymoon#<pr> <head>`. Ledger fails closed (unknown verdicts, any FAIL, verifier labels).
+  Preflight cleanup can no longer turn a pass into a refusal. `land.mjs`, `Makefile`, `init.sh` and tools.sh are protected.
+- **Evidence:** `make preflight` green in the stripped shell; the three surviving mutations are now killed.
+- **Next:** the first land of the gate uses `--bootstrap` and is judged by people; verify the reviewer usernames.
+
 ## 2026-10-29 · local landing (unit P08)
 - **Changed:** `make land PR=<n>` (scripts/land.mjs, pure decisions in land-decide.mjs): clean-shell preflight at
   the exact head, verifier ledger line, and for protected paths the reviewer's pod verdict matched by
@@ -11,7 +20,7 @@ goes in the PR.
   verifier plus `--owed`. P07 round-2 carry-overs fixed here: verdict is the last non-empty line (N1), credit
   lines normalised (N2), 14 new gate cases (N3), check-portable case-insensitive again (N4), reviewer names in
   `.github/opus-reviewers.txt` only (N5); B1 is moot with CI off and is stated in workflow.md, AGENTS.md and the ymls.
-- **Evidence:** `make test` runs 44 gate cases and 37 land cases; the accept-any-username mutation turns two red.
+- **Evidence:** `make test` runs 44 gate cases and 70 land cases (see the round-2 entry below); the accept-any-username mutation turns two red.
 - **Next:** the coordinator's live dry-run; verify the usernames in opus-reviewers.txt against the pod.
 - **Surprising:** the clean shell has no `gh` or `node`, so land runs under bun and the dry-run needs a normal PATH.
 

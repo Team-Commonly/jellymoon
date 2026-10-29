@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 const CREDIT = /written by ([^,\n]+), a commonly agent/gi;
 
-const PROTECTED = /^(schema\/|worker\/src\/auth\/|worker\/src\/mcp\/|daemon\/internal\/(acp|run)\/|worker\/public\/install\.sh$|\.github\/workflows\/|\.github\/opus-reviewers\.txt$|scripts\/review-gate\.mjs$)/;
+const PROTECTED = /^(schema\/|worker\/src\/auth\/|worker\/src\/mcp\/|daemon\/internal\/(acp|run)\/|worker\/public\/install\.sh$|\.github\/workflows\/|\.github\/opus-reviewers\.txt$|scripts\/(review-gate\.mjs|land\.mjs|land-decide\.mjs|tools\.sh)$|Makefile$|init\.sh$)/;
 
 // files: the PR's changed files as GitHub lists them. A rename OUT of a protected path lists only the new
 // name in `filename`, so previous_filename counts too.

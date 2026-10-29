@@ -1,67 +1,65 @@
 // Pure decisions behind scripts/land.mjs (docs/development/landing.md). Every function takes parsed data and
 // returns { ok, reason } (or a plain value); the shell-outs live in land.mjs. Tests: scripts/check-land.mjs.
+import fs from 'node:fs';
 import { verdictOf } from './review-gate.mjs';
 
-const VERDICTS = ['PASS', 'FAIL', 'FIXED-FWD'];
+const KNOWN = ['PASS', 'FAIL', 'LANDED', 'REGATE-OWED', 'BOOTSTRAP'];
+const VERIFIER = /^(opus|sonnet|haiku|fable)-verifier$/;
 const SEAT_NOTE = /^reviewer-gate-unavailable/; // TEMPORARY: remove when the reviewers return
-const ref = (v) => String(v).replace(/^#/, '');
+const ref = (v) => String(v).trim().replace(/^#/, '');
 
+// Rows are normalised (trim, case). The first line is dropped only if it IS the header.
 export function parseLedger(text) {
-  const [, ...lines] = text.split('\n').filter((l) => l.trim());
-  return lines.map((l) => {
-    const [pr, head, verdict, by, when, note = ''] = l.split('\t');
-    return { pr: ref(pr), head, verdict, by, when, note };
+  const lines = text.split('\n').filter((l) => l.trim());
+  const rows = /^pr\t/i.test(lines[0] || '') ? lines.slice(1) : lines;
+  return rows.map((l) => {
+    const [pr = '', head = '', verdict = '', by = '', when = '', note = ''] = l.split('\t');
+    return { pr: ref(pr), head: head.trim().toLowerCase(), verdict: verdict.trim().toUpperCase(), by: by.trim().toLowerCase(), when: when.trim(), note: note.trim() };
   });
 }
 
-const verifierModel = (by) => /^(.+)-verifier$/.exec(by || '')?.[1] ?? null;
+const family = (by) => VERIFIER.exec(by || '')?.[1] ?? null;
+const at = (rows, pr, head) => rows.filter((r) => r.pr === ref(pr) && r.head === head.toLowerCase());
 
-// The last row of the verdicts at (pr, head) decides. Second-verifier rows are not primary verdicts.
-function latest(rows, pr, head, { reviewer = false } = {}) {
-  return rows.filter((r) => ref(r.pr) === ref(pr) && r.head === head && VERDICTS.includes(r.verdict)
-    && SEAT_NOTE.test(r.note) === reviewer).at(-1);
+// Fails closed. At (pr, head): an unrecognised verdict blocks; a verdict row by a non-verifier blocks; a FAIL
+// blocks (whatever its note) unless the SAME label recorded a later PASS; the latest primary row must be a PASS.
+export function checkLedger(rows, { pr, head }) {
+  const mine = at(rows, pr, head);
+  const odd = mine.find((r) => !KNOWN.includes(r.verdict));
+  if (odd) return { ok: false, reason: `#${pr} has an unrecognised verdict '${odd.verdict}' at ${head.slice(0, 8)}` };
+  const verdicts = mine.filter((r) => ['PASS', 'FAIL'].includes(r.verdict));
+  const notV = verdicts.find((r) => !family(r.by));
+  if (notV) return { ok: false, reason: `#${pr} has a ${notV.verdict} by '${notV.by}', which is not a <model>-verifier` };
+  const failed = verdicts.find((r, i) => r.verdict === 'FAIL' && !verdicts.slice(i + 1).some((p) => p.verdict === 'PASS' && p.by === r.by));
+  if (failed) return { ok: false, reason: `#${pr} has a FAIL by ${failed.by} at ${head.slice(0, 8)} with no later PASS from the same verifier` };
+  const primary = verdicts.filter((r) => !SEAT_NOTE.test(r.note)).at(-1);
+  if (primary?.verdict !== 'PASS') return { ok: false, reason: `no verifier PASS for #${pr} at ${head.slice(0, 8)}` };
+  return { ok: true, primary };
 }
 
-// chain: [{ pr, head }] bottom-up. Returns { ok, reason, primary }.
-export function checkLedger(rows, { pr, head, chain = [{ pr, head }] }) {
-  const row = latest(rows, pr, head);
-  if (!row) return { ok: false, reason: `no verifier verdict for #${pr} at ${head.slice(0, 8)}` };
-  if (!verifierModel(row.by)) return { ok: false, reason: `#${pr} verdict is by '${row.by}', not a <model>-verifier` };
-  if (row.verdict === 'FAIL') return { ok: false, reason: `#${pr} latest verdict at ${head.slice(0, 8)} is FAIL` };
-  if (row.verdict === 'PASS') return { ok: true, primary: row };
-  const m = /^#(\d+)$/.exec(row.note);
-  const at = chain.findIndex((c) => c.pr === pr);
-  const target = m && chain.slice(at + 1).find((c) => c.pr === m[1]);
-  if (!target) return { ok: false, reason: `#${pr} FIXED-FWD names '${row.note}', which is not above it in this stack` };
-  const t = latest(rows, target.pr, target.head);
-  if (t?.verdict !== 'PASS' || !verifierModel(t.by)) return { ok: false, reason: `#${pr} FIXED-FWD target #${target.pr} has no verifier PASS at its head` };
-  return { ok: true, primary: row };
-}
-
-// TEMPORARY (remove when the reviewers return): a second verifier on a different model stands in for the pod verdict.
+// TEMPORARY (remove when the reviewers return): a second verifier from a different model family stands in
+// for the pod verdict.
 export function checkSecondVerifier(rows, { pr, head, primary }) {
-  const row = latest(rows, pr, head, { reviewer: true });
+  const row = at(rows, pr, head).filter((r) => ['PASS', 'FAIL'].includes(r.verdict) && SEAT_NOTE.test(r.note)).at(-1);
   if (!row) return { ok: false, reason: `#${pr} touches a protected path: no pod verdict, and no 'reviewer-gate-unavailable' second-verifier row` };
-  const model = verifierModel(row.by);
-  if (!model) return { ok: false, reason: `#${pr} second verifier '${row.by}' is not a <model>-verifier` };
   if (row.verdict !== 'PASS') return { ok: false, reason: `#${pr} latest second-verifier row is ${row.verdict}` };
-  if (model === verifierModel(primary.by)) return { ok: false, reason: `#${pr} second verifier '${row.by}' is on the same model as the first` };
+  if (family(row.by) === family(primary.by)) return { ok: false, reason: `#${pr} second verifier '${row.by}' is the same model family as the first` };
   return { ok: true, reason: `second verifier ${row.by}` };
 }
 
-const hasPr = (text, pr) => new RegExp(`jellymoon#${ref(pr)}(?!\\d)`).test(text);
 const msgUser = (m) => m.userId?.username ?? m.username;
 const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at ?? 0) || 0;
 
-// Verdicts from the pod. Only a message whose server-stamped username is a listed reviewer's counts,
-// whatever its text says. The latest qualifying message per reviewer at the head decides.
+// A message counts for #N only if its FIRST non-empty line is exactly `jellymoon#<N> <head>` and its server-stamped
+// username is a listed reviewer's. The latest such message per reviewer decides; text is never an identity.
 export function checkPodVerdict(messages, { pr, head, entries, after = 0 }) {
   const byUser = new Map(entries.filter((e) => e.username).map((e) => [e.username, e.name]));
+  const first = `jellymoon#${ref(pr)} ${head.toLowerCase()}`;
   const latestBy = new Map();
   messages.forEach((m, i) => {
     const name = byUser.get(msgUser(m));
-    const text = (m.content || '').replace(/<!--[\s\S]*?-->/g, '');
-    if (!name || msgTime(m) < after || !hasPr(text, pr) || !text.toLowerCase().includes(head.toLowerCase())) return;
+    const line = (m.content || '').split('\n').map((l) => l.trim()).find(Boolean);
+    if (!name || msgTime(m) < after || line?.toLowerCase() !== first) return;
     const prev = latestBy.get(name);
     if (!prev || msgTime(m) > msgTime(prev.m) || (msgTime(m) === msgTime(prev.m) && i > prev.i)) latestBy.set(name, { m, i });
   });
@@ -69,29 +67,42 @@ export function checkPodVerdict(messages, { pr, head, entries, after = 0 }) {
   const block = [];
   for (const [name, { m }] of latestBy) (verdictOf(m.content) === 'PASS' ? pass : block).push(name);
   if (block.length) return { ok: false, reason: `pod verdict blocked by ${block.join(', ')}` };
-  if (!pass.length) return { ok: false, reason: `no accepted reviewer's pod message names jellymoon#${ref(pr)} and the full head` };
+  if (!pass.length) return { ok: false, reason: `no accepted reviewer's pod message starts with 'jellymoon#${ref(pr)} <full head>'` };
   return { ok: true, reason: `pod verdict PASS (${pass.join(', ')})` };
 }
 
 export function checkHead(pr, local) {
-  if (pr.state === 'MERGED') return { ok: true };
   if (pr.state !== 'OPEN') return { ok: false, reason: `#${pr.number} is ${pr.state}` };
-  if (local !== pr.headRefOid) return { ok: false, reason: `#${pr.number} head on GitHub ${pr.headRefOid.slice(0, 8)} differs from the local fetch ${String(local).slice(0, 8)}` };
+  if (pr.baseRefName !== 'main') return { ok: false, reason: `#${pr.number} is based on ${pr.baseRefName}, not main; land one PR retargeted to main` };
+  if (String(local).toLowerCase() !== pr.headRefOid.toLowerCase()) return { ok: false, reason: `#${pr.number} head on GitHub ${pr.headRefOid.slice(0, 8)} differs from the local fetch ${String(local).slice(0, 8)}` };
   return { ok: true };
 }
 
 // Idempotency: what to do with this PR.
 export function landAction(pr, rows) {
   if (pr.state !== 'MERGED') return 'check';
-  return rows.some((r) => ref(r.pr) === String(pr.number) && r.head === pr.headRefOid && r.verdict === 'LANDED') ? 'already-landed' : 'record-only';
+  return at(rows, pr.number, pr.headRefOid).some((r) => r.verdict === 'LANDED') ? 'already-landed' : 'record-only';
 }
 
-// PRs that still owe a reviewer re-gate. regated(pr, head, since) says a reviewer's pod verdict PASS exists after that row.
+// PRs that still owe a reviewer re-gate. regated(pr, head, since) says a reviewer's pod PASS exists after that row.
 export function owedList(rows, regated) {
   const seen = new Set();
-  return rows.filter((r) => r.verdict === 'REGATE-OWED' && !seen.has(`${ref(r.pr)}@${r.head}`) && seen.add(`${ref(r.pr)}@${r.head}`)
-    && !regated(ref(r.pr), r.head, Date.parse(r.when) || 0));
+  return rows.filter((r) => r.verdict === 'REGATE-OWED' && !seen.has(`${r.pr}@${r.head}`) && seen.add(`${r.pr}@${r.head}`)
+    && !regated(r.pr, r.head, Date.parse(r.when) || 0));
 }
+
+// `git diff --name-status -M` output to the shape touchesProtected reads: renames and copies list both names.
+export function filesFromNameStatus(text) {
+  return text.split('\n').filter(Boolean).map((l) => {
+    const [status, a, b] = l.split('\t');
+    return /^[RC]/.test(status) ? { filename: b, previous_filename: a } : { filename: a };
+  });
+}
+
+export const checkMain = (before, after) => (before === after ? { ok: true }
+  : { ok: false, reason: `main moved from ${before.slice(0, 8)} to ${after.slice(0, 8)} during the run; run land again` });
+
+export const checkApi = (url) => (/^https:\/\//.test(url) ? { ok: true } : { ok: false, reason: 'JM_COMMONLY_API must be https (the bearer token would travel in clear)' });
 
 // The one git remote whose URL is the target repo (https or ssh, with or without .git), from `git remote -v`.
 export function remoteFor(remoteV, repo) {
@@ -100,4 +111,16 @@ export function remoteFor(remoteV, repo) {
   const names = [...new Set(remoteV.split('\n').map((l) => l.split(/\s+/)).filter(([, u]) => u && url.test(u)).map(([n]) => n))];
   if (names.length === 1) return { remote: names[0] };
   return { error: names.length ? `more than one git remote matches ${repo}: ${names.join(', ')}` : `no git remote matches ${repo}` };
+}
+
+// Removes a throwaway tree. Go's module cache is read-only, so make it writable first. Never throws: a failed
+// cleanup warns with the directory and the caller's result stands.
+export function removeTree(dir, { rm = (d) => fs.rmSync(d, { recursive: true, force: true }), warn = console.error } = {}) {
+  const writable = (d) => {
+    try {
+      fs.chmodSync(d, 0o700);
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) if (e.isDirectory() && !e.isSymbolicLink()) writable(`${d}/${e.name}`); else if (!e.isSymbolicLink()) fs.chmodSync(`${d}/${e.name}`, 0o600);
+    } catch { /* best effort */ }
+  };
+  try { writable(dir); rm(dir); return true; } catch (e) { warn(`land: warning: could not remove ${dir}: ${e.message.split('\n')[0]}`); return false; }
 }

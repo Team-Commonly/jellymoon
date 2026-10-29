@@ -62,9 +62,8 @@ hooks:
 portable:
 	scripts/check-portable.sh
 
-# The only merge path (docs/development/landing.md): make land PR=<n> [ARGS="--stack --dry-run"]. Needs the JM_* env.
+# The only merge path (docs/development/landing.md): make land PR=<n> [ARGS=--dry-run], or make land ARGS=--owed. Needs the JM_* env.
 land:
-	@test -n "$(PR)" || (echo "usage: make land PR=<n> [ARGS=--stack]"; exit 1)
 	$(BUN) scripts/land.mjs $(PR) $(ARGS)
 
 preflight: portable check-gen test entropy secrets

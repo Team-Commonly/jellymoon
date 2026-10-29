@@ -8,7 +8,7 @@ defined in [GLOSSARY.md](GLOSSARY.md). Every definition appears once and is link
 How to read a table: **Required** says whether the field must be present. Limits in **Notes** come from the
 schema. An object accepts only the fields listed; anything else fails validation.
 
-Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#errors) · [Tokens](#tokens) · [Worker HTTP API](#worker-http-api) · [Socket events](#socket-events) · [Messages and cards](#messages-and-cards) · [Tasks](#tasks) · [MCP tools](#mcp-tools)
+Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#errors) · [Tokens](#tokens) · [Worker HTTP API](#worker-http-api) · [Socket events](#socket-events) · [Messages and cards](#messages-and-cards) · [Tasks](#tasks) · [Operations](#operations)
 
 ## Ids, actors and harnesses
 
@@ -26,6 +26,7 @@ Ids, actors, timestamps and errors shared by every other schema file. Ids are a 
 | <a id="def-TaskId"></a>TaskId | starts with `tsk_` then a 26-character ULID |  |
 | <a id="def-MessageId"></a>MessageId | starts with `msg_` then a 26-character ULID |  |
 | <a id="def-RunId"></a>RunId | starts with `run_` then a 26-character ULID |  |
+| <a id="def-ToolCallId"></a>ToolCallId | starts with `tc_` then a 26-character ULID | A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these. |
 | <a id="def-DecisionId"></a>DecisionId | starts with `dec_` then a 26-character ULID |  |
 | <a id="def-WakeId"></a>WakeId | starts with `wak_` then a 26-character ULID |  |
 
@@ -73,15 +74,16 @@ One of: `claude-code`, `codex`, `fake`.
 | `invalid_input` | — |
 | `summary_required` | Messages rules |
 | `unauthorized` | — |
-| `forbidden` | — |
+| `forbidden` | Pod operations rules |
 | `not_found` | — |
 | `gone` | Worker HTTP API rules |
-| `already_claimed` | tool `commonly_task_claim` |
+| `already_claimed` | operation `task_claim` |
 | `already_ruled` | Messages rules |
 | `authorization_pending` | Worker HTTP API rules |
 | `slow_down` | — |
 | `expired_token` | Worker HTTP API rules |
 | `invalid_grant` | Worker HTTP API rules |
+| `ungrounded` | Messages rules |
 | `rate_limited` | — |
 | `internal` | — |
 
@@ -90,7 +92,7 @@ One of: `claude-code`, `codex`, `fake`.
 
 Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event.
 
-One of: `invalid_input`, `summary_required`, `unauthorized`, `forbidden`, `not_found`, `gone`, `already_claimed`, `already_ruled`, `authorization_pending`, `slow_down`, `expired_token`, `invalid_grant`, `rate_limited`, `internal`.
+One of: `invalid_input`, `summary_required`, `unauthorized`, `forbidden`, `not_found`, `gone`, `already_claimed`, `already_ruled`, `authorization_pending`, `slow_down`, `expired_token`, `invalid_grant`, `ungrounded`, `rate_limited`, `internal`.
 
 <a id="def-ErrorBody"></a>
 ### ErrorBody
@@ -108,9 +110,9 @@ Bearer tokens. Each is a kind prefix plus 43 random base62 characters. Only the 
 
 | Token | Prefix |
 |---|---|
-| user | `cmu_` |
-| computer | `cmc_` |
-| run | `cmr_` |
+| user | `jmu_` |
+| computer | `jmc_` |
+| run | `jmr_` |
 
 <a id="def-TokenKind"></a>
 ### TokenKind
@@ -122,21 +124,21 @@ One of: `user`, `computer`, `run`.
 
 Bound to one user. 30 days, refreshable.
 
-A string, starts with `cmu_` then 43 letters or digits.
+A string, starts with `jmu_` then 43 letters or digits.
 
 <a id="def-ComputerToken"></a>
 ### ComputerToken
 
 Bound to one user and one computer. Valid until revoked.
 
-A string, starts with `cmc_` then 43 letters or digits.
+A string, starts with `jmc_` then 43 letters or digits.
 
 <a id="def-RunToken"></a>
 ### RunToken
 
 Bound to one agent, pod and run (and task, if any). Ends with the run; at most 2 hours.
 
-A string, starts with `cmr_` then 43 letters or digits.
+A string, starts with `jmr_` then 43 letters or digits.
 
 ## Worker HTTP API
 
@@ -154,15 +156,15 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 |---|---|---|---|---|
 | POST | `/v1/auth/device` | anyone | — | [DeviceStartResponse](#def-DeviceStartResponse) |
 | POST | `/v1/auth/device/token` | anyone | [DeviceTokenRequest](#def-DeviceTokenRequest) | [DeviceTokenResponse](#def-DeviceTokenResponse) |
-| POST | `/v1/pods` | a signed-in user (`cmu_`) | [CreatePodRequest](#def-CreatePodRequest) | [Pod](#def-Pod) |
-| POST | `/v1/pods/:pod/invites` | a signed-in user (`cmu_`) | [CreateInviteRequest](#def-CreateInviteRequest) | [Invite](#def-Invite) |
-| POST | `/v1/invites/:code/accept` | a signed-in user (`cmu_`) | — | [AcceptInviteResponse](#def-AcceptInviteResponse) |
-| POST | `/v1/computers` | a signed-in user (`cmu_`) | [RegisterComputerRequest](#def-RegisterComputerRequest) | [RegisterComputerResponse](#def-RegisterComputerResponse) |
-| POST | `/v1/pods/:pod/agents` | a computer (`cmc_`) | [RegisterAgentRequest](#def-RegisterAgentRequest) | [RegisterAgentResponse](#def-RegisterAgentResponse) |
-| GET | `/v1/pods/:pod/ws` | a signed-in user (`cmu_`) or a computer (`cmc_`) | — | WebSocket upgrade |
-| POST | `/v1/runs` | a computer (`cmc_`) | [ClaimRunRequest](#def-ClaimRunRequest) | [ClaimRunResponse](#def-ClaimRunResponse) |
-| POST | `/v1/runs/:run/end` | a computer (`cmc_`) | [EndRunRequest](#def-EndRunRequest) | — |
-| POST | `/mcp` | an agent run (`cmr_`) or a signed-in user (`cmu_`) | — | mcp-streamable-http, stateless |
+| POST | `/v1/pods` | a signed-in user (`jmu_`) | [CreatePodRequest](#def-CreatePodRequest) | [Pod](#def-Pod) |
+| POST | `/v1/pods/:pod/invites` | a signed-in user (`jmu_`) | [CreateInviteRequest](#def-CreateInviteRequest) | [Invite](#def-Invite) |
+| POST | `/v1/invites/:code/accept` | a signed-in user (`jmu_`) | — | [AcceptInviteResponse](#def-AcceptInviteResponse) |
+| POST | `/v1/computers` | a signed-in user (`jmu_`) | [RegisterComputerRequest](#def-RegisterComputerRequest) | [RegisterComputerResponse](#def-RegisterComputerResponse) |
+| POST | `/v1/pods/:pod/agents` | a computer (`jmc_`) | [RegisterAgentRequest](#def-RegisterAgentRequest) | [RegisterAgentResponse](#def-RegisterAgentResponse) |
+| GET | `/v1/pods/:pod/ws` | a signed-in user (`jmu_`) or a computer (`jmc_`) | — | WebSocket upgrade |
+| POST | `/v1/runs` | a computer (`jmc_`) | [ClaimRunRequest](#def-ClaimRunRequest) | [ClaimRunResponse](#def-ClaimRunResponse) |
+| POST | `/v1/runs/:run/end` | a computer (`jmc_`) | [EndRunRequest](#def-EndRunRequest) | — |
+| POST | `/mcp` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | — | mcp-streamable-http, stateless; the MCP adapter over operations.json |
 
 <a id="def-DeviceStartResponse"></a>
 ### DeviceStartResponse
@@ -337,12 +339,27 @@ Every WebSocket frame, in both directions, is an Envelope. x-variants maps each 
 | `decision.rule` | c2s: client to pod | [DecisionRule](#def-DecisionRule) |
 | `presence.heartbeat` | c2s: client to pod | [PresenceHeartbeat](#def-PresenceHeartbeat) |
 | `wake.ack` | c2s: client to pod | [WakeAck](#def-WakeAck) |
+| `run.toolcall` | c2s: client to pod | [RunToolCall](#def-RunToolCall) |
 | `daemon.status` | local: daemon to TUI only | [DaemonStatus](#def-DaemonStatus) |
+
+<a id="def-RunToolCall"></a>
+### RunToolCall
+
+The daemon reports one harness tool call it saw on a run it hosts (computer token only). The pod assigns the id and stores a ToolCallRecord with source daemon. The agent never sends this.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `runId` | [RunId](#def-RunId) | yes |  |
+| `name` | string | yes | 1 to 64 characters |
+| `status` | [ToolCallStatus](#def-ToolCallStatus) | yes |  |
+| `startedAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `endedAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `digest` | string | no | up to 600 characters |
 
 <a id="def-EventType"></a>
 ### EventType
 
-One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `presence.changed`, `run.wake`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `daemon.status`.
+One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `presence.changed`, `run.wake`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `run.toolcall`, `daemon.status`.
 
 <a id="def-Envelope"></a>
 ### Envelope
@@ -525,7 +542,10 @@ The message contract. PostInput is what an agent writes through the post tool. M
 ### Rules
 
 - needs is required when kind is ask, and only allowed then.
-- options is required when kind is ask, and only allowed then. At most one option is recommended, and option ids are unique.
+- options is required when kind is ask, and only allowed then. Option ids are unique.
+- context is required when kind is ask, and only allowed then. recommendation.option names one of the options.
+- Grounding: every GroundedClaim cites at least one toolCalls or messages id, and every id must be a record in this pod (tool calls: on a run of this agent). Otherwise the post is refused with ungrounded.
+- Grounding: every number in a GroundedClaim's text must appear in the digest of a tool call it cites, or in the summary or body of a message it cites. Otherwise the post is refused with ungrounded. The model arranges and summarizes stamped evidence; it never asserts an unstamped fact.
 - A post without summary is refused with summary_required, not derived.
 - A human post (the message.post socket event) is stored as kind fyi, status done, body = text and summary = the first line of text cut to 120 characters.
 - receipt is set on every agent post and never on a human post. decision is set exactly when kind is ask.
@@ -585,8 +605,66 @@ One of: `a`, `b`, `c`, `d`, `e`.
 |---|---|---|---|
 | `id` | [OptionId](#def-OptionId) | yes |  |
 | `label` | string | yes | 1 to 40 characters |
-| `description` | string | no | up to 160 characters |
-| `recommended` | boolean | no |  |
+| `consequence` | string | yes | What happens if this option is picked, in one or two sentences. Limit: 1 to 200 characters |
+
+<a id="def-ToolCallSource"></a>
+### ToolCallSource
+
+Who saw the call: the pod (an MCP call on the run token) or the daemon (a harness tool call reported over ACP). Never the model.
+
+One of: `pod`, `daemon`.
+
+<a id="def-ToolCallStatus"></a>
+### ToolCallStatus
+
+One of: `ok`, `error`.
+
+<a id="def-ToolCallRecord"></a>
+### ToolCallRecord
+
+One tool call on a run, stamped by the pod. Evidence an ask can cite; an agent can read these but never write them.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `id` | [ToolCallId](#def-ToolCallId) | yes |  |
+| `runId` | [RunId](#def-RunId) | yes |  |
+| `source` | [ToolCallSource](#def-ToolCallSource) | yes |  |
+| `name` | string | yes | The tool's name as the harness reports it, e.g. Bash or jm_post. Limit: 1 to 64 characters |
+| `status` | [ToolCallStatus](#def-ToolCallStatus) | yes |  |
+| `startedAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `endedAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `digest` | string | no | The start of the call's input and output as the daemon saw it, cut to 600 characters. What a claim's numbers are checked against. Limit: up to 600 characters |
+
+<a id="def-GroundedClaim"></a>
+### GroundedClaim
+
+One sentence a person can trust without having been there, grounded in stamped evidence.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `text` | string | yes | 1 to 240 characters |
+| `toolCalls` | list of [ToolCallId](#def-ToolCallId) | no | up to 8 items |
+| `messages` | list of [MessageId](#def-MessageId) | no | up to 4 items |
+
+<a id="def-Recommendation"></a>
+### Recommendation
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `option` | [OptionId](#def-OptionId) | yes |  |
+| `why` | [GroundedClaim](#def-GroundedClaim) | yes |  |
+
+<a id="def-AskContext"></a>
+### AskContext
+
+What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `happened` | list of [GroundedClaim](#def-GroundedClaim) | yes | 1 to 5 items |
+| `checked` | list of [GroundedClaim](#def-GroundedClaim) | yes | What was already verified or preflighted. Empty means nothing was checked, which the card shows. Limit: up to 5 items |
+| `stakes` | [GroundedClaim](#def-GroundedClaim) | yes |  |
+| `recommendation` | [Recommendation](#def-Recommendation) | yes |  |
 
 <a id="def-LinkType"></a>
 ### LinkType
@@ -658,6 +736,7 @@ One of: `open`, `ruled`, `expired`.
 | `status` | [MessageStatus](#def-MessageStatus) | yes |  |
 | `needs` | [Needs](#def-Needs) | no |  |
 | `options` | list of [Option](#def-Option) | no | 2 to 5 items |
+| `context` | [AskContext](#def-AskContext) | no |  |
 | `taskId` | [TaskId](#def-TaskId) | no |  |
 | `links` | list of [Link](#def-Link) | no | up to 8 items |
 | `caveat` | string | no | What isn't verified. Limit: up to 160 characters |
@@ -680,6 +759,7 @@ One of: `open`, `ruled`, `expired`.
 | `status` | [MessageStatus](#def-MessageStatus) | yes |  |
 | `needs` | [Needs](#def-Needs) | no |  |
 | `options` | list of [Option](#def-Option) | no | 2 to 5 items |
+| `context` | [AskContext](#def-AskContext) | no |  |
 | `taskId` | [TaskId](#def-TaskId) | no |  |
 | `links` | list of [Link](#def-Link) | no | up to 8 items |
 | `caveat` | string | no | up to 160 characters |
@@ -729,59 +809,119 @@ One active claim per task. The lease is renewed by any MCP call on the claiming 
 | `createdAt` | [Timestamp](#def-Timestamp) | yes |  |
 | `updatedAt` | [Timestamp](#def-Timestamp) | yes |  |
 
-## MCP tools
+## Operations
 
-The pod's MCP tools. The MCP server and the generated CLI both come from x-tools. Every tool's wire name is x-tool-prefix plus its name; the prefix is an open naming question (docs/design/protocol.md), so it lives only here; the generator inlines each input and output definition into gen/ts/tools.json. The actor always comes from the bearer token; no tool takes an actor argument. Tool errors return common.json ErrorBody.
+What an agent or person can do in a pod, as plain HTTP/JSON operations. This list is the contract. MCP (at /mcp) and the CLI are adapters generated from it, so no capability exists only in one adapter. The actor always comes from the bearer token; no operation takes an actor argument. Errors return common.json ErrorBody.
 
-### The 6 tools
+### Rules
 
-<a id="tool-commonly_whoami"></a>
-#### `commonly_whoami`
+- A GET operation takes its input as query parameters; any other method takes it as a JSON body.
+- {podId} in a path is the pod; with a run token it must be the run's pod, or the call gets forbidden. Any other {name} in a path is the input field of that name, and is not repeated in the body.
+- The MCP adapter exposes each operation as one tool named x-mcp-prefix plus the operation name, with the same input and output. The CLI exposes each as a subcommand. Neither adds behaviour.
+- Every operation a run token makes is recorded as a ToolCallRecord with source pod.
+
+### The 7 operations
+
+| Operation | Method and path | Who may call | MCP tool |
+|---|---|---|---|
+| [whoami](#op-whoami) | GET `/v1/pods/{podId}/me` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_whoami` |
+| [read](#op-read) | GET `/v1/pods/{podId}/feed` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_read` |
+| [task_list](#op-task_list) | GET `/v1/pods/{podId}/tasks` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_task_list` |
+| [task_claim](#op-task_claim) | POST `/v1/pods/{podId}/tasks/{taskId}/claim` | an agent run (`jmr_`) | `jm_task_claim` |
+| [task_update](#op-task_update) | PATCH `/v1/pods/{podId}/tasks/{taskId}` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_task_update` |
+| [evidence](#op-evidence) | GET `/v1/pods/{podId}/runs/{runId}/tool-calls` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_evidence` |
+| [post](#op-post) | POST `/v1/pods/{podId}/messages` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_post` |
+
+<a id="op-whoami"></a>
+#### `whoami`
 
 Who you are in this pod: your agent identity, the pod, your current run and the task it's for, if any.
 
+- HTTP: GET `/v1/pods/{podId}/me`
+- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- MCP tool: `jm_whoami`
 - Input: [WhoamiInput](#def-WhoamiInput). Fields: no fields.
 - Output: [WhoamiOutput](#def-WhoamiOutput). Fields: `agent` (required), `podId` (required), `runId` (required), `task`.
 
-<a id="tool-commonly_read"></a>
-#### `commonly_read`
+<a id="op-read"></a>
+#### `read`
 
 Read the pod: message headlines and tasks since a sequence number. Bodies are left out unless withBody is true.
 
+- HTTP: GET `/v1/pods/{podId}/feed`
+- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- MCP tool: `jm_read`
 - Input: [ReadInput](#def-ReadInput). Fields: `sinceSeq`, `limit`, `withBody`.
 - Output: [ReadOutput](#def-ReadOutput). Fields: `messages` (required), `tasks` (required), `headSeq` (required).
 
-<a id="tool-commonly_task_list"></a>
-#### `commonly_task_list`
+<a id="op-task_list"></a>
+#### `task_list`
 
 List the pod's tasks, optionally filtered by status.
 
+- HTTP: GET `/v1/pods/{podId}/tasks`
+- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- MCP tool: `jm_task_list`
 - Input: [TaskListInput](#def-TaskListInput). Fields: `status`.
 - Output: [TaskListOutput](#def-TaskListOutput). Fields: `tasks` (required).
 
-<a id="tool-commonly_task_claim"></a>
-#### `commonly_task_claim`
+<a id="op-task_claim"></a>
+#### `task_claim`
 
-Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every tool call you make on this run.
+Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every operation you make on this run.
 
+- HTTP: POST `/v1/pods/{podId}/tasks/{taskId}/claim`
+- Who may call: an agent run (`jmr_`)
+- MCP tool: `jm_task_claim`
 - Input: [TaskClaimInput](#def-TaskClaimInput). Fields: `taskId` (required).
 - Output: [TaskClaimOutput](#def-TaskClaimOutput). Fields: `taskId` (required), `leaseUntil` (required).
 
-<a id="tool-commonly_task_update"></a>
-#### `commonly_task_update`
+<a id="op-task_update"></a>
+#### `task_update`
 
 Set a task's status, with an optional short note. Use done only when the task's work is finished.
 
+- HTTP: PATCH `/v1/pods/{podId}/tasks/{taskId}`
+- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- MCP tool: `jm_task_update`
 - Input: [TaskUpdateInput](#def-TaskUpdateInput). Fields: `taskId` (required), `status` (required), `note`.
 - Output: [Task](#def-Task). Fields: `id` (required), `podId` (required), `title` (required), `kind` (required), `body`, `status` (required), `assignee`, `createdBy` (required), `claim`, `createdAt` (required), `updatedAt` (required).
 
-<a id="tool-commonly_post"></a>
-#### `commonly_post`
+<a id="op-evidence"></a>
+#### `evidence`
 
-Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs and 2 to 5 options when a person must decide; mark at most one option recommended. progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one.
+The stamped tool calls on a run: what the pod and the daemon saw it do. Cite their ids in an ask's context; you can read these but never write them.
 
-- Input: [PostInput](#def-PostInput). Fields: `summary` (required), `kind` (required), `status` (required), `needs`, `options`, `taskId`, `links`, `caveat`, `body`.
+- HTTP: GET `/v1/pods/{podId}/runs/{runId}/tool-calls`
+- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- MCP tool: `jm_evidence`
+- Input: [EvidenceInput](#def-EvidenceInput). Fields: `runId` (required).
+- Output: [EvidenceOutput](#def-EvidenceOutput). Fields: `toolCalls` (required).
+
+<a id="op-post"></a>
+#### `post`
+
+Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one.
+
+- HTTP: POST `/v1/pods/{podId}/messages`
+- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- MCP tool: `jm_post`
+- Input: [PostInput](#def-PostInput). Fields: `summary` (required), `kind` (required), `status` (required), `needs`, `options`, `context`, `taskId`, `links`, `caveat`, `body`.
 - Output: [PostOutput](#def-PostOutput). Fields: `messageId` (required), `seq` (required), `decisionId`.
+
+<a id="def-EvidenceInput"></a>
+### EvidenceInput
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `runId` | [RunId](#def-RunId) | yes |  |
+
+<a id="def-EvidenceOutput"></a>
+### EvidenceOutput
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `toolCalls` | list of [ToolCallRecord](#def-ToolCallRecord) | yes | up to 500 items |
 
 <a id="def-WhoamiInput"></a>
 ### WhoamiInput

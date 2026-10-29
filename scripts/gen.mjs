@@ -242,7 +242,7 @@ write('gen/ts/protocol.ts', ts);
 write('gen/ts/schemas.json', JSON.stringify(bundle, null, 2) + '\n');
 write('gen/ts/tools.json', JSON.stringify({ $comment: HEADER, tools: mcpTools }, null, 2) + '\n');
 write('daemon/internal/protocol/gen.go', go);
-const protocolDoc = renderProtocol({ docs, defs, eventTypes, variants, variantData, tools });
+const protocolDoc = renderProtocol({ docs, defs, eventTypes, variants, variantData, operations, prefix: TOOL_PREFIX });
 const documented = (protocolDoc.match(/id="def-/g) || []).length;
 if (documented !== defs.size) fail(`docs/protocol.md documents ${documented} definitions but the schema has ${defs.size}`);
 write('docs/protocol.md', protocolDoc);

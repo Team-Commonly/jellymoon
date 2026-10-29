@@ -8,7 +8,8 @@ Set an absolute path, once, in your shell profile or the launcher that starts yo
 
     export JM_TOOLCHAIN_CACHE=/abs/path/to/jellymoon-toolchains
 
-Then run `./init.sh` (or `make tools`) as usual. The first worktree downloads; the rest download
+A worktree that already has its own `.tools/` must drop it first, or the old copies stay on disk:
+`rm -rf .tools`. Then run `./init.sh` (or `make tools`) as usual. The first worktree downloads; the rest download
 nothing. Each worktree keeps only `.tools/bin/` with three symlinks into the cache, so `du -sh .tools`
 is a few kilobytes. Unset the variable and nothing changes: CI and fresh clones install under
 `.tools/` exactly as before.
@@ -34,5 +35,10 @@ The cache holds `go-<ver>-<os>-<arch>/` and `bun-<ver>-<os>-<arch>/`. A version 
   variable is read by `tools.sh` alone and puts nothing new on PATH. Pass it inside the command
   (`JM_TOOLCHAIN_CACHE=... ./init.sh`) when you run under `env -i`.
 
-A stale lock (`<cache>/.lock-*`, left by a killed installer) makes the next install wait 10 minutes
-and then name the lock; remove it if no installer is running.
+- **Read-only caches work.** A version that is already in the cache is used without taking any lock
+  and without write access, so a sandboxed reviewer can mount the cache read-only. Installing a missing
+  version into a read-only cache fails at once with a message saying so.
+- **Killed installers recover.** The lock directory records the installer's PID. A waiter that finds
+  that process dead removes the lock and continues, and clears the half-written `.dl-*` and
+  `.unpack-*` temp directories. If the holder is alive but stuck, a waiter gives up after 2 minutes
+  and names the lock.

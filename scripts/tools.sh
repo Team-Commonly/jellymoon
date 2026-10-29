@@ -12,7 +12,7 @@ export PATH="$PWD/.tools/bin:$PATH"
 want() { awk -v t="$1" '$1==t{print $2}' .tool-versions; }
 GO=$(want go); BUN=$(want bun)
 os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m)
-case "$arch" in x86_64|amd64) goarch=amd64; bunarch=x64 ;; arm64|aarch64) goarch=arm64; bunarch=aarch64 ;; *) echo "unsupported arch $arch"; exit 1 ;; esac
+case "$arch" in x86_64|amd64) goarch=amd64; bunarch=x64 ;; arm64|aarch64) goarch=arm64; bunarch=aarch64 ;; *) echo "unsupported arch $arch"; exit 1 ;; esac # goarch also names the cache dirs
 mkdir -p .tools/bin
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 die() { echo "tools: $*" >&2; exit 1; }
@@ -22,7 +22,7 @@ if [ -n "$CACHE" ]; then
   case "$CACHE" in /*) ;; *) die "JM_TOOLCHAIN_CACHE must be an absolute path (got $CACHE)" ;; esac
   mkdir -p "$CACHE"
   ROOT=$CACHE
-  godir="$CACHE/go-$GO-$os-$goarch"; bundir="$CACHE/bun-$BUN-$os-$arch"
+  godir="$CACHE/go-$GO-$os-$goarch"; bundir="$CACHE/bun-$BUN-$os-$goarch"
 else
   ROOT=.tools
   godir=".tools/go-$GO"; bundir=".tools/bun-$os-$bunarch"
@@ -38,25 +38,50 @@ check_cached() { # dir checker
   "$2" "$1" || die "$1 does not report the pinned version; remove it deliberately if it is stale"
 }
 
-# install <dir> <fetch-fn>: download+verify+unpack into a sibling temp dir, stamp, then rename into
-# place under a lock, so a concurrent installer never sees a half-unpacked dir.
-install_into() {
-  local dir=$1 fetch=$2 checker=$3 lock="$ROOT/.lock-$(basename "$1")" n=0
-  until mkdir "$lock" 2>/dev/null; do
-    n=$((n+1)); [ "$n" -le 600 ] || die "waited 10 min for $lock; remove it if no installer is running"
+LOCK=""; WORK=""; UNPACK=""
+cleanup() { # runs on EXIT, INT and TERM; a SIGKILL skips it, which acquire_lock recovers from
+  for d in "$WORK" "$UNPACK"; do [ -z "$d" ] || { chmod -R u+w "$d" 2>/dev/null; rm -rf "$d"; }; done
+  [ -z "$LOCK" ] || rm -rf "$LOCK"
+  WORK=""; UNPACK=""; LOCK=""
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# The lock dir holds the installer's PID. A waiter that finds that PID dead removes the lock and
+# takes over; the timeout (2 min, an install takes about 7 s) is only a backstop.
+acquire_lock() { # lockdir
+  local n=0 pid
+  until mkdir "$1" 2>/dev/null; do
+    pid=$(cat "$1/pid" 2>/dev/null || true)
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then rm -rf "$1"; continue; fi
+    n=$((n+1)); [ "$n" -le 120 ] || die "waited 2 min for $1 (holder pid ${pid:-unknown}); remove it if no installer is running"
     sleep 1
   done
-  trap "rmdir '$lock' 2>/dev/null || true" EXIT
+  LOCK=$1; echo $$ > "$1/pid"
+}
+
+# install_into <dir> <fetch-fn> <checker-fn>: download+verify+unpack into a sibling temp dir,
+# stamp, then rename into place under a lock, so a concurrent installer never sees a half-unpacked
+# dir. A cache version dir only ever appears by rename, so an existing one is used with no lock
+# and no write access to the cache.
+install_into() {
+  local dir=$1 fetch=$2 checker=$3 name; name=$(basename "$1")
+  if [ -n "$CACHE" ] && [ -e "$dir" ]; then check_cached "$dir" "$checker"; return; fi
+  [ -w "$ROOT" ] || die "$name is not in $ROOT and $ROOT is not writable; ask whoever owns the cache to install it"
+  acquire_lock "$ROOT/.lock-$name"
+  # Leftovers of a killed installer. Names are per tool so the other tool's live install is safe.
+  for d in "$ROOT"/.dl-"$name".* "$ROOT"/.unpack-"$name".*; do [ -e "$d" ] && { chmod -R u+w "$d"; rm -rf "$d"; }; done
   if [ -n "$CACHE" ] && [ -e "$dir" ]; then check_cached "$dir" "$checker"; else
-    local work unpack; work=$(mktemp -d "$ROOT/.dl.XXXXXX"); unpack=$(mktemp -d "$ROOT/.unpack.XXXXXX")
-    "$fetch" "$work" "$unpack"
-    rm -rf "$work"                                   # the archive is dead weight once verified
-    "$checker" "$unpack" || { rm -rf "$unpack"; die "unpacked toolchain does not report the pinned version"; }
-    [ -z "$CACHE" ] && rm -rf "$dir"
-    [ -z "$CACHE" ] || chmod -R a+rX,a-w "$unpack"        # a unit must not modify a shared toolchain
-    mv "$unpack" "$dir"
+    WORK=$(mktemp -d "$ROOT/.dl-$name.XXXXXX"); UNPACK=$(mktemp -d "$ROOT/.unpack-$name.XXXXXX")
+    "$fetch" "$WORK" "$UNPACK"
+    rm -rf "$WORK"; WORK=""                           # the archive is dead weight once verified
+    "$checker" "$UNPACK" || die "unpacked toolchain does not report the pinned version"
+    [ -z "$CACHE" ] || chmod -R a+rX,a-w "$UNPACK"    # a unit must not modify a shared toolchain
+    [ -n "$CACHE" ] || rm -rf "$dir"
+    mv "$UNPACK" "$dir"; UNPACK=""
   fi
-  rmdir "$lock"; trap - EXIT
+  cleanup
 }
 
 fetch_go() { # workdir unpackdir

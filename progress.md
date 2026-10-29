@@ -4,9 +4,23 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · schema text (unit P02)
+- **Changed:** every `$def` and every property that is not a bare `$ref` has a plain description; each
+  `ErrorCode` carries `x-errors` (HTTP status and meaning). `make gen` fails and names each gap, a
+  description over 200 characters, or an `x-errors` key set that differs from the enum. Gen emits
+  `ERROR_STATUS` (TS) and `ErrorStatus` (Go). Also: the anchor check compares sets of names (one def
+  dropped and another doubled now fails), the "only the fields listed" sentence in `docs/protocol.md`
+  names its exception (`Envelope.data`), each Rules heading is unique, auth labels show the raw value and
+  its token, the errors table links to the doc's own headings, and the contents line comes from the one
+  title list. Nothing deleted beyond reworded lines.
+- **Evidence:** schema with every `description` and `x-errors` key removed is identical before and after;
+  `make gen` twice leaves the tree clean; mutation runs fail as intended; `make preflight` green.
+- **Open:** statuses other than `gone` (410) and the meanings of `slow_down`, `not_found` and
+  `invalid_input` are not decided by `docs/design/protocol.md`; the review should confirm them.
+
 ## 2026-10-29 · protocol reference doc (unit P01, rebased)
 - **Changed:** `make gen` also writes `docs/protocol.md`, a readable reference of the whole protocol
-  (101 definitions, 17 events, 7 operations with method, path, auth and MCP name, error codes, rules as
+  (every definition, every event, every operation with method, path, auth and MCP name, error codes, rules as
   sentences). `scripts/protocol-doc.mjs` renders it from the data `scripts/gen.mjs` already loads;
   `make check-gen` diffs the doc too. Rebased onto operations.json: the doc lists operations, not tools.
   No new dependency; nothing deleted.

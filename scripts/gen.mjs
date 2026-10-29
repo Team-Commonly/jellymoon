@@ -53,6 +53,33 @@ function check(node, where, depth) {
 }
 for (const [name, { file, schema }] of defs) check(schema, `${file}.json#${name}`, 0);
 
+// Text: every def and every property that is not a bare $ref says what it is, in at most 200 characters.
+const MAX_TEXT = 200;
+const textGaps = [];
+const needText = (node, where) => {
+  if (!node.description) textGaps.push(`${where} has no description`);
+  else if (node.description.length > MAX_TEXT) textGaps.push(`${where} description is ${node.description.length} characters; the limit is ${MAX_TEXT}`);
+};
+for (const [name, { file, schema }] of defs) {
+  needText(schema, `${file}.json#${name}`);
+  for (const [p, s] of Object.entries(schema.properties ?? {})) {
+    if (Object.keys(s).length === 1 && s.$ref) continue; // a bare $ref reads as its def's description
+    needText(s, `${file}.json#${name}.${p}`);
+  }
+}
+// ErrorCode carries a status and a meaning for every code, and nothing else.
+const errorCodes = defs.get('ErrorCode').schema.enum;
+const errorTable = defs.get('ErrorCode').schema['x-errors'] ?? {};
+for (const c of errorCodes) {
+  const e = errorTable[c];
+  if (!e) { textGaps.push(`ErrorCode x-errors has no entry for ${c}`); continue; }
+  if (!Number.isInteger(e.status) || e.status < 400 || e.status > 599) textGaps.push(`ErrorCode x-errors ${c}: status must be an HTTP error status`);
+  if (typeof e.meaning !== 'string' || !e.meaning) textGaps.push(`ErrorCode x-errors ${c}: meaning is empty`);
+  else if (e.meaning.length > MAX_TEXT) textGaps.push(`ErrorCode x-errors ${c}: meaning is ${e.meaning.length} characters; the limit is ${MAX_TEXT}`);
+}
+for (const c of Object.keys(errorTable)) if (!errorCodes.includes(c)) textGaps.push(`ErrorCode x-errors ${c} is not in the enum`);
+if (textGaps.length) fail(`schema text is incomplete:\n  ${textGaps.join('\n  ')}`);
+
 // x-variants must cover EventType exactly.
 const variants = docs.events['x-variants'];
 const eventTypes = defs.get('EventType').schema.enum;
@@ -121,6 +148,7 @@ ts += `export const EVENT_DIRECTION = {\n${eventTypes.map((t) => `  ${JSON.strin
 ts += `export const EVENT_DATA_DEF = {\n${eventTypes.map((t) => `  ${JSON.stringify(t)}: ${JSON.stringify(variantData[t])},`).join('\n')}\n} as const;\n\n`;
 ts += `export interface ToolIO {\n${tools.map((t) => `  ${t.name}: { input: ${t.inputDef}; output: ${t.outputDef} };`).join('\n')}\n}\n`;
 ts += `/** Every pod operation's HTTP form (operations.json x-operations). MCP and the CLI are adapters over these. */\nexport const OPERATIONS = {\n${operations.map((o) => `  ${o.name}: { method: ${JSON.stringify(o.method)}, path: ${JSON.stringify(o.path)}, auth: ${JSON.stringify(o.auth)} },`).join('\n')}\n} as const;\nexport type OperationName = keyof typeof OPERATIONS;\n`;
+ts += `/** The HTTP status each error code is sent with (common.json ErrorCode x-errors). */\nexport const ERROR_STATUS = {\n${errorCodes.map((c) => `  ${JSON.stringify(c)}: ${errorTable[c].status},`).join('\n')}\n} as const;\n`;
 ts += `export const TOOL_PREFIX = ${JSON.stringify(TOOL_PREFIX)};\nexport type ToolName = keyof ToolIO;\nexport const TOOL_NAMES = ${JSON.stringify(tools.map((t) => t.name))} as const;\n`;
 
 // ---------- bundled JSON Schema (ajv) ----------
@@ -229,6 +257,7 @@ for (const t of eventTypes) go += `\tcase EventType${goIdent(t)}:\n\t\tvar v ${g
 go += `\t}\n\treturn nil, fmt.Errorf("unknown event type %q", t)\n}\n\n`;
 go += `// Operation is a pod operation's HTTP form (schema/operations.json x-operations).\ntype Operation struct {\n\tName, Method, Path, Auth string\n}\n\n`;
 go += `// Operations lists the pod operations in schema order. MCP and the CLI are adapters over these.\nvar Operations = []Operation{\n${operations.map((o) => `\t{${JSON.stringify(o.name)}, ${JSON.stringify(o.method)}, ${JSON.stringify(o.path)}, ${JSON.stringify(o.auth)}},`).join('\n')}\n}\n\n`;
+go += `// ErrorStatus is the HTTP status each error code is sent with (common.json ErrorCode x-errors).\nvar ErrorStatus = map[ErrorCode]int{\n${errorCodes.map((c) => `\tErrorCode${goIdent(c)}: ${errorTable[c].status},`).join('\n')}\n}\n\n`;
 go += `// ToolPrefix is prepended to every operation name in the MCP adapter (schema/operations.json x-mcp-prefix).\nconst ToolPrefix = ${JSON.stringify(TOOL_PREFIX)}\n\n`;
 go += `// ToolNames lists the MCP tools in schema order.\nvar ToolNames = []string{${tools.map((t) => JSON.stringify(t.name)).join(', ')}}\n`;
 
@@ -243,7 +272,14 @@ write('gen/ts/schemas.json', JSON.stringify(bundle, null, 2) + '\n');
 write('gen/ts/tools.json', JSON.stringify({ $comment: HEADER, tools: mcpTools }, null, 2) + '\n');
 write('daemon/internal/protocol/gen.go', go);
 const protocolDoc = renderProtocol({ docs, defs, eventTypes, variants, variantData, operations, prefix: TOOL_PREFIX });
-const documented = (protocolDoc.match(/id="def-/g) || []).length;
-if (documented !== defs.size) fail(`docs/protocol.md documents ${documented} definitions but the schema has ${defs.size}`);
+// Every def is rendered exactly once: the anchors in the doc must be the defs, no more, no fewer, none twice.
+const anchors = [...protocolDoc.matchAll(/id="def-([A-Za-z0-9]+)"/g)].map((m) => m[1]);
+const anchorSet = new Set(anchors);
+const missingAnchors = [...defs.keys()].filter((n) => !anchorSet.has(n));
+const extraAnchors = [...anchorSet].filter((n) => !defs.has(n));
+const doubled = [...anchorSet].filter((n) => anchors.indexOf(n) !== anchors.lastIndexOf(n));
+if (missingAnchors.length || extraAnchors.length || doubled.length) {
+  fail(`docs/protocol.md anchors differ from the defs: missing [${missingAnchors}], unknown [${extraAnchors}], rendered twice [${doubled}]`);
+}
 write('docs/protocol.md', protocolDoc);
 console.log(`gen: ${defs.size} defs, ${eventTypes.length} event types, ${operations.length} operations`);

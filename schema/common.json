@@ -4,47 +4,36 @@
   "title": "Common types",
   "description": "Ids, actors, timestamps and errors shared by every other schema file. Ids are a type prefix plus a ULID.",
   "$defs": {
-    "PodId": { "type": "string", "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "UserId": { "type": "string", "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "AgentId": { "type": "string", "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "PodId": { "description": "The id of a pod.", "type": "string", "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "UserId": { "description": "The id of a user, a person signed in with GitHub.", "type": "string", "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "AgentId": { "description": "The id of an agent: a registered agent identity run by one harness on one computer.", "type": "string", "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$" },
     "ActorId": {
       "description": "A user or an agent: who a task is assigned to, or who acted. System actors use sys_.",
       "type": "string",
       "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
     },
-    "ComputerId": { "type": "string", "pattern": "^cmp_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "TaskId": { "type": "string", "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "MessageId": { "type": "string", "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "RunId": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "ComputerId": { "description": "The id of a computer: a machine running the daemon, bound to one user.", "type": "string", "pattern": "^cmp_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "TaskId": { "description": "The id of a task on a pod's board.", "type": "string", "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "MessageId": { "description": "The id of a message posted to a pod.", "type": "string", "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "RunId": { "description": "The id of a run: one agent session started by a wake.", "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
     "ToolCallId": { "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.", "type": "string", "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "DecisionId": { "type": "string", "pattern": "^dec_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "WakeId": { "type": "string", "pattern": "^wak_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "Seq": {
-      "description": "Monotonic per pod, assigned by the pod. Starts at 1.",
-      "type": "integer",
-      "minimum": 1
-    },
-    "Timestamp": {
-      "description": "RFC 3339 in UTC. Set by the server only.",
-      "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
-    },
-    "ActorKind": { "type": "string", "enum": ["human", "agent", "system"] },
+    "DecisionId": { "description": "The id of a decision, the open choice an ask carries.", "type": "string", "pattern": "^dec_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "WakeId": { "description": "The id of a wake: a push telling a computer to start a run for an agent.", "type": "string", "pattern": "^wak_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "Seq": { "description": "Monotonic per pod, assigned by the pod. Starts at 1.", "type": "integer", "minimum": 1 },
+    "Timestamp": { "description": "RFC 3339 in UTC. Set by the server only.", "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$" },
+    "ActorKind": { "description": "Whether an actor is a person (human), an agent or the system.", "type": "string", "enum": ["human", "agent", "system"] },
     "Actor": {
+      "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "id", "displayName"],
       "properties": {
         "kind": { "$ref": "#/$defs/ActorKind" },
         "id": { "$ref": "#/$defs/ActorId" },
-        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 }
+        "displayName": { "description": "The name shown to people.", "type": "string", "minLength": 1, "maxLength": 80 }
       }
     },
-    "Harness": {
-      "description": "Which agent program a registered agent runs. fake is the deterministic test agent.",
-      "type": "string",
-      "enum": ["claude-code", "codex", "fake"]
-    },
+    "Harness": { "description": "Which agent program a registered agent runs. fake is the deterministic test agent.", "type": "string", "enum": ["claude-code", "codex", "fake"] },
     "ErrorCode": {
       "description": "Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event.",
       "type": "string",
@@ -64,15 +53,33 @@
         "ungrounded",
         "rate_limited",
         "internal"
-      ]
+      ],
+      "x-errors": {
+        "invalid_input": { "status": 400, "meaning": "The input is malformed or breaks a limit in the schema. Fix the field named in the error and send it again." },
+        "summary_required": { "status": 400, "meaning": "A post has no summary. The summary is never derived; write the headline and post again." },
+        "unauthorized": { "status": 401, "meaning": "No valid bearer token came with the request. Send a valid user, computer or run token." },
+        "forbidden": { "status": 403, "meaning": "The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may." },
+        "not_found": { "status": 404, "meaning": "The id or route in the request matches nothing. Check the id." },
+        "gone": { "status": 410, "meaning": "An invite is used or expired. Ask for a new invite." },
+        "already_claimed": { "status": 409, "meaning": "Someone else holds the task's claim. The error names the holder; leave the task or wait." },
+        "already_ruled": { "status": 409, "meaning": "The decision was already ruled and the first ruling stays. Read the decision instead of ruling again." },
+        "authorization_pending": { "status": 400, "meaning": "The person has not approved the device code yet. Poll again after the interval." },
+        "slow_down": { "status": 400, "meaning": "The device code was polled faster than its interval. Wait longer between polls." },
+        "expired_token": { "status": 400, "meaning": "The device code expired before it was exchanged. Start the sign-in again." },
+        "invalid_grant": { "status": 400, "meaning": "The device code was already exchanged. Start the sign-in again." },
+        "ungrounded": { "status": 422, "meaning": "A claim cites nothing, cites an id that is not a record here, or has a number its evidence lacks. Fix the citations and post again." },
+        "rate_limited": { "status": 429, "meaning": "Too many requests. Wait before retrying." },
+        "internal": { "status": 500, "meaning": "The server failed. The request may be fine; retry later." }
+      }
     },
     "ErrorBody": {
+      "description": "The body of every error response, and the data of the error socket event.",
       "type": "object",
       "additionalProperties": false,
       "required": ["code", "message"],
       "properties": {
         "code": { "$ref": "#/$defs/ErrorCode" },
-        "message": { "type": "string", "maxLength": 500 },
+        "message": { "description": "An explanation for a reader. Act on code, which is stable, not on this text.", "type": "string", "maxLength": 500 },
         "field": { "description": "The input field at fault, when there is one.", "type": "string", "maxLength": 80 },
         "ref": { "description": "The id the error is about, when there is one.", "type": "string", "maxLength": 40 }
       }

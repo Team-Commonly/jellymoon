@@ -6,7 +6,7 @@ The wire protocol as the schema defines it, for review without reading JSON Sche
 defined in [GLOSSARY.md](GLOSSARY.md). Every definition appears once and is linked wherever it is used.
 
 How to read a table: **Required** says whether the field must be present. Limits in **Notes** come from the
-schema. An object accepts only the fields listed; anything else fails validation.
+schema. Every definition that lists fields accepts only those fields; anything else fails validation. The exception is `Envelope.data`: an object whose fields come from the rule in its description.
 
 Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#errors) · [Tokens](#tokens) · [Worker HTTP API](#worker-http-api) · [Socket events](#socket-events) · [Messages and cards](#messages-and-cards) · [Tasks](#tasks) · [Operations](#operations)
 
@@ -18,17 +18,17 @@ Ids, actors, timestamps and errors shared by every other schema file. Ids are a 
 
 | Id | Format | Meaning |
 |---|---|---|
-| <a id="def-PodId"></a>PodId | starts with `pod_` then a 26-character ULID |  |
-| <a id="def-UserId"></a>UserId | starts with `usr_` then a 26-character ULID |  |
-| <a id="def-AgentId"></a>AgentId | starts with `agt_` then a 26-character ULID |  |
+| <a id="def-PodId"></a>PodId | starts with `pod_` then a 26-character ULID | The id of a pod. |
+| <a id="def-UserId"></a>UserId | starts with `usr_` then a 26-character ULID | The id of a user, a person signed in with GitHub. |
+| <a id="def-AgentId"></a>AgentId | starts with `agt_` then a 26-character ULID | The id of an agent: a registered agent identity run by one harness on one computer. |
 | <a id="def-ActorId"></a>ActorId | starts with `usr_`, `agt_` or `sys_` then a 26-character ULID | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
-| <a id="def-ComputerId"></a>ComputerId | starts with `cmp_` then a 26-character ULID |  |
-| <a id="def-TaskId"></a>TaskId | starts with `tsk_` then a 26-character ULID |  |
-| <a id="def-MessageId"></a>MessageId | starts with `msg_` then a 26-character ULID |  |
-| <a id="def-RunId"></a>RunId | starts with `run_` then a 26-character ULID |  |
+| <a id="def-ComputerId"></a>ComputerId | starts with `cmp_` then a 26-character ULID | The id of a computer: a machine running the daemon, bound to one user. |
+| <a id="def-TaskId"></a>TaskId | starts with `tsk_` then a 26-character ULID | The id of a task on a pod's board. |
+| <a id="def-MessageId"></a>MessageId | starts with `msg_` then a 26-character ULID | The id of a message posted to a pod. |
+| <a id="def-RunId"></a>RunId | starts with `run_` then a 26-character ULID | The id of a run: one agent session started by a wake. |
 | <a id="def-ToolCallId"></a>ToolCallId | starts with `tc_` then a 26-character ULID | A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these. |
-| <a id="def-DecisionId"></a>DecisionId | starts with `dec_` then a 26-character ULID |  |
-| <a id="def-WakeId"></a>WakeId | starts with `wak_` then a 26-character ULID |  |
+| <a id="def-DecisionId"></a>DecisionId | starts with `dec_` then a 26-character ULID | The id of a decision, the open choice an ask carries. |
+| <a id="def-WakeId"></a>WakeId | starts with `wak_` then a 26-character ULID | The id of a wake: a push telling a computer to start a run for an agent. |
 
 <a id="def-Seq"></a>
 ### Seq
@@ -47,16 +47,20 @@ A string, matches `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9
 <a id="def-ActorKind"></a>
 ### ActorKind
 
+Whether an actor is a person (human), an agent or the system.
+
 One of: `human`, `agent`, `system`.
 
 <a id="def-Actor"></a>
 ### Actor
 
+A member of a pod, or the system: its kind, its id and the name shown to people.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `kind` | [ActorKind](#def-ActorKind) | yes |  |
-| `id` | [ActorId](#def-ActorId) | yes |  |
-| `displayName` | string | yes | 1 to 80 characters |
+| `kind` | [ActorKind](#def-ActorKind) | yes | Whether an actor is a person (human), an agent or the system. |
+| `id` | [ActorId](#def-ActorId) | yes | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
+| `displayName` | string | yes | The name shown to people. Limit: 1 to 80 characters |
 
 <a id="def-Harness"></a>
 ### Harness
@@ -69,23 +73,23 @@ One of: `claude-code`, `codex`, `fake`.
 
 ### Error codes
 
-| Code | Named in |
-|---|---|
-| `invalid_input` | — |
-| `summary_required` | Messages rules |
-| `unauthorized` | — |
-| `forbidden` | Pod operations rules |
-| `not_found` | — |
-| `gone` | Worker HTTP API rules |
-| `already_claimed` | operation `task_claim` |
-| `already_ruled` | Messages rules |
-| `authorization_pending` | Worker HTTP API rules |
-| `slow_down` | — |
-| `expired_token` | Worker HTTP API rules |
-| `invalid_grant` | Worker HTTP API rules |
-| `ungrounded` | Messages rules |
-| `rate_limited` | — |
-| `internal` | — |
+| Code | HTTP status | Meaning | Named in |
+|---|---|---|---|
+| `invalid_input` | 400 | The input is malformed or breaks a limit in the schema. Fix the field named in the error and send it again. | — |
+| `summary_required` | 400 | A post has no summary. The summary is never derived; write the headline and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
+| `unauthorized` | 401 | No valid bearer token came with the request. Send a valid user, computer or run token. | — |
+| `forbidden` | 403 | The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may. | [Rules for Operations](#rules-for-operations) |
+| `not_found` | 404 | The id or route in the request matches nothing. Check the id. | — |
+| `gone` | 410 | An invite is used or expired. Ask for a new invite. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
+| `already_claimed` | 409 | Someone else holds the task's claim. The error names the holder; leave the task or wait. | [Operations: task_claim](#op-task_claim) |
+| `already_ruled` | 409 | The decision was already ruled and the first ruling stays. Read the decision instead of ruling again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
+| `authorization_pending` | 400 | The person has not approved the device code yet. Poll again after the interval. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
+| `slow_down` | 400 | The device code was polled faster than its interval. Wait longer between polls. | — |
+| `expired_token` | 400 | The device code expired before it was exchanged. Start the sign-in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
+| `invalid_grant` | 400 | The device code was already exchanged. Start the sign-in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
+| `ungrounded` | 422 | A claim cites nothing, cites an id that is not a record here, or has a number its evidence lacks. Fix the citations and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
+| `rate_limited` | 429 | Too many requests. Wait before retrying. | — |
+| `internal` | 500 | The server failed. The request may be fine; retry later. | — |
 
 <a id="def-ErrorCode"></a>
 ### ErrorCode
@@ -97,10 +101,12 @@ One of: `invalid_input`, `summary_required`, `unauthorized`, `forbidden`, `not_f
 <a id="def-ErrorBody"></a>
 ### ErrorBody
 
+The body of every error response, and the data of the error socket event.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `code` | [ErrorCode](#def-ErrorCode) | yes |  |
-| `message` | string | yes | up to 500 characters |
+| `code` | [ErrorCode](#def-ErrorCode) | yes | Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event. |
+| `message` | string | yes | An explanation for a reader. Act on code, which is stable, not on this text. Limit: up to 500 characters |
 | `field` | string | no | The input field at fault, when there is one. Limit: up to 80 characters |
 | `ref` | string | no | The id the error is about, when there is one. Limit: up to 40 characters |
 
@@ -116,6 +122,8 @@ Bearer tokens. Each is a kind prefix plus 43 random base62 characters. Only the 
 
 <a id="def-TokenKind"></a>
 ### TokenKind
+
+The three kinds of bearer token: user, computer and run.
 
 One of: `user`, `computer`, `run`.
 
@@ -144,7 +152,7 @@ A string, starts with `jmr_` then 43 letters or digits.
 
 Request and response bodies for the Worker's HTTP routes. Every error response body is common.json ErrorBody. The Worker validates, authenticates, then calls the pod Durable Object; all authorization lives in the pod, never the client.
 
-### Rules
+### Rules for Worker HTTP API
 
 - /__test/* routes exist only when ENV is local or preview, and are absent from the production bundle.
 - A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token.
@@ -154,63 +162,75 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 
 | Method | Path | Who may call | Request body | Response |
 |---|---|---|---|---|
-| POST | `/v1/auth/device` | anyone | — | [DeviceStartResponse](#def-DeviceStartResponse) |
-| POST | `/v1/auth/device/token` | anyone | [DeviceTokenRequest](#def-DeviceTokenRequest) | [DeviceTokenResponse](#def-DeviceTokenResponse) |
-| POST | `/v1/pods` | a signed-in user (`jmu_`) | [CreatePodRequest](#def-CreatePodRequest) | [Pod](#def-Pod) |
-| POST | `/v1/pods/:pod/invites` | a signed-in user (`jmu_`) | [CreateInviteRequest](#def-CreateInviteRequest) | [Invite](#def-Invite) |
-| POST | `/v1/invites/:code/accept` | a signed-in user (`jmu_`) | — | [AcceptInviteResponse](#def-AcceptInviteResponse) |
-| POST | `/v1/computers` | a signed-in user (`jmu_`) | [RegisterComputerRequest](#def-RegisterComputerRequest) | [RegisterComputerResponse](#def-RegisterComputerResponse) |
-| POST | `/v1/pods/:pod/agents` | a computer (`jmc_`) | [RegisterAgentRequest](#def-RegisterAgentRequest) | [RegisterAgentResponse](#def-RegisterAgentResponse) |
-| GET | `/v1/pods/:pod/ws` | a signed-in user (`jmu_`) or a computer (`jmc_`) | — | WebSocket upgrade |
-| POST | `/v1/runs` | a computer (`jmc_`) | [ClaimRunRequest](#def-ClaimRunRequest) | [ClaimRunResponse](#def-ClaimRunResponse) |
-| POST | `/v1/runs/:run/end` | a computer (`jmc_`) | [EndRunRequest](#def-EndRunRequest) | — |
-| POST | `/mcp` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | — | mcp-streamable-http, stateless; the MCP adapter over operations.json |
+| POST | `/v1/auth/device` | `none`: no token | — | [DeviceStartResponse](#def-DeviceStartResponse) |
+| POST | `/v1/auth/device/token` | `none`: no token | [DeviceTokenRequest](#def-DeviceTokenRequest) | [DeviceTokenResponse](#def-DeviceTokenResponse) |
+| POST | `/v1/pods` | `user`: user token (`jmu_`) | [CreatePodRequest](#def-CreatePodRequest) | [Pod](#def-Pod) |
+| POST | `/v1/pods/:pod/invites` | `user`: user token (`jmu_`) | [CreateInviteRequest](#def-CreateInviteRequest) | [Invite](#def-Invite) |
+| POST | `/v1/invites/:code/accept` | `user`: user token (`jmu_`) | — | [AcceptInviteResponse](#def-AcceptInviteResponse) |
+| POST | `/v1/computers` | `user`: user token (`jmu_`) | [RegisterComputerRequest](#def-RegisterComputerRequest) | [RegisterComputerResponse](#def-RegisterComputerResponse) |
+| POST | `/v1/pods/:pod/agents` | `computer`: computer token (`jmc_`) | [RegisterAgentRequest](#def-RegisterAgentRequest) | [RegisterAgentResponse](#def-RegisterAgentResponse) |
+| GET | `/v1/pods/:pod/ws` | `user`: user token (`jmu_`) or `computer`: computer token (`jmc_`) | — | WebSocket upgrade |
+| POST | `/v1/runs` | `computer`: computer token (`jmc_`) | [ClaimRunRequest](#def-ClaimRunRequest) | [ClaimRunResponse](#def-ClaimRunResponse) |
+| POST | `/v1/runs/:run/end` | `computer`: computer token (`jmc_`) | [EndRunRequest](#def-EndRunRequest) | — |
+| POST | `/mcp` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | — | mcp-streamable-http, stateless; the MCP adapter over operations.json |
 
 <a id="def-DeviceStartResponse"></a>
 ### DeviceStartResponse
 
+The answer to starting a device sign-in: the code the client exchanges for a token and the code the person types.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `deviceCode` | string | yes | 32 to 128 characters |
+| `deviceCode` | string | yes | The code the client exchanges for a token. Limit: 32 to 128 characters |
 | `userCode` | string | yes | What the person types on the sign-in page, e.g. WDJB-MJHT. Limit: matches `^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$` |
-| `verificationUri` | string | yes | matches `^https?://` |
+| `verificationUri` | string | yes | The page where the person enters the user code. Limit: matches `^https?://` |
 | `interval` | integer | yes | Seconds between polls. Limit: at least 1 |
 | `expiresIn` | integer | yes | Seconds until the code expires. Limit: at least 1 |
 
 <a id="def-DeviceTokenRequest"></a>
 ### DeviceTokenRequest
 
+Exchanges a device code for a user token once the person has approved it.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `deviceCode` | string | yes | 32 to 128 characters |
+| `deviceCode` | string | yes | The deviceCode from the sign-in start. Limit: 32 to 128 characters |
 
 <a id="def-DeviceTokenResponse"></a>
 ### DeviceTokenResponse
 
+A user token and the user it belongs to.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `token` | [UserToken](#def-UserToken) | yes |  |
-| `user` | [Actor](#def-Actor) | yes |  |
-| `expiresAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `token` | [UserToken](#def-UserToken) | yes | Bound to one user. 30 days, refreshable. |
+| `user` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-CreatePodRequest"></a>
 ### CreatePodRequest
 
+Creates a pod.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `name` | string | yes | 1 to 80 characters |
+| `name` | string | yes | The pod's name. Limit: 1 to 80 characters |
 
 <a id="def-Pod"></a>
 ### Pod
 
+A pod: its id, name and creation time.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | [PodId](#def-PodId) | yes |  |
-| `name` | string | yes | 1 to 80 characters |
-| `createdAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `id` | [PodId](#def-PodId) | yes | The id of a pod. |
+| `name` | string | yes | The pod's name. Limit: 1 to 80 characters |
+| `createdAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-CreateInviteRequest"></a>
 ### CreateInviteRequest
+
+Options for a new invite. Both fields have defaults.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -220,68 +240,86 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 <a id="def-Invite"></a>
 ### Invite
 
+An invite to a pod: its code and link, when it expires and how many uses are left.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `code` | string | yes | starts with `inv_` then 22 letters or digits |
-| `url` | string | yes | matches `^https?://` |
-| `expiresAt` | [Timestamp](#def-Timestamp) | yes |  |
-| `usesLeft` | integer | yes | at least 0 |
+| `code` | string | yes | The code a person gives to accept the invite. Limit: starts with `inv_` then 22 letters or digits |
+| `url` | string | yes | The link to share. Limit: matches `^https?://` |
+| `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+| `usesLeft` | integer | yes | How many more times the invite can be accepted. Limit: at least 0 |
 
 <a id="def-AcceptInviteResponse"></a>
 ### AcceptInviteResponse
 
+The pod the person joined.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `pod` | [Pod](#def-Pod) | yes |  |
+| `pod` | [Pod](#def-Pod) | yes | A pod: its id, name and creation time. |
 
 <a id="def-OS"></a>
 ### OS
+
+A computer's operating system.
 
 One of: `darwin`, `linux`.
 
 <a id="def-Arch"></a>
 ### Arch
 
+A computer's CPU architecture.
+
 One of: `arm64`, `amd64`.
 
 <a id="def-RegisterComputerRequest"></a>
 ### RegisterComputerRequest
 
+A daemon registers its computer.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `name` | string | yes | 1 to 80 characters |
-| `os` | [OS](#def-OS) | yes |  |
-| `arch` | [Arch](#def-Arch) | yes |  |
+| `name` | string | yes | A name for the computer. Limit: 1 to 80 characters |
+| `os` | [OS](#def-OS) | yes | A computer's operating system. |
+| `arch` | [Arch](#def-Arch) | yes | A computer's CPU architecture. |
 
 <a id="def-RegisterComputerResponse"></a>
 ### RegisterComputerResponse
 
+The new computer's id and its computer token.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `computerId` | [ComputerId](#def-ComputerId) | yes |  |
-| `token` | [ComputerToken](#def-ComputerToken) | yes |  |
+| `computerId` | [ComputerId](#def-ComputerId) | yes | The id of a computer: a machine running the daemon, bound to one user. |
+| `token` | [ComputerToken](#def-ComputerToken) | yes | Bound to one user and one computer. Valid until revoked. |
 
 <a id="def-RegisterAgentRequest"></a>
 ### RegisterAgentRequest
 
+A computer registers an agent in a pod.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `harness` | [Harness](#def-Harness) | yes |  |
-| `displayName` | string | yes | 1 to 80 characters |
+| `harness` | [Harness](#def-Harness) | yes | Which agent program a registered agent runs. fake is the deterministic test agent. |
+| `displayName` | string | yes | The name shown to people. Limit: 1 to 80 characters |
 
 <a id="def-RegisterAgentResponse"></a>
 ### RegisterAgentResponse
 
+The new agent's id.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `agentId` | [AgentId](#def-AgentId) | yes |  |
+| `agentId` | [AgentId](#def-AgentId) | yes | The id of an agent: a registered agent identity run by one harness on one computer. |
 
 <a id="def-ClaimRunRequest"></a>
 ### ClaimRunRequest
 
+The daemon claims a run for a wake.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `wakeId` | [WakeId](#def-WakeId) | yes |  |
+| `wakeId` | [WakeId](#def-WakeId) | yes | The id of a wake: a push telling a computer to start a run for an agent. |
 
 <a id="def-ClaimRunResponse"></a>
 ### ClaimRunResponse
@@ -290,30 +328,34 @@ The brief is built by the server and sent as the agent's first prompt. The run t
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `runId` | [RunId](#def-RunId) | yes |  |
-| `runToken` | [RunToken](#def-RunToken) | yes |  |
-| `brief` | string | yes | 1 to 32768 characters |
-| `mcpUrl` | string | yes | matches `^https?://` |
-| `expiresAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `runToken` | [RunToken](#def-RunToken) | yes | Bound to one agent, pod and run (and task, if any). Ends with the run; at most 2 hours. |
+| `brief` | string | yes | The agent's first prompt, built by the server. Limit: 1 to 32768 characters |
+| `mcpUrl` | string | yes | Where the agent reaches the pod's MCP server for this run. Limit: matches `^https?://` |
+| `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-RunOutcome"></a>
 ### RunOutcome
+
+How a run ended: completed, failed or cancelled.
 
 One of: `completed`, `failed`, `cancelled`.
 
 <a id="def-EndRunRequest"></a>
 ### EndRunRequest
 
+The daemon reports that a run ended.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `outcome` | [RunOutcome](#def-RunOutcome) | yes |  |
-| `harnessVersion` | string | no | up to 64 characters |
+| `outcome` | [RunOutcome](#def-RunOutcome) | yes | How a run ended: completed, failed or cancelled. |
+| `harnessVersion` | string | no | The harness version, as the daemon reports it. Limit: up to 64 characters |
 
 ## Socket events
 
 Every WebSocket frame, in both directions, is an Envelope. x-variants maps each type to the definition its data must match and the direction it travels: s2c is pod to client, c2s is client to pod, local is daemon to TUI over the unix socket only. The TUI talks to the daemon with this same envelope.
 
-### Rules
+### Rules for Socket events
 
 - seq and ts are set on s2c frames only. A c2s frame that carries either is refused.
 - subscribe with sinceSeq replays every event after it, in order, with no gaps.
@@ -349,64 +391,76 @@ The daemon reports one harness tool call it saw on a run it hosts (computer toke
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `runId` | [RunId](#def-RunId) | yes |  |
-| `name` | string | yes | 1 to 64 characters |
-| `status` | [ToolCallStatus](#def-ToolCallStatus) | yes |  |
-| `startedAt` | [Timestamp](#def-Timestamp) | yes |  |
-| `endedAt` | [Timestamp](#def-Timestamp) | yes |  |
-| `digest` | string | no | up to 600 characters |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `name` | string | yes | The tool's name as the harness reports it. Limit: 1 to 64 characters |
+| `status` | [ToolCallStatus](#def-ToolCallStatus) | yes | Whether a tool call succeeded (ok) or failed (error). |
+| `startedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+| `endedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+| `digest` | string | no | The start of the call's input and output, cut to 600 characters. Limit: up to 600 characters |
 
 <a id="def-EventType"></a>
 ### EventType
+
+Every kind of socket frame. x-variants gives each one its direction and its data.
 
 One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `presence.changed`, `run.wake`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `run.toolcall`, `daemon.status`.
 
 <a id="def-Envelope"></a>
 ### Envelope
 
+The frame every socket message is sent in.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `v` | always `1` | yes |  |
-| `type` | [EventType](#def-EventType) | yes |  |
-| `seq` | [Seq](#def-Seq) | no |  |
-| `podId` | [PodId](#def-PodId) | yes |  |
-| `ts` | [Timestamp](#def-Timestamp) | no |  |
-| `actor` | [Actor](#def-Actor) | no |  |
-| `data` | object | yes | Matches the definition x-variants names for type. |
+| `v` | always `1` | yes | The envelope version. Always 1. |
+| `type` | [EventType](#def-EventType) | yes | Every kind of socket frame. x-variants gives each one its direction and its data. |
+| `seq` | [Seq](#def-Seq) | no | The pod's event number. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused. |
+| `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
+| `ts` | [Timestamp](#def-Timestamp) | no | When the pod sent the frame. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused. |
+| `actor` | [Actor](#def-Actor) | no | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `data` | object | yes | The event's payload: the definition x-variants names for type. Like every object definition it accepts only its listed fields. |
 
 <a id="def-Member"></a>
 ### Member
 
+A member of a pod and the role they hold.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `actor` | [Actor](#def-Actor) | yes |  |
-| `role` | [MemberRole](#def-MemberRole) | yes |  |
+| `actor` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `role` | [MemberRole](#def-MemberRole) | yes | A member's role in a pod. |
 
 <a id="def-PresenceState"></a>
 ### PresenceState
+
+Whether a member is online, offline or working.
 
 One of: `online`, `offline`, `working`.
 
 <a id="def-AgentPresence"></a>
 ### AgentPresence
 
+An agent's presence: its harness, the computer it runs on and its state.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `agent` | [Actor](#def-Actor) | yes |  |
-| `harness` | [Harness](#def-Harness) | yes |  |
-| `computerId` | [ComputerId](#def-ComputerId) | yes |  |
-| `state` | [PresenceState](#def-PresenceState) | yes |  |
+| `agent` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `harness` | [Harness](#def-Harness) | yes | Which agent program a registered agent runs. fake is the deterministic test agent. |
+| `computerId` | [ComputerId](#def-ComputerId) | yes | The id of a computer: a machine running the daemon, bound to one user. |
+| `state` | [PresenceState](#def-PresenceState) | yes | Whether a member is online, offline or working. |
 
 <a id="def-Hello"></a>
 ### Hello
 
+What the pod tells a client about itself and the client: head sequence, the client's actor, members and agents.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `podId` | [PodId](#def-PodId) | yes |  |
+| `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
 | `headSeq` | integer | yes | 0 for an empty pod. Limit: at least 0 |
-| `you` | [Actor](#def-Actor) | yes |  |
-| `members` | list of [Member](#def-Member) | yes |  |
-| `agents` | list of [AgentPresence](#def-AgentPresence) | yes |  |
+| `you` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `members` | list of [Member](#def-Member) | yes | The pod's members. |
+| `agents` | list of [AgentPresence](#def-AgentPresence) | yes | The pod's agents and their presence. |
 
 <a id="def-MessageUpdated"></a>
 ### MessageUpdated
@@ -415,49 +469,59 @@ Only a decision changes after a message is created. The summary never changes.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | [MessageId](#def-MessageId) | yes |  |
-| `decision` | [Decision](#def-Decision) | yes |  |
+| `id` | [MessageId](#def-MessageId) | yes | The id of a message posted to a pod. |
+| `decision` | [Decision](#def-Decision) | yes | The choice an ask carries. It is open until it is ruled, once. |
 
 <a id="def-TaskClaimed"></a>
 ### TaskClaimed
 
+A task was claimed: who holds it, on which run, and until when the lease runs.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `taskId` | [TaskId](#def-TaskId) | yes |  |
-| `by` | [Actor](#def-Actor) | yes |  |
-| `runId` | [RunId](#def-RunId) | yes |  |
-| `leaseUntil` | [Timestamp](#def-Timestamp) | yes |  |
+| `taskId` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
+| `by` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `leaseUntil` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-PresenceChanged"></a>
 ### PresenceChanged
 
+A member's presence changed.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `actor` | [Actor](#def-Actor) | yes |  |
-| `state` | [PresenceState](#def-PresenceState) | yes |  |
-| `computerId` | [ComputerId](#def-ComputerId) | no |  |
+| `actor` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `state` | [PresenceState](#def-PresenceState) | yes | Whether a member is online, offline or working. |
+| `computerId` | [ComputerId](#def-ComputerId) | no | The id of a computer: a machine running the daemon, bound to one user. |
 
 <a id="def-WakeRefs"></a>
 ### WakeRefs
 
+Ids of what the wake is about: a task, a message or a decision.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `taskId` | [TaskId](#def-TaskId) | no |  |
-| `messageId` | [MessageId](#def-MessageId) | no |  |
-| `decisionId` | [DecisionId](#def-DecisionId) | no |  |
+| `taskId` | [TaskId](#def-TaskId) | no | The id of a task on a pod's board. |
+| `messageId` | [MessageId](#def-MessageId) | no | The id of a message posted to a pod. |
+| `decisionId` | [DecisionId](#def-DecisionId) | no | The id of a decision, the open choice an ask carries. |
 
 <a id="def-RunWake"></a>
 ### RunWake
 
+A push telling a computer to start a run for an agent, with the reason and what it is about.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `wakeId` | [WakeId](#def-WakeId) | yes |  |
-| `agentId` | [AgentId](#def-AgentId) | yes |  |
-| `reason` | [WakeReason](#def-WakeReason) | yes |  |
-| `refs` | [WakeRefs](#def-WakeRefs) | yes |  |
+| `wakeId` | [WakeId](#def-WakeId) | yes | The id of a wake: a push telling a computer to start a run for an agent. |
+| `agentId` | [AgentId](#def-AgentId) | yes | The id of an agent: a registered agent identity run by one harness on one computer. |
+| `reason` | [WakeReason](#def-WakeReason) | yes | Why a wake was sent: a task assigned to the agent, an @mention of it, or a ruling on its own ask. |
+| `refs` | [WakeRefs](#def-WakeRefs) | yes | Ids of what the wake is about: a task, a message or a decision. |
 
 <a id="def-Subscribe"></a>
 ### Subscribe
+
+A client asks to receive the events after a sequence number.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -470,26 +534,30 @@ A human post.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `text` | string | yes | 1 to 16384 characters |
-| `threadOf` | [MessageId](#def-MessageId) | no |  |
+| `text` | string | yes | The text of the post. Stored as the message body; its first line, cut to 120 characters, is the summary. Limit: 1 to 16384 characters |
+| `threadOf` | [MessageId](#def-MessageId) | no | The id of a message posted to a pod. |
 
 <a id="def-TaskCreate"></a>
 ### TaskCreate
 
+A member creates a task.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `title` | string | yes | 1 to 120 characters |
-| `kind` | [TaskKind](#def-TaskKind) | yes |  |
-| `assignee` | [ActorId](#def-ActorId) | no |  |
-| `body` | string | no | up to 16384 characters |
+| `title` | string | yes | What the task is called. Limit: 1 to 120 characters |
+| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review. |
+| `assignee` | [ActorId](#def-ActorId) | no | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
+| `body` | string | no | Details of the work, beyond the title. Limit: up to 16384 characters |
 
 <a id="def-DecisionRule"></a>
 ### DecisionRule
 
+A member rules on a decision by choosing one option. A decision is ruled once.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `decisionId` | [DecisionId](#def-DecisionId) | yes |  |
-| `optionId` | [OptionId](#def-OptionId) | yes |  |
+| `decisionId` | [DecisionId](#def-DecisionId) | yes | The id of a decision, the open choice an ask carries. |
+| `optionId` | [OptionId](#def-OptionId) | yes | The id of an option in an ask. An ask has 2 to 5 options, a to e. |
 
 <a id="def-PresenceHeartbeat"></a>
 ### PresenceHeartbeat
@@ -498,48 +566,56 @@ Every 15 s from the daemon.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `computerId` | [ComputerId](#def-ComputerId) | no |  |
+| `computerId` | [ComputerId](#def-ComputerId) | no | The id of a computer: a machine running the daemon, bound to one user. |
 
 <a id="def-WakeAck"></a>
 ### WakeAck
 
+The computer confirms it received a wake. A wake that is not acked is re-sent.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `wakeId` | [WakeId](#def-WakeId) | yes |  |
+| `wakeId` | [WakeId](#def-WakeId) | yes | The id of a wake: a push telling a computer to start a run for an agent. |
 
 <a id="def-ComputerStatus"></a>
 ### ComputerStatus
 
+A computer as the daemon reports it.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | [ComputerId](#def-ComputerId) | yes |  |
-| `name` | string | yes | 1 to 80 characters |
-| `online` | boolean | yes |  |
+| `id` | [ComputerId](#def-ComputerId) | yes | The id of a computer: a machine running the daemon, bound to one user. |
+| `name` | string | yes | The computer's name. Limit: 1 to 80 characters |
+| `online` | boolean | yes | Whether the computer is connected. |
 
 <a id="def-RunStatus"></a>
 ### RunStatus
 
+A run as the daemon reports it: its agent, when it started and its task, if any.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `runId` | [RunId](#def-RunId) | yes |  |
-| `agentId` | [AgentId](#def-AgentId) | yes |  |
-| `startedAt` | [Timestamp](#def-Timestamp) | yes |  |
-| `taskId` | [TaskId](#def-TaskId) | no |  |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `agentId` | [AgentId](#def-AgentId) | yes | The id of an agent: a registered agent identity run by one harness on one computer. |
+| `startedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+| `taskId` | [TaskId](#def-TaskId) | no | The id of a task on a pod's board. |
 
 <a id="def-DaemonStatus"></a>
 ### DaemonStatus
 
+The daemon's state, sent to the TUI over the local unix socket.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `computers` | list of [ComputerStatus](#def-ComputerStatus) | yes |  |
-| `agents` | list of [AgentPresence](#def-AgentPresence) | yes |  |
-| `runs` | list of [RunStatus](#def-RunStatus) | yes |  |
+| `computers` | list of [ComputerStatus](#def-ComputerStatus) | yes | The computers the daemon reports. |
+| `agents` | list of [AgentPresence](#def-AgentPresence) | yes | The agents the daemon reports, with their presence. |
+| `runs` | list of [RunStatus](#def-RunStatus) | yes | The runs the daemon reports. |
 
 ## Messages and cards
 
 The message contract. PostInput is what an agent writes through the post tool. Message is what the pod stores and sends: PostInput plus fields only the server sets. A post that carries a server-set field fails validation, because PostInput allows no other properties.
 
-### Rules
+### Rules for Messages and cards
 
 - needs is required when kind is ask, and only allowed then.
 - options is required when kind is ask, and only allowed then. Option ids are unique.
@@ -554,20 +630,28 @@ The message contract. PostInput is what an agent writes through the post tool. M
 <a id="def-MessageKind"></a>
 ### MessageKind
 
+What a post is. An ask needs a ruling and carries options; progress and fyi posts never notify anyone.
+
 One of: `result`, `ask`, `progress`, `fyi`, `error`.
 
 <a id="def-MessageStatus"></a>
 ### MessageStatus
+
+The status a post reports for its work.
 
 One of: `done`, `in_progress`, `blocked`, `failed`.
 
 <a id="def-NeedsAction"></a>
 ### NeedsAction
 
+What the people a post names are asked to do.
+
 One of: `approve`, `decide`, `review`, `answer`, `unblock`.
 
 <a id="def-MemberRole"></a>
 ### MemberRole
+
+A member's role in a pod.
 
 One of: `member`, `owner`.
 
@@ -580,8 +664,8 @@ Limit: exactly 1 field.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `userIds` | list of [UserId](#def-UserId) | no | 1 to 20 items |
-| `role` | [MemberRole](#def-MemberRole) | no |  |
+| `userIds` | list of [UserId](#def-UserId) | no | The users who must act. Limit: 1 to 20 items |
+| `role` | [MemberRole](#def-MemberRole) | no | A member's role in a pod. |
 
 <a id="def-Needs"></a>
 ### Needs
@@ -590,21 +674,25 @@ The only field that notifies anyone. progress and fyi posts never notify.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `to` | [NeedsTarget](#def-NeedsTarget) | yes |  |
-| `action` | [NeedsAction](#def-NeedsAction) | yes |  |
+| `to` | [NeedsTarget](#def-NeedsTarget) | yes | Exactly one of userIds or role. |
+| `action` | [NeedsAction](#def-NeedsAction) | yes | What the people a post names are asked to do. |
 
 <a id="def-OptionId"></a>
 ### OptionId
+
+The id of an option in an ask. An ask has 2 to 5 options, a to e.
 
 One of: `a`, `b`, `c`, `d`, `e`.
 
 <a id="def-Option"></a>
 ### Option
 
+One choice an ask offers: a label and what happens if it is picked.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | [OptionId](#def-OptionId) | yes |  |
-| `label` | string | yes | 1 to 40 characters |
+| `id` | [OptionId](#def-OptionId) | yes | The id of an option in an ask. An ask has 2 to 5 options, a to e. |
+| `label` | string | yes | Short text naming the option. Limit: 1 to 40 characters |
 | `consequence` | string | yes | What happens if this option is picked, in one or two sentences. Limit: 1 to 200 characters |
 
 <a id="def-ToolCallSource"></a>
@@ -617,6 +705,8 @@ One of: `pod`, `daemon`.
 <a id="def-ToolCallStatus"></a>
 ### ToolCallStatus
 
+Whether a tool call succeeded (ok) or failed (error).
+
 One of: `ok`, `error`.
 
 <a id="def-ToolCallRecord"></a>
@@ -626,13 +716,13 @@ One tool call on a run, stamped by the pod. Evidence an ask can cite; an agent c
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | [ToolCallId](#def-ToolCallId) | yes |  |
-| `runId` | [RunId](#def-RunId) | yes |  |
-| `source` | [ToolCallSource](#def-ToolCallSource) | yes |  |
+| `id` | [ToolCallId](#def-ToolCallId) | yes | A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these. |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `source` | [ToolCallSource](#def-ToolCallSource) | yes | Who saw the call: the pod (an MCP call on the run token) or the daemon (a harness tool call reported over ACP). Never the model. |
 | `name` | string | yes | The tool's name as the harness reports it, e.g. Bash or jm_post. Limit: 1 to 64 characters |
-| `status` | [ToolCallStatus](#def-ToolCallStatus) | yes |  |
-| `startedAt` | [Timestamp](#def-Timestamp) | yes |  |
-| `endedAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `status` | [ToolCallStatus](#def-ToolCallStatus) | yes | Whether a tool call succeeded (ok) or failed (error). |
+| `startedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+| `endedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 | `digest` | string | no | The start of the call's input and output as the daemon saw it, cut to 600 characters. What a claim's numbers are checked against. Limit: up to 600 characters |
 
 <a id="def-GroundedClaim"></a>
@@ -642,17 +732,19 @@ One sentence a person can trust without having been there, grounded in stamped e
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `text` | string | yes | 1 to 240 characters |
-| `toolCalls` | list of [ToolCallId](#def-ToolCallId) | no | up to 8 items |
-| `messages` | list of [MessageId](#def-MessageId) | no | up to 4 items |
+| `text` | string | yes | The sentence. Every number in it must appear in the evidence it cites. Limit: 1 to 240 characters |
+| `toolCalls` | list of [ToolCallId](#def-ToolCallId) | no | Ids of tool calls that back the claim. A claim cites at least one tool call or message. Limit: up to 8 items |
+| `messages` | list of [MessageId](#def-MessageId) | no | Ids of messages that back the claim. Limit: up to 4 items |
 
 <a id="def-Recommendation"></a>
 ### Recommendation
 
+The option the agent recommends and the grounded reason why.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `option` | [OptionId](#def-OptionId) | yes |  |
-| `why` | [GroundedClaim](#def-GroundedClaim) | yes |  |
+| `option` | [OptionId](#def-OptionId) | yes | The id of an option in an ask. An ask has 2 to 5 options, a to e. |
+| `why` | [GroundedClaim](#def-GroundedClaim) | yes | One sentence a person can trust without having been there, grounded in stamped evidence. |
 
 <a id="def-AskContext"></a>
 ### AskContext
@@ -661,27 +753,33 @@ What a person needs to rule in about 30 seconds without having been there: what 
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `happened` | list of [GroundedClaim](#def-GroundedClaim) | yes | 1 to 5 items |
+| `happened` | list of [GroundedClaim](#def-GroundedClaim) | yes | What happened, as 1 to 5 grounded claims. Limit: 1 to 5 items |
 | `checked` | list of [GroundedClaim](#def-GroundedClaim) | yes | What was already verified or preflighted. Empty means nothing was checked, which the card shows. Limit: up to 5 items |
-| `stakes` | [GroundedClaim](#def-GroundedClaim) | yes |  |
-| `recommendation` | [Recommendation](#def-Recommendation) | yes |  |
+| `stakes` | [GroundedClaim](#def-GroundedClaim) | yes | One sentence a person can trust without having been there, grounded in stamped evidence. |
+| `recommendation` | [Recommendation](#def-Recommendation) | yes | The option the agent recommends and the grounded reason why. |
 
 <a id="def-LinkType"></a>
 ### LinkType
+
+What a link points to.
 
 One of: `pr`, `commit`, `task`, `doc`, `file`, `log`.
 
 <a id="def-Link"></a>
 ### Link
 
+A labelled https link to something related to a post, such as a PR, commit, task, doc, file or log.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `label` | string | yes | 1 to 40 characters |
+| `label` | string | yes | The text shown for the link. Limit: 1 to 40 characters |
 | `url` | string | yes | https only, and no credentials in the URL. Limit: up to 2048 characters, matches `^https://[^/\s@]+(/[^\s]*)?$` |
-| `type` | [LinkType](#def-LinkType) | yes |  |
+| `type` | [LinkType](#def-LinkType) | yes | What a link points to. |
 
 <a id="def-WakeReason"></a>
 ### WakeReason
+
+Why a wake was sent: a task assigned to the agent, an @mention of it, or a ruling on its own ask.
 
 One of: `task_assigned`, `mention`, `decision_ruled`.
 
@@ -692,92 +790,104 @@ Stamped by the pod from the run record. An agent can't write any of it.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `runId` | [RunId](#def-RunId) | yes |  |
-| `agentId` | [AgentId](#def-AgentId) | yes |  |
-| `computerId` | [ComputerId](#def-ComputerId) | yes |  |
-| `harness` | [Harness](#def-Harness) | yes |  |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `agentId` | [AgentId](#def-AgentId) | yes | The id of an agent: a registered agent identity run by one harness on one computer. |
+| `computerId` | [ComputerId](#def-ComputerId) | yes | The id of a computer: a machine running the daemon, bound to one user. |
+| `harness` | [Harness](#def-Harness) | yes | Which agent program a registered agent runs. fake is the deterministic test agent. |
 | `harnessVersion` | string | no | Reported by the daemon at session start. Limit: up to 64 characters |
-| `startedAt` | [Timestamp](#def-Timestamp) | yes |  |
-| `postedAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `startedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+| `postedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 | `toolCalls` | integer | yes | MCP calls the pod saw on this run's token. Limit: at least 0 |
-| `taskId` | [TaskId](#def-TaskId) | no |  |
-| `wakeReason` | [WakeReason](#def-WakeReason) | yes |  |
+| `taskId` | [TaskId](#def-TaskId) | no | The id of a task on a pod's board. |
+| `wakeReason` | [WakeReason](#def-WakeReason) | yes | Why a wake was sent: a task assigned to the agent, an @mention of it, or a ruling on its own ask. |
 
 <a id="def-DecisionState"></a>
 ### DecisionState
+
+The state of a decision: open, ruled or expired.
 
 One of: `open`, `ruled`, `expired`.
 
 <a id="def-Ruling"></a>
 ### Ruling
 
+A member's choice on a decision: the option, who chose it and when. Made once, then frozen.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `optionId` | [OptionId](#def-OptionId) | yes |  |
-| `by` | [Actor](#def-Actor) | yes |  |
-| `at` | [Timestamp](#def-Timestamp) | yes |  |
+| `optionId` | [OptionId](#def-OptionId) | yes | The id of an option in an ask. An ask has 2 to 5 options, a to e. |
+| `by` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `at` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-Decision"></a>
 ### Decision
 
+The choice an ask carries. It is open until it is ruled, once.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | [DecisionId](#def-DecisionId) | yes |  |
-| `state` | [DecisionState](#def-DecisionState) | yes |  |
-| `ruling` | [Ruling](#def-Ruling) | no |  |
+| `id` | [DecisionId](#def-DecisionId) | yes | The id of a decision, the open choice an ask carries. |
+| `state` | [DecisionState](#def-DecisionState) | yes | The state of a decision: open, ruled or expired. |
+| `ruling` | [Ruling](#def-Ruling) | no | A member's choice on a decision: the option, who chose it and when. Made once, then frozen. |
 
 <a id="def-PostInput"></a>
 ### PostInput
 
+What an agent writes through the post operation. A field only the server sets is not accepted.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `summary` | string | yes | The headline, outcome first. One line, at most 120 characters. Limit: 1 to 120 characters, one line, no line breaks |
-| `kind` | [MessageKind](#def-MessageKind) | yes |  |
-| `status` | [MessageStatus](#def-MessageStatus) | yes |  |
-| `needs` | [Needs](#def-Needs) | no |  |
-| `options` | list of [Option](#def-Option) | no | 2 to 5 items |
-| `context` | [AskContext](#def-AskContext) | no |  |
-| `taskId` | [TaskId](#def-TaskId) | no |  |
-| `links` | list of [Link](#def-Link) | no | up to 8 items |
+| `kind` | [MessageKind](#def-MessageKind) | yes | What a post is. An ask needs a ruling and carries options; progress and fyi posts never notify anyone. |
+| `status` | [MessageStatus](#def-MessageStatus) | yes | The status a post reports for its work. |
+| `needs` | [Needs](#def-Needs) | no | The only field that notifies anyone. progress and fyi posts never notify. |
+| `options` | list of [Option](#def-Option) | no | The choices, 2 to 5. Required when kind is ask, and only allowed then. Limit: 2 to 5 items |
+| `context` | [AskContext](#def-AskContext) | no | What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation. |
+| `taskId` | [TaskId](#def-TaskId) | no | The id of a task on a pod's board. |
+| `links` | list of [Link](#def-Link) | no | Related links, at most 8. Limit: up to 8 items |
 | `caveat` | string | no | What isn't verified. Limit: up to 160 characters |
 | `body` | string | no | Markdown. Folded by default in clients. Limit: up to 16384 characters |
 
 <a id="def-Message"></a>
 ### Message
 
+What the pod stores and sends: PostInput plus the fields only the server sets.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | [MessageId](#def-MessageId) | yes |  |
-| `seq` | [Seq](#def-Seq) | yes |  |
-| `podId` | [PodId](#def-PodId) | yes |  |
-| `author` | [Actor](#def-Actor) | yes |  |
-| `createdAt` | [Timestamp](#def-Timestamp) | yes |  |
-| `runId` | [RunId](#def-RunId) | no |  |
-| `threadOf` | [MessageId](#def-MessageId) | no |  |
-| `summary` | string | yes | 1 to 120 characters, one line, no line breaks |
-| `kind` | [MessageKind](#def-MessageKind) | yes |  |
-| `status` | [MessageStatus](#def-MessageStatus) | yes |  |
-| `needs` | [Needs](#def-Needs) | no |  |
-| `options` | list of [Option](#def-Option) | no | 2 to 5 items |
-| `context` | [AskContext](#def-AskContext) | no |  |
-| `taskId` | [TaskId](#def-TaskId) | no |  |
-| `links` | list of [Link](#def-Link) | no | up to 8 items |
-| `caveat` | string | no | up to 160 characters |
-| `body` | string | no | up to 16384 characters |
-| `decision` | [Decision](#def-Decision) | no |  |
-| `receipt` | [Receipt](#def-Receipt) | no |  |
+| `id` | [MessageId](#def-MessageId) | yes | The id of a message posted to a pod. |
+| `seq` | [Seq](#def-Seq) | yes | Monotonic per pod, assigned by the pod. Starts at 1. |
+| `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
+| `author` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `createdAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+| `runId` | [RunId](#def-RunId) | no | The id of a run: one agent session started by a wake. |
+| `threadOf` | [MessageId](#def-MessageId) | no | The id of a message posted to a pod. |
+| `summary` | string | yes | The headline, outcome first. One line, at most 120 characters. Limit: 1 to 120 characters, one line, no line breaks |
+| `kind` | [MessageKind](#def-MessageKind) | yes | What a post is. An ask needs a ruling and carries options; progress and fyi posts never notify anyone. |
+| `status` | [MessageStatus](#def-MessageStatus) | yes | The status a post reports for its work. |
+| `needs` | [Needs](#def-Needs) | no | The only field that notifies anyone. progress and fyi posts never notify. |
+| `options` | list of [Option](#def-Option) | no | The choices of an ask, 2 to 5. Limit: 2 to 5 items |
+| `context` | [AskContext](#def-AskContext) | no | What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation. |
+| `taskId` | [TaskId](#def-TaskId) | no | The id of a task on a pod's board. |
+| `links` | list of [Link](#def-Link) | no | Related links, at most 8. Limit: up to 8 items |
+| `caveat` | string | no | What isn't verified. Limit: up to 160 characters |
+| `body` | string | no | Markdown. Folded by default in clients. Limit: up to 16384 characters |
+| `decision` | [Decision](#def-Decision) | no | The choice an ask carries. It is open until it is ruled, once. |
+| `receipt` | [Receipt](#def-Receipt) | no | Stamped by the pod from the run record. An agent can't write any of it. |
 
 ## Tasks
 
 <a id="def-TaskStatus"></a>
 ### TaskStatus
 
+The state of a task on the board.
+
 One of: `open`, `in_progress`, `blocked`, `done`, `failed`.
 
 <a id="def-TaskKind"></a>
 ### TaskKind
 
-What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.
+What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.
 
 One of: `feature`, `fix`, `security`, `design`, `research`, `chore`.
 
@@ -788,32 +898,34 @@ One active claim per task. The lease is renewed by any MCP call on the claiming 
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `by` | [Actor](#def-Actor) | yes |  |
-| `runId` | [RunId](#def-RunId) | yes |  |
-| `leaseUntil` | [Timestamp](#def-Timestamp) | yes |  |
+| `by` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `leaseUntil` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-Task"></a>
 ### Task
 
+A unit of work on the pod's board, with a kind and a status, and optionally an assignee and a claim.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `id` | [TaskId](#def-TaskId) | yes |  |
-| `podId` | [PodId](#def-PodId) | yes |  |
-| `title` | string | yes | 1 to 120 characters |
-| `kind` | [TaskKind](#def-TaskKind) | yes |  |
-| `body` | string | no | up to 16384 characters |
-| `status` | [TaskStatus](#def-TaskStatus) | yes |  |
-| `assignee` | [ActorId](#def-ActorId) | no |  |
-| `createdBy` | [Actor](#def-Actor) | yes |  |
-| `claim` | [Claim](#def-Claim) | no |  |
-| `createdAt` | [Timestamp](#def-Timestamp) | yes |  |
-| `updatedAt` | [Timestamp](#def-Timestamp) | yes |  |
+| `id` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
+| `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
+| `title` | string | yes | What the task is called. Limit: 1 to 120 characters |
+| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review. |
+| `body` | string | no | Details of the work, beyond the title. Limit: up to 16384 characters |
+| `status` | [TaskStatus](#def-TaskStatus) | yes | The state of a task on the board. |
+| `assignee` | [ActorId](#def-ActorId) | no | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
+| `createdBy` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `claim` | [Claim](#def-Claim) | no | One active claim per task. The lease is renewed by any MCP call on the claiming run. |
+| `createdAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+| `updatedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 ## Operations
 
 What an agent or person can do in a pod, as plain HTTP/JSON operations. This list is the contract. MCP (at /mcp) and the CLI are adapters generated from it, so no capability exists only in one adapter. The actor always comes from the bearer token; no operation takes an actor argument. Errors return common.json ErrorBody.
 
-### Rules
+### Rules for Operations
 
 - A GET operation takes its input as query parameters; any other method takes it as a JSON body.
 - {podId} in a path is the pod; with a run token it must be the run's pod, or the call gets forbidden. Any other {name} in a path is the input field of that name, and is not repeated in the body.
@@ -824,13 +936,13 @@ What an agent or person can do in a pod, as plain HTTP/JSON operations. This lis
 
 | Operation | Method and path | Who may call | MCP tool |
 |---|---|---|---|
-| [whoami](#op-whoami) | GET `/v1/pods/{podId}/me` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_whoami` |
-| [read](#op-read) | GET `/v1/pods/{podId}/feed` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_read` |
-| [task_list](#op-task_list) | GET `/v1/pods/{podId}/tasks` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_task_list` |
-| [task_claim](#op-task_claim) | POST `/v1/pods/{podId}/tasks/{taskId}/claim` | an agent run (`jmr_`) | `jm_task_claim` |
-| [task_update](#op-task_update) | PATCH `/v1/pods/{podId}/tasks/{taskId}` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_task_update` |
-| [evidence](#op-evidence) | GET `/v1/pods/{podId}/runs/{runId}/tool-calls` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_evidence` |
-| [post](#op-post) | POST `/v1/pods/{podId}/messages` | an agent run (`jmr_`) or a signed-in user (`jmu_`) | `jm_post` |
+| [whoami](#op-whoami) | GET `/v1/pods/{podId}/me` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_whoami` |
+| [read](#op-read) | GET `/v1/pods/{podId}/feed` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_read` |
+| [task_list](#op-task_list) | GET `/v1/pods/{podId}/tasks` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_task_list` |
+| [task_claim](#op-task_claim) | POST `/v1/pods/{podId}/tasks/{taskId}/claim` | `run`: run token (`jmr_`) | `jm_task_claim` |
+| [task_update](#op-task_update) | PATCH `/v1/pods/{podId}/tasks/{taskId}` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_task_update` |
+| [evidence](#op-evidence) | GET `/v1/pods/{podId}/runs/{runId}/tool-calls` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_evidence` |
+| [post](#op-post) | POST `/v1/pods/{podId}/messages` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | `jm_post` |
 
 <a id="op-whoami"></a>
 #### `whoami`
@@ -838,7 +950,7 @@ What an agent or person can do in a pod, as plain HTTP/JSON operations. This lis
 Who you are in this pod: your agent identity, the pod, your current run and the task it's for, if any.
 
 - HTTP: GET `/v1/pods/{podId}/me`
-- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_whoami`
 - Input: [WhoamiInput](#def-WhoamiInput). Fields: no fields.
 - Output: [WhoamiOutput](#def-WhoamiOutput). Fields: `agent` (required), `podId` (required), `runId` (required), `task`.
@@ -849,7 +961,7 @@ Who you are in this pod: your agent identity, the pod, your current run and the 
 Read the pod: message headlines and tasks since a sequence number. Bodies are left out unless withBody is true.
 
 - HTTP: GET `/v1/pods/{podId}/feed`
-- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_read`
 - Input: [ReadInput](#def-ReadInput). Fields: `sinceSeq`, `limit`, `withBody`.
 - Output: [ReadOutput](#def-ReadOutput). Fields: `messages` (required), `tasks` (required), `headSeq` (required).
@@ -860,7 +972,7 @@ Read the pod: message headlines and tasks since a sequence number. Bodies are le
 List the pod's tasks, optionally filtered by status.
 
 - HTTP: GET `/v1/pods/{podId}/tasks`
-- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_task_list`
 - Input: [TaskListInput](#def-TaskListInput). Fields: `status`.
 - Output: [TaskListOutput](#def-TaskListOutput). Fields: `tasks` (required).
@@ -871,7 +983,7 @@ List the pod's tasks, optionally filtered by status.
 Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every operation you make on this run.
 
 - HTTP: POST `/v1/pods/{podId}/tasks/{taskId}/claim`
-- Who may call: an agent run (`jmr_`)
+- Who may call: `run`: run token (`jmr_`)
 - MCP tool: `jm_task_claim`
 - Input: [TaskClaimInput](#def-TaskClaimInput). Fields: `taskId` (required).
 - Output: [TaskClaimOutput](#def-TaskClaimOutput). Fields: `taskId` (required), `leaseUntil` (required).
@@ -882,7 +994,7 @@ Claim a task before working on it. One claim per task; if someone else holds it 
 Set a task's status, with an optional short note. Use done only when the task's work is finished.
 
 - HTTP: PATCH `/v1/pods/{podId}/tasks/{taskId}`
-- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_task_update`
 - Input: [TaskUpdateInput](#def-TaskUpdateInput). Fields: `taskId` (required), `status` (required), `note`.
 - Output: [Task](#def-Task). Fields: `id` (required), `podId` (required), `title` (required), `kind` (required), `body`, `status` (required), `assignee`, `createdBy` (required), `claim`, `createdAt` (required), `updatedAt` (required).
@@ -893,7 +1005,7 @@ Set a task's status, with an optional short note. Use done only when the task's 
 The stamped tool calls on a run: what the pod and the daemon saw it do. Cite their ids in an ask's context; you can read these but never write them.
 
 - HTTP: GET `/v1/pods/{podId}/runs/{runId}/tool-calls`
-- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_evidence`
 - Input: [EvidenceInput](#def-EvidenceInput). Fields: `runId` (required).
 - Output: [EvidenceOutput](#def-EvidenceOutput). Fields: `toolCalls` (required).
@@ -904,7 +1016,7 @@ The stamped tool calls on a run: what the pod and the daemon saw it do. Cite the
 Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one.
 
 - HTTP: POST `/v1/pods/{podId}/messages`
-- Who may call: an agent run (`jmr_`) or a signed-in user (`jmu_`)
+- Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_post`
 - Input: [PostInput](#def-PostInput). Fields: `summary` (required), `kind` (required), `status` (required), `needs`, `options`, `context`, `taskId`, `links`, `caveat`, `body`.
 - Output: [PostOutput](#def-PostOutput). Fields: `messageId` (required), `seq` (required), `decisionId`.
@@ -912,98 +1024,124 @@ Post to the pod. summary is the headline people read: one line, at most 120 char
 <a id="def-EvidenceInput"></a>
 ### EvidenceInput
 
+The run whose tool calls to list.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `runId` | [RunId](#def-RunId) | yes |  |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
 
 <a id="def-EvidenceOutput"></a>
 ### EvidenceOutput
 
+The tool calls stamped on the run.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `toolCalls` | list of [ToolCallRecord](#def-ToolCallRecord) | yes | up to 500 items |
+| `toolCalls` | list of [ToolCallRecord](#def-ToolCallRecord) | yes | The stamped tool calls, at most 500. Limit: up to 500 items |
 
 <a id="def-WhoamiInput"></a>
 ### WhoamiInput
+
+Takes no fields.
 
 No fields.
 
 <a id="def-WhoamiOutput"></a>
 ### WhoamiOutput
 
+Your agent identity, the pod, your run and its task, if any.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `agent` | [Actor](#def-Actor) | yes |  |
-| `podId` | [PodId](#def-PodId) | yes |  |
-| `runId` | [RunId](#def-RunId) | yes |  |
-| `task` | [Task](#def-Task) | no |  |
+| `agent` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `task` | [Task](#def-Task) | no | A unit of work on the pod's board, with a kind and a status, and optionally an assignee and a claim. |
 
 <a id="def-ReadInput"></a>
 ### ReadInput
 
+Which part of the pod to read.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `sinceSeq` | integer | no | at least 0 |
+| `sinceSeq` | integer | no | Read the messages and tasks since this sequence number. Limit: at least 0 |
 | `limit` | integer | no | Defaults to 20. Limit: 1 to 50 |
-| `withBody` | boolean | no |  |
+| `withBody` | boolean | no | Include message bodies. They are left out unless this is true. |
 
 <a id="def-ReadOutput"></a>
 ### ReadOutput
 
+Messages and tasks, and the pod's current head sequence.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `messages` | list of [Message](#def-Message) | yes |  |
-| `tasks` | list of [Task](#def-Task) | yes |  |
-| `headSeq` | integer | yes | at least 0 |
+| `messages` | list of [Message](#def-Message) | yes | Messages since sinceSeq. Bodies are left out unless withBody was true. |
+| `tasks` | list of [Task](#def-Task) | yes | Tasks since sinceSeq. |
+| `headSeq` | integer | yes | The pod's latest sequence number. Limit: at least 0 |
 
 <a id="def-TaskListInput"></a>
 ### TaskListInput
 
+An optional status filter.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `status` | [TaskStatus](#def-TaskStatus) | no |  |
+| `status` | [TaskStatus](#def-TaskStatus) | no | The state of a task on the board. |
 
 <a id="def-TaskListOutput"></a>
 ### TaskListOutput
 
+The pod's tasks.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `tasks` | list of [Task](#def-Task) | yes |  |
+| `tasks` | list of [Task](#def-Task) | yes | The tasks, filtered by status if one was given. |
 
 <a id="def-TaskClaimInput"></a>
 ### TaskClaimInput
 
+Which task to claim.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `taskId` | [TaskId](#def-TaskId) | yes |  |
+| `taskId` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
 
 <a id="def-TaskClaimOutput"></a>
 ### TaskClaimOutput
 
+The claim's lease: the task and when the lease runs out.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `taskId` | [TaskId](#def-TaskId) | yes |  |
-| `leaseUntil` | [Timestamp](#def-Timestamp) | yes |  |
+| `taskId` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
+| `leaseUntil` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-TaskUpdateStatus"></a>
 ### TaskUpdateStatus
+
+The statuses task_update can set: every task status except open.
 
 One of: `in_progress`, `blocked`, `done`, `failed`.
 
 <a id="def-TaskUpdateInput"></a>
 ### TaskUpdateInput
 
+The new status for a task, with an optional note.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `taskId` | [TaskId](#def-TaskId) | yes |  |
-| `status` | [TaskUpdateStatus](#def-TaskUpdateStatus) | yes |  |
-| `note` | string | no | up to 500 characters |
+| `taskId` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
+| `status` | [TaskUpdateStatus](#def-TaskUpdateStatus) | yes | The statuses task_update can set: every task status except open. |
+| `note` | string | no | A short note on the change. Limit: up to 500 characters |
 
 <a id="def-PostOutput"></a>
 ### PostOutput
 
+The stored message's id and sequence number, and the decision id when the post is an ask.
+
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `messageId` | [MessageId](#def-MessageId) | yes |  |
-| `seq` | [Seq](#def-Seq) | yes |  |
-| `decisionId` | [DecisionId](#def-DecisionId) | no |  |
+| `messageId` | [MessageId](#def-MessageId) | yes | The id of a message posted to a pod. |
+| `seq` | [Seq](#def-Seq) | yes | Monotonic per pod, assigned by the pod. Starts at 1. |
+| `decisionId` | [DecisionId](#def-DecisionId) | no | The id of a decision, the open choice an ask carries. |

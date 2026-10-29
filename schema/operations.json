@@ -28,19 +28,24 @@
   ],
   "$defs": {
     "EvidenceInput": {
+      "description": "The run whose tool calls to list.",
       "type": "object",
       "additionalProperties": false,
       "required": ["runId"],
       "properties": { "runId": { "$ref": "common.json#/$defs/RunId" } }
     },
     "EvidenceOutput": {
+      "description": "The tool calls stamped on the run.",
       "type": "object",
       "additionalProperties": false,
       "required": ["toolCalls"],
-      "properties": { "toolCalls": { "type": "array", "maxItems": 500, "items": { "$ref": "message.json#/$defs/ToolCallRecord" } } }
+      "properties": {
+        "toolCalls": { "description": "The stamped tool calls, at most 500.", "type": "array", "maxItems": 500, "items": { "$ref": "message.json#/$defs/ToolCallRecord" } }
+      }
     },
-    "WhoamiInput": { "type": "object", "additionalProperties": false, "properties": {} },
+    "WhoamiInput": { "description": "Takes no fields.", "type": "object", "additionalProperties": false, "properties": {} },
     "WhoamiOutput": {
+      "description": "Your agent identity, the pod, your run and its task, if any.",
       "type": "object",
       "additionalProperties": false,
       "required": ["agent", "podId", "runId"],
@@ -52,70 +57,68 @@
       }
     },
     "ReadInput": {
+      "description": "Which part of the pod to read.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "sinceSeq": { "type": "integer", "minimum": 0 },
+        "sinceSeq": { "description": "Read the messages and tasks since this sequence number.", "type": "integer", "minimum": 0 },
         "limit": { "description": "Defaults to 20.", "type": "integer", "minimum": 1, "maximum": 50 },
-        "withBody": { "type": "boolean" }
+        "withBody": { "description": "Include message bodies. They are left out unless this is true.", "type": "boolean" }
       }
     },
     "ReadOutput": {
+      "description": "Messages and tasks, and the pod's current head sequence.",
       "type": "object",
       "additionalProperties": false,
       "required": ["messages", "tasks", "headSeq"],
       "properties": {
-        "messages": { "type": "array", "items": { "$ref": "message.json#/$defs/Message" } },
-        "tasks": { "type": "array", "items": { "$ref": "task.json#/$defs/Task" } },
-        "headSeq": { "type": "integer", "minimum": 0 }
+        "messages": { "description": "Messages since sinceSeq. Bodies are left out unless withBody was true.", "type": "array", "items": { "$ref": "message.json#/$defs/Message" } },
+        "tasks": { "description": "Tasks since sinceSeq.", "type": "array", "items": { "$ref": "task.json#/$defs/Task" } },
+        "headSeq": { "description": "The pod's latest sequence number.", "type": "integer", "minimum": 0 }
       }
     },
-    "TaskListInput": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": { "status": { "$ref": "task.json#/$defs/TaskStatus" } }
-    },
+    "TaskListInput": { "description": "An optional status filter.", "type": "object", "additionalProperties": false, "properties": { "status": { "$ref": "task.json#/$defs/TaskStatus" } } },
     "TaskListOutput": {
+      "description": "The pod's tasks.",
       "type": "object",
       "additionalProperties": false,
       "required": ["tasks"],
-      "properties": { "tasks": { "type": "array", "items": { "$ref": "task.json#/$defs/Task" } } }
+      "properties": {
+        "tasks": { "description": "The tasks, filtered by status if one was given.", "type": "array", "items": { "$ref": "task.json#/$defs/Task" } }
+      }
     },
     "TaskClaimInput": {
+      "description": "Which task to claim.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId"],
       "properties": { "taskId": { "$ref": "common.json#/$defs/TaskId" } }
     },
     "TaskClaimOutput": {
+      "description": "The claim's lease: the task and when the lease runs out.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId", "leaseUntil"],
-      "properties": {
-        "taskId": { "$ref": "common.json#/$defs/TaskId" },
-        "leaseUntil": { "$ref": "common.json#/$defs/Timestamp" }
-      }
+      "properties": { "taskId": { "$ref": "common.json#/$defs/TaskId" }, "leaseUntil": { "$ref": "common.json#/$defs/Timestamp" } }
     },
-    "TaskUpdateStatus": { "type": "string", "enum": ["in_progress", "blocked", "done", "failed"] },
+    "TaskUpdateStatus": { "description": "The statuses task_update can set: every task status except open.", "type": "string", "enum": ["in_progress", "blocked", "done", "failed"] },
     "TaskUpdateInput": {
+      "description": "The new status for a task, with an optional note.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId", "status"],
       "properties": {
         "taskId": { "$ref": "common.json#/$defs/TaskId" },
         "status": { "$ref": "#/$defs/TaskUpdateStatus" },
-        "note": { "type": "string", "maxLength": 500 }
+        "note": { "description": "A short note on the change.", "type": "string", "maxLength": 500 }
       }
     },
     "PostOutput": {
+      "description": "The stored message's id and sequence number, and the decision id when the post is an ask.",
       "type": "object",
       "additionalProperties": false,
       "required": ["messageId", "seq"],
-      "properties": {
-        "messageId": { "$ref": "common.json#/$defs/MessageId" },
-        "seq": { "$ref": "common.json#/$defs/Seq" },
-        "decisionId": { "$ref": "common.json#/$defs/DecisionId" }
-      }
+      "properties": { "messageId": { "$ref": "common.json#/$defs/MessageId" }, "seq": { "$ref": "common.json#/$defs/Seq" }, "decisionId": { "$ref": "common.json#/$defs/DecisionId" } }
     }
   }
 }

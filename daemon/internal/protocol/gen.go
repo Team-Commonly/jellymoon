@@ -7,28 +7,37 @@ import (
 	"fmt"
 )
 
+// The id of a pod.
 type PodID = string
 
+// The id of a user, a person signed in with GitHub.
 type UserID = string
 
+// The id of an agent: a registered agent identity run by one harness on one computer.
 type AgentID = string
 
 // A user or an agent: who a task is assigned to, or who acted. System actors use sys_.
 type ActorID = string
 
+// The id of a computer: a machine running the daemon, bound to one user.
 type ComputerID = string
 
+// The id of a task on a pod's board.
 type TaskID = string
 
+// The id of a message posted to a pod.
 type MessageID = string
 
+// The id of a run: one agent session started by a wake.
 type RunID = string
 
 // A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.
 type ToolCallID = string
 
+// The id of a decision, the open choice an ask carries.
 type DecisionID = string
 
+// The id of a wake: a push telling a computer to start a run for an agent.
 type WakeID = string
 
 // Monotonic per pod, assigned by the pod. Starts at 1.
@@ -37,6 +46,7 @@ type Seq = int64
 // RFC 3339 in UTC. Set by the server only.
 type Timestamp = string
 
+// Whether an actor is a person (human), an agent or the system.
 type ActorKind string
 
 const (
@@ -54,10 +64,12 @@ func (x ActorKind) Valid() bool {
 	return false
 }
 
+// A member of a pod, or the system: its kind, its id and the name shown to people.
 type Actor struct {
-	Kind        ActorKind `json:"kind"`
-	ID          ActorID   `json:"id"`
-	DisplayName string    `json:"displayName"`
+	Kind ActorKind `json:"kind"`
+	ID   ActorID   `json:"id"`
+	// The name shown to people.
+	DisplayName string `json:"displayName"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -123,9 +135,11 @@ func (x ErrorCode) Valid() bool {
 	return false
 }
 
+// The body of every error response, and the data of the error socket event.
 type ErrorBody struct {
-	Code    ErrorCode `json:"code"`
-	Message string    `json:"message"`
+	Code ErrorCode `json:"code"`
+	// An explanation for a reader. Act on code, which is stable, not on this text.
+	Message string `json:"message"`
 	// The input field at fault, when there is one.
 	Field *string `json:"field,omitempty"`
 	// The id the error is about, when there is one.
@@ -147,6 +161,7 @@ func (x *ErrorBody) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The three kinds of bearer token: user, computer and run.
 type TokenKind string
 
 const (
@@ -173,6 +188,7 @@ type ComputerToken = string
 // Bound to one agent, pod and run (and task, if any). Ends with the run; at most 2 hours.
 type RunToken = string
 
+// The state of a task on the board.
 type TaskStatus string
 
 const (
@@ -192,7 +208,7 @@ func (x TaskStatus) Valid() bool {
 	return false
 }
 
-// What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.
+// What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.
 type TaskKind string
 
 const (
@@ -235,11 +251,14 @@ func (x *Claim) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A unit of work on the pod's board, with a kind and a status, and optionally an assignee and a claim.
 type Task struct {
-	ID        TaskID     `json:"id"`
-	PodID     PodID      `json:"podId"`
-	Title     string     `json:"title"`
-	Kind      TaskKind   `json:"kind"`
+	ID    TaskID `json:"id"`
+	PodID PodID  `json:"podId"`
+	// What the task is called.
+	Title string   `json:"title"`
+	Kind  TaskKind `json:"kind"`
+	// Details of the work, beyond the title.
 	Body      *string    `json:"body,omitempty"`
 	Status    TaskStatus `json:"status"`
 	Assignee  *ActorID   `json:"assignee,omitempty"`
@@ -264,6 +283,7 @@ func (x *Task) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// What a post is. An ask needs a ruling and carries options; progress and fyi posts never notify anyone.
 type MessageKind string
 
 const (
@@ -283,6 +303,7 @@ func (x MessageKind) Valid() bool {
 	return false
 }
 
+// The status a post reports for its work.
 type MessageStatus string
 
 const (
@@ -301,6 +322,7 @@ func (x MessageStatus) Valid() bool {
 	return false
 }
 
+// What the people a post names are asked to do.
 type NeedsAction string
 
 const (
@@ -320,6 +342,7 @@ func (x NeedsAction) Valid() bool {
 	return false
 }
 
+// A member's role in a pod.
 type MemberRole string
 
 const (
@@ -338,6 +361,7 @@ func (x MemberRole) Valid() bool {
 
 // Exactly one of userIds or role.
 type NeedsTarget struct {
+	// The users who must act.
 	UserIds []UserID    `json:"userIds,omitempty"`
 	Role    *MemberRole `json:"role,omitempty"`
 }
@@ -369,6 +393,7 @@ func (x *Needs) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The id of an option in an ask. An ask has 2 to 5 options, a to e.
 type OptionID string
 
 const (
@@ -388,9 +413,11 @@ func (x OptionID) Valid() bool {
 	return false
 }
 
+// One choice an ask offers: a label and what happens if it is picked.
 type Option struct {
-	ID    OptionID `json:"id"`
-	Label string   `json:"label"`
+	ID OptionID `json:"id"`
+	// Short text naming the option.
+	Label string `json:"label"`
 	// What happens if this option is picked, in one or two sentences.
 	Consequence string `json:"consequence"`
 }
@@ -427,6 +454,7 @@ func (x ToolCallSource) Valid() bool {
 	return false
 }
 
+// Whether a tool call succeeded (ok) or failed (error).
 type ToolCallStatus string
 
 const (
@@ -474,9 +502,12 @@ func (x *ToolCallRecord) UnmarshalJSON(b []byte) error {
 
 // One sentence a person can trust without having been there, grounded in stamped evidence.
 type GroundedClaim struct {
-	Text      string       `json:"text"`
+	// The sentence. Every number in it must appear in the evidence it cites.
+	Text string `json:"text"`
+	// Ids of tool calls that back the claim. A claim cites at least one tool call or message.
 	ToolCalls []ToolCallID `json:"toolCalls,omitempty"`
-	Messages  []MessageID  `json:"messages,omitempty"`
+	// Ids of messages that back the claim.
+	Messages []MessageID `json:"messages,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -494,6 +525,7 @@ func (x *GroundedClaim) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The option the agent recommends and the grounded reason why.
 type Recommendation struct {
 	Option OptionID      `json:"option"`
 	Why    GroundedClaim `json:"why"`
@@ -516,6 +548,7 @@ func (x *Recommendation) UnmarshalJSON(b []byte) error {
 
 // What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation.
 type AskContext struct {
+	// What happened, as 1 to 5 grounded claims.
 	Happened []GroundedClaim `json:"happened"`
 	// What was already verified or preflighted. Empty means nothing was checked, which the card shows.
 	Checked        []GroundedClaim `json:"checked"`
@@ -538,6 +571,7 @@ func (x *AskContext) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// What a link points to.
 type LinkType string
 
 const (
@@ -558,7 +592,9 @@ func (x LinkType) Valid() bool {
 	return false
 }
 
+// A labelled https link to something related to a post, such as a PR, commit, task, doc, file or log.
 type Link struct {
+	// The text shown for the link.
 	Label string `json:"label"`
 	// https only, and no credentials in the URL.
 	URL  string   `json:"url"`
@@ -580,6 +616,7 @@ func (x *Link) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Why a wake was sent: a task assigned to the agent, an @mention of it, or a ruling on its own ask.
 type WakeReason string
 
 const (
@@ -628,6 +665,7 @@ func (x *Receipt) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The state of a decision: open, ruled or expired.
 type DecisionState string
 
 const (
@@ -645,6 +683,7 @@ func (x DecisionState) Valid() bool {
 	return false
 }
 
+// A member's choice on a decision: the option, who chose it and when. Made once, then frozen.
 type Ruling struct {
 	OptionID OptionID  `json:"optionId"`
 	By       Actor     `json:"by"`
@@ -666,6 +705,7 @@ func (x *Ruling) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The choice an ask carries. It is open until it is ruled, once.
 type Decision struct {
 	ID     DecisionID    `json:"id"`
 	State  DecisionState `json:"state"`
@@ -687,16 +727,19 @@ func (x *Decision) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// What an agent writes through the post operation. A field only the server sets is not accepted.
 type PostInput struct {
 	// The headline, outcome first. One line, at most 120 characters.
 	Summary string        `json:"summary"`
 	Kind    MessageKind   `json:"kind"`
 	Status  MessageStatus `json:"status"`
 	Needs   *Needs        `json:"needs,omitempty"`
-	Options []Option      `json:"options,omitempty"`
-	Context *AskContext   `json:"context,omitempty"`
-	TaskID  *TaskID       `json:"taskId,omitempty"`
-	Links   []Link        `json:"links,omitempty"`
+	// The choices, 2 to 5. Required when kind is ask, and only allowed then.
+	Options []Option    `json:"options,omitempty"`
+	Context *AskContext `json:"context,omitempty"`
+	TaskID  *TaskID     `json:"taskId,omitempty"`
+	// Related links, at most 8.
+	Links []Link `json:"links,omitempty"`
 	// What isn't verified.
 	Caveat *string `json:"caveat,omitempty"`
 	// Markdown. Folded by default in clients.
@@ -718,26 +761,32 @@ func (x *PostInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// What the pod stores and sends: PostInput plus the fields only the server sets.
 type Message struct {
-	ID        MessageID     `json:"id"`
-	Seq       Seq           `json:"seq"`
-	PodID     PodID         `json:"podId"`
-	Author    Actor         `json:"author"`
-	CreatedAt Timestamp     `json:"createdAt"`
-	RunID     *RunID        `json:"runId,omitempty"`
-	ThreadOf  *MessageID    `json:"threadOf,omitempty"`
-	Summary   string        `json:"summary"`
-	Kind      MessageKind   `json:"kind"`
-	Status    MessageStatus `json:"status"`
-	Needs     *Needs        `json:"needs,omitempty"`
-	Options   []Option      `json:"options,omitempty"`
-	Context   *AskContext   `json:"context,omitempty"`
-	TaskID    *TaskID       `json:"taskId,omitempty"`
-	Links     []Link        `json:"links,omitempty"`
-	Caveat    *string       `json:"caveat,omitempty"`
-	Body      *string       `json:"body,omitempty"`
-	Decision  *Decision     `json:"decision,omitempty"`
-	Receipt   *Receipt      `json:"receipt,omitempty"`
+	ID        MessageID  `json:"id"`
+	Seq       Seq        `json:"seq"`
+	PodID     PodID      `json:"podId"`
+	Author    Actor      `json:"author"`
+	CreatedAt Timestamp  `json:"createdAt"`
+	RunID     *RunID     `json:"runId,omitempty"`
+	ThreadOf  *MessageID `json:"threadOf,omitempty"`
+	// The headline, outcome first. One line, at most 120 characters.
+	Summary string        `json:"summary"`
+	Kind    MessageKind   `json:"kind"`
+	Status  MessageStatus `json:"status"`
+	Needs   *Needs        `json:"needs,omitempty"`
+	// The choices of an ask, 2 to 5.
+	Options []Option    `json:"options,omitempty"`
+	Context *AskContext `json:"context,omitempty"`
+	TaskID  *TaskID     `json:"taskId,omitempty"`
+	// Related links, at most 8.
+	Links []Link `json:"links,omitempty"`
+	// What isn't verified.
+	Caveat *string `json:"caveat,omitempty"`
+	// Markdown. Folded by default in clients.
+	Body     *string   `json:"body,omitempty"`
+	Decision *Decision `json:"decision,omitempty"`
+	Receipt  *Receipt  `json:"receipt,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -757,12 +806,14 @@ func (x *Message) UnmarshalJSON(b []byte) error {
 
 // The daemon reports one harness tool call it saw on a run it hosts (computer token only). The pod assigns the id and stores a ToolCallRecord with source daemon. The agent never sends this.
 type RunToolCall struct {
-	RunID     RunID          `json:"runId"`
+	RunID RunID `json:"runId"`
+	// The tool's name as the harness reports it.
 	Name      string         `json:"name"`
 	Status    ToolCallStatus `json:"status"`
 	StartedAt Timestamp      `json:"startedAt"`
 	EndedAt   Timestamp      `json:"endedAt"`
-	Digest    *string        `json:"digest,omitempty"`
+	// The start of the call's input and output, cut to 600 characters.
+	Digest *string `json:"digest,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -780,6 +831,7 @@ func (x *RunToolCall) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Every kind of socket frame. x-variants gives each one its direction and its data.
 type EventType string
 
 const (
@@ -811,14 +863,18 @@ func (x EventType) Valid() bool {
 	return false
 }
 
+// The frame every socket message is sent in.
 type Envelope struct {
-	V     int64      `json:"v"`
-	Type  EventType  `json:"type"`
-	Seq   *Seq       `json:"seq,omitempty"`
-	PodID PodID      `json:"podId"`
+	// The envelope version. Always 1.
+	V    int64     `json:"v"`
+	Type EventType `json:"type"`
+	// The pod's event number. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.
+	Seq   *Seq  `json:"seq,omitempty"`
+	PodID PodID `json:"podId"`
+	// When the pod sent the frame. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.
 	Ts    *Timestamp `json:"ts,omitempty"`
 	Actor *Actor     `json:"actor,omitempty"`
-	// Matches the definition x-variants names for type.
+	// The event's payload: the definition x-variants names for type. Like every object definition it accepts only its listed fields.
 	Data json.RawMessage `json:"data"`
 }
 
@@ -837,6 +893,7 @@ func (x *Envelope) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A member of a pod and the role they hold.
 type Member struct {
 	Actor Actor      `json:"actor"`
 	Role  MemberRole `json:"role"`
@@ -857,6 +914,7 @@ func (x *Member) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Whether a member is online, offline or working.
 type PresenceState string
 
 const (
@@ -874,6 +932,7 @@ func (x PresenceState) Valid() bool {
 	return false
 }
 
+// An agent's presence: its harness, the computer it runs on and its state.
 type AgentPresence struct {
 	Agent      Actor         `json:"agent"`
 	Harness    Harness       `json:"harness"`
@@ -896,13 +955,16 @@ func (x *AgentPresence) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// What the pod tells a client about itself and the client: head sequence, the client's actor, members and agents.
 type Hello struct {
 	PodID PodID `json:"podId"`
 	// 0 for an empty pod.
-	HeadSeq int64           `json:"headSeq"`
-	You     Actor           `json:"you"`
-	Members []Member        `json:"members"`
-	Agents  []AgentPresence `json:"agents"`
+	HeadSeq int64 `json:"headSeq"`
+	You     Actor `json:"you"`
+	// The pod's members.
+	Members []Member `json:"members"`
+	// The pod's agents and their presence.
+	Agents []AgentPresence `json:"agents"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -941,6 +1003,7 @@ func (x *MessageUpdated) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A task was claimed: who holds it, on which run, and until when the lease runs.
 type TaskClaimed struct {
 	TaskID     TaskID    `json:"taskId"`
 	By         Actor     `json:"by"`
@@ -963,6 +1026,7 @@ func (x *TaskClaimed) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A member's presence changed.
 type PresenceChanged struct {
 	Actor      Actor         `json:"actor"`
 	State      PresenceState `json:"state"`
@@ -984,6 +1048,7 @@ func (x *PresenceChanged) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Ids of what the wake is about: a task, a message or a decision.
 type WakeRefs struct {
 	TaskID     *TaskID     `json:"taskId,omitempty"`
 	MessageID  *MessageID  `json:"messageId,omitempty"`
@@ -996,6 +1061,7 @@ func (x *WakeRefs) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A push telling a computer to start a run for an agent, with the reason and what it is about.
 type RunWake struct {
 	WakeID  WakeID     `json:"wakeId"`
 	AgentID AgentID    `json:"agentId"`
@@ -1018,6 +1084,7 @@ func (x *RunWake) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A client asks to receive the events after a sequence number.
 type Subscribe struct {
 	// 0 replays from the start of the kept log.
 	SinceSeq int64 `json:"sinceSeq"`
@@ -1040,6 +1107,7 @@ func (x *Subscribe) UnmarshalJSON(b []byte) error {
 
 // A human post.
 type MessagePost struct {
+	// The text of the post. Stored as the message body; its first line, cut to 120 characters, is the summary.
 	Text     string     `json:"text"`
 	ThreadOf *MessageID `json:"threadOf,omitempty"`
 }
@@ -1059,11 +1127,14 @@ func (x *MessagePost) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A member creates a task.
 type TaskCreate struct {
+	// What the task is called.
 	Title    string   `json:"title"`
 	Kind     TaskKind `json:"kind"`
 	Assignee *ActorID `json:"assignee,omitempty"`
-	Body     *string  `json:"body,omitempty"`
+	// Details of the work, beyond the title.
+	Body *string `json:"body,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1081,6 +1152,7 @@ func (x *TaskCreate) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A member rules on a decision by choosing one option. A decision is ruled once.
 type DecisionRule struct {
 	DecisionID DecisionID `json:"decisionId"`
 	OptionID   OptionID   `json:"optionId"`
@@ -1112,6 +1184,7 @@ func (x *PresenceHeartbeat) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The computer confirms it received a wake. A wake that is not acked is re-sent.
 type WakeAck struct {
 	WakeID WakeID `json:"wakeId"`
 }
@@ -1131,10 +1204,13 @@ func (x *WakeAck) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A computer as the daemon reports it.
 type ComputerStatus struct {
-	ID     ComputerID `json:"id"`
-	Name   string     `json:"name"`
-	Online bool       `json:"online"`
+	ID ComputerID `json:"id"`
+	// The computer's name.
+	Name string `json:"name"`
+	// Whether the computer is connected.
+	Online bool `json:"online"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1152,6 +1228,7 @@ func (x *ComputerStatus) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A run as the daemon reports it: its agent, when it started and its task, if any.
 type RunStatus struct {
 	RunID     RunID     `json:"runId"`
 	AgentID   AgentID   `json:"agentId"`
@@ -1174,10 +1251,14 @@ func (x *RunStatus) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The daemon's state, sent to the TUI over the local unix socket.
 type DaemonStatus struct {
+	// The computers the daemon reports.
 	Computers []ComputerStatus `json:"computers"`
-	Agents    []AgentPresence  `json:"agents"`
-	Runs      []RunStatus      `json:"runs"`
+	// The agents the daemon reports, with their presence.
+	Agents []AgentPresence `json:"agents"`
+	// The runs the daemon reports.
+	Runs []RunStatus `json:"runs"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1195,10 +1276,13 @@ func (x *DaemonStatus) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The answer to starting a device sign-in: the code the client exchanges for a token and the code the person types.
 type DeviceStartResponse struct {
+	// The code the client exchanges for a token.
 	DeviceCode string `json:"deviceCode"`
 	// What the person types on the sign-in page, e.g. WDJB-MJHT.
-	UserCode        string `json:"userCode"`
+	UserCode string `json:"userCode"`
+	// The page where the person enters the user code.
 	VerificationURI string `json:"verificationUri"`
 	// Seconds between polls.
 	Interval int64 `json:"interval"`
@@ -1221,7 +1305,9 @@ func (x *DeviceStartResponse) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Exchanges a device code for a user token once the person has approved it.
 type DeviceTokenRequest struct {
+	// The deviceCode from the sign-in start.
 	DeviceCode string `json:"deviceCode"`
 }
 
@@ -1240,6 +1326,7 @@ func (x *DeviceTokenRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A user token and the user it belongs to.
 type DeviceTokenResponse struct {
 	Token     UserToken `json:"token"`
 	User      Actor     `json:"user"`
@@ -1261,7 +1348,9 @@ func (x *DeviceTokenResponse) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Creates a pod.
 type CreatePodRequest struct {
+	// The pod's name.
 	Name string `json:"name"`
 }
 
@@ -1280,8 +1369,10 @@ func (x *CreatePodRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A pod: its id, name and creation time.
 type Pod struct {
-	ID        PodID     `json:"id"`
+	ID PodID `json:"id"`
+	// The pod's name.
 	Name      string    `json:"name"`
 	CreatedAt Timestamp `json:"createdAt"`
 }
@@ -1301,6 +1392,7 @@ func (x *Pod) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Options for a new invite. Both fields have defaults.
 type CreateInviteRequest struct {
 	// Defaults to 1.
 	MaxUses *int64 `json:"maxUses,omitempty"`
@@ -1314,11 +1406,15 @@ func (x *CreateInviteRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// An invite to a pod: its code and link, when it expires and how many uses are left.
 type Invite struct {
-	Code      string    `json:"code"`
+	// The code a person gives to accept the invite.
+	Code string `json:"code"`
+	// The link to share.
 	URL       string    `json:"url"`
 	ExpiresAt Timestamp `json:"expiresAt"`
-	UsesLeft  int64     `json:"usesLeft"`
+	// How many more times the invite can be accepted.
+	UsesLeft int64 `json:"usesLeft"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1336,6 +1432,7 @@ func (x *Invite) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The pod the person joined.
 type AcceptInviteResponse struct {
 	Pod Pod `json:"pod"`
 }
@@ -1355,6 +1452,7 @@ func (x *AcceptInviteResponse) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A computer's operating system.
 type OS string
 
 const (
@@ -1371,6 +1469,7 @@ func (x OS) Valid() bool {
 	return false
 }
 
+// A computer's CPU architecture.
 type Arch string
 
 const (
@@ -1387,7 +1486,9 @@ func (x Arch) Valid() bool {
 	return false
 }
 
+// A daemon registers its computer.
 type RegisterComputerRequest struct {
+	// A name for the computer.
 	Name string `json:"name"`
 	OS   OS     `json:"os"`
 	Arch Arch   `json:"arch"`
@@ -1408,6 +1509,7 @@ func (x *RegisterComputerRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The new computer's id and its computer token.
 type RegisterComputerResponse struct {
 	ComputerID ComputerID    `json:"computerId"`
 	Token      ComputerToken `json:"token"`
@@ -1428,9 +1530,11 @@ func (x *RegisterComputerResponse) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A computer registers an agent in a pod.
 type RegisterAgentRequest struct {
-	Harness     Harness `json:"harness"`
-	DisplayName string  `json:"displayName"`
+	Harness Harness `json:"harness"`
+	// The name shown to people.
+	DisplayName string `json:"displayName"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1448,6 +1552,7 @@ func (x *RegisterAgentRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The new agent's id.
 type RegisterAgentResponse struct {
 	AgentID AgentID `json:"agentId"`
 }
@@ -1467,6 +1572,7 @@ func (x *RegisterAgentResponse) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The daemon claims a run for a wake.
 type ClaimRunRequest struct {
 	WakeID WakeID `json:"wakeId"`
 }
@@ -1488,9 +1594,11 @@ func (x *ClaimRunRequest) UnmarshalJSON(b []byte) error {
 
 // The brief is built by the server and sent as the agent's first prompt. The run token goes to the agent; the computer token never does.
 type ClaimRunResponse struct {
-	RunID     RunID     `json:"runId"`
-	RunToken  RunToken  `json:"runToken"`
-	Brief     string    `json:"brief"`
+	RunID    RunID    `json:"runId"`
+	RunToken RunToken `json:"runToken"`
+	// The agent's first prompt, built by the server.
+	Brief string `json:"brief"`
+	// Where the agent reaches the pod's MCP server for this run.
 	MCPURL    string    `json:"mcpUrl"`
 	ExpiresAt Timestamp `json:"expiresAt"`
 }
@@ -1510,6 +1618,7 @@ func (x *ClaimRunResponse) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// How a run ended: completed, failed or cancelled.
 type RunOutcome string
 
 const (
@@ -1527,9 +1636,11 @@ func (x RunOutcome) Valid() bool {
 	return false
 }
 
+// The daemon reports that a run ended.
 type EndRunRequest struct {
-	Outcome        RunOutcome `json:"outcome"`
-	HarnessVersion *string    `json:"harnessVersion,omitempty"`
+	Outcome RunOutcome `json:"outcome"`
+	// The harness version, as the daemon reports it.
+	HarnessVersion *string `json:"harnessVersion,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1547,6 +1658,7 @@ func (x *EndRunRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The run whose tool calls to list.
 type EvidenceInput struct {
 	RunID RunID `json:"runId"`
 }
@@ -1566,7 +1678,9 @@ func (x *EvidenceInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The tool calls stamped on the run.
 type EvidenceOutput struct {
+	// The stamped tool calls, at most 500.
 	ToolCalls []ToolCallRecord `json:"toolCalls"`
 }
 
@@ -1585,6 +1699,7 @@ func (x *EvidenceOutput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Takes no fields.
 type WhoamiInput struct {
 }
 
@@ -1594,6 +1709,7 @@ func (x *WhoamiInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Your agent identity, the pod, your run and its task, if any.
 type WhoamiOutput struct {
 	Agent Actor `json:"agent"`
 	PodID PodID `json:"podId"`
@@ -1616,11 +1732,14 @@ func (x *WhoamiOutput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Which part of the pod to read.
 type ReadInput struct {
+	// Read the messages and tasks since this sequence number.
 	SinceSeq *int64 `json:"sinceSeq,omitempty"`
 	// Defaults to 20.
-	Limit    *int64 `json:"limit,omitempty"`
-	WithBody *bool  `json:"withBody,omitempty"`
+	Limit *int64 `json:"limit,omitempty"`
+	// Include message bodies. They are left out unless this is true.
+	WithBody *bool `json:"withBody,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1629,10 +1748,14 @@ func (x *ReadInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Messages and tasks, and the pod's current head sequence.
 type ReadOutput struct {
+	// Messages since sinceSeq. Bodies are left out unless withBody was true.
 	Messages []Message `json:"messages"`
-	Tasks    []Task    `json:"tasks"`
-	HeadSeq  int64     `json:"headSeq"`
+	// Tasks since sinceSeq.
+	Tasks []Task `json:"tasks"`
+	// The pod's latest sequence number.
+	HeadSeq int64 `json:"headSeq"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1650,6 +1773,7 @@ func (x *ReadOutput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// An optional status filter.
 type TaskListInput struct {
 	Status *TaskStatus `json:"status,omitempty"`
 }
@@ -1660,7 +1784,9 @@ func (x *TaskListInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The pod's tasks.
 type TaskListOutput struct {
+	// The tasks, filtered by status if one was given.
 	Tasks []Task `json:"tasks"`
 }
 
@@ -1679,6 +1805,7 @@ func (x *TaskListOutput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// Which task to claim.
 type TaskClaimInput struct {
 	TaskID TaskID `json:"taskId"`
 }
@@ -1698,6 +1825,7 @@ func (x *TaskClaimInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The claim's lease: the task and when the lease runs out.
 type TaskClaimOutput struct {
 	TaskID     TaskID    `json:"taskId"`
 	LeaseUntil Timestamp `json:"leaseUntil"`
@@ -1718,6 +1846,7 @@ func (x *TaskClaimOutput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The statuses task_update can set: every task status except open.
 type TaskUpdateStatus string
 
 const (
@@ -1736,10 +1865,12 @@ func (x TaskUpdateStatus) Valid() bool {
 	return false
 }
 
+// The new status for a task, with an optional note.
 type TaskUpdateInput struct {
 	TaskID TaskID           `json:"taskId"`
 	Status TaskUpdateStatus `json:"status"`
-	Note   *string          `json:"note,omitempty"`
+	// A short note on the change.
+	Note *string `json:"note,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1757,6 +1888,7 @@ func (x *TaskUpdateInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The stored message's id and sequence number, and the decision id when the post is an ask.
 type PostOutput struct {
 	MessageID  MessageID   `json:"messageId"`
 	Seq        Seq         `json:"seq"`
@@ -1989,6 +2121,25 @@ var Operations = []Operation{
 	{"task_update", "PATCH", "/v1/pods/{podId}/tasks/{taskId}", "run|user"},
 	{"evidence", "GET", "/v1/pods/{podId}/runs/{runId}/tool-calls", "run|user"},
 	{"post", "POST", "/v1/pods/{podId}/messages", "run|user"},
+}
+
+// ErrorStatus is the HTTP status each error code is sent with (common.json ErrorCode x-errors).
+var ErrorStatus = map[ErrorCode]int{
+	ErrorCodeInvalidInput:         400,
+	ErrorCodeSummaryRequired:      400,
+	ErrorCodeUnauthorized:         401,
+	ErrorCodeForbidden:            403,
+	ErrorCodeNotFound:             404,
+	ErrorCodeGone:                 410,
+	ErrorCodeAlreadyClaimed:       409,
+	ErrorCodeAlreadyRuled:         409,
+	ErrorCodeAuthorizationPending: 400,
+	ErrorCodeSlowDown:             400,
+	ErrorCodeExpiredToken:         400,
+	ErrorCodeInvalidGrant:         400,
+	ErrorCodeUngrounded:           422,
+	ErrorCodeRateLimited:          429,
+	ErrorCodeInternal:             500,
 }
 
 // ToolPrefix is prepended to every operation name in the MCP adapter (schema/operations.json x-mcp-prefix).

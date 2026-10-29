@@ -5,11 +5,13 @@
       "name": "jm_whoami",
       "description": "Who you are in this pod: your agent identity, the pod, your current run and the task it's for, if any.",
       "inputSchema": {
+        "description": "Takes no fields.",
         "type": "object",
         "additionalProperties": false,
         "properties": {}
       },
       "outputSchema": {
+        "description": "Your agent identity, the pod, your run and its task, if any.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -19,6 +21,7 @@
         ],
         "properties": {
           "agent": {
+            "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
             "type": "object",
             "additionalProperties": false,
             "required": [
@@ -28,6 +31,7 @@
             ],
             "properties": {
               "kind": {
+                "description": "Whether an actor is a person (human), an agent or the system.",
                 "type": "string",
                 "enum": [
                   "human",
@@ -41,6 +45,7 @@
                 "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
               },
               "displayName": {
+                "description": "The name shown to people.",
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 80
@@ -48,14 +53,17 @@
             }
           },
           "podId": {
+            "description": "The id of a pod.",
             "type": "string",
             "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "runId": {
+            "description": "The id of a run: one agent session started by a wake.",
             "type": "string",
             "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "task": {
+            "description": "A unit of work on the pod's board, with a kind and a status, and optionally an assignee and a claim.",
             "type": "object",
             "additionalProperties": false,
             "required": [
@@ -70,20 +78,23 @@
             ],
             "properties": {
               "id": {
+                "description": "The id of a task on a pod's board.",
                 "type": "string",
                 "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
               },
               "podId": {
+                "description": "The id of a pod.",
                 "type": "string",
                 "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$"
               },
               "title": {
+                "description": "What the task is called.",
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 120
               },
               "kind": {
-                "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+                "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
                 "type": "string",
                 "enum": [
                   "feature",
@@ -95,10 +106,12 @@
                 ]
               },
               "body": {
+                "description": "Details of the work, beyond the title.",
                 "type": "string",
                 "maxLength": 16384
               },
               "status": {
+                "description": "The state of a task on the board.",
                 "type": "string",
                 "enum": [
                   "open",
@@ -114,6 +127,7 @@
                 "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
               },
               "createdBy": {
+                "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
@@ -123,6 +137,7 @@
                 ],
                 "properties": {
                   "kind": {
+                    "description": "Whether an actor is a person (human), an agent or the system.",
                     "type": "string",
                     "enum": [
                       "human",
@@ -136,6 +151,7 @@
                     "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                   },
                   "displayName": {
+                    "description": "The name shown to people.",
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 80
@@ -153,6 +169,7 @@
                 ],
                 "properties": {
                   "by": {
+                    "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                     "type": "object",
                     "additionalProperties": false,
                     "required": [
@@ -162,6 +179,7 @@
                     ],
                     "properties": {
                       "kind": {
+                        "description": "Whether an actor is a person (human), an agent or the system.",
                         "type": "string",
                         "enum": [
                           "human",
@@ -175,6 +193,7 @@
                         "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                       },
                       "displayName": {
+                        "description": "The name shown to people.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 80
@@ -182,6 +201,7 @@
                     }
                   },
                   "runId": {
+                    "description": "The id of a run: one agent session started by a wake.",
                     "type": "string",
                     "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
                   },
@@ -211,10 +231,12 @@
       "name": "jm_read",
       "description": "Read the pod: message headlines and tasks since a sequence number. Bodies are left out unless withBody is true.",
       "inputSchema": {
+        "description": "Which part of the pod to read.",
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "sinceSeq": {
+            "description": "Read the messages and tasks since this sequence number.",
             "type": "integer",
             "minimum": 0
           },
@@ -225,11 +247,13 @@
             "maximum": 50
           },
           "withBody": {
+            "description": "Include message bodies. They are left out unless this is true.",
             "type": "boolean"
           }
         }
       },
       "outputSchema": {
+        "description": "Messages and tasks, and the pod's current head sequence.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -239,8 +263,10 @@
         ],
         "properties": {
           "messages": {
+            "description": "Messages since sinceSeq. Bodies are left out unless withBody was true.",
             "type": "array",
             "items": {
+              "description": "What the pod stores and sends: PostInput plus the fields only the server sets.",
               "type": "object",
               "additionalProperties": false,
               "required": [
@@ -255,6 +281,7 @@
               ],
               "properties": {
                 "id": {
+                  "description": "The id of a message posted to a pod.",
                   "type": "string",
                   "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
@@ -264,10 +291,12 @@
                   "minimum": 1
                 },
                 "podId": {
+                  "description": "The id of a pod.",
                   "type": "string",
                   "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "author": {
+                  "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
@@ -277,6 +306,7 @@
                   ],
                   "properties": {
                     "kind": {
+                      "description": "Whether an actor is a person (human), an agent or the system.",
                       "type": "string",
                       "enum": [
                         "human",
@@ -290,6 +320,7 @@
                       "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
                     "displayName": {
+                      "description": "The name shown to people.",
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 80
@@ -302,20 +333,24 @@
                   "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
                 },
                 "runId": {
+                  "description": "The id of a run: one agent session started by a wake.",
                   "type": "string",
                   "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "threadOf": {
+                  "description": "The id of a message posted to a pod.",
                   "type": "string",
                   "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "summary": {
+                  "description": "The headline, outcome first. One line, at most 120 characters.",
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 120,
                   "pattern": "^[^\\r\\n]*$"
                 },
                 "kind": {
+                  "description": "What a post is. An ask needs a ruling and carries options; progress and fyi posts never notify anyone.",
                   "type": "string",
                   "enum": [
                     "result",
@@ -326,6 +361,7 @@
                   ]
                 },
                 "status": {
+                  "description": "The status a post reports for its work.",
                   "type": "string",
                   "enum": [
                     "done",
@@ -351,15 +387,18 @@
                       "maxProperties": 1,
                       "properties": {
                         "userIds": {
+                          "description": "The users who must act.",
                           "type": "array",
                           "minItems": 1,
                           "maxItems": 20,
                           "items": {
+                            "description": "The id of a user, a person signed in with GitHub.",
                             "type": "string",
                             "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$"
                           }
                         },
                         "role": {
+                          "description": "A member's role in a pod.",
                           "type": "string",
                           "enum": [
                             "member",
@@ -369,6 +408,7 @@
                       }
                     },
                     "action": {
+                      "description": "What the people a post names are asked to do.",
                       "type": "string",
                       "enum": [
                         "approve",
@@ -381,10 +421,12 @@
                   }
                 },
                 "options": {
+                  "description": "The choices of an ask, 2 to 5.",
                   "type": "array",
                   "minItems": 2,
                   "maxItems": 5,
                   "items": {
+                    "description": "One choice an ask offers: a label and what happens if it is picked.",
                     "type": "object",
                     "additionalProperties": false,
                     "required": [
@@ -394,6 +436,7 @@
                     ],
                     "properties": {
                       "id": {
+                        "description": "The id of an option in an ask. An ask has 2 to 5 options, a to e.",
                         "type": "string",
                         "enum": [
                           "a",
@@ -404,6 +447,7 @@
                         ]
                       },
                       "label": {
+                        "description": "Short text naming the option.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 40
@@ -429,6 +473,7 @@
                   ],
                   "properties": {
                     "happened": {
+                      "description": "What happened, as 1 to 5 grounded claims.",
                       "type": "array",
                       "minItems": 1,
                       "maxItems": 5,
@@ -441,11 +486,13 @@
                         ],
                         "properties": {
                           "text": {
+                            "description": "The sentence. Every number in it must appear in the evidence it cites.",
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 240
                           },
                           "toolCalls": {
+                            "description": "Ids of tool calls that back the claim. A claim cites at least one tool call or message.",
                             "type": "array",
                             "maxItems": 8,
                             "items": {
@@ -455,9 +502,11 @@
                             }
                           },
                           "messages": {
+                            "description": "Ids of messages that back the claim.",
                             "type": "array",
                             "maxItems": 4,
                             "items": {
+                              "description": "The id of a message posted to a pod.",
                               "type": "string",
                               "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                             }
@@ -478,11 +527,13 @@
                         ],
                         "properties": {
                           "text": {
+                            "description": "The sentence. Every number in it must appear in the evidence it cites.",
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 240
                           },
                           "toolCalls": {
+                            "description": "Ids of tool calls that back the claim. A claim cites at least one tool call or message.",
                             "type": "array",
                             "maxItems": 8,
                             "items": {
@@ -492,9 +543,11 @@
                             }
                           },
                           "messages": {
+                            "description": "Ids of messages that back the claim.",
                             "type": "array",
                             "maxItems": 4,
                             "items": {
+                              "description": "The id of a message posted to a pod.",
                               "type": "string",
                               "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                             }
@@ -511,11 +564,13 @@
                       ],
                       "properties": {
                         "text": {
+                          "description": "The sentence. Every number in it must appear in the evidence it cites.",
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 240
                         },
                         "toolCalls": {
+                          "description": "Ids of tool calls that back the claim. A claim cites at least one tool call or message.",
                           "type": "array",
                           "maxItems": 8,
                           "items": {
@@ -525,9 +580,11 @@
                           }
                         },
                         "messages": {
+                          "description": "Ids of messages that back the claim.",
                           "type": "array",
                           "maxItems": 4,
                           "items": {
+                            "description": "The id of a message posted to a pod.",
                             "type": "string",
                             "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                           }
@@ -535,6 +592,7 @@
                       }
                     },
                     "recommendation": {
+                      "description": "The option the agent recommends and the grounded reason why.",
                       "type": "object",
                       "additionalProperties": false,
                       "required": [
@@ -543,6 +601,7 @@
                       ],
                       "properties": {
                         "option": {
+                          "description": "The id of an option in an ask. An ask has 2 to 5 options, a to e.",
                           "type": "string",
                           "enum": [
                             "a",
@@ -561,11 +620,13 @@
                           ],
                           "properties": {
                             "text": {
+                              "description": "The sentence. Every number in it must appear in the evidence it cites.",
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 240
                             },
                             "toolCalls": {
+                              "description": "Ids of tool calls that back the claim. A claim cites at least one tool call or message.",
                               "type": "array",
                               "maxItems": 8,
                               "items": {
@@ -575,9 +636,11 @@
                               }
                             },
                             "messages": {
+                              "description": "Ids of messages that back the claim.",
                               "type": "array",
                               "maxItems": 4,
                               "items": {
+                                "description": "The id of a message posted to a pod.",
                                 "type": "string",
                                 "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                               }
@@ -589,13 +652,16 @@
                   }
                 },
                 "taskId": {
+                  "description": "The id of a task on a pod's board.",
                   "type": "string",
                   "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "links": {
+                  "description": "Related links, at most 8.",
                   "type": "array",
                   "maxItems": 8,
                   "items": {
+                    "description": "A labelled https link to something related to a post, such as a PR, commit, task, doc, file or log.",
                     "type": "object",
                     "additionalProperties": false,
                     "required": [
@@ -605,6 +671,7 @@
                     ],
                     "properties": {
                       "label": {
+                        "description": "The text shown for the link.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 40
@@ -616,6 +683,7 @@
                         "pattern": "^https://[^/\\s@]+(/[^\\s]*)?$"
                       },
                       "type": {
+                        "description": "What a link points to.",
                         "type": "string",
                         "enum": [
                           "pr",
@@ -630,14 +698,17 @@
                   }
                 },
                 "caveat": {
+                  "description": "What isn't verified.",
                   "type": "string",
                   "maxLength": 160
                 },
                 "body": {
+                  "description": "Markdown. Folded by default in clients.",
                   "type": "string",
                   "maxLength": 16384
                 },
                 "decision": {
+                  "description": "The choice an ask carries. It is open until it is ruled, once.",
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
@@ -646,10 +717,12 @@
                   ],
                   "properties": {
                     "id": {
+                      "description": "The id of a decision, the open choice an ask carries.",
                       "type": "string",
                       "pattern": "^dec_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
                     "state": {
+                      "description": "The state of a decision: open, ruled or expired.",
                       "type": "string",
                       "enum": [
                         "open",
@@ -658,6 +731,7 @@
                       ]
                     },
                     "ruling": {
+                      "description": "A member's choice on a decision: the option, who chose it and when. Made once, then frozen.",
                       "type": "object",
                       "additionalProperties": false,
                       "required": [
@@ -667,6 +741,7 @@
                       ],
                       "properties": {
                         "optionId": {
+                          "description": "The id of an option in an ask. An ask has 2 to 5 options, a to e.",
                           "type": "string",
                           "enum": [
                             "a",
@@ -677,6 +752,7 @@
                           ]
                         },
                         "by": {
+                          "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                           "type": "object",
                           "additionalProperties": false,
                           "required": [
@@ -686,6 +762,7 @@
                           ],
                           "properties": {
                             "kind": {
+                              "description": "Whether an actor is a person (human), an agent or the system.",
                               "type": "string",
                               "enum": [
                                 "human",
@@ -699,6 +776,7 @@
                               "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                             },
                             "displayName": {
+                              "description": "The name shown to people.",
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 80
@@ -730,14 +808,17 @@
                   ],
                   "properties": {
                     "runId": {
+                      "description": "The id of a run: one agent session started by a wake.",
                       "type": "string",
                       "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
                     "agentId": {
+                      "description": "The id of an agent: a registered agent identity run by one harness on one computer.",
                       "type": "string",
                       "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
                     "computerId": {
+                      "description": "The id of a computer: a machine running the daemon, bound to one user.",
                       "type": "string",
                       "pattern": "^cmp_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
@@ -771,10 +852,12 @@
                       "minimum": 0
                     },
                     "taskId": {
+                      "description": "The id of a task on a pod's board.",
                       "type": "string",
                       "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
                     "wakeReason": {
+                      "description": "Why a wake was sent: a task assigned to the agent, an @mention of it, or a ruling on its own ask.",
                       "type": "string",
                       "enum": [
                         "task_assigned",
@@ -788,8 +871,10 @@
             }
           },
           "tasks": {
+            "description": "Tasks since sinceSeq.",
             "type": "array",
             "items": {
+              "description": "A unit of work on the pod's board, with a kind and a status, and optionally an assignee and a claim.",
               "type": "object",
               "additionalProperties": false,
               "required": [
@@ -804,20 +889,23 @@
               ],
               "properties": {
                 "id": {
+                  "description": "The id of a task on a pod's board.",
                   "type": "string",
                   "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "podId": {
+                  "description": "The id of a pod.",
                   "type": "string",
                   "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "title": {
+                  "description": "What the task is called.",
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 120
                 },
                 "kind": {
-                  "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+                  "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
                   "type": "string",
                   "enum": [
                     "feature",
@@ -829,10 +917,12 @@
                   ]
                 },
                 "body": {
+                  "description": "Details of the work, beyond the title.",
                   "type": "string",
                   "maxLength": 16384
                 },
                 "status": {
+                  "description": "The state of a task on the board.",
                   "type": "string",
                   "enum": [
                     "open",
@@ -848,6 +938,7 @@
                   "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "createdBy": {
+                  "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
@@ -857,6 +948,7 @@
                   ],
                   "properties": {
                     "kind": {
+                      "description": "Whether an actor is a person (human), an agent or the system.",
                       "type": "string",
                       "enum": [
                         "human",
@@ -870,6 +962,7 @@
                       "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
                     "displayName": {
+                      "description": "The name shown to people.",
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 80
@@ -887,6 +980,7 @@
                   ],
                   "properties": {
                     "by": {
+                      "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                       "type": "object",
                       "additionalProperties": false,
                       "required": [
@@ -896,6 +990,7 @@
                       ],
                       "properties": {
                         "kind": {
+                          "description": "Whether an actor is a person (human), an agent or the system.",
                           "type": "string",
                           "enum": [
                             "human",
@@ -909,6 +1004,7 @@
                           "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                         },
                         "displayName": {
+                          "description": "The name shown to people.",
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 80
@@ -916,6 +1012,7 @@
                       }
                     },
                     "runId": {
+                      "description": "The id of a run: one agent session started by a wake.",
                       "type": "string",
                       "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
@@ -940,6 +1037,7 @@
             }
           },
           "headSeq": {
+            "description": "The pod's latest sequence number.",
             "type": "integer",
             "minimum": 0
           }
@@ -950,10 +1048,12 @@
       "name": "jm_task_list",
       "description": "List the pod's tasks, optionally filtered by status.",
       "inputSchema": {
+        "description": "An optional status filter.",
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "status": {
+            "description": "The state of a task on the board.",
             "type": "string",
             "enum": [
               "open",
@@ -966,6 +1066,7 @@
         }
       },
       "outputSchema": {
+        "description": "The pod's tasks.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -973,8 +1074,10 @@
         ],
         "properties": {
           "tasks": {
+            "description": "The tasks, filtered by status if one was given.",
             "type": "array",
             "items": {
+              "description": "A unit of work on the pod's board, with a kind and a status, and optionally an assignee and a claim.",
               "type": "object",
               "additionalProperties": false,
               "required": [
@@ -989,20 +1092,23 @@
               ],
               "properties": {
                 "id": {
+                  "description": "The id of a task on a pod's board.",
                   "type": "string",
                   "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "podId": {
+                  "description": "The id of a pod.",
                   "type": "string",
                   "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "title": {
+                  "description": "What the task is called.",
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 120
                 },
                 "kind": {
-                  "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+                  "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
                   "type": "string",
                   "enum": [
                     "feature",
@@ -1014,10 +1120,12 @@
                   ]
                 },
                 "body": {
+                  "description": "Details of the work, beyond the title.",
                   "type": "string",
                   "maxLength": 16384
                 },
                 "status": {
+                  "description": "The state of a task on the board.",
                   "type": "string",
                   "enum": [
                     "open",
@@ -1033,6 +1141,7 @@
                   "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "createdBy": {
+                  "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
@@ -1042,6 +1151,7 @@
                   ],
                   "properties": {
                     "kind": {
+                      "description": "Whether an actor is a person (human), an agent or the system.",
                       "type": "string",
                       "enum": [
                         "human",
@@ -1055,6 +1165,7 @@
                       "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
                     "displayName": {
+                      "description": "The name shown to people.",
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 80
@@ -1072,6 +1183,7 @@
                   ],
                   "properties": {
                     "by": {
+                      "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                       "type": "object",
                       "additionalProperties": false,
                       "required": [
@@ -1081,6 +1193,7 @@
                       ],
                       "properties": {
                         "kind": {
+                          "description": "Whether an actor is a person (human), an agent or the system.",
                           "type": "string",
                           "enum": [
                             "human",
@@ -1094,6 +1207,7 @@
                           "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                         },
                         "displayName": {
+                          "description": "The name shown to people.",
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 80
@@ -1101,6 +1215,7 @@
                       }
                     },
                     "runId": {
+                      "description": "The id of a run: one agent session started by a wake.",
                       "type": "string",
                       "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
                     },
@@ -1131,6 +1246,7 @@
       "name": "jm_task_claim",
       "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every operation you make on this run.",
       "inputSchema": {
+        "description": "Which task to claim.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1138,12 +1254,14 @@
         ],
         "properties": {
           "taskId": {
+            "description": "The id of a task on a pod's board.",
             "type": "string",
             "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
           }
         }
       },
       "outputSchema": {
+        "description": "The claim's lease: the task and when the lease runs out.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1152,6 +1270,7 @@
         ],
         "properties": {
           "taskId": {
+            "description": "The id of a task on a pod's board.",
             "type": "string",
             "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
           },
@@ -1167,6 +1286,7 @@
       "name": "jm_task_update",
       "description": "Set a task's status, with an optional short note. Use done only when the task's work is finished.",
       "inputSchema": {
+        "description": "The new status for a task, with an optional note.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1175,10 +1295,12 @@
         ],
         "properties": {
           "taskId": {
+            "description": "The id of a task on a pod's board.",
             "type": "string",
             "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "status": {
+            "description": "The statuses task_update can set: every task status except open.",
             "type": "string",
             "enum": [
               "in_progress",
@@ -1188,12 +1310,14 @@
             ]
           },
           "note": {
+            "description": "A short note on the change.",
             "type": "string",
             "maxLength": 500
           }
         }
       },
       "outputSchema": {
+        "description": "A unit of work on the pod's board, with a kind and a status, and optionally an assignee and a claim.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1208,20 +1332,23 @@
         ],
         "properties": {
           "id": {
+            "description": "The id of a task on a pod's board.",
             "type": "string",
             "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "podId": {
+            "description": "The id of a pod.",
             "type": "string",
             "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "title": {
+            "description": "What the task is called.",
             "type": "string",
             "minLength": 1,
             "maxLength": 120
           },
           "kind": {
-            "description": "What kind of work a task is, set by whoever creates it. Required so policy (a fixes-only freeze, review depth, routing) never has to guess from the title. security is never folded into fix: it always gets its own review.",
+            "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
             "type": "string",
             "enum": [
               "feature",
@@ -1233,10 +1360,12 @@
             ]
           },
           "body": {
+            "description": "Details of the work, beyond the title.",
             "type": "string",
             "maxLength": 16384
           },
           "status": {
+            "description": "The state of a task on the board.",
             "type": "string",
             "enum": [
               "open",
@@ -1252,6 +1381,7 @@
             "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "createdBy": {
+            "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
             "type": "object",
             "additionalProperties": false,
             "required": [
@@ -1261,6 +1391,7 @@
             ],
             "properties": {
               "kind": {
+                "description": "Whether an actor is a person (human), an agent or the system.",
                 "type": "string",
                 "enum": [
                   "human",
@@ -1274,6 +1405,7 @@
                 "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
               },
               "displayName": {
+                "description": "The name shown to people.",
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 80
@@ -1291,6 +1423,7 @@
             ],
             "properties": {
               "by": {
+                "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
@@ -1300,6 +1433,7 @@
                 ],
                 "properties": {
                   "kind": {
+                    "description": "Whether an actor is a person (human), an agent or the system.",
                     "type": "string",
                     "enum": [
                       "human",
@@ -1313,6 +1447,7 @@
                     "pattern": "^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$"
                   },
                   "displayName": {
+                    "description": "The name shown to people.",
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 80
@@ -1320,6 +1455,7 @@
                 }
               },
               "runId": {
+                "description": "The id of a run: one agent session started by a wake.",
                 "type": "string",
                 "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
               },
@@ -1347,6 +1483,7 @@
       "name": "jm_evidence",
       "description": "The stamped tool calls on a run: what the pod and the daemon saw it do. Cite their ids in an ask's context; you can read these but never write them.",
       "inputSchema": {
+        "description": "The run whose tool calls to list.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1354,12 +1491,14 @@
         ],
         "properties": {
           "runId": {
+            "description": "The id of a run: one agent session started by a wake.",
             "type": "string",
             "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
           }
         }
       },
       "outputSchema": {
+        "description": "The tool calls stamped on the run.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1367,6 +1506,7 @@
         ],
         "properties": {
           "toolCalls": {
+            "description": "The stamped tool calls, at most 500.",
             "type": "array",
             "maxItems": 500,
             "items": {
@@ -1389,6 +1529,7 @@
                   "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "runId": {
+                  "description": "The id of a run: one agent session started by a wake.",
                   "type": "string",
                   "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
@@ -1407,6 +1548,7 @@
                   "maxLength": 64
                 },
                 "status": {
+                  "description": "Whether a tool call succeeded (ok) or failed (error).",
                   "type": "string",
                   "enum": [
                     "ok",
@@ -1438,6 +1580,7 @@
       "name": "jm_post",
       "description": "Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one.",
       "inputSchema": {
+        "description": "What an agent writes through the post operation. A field only the server sets is not accepted.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1454,6 +1597,7 @@
             "pattern": "^[^\\r\\n]*$"
           },
           "kind": {
+            "description": "What a post is. An ask needs a ruling and carries options; progress and fyi posts never notify anyone.",
             "type": "string",
             "enum": [
               "result",
@@ -1464,6 +1608,7 @@
             ]
           },
           "status": {
+            "description": "The status a post reports for its work.",
             "type": "string",
             "enum": [
               "done",
@@ -1489,15 +1634,18 @@
                 "maxProperties": 1,
                 "properties": {
                   "userIds": {
+                    "description": "The users who must act.",
                     "type": "array",
                     "minItems": 1,
                     "maxItems": 20,
                     "items": {
+                      "description": "The id of a user, a person signed in with GitHub.",
                       "type": "string",
                       "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$"
                     }
                   },
                   "role": {
+                    "description": "A member's role in a pod.",
                     "type": "string",
                     "enum": [
                       "member",
@@ -1507,6 +1655,7 @@
                 }
               },
               "action": {
+                "description": "What the people a post names are asked to do.",
                 "type": "string",
                 "enum": [
                   "approve",
@@ -1519,10 +1668,12 @@
             }
           },
           "options": {
+            "description": "The choices, 2 to 5. Required when kind is ask, and only allowed then.",
             "type": "array",
             "minItems": 2,
             "maxItems": 5,
             "items": {
+              "description": "One choice an ask offers: a label and what happens if it is picked.",
               "type": "object",
               "additionalProperties": false,
               "required": [
@@ -1532,6 +1683,7 @@
               ],
               "properties": {
                 "id": {
+                  "description": "The id of an option in an ask. An ask has 2 to 5 options, a to e.",
                   "type": "string",
                   "enum": [
                     "a",
@@ -1542,6 +1694,7 @@
                   ]
                 },
                 "label": {
+                  "description": "Short text naming the option.",
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 40
@@ -1567,6 +1720,7 @@
             ],
             "properties": {
               "happened": {
+                "description": "What happened, as 1 to 5 grounded claims.",
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 5,
@@ -1579,11 +1733,13 @@
                   ],
                   "properties": {
                     "text": {
+                      "description": "The sentence. Every number in it must appear in the evidence it cites.",
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 240
                     },
                     "toolCalls": {
+                      "description": "Ids of tool calls that back the claim. A claim cites at least one tool call or message.",
                       "type": "array",
                       "maxItems": 8,
                       "items": {
@@ -1593,9 +1749,11 @@
                       }
                     },
                     "messages": {
+                      "description": "Ids of messages that back the claim.",
                       "type": "array",
                       "maxItems": 4,
                       "items": {
+                        "description": "The id of a message posted to a pod.",
                         "type": "string",
                         "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                       }
@@ -1616,11 +1774,13 @@
                   ],
                   "properties": {
                     "text": {
+                      "description": "The sentence. Every number in it must appear in the evidence it cites.",
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 240
                     },
                     "toolCalls": {
+                      "description": "Ids of tool calls that back the claim. A claim cites at least one tool call or message.",
                       "type": "array",
                       "maxItems": 8,
                       "items": {
@@ -1630,9 +1790,11 @@
                       }
                     },
                     "messages": {
+                      "description": "Ids of messages that back the claim.",
                       "type": "array",
                       "maxItems": 4,
                       "items": {
+                        "description": "The id of a message posted to a pod.",
                         "type": "string",
                         "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                       }
@@ -1649,11 +1811,13 @@
                 ],
                 "properties": {
                   "text": {
+                    "description": "The sentence. Every number in it must appear in the evidence it cites.",
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 240
                   },
                   "toolCalls": {
+                    "description": "Ids of tool calls that back the claim. A claim cites at least one tool call or message.",
                     "type": "array",
                     "maxItems": 8,
                     "items": {
@@ -1663,9 +1827,11 @@
                     }
                   },
                   "messages": {
+                    "description": "Ids of messages that back the claim.",
                     "type": "array",
                     "maxItems": 4,
                     "items": {
+                      "description": "The id of a message posted to a pod.",
                       "type": "string",
                       "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                     }
@@ -1673,6 +1839,7 @@
                 }
               },
               "recommendation": {
+                "description": "The option the agent recommends and the grounded reason why.",
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
@@ -1681,6 +1848,7 @@
                 ],
                 "properties": {
                   "option": {
+                    "description": "The id of an option in an ask. An ask has 2 to 5 options, a to e.",
                     "type": "string",
                     "enum": [
                       "a",
@@ -1699,11 +1867,13 @@
                     ],
                     "properties": {
                       "text": {
+                        "description": "The sentence. Every number in it must appear in the evidence it cites.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 240
                       },
                       "toolCalls": {
+                        "description": "Ids of tool calls that back the claim. A claim cites at least one tool call or message.",
                         "type": "array",
                         "maxItems": 8,
                         "items": {
@@ -1713,9 +1883,11 @@
                         }
                       },
                       "messages": {
+                        "description": "Ids of messages that back the claim.",
                         "type": "array",
                         "maxItems": 4,
                         "items": {
+                          "description": "The id of a message posted to a pod.",
                           "type": "string",
                           "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
                         }
@@ -1727,13 +1899,16 @@
             }
           },
           "taskId": {
+            "description": "The id of a task on a pod's board.",
             "type": "string",
             "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "links": {
+            "description": "Related links, at most 8.",
             "type": "array",
             "maxItems": 8,
             "items": {
+              "description": "A labelled https link to something related to a post, such as a PR, commit, task, doc, file or log.",
               "type": "object",
               "additionalProperties": false,
               "required": [
@@ -1743,6 +1918,7 @@
               ],
               "properties": {
                 "label": {
+                  "description": "The text shown for the link.",
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 40
@@ -1754,6 +1930,7 @@
                   "pattern": "^https://[^/\\s@]+(/[^\\s]*)?$"
                 },
                 "type": {
+                  "description": "What a link points to.",
                   "type": "string",
                   "enum": [
                     "pr",
@@ -1780,6 +1957,7 @@
         }
       },
       "outputSchema": {
+        "description": "The stored message's id and sequence number, and the decision id when the post is an ask.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1788,6 +1966,7 @@
         ],
         "properties": {
           "messageId": {
+            "description": "The id of a message posted to a pod.",
             "type": "string",
             "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
           },
@@ -1797,6 +1976,7 @@
             "minimum": 1
           },
           "decisionId": {
+            "description": "The id of a decision, the open choice an ask carries.",
             "type": "string",
             "pattern": "^dec_[0-9A-HJKMNP-TV-Z]{26}$"
           }

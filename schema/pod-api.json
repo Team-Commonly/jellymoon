@@ -23,50 +23,56 @@
   ],
   "$defs": {
     "DeviceStartResponse": {
+      "description": "The answer to starting a device sign-in: the code the client exchanges for a token and the code the person types.",
       "type": "object",
       "additionalProperties": false,
       "required": ["deviceCode", "userCode", "verificationUri", "interval", "expiresIn"],
       "properties": {
-        "deviceCode": { "type": "string", "minLength": 32, "maxLength": 128 },
+        "deviceCode": { "description": "The code the client exchanges for a token.", "type": "string", "minLength": 32, "maxLength": 128 },
         "userCode": { "description": "What the person types on the sign-in page, e.g. WDJB-MJHT.", "type": "string", "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$" },
-        "verificationUri": { "type": "string", "pattern": "^https?://" },
+        "verificationUri": { "description": "The page where the person enters the user code.", "type": "string", "pattern": "^https?://" },
         "interval": { "description": "Seconds between polls.", "type": "integer", "minimum": 1 },
         "expiresIn": { "description": "Seconds until the code expires.", "type": "integer", "minimum": 1 }
       }
     },
     "DeviceTokenRequest": {
+      "description": "Exchanges a device code for a user token once the person has approved it.",
       "type": "object",
       "additionalProperties": false,
       "required": ["deviceCode"],
-      "properties": { "deviceCode": { "type": "string", "minLength": 32, "maxLength": 128 } }
+      "properties": {
+        "deviceCode": { "description": "The deviceCode from the sign-in start.", "type": "string", "minLength": 32, "maxLength": 128 }
+      }
     },
     "DeviceTokenResponse": {
+      "description": "A user token and the user it belongs to.",
       "type": "object",
       "additionalProperties": false,
       "required": ["token", "user", "expiresAt"],
-      "properties": {
-        "token": { "$ref": "tokens.json#/$defs/UserToken" },
-        "user": { "$ref": "common.json#/$defs/Actor" },
-        "expiresAt": { "$ref": "common.json#/$defs/Timestamp" }
-      }
+      "properties": { "token": { "$ref": "tokens.json#/$defs/UserToken" }, "user": { "$ref": "common.json#/$defs/Actor" }, "expiresAt": { "$ref": "common.json#/$defs/Timestamp" } }
     },
     "CreatePodRequest": {
+      "description": "Creates a pod.",
       "type": "object",
       "additionalProperties": false,
       "required": ["name"],
-      "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 80 } }
+      "properties": {
+        "name": { "description": "The pod's name.", "type": "string", "minLength": 1, "maxLength": 80 }
+      }
     },
     "Pod": {
+      "description": "A pod: its id, name and creation time.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "name", "createdAt"],
       "properties": {
         "id": { "$ref": "common.json#/$defs/PodId" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "name": { "description": "The pod's name.", "type": "string", "minLength": 1, "maxLength": 80 },
         "createdAt": { "$ref": "common.json#/$defs/Timestamp" }
       }
     },
     "CreateInviteRequest": {
+      "description": "Options for a new invite. Both fields have defaults.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -75,59 +81,63 @@
       }
     },
     "Invite": {
+      "description": "An invite to a pod: its code and link, when it expires and how many uses are left.",
       "type": "object",
       "additionalProperties": false,
       "required": ["code", "url", "expiresAt", "usesLeft"],
       "properties": {
-        "code": { "type": "string", "pattern": "^inv_[0-9A-Za-z]{22}$" },
-        "url": { "type": "string", "pattern": "^https?://" },
+        "code": { "description": "The code a person gives to accept the invite.", "type": "string", "pattern": "^inv_[0-9A-Za-z]{22}$" },
+        "url": { "description": "The link to share.", "type": "string", "pattern": "^https?://" },
         "expiresAt": { "$ref": "common.json#/$defs/Timestamp" },
-        "usesLeft": { "type": "integer", "minimum": 0 }
+        "usesLeft": { "description": "How many more times the invite can be accepted.", "type": "integer", "minimum": 0 }
       }
     },
     "AcceptInviteResponse": {
+      "description": "The pod the person joined.",
       "type": "object",
       "additionalProperties": false,
       "required": ["pod"],
       "properties": { "pod": { "$ref": "#/$defs/Pod" } }
     },
-    "OS": { "type": "string", "enum": ["darwin", "linux"] },
-    "Arch": { "type": "string", "enum": ["arm64", "amd64"] },
+    "OS": { "description": "A computer's operating system.", "type": "string", "enum": ["darwin", "linux"] },
+    "Arch": { "description": "A computer's CPU architecture.", "type": "string", "enum": ["arm64", "amd64"] },
     "RegisterComputerRequest": {
+      "description": "A daemon registers its computer.",
       "type": "object",
       "additionalProperties": false,
       "required": ["name", "os", "arch"],
       "properties": {
-        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "name": { "description": "A name for the computer.", "type": "string", "minLength": 1, "maxLength": 80 },
         "os": { "$ref": "#/$defs/OS" },
         "arch": { "$ref": "#/$defs/Arch" }
       }
     },
     "RegisterComputerResponse": {
+      "description": "The new computer's id and its computer token.",
       "type": "object",
       "additionalProperties": false,
       "required": ["computerId", "token"],
-      "properties": {
-        "computerId": { "$ref": "common.json#/$defs/ComputerId" },
-        "token": { "$ref": "tokens.json#/$defs/ComputerToken" }
-      }
+      "properties": { "computerId": { "$ref": "common.json#/$defs/ComputerId" }, "token": { "$ref": "tokens.json#/$defs/ComputerToken" } }
     },
     "RegisterAgentRequest": {
+      "description": "A computer registers an agent in a pod.",
       "type": "object",
       "additionalProperties": false,
       "required": ["harness", "displayName"],
       "properties": {
         "harness": { "$ref": "common.json#/$defs/Harness" },
-        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 }
+        "displayName": { "description": "The name shown to people.", "type": "string", "minLength": 1, "maxLength": 80 }
       }
     },
     "RegisterAgentResponse": {
+      "description": "The new agent's id.",
       "type": "object",
       "additionalProperties": false,
       "required": ["agentId"],
       "properties": { "agentId": { "$ref": "common.json#/$defs/AgentId" } }
     },
     "ClaimRunRequest": {
+      "description": "The daemon claims a run for a wake.",
       "type": "object",
       "additionalProperties": false,
       "required": ["wakeId"],
@@ -141,19 +151,20 @@
       "properties": {
         "runId": { "$ref": "common.json#/$defs/RunId" },
         "runToken": { "$ref": "tokens.json#/$defs/RunToken" },
-        "brief": { "type": "string", "minLength": 1, "maxLength": 32768 },
-        "mcpUrl": { "type": "string", "pattern": "^https?://" },
+        "brief": { "description": "The agent's first prompt, built by the server.", "type": "string", "minLength": 1, "maxLength": 32768 },
+        "mcpUrl": { "description": "Where the agent reaches the pod's MCP server for this run.", "type": "string", "pattern": "^https?://" },
         "expiresAt": { "$ref": "common.json#/$defs/Timestamp" }
       }
     },
-    "RunOutcome": { "type": "string", "enum": ["completed", "failed", "cancelled"] },
+    "RunOutcome": { "description": "How a run ended: completed, failed or cancelled.", "type": "string", "enum": ["completed", "failed", "cancelled"] },
     "EndRunRequest": {
+      "description": "The daemon reports that a run ended.",
       "type": "object",
       "additionalProperties": false,
       "required": ["outcome"],
       "properties": {
         "outcome": { "$ref": "#/$defs/RunOutcome" },
-        "harnessVersion": { "type": "string", "maxLength": 64 }
+        "harnessVersion": { "description": "The harness version, as the daemon reports it.", "type": "string", "maxLength": 64 }
       }
     }
   }

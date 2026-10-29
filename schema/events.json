@@ -36,46 +36,61 @@
       "required": ["runId", "name", "status", "startedAt", "endedAt"],
       "properties": {
         "runId": { "$ref": "common.json#/$defs/RunId" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "name": { "description": "The tool's name as the harness reports it.", "type": "string", "minLength": 1, "maxLength": 64 },
         "status": { "$ref": "message.json#/$defs/ToolCallStatus" },
         "startedAt": { "$ref": "common.json#/$defs/Timestamp" },
         "endedAt": { "$ref": "common.json#/$defs/Timestamp" },
-        "digest": { "type": "string", "maxLength": 600 }
+        "digest": { "description": "The start of the call's input and output, cut to 600 characters.", "type": "string", "maxLength": 600 }
       }
     },
     "EventType": {
+      "description": "Every kind of socket frame. x-variants gives each one its direction and its data.",
       "type": "string",
       "enum": [
-        "hello", "message.created", "message.updated", "task.created", "task.updated", "task.claimed",
-        "presence.changed", "run.wake", "error", "subscribe", "message.post", "task.create",
-        "decision.rule", "presence.heartbeat", "wake.ack", "run.toolcall", "daemon.status"
+        "hello",
+        "message.created",
+        "message.updated",
+        "task.created",
+        "task.updated",
+        "task.claimed",
+        "presence.changed",
+        "run.wake",
+        "error",
+        "subscribe",
+        "message.post",
+        "task.create",
+        "decision.rule",
+        "presence.heartbeat",
+        "wake.ack",
+        "run.toolcall",
+        "daemon.status"
       ]
     },
     "Envelope": {
+      "description": "The frame every socket message is sent in.",
       "type": "object",
       "additionalProperties": false,
       "required": ["v", "type", "podId", "data"],
       "properties": {
-        "v": { "type": "integer", "const": 1 },
+        "v": { "description": "The envelope version. Always 1.", "type": "integer", "const": 1 },
         "type": { "$ref": "#/$defs/EventType" },
-        "seq": { "$ref": "common.json#/$defs/Seq" },
+        "seq": { "description": "The pod's event number. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.", "$ref": "common.json#/$defs/Seq" },
         "podId": { "$ref": "common.json#/$defs/PodId" },
-        "ts": { "$ref": "common.json#/$defs/Timestamp" },
+        "ts": { "description": "When the pod sent the frame. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.", "$ref": "common.json#/$defs/Timestamp" },
         "actor": { "$ref": "common.json#/$defs/Actor" },
-        "data": { "description": "Matches the definition x-variants names for type.", "type": "object" }
+        "data": { "description": "The event's payload: the definition x-variants names for type. Like every object definition it accepts only its listed fields.", "type": "object" }
       }
     },
     "Member": {
+      "description": "A member of a pod and the role they hold.",
       "type": "object",
       "additionalProperties": false,
       "required": ["actor", "role"],
-      "properties": {
-        "actor": { "$ref": "common.json#/$defs/Actor" },
-        "role": { "$ref": "message.json#/$defs/MemberRole" }
-      }
+      "properties": { "actor": { "$ref": "common.json#/$defs/Actor" }, "role": { "$ref": "message.json#/$defs/MemberRole" } }
     },
-    "PresenceState": { "type": "string", "enum": ["online", "offline", "working"] },
+    "PresenceState": { "description": "Whether a member is online, offline or working.", "type": "string", "enum": ["online", "offline", "working"] },
     "AgentPresence": {
+      "description": "An agent's presence: its harness, the computer it runs on and its state.",
       "type": "object",
       "additionalProperties": false,
       "required": ["agent", "harness", "computerId", "state"],
@@ -87,6 +102,7 @@
       }
     },
     "Hello": {
+      "description": "What the pod tells a client about itself and the client: head sequence, the client's actor, members and agents.",
       "type": "object",
       "additionalProperties": false,
       "required": ["podId", "headSeq", "you", "members", "agents"],
@@ -94,8 +110,8 @@
         "podId": { "$ref": "common.json#/$defs/PodId" },
         "headSeq": { "description": "0 for an empty pod.", "type": "integer", "minimum": 0 },
         "you": { "$ref": "common.json#/$defs/Actor" },
-        "members": { "type": "array", "items": { "$ref": "#/$defs/Member" } },
-        "agents": { "type": "array", "items": { "$ref": "#/$defs/AgentPresence" } }
+        "members": { "description": "The pod's members.", "type": "array", "items": { "$ref": "#/$defs/Member" } },
+        "agents": { "description": "The pod's agents and their presence.", "type": "array", "items": { "$ref": "#/$defs/AgentPresence" } }
       }
     },
     "MessageUpdated": {
@@ -103,12 +119,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "decision"],
-      "properties": {
-        "id": { "$ref": "common.json#/$defs/MessageId" },
-        "decision": { "$ref": "message.json#/$defs/Decision" }
-      }
+      "properties": { "id": { "$ref": "common.json#/$defs/MessageId" }, "decision": { "$ref": "message.json#/$defs/Decision" } }
     },
     "TaskClaimed": {
+      "description": "A task was claimed: who holds it, on which run, and until when the lease runs.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId", "by", "runId", "leaseUntil"],
@@ -120,16 +134,14 @@
       }
     },
     "PresenceChanged": {
+      "description": "A member's presence changed.",
       "type": "object",
       "additionalProperties": false,
       "required": ["actor", "state"],
-      "properties": {
-        "actor": { "$ref": "common.json#/$defs/Actor" },
-        "state": { "$ref": "#/$defs/PresenceState" },
-        "computerId": { "$ref": "common.json#/$defs/ComputerId" }
-      }
+      "properties": { "actor": { "$ref": "common.json#/$defs/Actor" }, "state": { "$ref": "#/$defs/PresenceState" }, "computerId": { "$ref": "common.json#/$defs/ComputerId" } }
     },
     "WakeRefs": {
+      "description": "Ids of what the wake is about: a task, a message or a decision.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -139,6 +151,7 @@
       }
     },
     "RunWake": {
+      "description": "A push telling a computer to start a run for an agent, with the reason and what it is about.",
       "type": "object",
       "additionalProperties": false,
       "required": ["wakeId", "agentId", "reason", "refs"],
@@ -150,10 +163,13 @@
       }
     },
     "Subscribe": {
+      "description": "A client asks to receive the events after a sequence number.",
       "type": "object",
       "additionalProperties": false,
       "required": ["sinceSeq"],
-      "properties": { "sinceSeq": { "description": "0 replays from the start of the kept log.", "type": "integer", "minimum": 0 } }
+      "properties": {
+        "sinceSeq": { "description": "0 replays from the start of the kept log.", "type": "integer", "minimum": 0 }
+      }
     },
     "MessagePost": {
       "description": "A human post.",
@@ -161,29 +177,33 @@
       "additionalProperties": false,
       "required": ["text"],
       "properties": {
-        "text": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "text": {
+          "description": "The text of the post. Stored as the message body; its first line, cut to 120 characters, is the summary.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        },
         "threadOf": { "$ref": "common.json#/$defs/MessageId" }
       }
     },
     "TaskCreate": {
+      "description": "A member creates a task.",
       "type": "object",
       "additionalProperties": false,
       "required": ["title", "kind"],
       "properties": {
-        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "title": { "description": "What the task is called.", "type": "string", "minLength": 1, "maxLength": 120 },
         "kind": { "$ref": "task.json#/$defs/TaskKind" },
         "assignee": { "$ref": "common.json#/$defs/ActorId" },
-        "body": { "type": "string", "maxLength": 16384 }
+        "body": { "description": "Details of the work, beyond the title.", "type": "string", "maxLength": 16384 }
       }
     },
     "DecisionRule": {
+      "description": "A member rules on a decision by choosing one option. A decision is ruled once.",
       "type": "object",
       "additionalProperties": false,
       "required": ["decisionId", "optionId"],
-      "properties": {
-        "decisionId": { "$ref": "common.json#/$defs/DecisionId" },
-        "optionId": { "$ref": "message.json#/$defs/OptionId" }
-      }
+      "properties": { "decisionId": { "$ref": "common.json#/$defs/DecisionId" }, "optionId": { "$ref": "message.json#/$defs/OptionId" } }
     },
     "PresenceHeartbeat": {
       "description": "Every 15 s from the daemon.",
@@ -192,22 +212,25 @@
       "properties": { "computerId": { "$ref": "common.json#/$defs/ComputerId" } }
     },
     "WakeAck": {
+      "description": "The computer confirms it received a wake. A wake that is not acked is re-sent.",
       "type": "object",
       "additionalProperties": false,
       "required": ["wakeId"],
       "properties": { "wakeId": { "$ref": "common.json#/$defs/WakeId" } }
     },
     "ComputerStatus": {
+      "description": "A computer as the daemon reports it.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "name", "online"],
       "properties": {
         "id": { "$ref": "common.json#/$defs/ComputerId" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
-        "online": { "type": "boolean" }
+        "name": { "description": "The computer's name.", "type": "string", "minLength": 1, "maxLength": 80 },
+        "online": { "description": "Whether the computer is connected.", "type": "boolean" }
       }
     },
     "RunStatus": {
+      "description": "A run as the daemon reports it: its agent, when it started and its task, if any.",
       "type": "object",
       "additionalProperties": false,
       "required": ["runId", "agentId", "startedAt"],
@@ -219,13 +242,14 @@
       }
     },
     "DaemonStatus": {
+      "description": "The daemon's state, sent to the TUI over the local unix socket.",
       "type": "object",
       "additionalProperties": false,
       "required": ["computers", "agents", "runs"],
       "properties": {
-        "computers": { "type": "array", "items": { "$ref": "#/$defs/ComputerStatus" } },
-        "agents": { "type": "array", "items": { "$ref": "#/$defs/AgentPresence" } },
-        "runs": { "type": "array", "items": { "$ref": "#/$defs/RunStatus" } }
+        "computers": { "description": "The computers the daemon reports.", "type": "array", "items": { "$ref": "#/$defs/ComputerStatus" } },
+        "agents": { "description": "The agents the daemon reports, with their presence.", "type": "array", "items": { "$ref": "#/$defs/AgentPresence" } },
+        "runs": { "description": "The runs the daemon reports.", "type": "array", "items": { "$ref": "#/$defs/RunStatus" } }
       }
     }
   }

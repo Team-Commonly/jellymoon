@@ -25,21 +25,22 @@ Jellymoon is built by one long-running builder session, using the harness from A
   resume without the transcript.
 
 ## Stage skills
-| Stage | Skill | When |
-|---|---|---|
-| Plan and build | Pocock `tdd` | Every feature: e2e red, then unit red/green/refactor inward |
-| Review | Pocock `code-review`, run in a fresh-context subagent | Protected-path PRs, before the Opus gate |
-| Retro | pstack `reflect` (coordinator only; vendored in the skills repo, `pstack/reflect`) | At the end of each lane, or after a surprise |
-| Entropy | pstack `deslop` (`docs/skills/pstack-deslop/`) | Every verifier pass, and the removal-only unit each wave |
+The table in `AGENTS.md` maps each stage to one skill in `.agents/skills/`. They are vendored, not
+installed, so the loop works from a fresh clone; pins and update rules are in `docs/skills/SOURCES.md`.
+`code-review` and `deslop` run in a fresh-context subagent; `retro` runs at the end of each wave or
+after a surprise.
 
 ## Review and merge
-- Green in the merge queue merges.
+- Only the coordinator merges, on green CI plus a verifier ledger verdict at the PR head
+  (`docs/development/verifier.md`). Workers never merge.
 - A PR touching a protected path also needs two reviews before it merges:
   - one fresh-context review: a subagent given the diff and the feature, not the builder's reasoning;
   - an Opus `GATE: PASS` at the PR head (ada).
 - Protected paths: `schema/`, `worker/src/auth`, `worker/src/mcp`, `daemon/internal/{acp,run}`,
   `install.sh` and `.github/workflows`.
-- There is no separate press: the merge queue is the press.
+- **Why no merge queue:** the repo is private on GitHub Free, which allows no rulesets or merge queue.
+  The coordinator presses by hand under the rule above. When the repo goes public or moves to GitHub
+  Team, a ruleset plus merge queue takes over and this section changes.
 
 ## Design-gated features
 - **F18 (client) and F19 (connectors)** stay blocked until their options docs are reviewed with Sam.

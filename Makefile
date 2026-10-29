@@ -1,8 +1,11 @@
-# v4 commands (the build plan). Reviewers on the build host get Go and Bun from the v4-only
-# toolchain prefix; CI installs them with setup-go and setup-bun.
-export PATH := $(HOME)/.commonly/toolchains/v4/bin:$(PATH)
+# Jellymoon commands. Go and Bun are pinned in .tool-versions; `make tools` installs them into
+# .tools/ (repo-local). CI installs the same versions with setup-go and setup-bun.
+export PATH := $(CURDIR)/.tools/bin:$(PATH)
 
-.PHONY: gen check-gen test test-ts test-go entropy secrets hooks preflight
+.PHONY: tools gen check-gen test test-ts test-go entropy portable secrets hooks preflight
+
+tools:
+	scripts/tools.sh
 
 node_modules: package.json bun.lock
 	bun install --frozen-lockfile
@@ -50,4 +53,8 @@ hooks:
 	git config --worktree core.hooksPath .githooks
 	@if [ "$(fence)" = "1" ]; then git config --worktree commonly.pushFence 1; echo "push fence on"; fi
 
-preflight: check-gen test entropy secrets
+# Works from a fresh clone anywhere: no symlink out of the repo, no machine-local path.
+portable:
+	scripts/check-portable.sh
+
+preflight: portable check-gen test entropy secrets

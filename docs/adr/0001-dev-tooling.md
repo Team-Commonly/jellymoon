@@ -16,8 +16,9 @@ None of them ships in a runtime artifact.
 | staticcheck v0.8.2 (`go run`) | Go unused code and correctness lints | golangci-lint: one more binary to pin, more config |
 | deadcode, x/tools v0.51.0 (`go run`) | Unreachable Go functions from `main`; starts enforcing when a main package exists | — |
 
-Go tools run through `go run pkg@version`. They resolve from the module cache, with no install, which
-is the rule on the build host.
+Go tools run through `go run pkg@version`. They resolve from the module cache, with no install. Go and
+Bun themselves are pinned in `.tool-versions` and installed into `.tools/` by `scripts/tools.sh`
+(checksum-verified, repo-local), so nothing is installed outside the repo.
 
 The budgets they enforce live in `entropy.json`: a file is at most 400 lines and a function at most 60;
 LOC per area is capped; exceptions only shrink unless the exception cites a note here.

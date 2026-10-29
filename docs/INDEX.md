@@ -9,4 +9,4 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `development/workflow.md` | How Jellymoon is built: the long-running harness, stage skills, entropy gate, review and merge |
 | `development/verifier.md` | The verifier protocol: what a fresh-context reviewer checks, and its verdict format |
 | `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the slice LOC caps |
-| `skills/pstack-deslop/` | Vendored pstack deslop skill (MIT), used by the verifier and the removal-only unit |
+| `skills/SOURCES.md` | Where the vendored stage skills in `.agents/skills/` come from, their pins and how to update them |

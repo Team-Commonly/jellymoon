@@ -3,11 +3,10 @@
 # Every session runs this first (AGENTS.md). A red baseline is fixed before new work.
 set -euo pipefail
 cd "$(dirname "$0")"
-export PATH="$HOME/.commonly/toolchains/v4/bin:$PATH"
+export PATH="$PWD/.tools/bin:$PATH"
 
-for tool in go bun; do
-  command -v "$tool" >/dev/null || { echo "missing $tool: see AGENTS.md (Commands)"; exit 1; }
-done
+echo "== tools (.tool-versions)"
+scripts/tools.sh
 
 echo "== baseline: make preflight"
 make preflight

@@ -30,10 +30,12 @@ jobs:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.4
+          bun-version-file: .tool-versions
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Portable (no symlink out of the repo, no machine-local path)
+        run: make portable
       - name: Generated contracts match the schema
         run: make check-gen
       - name: Fixtures validate (ajv) and generated TS type-checks

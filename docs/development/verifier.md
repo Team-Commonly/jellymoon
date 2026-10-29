@@ -15,7 +15,7 @@ It runs on a different model from the builder.
    A step that no assertion covers is a finding.
 3. **Review.** Apply Pocock `code-review` to the diff against base `main`. Correctness comes first; then
    the contract (schema to generated code, server-stamped fields, token scope).
-4. **Deslop.** Apply pstack `deslop` (`docs/skills/pstack-deslop/SKILL.md`, base `main`). Look for dead code,
+4. **Deslop.** Apply pstack `deslop` (`.agents/skills/deslop/SKILL.md`, base `main`). Look for dead code,
    needless abstraction, comments that restate code, and over-defensive guards.
 5. **Subtract.** Answer two questions: could the diff be smaller, and does it delete anything it made
    obsolete?

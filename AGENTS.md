@@ -11,20 +11,19 @@ check is an API-level e2e. Terms are defined in `docs/GLOSSARY.md`; use them exa
 3. Take the first `feature_list.json` feature with `passes: false` and no `blockedBy`. One feature at a time.
 
 ## The loop: one skill per stage
-`P` = `<plugin cache>/claude-plugins-official/mattpocock-skills/1.3.1/skills` (Pocock).
-`S` = `<vendored pstack>/skills` (pstack, pinned, read-only). Read the SKILL.md before the stage.
+Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SOURCES.md`). Read it before the stage.
 
 | Stage | Skill | Output |
 |---|---|---|
-| Design | `P/engineering/grill-with-docs` | ADRs in `docs/adr/`, terms in `docs/GLOSSARY.md` |
-| Plan | `P/engineering/to-tickets` | features in `feature_list.json` with `blockedBy` edges |
-| Build | `P/engineering/tdd` | e2e red from the feature's steps, then red/green inward |
+| Design | `grill-with-docs` | ADRs in `docs/adr/`, terms in `docs/GLOSSARY.md` |
+| Plan | `to-tickets` | features in `feature_list.json` with `blockedBy` edges |
+| Build | `tdd` | e2e red from the feature's steps, then red/green inward |
 | Verify | the feature's `test` command (`docs/development/verifier.md`) | `passes: true`, ledger row |
-| Review | `P/engineering/code-review` + `docs/skills/pstack-deslop` | `GATE:` verdict in a fresh context |
-| Land | `S/make-pr-easy-to-review` | PR from `.github/pull_request_template.md` |
-| Learn | `S/reflect` | a test, lint rule or doc in the same PR |
-| Continuity | `S/poteto-mode/playbooks/session-pickup.md` | a `progress.md` entry at each boundary |
-| Entropy | `P/engineering/improve-codebase-architecture` | one removal-only unit per wave |
+| Review | `code-review` + `deslop` | `GATE:` verdict in a fresh context |
+| Land | `make-pr-easy-to-review` | PR from `.github/pull_request_template.md` |
+| Learn | `retro` | a test, lint rule or doc in the same PR |
+| Continuity | `handoff` | a `progress.md` entry at each boundary |
+| Entropy | `improve-codebase-architecture` | one removal-only unit per wave |
 
 ## Rules
 - **Only `passes` changes** in `feature_list.json`. Never delete, reword or reorder a feature to make it pass.
@@ -36,9 +35,10 @@ check is an API-level e2e. Terms are defined in `docs/GLOSSARY.md`; use them exa
 - **Stay small.** `make entropy` enforces `entropy.json`: files ≤ 400 lines, functions ≤ 60, LOC caps per
   area, `TODO(F07)`-style ids, import boundaries. A new dependency or module gets a `docs/adr/` note.
   Every report states lines added and removed, and what it deleted.
-- **Merging.** Green in the merge queue merges. Protected paths also need a fresh-context review and an Opus
-  `GATE: PASS` at the head: `schema/`, `worker/src/auth`, `worker/src/mcp`, `daemon/internal/{acp,run}`,
-  `install.sh`, `.github/workflows`.
+- **Merging.** Only the coordinator merges, and only on green CI plus a verifier ledger verdict at the head.
+  Protected paths also need an Opus `GATE: PASS` at the head: `schema/`, `worker/src/auth`, `worker/src/mcp`,
+  `daemon/internal/{acp,run}`, `install.sh`, `.github/workflows`. (No merge queue while the repo is private
+  on GitHub Free; this rule changes when it goes public or moves to Team.)
 - **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset; `make hooks`
   installs the pre-commit preflight and the push fence in a worktree.
 - **Lessons** land in the same PR as a test, lint rule or doc. Never only in private memory.
@@ -46,5 +46,5 @@ check is an API-level e2e. Terms are defined in `docs/GLOSSARY.md`; use them exa
 ## Map
 - `schema/` wire shapes; `schema/fixtures/` examples every test loads. `gen/`, `daemon/internal/protocol/gen.go`
   are generated. `worker/` Worker, PodDO, MCP, auth. `daemon/` Go daemon, ACP. `e2e/` slice tests.
-- `docs/INDEX.md` lists every doc. Go and Bun come from a shared toolchain dir on the build host
-  (the Makefile adds it). Never install anything globally.
+- `docs/INDEX.md` lists every doc. Go and Bun are pinned in `.tool-versions`; `init.sh` installs them into
+  `.tools/` (repo-local). Never install anything globally. No machine-local paths (`make portable`).

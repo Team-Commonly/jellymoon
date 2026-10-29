@@ -25,15 +25,30 @@
     "decision.rule": { "dir": "c2s", "data": "DecisionRule" },
     "presence.heartbeat": { "dir": "c2s", "data": "PresenceHeartbeat" },
     "wake.ack": { "dir": "c2s", "data": "WakeAck" },
+    "run.toolcall": { "dir": "c2s", "data": "RunToolCall" },
     "daemon.status": { "dir": "local", "data": "DaemonStatus" }
   },
   "$defs": {
+    "RunToolCall": {
+      "description": "The daemon reports one harness tool call it saw on a run it hosts (computer token only). The pod assigns the id and stores a ToolCallRecord with source daemon. The agent never sends this.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "name", "status", "startedAt", "endedAt"],
+      "properties": {
+        "runId": { "$ref": "common.json#/$defs/RunId" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "status": { "$ref": "message.json#/$defs/ToolCallStatus" },
+        "startedAt": { "$ref": "common.json#/$defs/Timestamp" },
+        "endedAt": { "$ref": "common.json#/$defs/Timestamp" },
+        "digest": { "type": "string", "maxLength": 600 }
+      }
+    },
     "EventType": {
       "type": "string",
       "enum": [
         "hello", "message.created", "message.updated", "task.created", "task.updated", "task.claimed",
         "presence.changed", "run.wake", "error", "subscribe", "message.post", "task.create",
-        "decision.rule", "presence.heartbeat", "wake.ack", "daemon.status"
+        "decision.rule", "presence.heartbeat", "wake.ack", "run.toolcall", "daemon.status"
       ]
     },
     "Envelope": {

@@ -14,7 +14,7 @@
     { "method": "GET", "path": "/v1/pods/:pod/ws", "auth": "user|computer", "upgrade": "websocket" },
     { "method": "POST", "path": "/v1/runs", "auth": "computer", "request": "ClaimRunRequest", "response": "ClaimRunResponse" },
     { "method": "POST", "path": "/v1/runs/:run/end", "auth": "computer", "request": "EndRunRequest" },
-    { "method": "POST", "path": "/mcp", "auth": "run|user", "protocol": "mcp-streamable-http, stateless" }
+    { "method": "POST", "path": "/mcp", "auth": "run|user", "protocol": "mcp-streamable-http, stateless; the MCP adapter over operations.json" }
   ],
   "x-rules": [
     "/__test/* routes exist only when ENV is local or preview, and are absent from the production bundle.",

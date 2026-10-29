@@ -36,6 +36,11 @@
       "type": "string",
       "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
     },
+    "ToolCallId": {
+      "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+      "type": "string",
+      "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
     "DecisionId": {
       "type": "string",
       "pattern": "^dec_[0-9A-HJKMNP-TV-Z]{26}$"
@@ -109,6 +114,7 @@
         "slow_down",
         "expired_token",
         "invalid_grant",
+        "ungrounded",
         "rate_limited",
         "internal"
       ]
@@ -346,7 +352,8 @@
       "additionalProperties": false,
       "required": [
         "id",
-        "label"
+        "label",
+        "consequence"
       ],
       "properties": {
         "id": {
@@ -357,12 +364,151 @@
           "minLength": 1,
           "maxLength": 40
         },
-        "description": {
+        "consequence": {
+          "description": "What happens if this option is picked, in one or two sentences.",
           "type": "string",
-          "maxLength": 160
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "ToolCallSource": {
+      "description": "Who saw the call: the pod (an MCP call on the run token) or the daemon (a harness tool call reported over ACP). Never the model.",
+      "type": "string",
+      "enum": [
+        "pod",
+        "daemon"
+      ]
+    },
+    "ToolCallStatus": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "error"
+      ]
+    },
+    "ToolCallRecord": {
+      "description": "One tool call on a run, stamped by the pod. Evidence an ask can cite; an agent can read these but never write them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "runId",
+        "source",
+        "name",
+        "status",
+        "startedAt",
+        "endedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ToolCallId"
         },
-        "recommended": {
-          "type": "boolean"
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        },
+        "source": {
+          "$ref": "#/$defs/ToolCallSource"
+        },
+        "name": {
+          "description": "The tool's name as the harness reports it, e.g. Bash or jm_post.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "status": {
+          "$ref": "#/$defs/ToolCallStatus"
+        },
+        "startedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "endedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "digest": {
+          "description": "The start of the call's input and output as the daemon saw it, cut to 600 characters. What a claim's numbers are checked against.",
+          "type": "string",
+          "maxLength": 600
+        }
+      }
+    },
+    "GroundedClaim": {
+      "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "toolCalls": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/ToolCallId"
+          }
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/MessageId"
+          }
+        }
+      }
+    },
+    "Recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "option",
+        "why"
+      ],
+      "properties": {
+        "option": {
+          "$ref": "#/$defs/OptionId"
+        },
+        "why": {
+          "$ref": "#/$defs/GroundedClaim"
+        }
+      }
+    },
+    "AskContext": {
+      "description": "What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "happened",
+        "checked",
+        "stakes",
+        "recommendation"
+      ],
+      "properties": {
+        "happened": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/GroundedClaim"
+          }
+        },
+        "checked": {
+          "description": "What was already verified or preflighted. Empty means nothing was checked, which the card shows.",
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/GroundedClaim"
+          }
+        },
+        "stakes": {
+          "$ref": "#/$defs/GroundedClaim"
+        },
+        "recommendation": {
+          "$ref": "#/$defs/Recommendation"
         }
       }
     },
@@ -541,6 +687,9 @@
             "$ref": "#/$defs/Option"
           }
         },
+        "context": {
+          "$ref": "#/$defs/AskContext"
+        },
         "taskId": {
           "$ref": "#/$defs/TaskId"
         },
@@ -621,6 +770,9 @@
             "$ref": "#/$defs/Option"
           }
         },
+        "context": {
+          "$ref": "#/$defs/AskContext"
+        },
         "taskId": {
           "$ref": "#/$defs/TaskId"
         },
@@ -647,6 +799,41 @@
         }
       }
     },
+    "RunToolCall": {
+      "description": "The daemon reports one harness tool call it saw on a run it hosts (computer token only). The pod assigns the id and stores a ToolCallRecord with source daemon. The agent never sends this.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "name",
+        "status",
+        "startedAt",
+        "endedAt"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "status": {
+          "$ref": "#/$defs/ToolCallStatus"
+        },
+        "startedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "endedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "digest": {
+          "type": "string",
+          "maxLength": 600
+        }
+      }
+    },
     "EventType": {
       "type": "string",
       "enum": [
@@ -665,6 +852,7 @@
         "decision.rule",
         "presence.heartbeat",
         "wake.ack",
+        "run.toolcall",
         "daemon.status"
       ]
     },
@@ -1366,6 +1554,34 @@
         "harnessVersion": {
           "type": "string",
           "maxLength": 64
+        }
+      }
+    },
+    "EvidenceInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        }
+      }
+    },
+    "EvidenceOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "toolCalls"
+      ],
+      "properties": {
+        "toolCalls": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/ToolCallRecord"
+          }
         }
       }
     },

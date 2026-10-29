@@ -22,16 +22,17 @@
     {
       "id": "a",
       "label": "D1",
-      "description": "Same platform, no new vendor."
+      "consequence": "If you pick d1, the agent proceeds that way on its next run."
     },
     {
       "id": "b",
-      "label": "KV"
+      "label": "KV",
+      "consequence": "If you pick kv, the agent proceeds that way on its next run."
     },
     {
       "id": "c",
       "label": "Redis",
-      "description": "Fastest, adds a vendor."
+      "consequence": "If you pick redis, the agent proceeds that way on its next run."
     }
   ],
   "receipt": {
@@ -49,5 +50,38 @@
   "decision": {
     "id": "dec_01JCZK7Q8XG4M2B9V5T3W6RH11",
     "state": "open"
+  },
+  "context": {
+    "happened": [
+      {
+        "text": "The fix passed 212 of 212 tests on its last run.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH01"
+        ]
+      }
+    ],
+    "checked": [
+      {
+        "text": "The migration ran clean against a copy of the pod's data.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH02"
+        ]
+      }
+    ],
+    "stakes": {
+      "text": "Waiting holds the release a day; merging early skips one human review.",
+      "messages": [
+        "msg_01JCZK7Q8XG4M2B9V5T3W6RH01"
+      ]
+    },
+    "recommendation": {
+      "option": "a",
+      "why": {
+        "text": "Every test the change touches passed, and the review only re-reads it.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH01"
+        ]
+      }
+    }
   }
 }

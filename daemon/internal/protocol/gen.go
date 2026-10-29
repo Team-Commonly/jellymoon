@@ -24,6 +24,9 @@ type MessageID = string
 
 type RunID = string
 
+// A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.
+type ToolCallID = string
+
 type DecisionID = string
 
 type WakeID = string
@@ -106,6 +109,7 @@ const (
 	ErrorCodeSlowDown             ErrorCode = "slow_down"
 	ErrorCodeExpiredToken         ErrorCode = "expired_token"
 	ErrorCodeInvalidGrant         ErrorCode = "invalid_grant"
+	ErrorCodeUngrounded           ErrorCode = "ungrounded"
 	ErrorCodeRateLimited          ErrorCode = "rate_limited"
 	ErrorCodeInternal             ErrorCode = "internal"
 )
@@ -113,7 +117,7 @@ const (
 // Valid reports whether x is one of the schema's values.
 func (x ErrorCode) Valid() bool {
 	switch x {
-	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeRateLimited, ErrorCodeInternal:
+	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeInternal:
 		return true
 	}
 	return false
@@ -385,10 +389,10 @@ func (x OptionID) Valid() bool {
 }
 
 type Option struct {
-	ID          OptionID `json:"id"`
-	Label       string   `json:"label"`
-	Description *string  `json:"description,omitempty"`
-	Recommended *bool    `json:"recommended,omitempty"`
+	ID    OptionID `json:"id"`
+	Label string   `json:"label"`
+	// What happens if this option is picked, in one or two sentences.
+	Consequence string `json:"consequence"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -397,12 +401,140 @@ func (x *Option) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &keys); err != nil {
 		return err
 	}
-	for _, k := range []string{"id", "label"} {
+	for _, k := range []string{"id", "label", "consequence"} {
 		if _, ok := keys[k]; !ok {
 			return fmt.Errorf("Option: missing required field %q", k)
 		}
 	}
 	type plain Option
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// Who saw the call: the pod (an MCP call on the run token) or the daemon (a harness tool call reported over ACP). Never the model.
+type ToolCallSource string
+
+const (
+	ToolCallSourcePod    ToolCallSource = "pod"
+	ToolCallSourceDaemon ToolCallSource = "daemon"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x ToolCallSource) Valid() bool {
+	switch x {
+	case ToolCallSourcePod, ToolCallSourceDaemon:
+		return true
+	}
+	return false
+}
+
+type ToolCallStatus string
+
+const (
+	ToolCallStatusOk    ToolCallStatus = "ok"
+	ToolCallStatusError ToolCallStatus = "error"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x ToolCallStatus) Valid() bool {
+	switch x {
+	case ToolCallStatusOk, ToolCallStatusError:
+		return true
+	}
+	return false
+}
+
+// One tool call on a run, stamped by the pod. Evidence an ask can cite; an agent can read these but never write them.
+type ToolCallRecord struct {
+	ID     ToolCallID     `json:"id"`
+	RunID  RunID          `json:"runId"`
+	Source ToolCallSource `json:"source"`
+	// The tool's name as the harness reports it, e.g. Bash or jm_post.
+	Name      string         `json:"name"`
+	Status    ToolCallStatus `json:"status"`
+	StartedAt Timestamp      `json:"startedAt"`
+	EndedAt   Timestamp      `json:"endedAt"`
+	// The start of the call's input and output as the daemon saw it, cut to 600 characters. What a claim's numbers are checked against.
+	Digest *string `json:"digest,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ToolCallRecord) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"id", "runId", "source", "name", "status", "startedAt", "endedAt"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ToolCallRecord: missing required field %q", k)
+		}
+	}
+	type plain ToolCallRecord
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// One sentence a person can trust without having been there, grounded in stamped evidence.
+type GroundedClaim struct {
+	Text      string       `json:"text"`
+	ToolCalls []ToolCallID `json:"toolCalls,omitempty"`
+	Messages  []MessageID  `json:"messages,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *GroundedClaim) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"text"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("GroundedClaim: missing required field %q", k)
+		}
+	}
+	type plain GroundedClaim
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+type Recommendation struct {
+	Option OptionID      `json:"option"`
+	Why    GroundedClaim `json:"why"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *Recommendation) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"option", "why"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("Recommendation: missing required field %q", k)
+		}
+	}
+	type plain Recommendation
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation.
+type AskContext struct {
+	Happened []GroundedClaim `json:"happened"`
+	// What was already verified or preflighted. Empty means nothing was checked, which the card shows.
+	Checked        []GroundedClaim `json:"checked"`
+	Stakes         GroundedClaim   `json:"stakes"`
+	Recommendation Recommendation  `json:"recommendation"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *AskContext) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"happened", "checked", "stakes", "recommendation"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("AskContext: missing required field %q", k)
+		}
+	}
+	type plain AskContext
 	return json.Unmarshal(b, (*plain)(x))
 }
 
@@ -562,6 +694,7 @@ type PostInput struct {
 	Status  MessageStatus `json:"status"`
 	Needs   *Needs        `json:"needs,omitempty"`
 	Options []Option      `json:"options,omitempty"`
+	Context *AskContext   `json:"context,omitempty"`
 	TaskID  *TaskID       `json:"taskId,omitempty"`
 	Links   []Link        `json:"links,omitempty"`
 	// What isn't verified.
@@ -598,6 +731,7 @@ type Message struct {
 	Status    MessageStatus `json:"status"`
 	Needs     *Needs        `json:"needs,omitempty"`
 	Options   []Option      `json:"options,omitempty"`
+	Context   *AskContext   `json:"context,omitempty"`
 	TaskID    *TaskID       `json:"taskId,omitempty"`
 	Links     []Link        `json:"links,omitempty"`
 	Caveat    *string       `json:"caveat,omitempty"`
@@ -621,6 +755,31 @@ func (x *Message) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// The daemon reports one harness tool call it saw on a run it hosts (computer token only). The pod assigns the id and stores a ToolCallRecord with source daemon. The agent never sends this.
+type RunToolCall struct {
+	RunID     RunID          `json:"runId"`
+	Name      string         `json:"name"`
+	Status    ToolCallStatus `json:"status"`
+	StartedAt Timestamp      `json:"startedAt"`
+	EndedAt   Timestamp      `json:"endedAt"`
+	Digest    *string        `json:"digest,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *RunToolCall) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"runId", "name", "status", "startedAt", "endedAt"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("RunToolCall: missing required field %q", k)
+		}
+	}
+	type plain RunToolCall
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 type EventType string
 
 const (
@@ -639,13 +798,14 @@ const (
 	EventTypeDecisionRule      EventType = "decision.rule"
 	EventTypePresenceHeartbeat EventType = "presence.heartbeat"
 	EventTypeWakeAck           EventType = "wake.ack"
+	EventTypeRunToolcall       EventType = "run.toolcall"
 	EventTypeDaemonStatus      EventType = "daemon.status"
 )
 
 // Valid reports whether x is one of the schema's values.
 func (x EventType) Valid() bool {
 	switch x {
-	case EventTypeHello, EventTypeMessageCreated, EventTypeMessageUpdated, EventTypeTaskCreated, EventTypeTaskUpdated, EventTypeTaskClaimed, EventTypePresenceChanged, EventTypeRunWake, EventTypeError, EventTypeSubscribe, EventTypeMessagePost, EventTypeTaskCreate, EventTypeDecisionRule, EventTypePresenceHeartbeat, EventTypeWakeAck, EventTypeDaemonStatus:
+	case EventTypeHello, EventTypeMessageCreated, EventTypeMessageUpdated, EventTypeTaskCreated, EventTypeTaskUpdated, EventTypeTaskClaimed, EventTypePresenceChanged, EventTypeRunWake, EventTypeError, EventTypeSubscribe, EventTypeMessagePost, EventTypeTaskCreate, EventTypeDecisionRule, EventTypePresenceHeartbeat, EventTypeWakeAck, EventTypeRunToolcall, EventTypeDaemonStatus:
 		return true
 	}
 	return false
@@ -1387,6 +1547,44 @@ func (x *EndRunRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+type EvidenceInput struct {
+	RunID RunID `json:"runId"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *EvidenceInput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"runId"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("EvidenceInput: missing required field %q", k)
+		}
+	}
+	type plain EvidenceInput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+type EvidenceOutput struct {
+	ToolCalls []ToolCallRecord `json:"toolCalls"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *EvidenceOutput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"toolCalls"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("EvidenceOutput: missing required field %q", k)
+		}
+	}
+	type plain EvidenceOutput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 type WhoamiInput struct {
 }
 
@@ -1589,12 +1787,17 @@ var Registry = map[string]func() any{
 	"NeedsTarget":              func() any { return new(NeedsTarget) },
 	"Needs":                    func() any { return new(Needs) },
 	"Option":                   func() any { return new(Option) },
+	"ToolCallRecord":           func() any { return new(ToolCallRecord) },
+	"GroundedClaim":            func() any { return new(GroundedClaim) },
+	"Recommendation":           func() any { return new(Recommendation) },
+	"AskContext":               func() any { return new(AskContext) },
 	"Link":                     func() any { return new(Link) },
 	"Receipt":                  func() any { return new(Receipt) },
 	"Ruling":                   func() any { return new(Ruling) },
 	"Decision":                 func() any { return new(Decision) },
 	"PostInput":                func() any { return new(PostInput) },
 	"Message":                  func() any { return new(Message) },
+	"RunToolCall":              func() any { return new(RunToolCall) },
 	"Envelope":                 func() any { return new(Envelope) },
 	"Member":                   func() any { return new(Member) },
 	"AgentPresence":            func() any { return new(AgentPresence) },
@@ -1628,6 +1831,8 @@ var Registry = map[string]func() any{
 	"ClaimRunRequest":          func() any { return new(ClaimRunRequest) },
 	"ClaimRunResponse":         func() any { return new(ClaimRunResponse) },
 	"EndRunRequest":            func() any { return new(EndRunRequest) },
+	"EvidenceInput":            func() any { return new(EvidenceInput) },
+	"EvidenceOutput":           func() any { return new(EvidenceOutput) },
 	"WhoamiInput":              func() any { return new(WhoamiInput) },
 	"WhoamiOutput":             func() any { return new(WhoamiOutput) },
 	"ReadInput":                func() any { return new(ReadInput) },
@@ -1657,6 +1862,7 @@ var EventDirection = map[EventType]string{
 	EventTypeDecisionRule:      "c2s",
 	EventTypePresenceHeartbeat: "c2s",
 	EventTypeWakeAck:           "c2s",
+	EventTypeRunToolcall:       "c2s",
 	EventTypeDaemonStatus:      "local",
 }
 
@@ -1753,6 +1959,12 @@ func DecodeEventData(t EventType, raw json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("%s: %w", t, err)
 		}
 		return &v, nil
+	case EventTypeRunToolcall:
+		var v RunToolCall
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s: %w", t, err)
+		}
+		return &v, nil
 	case EventTypeDaemonStatus:
 		var v DaemonStatus
 		if err := json.Unmarshal(raw, &v); err != nil {
@@ -1763,8 +1975,24 @@ func DecodeEventData(t EventType, raw json.RawMessage) (any, error) {
 	return nil, fmt.Errorf("unknown event type %q", t)
 }
 
-// ToolPrefix is prepended to every MCP tool name (schema/tools.json x-tool-prefix).
+// Operation is a pod operation's HTTP form (schema/operations.json x-operations).
+type Operation struct {
+	Name, Method, Path, Auth string
+}
+
+// Operations lists the pod operations in schema order. MCP and the CLI are adapters over these.
+var Operations = []Operation{
+	{"whoami", "GET", "/v1/pods/{podId}/me", "run|user"},
+	{"read", "GET", "/v1/pods/{podId}/feed", "run|user"},
+	{"task_list", "GET", "/v1/pods/{podId}/tasks", "run|user"},
+	{"task_claim", "POST", "/v1/pods/{podId}/tasks/{taskId}/claim", "run"},
+	{"task_update", "PATCH", "/v1/pods/{podId}/tasks/{taskId}", "run|user"},
+	{"evidence", "GET", "/v1/pods/{podId}/runs/{runId}/tool-calls", "run|user"},
+	{"post", "POST", "/v1/pods/{podId}/messages", "run|user"},
+}
+
+// ToolPrefix is prepended to every operation name in the MCP adapter (schema/operations.json x-mcp-prefix).
 const ToolPrefix = "commonly_"
 
 // ToolNames lists the MCP tools in schema order.
-var ToolNames = []string{"commonly_whoami", "commonly_read", "commonly_task_list", "commonly_task_claim", "commonly_task_update", "commonly_post"}
+var ToolNames = []string{"commonly_whoami", "commonly_read", "commonly_task_list", "commonly_task_claim", "commonly_task_update", "commonly_evidence", "commonly_post"}

@@ -1,0 +1,53 @@
+{
+  "summary": "Merge the auth fix now or wait for review?",
+  "kind": "ask",
+  "status": "blocked",
+  "taskId": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH01",
+  "needs": {
+    "to": {
+      "userIds": [
+        "usr_01JCZK7Q8XG4M2B9V5T3W6RH01"
+      ]
+    },
+    "action": "approve"
+  },
+  "options": [
+    {
+      "id": "a",
+      "label": "Merge now",
+      "consequence": "If you pick merge now, the agent proceeds that way on its next run."
+    },
+    {
+      "id": "b",
+      "label": "Wait for review",
+      "consequence": "If you pick wait for review, the agent proceeds that way on its next run."
+    }
+  ],
+  "context": {
+    "happened": [
+      {
+        "text": "The fix passed 212 of 212 tests on its last run.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH01"
+        ]
+      }
+    ],
+    "checked": [
+      {
+        "text": "The migration ran clean against a copy of the pod's data.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH02"
+        ]
+      }
+    ],
+    "recommendation": {
+      "option": "a",
+      "why": {
+        "text": "Every test the change touches passed, and the review only re-reads it.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH01"
+        ]
+      }
+    }
+  }
+}

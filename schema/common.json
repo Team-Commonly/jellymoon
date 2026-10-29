@@ -16,6 +16,7 @@
     "TaskId": { "type": "string", "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$" },
     "MessageId": { "type": "string", "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$" },
     "RunId": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "ToolCallId": { "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.", "type": "string", "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$" },
     "DecisionId": { "type": "string", "pattern": "^dec_[0-9A-HJKMNP-TV-Z]{26}$" },
     "WakeId": { "type": "string", "pattern": "^wak_[0-9A-HJKMNP-TV-Z]{26}$" },
     "Seq": {
@@ -60,6 +61,7 @@
         "slow_down",
         "expired_token",
         "invalid_grant",
+        "ungrounded",
         "rate_limited",
         "internal"
       ]

@@ -18,6 +18,9 @@ export type MessageId = string;
 
 export type RunId = string;
 
+/** A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these. */
+export type ToolCallId = string;
+
 export type DecisionId = string;
 
 export type WakeId = string;
@@ -42,8 +45,8 @@ export type Harness = "claude-code" | "codex" | "fake";
 export const HarnessValues = ["claude-code","codex","fake"] as const;
 
 /** Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event. */
-export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "rate_limited" | "internal";
-export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","rate_limited","internal"] as const;
+export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "internal";
+export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","internal"] as const;
 
 export interface ErrorBody {
   code: ErrorCode;
@@ -124,8 +127,50 @@ export const OptionIdValues = ["a","b","c","d","e"] as const;
 export interface Option {
   id: OptionId;
   label: string;
-  description?: string;
-  recommended?: boolean;
+  /** What happens if this option is picked, in one or two sentences. */
+  consequence: string;
+}
+
+/** Who saw the call: the pod (an MCP call on the run token) or the daemon (a harness tool call reported over ACP). Never the model. */
+export type ToolCallSource = "pod" | "daemon";
+export const ToolCallSourceValues = ["pod","daemon"] as const;
+
+export type ToolCallStatus = "ok" | "error";
+export const ToolCallStatusValues = ["ok","error"] as const;
+
+/** One tool call on a run, stamped by the pod. Evidence an ask can cite; an agent can read these but never write them. */
+export interface ToolCallRecord {
+  id: ToolCallId;
+  runId: RunId;
+  source: ToolCallSource;
+  /** The tool's name as the harness reports it, e.g. Bash or jm_post. */
+  name: string;
+  status: ToolCallStatus;
+  startedAt: Timestamp;
+  endedAt: Timestamp;
+  /** The start of the call's input and output as the daemon saw it, cut to 600 characters. What a claim's numbers are checked against. */
+  digest?: string;
+}
+
+/** One sentence a person can trust without having been there, grounded in stamped evidence. */
+export interface GroundedClaim {
+  text: string;
+  toolCalls?: ToolCallId[];
+  messages?: MessageId[];
+}
+
+export interface Recommendation {
+  option: OptionId;
+  why: GroundedClaim;
+}
+
+/** What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation. */
+export interface AskContext {
+  happened: GroundedClaim[];
+  /** What was already verified or preflighted. Empty means nothing was checked, which the card shows. */
+  checked: GroundedClaim[];
+  stakes: GroundedClaim;
+  recommendation: Recommendation;
 }
 
 export type LinkType = "pr" | "commit" | "task" | "doc" | "file" | "log";
@@ -179,6 +224,7 @@ export interface PostInput {
   status: MessageStatus;
   needs?: Needs;
   options?: Option[];
+  context?: AskContext;
   taskId?: TaskId;
   links?: Link[];
   /** What isn't verified. */
@@ -200,6 +246,7 @@ export interface Message {
   status: MessageStatus;
   needs?: Needs;
   options?: Option[];
+  context?: AskContext;
   taskId?: TaskId;
   links?: Link[];
   caveat?: string;
@@ -208,8 +255,18 @@ export interface Message {
   receipt?: Receipt;
 }
 
-export type EventType = "hello" | "message.created" | "message.updated" | "task.created" | "task.updated" | "task.claimed" | "presence.changed" | "run.wake" | "error" | "subscribe" | "message.post" | "task.create" | "decision.rule" | "presence.heartbeat" | "wake.ack" | "daemon.status";
-export const EventTypeValues = ["hello","message.created","message.updated","task.created","task.updated","task.claimed","presence.changed","run.wake","error","subscribe","message.post","task.create","decision.rule","presence.heartbeat","wake.ack","daemon.status"] as const;
+/** The daemon reports one harness tool call it saw on a run it hosts (computer token only). The pod assigns the id and stores a ToolCallRecord with source daemon. The agent never sends this. */
+export interface RunToolCall {
+  runId: RunId;
+  name: string;
+  status: ToolCallStatus;
+  startedAt: Timestamp;
+  endedAt: Timestamp;
+  digest?: string;
+}
+
+export type EventType = "hello" | "message.created" | "message.updated" | "task.created" | "task.updated" | "task.claimed" | "presence.changed" | "run.wake" | "error" | "subscribe" | "message.post" | "task.create" | "decision.rule" | "presence.heartbeat" | "wake.ack" | "run.toolcall" | "daemon.status";
+export const EventTypeValues = ["hello","message.created","message.updated","task.created","task.updated","task.claimed","presence.changed","run.wake","error","subscribe","message.post","task.create","decision.rule","presence.heartbeat","wake.ack","run.toolcall","daemon.status"] as const;
 
 export interface Envelope {
   v: 1;
@@ -425,6 +482,14 @@ export interface EndRunRequest {
   harnessVersion?: string;
 }
 
+export interface EvidenceInput {
+  runId: RunId;
+}
+
+export interface EvidenceOutput {
+  toolCalls: ToolCallRecord[];
+}
+
 export interface WhoamiInput {
 }
 
@@ -497,6 +562,7 @@ export interface EventDataMap {
   "decision.rule": DecisionRule;
   "presence.heartbeat": PresenceHeartbeat;
   "wake.ack": WakeAck;
+  "run.toolcall": RunToolCall;
   "daemon.status": DaemonStatus;
 }
 
@@ -519,6 +585,7 @@ export const EVENT_DIRECTION = {
   "decision.rule": "c2s",
   "presence.heartbeat": "c2s",
   "wake.ack": "c2s",
+  "run.toolcall": "c2s",
   "daemon.status": "local",
 } as const;
 
@@ -538,6 +605,7 @@ export const EVENT_DATA_DEF = {
   "decision.rule": "DecisionRule",
   "presence.heartbeat": "PresenceHeartbeat",
   "wake.ack": "WakeAck",
+  "run.toolcall": "RunToolCall",
   "daemon.status": "DaemonStatus",
 } as const;
 
@@ -547,8 +615,20 @@ export interface ToolIO {
   commonly_task_list: { input: TaskListInput; output: TaskListOutput };
   commonly_task_claim: { input: TaskClaimInput; output: TaskClaimOutput };
   commonly_task_update: { input: TaskUpdateInput; output: Task };
+  commonly_evidence: { input: EvidenceInput; output: EvidenceOutput };
   commonly_post: { input: PostInput; output: PostOutput };
 }
+/** Every pod operation's HTTP form (operations.json x-operations). MCP and the CLI are adapters over these. */
+export const OPERATIONS = {
+  whoami: { method: "GET", path: "/v1/pods/{podId}/me", auth: "run|user" },
+  read: { method: "GET", path: "/v1/pods/{podId}/feed", auth: "run|user" },
+  task_list: { method: "GET", path: "/v1/pods/{podId}/tasks", auth: "run|user" },
+  task_claim: { method: "POST", path: "/v1/pods/{podId}/tasks/{taskId}/claim", auth: "run" },
+  task_update: { method: "PATCH", path: "/v1/pods/{podId}/tasks/{taskId}", auth: "run|user" },
+  evidence: { method: "GET", path: "/v1/pods/{podId}/runs/{runId}/tool-calls", auth: "run|user" },
+  post: { method: "POST", path: "/v1/pods/{podId}/messages", auth: "run|user" },
+} as const;
+export type OperationName = keyof typeof OPERATIONS;
 export const TOOL_PREFIX = "commonly_";
 export type ToolName = keyof ToolIO;
-export const TOOL_NAMES = ["commonly_whoami","commonly_read","commonly_task_list","commonly_task_claim","commonly_task_update","commonly_post"] as const;
+export const TOOL_NAMES = ["commonly_whoami","commonly_read","commonly_task_list","commonly_task_claim","commonly_task_update","commonly_evidence","commonly_post"] as const;

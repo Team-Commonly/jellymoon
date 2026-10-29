@@ -36,11 +36,12 @@
       {
         "id": "a",
         "label": "Merge now",
-        "recommended": true
+        "consequence": "If you pick merge now, the agent proceeds that way on its next run."
       },
       {
         "id": "b",
-        "label": "Wait for review"
+        "label": "Wait for review",
+        "consequence": "If you pick wait for review, the agent proceeds that way on its next run."
       }
     ],
     "receipt": {
@@ -66,6 +67,39 @@
           "displayName": "Sam"
         },
         "at": "2026-10-29T09:30:00Z"
+      }
+    },
+    "context": {
+      "happened": [
+        {
+          "text": "The fix passed 212 of 212 tests on its last run.",
+          "toolCalls": [
+            "tc_01JCZK7Q8XG4M2B9V5T3W6RH01"
+          ]
+        }
+      ],
+      "checked": [
+        {
+          "text": "The migration ran clean against a copy of the pod's data.",
+          "toolCalls": [
+            "tc_01JCZK7Q8XG4M2B9V5T3W6RH02"
+          ]
+        }
+      ],
+      "stakes": {
+        "text": "Waiting holds the release a day; merging early skips one human review.",
+        "messages": [
+          "msg_01JCZK7Q8XG4M2B9V5T3W6RH01"
+        ]
+      },
+      "recommendation": {
+        "option": "a",
+        "why": {
+          "text": "Every test the change touches passed, and the review only re-reads it.",
+          "toolCalls": [
+            "tc_01JCZK7Q8XG4M2B9V5T3W6RH01"
+          ]
+        }
       }
     }
   }

@@ -5,7 +5,10 @@
   "description": "The message contract. PostInput is what an agent writes through the post tool. Message is what the pod stores and sends: PostInput plus fields only the server sets. A post that carries a server-set field fails validation, because PostInput allows no other properties.",
   "x-rules": [
     "needs is required when kind is ask, and only allowed then.",
-    "options is required when kind is ask, and only allowed then. At most one option is recommended, and option ids are unique.",
+    "options is required when kind is ask, and only allowed then. Option ids are unique.",
+    "context is required when kind is ask, and only allowed then. recommendation.option names one of the options.",
+    "Grounding: every GroundedClaim cites at least one toolCalls or messages id, and every id must be a record in this pod (tool calls: on a run of this agent). Otherwise the post is refused with ungrounded.",
+    "Grounding: every number in a GroundedClaim's text must appear in the digest of a tool call it cites, or in the summary or body of a message it cites. Otherwise the post is refused with ungrounded. The model arranges and summarizes stamped evidence; it never asserts an unstamped fact.",
     "A post without summary is refused with summary_required, not derived.",
     "A human post (the message.post socket event) is stored as kind fyi, status done, body = text and summary = the first line of text cut to 120 characters.",
     "receipt is set on every agent post and never on a human post. decision is set exactly when kind is ask.",
@@ -41,12 +44,65 @@
     "Option": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "label"],
+      "required": ["id", "label", "consequence"],
       "properties": {
         "id": { "$ref": "#/$defs/OptionId" },
         "label": { "type": "string", "minLength": 1, "maxLength": 40 },
-        "description": { "type": "string", "maxLength": 160 },
-        "recommended": { "type": "boolean" }
+        "consequence": { "description": "What happens if this option is picked, in one or two sentences.", "type": "string", "minLength": 1, "maxLength": 200 }
+      }
+    },
+    "ToolCallSource": {
+      "description": "Who saw the call: the pod (an MCP call on the run token) or the daemon (a harness tool call reported over ACP). Never the model.",
+      "type": "string",
+      "enum": ["pod", "daemon"]
+    },
+    "ToolCallStatus": { "type": "string", "enum": ["ok", "error"] },
+    "ToolCallRecord": {
+      "description": "One tool call on a run, stamped by the pod. Evidence an ask can cite; an agent can read these but never write them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "runId", "source", "name", "status", "startedAt", "endedAt"],
+      "properties": {
+        "id": { "$ref": "common.json#/$defs/ToolCallId" },
+        "runId": { "$ref": "common.json#/$defs/RunId" },
+        "source": { "$ref": "#/$defs/ToolCallSource" },
+        "name": { "description": "The tool's name as the harness reports it, e.g. Bash or jm_post.", "type": "string", "minLength": 1, "maxLength": 64 },
+        "status": { "$ref": "#/$defs/ToolCallStatus" },
+        "startedAt": { "$ref": "common.json#/$defs/Timestamp" },
+        "endedAt": { "$ref": "common.json#/$defs/Timestamp" },
+        "digest": { "description": "The start of the call's input and output as the daemon saw it, cut to 600 characters. What a claim's numbers are checked against.", "type": "string", "maxLength": 600 }
+      }
+    },
+    "GroundedClaim": {
+      "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "toolCalls": { "type": "array", "maxItems": 8, "items": { "$ref": "common.json#/$defs/ToolCallId" } },
+        "messages": { "type": "array", "maxItems": 4, "items": { "$ref": "common.json#/$defs/MessageId" } }
+      }
+    },
+    "Recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["option", "why"],
+      "properties": {
+        "option": { "$ref": "#/$defs/OptionId" },
+        "why": { "$ref": "#/$defs/GroundedClaim" }
+      }
+    },
+    "AskContext": {
+      "description": "What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["happened", "checked", "stakes", "recommendation"],
+      "properties": {
+        "happened": { "type": "array", "minItems": 1, "maxItems": 5, "items": { "$ref": "#/$defs/GroundedClaim" } },
+        "checked": { "description": "What was already verified or preflighted. Empty means nothing was checked, which the card shows.", "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/GroundedClaim" } },
+        "stakes": { "$ref": "#/$defs/GroundedClaim" },
+        "recommendation": { "$ref": "#/$defs/Recommendation" }
       }
     },
     "LinkType": { "type": "string", "enum": ["pr", "commit", "task", "doc", "file", "log"] },
@@ -121,6 +177,7 @@
         "status": { "$ref": "#/$defs/MessageStatus" },
         "needs": { "$ref": "#/$defs/Needs" },
         "options": { "type": "array", "minItems": 2, "maxItems": 5, "items": { "$ref": "#/$defs/Option" } },
+        "context": { "$ref": "#/$defs/AskContext" },
         "taskId": { "$ref": "common.json#/$defs/TaskId" },
         "links": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/Link" } },
         "caveat": { "description": "What isn't verified.", "type": "string", "maxLength": 160 },
@@ -144,6 +201,7 @@
         "status": { "$ref": "#/$defs/MessageStatus" },
         "needs": { "$ref": "#/$defs/Needs" },
         "options": { "type": "array", "minItems": 2, "maxItems": 5, "items": { "$ref": "#/$defs/Option" } },
+        "context": { "$ref": "#/$defs/AskContext" },
         "taskId": { "$ref": "common.json#/$defs/TaskId" },
         "links": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/Link" } },
         "caveat": { "type": "string", "maxLength": 160 },

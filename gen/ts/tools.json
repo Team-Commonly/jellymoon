@@ -389,7 +389,8 @@
                     "additionalProperties": false,
                     "required": [
                       "id",
-                      "label"
+                      "label",
+                      "consequence"
                     ],
                     "properties": {
                       "id": {
@@ -407,12 +408,182 @@
                         "minLength": 1,
                         "maxLength": 40
                       },
-                      "description": {
+                      "consequence": {
+                        "description": "What happens if this option is picked, in one or two sentences.",
                         "type": "string",
-                        "maxLength": 160
-                      },
-                      "recommended": {
-                        "type": "boolean"
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    }
+                  }
+                },
+                "context": {
+                  "description": "What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation.",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "happened",
+                    "checked",
+                    "stakes",
+                    "recommendation"
+                  ],
+                  "properties": {
+                    "happened": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 5,
+                      "items": {
+                        "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "text"
+                        ],
+                        "properties": {
+                          "text": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "toolCalls": {
+                            "type": "array",
+                            "maxItems": 8,
+                            "items": {
+                              "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                              "type": "string",
+                              "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                            }
+                          },
+                          "messages": {
+                            "type": "array",
+                            "maxItems": 4,
+                            "items": {
+                              "type": "string",
+                              "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "checked": {
+                      "description": "What was already verified or preflighted. Empty means nothing was checked, which the card shows.",
+                      "type": "array",
+                      "maxItems": 5,
+                      "items": {
+                        "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "text"
+                        ],
+                        "properties": {
+                          "text": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "toolCalls": {
+                            "type": "array",
+                            "maxItems": 8,
+                            "items": {
+                              "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                              "type": "string",
+                              "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                            }
+                          },
+                          "messages": {
+                            "type": "array",
+                            "maxItems": 4,
+                            "items": {
+                              "type": "string",
+                              "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "stakes": {
+                      "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "text"
+                      ],
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "toolCalls": {
+                          "type": "array",
+                          "maxItems": 8,
+                          "items": {
+                            "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                            "type": "string",
+                            "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                          }
+                        },
+                        "messages": {
+                          "type": "array",
+                          "maxItems": 4,
+                          "items": {
+                            "type": "string",
+                            "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+                          }
+                        }
+                      }
+                    },
+                    "recommendation": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "option",
+                        "why"
+                      ],
+                      "properties": {
+                        "option": {
+                          "type": "string",
+                          "enum": [
+                            "a",
+                            "b",
+                            "c",
+                            "d",
+                            "e"
+                          ]
+                        },
+                        "why": {
+                          "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "text"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "toolCalls": {
+                              "type": "array",
+                              "maxItems": 8,
+                              "items": {
+                                "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                                "type": "string",
+                                "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                              }
+                            },
+                            "messages": {
+                              "type": "array",
+                              "maxItems": 4,
+                              "items": {
+                                "type": "string",
+                                "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -958,7 +1129,7 @@
     },
     {
       "name": "commonly_task_claim",
-      "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every tool call you make on this run.",
+      "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every operation you make on this run.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -1173,8 +1344,99 @@
       }
     },
     {
+      "name": "commonly_evidence",
+      "description": "The stamped tool calls on a run: what the pod and the daemon saw it do. Cite their ids in an ask's context; you can read these but never write them.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "toolCalls"
+        ],
+        "properties": {
+          "toolCalls": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "description": "One tool call on a run, stamped by the pod. Evidence an ask can cite; an agent can read these but never write them.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "runId",
+                "source",
+                "name",
+                "status",
+                "startedAt",
+                "endedAt"
+              ],
+              "properties": {
+                "id": {
+                  "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                  "type": "string",
+                  "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                },
+                "runId": {
+                  "type": "string",
+                  "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+                },
+                "source": {
+                  "description": "Who saw the call: the pod (an MCP call on the run token) or the daemon (a harness tool call reported over ACP). Never the model.",
+                  "type": "string",
+                  "enum": [
+                    "pod",
+                    "daemon"
+                  ]
+                },
+                "name": {
+                  "description": "The tool's name as the harness reports it, e.g. Bash or jm_post.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "error"
+                  ]
+                },
+                "startedAt": {
+                  "description": "RFC 3339 in UTC. Set by the server only.",
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+                },
+                "endedAt": {
+                  "description": "RFC 3339 in UTC. Set by the server only.",
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+                },
+                "digest": {
+                  "description": "The start of the call's input and output as the daemon saw it, cut to 600 characters. What a claim's numbers are checked against.",
+                  "type": "string",
+                  "maxLength": 600
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "name": "commonly_post",
-      "description": "Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs and 2 to 5 options when a person must decide; mark at most one option recommended. progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one.",
+      "description": "Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -1265,7 +1527,8 @@
               "additionalProperties": false,
               "required": [
                 "id",
-                "label"
+                "label",
+                "consequence"
               ],
               "properties": {
                 "id": {
@@ -1283,12 +1546,182 @@
                   "minLength": 1,
                   "maxLength": 40
                 },
-                "description": {
+                "consequence": {
+                  "description": "What happens if this option is picked, in one or two sentences.",
                   "type": "string",
-                  "maxLength": 160
-                },
-                "recommended": {
-                  "type": "boolean"
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              }
+            }
+          },
+          "context": {
+            "description": "What a person needs to rule in about 30 seconds without having been there: what happened, what was already checked, what is at stake, and the recommendation.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "happened",
+              "checked",
+              "stakes",
+              "recommendation"
+            ],
+            "properties": {
+              "happened": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 5,
+                "items": {
+                  "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    },
+                    "toolCalls": {
+                      "type": "array",
+                      "maxItems": 8,
+                      "items": {
+                        "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                        "type": "string",
+                        "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                      }
+                    },
+                    "messages": {
+                      "type": "array",
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+                      }
+                    }
+                  }
+                }
+              },
+              "checked": {
+                "description": "What was already verified or preflighted. Empty means nothing was checked, which the card shows.",
+                "type": "array",
+                "maxItems": 5,
+                "items": {
+                  "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    },
+                    "toolCalls": {
+                      "type": "array",
+                      "maxItems": 8,
+                      "items": {
+                        "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                        "type": "string",
+                        "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                      }
+                    },
+                    "messages": {
+                      "type": "array",
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+                      }
+                    }
+                  }
+                }
+              },
+              "stakes": {
+                "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "toolCalls": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                      "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                      "type": "string",
+                      "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                    }
+                  },
+                  "messages": {
+                    "type": "array",
+                    "maxItems": 4,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+                    }
+                  }
+                }
+              },
+              "recommendation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "option",
+                  "why"
+                ],
+                "properties": {
+                  "option": {
+                    "type": "string",
+                    "enum": [
+                      "a",
+                      "b",
+                      "c",
+                      "d",
+                      "e"
+                    ]
+                  },
+                  "why": {
+                    "description": "One sentence a person can trust without having been there, grounded in stamped evidence.",
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "text"
+                    ],
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "toolCalls": {
+                        "type": "array",
+                        "maxItems": 8,
+                        "items": {
+                          "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.",
+                          "type": "string",
+                          "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$"
+                        }
+                      },
+                      "messages": {
+                        "type": "array",
+                        "maxItems": 4,
+                        "items": {
+                          "type": "string",
+                          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }

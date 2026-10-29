@@ -196,7 +196,7 @@
       ]
     },
     "TaskKind": {
-      "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
+      "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.",
       "type": "string",
       "enum": [
         "feature",
@@ -208,7 +208,7 @@
       ]
     },
     "Claim": {
-      "description": "One active claim per task. The lease is renewed by any MCP call on the claiming run.",
+      "description": "One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -493,7 +493,7 @@
       }
     },
     "Recommendation": {
-      "description": "The option the agent recommends and the grounded reason why.",
+      "description": "The option the poster recommends and the grounded reason why.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -695,7 +695,7 @@
       }
     },
     "PostInput": {
-      "description": "What an agent writes through the post operation. A field only the server sets is not accepted.",
+      "description": "What the poster writes through the post operation. A field only the server sets is not accepted.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -935,14 +935,14 @@
           "$ref": "#/$defs/PodId"
         },
         "ts": {
-          "description": "When the pod sent the frame. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.",
+          "description": "The frame's timestamp. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.",
           "$ref": "#/$defs/Timestamp"
         },
         "actor": {
           "$ref": "#/$defs/Actor"
         },
         "data": {
-          "description": "The event's payload: the definition x-variants names for type. Like every object definition it accepts only its listed fields.",
+          "description": "The event's payload. Its fields come from the definition x-variants names for type, and that definition accepts only its listed fields.",
           "type": "object"
         }
       }
@@ -1055,7 +1055,7 @@
       }
     },
     "TaskClaimed": {
-      "description": "A task was claimed: who holds it, on which run, and until when the lease runs.",
+      "description": "A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1262,7 +1262,7 @@
           "maxLength": 80
         },
         "online": {
-          "description": "Whether the computer is connected.",
+          "description": "Whether the daemon reports the computer as online.",
           "type": "boolean"
         }
       }
@@ -1823,7 +1823,7 @@
       }
     },
     "TaskClaimOutput": {
-      "description": "The claim's lease: the task and when the lease runs out.",
+      "description": "The claim's lease: the task and when the lease runs out. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "type": "object",
       "additionalProperties": false,
       "required": [

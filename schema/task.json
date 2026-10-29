@@ -2,15 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jellymoon.dev/schema/v1/task.json",
   "title": "Tasks",
+  "x-rules": [
+    "A claim belongs to a run. Its lease renews on any operation that run's token makes, through any adapter, and on every daemon heartbeat (every 15 s) from the computer that hosts the run, while the run has not ended. Silence on the pod is not abandonment.",
+    "leaseUntil is the last renewal plus 60 s (four missed heartbeats).",
+    "On expiry the pod drops the claim and emits task.updated with no claim. The task's status and assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets already_claimed naming the holder.",
+    "When a run ends (POST /v1/runs/:run/end) or its token expires (at most 2 h), its claims are released at once."
+  ],
   "$defs": {
     "TaskStatus": { "description": "The state of a task on the board.", "type": "string", "enum": ["open", "in_progress", "blocked", "done", "failed"] },
     "TaskKind": {
-      "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
+      "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.",
       "type": "string",
       "enum": ["feature", "fix", "security", "design", "research", "chore"]
     },
     "Claim": {
-      "description": "One active claim per task. The lease is renewed by any MCP call on the claiming run.",
+      "description": "One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "type": "object",
       "additionalProperties": false,
       "required": ["by", "runId", "leaseUntil"],

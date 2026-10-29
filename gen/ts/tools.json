@@ -94,7 +94,7 @@
                 "maxLength": 120
               },
               "kind": {
-                "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
+                "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.",
                 "type": "string",
                 "enum": [
                   "feature",
@@ -159,7 +159,7 @@
                 }
               },
               "claim": {
-                "description": "One active claim per task. The lease is renewed by any MCP call on the claiming run.",
+                "description": "One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
@@ -592,7 +592,7 @@
                       }
                     },
                     "recommendation": {
-                      "description": "The option the agent recommends and the grounded reason why.",
+                      "description": "The option the poster recommends and the grounded reason why.",
                       "type": "object",
                       "additionalProperties": false,
                       "required": [
@@ -905,7 +905,7 @@
                   "maxLength": 120
                 },
                 "kind": {
-                  "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
+                  "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.",
                   "type": "string",
                   "enum": [
                     "feature",
@@ -970,7 +970,7 @@
                   }
                 },
                 "claim": {
-                  "description": "One active claim per task. The lease is renewed by any MCP call on the claiming run.",
+                  "description": "One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
@@ -1108,7 +1108,7 @@
                   "maxLength": 120
                 },
                 "kind": {
-                  "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
+                  "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.",
                   "type": "string",
                   "enum": [
                     "feature",
@@ -1173,7 +1173,7 @@
                   }
                 },
                 "claim": {
-                  "description": "One active claim per task. The lease is renewed by any MCP call on the claiming run.",
+                  "description": "One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
                   "type": "object",
                   "additionalProperties": false,
                   "required": [
@@ -1244,7 +1244,7 @@
     },
     {
       "name": "jm_task_claim",
-      "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every operation you make on this run.",
+      "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "inputSchema": {
         "description": "Which task to claim.",
         "type": "object",
@@ -1261,7 +1261,7 @@
         }
       },
       "outputSchema": {
-        "description": "The claim's lease: the task and when the lease runs out.",
+        "description": "The claim's lease: the task and when the lease runs out. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1348,7 +1348,7 @@
             "maxLength": 120
           },
           "kind": {
-            "description": "What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.",
+            "description": "What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.",
             "type": "string",
             "enum": [
               "feature",
@@ -1413,7 +1413,7 @@
             }
           },
           "claim": {
-            "description": "One active claim per task. The lease is renewed by any MCP call on the claiming run.",
+            "description": "One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
             "type": "object",
             "additionalProperties": false,
             "required": [
@@ -1580,7 +1580,7 @@
       "name": "jm_post",
       "description": "Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one.",
       "inputSchema": {
-        "description": "What an agent writes through the post operation. A field only the server sets is not accepted.",
+        "description": "What the poster writes through the post operation. A field only the server sets is not accepted.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1839,7 +1839,7 @@
                 }
               },
               "recommendation": {
-                "description": "The option the agent recommends and the grounded reason why.",
+                "description": "The option the poster recommends and the grounded reason why.",
                 "type": "object",
                 "additionalProperties": false,
                 "required": [

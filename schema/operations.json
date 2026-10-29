@@ -18,7 +18,7 @@
     { "name": "task_list", "method": "GET", "path": "/v1/pods/{podId}/tasks", "auth": "run|user", "input": "TaskListInput", "output": "TaskListOutput",
       "description": "List the pod's tasks, optionally filtered by status." },
     { "name": "task_claim", "method": "POST", "path": "/v1/pods/{podId}/tasks/{taskId}/claim", "auth": "run", "input": "TaskClaimInput", "output": "TaskClaimOutput",
-      "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every operation you make on this run." },
+      "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002." },
     { "name": "task_update", "method": "PATCH", "path": "/v1/pods/{podId}/tasks/{taskId}", "auth": "run|user", "input": "TaskUpdateInput", "output": "task.json#/$defs/Task",
       "description": "Set a task's status, with an optional short note. Use done only when the task's work is finished." },
     { "name": "evidence", "method": "GET", "path": "/v1/pods/{podId}/runs/{runId}/tool-calls", "auth": "run|user", "input": "EvidenceInput", "output": "EvidenceOutput",
@@ -95,7 +95,7 @@
       "properties": { "taskId": { "$ref": "common.json#/$defs/TaskId" } }
     },
     "TaskClaimOutput": {
-      "description": "The claim's lease: the task and when the lease runs out.",
+      "description": "The claim's lease: the task and when the lease runs out. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId", "leaseUntil"],

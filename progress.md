@@ -4,6 +4,18 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · gen is all-or-nothing, claims and leases (unit P03)
+- **Changed:** `make gen` renders and checks everything, then writes; a failing run leaves the tree as it
+  was. It also fails on an auth value outside `none|user|computer|run` (joined with `|`). The nine P02
+  nits are closed (error-body field, `Envelope.data`, `ts`/`online`, "the poster", TaskKind text, GitHub
+  slugs). New `docs/adr/0002-claims-and-leases.md`; `task.json` gets `x-rules` for it.
+- **Feature text:** F10 only, as the brief sanctioned: description and steps 4-5 now say the lease lives as
+  long as its run (heartbeat renews it). No other feature changed; `passes` is untouched.
+- **Evidence:** mutations (missing description; duplicate anchor with a valid schema change; `runn` and
+  `computr|user` auth) fail with the tree byte-identical. Shapes match `p02-schema-text` once `description`,
+  `x-errors` and `task.json` `x-rules` are stripped. `make gen` twice is clean; `make preflight` green.
+- **Next:** F02. **Surprising:** the 60 s lease and the 2 h run cap are still guesses (ADR 0002 lists them).
+
 ## 2026-10-29 · schema text (unit P02)
 - **Changed:** every `$def` and every property that is not a bare `$ref` has a plain description; each
   `ErrorCode` carries `x-errors` (HTTP status and meaning). `make gen` fails and names each gap, a

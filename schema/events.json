@@ -76,9 +76,9 @@
         "type": { "$ref": "#/$defs/EventType" },
         "seq": { "description": "The pod's event number. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.", "$ref": "common.json#/$defs/Seq" },
         "podId": { "$ref": "common.json#/$defs/PodId" },
-        "ts": { "description": "When the pod sent the frame. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.", "$ref": "common.json#/$defs/Timestamp" },
+        "ts": { "description": "The frame's timestamp. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.", "$ref": "common.json#/$defs/Timestamp" },
         "actor": { "$ref": "common.json#/$defs/Actor" },
-        "data": { "description": "The event's payload: the definition x-variants names for type. Like every object definition it accepts only its listed fields.", "type": "object" }
+        "data": { "description": "The event's payload. Its fields come from the definition x-variants names for type, and that definition accepts only its listed fields.", "type": "object" }
       }
     },
     "Member": {
@@ -122,7 +122,7 @@
       "properties": { "id": { "$ref": "common.json#/$defs/MessageId" }, "decision": { "$ref": "message.json#/$defs/Decision" } }
     },
     "TaskClaimed": {
-      "description": "A task was claimed: who holds it, on which run, and until when the lease runs.",
+      "description": "A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId", "by", "runId", "leaseUntil"],
@@ -226,7 +226,7 @@
       "properties": {
         "id": { "$ref": "common.json#/$defs/ComputerId" },
         "name": { "description": "The computer's name.", "type": "string", "minLength": 1, "maxLength": 80 },
-        "online": { "description": "Whether the computer is connected.", "type": "boolean" }
+        "online": { "description": "Whether the daemon reports the computer as online.", "type": "boolean" }
       }
     },
     "RunStatus": {

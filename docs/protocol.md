@@ -75,13 +75,13 @@ One of: `claude-code`, `codex`, `fake`.
 
 | Code | HTTP status | Meaning | Named in |
 |---|---|---|---|
-| `invalid_input` | 400 | The input is malformed or breaks a limit in the schema. Fix the field named in the error and send it again. | — |
+| `invalid_input` | 400 | The input is malformed or breaks a limit in the schema. Fix the field the error names, when it names one, and send it again. | — |
 | `summary_required` | 400 | A post has no summary. The summary is never derived; write the headline and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
 | `unauthorized` | 401 | No valid bearer token came with the request. Send a valid user, computer or run token. | — |
 | `forbidden` | 403 | The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may. | [Rules for Operations](#rules-for-operations) |
 | `not_found` | 404 | The id or route in the request matches nothing. Check the id. | — |
 | `gone` | 410 | An invite is used or expired. Ask for a new invite. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
-| `already_claimed` | 409 | Someone else holds the task's claim. The error names the holder; leave the task or wait. | [Operations: task_claim](#op-task_claim) |
+| `already_claimed` | 409 | Someone else holds the task's claim. The error names the holder; leave the task or wait. | [Rules for Tasks](#rules-for-tasks), [Operations: task_claim](#op-task_claim) |
 | `already_ruled` | 409 | The decision was already ruled and the first ruling stays. Read the decision instead of ruling again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
 | `authorization_pending` | 400 | The person has not approved the device code yet. Poll again after the interval. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `slow_down` | 400 | The device code was polled faster than its interval. Wait longer between polls. | — |
@@ -416,9 +416,9 @@ The frame every socket message is sent in.
 | `type` | [EventType](#def-EventType) | yes | Every kind of socket frame. x-variants gives each one its direction and its data. |
 | `seq` | [Seq](#def-Seq) | no | The pod's event number. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused. |
 | `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
-| `ts` | [Timestamp](#def-Timestamp) | no | When the pod sent the frame. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused. |
+| `ts` | [Timestamp](#def-Timestamp) | no | The frame's timestamp. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused. |
 | `actor` | [Actor](#def-Actor) | no | A member of a pod, or the system: its kind, its id and the name shown to people. |
-| `data` | object | yes | The event's payload: the definition x-variants names for type. Like every object definition it accepts only its listed fields. |
+| `data` | object | yes | The event's payload. Its fields come from the definition x-variants names for type, and that definition accepts only its listed fields. |
 
 <a id="def-Member"></a>
 ### Member
@@ -475,7 +475,7 @@ Only a decision changes after a message is created. The summary never changes.
 <a id="def-TaskClaimed"></a>
 ### TaskClaimed
 
-A task was claimed: who holds it, on which run, and until when the lease runs.
+A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -545,7 +545,7 @@ A member creates a task.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | yes | What the task is called. Limit: 1 to 120 characters |
-| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review. |
+| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix. |
 | `assignee` | [ActorId](#def-ActorId) | no | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
 | `body` | string | no | Details of the work, beyond the title. Limit: up to 16384 characters |
 
@@ -586,7 +586,7 @@ A computer as the daemon reports it.
 |---|---|---|---|
 | `id` | [ComputerId](#def-ComputerId) | yes | The id of a computer: a machine running the daemon, bound to one user. |
 | `name` | string | yes | The computer's name. Limit: 1 to 80 characters |
-| `online` | boolean | yes | Whether the computer is connected. |
+| `online` | boolean | yes | Whether the daemon reports the computer as online. |
 
 <a id="def-RunStatus"></a>
 ### RunStatus
@@ -613,7 +613,7 @@ The daemon's state, sent to the TUI over the local unix socket.
 
 ## Messages and cards
 
-The message contract. PostInput is what an agent writes through the post tool. Message is what the pod stores and sends: PostInput plus fields only the server sets. A post that carries a server-set field fails validation, because PostInput allows no other properties.
+The message contract. PostInput is what the poster writes through the post tool. Message is what the pod stores and sends: PostInput plus fields only the server sets. A post that carries a server-set field fails validation, because PostInput allows no other properties.
 
 ### Rules for Messages and cards
 
@@ -739,7 +739,7 @@ One sentence a person can trust without having been there, grounded in stamped e
 <a id="def-Recommendation"></a>
 ### Recommendation
 
-The option the agent recommends and the grounded reason why.
+The option the poster recommends and the grounded reason why.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -756,7 +756,7 @@ What a person needs to rule in about 30 seconds without having been there: what 
 | `happened` | list of [GroundedClaim](#def-GroundedClaim) | yes | What happened, as 1 to 5 grounded claims. Limit: 1 to 5 items |
 | `checked` | list of [GroundedClaim](#def-GroundedClaim) | yes | What was already verified or preflighted. Empty means nothing was checked, which the card shows. Limit: up to 5 items |
 | `stakes` | [GroundedClaim](#def-GroundedClaim) | yes | One sentence a person can trust without having been there, grounded in stamped evidence. |
-| `recommendation` | [Recommendation](#def-Recommendation) | yes | The option the agent recommends and the grounded reason why. |
+| `recommendation` | [Recommendation](#def-Recommendation) | yes | The option the poster recommends and the grounded reason why. |
 
 <a id="def-LinkType"></a>
 ### LinkType
@@ -833,7 +833,7 @@ The choice an ask carries. It is open until it is ruled, once.
 <a id="def-PostInput"></a>
 ### PostInput
 
-What an agent writes through the post operation. A field only the server sets is not accepted.
+What the poster writes through the post operation. A field only the server sets is not accepted.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -877,6 +877,13 @@ What the pod stores and sends: PostInput plus the fields only the server sets.
 
 ## Tasks
 
+### Rules for Tasks
+
+- A claim belongs to a run. Its lease renews on any operation that run's token makes, through any adapter, and on every daemon heartbeat (every 15 s) from the computer that hosts the run, while the run has not ended. Silence on the pod is not abandonment.
+- leaseUntil is the last renewal plus 60 s (four missed heartbeats).
+- On expiry the pod drops the claim and emits task.updated with no claim. The task's status and assignee are unchanged and the run is not stopped. If that run later operates on the task and nobody else has claimed it, its claim is restored; if someone has, it gets already_claimed naming the holder.
+- When a run ends (POST /v1/runs/:run/end) or its token expires (at most 2 h), its claims are released at once.
+
 <a id="def-TaskStatus"></a>
 ### TaskStatus
 
@@ -887,14 +894,14 @@ One of: `open`, `in_progress`, `blocked`, `done`, `failed`.
 <a id="def-TaskKind"></a>
 ### TaskKind
 
-What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.
+What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.
 
 One of: `feature`, `fix`, `security`, `design`, `research`, `chore`.
 
 <a id="def-Claim"></a>
 ### Claim
 
-One active claim per task. The lease is renewed by any MCP call on the claiming run.
+One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -912,12 +919,12 @@ A unit of work on the pod's board, with a kind and a status, and optionally an a
 | `id` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
 | `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
 | `title` | string | yes | What the task is called. Limit: 1 to 120 characters |
-| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review. |
+| `kind` | [TaskKind](#def-TaskKind) | yes | What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix. |
 | `body` | string | no | Details of the work, beyond the title. Limit: up to 16384 characters |
 | `status` | [TaskStatus](#def-TaskStatus) | yes | The state of a task on the board. |
 | `assignee` | [ActorId](#def-ActorId) | no | A user or an agent: who a task is assigned to, or who acted. System actors use sys_. |
 | `createdBy` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
-| `claim` | [Claim](#def-Claim) | no | One active claim per task. The lease is renewed by any MCP call on the claiming run. |
+| `claim` | [Claim](#def-Claim) | no | One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002. |
 | `createdAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 | `updatedAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
@@ -980,7 +987,7 @@ List the pod's tasks, optionally filtered by status.
 <a id="op-task_claim"></a>
 #### `task_claim`
 
-Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every operation you make on this run.
+Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 
 - HTTP: POST `/v1/pods/{podId}/tasks/{taskId}/claim`
 - Who may call: `run`: run token (`jmr_`)
@@ -1110,7 +1117,7 @@ Which task to claim.
 <a id="def-TaskClaimOutput"></a>
 ### TaskClaimOutput
 
-The claim's lease: the task and when the lease runs out.
+The claim's lease: the task and when the lease runs out. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|

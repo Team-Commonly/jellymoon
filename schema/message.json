@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jellymoon.dev/schema/v1/message.json",
   "title": "Messages",
-  "description": "The message contract. PostInput is what an agent writes through the post tool. Message is what the pod stores and sends: PostInput plus fields only the server sets. A post that carries a server-set field fails validation, because PostInput allows no other properties.",
+  "description": "The message contract. PostInput is what the poster writes through the post tool. Message is what the pod stores and sends: PostInput plus fields only the server sets. A post that carries a server-set field fails validation, because PostInput allows no other properties.",
   "x-rules": [
     "needs is required when kind is ask, and only allowed then.",
     "options is required when kind is ask, and only allowed then. Option ids are unique.",
@@ -96,7 +96,7 @@
       }
     },
     "Recommendation": {
-      "description": "The option the agent recommends and the grounded reason why.",
+      "description": "The option the poster recommends and the grounded reason why.",
       "type": "object",
       "additionalProperties": false,
       "required": ["option", "why"],
@@ -170,7 +170,7 @@
       "properties": { "id": { "$ref": "common.json#/$defs/DecisionId" }, "state": { "$ref": "#/$defs/DecisionState" }, "ruling": { "$ref": "#/$defs/Ruling" } }
     },
     "PostInput": {
-      "description": "What an agent writes through the post operation. A field only the server sets is not accepted.",
+      "description": "What the poster writes through the post operation. A field only the server sets is not accepted.",
       "type": "object",
       "additionalProperties": false,
       "required": ["summary", "kind", "status"],

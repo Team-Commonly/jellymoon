@@ -208,7 +208,7 @@ func (x TaskStatus) Valid() bool {
 	return false
 }
 
-// What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review.
+// What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix.
 type TaskKind string
 
 const (
@@ -229,7 +229,7 @@ func (x TaskKind) Valid() bool {
 	return false
 }
 
-// One active claim per task. The lease is renewed by any MCP call on the claiming run.
+// One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 type Claim struct {
 	By         Actor     `json:"by"`
 	RunID      RunID     `json:"runId"`
@@ -525,7 +525,7 @@ func (x *GroundedClaim) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// The option the agent recommends and the grounded reason why.
+// The option the poster recommends and the grounded reason why.
 type Recommendation struct {
 	Option OptionID      `json:"option"`
 	Why    GroundedClaim `json:"why"`
@@ -727,7 +727,7 @@ func (x *Decision) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// What an agent writes through the post operation. A field only the server sets is not accepted.
+// What the poster writes through the post operation. A field only the server sets is not accepted.
 type PostInput struct {
 	// The headline, outcome first. One line, at most 120 characters.
 	Summary string        `json:"summary"`
@@ -871,10 +871,10 @@ type Envelope struct {
 	// The pod's event number. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.
 	Seq   *Seq  `json:"seq,omitempty"`
 	PodID PodID `json:"podId"`
-	// When the pod sent the frame. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.
+	// The frame's timestamp. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused.
 	Ts    *Timestamp `json:"ts,omitempty"`
 	Actor *Actor     `json:"actor,omitempty"`
-	// The event's payload: the definition x-variants names for type. Like every object definition it accepts only its listed fields.
+	// The event's payload. Its fields come from the definition x-variants names for type, and that definition accepts only its listed fields.
 	Data json.RawMessage `json:"data"`
 }
 
@@ -1003,7 +1003,7 @@ func (x *MessageUpdated) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// A task was claimed: who holds it, on which run, and until when the lease runs.
+// A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 type TaskClaimed struct {
 	TaskID     TaskID    `json:"taskId"`
 	By         Actor     `json:"by"`
@@ -1209,7 +1209,7 @@ type ComputerStatus struct {
 	ID ComputerID `json:"id"`
 	// The computer's name.
 	Name string `json:"name"`
-	// Whether the computer is connected.
+	// Whether the daemon reports the computer as online.
 	Online bool `json:"online"`
 }
 
@@ -1825,7 +1825,7 @@ func (x *TaskClaimInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// The claim's lease: the task and when the lease runs out.
+// The claim's lease: the task and when the lease runs out. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.
 type TaskClaimOutput struct {
 	TaskID     TaskID    `json:"taskId"`
 	LeaseUntil Timestamp `json:"leaseUntil"`

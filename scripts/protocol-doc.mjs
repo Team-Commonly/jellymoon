@@ -4,7 +4,7 @@ const esc = (s) => String(s).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const code = (s) => `\`${s}\``;
 const link = (name) => `[${name}](#def-${name})`;
 const refName = (ref) => /\$defs\/([A-Za-z0-9]+)$/.exec(ref)[1];
-const slug = (t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/ /g, '-');
+const slug = (t) => t.toLowerCase().replace(/[^a-z0-9 _-]/g, '').replace(/ /g, '-');
 
 // Section titles, in document order. head(), the contents line and the errors table all read this one list.
 const TITLE = {

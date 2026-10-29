@@ -121,12 +121,13 @@
     {
       "id": "F10",
       "category": "board",
-      "description": "jm_task_claim is exclusive and its lease renews on every tool call",
+      "description": "jm_task_claim is exclusive, and its lease lives as long as its run",
       "steps": [
         "two runs claim the same task concurrently; exactly one wins",
         "the loser gets already_claimed naming the holder",
         "members receive task.claimed with leaseUntil",
-        "a later tool call on the winning run moves leaseUntil forward"
+        "an operation on the winning run, or a heartbeat from its computer, moves leaseUntil forward",
+        "with the daemon stopped, the claim is dropped 60 s after the last renewal and members receive task.updated with no claim"
       ],
       "test": "go test ./e2e -run TestF10",
       "passes": false

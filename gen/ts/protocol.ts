@@ -88,11 +88,11 @@ export type RunToken = string;
 export type TaskStatus = "open" | "in_progress" | "blocked" | "done" | "failed";
 export const TaskStatusValues = ["open","in_progress","blocked","done","failed"] as const;
 
-/** What kind of work a task is, set by its creator, so policy never guesses from the title. security is never folded into fix: it always gets its own review. */
+/** What kind of work a task is, set by its creator so policy (a fixes-only freeze, review depth, routing) never guesses from the title. security is never folded into fix. */
 export type TaskKind = "feature" | "fix" | "security" | "design" | "research" | "chore";
 export const TaskKindValues = ["feature","fix","security","design","research","chore"] as const;
 
-/** One active claim per task. The lease is renewed by any MCP call on the claiming run. */
+/** One active claim per task. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002. */
 export interface Claim {
   by: Actor;
   runId: RunId;
@@ -190,7 +190,7 @@ export interface GroundedClaim {
   messages?: MessageId[];
 }
 
-/** The option the agent recommends and the grounded reason why. */
+/** The option the poster recommends and the grounded reason why. */
 export interface Recommendation {
   option: OptionId;
   why: GroundedClaim;
@@ -257,7 +257,7 @@ export interface Decision {
   ruling?: Ruling;
 }
 
-/** What an agent writes through the post operation. A field only the server sets is not accepted. */
+/** What the poster writes through the post operation. A field only the server sets is not accepted. */
 export interface PostInput {
   /** The headline, outcome first. One line, at most 120 characters. */
   summary: string;
@@ -328,10 +328,10 @@ export interface Envelope {
   /** The pod's event number. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused. */
   seq?: Seq;
   podId: PodId;
-  /** When the pod sent the frame. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused. */
+  /** The frame's timestamp. Set on pod-to-client frames only; a client-to-pod frame that carries it is refused. */
   ts?: Timestamp;
   actor?: Actor;
-  /** The event's payload: the definition x-variants names for type. Like every object definition it accepts only its listed fields. */
+  /** The event's payload. Its fields come from the definition x-variants names for type, and that definition accepts only its listed fields. */
   data: Record<string, unknown>;
 }
 
@@ -371,7 +371,7 @@ export interface MessageUpdated {
   decision: Decision;
 }
 
-/** A task was claimed: who holds it, on which run, and until when the lease runs. */
+/** A task was claimed: who holds it, on which run, and until when. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002. */
 export interface TaskClaimed {
   taskId: TaskId;
   by: Actor;
@@ -445,7 +445,7 @@ export interface ComputerStatus {
   id: ComputerId;
   /** The computer's name. */
   name: string;
-  /** Whether the computer is connected. */
+  /** Whether the daemon reports the computer as online. */
   online: boolean;
 }
 
@@ -652,7 +652,7 @@ export interface TaskClaimInput {
   taskId: TaskId;
 }
 
-/** The claim's lease: the task and when the lease runs out. */
+/** The claim's lease: the task and when the lease runs out. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002. */
 export interface TaskClaimOutput {
   taskId: TaskId;
   leaseUntil: Timestamp;

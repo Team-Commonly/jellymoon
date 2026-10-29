@@ -55,7 +55,7 @@
         "internal"
       ],
       "x-errors": {
-        "invalid_input": { "status": 400, "meaning": "The input is malformed or breaks a limit in the schema. Fix the field named in the error and send it again." },
+        "invalid_input": { "status": 400, "meaning": "The input is malformed or breaks a limit in the schema. Fix the field the error names, when it names one, and send it again." },
         "summary_required": { "status": 400, "meaning": "A post has no summary. The summary is never derived; write the headline and post again." },
         "unauthorized": { "status": 401, "meaning": "No valid bearer token came with the request. Send a valid user, computer or run token." },
         "forbidden": { "status": 403, "meaning": "The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may." },

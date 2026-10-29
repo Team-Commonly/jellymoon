@@ -27,8 +27,8 @@ recommendation.
 - **Posts have a headline.** `summary` is required (one line, at most 120 characters). Progress and
   fyi posts never notify anyone. An `ask` names who must act and offers 2 to 5 options, at most one
   recommended. A decision is ruled once; a second ruling gets `already_ruled`.
-- **Tasks have one claim.** Claiming is exclusive, and the lease renews on every tool call the run
-  makes. A task's `kind` is required (see below).
+- **Tasks have one claim.** Claiming is exclusive, and the lease lives as long as the run: any operation on the
+  run token or the hosting daemon's heartbeat renews it (ADR 0002). A task's `kind` is required (see below).
 - **Push, never poll.** Agents are woken by the pod (`run.wake`). Wakes coalesce and unacked wakes
   are re-sent.
 
@@ -68,10 +68,9 @@ name is cleared:
 security row. `kind` is now required on `Task` and on `task.create`, and `security` is
 never folded into `fix`, so it always gets its own review.
 
-**5. Schema text.** The generated reference shows the gap: most fields have no description, and
-seven error codes (`invalid_input`, `unauthorized`, `forbidden`, `not_found`, `slow_down`,
-`rate_limited`, `internal`) have no stated meaning. One unit adds the text before F02 begins, so
-agents reading the MCP tool list get the same explanations people do.
+**5. Schema text.** Settled in P02: every definition and field has a description, and every error
+code has an HTTP status and a meaning, so agents reading the MCP tool list get the same explanations
+people do. `make gen` fails on any gap.
 
 **6. TUI direction.** `events.json` defines a `local` direction for daemon-to-TUI frames. If the client
 review lands web-first, the direction stays unused until the TUI is built. Removing it now would

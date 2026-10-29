@@ -6,6 +6,7 @@
 //   docs/protocol.md              the human-readable protocol reference (scripts/protocol-doc.mjs)
 //   daemon/internal/protocol/gen.go   Go structs, enums, required-key checks, event decode
 // Deterministic: same schema in, same bytes out. `make gen` runs gofmt on the Go file afterwards.
+// All-or-nothing: every check runs before the first file is written, so a failing run changes nothing.
 import fs from 'node:fs';
 import path from 'node:path';
 import { renderProtocol } from './protocol-doc.mjs';
@@ -99,6 +100,16 @@ for (const o of operations) {
   for (const [, p] of o.path.matchAll(/\{(\w+)\}/g)) {
     if (p !== 'podId' && !fields.includes(p)) fail(`operation ${o.name}: path {${p}} is not a field of ${o.inputDef}`);
   }
+}
+// Every auth value, on operations and on routes, is a |-joined set of known token kinds.
+const AUTH_KINDS = ['none', 'user', 'computer', 'run'];
+const auths = [
+  ...operations.map((o) => [`operation ${o.name}`, o.auth]),
+  ...docs['pod-api']['x-routes'].map((r) => [`route ${r.method} ${r.path}`, r.auth]),
+];
+for (const [where, a] of auths) {
+  const bad = typeof a === 'string' ? a.split('|').filter((x) => !AUTH_KINDS.includes(x)) : [String(a)];
+  if (bad.length) fail(`${where}: unknown auth value ${bad.map((x) => JSON.stringify(x)).join(', ')}; known: ${AUTH_KINDS.join(', ')}, joined with |`);
 }
 // The MCP adapter: one tool per operation, same input and output.
 const tools = operations.map((o) => ({ ...o, name: TOOL_PREFIX + o.name }));
@@ -261,12 +272,9 @@ go += `// ErrorStatus is the HTTP status each error code is sent with (common.js
 go += `// ToolPrefix is prepended to every operation name in the MCP adapter (schema/operations.json x-mcp-prefix).\nconst ToolPrefix = ${JSON.stringify(TOOL_PREFIX)}\n\n`;
 go += `// ToolNames lists the MCP tools in schema order.\nvar ToolNames = []string{${tools.map((t) => JSON.stringify(t.name)).join(', ')}}\n`;
 
-// ---------- write ----------
-const write = (rel, content) => {
-  const p = path.join(ROOT, rel);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, content);
-};
+// ---------- render everything, check, then write ----------
+const outputs = [];
+const write = (rel, content) => outputs.push([rel, content]);
 write('gen/ts/protocol.ts', ts);
 write('gen/ts/schemas.json', JSON.stringify(bundle, null, 2) + '\n');
 write('gen/ts/tools.json', JSON.stringify({ $comment: HEADER, tools: mcpTools }, null, 2) + '\n');
@@ -282,4 +290,9 @@ if (missingAnchors.length || extraAnchors.length || doubled.length) {
   fail(`docs/protocol.md anchors differ from the defs: missing [${missingAnchors}], unknown [${extraAnchors}], rendered twice [${doubled}]`);
 }
 write('docs/protocol.md', protocolDoc);
+for (const [rel, content] of outputs) {
+  const p = path.join(ROOT, rel);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, content);
+}
 console.log(`gen: ${defs.size} defs, ${eventTypes.length} event types, ${operations.length} operations`);

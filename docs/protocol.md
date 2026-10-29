@@ -5,8 +5,8 @@
 The wire protocol as the schema defines it, for review without reading JSON Schema. Terms are used as
 defined in [GLOSSARY.md](GLOSSARY.md). Every definition appears once and is linked wherever it is used.
 
-How to read a table: **Required** says whether the field must be present. Limits in **Notes** are enforced
-by the pod. An object accepts only the fields listed; anything else is refused.
+How to read a table: **Required** says whether the field must be present. Limits in **Notes** come from the
+schema. An object accepts only the fields listed; anything else fails validation.
 
 Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#errors) · [Tokens](#tokens) · [Worker HTTP API](#worker-http-api) · [Socket events](#socket-events) · [Messages and cards](#messages-and-cards) · [Tasks](#tasks) · [MCP tools](#mcp-tools)
 
@@ -15,8 +15,6 @@ Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#er
 Ids, actors, timestamps and errors shared by every other schema file. Ids are a type prefix plus a ULID.
 
 ### Ids
-
-Every id is a type prefix plus a ULID.
 
 | Id | Format | Meaning |
 |---|---|---|
@@ -70,20 +68,20 @@ One of: `claude-code`, `codex`, `fake`.
 
 ### Error codes
 
-| Code | Where the protocol mentions it |
+| Code | Named in |
 |---|---|
 | `invalid_input` | — |
-| `summary_required` | A post without summary is refused with summary_required, not derived. |
+| `summary_required` | Messages rules |
 | `unauthorized` | — |
 | `forbidden` | — |
 | `not_found` | — |
-| `gone` | A used or expired invite gets gone (HTTP 410). Only a member can create an invite. |
-| `already_claimed` | Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim's lease renews with every tool call you make on this run. |
-| `already_ruled` | A decision is ruled once. A second ruling gets already_ruled and the first stays. |
-| `authorization_pending` | A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token. |
+| `gone` | Worker HTTP API rules |
+| `already_claimed` | tool `commonly_task_claim` |
+| `already_ruled` | Messages rules |
+| `authorization_pending` | Worker HTTP API rules |
 | `slow_down` | — |
-| `expired_token` | A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token. |
-| `invalid_grant` | A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token. |
+| `expired_token` | Worker HTTP API rules |
+| `invalid_grant` | Worker HTTP API rules |
 | `rate_limited` | — |
 | `internal` | — |
 
@@ -144,6 +142,12 @@ A string, starts with `cmr_` then 43 letters or digits.
 
 Request and response bodies for the Worker's HTTP routes. Every error response body is common.json ErrorBody. The Worker validates, authenticates, then calls the pod Durable Object; all authorization lives in the pod, never the client.
 
+### Rules
+
+- /__test/* routes exist only when ENV is local or preview, and are absent from the production bundle.
+- A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token.
+- A used or expired invite gets gone (HTTP 410). Only a member can create an invite.
+
 ### Routes
 
 | Method | Path | Who may call | Request body | Response |
@@ -159,12 +163,6 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 | POST | `/v1/runs` | a computer (`cmc_`) | [ClaimRunRequest](#def-ClaimRunRequest) | [ClaimRunResponse](#def-ClaimRunResponse) |
 | POST | `/v1/runs/:run/end` | a computer (`cmc_`) | [EndRunRequest](#def-EndRunRequest) | — |
 | POST | `/mcp` | an agent run (`cmr_`) or a signed-in user (`cmu_`) | — | mcp-streamable-http, stateless |
-
-### Rules
-
-- /__test/* routes exist only when ENV is local or preview, and are absent from the production bundle.
-- A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token.
-- A used or expired invite gets gone (HTTP 410). Only a member can create an invite.
 
 <a id="def-DeviceStartResponse"></a>
 ### DeviceStartResponse
@@ -556,6 +554,8 @@ One of: `member`, `owner`.
 ### NeedsTarget
 
 Exactly one of userIds or role.
+
+Limit: exactly 1 field.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|

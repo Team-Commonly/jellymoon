@@ -7,10 +7,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readReviewerEntries, touchesProtected } from './review-gate.mjs';
-import { checkHead, checkLedger, checkPodVerdict, checkSecondVerifier, landAction, owedList, parseLedger } from './land-decide.mjs';
+import { checkHead, remoteFor, checkLedger, checkPodVerdict, checkSecondVerifier, landAction, owedList, parseLedger } from './land-decide.mjs';
 
-const REQUIRED = ['JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
+const REQUIRED = ['JM_REPO', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
 const out = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
+const REPO = process.env.JM_REPO; // every gh call names it: a worktree can carry remotes for several repos
 const gh = (...args) => out('gh', args);
 const say = (m) => console.log(m);
 const refuse = (m) => { console.error(`land: refused: ${m}`); process.exit(1); };
@@ -23,15 +24,19 @@ function appendLedger(pr, head, verdict, by, note) {
   fs.appendFileSync(f, `${lead}${[pr, head, verdict, by, when(), note].join('\t')}\n`);
 }
 
-const viewPr = (n) => JSON.parse(gh('pr', 'view', String(n), '--json', 'number,state,baseRefName,headRefName,headRefOid,createdAt'));
-const changedFiles = (n) => gh('api', `repos/{owner}/{repo}/pulls/${n}/files`, '--paginate', '--jq', '.[] | {filename, previous_filename}')
+function viewPr(n) {
+  const pr = JSON.parse(gh('pr', 'view', String(n), '--repo', REPO, '--json', 'url,number,state,baseRefName,headRefName,headRefOid,createdAt'));
+  if (!String(pr.url).includes(`github.com/${REPO}/pull/${n}`)) refuse(`#${n} resolved to ${pr.url}, not ${REPO}`);
+  return pr;
+}
+const changedFiles = (n) => gh('api', `repos/${REPO}/pulls/${n}/files`, '--paginate', '--jq', '.[] | {filename, previous_filename}')
   .split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
 // Base chain from this PR down to main, bottom-up. A merged PR ends the walk.
 function chainOf(n, stack) {
   const chain = [viewPr(n)];
   while (stack && chain[0].state !== 'MERGED' && chain[0].baseRefName !== 'main') {
-    const below = JSON.parse(gh('pr', 'list', '--state', 'all', '--head', chain[0].baseRefName, '--json', 'number', '--limit', '1'))[0];
+    const below = JSON.parse(gh('pr', 'list', '--repo', REPO, '--state', 'all', '--head', chain[0].baseRefName, '--json', 'number', '--limit', '1'))[0];
     if (!below) refuse(`#${chain[0].number} is based on ${chain[0].baseRefName}, which has no PR; not a stack down to main`);
     chain.unshift(viewPr(below.number));
   }
@@ -40,9 +45,9 @@ function chainOf(n, stack) {
 }
 
 function fetchLocal(n) {
-  const slug = gh('repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner');
-  const remote = out('git', ['remote', '-v']).split('\n').find((l) => l.includes(`/${slug}`) || l.includes(`:${slug}`))?.split(/\s/)[0];
-  if (!remote) refuse(`no git remote points at ${slug}`);
+  const m = remoteFor(out('git', ['remote', '-v']), REPO);
+  if (m.error) refuse(m.error);
+  const remote = m.remote;
   out('git', ['fetch', '--quiet', remote, `pull/${n}/head`]);
   return out('git', ['rev-parse', 'FETCH_HEAD']);
 }
@@ -144,10 +149,10 @@ async function main() {
     if (action === 'record-only') {
       console.error(`land: warning: #${pr.number} was merged without a LANDED row; recording it`);
     } else {
-      if (pr.baseRefName !== 'main') gh('pr', 'edit', String(pr.number), '--base', 'main');
-      gh('pr', 'merge', String(pr.number), '--merge', '--match-head-commit', head);
+      if (pr.baseRefName !== 'main') gh('pr', 'edit', String(pr.number), '--repo', REPO, '--base', 'main');
+      gh('pr', 'merge', String(pr.number), '--repo', REPO, '--merge', '--match-head-commit', head);
     }
-    const sha = JSON.parse(gh('pr', 'view', String(pr.number), '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
+    const sha = JSON.parse(gh('pr', 'view', String(pr.number), '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
     appendLedger(pr.number, head, 'LANDED', 'land', sha);
     if (regate) appendLedger(pr.number, head, 'REGATE-OWED', 'land', 'reviewer-gate-unavailable');
     say(`#${pr.number} landed as ${sha}`);

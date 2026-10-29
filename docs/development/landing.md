@@ -26,6 +26,7 @@ plan and merges nothing.
 ## Environment (never committed)
 | Variable | Meaning |
 |---|---|
+| `JM_REPO` | the target repo as `owner/name`. Required: a worktree can carry remotes for more than one repo (here `origin` is a different repository), so a bare `gh` call would read or merge in the wrong one. Every `gh` call passes `--repo`, the git remote is the single one whose URL matches (https or ssh, with or without `.git`), and each PR's URL is checked to be `github.com/<JM_REPO>/pull/<n>` before any action |
 | `JM_LEDGER` | path to the ledger TSV |
 | `JM_COMMONLY_API` | base URL of the API holding the verdict pod |
 | `JM_COMMONLY_TOKEN_FILE` | path to a token file; read, never printed |

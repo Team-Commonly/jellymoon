@@ -92,3 +92,12 @@ export function owedList(rows, regated) {
   return rows.filter((r) => r.verdict === 'REGATE-OWED' && !seen.has(`${ref(r.pr)}@${r.head}`) && seen.add(`${ref(r.pr)}@${r.head}`)
     && !regated(ref(r.pr), r.head, Date.parse(r.when) || 0));
 }
+
+// The one git remote whose URL is the target repo (https or ssh, with or without .git), from `git remote -v`.
+export function remoteFor(remoteV, repo) {
+  const esc = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const url = new RegExp(`^(https://([^@/]+@)?github\\.com/|git@github\\.com:|ssh://git@github\\.com/)${esc}(\\.git)?/?$`, 'i');
+  const names = [...new Set(remoteV.split('\n').map((l) => l.split(/\s+/)).filter(([, u]) => u && url.test(u)).map(([n]) => n))];
+  if (names.length === 1) return { remote: names[0] };
+  return { error: names.length ? `more than one git remote matches ${repo}: ${names.join(', ')}` : `no git remote matches ${repo}` };
+}

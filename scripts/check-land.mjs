@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 // Tests the pure decisions behind scripts/land.mjs (scripts/land-decide.mjs). No network, no gh. Own step in `make test`.
-import { checkHead, checkLedger, checkPodVerdict, checkSecondVerifier, landAction, owedList, parseLedger } from './land-decide.mjs';
+import fs from 'node:fs';
+import { checkHead, remoteFor, checkLedger, checkPodVerdict, checkSecondVerifier, landAction, owedList, parseLedger } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
 const H2 = 'c'.repeat(40);
@@ -71,6 +72,24 @@ const cases = [
   ['--owed omits a re-gated PR', owedList(ledger(row(5, H, 'REGATE-OWED', 'land', 'reviewer-gate-unavailable')), () => true).length, 0],
   ['--owed lists each PR and head once', owedList(ledger(row(5, H, 'REGATE-OWED', 'land'), row(5, H, 'REGATE-OWED', 'land')), () => false).length, 1],
 ];
+const R = 'Team-Commonly/jellymoon';
+const rem = (...l) => l.map(([n, u]) => `${n}\t${u} (fetch)\n${n}\t${u} (push)`).join('\n');
+const remotes = (txt) => remoteFor(txt, R);
+const src = fs.readFileSync(new URL('./land.mjs', import.meta.url), 'utf8').split('\n');
+const ghCalls = src.map((l, i) => [l, i + 1]).filter(([l]) => /\bgh\(/.test(l) && !l.includes('const gh ='));
+cases.push(
+  ['remote: https matches', remotes(rem(['jm', `https://github.com/${R}`])).remote, 'jm'],
+  ['remote: https with .git matches', remotes(rem(['jm', `https://github.com/${R}.git`])).remote, 'jm'],
+  ['remote: ssh with .git matches', remotes(rem(['jm', `git@github.com:${R}.git`])).remote, 'jm'],
+  ['remote: ssh without .git matches', remotes(rem(['jm', `git@github.com:${R}`])).remote, 'jm'],
+  ['remote: the other repo is not matched, the right one is', remotes(rem(['origin', 'git@github.com:Team-Commonly/commonly.git'], ['jm', `https://github.com/${R}.git`])).remote, 'jm'],
+  ['remote: a repo with the same prefix is not matched', remotes(rem(['x', `https://github.com/${R}-old.git`])).error, `no git remote matches ${R}`],
+  ['remote: no match refused', remotes(rem(['origin', 'git@github.com:Team-Commonly/commonly.git'])).error, `no git remote matches ${R}`],
+  ['remote: two matches refused', Boolean(remotes(rem(['a', `https://github.com/${R}`], ['b', `git@github.com:${R}.git`])).error), true],
+  ['every gh call in land.mjs carries --repo (or a literal repos/${REPO} api path)',
+    ghCalls.filter(([l]) => !(l.includes("'--repo'") || (l.includes("gh('api'") && l.includes('repos/${REPO}')))).map(([, n]) => n).join(), ''],
+  ['land.mjs has gh calls to scan', ghCalls.length > 5, true],
+);
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (bad.length) { console.error(`check-land: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }
 console.log(`check-land: ${cases.length} cases ok`);

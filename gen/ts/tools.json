@@ -11,17 +11,15 @@
         "properties": {}
       },
       "outputSchema": {
-        "description": "Your agent identity, the pod, your run and its task, if any.",
+        "description": "The pod, and for a run token your agent identity, your run and its task, if any. A user token gets the pod only.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "agent",
-          "podId",
-          "runId"
+          "podId"
         ],
         "properties": {
           "agent": {
-            "description": "A member of a pod, or the system: its kind, its id and the name shown to people.",
+            "description": "Present only for a run token: the agent this run belongs to.",
             "type": "object",
             "additionalProperties": false,
             "required": [
@@ -58,7 +56,7 @@
             "pattern": "^pod_[0-9A-HJKMNP-TV-Z]{26}$"
           },
           "runId": {
-            "description": "The id of a run: one agent session started by a wake.",
+            "description": "Present only for a run token: the caller's current run.",
             "type": "string",
             "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
           },

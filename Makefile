@@ -1,6 +1,10 @@
 # Jellymoon commands. Go and Bun are pinned in .tool-versions; `make tools` installs them into
 # .tools/ (repo-local). CI installs the same versions with setup-go and setup-bun.
 export PATH := $(CURDIR)/.tools/bin:$(PATH)
+# GNU Make 3.81 (macOS) execs a simple recipe line directly, searching the PATH make started with,
+# not the exported one, so recipes name the repo-local tools by path. CI has no .tools/ and uses PATH.
+BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
+GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
 .PHONY: tools gen check-gen test test-ts test-go entropy portable secrets hooks preflight
 
@@ -8,12 +12,12 @@ tools:
 	scripts/tools.sh
 
 node_modules: package.json bun.lock
-	bun install --frozen-lockfile
+	$(BUN) install --frozen-lockfile
 	@touch node_modules
 
 # Regenerate every contract from schema/. Never hand-edit gen/, protocol/gen.go or docs/protocol.md.
 gen: node_modules
-	bun scripts/gen.mjs
+	$(BUN) scripts/gen.mjs
 
 # Fails if schema/ changed without `make gen`, or gen/ was edited by hand.
 check-gen: gen
@@ -21,12 +25,12 @@ check-gen: gen
 	@test -z "$$(git ls-files --others --exclude-standard gen daemon/internal/protocol docs/protocol.md)" || (echo "untracked generated files; commit them"; exit 1)
 
 test-ts: node_modules
-	bun scripts/check-fixtures.mjs
-	bun run check:types
+	$(BUN) scripts/check-fixtures.mjs
+	$(BUN) run check:types
 
 test-go:
-	go vet ./...
-	go test -race ./...
+	$(GO) vet ./...
+	$(GO) test -race ./...
 
 test: test-ts test-go
 
@@ -35,16 +39,16 @@ test: test-ts test-go
 STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.2
 DEADCODE := golang.org/x/tools/cmd/deadcode@v0.51.0
 entropy: node_modules
-	bun run check:entropy
-	bun run check:dead
-	bun run check:boundaries
-	go run $(STATICCHECK) ./...
-	@if [ -n "$$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)" ]; then go run $(DEADCODE) -test ./...; fi
+	$(BUN) run check:entropy
+	$(BUN) run check:dead
+	$(BUN) run check:boundaries
+	$(GO) run $(STATICCHECK) ./...
+	@if [ -n "$$($(GO) list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)" ]; then $(GO) run $(DEADCODE) -test ./...; fi
 
 # No secrets or infrastructure ids, from the first commit (gitleaks over the full history).
 GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 secrets:
-	go run $(GITLEAKS) git --log-opts=HEAD --redact --no-banner .
+	$(GO) run $(GITLEAKS) git --log-opts=HEAD --redact --no-banner .
 
 # Per worktree: pre-commit runs the fast gates; fence=1 also blocks pushes (worker worktrees).
 hooks:

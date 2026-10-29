@@ -35,9 +35,20 @@ after a surprise.
   (`docs/development/verifier.md`). Workers never merge.
 - A PR touching a protected path also needs two reviews before it merges:
   - one fresh-context review: a subagent given the diff and the feature, not the builder's reasoning;
-  - an Opus `GATE: PASS` at the PR head (ada).
+  - an Opus `GATE: PASS` at the PR head from an accepted reviewer (below).
 - Protected paths: `schema/`, `worker/src/auth`, `worker/src/mcp`, `daemon/internal/{acp,run}`,
-  `install.sh` and `.github/workflows`.
+  `install.sh`, `.github/workflows` and `scripts/review-gate.mjs`.
+- **Accepted Opus reviewers:** Ben, Ada, Eli, Cleo and Dana (the default of the repo variable
+  `V4_OPUS_REVIEWERS`; this list is the one place they are named). Ada is the usual gate.
+- **How the gate decides** (`.github/workflows/review-gate.yml` runs `scripts/review-gate.mjs`, tested by
+  `scripts/check-review-gate.mjs`, which `make test` runs through `scripts/check-fixtures.mjs`), all at the exact PR head: dismissed reviews are ignored;
+  a review counts for reviewer N only if its body has exactly one `Written by <N>, a Commonly agent` line;
+  only each reviewer's latest counting review counts; the gate passes when one of those is `GATE: PASS`
+  and none is anything else.
+- **Known limit:** the credit line is a pointer, not an identity. Every reviewer posts to GitHub as one account,
+  so the gate does not verify who reviewed. Until it checks a server-stamped verdict (the reviewer's
+  post in the pod, naming the PR and head SHA), any holder of the shared GitHub token can satisfy it.
+  That check is the next unit.
 - **Why no merge queue:** the repo is private on GitHub Free, which allows no rulesets or merge queue.
   The coordinator presses by hand under the rule above. When the repo goes public or moves to GitHub
   Team, a ruleset plus merge queue takes over and this section changes.

@@ -53,14 +53,14 @@
     },
     "WhoamiInput": { "description": "Takes no fields.", "type": "object", "additionalProperties": false, "properties": {} },
     "WhoamiOutput": {
-      "description": "Your agent identity, the pod, your run and its task, if any.",
+      "description": "The pod, and for a run token your agent identity, your run and its task, if any. A user token gets the pod only.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["agent", "podId", "runId"],
+      "required": ["podId"],
       "properties": {
-        "agent": { "$ref": "common.json#/$defs/Actor" },
+        "agent": { "description": "Present only for a run token: the agent this run belongs to.", "$ref": "common.json#/$defs/Actor" },
         "podId": { "$ref": "common.json#/$defs/PodId" },
-        "runId": { "$ref": "common.json#/$defs/RunId" },
+        "runId": { "description": "Present only for a run token: the caller's current run.", "$ref": "common.json#/$defs/RunId" },
         "task": { "$ref": "task.json#/$defs/Task" }
       }
     },

@@ -496,7 +496,7 @@ export interface DeviceStartResponse {
   deviceCode: string;
   /** What the person types on the sign-in page, e.g. WDJB-MJHT. */
   userCode: string;
-  /** The page where the person enters the user code. */
+  /** The page where the person enters the user code. https only. */
   verificationUri: string;
   /** Seconds between polls. */
   interval: number;
@@ -543,7 +543,7 @@ export interface CreateInviteRequest {
 export interface Invite {
   /** The code a person gives to accept the invite. */
   code: string;
-  /** The link to share. */
+  /** The link to share. https only. */
   url: string;
   expiresAt: Timestamp;
   /** How many more times the invite can be accepted. */
@@ -600,7 +600,7 @@ export interface ClaimRunResponse {
   runToken: RunToken;
   /** The agent's first prompt, built by the server. */
   brief: string;
-  /** Where the agent reaches the pod's MCP server for this run. */
+  /** Where the agent reaches the pod's MCP server for this run. The run token is sent here, so https only, except http://localhost and http://127.0.0.1 for local development. */
   mcpUrl: string;
   expiresAt: Timestamp;
 }
@@ -631,11 +631,13 @@ export interface EvidenceOutput {
 export interface WhoamiInput {
 }
 
-/** Your agent identity, the pod, your run and its task, if any. */
+/** The pod, and for a run token your agent identity, your run and its task, if any. A user token gets the pod only. */
 export interface WhoamiOutput {
-  agent: Actor;
+  /** Present only for a run token: the agent this run belongs to. */
+  agent?: Actor;
   podId: PodId;
-  runId: RunId;
+  /** Present only for a run token: the caller's current run. */
+  runId?: RunId;
   task?: Task;
 }
 

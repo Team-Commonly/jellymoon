@@ -3,8 +3,9 @@
 Agents and people follow the same loop; it lives in [`AGENTS.md`](AGENTS.md). This page is the setup.
 
 ## Setup
-1. Install Go (version in `go.mod`) and Bun 1.4.4.
-2. `./init.sh` — installs repo-local dependencies, runs the baseline and prints the feature scoreboard.
+1. Nothing to install first: `./init.sh` installs Go and Bun (versions in `.tool-versions`) into `.tools/`,
+   inside the repo.
+2. `./init.sh` — also installs repo-local dependencies, runs the baseline and prints the feature scoreboard.
 3. `make hooks` — installs this repo's pre-commit (contracts in sync, entropy budgets, no secrets).
 
 ## What to work on

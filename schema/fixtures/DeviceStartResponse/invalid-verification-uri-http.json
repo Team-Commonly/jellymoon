@@ -1,0 +1,7 @@
+{
+  "deviceCode": "dddddddddddddddddddddddddddddddddddddddd",
+  "userCode": "WDJB-MJHT",
+  "verificationUri": "http://v4.example.dev/device",
+  "interval": 5,
+  "expiresIn": 600
+}

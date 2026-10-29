@@ -11,11 +11,13 @@
   "options": [
     {
       "id": "f",
-      "label": "F"
+      "label": "F",
+      "consequence": "If you pick f, the agent proceeds that way on its next run."
     },
     {
       "id": "a",
-      "label": "A"
+      "label": "A",
+      "consequence": "If you pick a, the agent proceeds that way on its next run."
     }
   ]
 }

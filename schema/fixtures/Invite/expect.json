@@ -1,0 +1,6 @@
+{
+  "invalid-url-http.json": {
+    "keyword": "pattern",
+    "path": "/url"
+  }
+}

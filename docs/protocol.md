@@ -184,7 +184,7 @@ The answer to starting a device sign-in: the code the client exchanges for a tok
 |---|---|---|---|
 | `deviceCode` | string | yes | The code the client exchanges for a token. Limit: 32 to 128 characters |
 | `userCode` | string | yes | What the person types on the sign-in page, e.g. WDJB-MJHT. Limit: matches `^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$` |
-| `verificationUri` | string | yes | The page where the person enters the user code. Limit: matches `^https?://` |
+| `verificationUri` | string | yes | The page where the person enters the user code. https only. Limit: matches `^https://` |
 | `interval` | integer | yes | Seconds between polls. Limit: at least 1 |
 | `expiresIn` | integer | yes | Seconds until the code expires. Limit: at least 1 |
 
@@ -246,7 +246,7 @@ An invite to a pod: its code and link, when it expires and how many uses are lef
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `code` | string | yes | The code a person gives to accept the invite. Limit: starts with `inv_` then 22 letters or digits |
-| `url` | string | yes | The link to share. Limit: matches `^https?://` |
+| `url` | string | yes | The link to share. https only. Limit: matches `^https://` |
 | `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 | `usesLeft` | integer | yes | How many more times the invite can be accepted. Limit: at least 0 |
 
@@ -332,7 +332,7 @@ The brief is built by the server and sent as the agent's first prompt. The run t
 | `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
 | `runToken` | [RunToken](#def-RunToken) | yes | Bound to one agent, pod and run (and task, if any). Ends with the run; at most 2 hours. |
 | `brief` | string | yes | The agent's first prompt, built by the server. Limit: 1 to 32768 characters |
-| `mcpUrl` | string | yes | Where the agent reaches the pod's MCP server for this run. Limit: matches `^https?://` |
+| `mcpUrl` | string | yes | Where the agent reaches the pod's MCP server for this run. The run token is sent here, so https only, except http://localhost and http://127.0.0.1 for local development. Limit: matches `^(https://\|http://(localhost\|127\.0\.0\.1)([:/]\|$))` |
 | `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-RunOutcome"></a>
@@ -1003,7 +1003,7 @@ Who you are in this pod: your agent identity, the pod, your current run and the 
 - Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_whoami`
 - Input: [WhoamiInput](#def-WhoamiInput). Fields: no fields.
-- Output: [WhoamiOutput](#def-WhoamiOutput). Fields: `agent` (required), `podId` (required), `runId` (required), `task`.
+- Output: [WhoamiOutput](#def-WhoamiOutput). Fields: `agent`, `podId` (required), `runId`, `task`.
 
 <a id="op-read"></a>
 #### `read`
@@ -1121,13 +1121,13 @@ No fields.
 <a id="def-WhoamiOutput"></a>
 ### WhoamiOutput
 
-Your agent identity, the pod, your run and its task, if any.
+The pod, and for a run token your agent identity, your run and its task, if any. A user token gets the pod only.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `agent` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `agent` | [Actor](#def-Actor) | no | Present only for a run token: the agent this run belongs to. |
 | `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
-| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `runId` | [RunId](#def-RunId) | no | Present only for a run token: the caller's current run. |
 | `task` | [Task](#def-Task) | no | A unit of work on the pod's board, with a kind and a status, and optionally an assignee and a claim. |
 
 <a id="def-ReadInput"></a>

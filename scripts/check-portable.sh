@@ -9,8 +9,8 @@ while IFS= read -r f; do
   target=$(cd "$(dirname "$f")" && cd "$(dirname "$(readlink "$f")")" 2>/dev/null && pwd -P || echo /missing)
   case "$target/" in "$root"/*) ;; *) echo "symlink leaves the repo: $f -> $(readlink "$f")"; bad=1 ;; esac
 done < <(git ls-files -s | awk '$1=="120000"{print $4}')
-pattern='(~/[.A-Za-z]|/Users/[a-z]|/home/[a-z]|\$HOME/|\$\(HOME\))'
-if git grep -nIE "$pattern" -- . ':!scripts/check-portable.sh'; then
+pattern='(~/[.A-Za-z]|/home/[a-z]|/opt/homebrew|/private/t[m]p|\$HOME/|\$\(HOME\))'
+if git grep -nIE "$pattern" -- . ':!scripts/check-portable.sh' || git grep -nIiE '/Users/[a-z]' -- . ':!scripts/check-portable.sh'; then
   echo "machine-local path in a tracked file (above); use a repo-relative path"; bad=1
 fi
 if git ls-files | grep -E '(^|/)(\.tools|node_modules)/' | head -3 | grep .; then

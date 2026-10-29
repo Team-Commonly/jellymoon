@@ -32,4 +32,5 @@ GATE: PASS | GATE: FAIL
 - `GATE: PASS` requires zero blocking findings.
 - The verifier never pushes, comments on GitHub or merges. The coordinator records the ledger row and
   posts the review.
-- A protected-path PR still needs ada's Opus `GATE: PASS` at the same head.
+- A protected-path PR still needs an Opus `GATE: PASS` at the same head from an accepted reviewer
+  (`workflow.md`, Review and merge).

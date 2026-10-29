@@ -36,11 +36,14 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
   area, `TODO(F07)`-style ids, import boundaries. A new dependency or module gets a `docs/adr/` note.
   Every report states lines added and removed, and what it deleted.
 - **Merging.** Only the coordinator merges, and only on green CI plus a verifier ledger verdict at the head.
-  Protected paths also need an Opus `GATE: PASS` at the head: `schema/`, `worker/src/auth`, `worker/src/mcp`,
+  Protected paths also need an Opus `GATE: PASS` at the head from one of the accepted reviewers
+  (`docs/development/workflow.md`, Review and merge): `schema/`, `worker/src/auth`, `worker/src/mcp`,
   `daemon/internal/{acp,run}`, `install.sh`, `.github/workflows`. (No merge queue while the repo is private
   on GitHub Free; this rule changes when it goes public or moves to Team.)
-- **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset; `make hooks`
-  installs the pre-commit preflight and the push fence in a worktree.
+- **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new
+  worktree runs `./init.sh` first (it installs `.tools/`; the pre-commit hook fails without it), then
+  `make hooks fence=1` to install the push fence; plain `make hooks` installs only the pre-commit. The
+  pre-commit runs a subset of preflight (portable, check-gen, entropy, secrets), not the tests.
 - **Lessons** land in the same PR as a test, lint rule or doc. Never only in private memory.
 
 ## Map

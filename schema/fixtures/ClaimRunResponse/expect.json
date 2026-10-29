@@ -1,0 +1,14 @@
+{
+  "invalid-required-runToken.json": {
+    "keyword": "required",
+    "path": ""
+  },
+  "invalid-mcp-url-http.json": {
+    "keyword": "pattern",
+    "path": "/mcpUrl"
+  },
+  "invalid-mcp-url-localhost-lookalike.json": {
+    "keyword": "pattern",
+    "path": "/mcpUrl"
+  }
+}

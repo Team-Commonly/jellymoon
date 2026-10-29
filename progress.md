@@ -13,7 +13,7 @@ goes in the PR.
 - **Feature text:** F10 gained one step (claim.released per way a claim ends). No other feature changed.
 - **Evidence:** `make gen` twice is clean; `make preflight` green. Not enforced by schema: `by` required for
   released/stopped (no oneOf); the Worker tests it.
-- **Next:** F02. **Open:** `ux-concepts.html` still says "lease renewed 23x" (line 482) and in a JS reply (1053).
+- **Next:** F02.
 
 ## 2026-10-29 · human release and stop (unit P04)
 - **Changed:** operations `task_release` and `run_stop`, s2c event `run.stop`, their input/output defs and

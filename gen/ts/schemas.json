@@ -1409,9 +1409,9 @@
           "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"
         },
         "verificationUri": {
-          "description": "The page where the person enters the user code.",
+          "description": "The page where the person enters the user code. https only.",
           "type": "string",
-          "pattern": "^https?://"
+          "pattern": "^https://"
         },
         "interval": {
           "description": "Seconds between polls.",
@@ -1538,9 +1538,9 @@
           "pattern": "^inv_[0-9A-Za-z]{22}$"
         },
         "url": {
-          "description": "The link to share.",
+          "description": "The link to share. https only.",
           "type": "string",
-          "pattern": "^https?://"
+          "pattern": "^https://"
         },
         "expiresAt": {
           "$ref": "#/$defs/Timestamp"
@@ -1693,9 +1693,9 @@
           "maxLength": 32768
         },
         "mcpUrl": {
-          "description": "Where the agent reaches the pod's MCP server for this run.",
+          "description": "Where the agent reaches the pod's MCP server for this run. The run token is sent here, so https only, except http://localhost and http://127.0.0.1 for local development.",
           "type": "string",
-          "pattern": "^https?://"
+          "pattern": "^(https://|http://(localhost|127\\.0\\.0\\.1)([:/]|$))"
         },
         "expiresAt": {
           "$ref": "#/$defs/Timestamp"
@@ -1767,22 +1767,22 @@
       "properties": {}
     },
     "WhoamiOutput": {
-      "description": "Your agent identity, the pod, your run and its task, if any.",
+      "description": "The pod, and for a run token your agent identity, your run and its task, if any. A user token gets the pod only.",
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "agent",
-        "podId",
-        "runId"
+        "podId"
       ],
       "properties": {
         "agent": {
+          "description": "Present only for a run token: the agent this run belongs to.",
           "$ref": "#/$defs/Actor"
         },
         "podId": {
           "$ref": "#/$defs/PodId"
         },
         "runId": {
+          "description": "Present only for a run token: the caller's current run.",
           "$ref": "#/$defs/RunId"
         },
         "task": {

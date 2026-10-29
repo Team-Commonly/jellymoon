@@ -1352,7 +1352,7 @@ type DeviceStartResponse struct {
 	DeviceCode string `json:"deviceCode"`
 	// What the person types on the sign-in page, e.g. WDJB-MJHT.
 	UserCode string `json:"userCode"`
-	// The page where the person enters the user code.
+	// The page where the person enters the user code. https only.
 	VerificationURI string `json:"verificationUri"`
 	// Seconds between polls.
 	Interval int64 `json:"interval"`
@@ -1480,7 +1480,7 @@ func (x *CreateInviteRequest) UnmarshalJSON(b []byte) error {
 type Invite struct {
 	// The code a person gives to accept the invite.
 	Code string `json:"code"`
-	// The link to share.
+	// The link to share. https only.
 	URL       string    `json:"url"`
 	ExpiresAt Timestamp `json:"expiresAt"`
 	// How many more times the invite can be accepted.
@@ -1668,7 +1668,7 @@ type ClaimRunResponse struct {
 	RunToken RunToken `json:"runToken"`
 	// The agent's first prompt, built by the server.
 	Brief string `json:"brief"`
-	// Where the agent reaches the pod's MCP server for this run.
+	// Where the agent reaches the pod's MCP server for this run. The run token is sent here, so https only, except http://localhost and http://127.0.0.1 for local development.
 	MCPURL    string    `json:"mcpUrl"`
 	ExpiresAt Timestamp `json:"expiresAt"`
 }
@@ -1779,12 +1779,14 @@ func (x *WhoamiInput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// Your agent identity, the pod, your run and its task, if any.
+// The pod, and for a run token your agent identity, your run and its task, if any. A user token gets the pod only.
 type WhoamiOutput struct {
-	Agent Actor `json:"agent"`
-	PodID PodID `json:"podId"`
-	RunID RunID `json:"runId"`
-	Task  *Task `json:"task,omitempty"`
+	// Present only for a run token: the agent this run belongs to.
+	Agent *Actor `json:"agent,omitempty"`
+	PodID PodID  `json:"podId"`
+	// Present only for a run token: the caller's current run.
+	RunID *RunID `json:"runId,omitempty"`
+	Task  *Task  `json:"task,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.
@@ -1793,7 +1795,7 @@ func (x *WhoamiOutput) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &keys); err != nil {
 		return err
 	}
-	for _, k := range []string{"agent", "podId", "runId"} {
+	for _, k := range []string{"podId"} {
 		if _, ok := keys[k]; !ok {
 			return fmt.Errorf("WhoamiOutput: missing required field %q", k)
 		}

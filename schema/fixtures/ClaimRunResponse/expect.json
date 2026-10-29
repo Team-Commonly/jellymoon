@@ -10,5 +10,13 @@
   "invalid-mcp-url-localhost-lookalike.json": {
     "keyword": "pattern",
     "path": "/mcpUrl"
+  },
+  "invalid-mcp-url-userinfo-localhost.json": {
+    "keyword": "pattern",
+    "path": "/mcpUrl"
+  },
+  "invalid-mcp-url-userinfo-loopback.json": {
+    "keyword": "pattern",
+    "path": "/mcpUrl"
   }
 }

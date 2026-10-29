@@ -600,7 +600,7 @@ export interface ClaimRunResponse {
   runToken: RunToken;
   /** The agent's first prompt, built by the server. */
   brief: string;
-  /** Where the agent reaches the pod's MCP server for this run. The run token is sent here, so https only, except http://localhost and http://127.0.0.1 for local development. */
+  /** Where the agent reaches the pod's MCP server. https, or http on localhost or 127.0.0.1. The daemon must check scheme and host itself before sending the run token: Go does not enforce patterns. */
   mcpUrl: string;
   expiresAt: Timestamp;
 }

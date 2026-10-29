@@ -37,14 +37,27 @@ after a surprise.
   - one fresh-context review: a subagent given the diff and the feature, not the builder's reasoning;
   - an Opus `GATE: PASS` at the PR head from an accepted reviewer (below).
 - Protected paths: `schema/`, `worker/src/auth`, `worker/src/mcp`, `daemon/internal/{acp,run}`,
-  `install.sh`, `.github/workflows` and `scripts/review-gate.mjs`.
-- **Accepted Opus reviewers:** Ben, Ada, Eli, Cleo and Dana (the default of the repo variable
-  `V4_OPUS_REVIEWERS`; this list is the one place they are named). Ada is the usual gate.
-- **How the gate decides** (`.github/workflows/review-gate.yml` runs `scripts/review-gate.mjs`, tested by
-  `scripts/check-review-gate.mjs`, which `make test` runs through `scripts/check-fixtures.mjs`), all at the exact PR head: dismissed reviews are ignored;
-  a review counts for reviewer N only if its body has exactly one `Written by <N>, a Commonly agent` line;
-  only each reviewer's latest counting review counts; the gate passes when one of those is `GATE: PASS`
-  and none is anything else.
+  `install.sh`, `.github/workflows`, `.github/opus-reviewers.txt` and `scripts/review-gate.mjs`. A rename out
+  of a protected path counts. Listing the gate's own files here means a change to them needs a review; it does
+  not protect them from the gate (see below).
+- **Accepted Opus reviewers:** the names in `.github/opus-reviewers.txt`, the only place they are written
+  (today Ben, Ada, Eli, Cleo and Dana; Ada is the usual gate). The gate reads that file from the base
+  branch.
+- **How the gate decides** (`.github/workflows/review-gate.yml` runs the base branch's copy of
+  `scripts/review-gate.mjs`; the cases are `scripts/check-review-gate.mjs`, its own `make test` step). It fails
+  closed, at the exact PR head, ignoring code fences and blockquotes: a review is credited to N when a
+  `Written by <N>, a Commonly agent` line names a listed reviewer; one credited to two names blocks; dismissed
+  reviews are ignored; each reviewer's latest credited review decides, and it passes only with a last line of
+  exactly `GATE: PASS` (case and markdown emphasis ignored) and a state other than CHANGES_REQUESTED. The gate
+  passes when at least one reviewer's latest review passes and none blocks.
+- **The gate cannot judge its own change.** The script and reviewer list come from the base branch, so a PR
+  cannot rewrite its judge, but `review-gate.yml` itself runs from the PR's merge ref. Any PR touching
+  `review-gate.yml`, `scripts/review-gate.mjs` or `.github/opus-reviewers.txt` is judged by a person at press
+  time, never by the green check. Bootstrap: when the base branch has no `scripts/review-gate.mjs` (the first
+  merge of the gate into `main`), the check fails closed; a person verifies the Opus `GATE: PASS` at the head
+  by hand, merges that one PR by hand and records it in `progress.md`.
+- **Advisory, not required:** GitHub Free has no required checks on a private repo, so a red gate does not stop
+  a merge by itself. The coordinator's press rule above does.
 - **Known limit:** the credit line is a pointer, not an identity. Every reviewer posts to GitHub as one account,
   so the gate does not verify who reviewed. Until it checks a server-stamped verdict (the reviewer's
   post in the pod, naming the PR and head SHA), any holder of the shared GitHub token can satisfy it.

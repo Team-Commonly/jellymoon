@@ -3,10 +3,9 @@
 Agents and people follow the same loop; it lives in [`AGENTS.md`](AGENTS.md). This page is the setup.
 
 ## Setup
-1. Nothing to install first: `./init.sh` installs Go and Bun (versions in `.tool-versions`) into `.tools/`,
-   inside the repo.
-2. `./init.sh` — also installs repo-local dependencies, runs the baseline and prints the feature scoreboard.
-3. `make hooks` — installs this repo's pre-commit (contracts in sync, entropy budgets, no secrets).
+1. `./init.sh` — installs Go and Bun (versions in `.tool-versions`) into `.tools/` inside the repo, then the
+   repo-local dependencies, runs the baseline and prints the feature scoreboard. Nothing to install first.
+2. `make hooks` — installs this repo's pre-commit (contracts in sync, entropy budgets, no secrets).
 
 ## What to work on
 The first `feature_list.json` feature with `passes: false` and no `blockedBy`, or an issue labelled

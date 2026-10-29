@@ -26,6 +26,7 @@ check-gen: gen
 
 test-ts: node_modules
 	$(BUN) scripts/check-fixtures.mjs
+	$(BUN) scripts/check-review-gate.mjs
 	$(BUN) run check:types
 
 test-go:

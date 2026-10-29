@@ -10,7 +10,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Ajv2020 from 'ajv/dist/2020.js';
-import './check-review-gate.mjs'; // also runs the review-gate cases (knip sees it as used; `make test` runs both)
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, 'gen/ts/schemas.json'), 'utf8'));
@@ -24,6 +23,8 @@ function fail(msg) { console.error(msg); process.exit(1); }
 
 const LEGACY_UNASSERTED = new Set(['ClaimReleased', 'Envelope', 'ReadInput', 'RegisterComputerRequest',
   'RunStopInput', 'RunStopOutput', 'Task', 'TaskClaimInput', 'TaskReleaseInput', 'TaskUpdateInput']);
+const LEGACY_PIN = 10; // lower this when a def leaves LEGACY_UNASSERTED; it may never grow
+if (LEGACY_UNASSERTED.size !== LEGACY_PIN) fail(`LEGACY_UNASSERTED has ${LEGACY_UNASSERTED.size} defs, pinned at ${LEGACY_PIN}: it only shrinks, so lower the pin when you remove one`);
 const dir = path.join(ROOT, 'schema/fixtures');
 let checked = 0;
 const problems = [];

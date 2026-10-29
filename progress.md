@@ -4,6 +4,19 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · loop fixes from the PR #1 and #2 verifiers (unit P07)
+- **Changed:** `make` finds `.tools/bin` by path (GNU Make 3.81 ignores the exported PATH for command lookup).
+  Review gate decision moved to `scripts/review-gate.mjs`, run from the base branch, fail closed (multi-credit
+  blocks, fences and blockquotes ignored, CHANGES_REQUESTED blocks, renames checked), reviewers in
+  `.github/opus-reviewers.txt`. `whoami` agent/runId optional; verificationUri, Invite.url, mcpUrl https only
+  (mcpUrl: loopback http with optional port). Fixtures: PostInput invalids assert their rule via `expect.json`.
+  Docs: worktree init, fence, gate limits, glossary (gate advisory), worker/ and e2e/ marked not yet created.
+- **Evidence:** PATH-stripped `make preflight` green; `make test` runs the 31 gate cases and 7 path cases.
+- **Next:** F02. A server-stamped verdict check replaces the credit-line pointer. The first merge of the gate
+  into `main` fails closed and is pressed by hand with the Opus `GATE: PASS` checked at the head.
+- **Surprising:** `SHELL := /bin/bash` does not help Make 3.81; only calling tools by path does. A gate that
+  runs the PR's own judge can be made green by the PR.
+
 ## 2026-10-29 · claim.released and cleanup (unit P05)
 - **Changed:** s2c event `claim.released` (`ClaimReleased`, `ClaimReleaseCause`: expired, released, run_ended,
   stopped) with fixtures; ADR 0002 names the cause each path emits. Closed 12 verifier findings: glossary and

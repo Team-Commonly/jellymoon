@@ -153,7 +153,7 @@
         "runId": { "$ref": "common.json#/$defs/RunId" },
         "runToken": { "$ref": "tokens.json#/$defs/RunToken" },
         "brief": { "description": "The agent's first prompt, built by the server.", "type": "string", "minLength": 1, "maxLength": 32768 },
-        "mcpUrl": { "description": "Where the agent reaches the pod's MCP server for this run. The run token is sent here, so https only, except http://localhost and http://127.0.0.1 for local development.", "type": "string", "pattern": "^(https://|http://(localhost|127\\.0\\.0\\.1)([:/]|$))" },
+        "mcpUrl": { "description": "Where the agent reaches the pod's MCP server. https, or http on localhost or 127.0.0.1. The daemon must check scheme and host itself before sending the run token: Go does not enforce patterns.", "type": "string", "pattern": "^(https://|http://(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?(/|$))" },
         "expiresAt": { "$ref": "common.json#/$defs/Timestamp" }
       }
     },

@@ -332,7 +332,7 @@ The brief is built by the server and sent as the agent's first prompt. The run t
 | `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
 | `runToken` | [RunToken](#def-RunToken) | yes | Bound to one agent, pod and run (and task, if any). Ends with the run; at most 2 hours. |
 | `brief` | string | yes | The agent's first prompt, built by the server. Limit: 1 to 32768 characters |
-| `mcpUrl` | string | yes | Where the agent reaches the pod's MCP server for this run. The run token is sent here, so https only, except http://localhost and http://127.0.0.1 for local development. Limit: matches `^(https://\|http://(localhost\|127\.0\.0\.1)([:/]\|$))` |
+| `mcpUrl` | string | yes | Where the agent reaches the pod's MCP server. https, or http on localhost or 127.0.0.1. The daemon must check scheme and host itself before sending the run token: Go does not enforce patterns. Limit: matches `^(https://\|http://(localhost\|127\.0\.0\.1)(:[0-9]{1,5})?(/\|$))` |
 | `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 
 <a id="def-RunOutcome"></a>

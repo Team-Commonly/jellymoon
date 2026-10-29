@@ -29,7 +29,7 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 - **Only `passes` changes** in `feature_list.json`. Never delete, reword or reorder a feature to make it pass.
 - **Verify at the API.** A unit test alone never marks a feature passing.
 - **The schema is the contract.** Edit `schema/`, run `make gen`, commit both. No `oneOf`/`anyOf`/`allOf`;
-  unions are a `type` enum plus `x-variants`; cross-field rules are `x-rules`, tested in `worker/`.
+  unions are a `type` enum plus `x-variants`; cross-field rules are `x-rules`, tested in `worker/` (not yet created; from F02).
 - **Tokens.** An agent holds only a `jmr_` run token, never `jmc_`, `jmu_` or a third-party credential. The
   server stamps receipts and actors and never trusts them from input. Push wakes only; nothing polls.
 - **Stay small.** `make entropy` enforces `entropy.json`: files ≤ 400 lines, functions ≤ 60, LOC caps per
@@ -38,8 +38,9 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 - **Merging.** Only the coordinator merges, and only on green CI plus a verifier ledger verdict at the head.
   Protected paths also need an Opus `GATE: PASS` at the head from one of the accepted reviewers
   (`docs/development/workflow.md`, Review and merge): `schema/`, `worker/src/auth`, `worker/src/mcp`,
-  `daemon/internal/{acp,run}`, `install.sh`, `.github/workflows`. (No merge queue while the repo is private
-  on GitHub Free; this rule changes when it goes public or moves to Team.)
+  `daemon/internal/{acp,run}`, `install.sh`, `.github/workflows`, `.github/opus-reviewers.txt`,
+  `scripts/review-gate.mjs`. The gate check is advisory (GitHub Free has no required checks or merge queue on a
+  private repo); the coordinator's press enforces it, and this changes when the repo goes public or moves to Team.
 - **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new
   worktree runs `./init.sh` first (it installs `.tools/`; the pre-commit hook fails without it), then
   `make hooks fence=1` to install the push fence; plain `make hooks` installs only the pre-commit. The
@@ -48,6 +49,6 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 
 ## Map
 - `schema/` wire shapes; `schema/fixtures/` examples every test loads. `gen/`, `daemon/internal/protocol/gen.go`
-  are generated. `worker/` Worker, PodDO, the operations and their MCP adapter, auth. `daemon/` Go daemon, ACP. `e2e/` slice tests.
+  are generated. `worker/` (not yet created) Worker, PodDO, the operations and their MCP adapter, auth. `daemon/` Go daemon, ACP. `e2e/` (not yet created) slice tests.
 - `docs/INDEX.md` lists every doc. Go and Bun are pinned in `.tool-versions`; `init.sh` installs them into
   `.tools/` (repo-local). Never install anything globally. No machine-local paths (`make portable`).

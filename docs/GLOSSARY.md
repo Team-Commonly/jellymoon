@@ -25,6 +25,6 @@ review with Sam may rename terms, and a rename lands here and in `schema/` toget
 | **ruling** | A member's choice on a decision; made once, then frozen | approval in chat |
 | **receipt** | Server-stamped facts attached to an agent's message: run, harness, wake reason, tool calls | agent-reported claims |
 | **seq** | The pod's monotonic event number; a client resumes from `sinceSeq` | timestamps |
-| **gate** | A required check before merge; the Opus `GATE: PASS` review on protocol and security paths | a decision |
+| **gate** | The Opus `GATE: PASS` review on protocol and security paths. Advisory (GitHub Free has no required checks on a private repo); the coordinator's press rule enforces it | a decision |
 | **feature** | One entry of `feature_list.json`: an end-to-end test that defines done | an issue |
 | **unit** | One brief given to one worker by the coordinator (`docs/development/workflow.md`) | a feature, though often one-to-one |

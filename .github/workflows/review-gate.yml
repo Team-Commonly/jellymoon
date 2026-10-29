@@ -2,6 +2,9 @@ name: Review gate
 
 # One Opus reviewer only for protocol or security changes (the build plan).
 #
+# This check cannot judge its own change: a PR touching review-gate.yml (run from the PR's merge ref)
+# or scripts/review-gate.mjs is judged by a person at press time, never by the green tick.
+#
 # KNOWN LIMIT: the credit line is a pointer, not an identity. Every reviewer posts to GitHub as one
 # account, so this gate cannot verify who reviewed: until it checks a server-stamped verdict (the
 # reviewer's post in the pod, naming the PR and head SHA), any holder of the shared GitHub
@@ -23,15 +26,23 @@ permissions:
 
 jobs:
   # Passes on its own unless the diff touches a protocol or security path. Then the rules in
-  # scripts/review-gate.mjs apply at the exact PR head: dismissed reviews are ignored, a review
-  # counts only with exactly one "Written by <name>, a Commonly agent" line naming a listed
-  # reviewer, each reviewer's latest counting review is the one that counts, and the gate passes
-  # when one is GATE: PASS and none is anything else.
+  # scripts/review-gate.mjs (base copy) apply at the exact PR head and fail closed; the rules are
+  # written at the top of that file and in docs/development/workflow.md. Reviewers: .github/opus-reviewers.txt.
   review-required:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      # The judge comes from the BASE branch, never from the PR it judges: a PR that edited
+      # scripts/review-gate.mjs could otherwise make its own check green with zero reviews.
       - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/review-gate.mjs
+            .github/opus-reviewers.txt
+          sparse-checkout-cone-mode: false
       - name: Opus gate on protocol and security paths
         if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
         env:
@@ -39,14 +50,14 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-          OPUS_REVIEWERS: ${{ vars.V4_OPUS_REVIEWERS || 'Ben,Ada,Eli,Cleo,Dana' }}
         run: |
-          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate -q '.[].filename')
-          if ! printf '%s\n' "$files" | grep -Eq '^(schema/|worker/src/auth/|worker/src/mcp/|daemon/internal/(acp|run)/|worker/public/install\.sh$|\.github/workflows/|scripts/review-gate\.mjs$)'; then
-            echo "No protocol or security path touched; no review needed."; exit 0
+          if [ ! -f scripts/review-gate.mjs ] || [ ! -f .github/opus-reviewers.txt ]; then
+            echo "::error::bootstrap: the base branch has no scripts/review-gate.mjs or .github/opus-reviewers.txt, so this gate cannot judge. Fail closed: a person checks the Opus GATE: PASS at the head by hand and merges this PR by hand."
+            exit 1
           fi
+          gh api "repos/$REPO/pulls/$PR/files" --paginate --slurp > "$RUNNER_TEMP/files.json"
           gh api "repos/$REPO/pulls/$PR/reviews" --paginate --slurp > "$RUNNER_TEMP/reviews.json"
-          node scripts/review-gate.mjs "$RUNNER_TEMP/reviews.json"
+          node scripts/review-gate.mjs "$RUNNER_TEMP/reviews.json" .github/opus-reviewers.txt "$RUNNER_TEMP/files.json"
       - name: In the merge queue
         if: github.event_name == 'merge_group'
         run: echo "Gate was checked on the PR head before it entered the queue."

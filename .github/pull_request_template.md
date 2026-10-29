@@ -15,5 +15,5 @@ E2E_MS=<n> STEPS=<k>/<k>
 - [ ] `make preflight` green locally
 - [ ] `feature_list.json`: only `passes` changed
 - [ ] `progress.md` entry added
-- [ ] Touches a protected path (schema/, worker/src/auth, worker/src/mcp, daemon/internal/{acp,run}, install.sh, .github/workflows)? If yes: fresh-context review done, Opus `GATE: PASS` at head requested
+- [ ] Touches a protected path (schema/, worker/src/auth, worker/src/mcp, daemon/internal/{acp,run}, install.sh, .github/workflows, .github/opus-reviewers.txt, scripts/review-gate.mjs)? If yes: fresh-context review done, Opus `GATE: PASS` at head requested
 - [ ] Lesson captured in the repo (test, lint or docs/), or none surfaced

@@ -1,0 +1,6 @@
+# Accepted Opus reviewers for the protected-path gate, one per line. Read from the base branch by review-gate.yml.
+Ben
+Ada
+Otto
+Cleo
+Dana

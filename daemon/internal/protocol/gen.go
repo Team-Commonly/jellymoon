@@ -1668,7 +1668,7 @@ type ClaimRunResponse struct {
 	RunToken RunToken `json:"runToken"`
 	// The agent's first prompt, built by the server.
 	Brief string `json:"brief"`
-	// Where the agent reaches the pod's MCP server for this run. The run token is sent here, so https only, except http://localhost and http://127.0.0.1 for local development.
+	// Where the agent reaches the pod's MCP server. https, or http on localhost or 127.0.0.1. The daemon must check scheme and host itself before sending the run token: Go does not enforce patterns.
 	MCPURL    string    `json:"mcpUrl"`
 	ExpiresAt Timestamp `json:"expiresAt"`
 }

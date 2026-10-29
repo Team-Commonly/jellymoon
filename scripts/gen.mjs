@@ -3,10 +3,12 @@
 //   gen/ts/protocol.ts            TS types, enum value lists, the event union, tool names
 //   gen/ts/schemas.json           one bundled JSON Schema document for ajv in the Worker
 //   gen/ts/tools.json             the MCP adapter's tool list: one tool per operation, schemas fully inlined
+//   docs/protocol.md              the human-readable protocol reference (scripts/protocol-doc.mjs)
 //   daemon/internal/protocol/gen.go   Go structs, enums, required-key checks, event decode
 // Deterministic: same schema in, same bytes out. `make gen` runs gofmt on the Go file afterwards.
 import fs from 'node:fs';
 import path from 'node:path';
+import { renderProtocol } from './protocol-doc.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const SCHEMA_DIR = path.join(ROOT, 'schema');
@@ -240,4 +242,5 @@ write('gen/ts/protocol.ts', ts);
 write('gen/ts/schemas.json', JSON.stringify(bundle, null, 2) + '\n');
 write('gen/ts/tools.json', JSON.stringify({ $comment: HEADER, tools: mcpTools }, null, 2) + '\n');
 write('daemon/internal/protocol/gen.go', go);
+write('docs/protocol.md', renderProtocol({ docs, defs, eventTypes, variants, variantData, tools }));
 console.log(`gen: ${defs.size} defs, ${eventTypes.length} event types, ${operations.length} operations`);

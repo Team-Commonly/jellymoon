@@ -11,15 +11,15 @@ node_modules: package.json bun.lock
 	bun install --frozen-lockfile
 	@touch node_modules
 
-# Regenerate every contract from schema/. Never hand-edit gen/ or protocol/gen.go.
+# Regenerate every contract from schema/. Never hand-edit gen/, protocol/gen.go or docs/protocol.md.
 gen: node_modules
 	bun scripts/gen.mjs
 	gofmt -w daemon/internal/protocol/gen.go
 
 # Fails if schema/ changed without `make gen`, or gen/ was edited by hand.
 check-gen: gen
-	git diff --exit-code -- gen daemon/internal/protocol/gen.go
-	@test -z "$$(git ls-files --others --exclude-standard gen daemon/internal/protocol)" || (echo "untracked generated files; commit them"; exit 1)
+	git diff --exit-code -- gen daemon/internal/protocol/gen.go docs/protocol.md
+	@test -z "$$(git ls-files --others --exclude-standard gen daemon/internal/protocol docs/protocol.md)" || (echo "untracked generated files; commit them"; exit 1)
 
 test-ts: node_modules
 	bun scripts/check-fixtures.mjs

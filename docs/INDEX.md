@@ -6,6 +6,7 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | File | What it is for |
 |---|---|
 | `GLOSSARY.md` | Terms used precisely across code, schema and docs |
+| `protocol.md` | The wire protocol in plain words: ids, tokens, HTTP routes, events, messages, tasks, MCP tools and errors. Generated from `schema/` by `make gen`; never edit by hand |
 | `development/workflow.md` | How Jellymoon is built: the long-running harness, stage skills, entropy gate, review and merge |
 | `development/verifier.md` | The verifier protocol: what a fresh-context reviewer checks, and its verdict format |
 | `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the slice LOC caps |

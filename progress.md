@@ -4,6 +4,16 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · protocol reference doc (unit P01)
+- **Changed:** `make gen` now also writes `docs/protocol.md`, a readable reference of the whole protocol
+  (90 definitions, 16 events with direction and data links, 6 MCP tools, error codes, rules as sentences).
+  `scripts/protocol-doc.mjs` renders it from the data `scripts/gen.mjs` already loads; `make check-gen`
+  now diffs the doc too. No new dependency, nothing deleted (the doc is new surface; `gen.mjs` grew 3 lines).
+- **Evidence:** `make gen` twice leaves the tree unchanged; editing a schema description makes
+  `make check-gen` fail until regenerated; `make preflight` green.
+- **Open:** every definition is rendered from the schema only, so a description missing there
+  (ids, most fields) shows as an empty Notes cell. Fixing that is a schema edit, not a doc edit.
+
 ## 2026-10-29 · Jellymoon names applied (build session)
 - **Changed:** decided at the protocol review: MCP adapter prefix `jm_`, tokens `jmu_`/`jmc_`/`jmr_`,
   schema `$id` on `jellymoon.dev/schema/v1`, CLI binary `jellymoon` (alias `jm`), package `jellymoon`.

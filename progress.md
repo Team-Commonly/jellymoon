@@ -9,13 +9,15 @@ goes in the PR.
   `make preflight` and the pre-commit) refuses operator paths, personal emails, internal ids, cloud identifiers, note labels and
   section marks, with an env-supplied names list for values that have no safe pattern; `ee/` holds the commercial-licence area
   with `ee-stays-in-ee` (dependency-cruiser) pinned by `boundary-fixture/`, ADR 0004 and SECURITY.md; DCO sign-off is required
-  in CONTRIBUTING.md and checked by the `dco` CI job; CI is a fork-safe, dispatch-only mirror of `make preflight`; the loop
+  in CONTRIBUTING.md (nothing checks it today; the `dco` CI job will once CI runs on pull requests); CI is a fork-safe,
+  dispatch-only mirror of `make preflight`; the loop
   docs moved to `.loop/`.
-- **Evidence:** `make preflight` green; check-private 70 cases with a mutation sweep (every mutant caught except one self-test
+- **Evidence:** `make preflight` green; check-private 80 cases with a mutation sweep (every mutant caught except one self-test
   blind spot, a mutated exit path that also hides its own failure); `make secrets-all` over every branch of the old repo found nothing.
 - **Next:** supply the names list in CI, flip the repo public after the owner's go.
 - **Surprising:** the check's first version printed the text it matched, which a CI log masks only as a whole string; it now
-  prints `file:line: class` and nothing else.
+  prints `file:line: class` for a content hit and, for a path that holds a name, only its position in the file list; never the
+  matched text and never such a path.
 
 ## 2026-10-30 · P08 range control, land-shaped (unit P08, round 18)
 - **Changed:** the range cases now model a normal land (checkout on main, PR head reachable by SHA only) in three shapes: linear, a merged side branch, main moved after branching. `--bootstrap` requires HEAD to be the PR head. A pod page holding a non-object refuses in words. Doc fixes: built-in allowlist cited by reference, stale wording in GLOSSARY, INDEX, ADR and the design doc.
@@ -202,11 +204,10 @@ goes in the PR.
   secret, an owner action.
 
 ## 2026-10-29 · repo move (builder session)
-- **Changed:** the build moved from the `v4` branch of the Commonly repo to its own private repo,
+- **Changed:** the build moved from the `v4` branch of the Commonly repo to its own repo,
   `Team-Commonly/jellymoon` (the company stays Commonly). History was rebuilt clean:
   a fixture token that tripped gitleaks became an obviously fake one, and the Go module is
   `github.com/Team-Commonly/jellymoon`.
-- **Surprising:** the private repo has no merge queue, so the coordinator merges only on green CI plus a ledger verdict.
 
 ## Server stack tripwires (watched from day one)
 - any claim.released{expired} earlier than last renewal + 60 s, in any environment
@@ -216,4 +217,4 @@ goes in the PR.
 - ops hours above 8 h/month for two months running
 Record a hit here with its date and evidence, and raise it to the coordinator.
 
-Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (PC4 N10).
+Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (unit PC4).

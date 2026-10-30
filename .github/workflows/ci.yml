@@ -1,7 +1,7 @@
 name: CI
-# Off until the repo goes public: it runs only when dispatched by hand. Local `make land` is the gate and nothing GitHub
-# reports counts (docs/development/landing.md); CI's role after the flip is a separate ruling. The workflow is already
-# fork-safe, so enabling it is a one-line change.
+# Runs only when dispatched by hand until the public flip. After the flip CI mirrors the local checks, and a failing check run
+# blocks a land (docs/development/landing.md). CI never lands anything: `make land` stays the only merge path. The workflow is
+# already fork-safe, so enabling it is a one-line change.
 
 # Verification loop (docs/development/workflow.md). Each check is a job here. A job whose code does not exist
 # yet passes with a notice; it starts enforcing the moment its directory lands.

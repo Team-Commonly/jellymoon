@@ -35,15 +35,17 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 - **Stay small.** `make entropy` enforces `entropy.json`: files ≤ 400 lines, functions ≤ 60, LOC caps per
   area, `TODO(F07)`-style ids, import boundaries. A new dependency or module gets a `docs/adr/` note.
   Every report states lines added and removed, and what it deleted.
-- **Merging.** Local verification is the authority. `make land PR=<n>` is the only merge path: it proves the
-  exact head green in a sandboxed clean shell, requires the verifier's ledger line at that head (the coordinator transcribes the
-  report's `GATE:` line, model and `FINDINGS` into the row), and for protected paths (every changed path except
-  `progress.md` and documentation files under `docs/`: `.md .html .svg .png .jpg .gif .webp`; a rename counts both
-  sides) also the reviewer's pod verdict naming the PR and head. Verifiers run a PR's code only in the same
-  sandbox: `make verify-preflight PR=<n>`. The stack lands as
-  one PR retargeted to `main`. GitHub checks are not consulted and nothing GitHub reports counts. CI is
-  disabled while the repo is private; it returns at public launch only as a thin mirror of `make preflight`.
-  Only the coordinator lands (`docs/development/landing.md`, `workflow.md`).
+- **Merging.** Local verification is the authority. `make land PR=<n>` is the only merge path. PR code runs on this
+  host only for a trusted PR: same repo, author and every push-capable account in the operator's `JM_TRUSTED_LOGINS`;
+  an outside PR is never executed here (CI runs it). Land proves the exact head green in a clean shell (a correctness
+  check, not a security boundary), requires the verifier's ledger line at that head (the coordinator transcribes the
+  report's `GATE:` line, model and `FINDINGS` into the row; any FAIL at a head blocks it, so the fix is a new head),
+  and for protected paths (every changed path except `progress.md` and documentation files under `docs/`:
+  `.md .html .svg .png .jpg .gif .webp`; a rename counts both sides) or an added `gitleaks:allow` line also the
+  reviewer's pod verdict naming the PR and head. Verifiers run a PR's code only after the same trust gate:
+  `make verify-preflight PR=<n>`. The stack lands as one PR retargeted to `main`. CI is off by decision; land refuses
+  only if check runs exist on the head and one failed. Only the coordinator lands (`docs/development/landing.md`,
+  `workflow.md`).
 - **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new
   worktree runs `./init.sh` first (it installs `.tools/`; the pre-commit hook fails without it), then
   `make hooks fence=1` to install the push fence; plain `make hooks` installs only the pre-commit. The

@@ -1,13 +1,10 @@
 // Pure decisions behind scripts/land.mjs (docs/development/landing.md). Every function takes parsed data and
 // returns { ok, reason } (or a plain value); the shell-outs live in land.mjs. Tests: scripts/check-land.mjs.
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import net from 'node:net';
 import path from 'node:path';
 
-const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'REGATE-OWED', 'BOOTSTRAP'];
+const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'BOOTSTRAP'];
 const VERIFIER = /^(opus|sonnet|haiku|fable)-verifier$/;
-const SEAT_NOTE = /^reviewer-gate-unavailable/i; // TEMPORARY: remove when the reviewers return
 const ref = (v) => String(v).trim().replace(/^#/, '');
 
 // Rows are normalised (trim, case). The first line is dropped only if it IS the header.
@@ -47,8 +44,8 @@ export function verdictOf(text) {
 const family = (by) => VERIFIER.exec(by || '')?.[1] ?? null;
 const at = (rows, pr, head) => rows.filter((r) => r.pr === ref(pr) && r.head === head.toLowerCase());
 
-// Fails closed. At (pr, head): an unrecognised verdict blocks; a verdict row by a non-verifier blocks; a FAIL
-// blocks (whatever its note) unless the SAME label recorded a later PASS; the latest primary row must be a PASS.
+// Fails closed. At (pr, head): an unrecognised verdict blocks; a verdict row by a non-verifier blocks; ANY FAIL blocks,
+// whoever wrote it (no verdict shopping: the fix is a new head); the latest verdict row must be a PASS.
 export function checkLedger(rows, { pr, head }) {
   const mine = at(rows, pr, head);
   const odd = mine.find((r) => !KNOWN.includes(r.verdict));
@@ -56,28 +53,19 @@ export function checkLedger(rows, { pr, head }) {
   const verdicts = mine.filter((r) => ['PASS', 'FAIL'].includes(r.verdict));
   const notV = verdicts.find((r) => !family(r.by));
   if (notV) return { ok: false, reason: `#${pr} has a ${notV.verdict} by '${notV.by}', which is not a <model>-verifier` };
-  const failed = verdicts.find((r, i) => r.verdict === 'FAIL' && !verdicts.slice(i + 1).some((p) => p.verdict === 'PASS' && p.by === r.by));
-  if (failed) return { ok: false, reason: `#${pr} has a FAIL by ${failed.by} at ${head.slice(0, 8)} with no later PASS from the same verifier` };
-  const primary = verdicts.filter((r) => !SEAT_NOTE.test(r.note)).at(-1);
+  const failed = verdicts.find((r) => r.verdict === 'FAIL');
+  if (failed) return { ok: false, reason: `#${pr} has a FAIL by ${failed.by} at ${head.slice(0, 8)}; a FAIL blocks that head, so push a new head` };
+  const primary = verdicts.at(-1);
   if (primary?.verdict !== 'PASS') return { ok: false, reason: `no verifier PASS for #${pr} at ${head.slice(0, 8)}` };
   return { ok: true, primary };
-}
-
-// TEMPORARY (remove when the reviewers return): a second verifier from a different model family stands in
-// for the pod verdict.
-export function checkSecondVerifier(rows, { pr, head, primary }) {
-  const row = at(rows, pr, head).filter((r) => ['PASS', 'FAIL'].includes(r.verdict) && SEAT_NOTE.test(r.note)).at(-1);
-  if (!row) return { ok: false, reason: `#${pr} touches a protected path: no pod verdict, and no 'reviewer-gate-unavailable' second-verifier row` };
-  if (row.verdict !== 'PASS') return { ok: false, reason: `#${pr} latest second-verifier row is ${row.verdict}` };
-  if (family(row.by) === family(primary.by)) return { ok: false, reason: `#${pr} second verifier '${row.by}' is the same model family as the first` };
-  return { ok: true, reason: `second verifier ${row.by}` };
 }
 
 const msgUser = (m) => m.userId?.username ?? m.username;
 const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at) || 0;
 
 // A message counts for #N only if its FIRST non-empty line is exactly `jellymoon#<N> <head>` and its server-stamped
-// username is a listed reviewer's. The latest such message per reviewer decides; text is never an identity.
+// username is a listed reviewer's. The latest such message per reviewer decides (messages arrive newest first, so on a
+// tie the lower index is the newer one); text is never an identity.
 export function checkPodVerdict(messages, { pr, head, entries, after = 0 }) {
   const byUser = new Map(entries.filter((e) => e.username).map((e) => [e.username, e.name]));
   const first = `jellymoon#${ref(pr)} ${head.toLowerCase()}`;
@@ -87,7 +75,7 @@ export function checkPodVerdict(messages, { pr, head, entries, after = 0 }) {
     const line = (m.content || '').split('\n').map((l) => l.trim()).find(Boolean);
     if (!name || msgTime(m) < after || line?.toLowerCase() !== first) return;
     const prev = latestBy.get(name);
-    if (!prev || msgTime(m) > msgTime(prev.m) || (msgTime(m) === msgTime(prev.m) && i > prev.i)) latestBy.set(name, { m, i });
+    if (!prev || msgTime(m) > msgTime(prev.m) || (msgTime(m) === msgTime(prev.m) && i < prev.i)) latestBy.set(name, { m, i });
   });
   const pass = [];
   const block = [];
@@ -110,13 +98,6 @@ export function landAction(pr, rows) {
   return at(rows, pr.number, pr.headRefOid).some((r) => ['LANDED', 'MERGED-UNVERIFIED'].includes(r.verdict)) ? 'already-landed' : 'record-only';
 }
 
-// PRs that still owe a reviewer re-gate. regated(pr, head, since) says a reviewer's pod PASS exists after that row.
-export function owedList(rows, regated) {
-  const seen = new Set();
-  return rows.filter((r) => r.verdict === 'REGATE-OWED' && !seen.has(`${r.pr}@${r.head}`) && seen.add(`${r.pr}@${r.head}`)
-    && !regated(r.pr, r.head, Date.parse(r.when) || 0));
-}
-
 // `git diff --name-status -M` output to the shape touchesProtected reads: renames and copies list both names.
 export function filesFromNameStatus(text) {
   return text.split('\n').filter(Boolean).map((l) => {
@@ -133,7 +114,7 @@ export const checkApi = (url) => (/^https:\/\//.test(url) ? { ok: true } : { ok:
 // The one git remote whose URL is the target repo (https or ssh, with or without .git), from `git remote -v`.
 export function remoteFor(remoteV, repo) {
   const esc = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const url = new RegExp(`^(https://([^@/]+@)?github\\.com/|git@github\\.com:|ssh://git@github\\.com/)${esc}(\\.git)?/?$`, 'i');
+  const url = new RegExp(`^(https://github\\.com/|git@github\\.com:|ssh://git@github\\.com/)${esc}(\\.git)?/?$`, 'i');
   const names = [...new Set(remoteV.split('\n').map((l) => l.split(/\s+/)).filter(([, u]) => u && url.test(u)).map(([n]) => n))];
   if (names.length === 1) return { remote: names[0] };
   return { error: names.length ? `more than one git remote matches ${repo}: ${names.join(', ')}` : `no git remote matches ${repo}` };
@@ -180,10 +161,6 @@ export function appendLedger(file, cols, { dry = false } = {}) {
   return true;
 }
 
-export const checkPlatform = (platform) => (platform === 'darwin' ? { ok: true }
-  : { ok: false, reason: `preflight sandbox is macOS-only; add one for ${platform} before landing here` });
-
-
 // One land at a time per clone: an mkdir lock holding the PID. A dead owner, or a lock dir with no readable pid, is
 // stale; it is taken over by renaming the stale dir to a name of our own (atomic: one taker wins), then mkdir.
 export function acquireLock(dir, { pid = process.pid, alive = (p) => { try { process.kill(p, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } } } = {}) {
@@ -197,50 +174,42 @@ export function acquireLock(dir, { pid = process.pid, alive = (p) => { try { pro
   try { take(); return { ok: true }; } catch { return { ok: false, reason: 'could not take the land lock' }; }
 }
 
-// macOS sandbox-exec profile for the preflight, which runs the PR's own code. The LAST matching rule wins. Order:
-// everything readable; the real home unreadable; allow back what the preflight needs (read: allowRead and the
-// writable dirs; write: only allowWrite and /dev); then the directories holding the token file and the ledger are hidden
-// for good. Unix sockets are closed (docker.sock and every local daemon) except the DNS resolver's, and securityd is
-// closed so /usr/bin/security cannot read the keychain. TCP stays open (tools.sh may download a toolchain) and trustd
-// stays reachable (TLS needs it). Paths are resolved through symlinks first (macOS /tmp is a link).
-const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
-const quote = (p) => `"${p.replace(/[\\"]/g, '\\$&')}"`;
-export function sandboxProfile({ homes, allowRead = [], allowWrite, hide = [] }) {
-  const rule = (verb, ps, kind = 'subpath') => { const s = [...new Set(ps.filter(Boolean).map(real))].map((p) => `(${kind} ${quote(p)})`); return s.length ? `(${verb} ${s.join(' ')})` : ''; };
-  const hidden = hide.filter(Boolean).flatMap((f) => [path.dirname(f), path.dirname(real(f))]);
-  // git stats every ancestor of the allowed paths: metadata (not listing) of those directories stays readable.
-  const above = [...allowRead, ...allowWrite].filter(Boolean).flatMap((p) => { const up = []; for (let d = path.dirname(real(p)); d !== path.dirname(d); d = path.dirname(d)) up.push(d); return up; });
-  return ['(version 1)', '(allow default)', rule('deny file-read*', homes), rule('allow file-read-metadata', above, 'literal'), rule('allow file-read*', [...allowRead, ...allowWrite]),
-    '(deny file-write*)', rule('allow file-write*', [...allowWrite, '/dev']), rule('deny file-read* file-write*', hidden),
-    '(deny network-outbound (remote unix-socket))', '(allow network-outbound (literal "/private/var/run/mDNSResponder"))',
-    '(deny mach-lookup (global-name "com.apple.SecurityServer"))'].filter(Boolean).join('\n');
+// The trust gate: this host runs only code whose authors are trusted. Trust is GitHub identity, never a commit author string.
+// pr: { isCrossRepository, author }; pushers: logins with push access to the repo; trusted: JM_TRUSTED_LOGINS (operator env).
+const REFUSE = 'untrusted PR: not executed on this host; CI runs it. Re-author it through the loop to land it.';
+export const parseLogins = (text) => [...new Set(String(text || '').split(',').map((l) => l.trim().toLowerCase()).filter(Boolean))];
+export function checkTrust({ pr, pushers, trusted }) {
+  const no = (why) => ({ ok: false, reason: `${REFUSE} (${why})` });
+  if (!trusted.length) return { ok: false, reason: 'JM_TRUSTED_LOGINS is not set; refusing to run any PR code' };
+  if (pr.isCrossRepository) return no('cross-repository');
+  const author = String(pr.author || '').toLowerCase();
+  if (!trusted.includes(author)) return no(`author '${author || 'unknown'}' is not trusted`);
+  const stranger = pushers.map((l) => String(l).toLowerCase()).find((l) => !trusted.includes(l));
+  return stranger ? no(`'${stranger}' can push to the repo and is not trusted`) : { ok: true };
 }
 
-// Proves the profile before every preflight, under the exact profile (not nested). Each forbidden action must FAIL;
-// a controls pair guards against a profile that fails everything. Exit codes only: no keychain secret is ever read.
-export async function proveSandbox({ profile, dir, home }) {
-  const where = real(path.dirname(dir));
-  const sock = path.join(where, `jm-probe-${process.pid}.sock`);
-  const outside = path.join(where, `jm-probe-${process.pid}.out`);
-  const run = (boxed, cmd, ...args) => new Promise((done) => {
-    const p = spawn(boxed ? 'sandbox-exec' : cmd, boxed ? ['-p', profile, cmd, ...args] : args, { stdio: 'ignore', cwd: dir });
-    p.on('error', () => done(-1));
-    p.on('exit', (code) => done(code ?? -1));
-  });
-  const sh = (boxed, script, arg) => run(boxed, '/bin/sh', '-c', script, 'sh', arg);
-  const connect = '/usr/bin/nc -w 2 -U "$1" </dev/null';
-  const server = net.createServer((c) => c.end());
-  try {
-    await new Promise((ok, no) => { server.once('error', no); server.listen(sock, ok); });
-    if (await sh(true, 'echo x > "$1"', path.join(dir, 'probe-control')) !== 0) return { ok: false, reason: 'sandbox profile does not run: a control write to the throwaway dir failed' };
-    if (await sh(false, connect, sock) !== 0) return { ok: false, reason: 'sandbox probe is broken: the test socket refused an unsandboxed connect' };
-    const keychain = await run(false, '/usr/bin/security', 'default-keychain') === 0; // a host with no keychain cannot tell
-    const probes = [...[].concat(home).map((h) => [`reading a file under ${h}`, () => run(true, '/bin/ls', h)]),
-      ['connecting to a unix socket', () => sh(true, connect, sock)],
-      ['security find-generic-password (keychain)', () => run(true, '/usr/bin/security', 'find-generic-password', '-s', 'jm-probe-no-such-item')],
-      ['security default-keychain (keychain)', () => (keychain ? run(true, '/usr/bin/security', 'default-keychain') : 1)],
-      ['writing outside the throwaway dir', () => sh(true, 'echo x > "$1"', outside)]];
-    for (const [name, go] of probes) if (await go() === 0) return { ok: false, reason: `sandbox profile is not holding: ${name}` };
-    return fs.existsSync(outside) ? { ok: false, reason: 'sandbox profile is not holding: writing outside the throwaway dir' } : { ok: true };
-  } finally { server.close(); fs.rmSync(sock, { force: true }); fs.rmSync(outside, { force: true }); }
+// Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
+const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
+export function checkRuns(runs, total = runs.length) {
+  if (total > runs.length) return { ok: false, reason: `${total} check runs on the head; cannot read them all` };
+  const bad = runs.filter((r) => BAD_CONCLUSION.includes(r.conclusion));
+  return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${r.name} (${r.conclusion})`).join(', ')}` } : { ok: true };
 }
+
+// The land checkout: HEAD is main's tip and the tree is clean (the land runs the scripts in this tree). Credentials in the
+// checkout's git config would travel into every fetch, so a remote URL with userinfo or an http extraheader refuses.
+const USERINFO = /^https?:\/\/[^/\s]*@|^[a-z+]+:\/\/[^/@\s]*:[^/@\s]*@/i;
+export function checkCheckout({ head, mainTip, porcelain, remoteV, config, needMain = true }) {
+  if (needMain && head !== mainTip) return { ok: false, reason: `this checkout is at ${head.slice(0, 8)}, not main's tip ${mainTip.slice(0, 8)}; land from a checkout of main` };
+  if (needMain && porcelain.trim()) return { ok: false, reason: 'this checkout has uncommitted or untracked files; land from a clean checkout of main' };
+  if (remoteV.split('\n').some((l) => USERINFO.test(l.split(/\s+/)[1] || ''))) return { ok: false, reason: 'a git remote URL carries credentials (userinfo); remove them' };
+  if (/^http\..*extraheader/im.test(config)) return { ok: false, reason: 'the git config carries an http extraheader (a credential); remove it' };
+  return { ok: true };
+}
+
+// An added line with the secret scanner's allow marker is a way to hide a secret: such a PR needs the pod verdict.
+export const addsAllowMarker = (diff) => diff.split('\n').some((l) => l.startsWith('+') && !l.startsWith('+++') && l.includes('gitleaks:allow'));
+
+// PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
+// stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
+export const quoteOutput = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '').replace(/\n$/, '').split('\n').map((l) => `preflight| ${l}`).join('\n');

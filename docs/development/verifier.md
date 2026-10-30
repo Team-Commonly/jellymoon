@@ -9,10 +9,12 @@ A verifier is a fresh-context subagent. It never sees the builder's reasoning. I
 It runs on a different model from the builder.
 
 ## What it does, in order
-1. **Reproduce.** From main's checkout run `make verify-preflight PR=<n>` (needs `JM_REPO`; `landing.md`): the same
-   sandboxed merge-result preflight land runs. Read the PR's code freely, but never execute it outside that
-   sandbox. Then the feature's `test` command, likewise only inside the sandbox: if it cannot run there, report
-   `verifier-blocked` rather than run the PR's code outside it. A red result ends the review with `verifier-failed`.
+1. **Reproduce.** Run `make verify-preflight PR=<n>` (needs `JM_REPO` and `JM_TRUSTED_LOGINS`; `landing.md`). It checks
+   the trust gate first: the same merge-result preflight land runs, and only for a same-repo PR whose author and every
+   push-capable account are trusted. For an untrusted PR it refuses before fetching; read the CI logs and the code,
+   run nothing, and report `verifier-blocked`. The bootstrap PR's verifiers run its own land code, which is trusted
+   under the same rule. Then the feature's `test` command, only for a trusted PR. A red result ends the review with
+   `verifier-failed`.
 2. **Acceptance.** Walk each step of the feature or brief against what the test actually asserts.
    A step that no assertion covers is a finding.
 3. **Review.** Apply Pocock `code-review` to the diff against base `main`. Correctness comes first; then

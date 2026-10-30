@@ -4,6 +4,9 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · P08 trust gate, not sandbox (unit P08, round 5)
+- **Changed:** deleted the macOS sandbox, its proof, the platform check, `--reviewer-gate-unavailable`, `--owed` and `REGATE-OWED`; land and verify-preflight run PR code only for a same-repo PR whose author and every push-capable account are in `JM_TRUSTED_LOGINS`; the checkout must be at main and clean with no credentials in its git config; any FAIL at a head blocks it; failed check runs veto; an added `gitleaks:allow` line makes a PR protected; preflight output is quoted; check-gen is proved to bite. **Evidence:** check-land 88 cases, core LOC 1455 to 1414 (max 1454). **Next:** land #10 with `--bootstrap`; `ci.yml` stays off.
+
 ## 2026-10-29 · P08 sandbox and inert docs (unit P08, round 4)
 - **Changed:** protection is now an allow-list of inert paths (`progress.md`, doc extensions under `docs/`; `docs/**/*.go` is protected); the preflight sandbox denies the real home, unix sockets and the keychain service, writes only to its throwaway dir, and is proved by a four-probe check before every land and in `make test`; `make verify-preflight PR=<n>` gives verifiers the same sandbox; deleted the GitHub review-gate code (`review-gate.mjs`, `review-gate.yml`); merge without repo hooks, scripts/ must equal main's, one PR number, real worktree-add reason, atomic stale-lock takeover, `MERGED-UNVERIFIED` for out-of-band merges.
 - **Evidence:** check-land 107 cases (sandbox proof included), check-review-gate 11 + 33; core LOC budget 1500 to 1455.

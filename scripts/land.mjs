@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 // make land PR=<n>: the only merge path (docs/development/landing.md). Thin shell-outs to git, gh and the pod API;
 // every decision is a pure function in land-decide.mjs, tested by check-land.mjs. Read-only unless merging:
-// --dry-run writes no ledger row and the preflight runs in a macOS sandbox, proved before each run.
-//   land.mjs <pr> [--dry-run] [--reviewer-gate-unavailable] [--bootstrap]     land.mjs --owed
-//   land.mjs <pr> --preflight-only   (verifiers: the sandboxed merge-result preflight only; needs just JM_REPO)
-// Run it from main's checkout: it reads the reviewer list from main's tip, never from the working tree, and a land
-// refuses when this checkout's scripts/ differ from main's.
-import { execFileSync } from 'node:child_process';
+// --dry-run writes no ledger row. PR code runs here only after the trust gate (checkTrust); the preflight is a
+// correctness check, not a security boundary.
+//   land.mjs <pr> [--dry-run] [--bootstrap]
+//   land.mjs <pr> --preflight-only   (verifiers: the trust gate and the merge-result preflight only; needs JM_REPO and JM_TRUSTED_LOGINS)
+// Run it from a clean checkout of main: it reads the reviewer list from main's tip, never from the working tree.
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  acquireLock, appendLedger as writeLedger, checkApi, checkHead, checkLedger, checkMain, checkPlatform, checkPodVerdict, checkSecondVerifier,
-  cursorOf, filesFromNameStatus, landAction, owedList, parseLedger, proveSandbox, readReviewerEntries, readToken, remoteFor, removeTree,
-  sandboxProfile, scrub, takePage, touchesProtected,
+  acquireLock, addsAllowMarker, appendLedger as writeLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns,
+  checkTrust, cursorOf, filesFromNameStatus, landAction, parseLedger, parseLogins, quoteOutput, readReviewerEntries, readToken, remoteFor,
+  removeTree, scrub, takePage, touchesProtected,
 } from './land-decide.mjs';
 
-const REQUIRED = ['JM_REPO', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
+const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
 const out = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
 const REPO = process.env.JM_REPO; // every gh call names it: a worktree can carry remotes for several repos
 const gh = (...args) => out('gh', args);
@@ -29,7 +29,7 @@ const readLedger = () => parseLedger(fs.existsSync(process.env.JM_LEDGER) ? fs.r
 const appendLedger = (pr, head, verdict, by, note) => writeLedger(process.env.JM_LEDGER, [pr, head, verdict, by, new Date().toISOString(), note], { dry: DRY });
 
 function viewPr(n) {
-  const pr = JSON.parse(gh('pr', 'view', String(n), '--repo', REPO, '--json', 'url,number,state,baseRefName,headRefName,headRefOid,createdAt'));
+  const pr = JSON.parse(gh('pr', 'view', String(n), '--repo', REPO, '--json', 'url,number,state,baseRefName,headRefName,headRefOid,createdAt,isCrossRepository,author'));
   if (!String(pr.url).includes(`github.com/${REPO}/pull/${n}`)) refuse(`#${n} resolved to ${pr.url}, not ${REPO}`);
   return pr;
 }
@@ -53,38 +53,39 @@ function fetchRef(ref) {
 const why = (e) => scrub(String(e.stderr || e.message).split('\n').find(Boolean) || 'unknown', SECRET);
 const BASE = ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=land', '-c', 'user.email=land@localhost'];
 
-// The PR's own code runs here: no read of the real home (but the git common dir, the read-only toolchain cache and the
-// throwaway dir), no write outside the throwaway dir and /dev, no unix socket, no keychain. A cache miss downloads into
-// the throwaway dir. A land checkout under a denied dir (the token's or the ledger's) can never pass.
-async function sandboxed(dir, wt, env) {
-  const homes = [...new Set([os.userInfo().homedir, process.env.HOME].filter(Boolean))];
-  const profile = sandboxProfile({ homes, allowRead: [path.resolve(out('git', ['rev-parse', '--git-common-dir'])), process.env.JM_TOOLCHAIN_CACHE],
-    allowWrite: [dir], hide: [process.env.JM_LEDGER, process.env.JM_COMMONLY_TOKEN_FILE] });
-  const proof = await proveSandbox({ profile, dir, home: homes });
-  if (!proof.ok) return proof;
-  try {
-    execFileSync('sandbox-exec', ['-p', profile, 'env', '-i', ...Object.entries(env).map(([k, v]) => `${k}=${v}`), 'bash', '-c', './init.sh'], { cwd: wt, stdio: 'inherit' });
-    return { ok: true };
-  } catch { return { ok: false, reason: 'clean-shell ./init.sh (baseline preflight) failed on the merge result' }; }
+// Runs ./init.sh (which runs make preflight) in the throwaway worktree: env -i, stdin /dev/null, a NEW session (no
+// controlling tty), output captured and quoted, and the whole process group killed when it returns.
+function runInit(wt, env) {
+  return new Promise((done) => {
+    let text = '';
+    const child = spawn('env', ['-i', ...Object.entries(env).map(([k, v]) => `${k}=${v}`), 'bash', '-c', './init.sh'], { cwd: wt, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const take = (b) => { if (text.length < 2e6) text += b.toString('utf8'); };
+    child.stdout.on('data', take);
+    child.stderr.on('data', take);
+    const end = (code) => {
+      try { process.kill(-child.pid, 'SIGKILL'); } catch { /* the group is already gone */ }
+      if (text) console.error(quoteOutput(text));
+      done(code === 0 ? { ok: true } : { ok: false, reason: 'clean-shell ./init.sh (baseline preflight) failed on the merge result' });
+    };
+    child.on('error', () => end(-1));
+    child.on('close', end);
+  });
 }
 
-// Throwaway worktree at main's tip, the PR head merged in as GitHub would (no repo hooks), then ./init.sh (which runs
-// make preflight) under env -i with an empty HOME and TMPDIR inside the throwaway dir, system dirs only, in sandbox-exec.
+// Throwaway worktree at main's tip, the PR head merged in as GitHub would (no repo hooks), then ./init.sh under env -i with
+// HOME and TMPDIR inside the throwaway dir and system dirs only on PATH. Hygiene, not isolation.
 async function preflight(mainTip, head) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-land-'));
   const wt = path.join(dir, 'wt');
-  for (const d of ['home', 'tmp', 'bin']) fs.mkdirSync(path.join(dir, d));
-  // bun's own `node` shim lives in /tmp, which the sandbox cannot write; a node link to the tree's bun, inside the throwaway dir, stands in.
-  fs.symlinkSync(path.join(wt, '.tools', 'bin', 'bun'), path.join(dir, 'bin', 'node'));
-  const env = { HOME: path.join(dir, 'home'), TMPDIR: path.join(dir, 'tmp'), PATH: `/usr/bin:/bin:/usr/sbin:/sbin:${path.join(dir, 'bin')}`, TERM: 'dumb' };
-  if (process.env.JM_TOOLCHAIN_CACHE) env.JM_TOOLCHAIN_CACHE = process.env.JM_TOOLCHAIN_CACHE; // read-only; read once tools.sh supports it
+  for (const d of ['home', 'tmp']) fs.mkdirSync(path.join(dir, d));
+  const env = { HOME: path.join(dir, 'home'), TMPDIR: path.join(dir, 'tmp'), PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' };
   let result = { ok: true };
   try {
     try { out('git', ['worktree', 'add', '--quiet', '--detach', wt, mainTip]); } catch (e) { result = { ok: false, reason: `git worktree add failed: ${why(e)}` }; }
     if (result.ok) try { out('git', ['-C', wt, ...BASE, 'merge', '--no-ff', '--no-edit', head]); } catch {
       result = { ok: false, reason: `merging ${head.slice(0, 8)} into main ${mainTip.slice(0, 8)} conflicts` };
     }
-    if (result.ok) result = await sandboxed(dir, wt, env);
+    if (result.ok) result = await runInit(wt, env);
   } catch (e) { result = { ok: false, reason: `preflight failed: ${why(e)}` }; }
   try { execFileSync('chmod', ['-R', 'u+w', dir]); out('git', ['worktree', 'remove', '--force', wt]); } catch { /* removeTree warns */ }
   removeTree(dir);
@@ -122,7 +123,15 @@ async function podMessages(since) {
 const reviewers = (ref) => readReviewerEntries(out('git', ['show', `${ref}:.github/opus-reviewers.txt`]));
 function hasLand(mainTip) { try { out('git', ['cat-file', '-e', `${mainTip}:scripts/land.mjs`]); return true; } catch { return false; } }
 
-// Every ledger and pod check at this moment. Run before the preflight and again right before the merge.
+// Trust gate: runs before anything of the PR is fetched or executed. Trust is GitHub identity: not cross-repository, the
+// author and every account with push access are in JM_TRUSTED_LOGINS (an operator env var; a PR cannot widen it).
+function trustGate(pr) {
+  const pushers = gh('api', '--paginate', `repos/${REPO}/collaborators?affiliation=all&permission=push&per_page=100`, '--jq', '.[].login').split('\n').filter(Boolean);
+  const t = checkTrust({ pr: { isCrossRepository: pr.isCrossRepository, author: pr.author?.login }, pushers, trusted: parseLogins(process.env.JM_TRUSTED_LOGINS) });
+  if (!t.ok) refuse(`#${pr.number}: ${t.reason}`);
+}
+
+// Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
 async function decide(pr, mainTip, opts) {
   const n = String(pr.number);
   const head = pr.headRefOid;
@@ -130,66 +139,55 @@ async function decide(pr, mainTip, opts) {
   const led = checkLedger(rows, { pr: n, head });
   if (!led.ok) return led;
   const notes = [`ledger PASS by ${led.primary.by}`];
-  const files = filesFromNameStatus(out('git', ['diff', '--name-status', '-M', out('git', ['merge-base', mainTip, head]), head]));
-  let regate = false;
-  if (touchesProtected(files)) {
-    const gate = opts.reviewer
-      ? checkSecondVerifier(rows, { pr: n, head, primary: led.primary })
-      : checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers(opts.bootstrap ? head : mainTip) });
+  const runs = JSON.parse(gh('api', `repos/${REPO}/commits/${head}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, conclusion}]}'));
+  const ci = checkRuns(runs.runs, runs.total);
+  if (!ci.ok) return ci;
+  const base = out('git', ['merge-base', mainTip, head]);
+  const files = filesFromNameStatus(out('git', ['diff', '--name-status', '-M', base, head]));
+  if (touchesProtected(files) || addsAllowMarker(out('git', ['diff', '-U0', '--no-color', base, head], { maxBuffer: 1 << 28 }))) {
+    const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers(opts.bootstrap ? head : mainTip) });
     if (!gate.ok) return gate;
     notes.push(gate.reason);
-    regate = opts.reviewer;
   }
-  return { ok: true, notes, regate };
+  return { ok: true, notes };
 }
 
-async function owed() {
-  const mainTip = fetchRef('main');
-  const rows = readLedger();
-  const owing = rows.filter((r) => r.verdict === 'REGATE-OWED');
-  const since = Math.min(Date.now(), ...owing.map((r) => Date.parse(r.when) || Date.now()));
-  const msgs = owing.length ? await podMessages(since) : [];
-  const entries = reviewers(mainTip);
-  const list = owedList(rows, (pr, head, after) => checkPodVerdict(msgs, { pr, head, entries, after }).ok);
-  say(list.length ? list.map((r) => `#${r.pr} ${r.head} owes a reviewer re-gate (landed ${r.when})`).join('\n') : 'no PR owes a reviewer re-gate');
+const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
+const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only';
+
+// The checkout this runs from: credentials out of its git config; for a land, also HEAD == main's tip and a clean tree.
+function checkoutGate(mainTip, { needMain }) {
+  const config = (() => { try { return out('git', ['config', '--get-regexp', 'extraheader']); } catch { return ''; } })();
+  const c = checkCheckout({ head: out('git', ['rev-parse', 'HEAD']), mainTip, porcelain: out('git', ['status', '--porcelain']), remoteV: out('git', ['remote', '-v']), config, needMain });
+  if (!c.ok) refuse(c.reason);
 }
 
-const FLAGS = ['--dry-run', '--reviewer-gate-unavailable', '--bootstrap', '--preflight-only'];
-const USAGE = 'usage: land.mjs <pr> [--dry-run] [--reviewer-gate-unavailable] [--bootstrap] | <pr> --preflight-only | --owed';
-
-// This checkout's scripts/ must be main's: land runs whatever scripts/land.mjs is in the working tree.
-function scriptsAreMains(mainTip) {
-  try { execFileSync('git', ['diff', '--quiet', mainTip, '--', 'scripts/']); } catch { return false; }
-  return out('git', ['ls-files', '--others', '--exclude-standard', 'scripts/']) === '';
-}
-
-// Verifiers: the sandboxed merge-result preflight and nothing else. No ledger, no pod, no merge.
+// Verifiers: the trust gate and the merge-result preflight, nothing else. No ledger, no pod, no merge.
 async function preflightOnly(n) {
   lock();
   const pr = viewPr(n);
+  trustGate(pr);
   const mainTip = fetchRef('main');
+  checkoutGate(mainTip, { needMain: false });
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
   const pf = await preflight(mainTip, pr.headRefOid.toLowerCase());
   if (!pf.ok) refuse(`#${n}: ${pf.reason}`);
-  say(`#${n}: merge result preflight green in the sandbox (main ${mainTip.slice(0, 8)} + ${pr.headRefOid.slice(0, 8)})`);
+  say(`#${n}: merge result preflight green (main ${mainTip.slice(0, 8)} + ${pr.headRefOid.slice(0, 8)})`);
 }
 
 async function main() {
   const args = process.argv.slice(2);
   const only = args.includes('--preflight-only');
-  const missing = (only ? ['JM_REPO'] : REQUIRED).find((v) => !process.env[v]);
+  const missing = (only ? ['JM_REPO', 'JM_TRUSTED_LOGINS'] : REQUIRED).find((v) => !process.env[v]);
   if (missing) refuse(`environment variable ${missing} is not set`);
   const api = only ? { ok: true } : checkApi(process.env.JM_COMMONLY_API);
   if (!api.ok) refuse(api.reason);
-  const sb = checkPlatform(process.platform);
-  if (!sb.ok) refuse(sb.reason);
-  if (args.includes('--owed')) return owed();
   const nums = args.filter((a) => /^\d+$/.test(a));
   if (nums.length !== 1 || args.some((a) => !/^\d+$/.test(a) && !FLAGS.includes(a)) || (only && args.length > 2)) refuse(USAGE);
   if (only) return preflightOnly(nums[0]);
   const n = nums[0];
-  const opts = { reviewer: args.includes('--reviewer-gate-unavailable'), bootstrap: args.includes('--bootstrap') };
+  const opts = { bootstrap: args.includes('--bootstrap') };
   lock();
   const pr = viewPr(n);
   const action = landAction(pr, readLedger());
@@ -198,11 +196,12 @@ async function main() {
     console.error(`land: warning: #${n} was merged without a LANDED row; ${DRY ? 'dry run, not recording it' : 'recording it as MERGED-UNVERIFIED'}`);
     return appendLedger(n, pr.headRefOid.toLowerCase(), 'MERGED-UNVERIFIED', 'land', 'merged out of band; recorded without any check');
   }
+  trustGate(pr);
   const mainTip = fetchRef('main');
+  checkoutGate(mainTip, { needMain: !opts.bootstrap });
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
   if (hasLand(mainTip) === opts.bootstrap) refuse(opts.bootstrap ? 'main already has scripts/land.mjs; --bootstrap is only for the first land of the gate' : 'main has no scripts/land.mjs yet; the first land of the gate needs --bootstrap and is judged by people');
-  if (!opts.bootstrap && !scriptsAreMains(mainTip)) refuse("scripts/ in this checkout differ from main's tip; land from a clean checkout of main");
   const head = pr.headRefOid.toLowerCase();
   const d = await decide(pr, mainTip, opts);
   if (!d.ok) refuse(`#${n}: ${d.reason} (nothing merged)`);
@@ -214,10 +213,11 @@ async function main() {
   if (!moved.ok) refuse(moved.reason);
   const again = await decide(pr, mainTip, opts);
   if (!again.ok) refuse(`#${n}: ${again.reason} (changed before the merge; nothing merged)`);
+  const now = checkHead(viewPr(n), head); // --match-head-commit pins only the head: base and state are re-read too
+  if (!now.ok) refuse(`${now.reason} (changed before the merge; nothing merged)`);
   gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
   const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
   appendLedger(n, head, 'LANDED', 'land', sha);
-  if (d.regate) appendLedger(n, head, 'REGATE-OWED', 'land', 'reviewer-gate-unavailable');
   if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
   say(`#${n} landed as ${sha}; branch ${pr.headRefName} is now safe to delete (not deleted)`);
 }

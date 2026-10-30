@@ -62,12 +62,12 @@ hooks:
 portable:
 	scripts/check-portable.sh
 
-# The only merge path (docs/development/landing.md): make land PR=<n> [ARGS=--dry-run], or make land ARGS=--owed. Needs the JM_* env.
+# The only merge path (docs/development/landing.md): make land PR=<n> [ARGS=--dry-run]. Needs the JM_* env.
 land:
 	$(BUN) scripts/land.mjs $(PR) $(ARGS)
 
-# Verifiers: the sandboxed merge-result preflight of PR=<n> and nothing else (no ledger, no pod). Needs only JM_REPO.
-# Run it from main's checkout, never from the PR's tree: the PR's own scripts must not run outside the sandbox.
+# Verifiers: the trust gate, then the merge-result preflight of PR=<n> and nothing else (no ledger, no pod).
+# Needs JM_REPO and JM_TRUSTED_LOGINS. An untrusted PR is refused before any of its code is fetched.
 verify-preflight:
 	$(BUN) scripts/land.mjs $(PR) --preflight-only
 

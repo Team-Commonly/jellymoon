@@ -65,6 +65,17 @@ export class PodDO implements Starter {
     const meta = rows.find((r) => r.k === 'meta');
     if (meta !== undefined) this.meta = JSON.parse(meta.v) as PodMeta;
     this.exec({ type: 'boot', staleMs: 0 });
+    this.reconcile();
+  }
+
+  /**
+   * The sockets are the adapter's truth about who is connected; the pod's `online` map is the core's. A restored object (a woken
+   * hibernated one, or a restarted server) drops every computer the map holds whose socket is gone. The other direction needs
+   * nothing: a live socket is in the map from the command that accepted it, unless the core ruled it stale, and that stands.
+   */
+  private reconcile(): void {
+    const live = new Set(this.ctx.getWebSockets().flatMap((ws) => this.ctx.getTags(ws).filter((t) => t.startsWith('c:')).map((t) => t.slice(2))));
+    for (const id of Object.keys(this.state.online ?? {})) if (!live.has(id)) this.exec({ type: 'computer_offline', computerId: id });
   }
 
   /** For the test entry: forget everything held in memory and restore from storage, the way a woken object does. */
@@ -128,7 +139,7 @@ export class PodDO implements Starter {
 
   private fanOut(out: Out[]): void {
     for (const o of out) {
-      if (o.kind === 'event') {
+      if (o.kind === 'event' || o.kind === 'live') {
         const text = JSON.stringify(o.event);
         for (const ws of this.ctx.getWebSockets()) if ((ws.deserializeAttachment() as Att | null)?.subscribed) this.send(ws, text);
       } else if (o.kind === 'to-computer') {
@@ -167,11 +178,8 @@ export class PodDO implements Starter {
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server, [who.kind === 'user' ? `u:${who.actor.id}` : `c:${who.computerId}`]);
     server.serializeAttachment({ who, subscribed: false } satisfies Att);
-    const online = new Set(this.ctx.getWebSockets().flatMap((ws) => {
-      const a = ws.deserializeAttachment() as Att | null;
-      return a?.who.kind === 'computer' ? [a.who.computerId] : [];
-    }));
-    this.send(server, this.frame('hello', hello(this.state, this.meta, member, online)));
+    if (who.kind === 'computer') this.exec({ type: 'computer_online', computerId: who.computerId });
+    this.send(server, this.frame('hello', hello(this.state, this.meta, member)));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -195,11 +203,20 @@ export class PodDO implements Starter {
     ws.serializeAttachment({ ...att, subscribed: true } satisfies Att);
   }
 
+  /** A computer's last socket to this pod is gone: it is offline here. */
+  private dropped(ws: WebSocket): void {
+    const tag = this.ctx.getTags(ws).find((t) => t.startsWith('c:'));
+    if (tag === undefined) return;
+    const open = this.ctx.getWebSockets(tag).some((s) => s !== ws && s.readyState === WebSocket.READY_STATE_OPEN);
+    if (!open) this.exec({ type: 'computer_offline', computerId: tag.slice(2) });
+  }
+
   webSocketClose(ws: WebSocket, code: number): void {
+    this.dropped(ws);
     try { ws.close(code >= 1000 && code < 5000 && code !== 1005 && code !== 1006 ? code : 1000, 'closing'); } catch { /* already closed */ }
   }
 
-  webSocketError(): void { /* a failed socket is dropped by the runtime; the pod's state is not tied to it */ }
+  webSocketError(ws: WebSocket): void { this.dropped(ws); }
 
   alarm(): void {
     this.armed = null;

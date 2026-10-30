@@ -84,6 +84,7 @@ The suite asserts these; a server that disagrees should change the protocol, not
 - Every sequenced frame is replayed, and sequence numbers have no gaps. Frames with no `seq` (`run.wake`,
   `run.stop`, `hello`) are not part of the log.
 - Releasing as the claiming agent's owner means the user whose computer registered the agent.
+- `presence.changed` has no `seq`: it is not in the log and not replayed. A client reads current presence from `hello`. A computer is online from its socket until the socket closes or 45 s pass without a heartbeat on the server clock.
 
 ## The renewal ledger
 
@@ -112,6 +113,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestInputValidation` | Each write route refuses what the schema refuses with `400 invalid_input` (a numeric or 16,385-character `body`, a two-line `summary`, a missing `kind`, a note on a task update, and the other routes' bodies), stores a 16,384-character body whole, and lets a run post with its `summary`. |
 | `TestRestartPastDeadline` | A claim made on a fake clock two minutes behind real time, then `kill -9` and a restart with no clock call: the restarted server is on its real clock, so the deadline is already past, and the first frames after the restart carry `task.updated` (no claim) and one `claim.released{expired}`. It needs the server to settle when it restores state. |
 | `TestRunTokenOtherPod` | A run token on another pod's routes (read, list, feed, post) gets `403 forbidden`; on its own pod it works. |
+| `TestF08` | F08: builds the repo's `daemon/cmd/jellymoon` and runs it as a black box (own process group, output captured, config dir `JELLYMOON_HOME`, server `JELLYMOON_SERVER`, first-registration jmu_ token in `JELLYMOON_USER_TOKEN`, never argv). It registers the computer and stores `computer.json` at 0600 in a 0700 dir; `agent add fake --pod` registers an agent; members get `presence.changed` online within 5 s; a daemon stopped with SIGSTOP (socket open, no heartbeat) goes offline when the fake clock is exactly 45 s past its last sign of life and not 1 ms before; a second start reuses the stored computer; `kill -9` gives offline within 45 s; no token appears in any output or in any process's argv; plain http to a non-local host is refused; and after a server crash with the daemon gone, hello lists the agent offline. |
 | `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. It judges the run so far, so it is last; it fails if a suite test failed and skips on a partial run. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X

@@ -156,7 +156,7 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   - **Fragment cuts.** `gitleaks dir` and git mode read a file in 100,000-byte chunks (extended at most 25,000 bytes to a blank line), and no rule matches across chunks, so a token straddling a cut is not matched.
   - **File-type sniffing.** `gitleaks dir` types a file by its leading bytes (offsets up to 32,773) and skips what it calls `application/*`.
   - **Binaries and images.** Git mode skips binary files and images.
-  - **Allowlisted paths.** Git mode's built-in allowlist skips `node_modules`, `bower_components` and `gitleaks.toml` paths, and it skips lockfiles and `go.sum`, so a secret added then deleted in such a blob sits in main's history unscanned.
+  - **Allowlisted paths.** The pinned gitleaks v8.30.1 ships a built-in allowlist (its default config, `config/gitleaks.toml`, under `[allowlist]`: path patterns for dependency directories, lockfiles and manifests such as `go.mod`, minified and vendored JS, fonts, PDFs and more). Cited by reference, not listed here, because a partial list understates it. A secret added then deleted in such a path sits in main's history unscanned. Added-then-deleted text elsewhere IS read.
   - **Commit headers.** Extra commit headers and the author and committer fields.
   - **File names.**
   - **A commit message after a NUL.** `git log %B` stops at it, and git mode never reads commit messages at all.

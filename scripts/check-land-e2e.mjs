@@ -101,7 +101,7 @@ await t('a PR with a verdict from the configured reviewer id lands', {}, (r) => 
 await t('a PR with JM_VERDICT_REVIEWERS unset refuses, naming it', { env: { JM_VERDICT_REVIEWERS: '' } }, (r) => no(r, /environment variable JM_VERDICT_REVIEWERS is not set/) && r.w.pod.length === 0 && r.w.calls.length === 0);
 await t('a verdict from a forged username with another id is refused', { msgs: [{ ...NOTE, userId: { _id: 'id-forged', username: 'orion' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('a docs-only PR with a ledger PASS and no pod verdict: refused; land classifies no paths (no diff or tree listing is read)', { msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/) && !r.w.calls.some((c) => c.args.some((a) => ['ls-tree', '--raw', '--numstat'].includes(a))));
-await t('a range scan hit with a valid verdict: refused, naming the history', { scan: 'hit' }, (r) => no(r, /a secret was found in the range; remove it from history and push a new head/));
+await t('a range scan hit with a valid verdict: refused, naming the history', { scan: 'hit' }, (r) => no(r, /a secret was found in the range; remove it from history and push a new head/) && r.w.pod.length === 0); // scan first: no token read, no pod fetch
 await t('a range scan that failed to run: refused', { scan: 'fail' }, (r) => no(r, /scan failed to run/) && !/secret was found/.test(r.error));
 await t('a valid verdict with a clean scan lands (control)', { scan: 'clean' }, (r) => r.merge && r.ledgerNow.includes('\tLANDED\t'));
 await t('JM_VERDICT_REVIEWERS with no valid entry is malformed, refused before the token read and the pod fetch', { env: { JM_VERDICT_REVIEWERS: 'bad,:x' } }, (r) => no(r, /JM_VERDICT_REVIEWERS is malformed/) && r.w.pod.length === 0 && r.w.calls.length === 0);
@@ -109,6 +109,7 @@ await t('a username equal to a listed id, with no _id, is not the reviewer', { m
 await t('an _id that is an array holding the listed id is not the reviewer', { msgs: [{ ...NOTE, userId: { _id: ['id-orion'], username: 'x' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('an error carrying the token after the pod read is scrubbed by main\'s catch', { on: [[/^gh pr merge/, () => { throw new Error('boom jmu_FAKE-token-abc123'); }]] }, (r) => !r.ledgerNow.includes('LANDED') && r.error.includes('[token]') && !r.error.includes('abc123'));
 await t('a verdict whose first line carries only a PREFIX of the head: refused', { msgs: [{ ...NOTE, content: `jellymoon#5 ${HEAD.slice(0, 8)}\nGATE: PASS` }] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('a verdict whose first line carries a 39-hex prefix of the head: refused', { msgs: [{ ...NOTE, content: `jellymoon#5 ${HEAD.slice(0, 39)}\nGATE: PASS` }] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('a verdict whose first line carries the head plus a suffix: refused', { msgs: [{ ...NOTE, content: `jellymoon#5 ${HEAD}0\nGATE: PASS` }] }, (r) => no(r, /no accepted reviewer's pod message/));
 // Pod paging: a partial list must never be judged (a page-1 PASS over a page-2 FAIL would land).
 const FAILMSG = { ...NOTE, userId: { _id: 'id-vega', username: 'vega' }, content: `jellymoon#5 ${HEAD}\nGATE: FAIL`, createdAt: '2026-10-29T09:30:00Z' };
@@ -125,6 +126,9 @@ await t('paging: an HTTP error on page 2 refuses, not a partial list', { plan: (
 await t('paging: a fetch error after page 1 refuses', { plan: (n) => { if (n === 1) return page([NOTE]); throw Object.assign(new Error('down'), { name: 'TimeoutError' }); } }, (r) => no(r, /request failed \(TimeoutError\)/));
 await t('paging: a reply that is not JSON refuses', { plan: (n) => (n === 1 ? page([NOTE]) : { ok: true, status: 200, json: async () => { throw new SyntaxError('x'); } }) }, (r) => no(r, /unreadable reply \(SyntaxError\)/));
 await t('paging: a reply that is not a list refuses in words, not a TypeError', { plan: () => page({ oops: 1 }) }, (r) => no(r, /not a list of messages/));
+await t('paging: a page holding null before the PASS refuses in words, not a TypeError', { plan: () => page([null, NOTE]) }, (r) => no(r, /not a list of messages/));
+await t('paging: a page of numbers refuses in words', { plan: () => page([1]) }, (r) => no(r, /not a list of messages/));
+await t('paging: a page of strings refuses in words', { plan: () => page(['x']) }, (r) => no(r, /not a list of messages/));
 await t('paging: the 30-page cap refuses rather than judge a partial list', { plan: (n) => page([{ id: `p${n}`, userId: { _id: 'other', username: 'o' }, content: 'x', createdAt: new Date(Date.parse('2026-10-29T12:00:00Z') - n * 1000).toISOString() }]) }, (r) => no(r, /page cap reached/) && r.w.pod.length === 30);
 await t('a PR url that merely starts like this PR (pull/50 for #5) is refused', { pr: { url: `https://github.com/${REPO}/pull/50` } }, (r) => no(r, /resolved to/));
 await t('--preflight-only: the worktree merge tree must equal the expected one', { argv: PO, wtTree: OTHER }, (r) => no(r, /not the merge result/) && r.w.spawns.length === 0);
@@ -163,9 +167,11 @@ await t('checkout gate: an http extraheader is refused', { on: [[/^git config --
 await t('checkout gate: .ENV at the repo root is refused (any case)', { topFiles: ['.ENV'] }, (r) => no(r, /env/i));
 await t('checkout gate: BUNFIG.TOML in the cwd is refused (any case)', { cwdFiles: ['BUNFIG.TOML'] }, (r) => no(r, /bunfig/i));
 await t('checkout gate: --preflight-only has it too', { argv: PO, on: dirty }, (r) => no(r, /uncommitted/));
-await t('bootstrap: refused once main has scripts/land.mjs, in both paths', { argv: ['5', '--bootstrap'] }, (r) => no(r, /only for the first land/));
-await t('bootstrap (preflight-only): refused once main has scripts/land.mjs', { argv: [...PO, '--bootstrap'] }, (r) => no(r, /only for the first land/));
-const boot = { argv: ['5', '--bootstrap'], checkoutHead: OTHER, on: [[/^git cat-file -e \S+:(scripts\/land\.mjs|entropy\.json)/, () => { throw fail; }]] };
+await t('bootstrap: refused once main has scripts/land.mjs, in both paths', { argv: ['5', '--bootstrap'], checkoutHead: HEAD }, (r) => no(r, /only for the first land/));
+await t('bootstrap (preflight-only): refused once main has scripts/land.mjs', { argv: [...PO, '--bootstrap'], checkoutHead: HEAD }, (r) => no(r, /only for the first land/));
+const boot = { argv: ['5', '--bootstrap'], checkoutHead: HEAD, on: [[/^git cat-file -e \S+:(scripts\/land\.mjs|entropy\.json)/, () => { throw fail; }]] };
+await t('bootstrap from a checkout that is not the PR head: refused (land)', { ...boot, checkoutHead: OTHER }, (r) => no(r, /checkout of the PR head/) && r.w.spawns.length === 0);
+await t('bootstrap (preflight-only) from a checkout that is not the PR head: refused', { ...boot, argv: [...PO, '--bootstrap'], checkoutHead: OTHER }, (r) => no(r, /checkout of the PR head/) && r.w.spawns.length === 0);
 await t('bootstrap on a main without land.mjs: entropy base is none, a BOOTSTRAP row is written', { ...boot }, (r) => r.merge && r.w.spawns[0].args.includes('JM_ENTROPY_BASE=none') && r.ledgerNow.includes('\tBOOTSTRAP\t'));
 await t('API origin that is not commonly: refused', { env: { JM_COMMONLY_API: 'https://evil.example' } }, (r) => no(r, /JM_COMMONLY_API must be/) && r.w.calls.length === 0);
 await t('a PR url for another repo: refused', { pr: { url: 'https://github.com/Other/repo/pull/5' } }, (r) => no(r, /resolved to/));

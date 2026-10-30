@@ -110,6 +110,8 @@ const cases = [
       ['checkout: HEAD at main and clean is accepted', c().ok, true],
       ['checkout: HEAD not at main is refused', c({ head: H }).ok, false],
       ['checkout: HEAD elsewhere is fine only under --bootstrap', c({ head: H, bootstrap: true }).ok, true],
+      ['checkout: --bootstrap at the PR head is accepted', c({ head: H, prHead: H.toUpperCase(), bootstrap: true }).ok, true],
+      ['checkout: --bootstrap anywhere but the PR head is refused', c({ head: H, prHead: H2, bootstrap: true }).ok, false],
       ['checkout: a dirty tree under --bootstrap is refused', c({ head: H, bootstrap: true, porcelain: ' M Makefile' }).ok, false],
       ['preflight-only: a non-main HEAD is refused (the PR tree must not run its own Makefile)', c({ head: H }).ok, false],
       ['checkout: an assume-unchanged file (h) is refused', c({ lsv: 'H a\nh scripts/land.mjs' }).ok, false],

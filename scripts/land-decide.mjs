@@ -181,7 +181,8 @@ export function checkRuns(runs, total = runs.length) {
 // checkout's git config would travel into every fetch, so a remote URL with userinfo or an http extraheader refuses.
 const USERINFO = /^https?:\/\/[^/\s]*@|^[a-z+]+:\/\/[^/@\s]*:[^/@\s]*@/i;
 // porcelain is `status --porcelain` with showUntrackedFiles=all; lsv is `ls-files -v`; diffDirty is a non-empty `diff HEAD`.
-export function checkCheckout({ head, mainTip, porcelain, remoteV, config, lsv = '', diffDirty = false, bootstrap = false }) {
+export function checkCheckout({ head, mainTip, prHead = null, porcelain, remoteV, config, lsv = '', diffDirty = false, bootstrap = false }) {
+  if (bootstrap && mainTip !== null && prHead && head.toLowerCase() !== prHead.toLowerCase()) return { ok: false, reason: `--bootstrap runs from a checkout of the PR head ${prHead.slice(0, 8)}, but this checkout is at ${head.slice(0, 8)}` };
   if (!bootstrap && mainTip !== null && head !== mainTip) return { ok: false, reason: `this checkout is at ${head.slice(0, 8)}, not main's tip ${mainTip.slice(0, 8)}; land from a checkout of main` };
   if (porcelain.trim()) return { ok: false, reason: 'this checkout has uncommitted or untracked files; land from a clean checkout of main' };
   if (lsv.split('\n').some((l) => /^[a-zS] /.test(l))) return { ok: false, reason: 'a tracked file is marked assume-unchanged or skip-worktree, which hides edits from git status; clear the flag' };

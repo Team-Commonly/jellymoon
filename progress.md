@@ -17,6 +17,17 @@ goes in the PR.
 - **Surprising:** the check's first version printed the text it matched, which a CI log masks only as a whole string; it now
   prints `file:line: class` and nothing else.
 
+## 2026-10-30 · P08 range control, land-shaped (unit P08, round 18)
+- **Changed:** the range cases now model a normal land (checkout on main, PR head reachable by SHA only) in three shapes: linear, a merged side branch, main moved after branching. `--bootstrap` requires HEAD to be the PR head. A pod page holding a non-object refuses in words. Doc fixes: built-in allowlist cited by reference, stale wording in GLOSSARY, INDEX, ADR and the design doc.
+- **Evidence:** check-land 155, check-land-e2e 93, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge + 7 range.
+- **Next:** land #10 with `--bootstrap`.
+- **Surprising:** a fixture left on the PR branch passed four recipe mutants (`HEAD`, `--all`, `--first-parent`, `--ancestry-path`) that a main checkout exposes.
+
+## 2026-10-30 · P08 range control and pod paging (unit P08, round 17)
+- **Changed:** restored the real-recipe range cases (add then delete a token; marker ignored; clean range), e2e cases for every pod paging guard, an exact PR url check, a non-list pod reply refusing in words, and land-decide reached by a non-literal path so knip sees its exports.
+- **Evidence:** check-land 153, check-land-e2e 87, check-review-gate 10 + 4 + 3 + 2 + 3 + 3; core LOC 1833.
+- **Next:** as round 18.
+
 ## 2026-10-30 · P08 one review per head, scans only refuse (unit P08, round 16)
 - **Changed:** every land needs the ledger PASS and the pod verdict; no path rule or scan result waives either. Deleted the inert rule, `needsVerdict`, the neutral-name re-scan, the range-blob enumeration, `touchesProtected` and the path cases. `make secrets-range` now exits 3 on a finding; a hit or a failed scan refuses. Reviewers env is checked before the token read ("malformed" if no valid entry); `msgUser` takes only a string `_id`.
 - **Evidence:** check-land 153, check-land-e2e 73, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge; core LOC 2103 to 1787.

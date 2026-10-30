@@ -124,7 +124,7 @@ async function podMessages(since) {
     if (!res.ok) refuse(`pod messages: HTTP ${res.status}`);
     let msgs;
     try { msgs = await res.json(); } catch (e) { return refuse(`pod messages: unreadable reply (${e.name})`); }
-    if (!Array.isArray(msgs)) refuse('pod messages: the reply is not a list of messages');
+    if (!Array.isArray(msgs) || msgs.some((m) => !m || typeof m !== 'object' || Array.isArray(m))) refuse('pod messages: the reply is not a list of messages');
     const { fresh, stuck } = takePage(seen, msgs, 200);
     if (stuck) refuse('pod messages: a page boundary could hide a message; cannot prove no older FAIL');
     if (!fresh.length) return all;
@@ -188,9 +188,9 @@ const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
 const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only [--bootstrap]';
 // The checkout this runs from, checked before the first fetch (mainTip null) and again after it: a clean tree at main's tip (only --bootstrap may sit elsewhere), no credentials in its git config.
 const ok = (cmd, a) => { try { out(cmd, a); return true; } catch { return false; } }; // did the command exit 0
-function checkoutGate(mainTip, bootstrap) {
+function checkoutGate(mainTip, bootstrap, prHead = null) {
   const config = (() => { try { return out('git', ['config', '--get-regexp', 'extraheader']); } catch { return ''; } })();
-  const c = checkCheckout({ head: out('git', ['rev-parse', 'HEAD']), mainTip, porcelain: out('git', ['-c', 'status.showUntrackedFiles=all', 'status', '--porcelain']), remoteV: out('git', ['remote', '-v']), config, lsv: out('git', ['ls-files', '-v']), diffDirty: !ok('git', ['diff', '--quiet', 'HEAD']), bootstrap });
+  const c = checkCheckout({ head: out('git', ['rev-parse', 'HEAD']), mainTip, prHead, porcelain: out('git', ['-c', 'status.showUntrackedFiles=all', 'status', '--porcelain']), remoteV: out('git', ['remote', '-v']), config, lsv: out('git', ['ls-files', '-v']), diffDirty: !ok('git', ['diff', '--quiet', 'HEAD']), bootstrap });
   if (!c.ok) refuse(c.reason);
   const b = checkNoBunConfig([...fs.readdirSync(out('git', ['rev-parse', '--show-toplevel'])), ...fs.readdirSync(IO.cwd)]); // the filesystem, not porcelain: ignored files count
   if (!b.ok) refuse(b.reason);
@@ -201,7 +201,7 @@ async function preflightOnly(n, bootstrap, hold) {
   const pr = viewPr(n);
   trustGate(pr);
   const mainTip = fetchRef(MAIN_REF);
-  checkoutGate(mainTip, bootstrap);
+  checkoutGate(mainTip, bootstrap, pr.headRefOid);
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
   bootstrapGate(mainTip, bootstrap);
@@ -243,7 +243,7 @@ async function run(args, hold) {
   }
   trustGate(pr);
   const mainTip = fetchRef(MAIN_REF);
-  checkoutGate(mainTip, opts.bootstrap);
+  checkoutGate(mainTip, opts.bootstrap, pr.headRefOid);
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
   bootstrapGate(mainTip, opts.bootstrap);

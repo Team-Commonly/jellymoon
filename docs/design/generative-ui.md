@@ -126,7 +126,7 @@ New common id: `FileId` (`fil_`); `ToolCallId` (`tc_`) now exists. Agents emit a
 
 ## 7. Risks and open questions
 
-1. **Catalogue creep.** Every new type is a schema change, a protected path and a review gate. That is the point, but expect pressure for a generic `table`. Hold the line until three asks need it.
+1. **Catalogue creep.** Every new type is a schema change and a reviewed verdict. That is the point, but expect pressure for a generic `table`. Hold the line until three asks need it.
 2. **Ref load.** Agents must quote `tc_` ids, which they get from the `evidence` operation. Measure in the slice how often an agent's first post is refused with `ungrounded`; if it is often, return the run's recent ids with every `post` refusal.
 3. **Screenshots** need a file store (R2) and a capture path. Neither exists in v4 yet.
 4. **Unverified:** CopilotKit's licence-gated feature list; whether Claude Code renders MCP Apps; OpenUI's plans for a JSON input mode; Tambo's self-host story.

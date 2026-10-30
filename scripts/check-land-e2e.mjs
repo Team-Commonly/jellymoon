@@ -39,7 +39,7 @@ async function land(over = {}) {
     [/^gh api .*collaborators/, (a) => ['{"login":"lily","push":true}', ...(a.includes('--paginate') ? over.page2 || [] : [])].join('\n')],
     [/^gh api .*check-runs/, over.runs ?? '{"total":1,"runs":[{"name":"ci","conclusion":"success"}]}'],
     [/^git merge-tree --write-tree/, `${TREE}\n`],
-    [/^make -s secrets-range/, () => { if (over.scan === 'hit') throw Object.assign(new Error('make failed'), { stderr: 'WRN leaks found: 1\nexit status 3\nmake: *** [secrets-range] Error 1\n' }); if (over.scan === 'fail') throw Object.assign(new Error('make failed'), { stderr: 'go: no network\nexit status 1\n' }); return ''; }],
+    [/^make -s secrets-range/, () => { if (over.scan === 'hit') throw Object.assign(new Error('make failed'), { status: 2, stderr: 'WRN leaks found: 1\nexit status 3\nmake: *** [secrets-range] Error 1\n' }); if (over.scan === 'fail') throw Object.assign(new Error('make failed'), { status: 2, stderr: 'go: no network\nexit status 1\n' }); return ''; }],
     [/^git cat-file -e/, ''],
     [/^git (-c \S+ )?worktree|^chmod/, ''], [new RegExp(`${wt.source}.*merge --no-ff`), ''], [new RegExp(`${wt.source}.*rev-parse HEAD\\^\\{tree\\}`), over.wtTree ?? TREE],
   ];
@@ -85,6 +85,10 @@ await t('happy path: lands with --merge and --match-head-commit <head>; the ledg
 await t('happy path: pr view asks for isCrossRepository; the collaborators call is paginated and unfiltered', {}, (r) => argv(r, 'gh', 'pr view')[0].includes('isCrossRepository') && argv(r, 'gh', 'collaborators')[0].includes('--paginate') && !argv(r, 'gh', 'collaborators')[0].includes('permission='));
 await t('every main fetch names refs/heads/main; the merge disables hooks; untracked files are shown in full', {}, (r) => r.w.fetches.filter((f) => !f.startsWith('pull/') && f !== MERGED).every((f) => f === 'refs/heads/main') && argv(r, 'git', 'merge --no-ff')[0].includes('core.hooksPath=/dev/null') && argv(r, 'git', 'status')[0].includes('status.showUntrackedFiles=all'));
 await t('the secret range is <main tip>..<head>', {}, (r) => argv(r, 'make', 'secrets-range')[0] === `-s secrets-range RANGE=${MAIN}..${HEAD}`);
+const MAKEENV = { MAKEFLAGS: 'i', GITLEAKS_CONFIG: '/tmp/off.toml', GITLEAKS_ENABLE_RULES: 'x', GIT_DIR: '/nope', GOFLAGS: '-x', PATH: '/usr/bin:/bin', HOME: '/opt/opuser', TMPDIR: '/var/tmp', GOPATH: '/opt/gopath' };
+const makeEnv = (r) => argv(r, 'make', 'secrets-range').length && r.w.calls.find((c) => c.cmd === 'make').opts.env;
+await t('the range scan runs make with an allowlist env: no MAKEFLAGS, no gitleaks or git or go variables from the operator', { env: MAKEENV }, (r) => { const e = makeEnv(r); return !('MAKEFLAGS' in e) && !('GITLEAKS_CONFIG' in e) && !('GITLEAKS_ENABLE_RULES' in e) && !('GIT_DIR' in e) && !('GOFLAGS' in e); });
+await t('the range scan env keeps PATH, HOME, TMPDIR and GOPATH, and pins git config off', { env: MAKEENV }, (r) => { const e = makeEnv(r); return e.PATH === '/usr/bin:/bin' && e.HOME === '/opt/opuser' && e.TMPDIR === '/var/tmp' && e.GOPATH === '/opt/gopath' && e.GIT_CONFIG_GLOBAL === '/dev/null' && e.GIT_CONFIG_NOSYSTEM === '1'; });
 await t('the preflight child: stdin ignored, own session, env -i, HOME and TMPDIR inside the throwaway, entropy base is main\'s tip', {}, (r) => {
   const [sp] = r.w.spawns; const home = sp.args.find((a) => a.startsWith('HOME=')).slice(5); const tmp = sp.args.find((a) => a.startsWith('TMPDIR=')).slice(7);
   return sp.opts.stdio[0] === 'ignore' && sp.opts.detached === true && sp.args[0] === '-i' && path.dirname(home) === path.dirname(tmp) && home.includes('jm-land-') && sp.args.includes(`JM_ENTROPY_BASE=${MAIN}`) && sp.args.includes('PATH=/usr/bin:/bin:/usr/sbin:/sbin');
@@ -127,6 +131,8 @@ await t('paging: a fetch error after page 1 refuses', { plan: (n) => { if (n ===
 await t('paging: a reply that is not JSON refuses', { plan: (n) => (n === 1 ? page([NOTE]) : { ok: true, status: 200, json: async () => { throw new SyntaxError('x'); } }) }, (r) => no(r, /unreadable reply \(SyntaxError\)/));
 await t('paging: a reply that is not a list refuses in words, not a TypeError', { plan: () => page({ oops: 1 }) }, (r) => no(r, /not a list of messages/));
 await t('paging: a page holding null before the PASS refuses in words, not a TypeError', { plan: () => page([null, NOTE]) }, (r) => no(r, /not a list of messages/));
+await t('paging: a page holding null after the PASS refuses in words', { plan: () => page([NOTE, null]) }, (r) => no(r, /not a list of messages/));
+await t('paging: a page that is a list inside a list refuses in words', { plan: () => page([[]]) }, (r) => no(r, /not a list of messages/));
 await t('paging: a page of numbers refuses in words', { plan: () => page([1]) }, (r) => no(r, /not a list of messages/));
 await t('paging: a page of strings refuses in words', { plan: () => page(['x']) }, (r) => no(r, /not a list of messages/));
 await t('paging: the 30-page cap refuses rather than judge a partial list', { plan: (n) => page([{ id: `p${n}`, userId: { _id: 'other', username: 'o' }, content: 'x', createdAt: new Date(Date.parse('2026-10-29T12:00:00Z') - n * 1000).toISOString() }]) }, (r) => no(r, /page cap reached/) && r.w.pod.length === 30);
@@ -170,8 +176,8 @@ await t('checkout gate: --preflight-only has it too', { argv: PO, on: dirty }, (
 await t('bootstrap: refused once main has scripts/land.mjs, in both paths', { argv: ['5', '--bootstrap'], checkoutHead: HEAD }, (r) => no(r, /only for the first land/));
 await t('bootstrap (preflight-only): refused once main has scripts/land.mjs', { argv: [...PO, '--bootstrap'], checkoutHead: HEAD }, (r) => no(r, /only for the first land/));
 const boot = { argv: ['5', '--bootstrap'], checkoutHead: HEAD, on: [[/^git cat-file -e \S+:(scripts\/land\.mjs|entropy\.json)/, () => { throw fail; }]] };
-await t('bootstrap from a checkout that is not the PR head: refused (land)', { ...boot, checkoutHead: OTHER }, (r) => no(r, /checkout of the PR head/) && r.w.spawns.length === 0);
-await t('bootstrap (preflight-only) from a checkout that is not the PR head: refused', { ...boot, argv: [...PO, '--bootstrap'], checkoutHead: OTHER }, (r) => no(r, /checkout of the PR head/) && r.w.spawns.length === 0);
+await t('bootstrap from a checkout that is not the PR head: refused (land)', { ...boot, checkoutHead: OTHER }, (r) => no(r, /checkout of the PR head/) && r.w.spawns.length === 0 && argv(r, 'make', 'secrets-range').length === 0 && r.w.pod.length === 0);
+await t('bootstrap (preflight-only) from a checkout that is not the PR head: refused', { ...boot, argv: [...PO, '--bootstrap'], checkoutHead: OTHER }, (r) => no(r, /checkout of the PR head/) && r.w.spawns.length === 0 && argv(r, 'make', 'secrets-range').length === 0 && r.w.pod.length === 0);
 await t('bootstrap on a main without land.mjs: entropy base is none, a BOOTSTRAP row is written', { ...boot }, (r) => r.merge && r.w.spawns[0].args.includes('JM_ENTROPY_BASE=none') && r.ledgerNow.includes('\tBOOTSTRAP\t'));
 await t('API origin that is not commonly: refused', { env: { JM_COMMONLY_API: 'https://evil.example' } }, (r) => no(r, /JM_COMMONLY_API must be/) && r.w.calls.length === 0);
 await t('a PR url for another repo: refused', { pr: { url: 'https://github.com/Other/repo/pull/5' } }, (r) => no(r, /resolved to/));

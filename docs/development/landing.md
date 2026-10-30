@@ -146,6 +146,14 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   `<main tip>..<head>` (the merge keeps every commit, and gitleaks honours the marker per commit), and `make
   secrets-range` runs gitleaks over that range with `--ignore-gitleaks-allow`. A hit needs the pod verdict.
 - **`docs/development/` is protected**, because it holds these rules and the verifier protocol.
+- **The `.env*` and `bunfig.toml` check reads the repo root only**, ignored files included. A nested `sub/.env` is not
+  checked, because bun runs from the root.
+- **The remote check covers http(s) userinfo and `http.*.extraheader`**, including a URL rewritten by `insteadOf` (it reads
+  `git remote -v`, which shows the rewrite). It does not look at `credential.helper`, and it lets a non-http URL carry a
+  plain user (`ssh://git@host`); only a user:password pair is refused there.
+- **The base can be retargeted between the last re-read and the merge.** `--match-head-commit` pins the head only.
+- **The CI veto reads completed check runs only.** In-progress runs and legacy commit statuses are ignored, which matches
+  "CI is off; a failing run vetoes".
 - **The checkout check** also refuses `assume-unchanged` or `skip-worktree` files, a diff from HEAD, and untracked files
   (all shown).
 - **A pod creator can delete a reviewer's message.** Land reads only what exists at land time, so deleting a

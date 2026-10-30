@@ -106,6 +106,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestOneReleasePerCause` | For `expired`, `released`, `run_ended` and `stopped`, each member gets exactly one `claim.released` with that cause, with `by` and `reason` as specified. |
 | `TestInputValidation` | Each write route refuses what the schema refuses with `400 invalid_input` (a numeric or 16,385-character `body`, a two-line `summary`, a missing `kind`, a note on a task update, and the other routes' bodies), stores a 16,384-character body whole, and lets a run post with its `summary`. |
 | `TestRestartPastDeadline` | A claim made on a fake clock two minutes behind real time, then `kill -9` and a restart with no clock call: the restarted server is on its real clock, so the deadline is already past, and the first frames after the restart carry `task.updated` (no claim) and one `claim.released{expired}`. It needs the server to settle when it restores state. |
+| `TestRunTokenOtherPod` | A run token on another pod's routes (read, list, feed, post) gets `403 forbidden`; on its own pod it works. |
 | `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. It judges the run so far, so it is last; it fails if a suite test failed and skips on a partial run. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X

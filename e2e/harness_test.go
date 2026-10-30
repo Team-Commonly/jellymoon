@@ -29,7 +29,7 @@ var (
 	serverCmd  = os.Getenv("JM_E2E_SERVER")
 	realClock  = os.Getenv("JM_E2E_REAL_CLOCK") == "1"
 	suiteTests = []string{"TestF02", "TestF07", "TestF10", "TestExpiryZeroTraffic", "TestRenewRace",
-		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline"}
+		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline", "TestRunTokenOtherPod"}
 	outcomes sync.Map // test name -> failed bool
 )
 

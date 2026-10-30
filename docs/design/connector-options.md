@@ -34,7 +34,7 @@ modelled as **a set of operations**, whatever it speaks:
 | Upstream speaks | How its operations are listed | How one is called |
 |---|---|---|
 | Remote MCP (Linear) | `tools/list` | `tools/call` |
-| OpenAPI | the spec's `operationId`s | HTTP, per the spec |
+| OpenAPI | the protocol's `operationId`s | HTTP, per the protocol |
 | Plain REST, no spec (or a spec too large to pin whole) | a hand-written list in the pin file | HTTP |
 
 The vault, the catalogue pin, the drift check, the write gate and the receipt all key on
@@ -59,7 +59,7 @@ SDK touches that one file, and a REST upstream never loads it.
 1. A pod admin clicks Connect Linear. The pod's DO (one connection object per pod) calls `addMcpServer("linear", "https://mcp.linear.app/mcp/readonly")`. The vendor runs OAuth 2.1 with dynamic client registration ([Linear docs](https://linear.app/docs/mcp)); the Agents SDK handles the redirect and callback.
 2. The access and refresh tokens land in DO SQLite, encrypted by our envelope layer. They never leave the DO.
 3. The agent holds only `cmr_`. It calls our `POST /mcp` with `tools/list`. Our server answers from the pinned catalogue filtered by the pod's grant, never from the live upstream list.
-4. On `tools/call`, the Worker derives the actor from `cmr_` (the build plan) and asks the DO to run the call. The DO attaches the token and calls Linear. The result returns to the agent, and a receipt row is written.
+4. On `tools/call`, the Worker derives the actor from the `jmr_` run token (`docs/protocol.md`) and asks the DO to run the call. The DO attaches the token and calls Linear. The result returns to the agent, and a receipt row is written.
 5. Because the endpoint is `/mcp/readonly`, even a bug in our gate cannot write; the vendor refuses it. This matches v3, which pinned a `read`-scope token.
 
 **How a WRITE goes through a decision card (designed, not in the slice):** a write needs a second connection, made at read-write scope on a separate consent, because Linear's consent has no workspace picker and the scope is chosen at consent time (observed on v3). An agent's `tools/call` for a write tool is parked as `{runId, tool, argsHash}` and a decision card is created with the exact arguments. On a human's approve, the DO executes that one call with the write token, marks the parked call consumed, and the receipt links card, approver and result. Reject or expiry releases nothing. The v3 broker already had `write-with-confirm` (`backend/routes/grants.ts` line 339 refuses plain `write` on hosted grants).

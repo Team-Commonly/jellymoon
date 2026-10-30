@@ -21,6 +21,7 @@ const CLASSES = [
   { name: 'ledger id', re: /\bD\d{3}\b/g },
   { name: 'task label', re: /\bTASK-\d+\b/g },
   { name: 'memo reference', re: /\b(?:local|internal|stack|research) memo\b|\bmemo [A-Z]\b/gi },
+  { name: 'private spec citation', re: /\b(?:build[ ]spec|spec §\s*\d)/gi },
 ];
 const NAMES = process.env.JM_PRIVATE_NAMES ? { name: 'private name', re: new RegExp(process.env.JM_PRIVATE_NAMES, 'gi') } : null;
 
@@ -47,6 +48,8 @@ const CASES = [
   ['ledger id', j('see ', 'D', '123'), 'ledger id'],
   ['task label', j('TASK', '-77'), 'task label'],
   ['memo reference', j('Internal research ', 'memo', ' J'), 'memo reference'],
+  ['private spec citation', j('see spec', ' section 2.4'), 'private spec citation'],
+  ['private spec citation: named document', j('the build ', 'spec says'), 'private spec citation'],
   // one clean case per allow-list entry
   ['allowed: GitHub noreply address', j('1+x@users.', 'noreply.github.com'), null],
   ['allowed: userinfo in a test URL', j('https://tok@', 'github.com/o/r'), null],
@@ -56,6 +59,7 @@ const CASES = [
   ['allowed: documented test prefix', j('deadbeef', '0123456789abcdef'), null],
   // near misses stay clean
   ['clean: a 12-hex value is not an id', 'abcdef012345', null],
+  ['clean: a spec file or a test spec is not a citation', 'the OpenAPI spec file; 1 Playwright spec', null],
   ['clean: ordinary prose', 'The pod core is pure; the ledger is the land script\'s verifier record.', null],
 ];
 

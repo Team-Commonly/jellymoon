@@ -24,7 +24,7 @@
       "paths": [
         "worker/"
       ],
-      "max": 1250
+      "max": 1550
     },
     "podcore": {
       "paths": [

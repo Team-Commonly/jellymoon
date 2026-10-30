@@ -4,6 +4,9 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · pod core for claims, leases and recourse (unit P09)
+- **Changed:** `podcore/` (pure `apply`/`nextDeadline`, ADR 0003, `podcore-is-pure` rule); **Evidence:** `bun test podcore` (31 tests, 3 properties x 500 seeds, both mutations red); **Next:** wakes (P10); **Surprising:** an op arriving at `leaseUntil` must see the claim already expired, so every command settles first.
+
 ## 2026-10-29 · P08 final fixes (unit P08, round 3)
 - **Changed:** every path but `docs/` and `progress.md` is now protected (renames count both sides); the preflight runs in a macOS `sandbox-exec`; pod paging dedupes by id and fails closed at a boundary; a bad token file is never echoed; `--dry-run` writes no ledger row; both workflows are `workflow_dispatch` only; CODEOWNERS deleted; one wording for who writes verdict rows; internal labels scrubbed.
 - **Evidence:** `make preflight` green in the stripped shell; check-land 89 cases (sandbox proof included), check-review-gate 44 + 23.

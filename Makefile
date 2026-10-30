@@ -29,6 +29,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-review-gate.mjs
 	$(BUN) scripts/check-land.mjs
 	$(BUN) run check:types
+	$(BUN) test podcore
 
 test-go:
 	$(GO) vet ./...

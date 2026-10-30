@@ -180,7 +180,7 @@ cases.push(
   ['sandbox: darwin is accepted', checkPlatform('darwin').ok, true],
 );
 const probe = (() => {
-  if (process.platform !== 'darwin' || spawnSync('sandbox-exec', ['-n', 'no-network', 'true']).error) return null;
+  if (process.platform !== 'darwin' || spawnSync('sandbox-exec', ['-p', '(version 1)(allow default)', 'true']).status !== 0) return null;
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'check-sandbox-')));
   const home = path.join(root, 'home');
   const work = path.join(root, 'work');
@@ -206,7 +206,7 @@ if (probe) {
     ['sandbox proof: writing outside the temp dir fails and leaves no file', probe.writeOutside !== 0 && !probe.leaked, true],
     ['sandbox proof: writing inside the allowed dir succeeds', probe.writeAllowed, 0],
   );
-} else console.log('check-land: SKIP sandbox proof (needs macOS with /usr/bin/sandbox-exec)');
+} else console.log('check-land: SKIP sandbox proof (needs macOS with a usable sandbox-exec; one cannot nest inside the preflight sandbox itself)');
 
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (bad.length) { console.error(`check-land: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }

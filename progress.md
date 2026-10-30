@@ -4,6 +4,12 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-30 · P08F land follow-ups, with round 20 (units P08 round 20, P08F)
+- **Changed:** round 20 made the range scan read its result from stderr on success as well as failure (`realRun` keeps stderr and status), clean only on exit 0 with "no leaks found" and exactly one "<n> commits scanned." line, under an allowlisted env (`scanEnv`). P08F: the expected count is now what gitleaks counts (commits whose diff has a hunk in a non-deleted file, `textCommits`), so a PR with an empty, rename-only, mode-only, delete-only, empty-file or binary-only commit no longer refuses; the Makefile pin forbids any other assignment of RANGE, GO or GITLEAKS; the CLI wiring (`run: realRun`, exec options) is pinned from source; land refuses when main carries a `.gitleaks.toml`, `.gitleaksignore` or a diff-switching `.gitattributes`; scanEnv is asserted as one exact allowlist; the full-history block reads through `scanResult` and `scanEnv`. Docs: step 4, the `go` requirement, known limits.
+- **Evidence:** `./init.sh` green under `env -i`; check-land 179 to 208, check-land-e2e 109 to 122, check-review-gate 33 range cases to 61 plus 12 recipe pin cases (was 2); mutants in the PR body of the unit.
+- **Next:** land #10 with `--bootstrap`.
+- **Surprising:** the old count (`rev-list --count`) matched gitleaks on every history the fixtures had because each commit added text; an empty commit was enough to make land refuse an innocent PR.
+
 ## 2026-10-30 · pre-public readiness (unit OS1)
 - **Changed:** private references scrubbed from the tree and docs; `scripts/check-private.mjs` (the deny check, in
   `make preflight` and the pre-commit) refuses operator paths, personal emails, internal ids, cloud identifiers, note labels and

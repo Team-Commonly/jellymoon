@@ -5,10 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { realRun } from './land.mjs';
 import {
   landedNote, mergeAction, mergeTree,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scanEnv, scanResult, scrub, stripControls, takePage,
+  checkNode, checkScanConfig, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scanEnv, scanResult, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const CLEAN = '10:11AM INF 3 commits scanned.\n10:11AM INF no leaks found\n'; // what a clean gitleaks run prints to stderr
@@ -165,8 +166,43 @@ const cases = [
   ['scan result: no expected count is a failure', scanResult({ status: 0, stderr: CLEAN }), 'failure'],
   ['scan result: a non-numeric expected count is a failure', scanResult({ status: 0, stderr: CLEAN, expected: NaN }), 'failure'],
   ['scan result: two count lines are a failure', scanResult({ status: 0, stderr: CLEAN + '10:11AM INF 3 commits scanned.\n', expected: 3 }), 'failure'],
-  ['scan env: MAKEFLAGS and the gitleaks variables are dropped, PATH HOME TMPDIR kept, git config pinned off', JSON.stringify(scanEnv({ MAKEFLAGS: 'i', GITLEAKS_CONFIG: 'x', PATH: '/p', HOME: '/h', TMPDIR: '/t' })), JSON.stringify({ PATH: '/p', HOME: '/h', TMPDIR: '/t', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' })],
-  ['scan env: the Go variables pass when set', Object.keys(scanEnv({ GOPATH: 'a', GOCACHE: 'b', GOMODCACHE: 'c', GOTOOLCHAIN: 'd' })).join(), 'GOPATH,GOCACHE,GOMODCACHE,GOTOOLCHAIN,GIT_CONFIG_GLOBAL,GIT_CONFIG_NOSYSTEM'],
+  ['scan result: a count that is a string is a failure (the count must be a number)', scanResult({ status: 0, stderr: CLEAN, expected: '3' }), 'failure'],
+  ['scan result: a negative expected count is a failure', scanResult({ status: 0, stderr: CLEAN, expected: -1 }), 'failure'],
+  ['scan result: gitleaks\' own "no leaks found in partial scan" warning is not the clean line', scanResult({ status: 0, stderr: '10:11AM INF 3 commits scanned.\n10:11AM WRN no leaks found in partial scan\n', expected: 3 }), 'failure'],
+  ['scan result: the count text inside a longer line does not count', scanResult({ status: 0, stderr: '10:11AM INF no leaks found\nnote: 10:11AM INF 3 commits scanned.\n', expected: 3 }), 'failure'],
+  ['scan result: the count text with a trailing word does not count', scanResult({ status: 0, stderr: '10:11AM INF no leaks found\n10:11AM INF 3 commits scanned. (partial)\n', expected: 3 }), 'failure'],
+  ['scan result: a count that merely ends in the expected digits does not count', scanResult({ status: 0, stderr: '10:11AM INF no leaks found\n10:11AM INF 13 commits scanned.\n', expected: 3 }), 'failure'],
+  ['scan result: the "no leaks found" text inside a longer line is not the clean line', scanResult({ status: 0, stderr: '10:11AM INF 3 commits scanned.\nprefix 10:11AM INF no leaks found\n', expected: 3 }), 'failure'],
+  ['scan env: exactly the allowlist passes, and git config is pinned off', JSON.stringify(Object.entries(scanEnv({ MAKEFLAGS: 'i', GITLEAKS_CONFIG: 'x', GIT_DIR: 'g', PATH: '/p', HOME: '/h', TMPDIR: '/t', GOPATH: 'a', GOCACHE: 'b', GOMODCACHE: 'c', GOTOOLCHAIN: 'd' })).sort()), JSON.stringify(Object.entries({ PATH: '/p', HOME: '/h', TMPDIR: '/t', GOPATH: 'a', GOCACHE: 'b', GOMODCACHE: 'c', GOTOOLCHAIN: 'd', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }).sort())],
+  ['scan env: only the names that are set pass', JSON.stringify(Object.entries(scanEnv({ PATH: '/p' })).sort()), JSON.stringify(Object.entries({ PATH: '/p', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }).sort())],
+  ['scan env: GIT_CONFIG_GLOBAL and GIT_CONFIG_NOSYSTEM set by the operator are overridden, not taken', JSON.stringify([scanEnv({ GIT_CONFIG_GLOBAL: '/etc/operator-gitconfig', GIT_CONFIG_NOSYSTEM: '0' }).GIT_CONFIG_GLOBAL, scanEnv({ GIT_CONFIG_GLOBAL: '/etc/operator-gitconfig', GIT_CONFIG_NOSYSTEM: '0' }).GIT_CONFIG_NOSYSTEM]), JSON.stringify(['/dev/null', '1'])],
+  // main's own scan configuration: refused unless the blob is one this repo ships (it ships none)
+  ...(() => {
+    const A = 'a'.repeat(40);
+    const tree = (...paths) => paths.map((p) => `100644 blob ${A}\t${p}\0`).join('');
+    const attrs = (text, shipped) => checkScanConfig(tree('docs/x.md', '.gitattributes'), () => text, shipped);
+    const named = (path, shipped) => checkScanConfig(tree('README.md', path), () => { throw new Error('a blob read for a file that is not .gitattributes'); }, shipped);
+    return [
+      ['scan config: a tree with none of the files is accepted', named('src/a.mjs').ok, true],
+      ['scan config: a .gitleaks.toml at the root is refused, naming it', named('.gitleaks.toml').reason?.includes('main carries .gitleaks.toml'), true],
+      ['scan config: a .gitleaksignore at the root is refused, naming it', named('.gitleaksignore').reason?.includes('main carries .gitleaksignore'), true],
+      ['scan config: a nested .gitleaksignore is refused, naming its path', named('sub/dir/.gitleaksignore').reason?.includes('sub/dir/.gitleaksignore'), true],
+      ['scan config: the name compares case-insensitively', named('.GitLeaks.TOML').ok, false],
+      ['scan config: a .gitattributes with `-diff` is refused', attrs('*.md text\n* -diff\n').ok, false],
+      ['scan config: a .gitattributes with `binary` is refused', attrs('*.lock binary\n').ok, false],
+      ['scan config: a .gitattributes with `!diff` is refused', attrs('docs/** !diff\n').ok, false],
+      ['scan config: a .gitattributes with a negative pattern is refused', attrs('!*.md text\n').ok, false],
+      ['scan config: a macro that switches diff off is refused', attrs('[attr]quiet -diff\n*.x quiet\n').ok, false],
+      ['scan config: a tab-separated `-diff` is refused', attrs('*.md\t-diff\n').ok, false],
+      ['scan config: a .gitattributes that only sets text and eol is accepted', attrs('# -diff is not here\n* text=auto eol=lf\n*.sh text\n\n').ok, true],
+      ['scan config: a comment that mentions -diff is not a line that switches it', attrs('# * -diff\n').ok, true],
+      ['scan config: the refusal names the .gitattributes path', checkScanConfig(tree('web/.gitattributes'), () => '* binary').reason.includes('main carries web/.gitattributes'), true],
+      ['scan config: a file whose blob is the one this repo ships is accepted', named('.gitleaks.toml', { '.gitleaks.toml': A }).ok, true],
+      ['scan config: a file at a shipped path with another blob is refused', checkScanConfig(`100644 blob ${'b'.repeat(40)}\t.gitleaks.toml\0`, () => '', { '.gitleaks.toml': A }).ok, false],
+      ['scan config: a shipped blob at another path is refused', checkScanConfig(tree('other/.gitleaks.toml'), () => '', { '.gitleaks.toml': A }).ok, false],
+      ['scan config: this repo ships none, so none is allowed', checkScanConfig(tree('.gitleaks.toml'), () => '').ok, false],
+    ];
+  })(),
   ['merge tree: the first line of merge-tree is the tree', mergeTree(() => 'abc123\nrest', H, H2), 'abc123'],
   ['merge tree: a conflict is a refusal naming both commits', throws(() => mergeTree(() => { throw new Error('x'); }, H, H2)), true],
   ['dry run: stops before the merge', mergeAction({ dryRun: true }), 'stop'],
@@ -299,6 +335,9 @@ cases.push(
   ['land.mjs: preflight output is scrubbed and the group is killed on return', landSrc.includes('scrub(quoteOutput(text), SECRET)') && /clearTimeout\(timer\);\s*clearTimeout\(late\);\s*kill\(\);/.test(landSrc), true],
   ['land.mjs: SIGINT and SIGTERM exit, which kills the group and releases the lock', /SIGINT[^\n]*exit\(130\)/.test(landSrc) && /SIGTERM[^\n]*exit\(143\)/.test(landSrc), true],
   ['land.mjs: the throwaway dir is tracked and the group kill runs first', landSrc.includes('trackThrowaway(dir, wt,') && landSrc.includes("process.prependListener('exit', kill)"), true],
+  ['land.mjs: the CLI hands the scan seam the real realRun, unwrapped (a wrapper could drop stderr or force a status)', landSrc.includes('main({ exec, run: realRun, fetch, spawn, kill: process.kill,'), true],
+  ['land.mjs: the CLI exec passes its options through to execFileSync (the scan env and maxBuffer reach git)', landSrc.includes("const exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();"), true],
+  ['land.mjs: the real run seam passes its options through to spawnSync', realRun(process.execPath, ['-e', "process.stdout.write(process.env.JM_SEEN ?? 'unset')"], { env: { JM_SEEN: 'seen', PATH: process.env.PATH } }).stdout, 'seen'],
   ['land.mjs imports resolve: run with no arguments it reaches main and refuses', run.status === 1 && !/export named|SyntaxError|ReferenceError/i.test(run.stderr) && run.stderr.includes('land: refused'), true],
 );
 

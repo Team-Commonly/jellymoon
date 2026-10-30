@@ -169,23 +169,57 @@ export function checkTrust({ pr, pushers, trusted }) {
   const strangers = pushers.map((l) => String(l).toLowerCase()).filter((l) => !trusted.includes(l)); // .some-style: an empty login is a stranger too
   return strangers.length ? { ok: false, reason: `${REFUSE} (an account that can push to the repo is not trusted: ${strangers[0]})` } : { ok: true };
 }
+// How gitleaks v8.30.1 counts commits ("<n> commits scanned."): its git source runs `git log -p -U0 <log-opts>` and yields one fragment per
+// hunk (TextFragment) of every file that is not deleted and not a non-archive binary (sources/git.go, Fragments); the detector adds a
+// fragment's commit to the count when the fragment arrives, even one with no added lines (detect.go, DetectSource: addCommit before the
+// empty check). So a commit counts exactly when its diff has a hunk in a file git does not show as deleted. An empty commit, a pure rename, a
+// mode change, an empty file, a deleted file, and a binary (git prints no hunk for it) yield nothing. `log` is `git log -m -p -U0
+// --format=%x01%H <range>` and `all` is `git rev-list <range>`. Returns the count gitleaks should print and the commits that add no text.
+export function textCommits(log, all) {
+  const read = new Set();
+  let sha = '';
+  let deleted = false;
+  for (const l of String(log).split('\n')) { // a diff line starts with + - space or backslash, so these prefixes are headers
+    if (l.startsWith('\u0001')) sha = l.slice(1);
+    else if (l.startsWith('diff --git ')) deleted = false;
+    else if (l.startsWith('deleted file mode ')) deleted = true;
+    else if (l.startsWith('@@ ') && !deleted && sha) read.add(sha);
+  }
+  return { expected: all.filter((c) => read.has(c)).length, bare: all.filter((c) => !read.has(c)) };
+}
 // The one reading of the range scan's result, shared by land and by the fixtures that test the recipe. Clean is positive evidence, all of:
 // exit status 0; no `exit status 3` line (gitleaks' --exit-code 3, which `go run` reports that way); no gitleaks ERR/FTL/PNC log line and no
 // "failed to scan"; the "no leaks found" line; and exactly one "<n> commits scanned." line with n equal to `expected`, the number of commits
-// the land would merge, which the caller counts itself with `git rev-list --count <main tip>..<head>`. Measured on gitleaks 8.30.1 with -m:
-// its count equals rev-list --count on a linear range, a merged side branch, main moved after branching, an octopus merge, main merged
-// into the PR, and an empty range. A hit is a nonzero exit with the hit line. Everything else, including a zero exit that printed the hit
-// line or an error (a recipe that swallowed the failure) or scanned fewer commits than the range holds, is a failure, and a failure refuses.
-// gitleaks colours its log even into a pipe, so the escape codes are stripped before reading.
+// gitleaks should read, which the caller derives itself with textCommits (above), outside make. A hit is a nonzero exit with the hit line.
+// Everything else, including a zero exit that printed the hit line or an error (a recipe that swallowed the failure) or scanned fewer
+// commits than the range holds, is a failure, and a failure refuses. gitleaks colours its log even into a pipe, so the escape codes are
+// stripped before reading.
 export const scanResult = ({ status, stderr, expected }) => {
   const text = String(stderr || '').replace(/\u001b\[[0-9;]*m/g, '');
   const hitLine = /^exit status 3$/m.test(text);
   if (typeof status === 'number' && status !== 0 && hitLine) return 'hit';
   const counts = [...text.matchAll(/^\S+ INF (\d+) commits? scanned\.$/gm)].map((m) => Number(m[1]));
   const errLine = /^\S+ (ERR|FTL|PNC) /m.test(text) || /failed to scan/.test(text);
-  const read = counts.length === 1 && Number.isInteger(expected) && expected >= 0 && counts[0] === expected;
+  const read = counts.length === 1 && counts[0] === expected; // === also rules out an expected that is missing, NaN, negative, fractional or a string
   return status === 0 && !hitLine && !errLine && /^\S+ INF no leaks found$/m.test(text) && read ? 'clean' : 'failure';
 };
+// Main's own scan configuration. The range scan runs in a checkout of main, so a `.gitleaks.toml`, a `.gitleaksignore`, or a `.gitattributes`
+// that switches files out of the diff (`-diff`, `!diff`, `binary`, a `!` pattern), committed to main, changes what every later land reads.
+// `tree` is `git ls-tree -r -z <main tip>`, blob(id) reads a blob. A file is allowed only when its blob id is the one this repo ships:
+// SHIPPED maps a path to that id, and this repo ships none, so none is allowed. Names compare case-insensitively (APFS).
+const SHIPPED = {};
+const SWITCHES = new Set(['-diff', '!diff', 'binary']);
+const switchesOff = (line) => { const [pat, ...attrs] = line.trim().split(/\s+/); return !pat.startsWith('#') && (pat.startsWith('!') || attrs.some((a) => SWITCHES.has(a))); };
+export function checkScanConfig(tree, blob, shipped = SHIPPED) {
+  for (const entry of String(tree).split('\0').filter(Boolean)) {
+    const [meta, file] = [entry.slice(0, entry.indexOf('\t')), entry.slice(entry.indexOf('\t') + 1)];
+    const id = meta.split(' ')[2];
+    const name = file.split('/').pop().toLowerCase();
+    const bad = name === '.gitleaks.toml' || name === '.gitleaksignore' || (name === '.gitattributes' && blob(id).split('\n').some((l) => l.trim() && switchesOff(l)));
+    if (bad && shipped[file] !== id) return { ok: false, reason: `main carries ${file}, which changes what the range scan reads; remove it or ship it from this repo` };
+  }
+  return { ok: true };
+}
 // The environment make runs the range scan in: an allowlist, so the operator's MAKEFLAGS (make -i), GITLEAKS_CONFIG or git config
 // cannot switch the scan off. Only what the Go toolchain and git need is kept.
 const SCAN_ENV_KEEP = ['PATH', 'HOME', 'TMPDIR', 'GOPATH', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN'];

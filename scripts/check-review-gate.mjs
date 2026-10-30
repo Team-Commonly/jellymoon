@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scanEnv, scanResult, verdictOf } from './land-decide.mjs';
+import { scanEnv, scanResult, textCommits, verdictOf } from './land-decide.mjs';
 
 // Only exactly `GATE: PASS` as the last non-empty line passes; everything else blocks (nothing at all is null).
 const verdicts = [
@@ -59,19 +59,32 @@ const badChain = results.filter(([, got, want]) => got !== want).map(([n]) => n)
 if (badChain.length) { console.error(`check-review-gate: symlink cases wrong\n  ${badChain.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${results.length} symlink cases ok`);
 
+// The scan runs the way land runs it: make -s in the checkout, the allowlist env, and the shared reading of its result (scanResult), with the
+// count land derives for itself (textCommits over git log -m -p -U0, run in the same env) as the expected scanned count.
+const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
+const makeIn = (cwd, target, range) => {
+  const r = spawnSync('make', ['-s', target, ...(range ? [`RANGE=${range}`] : [])], { cwd, encoding: 'utf8', env: scanEnv(process.env) });
+  const git = (...a) => spawnSync('git', a, { cwd, encoding: 'utf8', env: scanEnv(process.env) }).stdout;
+  const all = range ? git('rev-list', range).split('\n').filter(Boolean) : [];
+  return { status: r.status, stderr: r.stderr, expected: range ? textCommits(git('log', '-m', '-p', '-U0', '--format=%x01%H', range), all).expected : undefined, revlist: all.length };
+};
+
 // A gitleaks:allow marker added and removed inside the PR's history leaves the merge result clean, yet the merge keeps both commits and
 // gitleaks honours the marker per commit. The range scan ignores markers and must find what the marker hid; it can only refuse.
 const token = ['ghp_', 'aB3dE5gH7jK9m', 'N1pQ3sT5vW7yZ9bD2fH4jL6'].join('');
 const hist = (marker) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-hist-'));
-  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
-  g(`git init -q -b main && echo base > f && git add -A && git commit -qm base && git checkout -qb pr && echo 'token = ${token}${marker ? ' # gitleaks:allow' : ''}' > t.txt && git add -A && git commit -qm add && git rm -q t.txt && git commit -qm drop`);
+  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: gitEnv });
+  g(`git init -q -b main && echo base > f && git add -A && git commit -qm base && git checkout -qb pr && echo 'token = ${token}${marker ? ' # gitleaks:allow' : ''}' > t.txt && git add -A && git commit -qm add && git rm -q t.txt && git commit -qm drop && cp '${root}/Makefile' .`);
   const run = (a) => g(`git ${a.map((x) => `'${x}'`).join(' ')}`).stdout.trim();
   const [tip, head] = [run(['rev-parse', 'main']), run(['rev-parse', 'pr'])];
-  const leaks = (ignore) => spawnSync('go', ['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', `--log-opts=${tip}..${head}`, ...(ignore ? ['--ignore-gitleaks-allow'] : []), '--redact', '--no-banner', dir], { encoding: 'utf8' }).status !== 0;
-  const out = { found: leaks(true), foundHonouringMarker: leaks(false) };
+  // Ignoring markers goes through the real recipe, read by scanResult. Honouring them is the one run the recipe cannot make (it pins
+  // --ignore-gitleaks-allow, and this run is the demonstration of the hole), so it runs gitleaks directly in the same allowlist env and
+  // is read by its own exit status.
+  const found = scanResult(makeIn(dir, 'secrets-range', `${tip}..${head}`)) === 'hit';
+  const honoured = spawnSync('go', ['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', `--log-opts=${tip}..${head}`, '--redact', '--no-banner', dir], { encoding: 'utf8', env: scanEnv(process.env) }).status !== 0;
   fs.rmSync(dir, { recursive: true, force: true });
-  return out;
+  return { found, foundHonouringMarker: honoured };
 };
 const [marked, control] = [hist(true), hist(false)];
 const history = [
@@ -95,15 +108,6 @@ const portable = [['portable: a symlink with a space that stays inside passes', 
 const badPortable = portable.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (badPortable.length) { console.error(`check-review-gate: portable cases wrong\n  ${badPortable.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${portable.length} portable cases ok`);
-
-// The scan runs the way land runs it: make -s in the checkout, the allowlist env, and the shared reading of its result (scanResult), with the
-// commit count land computes for itself (git rev-list --count <range>) as the expected scanned count.
-const makeIn = (cwd, target, range) => {
-  const r = spawnSync('make', ['-s', target, ...(range ? [`RANGE=${range}`] : [])], { cwd, encoding: 'utf8', env: scanEnv(process.env) });
-  const expected = range ? Number(spawnSync('git', ['rev-list', '--count', range], { cwd, encoding: 'utf8' }).stdout) : undefined;
-  return { status: r.status, stderr: r.stderr, expected };
-};
-const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
 
 // B1 evil merge: gitleaks runs `git log -p` without -m, so a secret that exists only in a merge commit's own diff (a conflict resolution)
 // is never scanned. Both targets pass -m. A trusted branch merges a side branch and adds a token to docs/a.md in the resolution. The
@@ -135,18 +139,42 @@ const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME
 }
 
 // The recipe is pinned as text: every flag on it (git log filters, gitleaks filters, ref exclusions, an error-swallowing prefix) changes what
-// the scan reads, and no fixture can show all of them. Changing the line means changing this pin, in review.
+// the scan reads, and no fixture can show all of them. Changing the line means changing this pin, in review. The comparisons are exact, and
+// no other line may assign RANGE, GO or GITLEAKS in any form (=, :=, ::=, ?=, +=, !=, override, export, define, target-specific), because an
+// assignment elsewhere changes what the pinned text means. Backslash continuations are joined first; full-line comments are skipped.
+const PIN = 'secrets-range:\n\t$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --exit-code 3 --redact --no-banner .';
+const VARS = 'GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)\nGITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1';
+const OURS = /^(GO|GITLEAKS) :=/;
+const pinProblems = (mk) => {
+  const lines = mk.replace(/\\\n/g, ' ').split('\n');
+  const at = lines.indexOf('secrets-range:');
+  const stray = lines.filter((l) => !/^\s*#/.test(l) && !OURS.test(l) && (/(^|[\s:(])(RANGE|GO|GITLEAKS)\s*[:?+!]*=/.test(l) || /^\s*(override\s+)?define\s+(RANGE|GO|GITLEAKS)\b/.test(l)));
+  return [
+    at < 0 || lines.slice(at, lines.indexOf('', at)).join('\n') !== PIN ? 'the secrets-range recipe is not exactly the pinned line' : '',
+    lines.filter((l) => /^secrets-range\b/.test(l)).length !== 1 ? 'secrets-range is defined more than once' : '',
+    lines.filter((l) => OURS.test(l)).join('\n') !== VARS ? 'the go and gitleaks definitions are not exactly the pinned ones' : '',
+    stray.length ? `another line assigns RANGE, GO or GITLEAKS: ${stray[0].trim()}` : '',
+  ].filter(Boolean);
+};
 {
   const mk = fs.readFileSync(path.join(root, 'Makefile'), 'utf8');
-  const lines = mk.split('\n');
-  const at = lines.findIndex((l) => l === 'secrets-range:');
-  const recipe = at < 0 ? '' : lines.slice(at, lines.indexOf('', at)).join('\n');
-  const vars = lines.filter((l) => /^(GO|GITLEAKS) :=/.test(l)).join('\n');
-  const PIN = 'secrets-range:\n\t$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --exit-code 3 --redact --no-banner .';
-  const VARS = 'GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)\nGITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1';
+  const recipe = mk.split('\n').find((l) => l.startsWith('\t$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)"'));
+  const mutants = [
+    ['an override RANGE line', `${mk}\noverride RANGE := HEAD\n`],
+    ['a target-specific GO', `${mk}\nsecrets-range: GO = true\n`],
+    ['an exported GITLEAKS with ?=', `${mk}\nexport GITLEAKS ?= true\n`],
+    ['RANGE += with no spaces', `${mk}\nRANGE+=x\n`],
+    ['GO= with no spaces', `${mk}\nGO=true\n`],
+    ['a define GO block', `${mk}\ndefine GO\ntrue\nendef\n`],
+    ['an assignment hidden by a continuation', `${mk}\noverride \\\nRANGE := HEAD\n`],
+    ['a second secrets-range target', `${mk}\nsecrets-range:\n\ttrue\n`],
+    ['|| true appended to the recipe line', mk.replace(recipe, `${recipe} || true`)],
+    ['a prefix of the recipe line (a flag dropped from the end)', mk.replace(recipe, recipe.replace(' --no-banner .', ''))],
+    ['the GITLEAKS version changed', mk.replace('gitleaks/v8@v8.30.1', 'gitleaks/v8@v8.30.2')],
+  ];
   const pinCases = [
-    ['recipe pin: the secrets-range recipe is exactly the pinned line', recipe, PIN],
-    ['recipe pin: the go and gitleaks definitions are exactly the pinned ones', vars, VARS],
+    ['recipe pin: the real Makefile passes every check', pinProblems(mk).join('; '), ''],
+    ...mutants.map(([name, text]) => [`recipe pin: ${name} is refused`, pinProblems(text).length > 0, true]),
   ];
   const badPin = pinCases.filter(([, got, want]) => got !== want).map(([n]) => n);
   if (badPin.length) { console.error(`check-review-gate: recipe pin wrong\n  ${badPin.join('\n  ')}`); process.exit(1); }
@@ -158,6 +186,26 @@ const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME
 // with one (a local branch and a refs/remotes ref, which any later git fetch leaves behind). A token added then deleted in the range is
 // still in history and must be found whatever shape the history has, and a ref holding the head must not hide the range from the scan.
 {
+  // Shapes whose commits gitleaks does not count (it counts a commit only when its diff has a hunk in a file git does not show as deleted):
+  // name -> [setup on a branch off main, 'rev-list/gitleaks/expected']. The three numbers are measured; land's expected must equal gitleaks'.
+  const C = 'git add -A && git commit -qm x';
+  const bare = {
+    empty: ['git commit -q --allow-empty -m e', '1/0/0'],
+    rename: [`git mv notes.txt moved.txt && ${C}`, '1/0/0'],
+    modeonly: [`chmod +x notes.txt && ${C}`, '1/0/0'],
+    deleteonly: [`echo a > f.txt && ${C} && git rm -q f.txt && ${C}`, '2/1/1'],
+    revertadd: [`echo a > f.txt && ${C} && git revert --no-edit HEAD`, '2/1/1'],
+    emptyfile: [`: > e.txt && ${C}`, '1/0/0'],
+    binary: [`printf '\\000\\001\\002' > b.bin && ${C}`, '1/0/0'],
+    archive: [`echo x > in.txt && tar czf a.tar.gz in.txt && rm in.txt && ${C}`, '1/0/0'],
+    lineremoval: [`printf 'a\\nb\\n' > notes.txt && ${C} && printf 'a\\n' > notes.txt && ${C}`, '2/2/2'],
+    renameedit: [`git mv notes.txt moved.txt && echo more >> moved.txt && ${C}`, '1/1/1'],
+    typechange: [`rm notes.txt && ln -s elsewhere notes.txt && ${C}`, '1/1/1'],
+    mixed: [`git commit -q --allow-empty -m e && echo more >> notes.txt && ${C} && git mv notes.txt n2.txt && ${C}`, '3/1/1'],
+    mergeEmptyOne: [`echo mine > mine.txt && ${C} && git checkout -qb side main && git commit -q --allow-empty -m s && git checkout -q pr && git merge -q --no-ff --no-edit side`, '3/2/2'],
+    mergeEmptyBoth: [`git commit -q --allow-empty -m a && git checkout -qb side main && git commit -q --allow-empty -m b && git checkout -q pr && git merge -q --no-ff --no-edit side`, '3/0/0'],
+    octopusEmpty: [`git commit -q --allow-empty -m a && git checkout -qb s1 main && git commit -q --allow-empty -m b && git checkout -qb s2 main && git commit -q --allow-empty -m c && git checkout -q pr && git merge -q --no-ff --no-edit s1 s2`, '4/0/0'],
+  };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-range-'));
   const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: gitEnv });
   let plain = false; // the same shapes with the token replaced by harmless text, to read the scanned count on clean merges
@@ -173,8 +221,11 @@ const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME
     // main moved after the PR branched, and the PR merged that tip in
     mainmerged: (m) => `git checkout -qb pr && ${tok(m)} > notes.txt && git commit -qam add && echo base > notes.txt && git commit -qam drop && git checkout -q main && echo next > next.txt && git add -A && git commit -qm next && git checkout -q pr && git merge -q --no-ff --no-edit main`,
     clean: () => 'git checkout -qb pr && echo more > notes.txt && git commit -qam add',
+    tokenAmongEmpty: (m) => `git checkout -qb pr && git commit -q --allow-empty -m e && ${tok(m)} > notes.txt && git commit -qam add && git commit -q --allow-empty -m f && echo base > notes.txt && git commit -qam drop`,
+    ...Object.fromEntries(Object.entries(bare).map(([name, [script]]) => [name, () => `git checkout -qb pr && ${script}`])),
   };
-  const extras = { sidebranch: 'side', octopus: 's1 s2' };
+  const extras = { sidebranch: 'side', octopus: 's1 s2', mergeEmptyOne: 'side', mergeEmptyBoth: 'side', octopusEmpty: 's1 s2' };
+  let last; // the makeIn result of the latest status call
   const status = (shape, marker, refs, harmless = false) => {
     plain = harmless;
     fs.rmSync(dir, { recursive: true, force: true });
@@ -183,8 +234,10 @@ const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME
     const head = g('git rev-parse pr').stdout.trim();
     const keep = refs ? `git branch -q kept ${head} && git update-ref refs/remotes/origin/pr ${head}` : 'true';
     const tip = g(`${keep} && git checkout -q main && git branch -qD pr ${extras[shape] ?? ''} && git rev-parse main`).stdout.trim();
-    return scanResult(makeIn(dir, 'secrets-range', `${tip}..${head}`));
+    last = makeIn(dir, 'secrets-range', `${tip}..${head}`);
+    return scanResult(last);
   };
+  const scanned = () => /(\d+) commits? scanned/.exec(last.stderr.replace(/\u001b\[[0-9;]*m/g, ''))?.[1];
   const rangeCases = [];
   for (const refs of [false, true]) {
     const where = refs ? 'refs at the head' : 'no ref at the head';
@@ -193,7 +246,12 @@ const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME
       rangeCases.push([`range (${shape}, ${where}): a gitleaks:allow marker does not hide it`, status(shape, true, refs), 'hit']);
     }
     rangeCases.push([`range (${where}): a range without a token is clean`, status('clean', false, refs), 'clean']);
-    for (const shape of ['linear', 'sidebranch', 'oldbase', 'octopus', 'mainmerged']) rangeCases.push([`range (${shape}, ${where}): without the token it reads clean, so gitleaks' scanned count equals rev-list --count`, status(shape, false, refs, true), 'clean']);
+    for (const shape of ['linear', 'sidebranch', 'oldbase', 'octopus', 'mainmerged']) rangeCases.push([`range (${shape}, ${where}): without the token it reads clean, so gitleaks' scanned count equals the expected one`, status(shape, false, refs, true), 'clean']);
+    for (const shape of refs ? [] : Object.keys(bare)) { // the ref variants above already show a ref at the head cannot hide the range
+      rangeCases.push([`range (${shape}, ${where}): reads clean, so land's expected count equals what gitleaks scanned`, status(shape, false, refs, true), 'clean']);
+      rangeCases.push([`range (${shape}, ${where}): rev-list/gitleaks/expected counts`, `${last.revlist}/${scanned()}/${last.expected}`, bare[shape][1]]);
+    }
+    rangeCases.push([`range (${where}): a token among commits that add no text is still found`, status('tokenAmongEmpty', false, refs), 'hit']);
   }
   process.env.MAKEFLAGS = 'i'; // make -i would turn a hit into exit 0; the scan env drops it
   rangeCases.push(['range: an operator MAKEFLAGS=i does not switch the scan off', status('linear', false, false), 'hit']);

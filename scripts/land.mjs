@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, scanEnv, scanResult, takePage,
+  scrub, scanEnv, scanResult, takePage, textCommits, checkScanConfig,
 } from './land-decide.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
 // All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
@@ -157,10 +157,14 @@ const reviewers = () => {
 };
 // The commit-range secret scan (gitleaks git mode, -m, markers ignored). It only refuses. Clean is positive evidence read from the scan's own
 // exit status AND stderr, on success as well as failure (see scanResult): exit 0, no hit or error line, "no leaks found", and a scanned
-// count equal to the commits this land would merge, which land counts itself with git, outside make. A scan that did not read the range
+// count equal to the commits gitleaks reads (those whose diff has a text hunk, see textCommits), which land derives itself with git, outside make. A scan that did not read the range
 // (a recipe that swallowed an error, an object missing from the checkout, an empty range) proves nothing, so it refuses too.
 const rangeScan = (mainTip, head) => {
-  const expected = Number(out('git', ['rev-list', '--count', `${mainTip}..${head}`]));
+  const config = checkScanConfig(out('git', ['ls-tree', '-r', '-z', mainTip], { maxBuffer: 1 << 28 }), (id) => out('git', ['cat-file', 'blob', id]));
+  if (!config.ok) return config;
+  const range = `${mainTip}..${head}`;
+  const git = (...a) => out('git', a, { env: scanEnv(IO.env), maxBuffer: 1 << 28 }); // the scan's own git environment, so both count the same way
+  const { expected } = textCommits(git('log', '-m', '-p', '-U0', '--format=%x01%H', range), git('rev-list', range).split('\n').filter(Boolean));
   const r = IO.run('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`], { env: scanEnv(IO.env) });
   const res = scanResult({ status: r.status, stderr: r.stderr, expected });
   if (res === 'clean') return { ok: true };

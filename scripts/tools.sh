@@ -94,8 +94,8 @@ install_into() {
     "$fetch" "$WORK" "$UNPACK"
     rm -rf "$WORK"; WORK=""                           # the archive is dead weight once verified
     "$checker" "$UNPACK" || die "unpacked toolchain does not report the pinned version"
-    [ -z "$CACHE" ] || chmod -R a+rX,a-w "$UNPACK"    # a unit must not modify a shared toolchain
-    [ -n "$CACHE" ] || rm -rf "$dir"
+    if [ -n "$CACHE" ]; then chmod -R a+rX,a-w "$UNPACK" # an accident guard: its owner can undo it
+    else chmod 755 "$UNPACK"; rm -rf "$dir"; fi         # mktemp made it 0700; .tools/ dirs are 0755
     mv "$UNPACK" "$dir"; UNPACK=""
   fi
   cleanup

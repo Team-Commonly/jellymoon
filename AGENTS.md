@@ -7,7 +7,8 @@ check is an API-level e2e. Terms are defined in `docs/GLOSSARY.md`; use them exa
 
 ## Start every session here
 1. `./init.sh` — dependencies, the baseline (`make preflight`) and the feature scoreboard. Red baseline first.
-2. Read `progress.md` (newest first) and `git log --oneline -15`.
+2. Read the newest entries in `progress/` (`ls -r progress/ | head -5`), `progress.md` for older history, and
+   `git log --oneline -15`.
 3. Take the first `feature_list.json` feature with `passes: false` and no `blockedBy`. One feature at a time.
 
 ## The loop: one skill per stage
@@ -22,7 +23,7 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 | Review | `code-review` + `deslop` | `GATE:` verdict in a fresh context |
 | Land | `make-pr-easy-to-review` | PR from `.github/pull_request_template.md` |
 | Learn | `retro` | a test, lint rule or doc in the same PR |
-| Continuity | `handoff` | a `progress.md` entry at each boundary |
+| Continuity | `handoff` | a new file in `progress/` at each boundary, one per unit |
 | Entropy | `improve-codebase-architecture` | one removal-only unit per wave |
 
 ## Rules

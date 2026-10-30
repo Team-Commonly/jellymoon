@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { apply, nthWakeId } from '../src';
 import type { Cmd } from '../src';
 import { AG1, AG3, AG_UNREG, CMP_1, CMP_2, RUN_A, RUN_B, TASKS, U_AGENT_OWNER, U_OWNER, errCode, events, id, lastReply, play, runN, toComputer, wak, world } from './helpers';
 
@@ -6,7 +7,7 @@ const [T1, T2] = TASKS;
 const call = { kind: 'user' as const, userId: U_OWNER.id };
 /** Task 10+n, assigned to an agent: the core writes the task_assigned wake itself. */
 const assign = (n: number, assignee = AG1, wakeId = wak(n)): Cmd => ({ type: 'task_create', caller: call, taskId: id('tsk', 10 + n), title: `T${n}`, kind: 'chore', assignee, wakeId });
-const say = (n: number, text: string, caller: Cmd extends infer _ ? { kind: 'user'; userId: string } | { kind: 'run'; runId: string } : never = call): Cmd => ({ type: 'message_post', caller, messageId: id('msg', n), text, wakeIds: [wak(n), wak(n + 40), wak(n + 80)] });
+const say = (n: number, text: string, caller: Cmd extends infer _ ? { kind: 'user'; userId: string } | { kind: 'run'; runId: string } : never = call): Cmd => ({ type: 'message_post', caller, messageId: id('msg', n), text, wakeId: wak(n) });
 const ruling = (n: number): Cmd => ({ type: 'change', kind: 'ruling', agentId: AG1, refs: { decisionId: id('dec', 1) }, wakeId: wak(n) });
 const hb = (computerId: string): Cmd => ({ type: 'heartbeat', computerId });
 const claimWake = (n: number, computerId = CMP_1, r = 1): Cmd => ({ type: 'run_claim', wakeId: wak(n), computerId, runId: runN(r) });
@@ -68,9 +69,36 @@ describe('mentions, run callers and validation', () => {
     expect(wakes(play([[say(1, '@agent-1', caller), 0]]).out)).toEqual([]);
   });
 
-  test('task_update refuses status open, and a message needs a wakeId per mentioned agent', () => {
+  test('task_update refuses status open', () => {
     expect(errCode(play([[{ type: 'task_update', caller: call, taskId: T1, status: 'open' as never, wakeId: wak(1) }, 0]]).out)).toBe('invalid_input');
-    expect(() => play([[{ ...say(1, '@agent-1 @agent-3'), wakeIds: [wak(1)] } as Cmd, 0]])).toThrow();
+  });
+
+});
+
+describe('input an adapter could get wrong', () => {
+  test('a malformed or exhausted wakeId, a non-string text, a bad now, a bad staleMs and an unknown type are refusals that change nothing', () => {
+    const top = `wak_${'0'.repeat(10)}${'Z'.repeat(16)}`;
+    const bad = ['', 'wak_1', wak(1).replace('wak', 'run'), `${wak(1).slice(0, -1)}U`, `${wak(1).slice(0, -1)}a`];
+    const base = world();
+    const refused = (cmd: Cmd, now = 0) => {
+      const r = apply(base, cmd, now);
+      expect([JSON.stringify(cmd), errCode(r.out), r.out.length, r.state]).toEqual([JSON.stringify(cmd), 'invalid_input', 1, base]);
+    };
+    for (const wakeId of bad) {
+      refused({ ...assign(1), wakeId } as Cmd);
+      refused({ type: 'task_update', caller: call, taskId: T1, status: 'done', wakeId });
+      refused({ ...say(1, 'hi'), wakeId } as Cmd);
+      refused({ type: 'change', kind: 'ruling', agentId: AG1, refs: {}, wakeId });
+    }
+    refused({ ...say(1, '@agent-1 @agent-3'), wakeId: top } as Cmd);
+    refused({ ...say(1, 'hi'), text: 5 as never } as Cmd);
+    refused({ type: 'tick' }, 1.5);
+    refused({ type: 'tick' }, Number.NaN);
+    refused({ type: 'tick' }, -1);
+    for (const staleMs of [-1, 60_001, 1.5, Number.NaN]) refused({ type: 'boot', staleMs });
+    refused({ type: 'nope' } as never);
+    refused({ type: 'constructor' } as never);
+    expect(wakes(play([[{ ...say(1, '@agent-1'), wakeId: top } as Cmd, 0]]).out).length).toBe(1);
   });
 
   test('an ambient message writes no wake', () => {
@@ -212,6 +240,22 @@ describe('run_claim', () => {
 });
 
 describe('wake ids are minted by the adapter', () => {
+  test('one message mentioning three agents opens three distinct valid wak_ ULIDs, the k-th being nthWakeId(seed, k)', () => {
+    const r = play([[say(5, '@agent-1 @agent-2 @agent-3'), 0]]);
+    const ids = wakes(r.out).map((o) => (o.event.type === 'run.wake' ? o.event.data.wakeId : ''));
+    expect(ids).toEqual([wak(5), wak(6), wak(7)]);
+    expect(ids.every((x) => /^wak_[0-9A-HJKMNP-TV-Z]{26}$/.test(x))).toBe(true);
+  });
+  test('a coalesced wake does not use up a k', () => {
+    expect(wakes(play([[assign(1), 0], [say(5, '@agent-1 @agent-3'), 1]]).out).map((o) => o.event.type === 'run.wake' && o.event.data.wakeId)).toEqual([wak(1), wak(5)]);
+  });
+  test('nthWakeId is pure, carries across digits, and refuses a malformed seed or an overflow', () => {
+    const seed = `wak_${'0'.repeat(24)}Z1`;
+    expect([nthWakeId(seed, 0), nthWakeId(seed, 1), nthWakeId(seed, 31)]).toEqual([seed, `wak_${'0'.repeat(24)}Z2`, `wak_${'0'.repeat(23)}100`]);
+    const top = `wak_${'0'.repeat(10)}${'Z'.repeat(16)}`;
+    expect([nthWakeId(top, 0), nthWakeId(top, 1)]).toEqual([top, null]);
+    expect([nthWakeId(`wak_${'1'.repeat(10)}${'Z'.repeat(16)}`, 1), nthWakeId('x', 0), nthWakeId(seed, -1), nthWakeId(seed, 0.5)]).toEqual([null, null, null, null]);
+  });
   test('two pods sharing a computer emit the ids they were given, so no wakeId repeats; a coalesced command ignores its id', () => {
     const other = { ...world(), podId: id('pod', 2) };
     const a = play([[assign(1), 0], [assign(2), 1]]);

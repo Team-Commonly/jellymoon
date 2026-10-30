@@ -4,7 +4,7 @@ import { taskView, who, acquire } from './claims';
 import { emit, fail, ok } from './emit';
 import { isoOf } from './time';
 import { prose } from './mentions';
-import { writeWake } from './wakes';
+import { seedFits, writeWake } from './wakes';
 import type { Cmd, Ctx } from './types';
 
 type Of<T extends Cmd['type']> = Extract<Cmd, { type: T }>;
@@ -26,6 +26,7 @@ export function memberAddCmd(c: Ctx, cmd: Of<'member_add'>): void {
 export function taskCreateCmd(c: Ctx, cmd: Of<'task_create'>): void {
   const w = who(c, cmd.caller);
   if (w === null) return;
+  if (!seedFits(c, cmd.wakeId, 1)) return;
   if (c.s.tasks[cmd.taskId] !== undefined) return fail(c, 'invalid_input', 'That task id is taken.', cmd.taskId);
   const at = isoOf(c.now);
   const task: Task = { id: cmd.taskId, podId: c.s.podId, title: cmd.title, kind: cmd.kind, status: 'open', createdBy: w.actor, createdAt: at, updatedAt: at };
@@ -40,6 +41,7 @@ export function taskCreateCmd(c: Ctx, cmd: Of<'task_create'>): void {
 export function taskUpdateCmd(c: Ctx, cmd: Of<'task_update'>): void {
   const w = who(c, cmd.caller);
   if (w === null) return;
+  if (!seedFits(c, cmd.wakeId, 1)) return;
   if ((cmd.status as string | undefined) === 'open') return fail(c, 'invalid_input', 'A task cannot be set back to open.', cmd.taskId);
   const task = c.s.tasks[cmd.taskId];
   if (task === undefined) return fail(c, 'not_found', 'No such task.', cmd.taskId);
@@ -69,8 +71,9 @@ const summaryOf = (text: string): string => {
 export function messagePostCmd(c: Ctx, cmd: Of<'message_post'>): void {
   const w = who(c, cmd.caller);
   if (w === null) return;
+  if (typeof cmd.text !== 'string') return fail(c, 'invalid_input', 'text must be a string.');
   const ids = mentioned(c, cmd.text).filter((id) => id !== w.actor.id);
-  if (ids.length > cmd.wakeIds.length) throw new Error('message_post: wakeIds needs one id per mentioned agent');
+  if (!seedFits(c, cmd.wakeId, ids.length)) return;
   const msg: Message = {
     id: cmd.messageId, seq: c.s.seq + 1, podId: c.s.podId, author: w.actor, createdAt: isoOf(c.now), summary: summaryOf(cmd.text),
     kind: 'fyi', status: 'done', body: cmd.text,
@@ -78,7 +81,7 @@ export function messagePostCmd(c: Ctx, cmd: Of<'message_post'>): void {
   if (w.run !== undefined) msg.runId = w.run.id;
   if (cmd.threadOf !== undefined) msg.threadOf = cmd.threadOf;
   emit(c, 'message.created', msg);
-  // One adapter-minted wakeId per mentioned agent, in text order; a run's message never wakes its own agent.
-  ids.forEach((id, i) => writeWake(c, id, 'mention', { messageId: cmd.messageId as MessageId }, cmd.wakeIds[i]));
+  // The k-th new wake takes nthWakeId(wakeId, k), in text order; a run's message never wakes its own agent.
+  ids.forEach((id) => writeWake(c, id, 'mention', { messageId: cmd.messageId as MessageId }, cmd.wakeId));
   ok(c, msg);
 }

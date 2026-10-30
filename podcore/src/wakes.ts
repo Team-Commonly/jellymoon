@@ -1,6 +1,7 @@
 // Wakes and run start. A wake is written only for an addressed change; one agent has at most one pending wake.
 import type { AgentId, ComputerId, WakeId, WakeReason, WakeRefs } from '../../gen/ts/protocol';
 import { RUN_CAP_MS } from './claims';
+import { nthWakeId } from './wakeid';
 import { fail, ok, push } from './emit';
 import { isoOf } from './time';
 import type { Cmd, Ctx, Wake } from './types';
@@ -24,23 +25,33 @@ function send(c: Ctx, computerId: ComputerId, w: Wake): void {
 
 /**
  * The one wake writer. An unregistered agent has no computer to wake, so its change is dropped, not held (ADR 0003).
- * A pending wake absorbs the change and `wakeId` is ignored; otherwise a new wake is written under `wakeId`, which
- * the adapter minted (globally unique, like every id). A run never wakes its own agent: `by` is the caller's actor id.
+ * A pending wake absorbs the change and `seed` is ignored; otherwise a new wake is written under
+ * `nthWakeId(seed, k)`, k counting the new wakes this command has opened. The caller checked `seedFits` first.
+ * A run never wakes its own agent: `by` is the caller's actor id.
  */
-export function writeWake(c: Ctx, agentId: AgentId, reason: WakeReason, refs: WakeRefs, wakeId: WakeId, by?: string): void {
+export function writeWake(c: Ctx, agentId: AgentId, reason: WakeReason, refs: WakeRefs, seed: WakeId, by?: string): void {
   const agent = c.s.agents[agentId];
   if (agent === undefined || agentId === by) return;
   const pending = c.s.wakes[agentId];
   if (pending !== undefined) return mergeRefs(pending.refs, refs);
   const own: WakeRefs = {};
   mergeRefs(own, refs);
-  const w: Wake = { id: wakeId, agentId, reason, refs: own, acked: false, sentAt: c.now };
+  const w: Wake = { id: nthWakeId(seed, c.opened) as WakeId, agentId, reason, refs: own, acked: false, sentAt: c.now };
+  c.opened += 1;
   c.s.wakes[agentId] = w;
   send(c, agent.computerId, w);
 }
 
+/** Refuses (invalid_input) a malformed seed, or one whose random part cannot hold `n` wakes. Call before any effect. */
+export function seedFits(c: Ctx, seed: WakeId, n: number): boolean {
+  if (nthWakeId(seed, Math.max(n - 1, 0)) !== null) return true;
+  fail(c, 'invalid_input', 'wakeId must be a fresh wak_ ULID with room for the wakes this command opens.', seed);
+  return false;
+}
+
 /** A ruling on an agent's own ask. Assignments and mentions are derived by the task and message commands. */
 export function changeCmd(c: Ctx, cmd: Of<'change'>): void {
+  if (!seedFits(c, cmd.wakeId, 1)) return;
   if (cmd.kind === 'ruling') writeWake(c, cmd.agentId, 'decision_ruled', cmd.refs, cmd.wakeId);
   ok(c);
 }

@@ -22,7 +22,7 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
   `require`, `import(`, `Function (` and `.then(`. Bare `Math` is banned except the calls `Math.floor`, `Math.min`
   and `Math.max`, so `Math.random`, `Math['random']` and `const M = Math` all fail. It is a lexical backstop, not a
   proof: it reads text, so a spelling it did not list gets through, and the import rule is the other half.
-  `isoOf` throws on a non-integer `now`; adapters pass integer milliseconds.
+  `now` must be a non-negative integer of milliseconds.
 
 ## Why
 
@@ -72,13 +72,14 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 4. Authenticate: map a token to its pod and check the token is valid, stamp the caller, handle invites (the adapter calls
    `member_add` after one is accepted), mint every id (tasks, messages, runs, run tokens and wakes), validate `reason`
    length (160) before `apply`, and map reply codes to HTTP statuses. Wake ids are globally unique and minted by the
-   adapter like the rest: `task_create`, `task_update` and `change` carry `wakeId`, `message_post` carries `wakeIds`
-   (one per agent the text may mention, in text order; fewer than the mentions throws). The core uses an id only for a
-   NEW pending wake; a command that coalesces ignores it. `POST /v1/runs {wakeId}` names no pod, so the adapter keeps
+   adapter like the rest: `task_create`, `task_update`, `message_post` and `change` each carry ONE
+   fresh `wakeId`. The k-th new wake a command opens (text order) gets `nthWakeId(wakeId, k)`: k = 0 is the id itself,
+   k > 0 adds k to the ULID's 80-bit random part with carry, so ids stay unique while the seed is fresh. A command that
+   coalesces uses no id; a malformed seed or an overflow is `invalid_input`. `POST /v1/runs {wakeId}` names no pod, so the adapter keeps
    a wakeId to pod index.
    Callers pass a non-decreasing `now`; the core does not clamp it.
 5. After restoring state on a (re)start, apply `boot {staleMs}` once, with `now`. `staleMs` is an integer from 0 to
-   `LEASE_MS` (anything else throws): the most that the adapter's saved heartbeat renewals can lag the truth. An
+   `LEASE_MS` (anything else is `invalid_input`): the most that the adapter's saved heartbeat renewals can lag the truth. An
    adapter that persists every command passes 0. `boot` runs WITHOUT the leading settle: it first sets every live
    claim's `leaseUntil = max(leaseUntil, min(leaseUntil + staleMs, now + LEASE_MS))`, then settles at `now`, deadline
    stamped, and emits only what that settle emits.
@@ -125,6 +126,14 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
 - A `change` for an unregistered agent is dropped, not held. A held wake has no computer to go to, and holding
   it would need a delivery rule on register; the agent reads the pod when it first starts, so nothing is lost.
 - Re-send has no deadline: nothing is due until a heartbeat arrives, so `nextDeadline` is unchanged.
+
+## Throws
+
+`apply` never throws on adapter input: a non-integer or negative `now`, an unknown command type, a bad `staleMs`, a
+malformed or exhausted `wakeId` and a non-string message `text` are all `invalid_input` and change nothing. What can
+still throw is an invariant violation, i.e. a bug or a corrupt saved state: `structuredClone` of a non-JSON state,
+`isoOf` on a non-integer (unreachable once `now` is checked), and a missing record that state invariants guarantee
+(a wake's agent, a claim's run).
 
 ## Accepted limits
 

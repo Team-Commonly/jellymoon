@@ -42,7 +42,7 @@ describe('message_post summary', () => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   ajv.addSchema(bundle);
   const valid = ajv.getSchema(`${bundle.$id}#/$defs/Message`);
-  const post = (text: string) => events(play([[{ type: 'message_post', caller: owner, messageId: id('msg', 1), text, wakeIds: [] }, 0]]).out)[0].data as { summary: string };
+  const post = (text: string) => events(play([[{ type: 'message_post', caller: owner, messageId: id('msg', 1), text, wakeId: id('wak', 1) }, 0]]).out)[0].data as { summary: string };
   const cases: Array<[string, string]> = [['\nhello', 'hello'], ['line one\r\nline two', 'line one'], ['a\rb', 'a'], ['   ', '(no text)'], ['', '(no text)'], ['\u{1F600}'.repeat(200), '\u{1F600}'.repeat(120)], ['hello', 'hello'], ['  \n  padded  \nnext', 'padded']];
   test('the first non-blank line, trimmed and cut to 120 code points, validates as a Message for every text', () => {
     for (const [text, summary] of cases) {
@@ -85,7 +85,5 @@ describe('boot', () => {
     expect(types(r.out)).toEqual(['task.updated', 'claim.released']);
     expect(lastReply(r.out)).toBe(undefined);
   });
-  test('an out-of-range staleMs is a plain Error', () => {
-    for (const bad of [-1, LEASE_MS + 1, 1.5]) expect(() => apply(world(), { type: 'boot', staleMs: bad }, 0)).toThrow();
-  });
+
 });

@@ -58,7 +58,7 @@ export type Cmd =
   | { type: 'member_add'; userId: ActorId; name: string }
   | { type: 'task_create'; caller: Caller; taskId: TaskId; title: string; kind: TaskKind; assignee?: ActorId; body?: string; wakeId: WakeId }
   | { type: 'task_update'; caller: Caller; taskId: TaskId; status?: TaskUpdateStatus; assignee?: ActorId; wakeId: WakeId }
-  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; threadOf?: MessageId; wakeIds: WakeId[] }
+  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; threadOf?: MessageId; wakeId: WakeId }
   | { type: 'boot'; staleMs: number }
   | { type: 'change'; kind: 'ruling'; agentId: AgentId; refs: WakeRefs; wakeId: WakeId }
   | { type: 'wake_ack'; wakeId: WakeId; computerId: ComputerId }
@@ -75,4 +75,5 @@ export type Out =
   | { kind: 'reply'; ok: true; result: Result }
   | { kind: 'reply'; ok: false; error: ErrorBody };
 
-export interface Ctx { s: PodState; now: number; out: Out[] }
+/** `opened` counts the new wakes this command has written; the k-th takes `nthWakeId(seed, k)`. */
+export interface Ctx { s: PodState; now: number; out: Out[]; opened: number }

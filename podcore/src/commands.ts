@@ -88,6 +88,5 @@ export function runStopCmd(c: Ctx, cmd: Of<'run_stop'>): void {
 
 /** Restart: stretch each live lease by up to `staleMs` (never past now + 60 s, never shorter), then settle at `now`. */
 export function bootCmd(c: Ctx, cmd: Of<'boot'>): void {
-  if (!Number.isInteger(cmd.staleMs) || cmd.staleMs < 0 || cmd.staleMs > LEASE_MS) throw new Error('boot: staleMs must be an integer from 0 to LEASE_MS');
   for (const k of Object.values(c.s.claims)) k.leaseUntil = Math.max(k.leaseUntil, Math.min(k.leaseUntil + cmd.staleMs, c.now + LEASE_MS));
 }

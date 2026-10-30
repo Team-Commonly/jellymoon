@@ -1,6 +1,6 @@
 // The pod core (ADR 0003): apply(state, cmd, now) -> { state, out }. Pure; adapters own I/O and the timer.
 import { messagePostCmd, memberAddCmd, podCreateCmd, taskCreateCmd, taskUpdateCmd } from './board';
-import { LEASE_MS, nextDeadline, own, renewRun, settle } from './claims';
+import { CALLER_TYPES, LEASE_MS, callerOf, isObj, nextDeadline, own, renewRun, settle } from './claims';
 import { bootCmd, claimCmd, heartbeatCmd, opCmd, releaseCmd, runEndCmd, runStopCmd } from './commands';
 import { fail } from './emit';
 import { agentRegisterCmd, changeCmd, runClaimCmd, wakeAckCmd } from './wakes';
@@ -38,29 +38,21 @@ const STRINGS: Record<string, string[]> = {
 };
 /** Optional string fields: absent is fine, present must be a string (an array id would otherwise slip past the id checks). */
 const OPTIONAL: Record<string, string[]> = { op: ['taskId'], task_create: ['assignee'], task_update: ['assignee'] };
-const CALLERS = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post'];
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
-const callerOk = (v: unknown): boolean => isObj(v) && ((v.kind === 'user' && typeof v.userId === 'string') || (v.kind === 'run' && typeof v.runId === 'string'));
 const shapeBad = (cmd: Cmd): boolean => {
   const o = cmd as Record<string, unknown>;
-  return (STRINGS[cmd.type] ?? []).some((k) => typeof o[k] !== 'string') || (OPTIONAL[cmd.type] ?? []).some((k) => o[k] !== undefined && typeof o[k] !== 'string') || (CALLERS.includes(cmd.type) && !callerOk(o.caller)) || (cmd.type === 'change' && !isObj(o.refs));
+  return (STRINGS[cmd.type] ?? []).some((k) => typeof o[k] !== 'string') || (OPTIONAL[cmd.type] ?? []).some((k) => o[k] !== undefined && typeof o[k] !== 'string') || (CALLER_TYPES.includes(cmd.type) && callerOf(cmd) === null) || (cmd.type === 'change' && !isObj(o.refs));
 };
+
+const clockOk = (now: number): boolean => Number.isInteger(now) && now >= 0 && now <= MAX_NOW;
 
 /** True when any id-like field (a name ending in Id, or assignee), at any depth, is an Object.prototype key such as `__proto__`. */
 const protoKeyed = (v: unknown): boolean => typeof v === 'object' && v !== null && Object.entries(v).some(([k, x]) => (
   typeof x === 'string' ? (/Id$|^assignee$/.test(k) && (x === '__proto__' || x in {})) : protoKeyed(x)));
 
-/** The run id a command's token names, if it names one as a string: a run caller, or `claim`/`op`. */
-const runOf = (cmd: Cmd): string | null => {
-  const o = cmd as Record<string, unknown>;
-  if (isObj(o.caller)) return o.caller.kind === 'run' && typeof o.caller.runId === 'string' ? o.caller.runId : null;
-  return (cmd.type === 'claim' || cmd.type === 'op') && typeof o.runId === 'string' ? o.runId : null;
-};
-
 /** Why a call cannot run at all: input the types promise and an adapter might still get wrong. Never a throw. */
 function refusal(cmd: Cmd, now: number): { code: 'invalid_input' | 'not_found'; why: string } | null {
   if (!isObj(cmd)) return { code: 'invalid_input', why: 'A command must be an object.' };
-  if (!Number.isInteger(now) || now < 0 || now > MAX_NOW) return { code: 'invalid_input', why: 'now must be an integer from 0 to the end of year 9999, in milliseconds.' };
+  if (!clockOk(now)) return { code: 'invalid_input', why: 'now must be an integer from 0 to the end of year 9999, in milliseconds.' };
   if (!Object.hasOwn(HANDLERS, cmd.type)) return { code: 'invalid_input', why: 'Unknown command type.' };
   if (cmd.type === 'boot' && !(Number.isInteger(cmd.staleMs) && cmd.staleMs >= 0 && cmd.staleMs <= LEASE_MS)) return { code: 'invalid_input', why: 'staleMs must be an integer from 0 to LEASE_MS.' };
   if (shapeBad(cmd)) return { code: 'invalid_input', why: 'A required field is missing or has the wrong type.' };
@@ -72,18 +64,16 @@ function refusal(cmd: Cmd, now: number): { code: 'invalid_input' | 'not_found'; 
  * the caller is before what they asked: a dead or unknown run is unauthorized, a non-member is forbidden, else the refusal.
  */
 function refuse(c: Ctx, cmd: Cmd, bad: { code: 'invalid_input' | 'not_found'; why: string }): void {
-  const o = cmd as Record<string, unknown>;
-  if (!isObj(cmd) || !Number.isInteger(c.now) || c.now < 0 || c.now > MAX_NOW) return fail(c, bad.code, bad.why);
+  if (!isObj(cmd) || !clockOk(c.now)) return fail(c, bad.code, bad.why);
   settle(c);
-  const id = runOf(cmd);
-  const run = id === null ? undefined : own(c.s.runs, id);
-  if (run?.status === 'active') {
+  const caller = callerOf(cmd);
+  if (caller?.kind === 'run') {
+    const run = own(c.s.runs, caller.runId);
+    if (run?.status !== 'active') return fail(c, 'unauthorized', 'This run has ended; its token no longer works.', caller.runId);
     renewRun(c, run.id);
     // The one rule that depends on the caller alone: a run token cannot stop a run (operations.json), whatever it names.
     if (cmd.type === 'run_stop') return fail(c, 'forbidden', 'A run cannot stop a run; only a person may.');
-  } else if (id !== null) return fail(c, 'unauthorized', 'This run has ended; its token no longer works.', id);
-  const u = isObj(o.caller) && o.caller.kind === 'user' && typeof o.caller.userId === 'string' ? o.caller.userId : null;
-  if (u !== null && c.s.members.length > 0 && !c.s.members.some((m) => m.id === u)) return fail(c, 'forbidden', 'Only members of this pod may do this.');
+  } else if (caller !== null && c.s.members.length > 0 && !c.s.members.some((m) => m.id === caller.userId)) return fail(c, 'forbidden', 'Only members of this pod may do this.');
   fail(c, bad.code, bad.why);
 }
 

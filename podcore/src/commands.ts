@@ -1,7 +1,7 @@
 // One function per command. Authorization is read from state, never from the input's own claims.
 import { RunOutcomeValues } from '../../gen/ts/protocol';
 import type { Actor } from '../../gen/ts/protocol';
-import { LEASE_MS, acquire, endClaim, endRun, liveRun, lostHow, own, renewRun, taskView, who } from './claims';
+import { LEASE_MS, acquire, endClaim, endRun, lostHow, own, renewRun, taskView, who } from './claims';
 import { fail, ok, push } from './emit';
 import { isoOf } from './time';
 import { resendWakes } from './wakes';
@@ -12,8 +12,8 @@ type Of<T extends Cmd['type']> = Extract<Cmd, { type: T }>;
 const noTask = (c: Ctx, taskId: string): void => fail(c, 'not_found', 'No such task.', taskId);
 
 export function claimCmd(c: Ctx, cmd: Of<'claim'>): void {
-  const run = liveRun(c, cmd.runId);
-  if (run === null) return;
+  const run = who(c, cmd)?.run;
+  if (run === undefined) return;
   if (own(c.s.tasks, cmd.taskId) === undefined) return noTask(c, cmd.taskId);
   if (acquire(c, run, cmd.taskId, true)) return;
   ok(c, { taskId: cmd.taskId, leaseUntil: isoOf(c.s.claims[cmd.taskId].leaseUntil) });
@@ -21,8 +21,8 @@ export function claimCmd(c: Ctx, cmd: Of<'claim'>): void {
 
 /** Any other operation a run makes: it renews, and may restore an expired claim on `taskId`. */
 export function opCmd(c: Ctx, cmd: Of<'op'>): void {
-  const run = liveRun(c, cmd.runId);
-  if (run === null) return;
+  const run = who(c, cmd)?.run;
+  if (run === undefined) return;
   if (cmd.taskId === undefined) return ok(c);
   if (own(c.s.tasks, cmd.taskId) === undefined) return noTask(c, cmd.taskId);
   if (acquire(c, run, cmd.taskId, false)) return;
@@ -40,7 +40,7 @@ export function heartbeatCmd(c: Ctx, cmd: Of<'heartbeat'>): void {
 }
 
 export function releaseCmd(c: Ctx, cmd: Of<'task_release'>): void {
-  const w = who(c, cmd.caller);
+  const w = who(c, cmd);
   if (w === null) return;
   if (own(c.s.tasks, cmd.taskId) === undefined) return noTask(c, cmd.taskId);
   const { run } = w;
@@ -73,7 +73,7 @@ function stopper(c: Ctx, actor: Actor, run: Run): Actor | undefined {
 }
 
 export function runStopCmd(c: Ctx, cmd: Of<'run_stop'>): void {
-  const w = who(c, cmd.caller);
+  const w = who(c, cmd);
   if (w === null) return;
   if (w.run !== undefined) return fail(c, 'forbidden', 'A run cannot stop a run; only a person may.');
   const run = own(c.s.runs, cmd.runId);

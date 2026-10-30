@@ -24,7 +24,7 @@ export function memberAddCmd(c: Ctx, cmd: Of<'member_add'>): void {
 }
 
 export function taskCreateCmd(c: Ctx, cmd: Of<'task_create'>): void {
-  const w = who(c, cmd.caller);
+  const w = who(c, cmd);
   if (w === null) return;
   if (!seedFits(c, cmd.wakeId, 1)) return;
   if (own(c.s.tasks, cmd.taskId) !== undefined) return fail(c, 'invalid_input', 'That task id is taken.', cmd.taskId);
@@ -39,7 +39,7 @@ export function taskCreateCmd(c: Ctx, cmd: Of<'task_create'>): void {
 }
 
 export function taskUpdateCmd(c: Ctx, cmd: Of<'task_update'>): void {
-  const w = who(c, cmd.caller);
+  const w = who(c, cmd);
   if (w === null) return;
   if (!seedFits(c, cmd.wakeId, 1)) return;
   if ((cmd.status as string | undefined) === 'open') return fail(c, 'invalid_input', 'A task cannot be set back to open.', cmd.taskId);
@@ -75,7 +75,7 @@ const summaryOf = (text: string): string => {
 };
 
 export function messagePostCmd(c: Ctx, cmd: Of<'message_post'>): void {
-  const w = who(c, cmd.caller);
+  const w = who(c, cmd);
   if (w === null) return;
   if (typeof cmd.text !== 'string') return fail(c, 'invalid_input', 'text must be a string.');
   // A run must write its own headline (schema/message.json); a person's post gets one derived from the text.

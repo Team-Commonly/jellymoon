@@ -28,7 +28,7 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | Area | Cap |
 |---|---|
 | core (`schema/`, `scripts/`) | 1,500 |
-| podcore | 1,950 |
+| podcore | 2,050 |
 | worker | 3,000 |
 | daemon | 3,000 |
 | e2e | 1,500 |
@@ -39,3 +39,4 @@ That is under 11k hand-written lines. Agent-written comparables grew without bou
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, PC rounds 1–3). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
 - 10-30: podcore 1,750 → 1,850, refusal-path tests, PC round 4
 - 10-30: podcore 1,850 → 1,950, caller-first refusal rules and the tests that pin them, PC round 6
+- 10-30: podcore 1,950 → 2,050, the differential caller property test and its regression rows (one caller derivation, PC round 8)

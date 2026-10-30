@@ -2,7 +2,7 @@
 import type { Actor, ClaimReleased, ClaimReleaseCause, RunId, RunOutcome, Task, TaskId } from '../../gen/ts/protocol';
 import { emit, fail } from './emit';
 import { isoOf } from './time';
-import type { Caller, Ctx, Run } from './types';
+import type { Caller, Cmd, Ctx, Run } from './types';
 
 export const LEASE_MS = 60_000;
 
@@ -84,15 +84,35 @@ export function nextDeadline(s: { runs: Record<RunId, Run>; claims: Record<TaskI
 }
 
 /** The run behind a run token, or a refusal: an ended or unknown run's token is dead. A live run renews first, so no refusal below it can skip the renewal. */
-export function liveRun(c: Ctx, runId: RunId): Run | null {
+function liveRun(c: Ctx, runId: RunId): Run | null {
   const run = own(c.s.runs, runId);
   if (run !== undefined && run.status === 'active') return renewRun(c, runId), run;
   fail(c, 'unauthorized', 'This run has ended; its token no longer works.', runId);
   return null;
 }
 
+export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/** The commands whose `caller` field names who is calling. `claim` and `op` are called by the run in `runId`; no other command has a caller. */
+export const CALLER_TYPES = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post'];
+
+/**
+ * The ONE place a caller is derived, for the handlers and for the refusal path alike: a run for `claim`/`op` (from `runId`),
+ * the `caller` field for CALLER_TYPES, nobody for anything else. Malformed gives null. Stray fields on other types are ignored.
+ */
+export function callerOf(cmd: Cmd): Caller | null {
+  const o = cmd as Record<string, unknown>;
+  if (cmd.type === 'claim' || cmd.type === 'op') return typeof o.runId === 'string' ? { kind: 'run', runId: o.runId } : null;
+  const k = o.caller;
+  if (!CALLER_TYPES.includes(cmd.type) || !isObj(k)) return null;
+  if (k.kind === 'user' && typeof k.userId === 'string') return { kind: 'user', userId: k.userId };
+  return k.kind === 'run' && typeof k.runId === 'string' ? { kind: 'run', runId: k.runId } : null;
+}
+
 /** Who is calling: a live run, or a member. Checked before any lookup, so a stranger cannot probe ids. */
-export function who(c: Ctx, caller: Caller): { actor: Actor; run?: Run } | null {
+export function who(c: Ctx, cmd: Cmd): { actor: Actor; run?: Run } | null {
+  const caller = callerOf(cmd);
+  if (caller === null) return fail(c, 'invalid_input', 'This command has no valid caller.'), null;
   if (caller.kind === 'run') {
     const run = liveRun(c, caller.runId);
     return run === null ? null : { actor: run.agent, run };

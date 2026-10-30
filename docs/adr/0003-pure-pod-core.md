@@ -51,11 +51,11 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
   (ADR 0002, F13). A live run calling `run_stop` gets `forbidden` before any lookup,
   unknown run ids included.
 - A caller that is a user must be a member of the pod, or gets `forbidden` on every command, before `not_found`, so a
-  stranger cannot probe ids. Before `pod_create`, a well-formed command gets `not_found`; a malformed one gets `invalid_input`, since there are no
+  stranger cannot probe ids. Before `pod_create`, a well-formed command gets `not_found`; a malformed one gets `invalid_input` (`unauthorized` if it names a run, which cannot exist yet), since there are no
   members to judge it by.
   The caller check comes first even for a refused (malformed or prototype-key) command: in the refusal path the core settles,
   renews a live run, then answers a dead or unknown run `unauthorized` and a non-member user `forbidden`, and a live run's `run_stop` `forbidden` (a run token cannot stop a run, whatever it names), and only then the
-  refusal itself (`invalid_input`, or `not_found` for prototype-key ids). A caller that is not an object stays `invalid_input`. A bad `now` is answered `invalid_input` before any caller is judged: `now` is the adapter's clock, not the caller's.
+  refusal itself (`invalid_input`, or `not_found` for prototype-key ids). A caller that is not an object stays `invalid_input`. The caller is derived in ONE place, `callerOf`, by command type: the run in `runId` for `claim`/`op`, the `caller` field for the five commands that carry one, nobody otherwise; stray `caller` fields elsewhere are ignored, in the refusal path and the handlers alike. A bad `now` is answered `invalid_input` before any caller is judged: `now` is the adapter's clock, not the caller's.
 - Renewal follows ADR 0002: its lease renews on any operation that run's token makes. A live run's command renews
   all of that run's claims BEFORE any refusal (`forbidden`, `already_claimed`, `not_found`, `invalid_input`), so
   what a command is answered never changes when a lease ends. An ended run gets `unauthorized` and renews nothing.
@@ -146,7 +146,7 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 - Computers can tell an unknown id from a foreign one by the reply code. Accepted: ids are unguessable ULIDs.
 - The boot stretch can turn an `expired` release near the cap into `run_ended`, because a stretched lease may now
   meet the 2 h run cap first.
-- Size: `podcore/` is capped at 1,950 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
+- Size: `podcore/` is capped at 2,050 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
   exception was added; it ratchets down from here.
 - Fence rules cover top-level fences only: a fence inside a list item still wakes. That is an extra wake, never a missed one.
 - A run's `summary` over 120 characters is cut, not refused; the adapter's schema refuses it first.

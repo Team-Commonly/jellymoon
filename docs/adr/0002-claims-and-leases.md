@@ -1,6 +1,6 @@
 # 0002 · Claims and leases
 
-Status: Accepted (owner ruling, 2026-10-29). The unknowns below stay open;
+Status: Accepted (maintainers, 2026-10-29; direction ratified by the owner). The unknowns below stay open;
 accepting this ADR does not settle them.
 
 Implemented by ADR 0003 (podcore), which records how the core applies these rules and the

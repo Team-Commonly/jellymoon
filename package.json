@@ -9,7 +9,9 @@
     "check:types": "tsc -p tsconfig.json",
     "check:entropy": "bun scripts/check-entropy.mjs",
     "check:dead": "knip",
-    "check:boundaries": "depcruise scripts gen podcore --config .dependency-cruiser.cjs"
+    "check:boundaries": "depcruise scripts gen podcore --config .dependency-cruiser.cjs",
+    "check:private": "bun scripts/check-private.mjs",
+    "check:boundary-rule": "bun scripts/check-boundary-rule.mjs"
   },
   "devDependencies": {
     "ajv": "8.17.1",

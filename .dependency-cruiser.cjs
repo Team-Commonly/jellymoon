@@ -4,7 +4,7 @@ module.exports = {
     { name: 'no-circular', severity: 'error', from: {}, to: { circular: true } },
     { name: 'gen-is-a-leaf', severity: 'error', from: { path: '^gen/' }, to: { pathNot: '^gen/' } },
     { name: 'nothing-imports-e2e', severity: 'error', from: { pathNot: '^e2e/' }, to: { path: '^e2e/' } },
-    { name: 'ee-stays-in-ee', severity: 'error', from: { pathNot: '^ee/' }, to: { path: '^ee/' } },
+    { name: 'ee-stays-in-ee', severity: 'error', comment: 'ADR 0004: core never imports ee/', from: { pathNot: '^ee/' }, to: { path: '^ee/' } },
     { name: 'podcore-is-pure', severity: 'error', comment: 'ADR 0003: the pod core imports only itself and gen/', from: { path: '^podcore/src/' }, to: { pathNot: '^(podcore|gen)/' } },
     { name: 'no-test-routes-from-prod', severity: 'error', from: { path: '^worker/src/', pathNot: '^worker/src/test/' }, to: { path: '^worker/src/test/' } }
   ],

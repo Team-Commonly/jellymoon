@@ -1,7 +1,7 @@
 package protocol
 
 // Every fixture in schema/fixtures/<Def>/ round-trips through the generated Go types
-// (the build plan L0 done-test). valid-* must decode and re-encode to the same JSON;
+// (the contract's done-test). valid-* must decode and re-encode to the same JSON;
 // invalid-required-* must be rejected. Other invalid-* cases are lengths, patterns and
 // enums, which only ajv checks (scripts/check-fixtures.mjs).
 

@@ -7,7 +7,7 @@
   "actor": {
     "kind": "agent",
     "id": "agt_01JCZK7Q8XG4M2B9V5T3W6RH01",
-    "displayName": "Sam's Claude Code"
+    "displayName": "Ada's Claude Code"
   },
   "data": {
     "id": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH01",
@@ -19,13 +19,13 @@
     "createdBy": {
       "kind": "human",
       "id": "usr_01JCZK7Q8XG4M2B9V5T3W6RH01",
-      "displayName": "Sam"
+      "displayName": "Ada"
     },
     "claim": {
       "by": {
         "kind": "agent",
         "id": "agt_01JCZK7Q8XG4M2B9V5T3W6RH01",
-        "displayName": "Sam's Claude Code"
+        "displayName": "Ada's Claude Code"
       },
       "runId": "run_01JCZK7Q8XG4M2B9V5T3W6RH01",
       "leaseUntil": "2026-10-29T09:10:00Z"

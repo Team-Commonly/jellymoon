@@ -1,4 +1,4 @@
-// D1: the cross-pod index. Tokens (SHA-256 only), users, computers, the pod list, invite codes, and which pods a computer has agents in.
+// D1: the cross-pod index. Tokens and invite codes (SHA-256 only), users, computers, the pod list, and which pods a computer has agents in.
 // Everything inside a pod lives in that pod's Durable Object, not here.
 import type { Actor } from '../../gen/ts/protocol';
 import { hashToken, newId, newToken } from './ids';
@@ -59,10 +59,11 @@ export async function allPodIds(db: D1Database): Promise<string[]> {
   return (await db.prepare('select id from pods').all<{ id: string }>()).results.map((r) => r.id);
 }
 
-export const addInvite = (db: D1Database, code: string, pod: string): Promise<unknown> => db.prepare('insert into invites (code, pod) values (?, ?)').bind(code, pod).run();
-export const dropInvite = (db: D1Database, code: string): Promise<unknown> => db.prepare('delete from invites where code = ?').bind(code).run();
-export async function podOfInvite(db: D1Database, code: string): Promise<string | null> {
-  return (await db.prepare('select pod from invites where code = ?').bind(code).first<{ pod: string }>())?.pod ?? null;
+/** An invite code is a join credential: only its SHA-256 is stored, like a token's. */
+export const addInvite = (db: D1Database, hash: string, pod: string): Promise<unknown> => db.prepare('insert into invites (hash, pod) values (?, ?)').bind(hash, pod).run();
+export const dropInvite = (db: D1Database, hash: string): Promise<unknown> => db.prepare('delete from invites where hash = ?').bind(hash).run();
+export async function podOfInvite(db: D1Database, hash: string): Promise<string | null> {
+  return (await db.prepare('select pod from invites where hash = ?').bind(hash).first<{ pod: string }>())?.pod ?? null;
 }
 
 export const addAgentPod = (db: D1Database, computerId: string, podId: string): Promise<unknown> =>

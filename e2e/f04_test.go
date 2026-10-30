@@ -136,7 +136,7 @@ func TestF04(t *testing.T) {
 		w.setClock(w.clock)
 		return wantReplay(w.replayed(w.cara.tok, "cara-restart", head), head, "after one", "after two", "after three")
 	})
-	p.count()
+	p.count(t)
 	if p.ok != p.run {
 		t.Fatalf("%d of %d steps passed", p.ok, p.run)
 	}

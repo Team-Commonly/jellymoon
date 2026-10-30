@@ -9,9 +9,24 @@ const user: Who = { kind: 'user', actor: { kind: 'human', id: 'usr_01ARZ3NDEKTSV
 const computer: Who = { kind: 'computer', computerId: 'cmp_1', owner: { kind: 'human', id: 'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV', displayName: 'ben' } };
 const frame = (type: string, data: unknown, extra: object = {}): string => JSON.stringify({ v: 1, type, podId: 'pod_1', data, ...extra });
 
-test('ids sort in creation order and tokens hash to 64 hex characters', async () => {
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const randomPart = (id: string): bigint => [...id.slice(-16)].reduce((n, c) => n * 32n + BigInt(B32.indexOf(c)), 0n);
+
+test('two ids minted in the same millisecond are not neighbours', () => {
+  const near = (a: bigint, b: bigint): boolean => (a > b ? a - b : b - a) < 2n ** 40n;
+  let pairs = 0;
+  for (let i = 0; i < 2000 && pairs < 20; i += 1) {
+    const [a, b] = [newId('tsk_'), newId('tsk_')];
+    if (a.slice(4, 14) !== b.slice(4, 14)) continue;
+    pairs += 1;
+    expect(near(randomPart(a), randomPart(b))).toBe(false);
+  }
+  expect(pairs).toBe(20);
+});
+
+test('ids are unique and tokens hash to 64 hex characters', async () => {
   const ids = Array.from({ length: 50 }, () => newId('tsk_'));
-  expect([...ids].sort()).toEqual(ids);
+  expect(new Set(ids).size).toBe(50);
   expect(/^[0-9A-Za-z]{40}$/.test(base62(40))).toBe(true);
   expect(/^jmu_[0-9A-Za-z]{43}$/.test(newToken('jmu_'))).toBe(true);
   expect(/^[0-9a-f]{64}$/.test(await hashToken('x'))).toBe(true);

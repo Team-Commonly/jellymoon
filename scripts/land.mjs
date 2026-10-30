@@ -6,7 +6,7 @@
 //   land.mjs <pr> [--dry-run] [--bootstrap]
 //   land.mjs <pr> --preflight-only [--bootstrap]   (verifiers: the trust gate and the merge-result preflight only; needs JM_REPO and JM_TRUSTED_LOGINS)
 // Run it from a clean checkout of main: the accepted reviewers come from operator env, never from the repo.
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -18,7 +18,7 @@ import {
 } from './land-decide.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
 // All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
-// git, gh and make call, fetch for the pod read, spawn for the preflight child, env, argv and the Node version.
+// git and gh call (stdout, throws on failure), run(cmd, args, opts) for the range scan ({ status, stdout, stderr }, never throws), fetch for the pod read, spawn for the preflight child, env, argv and the Node version.
 export class Refusal extends Error {}
 let IO;
 let REPO = ''; // every gh call names it: a worktree can carry remotes for several repos
@@ -155,15 +155,16 @@ const reviewers = () => {
   if (!list.length) refuse('JM_VERDICT_REVIEWERS is malformed: it has no valid <id>:<Name> entry');
   return list;
 };
-// The commit-range secret scan (gitleaks git mode, -m, markers ignored). It only refuses. A finding exits gitleaks with 3, which `go run`
-// reports as "exit status 3" on stderr; any other failure of the scan refuses too, because a scan that did not run proves nothing.
+// The commit-range secret scan (gitleaks git mode, -m, markers ignored). It only refuses. Clean is positive evidence read from the scan's own
+// exit status AND stderr, on success as well as failure (see scanResult): exit 0, no hit or error line, "no leaks found", and a scanned
+// count equal to the commits this land would merge, which land counts itself with git, outside make. A scan that did not read the range
+// (a recipe that swallowed an error, an object missing from the checkout, an empty range) proves nothing, so it refuses too.
 const rangeScan = (mainTip, head) => {
-  let status = 0;
-  let stderr = '';
-  try { out('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`], { env: scanEnv(IO.env) }); } catch (e) { status = typeof e.status === 'number' ? e.status : null; stderr = String(e.stderr || ''); }
-  const res = scanResult({ status, stderr });
+  const expected = Number(out('git', ['rev-list', '--count', `${mainTip}..${head}`]));
+  const r = IO.run('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`], { env: scanEnv(IO.env) });
+  const res = scanResult({ status: r.status, stderr: r.stderr, expected });
   if (res === 'clean') return { ok: true };
-  return { ok: false, reason: res === 'hit' ? 'a secret was found in the range; remove it from history and push a new head' : 'the range secret scan failed to run; it proves nothing, so land refuses' };
+  return { ok: false, reason: res === 'hit' ? 'a secret was found in the range; remove it from history and push a new head' : 'the range secret scan failed to run, or did not read the whole range; it proves nothing, so land refuses' };
 };
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
 async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
@@ -274,12 +275,18 @@ async function run(args, hold) {
   if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
   say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);
 }
+// The real run seam: status, stdout and stderr of a finished command, on success as well as failure. status is null when the command was killed
+// by a signal or never started. The range scan is read from this stderr, so it must not be dropped on a zero exit.
+export const realRun = (cmd, args, opts = {}) => {
+  const r = spawnSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26, ...opts });
+  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+};
 // The CLI: the real I/O. Ctrl-C and kill run the exit handlers that kill the preflight's process group and release the lock.
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   process.on('SIGINT', () => process.exit(130));
   process.on('SIGTERM', () => process.exit(143));
   process.on('SIGHUP', () => process.exit(129));
   const exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
-  main({ exec, fetch, spawn, kill: process.kill, env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
+  main({ exec, run: realRun, fetch, spawn, kill: process.kill, env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
     .catch((e) => { console.error(`land: refused: ${e.message}`); process.exit(1); });
 }

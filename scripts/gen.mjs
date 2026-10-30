@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Generates every wire type from schema/*.json (the build plan). Nothing else defines a wire shape.
+// Generates every wire type from schema/*.json. Nothing else defines a wire shape.
 //   gen/ts/protocol.ts            TS types, enum value lists, the event union, tool names
 //   gen/ts/schemas.json           one bundled JSON Schema document for ajv in the Worker
 //   gen/ts/tools.json             the MCP adapter's tool list: one tool per operation, schemas fully inlined
@@ -44,7 +44,7 @@ function refName(ref, fromFile) {
 function check(node, where, depth) {
   if (Array.isArray(node)) { node.forEach((n, i) => check(n, `${where}[${i}]`, depth)); return; }
   if (!node || typeof node !== 'object') return;
-  for (const k of BANNED) if (k in node) fail(`${where} uses ${k}; the schema allows no composition (go-jsonschema can't, the build plan)`);
+  for (const k of BANNED) if (k in node) fail(`${where} uses ${k}; the schema allows no composition (go-jsonschema can't)`);
   if (node.$ref) refName(node.$ref, where.split('.json')[0]);
   if (depth > 0 && node.type === 'object' && node.properties) fail(`${where} is an inline object; make it a named $def`);
   for (const [k, v] of Object.entries(node)) {

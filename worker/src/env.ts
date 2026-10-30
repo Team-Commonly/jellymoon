@@ -2,7 +2,7 @@
 export interface Env {
   DB: D1Database;
   POD: DurableObjectNamespace;
-  /** Public base URL used in run briefs (mcpUrl); optional. */
+  /** Public base URL: the run's mcpUrl and an invite's join link. Optional; a request's own origin stands in. */
   PUBLIC_URL?: string;
   ENV?: string;
   TEST_BEARER?: string;

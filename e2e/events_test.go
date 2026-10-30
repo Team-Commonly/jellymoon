@@ -47,10 +47,11 @@ func (w *world) awaitExpiry(s *sock, mk int, taskID string, r *run, wait time.Du
 	return min(f1.recv, f2.recv), true
 }
 
-// noRelease fails when a claim.released for taskID arrives on s within d.
-func (w *world) noRelease(s *sock, taskID string, d time.Duration) {
+// noRelease fails when a claim.released for taskID is on s after mk, or arrives within d. Take mk BEFORE the step under test
+// (a clock move): a server that releases early sends claim.released before /__test/clock returns, and a mark taken after
+// the move would start past it.
+func (w *world) noRelease(s *sock, mk int, taskID string, d time.Duration) {
 	w.t.Helper()
-	mk := s.mark()
 	if !s.none(mk, released(taskID, ""), d) {
 		w.t.Fatalf("%s: claim.released for %s arrived before its deadline", s.name, taskID)
 	}

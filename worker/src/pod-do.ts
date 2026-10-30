@@ -17,7 +17,7 @@ import type { Opts, PodMeta, Reply, Who } from './wire';
 const SCHEMA = [
   'create table if not exists kv (k text primary key, v text not null)',
   'create table if not exists events (seq integer primary key, envelope text not null)',
-  'create table if not exists invites (code text primary key, uses_left integer not null, expires_at real not null)',
+  'create table if not exists invites (hash text primary key, uses_left integer not null, expires_at real not null)',
 ];
 const REPLAY_BATCH = 500;
 

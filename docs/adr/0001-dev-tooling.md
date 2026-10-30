@@ -1,6 +1,6 @@
 # 0001 · Dev tooling and its dependencies
 
-Status: Accepted (owner ruling,2026-10-29). Rule: every new dependency or module gets a note like this one.
+Status: Accepted (maintainers, 2026-10-29). Rule: every new dependency or module gets a note like this one.
 
 Each dependency below is a dev-only dependency, pinned to an exact version at least two weeks old.
 None of them ships in a runtime artifact.
@@ -31,25 +31,28 @@ The LOC budget for the slice is a deliberate choice to stay small:
 
 | Area | Cap |
 |---|---|
-| core (`schema/`, `scripts/`) | 2,200 |
+| core (`schema/`, `scripts/`) | 2,450 |
 | podcore | 2,050 |
-| worker | 1,250 |
+| worker | 1,550 |
 | daemon | 3,000 |
 | e2e | 2,270 |
 
-The caps add up to 10,770 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 11,320 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
-- 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, PC rounds 1–3). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
-- 10-30: podcore 1,750 → 1,850, refusal-path tests, PC round 4
-- 10-30: podcore 1,850 → 1,950, caller-first refusal rules and the tests that pin them, PC round 6
-- 10-30: podcore 1,950 → 2,050, the differential caller property test and its regression rows (one caller derivation, PC round 8)
-2026-10-30: core cap 1,500 → 1,650, land security tests, P08 r9.
-2026-10-30: core cap 1,650 → 1,750, land security tests, P08 r10.
-2026-10-30: core cap 1,750 → 1,800, land security tests, P08 r11.
-2026-10-30: core cap 1,800 → 2,000, land I/O seam and end-to-end land cases, P08 r12.
-2026-10-30: core cap 2,000 → 2,100, id-keyed verdict, every-range-blob scan and kill/trust/scrub tests, P08 r14.
-2026-10-30: core cap 2,100 → 2,200, text-by-land rule, padded range scan, per-magic and end-to-end tests, P08 r15.
-2026-10-30: gitleaks row rewritten: scans refuse and never waive; the verdict-free path and its ~320 core lines were deleted, core is 1,787 under the 2,200 cap, P08 r16.
+- 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
+- 10-30: podcore 1,750 → 1,850, refusal-path tests, pod core review round 4, #12
+- 10-30: podcore 1,850 → 1,950, caller-first refusal rules and the tests that pin them, pod core review round 6, #12
+- 10-30: podcore 1,950 → 2,050, the differential caller property test and its regression rows (one caller derivation, pod core review round 8, #12)
+2026-10-30: core cap 1,500 → 1,650, land security tests, land review round 9, #10.
+2026-10-30: core cap 1,650 → 1,750, land security tests, land review round 10, #10.
+2026-10-30: core cap 1,750 → 1,800, land security tests, land review round 11, #10.
+2026-10-30: core cap 1,800 → 2,000, land I/O seam and end-to-end land cases, land review round 12, #10.
+2026-10-30: core cap 2,000 → 2,100, id-keyed verdict, every-range-blob scan and kill/trust/scrub tests, land review round 14, #10.
+2026-10-30: core cap 2,100 → 2,200, text-by-land rule, padded range scan, per-magic and end-to-end tests, land review round 15, #10.
+2026-10-30: gitleaks row rewritten: scans refuse and never waive; the verdict-free path and its ~320 core lines were deleted, core is 1,787 under the 2,200 cap, land review round 16, #10.
+2026-10-30: core cap 2,200 → 2,450, the pre-public deny check (`scripts/check-private.mjs` and its cases) on top of land review rounds 19 and 20; merged, core measures 2,236, unit OS1.
 2026-10-30: worker cap 3,000 → 1,250 and e2e cap 1,500 → 1,900, the Cloudflare adapter and the contract suite now in the tree at 1,097 and 1,641 lines (each cap is its count plus about 15%); the total is 10,400. Core stays 2,200 and podcore 2,050. W0.
-2026-10-30: e2e cap 1,900 → 2,270, the pod feature tests (F03 to F06) take the suite to 1,973 lines (the cap is that count plus about 15%); the total is 10,770. No other cap changes. W1.
+2026-10-30: worker cap 1,250 → 1,550, input validation against gen/, hashed invite codes, random ids and the test-clock reset now in the Cloudflare adapter at 1,348 lines (the cap is its count plus about 15%); the total is 10,700. e2e stays 1,900 at 1,888. W0 round 2.
+2026-10-30: the adapter merged with the core cap raise above (core 2,450): the total is 10,950. W0.
+2026-10-30: e2e cap 1,900 → 2,270, the pod feature tests (F03 to F06) take the suite to 1,973 lines (the cap is that count plus about 15%); the total is 11,320 with the adapter's raised worker and core caps. No other cap changes. W1.

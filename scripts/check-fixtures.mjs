@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Validates every fixture in schema/fixtures/<Def>/ against the generated bundle (the build plan L0 done-test).
+// Validates every fixture in schema/fixtures/<Def>/ against the generated bundle.
 // valid-*.json must pass and invalid-*.json must fail. An Envelope fixture's data is also checked
 // against the definition its event type names. The Go side of the same check is
 // daemon/internal/protocol/fixtures_test.go.

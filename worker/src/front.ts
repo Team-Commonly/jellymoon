@@ -1,10 +1,10 @@
 // The Worker: authenticates against D1, checks the token kind and the pod, and hands the request to the pod's Durable Object
 // with the caller in an internal header (any incoming copy is deleted first). It holds no pod state.
-import { RunOutcomeValues } from '../../gen/ts/protocol';
 import { addAgentPod, addInvite, addPod, authenticate, createComputer, dropInvite, dropPod, dropRunToken, mintRunToken, podExists, podOfInvite, podOfRun, podsOfComputer } from './directory';
 import type { Env } from './env';
-import { newId, newInviteCode } from './ids';
-import { bad, encodeWho, fail, parse, pick, str, WHO_HEADER } from './wire';
+import { hashToken, newId, newInviteCode } from './ids';
+import { check } from './validate';
+import { bad, encodeWho, fail, parse, WHO_HEADER } from './wire';
 import type { Body, Who } from './wire';
 
 type Kind = Who['kind'];
@@ -49,19 +49,21 @@ async function podCall(env: Env, req: Request, kinds: readonly Kind[], podId: st
   return fn(g.who);
 }
 
-async function setup(env: Env, req: Request, kinds: readonly Kind[], fn: (who: Who, body: Body) => Promise<Response>): Promise<Response> {
+/** `def` names the request definition in gen/ the body is checked against; null for a route that takes no body. */
+async function setup(env: Env, req: Request, kinds: readonly Kind[], def: string | null, fn: (who: Who, body: Body) => Promise<Response>): Promise<Response> {
   const g = await guard(env, req, kinds);
   if (g instanceof Response) return g;
   const body = await parse(req);
-  return body === null ? bad('The body must be a JSON object.') : fn(g.who, body);
+  if (body === null) return bad('The body must be a JSON object.');
+  const problem = def === null ? null : check(def, body);
+  return problem === null ? fn(g.who, body) : bad(problem);
 }
 
 const userOf = (who: Who) => (who as Extract<Who, { kind: 'user' }>).actor;
 const computerOf = (who: Who) => who as Extract<Who, { kind: 'computer' }>;
 
 async function createPod(env: Env, who: Who, body: Body): Promise<Response> {
-  const name = str(body.name, 1, 80);
-  if (name === undefined) return bad('name is 1 to 80 characters.');
+  const name = body.name as string;
   const id = newId('pod_');
   await addPod(env.DB, id);
   const res = await internal(env, id, 'create', { podId: id, name, ownerId: userOf(who).id, ownerName: userOf(who).displayName });
@@ -69,20 +71,21 @@ async function createPod(env: Env, who: Who, body: Body): Promise<Response> {
   return res;
 }
 
-async function createInvite(env: Env, req: Request, podId: string, who: Who): Promise<Response> {
-  const body = await parse(req);
-  if (body === null) return bad('The body must be a JSON object.');
+/** The code is shown once, in this reply. D1 and the pod keep its SHA-256, and the join link is built from PUBLIC_URL. */
+async function createInvite(env: Env, podId: string, who: Who, body: Body, origin: string): Promise<Response> {
   const code = newInviteCode();
-  await addInvite(env.DB, code, podId);
-  const res = await internal(env, podId, 'invite', { ...body, code, userId: userOf(who).id });
-  if (!res.ok) await dropInvite(env.DB, code);
+  const hash = await hashToken(code);
+  await addInvite(env.DB, hash, podId);
+  const res = await internal(env, podId, 'invite', { ...body, code, hash, userId: userOf(who).id, base: env.PUBLIC_URL ?? origin });
+  if (!res.ok) await dropInvite(env.DB, hash);
   return res;
 }
 
 async function acceptInvite(env: Env, code: string, who: Who): Promise<Response> {
-  const podId = await podOfInvite(env.DB, code);
+  const hash = await hashToken(code);
+  const podId = await podOfInvite(env.DB, hash);
   if (podId === null) return fail('not_found', 'No such invite.');
-  return internal(env, podId, 'accept', { code, userId: userOf(who).id, name: userOf(who).displayName });
+  return internal(env, podId, 'accept', { hash, userId: userOf(who).id, name: userOf(who).displayName });
 }
 
 async function registerAgent(env: Env, req: Request, podId: string, who: Who): Promise<Response> {
@@ -93,8 +96,7 @@ async function registerAgent(env: Env, req: Request, podId: string, who: Who): P
 
 /** Wake ids are per pod: ask each pod where this computer hosts an agent whether the wake is its own. */
 async function startRun(env: Env, who: Who, body: Body, origin: string): Promise<Response> {
-  const wakeId = str(body.wakeId, 1, 64);
-  if (wakeId === undefined) return bad('wakeId is required.');
+  const wakeId = body.wakeId as string;
   const computerId = computerOf(who).computerId;
   const pods = await podsOfComputer(env.DB, computerId);
   const has = await Promise.all(pods.map(async (p) => ((await (await internal(env, p, 'has-wake', { wakeId, computerId })).json()) as { has: boolean }).has));
@@ -109,19 +111,16 @@ async function startRun(env: Env, who: Who, body: Body, origin: string): Promise
 }
 
 async function endRun(env: Env, who: Who, body: Body, runId: string): Promise<Response> {
-  const outcome = pick(body.outcome, RunOutcomeValues);
-  if (outcome === undefined) return bad('outcome must be completed, failed or cancelled.');
+  // The core's run_end has no place for the harness version, so it is refused rather than dropped.
+  if (body.harnessVersion !== undefined) return bad('body.harnessVersion: this server does not store a harness version yet');
+  const outcome = body.outcome as string;
   const podId = await podOfRun(env.DB, runId);
   if (podId === null) return fail('not_found', 'No such run.', runId);
   return internal(env, podId, 'run-end', { runId, outcome, computerId: computerOf(who).computerId });
 }
 
 async function newComputer(env: Env, who: Who, body: Body): Promise<Response> {
-  const name = str(body.name, 1, 80);
-  const os = pick(body.os, ['darwin', 'linux'] as const);
-  const arch = pick(body.arch, ['arm64', 'amd64'] as const);
-  if (name === undefined || os === undefined || arch === undefined) return bad('name, os (darwin or linux) and arch (arm64 or amd64) are required.');
-  return Response.json(await createComputer(env.DB, userOf(who).id, name, os, arch));
+  return Response.json(await createComputer(env.DB, userOf(who).id, body.name as string, body.os as string, body.arch as string));
 }
 
 /** Every public route. The test entry wraps this; the production entry is this alone. */
@@ -130,15 +129,21 @@ export async function handle(req: Request, env: Env): Promise<Response> {
   const path = url.pathname;
   const m = req.method;
   if (path === '/healthz') return new Response('ok');
-  if (m === 'POST' && path === '/v1/pods') return setup(env, req, ['user'], (w, b) => createPod(env, w, b));
-  if (m === 'POST' && path === '/v1/computers') return setup(env, req, ['user'], (w, b) => newComputer(env, w, b));
-  if (m === 'POST' && path === '/v1/runs') return setup(env, req, ['computer'], (w, b) => startRun(env, w, b, url.origin));
+  if (m === 'POST' && path === '/v1/pods') return setup(env, req, ['user'], 'CreatePodRequest', (w, b) => createPod(env, w, b));
+  if (m === 'POST' && path === '/v1/computers') return setup(env, req, ['user'], 'RegisterComputerRequest', (w, b) => newComputer(env, w, b));
+  if (m === 'POST' && path === '/v1/runs') return setup(env, req, ['computer'], 'ClaimRunRequest', (w, b) => startRun(env, w, b, url.origin));
   const run = /^\/v1\/runs\/([^/]+)\/end$/.exec(path);
-  if (m === 'POST' && run) return setup(env, req, ['computer'], (w, b) => endRun(env, w, b, run[1]));
+  if (m === 'POST' && run) return setup(env, req, ['computer'], 'EndRunRequest', (w, b) => endRun(env, w, b, run[1]));
   const inv = /^\/v1\/invites\/([^/]+)\/accept$/.exec(path);
-  if (m === 'POST' && inv) return setup(env, req, ['user'], (w) => acceptInvite(env, inv[1], w));
+  if (m === 'POST' && inv) return setup(env, req, ['user'], null, (w) => acceptInvite(env, inv[1], w));
   const create = new RegExp(`${POD}/invites$`).exec(path);
-  if (m === 'POST' && create) return podCall(env, req, ['user'], create[1], (w) => createInvite(env, req, create[1], w));
+  if (m === 'POST' && create) {
+    return podCall(env, req, ['user'], create[1], async (w) => {
+      const body = await parse(req);
+      const problem = body === null ? 'The body must be a JSON object.' : check('CreateInviteRequest', body);
+      return body === null || problem !== null ? bad(problem ?? '') : createInvite(env, create[1], w, body, url.origin);
+    });
+  }
   if (m === 'GET' && new RegExp(`${POD}/runs/[^/]+/tool-calls$`).test(path)) return fail('not_found', 'Evidence is not served by this server.');
   for (const [method, re, kinds] of POD_KINDS) {
     const hit = method === m ? re.exec(path) : null;

@@ -56,7 +56,7 @@ func TestF05(t *testing.T) {
 		}
 		return nil
 	})
-	p.count()
+	p.count(t)
 	if p.ok != p.run {
 		t.Fatalf("%d of %d steps passed", p.ok, p.run)
 	}

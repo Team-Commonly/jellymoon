@@ -1,9 +1,9 @@
-// Ids are a type prefix plus a ULID (monotonic within one object, so a task list sorts in creation order).
+// Ids are a type prefix plus a ULID: a millisecond timestamp and 80 fresh random bits, never a counter. ADR 0003 accepts that a computer
+// can tell an unknown id from a foreign one only because ids are unguessable, so an id's neighbour must not be another id. Nothing
+// orders by id: creation order is the order of the state's keys and of the event log (seq).
 // Tokens are a kind prefix plus random base62; only their SHA-256 is stored.
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const B62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-let lastTime = 0;
-let lastRand = 0n;
 
 const bytes = (n: number): Uint8Array => crypto.getRandomValues(new Uint8Array(n));
 const hex = (b: Uint8Array): string => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
@@ -18,12 +18,7 @@ function encode(t: number, rand: bigint): string {
   return head + tail;
 }
 
-function ulid(): string {
-  const t = Math.max(Date.now(), lastTime);
-  lastRand = t === lastTime ? lastRand + 1n : BigInt(`0x${hex(bytes(10))}`);
-  lastTime = t;
-  return encode(t, lastRand);
-}
+const ulid = (): string => encode(Date.now(), BigInt(`0x${hex(bytes(10))}`));
 
 export const newId = (prefix: string): string => prefix + ulid();
 

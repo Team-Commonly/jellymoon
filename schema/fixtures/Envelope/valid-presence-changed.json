@@ -7,13 +7,13 @@
   "actor": {
     "kind": "agent",
     "id": "agt_01JCZK7Q8XG4M2B9V5T3W6RH01",
-    "displayName": "Sam's Claude Code"
+    "displayName": "Ada's Claude Code"
   },
   "data": {
     "actor": {
       "kind": "agent",
       "id": "agt_01JCZK7Q8XG4M2B9V5T3W6RH01",
-      "displayName": "Sam's Claude Code"
+      "displayName": "Ada's Claude Code"
     },
     "state": "working",
     "computerId": "cmp_01JCZK7Q8XG4M2B9V5T3W6RH01"

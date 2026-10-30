@@ -1,14 +1,12 @@
 // Client frames on the pod socket: parse one, turn it into a core command (or a refusal), run it.
 // The token rode in Authorization on the upgrade; hello was sent at once; the client then subscribes.
-import { TaskKindValues } from '../../gen/ts/protocol';
-import type { ErrorBody } from '../../gen/ts/protocol';
+import type { ErrorBody, TaskKind } from '../../gen/ts/protocol';
 import type { Cmd } from '../../podcore/src/index';
 import { newId, newWakeSeed } from './ids';
-import { pick, str } from './wire';
+import { check } from './validate';
+import { str } from './wire';
 import type { PodPort, Who } from './wire';
 
-const ACTOR_ID = /^(usr|agt|sys)_[0-9A-HJKMNP-TV-Z]{26}$/;
-const MESSAGE_ID = /^msg_[0-9A-HJKMNP-TV-Z]{26}$/;
 const TYPES = ['subscribe', 'message.post', 'task.create', 'presence.heartbeat', 'wake.ack'];
 type Data = Record<string, unknown>;
 
@@ -17,18 +15,15 @@ export type Parsed = { subscribe: number } | { cmd: Cmd } | ErrorBody;
 
 function userCommand(type: string, d: Data, who: Extract<Who, { kind: 'user' }>): Cmd | ErrorBody {
   const caller = { kind: 'user', userId: who.actor.id } as const;
+  const problem = check(type === 'message.post' ? 'MessagePost' : 'TaskCreate', d);
+  if (problem !== null) return { code: 'invalid_input', message: problem };
   if (type === 'message.post') {
-    const text = str(d.text, 1, 16384);
-    const threadOf = d.threadOf === undefined ? undefined : str(d.threadOf, 30, 30);
-    if (text === undefined || (d.threadOf !== undefined && (threadOf === undefined || !MESSAGE_ID.test(threadOf)))) return { code: 'invalid_input', message: 'message.post needs text (1 to 16384 characters) and, optionally, a threadOf message id.' };
-    return { type: 'message_post', caller, messageId: newId('msg_'), wakeId: newWakeSeed(), text, ...(threadOf ? { threadOf } : {}) };
+    return { type: 'message_post', caller, messageId: newId('msg_'), wakeId: newWakeSeed(), text: d.text as string, ...(d.threadOf === undefined ? {} : { threadOf: d.threadOf as string }) };
   }
-  const title = str(d.title, 1, 120);
-  const kind = pick(d.kind, TaskKindValues);
-  const body = d.body === undefined ? undefined : str(d.body, 0, 16384);
-  const assignee = d.assignee === undefined ? undefined : str(d.assignee, 30, 30);
-  if (title === undefined || kind === undefined || (d.body !== undefined && body === undefined) || (d.assignee !== undefined && !ACTOR_ID.test(assignee ?? ''))) return { code: 'invalid_input', message: 'task.create needs a title (1 to 120 characters) and a kind; assignee is an actor id and body at most 16384 characters.' };
-  return { type: 'task_create', caller, taskId: newId('tsk_'), wakeId: newWakeSeed(), title, kind, ...(assignee ? { assignee } : {}), ...(body === undefined ? {} : { body }) };
+  return {
+    type: 'task_create', caller, taskId: newId('tsk_'), wakeId: newWakeSeed(), title: d.title as string, kind: d.kind as TaskKind,
+    ...(d.assignee === undefined ? {} : { assignee: d.assignee as string }), ...(d.body === undefined ? {} : { body: d.body as string }),
+  };
 }
 
 function computerCommand(type: string, d: Data, w: Extract<Who, { kind: 'computer' }>): Cmd | ErrorBody {

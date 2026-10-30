@@ -18,13 +18,13 @@
         "schema/",
         "scripts/"
       ],
-      "max": 2200
+      "max": 2450
     },
     "worker": {
       "paths": [
         "worker/"
       ],
-      "max": 1250
+      "max": 1550
     },
     "podcore": {
       "paths": [

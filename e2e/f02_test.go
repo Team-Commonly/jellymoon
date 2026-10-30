@@ -6,16 +6,37 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// Steps counted across the run, for the closing line. Only a stepper that a real test folds in with count() adds to them.
-var stepsRun, stepsOK atomic.Int64
+// Steps counted across the run, for the closing line: every named step of a stepper a test folds in with count(), and one step
+// for every other test that ran (it passed or it did not). A skipped test counts nothing.
+var (
+	stepsRun, stepsOK atomic.Int64
+	counted           sync.Map // test name -> true once its steps are in the totals
+)
+
+// countTest adds the test as one step when it ends, unless its own steppers already counted it.
+func countTest(t *testing.T) {
+	t.Cleanup(func() {
+		if t.Skipped() {
+			return
+		}
+		if _, done := counted.LoadOrStore(t.Name(), true); done {
+			return
+		}
+		stepsRun.Add(1)
+		if !t.Failed() {
+			stepsOK.Add(1)
+		}
+	})
+}
 
 const eventTail = 20
 
@@ -48,7 +69,11 @@ func (p *stepper) step(name string, fn func() error) bool {
 	return false
 }
 
-func (p *stepper) count() {
+// count folds this stepper's steps into the totals in place of the test's single step.
+func (p *stepper) count(t *testing.T) {
+	if _, done := counted.LoadOrStore(t.Name(), true); done {
+		return
+	}
 	stepsRun.Add(int64(p.run))
 	stepsOK.Add(int64(p.ok))
 }
@@ -81,19 +106,45 @@ func printerCheck() error {
 
 // TestStepPrinter needs no server: a fake failing step prints its name and the last 20 events, and the suite stays green.
 func TestStepPrinter(t *testing.T) {
+	countTest(t)
 	if err := printerCheck(); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// TestF02: the harness boots the Worker with a persisted state dir, waits for /healthz, and reports as the closing line.
+// serverArgv is the command line of every process in the server's process group, as `ps` reports it.
+func serverArgv(s *server) (string, error) {
+	out, err := exec.Command("ps", "-ww", "-axo", "pgid=,args=").Output()
+	if err != nil {
+		return "", err
+	}
+	var mine []string
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Fields(line)
+		if len(f) > 1 && f[0] == fmt.Sprint(s.cmd.Process.Pid) {
+			mine = append(mine, strings.Join(f[1:], " "))
+		}
+	}
+	return strings.Join(mine, "\n"), nil
+}
+
+// TestF02: the harness boots the Worker with a persisted state dir and waits for /healthz. The closing line is not judged here,
+// since a test cannot see the run's last line: `make e2e-a` asserts it (see the Makefile).
 func TestF02(t *testing.T) {
 	needFake(t)
 	w := newWorld(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sO.snapshot(0) }}
+	defer p.count(t)
 	p.step("the Worker starts with --persist-to a temp dir", func() error {
 		state := filepath.Join(w.srv.dir, "state")
-		if !strings.HasPrefix(w.srv.dir, os.TempDir()) {
+		argv, err := serverArgv(w.srv)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(argv, "--persist-to "+state) {
+			return fmt.Errorf("no process of the server was started with --persist-to %s; argv:\n%s", state, argv)
+		}
+		if tmp, _ := filepath.EvalSymlinks(os.TempDir()); !strings.HasPrefix(w.srv.dir, os.TempDir()) && !strings.HasPrefix(w.srv.dir, tmp) {
 			return fmt.Errorf("data dir %s is not under the temp dir %s", w.srv.dir, os.TempDir())
 		}
 		ents, err := os.ReadDir(state)
@@ -117,14 +168,6 @@ func TestF02(t *testing.T) {
 		return nil
 	})
 	p.step("a failing step names itself and prints the last 20 events", printerCheck)
-	p.step("the run ends with E2E_MS=<n> STEPS=<k>/<k>", func() error {
-		line := summaryLine(1234, 4, 4)
-		if m := regexp.MustCompile(`^E2E_MS=\d+ STEPS=(\d+)/(\d+)$`).FindStringSubmatch(line); m == nil || m[1] != m[2] {
-			return fmt.Errorf("closing line is %q", line)
-		}
-		return nil
-	})
-	p.count()
 	if p.ok != p.run {
 		t.Fatalf("%d of %d steps passed", p.ok, p.run)
 	}

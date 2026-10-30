@@ -53,9 +53,9 @@ merges only when all of these hold at the exact PR head:
   if that is exactly `GATE: PASS` (case-insensitive). A missing line, a FAIL after the PASS, prose after it, an
   indented line, or a fullwidth or zero-width variant blocks. Cases: `scripts/check-review-gate.mjs`; land's
   cases: `scripts/check-land.mjs`.
-- **CI** returns at public launch only as a thin mirror of `make preflight` for outside contributors, never as
-  the gate. The review-gate workflow is deleted; `ci.yml` stays disabled.
-- **Why no merge queue:** the repo is private on GitHub Free. `make land` is the one door, with a lock so two lands cannot run at once.
+- **CI** runs only when dispatched by hand until the public flip. After the flip it mirrors the local checks and a failing
+  check run blocks a land; CI never lands anything, and `make land` stays the only merge path. The review-gate workflow is deleted.
+- **One door:** `make land` is the only merge path, with a lock so two lands cannot run at once.
 
 ## Design-gated features
 - **F18 (client) and F19 (connectors)** stay blocked until their options docs are reviewed by the maintainers.

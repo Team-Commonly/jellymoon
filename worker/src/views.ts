@@ -12,7 +12,8 @@ export function taskView(s: PodState, id: string): Task {
 }
 
 export const tasksOf = (s: PodState, status?: string): Task[] =>
-  Object.keys(s.tasks).sort().map((id) => taskView(s, id)).filter((t) => status === undefined || t.status === status);
+  // Creation order: task ids carry no order, but the state's keys keep the order they were added in (JSON round-trips keep it).
+  Object.keys(s.tasks).map((id) => taskView(s, id)).filter((t) => status === undefined || t.status === status);
 
 function presence(s: PodState, a: Actor, computerId: string, online: Set<string>): AgentPresence['state'] {
   if (Object.values(s.runs).some((r) => r.status === 'active' && r.agent.id === a.id)) return 'working';

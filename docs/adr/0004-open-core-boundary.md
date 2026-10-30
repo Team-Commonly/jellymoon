@@ -22,8 +22,9 @@ daemon, the CLI, MCP and anything an agent needs to join a pod. Those are the op
 
 ### Core never imports `ee/`
 Enforced by the `ee-stays-in-ee` rule in `.dependency-cruiser.cjs`: no module outside `ee/` may depend on a module in `ee/`.
-`ee/` may import core. The rule was tested with a throwaway fixture (an `ee/` module imported from `podcore/src`), which
-the check failed, and the fixture was removed. The rule is pinned by `boundary-fixture/` (a module outside `ee/` importing one inside it), which `scripts/check-boundary-rule.mjs` runs in `make entropy`; deleting the rule fails preflight. When `ee/` gains TypeScript and `worker/` arrives, add both `ee` and `worker` to the `check:boundaries` roots. Go code has no such rule yet.
+`ee/` may import core. The rule is pinned by the tracked `boundary-fixture/` (a module outside `ee/` importing one inside it), which
+`scripts/check-boundary-rule.mjs` runs in `make entropy`: it must report exactly one violation, named `ee-stays-in-ee`.
+Deleting, downgrading or exempting the rule fails preflight. When `ee/` gains TypeScript and `worker/` arrives, add both `ee` and `worker` to the `check:boundaries` roots. Go code has no such rule yet.
 
 ### The entitlement interface
 Core asks one question and never learns where the answer comes from:

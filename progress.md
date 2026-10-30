@@ -4,6 +4,19 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-30 · pre-public readiness (unit OS1)
+- **Changed:** private references scrubbed from the tree and history-safe docs; `scripts/check-private.mjs` (the deny check, in
+  `make preflight` and the pre-commit) refuses operator paths, personal emails, internal ids, cloud identifiers, note labels and
+  section marks, with an env-supplied names list for values that have no safe pattern; `ee/` holds the commercial-licence area
+  with `ee-stays-in-ee` (dependency-cruiser) pinned by `boundary-fixture/`, ADR 0004 and SECURITY.md; DCO sign-off is required
+  in CONTRIBUTING.md and checked by the `dco` CI job; CI is a fork-safe, dispatch-only mirror of `make preflight`; the loop
+  docs moved to `.loop/`.
+- **Evidence:** `make preflight` green; check-private 65+ cases with a runner mutation sweep (all caught but one self-test
+  blind spot); `make secrets-all` over every branch of the old repo found nothing.
+- **Next:** supply the names list in CI, flip the repo public after the owner's go.
+- **Surprising:** the check's first version printed the text it matched, which a CI log masks only as a whole string; it now
+  prints `file:line: class` and nothing else.
+
 ## 2026-10-30 · P08 one review per head, scans only refuse (unit P08, round 16)
 - **Changed:** every land needs the ledger PASS and the pod verdict; no path rule or scan result waives either. Deleted the inert rule, `needsVerdict`, the neutral-name re-scan, the range-blob enumeration, `touchesProtected` and the path cases. `make secrets-range` now exits 3 on a finding; a hit or a failed scan refuses. Reviewers env is checked before the token read ("malformed" if no valid entry); `msgUser` takes only a string `_id`.
 - **Evidence:** check-land 153, check-land-e2e 73, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge; core LOC 2103 to 1787.
@@ -153,7 +166,7 @@ goes in the PR.
   `.agents/skills/` (pins in `docs/skills/SOURCES.md`); Go and Bun are pinned in `.tool-versions` and
   `init.sh` installs them into `.tools/`; `make portable` (preflight, pre-commit, CI) fails on a symlink
   out of the repo or a machine-local path. The merge rule says what actually runs: coordinator merges on
-  green CI plus a ledger verdict, since GitHub Free gives a private repo no merge queue.
+  green CI plus a ledger verdict.
 - **Evidence:** `./init.sh` green with `HOME` set to an empty dir and only system dirs on `PATH` (35 s
   cold, tools downloaded and checksum-verified). Mutation checks: an outside symlink and a `~/` path
   each fail `make portable`.
@@ -182,9 +195,7 @@ goes in the PR.
   `Team-Commonly/jellymoon` (the company stays Commonly). History was rebuilt clean:
   a fixture token that tripped gitleaks became an obviously fake one, and the Go module is
   `github.com/Team-Commonly/jellymoon`.
-- **Held:** the CLI binary name (`commonly` in F08/F15) and the npm scope wait for the trademark check.
-- **Surprising:** the org is on GitHub Free, so a private repo gets no rulesets or merge queue.
-  Until that is decided, the coordinator merges only on green CI plus a ledger verdict.
+- **Surprising:** the private repo has no merge queue, so the coordinator merges only on green CI plus a ledger verdict.
 
 ## Server stack tripwires (watched from day one)
 - any claim.released{expired} earlier than last renewal + 60 s, in any environment

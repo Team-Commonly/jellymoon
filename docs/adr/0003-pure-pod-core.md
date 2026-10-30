@@ -1,6 +1,6 @@
 # 0003 · A pure pod core
 
-Status: Accepted (maintainers, 2026-10-30; units P09, P10, P11). Accepting it settles none of the acknowledged unknowns: the purity guard is
+Status: Accepted (maintainers, 2026-10-30; the pod core work, #12). Accepting it settles none of the acknowledged unknowns: the purity guard is
 lexical (a dynamic import or alias can evade it), wake-id uniqueness across pods rests on adapters minting fresh seeds, and every
 item under "Not here yet" and "Open unknowns (carried from ADR 0002)" stays open, including the outcome of a capped run
 (`failed` here; the schema does not say) and the ADR 0002 points NB3, NB4 and NB13. It adds a module (`podcore/`), so it needs this note. The server shape is
@@ -104,7 +104,7 @@ it still mentions. A run never wakes its own agent, through any command. Text wi
 `message_post` sets `summary` to the first non-blank line (split on CR, LF or CRLF), trimmed and cut to 120 code points,
 or `(no text)`. `task_update` refuses status `open` with `invalid_input`.
 
-## Wakes and run start (P10)
+## Wakes and run start
 
 All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the addressing facts; the core decides.
 

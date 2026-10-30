@@ -16,9 +16,9 @@ Paste verbatim into every worker and verifier spawn.
    than the worker.
 7. Verification bar: a feature passes only on its `test` command from `feature_list.json`, run against the real Worker and daemon.
    CI green is an input, not a verdict. Ledger rows key on PR and head SHA.
-8. Merge: a PR lands only through `node scripts/land.mjs <pr>` with a ledger PASS at its exact head and the trust gate (the PR
-   author and every push-capable login in `JM_TRUSTED_LOGINS`). Protected paths are defined in `docs/development/landing.md`
-   and also need the review's pod verdict at the head. A failing check run blocks; no check runs is fine.
+8. Merge: a PR lands only through `node scripts/land.mjs <pr>` with the trust gate (the PR author and every push-capable login
+   in `JM_TRUSTED_LOGINS`). Every land needs both the ledger PASS at the exact head and the review's pod verdict at the head.
+   Scans only refuse, they never waive either. A failing check run blocks; no check runs is fine.
 9. Workers commit on their own branch and stop. They never push, merge, rebase, reset, force-push or retarget PRs. The
    coordinator pushes, opens PRs and merges.
 10. Commits use the maintainers' GitHub noreply identity, set in each worktree, with a DCO sign-off. The repo's pre-commit runs

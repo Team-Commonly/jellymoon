@@ -46,5 +46,6 @@ only in the code.
   could land without the verdict. Each round found another blind spot, and each one was a bypass. The fix was
   subtraction: every land needs the verdict, and scans are defence in depth.
 - Never let a scanner's own file-type detection decide what gets scanned. Land lost three rounds to gitleaks blind spots in
-  turn (images, then NUL text and allowlisted paths, then content sniffing of PDF/ELF/zip magic). The gate decides
-  "text" with its own strict rule, makes everything else protected, and writes text with a fixed prefix so no magic matches.
+  turn (images, then NUL text and allowlisted paths, then content sniffing of PDF/ELF/zip magic). The machinery built to
+  work around them (a strict text rule, a protected set for everything else, a fixed prefix so no magic matched) was deleted
+  with the verdict-free path it served. The lesson stands: a scanner's blind spots are its own, so it only refuses.

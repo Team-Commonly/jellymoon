@@ -45,7 +45,8 @@ merges only when all of these hold at the exact PR head:
 - Workers never merge. GitHub review text is not consulted.
 - Protected paths: every changed path except `progress.md` and documentation files under `docs/` (`.md .html .svg .png
   .jpg .gif .webp`; Go compiles `docs/**/*.go`, so those are protected) (`landing.md`). A rename counts both sides.
-  Run land from a clean checkout of main; it refuses otherwise.
+  Run land from a clean checkout of main. The check lives in the checked-out tree, so it is operator discipline: it binds
+  only a tree that really is main.
 - **Verifiers run PR code only after the same trust gate:** `make verify-preflight PR=<n>` (`landing.md`).
 - **Accepted reviewers:** `.github/opus-reviewers.txt` is the only place they are written (`Name username`);
   the test asserts the file parses and pins no name.

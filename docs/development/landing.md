@@ -31,6 +31,12 @@ is refused.
   is later accepted can all put commits on a same-repo branch. Also credentials in `url.<x>.insteadOf` or a git
   credential helper, which the checkout check does not look for. Keep these empty on this repo and on the operator's
   git config.
+- **A trusted account can carry an outsider's commits.** It can push an outsider's commits onto a same-repo branch, and
+  the gate sees only the PR author and the push list. Read the diff, not the author.
+- **The pod verdict is the latest per reviewer; the ledger's FAIL is permanent at a head.** A reviewer can flip their own
+  verdict with a later message, so a pod PASS is weaker than a ledger FAIL.
+- **`permission=push` was observed returning admins only.** Check that the list the endpoint returns is the list you
+  expect, and keep `JM_TRUSTED_LOGINS` a superset of it.
 - **The pusher list is read at land time.** A collaborator removed since writing a commit no longer shows, so their
   earlier commits on a trusted author's branch still pass. Audit the branch's commits when removing access.
 - **Trusted preflight code can persist.** It runs as the operator and can rewrite the land checkout's `.git/config`, its
@@ -69,7 +75,11 @@ Re-running is safe: a merged PR with a `LANDED` row at its head exits 0 saying s
 with a warning as `MERGED-UNVERIFIED` (see the ledger format). `--dry-run` runs every check and the preflight, merges nothing and writes no ledger row (git's own
 fetch and worktree bookkeeping and the land lock live in the git dir). An unreadable ledger (a row that is not 6 tab columns with a 40-hex head) refuses; no row is skipped silently. A malformed token file is refused without
 echoing it, and no output, the quoted preflight output included, ever contains the token. The preflight also gets
-`JM_ENTROPY_BASE` (main's tip as fetched) so `make entropy` ratchets against it and fails if it cannot read it.
+`JM_ENTROPY_BASE` (main's tip as fetched) so `make entropy` ratchets against it and fails if it cannot read it. Only the bootstrap land of a main with no `entropy.json`
+passes `none` (no base yet); every other unreadable base fails.
+
+The Makefile calls `node`, which an ignored `.tools/bin/node` could shadow under make 3.82 or later. The documented land
+command is `node scripts/land.mjs <n>` from the operator's shell.
 
 ## Environment (never committed)
 | Variable | Meaning |
@@ -114,8 +124,11 @@ A path is unprotected only if it is inert: the file `progress.md`, or a file und
 and runs it (`go vet ./...`, `go test ./...`). Anything protected (`GNUmakefile`, `package.json`, `scripts/`,
 `.githooks/`, `go.mod`, `entropy.json`, `docs/x/x_test.go`, `docs/a.js`, ...) runs from the PR tree during the
 preflight, so it needs the reviewer's verdict, as does any PR that adds a `gitleaks:allow` line (it can hide a secret). A rename counts both sides: `docs/a.md` to `docs/a.go` is
-protected, and so are `docs/x` to `scripts/x` and the reverse. One function, `touchesProtected` in
-`scripts/land-decide.mjs`, owns the rule; land reads the changed files through `filesFromNameStatus` there too.
+protected, and so are `docs/x` to `scripts/x` and the reverse. So is any entry whose old or new mode is not a regular
+file (`100644`, `100755`): a symlink (`120000`) or gitlink (`160000`) is never inert, wherever it sits. The modes come from
+`git diff --raw` on the merge result. `check-portable` resolves each tracked symlink's full target physically and refuses one
+that leaves the repo, and `make gen` will not write through a symlink. One function, `touchesProtected` in
+`scripts/land-decide.mjs`, owns the rule; land reads the changed files through `filesFromRaw` there too.
 
 ## Verifiers use the same trust gate
 `make verify-preflight PR=<n>` (`node scripts/land.mjs <n> --preflight-only`) runs the trust gate, the head check and
@@ -129,6 +142,6 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 - **A trusted author is trusted fully.** Nothing here contains code a trusted account wrote; see the threat model.
 
 ## Bootstrap: the first land of the gate
-While main has no `scripts/land.mjs`, land refuses unless run with `--bootstrap` (and with `--bootstrap` it
-refuses once main has the file). It then reads the reviewer list from the PR head and appends a
+While main has no `scripts/land.mjs`, land and `verify-preflight` refuse unless run with `--bootstrap` (and with
+`--bootstrap` they refuse once main has the file). It then reads the reviewer list from the PR head and appends a
 `BOOTSTRAP` row. The first land of the gate is judged by people and recorded as such.

@@ -78,9 +78,9 @@ if (files.some((f) => f.endsWith('.go'))) {
 }
 
 // Ratchet: exceptions only shrink, unless the new one cites an ADR note. `make land` names the base (JM_ENTROPY_BASE, main's tip as
-// fetched); a named base that cannot be read fails loudly. Unnamed, origin/main is used, and a missing one means no base yet.
+// fetched); a named base that cannot be read fails loudly (`none`: the bootstrap land, main has no entropy.json yet). Unnamed, origin/main is used, and a missing one means no base yet.
 const named = process.env.JM_ENTROPY_BASE;
-try {
+if (named !== 'none') try {
   const base = JSON.parse(execFileSync('git', ['show', `${named ?? 'origin/main'}:entropy.json`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
   for (const kind of ['files', 'functions']) {
     for (const [key, reason] of Object.entries(cfg.exceptions[kind])) {

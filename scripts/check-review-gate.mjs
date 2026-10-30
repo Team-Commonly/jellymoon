@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { addsAllowMarker, readReviewerEntries, touchesProtected, verdictOf } from './land-decide.mjs';
+import { addsAllowMarker, filesFromRaw, readReviewerEntries, touchesProtected, verdictOf } from './land-decide.mjs';
 
 // Only exactly `GATE: PASS` as the last non-empty line passes; everything else blocks (nothing at all is null).
 const verdicts = [
@@ -45,6 +45,10 @@ const paths = [
   ['a rename docs/a.md -> docs/a.go is protected', [{ filename: 'docs/a.go', previous_filename: 'docs/a.md' }], true],
   ['a file with no extension under docs/ is protected', [{ filename: 'docs/Makefile' }], true],
   ['a .md that is a directory of code is protected', [{ filename: 'docs/a.md/run.sh' }], true],
+  ['a symlink under docs/ is protected (mode 120000)', [{ filename: 'docs/lnk.md', modes: ['000000', '120000'] }], true],
+  ['a symlink turned into a regular .md is protected (old mode 120000)', [{ filename: 'docs/a.md', modes: ['120000', '100644'] }], true],
+  ['a gitlink under docs/ is protected (mode 160000)', [{ filename: 'docs/sub.md', modes: ['000000', '160000'] }], true],
+  ['a regular docs file with modes is not protected', [{ filename: 'docs/a.md', modes: ['100644', '100644'] }, { filename: 'docs/b.md', modes: ['000000', '100755'] }], false],
   ['a docs change beside one protected file is protected', [{ filename: 'docs/a.md' }, { filename: 'go.mod' }], true],
 ];
 const hunk = (body, name = 'docs/a.md') => `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n@@ -0,0 +1 @@\n${body}`;
@@ -69,9 +73,9 @@ console.log(`check-review-gate: ${verdicts.length} verdict cases and ${paths.len
 
 // F01 step 4: a schema edit without `make gen` must fail check-gen. In a throwaway git copy of what gen reads and writes, gen leaves the
 // tree clean, then a schema edit followed by gen changes the generated files, which is what check-gen's `git diff --exit-code` catches.
+const root = path.resolve(import.meta.dirname, '..');
 const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'check-gen-bites-'));
 const sh = (script) => spawnSync('bash', ['-c', script], { cwd: copy, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } }).status;
-const root = path.resolve(import.meta.dirname, '..');
 const gen = `'${process.execPath}' scripts/gen.mjs >/dev/null || exit 2; git diff --quiet -- gen daemon/internal/protocol docs/protocol.md`;
 sh(`mkdir -p daemon/internal docs && cp -R '${root}/scripts' '${root}/schema' '${root}/gen' . && cp -R '${root}/daemon/internal/protocol' daemon/internal/ && cp '${root}/docs/protocol.md' docs/ && git init -q && git add -A && git commit -qm base`);
 const cleanAfterGen = sh(gen) === 0;
@@ -80,3 +84,26 @@ const bites = sh(gen) === 1; // 1: gen ran and the generated files differ (2 wou
 fs.rmSync(copy, { recursive: true, force: true });
 if (!cleanAfterGen || !bites) { console.error(`check-review-gate: check-gen does not bite (gen leaves a clean tree: ${cleanAfterGen}; a schema edit changes generated files: ${bites})`); process.exit(1); }
 console.log('check-review-gate: check-gen bites (a schema edit changes the generated files)');
+
+// B2 end to end: two symlinks, docs/lnk.md -> ../.. and docs/protocol.md -> lnk.md/../victim.txt, would let `make gen` overwrite a file above the tree
+// and look docs-only. The diff protects the PR, check-portable refuses the chain, and gen will not write through it. The victim must stay intact.
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'check-symlink-'));
+const repo = path.join(base, 'a', 'repo');
+fs.mkdirSync(repo, { recursive: true });
+fs.writeFileSync(path.join(base, 'victim.txt'), 'SAFE');
+const at = (script) => spawnSync('bash', ['-c', script], { cwd: repo, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
+at(`mkdir -p daemon/internal docs && cp -R '${root}/scripts' '${root}/schema' '${root}/gen' . && cp -R '${root}/daemon/internal/protocol' daemon/internal/ && cp '${root}/docs/protocol.md' docs/ && git init -q && git add -A && git commit -qm base`);
+const cleanPortable = at('bash scripts/check-portable.sh').status === 0;
+at('rm docs/protocol.md && ln -s lnk.md/../victim.txt docs/protocol.md && ln -s ../.. docs/lnk.md && git add -A && git commit -qm links');
+const chain = filesFromRaw(at('git diff --raw -M HEAD~1 HEAD').stdout);
+const results = [
+  ['symlink chain: the PR is protected, not docs-only', touchesProtected(chain), true],
+  ['symlink chain: the clean tree passes check-portable (so the next case is the symlinks)', cleanPortable, true],
+  ['symlink chain: check-portable refuses the chain', at('bash scripts/check-portable.sh').status !== 0, true],
+  ['symlink chain: gen refuses to write through it', at(`'${process.execPath}' scripts/gen.mjs`).status !== 0, true],
+  ['symlink chain: the file above the tree is untouched', fs.readFileSync(path.join(base, 'victim.txt'), 'utf8'), 'SAFE'],
+];
+fs.rmSync(base, { recursive: true, force: true });
+const badChain = results.filter(([, got, want]) => got !== want).map(([n]) => n);
+if (badChain.length) { console.error(`check-review-gate: symlink cases wrong\n  ${badChain.join('\n  ')}`); process.exit(1); }
+console.log(`check-review-gate: ${results.length} symlink cases ok`);

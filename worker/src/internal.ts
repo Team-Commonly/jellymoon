@@ -21,30 +21,33 @@ function create(pod: Starter, b: Body): Response {
   return respond(pod.exec({ type: 'pod_create', ownerId, ownerName }, { meta: (m) => { m.name = name; m.createdAt = isoOf(pod.now()); } }), () => podView(pod));
 }
 
+/** The Worker has validated the request and hashed the code; the pod stores the hash and returns the code once, in this reply. */
 function invite(pod: PodPort, b: Body): Response {
   const code = str(b.code, 1, 64);
+  const hash = str(b.hash, 64, 64);
   const userId = str(b.userId, 1, 64);
+  const base = str(b.base, 1, 2048);
   const uses = intIn(b.maxUses, 1, 1, 100);
   const ttl = intIn(b.ttlSeconds, 604800, 60, 2592000);
-  if (code === undefined || userId === undefined || uses === null || ttl === null) return bad('maxUses is 1 to 100 and ttlSeconds is 60 to 2592000.');
+  if (code === undefined || hash === undefined || userId === undefined || base === undefined || uses === null || ttl === null) return bad('code, hash, userId and base are required.');
   if (!isMember(pod, userId)) return fail('forbidden', 'Only a member can invite.');
   const expiresAt = pod.now() + ttl * 1000;
-  pod.sql.exec('insert into invites (code, uses_left, expires_at) values (?, ?, ?)', code, uses, expiresAt);
-  return Response.json({ code, url: `https://jellymoon.dev/join/${code}`, expiresAt: isoOf(expiresAt), usesLeft: uses });
+  pod.sql.exec('insert into invites (hash, uses_left, expires_at) values (?, ?, ?)', hash, uses, expiresAt);
+  return Response.json({ code, url: `${base.replace(/\/+$/, '')}/join/${code}`, expiresAt: isoOf(expiresAt), usesLeft: uses });
 }
 
 function accept(pod: PodPort, b: Body): Response {
-  const code = str(b.code, 1, 64);
+  const hash = str(b.hash, 64, 64);
   const userId = str(b.userId, 1, 64);
   const name = str(b.name, 1, 80);
-  if (code === undefined || userId === undefined || name === undefined) return bad('code, userId and name are required.');
+  if (hash === undefined || userId === undefined || name === undefined) return bad('hash, userId and name are required.');
   const reply = pod.exec({ type: 'member_add', userId, name }, {
     pre: (s) => {
       if (s.members.some((m) => m.id === userId)) return { ok: true, result: null };
-      const [inv] = pod.sql.exec<{ uses_left: number; expires_at: number }>('select uses_left, expires_at from invites where code = ?', code).toArray();
+      const [inv] = pod.sql.exec<{ uses_left: number; expires_at: number }>('select uses_left, expires_at from invites where hash = ?', hash).toArray();
       return inv !== undefined && inv.uses_left > 0 && inv.expires_at > pod.now() ? null : { ok: false, error: { code: 'gone', message: 'This invite is used or expired.' } };
     },
-    extra: () => { pod.sql.exec('update invites set uses_left = uses_left - 1 where code = ?', code); },
+    extra: () => { pod.sql.exec('update invites set uses_left = uses_left - 1 where hash = ?', hash); },
   });
   return respond(reply, () => ({ pod: podView(pod) }));
 }

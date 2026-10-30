@@ -2,7 +2,7 @@
 // with the caller in an internal header (any incoming copy is deleted first). It holds no pod state.
 import { addAgentPod, addInvite, addPod, authenticate, createComputer, dropInvite, dropPod, dropRunToken, mintRunToken, podExists, podOfInvite, podOfRun, podsOfComputer } from './directory';
 import type { Env } from './env';
-import { newId, newInviteCode } from './ids';
+import { hashToken, newId, newInviteCode } from './ids';
 import { check } from './validate';
 import { bad, encodeWho, fail, parse, WHO_HEADER } from './wire';
 import type { Body, Who } from './wire';
@@ -71,18 +71,21 @@ async function createPod(env: Env, who: Who, body: Body): Promise<Response> {
   return res;
 }
 
-async function createInvite(env: Env, podId: string, who: Who, body: Body): Promise<Response> {
+/** The code is shown once, in this reply. D1 and the pod keep its SHA-256, and the join link is built from PUBLIC_URL. */
+async function createInvite(env: Env, podId: string, who: Who, body: Body, origin: string): Promise<Response> {
   const code = newInviteCode();
-  await addInvite(env.DB, code, podId);
-  const res = await internal(env, podId, 'invite', { ...body, code, userId: userOf(who).id });
-  if (!res.ok) await dropInvite(env.DB, code);
+  const hash = await hashToken(code);
+  await addInvite(env.DB, hash, podId);
+  const res = await internal(env, podId, 'invite', { ...body, code, hash, userId: userOf(who).id, base: env.PUBLIC_URL ?? origin });
+  if (!res.ok) await dropInvite(env.DB, hash);
   return res;
 }
 
 async function acceptInvite(env: Env, code: string, who: Who): Promise<Response> {
-  const podId = await podOfInvite(env.DB, code);
+  const hash = await hashToken(code);
+  const podId = await podOfInvite(env.DB, hash);
   if (podId === null) return fail('not_found', 'No such invite.');
-  return internal(env, podId, 'accept', { code, userId: userOf(who).id, name: userOf(who).displayName });
+  return internal(env, podId, 'accept', { hash, userId: userOf(who).id, name: userOf(who).displayName });
 }
 
 async function registerAgent(env: Env, req: Request, podId: string, who: Who): Promise<Response> {
@@ -138,7 +141,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
     return podCall(env, req, ['user'], create[1], async (w) => {
       const body = await parse(req);
       const problem = body === null ? 'The body must be a JSON object.' : check('CreateInviteRequest', body);
-      return body === null || problem !== null ? bad(problem ?? '') : createInvite(env, create[1], w, body);
+      return body === null || problem !== null ? bad(problem ?? '') : createInvite(env, create[1], w, body, url.origin);
     });
   }
   if (m === 'GET' && new RegExp(`${POD}/runs/[^/]+/tool-calls$`).test(path)) return fail('not_found', 'Evidence is not served by this server.');

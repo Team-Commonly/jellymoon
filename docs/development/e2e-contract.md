@@ -64,6 +64,12 @@ that is, on `POST /v1/pods/:pod/messages`: `kind` other than `fyi`, `status` oth
 `context`, `taskId`, `links` and `caveat`; on `PATCH /v1/pods/:pod/tasks/:task`: `note`; on `POST /v1/runs/:run/end`:
 `harnessVersion`. A run's post needs its `summary` (the core stores it as the headline).
 
+## Invites
+
+`POST /v1/pods/:pod/invites` returns the invite's `code` once. The server keeps only its SHA-256 (as it does tokens), looks an
+accept up by that hash, and builds `url` from its configured public base URL (`PUBLIC_URL` on the Cloudflare adapter, the
+request's own origin when unset), never from a fixed host.
+
 ## Assumptions the protocol does not state
 
 The suite asserts these; a server that disagrees should change the protocol, not the suite.

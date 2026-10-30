@@ -4,6 +4,12 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-30 · pod creation, invites, replay and agent tasks proved (unit W1)
+- **Changed:** `TestF03`, `TestF05`, `TestF04` and `TestF06` in `e2e/`, each asserting every feature step by name through the step printer; F03 to F06 now pass. The Worker needed no fix. `helloData`, `firstHello`, `postAll` and `wantReplay` are shared helpers. The e2e cap rose 1,900 to 2,270 (ADR 0001 note, entropy.json, stated total together). The four tests join the budget list.
+- **Evidence:** `make e2e-a` under a clean shell: 19/19 steps, all tests pass; `make preflight` passes; five mutants (hello headSeq +1, invite uses not decremented, no membership check on invites, replay skipping one event, task.created to the sender only) each fail their test.
+- **Next:** F08 onward.
+- **Surprising:** `wrangler dev` offers no way to evict a Durable Object from outside, so F04's hibernation step is asserted across a full kill -9 restart and says so in its step text. The feature text names `/__test/seed`; the contract's seed route is `/__test/session`, so F03 uses that.
+
 ## 2026-10-30 · the Cloudflare adapter and the e2e suite join the tree (unit W0)
 - **Changed:** `worker/` (Worker, one Durable Object per pod, D1) and `e2e/` (black-box contract suite) came over from the earlier build and now run on this head's `podcore/`. Commands carry an adapter-minted `wakeId` seed. The wake step of `TestF07` now follows ADR 0003: an ack changes nothing, so an acked wake is re-sent until a run claims it. `TestF02` and `TestStepPrinter` are new, and the run ends `E2E_MS=<n> STEPS=<k>/<k>`. New targets `e2e`, `worker-dev`, `e2e-a`; `test-ts` also runs `worker`; `preflight` ends with `e2e-a`. Boundary rules and knip cover `worker/`; caps worker 1,250 and e2e 1,900 (ADR 0001).
 - **Evidence:** `make preflight` and `make e2e-a` under a clean shell; F02, F07 and F10 pass; `podcore/`, `schema/` and `scripts/` are byte-identical to the base.

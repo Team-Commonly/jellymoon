@@ -35,9 +35,9 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | podcore | 2,050 |
 | worker | 1,250 |
 | daemon | 3,000 |
-| e2e | 1,900 |
+| e2e | 2,270 |
 
-The caps add up to 10,400 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 10,770 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, PC rounds 1–3). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -52,3 +52,4 @@ The caps add up to 10,400 lines. Agent-written comparables grew without bounds: 
 2026-10-30: core cap 2,100 → 2,200, text-by-land rule, padded range scan, per-magic and end-to-end tests, P08 r15.
 2026-10-30: gitleaks row rewritten: scans refuse and never waive; the verdict-free path and its ~320 core lines were deleted, core is 1,787 under the 2,200 cap, P08 r16.
 2026-10-30: worker cap 3,000 → 1,250 and e2e cap 1,500 → 1,900, the Cloudflare adapter and the contract suite now in the tree at 1,097 and 1,641 lines (each cap is its count plus about 15%); the total is 10,400. Core stays 2,200 and podcore 2,050. W0.
+2026-10-30: e2e cap 1,900 → 2,270, the pod feature tests (F03 to F06) take the suite to 1,973 lines (the cap is that count plus about 15%); the total is 10,770. No other cap changes. W1.

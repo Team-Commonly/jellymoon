@@ -76,7 +76,7 @@
         "all subscribers receive task.created with status open and the assignee set"
       ],
       "test": "go test ./e2e -run TestF06",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F07",

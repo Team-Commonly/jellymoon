@@ -74,6 +74,10 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | Test | What it proves |
 |---|---|
 | `TestF02` | F02: the harness starts the server with a persisted state dir, `/healthz` answers 200 within 10 s, a failing step names itself and prints the last 20 events, and the run ends with the closing line. `TestStepPrinter` checks the printer alone, with a fake failing step. |
+| `TestF03` | F03: a user seeded through `POST /__test/session` (the contract's seed route) creates a pod, and the first frame on its pod WebSocket is `hello` with `headSeq` 0 and that user as the one owner. |
+| `TestF04` | F04: two members subscribe and both get the same `message.created` seq; one disconnects, three posts happen, and `subscribe{sinceSeq}` replays exactly those three in order; the same after a full kill -9 restart (a black-box suite cannot evict a Durable Object, so the restart stands in for hibernation). |
+| `TestF05` | F05: an invite is accepted and the new member's `hello` lists them; the same single-use invite returns 410 the second time; a non-member creating an invite gets 403. |
+| `TestF06` | F06: a member sends `task.create` with a registered agent as assignee, and every subscriber gets `task.created` with status `open` and that assignee, at one seq. |
 | `TestF07` | F07: ambient messages wake nobody; three assignments make one wake; a pending wake is re-sent on the heartbeat at exactly 60 s and not 1 ms before, acked or not (only a run claim consumes it); only the hosting computer is woken or re-woken. |
 | `TestF10` | F10 steps 1 to 7, plus restore after expiry, no restore after a release, and `forbidden` for a member who may not release. |
 | `TestExpiryZeroTraffic` | After the last renewal the suite sends nothing. Still claimed at deadline - 1; at the deadline members get `task.updated` (no claim) and one `claim.released{expired}`. |

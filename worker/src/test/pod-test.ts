@@ -64,6 +64,8 @@ export class TestPodDO extends PodDO {
     if (typeof b?.alarmMs === 'number') {
       const at = Date.now() + b.alarmMs;
       this.sql.exec("insert or replace into kv (k, v) values ('alarm_at', ?)", String(at));
+      // The clock the server reads once the alarm runs, so the alarm's tick, not the restore, finds the deadline due.
+      if (typeof b.alarmNow === 'number') this.sql.exec("insert or replace into kv (k, v) values ('alarm_clock', ?)", String(b.alarmNow));
       await this.ctx.storage.setAlarm(at);
     }
     setTimeout(() => this.ctx.abort('discarded by the test entry'), 0);
@@ -71,6 +73,8 @@ export class TestPodDO extends PodDO {
   }
 
   override alarm(): void {
+    const [due] = this.sql.exec<{ v: string }>("select v from kv where k = 'alarm_clock'").toArray();
+    if (due !== undefined) { this.setFixed(Number(due.v)); this.sql.exec("delete from kv where k = 'alarm_clock'"); }
     this.sql.exec("insert or replace into kv (k, v) values ('alarm_fired', ?)", String(Date.now()));
     // D1 outlives the object, so the suite reads what woke it without sending the object a request.
     this.ctx.waitUntil(this.env.DB.prepare("insert or replace into kv (k, v) values (?, ?)").bind(`woke:${this.id}`, JSON.stringify({ instance: this.instance, requests: this.requests })).run());

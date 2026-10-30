@@ -13,12 +13,14 @@ type instance struct {
 
 // discard has the test entry throw the pod's object away: the runtime ends its requests, drops every socket and builds a new
 // instance for the next request or alarm. `now` is stored as the server clock with no tick; alarmMs > 0 stores an alarm that
-// many real ms ahead. The suite sets w.clock to match, since the server clock moved without a /__test/clock call.
-func (w *world) discard(now, alarmMs int64) {
+// many real ms ahead, and the clock becomes alarmNow when that alarm runs. The suite sets w.clock to match, since the server
+// clock moved without a /__test/clock call.
+func (w *world) discard(now, alarmMs, alarmNow int64) {
 	w.t.Helper()
 	body := map[string]any{"now": now}
 	if alarmMs > 0 {
-		body["alarmMs"] = alarmMs
+		body["alarmMs"], body["alarmNow"] = alarmMs, alarmNow
+		now = alarmNow
 	}
 	w.must(w.c.do("POST", "/__test/discard/"+w.pod, "", body, nil), "POST /__test/discard/:pod")
 	w.clock = now
@@ -52,7 +54,7 @@ func TestEvictMidClaim(t *testing.T) {
 	deadline := w.expected(r)
 	last := maxSeq(w.sBen.snapshot(0))
 	before := w.instanceOf()
-	w.discard(deadline-1000, 0)
+	w.discard(deadline-1000, 0, 0)
 	s := w.openSince(w.ben.tok, "ben-after-discard", last) // the first request the new object serves
 	w.reconnect()
 	if after := w.instanceOf(); after.Instance == before.Instance {
@@ -102,7 +104,7 @@ func TestEvictAlarmWake(t *testing.T) {
 	if fired.At != nil {
 		t.Fatalf("the alarm had fired (%s) before the eviction", *fired.At)
 	}
-	w.discard(deadline, 100) // no request reaches the object from here until the release is seen
+	w.discard(deadline-1, 100, deadline) // no request reaches the object from here until the release is seen
 	var woke instance
 	w.eventually("the alarm waking the discarded object", func() (bool, string) {
 		woke = instance{}
@@ -140,7 +142,7 @@ func TestEvictPastDeadline(t *testing.T) {
 	w.mustClaim(r, tk.ID)
 	w.checkLease(tk.ID, r)
 	last := maxSeq(w.sBen.snapshot(0))
-	w.discard(w.expected(r)+5000, 0)
+	w.discard(w.expected(r)+5000, 0, 0)
 	s := w.openSince(w.ben.tok, "ben-after-discard", last)
 	if _, ok := w.awaitExpiry(s, 0, tk.ID, r, 5*time.Second); !ok {
 		t.FailNow()

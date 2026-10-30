@@ -77,8 +77,11 @@ function refuse(c: Ctx, cmd: Cmd, bad: { code: 'invalid_input' | 'not_found'; wh
   settle(c);
   const id = runOf(cmd);
   const run = id === null ? undefined : own(c.s.runs, id);
-  if (run?.status === 'active') renewRun(c, run.id);
-  else if (id !== null && c.s.members.length > 0) return fail(c, 'unauthorized', 'This run has ended; its token no longer works.', id);
+  if (run?.status === 'active') {
+    renewRun(c, run.id);
+    // The one rule that depends on the caller alone: a run token cannot stop a run (operations.json), whatever it names.
+    if (cmd.type === 'run_stop') return fail(c, 'forbidden', 'A run cannot stop a run; only a person may.');
+  } else if (id !== null) return fail(c, 'unauthorized', 'This run has ended; its token no longer works.', id);
   const u = isObj(o.caller) && o.caller.kind === 'user' && typeof o.caller.userId === 'string' ? o.caller.userId : null;
   if (u !== null && c.s.members.length > 0 && !c.s.members.some((m) => m.id === u)) return fail(c, 'forbidden', 'Only members of this pod may do this.');
   fail(c, bad.code, bad.why);

@@ -266,6 +266,11 @@ describe('one claim per task', () => {
 });
 
 describe('a refused call is still a call', () => {
+  test('a run\'s task_update on a free task does not create a claim', () => {
+    const upd: Cmd = { type: 'task_update', caller: { kind: 'run', runId: RUN_A }, taskId: T1, status: 'in_progress', wakeId: id('wak', 1) };
+    const r = play([[upd, 0]]);
+    expect([errCode(r.out), r.state.claims[T1]]).toEqual([null, undefined]);
+  });
   test('a refused call settles first, then renews: an expired lease is released, not revived (run caller and user caller)', () => {
     const refusedAt61: Cmd[] = [{ type: 'op', runId: RUN_A, taskId: 'constructor' }, { type: 'task_release', caller: { kind: 'user', userId: U_OWNER.id }, taskId: '__proto__' }];
     for (const cmd of refusedAt61) {

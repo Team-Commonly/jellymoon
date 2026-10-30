@@ -51,9 +51,9 @@ describe('a change writes a wake only for the agent it addresses', () => {
 
 describe('mentions, run callers and validation', () => {
   test('mentions follow CommonMark: spans of any length, across a newline, fences; an escape or an unclosed backtick is literal', () => {
-    const quiet = ['``@agent-1``', '`` @agent-1 ``', 'a `x\n@agent-1\ny` b', '```\n@agent-1', '~~~\n@agent-1\n~~~', '  ```js\n@agent-1\n```', '````\n```\n@agent-1\n````', '``a` @agent-1 `b``'];
+    const quiet = ['``@agent-1``', '`` @agent-1 ``', 'a `x\n@agent-1\ny` b', '```\n@agent-1', '~~~\n@agent-1\n~~~', '  ```js\n@agent-1\n```', '````\n```\n@agent-1\n````', '``a` @agent-1 `b``', '`a``@agent-1`', '`a```@agent-1`'];
     for (const text of quiet) expect([text, wakes(play([[say(1, text), 0]]).out)]).toEqual([text, []]);
-    for (const text of ['\\`@agent-1\\`', '`@agent-1 with no closer', 'see ```\n@agent-1\n``` ok', '`a` @agent-1 `b`', '``` x`\n@agent-1']) {
+    for (const text of ['\\`@agent-1\\`', '`@agent-1 with no closer', 'see ```\n@agent-1\n``` ok', '`a` @agent-1 `b`', '``` x`\n@agent-1', '    ```\n@agent-1']) {
       expect([text, wakeReasons(play([[say(1, text), 0]]).out)]).toEqual([text, ['mention']]);
     }
   });

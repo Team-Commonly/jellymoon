@@ -19,6 +19,11 @@ describe('pod_create, members and the gate', () => {
     expect(r.state.owners).toEqual([U_OWNER]);
     expect(errCode(play([[{ type: 'pod_create', ownerId: U_STRANGER.id, ownerName: 'x' }, 1]], r.state).out)).toBe('invalid_input');
   });
+  test('before pod_create a malformed command from anyone is invalid_input, not forbidden (there are no members to judge by)', () => {
+    const bad = { type: 'task_release', caller: { kind: 'user', userId: U_STRANGER.id }, taskId: '__proto__' } as Cmd;
+    expect(errCode(play([[bad, 0]], emptyPod(POD_ID)).out)).toBe('not_found');
+    expect(errCode(play([[{ ...bad, taskId: 7 } as unknown as Cmd, 0]], emptyPod(POD_ID)).out)).toBe('invalid_input');
+  });
   test('member_add admits a person once; a stranger is forbidden before not_found', () => {
     const probe: Cmd = { type: 'task_release', caller: { kind: 'user', userId: U_STRANGER.id }, taskId: id('tsk', 99) };
     expect(errCode(play([[probe, 1]]).out)).toBe('forbidden');

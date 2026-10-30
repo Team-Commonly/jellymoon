@@ -116,7 +116,9 @@ describe('run callers and run_end', () => {
     for (const cmd of cmds) expect([JSON.stringify(cmd), errCode(play([[cmd, 2]], ended).out)]).toEqual([JSON.stringify(cmd), 'unauthorized']);
   });
   test('a live run calling run_stop gets forbidden before any lookup: itself, another run, an unknown id', () => {
-    for (const runId of [RUN_B, RUN_A, id('run', 99)]) expect(errCode(play([[{ type: 'run_stop', caller: { kind: 'run', runId: RUN_B }, runId }, 2]]).out)).toBe('forbidden');
+    for (const runId of [RUN_B, RUN_A, id('run', 99), '__proto__', 'constructor', 'toString', 7, undefined, ['x']]) {
+      expect([String(runId), errCode(play([[{ type: 'run_stop', caller: { kind: 'run', runId: RUN_B }, runId } as unknown as Cmd, 2]]).out)]).toEqual([String(runId), 'forbidden']);
+    }
   });
   test('run_end from a computer that does not host the run is forbidden and ends nothing', () => {
     const r = play([[{ type: 'run_end', runId: RUN_A, computerId: id('cmp', 2), outcome: 'completed' }, 2]]);

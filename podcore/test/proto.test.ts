@@ -29,10 +29,11 @@ function variants(v: unknown, bad: string): unknown[] {
   });
 }
 
-/** The caller is judged first (ADR 0003): a prototype-key run is unauthorized, a prototype-key user is forbidden, any other id is not_found. */
+/** The caller is judged first (ADR 0003): a prototype-key run is unauthorized, a prototype-key user is forbidden, a live run's run_stop is forbidden whatever it names (a run token cannot stop a run), any other id is not_found. */
 const expected = (v: Cmd): string => {
   const o = v as unknown as { type: string; runId?: string; caller?: { runId?: string; userId?: string } };
   if (BAD.includes(o.caller?.runId ?? '') || (['claim', 'op'].includes(o.type) && BAD.includes(o.runId ?? ''))) return 'unauthorized';
+  if (o.type === 'run_stop' && o.caller?.runId !== undefined) return 'forbidden';
   return BAD.includes(o.caller?.userId ?? '') ? 'forbidden' : 'not_found';
 };
 

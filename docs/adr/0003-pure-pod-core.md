@@ -51,10 +51,11 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
   (ADR 0002, F13). A live run calling `run_stop` gets `forbidden` before any lookup,
   unknown run ids included.
 - A caller that is a user must be a member of the pod, or gets `forbidden` on every command, before `not_found`, so a
-  stranger cannot probe ids. Before `pod_create`, every command gets `not_found`.
+  stranger cannot probe ids. Before `pod_create`, a well-formed command gets `not_found`; a malformed one gets `invalid_input`, since there are no
+  members to judge it by.
   The caller check comes first even for a refused (malformed or prototype-key) command: in the refusal path the core settles,
-  renews a live run, then answers a dead or unknown run `unauthorized` and a non-member user `forbidden`, and only then the
-  refusal itself (`invalid_input`, or `not_found` for prototype-key ids). A caller that is not an object stays `invalid_input`.
+  renews a live run, then answers a dead or unknown run `unauthorized` and a non-member user `forbidden`, and a live run's `run_stop` `forbidden` (a run token cannot stop a run, whatever it names), and only then the
+  refusal itself (`invalid_input`, or `not_found` for prototype-key ids). A caller that is not an object stays `invalid_input`. A bad `now` is answered `invalid_input` before any caller is judged: `now` is the adapter's clock, not the caller's.
 - Renewal follows ADR 0002: its lease renews on any operation that run's token makes. A live run's command renews
   all of that run's claims BEFORE any refusal (`forbidden`, `already_claimed`, `not_found`, `invalid_input`), so
   what a command is answered never changes when a lease ends. An ended run gets `unauthorized` and renews nothing.
@@ -147,6 +148,8 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
   meet the 2 h run cap first.
 - Size: `podcore/` is capped at 1,950 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
   exception was added; it ratchets down from here.
+- Fence rules cover top-level fences only: a fence inside a list item still wakes. That is an extra wake, never a missed one.
+- A run's `summary` over 120 characters is cut, not refused; the adapter's schema refuses it first.
 - Indented code blocks are NOT recognised as code, so a mention inside one wakes (deliberate).
 - Adapters pass `staleMs: 0` until ADR 0002 gains a restart clause: a stretched lease can outlive "last renewal + 60 s".
 - The save-lag bound is PER LEASE; a pod-wide save throttle does not bound it. Coalescing applies only to a heartbeat whose
@@ -182,3 +185,9 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
   run as `failed`; the schema does not say which outcome a capped run gets.
 - Heartbeat renewal cannot tell a hung harness from a busy one.
 - Nothing is inherited from v3's 90 s lease.
+- ADR 0002 (NB3): for a run whose claim expired, `task_release` while another run holds the task is `forbidden` here (0002:38-40,
+  "anyone else") but 0002:18-19 can be read as `already_claimed`. The same run's `task_release` on a free task is a no-op that keeps
+  the expiry marker, so a later `op` restores a claim it asked to release. ADR 0002 should settle both.
+- ADR 0002 (NB4): `boot` with `staleMs` > 0 can hold a lease past "last renewal + 60 s" (0002:15). The restore is never early, but the
+  late side needs a restart clause in ADR 0002, or the core should enforce 0 until then. Adapters pass 0 for now.
+- ADR 0002 (NB13): expiry is inclusive at `leaseUntil`, so with an exact 15 s heartbeat cadence a claim drops after 3 missed heartbeats, not the "four" in 0002:15. A wording point.

@@ -1,8 +1,14 @@
 // The pod object with a settable clock and write counters, for local runs and previews. The production bundle has the plain PodDO.
-// The clock lives in the object's own storage ('clock': milliseconds, or 'none'). A fixed clock never arms the alarm; /_in/clock
+// The clock lives in the object's own storage ('clock': this process's id and milliseconds, or 'none'); a restarted server is a
+// new process and so starts on its real clock again, as the contract says. A fixed clock never arms the alarm; /_in/clock
 // runs any due tick itself, so expiry fires with zero other traffic. A new object asks D1 once for a clock set before it existed.
 import { PodDO } from '../pod-do';
 import { parse } from '../wire';
+
+/** One per server process (a module is evaluated once per start). A clock set by an earlier process is not this one's. */
+let proc: string | undefined;
+/** Random values are not allowed in global scope, so the id is made on first use. */
+const processId = (): string => (proc ??= crypto.randomUUID());
 
 export class TestPodDO extends PodDO {
   private declare fixed: number | null | undefined;
@@ -10,13 +16,13 @@ export class TestPodDO extends PodDO {
 
   private setFixed(ms: number | null): void {
     this.fixed = ms;
-    this.sql.exec('insert or replace into kv (k, v) values (?, ?)', 'clock', ms === null ? 'none' : String(ms));
+    this.sql.exec('insert or replace into kv (k, v) values (?, ?)', 'clock', ms === null ? 'none' : `${processId()}:${ms}`);
   }
 
   private fixedNow(): number | null {
     if (this.fixed === undefined) {
       const [row] = this.sql.exec<{ v: string }>("select v from kv where k = 'clock'").toArray();
-      this.fixed = row === undefined || row.v === 'none' ? null : Number(row.v);
+      this.fixed = row === undefined || !row.v.startsWith(`${processId()}:`) ? null : Number(row.v.slice(processId().length + 1));
     }
     return this.fixed;
   }

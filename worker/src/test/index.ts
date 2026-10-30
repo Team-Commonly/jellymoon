@@ -16,6 +16,8 @@ let ready: Promise<void> | undefined;
 async function prepare(env: Env): Promise<void> {
   if (env.ENV === 'local') {
     await env.DB.batch(schemaSql.split(';').map((q) => q.trim()).filter((q) => q !== '').map((q) => env.DB.prepare(q)));
+    // A new process starts on its real clock; a clock set before the restart is not carried over.
+    await env.DB.prepare("delete from kv where k = 'clock'").run();
   }
   if (env.BOOT_SWEEP === '1') await Promise.all((await allPodIds(env.DB)).map((id) => internal(env, id, 'ping', {})));
 }

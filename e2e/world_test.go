@@ -59,7 +59,10 @@ func wantID(t *testing.T, prefix, s string) {
 	}
 }
 
-func newWorld(t *testing.T) *world {
+func newWorld(t *testing.T) *world { return newWorldAt(t, fakeBase) }
+
+// newWorldAt is newWorld with the clock set to `clock` (unix ms) before anything else; real-clock mode ignores it.
+func newWorldAt(t *testing.T, clock int64) *world {
 	t.Helper()
 	need(t)
 	track(t)
@@ -67,7 +70,7 @@ func newWorld(t *testing.T) *world {
 	w.srv = startServer(t)
 	w.c = newClient(t, w.srv.base())
 	if !realClock {
-		w.setClock(fakeBase)
+		w.setClock(clock)
 	}
 	w.owner, w.ben, w.cara = w.session("olivia"), w.session("ben"), w.session("cara")
 	var pod struct {

@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"sync"
 	"syscall"
 	"testing"
@@ -30,11 +29,17 @@ var (
 	serverCmd  = os.Getenv("JM_E2E_SERVER")
 	realClock  = os.Getenv("JM_E2E_REAL_CLOCK") == "1"
 	suiteTests = []string{"TestF02", "TestF07", "TestF10", "TestExpiryZeroTraffic", "TestRenewRace",
-		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation"}
+		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline"}
 	outcomes sync.Map // test name -> failed bool
 )
 
 func TestMain(m *testing.M) {
+	// staleMs is 0 (ADR 0003, "What an adapter must do", item 5): every command is persisted, heartbeats included.
+	// The knob that once widened the early-expiry bound is gone, and a value other than 0 is an error, not ignored.
+	if v := os.Getenv("JM_E2E_STALE_MS"); v != "" && v != "0" {
+		fmt.Fprintln(os.Stderr, "JM_E2E_STALE_MS is no longer a setting: staleMs must be 0 (docs/adr/0003-pure-pod-core.md, item 5)")
+		os.Exit(2)
+	}
 	code := m.Run()
 	if serverCmd != "" {
 		fmt.Println(summaryLine(time.Since(suiteStart).Milliseconds(), stepsOK.Load(), stepsRun.Load()))
@@ -205,16 +210,4 @@ func (w *world) crash(holdUntil int64) int64 {
 	w.srv.boot()
 	w.srv.restarting = false
 	return time.Now().UnixMilli()
-}
-
-// staleMs is how far the server declares its saved heartbeat renewals may lag (JM_E2E_STALE_MS, 0 to 60000).
-func staleMs(t *testing.T) int64 {
-	n, err := int64(0), error(nil)
-	if v := os.Getenv("JM_E2E_STALE_MS"); v != "" {
-		n, err = strconv.ParseInt(v, 10, 64)
-	}
-	if err != nil || n < 0 || n > leaseMs {
-		t.Fatalf("JM_E2E_STALE_MS must be an integer from 0 to 60000")
-	}
-	return n
 }

@@ -87,8 +87,8 @@ e2e:
 worker-dev: node_modules
 	ENV=local PORT=$${PORT:-8787} JM_DATA_DIR=$${JM_DATA_DIR:-$(CURDIR)/.wrangler-data} worker/dev.sh
 
-# The contract suite against the Cloudflare adapter. It persists every command, so staleMs is 0.
+# The contract suite against the Cloudflare adapter. It persists every command, heartbeats included (staleMs is 0).
 e2e-a: node_modules
-	JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' JM_E2E_STALE_MS=0 $(GO) test ./e2e -count=1 -v
+	JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' $(GO) test ./e2e -count=1 -v
 
 preflight: portable check-gen test entropy secrets e2e-a

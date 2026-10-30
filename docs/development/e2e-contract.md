@@ -30,6 +30,8 @@ Clock rules, which every server under test must meet:
 - **Before the first `/__test/clock` call the server uses its real clock. After it, `now` is the set value and
   moves only by another call.** The suite sets 2040-01-01T00:00:00Z first thing after every boot, before it
   mints a session, so a restarted server on its real clock never finds a lease due.
+- **A restarted server is a new process and starts on its real clock again** (`kill -9` plus the same command). The suite sets the clock again
+  after a restart when a test needs fake time.
 - **When the clock moves, the server applies any due `tick` at once, independent of its real timer or
   alarm.** Expiry must fire with zero other traffic. The response may come before events are delivered;
   the suite waits up to 5 s.
@@ -39,13 +41,16 @@ Clock rules, which every server under test must meet:
 
 ## Persistence rule
 
-- Every command's new state is persisted **before the reply or the emission**, with one exception: renewals
-  caused only by heartbeats, which a server may coalesce.
-- A server that coalesces declares how far its saved heartbeat renewals can lag as the core's `boot {staleMs}`
-  (0 to 60 000) and tells the suite by env `JM_E2E_STALE_MS` (default 0). Saved state is never more than
-  `staleMs` behind on heartbeat renewals.
-- The server applies the core's `boot` command right after restoring state, before serving.
-- A coalesced save of anything else fails `TestKillMidLease` as an early expiry.
+The rule is ADR 0003, "What an adapter must do", item 5. A server persists every command that moves a lease, heartbeats
+included, and never coalesces saves: a lagging saved lease would expire early after a restart, against ADR 0002's
+"`leaseUntil` is the last renewal plus 60 s".
+
+- Every command's new state is persisted **before the reply or the emission**.
+- The server applies the core's `boot {staleMs: 0}` right after restoring state, before serving. `staleMs` is 0 and
+  nothing else: the core refuses any other value. The suite has no setting for it; `JM_E2E_STALE_MS` set to anything but
+  0 stops the run with an error.
+- A coalesced or skipped save fails `TestKillMidLease` as an early expiry, and a skipped `boot` fails
+  `TestRestartPastDeadline`.
 
 ## Input validation
 
@@ -94,11 +99,12 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestReplayAcrossRestart` | `subscribe sinceSeq=N` after a restart replays N+1..head in order, once each, equal to what a live socket saw; new events continue after head. |
 | `TestOneReleasePerCause` | For `expired`, `released`, `run_ended` and `stopped`, each member gets exactly one `claim.released` with that cause, with `by` and `reason` as specified. |
 | `TestInputValidation` | Each write route refuses what the schema refuses with `400 invalid_input` (a numeric or 16,385-character `body`, a two-line `summary`, a missing `kind`, a note on a task update, and the other routes' bodies), stores a 16,384-character body whole, and lets a run post with its `summary`. |
+| `TestRestartPastDeadline` | A claim made on a fake clock two minutes behind real time, then `kill -9` and a restart with no clock call: the restarted server is on its real clock, so the deadline is already past, and the first frames after the restart carry `task.updated` (no claim) and one `claim.released{expired}`. It needs the server to settle when it restores state. |
 | `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. It judges the run so far, so it is last; it fails if a suite test failed and skips on a partial run. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X
 (renewed by a heartbeat; its deadline falls after the restart), then crashes. For each it asserts: not
-released before its recorded deadline; released no later than `max(restart, deadline) + JM_E2E_STALE_MS + 6 s`
+released before its recorded deadline; released no later than `max(restart, deadline) + 6 s`
 once the clock passes it; one `claim.released` over live delivery and over a replay from seq 0.
 
 ## Output lines

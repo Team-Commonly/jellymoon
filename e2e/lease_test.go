@@ -28,7 +28,7 @@ func TestExpiryZeroTraffic(t *testing.T) {
 	} else {
 		w.setClock(exp - 1)
 		w.checkLease(tk.ID, r)
-		w.noRelease(w.sBen, tk.ID, 300*time.Millisecond)
+		w.noRelease(w.sBen, mk, tk.ID, 300*time.Millisecond)
 		w.setClock(exp)
 	}
 	obs, ok := w.awaitExpiry(w.sBen, mk, tk.ID, r, wait)
@@ -123,14 +123,14 @@ func (w *world) pause(d int64) {
 // TestKillMidLease: kill -9 with two live claims. Y has no renewal after its claim and its deadline falls
 // inside the outage; X was renewed by a heartbeat and its deadline falls after the restart. Neither may
 // be released before its recorded deadline, and each must be released no later than
-// max(restart, deadline) + JM_E2E_STALE_MS + 6 s once the clock passes it; no claim.released repeats.
+// max(restart, deadline) + 6 s once the clock passes it; no claim.released repeats. Every mark a "not yet" check
+// reads is taken before the clock moves, so a release sent during the move is seen.
 func TestKillMidLease(t *testing.T) {
 	need(t)
 	if realClock {
 		t.Parallel()
 	}
 	w := newWorld(t)
-	stale := staleMs(t)
 	ry, rx := w.startRun(w.a1, "wake-y"), w.startRun(w.b1, "wake-x")
 	ty, tx := w.newTask("claim-y", ""), w.newTask("claim-x", "")
 	w.mustClaim(ry, ty.ID)
@@ -148,19 +148,19 @@ func TestKillMidLease(t *testing.T) {
 	mk := s.mark()
 	restartAt := healthy
 	if !realClock {
-		w.noRelease(s, ty.ID, 300*time.Millisecond)
+		w.noRelease(s, mk, ty.ID, 300*time.Millisecond)
 		restartAt = dy + 10000
 		w.setClock(restartAt)
 	}
-	w.dueAndReleased("after_restart_inside", s, mk, ty, ry, dy, max(restartAt, dy)+stale)
+	w.dueAndReleased("after_restart_inside", s, mk, ty, ry, dy, max(restartAt, dy))
 	if !realClock && w.clock < dx {
 		if tk := w.task(tx.ID); tk.Claim == nil || tk.Claim.RunID != rx.id {
 			t.Fatalf("x was released with the clock %d ms before its recorded deadline %d", dx-w.clock, dx)
 		}
 		w.setClock(dx - 1)
-		w.noRelease(s, tx.ID, 300*time.Millisecond)
+		w.noRelease(s, mk, tx.ID, 300*time.Millisecond)
 	}
-	w.dueAndReleased("after_restart_ahead", s, mk, tx, rx, dx, max(restartAt, dx)+stale)
+	w.dueAndReleased("after_restart_ahead", s, mk, tx, rx, dx, max(restartAt, dx))
 	if !realClock {
 		w.advance(120000)
 	}
@@ -190,7 +190,28 @@ func (w *world) dueAndReleased(kind string, s *sock, mk int, tk Task, r *run, de
 	if realClock {
 		fmt.Printf("LATENESS_MS %s %d\n", kind, obs-deadline)
 		if obs < deadline-2 || obs > due+6000 {
-			w.t.Fatalf("%s released at %d: want within [%d, %d] (deadline, then max(restart, deadline)+stale+6 s)", tk.ID, obs, deadline, due+6000)
+			w.t.Fatalf("%s released at %d: want within [%d, %d] (deadline, then max(restart, deadline)+6 s)", tk.ID, obs, deadline, due+6000)
 		}
 	}
+}
+
+// TestRestartPastDeadline: a lease whose deadline passed while the server was down is released by the restart itself, with
+// no clock call and no other traffic. The claim is made on a fake clock two minutes behind real time, so on the restarted
+// server's real clock the deadline is already a minute past; the first frames after the restart carry the release.
+// A server that does not settle (`boot`) when it restores state fails this.
+func TestRestartPastDeadline(t *testing.T) {
+	needFake(t)
+	w := newWorldAt(t, time.Now().UnixMilli()-120000)
+	r := w.startRun(w.a1, "wake")
+	tk := w.newTask("past due", "")
+	w.mustClaim(r, tk.ID)
+	w.checkLease(tk.ID, r)
+	w.expect(w.sBen, 0, isType("task.claimed"), "task.claimed before the kill")
+	last := maxSeq(w.sBen.snapshot(0))
+	w.crash(0)
+	s := w.openSince(w.ben.tok, "ben-after-restart", last)
+	if _, ok := w.awaitExpiry(s, 0, tk.ID, r, 5*time.Second); !ok {
+		t.FailNow()
+	}
+	w.oneRelease(s, 0, tk.ID, 1)
 }

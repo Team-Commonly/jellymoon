@@ -80,8 +80,6 @@ export function messagePostCmd(c: Ctx, cmd: Of<'message_post'>): void {
   if (typeof cmd.text !== 'string') return fail(c, 'invalid_input', 'text must be a string.');
   const ids = mentioned(c, cmd.text).filter((id) => id !== w.actor.id);
   if (!seedFits(c, cmd.wakeId, ids.length)) return;
-  if (own(c.s.messages, cmd.messageId) !== undefined) return fail(c, 'invalid_input', 'That message id is taken.', cmd.messageId);
-  c.s.messages[cmd.messageId] = true;
   const msg: Message = {
     id: cmd.messageId, seq: c.s.seq + 1, podId: c.s.podId, author: w.actor, createdAt: isoOf(c.now), summary: summaryOf(cmd.text),
     kind: 'fyi', status: 'done', body: cmd.text,

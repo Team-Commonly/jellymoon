@@ -208,7 +208,7 @@ describe('members events', () => {
   });
 });
 
-describe('one claim per task, one id per message', () => {
+describe('one claim per task', () => {
   const upd = (caller: { kind: 'run'; runId: string } | { kind: 'user'; userId: string }): Cmd => ({ type: 'task_update', caller, taskId: T1, status: 'in_progress', wakeId: id('wak', 1) });
   test('a run\'s task_update on a task another live run holds is already_claimed naming the holder; a person may update', () => {
     const held = play([[claimA(), 0]]).state;
@@ -219,9 +219,13 @@ describe('one claim per task, one id per message', () => {
     expect(errCode(play([[upd({ kind: 'user', userId: U_OWNER.id }), 1]], held).out)).toBeNull();
     expect(errCode(play([[upd({ kind: 'run', runId: RUN_A }), 1]], held).out)).toBeNull();
   });
-  test('message_post refuses a messageId that already exists', () => {
-    const post: Cmd = { type: 'message_post', caller: { kind: 'user', userId: U_OWNER.id }, messageId: id('msg', 1), text: 'hi', wakeId: id('wak', 1) };
-    const r = play([[post, 0], [post, 1]]);
-    expect([errCode(r.out), events(r.out).length, r.state.seq]).toEqual(['invalid_input', 1, 1]);
+  test('now past the end of year 9999 is refused as invalid_input and changes nothing', () => {
+    const r = apply(world(), { type: 'tick' }, 253_402_300_800_000);
+    expect([errCode(r.out), r.state]).toEqual(['invalid_input', world()]);
+    expect(errCode(apply(world(), { type: 'tick' }, 253_402_300_799_999).out)).toBeNull();
+  });
+  test('run_end with an outcome outside the schema enum is invalid_input and the run stays active', () => {
+    const r = apply(world(), { type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'done' as never }, 5);
+    expect([errCode(r.out), r.state.runs[RUN_A].status]).toEqual(['invalid_input', 'active']);
   });
 });

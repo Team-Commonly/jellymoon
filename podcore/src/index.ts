@@ -14,7 +14,7 @@ export { nthWakeId } from './wakeid';
 
 /** A pod nobody has created yet: every command but `pod_create` (and `boot`) gets not_found. */
 export const emptyPod = (podId: string): PodState => ({
-  podId, seq: 0, members: [], owners: [], tasks: {}, messages: {}, runs: {}, claims: {}, lost: {}, agents: {}, wakes: {},
+  podId, seq: 0, members: [], owners: [], tasks: {}, runs: {}, claims: {}, lost: {}, agents: {}, wakes: {},
 });
 
 type Handlers = { [K in Cmd['type']]: (c: Ctx, cmd: Extract<Cmd, { type: K }>) => void };

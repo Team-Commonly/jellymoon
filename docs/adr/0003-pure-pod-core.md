@@ -132,7 +132,7 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
 ## Throws
 
 `apply` never throws on adapter input: a non-integer or negative `now`, an unknown command type, a bad `staleMs`, a
-malformed or exhausted `wakeId` and a non-string message `text`, a `now` past the end of year 9999, a repeated `messageId` and a `run_end` outcome outside the schema enum are all `invalid_input` and change nothing. An id that is `__proto__` or names an `Object.prototype` member (`constructor`, `toString`, ...) in any `*Id` field or `assignee` is `not_found`, refused before any lookup or write; every record lookup also goes through `own()` (`Object.hasOwn`). What can
+malformed or exhausted `wakeId` and a non-string message `text`, a `now` past the end of year 9999, and a `run_end` outcome outside the schema enum are all `invalid_input` and change nothing. An id that is `__proto__` or names an `Object.prototype` member (`constructor`, `toString`, ...) in any `*Id` field or `assignee` is `not_found`, refused before any lookup or write; every record lookup also goes through `own()` (`Object.hasOwn`). What can
 still throw is an invariant violation, i.e. a bug or a corrupt saved state: `structuredClone` of a non-JSON state,
 `isoOf` on a non-integer (unreachable once `now` is checked), and a missing record that state invariants guarantee
 (a wake's agent, a claim's run).
@@ -145,6 +145,7 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 - Size: `podcore/` is capped at 1,750 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
   exception was added; it ratchets down from here.
 - Indented code blocks are NOT recognised as code, so a mention inside one wakes (deliberate).
+- The adapter mints `messageId` and owns the message log, so message id uniqueness is the adapter's; the core keeps no set of them.
 - The adapter bounds message body size: `stripSpans` is super-linear on growing backtick runs.
 - A run's `task_update` on a task another live run holds is `already_claimed` naming the holder (one claim per task,
   `operations.json`); a person may still update.

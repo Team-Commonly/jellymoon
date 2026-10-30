@@ -34,8 +34,6 @@ export interface PodState {
   owners: Actor[];
   /** Tasks as stored: the claim lives in `claims`, so a task here never carries one. */
   tasks: Record<TaskId, Task>;
-  /** Every message id posted, so a repeated id is refused. The messages themselves live in the adapter's log. */
-  messages: Record<MessageId, true>;
   runs: Record<RunId, Run>;
   /** At most one per task; the key makes exclusivity structural. leaseUntil is in milliseconds. */
   claims: Record<TaskId, { runId: RunId; leaseUntil: number }>;

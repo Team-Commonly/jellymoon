@@ -39,7 +39,7 @@ async function land(over = {}) {
     [/^gh api .*collaborators/, (a) => ['{"login":"lily","push":true}', ...(a.includes('--paginate') ? over.page2 || [] : [])].join('\n')],
     [/^gh api .*check-runs/, over.runs ?? '{"total":1,"runs":[{"name":"ci","conclusion":"success"}]}'],
     [/^git merge-tree --write-tree/, `${TREE}\n`],
-    [/^make -s secrets-range/, () => { if (over.scan === 'hit') throw Object.assign(new Error('make failed'), { status: 2, stderr: 'WRN leaks found: 1\nexit status 3\nmake: *** [secrets-range] Error 1\n' }); if (over.scan === 'fail') throw Object.assign(new Error('make failed'), { status: 2, stderr: 'go: no network\nexit status 1\n' }); return ''; }],
+    [/^make -s secrets-range/, () => { if (over.scan === 'hit') throw Object.assign(new Error('make failed'), { status: 2, stderr: 'WRN leaks found: 1\nexit status 3\nmake: *** [secrets-range] Error 1\n' }); if (over.scan === 'killed') throw Object.assign(new Error('make failed'), { status: null, signal: 'SIGKILL', stderr: 'exit status 3\n' }); if (over.scan === 'fail') throw Object.assign(new Error('make failed'), { status: 2, stderr: 'go: no network\nexit status 1\n' }); return ''; }],
     [/^git cat-file -e/, ''],
     [/^git (-c \S+ )?worktree|^chmod/, ''], [new RegExp(`${wt.source}.*merge --no-ff`), ''], [new RegExp(`${wt.source}.*rev-parse HEAD\\^\\{tree\\}`), over.wtTree ?? TREE],
   ];
@@ -87,6 +87,7 @@ await t('every main fetch names refs/heads/main; the merge disables hooks; untra
 await t('the secret range is <main tip>..<head>', {}, (r) => argv(r, 'make', 'secrets-range')[0] === `-s secrets-range RANGE=${MAIN}..${HEAD}`);
 const MAKEENV = { MAKEFLAGS: 'i', GITLEAKS_CONFIG: '/tmp/off.toml', GITLEAKS_ENABLE_RULES: 'x', GIT_DIR: '/nope', GOFLAGS: '-x', PATH: '/usr/bin:/bin', HOME: '/opt/opuser', TMPDIR: '/var/tmp', GOPATH: '/opt/gopath' };
 const makeEnv = (r) => argv(r, 'make', 'secrets-range').length && r.w.calls.find((c) => c.cmd === 'make').opts.env;
+await t('a scan killed by a signal (no exit status) refuses as a failed scan, not a finding or clean', { scan: 'killed' }, (r) => no(r, /failed to run/) && !r.ledgerNow.includes('LANDED'));
 await t('the range scan runs make with an allowlist env: no MAKEFLAGS, no gitleaks or git or go variables from the operator', { env: MAKEENV }, (r) => { const e = makeEnv(r); return !('MAKEFLAGS' in e) && !('GITLEAKS_CONFIG' in e) && !('GITLEAKS_ENABLE_RULES' in e) && !('GIT_DIR' in e) && !('GOFLAGS' in e); });
 await t('the range scan env keeps PATH, HOME, TMPDIR and GOPATH, and pins git config off', { env: MAKEENV }, (r) => { const e = makeEnv(r); return e.PATH === '/usr/bin:/bin' && e.HOME === '/opt/opuser' && e.TMPDIR === '/var/tmp' && e.GOPATH === '/opt/gopath' && e.GIT_CONFIG_GLOBAL === '/dev/null' && e.GIT_CONFIG_NOSYSTEM === '1'; });
 await t('the preflight child: stdin ignored, own session, env -i, HOME and TMPDIR inside the throwaway, entropy base is main\'s tip', {}, (r) => {

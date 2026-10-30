@@ -185,6 +185,9 @@ const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME
     }
     rangeCases.push([`range (${where}): a range without a token is clean`, status('clean', false, refs), 'clean']);
   }
+  process.env.MAKEFLAGS = 'i'; // make -i would turn a hit into exit 0; the scan env drops it
+  rangeCases.push(['range: an operator MAKEFLAGS=i does not switch the scan off', status('linear', false, false), 'hit']);
+  delete process.env.MAKEFLAGS;
   fs.rmSync(dir, { recursive: true, force: true });
   const badRange = rangeCases.filter(([, got, want]) => got !== want).map(([n]) => n);
   if (badRange.length) { console.error(`check-review-gate: range cases wrong\n  ${badRange.join('\n  ')}`); process.exit(1); }

@@ -101,15 +101,11 @@ func (w *world) must(r res, what string) {
 }
 
 func (w *world) session(name string) user {
-	var out struct {
-		Token string `json:"token"`
-		User  Actor  `json:"user"`
+	u, err := seedUser(w.c, name)
+	if err != nil {
+		w.t.Fatalf("POST /__test/session: %v (the test-route contract is not implemented; is ENV=local?)", err)
 	}
-	r := w.c.do("POST", "/__test/session", "", map[string]any{"name": name}, &out)
-	if !r.ok() {
-		w.t.Fatalf("POST /__test/session: HTTP %d (the test-route contract is not implemented; is ENV=local?)", r.Status)
-	}
-	return user{tok: out.Token, actor: out.User}
+	return u
 }
 
 func (w *world) register(u user, name string) *computer {

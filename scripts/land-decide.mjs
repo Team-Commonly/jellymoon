@@ -41,7 +41,10 @@ export function collides(paths, tree) {
   }
   return paths.some((n) => n.split('/').some((_, k, a) => spell.get(a.slice(0, k + 1).join('/').toLowerCase()).size > 1));
 }
-export const touchesProtected = (files, tree = []) => files.some((f) => (f.modes || []).some((m) => !REGULAR.includes(m)) || [f.filename, f.previous_filename].some((n) => n && !INERT.test(n.toLowerCase())))
+// APFS case-folds Unicode (U+017F folds to s, U+212A to k) and ignores normalization, and Windows-style names drop a trailing dot or
+// space. Rather than chase each fold: a non-ASCII byte, an empty, `.` or `..` segment, or a segment ending in a dot or space is protected.
+export const oddPath = (n) => /[^\x20-\x7e]/.test(n) || n.split('/').some((seg) => seg === '' || seg === '.' || seg === '..' || /[. ]$/.test(seg));
+export const touchesProtected = (files, tree = []) => files.some((f) => (f.modes || []).some((m) => !REGULAR.includes(m)) || [f.filename, f.previous_filename].some((n) => n && (oddPath(n) || !INERT.test(n.toLowerCase()))))
   || collides(files.map((f) => f.filename), tree);
 // One reviewer per line: `Name username` (the username is the pod's server-stamped one). A single token is a name with no username.
 export function readReviewerEntries(text) {

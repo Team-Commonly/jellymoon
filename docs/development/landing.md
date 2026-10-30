@@ -131,7 +131,8 @@ and runs it (`go vet ./...`, `go test ./...`). Anything protected (`GNUmakefile`
 `.githooks/`, `go.mod`, `entropy.json`, `docs/x/x_test.go`, `docs/a.js`, ...) runs from the PR tree during the
 preflight, so it needs the reviewer's verdict, as does any PR that adds a `gitleaks:allow` line (it can hide a secret). Matching is on the lowercased path (macOS is case-insensitive: `docs/Development/x.md` would overwrite
 `docs/development/x.md`), and a path whose lowercase equals another path in main's tree or in the same PR, or a directory spelled
-two ways, is protected. A rename counts both sides: `docs/a.md` to `docs/a.go` is
+two ways, is protected. APFS also folds Unicode (U+017F to `s`, U+212A to `k`) and ignores normalization, so rather than chase each fold a path with
+a non-ASCII byte, an empty, `.` or `..` segment, or a segment ending in a dot or space is protected too. A rename counts both sides: `docs/a.md` to `docs/a.go` is
 protected, and so are `docs/x` to `scripts/x` and the reverse. So is any entry whose old or new mode is not a regular
 file (`100644`, `100755`): a symlink (`120000`) or gitlink (`160000`) is never inert, wherever it sits. The modes come from
 `git diff --raw` on the merge result. `check-portable` resolves each tracked symlink's full target physically and refuses one

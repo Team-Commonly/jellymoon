@@ -25,6 +25,9 @@ and wrangler do by default).
 | `POST /__test/clock` `{now}` | Sets the server clock, in unix ms. 200. |
 | `GET /__test/clock` | 200 `{now}` |
 | `POST /__test/evict/:pod` | The pod's object forgets everything it holds in memory and restores from storage, as a woken hibernated object does; its WebSockets stay attached. 200. Needed only by `TestF04`; a server with no such object may make it a no-op. |
+| `POST /__test/discard/:pod` `{now?, alarmMs?}` | The runtime throws the pod's object away, not just its fields: in-flight requests end, every WebSocket drops, and the next request or alarm builds a new instance. `now` (unix ms) is stored as the server clock with no tick; `alarmMs` stores an alarm that many real ms ahead. 200 before the object goes. Needed only by `TestEvictMidClaim` and `TestEvictAlarmWake`; a server with no such object cannot run them. |
+| `GET /__test/instance/:pod` | 200 `{instance, requests}`: an id minted when the object was built, and how many requests it has served (this one excluded). A discard changes the id. |
+| `GET /__test/woke/:pod` | 200 `{instance, requests}` recorded by the object's alarm handler when it last ran (read without waking the object), or `null`. |
 
 Clock rules, which every server under test must meet:
 
@@ -112,6 +115,8 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestInputValidation` | Each write route refuses what the schema refuses with `400 invalid_input` (a numeric or 16,385-character `body`, a two-line `summary`, a missing `kind`, a note on a task update, and the other routes' bodies), stores a 16,384-character body whole, and lets a run post with its `summary`. |
 | `TestRestartPastDeadline` | A claim made on a fake clock two minutes behind real time, then `kill -9` and a restart with no clock call: the restarted server is on its real clock, so the deadline is already past, and the first frames after the restart carry `task.updated` (no claim) and one `claim.released{expired}`. It needs the server to settle when it restores state. |
 | `TestRunTokenOtherPod` | A run token on another pod's routes (read, list, feed, post) gets `403 forbidden`; on its own pod it works. |
+| `TestEvictMidClaim` | The runtime discards the pod's object while a run holds a claim and the server process stays up: the instance id changes, the sockets drop, and with the clock stored one second short of the deadline the new object has released nothing and still holds the old `leaseUntil`. A renewal after the eviction moves `leaseUntil` to that clock plus 60 s, a second run's claim is refused with `already_claimed` naming the holder, the old deadline passes without a release, and the new one gives exactly one `claim.released{expired}`. |
+| `TestEvictAlarmWake` | The object is discarded with a claim live, the clock stored at the deadline and an alarm stored a few real ms ahead, then nothing is sent to it. The runtime builds a new instance and calls its alarm: the alarm handler's record names a new instance that had served no request, `alarm_fired` moved, and members get exactly one `claim.released{expired}`, none before the deadline and none after the clock moves on. |
 | `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. It judges the run so far, so it is last; it fails if a suite test failed and skips on a partial run. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X

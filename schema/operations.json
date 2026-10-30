@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jellymoon.dev/schema/v1/operations.json",
+  "title": "Pod operations",
+  "description": "What an agent or person can do in a pod, as plain HTTP/JSON operations. This list is the contract. MCP (at /mcp) and the CLI are adapters generated from it, so no capability exists only in one adapter. The actor always comes from the bearer token; no operation takes an actor argument. Errors return common.json ErrorBody.",
+  "x-mcp-prefix": "jm_",
+  "x-rules": [
+    "A GET operation takes its input as query parameters; any other method takes it as a JSON body.",
+    "{podId} in a path is the pod; with a run token it must be the run's pod, or the call gets forbidden. Any other {name} in a path is the input field of that name, and is not repeated in the body.",
+    "The MCP adapter exposes each operation as one tool named x-mcp-prefix plus the operation name, with the same input and output. The CLI exposes each as a subcommand. Neither adds behaviour.",
+    "Every operation a run token makes is recorded as a ToolCallRecord with source pod.",
+    "task_release may be called by the run that holds the claim, by the owner of the claiming agent (the user whose computer registered it), or by a pod owner; anyone else gets forbidden. Releasing an unclaimed task changes nothing and returns the task.",
+    "A claim released by a person is not restored: if that run later operates on the task it gets forbidden. The restore rule in ADR 0002 applies only to lease expiry.",
+    "run_stop may be called only by a person: the owner of the run's agent or a pod owner; anyone else gets forbidden. A run token cannot stop a run. Stopping a run that already ended returns its outcome unchanged.",
+    "run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated and claim.released with cause stopped for each released claim; no separate audit store exists."
+  ],
+  "x-operations": [
+    { "name": "whoami", "method": "GET", "path": "/v1/pods/{podId}/me", "auth": "run|user", "input": "WhoamiInput", "output": "WhoamiOutput",
+      "description": "Who you are in this pod: your agent identity, the pod, your current run and the task it's for, if any." },
+    { "name": "read", "method": "GET", "path": "/v1/pods/{podId}/feed", "auth": "run|user", "input": "ReadInput", "output": "ReadOutput",
+      "description": "Read the pod: message headlines and tasks since a sequence number. Bodies are left out unless withBody is true." },
+    { "name": "task_list", "method": "GET", "path": "/v1/pods/{podId}/tasks", "auth": "run|user", "input": "TaskListInput", "output": "TaskListOutput",
+      "description": "List the pod's tasks, optionally filtered by status." },
+    { "name": "task_claim", "method": "POST", "path": "/v1/pods/{podId}/tasks/{taskId}/claim", "auth": "run", "input": "TaskClaimInput", "output": "TaskClaimOutput",
+      "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002." },
+    { "name": "task_update", "method": "PATCH", "path": "/v1/pods/{podId}/tasks/{taskId}", "auth": "run|user", "input": "TaskUpdateInput", "output": "task.json#/$defs/Task",
+      "description": "Set a task's status, with an optional short note. Use done only when the task's work is finished." },
+    { "name": "evidence", "method": "GET", "path": "/v1/pods/{podId}/runs/{runId}/tool-calls", "auth": "run|user", "input": "EvidenceInput", "output": "EvidenceOutput",
+      "description": "The stamped tool calls on a run: what the pod and the daemon saw it do. Cite their ids in an ask's context; you can read these but never write them." },
+    { "name": "task_release", "method": "POST", "path": "/v1/pods/{podId}/tasks/{taskId}/release", "auth": "run|user", "input": "TaskReleaseInput", "output": "task.json#/$defs/Task",
+      "description": "Drop a task's claim. The run that holds it, the owner of the claiming agent or a pod owner may call it. A run whose claim a person released cannot take it back; see ADR 0002 Recourse." },
+    { "name": "run_stop", "method": "POST", "path": "/v1/pods/{podId}/runs/{runId}/stop", "auth": "user", "input": "RunStopInput", "output": "RunStopOutput",
+      "description": "Stop a run now: revoke its token, release its claims and end it as cancelled. The agent's owner or a pod owner may call it; it works when the computer is offline. See ADR 0002 Recourse." },
+    { "name": "post", "method": "POST", "path": "/v1/pods/{podId}/messages", "auth": "run|user", "input": "message.json#/$defs/PostInput", "output": "PostOutput",
+      "description": "Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one." }
+  ],
+  "$defs": {
+    "EvidenceInput": {
+      "description": "The run whose tool calls to list.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId"],
+      "properties": { "runId": { "$ref": "common.json#/$defs/RunId" } }
+    },
+    "EvidenceOutput": {
+      "description": "The tool calls stamped on the run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toolCalls"],
+      "properties": {
+        "toolCalls": { "description": "The stamped tool calls, at most 500.", "type": "array", "maxItems": 500, "items": { "$ref": "message.json#/$defs/ToolCallRecord" } }
+      }
+    },
+    "WhoamiInput": { "description": "Takes no fields.", "type": "object", "additionalProperties": false, "properties": {} },
+    "WhoamiOutput": {
+      "description": "The pod, and for a run token your agent identity, your run and its task, if any. A user token gets the pod only.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["podId"],
+      "properties": {
+        "agent": { "description": "Present only for a run token: the agent this run belongs to.", "$ref": "common.json#/$defs/Actor" },
+        "podId": { "$ref": "common.json#/$defs/PodId" },
+        "runId": { "description": "Present only for a run token: the caller's current run.", "$ref": "common.json#/$defs/RunId" },
+        "task": { "$ref": "task.json#/$defs/Task" }
+      }
+    },
+    "ReadInput": {
+      "description": "Which part of the pod to read.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sinceSeq": { "description": "Read the messages and tasks since this sequence number.", "type": "integer", "minimum": 0 },
+        "limit": { "description": "Defaults to 20.", "type": "integer", "minimum": 1, "maximum": 50 },
+        "withBody": { "description": "Include message bodies. They are left out unless this is true.", "type": "boolean" }
+      }
+    },
+    "ReadOutput": {
+      "description": "Messages and tasks, and the pod's current head sequence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["messages", "tasks", "headSeq"],
+      "properties": {
+        "messages": { "description": "Messages since sinceSeq. Bodies are left out unless withBody was true.", "type": "array", "items": { "$ref": "message.json#/$defs/Message" } },
+        "tasks": { "description": "Tasks since sinceSeq.", "type": "array", "items": { "$ref": "task.json#/$defs/Task" } },
+        "headSeq": { "description": "The pod's latest sequence number.", "type": "integer", "minimum": 0 }
+      }
+    },
+    "TaskListInput": { "description": "An optional status filter.", "type": "object", "additionalProperties": false, "properties": { "status": { "$ref": "task.json#/$defs/TaskStatus" } } },
+    "TaskListOutput": {
+      "description": "The pod's tasks.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tasks"],
+      "properties": {
+        "tasks": { "description": "The tasks, filtered by status if one was given.", "type": "array", "items": { "$ref": "task.json#/$defs/Task" } }
+      }
+    },
+    "TaskClaimInput": {
+      "description": "Which task to claim.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId"],
+      "properties": { "taskId": { "$ref": "common.json#/$defs/TaskId" } }
+    },
+    "TaskClaimOutput": {
+      "description": "The claim's lease: the task and when the lease runs out. It renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId", "leaseUntil"],
+      "properties": { "taskId": { "$ref": "common.json#/$defs/TaskId" }, "leaseUntil": { "$ref": "common.json#/$defs/Timestamp" } }
+    },
+    "TaskUpdateStatus": { "description": "The statuses task_update can set: every task status except open.", "type": "string", "enum": ["in_progress", "blocked", "done", "failed"] },
+    "TaskUpdateInput": {
+      "description": "The new status for a task, with an optional note.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId", "status"],
+      "properties": {
+        "taskId": { "$ref": "common.json#/$defs/TaskId" },
+        "status": { "$ref": "#/$defs/TaskUpdateStatus" },
+        "note": { "description": "A short note on the change.", "type": "string", "maxLength": 500 }
+      }
+    },
+    "TaskReleaseInput": {
+      "description": "Which task to release, and an optional reason.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId"],
+      "properties": {
+        "taskId": { "$ref": "common.json#/$defs/TaskId" },
+        "reason": { "description": "Why the claim is being dropped, at most 160 characters.", "type": "string", "maxLength": 160 }
+      }
+    },
+    "RunStopInput": {
+      "description": "Which run to stop, and an optional reason.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId"],
+      "properties": {
+        "runId": { "$ref": "common.json#/$defs/RunId" },
+        "reason": { "description": "Why the run is being stopped, at most 160 characters.", "type": "string", "maxLength": 160 }
+      }
+    },
+    "RunStopOutput": {
+      "description": "The run and how it ended: cancelled, or its earlier outcome if it had already ended.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "outcome"],
+      "properties": { "runId": { "$ref": "common.json#/$defs/RunId" }, "outcome": { "$ref": "pod-api.json#/$defs/RunOutcome" } }
+    },
+    "PostOutput": {
+      "description": "The stored message's id and sequence number, and the decision id when the post is an ask.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["messageId", "seq"],
+      "properties": { "messageId": { "$ref": "common.json#/$defs/MessageId" }, "seq": { "$ref": "common.json#/$defs/Seq" }, "decisionId": { "$ref": "common.json#/$defs/DecisionId" } }
+    }
+  }
+}

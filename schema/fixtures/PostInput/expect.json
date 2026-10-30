@@ -1,0 +1,12 @@
+{
+  "invalid-claim-cites-run-not-toolcall.json": { "keyword": "pattern", "path": "/context/happened/0/toolCalls/0" },
+  "invalid-client-sent-receipt.json": { "keyword": "additionalProperties", "path": "" },
+  "invalid-context-no-stakes.json": { "keyword": "required", "path": "/context" },
+  "invalid-link-http.json": { "keyword": "pattern", "path": "/links/0/url" },
+  "invalid-needs-both-targets.json": { "keyword": "maxProperties", "path": "/needs/to" },
+  "invalid-option-id.json": { "keyword": "enum", "path": "/options/0/id" },
+  "invalid-option-no-consequence.json": { "keyword": "required", "path": "/options/0" },
+  "invalid-required-summary.json": { "keyword": "required", "path": "" },
+  "invalid-summary-newline.json": { "keyword": "pattern", "path": "/summary" },
+  "invalid-summary-too-long.json": { "keyword": "maxLength", "path": "/summary" }
+}

@@ -1,0 +1,26 @@
+{
+  "summary": "pick",
+  "kind": "ask",
+  "status": "blocked",
+  "needs": {
+    "to": {
+      "role": "member",
+      "userIds": [
+        "usr_01JCZK7Q8XG4M2B9V5T3W6RH01"
+      ]
+    },
+    "action": "decide"
+  },
+  "options": [
+    {
+      "id": "a",
+      "label": "A",
+      "consequence": "If you pick a, the agent proceeds that way on its next run."
+    },
+    {
+      "id": "b",
+      "label": "B",
+      "consequence": "If you pick b, the agent proceeds that way on its next run."
+    }
+  ]
+}

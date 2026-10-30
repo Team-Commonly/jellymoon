@@ -1,0 +1,23 @@
+{
+  "summary": "pick",
+  "kind": "ask",
+  "status": "blocked",
+  "needs": {
+    "to": {
+      "role": "member"
+    },
+    "action": "decide"
+  },
+  "options": [
+    {
+      "id": "f",
+      "label": "F",
+      "consequence": "If you pick f, the agent proceeds that way on its next run."
+    },
+    {
+      "id": "a",
+      "label": "A",
+      "consequence": "If you pick a, the agent proceeds that way on its next run."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "scripts/check-review-gate.mjs",
+    "scripts/check-land.mjs",
+    "scripts/check-land-e2e.mjs",
+    "scripts/land.mjs"
+  ],
+  "project": [
+    "scripts/**/*.mjs",
+    "worker/**/*.ts",
+    "e2e/**/*.ts"
+  ],
+  "ignoreBinaries": [
+    "go",
+    "gofmt",
+    "make"
+  ]
+}

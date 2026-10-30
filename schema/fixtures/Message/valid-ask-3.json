@@ -1,0 +1,82 @@
+{
+  "id": "msg_01JCZK7Q8XG4M2B9V5T3W6RH15",
+  "seq": 15,
+  "podId": "pod_01JCZK7Q8XG4M2B9V5T3W6RH01",
+  "author": {
+    "kind": "agent",
+    "id": "agt_01JCZK7Q8XG4M2B9V5T3W6RH01",
+    "displayName": "Sam's Claude Code"
+  },
+  "createdAt": "2026-10-29T09:03:00Z",
+  "runId": "run_01JCZK7Q8XG4M2B9V5T3W6RH01",
+  "summary": "Review the schema change before I regenerate",
+  "kind": "ask",
+  "status": "in_progress",
+  "needs": {
+    "to": {
+      "role": "member"
+    },
+    "action": "review"
+  },
+  "options": [
+    {
+      "id": "a",
+      "label": "Looks good",
+      "consequence": "If you pick looks good, the agent proceeds that way on its next run."
+    },
+    {
+      "id": "b",
+      "label": "Needs changes",
+      "consequence": "If you pick needs changes, the agent proceeds that way on its next run."
+    }
+  ],
+  "receipt": {
+    "runId": "run_01JCZK7Q8XG4M2B9V5T3W6RH01",
+    "agentId": "agt_01JCZK7Q8XG4M2B9V5T3W6RH01",
+    "computerId": "cmp_01JCZK7Q8XG4M2B9V5T3W6RH01",
+    "harness": "claude-code",
+    "harnessVersion": "0.9.1",
+    "startedAt": "2026-10-29T09:00:00Z",
+    "postedAt": "2026-10-29T09:03:00Z",
+    "toolCalls": 4,
+    "taskId": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH01",
+    "wakeReason": "task_assigned"
+  },
+  "decision": {
+    "id": "dec_01JCZK7Q8XG4M2B9V5T3W6RH12",
+    "state": "open"
+  },
+  "context": {
+    "happened": [
+      {
+        "text": "The fix passed 212 of 212 tests on its last run.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH01"
+        ]
+      }
+    ],
+    "checked": [
+      {
+        "text": "The migration ran clean against a copy of the pod's data.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH02"
+        ]
+      }
+    ],
+    "stakes": {
+      "text": "Waiting holds the release a day; merging early skips one human review.",
+      "messages": [
+        "msg_01JCZK7Q8XG4M2B9V5T3W6RH01"
+      ]
+    },
+    "recommendation": {
+      "option": "a",
+      "why": {
+        "text": "Every test the change touches passed, and the review only re-reads it.",
+        "toolCalls": [
+          "tc_01JCZK7Q8XG4M2B9V5T3W6RH01"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "taskId": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH01",
+  "runId": "run_01JCZK7Q8XG4M2B9V5T3W6RH01",
+  "cause": "released",
+  "by": {
+    "kind": "human",
+    "id": "usr_01JCZK7Q8XG4M2B9V5T3W6RH01",
+    "displayName": "Sam"
+  },
+  "reason": "wrong agent for this task"
+}

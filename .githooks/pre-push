@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Installed by `make hooks fence=1` in a worker's worktree: workers commit, the coordinator pushes.
+if [ "$(git config --worktree --get commonly.pushFence)" = "1" ]; then
+  echo "push blocked: this is a worker worktree (docs/development/workflow.md). The coordinator pushes." >&2
+  exit 1
+fi

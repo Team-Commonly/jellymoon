@@ -1,16 +1,16 @@
 name: CI
+# Disabled while the repo is private: it runs only when dispatched by hand. Local `make land` is the gate and
+# nothing GitHub reports counts (a PR touching .github/workflows/ can fake any check). At public launch CI
+# returns as a thin mirror of `make preflight` for outside contributors. See docs/development/landing.md.
 
-# v4 verification loop (the build plan). Every required check on `main` is a
-# job here, so a check name never goes missing. A job whose code does not exist
+# Verification loop (docs/development/workflow.md). When enabled, each check is a
+# job here. A job whose code does not exist
 # yet passes with a notice; it starts enforcing the moment its directory lands.
-# Budget: 5 minutes wall clock for the whole workflow. The review gate is
-# review-gate.yml, kept separate so a review event never re-runs these jobs.
+# Budget: 5 minutes wall clock for the whole workflow. There is no review gate in
+# CI: `make land` is the only merge path (docs/development/landing.md).
 
 on:
-  pull_request:
-  merge_group:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -23,16 +23,27 @@ permissions:
 jobs:
   gen-drift:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .tool-versions
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Portable (no symlink out of the repo, no machine-local path)
+        run: make portable
       - name: Generated contracts match the schema
-        run: |
-          if [ ! -f Makefile ] || ! grep -q '^gen:' Makefile; then
-            echo "::notice::no 'make gen' target yet; skipping"; exit 0
-          fi
-          make gen
-          git diff --exit-code
+        run: make check-gen
+      - name: Fixtures validate (ajv) and generated TS type-checks
+        run: make test-ts
+      - name: Entropy gate (budgets, ratchet, dead code, boundaries)
+        run: make entropy
+      - name: No secrets in history (gitleaks)
+        run: make secrets
 
   worker:
     runs-on: ubuntu-latest
@@ -49,10 +60,11 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - name: Daemon, ACP and TUI tests
-        run: |
-          if [ ! -f go.mod ]; then echo "::notice::no go.mod yet; skipping"; exit 0; fi
-          go vet ./... && go test -race ./...
+        run: make test-go
 
   install:
     runs-on: ubuntu-latest
@@ -84,7 +96,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          if [ ! -f worker/wrangler.toml ]; then echo "::notice::no worker/wrangler.toml yet; skipping"; exit 0; fi
+          if [ ! -f worker/wrangler.toml ] && [ ! -f worker/wrangler.jsonc ]; then echo "::notice::no worker/wrangler config yet; skipping"; exit 0; fi
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::warning::CLOUDFLARE_API_TOKEN secret not set yet (owner action, the build plan); preview skipped"; exit 0
           fi

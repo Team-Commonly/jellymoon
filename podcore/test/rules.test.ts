@@ -264,3 +264,33 @@ describe('one claim per task', () => {
     }
   });
 });
+
+describe('a refused call is still a call', () => {
+  test('a refused call settles first, then renews: an expired lease is released, not revived (run caller and user caller)', () => {
+    const refusedAt61: Cmd[] = [{ type: 'op', runId: RUN_A, taskId: 'constructor' }, { type: 'task_release', caller: { kind: 'user', userId: U_OWNER.id }, taskId: '__proto__' }];
+    for (const cmd of refusedAt61) {
+      const r = play([[claimA(), 0], [cmd, 61_000]]);
+      expect([JSON.stringify(cmd), released(r.out), r.state.claims[T1]]).toEqual([JSON.stringify(cmd), [{ taskId: T1, runId: RUN_A, cause: 'expired' }], undefined]);
+    }
+  });
+  test('a plain member\'s run_stop on an ENDED run stays forbidden', () => {
+    const add: Cmd = { type: 'member_add', userId: U_STRANGER.id, name: 'x' };
+    const r = play([[add, 0], [{ type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'completed' }, 1], [{ type: 'run_stop', caller: { kind: 'user', userId: U_STRANGER.id }, runId: RUN_A }, 2]]);
+    expect(errCode(r.out)).toBe('forbidden');
+  });
+  test('a run\'s no-op release of an expired claim keeps its right to restore it', () => {
+    const rel: Cmd = { type: 'task_release', caller: { kind: 'run', runId: RUN_A }, taskId: T1 };
+    const r = play([[claimA(), 0], [rel, 61_000], [{ type: 'op', runId: RUN_A, taskId: T1 }, 62_000]]);
+    expect(r.state.claims[T1]?.runId).toBe(RUN_A);
+  });
+  test('a heartbeat renews every live run on its computer, not only the first', () => {
+    const r = play([[claimA(), 0], [{ type: 'claim', runId: RUN_B, taskId: T2 }, 0], [{ type: 'heartbeat', computerId: CMP_1 }, 50_000], [{ type: 'tick' }, 109_999]]);
+    expect(Object.keys(r.state.claims).sort()).toEqual([T1, T2]);
+  });
+  test('a null or non-object command, and array-valued ids, are invalid_input and change nothing', () => {
+    for (const cmd of [null, 7, 'tick', [], { type: 'op', runId: RUN_A, taskId: [T1] }, { type: 'task_update', caller: { kind: 'user', userId: U_OWNER.id }, taskId: T1, assignee: [], wakeId: id('wak', 1) }]) {
+      const r = apply(world(), cmd as unknown as Cmd, 5);
+      expect([JSON.stringify(cmd), errCode(r.out), r.state]).toEqual([JSON.stringify(cmd), 'invalid_input', world()]);
+    }
+  });
+});

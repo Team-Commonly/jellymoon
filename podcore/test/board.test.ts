@@ -22,6 +22,10 @@ describe('pod_create, members and the gate', () => {
   test('member_add admits a person once; a stranger is forbidden before not_found', () => {
     const probe: Cmd = { type: 'task_release', caller: { kind: 'user', userId: U_STRANGER.id }, taskId: id('tsk', 99) };
     expect(errCode(play([[probe, 1]]).out)).toBe('forbidden');
+    const stranger = { kind: 'user', userId: U_STRANGER.id };
+    const malformed = [{ ...probe, taskId: '__proto__' }, { type: 'run_stop', caller: stranger, runId: 'toString' }, { type: 'task_update', caller: stranger, taskId: T1 },
+      { type: 'task_create', caller: stranger, taskId: 7 }, { type: 'message_post', caller: stranger, messageId: 'constructor' }] as unknown as Cmd[];
+    for (const cmd of malformed) expect([JSON.stringify(cmd), errCode(play([[cmd, 1]]).out)]).toEqual([JSON.stringify(cmd), 'forbidden']);
     const add: Cmd = { type: 'member_add', userId: U_STRANGER.id, name: U_STRANGER.displayName };
     const r = play([[add, 1], [add, 2], [probe, 3]]);
     expect(r.state.members.filter((m) => m.id === U_STRANGER.id)).toEqual([U_STRANGER]);

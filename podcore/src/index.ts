@@ -36,12 +36,14 @@ const STRINGS: Record<string, string[]> = {
   pod_create: ['ownerId'], member_add: ['userId'], task_create: ['taskId', 'wakeId'], task_update: ['taskId', 'wakeId'], message_post: ['messageId', 'wakeId'],
   change: ['agentId', 'wakeId'], wake_ack: ['wakeId', 'computerId'], run_claim: ['wakeId', 'computerId', 'runId'], agent_register: ['agentId', 'ownerId', 'computerId'],
 };
+/** Optional string fields: absent is fine, present must be a string (an array id would otherwise slip past the id checks). */
+const OPTIONAL: Record<string, string[]> = { op: ['taskId'], task_create: ['assignee'], task_update: ['assignee'] };
 const CALLERS = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post'];
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const callerOk = (v: unknown): boolean => isObj(v) && ((v.kind === 'user' && typeof v.userId === 'string') || (v.kind === 'run' && typeof v.runId === 'string'));
 const shapeBad = (cmd: Cmd): boolean => {
   const o = cmd as Record<string, unknown>;
-  return (STRINGS[cmd.type] ?? []).some((k) => typeof o[k] !== 'string') || (CALLERS.includes(cmd.type) && !callerOk(o.caller)) || (cmd.type === 'change' && !isObj(o.refs));
+  return (STRINGS[cmd.type] ?? []).some((k) => typeof o[k] !== 'string') || (OPTIONAL[cmd.type] ?? []).some((k) => o[k] !== undefined && typeof o[k] !== 'string') || (CALLERS.includes(cmd.type) && !callerOk(o.caller)) || (cmd.type === 'change' && !isObj(o.refs));
 };
 
 /** True when any id-like field (a name ending in Id, or assignee), at any depth, is an Object.prototype key such as `__proto__`. */
@@ -57,6 +59,7 @@ const runOf = (cmd: Cmd): string | null => {
 
 /** Why a call cannot run at all: input the types promise and an adapter might still get wrong. Never a throw. */
 function refusal(cmd: Cmd, now: number): { code: 'invalid_input' | 'not_found'; why: string } | null {
+  if (!isObj(cmd)) return { code: 'invalid_input', why: 'A command must be an object.' };
   if (!Number.isInteger(now) || now < 0 || now > MAX_NOW) return { code: 'invalid_input', why: 'now must be an integer from 0 to the end of year 9999, in milliseconds.' };
   if (!Object.hasOwn(HANDLERS, cmd.type)) return { code: 'invalid_input', why: 'Unknown command type.' };
   if (cmd.type === 'boot' && !(Number.isInteger(cmd.staleMs) && cmd.staleMs >= 0 && cmd.staleMs <= LEASE_MS)) return { code: 'invalid_input', why: 'staleMs must be an integer from 0 to LEASE_MS.' };
@@ -64,20 +67,28 @@ function refusal(cmd: Cmd, now: number): { code: 'invalid_input' | 'not_found'; 
   return protoKeyed(cmd) ? { code: 'not_found', why: 'No such id.' } : null;
 }
 
+/**
+ * A refused call is still a call. With a usable clock: settle, then renew a live run's claims (ADR 0002), then answer who
+ * the caller is before what they asked: a dead or unknown run is unauthorized, a non-member is forbidden, else the refusal.
+ */
+function refuse(c: Ctx, cmd: Cmd, bad: { code: 'invalid_input' | 'not_found'; why: string }): void {
+  const o = cmd as Record<string, unknown>;
+  if (!isObj(cmd) || !Number.isInteger(c.now) || c.now < 0 || c.now > MAX_NOW) return fail(c, bad.code, bad.why);
+  settle(c);
+  const id = runOf(cmd);
+  const run = id === null ? undefined : own(c.s.runs, id);
+  if (run?.status === 'active') renewRun(c, run.id);
+  else if (id !== null && c.s.members.length > 0) return fail(c, 'unauthorized', 'This run has ended; its token no longer works.', id);
+  const u = isObj(o.caller) && o.caller.kind === 'user' && typeof o.caller.userId === 'string' ? o.caller.userId : null;
+  if (u !== null && c.s.members.length > 0 && !c.s.members.some((m) => m.id === u)) return fail(c, 'forbidden', 'Only members of this pod may do this.');
+  fail(c, bad.code, bad.why);
+}
+
 /** Settles whatever is due at `now`, then runs the command. The input state is never touched. */
 export function apply(state: PodState, cmd: Cmd, now: number): { state: PodState; out: Out[] } {
   const c: Ctx = { s: structuredClone(state), now, out: [], opened: 0 };
   const bad = refusal(cmd, now);
-  if (bad !== null) {
-    // ADR 0002: ANY operation a live run's token makes renews its claims, a refused one too. With a usable clock, settle then renew.
-    const id = runOf(cmd);
-    if (id !== null && Number.isInteger(now) && now >= 0 && now <= MAX_NOW) {
-      settle(c);
-      const run = own(c.s.runs, id);
-      if (run?.status === 'active') renewRun(c, id);
-    }
-    return fail(c, bad.code, bad.why), { state: c.s, out: c.out };
-  }
+  if (bad !== null) return refuse(c, cmd, bad), { state: c.s, out: c.out };
   // boot stretches stale leases BEFORE the settle, or a lease that only looks lapsed would be expired early.
   if (cmd.type === 'boot') bootCmd(c, cmd);
   settle(c);

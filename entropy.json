@@ -30,7 +30,7 @@
       "paths": [
         "podcore/"
       ],
-      "max": 1850
+      "max": 1950
     },
     "daemon": {
       "paths": [

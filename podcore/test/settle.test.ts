@@ -108,8 +108,12 @@ describe('run callers and run_end', () => {
       claim(), { type: 'op', runId: RUN_A, taskId: id('tsk', 99) }, { type: 'task_release', caller, taskId: id('tsk', 99) }, { type: 'run_stop', caller, runId: id('run', 99) },
       { type: 'task_create', caller, taskId: T1, title: 'x', kind: 'chore', wakeId: id('wak', 1) }, { type: 'task_update', caller, taskId: id('tsk', 99), status: 'done', wakeId: id('wak', 1) },
       { type: 'message_post', caller, messageId: id('msg', 1), text: 'hi', summary: 's', wakeId: id('wak', 1) },
-    ];
-    for (const cmd of cmds) expect(errCode(play([[cmd, 2]], ended).out)).toBe('unauthorized');
+      // malformed or prototype-key: the caller is judged first (ADR 0002, ADR 0003)
+      { type: 'op', runId: RUN_A, taskId: 'constructor' }, { type: 'claim', runId: RUN_A, taskId: 7 }, { type: 'claim', runId: RUN_A, taskId: '__proto__' },
+      { type: 'task_create', caller, taskId: T1, title: 'x', kind: 'chore' }, { type: 'task_update', caller, taskId: T1, assignee: '__proto__', wakeId: id('wak', 1) },
+      { type: 'task_release', caller, taskId: 'toString' }, { type: 'run_stop', caller, runId: 'valueOf' }, { type: 'message_post', caller, messageId: id('msg', 1) },
+    ] as unknown as Cmd[];
+    for (const cmd of cmds) expect([JSON.stringify(cmd), errCode(play([[cmd, 2]], ended).out)]).toEqual([JSON.stringify(cmd), 'unauthorized']);
   });
   test('a live run calling run_stop gets forbidden before any lookup: itself, another run, an unknown id', () => {
     for (const runId of [RUN_B, RUN_A, id('run', 99)]) expect(errCode(play([[{ type: 'run_stop', caller: { kind: 'run', runId: RUN_B }, runId }, 2]]).out)).toBe('forbidden');

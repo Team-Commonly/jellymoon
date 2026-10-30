@@ -29,6 +29,13 @@ function variants(v: unknown, bad: string): unknown[] {
   });
 }
 
+/** The caller is judged first (ADR 0003): a prototype-key run is unauthorized, a prototype-key user is forbidden, any other id is not_found. */
+const expected = (v: Cmd): string => {
+  const o = v as unknown as { type: string; runId?: string; caller?: { runId?: string; userId?: string } };
+  if (BAD.includes(o.caller?.runId ?? '') || (['claim', 'op'].includes(o.type) && BAD.includes(o.runId ?? ''))) return 'unauthorized';
+  return BAD.includes(o.caller?.userId ?? '') ? 'forbidden' : 'not_found';
+};
+
 const protoState = () => {
   const names = Object.getOwnPropertyNames(Object.prototype);
   return { names, values: names.map((n) => Object.getOwnPropertyDescriptor(Object.prototype, n)?.value) };
@@ -44,7 +51,7 @@ test('an id equal to an Object.prototype key is not_found: no throw, state uncha
       for (const v of variants(cmd, bad)) {
         const r = apply(base, v as Cmd, 5);
         tried += 1;
-        expect([JSON.stringify(v), errCode(r.out), r.out.length, r.state]).toEqual([JSON.stringify(v), 'not_found', 1, base]);
+        expect([JSON.stringify(v), errCode(r.out), r.out.length, r.state]).toEqual([JSON.stringify(v), expected(v as Cmd), 1, base]);
         expect(protoState()).toEqual(before);
         for (const k of TOUCHED) expect((Object.prototype as Record<string, unknown>)[k]).toBe(undefined);
       }

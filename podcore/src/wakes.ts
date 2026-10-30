@@ -44,8 +44,8 @@ export function writeWake(c: Ctx, agentId: AgentId, reason: WakeReason, refs: Wa
 
 /** Refuses (invalid_input) a malformed seed, or one whose random part cannot hold `n` wakes. Call before any effect. */
 export function seedFits(c: Ctx, seed: WakeId, n: number): boolean {
-  const first = nthWakeId(seed, 0);
-  if (first !== null && Object.values(c.s.wakes).some((w) => w.id === first)) {
+  const taken = Array.from({ length: Math.max(n, 1) }, (_, k) => nthWakeId(seed, k));
+  if (Object.values(c.s.wakes).some((w) => taken.includes(w.id))) {
     fail(c, 'invalid_input', 'That wakeId is already a pending wake; a retry needs a fresh seed.', seed);
     return false;
   }

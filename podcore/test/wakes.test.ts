@@ -178,6 +178,7 @@ describe('resend', () => {
   test('a resend restarts the 60 s wait', () => {
     const r = play([[hb(CMP_1), 60_000], [hb(CMP_1), 100_000], [hb(CMP_1), 120_000]], sent);
     expect(wakes(r.out).length).toBe(2);
+    expect(wakes(play([[hb(CMP_1), 60_000], [hb(CMP_1), 119_999]], sent).out).length).toBe(1);
   });
 
   test('a claimed wake is gone, so nothing is resent', () => {
@@ -284,5 +285,12 @@ describe('agent_register', () => {
     const cmd = assign(1, AG1, wak(7));
     const r = play([[cmd, 0], [{ ...cmd, taskId: id('tsk', 40) } as Cmd, 1]]);
     expect([errCode(r.out), Object.values(r.state.wakes).length]).toEqual(['invalid_input', 1]);
+  });
+
+  test('a seed whose later ids (k > 0) collide with a pending wake is refused too', () => {
+    const three = { type: 'message_post', caller: call, messageId: id('msg', 5), text: '@agent-1 @agent-3', summary: 's', wakeId: wak(10) } as Cmd;
+    const pending = play([[assign(1, AG3, wak(11)), 0]]).state;
+    expect(errCode(play([[three, 1]], pending).out)).toBe('invalid_input');
+    expect(errCode(play([[three, 1]], play([[assign(1, AG3, wak(30)), 0]]).state).out)).toBeNull();
   });
 });

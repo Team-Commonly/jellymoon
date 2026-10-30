@@ -89,12 +89,17 @@ test('stale restore property: a snapshot stale only in heartbeat renewals by up 
     const at = Math.floor(rnd() * steps.length);
     const w = Math.floor(rnd() * 60_001);
     const straight = instances(run(steps).per);
-    const stale = instances(run(steps, (s, i) => {
+    let boot: Out[] = [];
+    const staleRun = run(steps, (s, i) => {
       if (i !== at) return s;
       const old = JSON.parse(JSON.stringify(s)) as PodState;
       for (const k of Object.values(old.claims)) k.leaseUntil -= Math.floor(rnd() * (w + 1));
-      return apply(old, { type: 'boot', staleMs: w }, steps[at][1]).state;
-    }).per);
+      const b = apply(old, { type: 'boot', staleMs: w }, steps[at][1]);
+      boot = b.out;
+      return b.state;
+    });
+    // boot's own events (the settle it runs) come before the step's, so they belong in the comparison
+    const stale = instances([...staleRun.per.slice(0, at), boot, ...staleRun.per.slice(at)]);
     for (const [key, ts] of stale) if (straight.has(key)) expect([seed, key, ts >= (straight.get(key) as string)]).toEqual([seed, key, true]);
   }
 });

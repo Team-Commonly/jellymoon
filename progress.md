@@ -12,7 +12,7 @@ goes in the PR.
   in CONTRIBUTING.md (nothing checks it today; the `dco` CI job will once CI runs on pull requests); CI is a fork-safe,
   dispatch-only mirror of `make preflight`; the loop
   docs moved to `.loop/`.
-- **Evidence:** `make preflight` green; check-private 80 cases with a mutation sweep (every mutant caught except one self-test
+- **Evidence:** `make preflight` green; check-private 81 cases with a mutation sweep (every mutant caught except one self-test
   blind spot, a mutated exit path that also hides its own failure); `make secrets-all` over every branch of the old repo found nothing.
 - **Next:** supply the names list in CI, flip the repo public after the owner's go.
 - **Surprising:** the check's first version printed the text it matched, which a CI log masks only as a whole string; it now

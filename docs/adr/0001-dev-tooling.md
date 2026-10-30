@@ -29,13 +29,13 @@ The LOC budget for the slice is a deliberate choice to stay small:
 
 | Area | Cap |
 |---|---|
-| core (`schema/`, `scripts/`) | 2,200 |
+| core (`schema/`, `scripts/`) | 2,450 |
 | podcore | 2,050 |
 | worker | 3,000 |
 | daemon | 3,000 |
 | e2e | 1,500 |
 
-The caps add up to 11,750 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 12,000 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -49,3 +49,4 @@ The caps add up to 11,750 lines. Agent-written comparables grew without bounds: 
 2026-10-30: core cap 2,000 → 2,100, id-keyed verdict, every-range-blob scan and kill/trust/scrub tests, land review round 14, #10.
 2026-10-30: core cap 2,100 → 2,200, text-by-land rule, padded range scan, per-magic and end-to-end tests, land review round 15, #10.
 2026-10-30: gitleaks row rewritten: scans refuse and never waive; the verdict-free path and its ~320 core lines were deleted, core is 1,787 under the 2,200 cap, land review round 16, #10.
+2026-10-30: core cap 2,200 → 2,450, the pre-public deny check (`scripts/check-private.mjs` and its cases) on top of land review rounds 19 and 20; merged, core measures 2,236, unit OS1.

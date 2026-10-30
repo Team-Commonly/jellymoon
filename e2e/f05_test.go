@@ -38,7 +38,7 @@ func TestF05(t *testing.T) {
 	needFake(t)
 	w := newWorld(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sO.snapshot(0) }}
-	dana, eli := w.session("dana"), w.session("eli")
+	dana, eli, fay := w.session("dana"), w.session("eli"), w.session("fay")
 	people := []user{w.owner, w.ben, w.cara, dana} // the pod after dana joins
 	var code string
 	p.step("the owner creates a single-use invite and a second user accepts it", func() error {
@@ -66,6 +66,19 @@ func TestF05(t *testing.T) {
 			return fmt.Errorf("second accept: HTTP %d code=%q, want 410", r.Status, r.Err.Code)
 		}
 		return w.onlyMembers(people...) // the refused user did not join
+	})
+	p.step("accepting an expired invite returns 410 and adds no member", func() error {
+		var inv struct {
+			Code string `json:"code"`
+		}
+		if r := w.c.do("POST", "/v1/pods/"+w.pod+"/invites", w.owner.tok, map[string]any{"maxUses": 5, "ttlSeconds": 60}, &inv); !r.ok() {
+			return fmt.Errorf("create invite: HTTP %d code=%q", r.Status, r.Err.Code)
+		}
+		w.advance(61_000) // past the invite's expiry, with uses left
+		if r := w.c.do("POST", "/v1/invites/"+inv.Code+"/accept", fay.tok, nil, nil); r.Status != 410 {
+			return fmt.Errorf("expired accept: HTTP %d code=%q, want 410", r.Status, r.Err.Code)
+		}
+		return w.onlyMembers(people...)
 	})
 	p.step("a non-member creating an invite gets 403", func() error {
 		r := w.c.do("POST", "/v1/pods/"+w.pod+"/invites", eli.tok, map[string]any{"maxUses": 1}, nil)

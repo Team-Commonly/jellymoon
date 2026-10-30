@@ -61,6 +61,7 @@
         "the owner creates an invite and a second user accepts it",
         "the second user's hello lists them as a member",
         "accepting the same single-use invite again returns 410",
+        "accepting an expired invite returns 410 and adds no member",
         "a non-member creating an invite gets 403"
       ],
       "test": "go test ./e2e -run TestF05",

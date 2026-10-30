@@ -111,8 +111,8 @@ await t('an error carrying the token after the pod read is scrubbed by main\'s c
 await t('a verdict whose first line carries only a PREFIX of the head: refused', { msgs: [{ ...NOTE, content: `jellymoon#5 ${HEAD.slice(0, 8)}\nGATE: PASS` }] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('a verdict whose first line carries the head plus a suffix: refused', { msgs: [{ ...NOTE, content: `jellymoon#5 ${HEAD}0\nGATE: PASS` }] }, (r) => no(r, /no accepted reviewer's pod message/));
 // Pod paging: a partial list must never be judged (a page-1 PASS over a page-2 FAIL would land).
-const FAILMSG = { ...NOTE, userId: { _id: 'id-ben', username: 'ben' }, content: `jellymoon#5 ${HEAD}\nGATE: FAIL`, createdAt: '2026-10-29T09:30:00Z' };
-const TWO = { JM_VERDICT_REVIEWERS: 'id-orion:Orion,id-ben:Vega' };
+const FAILMSG = { ...NOTE, userId: { _id: 'id-vega', username: 'vega' }, content: `jellymoon#5 ${HEAD}\nGATE: FAIL`, createdAt: '2026-10-29T09:30:00Z' };
+const TWO = { JM_VERDICT_REVIEWERS: 'id-orion:Orion,id-vega:Vega' };
 const older = (r) => r.w.pod.filter((p) => p.url.includes('before=')).length; // fetches that went back past page 1
 const page = (items) => ({ ok: true, status: 200, json: async () => items });
 const full = Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, userId: { _id: 'other', username: 'o' }, content: 'x', createdAt: new Date(Date.parse('2026-10-29T11:00:00Z') - i * 1000).toISOString() }));

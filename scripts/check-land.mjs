@@ -149,7 +149,7 @@ const cases = [
   ['pod: the right id with any username is accepted', pod([msg('orion', verdict(5, H), { userId: { _id: 'id-orion', username: 'alice-example' } })]).ok, true],
   ['pod: a forged later PASS (other id, same name) does not override the real FAIL', pod([msg('orion', verdict(5, H, 'FAIL')), msg('orion', verdict(5, H), { userId: { _id: 'id-forged', username: 'orion' } })]).ok, false],
   ['pod: the latest verdict is decided per id (a later PASS from the same id wins)', pod([msg('orion', verdict(5, H, 'FAIL'), { createdAt: '2026-10-29T10:00:00Z' }), msg('orion', verdict(5, H), { createdAt: '2026-10-29T11:00:00Z' })]).ok, true],
-  ['pod: a prefix of a listed id is not the reviewer', pod([msg('orion', verdict(5, H), { userId: { _id: 'id-lume', username: 'orion' } })]).ok, false],
+  ['pod: a prefix of a listed id is not the reviewer', pod([msg('orion', verdict(5, H), { userId: { _id: 'id-orio', username: 'orion' } })]).ok, false],
   ['pod: a case variant of a listed id is not the reviewer', pod([msg('orion', verdict(5, H), { userId: { _id: 'ID-ORION', username: 'orion' } })]).ok, false],
   ['pod: a string userId (not a populated user) is ignored', pod([msg('orion', verdict(5, H), { userId: 'id-orion' })]).ok, false],
   ['pod: no configured reviewers refuses and names JM_VERDICT_REVIEWERS', pod([msg('orion', verdict(5, H))], '5', H, { entries: [] }).reason.includes('JM_VERDICT_REVIEWERS'), true],

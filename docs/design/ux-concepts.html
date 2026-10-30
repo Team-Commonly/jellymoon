@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400..900&family=Overpass+Mono:wght@400..700&display=swap">
 <style>
-/* Tokens: Timetable direction from v4-design-directions-r2, plus a derived dark set.
+/* Tokens: the Timetable direction, plus a derived dark set.
    One colour rule: --signal means a person is needed. Everything else is ink on concrete/enamel. */
 :root{
   --concrete:oklch(93.6% 0.003 170);
@@ -431,7 +431,7 @@ button.g:hover{background:var(--concrete)}
     <p style="margin-top:10px;padding:10px 12px;border-left:3px solid var(--ink);background:var(--enamel);color:var(--ink);font-size:14.5px"><b>Current lean (revised for tab 6).</b> Inbox stays home. <b>Round table</b> is how you re-enter after time away, and every ask carries a context block (what happened, what was checked, what is at stake, each option’s consequence). Chat is the pod surface between round tables; Transit’s handoff and receipt routes live inside the cards. Map and Room stay later views.</p>
     <span class="ex-banner">Example data. Every person, agent, PR, number and receipt on this page is invented for the mock.</span>
     <div class="bar">
-      <p style="margin:0;font-size:13px;color:var(--ink-3)">Keys on every tab: <span class="kbd">A</span> approve recommended · <span class="kbd">1</span>–<span class="kbd">3</span> rule · <span class="kbd">U</span> undo · <span class="kbd">R</span> redirect Wren · <span class="kbd">T</span> receipt · <span class="kbd">C</span> catch up · <span class="kbd">J</span>/<span class="kbd">K</span> move · <span class="kbd">N</span>/<span class="kbd">P</span> next/previous turn (tab 6)</p>
+      <p style="margin:0;font-size:13px;color:var(--ink-3)">Keys on every tab: <span class="kbd">A</span> approve recommended · <span class="kbd">1</span>–<span class="kbd">3</span> rule · <span class="kbd">U</span> undo · <span class="kbd">R</span> redirect Mira · <span class="kbd">T</span> receipt · <span class="kbd">C</span> catch up · <span class="kbd">J</span>/<span class="kbd">K</span> move · <span class="kbd">N</span>/<span class="kbd">P</span> next/previous turn (tab 6)</p>
       <button class="btn btn-s" type="button" data-act="theme" id="themeBtn" aria-label="Theme">Theme: auto</button>
     </div>
   </header>
@@ -451,7 +451,7 @@ button.g:hover{background:var(--concrete)}
 <dialog id="dlg-receipt" aria-labelledby="rc-title"><div id="rc-body"></div></dialog>
 <dialog id="dlg-redirect" aria-labelledby="rd-title">
   <form method="dialog" id="rd-form">
-    <div class="dh"><div><h3 id="rd-title">Redirect Wren mid-run</h3><p>Lands at Wren's next tool call; the claim's 60 s lease renews on the daemon heartbeat, not on your note.</p></div><button class="btn btn-s" value="cancel" type="submit" formnovalidate>Close</button></div>
+    <div class="dh"><div><h3 id="rd-title">Redirect Mira mid-run</h3><p>Lands at Mira's next tool call; the claim's 60 s lease renews on the daemon heartbeat, not on your note.</p></div><button class="btn btn-s" value="cancel" type="submit" formnovalidate>Close</button></div>
     <div class="db">
       <p class="claimed" id="rd-now"></p>
       <fieldset class="preset" style="border:0;padding:0;margin:0"><legend class="sr">Redirect</legend>
@@ -460,9 +460,9 @@ button.g:hover{background:var(--concrete)}
         <label><input type="radio" name="rp" value="cap"><span><b>Cap exports at 2,000 lines for now</b><span class="hint" style="display:block">Ship a clear error above the cap; chunking later.</span></span></label>
         <label><input type="radio" name="rp" value="custom"><span><b>Something else</b></span></label>
       </fieldset>
-      <label class="sr" for="rd-text">Your note to Wren</label>
-      <input class="field" id="rd-text" placeholder="Note to Wren (used with “Something else”)">
-      <div class="row"><button class="btn btn-p" type="submit" value="send">Send redirect</button><button class="btn" type="submit" value="stop" id="rd-stop">Stop Wren</button></div>
+      <label class="sr" for="rd-text">Your note to Mira</label>
+      <input class="field" id="rd-text" placeholder="Note to Mira (used with “Something else”)">
+      <div class="row"><button class="btn btn-p" type="submit" value="send">Send redirect</button><button class="btn" type="submit" value="stop" id="rd-stop">Stop Mira</button></div>
     </div>
   </form>
 </dialog>
@@ -472,57 +472,57 @@ button.g:hover{background:var(--concrete)}
 "use strict";
 /* ---------- example data (invented) ---------- */
 const PPL={maya:{n:'Maya Okafor',i:'MO',sub:'you · pod lead'},marco:{n:'Marco Ruiz',i:'MR',sub:'billing engineer'}};
-const AG={wren:{n:'Wren',h:'Claude Code',hk:'claude-code',owner:'Maya',pc:'maya-mbp'},otto:{n:'Otto',h:'Codex',hk:'codex',owner:'Marco',pc:'marco-linux'}};
-const OPTS={1:{l:'Merge as is',d:'Half-even rounding everywhere; update the 3 PDF snapshots.',rec:1,then:'Otto merges now. PDFs round half-even from the next deploy; 3 of 212 fixture totals drop by one cent. Marco’s T-42 sign-off has to cover the PDF change too.'},
-  2:{l:'Merge, keep PDF rounding',d:'Wren splits the helper so only CSV rounds half-even. About 20 min.',then:'Wren splits the helper after its current T-43 step (about 20 min), Otto re-reviews, merge mid-morning. PDFs do not change.'},
+const AG={mira:{n:'Mira',h:'Claude Code',hk:'claude-code',owner:'Maya',pc:'maya-mbp'},jonah:{n:'Jonah',h:'Codex',hk:'codex',owner:'Marco',pc:'marco-linux'}};
+const OPTS={1:{l:'Merge as is',d:'Half-even rounding everywhere; update the 3 PDF snapshots.',rec:1,then:'Jonah merges now. PDFs round half-even from the next deploy; 3 of 212 fixture totals drop by one cent. Marco’s T-42 sign-off has to cover the PDF change too.'},
+  2:{l:'Merge, keep PDF rounding',d:'Mira splits the helper so only CSV rounds half-even. About 20 min.',then:'Mira splits the helper after its current T-43 step (about 20 min), Jonah re-reviews, merge mid-morning. PDFs do not change.'},
   3:{l:'Hold for finance',d:'Wait for Marco’s sign-off on totals (T-42) before merging.',then:'Nothing merges until Marco signs off T-42 (back 13:00). CSV export slips to the afternoon; T-43 keeps running.'}};
-const REC_WHY='Otto recommends 1: one rounding rule for both formats is what Marco’s “match to the cent” rule needs, and half-even is the finance standard.';
+const REC_WHY='Jonah recommends 1: one rounding rule for both formats is what Marco’s “match to the cent” rule needs, and half-even is the finance standard.';
 const ASK_TEXT='I reviewed all 6 files. One change reaches past CSV: rounding moved into a shared helper, so PDF totals now round half-even too. Three PDF snapshots moved by one cent.';
 const RC={
-  r1184:{title:'Wren · result on T-40',line:'read 14 files · 23 tool calls · 6m 41s · T-40',run:'jmr_8f2c…a41f',agent:'wren',wake:'mention by Marco Ruiz (seq 1180)',claim:'T-40 · 23 tool calls, released 10:04:12',win:'09:57:31 → 10:04:12',
+  r1184:{title:'Mira · result on T-40',line:'read 14 files · 23 tool calls · 6m 41s · T-40',run:'jmr_8f2c…a41f',agent:'mira',wake:'mention by Marco Ruiz (seq 1180)',claim:'T-40 · 23 tool calls, released 10:04:12',win:'09:57:31 → 10:04:12',
     tools:[['Read','billing/export/*.ts (6 files)'],['Read','billing/test/invoices (8 fixtures)'],['Grep','"roundTotal" · 3 hits'],['Edit','billing/money.ts'],['Edit','billing/export/csv.ts +5 files'],['Bash','npm test -- invoices → exit 0 · 212 passed'],['Bash','git push origin csv-export'],['gh','pr create → #418']],
     says:['“Totals match the PDF on 212 fixtures.” Matches the test run above.','Caveat: not tested above 480 line items. Not checkable by the server.']},
-  r1189:{title:'Otto · ask on PR #418',line:'read 6 files · 9 tool calls · 4m 02s · review of #418',run:'jmr_31d0…7c02',agent:'otto',wake:'handoff from Wren (seq 1186)',claim:'T-40 review · lease held while waiting on ruling',win:'10:15:40 → 10:19:42',
+  r1189:{title:'Jonah · ask on PR #418',line:'read 6 files · 9 tool calls · 4m 02s · review of #418',run:'jmr_31d0…7c02',agent:'jonah',wake:'handoff from Mira (seq 1186)',claim:'T-40 review · lease held while waiting on ruling',win:'10:15:40 → 10:19:42',
     tools:[['Read','PR #418 diff · 6 files'],['Bash','npm test -- invoices → exit 0 · 212 passed'],['Bash','npm run pdf:snap → 3 snapshots changed'],['Read','billing/money.ts roundHalfEven'],['gh','pr review #418 --comment']],
     says:['“Three PDF snapshots moved by one cent.” Matches pdf:snap output above.']},
-  r1191:{title:'Wren · live run on T-43',line:'',run:'jmr_b9e0…12aa',agent:'wren',wake:'task.assigned by Maya Okafor (seq 1183)',claim:'T-43 · lease live, renewed by heartbeat (60 s)',win:'10:16:05 → now',
+  r1191:{title:'Mira · live run on T-43',line:'',run:'jmr_b9e0…12aa',agent:'mira',wake:'task.assigned by Maya Okafor (seq 1183)',claim:'T-43 · lease live, renewed by heartbeat (60 s)',win:'10:16:05 → now',
     tools:[['Read','billing/export/csv.ts'],['Bash','npm test -- export.large → timeout at 31s'],['Grep','"buildRows" · 2 hits'],['Read','billing/export/rows.ts'],['Edit','billing/export/rows.ts'],['Bash','npm test -- export.large → timeout at 29s'],['Read','node_modules/csv-stringify/README'],['Edit','billing/export/chunk.ts (new)'],['Bash','npm test -- export.chunk → 4 passed']],
     says:['Plan and step labels are agent-reported.']}
 };
 const OVN={win8F:'00:57:31 → 01:04:12',win31:'01:15:40 → 01:19:42'};
 Object.assign(RC,{
-  r8F:{...RC.r1184,title:'Wren · run r_8F (overnight)',win:OVN.win8F},
-  r31:{...RC.r1189,title:'Otto · run r_31 (overnight)',win:OVN.win31},
-  rB9:{...RC.r1191,title:'Wren · run r_B9, live on T-43',win:'01:16:05 → now'},
-  t2C:{title:'Test run t_2C (inside run r_8F)',run:'jmr_8f2c…a41f · tool call #6',agent:'wren',wake:RC.r1184.wake,claim:'T-40',win:'01:02:10 → 01:02:56',tools:[['Bash','npm test -- invoices'],['exit','0 · 212 passed, 0 failed, 0 skipped · 46 s']],says:['“Totals match the PDF”: the suite asserts CSV total equals PDF total for each fixture.']},
-  p4D:{title:'Preflight p_4D (before opening PR #418)',run:'jmr_8f2c…a41f · tool calls #19–21',agent:'wren',wake:RC.r1184.wake,claim:'T-40',win:'01:03:20 → 01:03:58',tools:[['Bash','npm run lint → exit 0'],['Bash','npm run typecheck → exit 0'],['Bash','npm run build → exit 0']],says:['Lint, types and build are the pod’s required preflight before a PR.']},
-  t5A:{title:'Test run t_5A (inside run r_31)',run:'jmr_31d0…7c02 · tool call #2',agent:'otto',wake:RC.r1189.wake,claim:'T-40 review',win:'01:16:30 → 01:17:15',tools:[['Bash','npm test -- invoices'],['exit','0 · 212 passed · 45 s']],says:['An independent re-run by a second harness on a second computer.']},
-  s7E:{title:'Snapshot diff s_7E (inside run r_31)',run:'jmr_31d0…7c02 · tool call #3',agent:'otto',wake:RC.r1189.wake,claim:'T-40 review',win:'01:17:20 → 01:18:02',tools:[['Bash','npm run pdf:snap → 3 changed'],['diff','inv-0031 total 1,204.35 → 1,204.34'],['diff','inv-0107 total 88.65 → 88.64'],['diff','inv-0188 total 15.05 → 15.04']],says:['“One cent”: each diff above is exactly 0.01, all on a half-cent tie.']},
+  r8F:{...RC.r1184,title:'Mira · run r_8F (overnight)',win:OVN.win8F},
+  r31:{...RC.r1189,title:'Jonah · run r_31 (overnight)',win:OVN.win31},
+  rB9:{...RC.r1191,title:'Mira · run r_B9, live on T-43',win:'01:16:05 → now'},
+  t2C:{title:'Test run t_2C (inside run r_8F)',run:'jmr_8f2c…a41f · tool call #6',agent:'mira',wake:RC.r1184.wake,claim:'T-40',win:'01:02:10 → 01:02:56',tools:[['Bash','npm test -- invoices'],['exit','0 · 212 passed, 0 failed, 0 skipped · 46 s']],says:['“Totals match the PDF”: the suite asserts CSV total equals PDF total for each fixture.']},
+  p4D:{title:'Preflight p_4D (before opening PR #418)',run:'jmr_8f2c…a41f · tool calls #19–21',agent:'mira',wake:RC.r1184.wake,claim:'T-40',win:'01:03:20 → 01:03:58',tools:[['Bash','npm run lint → exit 0'],['Bash','npm run typecheck → exit 0'],['Bash','npm run build → exit 0']],says:['Lint, types and build are the pod’s required preflight before a PR.']},
+  t5A:{title:'Test run t_5A (inside run r_31)',run:'jmr_31d0…7c02 · tool call #2',agent:'jonah',wake:RC.r1189.wake,claim:'T-40 review',win:'01:16:30 → 01:17:15',tools:[['Bash','npm test -- invoices'],['exit','0 · 212 passed · 45 s']],says:['An independent re-run by a second harness on a second computer.']},
+  s7E:{title:'Snapshot diff s_7E (inside run r_31)',run:'jmr_31d0…7c02 · tool call #3',agent:'jonah',wake:RC.r1189.wake,claim:'T-40 review',win:'01:17:20 → 01:18:02',tools:[['Bash','npm run pdf:snap → 3 changed'],['diff','inv-0031 total 1,204.35 → 1,204.34'],['diff','inv-0107 total 88.65 → 88.64'],['diff','inv-0188 total 15.05 → 15.04']],says:['“One cent”: each diff above is exactly 0.01, all on a half-cent tie.']},
   c9A:{title:'Commit c_9A by Marco',stamp:'STAMPED BY GITHUB, LINKED BY THE POD',run:'git c9a1e07 (push)',agent:'marco',wake:'none: a person, not a run',claim:'T-42',win:'23:38:02',tools:[['git','add billing/test/invoices/*.json (8 files)'],['git','push origin fixtures']],says:['Marco also says he checked PDF totals by hand. No receipt covers that.']},
-  m1180:{title:'Pod message seq 1180 by Marco',run:'message seq 1180',agent:'marco',wake:'none: a person, not a run',claim:'—',win:'23:40:11',tools:[['post','invoice-export · mentions Wren']],says:['Sets the rule Wren and Otto worked to: CSV totals match the PDF to the cent.']}
+  m1180:{title:'Pod message seq 1180 by Marco',run:'message seq 1180',agent:'marco',wake:'none: a person, not a run',claim:'—',win:'23:40:11',tools:[['post','invoice-export · mentions Mira']],says:['Sets the rule Mira and Jonah worked to: CSV totals match the PDF to the cent.']}
 });
 const LIVE=[['Edit','billing/export/csv.ts'],['Bash','npm test -- export.large → 22s'],['Read','billing/test/invoices/big-2000.json'],['Bash','npm test -- export.chunk → 6 passed'],['Edit','billing/export/chunk.ts'],['Grep','"flushEvery" · 1 hit']];
 const FEED=[
-  {seq:1180,t:'09:12',k:'human',who:'marco',text:'Finance checks one thing first: CSV totals have to match the PDF to the cent. <b>@Wren</b>, the fixtures are in <code>billing/test/invoices</code>.'},
+  {seq:1180,t:'09:12',k:'human',who:'marco',text:'Finance checks one thing first: CSV totals have to match the PDF to the cent. <b>@Mira</b>, the fixtures are in <code>billing/test/invoices</code>.'},
   {seq:1182,t:'09:26',k:'human',who:'maya',text:'Menu label is settled: “Download CSV”, right under “Download PDF”. No new icon.'},
-  {seq:1183,t:'09:40',k:'human',who:'maya',text:'<b>@Wren</b> after the export lands, take T-43: exports over 500 lines time out.'},
-  {seq:1184,t:'10:04',k:'result',who:'wren',task:'T-40'},
-  {seq:1186,t:'10:15',k:'handoff',from:'wren',to:'otto',what:'review of PR #418'},
-  {seq:1189,t:'10:19',k:'ask',who:'otto',task:'T-40'},
-  {seq:1191,t:'10:16',k:'progress',who:'wren',task:'T-43'}
+  {seq:1183,t:'09:40',k:'human',who:'maya',text:'<b>@Mira</b> after the export lands, take T-43: exports over 500 lines time out.'},
+  {seq:1184,t:'10:04',k:'result',who:'mira',task:'T-40'},
+  {seq:1186,t:'10:15',k:'handoff',from:'mira',to:'jonah',what:'review of PR #418'},
+  {seq:1189,t:'10:19',k:'ask',who:'jonah',task:'T-40'},
+  {seq:1191,t:'10:16',k:'progress',who:'mira',task:'T-43'}
 ];
 const TASKS={
   'T-41':{id:'T-41',title:['Menu label:','Download CSV'],status:'done',who:'maya'},
-  'T-40':{id:'T-40',title:['CSV export','for invoices'],status:'review',who:'otto'},
+  'T-40':{id:'T-40',title:['CSV export','for invoices'],status:'review',who:'jonah'},
   'T-42':{id:'T-42',title:['Finance sign-off','on totals'],status:'doing',who:'marco'},
-  'T-43':{id:'T-43',title:['Chunk exports','over 500 lines'],status:'doing',who:'wren'},
+  'T-43':{id:'T-43',title:['Chunk exports','over 500 lines'],status:'doing',who:'mira'},
   'T-44':{id:'T-44',title:['Load-test a','2,000-line invoice'],status:'todo',who:null}
 };
 const PLAN={'T-43':[['Find where the export times out','done'],['Split rows into 500-line chunks','doing'],['Test a 2,000-line fixture','todo'],['Open a PR','todo']],
   'T-44':[['Build a 2,000-line invoice fixture','doing'],['Time the export end to end','todo'],['Post the numbers','todo']]};
 const clone=o=>JSON.parse(JSON.stringify(o));
 function fresh(){return{feed:clone(FEED),tasks:clone(TASKS),seq:1191,min:12*60+14,lastSeen:1183,recap:false,ruling:null,
-  wren:{state:'run',task:'T-43',tools:9,plan:clone(PLAN['T-43']),live:[]},otto:{state:'wait'},sel:null,marco:null,replay:false,rt:0,rtDone:null};}
+  mira:{state:'run',task:'T-43',tools:9,plan:clone(PLAN['T-43']),live:[]},jonah:{state:'wait'},sel:null,marco:null,replay:false,rt:0,rtDone:null};}
 const S=[0,1,2,3,4,5].map(fresh);S[5].min=8*60+34;
 let cur=0;
 const timers=new Map();
@@ -532,39 +532,39 @@ const $=(s,r=document)=>r.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tm=st=>{const m=st.min++;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};
 const av=p=>`<span class="av" aria-hidden="true">${PPL[p].i}</span>`;
-const sgState=(st,a)=>a==='wren'?st.wren.state:st.otto.state;
+const sgState=(st,a)=>a==='mira'?st.mira.state:st.jonah.state;
 const sg=(st,a,cls='')=>`<span class="sg ${sgState(st,a)} ${cls}" aria-hidden="true">${AG[a].n[0]}</span>`;
 const STL={run:'Running',ack:'Redirect queued',stopped:'Paused, no run',wait:'Waiting on you',idle:'Idle'};
-const lamp=(st,a)=>{const s=sgState(st,a);let l=STL[s];if(a==='wren'&&s==='run')l+=' · '+st.wren.task;return `<span class="lamp ${s}">${l}</span>`};
+const lamp=(st,a)=>{const s=sgState(st,a);let l=STL[s];if(a==='mira'&&s==='run')l+=' · '+st.mira.task;return `<span class="lamp ${s}">${l}</span>`};
 const who=(st,a)=>`<span class="nm">${AG[a].n}</span><span class="rt">${AG[a].h}</span><span class="own">agent · works for ${AG[a].owner}</span>`;
 const rcptBtn=(st,id)=>id==='r1191'
-  ?`<button type="button" class="rcpt" data-act="receipt" data-arg="r1191" aria-label="Open receipt for Wren's live run">read 9 files · <span data-live="wt">${st.wren.tools}</span> tool calls · ${st.wren.state==='run'?'running':STL[st.wren.state].toLowerCase()} · ${st.wren.task}</button>`
+  ?`<button type="button" class="rcpt" data-act="receipt" data-arg="r1191" aria-label="Open receipt for Mira's live run">read 9 files · <span data-live="wt">${st.mira.tools}</span> tool calls · ${st.mira.state==='run'?'running':STL[st.mira.state].toLowerCase()} · ${st.mira.task}</button>`
   :`<button type="button" class="rcpt" data-act="receipt" data-arg="${id}" aria-label="Open receipt: ${RC[id].title}">${RC[id].line}</button>`;
 const kbd=k=>`<span class="kbd">${k}</span>`;
-function sinceCounts(st){const n=st.feed.filter(f=>f.seq>st.lastSeen);return{needs:st.ruling?0:1,done:n.filter(f=>f.k==='result').length,hand:n.filter(f=>f.k==='handoff').length,run:st.wren.state==='run'?1:0,newCount:n.length}}
+function sinceCounts(st){const n=st.feed.filter(f=>f.seq>st.lastSeen);return{needs:st.ruling?0:1,done:n.filter(f=>f.k==='result').length,hand:n.filter(f=>f.k==='handoff').length,run:st.mira.state==='run'?1:0,newCount:n.length}}
 const extra=st=>st.feed.filter(f=>f.seq>1191);
 
 const gc=(id,label)=>`<button type="button" class="g" data-act="receipt" data-arg="${id}">${label}</button>`;
 const gno=label=>`<span class="g no" title="No receipt backs this claim">${label}</span>`;
 function ctxBlock(open){
-  const body=`<dl><dt>What happened</dt><dd>Wren built CSV export (PR #418) and handed review to Otto. Otto found rounding moved into a shared helper, so PDF totals change too. ${gc('r8F','run r_8F · 23 tool calls')}${gc('r31','run r_31 · 9 tool calls')}</dd>
+  const body=`<dl><dt>What happened</dt><dd>Mira built CSV export (PR #418) and handed review to Jonah. Jonah found rounding moved into a shared helper, so PDF totals change too. ${gc('r8F','run r_8F · 23 tool calls')}${gc('r31','run r_31 · 9 tool calls')}</dd>
     <dt>What was checked</dt><dd>212 fixtures pass on both agents’ runs; 3 PDF snapshots move by exactly one cent. Not checked: invoices over 480 lines. ${gc('t2C','test t_2C · 212 passed')}${gc('s7E','snapshots s_7E · 3 changed')}${gno('480+ lines · no run')}</dd>
     <dt>What’s at stake</dt><dd>PDF totals customers already get change by one cent on 3 of 212 fixtures from the next deploy. CSV stays off behind <code>export_csv</code>. Marco’s rule: totals match to the cent.</dd></dl>`;
   return open?`<div class="ctx open">${body}</div>`:`<details class="ctx"><summary>Context: what happened, what was checked, what’s at stake</summary>${body}</details>`;
 }
 function askBlock(st,{compact=false,anchor=true,ctx=false}={}){
   const r=st.ruling;
-  const opts=[1,2,3].map(i=>`<button type="button" class="opt" data-act="rule" data-arg="${i}" ${r?'disabled':''} aria-pressed="${r&&r.opt===i}" aria-keyshortcuts="${i}${OPTS[i].rec?' A':''}" ${anchor&&i===1?'data-anchor="ask"':''}>${kbd(i)}<span><b>${OPTS[i].l}</b>${OPTS[i].rec?'<span class="rec">Otto recommends</span>':''}<span class="opt-d">${OPTS[i].d}</span><span class="then opt-d"><b>Then:</b> ${OPTS[i].then}</span></span></button>`).join('');
+  const opts=[1,2,3].map(i=>`<button type="button" class="opt" data-act="rule" data-arg="${i}" ${r?'disabled':''} aria-pressed="${r&&r.opt===i}" aria-keyshortcuts="${i}${OPTS[i].rec?' A':''}" ${anchor&&i===1?'data-anchor="ask"':''}>${kbd(i)}<span><b>${OPTS[i].l}</b>${OPTS[i].rec?'<span class="rec">Jonah recommends</span>':''}<span class="opt-d">${OPTS[i].d}</span><span class="then opt-d"><b>Then:</b> ${OPTS[i].then}</span></span></button>`).join('');
   const ruled=r?`<p class="ruled" role="status">Ruled by you at ${r.t}: <b>${OPTS[r.opt].l}</b> · decision d-77 · seq ${r.seq} · ${r.frozen?'<b>frozen</b>':`<button type="button" class="lnk" data-act="undo">Undo (U)</button> before it freezes`}</p>`:'';
   return `<div class="${compact?'compact':''}">${r?'':'<p class="need-l">Needs you · asks Maya, PR owner</p>'}<p class="sum">Merge PR #418?</p><p class="txt">${ASK_TEXT}</p>${compact?'':ctxBlock(ctx)}<div class="opts" role="group" aria-label="Options for merging PR #418">${opts}</div>${compact?'':`<p class="recline">${REC_WHY}</p>`}${ruled}${r?'':`<p class="keys">${kbd('A')} approve recommended · ${kbd('1')}–${kbd('3')} pick · ${kbd('U')} undo within 5 s</p>`}</div>`;
 }
 function resultBlock(st){return `<p class="sum">CSV export works for all four invoice states, and totals match the PDF on 212 fixtures.</p><div class="chips"><span class="chip">Ready for review</span><span class="chip">PR #418</span><span class="chip"><span class="add">+182</span> <span class="del">−14</span> · 6 files</span></div><p class="cav"><b>Caveat</b>Not tested above 480 line items; the largest fixture stops there.</p>${rcptBtn(st,'r1184')}`}
-function wrenRunBlock(st,{acts=true}={}){
-  const w=st.wren;const plan=w.plan.map(([s,x])=>`<li class="${x}">${esc(s)}</li>`).join('');
-  return `<p class="sum">${w.task==='T-43'?'Chunking exports over 500 lines':'Load-testing a 2,000-line invoice'} (${w.task})</p><ol class="plan" aria-label="Wren's plan">${plan}</ol>${rcptBtn(st,'r1191')}${acts?`<div class="acts"><button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Redirect ${kbd('R')}</button>${w.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Stop</button>'}</div>`:''}`;
+function miraRunBlock(st,{acts=true}={}){
+  const w=st.mira;const plan=w.plan.map(([s,x])=>`<li class="${x}">${esc(s)}</li>`).join('');
+  return `<p class="sum">${w.task==='T-43'?'Chunking exports over 500 lines':'Load-testing a 2,000-line invoice'} (${w.task})</p><ol class="plan" aria-label="Mira's plan">${plan}</ol>${rcptBtn(st,'r1191')}${acts?`<div class="acts"><button type="button" class="btn btn-s" data-act="redirect" data-arg="mira" data-anchor="redirect">Redirect ${kbd('R')}</button>${w.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Stop</button>'}</div>`:''}`;
 }
 function feedLine(st,f){
-  if(f.k==='redirect')return `<b>Maya → Wren (redirect):</b> ${esc(f.text)}`;
+  if(f.k==='redirect')return `<b>Maya → Mira (redirect):</b> ${esc(f.text)}`;
   if(f.k==='reply')return `<b>${f.who==='marco'?'Marco':AG[f.who].n}:</b> ${f.text}`;
   if(f.k==='human')return `<b>${PPL[f.who].n.split(' ')[0]}:</b> ${f.text}`;
   return f.text;
@@ -582,18 +582,18 @@ function rChat(st){
     items.push(chatItem(st,f));
   }
   const recap=st.recap?`<section class="recap" data-anchor="catchup" tabindex="-1" aria-label="Catch-up recap"><h4>Since you were here (10:00 · 2h 14m ago)</h4><dl>
-    <dt class="${c.needs?'needs':''}">Needs you</dt><dd>${c.needs?'Otto: merge PR #418? <button type="button" class="lnk" data-act="goask">Rule it</button>':'Nothing. You ruled on PR #418.'}</dd>
-    <dt>Done</dt><dd>Wren: CSV export ready for review, 212 fixtures match. <button type="button" class="lnk" data-act="receipt" data-arg="r1184">Receipt</button></dd>
-    <dt>Handoff</dt><dd>Wren passed PR #418 review to Otto (Marco's agent) at 10:15.</dd>
-    <dt>Running</dt><dd>Wren on T-43, step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1} of ${st.wren.plan.length}.</dd>
+    <dt class="${c.needs?'needs':''}">Needs you</dt><dd>${c.needs?'Jonah: merge PR #418? <button type="button" class="lnk" data-act="goask">Rule it</button>':'Nothing. You ruled on PR #418.'}</dd>
+    <dt>Done</dt><dd>Mira: CSV export ready for review, 212 fixtures match. <button type="button" class="lnk" data-act="receipt" data-arg="r1184">Receipt</button></dd>
+    <dt>Handoff</dt><dd>Mira passed PR #418 review to Jonah (Marco's agent) at 10:15.</dd>
+    <dt>Running</dt><dd>Mira on T-43, step ${st.mira.plan.findIndex(p=>p[1]==='doing')+1} of ${st.mira.plan.length}.</dd>
     <dt>People</dt><dd>Nothing new from Marco.</dd></dl>
     <p class="hint" style="margin-top:8px">Built from stored summaries. No model rewrote anything.</p>
     <div class="acts"><button type="button" class="btn btn-s btn-p" data-act="markread">Mark caught up</button></div></section>`:'';
   const side=`<aside class="chat-side" aria-label="Members and board"><h4 class="side-h">In this pod · 2 people, 2 agents</h4>
     <div class="mem">${av('maya')}<span><b>Maya Okafor</b><small>you · pod lead</small></span></div>
     <div class="mem">${av('marco')}<span><b>Marco Ruiz</b><small>billing engineer</small></span></div>
-    <div class="mem">${sg(st,'wren')}<span><b>Wren</b> <span class="rt">Claude Code</span><small>agent · works for Maya</small>${lamp(st,'wren')}</span></div>
-    <div class="mem">${sg(st,'otto')}<span><b>Otto</b> <span class="rt">Codex</span><small>agent · works for Marco · <button type="button" class="lnk" data-act="mate">how to work with it</button></small>${lamp(st,'otto')}</span></div>
+    <div class="mem">${sg(st,'mira')}<span><b>Mira</b> <span class="rt">Claude Code</span><small>agent · works for Maya</small>${lamp(st,'mira')}</span></div>
+    <div class="mem">${sg(st,'jonah')}<span><b>Jonah</b> <span class="rt">Codex</span><small>agent · works for Marco · <button type="button" class="lnk" data-act="mate">how to work with it</button></small>${lamp(st,'jonah')}</span></div>
     <h4 class="side-h">Board</h4>${Object.values(st.tasks).map(t=>`<div class="mini-task"><span class="id">${t.id}</span><span>${t.title.join(' ')} · <i>${t.status}</i></span></div>`).join('')}</aside>`;
   return `<div class="chat"><div class="chat-main">
     <header class="podhead"><h3>invoice-export</h3><p>Ship CSV export for invoices behind the <code>export_csv</code> flag. <span class="ex">Example data</span></p></header>
@@ -601,16 +601,16 @@ function rChat(st){
       <div class="counts"><button type="button" class="cnt ${c.needs?'needs':'zero'}" data-act="goask"><span class="cnt-l">Needs you</span><span class="cnt-n">${c.needs}</span></button><button type="button" class="cnt ${c.done?'':'zero'}" data-act="jump" data-arg="result"><span class="cnt-l">Done</span><span class="cnt-n">${c.done}</span></button><button type="button" class="cnt ${c.hand?'':'zero'}" data-act="jump" data-arg="handoff"><span class="cnt-l">Handoffs</span><span class="cnt-n">${c.hand}</span></button><button type="button" class="cnt ${c.run?'':'zero'}" data-act="jump" data-arg="redirect"><span class="cnt-l">Running</span><span class="cnt-n">${c.run}</span></button></div></section>`:''}
     ${recap}
     <ol class="stream" aria-label="Messages">${items.join('')}</ol>
-    <form class="composer" data-form="compose"><label class="sr" for="compose-0">Message invoice-export</label><input class="field" id="compose-0" name="m" placeholder="Message, or @Wren to redirect, @Otto to ask" autocomplete="off"><button class="btn btn-p" type="submit">Send</button></form>
+    <form class="composer" data-form="compose"><label class="sr" for="compose-0">Message invoice-export</label><input class="field" id="compose-0" name="m" placeholder="Message, or @Mira to redirect, @Jonah to ask" autocomplete="off"><button class="btn btn-p" type="submit">Send</button></form>
   </div>${side}</div>`;
 }
 function chatItem(st,f){
   if(f.k==='human')return `<li class="msg"><time class="tm">${f.t}</time>${av(f.who)}<div><p class="by">${PPL[f.who].n}</p><p class="mtext">${f.text}</p></div></li>`;
-  if(f.k==='handoff')return `<li class="handoff" data-anchor="handoff" tabindex="-1"><time class="tm">${f.t}</time><p><span class="tag">Handoff</span><b>Wren</b> → <b>Otto</b> <span>${f.what}</span><span class="own">Maya's agent to Marco's</span></p></li>`;
-  if(f.k==='result')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'wren')}<article class="card" data-nav tabindex="0" data-anchor="result" aria-label="Wren result on T-40"><header class="ch">${who(st,'wren')}</header>${resultBlock(st)}</article></li>`;
-  if(f.k==='ask')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'otto')}<article class="card ${st.ruling?'':'needs'}" data-nav tabindex="0" aria-label="Otto asks: merge PR 418?"><header class="ch">${who(st,'otto')}${lamp(st,'otto')}</header>${askBlock(st)}${rcptBtn(st,'r1189')}<div class="acts"><button type="button" class="btn btn-s" data-act="mate">Otto is Marco's agent</button></div></article></li>`;
-  if(f.k==='progress')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'wren')}<article class="card" data-nav tabindex="0" aria-label="Wren running on ${st.wren.task}"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}<p class="hint" style="margin-top:6px">One card per run; it updates in place.</p></article></li>`;
-  if(f.k==='redirect')return `<li class="msg"><time class="tm">${f.t}</time>${av('maya')}<div><p class="by">Maya Okafor <span class="rt">redirect → Wren</span></p><p class="mtext">${esc(f.text)}</p></div></li>`;
+  if(f.k==='handoff')return `<li class="handoff" data-anchor="handoff" tabindex="-1"><time class="tm">${f.t}</time><p><span class="tag">Handoff</span><b>Mira</b> → <b>Jonah</b> <span>${f.what}</span><span class="own">Maya's agent to Marco's</span></p></li>`;
+  if(f.k==='result')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'mira')}<article class="card" data-nav tabindex="0" data-anchor="result" aria-label="Mira result on T-40"><header class="ch">${who(st,'mira')}</header>${resultBlock(st)}</article></li>`;
+  if(f.k==='ask')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'jonah')}<article class="card ${st.ruling?'':'needs'}" data-nav tabindex="0" aria-label="Jonah asks: merge PR 418?"><header class="ch">${who(st,'jonah')}${lamp(st,'jonah')}</header>${askBlock(st)}${rcptBtn(st,'r1189')}<div class="acts"><button type="button" class="btn btn-s" data-act="mate">Jonah is Marco's agent</button></div></article></li>`;
+  if(f.k==='progress')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'mira')}<article class="card" data-nav tabindex="0" aria-label="Mira running on ${st.mira.task}"><header class="ch">${who(st,'mira')}${lamp(st,'mira')}</header>${miraRunBlock(st)}<p class="hint" style="margin-top:6px">One card per run; it updates in place.</p></article></li>`;
+  if(f.k==='redirect')return `<li class="msg"><time class="tm">${f.t}</time>${av('maya')}<div><p class="by">Maya Okafor <span class="rt">redirect → Mira</span></p><p class="mtext">${esc(f.text)}</p></div></li>`;
   if(f.k==='reply'){const a=f.who;return a==='marco'?`<li class="msg"><time class="tm">${f.t}</time>${av('marco')}<div><p class="by">Marco Ruiz</p><p class="mtext">${f.text}</p></div></li>`:`<li class="msg"><time class="tm">${f.t}</time>${sg(st,a)}<article class="card"><header class="ch">${who(st,a)}</header><p class="mtext" style="margin-top:6px">${f.text}</p>${f.wake?`<p class="hint" style="margin-top:4px;font-family:var(--mono)">wake: ${f.wake}</p>`:''}</article></li>`}
   if(f.k==='sys')return `<li class="sys">${f.text}</li>`;
   return '';
@@ -621,32 +621,32 @@ function rInbox(st){
   const c=sinceCounts(st);const sel=st.sel||'ask';
   const it=(id,cls,main,after='')=>`<li class="it ${cls} ${sel===id?'on':''}"><button type="button" class="it-main" data-act="sel" data-arg="${id}" data-nav aria-current="${sel===id}">${main}</button>${after}</li>`;
   const askOpts=st.ruling?'':`<div class="opts" role="group" aria-label="Rule from the queue">${[1,2,3].map(i=>`<button type="button" class="opt" data-act="rule" data-arg="${i}" ${i===1?'data-anchor="ask"':''}>${kbd(i)}<span><b>${OPTS[i].l}</b>${OPTS[i].rec?'<span class="rec">rec.</span>':''}</span></button>`).join('')}</div>`;
-  const needs=st.ruling?'':`<ul>${it('ask','needs',`${sg(st,'otto')}<span><span class="it-t">Merge PR #418?</span><span class="it-m"><b>Needs you</b> · Otto, Marco's agent · invoice-export · waiting 1h 55m</span></span>`,askOpts)}</ul>`;
+  const needs=st.ruling?'':`<ul>${it('ask','needs',`${sg(st,'jonah')}<span><span class="it-t">Merge PR #418?</span><span class="it-m"><b>Needs you</b> · Jonah, Marco's agent · invoice-export · waiting 1h 55m</span></span>`,askOpts)}</ul>`;
   const newItems=c.newCount&&st.feed.some(f=>f.seq>st.lastSeen&&f.seq<=1191);
   const since=newItems?`<section class="grp" data-anchor="catchup" tabindex="-1"><h4 class="grp-h"><span>Since 10:00 · FYI, no action</span><button type="button" class="btn btn-s" data-act="markread">Mark all read</button></h4><ul>
-    ${it('wren-result','',`${sg(st,'wren')}<span><span class="it-t">CSV export ready for review</span><span class="it-m">Wren · T-40 · 212 fixtures match the PDF</span></span>`)}
-    ${it('handoff','',`<span class="av sm" aria-hidden="true">⇄</span><span><span class="it-t">Wren handed PR #418 to Otto</span><span class="it-m">10:15 · Maya's agent to Marco's</span></span>`)}</ul></section>`:'';
+    ${it('mira-result','',`${sg(st,'mira')}<span><span class="it-t">CSV export ready for review</span><span class="it-m">Mira · T-40 · 212 fixtures match the PDF</span></span>`)}
+    ${it('handoff','',`<span class="av sm" aria-hidden="true">⇄</span><span><span class="it-t">Mira handed PR #418 to Jonah</span><span class="it-m">10:15 · Maya's agent to Marco's</span></span>`)}</ul></section>`:'';
   const ex=extra(st).slice(-4);
   const just=ex.length?`<section class="grp"><h4 class="grp-h"><span>Just now</span></h4><ul class="feedmini">${ex.map(f=>`<li>${feedLine(st,f)}</li>`).join('')}</ul></section>`:'';
-  const zero=!c.needs&&!newItems?`<div class="zero" data-anchor="catchup" tabindex="-1"><b>You're caught up.</b><span>Agents surface here only when they need you. ${st.wren.state==='run'?'1 agent is':'No agent is'} working quietly.</span></div>`:'';
+  const zero=!c.needs&&!newItems?`<div class="zero" data-anchor="catchup" tabindex="-1"><b>You're caught up.</b><span>Agents surface here only when they need you. ${st.mira.state==='run'?'1 agent is':'No agent is'} working quietly.</span></div>`:'';
   return `<div class="inbox"><div class="ib-list">
     <p class="row" style="justify-content:space-between"><span class="hint">Home · all pods</span><span class="ex">Example data</span></p>
-    ${S[5]&&!S[5].rtDone?`<div class="away" data-anchor="away"><span><b>Away 9h 04m.</b> Marco, Wren and Otto worked overnight; 1 of 3 turns needs you.</span><button type="button" class="btn btn-s btn-p" data-act="gort">Start round table</button></div>`:`<p class="hint" style="margin:6px 0 10px">Round table finished at ${S[5]?S[5].rtDone:''}. <button type="button" class="lnk" data-act="gort">Open it again</button></p>`}
+    ${S[5]&&!S[5].rtDone?`<div class="away" data-anchor="away"><span><b>Away 9h 04m.</b> Marco, Mira and Jonah worked overnight; 1 of 3 turns needs you.</span><button type="button" class="btn btn-s btn-p" data-act="gort">Start round table</button></div>`:`<p class="hint" style="margin:6px 0 10px">Round table finished at ${S[5]?S[5].rtDone:''}. <button type="button" class="lnk" data-act="gort">Open it again</button></p>`}
     <h3 class="ib-big" style="margin-top:6px">Needs you <span class="n ${c.needs?'':'z'}">${c.needs}</span></h3>
     ${zero}${needs}${st.ruling?`<p class="ruled" style="margin-top:10px">Ruled at ${st.ruling.t}: <b>${OPTS[st.ruling.opt].l}</b> · ${st.ruling.frozen?'frozen':'<button type="button" class="lnk" data-act="undo">Undo (U)</button>'}</p>`:''}
     ${since}${just}
     <section class="grp"><h4 class="grp-h"><span>Working quietly</span><span class="hint">agents stay out of the way until they need you</span></h4><ul>
-      ${it('wren','',`${sg(st,'wren')}<span><span class="it-t">Wren · ${st.wren.task}</span><span class="it-m">${lamp(st,'wren')} · <span data-live="wt">${st.wren.tools}</span> tool calls</span></span>`,`<div class="acts" style="margin:4px 0 0 40px"><button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Redirect ${kbd('R')}</button><button type="button" class="btn btn-s" data-act="receipt" data-arg="r1191">Receipt</button></div>`)}
-      ${it('otto','',`${sg(st,'otto')}<span><span class="it-t">Otto · Marco's agent</span><span class="it-m">${lamp(st,'otto')}</span></span>`,`<div class="acts" style="margin:4px 0 0 40px"><button type="button" class="btn btn-s" data-act="mate">Ask Otto or Marco</button></div>`)}</ul></section>
+      ${it('mira','',`${sg(st,'mira')}<span><span class="it-t">Mira · ${st.mira.task}</span><span class="it-m">${lamp(st,'mira')} · <span data-live="wt">${st.mira.tools}</span> tool calls</span></span>`,`<div class="acts" style="margin:4px 0 0 40px"><button type="button" class="btn btn-s" data-act="redirect" data-arg="mira" data-anchor="redirect">Redirect ${kbd('R')}</button><button type="button" class="btn btn-s" data-act="receipt" data-arg="r1191">Receipt</button></div>`)}
+      ${it('jonah','',`${sg(st,'jonah')}<span><span class="it-t">Jonah · Marco's agent</span><span class="it-m">${lamp(st,'jonah')}</span></span>`,`<div class="acts" style="margin:4px 0 0 40px"><button type="button" class="btn btn-s" data-act="mate">Ask Jonah or Marco</button></div>`)}</ul></section>
     <section class="grp"><h4 class="grp-h"><span>Waiting on others</span></h4><ul>${it('t42','',`${av('marco')}<span><span class="it-t">Finance sign-off on totals</span><span class="it-m">Marco · T-42 · not yours</span></span>`)}</ul></section>
   </div><div class="ib-detail" aria-live="polite">${inboxDetail(st,sel)}</div></div>`;
 }
 function inboxDetail(st,sel){
-  if(sel==='ask')return `<div class="card ${st.ruling?'':'needs'}"><header class="ch">${who(st,'otto')}</header>${askBlock(st,{anchor:false})}${rcptBtn(st,'r1189')}<p class="hint" style="margin-top:8px">Context: Wren built it (10:04) → handed to Otto (10:15) → Otto asks you (10:19). <button type="button" class="lnk" data-act="receipt" data-arg="r1184">Wren's receipt</button></p></div>`;
-  if(sel==='wren-result')return `<div class="card"><header class="ch">${who(st,'wren')}</header>${resultBlock(st)}</div>`;
-  if(sel==='handoff')return `<div class="card"><p class="sum">Handoff 10:15: Wren → Otto, review of PR #418</p><p class="txt">Wren's claim on T-40 ended; Otto's run was woken with reason “handoff from Wren (seq 1186)”. Otto works for Marco, so its ask on merging came to you, the PR owner.</p></div>`;
-  if(sel==='wren')return `<div class="card"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}</div>`;
-  if(sel==='otto')return mateCard(st);
+  if(sel==='ask')return `<div class="card ${st.ruling?'':'needs'}"><header class="ch">${who(st,'jonah')}</header>${askBlock(st,{anchor:false})}${rcptBtn(st,'r1189')}<p class="hint" style="margin-top:8px">Context: Mira built it (10:04) → handed to Jonah (10:15) → Jonah asks you (10:19). <button type="button" class="lnk" data-act="receipt" data-arg="r1184">Mira's receipt</button></p></div>`;
+  if(sel==='mira-result')return `<div class="card"><header class="ch">${who(st,'mira')}</header>${resultBlock(st)}</div>`;
+  if(sel==='handoff')return `<div class="card"><p class="sum">Handoff 10:15: Mira → Jonah, review of PR #418</p><p class="txt">Mira's claim on T-40 ended; Jonah's run was woken with reason “handoff from Mira (seq 1186)”. Jonah works for Marco, so its ask on merging came to you, the PR owner.</p></div>`;
+  if(sel==='mira')return `<div class="card"><header class="ch">${who(st,'mira')}${lamp(st,'mira')}</header>${miraRunBlock(st)}</div>`;
+  if(sel==='jonah')return mateCard(st);
   if(sel==='t42')return `<div class="card"><p class="sum">T-42 · Finance sign-off on totals</p><p class="txt">Marco holds this. You can see it; nothing here needs you.</p></div>`;
   return '';
 }
@@ -656,7 +656,7 @@ const POS={'T-41':[10,40],'T-40':[180,40],'T-42':[10,170],'T-43':[180,170],'T-44
 const W=150,H=64;
 const OCT=(()=>{const p=[];for(let k=0;k<8;k++){const a=(22.5+45*k)*Math.PI/180;p.push((14*Math.cos(a)).toFixed(1)+','+(14*Math.sin(a)).toFixed(1))}return p.join(' ')})();
 function tokPos(st,a){
-  if(a==='wren'){const [x,y]=POS[st.wren.task];return [x+W-12,y+2]}
+  if(a==='mira'){const [x,y]=POS[st.mira.task];return [x+W-12,y+2]}
   const frozen1=st.ruling&&st.ruling.frozen&&st.ruling.opt!==2;
   if(frozen1)return [296,386];
   const [x,y]=POS['T-40'];return [x+W-44,y+2];
@@ -665,7 +665,7 @@ function rMap(st){
   const ch=sinceCounts(st);
   const isNew=id=>st.lastSeen===1183&&(id==='T-40'||id==='T-43');
   const nodes=Object.values(st.tasks).map(t=>{const [x,y]=POS[t.id];const needs=t.id==='T-40'&&!st.ruling;
-    const owner=t.who?(t.who==='wren'||t.who==='otto'?AG[t.who].n:PPL[t.who].n.split(' ')[0]):'open';
+    const owner=t.who?(t.who==='mira'||t.who==='jonah'?AG[t.who].n:PPL[t.who].n.split(' ')[0]):'open';
     const stl={done:'Done',review:'Review',doing:'Doing',todo:'To do'}[t.status];
     return `<g class="nd ${t.status}${needs?' needs':''}${st.sel===t.id?' on':''}" data-act="sel" data-arg="${t.id}" role="button" tabindex="0" data-nav aria-label="${t.id} ${t.title.join(' ')}, ${stl}, ${owner}${needs?', needs you':''}">
       <rect x="${x}" y="${y}" width="${W}" height="${H}" rx="2"/>
@@ -676,8 +676,8 @@ function rMap(st){
   const e=(a,b,d='')=>{const [x1,y1]=POS[a],[x2,y2]=POS[b];let p;
     if(y1===y2)p=`M${x1+W},${y1+H/2} L${x2-6},${y2+H/2}`;else{const sx=x1+W/2,sy=y1+H,ex=x2+W/2,ey=y2-6;p=`M${sx},${sy} C${sx},${sy+30} ${ex},${ey-30} ${ex},${ey}`}
     return `<path class="edge ${d}" d="${p}" marker-end="url(#ar)"/>`};
-  const tok=a=>{const [x,y]=st.replay?(a==='wren'?[POS['T-40'][0]+W-12,POS['T-40'][1]+2]:[296,386]):tokPos(st,a);const s=sgState(st,a);
-    return `<g class="tok ${s}" data-act="sel" data-arg="${a}" role="button" tabindex="0" data-nav data-tok="${a}" style="transform:translate(${x}px,${y}px)" aria-label="${AG[a].n}, ${AG[a].h} agent, works for ${AG[a].owner}, ${STL[s]}"><polygon points="${OCT}"/><text y="4">${AG[a].n[0]}</text><text class="own-t" y="27">${a==='otto'?'Marco’s':'Maya’s'}</text></g>`};
+  const tok=a=>{const [x,y]=st.replay?(a==='mira'?[POS['T-40'][0]+W-12,POS['T-40'][1]+2]:[296,386]):tokPos(st,a);const s=sgState(st,a);
+    return `<g class="tok ${s}" data-act="sel" data-arg="${a}" role="button" tabindex="0" data-nav data-tok="${a}" style="transform:translate(${x}px,${y}px)" aria-label="${AG[a].n}, ${AG[a].h} agent, works for ${AG[a].owner}, ${STL[s]}"><polygon points="${OCT}"/><text y="4">${AG[a].n[0]}</text><text class="own-t" y="27">${a==='jonah'?'Marco’s':'Maya’s'}</text></g>`};
   const ex=extra(st).slice(-3);
   return `<div class="map"><div class="map-g">
     <div class="map-bar"><span><b>invoice-export</b> · 5 tasks · 2 agents <span class="ex">Example data</span></span>
@@ -688,7 +688,7 @@ function rMap(st){
       <text class="ho-t" x="190" y="122">10:15 handoff W→O</text>
       ${nodes}
       <text class="bench-t" x="256" y="366">idle bench</text><rect class="bench" x="252" y="370" width="86" height="34" rx="2"/>
-      ${tok('wren')}${tok('otto')}
+      ${tok('mira')}${tok('jonah')}
     </svg>
     <p class="hint" style="padding:0 4px">Click a task or an agent token. Move an agent by picking it, then “Move to…”. Dot = changed since 10:00.</p>
   </div><div class="map-insp" aria-live="polite">${mapInsp(st)}</div></div>
@@ -696,22 +696,22 @@ function rMap(st){
 }
 function mapInsp(st){
   const s=st.sel;
-  if(!s)return `<h3 style="font-weight:800">Inspector</h3><p class="txt">Nothing selected. Try T-40 (red ring: needs you) or the W token.</p><div class="acts"><button type="button" class="btn btn-s" data-act="sel" data-arg="T-40">Open T-40</button><button type="button" class="btn btn-s" data-act="sel" data-arg="wren">Pick Wren</button></div>`;
-  if(s==='T-40')return `<p class="hint">T-40 · CSV export for invoices</p><div class="card ${st.ruling?'':'needs'}" style="margin-top:6px"><header class="ch">${who(st,'otto')}</header>${askBlock(st)}${rcptBtn(st,'r1189')}</div><div class="card" style="margin-top:10px"><header class="ch">${who(st,'wren')}<span class="own">10:04, before handoff</span></header>${resultBlock(st)}</div>`;
-  if(s==='T-43'||s==='T-44'){const t=st.tasks[s];if(t.who==='wren')return `<p class="hint">${s} · ${t.title.join(' ')}</p><div class="card" style="margin-top:6px"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}</div>`;
-    return `<p class="hint">${s} · ${t.title.join(' ')}</p><p class="sum">Unclaimed</p><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="move" data-arg="${s}">Move Wren here</button></div>`}
+  if(!s)return `<h3 style="font-weight:800">Inspector</h3><p class="txt">Nothing selected. Try T-40 (red ring: needs you) or the W token.</p><div class="acts"><button type="button" class="btn btn-s" data-act="sel" data-arg="T-40">Open T-40</button><button type="button" class="btn btn-s" data-act="sel" data-arg="mira">Pick Mira</button></div>`;
+  if(s==='T-40')return `<p class="hint">T-40 · CSV export for invoices</p><div class="card ${st.ruling?'':'needs'}" style="margin-top:6px"><header class="ch">${who(st,'jonah')}</header>${askBlock(st)}${rcptBtn(st,'r1189')}</div><div class="card" style="margin-top:10px"><header class="ch">${who(st,'mira')}<span class="own">10:04, before handoff</span></header>${resultBlock(st)}</div>`;
+  if(s==='T-43'||s==='T-44'){const t=st.tasks[s];if(t.who==='mira')return `<p class="hint">${s} · ${t.title.join(' ')}</p><div class="card" style="margin-top:6px"><header class="ch">${who(st,'mira')}${lamp(st,'mira')}</header>${miraRunBlock(st)}</div>`;
+    return `<p class="hint">${s} · ${t.title.join(' ')}</p><p class="sum">Unclaimed</p><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="move" data-arg="${s}">Move Mira here</button></div>`}
   if(s==='T-42')return `<p class="hint">T-42</p><p class="sum">Finance sign-off on totals</p><p class="txt">Held by Marco. Blocks T-44 only if finance asks for a load test.</p>`;
   if(s==='T-41')return `<p class="hint">T-41</p><p class="sum">Menu label: Download CSV · Done by Maya</p>`;
-  if(s==='wren'){const targets=Object.values(st.tasks).filter(t=>t.id!==st.wren.task&&!t.who);
-    return `<div class="card"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}<p class="stamp" style="margin-top:12px">Move to…</p><div class="acts" style="margin-top:4px">${targets.map(t=>`<button type="button" class="btn btn-s" data-act="move" data-arg="${t.id}">${t.id} ${t.title.join(' ')}</button>`).join('')||'<span class="hint">No unclaimed tasks.</span>'}</div><p class="hint" style="margin-top:6px">A move ends the claim on ${st.wren.task} after the current tool call and claims the target.</p></div>`}
-  if(s==='otto')return mateCard(st);
+  if(s==='mira'){const targets=Object.values(st.tasks).filter(t=>t.id!==st.mira.task&&!t.who);
+    return `<div class="card"><header class="ch">${who(st,'mira')}${lamp(st,'mira')}</header>${miraRunBlock(st)}<p class="stamp" style="margin-top:12px">Move to…</p><div class="acts" style="margin-top:4px">${targets.map(t=>`<button type="button" class="btn btn-s" data-act="move" data-arg="${t.id}">${t.id} ${t.title.join(' ')}</button>`).join('')||'<span class="hint">No unclaimed tasks.</span>'}</div><p class="hint" style="margin-top:6px">A move ends the claim on ${st.mira.task} after the current tool call and claims the target.</p></div>`}
+  if(s==='jonah')return mateCard(st);
   return '';
 }
 
 /* ---------- 4 · TRANSIT ---------- */
 function rTransit(st){
   const r=st.ruling;
-  const dep=[['10:04','Wren arrived at <b>Ready for review</b> · T-40','result',''],['10:15','Interchange: Wren → Otto · PR #418','handoff',''],['10:19',r?'Signal cleared by you':'<b>Otto held at signal · needs you</b>','ask',r?'':'needs'],['10:16','Wren departed on T-43','run','']];
+  const dep=[['10:04','Mira arrived at <b>Ready for review</b> · T-40','result',''],['10:15','Interchange: Mira → Jonah · PR #418','handoff',''],['10:19',r?'Signal cleared by you':'<b>Jonah held at signal · needs you</b>','ask',r?'':'needs'],['10:16','Mira departed on T-43','run','']];
   const old=st.lastSeen>1183;
   const stop=(t,mk,body,cls='',anchor='')=>`<li class="stp ${cls}" ${anchor?`data-anchor="${anchor}" tabindex="-1"`:''}><span class="t">${t}</span><span class="mk ${mk}" aria-hidden="true"></span><div class="sb">${body}</div></li>`;
   const ex=extra(st);
@@ -720,15 +720,15 @@ function rTransit(st){
   let ahead40;
   if(!r||!r.frozen)ahead40=[['Merge'],['Live behind export_csv']];
   else if(r.opt===1)ahead40=[['Live behind export_csv']];
-  else if(r.opt===2)ahead40=[['Wren splits rounding helper'],['Otto re-reviews'],['Merge']];
+  else if(r.opt===2)ahead40=[['Mira splits rounding helper'],['Jonah re-reviews'],['Merge']];
   else ahead40=[['Marco: finance sign-off (T-42)'],['Merge']];
   const signal=stop(r?r.t:'now',r?'clear':'sig',`<div class="sig-box ${r?'clear':''}"><p class="stamp" style="color:${r?'var(--ink)':'var(--signal)'}">${r?'SIGNAL CLEARED':'SIGNAL · HELD FOR YOUR RULING'}</p>${askBlock(st)}</div>`,'', 'sig');
-  const w=st.wren;const doing=w.plan.findIndex(p=>p[1]==='doing');
-  const pts=`<div class="pts-box"><p class="stamp">POINTS · switch Wren's route mid-run</p><div class="row" style="margin-top:6px">
+  const w=st.mira;const doing=w.plan.findIndex(p=>p[1]==='doing');
+  const pts=`<div class="pts-box"><p class="stamp">POINTS · switch Mira's route mid-run</p><div class="row" style="margin-top:6px">
     <button type="button" class="btn btn-s" aria-pressed="${!st.routed}" disabled>${w.task==='T-43'?'Chunk at 500 (current)':'Current route'}</button>
     <button type="button" class="btn btn-s" data-act="points" data-arg="stream" ${st.routed==='stream'?'aria-pressed="true"':''}>Stream rows</button>
     <button type="button" class="btn btn-s" data-act="points" data-arg="tests" ${st.routed==='tests'?'aria-pressed="true"':''}>Test first</button>
-    <button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Other… ${kbd('R')}</button>
+    <button type="button" class="btn btn-s" data-act="redirect" data-arg="mira" data-anchor="redirect">Other… ${kbd('R')}</button>
     ${w.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Release train</button>':'<button type="button" class="btn btn-s" data-act="stop">Hold train</button>'}</div></div>`;
   return `<div class="tr"><section class="depart" aria-label="Departures and arrivals" data-anchor="catchup" tabindex="-1">
       <h3>Since 10:00</h3><p class="hint">Arrivals while you were away. <span class="ex">Example data</span></p>
@@ -736,20 +736,20 @@ function rTransit(st){
       <div class="acts">${old?'<span class="hint">Caught up. Board dims what you have seen.</span>':`<button type="button" class="btn btn-s" data-act="markread">Mark caught up ${kbd('C')}</button>`}</div>
     </section>
     <div class="lines">
-      <section aria-label="Line T-40"><p class="line-h"><b>T-40 · CSV export</b><span>Wren (Maya's) ⇄ Otto (Marco's)</span></p><ol class="stops">
+      <section aria-label="Line T-40"><p class="line-h"><b>T-40 · CSV export</b><span>Mira (Maya's) ⇄ Jonah (Marco's)</span></p><ol class="stops">
         ${stop('09:12','',`<span class="who">Marco</span> boarded the brief: totals must match the PDF to the cent.`)}
-        ${stop('10:04','ag',`<span class="who">Wren</span> built it · ready for review<button type="button" class="route" data-act="receipt" data-arg="r1184" data-anchor="result" aria-label="Open Wren's receipt: read 14 files, ran 212 tests passed, took 6 min 41 s"><span>read 14</span><i>→</i><span>ran 212 ✓</span><i>→</i><span>took 6m 41s</span><span class="term"></span></button>`)}
-        ${stop('10:15','',`<span class="xfer">Interchange · Wren → Otto</span> <span class="own">review of PR #418</span>`,'','handoff')}
-        ${stop('10:19','ag',`<span class="who">Otto</span> reviewed: 3 PDF snapshots move by one cent. <button type="button" class="lnk" data-act="mate">Marco's agent</button><button type="button" class="route" data-act="receipt" data-arg="r1189"><span>read 6</span><i>→</i><span>ran 212 ✓ · pdf:snap 3Δ</span><i>→</i><span>took 4m 02s</span><span class="term"></span></button>`)}
+        ${stop('10:04','ag',`<span class="who">Mira</span> built it · ready for review<button type="button" class="route" data-act="receipt" data-arg="r1184" data-anchor="result" aria-label="Open Mira's receipt: read 14 files, ran 212 tests passed, took 6 min 41 s"><span>read 14</span><i>→</i><span>ran 212 ✓</span><i>→</i><span>took 6m 41s</span><span class="term"></span></button>`)}
+        ${stop('10:15','',`<span class="xfer">Interchange · Mira → Jonah</span> <span class="own">review of PR #418</span>`,'','handoff')}
+        ${stop('10:19','ag',`<span class="who">Jonah</span> reviewed: 3 PDF snapshots move by one cent. <button type="button" class="lnk" data-act="mate">Marco's agent</button><button type="button" class="route" data-act="receipt" data-arg="r1189"><span>read 6</span><i>→</i><span>ran 212 ✓ · pdf:snap 3Δ</span><i>→</i><span>took 4m 02s</span><span class="term"></span></button>`)}
         ${signal}${ex40.join('')}
         ${ahead40.map(([s])=>stop('','ghost',s,'ghost')).join('')}
       </ol></section>
-      <section aria-label="Line T-43"><p class="line-h"><b>${w.task} · ${w.task==='T-43'?'Chunk exports over 500 lines':'Load-test 2,000 lines'}</b><span>Wren (Maya's)</span></p><ol class="stops">
+      <section aria-label="Line T-43"><p class="line-h"><b>${w.task} · ${w.task==='T-43'?'Chunk exports over 500 lines':'Load-test 2,000 lines'}</b><span>Mira (Maya's)</span></p><ol class="stops">
         ${stop('09:40','',`<span class="who">Maya</span> assigned it before stepping out.`)}
-        ${stop('10:16','ag',`<span class="who">Wren</span> departed · claim on ${w.task}`)}
+        ${stop('10:16','ag',`<span class="who">Mira</span> departed · claim on ${w.task}`)}
         ${w.plan.slice(0,Math.max(doing,0)).map(p=>stop('','ag',`<span style="color:var(--ink-3)">${esc(p[0])}</span>`)).join('')}
         ${ex43.join('')}
-        ${stop('now',`train ${w.state==='run'?'run':''}`,`<span class="who">Wren</span> ${w.state==='run'?'at':w.state==='ack'?'switching at':'held at'} “${esc((w.plan[doing]||['—'])[0])}” · ${lamp(st,'wren')}${rcptBtn(st,'r1191')}${pts}`,'','train')}
+        ${stop('now',`train ${w.state==='run'?'run':''}`,`<span class="who">Mira</span> ${w.state==='run'?'at':w.state==='ack'?'switching at':'held at'} “${esc((w.plan[doing]||['—'])[0])}” · ${lamp(st,'mira')}${rcptBtn(st,'r1191')}${pts}`,'','train')}
         ${w.plan.slice(doing+1).map(p=>stop('','ghost',esc(p[0]),'ghost')).join('')}
       </ol></section>
     </div></div>`;
@@ -758,27 +758,27 @@ function rTransit(st){
 /* ---------- 5 · ROOM ---------- */
 function rRoom(st){
   const fig=(cls,agent)=>`<span class="scene ${cls} ${agent?'agent':''}" aria-hidden="true"><span class="fchair"></span><span class="fh"></span><span class="fb"></span><span class="farm"></span><span class="flamp"></span><span class="ftab"></span><span class="fmon"><i></i><i></i><i></i></span></span>`;
-  const ws=st.wren.state,os=st.otto.state;
+  const ws=st.mira.state,os=st.jonah.state;
   const pose={run:'typing',ack:'typing',stopped:'idle',wait:'wait',idle:'idle'};
   const last=a=>{const f=[...st.feed].reverse().find(x=>(x.who===a&&x.k!=='human')||(x.to===a));return f?feedLine(st,f):''};
   const desk=(id,cls,figHtml,name,sub,bub='')=>`<button type="button" class="desk ${cls}" data-act="sel" data-arg="${id}" data-nav aria-pressed="${st.sel===id}">${figHtml}<span class="dn">${name}</span><span class="ds">${sub}</span>${bub?`<span class="bub">${bub}</span>`:''}</button>`;
   const caught=st.lastSeen>1183;
   return `<div class="room"><div class="floor" aria-label="Pod floor">
-    ${desk('wren',ws==='run'?'':ws,fig(pose[ws],1),'Wren <span class="rt">Claude Code</span>',`Maya's · ${lamp(st,'wren')}`,ws==='run'?`${st.wren.task} · tool call #<span data-live="wt">${st.wren.tools}</span>`:'')}
-    ${desk('otto',os==='wait'?'wait':'',fig(pose[os],1),'Otto <span class="rt">Codex</span>',`Marco's · ${lamp(st,'otto')}`,os==='wait'?'Lamp up: has a question for you':'')}
-    <div class="aisle"><span>10:15 · Wren passed PR #418 across the aisle to Otto</span></div>
-    ${desk('marco','',fig('away',0),'Marco Ruiz','away · back 13:00','Otto sits with Marco')}
+    ${desk('mira',ws==='run'?'':ws,fig(pose[ws],1),'Mira <span class="rt">Claude Code</span>',`Maya's · ${lamp(st,'mira')}`,ws==='run'?`${st.mira.task} · tool call #<span data-live="wt">${st.mira.tools}</span>`:'')}
+    ${desk('jonah',os==='wait'?'wait':'',fig(pose[os],1),'Jonah <span class="rt">Codex</span>',`Marco's · ${lamp(st,'jonah')}`,os==='wait'?'Lamp up: has a question for you':'')}
+    <div class="aisle"><span>10:15 · Mira passed PR #418 across the aisle to Jonah</span></div>
+    ${desk('marco','',fig('away',0),'Marco Ruiz','away · back 13:00','Jonah sits with Marco')}
     ${desk('you','',fig('idle',0),'Maya Okafor','you · just walked in',st.ruling?'Nothing waiting':'1 lamp is up for you')}
     <section class="wb ${caught?'clean':''}" data-anchor="catchup" tabindex="-1" aria-label="Whiteboard: while you were out"><h4><span>Whiteboard · while you were out <span class="ex">Example data</span></span>${caught?'<span class="hint">wiped at '+st.wiped+'</span>':`<button type="button" class="btn btn-s" data-act="markread">Wipe board ${kbd('C')}</button>`}</h4>
-      <div class="notes"><button type="button" class="note ${st.ruling?'':'needs'}" data-act="sel" data-arg="otto"><b>${st.ruling?'RULED':'NEEDS YOU'}</b>Otto: merge PR #418?</button><button type="button" class="note" data-act="receipt" data-arg="r1184"><b>DONE 10:04</b>Wren: CSV export, 212 fixtures match</button><button type="button" class="note" data-act="sel" data-arg="otto"><b>HANDOFF 10:15</b>Wren → Otto, review #418</button><button type="button" class="note" data-act="sel" data-arg="wren"><b>RUNNING</b>Wren on ${st.wren.task}</button></div></section>
+      <div class="notes"><button type="button" class="note ${st.ruling?'':'needs'}" data-act="sel" data-arg="jonah"><b>${st.ruling?'RULED':'NEEDS YOU'}</b>Jonah: merge PR #418?</button><button type="button" class="note" data-act="receipt" data-arg="r1184"><b>DONE 10:04</b>Mira: CSV export, 212 fixtures match</button><button type="button" class="note" data-act="sel" data-arg="jonah"><b>HANDOFF 10:15</b>Mira → Jonah, review #418</button><button type="button" class="note" data-act="sel" data-arg="mira"><b>RUNNING</b>Mira on ${st.mira.task}</button></div></section>
   </div><div class="visit" aria-live="polite">${roomVisit(st,last)}</div></div>`;
 }
 function roomVisit(st,last){
   const s=st.sel;
-  if(!s)return `<h3>Walk up to a desk</h3><p class="txt">Click a desk to stand at it and see the screen. Otto's lamp is up: it has a question for you.</p><div class="acts"><button type="button" class="btn btn-s" data-act="sel" data-arg="otto">Walk to Otto</button><button type="button" class="btn btn-s" data-act="sel" data-arg="wren">Walk to Wren</button></div>`;
-  if(s==='wren')return `<h3>At Wren's desk</h3><p class="hint">Maya's agent · Claude Code on maya-mbp</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'wren')}</p>${wrenRunBlock(st,{acts:false})}</div><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="redirect" data-arg="wren" data-anchor="redirect">Tap on the shoulder ${kbd('R')}</button>${st.wren.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Ask Wren to stop</button>'}<button type="button" class="btn btn-s" data-act="receipt" data-arg="r1184">Open the binder (last result)</button></div>${last('wren')?`<ul class="feedmini"><li>${last('wren')}</li></ul>`:''}`;
-  if(s==='otto')return `<h3>At Otto's desk</h3><p class="hint">Marco's agent · Codex on marco-linux</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'otto')}</p>${askBlock(st,{compact:false})}${rcptBtn(st,'r1189')}</div><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Otto is Marco's: what can I do?</button></div>${last('otto')?`<ul class="feedmini"><li>${last('otto')}</li></ul>`:''}`;
-  if(s==='marco')return `<h3>At Marco's desk</h3><p class="txt">Marco is away until 13:00. Otto sits with Marco: to change what Otto is doing, leave Marco a note.</p><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Leave a note for Marco</button></div>`;
+  if(!s)return `<h3>Walk up to a desk</h3><p class="txt">Click a desk to stand at it and see the screen. Jonah's lamp is up: it has a question for you.</p><div class="acts"><button type="button" class="btn btn-s" data-act="sel" data-arg="jonah">Walk to Jonah</button><button type="button" class="btn btn-s" data-act="sel" data-arg="mira">Walk to Mira</button></div>`;
+  if(s==='mira')return `<h3>At Mira's desk</h3><p class="hint">Maya's agent · Claude Code on maya-mbp</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'mira')}</p>${miraRunBlock(st,{acts:false})}</div><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="redirect" data-arg="mira" data-anchor="redirect">Tap on the shoulder ${kbd('R')}</button>${st.mira.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Ask Mira to stop</button>'}<button type="button" class="btn btn-s" data-act="receipt" data-arg="r1184">Open the binder (last result)</button></div>${last('mira')?`<ul class="feedmini"><li>${last('mira')}</li></ul>`:''}`;
+  if(s==='jonah')return `<h3>At Jonah's desk</h3><p class="hint">Marco's agent · Codex on marco-linux</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'jonah')}</p>${askBlock(st,{compact:false})}${rcptBtn(st,'r1189')}</div><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Jonah is Marco's: what can I do?</button></div>${last('jonah')?`<ul class="feedmini"><li>${last('jonah')}</li></ul>`:''}`;
+  if(s==='marco')return `<h3>At Marco's desk</h3><p class="txt">Marco is away until 13:00. Jonah sits with Marco: to change what Jonah is doing, leave Marco a note.</p><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Leave a note for Marco</button></div>`;
   if(s==='you')return `<h3>Your desk</h3><p class="txt">${st.ruling?'Nothing is waiting on you.':'One lamp is up. You can rule from here without walking over.'}</p>${st.ruling?'':`<div class="card needs" style="margin-top:8px">${askBlock(st,{anchor:false})}</div>`}`;
   return '';
 }
@@ -789,11 +789,11 @@ const TURNS=[
   did:[['Added 8 invoice fixtures covering all four invoice states',[['c9A','commit c_9A · 8 files']]],['Set the rule: CSV totals must match the PDF to the cent',[['m1180','message seq 1180']]]],
   chk:[['Checked PDF totals on the new fixtures by hand: all match',[[null,'person-reported · no receipt']]]],
   need:'Nothing tonight. Marco holds T-42, finance sign-off, and is back 13:00.'},
- {who:'wren',kind:'a',role:'Claude Code · Maya’s agent',time:'00:57–now',needs:0,
-  did:[['Built CSV export for all four invoice states: PR #418, +182 −14 in 6 files',[['r8F','run r_8F · 23 tool calls']]],['Handed review of PR #418 to Otto at 01:15',[['r31','handoff · seq 1186']]],['Started T-43, chunking exports over 500 lines; still running',[['rB9','run r_B9 · live']]]],
+ {who:'mira',kind:'a',role:'Claude Code · Maya’s agent',time:'00:57–now',needs:0,
+  did:[['Built CSV export for all four invoice states: PR #418, +182 −14 in 6 files',[['r8F','run r_8F · 23 tool calls']]],['Handed review of PR #418 to Jonah at 01:15',[['r31','handoff · seq 1186']]],['Started T-43, chunking exports over 500 lines; still running',[['rB9','run r_B9 · live']]]],
   chk:[['CSV totals match the PDF on 212 fixtures',[['t2C','test t_2C · 212 passed']]],['Preflight before the PR: lint, types, build',[['p4D','preflight p_4D · 3 of 3 ok']]],['Not checked: invoices above 480 line items',[[null,'no run covers this']]]],
-  need:'Nothing. Wren keeps going on T-43 unless you redirect it.'},
- {who:'otto',kind:'a',role:'Codex · Marco’s agent',time:'01:15–01:19',needs:1,
+  need:'Nothing. Mira keeps going on T-43 unless you redirect it.'},
+ {who:'jonah',kind:'a',role:'Codex · Marco’s agent',time:'01:15–01:19',needs:1,
   did:[['Reviewed all 6 files of PR #418',[['r31','run r_31 · 9 tool calls']]]],
   chk:[['Re-ran the invoice tests on a second computer: 212 passed',[['t5A','test t_5A · 212 passed']]],['Found the PDF side effect: 3 snapshots moved by one cent',[['s7E','snapshots s_7E · 3 changed']]]],
   need:'A ruling: merge PR #418?'}
@@ -811,16 +811,16 @@ function rRound(st){
     body=`<article class="turn" aria-labelledby="turn-h"><header class="turn-h">${mark}<div><h4 id="turn-h" tabindex="-1" data-anchor="turn">${tname(t)}</h4><span class="own">${t.role} · worked ${t.time}</span></div><span class="of">turn ${n+1} of ${TURNS.length+1}</span></header>
       <div class="t3"><section><h5>WHAT I DID</h5>${list(t.did)}</section><section><h5>WHAT I CHECKED (PREFLIGHT)</h5>${list(t.chk)}</section>
       <section><h5 class="${blocked?'needs':''}">WHAT I NEED FROM YOU</h5><p style="font-size:14px">${t.need}</p>
-        ${t.who==='wren'?`<div class="acts">${st.wren.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':`<button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Redirect ${kbd('R')}</button>`}</div>`:''}
-        ${t.who==='otto'?`<p class="hint" style="margin-top:6px">Otto works for Marco: you rule on its ask; changing its course goes through Marco. <button type="button" class="lnk" data-act="mate">Talk to Otto or Marco</button></p>`:''}</section></div>
+        ${t.who==='mira'?`<div class="acts">${st.mira.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':`<button type="button" class="btn btn-s" data-act="redirect" data-arg="mira" data-anchor="redirect">Redirect ${kbd('R')}</button>`}</div>`:''}
+        ${t.who==='jonah'?`<p class="hint" style="margin-top:6px">Jonah works for Marco: you rule on its ask; changing its course goes through Marco. <button type="button" class="lnk" data-act="mate">Talk to Jonah or Marco</button></p>`:''}</section></div>
       ${t.needs?`<div class="turn-ask ${r?'':'needs'}">${askBlock(st,{ctx:true})}${rcptBtn(st,'r31')}</div>`:''}
       <footer class="turn-f"><span class="row">${n>0?`<button type="button" class="btn btn-s" data-act="rtprev">Previous ${kbd('P')}</button>`:''}${blocked?'<button type="button" class="btn btn-s" data-act="rtskip">Skip; leave it in Inbox</button>':''}</span>
         <button type="button" class="btn btn-p" data-act="rtnext" ${blocked?'aria-disabled="true"':''}>${blocked?'Rule to continue':'Next turn'} ${kbd('N')}</button></footer></article>`;
   }else{
     const ex=extra(st);
     body=`<article class="turn" aria-labelledby="turn-h"><header class="turn-h"><span class="av big" aria-hidden="true">MO</span><div><h4 id="turn-h" tabindex="-1" data-anchor="turn">Wrap-up: you’re current</h4><span class="own">what changed because you sat down</span></div><span class="of">turn ${TURNS.length+1} of ${TURNS.length+1}</span></header>
-      <div class="wrapup"><p><b>Your ruling.</b> ${r?`${OPTS[r.opt].l} at ${r.t} (${r.frozen?'frozen':'undo still open'}). Then: ${OPTS[r.opt].then}`:'Otto’s ask is still open. It stays at the top of your Inbox with its context.'}</p>
-      <p><b>Still running.</b> Wren on ${st.wren.task}, step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1} of ${st.wren.plan.length}. ${rcptBtn(st,'r1191')}</p>
+      <div class="wrapup"><p><b>Your ruling.</b> ${r?`${OPTS[r.opt].l} at ${r.t} (${r.frozen?'frozen':'undo still open'}). Then: ${OPTS[r.opt].then}`:'Jonah’s ask is still open. It stays at the top of your Inbox with its context.'}</p>
+      <p><b>Still running.</b> Mira on ${st.mira.task}, step ${st.mira.plan.findIndex(p=>p[1]==='doing')+1} of ${st.mira.plan.length}. ${rcptBtn(st,'r1191')}</p>
       <p><b>Unverified, carried forward.</b> Invoices above 480 lines (no run); Marco’s hand check of PDF totals (no receipt). T-44’s load test would cover the first.</p>
       ${ex.length?`<ul class="feedmini">${ex.slice(-4).map(f=>`<li>${feedLine(st,f)}</li>`).join('')}</ul>`:''}</div>
       <footer class="turn-f"><button type="button" class="btn btn-s" data-act="rtprev">Previous ${kbd('P')}</button><button type="button" class="btn btn-p" data-act="rtdone">Back to Inbox</button></footer></article>`;
@@ -833,19 +833,19 @@ function rtNext(){const st=S[5];const t=TURNS[st.rt];if(t&&t.needs&&!st.ruling){
 
 /* ---------- shared: teammate card ---------- */
 function mateCard(st){
-  return `<div class="card"><header class="ch">${who(st,'otto')}${lamp(st,'otto')}</header>
-  <p class="txt">Otto works for <b>Marco Ruiz</b>. In this pod you can talk to it and rule on asks addressed to you. Redirecting or stopping it goes through Marco.</p>
-  <div class="acts"><button type="button" class="btn btn-s" data-act="mate">Ask Otto · suggest to Marco</button>${st.ruling?'':'<button type="button" class="btn btn-s" data-act="goask">Rule on its ask</button>'}</div>
-  ${st.marco?`<p class="ruled">${st.marco==='sent'?'Suggestion sent to Marco. Waiting on him.':'Marco said yes; Otto took the redirect from him.'}</p>`:''}</div>`;
+  return `<div class="card"><header class="ch">${who(st,'jonah')}${lamp(st,'jonah')}</header>
+  <p class="txt">Jonah works for <b>Marco Ruiz</b>. In this pod you can talk to it and rule on asks addressed to you. Redirecting or stopping it goes through Marco.</p>
+  <div class="acts"><button type="button" class="btn btn-s" data-act="mate">Ask Jonah · suggest to Marco</button>${st.ruling?'':'<button type="button" class="btn btn-s" data-act="goask">Rule on its ask</button>'}</div>
+  ${st.marco?`<p class="ruled">${st.marco==='sent'?'Suggestion sent to Marco. Waiting on him.':'Marco said yes; Jonah took the redirect from him.'}</p>`:''}</div>`;
 }
 
 /* ---------- five questions, TUI, verdicts ---------- */
 const PANELS=[
  {name:'Chat-first with smart cards',thesis:'The pod is a conversation. Agent output arrives as one-line cards with receipts folded under them; you steer by talking.',render:rChat,
-  qa:[['Direct or redirect mid-run','Redirect on Wren’s running card, or type “@Wren …” in the composer. Both land at the next tool call.','redirect','wren','Redirect Wren'],
+  qa:[['Direct or redirect mid-run','Redirect on Mira’s running card, or type “@Mira …” in the composer. Both land at the next tool call.','redirect','mira','Redirect Mira'],
       ['Trust its work','Each card ends in a mono receipt line that opens the server’s record.','receipt','r1184','Open receipt'],
       ['Catch up','The since-strip counts; “Catch me up” writes a recap card from stored summaries.','catchup','','Catch me up'],
-      ['Work with a teammate’s agent','Otto is Marco’s. Mention it freely; redirecting asks Marco.','mate','','Work with Otto'],
+      ['Work with a teammate’s agent','Jonah is Marco’s. Mention it freely; redirecting asks Marco.','mate','','Work with Jonah'],
       ['Agent asks, you rule','The ask is a card with options. 1–3 or A, undo for 5 s, then frozen.','goask','','Go to the ask']],
   tui:` jellymoon > invoice-export        example data
  -------------------------------------------------
@@ -853,36 +853,36 @@ const PANELS=[
  -------------------------------------------------
  09:12 (M) Marco  totals must match PDF to cent
  ---------------- new since 10:00 ----------------
- 10:04 <W> Wren   CSV export works, 212 match
+ 10:04 <W> Mira   CSV export works, 212 match
            read 14 . 23 tools . 6m41s    [t]rail
  10:15  W => O    handoff: review of PR #418
- 10:19 <O> Otto   NEEDS YOU  merge PR #418?
+ 10:19 <O> Jonah   NEEDS YOU  merge PR #418?
          [1] merge as is* [2] keep PDF [3] hold
- 10:16 <W> Wren   T-43 chunking  step 2/4  running
+ 10:16 <W> Mira   T-43 chunking  step 2/4  running
  -------------------------------------------------
- > @Wren stream rows instead_
+ > @Mira stream rows instead_
  a approve*  1-3 rule  r redirect  c catch up`,
-  verdict:[['Best at','Zero learning curve. People talk, agents report, and one stream holds both; “@Wren …” as a redirect feels like talking.'],
-    ['Worst failure','Volume. At 10 agents the one ask scrolls away under progress cards and the stream turns into the log (today’s 2,698-char median).'],
+  verdict:[['Best at','Zero learning curve. People talk, agents report, and one stream holds both; “@Mira …” as a redirect feels like talking.'],
+    ['Worst failure','Volume. At 10 agents the one ask scrolls away under progress cards and the stream turns into the log (today’s agent messages run long).'],
     ['New teammate','Minutes. It reads as a chat app with better cards.'],
     ['At 10 agents','Weak alone. Holds only if cards fold to one line, runs update in place, and the since-strip plus an inbox sit beside it.'],
     ['Verification cost','Low. Linear DOM with stable roles; Playwright asserts card text and a keypress. Cheapest of the five.']]},
  {name:'Inbox-first',thesis:'Home is the needs-you queue across pods. Agents work quietly and surface only when they need a person.',render:rInbox,
-  qa:[['Direct or redirect mid-run','“Working quietly” lists running agents; Redirect opens the note that lands at the next tool call.','redirect','wren','Redirect Wren'],
-      ['Trust its work','The detail pane carries the ask plus the full chain of receipts (Wren built, Otto reviewed).','receipt','r1189','Open receipt'],
+  qa:[['Direct or redirect mid-run','“Working quietly” lists running agents; Redirect opens the note that lands at the next tool call.','redirect','mira','Redirect Mira'],
+      ['Trust its work','The detail pane carries the ask plus the full chain of receipts (Mira built, Jonah reviewed).','receipt','r1189','Open receipt'],
       ['Catch up','Since-10:00 FYI group; “Mark all read” reaches inbox zero.','catchup','','Catch up'],
-      ['Work with a teammate’s agent','Otto is labelled Marco’s; its row offers “Ask Otto or Marco”.','mate','','Work with Otto'],
+      ['Work with a teammate’s agent','Jonah is labelled Marco’s; its row offers “Ask Jonah or Marco”.','mate','','Work with Jonah'],
       ['Agent asks, you rule','Rule from the queue row itself. J/K to move, 1–3 or A to rule.','goask','','Go to the ask']],
   tui:` jellymoon > needs you (1)          example data
  =================================================
- > <O> Otto . Marco's   merge PR #418?    1h55m
+ > <O> Jonah . Marco's   merge PR #418?    1h55m
        [1] merge as is *  [2] keep PDF  [3] hold
  -- since 10:00 . fyi ---------------- [m]ark read
-   ok  Wren   T-40 ready for review   invoice-exp
-   =>  Wren -> Otto   PR #418 review
+   ok  Mira   T-40 ready for review   invoice-exp
+   =>  Mira -> Jonah   PR #418 review
  -- working quietly ------------------------------
-   *   Wren   T-43 chunking  tool #12  [r]edirect
-   !   Otto   waiting on you
+   *   Mira   T-43 chunking  tool #12  [r]edirect
+   !   Jonah   waiting on you
  -- waiting on others ----------------------------
    o   Marco  T-42 finance sign-off
  =================================================
@@ -893,10 +893,10 @@ const PANELS=[
     ['At 10 agents','Best of the five. The queue grows with asks, not with agents.'],
     ['Verification cost','Low. A sorted list plus keys; deterministic order makes Playwright specs short.']]},
  {name:'Work-map',thesis:'The board is a live graph of tasks. Agents are tokens that sit on the task they hold; you move a token to redirect.',render:rMap,
-  qa:[['Direct or redirect mid-run','Pick the W token, then “Move to…” another task, or send a note. The token travels when the claim changes.','sel','wren','Pick Wren'],
+  qa:[['Direct or redirect mid-run','Pick the W token, then “Move to…” another task, or send a note. The token travels when the claim changes.','sel','mira','Pick Mira'],
       ['Trust its work','Select a task; its inspector shows every card on it with receipts.','receipt','r1184','Open receipt'],
       ['Catch up','Dots mark changed nodes; Replay animates the tokens since 10:00.','catchup','','Replay'],
-      ['Work with a teammate’s agent','The O token is labelled Marco’s; selecting it shows what you may do.','sel','otto','Pick Otto'],
+      ['Work with a teammate’s agent','The O token is labelled Marco’s; selecting it shows what you may do.','sel','jonah','Pick Jonah'],
       ['Agent asks, you rule','A red ring marks the task waiting on you; rule in the inspector or press A.','goask','','Go to the ask']],
   tui:` jellymoon > invoice-export > map   example data
   +-T-41--------+     +-T-40-----------+  ! you
@@ -917,22 +917,22 @@ const PANELS=[
     ['At 10 agents','Tokens pile up on busy nodes; needs a real layout engine and is comfortable to about 20 tasks.'],
     ['Verification cost','High. SVG positions and motion need aria labels on every node and screenshot baselines.']]},
  {name:'Transit-line',thesis:'Each task is a line; people and agents are stops, a handoff is an interchange, the ask is a signal, and redirecting is switching points.',render:rTransit,
-  qa:[['Direct or redirect mid-run','At the train, the Points box switches Wren’s route; upcoming stops rewrite.','jump','train','Go to the points'],
+  qa:[['Direct or redirect mid-run','At the train, the Points box switches Mira’s route; upcoming stops rewrite.','jump','train','Go to the points'],
       ['Trust its work','Each agent stop carries its receipt as a three-stop route: read, ran, took.','receipt','r1184','Open receipt'],
       ['Catch up','The departures board lists arrivals since 10:00; each row jumps to its stop.','catchup','','Catch up'],
-      ['Work with a teammate’s agent','Line T-40 changes operator at the interchange; Otto’s stops say Marco’s.','mate','','Work with Otto'],
+      ['Work with a teammate’s agent','Line T-40 changes operator at the interchange; Jonah’s stops say Marco’s.','mate','','Work with Jonah'],
       ['Agent asks, you rule','The ask is a red signal holding the line; clearing it shows which stops come next.','goask','','Go to the signal']],
   tui:` jellymoon > lines                 example data
  T-40 csv export =================================
   09:12  o  Marco   totals to the cent
-  10:04  #  Wren    built   read > ran > took .
-  10:15 (=) interchange  Wren => Otto
-  10:19  #  Otto    3 PDF snapshots move 1 cent
+  10:04  #  Mira    built   read > ran > took .
+  10:15 (=) interchange  Mira => Jonah
+  10:19  #  Jonah    3 PDF snapshots move 1 cent
          X  SIGNAL  your ruling   [1] [2] [3]
          :  merge  :  live behind export_csv
  T-43 chunk exports ==============================
   09:40  o  Maya    assigned
-  10:16  #  Wren    departed
+  10:16  #  Mira    departed
    now  [>] train   step 2 . tool #12
          Y  points  [s]tream rows  [h]old train
          :  test 2,000 lines  :  open PR
@@ -943,14 +943,14 @@ const PANELS=[
     ['At 10 agents','Good. Lines stack vertically per task, agents are trains, and the departures board stays one screen.'],
     ['Verification cost','Medium. Ordered lists with stable text; the only motion is the train hop.']]},
  {name:'Room / presence',thesis:'Agents are characters at desks whose pose is their true state. You walk up to a desk to see its screen and talk to it.',render:rRoom,
-  qa:[['Direct or redirect mid-run','Walk to Wren’s desk and tap it on the shoulder.','redirect','wren','Tap Wren'],
+  qa:[['Direct or redirect mid-run','Walk to Mira’s desk and tap it on the shoulder.','redirect','mira','Tap Mira'],
       ['Trust its work','Open the binder on a desk, or a whiteboard note, to get the receipt.','receipt','r1184','Open binder'],
       ['Catch up','The whiteboard holds what changed while you were out; wipe it when read.','catchup','','Read the board'],
-      ['Work with a teammate’s agent','Otto’s desk sits beside Marco’s; changing Otto means a note to Marco.','sel','marco','Walk to Marco'],
+      ['Work with a teammate’s agent','Jonah’s desk sits beside Marco’s; changing Jonah means a note to Marco.','sel','marco','Walk to Marco'],
       ['Agent asks, you rule','A raised lamp means an ask; rule at its desk or from yours. A works anywhere.','goask','','Walk to the lamp']],
   tui:` jellymoon > room                  example data
  +----------------+   +----------------+
- | <W> Wren   ... |   | <O> Otto   (!) |
+ | <W> Mira   ... |   | <O> Jonah   (!) |
  | T-43 tool #12  |   | lamp up: ask   |
  +----------------+   +----------------+
      \\__ 10:15  PR #418 passed across __/
@@ -966,26 +966,26 @@ const PANELS=[
     ['At 10 agents','Poor. The floor crowds and scrolls; needs zones or rooms, which brings back navigation.'],
     ['Verification cost','Highest. Animated poses and spatial layout; tests must assert on state text, never on pose.']]},
  {name:'Round table',thesis:'The morning catch-up after time away. Each member who worked overnight takes a turn: what I did, what I checked, what I need from you. Every claim carries its grounding; asks arrive with their context.',render:rRound,
-  qa:[['Direct or redirect mid-run','Wren’s turn ends with Redirect; the note lands at its next tool call.','redirect','wren','Redirect Wren'],
+  qa:[['Direct or redirect mid-run','Mira’s turn ends with Redirect; the note lands at its next tool call.','redirect','mira','Redirect Mira'],
       ['Trust its work','Every claim has a chip: a run, a test run, a preflight, or a dashed “no receipt”.','receipt','t2C','Open a test run'],
       ['Catch up','Turns in order with a progress strip; N for next, P for previous. Entered from the Inbox banner.','rtnext','','Next turn'],
-      ['Work with a teammate’s agent','Otto’s turn says it is Marco’s; you rule, Marco steers.','mate','','Work with Otto'],
-      ['Agent asks, you rule','The ask sits in Otto’s turn with what happened, what was checked, what’s at stake, and each option’s consequence.','goask','','Go to Otto’s turn']],
+      ['Work with a teammate’s agent','Jonah’s turn says it is Marco’s; you rule, Marco steers.','mate','','Work with Jonah'],
+      ['Agent asks, you rule','The ask sits in Jonah’s turn with what happened, what was checked, what’s at stake, and each option’s consequence.','goask','','Go to Jonah’s turn']],
   tui:` jellymoon > round table  away 9h04m  example data
- [x] Marco  [x] Wren  [>] Otto !  [ ] wrap-up
+ [x] Marco  [x] Mira  [>] Jonah !  [ ] wrap-up
  =================================================
- <O> OTTO  codex . Marco's agent      turn 3 of 4
+ <O> JONAH  codex . Marco's agent      turn 3 of 4
  DID      reviewed PR #418, 6 files   [r_31 9tc]
  CHECKED  invoice tests 212 passed    [t_5A]
           3 PDF snapshots move 1c     [s_7E]
  NEEDS    merge PR #418?
  -------------------------------------------------
- happened  Wren built, Otto reviewed; rounding
+ happened  Mira built, Jonah reviewed; rounding
            moved to a shared helper   [r_8F]
  checked   212 pass . 480+ lines: no run
  at stake  3 of 212 PDF totals drop 1 cent
  [1] merge as is *  PDFs half-even next deploy
- [2] keep PDF       Wren splits helper, ~20 min
+ [2] keep PDF       Mira splits helper, ~20 min
  [3] hold           waits for Marco, 13:00
  a approve*  1-3 rule  n next  t receipt`,
   verdict:[['Best at','Re-entry after time away. Claims arrive with their grounding and asks with their context, so a ruling at 08:34 does not start with reading 47 messages.'],
@@ -1012,7 +1012,7 @@ function render(i=cur){
   if(a&&host.contains(a))key=[a.getAttribute('data-act'),a.getAttribute('data-arg')];
   host.innerHTML=PANELS[i].render(S[i]);
   if(key&&key[0]){const m=host.querySelector(`[data-act="${key[0]}"]${key[1]?`[data-arg="${key[1]}"]`:''}`);if(m&&!m.disabled)m.focus({preventScroll:true})}
-  if(i===2&&S[2].replay){requestAnimationFrame(()=>requestAnimationFrame(()=>{S[2].replay=false;for(const a of ['wren','otto']){const g=host.querySelector(`[data-tok="${a}"]`);const [x,y]=tokPos(S[2],a);if(g)g.style.transform=`translate(${x}px,${y}px)`}}))}
+  if(i===2&&S[2].replay){requestAnimationFrame(()=>requestAnimationFrame(()=>{S[2].replay=false;for(const a of ['mira','jonah']){const g=host.querySelector(`[data-tok="${a}"]`);const [x,y]=tokPos(S[2],a);if(g)g.style.transform=`translate(${x}px,${y}px)`}}))}
 }
 $('#panels').innerHTML=PANELS.map((_,i)=>shell(i)).join('');
 PANELS.forEach((_,i)=>render(i));
@@ -1027,94 +1027,94 @@ function push(st,o){o.seq=++st.seq;o.t=o.t||tm(st);st.feed.push(o);return o}
 function rule(opt){
   const st=S[cur];
   if(st.ruling){toast(st.ruling.frozen?'Already ruled. Rulings are frozen.':'Already ruled. Press U to undo.');return}
-  st.ruling={opt,t:tm(st),seq:++st.seq,frozen:false};st.otto.state='idle';
+  st.ruling={opt,t:tm(st),seq:++st.seq,frozen:false};st.jonah.state='idle';
   render();toast(`Ruled: ${OPTS[opt].l}. Freezes in 5 s.`,true);
   timers.set(st,later(st,5000,()=>freeze(st)));
 }
 function freeze(st){
   if(!st.ruling||st.ruling.frozen)return;st.ruling.frozen=true;timers.delete(st);
   const o=st.ruling.opt;
-  if(o===1){st.tasks['T-40'].status='done';st.tasks['T-40'].who=null;push(st,{k:'reply',who:'otto',line:'T-40',text:'Merged PR #418 behind <code>export_csv</code>; 3 PDF snapshots updated. T-40 is done.',wake:'ruling on d-77 by Maya'})}
-  else if(o===2){st.tasks['T-40'].status='doing';push(st,{k:'reply',who:'wren',line:'T-40',text:'Woken by your ruling. I will split the rounding helper after my current T-43 step, then hand back to Otto.',wake:'ruling on d-77 by Maya'})}
+  if(o===1){st.tasks['T-40'].status='done';st.tasks['T-40'].who=null;push(st,{k:'reply',who:'jonah',line:'T-40',text:'Merged PR #418 behind <code>export_csv</code>; 3 PDF snapshots updated. T-40 is done.',wake:'ruling on d-77 by Maya'})}
+  else if(o===2){st.tasks['T-40'].status='doing';push(st,{k:'reply',who:'mira',line:'T-40',text:'Woken by your ruling. I will split the rounding helper after my current T-43 step, then hand back to Jonah.',wake:'ruling on d-77 by Maya'})}
   else{st.tasks['T-40'].status='review';push(st,{k:'sys',line:'T-40',text:'T-40 held for Marco’s finance sign-off (T-42). Marco is notified.'})}
 }
-function undo(){const st=S[cur];if(!st.ruling)return;if(st.ruling.frozen){toast('Frozen. A ruling cannot be undone once frozen.');return}clearTimeout(timers.get(st));timers.delete(st);st.ruling=null;st.otto.state='wait';render();toast('Ruling undone. The ask is open again.')}
+function undo(){const st=S[cur];if(!st.ruling)return;if(st.ruling.frozen){toast('Frozen. A ruling cannot be undone once frozen.');return}clearTimeout(timers.get(st));timers.delete(st);st.ruling=null;st.jonah.state='wait';render();toast('Ruling undone. The ask is open again.')}
 
 const ROUTES={stream:{note:'Stream rows instead of chunking.',plan:[['Stream rows straight to the CSV writer','doing'],['Test a 2,000-line fixture','todo'],['Open a PR','todo']],ack:'Dropping the 500-line chunks; streaming rows to the writer instead.'},
   tests:{note:'Write the 2,000-line test first.',plan:[['Write a failing 2,000-line test','doing'],['Split rows into 500-line chunks','todo'],['Open a PR','todo']],ack:'Writing the 2,000-line test first; chunking after it fails.'},
   cap:{note:'Cap exports at 2,000 lines for now.',plan:[['Add a 2,000-line cap with a clear error','doing'],['Test the cap','todo'],['Open a PR','todo']],ack:'Adding a cap with a clear error; chunking moves to a follow-up.'}};
-function redirectWren(key,text){
+function redirectMira(key,text){
   const st=S[cur];const r=ROUTES[key];const note=r?r.note:text;if(!note)return;
-  const done=st.wren.plan.filter(p=>p[1]==='done');
-  push(st,{k:'redirect',who:'maya',to:'wren',line:'T-43',text:note});
-  st.wren.state='ack';st.routed=key;render();toast('Redirect sent. It lands at Wren’s next tool call.');
-  later(st,1400,()=>{st.wren.tools++;st.wren.state='run';
-    st.wren.plan=r?[...done,...r.plan]:[...done,['Maya: '+note,'doing'],...st.wren.plan.filter(p=>p[1]==='todo')];
-    push(st,{k:'reply',who:'wren',line:'T-43',text:`Got it at tool call #${st.wren.tools}. ${r?r.ack:'Plan updated with your note.'}`,wake:'redirect by Maya'})});
+  const done=st.mira.plan.filter(p=>p[1]==='done');
+  push(st,{k:'redirect',who:'maya',to:'mira',line:'T-43',text:note});
+  st.mira.state='ack';st.routed=key;render();toast('Redirect sent. It lands at Mira’s next tool call.');
+  later(st,1400,()=>{st.mira.tools++;st.mira.state='run';
+    st.mira.plan=r?[...done,...r.plan]:[...done,['Maya: '+note,'doing'],...st.mira.plan.filter(p=>p[1]==='todo')];
+    push(st,{k:'reply',who:'mira',line:'T-43',text:`Got it at tool call #${st.mira.tools}. ${r?r.ack:'Plan updated with your note.'}`,wake:'redirect by Maya'})});
 }
-function stopWren(){const st=S[cur];st.wren.state='stopped';push(st,{k:'sys',line:'T-43',text:`Maya stopped Wren’s run on ${st.wren.task}. Lease released; the task stays assigned to Wren with no run.`});render();toast('Wren stopped at its current tool call.')}
-function resumeWren(){const st=S[cur];st.wren.state='run';push(st,{k:'reply',who:'wren',line:'T-43',text:`Resumed on ${st.wren.task} from step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1}.`,wake:'resume by Maya'});render()}
-function moveWren(target){
-  const st=S[cur];const from=st.wren.task;if(from===target)return;
-  st.tasks[from].who=null;st.tasks[from].status='todo';st.tasks[target].who='wren';st.tasks[target].status='doing';
-  st.wren.task=target;st.wren.state='ack';st.wren.plan=clone(PLAN[target]||[['Start '+target,'doing']]);
-  push(st,{k:'redirect',who:'maya',to:'wren',line:'T-43',text:`Move from ${from} to ${target}.`});st.sel='wren';render();toast(`Wren will release ${from} after its current tool call.`);
-  later(st,1400,()=>{st.wren.state='run';st.wren.tools++;push(st,{k:'reply',who:'wren',line:'T-43',text:`Released ${from}, claimed ${target}.`,wake:'reassign by Maya'})});
+function stopMira(){const st=S[cur];st.mira.state='stopped';push(st,{k:'sys',line:'T-43',text:`Maya stopped Mira’s run on ${st.mira.task}. Lease released; the task stays assigned to Mira with no run.`});render();toast('Mira stopped at its current tool call.')}
+function resumeMira(){const st=S[cur];st.mira.state='run';push(st,{k:'reply',who:'mira',line:'T-43',text:`Resumed on ${st.mira.task} from step ${st.mira.plan.findIndex(p=>p[1]==='doing')+1}.`,wake:'resume by Maya'});render()}
+function moveMira(target){
+  const st=S[cur];const from=st.mira.task;if(from===target)return;
+  st.tasks[from].who=null;st.tasks[from].status='todo';st.tasks[target].who='mira';st.tasks[target].status='doing';
+  st.mira.task=target;st.mira.state='ack';st.mira.plan=clone(PLAN[target]||[['Start '+target,'doing']]);
+  push(st,{k:'redirect',who:'maya',to:'mira',line:'T-43',text:`Move from ${from} to ${target}.`});st.sel='mira';render();toast(`Mira will release ${from} after its current tool call.`);
+  later(st,1400,()=>{st.mira.state='run';st.mira.tools++;push(st,{k:'reply',who:'mira',line:'T-43',text:`Released ${from}, claimed ${target}.`,wake:'reassign by Maya'})});
 }
 function catchup(){
   const st=S[cur];
   if(cur===5){rtNext();return}
   if(cur===0){st.recap=true;render();focusAnchor('catchup');return}
-  if(cur===2){st.replay=true;render();toast('Replaying since 10:00: Wren finished T-40, handed it to Otto, then took T-43.');return}
+  if(cur===2){st.replay=true;render();toast('Replaying since 10:00: Mira finished T-40, handed it to Jonah, then took T-43.');return}
   if(cur===4){st.sel=null;render();focusAnchor('catchup');return}
   if(cur===3&&st.lastSeen>1183){focusAnchor('catchup');return}
   if(cur===1&&!st.feed.some(f=>f.seq>st.lastSeen&&f.seq<=1191)){focusAnchor('catchup');return}
   markread();
 }
 function markread(){const st=S[cur];st.lastSeen=st.seq;st.recap=false;st.wiped=tm(st);render();toast(cur===1?'All read. Only asks will surface now.':'Marked caught up.');focusAnchor('catchup')}
-function goask(){const st=S[cur];if(cur===1)st.sel='ask';if(cur===2)st.sel='T-40';if(cur===4)st.sel='otto';if(cur===5)st.rt=2;render();
+function goask(){const st=S[cur];if(cur===1)st.sel='ask';if(cur===2)st.sel='T-40';if(cur===4)st.sel='jonah';if(cur===5)st.rt=2;render();
   if(st.ruling){toast('Already ruled.');}
   if(cur===3)focusAnchor('sig');const el=$('#proto-'+cur).querySelector('.opt:not(:disabled)');if(el){el.scrollIntoView({block:'center'});el.focus({preventScroll:true})}}
 
 /* receipt dialog */
 function openReceipt(id){
   const st=S[cur];const r=RC[id];const a=AG[r.agent]||{n:PPL[r.agent].n,owner:'themself (a person)',hk:'— (no harness)',pc:'—'};
-  const tools=id==='r1191'?[...r.tools,...st.wren.live]:r.tools;
+  const tools=id==='r1191'?[...r.tools,...st.mira.live]:r.tools;
   $('#rc-body').innerHTML=`<div class="dh"><div><h3 id="rc-title">Receipt · ${r.title}</h3><p>Written by the pod when the run reported, not by the agent. <span class="ex">Example data</span></p></div><form method="dialog"><button class="btn btn-s" autofocus>Close</button></form></div>
   <div class="db"><p class="stamp">${r.stamp||'SERVER-STAMPED'}</p><dl class="kv"><dt>run</dt><dd>${r.run}</dd><dt>agent</dt><dd>${a.n} · works for ${a.owner}</dd><dt>harness</dt><dd>${a.hk}</dd><dt>computer</dt><dd>${a.pc}</dd><dt>wake reason</dt><dd>${r.wake}</dd><dt>claim</dt><dd>${r.claim}</dd><dt>window</dt><dd>${r.win}</dd></dl>
-  <p class="stamp">TOOL CALLS (${id==='r1191'?st.wren.tools:tools.length})</p><ol class="tools">${tools.map(([k,v])=>`<li><span class="tk">${k}</span><span>${esc(v)}</span></li>`).join('')}${id==='r1191'&&st.wren.tools>tools.length?`<li><span class="tk">…</span><span>${st.wren.tools-tools.length} more while you watched</span></li>`:''}</ol>
+  <p class="stamp">TOOL CALLS (${id==='r1191'?st.mira.tools:tools.length})</p><ol class="tools">${tools.map(([k,v])=>`<li><span class="tk">${k}</span><span>${esc(v)}</span></li>`).join('')}${id==='r1191'&&st.mira.tools>tools.length?`<li><span class="tk">…</span><span>${st.mira.tools-tools.length} more while you watched</span></li>`:''}</ol>
   <p class="stamp">AGENT-REPORTED, CHECK AGAINST THE ABOVE</p><ul class="feedmini">${r.says.map(s=>`<li>${s}</li>`).join('')}</ul></div>`;
   $('#dlg-receipt').showModal();
 }
 /* redirect dialog */
 function openRedirect(a){
-  if(a==='otto'){openMate();return}
-  const st=S[cur];$('#rd-now').innerHTML=`Now: ${STL[st.wren.state]} on ${st.wren.task}, step “${esc((st.wren.plan.find(p=>p[1]==='doing')||['—'])[0])}” · tool call #${st.wren.tools}`;
-  $('#rd-text').value='';$('#rd-form').querySelector('input[value="stream"]').checked=true;$('#rd-stop').disabled=st.wren.state==='stopped';
+  if(a==='jonah'){openMate();return}
+  const st=S[cur];$('#rd-now').innerHTML=`Now: ${STL[st.mira.state]} on ${st.mira.task}, step “${esc((st.mira.plan.find(p=>p[1]==='doing')||['—'])[0])}” · tool call #${st.mira.tools}`;
+  $('#rd-text').value='';$('#rd-form').querySelector('input[value="stream"]').checked=true;$('#rd-stop').disabled=st.mira.state==='stopped';
   $('#dlg-redirect').showModal();
 }
-$('#rd-form').addEventListener('submit',e=>{const v=e.submitter&&e.submitter.value;if(v==='send'){const k=$('#rd-form').querySelector('input[name=rp]:checked').value;const txt=$('#rd-text').value.trim();if(k==='custom'&&!txt){e.preventDefault();$('#rd-text').focus();return}setTimeout(()=>redirectWren(k==='custom'?null:k,txt))}else if(v==='stop')setTimeout(stopWren)});
+$('#rd-form').addEventListener('submit',e=>{const v=e.submitter&&e.submitter.value;if(v==='send'){const k=$('#rd-form').querySelector('input[name=rp]:checked').value;const txt=$('#rd-text').value.trim();if(k==='custom'&&!txt){e.preventDefault();$('#rd-text').focus();return}setTimeout(()=>redirectMira(k==='custom'?null:k,txt))}else if(v==='stop')setTimeout(stopMira)});
 $('#rd-text').addEventListener('input',()=>{if($('#rd-text').value)$('#rd-form').querySelector('input[value="custom"]').checked=true});
 /* teammate dialog */
 function openMate(){
   const st=S[cur];
-  $('#tm-body').innerHTML=`<div class="dh"><div><h3 id="tm-title">Otto is Marco's agent</h3><p>Codex on marco-linux · ${STL[st.otto.state]}</p></div><form method="dialog"><button class="btn btn-s">Close</button></form></div>
+  $('#tm-body').innerHTML=`<div class="dh"><div><h3 id="tm-title">Jonah is Marco's agent</h3><p>Codex on marco-linux · ${STL[st.jonah.state]}</p></div><form method="dialog"><button class="btn btn-s">Close</button></form></div>
   <div class="db"><dl class="kv"><dt>you can</dt><dd>mention it, ask it questions, read its receipts, rule on asks addressed to you</dd><dt>via Marco</dt><dd>redirect, stop, or reassign it</dd></dl>
-  <form id="mate-q" class="db" style="padding:0"><label class="stamp" for="mq">ASK OTTO A QUESTION (wakes it with reason “mention by Maya”)</label><input class="field" id="mq" value="Which helper does the rounding now?"><div class="row"><button class="btn btn-p btn-s" type="submit">Ask Otto</button></div></form>
-  <form id="mate-s" class="db" style="padding:0"><label class="stamp" for="ms">SUGGEST A REDIRECT TO MARCO</label><input class="field" id="ms" value="Have Otto also check the 480+ line case before merge."><div class="row"><button class="btn btn-s" type="submit" ${st.marco?'disabled':''}>Send to Marco</button>${st.marco?`<span class="hint">${st.marco==='sent'?'Sent; waiting on Marco.':'Marco approved it.'}</span>`:''}</div></form></div>`;
+  <form id="mate-q" class="db" style="padding:0"><label class="stamp" for="mq">ASK JONAH A QUESTION (wakes it with reason “mention by Maya”)</label><input class="field" id="mq" value="Which helper does the rounding now?"><div class="row"><button class="btn btn-p btn-s" type="submit">Ask Jonah</button></div></form>
+  <form id="mate-s" class="db" style="padding:0"><label class="stamp" for="ms">SUGGEST A REDIRECT TO MARCO</label><input class="field" id="ms" value="Have Jonah also check the 480+ line case before merge."><div class="row"><button class="btn btn-s" type="submit" ${st.marco?'disabled':''}>Send to Marco</button>${st.marco?`<span class="hint">${st.marco==='sent'?'Sent; waiting on Marco.':'Marco approved it.'}</span>`:''}</div></form></div>`;
   $('#dlg-mate').showModal();
   $('#mate-q').onsubmit=e=>{e.preventDefault();const q=$('#mq').value.trim();if(!q)return;$('#dlg-mate').close();
-    push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Otto</b> '+esc(q)});render();toast('Asked Otto. Mentions wake any agent in the pod.');
-    later(st,1300,()=>push(st,{k:'reply',who:'otto',line:'T-40',text:'<code>roundHalfEven</code> in <code>billing/money.ts</code>. CSV and PDF both call it since PR #418.',wake:'mention by Maya'}))};
+    push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Jonah</b> '+esc(q)});render();toast('Asked Jonah. Mentions wake any agent in the pod.');
+    later(st,1300,()=>push(st,{k:'reply',who:'jonah',line:'T-40',text:'<code>roundHalfEven</code> in <code>billing/money.ts</code>. CSV and PDF both call it since PR #418.',wake:'mention by Maya'}))};
   $('#mate-s').onsubmit=e=>{e.preventDefault();const q=$('#ms').value.trim();if(!q)return;$('#dlg-mate').close();st.marco='sent';
-    push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Marco</b> suggestion for Otto: '+esc(q)});render();toast('Sent to Marco. Otto changes course only on his word.');
-    later(st,2200,()=>{st.marco='ok';push(st,{k:'reply',who:'marco',line:'T-40',text:'Fine by me. <b>@Otto</b> go ahead.'});push(st,{k:'reply',who:'otto',line:'T-40',text:'Checking the 480+ line case now, at Marco’s word.',wake:'mention by Marco (owner)'})})};
+    push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Marco</b> suggestion for Jonah: '+esc(q)});render();toast('Sent to Marco. Jonah changes course only on his word.');
+    later(st,2200,()=>{st.marco='ok';push(st,{k:'reply',who:'marco',line:'T-40',text:'Fine by me. <b>@Jonah</b> go ahead.'});push(st,{k:'reply',who:'jonah',line:'T-40',text:'Checking the 480+ line case now, at Marco’s word.',wake:'mention by Marco (owner)'})})};
 }
 
 /* composer (chat) */
 document.addEventListener('submit',e=>{const f=e.target;if(f.dataset.form!=='compose')return;e.preventDefault();const v=f.m.value.trim();if(!v)return;const st=S[cur];f.m.value='';
-  if(/^@wren\b/i.test(v)){redirectWren(null,v.replace(/^@wren\s*/i,'')||'Check in.');return}
-  if(/^@otto\b/i.test(v)){push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Otto</b> '+esc(v.replace(/^@otto\s*/i,''))});render();later(st,1300,()=>push(st,{k:'reply',who:'otto',line:'T-40',text:'Answering you directly; I work for Marco, so a change of course goes through him.',wake:'mention by Maya'}));return}
+  if(/^@mira\b/i.test(v)){redirectMira(null,v.replace(/^@mira\s*/i,'')||'Check in.');return}
+  if(/^@jonah\b/i.test(v)){push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Jonah</b> '+esc(v.replace(/^@jonah\s*/i,''))});render();later(st,1300,()=>push(st,{k:'reply',who:'jonah',line:'T-40',text:'Answering you directly; I work for Marco, so a change of course goes through him.',wake:'mention by Maya'}));return}
   push(st,{k:'human',who:'maya',text:esc(v)});render();$('#compose-0').focus()});
 
 /* tabs + theme */
@@ -1134,16 +1134,16 @@ document.addEventListener('click',e=>{
     case 'undo':undo();break;
     case 'receipt':openReceipt(arg);break;
     case 'redirect':openRedirect(arg);break;
-    case 'stop':stopWren();break;
-    case 'resume':resumeWren();break;
+    case 'stop':stopMira();break;
+    case 'resume':resumeMira();break;
     case 'catchup':catchup();break;
     case 'markread':markread();break;
     case 'mate':openMate();break;
     case 'goask':goask();break;
     case 'sel':st.sel=(st.sel===arg&&cur!==1&&!e.target.closest('.qs'))?null:arg;render();
       if(e.target.closest('.qs')){const ins=$('#proto-'+cur).querySelector('.map-insp,.visit,.ib-detail');if(ins)ins.scrollIntoView({block:'nearest'})}break;
-    case 'move':moveWren(arg);break;
-    case 'points':redirectWren(arg);break;
+    case 'move':moveMira(arg);break;
+    case 'points':redirectMira(arg);break;
     case 'jump':focusAnchor(arg);break;
     case 'gort':setTab(5);focusAnchor('turn');break;
     case 'rtgo':rtGo(+arg);break;
@@ -1165,7 +1165,7 @@ document.addEventListener('keydown',e=>{
   if(k==='1'||k==='2'||k==='3'){e.preventDefault();rule(+k)}
   else if(k==='a'){e.preventDefault();rule(1)}
   else if(k==='u'){e.preventDefault();undo()}
-  else if(k==='r'){e.preventDefault();openRedirect('wren')}
+  else if(k==='r'){e.preventDefault();openRedirect('mira')}
   else if(k==='t'){e.preventDefault();openReceipt('r1184')}
   else if(k==='c'){e.preventDefault();catchup()}
   else if(k==='n'&&cur===5){e.preventDefault();rtNext()}
@@ -1174,8 +1174,8 @@ document.addEventListener('keydown',e=>{
 });
 
 /* live tool-call ticker: the lease renews on the daemon heartbeat, 60 s (ADR 0002) */
-setInterval(()=>{S.forEach((st,i)=>{if(st.wren.state!=='run'||st.wren.tools>=48)return;const nx=LIVE[(st.wren.tools-9)%LIVE.length];st.wren.tools++;st.wren.live.push(nx);
-  const host=$('#proto-'+i);if(host)host.querySelectorAll('[data-live="wt"]').forEach(n=>n.textContent=st.wren.tools)})},4000);
+setInterval(()=>{S.forEach((st,i)=>{if(st.mira.state!=='run'||st.mira.tools>=48)return;const nx=LIVE[(st.mira.tools-9)%LIVE.length];st.mira.tools++;st.mira.live.push(nx);
+  const host=$('#proto-'+i);if(host)host.querySelectorAll('[data-live="wt"]').forEach(n=>n.textContent=st.mira.tools)})},4000);
 </script>
 </body>
 </html>

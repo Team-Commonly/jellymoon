@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, scanEnv, takePage, checkScanConfig,
+  scrub, scanEnv, takePage,
 } from './land-decide.mjs';
 import { scanRange } from './land-scan.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
@@ -157,13 +157,12 @@ const reviewers = () => {
   return list;
 };
 // The commit-range secret scan (gitleaks git mode, -m, markers ignored), run by scanRange (land-scan.mjs): land runs the checkout's own
-// `.tools/bin/go` with an argv it builds, not make. It only refuses. Clean is positive evidence read from the scan's own exit status AND
-// stderr (see scanResult): exit 0, no hit or error line, "no leaks found", and a scanned count equal to the commits gitleaks reads (those
-// whose diff has a text hunk, see textCommits). A range that touches a path ending in a backslash is refused first, because the count
-// cannot show which commits were read. A scan that did not read the range proves nothing, so it refuses too.
+// installed go with an argv it builds, not make. It only refuses. Before the scan, main's tree and every range commit's tree are read for a
+// file that would steer the scan (checkScanConfig), and the checkout's .tools is checked. Clean is positive evidence read from the scan's own
+// exit status AND stderr (see scanResult): exit 0, no hit or error line, "no leaks found", and a scanned count equal to the commits gitleaks
+// reads (those whose diff has a text hunk, see textCommits). A range that touches a path ending in a backslash is refused first, because the
+// count cannot show which commits were read. A scan that did not read the range proves nothing, so it refuses too.
 const rangeScan = (mainTip, head) => {
-  const config = checkScanConfig(out('git', ['ls-tree', '-r', '-z', mainTip], { maxBuffer: 1 << 28 }), (id) => out('git', ['cat-file', 'blob', id]));
-  if (!config.ok) return config;
   const top = out('git', ['rev-parse', '--show-toplevel']);
   const git = (a) => out('git', a, { env: scanEnv(IO.env), maxBuffer: 1 << 28 }); // the scan's own git environment, so both count the same way
   const r = scanRange({ range: `${mainTip}..${head}`, top, git, run: IO.run, env: IO.env });

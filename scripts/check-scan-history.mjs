@@ -96,6 +96,8 @@ console.log(`check-scan-history: ${history.length} history cases ok`);
     ['exported GIT_CONFIG_* pointing core.attributesFile at a tracked -diff file', { Makefile: `${MK}\nexport GIT_CONFIG_COUNT := 1\nexport GIT_CONFIG_KEY_0 := core.attributesFile\nexport GIT_CONFIG_VALUE_0 := scan.attrs\n`, 'scan.attrs': 'b.txt -diff\n' }],
     ['a tracked go.work with a newer go line and a toolchain line', { 'go.work': 'go 1.99\ntoolchain go1.99.0\nuse ./nope\n' }],
     ['a tracked go.mod with a toolchain line and a replace of the scanner', { 'go.mod': 'module x\ngo 1.99\ntoolchain go1.99.0\nreplace github.com/zricethezav/gitleaks/v8 => ./nope\n' }],
+    // go started through the .tools/bin/go link looks three levels up for its GOROOT, which is the checkout; land runs the resolved go with GOROOT set
+    ['a tracked pkg/tool/ and go.env at the top, which would make the checkout the GOROOT of a go started through the .tools/bin link', { 'pkg/tool/README': 'x\n', 'go.env': 'GOPROXY=off\nGOFLAGS=-mod=mod\n' }],
   ];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-steer-'));
   const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: gitEnv });
@@ -107,7 +109,7 @@ console.log(`check-scan-history: ${history.length} history cases ok`);
     fs.writeFileSync(path.join(dir, 'b.txt'), `token = ${token}\n`);
     g('git add -A && git commit -qm pr');
     const range = `${g('git rev-parse HEAD~1').stdout.trim()}..${g('git rev-parse HEAD').stdout.trim()}`;
-    Object.entries(files).forEach(([f, text]) => fs.writeFileSync(path.join(dir, f), text, { mode: f === 'scan-shell' ? 0o755 : 0o644 }));
+    Object.entries(files).forEach(([f, text]) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), text, { mode: f === 'scan-shell' ? 0o755 : 0o644 }); });
     g('git add -A && git commit -qm main');
     return [`land's scan: ${name} on main changes nothing, the token is found`, rangeIn(dir, range).result, 'hit'];
   });

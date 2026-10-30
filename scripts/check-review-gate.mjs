@@ -69,7 +69,25 @@ const insideOk = pg('bash scripts/check-portable.sh').status === 0;
 pg('ln -s ../.. "sp/out side.md" && git add -A && git commit -qm b');
 const outside = pg('bash scripts/check-portable.sh');
 fs.rmSync(pdir, { recursive: true, force: true });
-const portable = [['portable: a symlink with a space that stays inside passes', insideOk, true], ['portable: a symlink with a space that leaves the repo is refused by its whole path', outside.status !== 0 && outside.stdout.includes('sp/out side.md'), true]];
+// Installed tools and dependencies: a path component named .tools or node_modules, in any case, a directory or the entry itself (a symlink).
+const tracked = (files, links = []) => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'check-portable-'));
+  fs.mkdirSync(path.join(d, 'scripts'));
+  fs.copyFileSync(path.join(root, 'scripts', 'check-portable.sh'), path.join(d, 'scripts', 'check-portable.sh'));
+  for (const f of files) { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), 'x\n'); }
+  for (const l of links) { fs.mkdirSync(path.dirname(path.join(d, l)), { recursive: true }); fs.symlinkSync('../scripts', path.join(d, l)); }
+  const r = spawnSync('bash', ['-c', 'git init -q && git add -Af && git commit -qm a && bash scripts/check-portable.sh'], { cwd: d, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
+  fs.rmSync(d, { recursive: true, force: true });
+  return r.status !== 0 && /installed tools or dependencies are tracked/.test(r.stdout);
+};
+const many = Array.from({ length: 1500 }, (_, i) => `node_modules/a-package-with-a-long-enough-name-to-fill-a-pipe-buffer-${i}/index.js`); // about 120 KB of names
+const portable = [['portable: a symlink with a space that stays inside passes', insideOk, true], ['portable: a symlink with a space that leaves the repo is refused by its whole path', outside.status !== 0 && outside.stdout.includes('sp/out side.md'), true],
+  ['portable: a tracked .tools that is a symlink (an entry with no slash) is refused', tracked([], ['.tools']), true],
+  ['portable: a tracked .TOOLS/bin/go is refused (any case)', tracked(['.TOOLS/bin/go']), true],
+  ['portable: a tracked sub/NODE_MODULES symlink is refused', tracked([], ['sub/NODE_MODULES']), true],
+  ['portable: names that only contain the words pass (my.tools/, .toolsrc, node_modules.md)', tracked(['my.tools/x', '.toolsrc', 'docs/node_modules.md']), false],
+  ['portable: a list of tracked node_modules files longer than a pipe buffer is refused (a head under pipefail once passed it)', tracked(many), true],
+];
 const badPortable = portable.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (badPortable.length) { console.error(`check-review-gate: portable cases wrong\n  ${badPortable.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${portable.length} portable cases ok`);

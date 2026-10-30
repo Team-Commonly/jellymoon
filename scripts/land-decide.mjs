@@ -204,20 +204,30 @@ export const scanResult = ({ status, stderr, expected }) => {
   const read = counts.length === 1 && counts[0] === expected; // === also rules out an expected that is missing, NaN, negative, fractional or a string
   return status === 0 && !hitLine && !errLine && /^\S+ INF no leaks found$/m.test(text) && read ? 'clean' : 'failure';
 };
-// Main's own scan configuration. The range scan runs in a checkout of main, so a `.gitleaks.toml`, a `.gitleaksignore`, or a `.gitattributes`
-// that switches files out of the diff (`-diff`, `!diff`, `binary`, a `!` pattern), committed to main, changes what every later land reads.
-// `tree` is `git ls-tree -r -z <main tip>`, blob(id) reads a blob. A file is allowed only when its blob id is the one this repo ships:
-// SHIPPED maps a path to that id, and this repo ships none, so none is allowed. Names compare case-insensitively (APFS).
+// A name folded the way a case-insensitive filesystem may compare it. APFS opens `.TOOLS` for `.tools`, and also takes ſ (long s) for s, the
+// Kelvin sign for k, and ß or ẞ for ss (measured by probing every BMP code point against the letters of the names below; no code point is
+// ignored inside a name). NFKC and a lower, upper, lower round trip fold each of those the same way; they fold more besides, which only
+// refuses more.
+export const foldName = (name) => name.normalize('NFKC').toLowerCase().toUpperCase().toLowerCase();
+// What a tree carries that changes what the range scan runs or reads. The scan runs in a checkout of main, so these, committed to main, change
+// every later land: land checks main's tree and the tree of every commit in the range (land-scan.mjs), so a PR cannot bring one onto main.
+// - a path whose FIRST component is `.tools`: land runs go from `<checkout>/.tools/bin`, so a tracked `.tools` (a symlink, or a force-added
+//   `.tools/bin/go`) would choose the go land runs. Never allowed, whatever the blob.
+// - a `.gitleaks.toml` or `.gitleaksignore` at any depth, or a `.gitattributes` that switches files out of the diff (`-diff`, `!diff`, `binary`,
+//   a `!` pattern). Allowed only when its blob id is the one this repo ships: SHIPPED maps a path to that id, and this repo ships none.
+// `tree` is `git ls-tree -r -z --full-tree <commit>`, blob(id) reads a blob, `where` names the tree in the reason. Names compare folded.
 const SHIPPED = {};
 const SWITCHES = new Set(['-diff', '!diff', 'binary']);
 const switchesOff = (line) => { const [pat, ...attrs] = line.trim().split(/\s+/); return !pat.startsWith('#') && (pat.startsWith('!') || attrs.some((a) => SWITCHES.has(a))); };
-export function checkScanConfig(tree, blob, shipped = SHIPPED) {
+export function checkScanConfig(tree, blob, shipped = SHIPPED, where = 'main') {
   for (const entry of String(tree).split('\0').filter(Boolean)) {
     const [meta, file] = [entry.slice(0, entry.indexOf('\t')), entry.slice(entry.indexOf('\t') + 1)];
     const id = meta.split(' ')[2];
-    const name = file.split('/').pop().toLowerCase();
+    const parts = file.split('/').map(foldName);
+    if (parts[0] === '.tools') return { ok: false, reason: `${where} carries ${file}; land runs go from the checkout's own .tools, so a tracked .tools would choose the scanner; remove it` };
+    const name = parts.at(-1);
     const bad = name === '.gitleaks.toml' || name === '.gitleaksignore' || (name === '.gitattributes' && blob(id).split('\n').some((l) => l.trim() && switchesOff(l)));
-    if (bad && shipped[file] !== id) return { ok: false, reason: `main carries ${file}, which changes what the range scan reads; remove it or ship it from this repo` };
+    if (bad && shipped[file] !== id) return { ok: false, reason: `${where} carries ${file}, which changes what the range scan reads; remove it or ship it from this repo` };
   }
   return { ok: true };
 }

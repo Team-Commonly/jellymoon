@@ -36,7 +36,7 @@ async function land(over = {}) {
   fs.writeFileSync(path.join(dir, 'token'), 'jmu_FAKE-token-abc123\n');
   (over.topFiles || []).forEach((f) => fs.writeFileSync(path.join(top, f), '')); if (!over.noGo) seedGo(top);
   (over.cwdFiles || []).forEach((f) => fs.writeFileSync(path.join(cwd, f), ''));
-  const w = { calls: [], fetches: [], pod: [], spawns: [], views: 0, ledger, lockAtMerge: null, kills: [], top };
+  const w = { calls: [], fetches: [], pod: [], spawns: [], views: 0, ledger, lockAtMerge: null, kills: [], top, go: over.noGo ? null : fs.realpathSync.native(path.join(top, '.tools', 'bin', 'go')) }; // go: what land runs, the checkout's go resolved
   const base = { url: `https://github.com/${REPO}/pull/5`, number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'feat', headRefOid: HEAD, createdAt: '2026-10-29T09:00:00Z', isCrossRepository: false, author: { login: 'alice' }, mergeCommit: { oid: MERGED }, ...over.pr };
   const wt = /^git -C \S+ /;
   const defaults = [
@@ -90,7 +90,7 @@ async function land(over = {}) {
 }
 // Each case runs land once; `no` is: refused with this reason, nothing merged.
 const no = (r, re) => !r.merge && re.test(r.error ?? '');
-const scans = (r) => r.w.calls.filter((c) => c.cmd === path.join(r.w.top, '.tools', 'bin', 'go')); // land's gitleaks runs: the checkout's own go, by absolute path
+const scans = (r) => r.w.calls.filter((c) => c.cmd === r.w.go); // land's gitleaks runs: the checkout's own go, by its resolved absolute path
 const argv = (r, cmd, sub) => r.w.calls.filter((c) => c.cmd === cmd && [cmd, ...c.args].join(' ').includes(sub)).map((c) => c.args.join(' '));
 const fetched = (r) => r.w.calls.some((c) => c.args[0] === 'fetch');
 const cases = [];
@@ -101,15 +101,17 @@ const PO = ['5', '--preflight-only'];
 await t('happy path: lands with --merge and --match-head-commit <head>; the ledger gets LANDED', {}, (r) => r.merge?.args.join(' ') === mergeArgs && r.ledgerNow.includes('\tLANDED\t') && r.lock === false && r.w.lockAtMerge === true);
 await t('happy path: pr view asks for isCrossRepository; the collaborators call is paginated and unfiltered', {}, (r) => argv(r, 'gh', 'pr view')[0].includes('isCrossRepository') && argv(r, 'gh', 'collaborators')[0].includes('--paginate') && !argv(r, 'gh', 'collaborators')[0].includes('permission='));
 await t('every main fetch names refs/heads/main; the merge disables hooks; untracked files are shown in full', {}, (r) => r.w.fetches.filter((f) => !f.startsWith('pull/') && f !== MERGED).every((f) => f === 'refs/heads/main') && argv(r, 'git', 'merge --no-ff')[0].includes('core.hooksPath=/dev/null') && argv(r, 'git', 'status')[0].includes('status.showUntrackedFiles=all'));
-await t('the range scan is the checkout\'s own .tools/bin/go (absolute path) run with exactly this argv, cwd the checkout, no shell, and no make', {}, (r) => scans(r).length === 2 && scans(r).every((c) => JSON.stringify(c.args) === JSON.stringify(['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', `--log-opts=-m ${MAIN}..${HEAD}`, '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '.']) && c.opts.cwd === r.w.top && !('shell' in c.opts)) && !r.w.calls.some((c) => c.cmd === 'make' || c.cmd === 'go' || c.cmd === 'sh' || c.cmd === 'bash'));
+await t('the range scan is the checkout\'s own .tools/bin/go, resolved to its real absolute path, run with exactly this argv, cwd the checkout, no shell, and no make', {}, (r) => scans(r).length === 2 && scans(r).every((c) => JSON.stringify(c.args) === JSON.stringify(['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', `--log-opts=-m ${MAIN}..${HEAD}`, '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '.']) && c.opts.cwd === r.w.top && !('shell' in c.opts)) && !r.w.calls.some((c) => c.cmd === 'make' || c.cmd === 'go' || c.cmd === 'sh' || c.cmd === 'bash'));
 // Every name the allowlist keeps, set to a recognisable value, plus operator variables that must not pass (and a git config the operator points at its own).
 const KEPT = { PATH: '/usr/bin:/bin', HOME: '/opt/opuser', TMPDIR: '/var/tmp', GOPATH: '/opt/gopath', GOCACHE: '/opt/gocache', GOMODCACHE: '/opt/gomod' };
 const MAKEENV = { ...KEPT, MAKEFLAGS: 'i', GITLEAKS_CONFIG: '/tmp/off.toml', GITLEAKS_ENABLE_RULES: 'x', GIT_DIR: '/nope', GOFLAGS: '-x', GOTOOLCHAIN: 'go9.9', GOWORK: '/nope/go.work', GIT_CONFIG_GLOBAL: '/opt/opuser/.gitconfig', GIT_CONFIG_NOSYSTEM: '0' };
-const EXACT = JSON.stringify(Object.entries({ ...KEPT, GOTOOLCHAIN: 'local', GOWORK: 'off', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }).sort());
+const PINNED = { ...KEPT, GOTOOLCHAIN: 'local', GOWORK: 'off', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+const EXACT = JSON.stringify(Object.entries(PINNED).sort()); // git's env; the scan adds GOROOT, the resolved toolchain's own directory
+const scanExact = (r) => JSON.stringify(Object.entries({ ...PINNED, GOROOT: path.dirname(path.dirname(r.w.go)) }).sort());
 const envOf = (c) => c && JSON.stringify(Object.entries(c.opts.env).sort());
 const scanEnvOf = (r) => envOf(scans(r)[0]);
 await t('a scan killed by a signal (no exit status) refuses as a failed scan, not a finding or clean', { scan: 'killed' }, (r) => no(r, /failed to run/) && !r.ledgerNow.includes('LANDED'));
-await t('the range scan runs with exactly the allowlisted env (Go pinned to the installed toolchain, no workspace) and git config pinned off', { env: MAKEENV }, (r) => scanEnvOf(r) === EXACT);
+await t('the range scan runs with exactly the allowlisted env (Go pinned to the installed toolchain, no workspace, GOROOT the toolchain\'s own) and git config pinned off', { env: MAKEENV }, (r) => scanEnvOf(r) === scanExact(r));
 await t('the commits the scan should read, and the paths the range touches, are derived by git in that same env (the name list, the rev-list and the diff, once for each of the two decisions)', { env: MAKEENV }, (r) => {
   const mine = r.w.calls.filter((c) => c.cmd === 'git' && ['log', 'rev-list'].includes(c.args[0]));
   return mine.length === 6 && mine.every((c) => envOf(c) === EXACT);
@@ -129,7 +131,8 @@ await t('a PR without a pod verdict: refused', { msgs: [] }, (r) => no(r, /no ac
 await t('a PR with a verdict from the configured reviewer id lands', {}, (r) => r.merge);
 await t('a PR with JM_VERDICT_REVIEWERS unset refuses, naming it', { env: { JM_VERDICT_REVIEWERS: '' } }, (r) => no(r, /environment variable JM_VERDICT_REVIEWERS is not set/) && r.w.pod.length === 0 && r.w.calls.length === 0);
 await t('a verdict from a forged username with another id is refused', { msgs: [{ ...NOTE, userId: { _id: 'id-forged', username: 'orion' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
-await t('a docs-only PR with a ledger PASS and no pod verdict: refused; land classifies no paths (no diff of the PR is read, and the only tree listing is the main tip)', { msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/) && !r.w.calls.some((c) => c.args.some((a) => ['--raw', '--numstat'].includes(a)) || (c.args.includes('ls-tree') && c.args.at(-1) !== MAIN))); // the one tree listing is main's tip (its scan configuration), never the PR's
+const listed = [MAIN, ...commitsOf(`${MAIN}..${HEAD}`)]; // the trees land lists: main's tip and each commit of the range, for the scan configuration
+await t('a docs-only PR with a ledger PASS and no pod verdict: refused; land classifies no paths (no diff of the PR is read, and the only tree listings are main\'s tip and the range\'s commits)', { msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/) && !r.w.calls.some((c) => c.args.some((a) => ['--raw', '--numstat'].includes(a)) || (c.args.includes('ls-tree') && !listed.includes(c.args.at(-1)))));
 await t('a range scan hit with a valid verdict: refused, naming the history', { scan: 'hit' }, (r) => no(r, /a secret was found in the range; remove it from history and push a new head/) && r.w.pod.length === 0); // scan first: no token read, no pod fetch
 await t('a range scan that failed to run: refused', { scan: 'fail' }, (r) => no(r, /scan failed to run/) && !/secret was found/.test(r.error));
 await t('a valid verdict with a clean scan lands (control)', { scan: 'clean' }, (r) => r.merge && r.ledgerNow.includes('\tLANDED\t'));
@@ -144,7 +147,7 @@ await t('a zero exit that scanned an empty range while the land would merge comm
 await t('a zero exit with the count line printed twice: refused as a scan failure', { scanErr: cleanScan(3) + '10:11AM INF 3 commits scanned.\n' }, refusedScan);
 const entry = (file) => `100644 blob ${'a'.repeat(40)}\t${file}\0`;
 const refusedConfig = (file) => (r) => no(r, new RegExp(`main carries ${file.replace('.', '\\.')}`)) && r.w.pod.length === 0 && !scans(r).length && !r.ledgerNow.includes('LANDED');
-await t('main\'s tree at the fetched tip is read for scan configuration, with -r -z', {}, (r) => argv(r, 'git', 'ls-tree')[0] === `ls-tree -r -z ${MAIN}`);
+await t('main\'s tree at the fetched tip, then each range commit\'s, is read for scan configuration, whole (--full-tree) and with -r -z, at both decisions', {}, (r) => JSON.stringify(argv(r, 'git', 'ls-tree')) === JSON.stringify([...listed, ...listed].map((c) => `ls-tree -r -z --full-tree ${c}`)));
 await t('main carries a .gitleaks.toml: refused, naming it, before the scan or the pod', { tree: entry('README.md') + entry('.gitleaks.toml') }, refusedConfig('.gitleaks.toml'));
 await t('main carries a .gitleaksignore: refused, naming it', { tree: entry('.gitleaksignore') }, refusedConfig('.gitleaksignore'));
 await t('main carries a .gitattributes with -diff: refused, naming it', { tree: entry('.gitattributes'), attrs: '* -diff\n' }, refusedConfig('.gitattributes'));

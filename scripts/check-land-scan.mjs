@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Tests the range secret scan's pure decisions: how its result is read (scanResult), the environment it runs in (scanEnv), main's own
 // scan configuration (checkScanConfig) and land-scan.mjs (the argv, the paths gitleaks cannot parse). No network. Own step in `make test`.
-import { checkScanConfig, scanEnv, scanResult, textCommits } from './land-decide.mjs';
+import { checkScanConfig, foldName, scanEnv, scanResult, textCommits } from './land-decide.mjs';
 import { backslashPaths, GITLEAKS_MODULE, scanArgv, touchedPaths } from './land-scan.mjs';
 
 const CLEAN = '10:11AM INF 3 commits scanned.\n10:11AM INF no leaks found\n'; // what a clean gitleaks run prints to stderr
@@ -87,6 +87,15 @@ const cases = [
       ['scan config: a file at a shipped path with another blob is refused', checkScanConfig(`100644 blob ${'b'.repeat(40)}\t.gitleaks.toml\0`, () => '', { '.gitleaks.toml': A }).ok, false],
       ['scan config: a shipped blob at another path is refused', checkScanConfig(tree('other/.gitleaks.toml'), () => '', { '.gitleaks.toml': A }).ok, false],
       ['scan config: this repo ships none, so none is allowed', checkScanConfig(tree('.gitleaks.toml'), () => '').ok, false],
+      // a tracked .tools: land runs go from <checkout>/.tools, so no tree land checks may carry one, in any form, whatever the blob
+      ['scan config: a tracked .tools entry (a symlink, no slash) is refused, naming it', checkScanConfig(`120000 blob ${A}\t.tools\0`, () => '').reason?.startsWith('main carries .tools;'), true],
+      ['scan config: a force-tracked .tools/bin/go is refused, naming it', named('.tools/bin/go').reason?.startsWith('main carries .tools/bin/go;'), true],
+      ['scan config: .TOOLS and .Tools are refused (the filesystem folds case)', [named('.TOOLS/bin/go').ok, named('.Tools').ok].join(), 'false,false'],
+      ['scan config: .tool\u017f (a long s, which APFS folds to s) is refused', named('.tool\u017f/bin/go').ok, false],
+      ['scan config: a .tools listed as shipped is still refused (no blob is allowed)', checkScanConfig(tree('.tools/bin/go'), () => '', { '.tools/bin/go': A }).ok, false],
+      ['scan config: only the first component counts (.toolsrc, my.tools/x and sub/.tools/x pass here; check-portable refuses the last)', [named('.toolsrc').ok, named('my.tools/x').ok, named('sub/.tools/x').ok].join(), 'true,true,true'],
+      ['scan config: the refusal names the tree it was found in', checkScanConfig(tree('.tools/bin/go'), () => '', undefined, 'commit abcd1234 in the range').reason?.startsWith('commit abcd1234 in the range carries .tools/bin/go;'), true],
+      ['fold: case, the long s, the Kelvin sign and sharp s fold the way APFS compares them', ['.ToOLS', '.tool\u017f', '\u212Aeep', 'stra\u00dfe', 'STRA\u1E9EE'].map(foldName).join(), '.tools,.tools,keep,strasse,strasse'],
     ];
   })(),
 ];

@@ -1,6 +1,6 @@
 // Creating the pod, its members, tasks and messages. A task or message that addresses a registered agent writes its wake.
 import type { Message, MessageId, Task } from '../../gen/ts/protocol';
-import { taskView, who, acquire } from './claims';
+import { acquire, own, taskView, who } from './claims';
 import { emit, fail, ok } from './emit';
 import { isoOf } from './time';
 import { prose } from './mentions';
@@ -27,7 +27,7 @@ export function taskCreateCmd(c: Ctx, cmd: Of<'task_create'>): void {
   const w = who(c, cmd.caller);
   if (w === null) return;
   if (!seedFits(c, cmd.wakeId, 1)) return;
-  if (c.s.tasks[cmd.taskId] !== undefined) return fail(c, 'invalid_input', 'That task id is taken.', cmd.taskId);
+  if (own(c.s.tasks, cmd.taskId) !== undefined) return fail(c, 'invalid_input', 'That task id is taken.', cmd.taskId);
   const at = isoOf(c.now);
   const task: Task = { id: cmd.taskId, podId: c.s.podId, title: cmd.title, kind: cmd.kind, status: 'open', createdBy: w.actor, createdAt: at, updatedAt: at };
   if (cmd.body !== undefined) task.body = cmd.body;
@@ -43,9 +43,15 @@ export function taskUpdateCmd(c: Ctx, cmd: Of<'task_update'>): void {
   if (w === null) return;
   if (!seedFits(c, cmd.wakeId, 1)) return;
   if ((cmd.status as string | undefined) === 'open') return fail(c, 'invalid_input', 'A task cannot be set back to open.', cmd.taskId);
-  const task = c.s.tasks[cmd.taskId];
+  const task = own(c.s.tasks, cmd.taskId);
   if (task === undefined) return fail(c, 'not_found', 'No such task.', cmd.taskId);
   if (w.run !== undefined && acquire(c, w.run, cmd.taskId, false)) return;
+  // One claim per task (operations.json): another live run's claim bars a run's update; a person may still update.
+  const held = own(c.s.claims, cmd.taskId);
+  if (w.run !== undefined && held !== undefined && held.runId !== w.run.id) {
+    const holder = c.s.runs[held.runId].agent;
+    return fail(c, 'already_claimed', `${holder.displayName} holds this task.`, holder.id);
+  }
   const reassigned = cmd.assignee !== undefined && cmd.assignee !== task.assignee;
   if (cmd.status !== undefined) task.status = cmd.status;
   if (cmd.assignee !== undefined) task.assignee = cmd.assignee;
@@ -74,6 +80,8 @@ export function messagePostCmd(c: Ctx, cmd: Of<'message_post'>): void {
   if (typeof cmd.text !== 'string') return fail(c, 'invalid_input', 'text must be a string.');
   const ids = mentioned(c, cmd.text).filter((id) => id !== w.actor.id);
   if (!seedFits(c, cmd.wakeId, ids.length)) return;
+  if (own(c.s.messages, cmd.messageId) !== undefined) return fail(c, 'invalid_input', 'That message id is taken.', cmd.messageId);
+  c.s.messages[cmd.messageId] = true;
   const msg: Message = {
     id: cmd.messageId, seq: c.s.seq + 1, podId: c.s.podId, author: w.actor, createdAt: isoOf(c.now), summary: summaryOf(cmd.text),
     kind: 'fyi', status: 'done', body: cmd.text,

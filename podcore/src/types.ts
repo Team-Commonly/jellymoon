@@ -15,7 +15,6 @@ export interface Run {
   startedAt: number;
   status: 'active' | 'ended';
   outcome?: RunOutcome;
-  wakeReason?: WakeReason;
   /** Set when a person stopped the run; cleared when the daemon reports it ended. Re-sent on each heartbeat until then. */
   stop?: { reason?: string };
 }
@@ -24,7 +23,7 @@ export interface Run {
 export interface Agent { actor: Actor; owner: Actor; computerId: ComputerId }
 
 /** A pending wake. Keyed by agent in PodState, so a second pending wake for one agent cannot exist. */
-export interface Wake { id: WakeId; agentId: AgentId; reason: WakeReason; refs: WakeRefs; acked: boolean; sentAt: number }
+export interface Wake { id: WakeId; agentId: AgentId; reason: WakeReason; refs: WakeRefs; sentAt: number }
 
 export interface PodState {
   podId: PodId;
@@ -35,6 +34,8 @@ export interface PodState {
   owners: Actor[];
   /** Tasks as stored: the claim lives in `claims`, so a task here never carries one. */
   tasks: Record<TaskId, Task>;
+  /** Every message id posted, so a repeated id is refused. The messages themselves live in the adapter's log. */
+  messages: Record<MessageId, true>;
   runs: Record<RunId, Run>;
   /** At most one per task; the key makes exclusivity structural. leaseUntil is in milliseconds. */
   claims: Record<TaskId, { runId: RunId; leaseUntil: number }>;

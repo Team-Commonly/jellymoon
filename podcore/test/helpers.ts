@@ -35,7 +35,7 @@ export function world(): PodState {
     podId: POD, seq: 0, owners: [U_OWNER], members: [U_OWNER, U_AGENT_OWNER],
     runs: { [RUN_A]: run(RUN_A, 1, CMP_1), [RUN_B]: run(RUN_B, 2, CMP_1), [RUN_C]: run(RUN_C, 3, CMP_2) },
     tasks: Object.fromEntries(TASKS.map((t, i) => [t, task(t, i + 1)])),
-    claims: {}, lost: {}, wakes: {},
+    claims: {}, lost: {}, wakes: {}, messages: {},
     agents: Object.fromEntries([[1, CMP_1], [2, CMP_1], [3, CMP_2]].map(([n, cmp]) => [id('agt', n as number), { actor: actor('agent', 'agt', n as number, `agent-${n}`), owner: U_AGENT_OWNER, computerId: cmp as string }])),
   };
 }

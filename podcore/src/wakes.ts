@@ -1,6 +1,6 @@
 // Wakes and run start. A wake is written only for an addressed change; one agent has at most one pending wake.
 import type { AgentId, ComputerId, WakeId, WakeReason, WakeRefs } from '../../gen/ts/protocol';
-import { RUN_CAP_MS } from './claims';
+import { RUN_CAP_MS, own } from './claims';
 import { nthWakeId } from './wakeid';
 import { fail, ok, push } from './emit';
 import { isoOf } from './time';
@@ -8,7 +8,7 @@ import type { Cmd, Ctx, Wake } from './types';
 
 type Of<T extends Cmd['type']> = Extract<Cmd, { type: T }>;
 
-/** A wake with no run_claim is re-sent on a heartbeat once its last send is this old (>=, not >), acked or not. */
+/** A wake with no run_claim is re-sent on a heartbeat once its last send is this old (>=, not >). */
 export const WAKE_RESEND_MS = 60_000;
 
 const REF_KEYS = ['taskId', 'messageId', 'decisionId'] as const;
@@ -30,13 +30,13 @@ function send(c: Ctx, computerId: ComputerId, w: Wake): void {
  * A run never wakes its own agent: `by` is the caller's actor id.
  */
 export function writeWake(c: Ctx, agentId: AgentId, reason: WakeReason, refs: WakeRefs, seed: WakeId, by?: string): void {
-  const agent = c.s.agents[agentId];
+  const agent = own(c.s.agents, agentId);
   if (agent === undefined || agentId === by) return;
-  const pending = c.s.wakes[agentId];
+  const pending = own(c.s.wakes, agentId);
   if (pending !== undefined) return mergeRefs(pending.refs, refs);
-  const own: WakeRefs = {};
-  mergeRefs(own, refs);
-  const w: Wake = { id: nthWakeId(seed, c.opened) as WakeId, agentId, reason, refs: own, acked: false, sentAt: c.now };
+  const mine: WakeRefs = {};
+  mergeRefs(mine, refs);
+  const w: Wake = { id: nthWakeId(seed, c.opened) as WakeId, agentId, reason, refs: mine, sentAt: c.now };
   c.opened += 1;
   c.s.wakes[agentId] = w;
   send(c, agent.computerId, w);
@@ -58,11 +58,8 @@ export function changeCmd(c: Ctx, cmd: Of<'change'>): void {
 
 const wakeById = (c: Ctx, wakeId: string): Wake | undefined => Object.values(c.s.wakes).find((w) => w.id === wakeId);
 
-export function wakeAckCmd(c: Ctx, cmd: Of<'wake_ack'>): void {
-  const w = wakeById(c, cmd.wakeId);
-  if (w !== undefined && c.s.agents[w.agentId].computerId === cmd.computerId) w.acked = true;
-  ok(c);
-}
+/** An ack changes nothing: a pending wake is re-sent until `run_claim` consumes it, acked or not (ADR 0003). */
+export const wakeAckCmd = (c: Ctx): void => ok(c);
 
 /** On a heartbeat, the hosting computer gets every pending wake that is old enough. */
 export function resendWakes(c: Ctx, computerId: ComputerId): void {
@@ -76,20 +73,20 @@ export function runClaimCmd(c: Ctx, cmd: Of<'run_claim'>): void {
   if (w === undefined) return fail(c, 'not_found', 'No such wake, or it was already claimed.', cmd.wakeId);
   const agent = c.s.agents[w.agentId];
   if (agent.computerId !== cmd.computerId) return fail(c, 'forbidden', 'This computer does not host that agent.', w.agentId);
-  if (c.s.runs[cmd.runId] !== undefined) return fail(c, 'invalid_input', 'That run id is taken.', cmd.runId);
-  c.s.runs[cmd.runId] = { id: cmd.runId, agent: agent.actor, owner: agent.owner, computerId: cmd.computerId, startedAt: c.now, status: 'active', wakeReason: w.reason };
+  if (own(c.s.runs, cmd.runId) !== undefined) return fail(c, 'invalid_input', 'That run id is taken.', cmd.runId);
+  c.s.runs[cmd.runId] = { id: cmd.runId, agent: agent.actor, owner: agent.owner, computerId: cmd.computerId, startedAt: c.now, status: 'active' };
   delete c.s.wakes[w.agentId];
   ok(c, { runId: cmd.runId, expiresAt: isoOf(c.now + RUN_CAP_MS), reason: w.reason, refs: w.refs });
 }
 
 export function agentRegisterCmd(c: Ctx, cmd: Of<'agent_register'>): void {
-  const old = c.s.agents[cmd.agentId];
+  const old = own(c.s.agents, cmd.agentId);
   c.s.agents[cmd.agentId] = {
     actor: { kind: 'agent', id: cmd.agentId, displayName: cmd.agentName ?? old?.actor.displayName ?? cmd.agentId },
     owner: { kind: 'human', id: cmd.ownerId, displayName: cmd.ownerName ?? old?.owner.displayName ?? cmd.ownerId },
     computerId: cmd.computerId,
   };
-  const pending = c.s.wakes[cmd.agentId];
-  if (pending !== undefined && old?.computerId !== cmd.computerId) pending.acked = false, send(c, cmd.computerId, pending);
+  const pending = own(c.s.wakes, cmd.agentId);
+  if (pending !== undefined && old?.computerId !== cmd.computerId) send(c, cmd.computerId, pending);
   ok(c);
 }

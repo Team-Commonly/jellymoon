@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { apply, isoOf, nextDeadline } from '../src';
 import type { Cmd } from '../src';
 import {
-  CMP_1, CMP_2, RUN_A, RUN_B, RUN_C, TASKS, U_AGENT_OWNER, U_OWNER, U_STRANGER, errCode, events, lastReply, play, released, types, world,
+  CMP_1, CMP_2, RUN_A, RUN_B, RUN_C, TASKS, U_AGENT_OWNER, U_OWNER, U_STRANGER, errCode, events, id, lastReply, play, released, types, world,
 } from './helpers';
 
 const [T1, T2] = TASKS;
@@ -111,7 +111,7 @@ describe('run end and token cap', () => {
   test('the 2 h run-token cap is enforced by tick and releases with run_ended', () => {
     const r = play([[claimA(), 7_130_000], [{ type: 'heartbeat', computerId: CMP_1 }, 7_189_000], [{ type: 'tick' }, 7_200_000]]);
     expect(released(r.out)).toEqual([{ taskId: T1, runId: RUN_A, cause: 'run_ended' }]);
-    expect(r.state.runs[RUN_A].status).toBe('ended');
+    expect(r.state.runs[RUN_A]).toMatchObject({ status: 'ended', outcome: 'failed' });
     expect(errCode(play([[{ type: 'op', runId: RUN_A }, 7_200_001]], r.state).out)).toBe('unauthorized');
   });
 });
@@ -205,5 +205,23 @@ describe('members events', () => {
 
   test('isoOf agrees with the platform clock on awkward instants', () => {
     for (const ms of [0, 951_782_400_000, 1_782_431_999_999, 4_102_444_800_123]) expect(isoOf(ms)).toBe(new Date(ms).toISOString());
+  });
+});
+
+describe('one claim per task, one id per message', () => {
+  const upd = (caller: { kind: 'run'; runId: string } | { kind: 'user'; userId: string }): Cmd => ({ type: 'task_update', caller, taskId: T1, status: 'in_progress', wakeId: id('wak', 1) });
+  test('a run\'s task_update on a task another live run holds is already_claimed naming the holder; a person may update', () => {
+    const held = play([[claimA(), 0]]).state;
+    const r = play([[upd({ kind: 'run', runId: RUN_B }), 1]], held);
+    const reply = lastReply(r.out);
+    expect([errCode(r.out), reply?.kind === 'reply' && !reply.ok && reply.error.ref]).toEqual(['already_claimed', held.runs[RUN_A].agent.id]);
+    expect(r.state.tasks[T1].status).toBe('open');
+    expect(errCode(play([[upd({ kind: 'user', userId: U_OWNER.id }), 1]], held).out)).toBeNull();
+    expect(errCode(play([[upd({ kind: 'run', runId: RUN_A }), 1]], held).out)).toBeNull();
+  });
+  test('message_post refuses a messageId that already exists', () => {
+    const post: Cmd = { type: 'message_post', caller: { kind: 'user', userId: U_OWNER.id }, messageId: id('msg', 1), text: 'hi', wakeId: id('wak', 1) };
+    const r = play([[post, 0], [post, 1]]);
+    expect([errCode(r.out), events(r.out).length, r.state.seq]).toEqual(['invalid_input', 1, 1]);
   });
 });

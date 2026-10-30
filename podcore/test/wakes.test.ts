@@ -95,6 +95,8 @@ describe('input an adapter could get wrong', () => {
     refused({ type: 'tick' }, 1.5);
     refused({ type: 'tick' }, Number.NaN);
     refused({ type: 'tick' }, -1);
+    refused({ type: 'tick' }, 253_402_300_800_000);
+    refused({ type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'done' as never });
     for (const staleMs of [-1, 60_001, 1.5, Number.NaN]) refused({ type: 'boot', staleMs });
     refused({ type: 'nope' } as never);
     refused({ type: 'constructor' } as never);
@@ -167,7 +169,7 @@ describe('resend', () => {
     expect(wakes(at({ type: 'tick' }, 90_000))).toEqual([]);
   });
 
-  test('an acked wake with no run_claim is re-sent like an un-acked one: nothing at 59 999 ms, a resend at 60 000 ms', () => {
+  test('wake_ack changes nothing: the wake is re-sent after 60 s without a run_claim, nothing at 59 999 ms', () => {
     const ack: Cmd = { type: 'wake_ack', wakeId: wak(1), computerId: CMP_1 };
     expect(wakes(play([[ack, 10], [hb(CMP_1), 59_999]], sent).out)).toEqual([]);
     expect(wakes(play([[ack, 10], [hb(CMP_1), 60_000]], sent).out).length).toBe(1);
@@ -176,11 +178,6 @@ describe('resend', () => {
   test('a resend restarts the 60 s wait', () => {
     const r = play([[hb(CMP_1), 60_000], [hb(CMP_1), 100_000], [hb(CMP_1), 120_000]], sent);
     expect(wakes(r.out).length).toBe(2);
-  });
-
-  test('wake_ack from the wrong computer is ignored', () => {
-    const r = play([[{ type: 'wake_ack', wakeId: wak(1), computerId: CMP_2 }, 10], [hb(CMP_1), 60_000]], sent);
-    expect(wakes(r.out).length).toBe(1);
   });
 
   test('a claimed wake is gone, so nothing is resent', () => {
@@ -254,6 +251,7 @@ describe('wake ids are minted by the adapter', () => {
     expect([nthWakeId(seed, 0), nthWakeId(seed, 1), nthWakeId(seed, 31)]).toEqual([seed, `wak_${'0'.repeat(24)}Z2`, `wak_${'0'.repeat(23)}100`]);
     const top = `wak_${'0'.repeat(10)}${'Z'.repeat(16)}`;
     expect([nthWakeId(top, 0), nthWakeId(top, 1)]).toEqual([top, null]);
+    expect(nthWakeId(`wak_${'0'.repeat(11)}${'Z'.repeat(15)}`, 1)).toBe(`wak_${'0'.repeat(10)}1${'0'.repeat(15)}`);
     expect([nthWakeId(`wak_${'1'.repeat(10)}${'Z'.repeat(16)}`, 1), nthWakeId('x', 0), nthWakeId(seed, -1), nthWakeId(seed, 0.5)]).toEqual([null, null, null, null]);
   });
   test('two pods sharing a computer emit the ids they were given, so no wakeId repeats; a coalesced command ignores its id', () => {

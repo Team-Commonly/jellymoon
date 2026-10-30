@@ -5,6 +5,9 @@ import { isoOf } from './time';
 import type { Caller, Ctx, Run } from './types';
 
 export const LEASE_MS = 60_000;
+
+/** The one record lookup: an own key only, so an id like `constructor` finds nothing instead of Object.prototype's member. */
+export const own = <T>(rec: Record<string, T>, key: string): T | undefined => (Object.hasOwn(rec, key) ? rec[key] : undefined);
 /** A run token lives at most 2 h (ADR 0002). */
 export const RUN_CAP_MS = 7_200_000;
 
@@ -22,7 +25,7 @@ function startClaim(c: Ctx, run: Run, taskId: TaskId): void {
 }
 
 export function lostHow(c: Ctx, runId: RunId, taskId: TaskId): 'expired' | 'released' | undefined {
-  return c.s.lost[runId]?.[taskId];
+  return own(own(c.s.lost, runId) ?? {}, taskId);
 }
 
 /** The one place a claim ends: task.updated with no claim, then exactly one claim.released. */
@@ -66,12 +69,13 @@ export function settle(c: Ctx): void {
   for (const [at, rank, id] of due) {
     c.now = at;
     if (rank === 0) endRun(c, c.s.runs[id], 'failed', 'run_ended');
-    else if (c.s.claims[id] !== undefined) endClaim(c, id, 'expired');
+    else if (own(c.s.claims, id) !== undefined) endClaim(c, id, 'expired');
   }
   c.now = real;
 }
 
-export function nextDeadlineOf(s: { runs: Record<RunId, Run>; claims: Record<TaskId, { leaseUntil: number }> }): number | null {
+/** The earliest moment `apply(state, {type:'tick'}, t)` has work to do, or null. */
+export function nextDeadline(s: { runs: Record<RunId, Run>; claims: Record<TaskId, { leaseUntil: number }> }): number | null {
   const times = [
     ...Object.values(s.claims).map((k) => k.leaseUntil),
     ...Object.values(s.runs).filter((r) => r.status === 'active').map((r) => r.startedAt + RUN_CAP_MS),
@@ -81,7 +85,7 @@ export function nextDeadlineOf(s: { runs: Record<RunId, Run>; claims: Record<Tas
 
 /** The run behind a run token, or a refusal: an ended or unknown run's token is dead. A live run renews first, so no refusal below it can skip the renewal. */
 export function liveRun(c: Ctx, runId: RunId): Run | null {
-  const run = c.s.runs[runId];
+  const run = own(c.s.runs, runId);
   if (run !== undefined && run.status === 'active') return renewRun(c, runId), run;
   fail(c, 'unauthorized', 'This run has ended; its token no longer works.', runId);
   return null;
@@ -105,7 +109,7 @@ export function who(c: Ctx, caller: Caller): { actor: Actor; run?: Run } | null 
 export function acquire(c: Ctx, run: Run, taskId: TaskId, create: boolean): boolean {
   const how = lostHow(c, run.id, taskId);
   if (how === 'released') return fail(c, 'forbidden', 'A person released this claim; it cannot be taken back.', taskId), true;
-  const held = c.s.claims[taskId];
+  const held = own(c.s.claims, taskId);
   if (held !== undefined && held.runId !== run.id && (create || how === 'expired')) {
     const holder = c.s.runs[held.runId].agent;
     return fail(c, 'already_claimed', `${holder.displayName} holds this task.`, holder.id), true;

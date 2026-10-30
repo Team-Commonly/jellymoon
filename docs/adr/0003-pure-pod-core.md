@@ -115,10 +115,10 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
   clash the earlier ref stays; the agent reads the pod for the rest. The reason is the first change's.
   Delivery is one to-computer `run.wake` to the hosting computer, with no members event and no seq.
 - Re-send: on a `heartbeat` from the hosting computer, a pending wake whose last send is 60 000 ms old or
-  more (>=) is sent again, and the clock restarts. That holds for an acked wake too: an ack means the daemon got the
-  push, and only `run_claim` consumes the wake (the exit). Another computer's heartbeat sends nothing. `wake_ack`
-  from a computer that does not host the agent is ignored. `agent_register` that moves an agent to another computer
-  sends its pending wake to the new one at once (un-acked, clock restarted).
+  more (>=) is sent again, and the clock restarts. Only `run_claim` consumes the wake (the exit): `wake_ack` is a
+  valid command that changes nothing, so an acked wake is re-sent like any other. Another computer's heartbeat
+  sends nothing. `agent_register` that moves an agent to another computer sends its pending wake to the new one at
+  once, clock restarted.
 - `run.stop` is re-sent on every heartbeat from the hosting computer, with no wait, until `run_end` clears it.
 - `run_claim {wakeId, computerId, runId}` creates the Run (expiry is the 2 h cap from now), consumes the wake
   and replies `{runId, expiresAt, reason, refs}` for the adapter to build the brief. Unknown or consumed wake:
@@ -132,7 +132,7 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
 ## Throws
 
 `apply` never throws on adapter input: a non-integer or negative `now`, an unknown command type, a bad `staleMs`, a
-malformed or exhausted `wakeId` and a non-string message `text` are all `invalid_input` and change nothing. What can
+malformed or exhausted `wakeId` and a non-string message `text`, a `now` past the end of year 9999, a repeated `messageId` and a `run_end` outcome outside the schema enum are all `invalid_input` and change nothing. An id that is `__proto__` or names an `Object.prototype` member (`constructor`, `toString`, ...) in any `*Id` field or `assignee` is `not_found`, refused before any lookup or write; every record lookup also goes through `own()` (`Object.hasOwn`). What can
 still throw is an invariant violation, i.e. a bug or a corrupt saved state: `structuredClone` of a non-JSON state,
 `isoOf` on a non-integer (unreachable once `now` is checked), and a missing record that state invariants guarantee
 (a wake's agent, a claim's run).
@@ -142,8 +142,12 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 - Computers can tell an unknown id from a foreign one by the reply code. Accepted: ids are unguessable ULIDs.
 - The boot stretch can turn an `expired` release near the cap into `run_ended`, because a stretched lease may now
   meet the 2 h run cap first.
-- Size: `podcore/` is held to 1650 lines in `entropy.json` (was 1500), the tests included, for the tests that pin the
-  rules above. No exception was added; it ratchets down from here.
+- Size: `podcore/` is capped at 1,750 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
+  exception was added; it ratchets down from here.
+- Indented code blocks are NOT recognised as code, so a mention inside one wakes (deliberate).
+- The adapter bounds message body size: `stripSpans` is super-linear on growing backtick runs.
+- A run's `task_update` on a task another live run holds is `already_claimed` naming the holder (one claim per task,
+  `operations.json`); a person may still update.
 
 ## Not here yet
 

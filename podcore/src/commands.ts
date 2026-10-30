@@ -1,6 +1,7 @@
 // One function per command. Authorization is read from state, never from the input's own claims.
+import { RunOutcomeValues } from '../../gen/ts/protocol';
 import type { Actor } from '../../gen/ts/protocol';
-import { LEASE_MS, acquire, endClaim, endRun, liveRun, lostHow, renewRun, taskView, who } from './claims';
+import { LEASE_MS, acquire, endClaim, endRun, liveRun, lostHow, own, renewRun, taskView, who } from './claims';
 import { fail, ok, push } from './emit';
 import { isoOf } from './time';
 import { resendWakes } from './wakes';
@@ -13,7 +14,7 @@ const noTask = (c: Ctx, taskId: string): void => fail(c, 'not_found', 'No such t
 export function claimCmd(c: Ctx, cmd: Of<'claim'>): void {
   const run = liveRun(c, cmd.runId);
   if (run === null) return;
-  if (c.s.tasks[cmd.taskId] === undefined) return noTask(c, cmd.taskId);
+  if (own(c.s.tasks, cmd.taskId) === undefined) return noTask(c, cmd.taskId);
   if (acquire(c, run, cmd.taskId, true)) return;
   ok(c, { taskId: cmd.taskId, leaseUntil: isoOf(c.s.claims[cmd.taskId].leaseUntil) });
 }
@@ -23,9 +24,9 @@ export function opCmd(c: Ctx, cmd: Of<'op'>): void {
   const run = liveRun(c, cmd.runId);
   if (run === null) return;
   if (cmd.taskId === undefined) return ok(c);
-  if (c.s.tasks[cmd.taskId] === undefined) return noTask(c, cmd.taskId);
+  if (own(c.s.tasks, cmd.taskId) === undefined) return noTask(c, cmd.taskId);
   if (acquire(c, run, cmd.taskId, false)) return;
-  const mine = c.s.claims[cmd.taskId]?.runId === run.id;
+  const mine = own(c.s.claims, cmd.taskId)?.runId === run.id;
   ok(c, mine ? { taskId: cmd.taskId, leaseUntil: isoOf(c.s.claims[cmd.taskId].leaseUntil) } : null);
 }
 
@@ -41,10 +42,10 @@ export function heartbeatCmd(c: Ctx, cmd: Of<'heartbeat'>): void {
 export function releaseCmd(c: Ctx, cmd: Of<'task_release'>): void {
   const w = who(c, cmd.caller);
   if (w === null) return;
-  if (c.s.tasks[cmd.taskId] === undefined) return noTask(c, cmd.taskId);
+  if (own(c.s.tasks, cmd.taskId) === undefined) return noTask(c, cmd.taskId);
   const { run } = w;
   if (run !== undefined && lostHow(c, run.id, cmd.taskId) === 'released') return fail(c, 'forbidden', 'A person released this claim; it cannot be taken back.', cmd.taskId);
-  const held = c.s.claims[cmd.taskId];
+  const held = own(c.s.claims, cmd.taskId);
   if (held === undefined) {
     return ok(c, taskView(c, cmd.taskId));
   }
@@ -58,7 +59,8 @@ export function releaseCmd(c: Ctx, cmd: Of<'task_release'>): void {
 }
 
 export function runEndCmd(c: Ctx, cmd: Of<'run_end'>): void {
-  const run = c.s.runs[cmd.runId];
+  if (!(RunOutcomeValues as readonly string[]).includes(cmd.outcome)) return fail(c, 'invalid_input', 'outcome must be completed, failed or cancelled.');
+  const run = own(c.s.runs, cmd.runId);
   if (run === undefined) return fail(c, 'not_found', 'No such run.', cmd.runId);
   if (run.computerId !== cmd.computerId) return fail(c, 'forbidden', 'This computer does not host that run.', run.id);
   if (run.status === 'active') endRun(c, run, cmd.outcome, 'run_ended');
@@ -74,7 +76,7 @@ export function runStopCmd(c: Ctx, cmd: Of<'run_stop'>): void {
   const w = who(c, cmd.caller);
   if (w === null) return;
   if (w.run !== undefined) return fail(c, 'forbidden', 'A run cannot stop a run; only a person may.');
-  const run = c.s.runs[cmd.runId];
+  const run = own(c.s.runs, cmd.runId);
   if (run === undefined) return fail(c, 'not_found', 'No such run.', cmd.runId);
   const by = stopper(c, w.actor, run);
   if (by === undefined) return fail(c, 'forbidden', 'Only the agent\'s owner or a pod owner may stop a run.', run.id);

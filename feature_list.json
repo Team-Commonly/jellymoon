@@ -103,7 +103,7 @@
         "killing the daemon produces presence.changed offline within 45 s"
       ],
       "test": "go test ./e2e -run TestF08",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F09",

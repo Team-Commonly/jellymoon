@@ -10,7 +10,7 @@ import (
 
 type helloData struct {
 	PodID   string `json:"podId"`
-	HeadSeq int64  `json:"headSeq"`
+	HeadSeq *int64 `json:"headSeq"` // a pointer: a hello with no headSeq is not a hello with headSeq 0
 	You     Actor  `json:"you"`
 	Members []struct {
 		Actor Actor
@@ -43,6 +43,9 @@ func firstHello(s *sock) (helloData, error) {
 		return h, fmt.Errorf("the first frame is %+v, want hello", first)
 	}
 	first[0].dec(&h)
+	if h.HeadSeq == nil {
+		return h, fmt.Errorf("hello carries no headSeq: %s", first[0].Data)
+	}
 	return h, nil
 }
 
@@ -86,8 +89,8 @@ func TestF03(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if h.PodID != podID || h.HeadSeq != 0 || h.You.ID != u.actor.ID {
-			return fmt.Errorf("hello podId=%q headSeq=%d you=%q, want %s, 0, %s", h.PodID, h.HeadSeq, h.You.ID, podID, u.actor.ID)
+		if h.PodID != podID || *h.HeadSeq != 0 || h.You.ID != u.actor.ID {
+			return fmt.Errorf("hello podId=%q headSeq=%d you=%q, want %s, 0, %s", h.PodID, *h.HeadSeq, h.You.ID, podID, u.actor.ID)
 		}
 		if len(h.Members) != 1 || h.Members[0].Actor.ID != u.actor.ID || h.Members[0].Role != "owner" {
 			return fmt.Errorf("hello members %+v, want the user as the one owner", h.Members)

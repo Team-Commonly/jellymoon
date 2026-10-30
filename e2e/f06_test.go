@@ -40,8 +40,8 @@ func TestF06(t *testing.T) {
 			}
 			var tk Task
 			f.dec(&tk)
-			if tk.Title != "assigned to one" || tk.Status != "open" || tk.Assignee != w.a1.id || (seq != 0 && f.Seq != seq) {
-				return fmt.Errorf("%s: seq %d task %+v, want status open, assignee %s and seq %d shared by all", s.name, f.Seq, tk, w.a1.id, seq)
+			if f.Seq <= 0 || tk.Title != "assigned to one" || tk.Status != "open" || tk.Assignee != w.a1.id || (seq != 0 && f.Seq != seq) {
+				return fmt.Errorf("%s: seq %d task %+v, want a positive seq, status open, assignee %s and seq %d shared by all", s.name, f.Seq, tk, w.a1.id, seq)
 			}
 			seq = f.Seq
 		}

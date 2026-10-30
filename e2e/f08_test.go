@@ -14,9 +14,8 @@ import (
 	"time"
 )
 
-// The daemon under test is the repo's own jellymoon binary, built once into a temp dir and run as a black box: its argv, its
-// environment, its config dir (JELLYMOON_HOME) and its output. Its files are documented in docs/development/e2e-contract.md.
-
+// The daemon under test is the repo's own jellymoon binary, built into a temp dir and run as a black box: its argv, its
+// environment, its config dir (JELLYMOON_HOME) and its output (docs/development/e2e-contract.md).
 // dproc is one daemon or CLI process in its own process group, with its output captured.
 type dproc struct {
 	cmd  *exec.Cmd
@@ -161,8 +160,20 @@ func waitComputer(cfg string) (sc storedComputer, fi os.FileInfo, err error) {
 
 var secretShape = regexp.MustCompile(`jm[ucr]_[A-Za-z0-9]{10}`)
 
-// leaks lists every place a token shows: the captured output of each process, and the argv of every process on the host.
-func leaks(procs map[string]*dproc, secrets ...string) []string {
+// groupArgv is the command line of every process in the group, as `ps` reports it: what any user on the host can read.
+func groupArgv(pgid int) string {
+	out, _ := exec.Command("ps", "-ww", "-axo", "pgid=,args=").Output()
+	var mine []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if f := strings.Fields(line); len(f) > 1 && f[0] == fmt.Sprint(pgid) {
+			mine = append(mine, strings.Join(f[1:], " "))
+		}
+	}
+	return strings.Join(mine, "\n")
+}
+
+// leaks lists every place a token shows: the captured output of each process and the argv seen while the daemon ran.
+func leaks(procs map[string]*dproc, argv string, secrets ...string) []string {
 	var hits []string
 	check := func(where, text string) {
 		for _, s := range secrets {
@@ -177,8 +188,7 @@ func leaks(procs map[string]*dproc, secrets ...string) []string {
 	for name, p := range procs {
 		check(name+" output", p.text())
 	}
-	argv, _ := exec.Command("ps", "-ww", "-axo", "args=").Output()
-	check("ps argv", string(argv))
+	check("argv", argv)
 	return hits
 }
 
@@ -196,6 +206,7 @@ type f08 struct {
 	obs     []*sock
 	env     []string
 	agentID string
+	argv    string // the daemon's argv, read while it ran
 	comp    storedComputer
 	daemon  *dproc
 	procs   map[string]*dproc
@@ -280,6 +291,9 @@ func (f *f08) showsOnline() error {
 	if err := f.all("online", []int{0, 0}, 5*time.Second); err != nil {
 		return err
 	}
+	if f.argv = groupArgv(f.daemon.cmd.Process.Pid); !strings.Contains(f.argv, "daemon start --foreground") {
+		return fmt.Errorf("could not read the running daemon's argv: %q", f.argv)
+	}
 	if st := helloAgents(f.t, f.srv, f.pod, f.ben.tok)[f.agentID]; st != "online" {
 		return fmt.Errorf("hello lists the agent as %q, want online", st)
 	}
@@ -320,7 +334,7 @@ func (f *f08) goesOfflineWhenKilled() error {
 }
 
 func (f *f08) leaksNothing() error {
-	if hits := leaks(f.procs, f.owner.tok, f.comp.Token); len(hits) > 0 {
+	if hits := leaks(f.procs, f.argv, f.owner.tok, f.comp.Token); len(hits) > 0 {
 		return fmt.Errorf("%s", strings.Join(hits, "; "))
 	}
 	return nil

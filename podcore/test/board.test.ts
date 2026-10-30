@@ -10,7 +10,7 @@ const owner = { kind: 'user' as const, userId: U_OWNER.id };
 const create = (c: Cmd = { type: 'pod_create', ownerId: U_OWNER.id, ownerName: 'Pod Owner' }) => play([[c, 0]], emptyPod(POD_ID));
 
 describe('pod_create, members and the gate', () => {
-  test('before pod_create every command gets not_found; pod_create makes the owner a member and owner', () => {
+  test('before pod_create every command but boot gets not_found; pod_create makes the owner a member and owner', () => {
     for (const cmd of [{ type: 'tick' }, { type: 'heartbeat', computerId: CMP_1 }, { type: 'member_add', userId: U_OWNER.id, name: 'x' }] as Cmd[]) {
       expect(errCode(play([[cmd, 0]], emptyPod(POD_ID)).out)).toBe('not_found');
     }

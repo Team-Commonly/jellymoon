@@ -1,8 +1,9 @@
 # 0003 · A pure pod core
 
-Status: Accepted (2026-10-30; units P09, P10, P11). Acknowledged unknowns this does not settle: the purity guard is lexical (a
-dynamic import or alias can evade it), wake-id uniqueness across pods rests on adapters minting fresh seeds, and the ADR 0002
-ambiguities under Open questions (NB3, NB4, NB13). It adds a module (`podcore/`), so it needs this note. The server shape is
+Status: Accepted (owner ruling,2026-10-30; units P09, P10, P11). Accepting it settles none of the acknowledged unknowns: the purity guard is
+lexical (a dynamic import or alias can evade it), wake-id uniqueness across pods rests on adapters minting fresh seeds, and every
+item under "Not here yet" and "Open unknowns (carried from ADR 0002)" stays open, including the outcome of a capped run
+(`failed` here; the schema does not say) and the ADR 0002 points NB3, NB4 and NB13. It adds a module (`podcore/`), so it needs this note. The server shape is
 still open; this decision holds under every shape being weighed.
 
 ## Decision
@@ -53,7 +54,7 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
   (ADR 0002, F13). A live run calling `run_stop` gets `forbidden` before any lookup,
   unknown run ids included.
 - A caller that is a user must be a member of the pod, or gets `forbidden` on every command, before `not_found`, so a
-  stranger cannot probe ids. Before `pod_create`, a well-formed command gets `not_found`; a malformed one gets `invalid_input` (`unauthorized` if it names a run, which cannot exist yet), since there are no
+  stranger cannot probe ids. Before `pod_create`, a well-formed command gets `not_found` (`boot` answers nothing); a malformed one gets `invalid_input` (`unauthorized` if it names a run, which cannot exist yet), since there are no
   members to judge it by.
   The caller check comes first even for a refused (malformed or prototype-key) command: in the refusal path the core settles,
   renews a live run, then answers a dead or unknown run `unauthorized` and a non-member user `forbidden`, and a live run's `run_stop` `forbidden` (a run token cannot stop a run, whatever it names), and only then the
@@ -61,15 +62,14 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 - Renewal follows ADR 0002: its lease renews on any operation that run's token makes. A live run's command renews
   all of that run's claims BEFORE any refusal (`forbidden`, `already_claimed`, `not_found`, `invalid_input`), so
   what a command is answered never changes when a lease ends. An ended run gets `unauthorized` and renews nothing.
-  (An earlier draft said a refused command never renews; it contradicted ADR 0002.)
 - A run whose claim a person released gets `forbidden` from `task_release` and `task_update` on that task too.
 - `run_end` carries the reporting `computerId`; a computer that does not host the run gets `forbidden`. `run_end` after
   `run_stop` keeps the outcome `cancelled`.
 
 ## What an adapter must do
 
-1. Persist the new state atomically with emitting `out`, for every command, heartbeats included, before replying or
-   emitting: never one without the other. Never coalesce saves: see item 5.
+1. Persist the new state atomically with emitting `out`, before replying or emitting: never one without the other.
+   Which commands to persist is item 5.
 2. Own the single timer: call `apply(state, { type: 'tick' }, now)` at or after `nextDeadline(state)`. A second
    timer firing is harmless; a repeated tick at the same `now` emits nothing.
 3. Own the seq log and replay: keep the members events and re-deliver them from `seq`. The core keeps only state; it
@@ -87,9 +87,9 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
    Callers pass a non-decreasing `now`; the core does not clamp it.
 5. After restoring state on a (re)start, apply `boot {staleMs}` once, with `now`. `staleMs` MUST be 0 (anything else is
    `invalid_input` and changes nothing beyond the settle every refused call runs) until ADR 0002 gains a restart clause; with 0,
-   `boot` is a plain settle at `now`, and on a created pod it equals a tick. THE RULE: persist every command that moves a
-   lease, heartbeats included; never coalesce saves. A lagging saved lease would otherwise expire EARLY after a restart,
-   against 0002:15. A boot stretch was removed because it could hold a claim well past "last renewal + 60 s".
+   `boot` is a plain settle at `now`, and on a created pod it equals a tick. Persist every command that moves a
+   lease, heartbeats included, and never coalesce saves: a lagging saved lease would otherwise expire early after a restart,
+   against ADR 0002's "`leaseUntil` is the last renewal plus 60 s".
 
 ## Commands
 
@@ -178,8 +178,8 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
   run as `failed`; the schema does not say which outcome a capped run gets.
 - Heartbeat renewal cannot tell a hung harness from a busy one.
 - Nothing is inherited from v3's 90 s lease.
-- ADR 0002 (NB3): for a run whose claim expired, `task_release` while another run holds the task is `forbidden` here (0002:38-40,
-  "anyone else") but 0002:18-19 can be read as `already_claimed`. The same run's `task_release` on a free task is a no-op that keeps
+- ADR 0002 (NB3): for a run whose claim expired, `task_release` while another run holds the task is `forbidden` here (ADR 0002, `task_release`:
+  "Anyone else gets `forbidden`") but ADR 0002's expiry bullet ("it gets `already_claimed` naming the holder") can be read as `already_claimed`. The same run's `task_release` on a free task is a no-op that keeps
   the expiry marker, so a later `op` restores a claim it asked to release. ADR 0002 should settle both.
-- ADR 0002 (NB4): a restart stretch (`staleMs` > 0) can hold a lease past "last renewal + 60 s" (0002:15), so the core refuses it (item 5). ADR 0002 needs a restart clause before any stretch or save coalescing can return.
-- ADR 0002 (NB13): expiry is inclusive at `leaseUntil`, so with an exact 15 s heartbeat cadence a claim drops after 3 missed heartbeats, not the "four" in 0002:15. A wording point.
+- ADR 0002 (NB4): a restart stretch (`staleMs` > 0) can hold a lease past "last renewal plus 60 s" (ADR 0002, Decision), so the core refuses it (item 5). ADR 0002 needs a restart clause before any stretch or save coalescing can return.
+- ADR 0002 (NB13): expiry is inclusive at `leaseUntil`, so with an exact 15 s heartbeat cadence a claim drops after 3 missed heartbeats, not the "four missed heartbeats" in ADR 0002's Decision. A wording point.

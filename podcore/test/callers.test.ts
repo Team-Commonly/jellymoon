@@ -129,6 +129,7 @@ describe('a stray caller or runId on a command that has none changes nothing, on
       const cmd: Record<string, unknown> = { type };
       for (const f of FIELDS[type]) cmd[f] = GOOD[f];
       if (type === 'change') Object.assign(cmd, { kind: 'ruling', refs: {} });
+      if (FIELDS[type].length > 0) cmd[FIELDS[type][0]] = 7; // malformed, so the command takes the refusal path, where callerOf is read
       const plain = apply(base, cmd as unknown as Cmd, NOW);
       for (const caller of strays) {
         const stray = { ...cmd, caller, ...(type === 'run_claim' ? {} : { runId: RUN_A }) };

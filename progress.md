@@ -5,6 +5,10 @@ result, or the PR), what's next, and anything surprising. Keep each entry under 
 goes in the PR.
 
 
+
+## 2026-10-30 · ADR 0003 accepted (unit PC10)
+- **Changed:** ADR 0003 Accepted (owner ruling) with its unknowns named, coalescing leftovers removed, ADR 0002 citations by section and quote, a scope pointer in ADR 0002, GLOSSARY boot entry, nine dead imports and one unused local removed, `noUnusedLocals` on; **Evidence:** `make preflight`, `bun test podcore` (126 tests, per-type stray-caller mutants red except tick, which is equivalent); **Next:** ADR 0002 restart clause; **Surprising:** the well-formed stray-caller rows never reached the refusal path, so a callerOf leak survived until one field was malformed per row.
+
 ## 2026-10-30 · pod core hardening (unit PC9)
 - **Changed:** `podcore/` treats a non-string `type` as an unknown command, refuses `boot` with `staleMs` other than 0 (stretch code, its tests and the stale-restore property removed), ADR 0003 corrected; **Evidence:** `make preflight`, `bun test podcore` (117 tests, 4 mutants red); **Next:** ADR 0002 restart clause before any stretch returns; **Surprising:** `Object.hasOwn(HANDLERS, ['change'])` coerces the key, so a guard and the strict compares after it disagreed.
 

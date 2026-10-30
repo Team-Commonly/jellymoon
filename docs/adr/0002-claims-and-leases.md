@@ -3,7 +3,8 @@
 Status: Accepted (owner ruling, 2026-10-29). The unknowns below stay open;
 accepting this ADR does not settle them.
 
-Implemented by ADR 0003 (podcore), which records how the core applies these rules and the adapter's duties; where the two seem to differ, this ADR governs.
+Implemented by ADR 0003 (podcore), which records how the core applies these rules and the
+adapter's duties; where the two seem to differ, this ADR governs.
 
 The schema, `docs/design/protocol.md` and feature F10 described lease renewal three different ways. This
 note is the one rule they now follow. The schema carries it as `x-rules` in `schema/task.json`.

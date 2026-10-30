@@ -49,7 +49,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
 0. The checkout check runs first, before any network call, and runs again once main is fetched (so HEAD can be compared with
    main's tip). The order in the code: environment and usage, the checkout check, the lock, the PR read, the trust gate (below), the
    fetch of main, the checkout check again. The check: `git status --porcelain` is empty and `HEAD` is main's tip (an
-   explicit `--bootstrap`, the first land of the gate, is the only exception, and only for HEAD), no git remote URL
+   explicit `--bootstrap`, the first land of the gate, is the only exception, and only for HEAD: with `--bootstrap`, `HEAD` must be the PR head), no git remote URL
    carries userinfo, no git config carries an `http.*extraheader`, and no `.env*` or `bunfig.toml` exists in the
    checkout (the filesystem is checked, ignored files included: bun would load them as configuration).
 1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.

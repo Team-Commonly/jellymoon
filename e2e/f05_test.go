@@ -16,12 +16,30 @@ func memberRole(h helloData, id string) string {
 	return ""
 }
 
+// onlyMembers checks, through a fresh owner hello, that the pod's members are exactly the given users: a refused request left no one behind.
+func (w *world) onlyMembers(want ...user) error {
+	h, err := firstHello(w.dial(w.owner.tok, "olivia-check"))
+	if err != nil {
+		return err
+	}
+	if len(h.Members) != len(want) {
+		return fmt.Errorf("hello lists %d members %+v, want exactly %d", len(h.Members), h.Members, len(want))
+	}
+	for _, u := range want {
+		if memberRole(h, u.actor.ID) == "" {
+			return fmt.Errorf("hello members %+v do not list %s", h.Members, u.actor.ID)
+		}
+	}
+	return nil
+}
+
 // TestF05: invites add members; a used invite is refused with 410 and a non-member cannot invite.
 func TestF05(t *testing.T) {
 	needFake(t)
 	w := newWorld(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sO.snapshot(0) }}
 	dana, eli := w.session("dana"), w.session("eli")
+	people := []user{w.owner, w.ben, w.cara, dana} // the pod after dana joins
 	var code string
 	p.step("the owner creates a single-use invite and a second user accepts it", func() error {
 		var inv struct {
@@ -47,14 +65,14 @@ func TestF05(t *testing.T) {
 		if r := w.c.do("POST", "/v1/invites/"+code+"/accept", eli.tok, nil, nil); r.Status != 410 {
 			return fmt.Errorf("second accept: HTTP %d code=%q, want 410", r.Status, r.Err.Code)
 		}
-		return nil
+		return w.onlyMembers(people...) // the refused user did not join
 	})
 	p.step("a non-member creating an invite gets 403", func() error {
 		r := w.c.do("POST", "/v1/pods/"+w.pod+"/invites", eli.tok, map[string]any{"maxUses": 1}, nil)
 		if r.Status != 403 || r.Err.Code != "forbidden" {
 			return fmt.Errorf("non-member invite: HTTP %d code=%q, want 403 forbidden", r.Status, r.Err.Code)
 		}
-		return nil
+		return w.onlyMembers(people...)
 	})
 	p.count(t)
 	if p.ok != p.run {

@@ -72,6 +72,7 @@ const CASES = [
   ['allowed: userinfo in a test URL', j('https://tok@', 'github.com/o/r'), null],
   ['allowed: user and password in a remote URL', j('ssh://u:p@', 'github.com/o/r'), null],
   ['allowed: scp-form remote', j('git@', 'github.com:o/r.git'), null],
+  ['email: userinfo at another host is not allowed', j('https://tok@', 'gmail.com/o/r'), 'email'],
   ['email: a github.com address that is not a remote', j('someone@', 'github.com'), 'email'],
   ['allowed: reserved example domain', j('a@', 'example.org'), null],
   ['allowed: obviously synthetic domain', j('http://localhost:80@', 'evil.com'), null],

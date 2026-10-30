@@ -143,63 +143,77 @@ func TestEvictAlarmWake(t *testing.T) {
 	if before.Requests == 0 {
 		t.Fatalf("the request counter reads 0 on an object that has served the whole setup: it counts nothing")
 	}
-	var fired struct{ At *string }
-	w.must(w.c.do("POST", "/__test/alarm/"+w.pod, "", nil, &fired), "POST /__test/alarm/:pod")
-	if fired.At != nil {
-		t.Fatalf("the alarm had fired (%s) before the eviction", *fired.At)
+	if at := w.alarmFired(); at != nil {
+		t.Fatalf("the alarm had fired (%s) before the eviction", *at)
 	}
 	if was := w.discard(deadline-1, 100, deadline); was != deadline { // moves the alarm the object stored; no request reaches it from here until the release is seen
 		t.Fatalf("the discard moved a stored alarm at %d, want the claim's deadline %d", was, deadline)
 	}
-	var woke instance
-	w.eventually("the alarm waking the discarded object", func() (bool, string) {
-		woke = instance{}
-		w.must(w.c.do("GET", "/__test/woke/"+w.pod, "", nil, &woke), "GET /__test/woke/:pod")
-		return woke.Instance != "", "no record from the alarm yet"
-	})
+	woke := w.awaitWoke()
 	if woke.Was != deadline {
 		t.Fatalf("the alarm that ran was moved from %d, want the object's own deadline alarm %d", woke.Was, deadline)
 	}
 	if woke.Instance == before.Instance || woke.Requests != 0 {
 		t.Fatalf("alarm ran on instance %s after %d requests; the discarded one was %s: want a new instance and no request", woke.Instance, woke.Requests, before.Instance)
 	}
-	s := w.openSince(w.ben.tok, "ben-after-alarm", last)
-	if _, ok := w.awaitExpiry(s, 0, tk.ID, r, 5*time.Second); !ok {
-		t.FailNow()
-	}
-	if f, _ := s.waitAfter(0, released(tk.ID, "expired"), time.Second); ms(f.Ts) < deadline {
-		t.Errorf("claim.released is stamped %d, before the deadline %d: it came from the restore, not the alarm's tick", ms(f.Ts), deadline)
-	}
-	time.Sleep(300 * time.Millisecond)
-	members := []*sock{s, w.openSince(w.owner.tok, "olivia-after-alarm", last), w.openSince(w.cara.tok, "cara-after-alarm", last)}
-	for _, m := range members[1:] {
-		if _, ok := w.awaitExpiry(m, 0, tk.ID, r, 5*time.Second); !ok {
-			t.FailNow()
-		}
-	}
-	time.Sleep(300 * time.Millisecond)
-	for _, m := range members {
-		w.oneRelease(m, 0, tk.ID, 1) // every member's replay carries exactly one
-	}
+	members := w.membersReplay(tk, r, last, deadline)
 	if now := w.instanceOf(); now.Instance != woke.Instance {
 		t.Fatalf("the object was rebuilt again (%s, then %s): the alarm did not run on the instance that served the release", woke.Instance, now.Instance)
 	}
-	w.must(w.c.do("POST", "/__test/alarm/"+w.pod, "", nil, &fired), "POST /__test/alarm/:pod")
-	if fired.At == nil {
+	fired := w.alarmFired()
+	if fired == nil {
 		t.Fatalf("alarm_fired did not move: the release did not come from the alarm")
 	}
 	// Nothing re-arms the consumed alarm: alarm_fired holds still across two reads, and no repeat release follows a clock move.
 	time.Sleep(500 * time.Millisecond)
-	var again struct{ At *string }
-	w.must(w.c.do("POST", "/__test/alarm/"+w.pod, "", nil, &again), "POST /__test/alarm/:pod")
-	if again.At == nil || *again.At != *fired.At {
-		t.Fatalf("alarm_fired moved from %v to %v with nothing to wake the object: the alarm is firing again", *fired.At, again.At)
+	if again := w.alarmFired(); again == nil || *again != *fired {
+		t.Fatalf("alarm_fired moved from %v to %v with nothing to wake the object: the alarm is firing again", *fired, again)
 	}
 	w.advance(120000)
 	time.Sleep(300 * time.Millisecond)
 	for _, m := range members {
 		w.oneRelease(m, 0, tk.ID, 1)
 	}
+}
+
+// alarmFired reads the object's alarm_fired marker: when its alarm handler last ran, or nil. The read is a request to the object.
+func (w *world) alarmFired() *string {
+	w.t.Helper()
+	var fired struct{ At *string }
+	w.must(w.c.do("POST", "/__test/alarm/"+w.pod, "", nil, &fired), "POST /__test/alarm/:pod")
+	return fired.At
+}
+
+// awaitWoke waits for the alarm handler's record in D1, which is read without sending the object a request.
+func (w *world) awaitWoke() instance {
+	w.t.Helper()
+	var woke instance
+	w.eventually("the alarm waking the discarded object", func() (bool, string) {
+		woke = instance{}
+		w.must(w.c.do("GET", "/__test/woke/"+w.pod, "", nil, &woke), "GET /__test/woke/:pod")
+		return woke.Instance != "", "no record from the alarm yet"
+	})
+	return woke
+}
+
+// membersReplay opens a fresh replay from `since` for Ben, Olivia and Cara, waits for the expiry on each, checks the release is
+// stamped at the deadline or later (the alarm's tick, not the restore before it), and that each carries exactly one.
+func (w *world) membersReplay(tk Task, r *run, since, deadline int64) []*sock {
+	w.t.Helper()
+	members := []*sock{w.openSince(w.ben.tok, "ben-after-alarm", since), w.openSince(w.owner.tok, "olivia-after-alarm", since), w.openSince(w.cara.tok, "cara-after-alarm", since)}
+	for _, m := range members {
+		if _, ok := w.awaitExpiry(m, 0, tk.ID, r, 5*time.Second); !ok {
+			w.t.FailNow()
+		}
+		if f, _ := m.waitAfter(0, released(tk.ID, "expired"), time.Second); ms(f.Ts) < deadline {
+			w.t.Errorf("%s: claim.released is stamped %d, before the deadline %d: it came from the restore, not the alarm's tick", m.name, ms(f.Ts), deadline)
+		}
+	}
+	time.Sleep(300 * time.Millisecond)
+	for _, m := range members {
+		w.oneRelease(m, 0, tk.ID, 1) // every member's replay carries exactly one
+	}
+	return members
 }
 
 // TestEvictPastDeadline: the object is discarded with the clock stored past the deadline, and the first thing to reach the new

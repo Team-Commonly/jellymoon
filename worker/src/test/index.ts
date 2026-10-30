@@ -67,6 +67,8 @@ async function testRoute(req: Request, env: Env, path: string): Promise<Response
   if (discard && req.method === 'POST') return internal(env, discard[1], 'discard', await parse(req) ?? {});
   const who = /^\/__test\/instance\/([^/]+)$/.exec(path);
   if (who) return internal(env, who[1], 'instance', {});
+  const stored = /^\/__test\/stored-alarm\/([^/]+)$/.exec(path);
+  if (stored) return internal(env, stored[1], 'stored-alarm', {});
   const woke = /^\/__test\/woke\/([^/]+)$/.exec(path);
   if (woke) return Response.json(JSON.parse((await env.DB.prepare('select v from kv where k = ?').bind(`woke:${woke[1]}`).first<{ v: string }>())?.v ?? 'null'));
   if (path === '/__test/stats' && req.method === 'GET') return statsRoute(env);

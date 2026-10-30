@@ -1,7 +1,8 @@
 // The pod object with a settable clock and write counters, for local runs and previews. The production bundle has the plain PodDO.
 // The clock lives in the object's own storage ('clock': this process's id and milliseconds, or 'none'); a restarted server is a
-// new process and so starts on its real clock again, as the contract says. A fixed clock never arms the alarm; /_in/clock
-// runs any due tick itself, so expiry fires with zero other traffic. A new object asks D1 once for a clock set before it existed.
+// new process and so starts on its real clock again, as the contract says. A fixed clock stores the object's own deadline alarm,
+// a far-future real time that never fires by itself (the suite reads it back to prove it); /_in/clock runs any due tick itself, so
+// expiry fires with zero other traffic. A new object asks D1 once for a clock set before it existed.
 import { PodDO } from '../pod-do';
 import { parse } from '../wire';
 
@@ -39,13 +40,17 @@ export class TestPodDO extends PodDO {
 
   override now(): number { return this.fixedNow() ?? Date.now(); }
 
-  /** A fixed clock stores no alarm, unless a discard stored one: then a pending deadline arms that real time instead. */
+  /**
+   * The production value, untouched: a fixed deadline is a far-future real time, so the stored alarm never fires on its own.
+   * Two accommodations, neither of which changes a deadline that is still ahead: a discard that moved the stored alarm to fire
+   * keeps it armed until it has run, and a fixed deadline already past in real time is not stored, or it would re-fire for ever.
+   */
   protected override alarmAt(): number | null {
     const at = super.alarmAt();
-    if (this.fixedNow() === null) return at;
-    if (at === null) return null;
+    if (this.fixedNow() === null || at === null) return at;
     const [row] = this.sql.exec<{ v: string }>("select v from kv where k = 'alarm_at'").toArray();
-    return row === undefined ? null : Number(row.v);
+    if (row !== undefined) return Number(row.v);
+    return at > Date.now() ? at : null;
   }
 
   protected override note(type: string, rowsWritten: number): void {
@@ -54,36 +59,45 @@ export class TestPodDO extends PodDO {
     this.writes.set(type, { commands: w.commands + 1, rowsWritten: w.rowsWritten + rowsWritten });
   }
 
-  /** The runtime throws this object away: ends in-flight requests, drops sockets, and builds a new instance on the next request or alarm. */
+  /**
+   * The runtime throws this object away: ends in-flight requests, drops sockets, and builds a new instance on the next request or
+   * alarm. With alarmMs, the alarm the object itself stored is moved to fire that many real ms ahead (nothing new is planted: there
+   * must be a stored alarm, and its old time is recorded and answered), so the runtime fires the object's own alarm on the new instance.
+   */
   private async discard(req: Request): Promise<Response> {
     const b = await parse(req);
     const now = b?.now;
     if (now !== undefined && (typeof now !== 'number' || !Number.isInteger(now) || now < 0)) return new Response('bad', { status: 400 });
+    const stored = await this.ctx.storage.getAlarm();
+    if (typeof b?.alarmMs === 'number' && stored === null) return new Response('the object has no stored alarm to fire', { status: 409 });
     if (now !== undefined) this.setFixed(now); // the clock moves with no tick: nothing runs until the object is woken
-    // A fixed clock stores no alarm, so a test that wants the alarm to wake the object stores one a few real ms ahead.
-    if (typeof b?.alarmMs === 'number') {
+    if (typeof b?.alarmMs === 'number' && stored !== null) {
       const at = Date.now() + b.alarmMs;
-      this.sql.exec("insert or replace into kv (k, v) values ('alarm_at', ?)", String(at));
+      this.sql.exec("insert or replace into kv (k, v) values ('alarm_at', ?), ('alarm_was', ?)", String(at), String(stored));
       // The clock the server reads once the alarm runs, so the alarm's tick, not the restore, finds the deadline due.
       if (typeof b.alarmNow === 'number') this.sql.exec("insert or replace into kv (k, v) values ('alarm_clock', ?)", String(b.alarmNow));
       await this.ctx.storage.setAlarm(at);
     }
     setTimeout(() => this.ctx.abort('discarded by the test entry'), 0);
-    return Response.json({ discarded: this.instance });
+    return Response.json({ discarded: this.instance, alarm: stored });
   }
 
   override alarm(): void {
     const [due] = this.sql.exec<{ v: string }>("select v from kv where k = 'alarm_clock'").toArray();
     if (due !== undefined) { this.setFixed(Number(due.v)); this.sql.exec("delete from kv where k = 'alarm_clock'"); }
+    const [was] = this.sql.exec<{ v: string }>("select v from kv where k = 'alarm_was'").toArray();
+    // Consumed: once it has run, the alarm is the production one again, so it cannot re-fire for ever.
+    this.sql.exec("delete from kv where k in ('alarm_at', 'alarm_was')");
     this.sql.exec("insert or replace into kv (k, v) values ('alarm_fired', ?)", String(Date.now()));
     // D1 outlives the object, so the suite reads what woke it without sending the object a request.
-    this.ctx.waitUntil(this.env.DB.prepare("insert or replace into kv (k, v) values (?, ?)").bind(`woke:${this.id}`, JSON.stringify({ instance: this.instance, requests: this.requests })).run());
+    this.ctx.waitUntil(this.env.DB.prepare("insert or replace into kv (k, v) values (?, ?)").bind(`woke:${this.id}`, JSON.stringify({ instance: this.instance, requests: this.requests, was: was === undefined ? null : Number(was.v) })).run());
     super.alarm();
   }
 
   override async fetch(req: Request): Promise<Response> {
     const path = new URL(req.url).pathname;
     if (path === '/_in/instance') return Response.json({ instance: this.instance, requests: this.requests });
+    if (path === '/_in/stored-alarm') return Response.json({ at: await this.ctx.storage.getAlarm() }); // what the object itself stored
     this.requests += 1;
     if (path === '/_in/discard') return this.discard(req);
     if (path === '/_in/evict') { this.evict(); return Response.json({ evicted: true }); }

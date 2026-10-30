@@ -7,7 +7,7 @@ goes in the PR.
 
 
 ## 2026-10-30 · ADR 0003 accepted (unit PC10)
-- **Changed:** ADR 0003 Accepted (owner ruling) with its unknowns named, coalescing leftovers removed, ADR 0002 citations by section and quote, a scope pointer in ADR 0002, GLOSSARY boot entry, nine dead imports and one unused local removed, `noUnusedLocals` on; **Evidence:** `make preflight`, `bun test podcore` (126 tests, per-type stray-caller mutants red except tick, which is equivalent); **Next:** ADR 0002 restart clause; **Surprising:** the well-formed stray-caller rows never reached the refusal path, so a callerOf leak survived until one field was malformed per row.
+- **Changed:** ADR 0003 Accepted (maintainers) with its unknowns named, coalescing leftovers removed, ADR 0002 citations by section and quote, a scope pointer in ADR 0002, GLOSSARY boot entry, nine dead imports and one unused local removed, `noUnusedLocals` on; **Evidence:** `make preflight`, `bun test podcore` (126 tests, per-type stray-caller mutants red except tick, which is equivalent); **Next:** ADR 0002 restart clause; **Surprising:** the well-formed stray-caller rows never reached the refusal path, so a callerOf leak survived until one field was malformed per row.
 
 ## 2026-10-30 · pod core hardening (unit PC9)
 - **Changed:** `podcore/` treats a non-string `type` as an unknown command, refuses `boot` with `staleMs` other than 0 (stretch code, its tests and the stale-restore property removed), ADR 0003 corrected; **Evidence:** `make preflight`, `bun test podcore` (117 tests, 4 mutants red); **Next:** ADR 0002 restart clause before any stretch returns; **Surprising:** `Object.hasOwn(HANDLERS, ['change'])` coerces the key, so a guard and the strict compares after it disagreed.
@@ -126,14 +126,14 @@ goes in the PR.
   `make check-gen` fail until regenerated; `make preflight` green.
 - **Open:** a definition without a schema description shows an empty Notes cell; fixing that is a schema edit.
 
-## 2026-10-29 · Jellymoon names applied (build session)
+## 2026-10-29 · Jellymoon names applied (builder session)
 - **Changed:** decided at the protocol review: MCP adapter prefix `jm_`, tokens `jmu_`/`jmc_`/`jmr_`,
   schema `$id` on `jellymoon.dev/schema/v1`, CLI binary `jellymoon` (alias `jm`), package `jellymoon`.
   Feature step text changed only for these names (F03, F08, F09, F10, F11, F12, F13, F15); no step's
   meaning changed. This resolves the naming hold noted below.
 - **Evidence:** `make preflight` green.
 
-## 2026-10-29 · two founder directions applied to the schema (build session)
+## 2026-10-29 · two owner directions applied to the schema (builder session)
 - **Changed:** asks carry a required grounded `context` (happened, checked, stakes, recommendation) and
   each option a `consequence`; every claim cites `tc_` tool-call or message ids, and a post whose
   numbers aren't in its cited evidence is refused with `ungrounded`. The pod stamps tool calls itself
@@ -144,7 +144,7 @@ goes in the PR.
 - **Next:** the grounding x-rules need Worker tests when F-posting lands; features F08/F15 still quote
   MCP-first wording, changed in the naming PR after the design review.
 
-## 2026-10-29 · portability fixes from loop review (build session)
+## 2026-10-29 · portability fixes from loop review (builder session)
 - **Changed:** the repo now works from a fresh clone anywhere. Stage skills are vendored in
   `.agents/skills/` (pins in `docs/skills/SOURCES.md`); Go and Bun are pinned in `.tool-versions` and
   `init.sh` installs them into `.tools/`; `make portable` (preflight, pre-commit, CI) fails on a symlink
@@ -160,7 +160,7 @@ goes in the PR.
   review. The prefix is one constant (`x-tool-prefix` in `schema/tools.json`); feature text still
   quotes today's names.
 
-## 2026-10-29 · initializer (build session)
+## 2026-10-29 · initializer (builder session)
 - **Changed:** set up the long-running harness. `feature_list.json` holds 20 slice features as e2e
   tests (F01 passes). Also added `init.sh`, this file, the `AGENTS.md` loop, the PR template and
   `docs/development/workflow.md`.
@@ -173,7 +173,7 @@ goes in the PR.
   this repo's own pre-commit. F17 needs a Cloudflare API token
   secret, an owner action.
 
-## 2026-10-29 · repo move (build session)
+## 2026-10-29 · repo move (builder session)
 - **Changed:** the build moved from the `v4` branch of the Commonly repo to its own private repo,
   `Team-Commonly/jellymoon` (the company stays Commonly). History was rebuilt clean:
   a fixture token that tripped gitleaks became an obviously fake one, and the Go module is

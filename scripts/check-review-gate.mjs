@@ -145,7 +145,7 @@ const hist = (marker) => {
   return out;
 };
 const [marked, control] = [hist(true), hist(false)];
-const noVerdict = (h) => checkPodVerdict([], { pr: '5', head: h, entries: [{ id: 'id-ada', name: 'Ada' }] }).ok;
+const noVerdict = (h) => checkPodVerdict([], { pr: '5', head: h, entries: [{ id: 'id-orion', name: 'Orion' }] }).ok;
 const history = [
   ['history: the merge result alone shows nothing (the verifier\'s fixture)', marked.merged.files.length === 0 && !addsAllowMarker(marked.merged.treePatch), true],
   ['history: the marker added then removed still protects the PR', addsAllowMarker(marked.merged.patch), true],
@@ -260,8 +260,8 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
     const w = { pod: 0, said: [] };
     let fetched = '';
     const exec = (cmd, args, opts = {}) => {
-      if (cmd === 'gh' && args[0] === 'pr') return JSON.stringify({ url: 'https://github.com/o/r/pull/5', number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'pr', headRefOid: head, createdAt: '2026-10-29T00:00:00Z', isCrossRepository: false, author: { login: 'lily' } });
-      if (cmd === 'gh' && args.some((a) => a.includes('collaborators'))) return '{"login":"lily","push":true}';
+      if (cmd === 'gh' && args[0] === 'pr') return JSON.stringify({ url: 'https://github.com/o/r/pull/5', number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'pr', headRefOid: head, createdAt: '2026-10-29T00:00:00Z', isCrossRepository: false, author: { login: 'alice' } });
+      if (cmd === 'gh' && args.some((a) => a.includes('collaborators'))) return '{"login":"alice","push":true}';
       if (cmd === 'gh' && args.some((a) => a.includes('check-runs'))) return '{"total":0,"runs":[]}';
       if (cmd === 'git' && args[0] === 'remote') return 'origin\thttps://github.com/o/r.git (fetch)';
       if (cmd === 'git' && args[0] === 'fetch') { fetched = args.at(-1); return ''; }
@@ -271,7 +271,7 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
     };
     const fetch = async () => { w.pod += 1; return { ok: true, status: 200, json: async () => [] }; };
     const spawn = () => { const c = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), pid: 2000000001 }); setImmediate(() => c.emit('close', 0)); return c; };
-    const env = { JM_REPO: 'o/r', JM_TRUSTED_LOGINS: 'lily', JM_LEDGER: ledger, JM_COMMONLY_API: 'https://api.commonly.me', JM_COMMONLY_TOKEN_FILE: tokenFile, JM_VERDICT_POD: 'pod', JM_VERDICT_REVIEWERS: 'id-op:Operator' };
+    const env = { JM_REPO: 'o/r', JM_TRUSTED_LOGINS: 'alice', JM_LEDGER: ledger, JM_COMMONLY_API: 'https://api.commonly.me', JM_COMMONLY_TOKEN_FILE: tokenFile, JM_VERDICT_POD: 'pod', JM_VERDICT_REVIEWERS: 'id-op:Operator' };
     const [log, err, cwd] = [console.log, console.error, process.cwd()];
     console.log = (m) => w.said.push(String(m)); console.error = (m) => w.said.push(String(m));
     process.chdir(dir);

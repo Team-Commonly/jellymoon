@@ -9,10 +9,10 @@ Research only, read 2026-10-29. Licenses were read from each repo's LICENSE file
 ### ADOPT (permissive licence, fits Workers + DO + TypeScript)
 - **Linear's official remote MCP** as the upstream, via `https://mcp.linear.app/mcp/readonly`, which "only ever exposes read tools" ([Linear docs](https://linear.app/docs/mcp)). The server is vendor-hosted, so we run nothing.
 - **Cloudflare Agents SDK MCP client** (`cloudflare/agents`, MIT, 5.9k stars, pushed 2026-10-28). `addMcpServer()` runs the OAuth redirect, stores tokens in the Durable Object's SQLite, discovers tools, and blocks private-IP URLs ([MCP client API](https://developers.cloudflare.com/agents/model-context-protocol/mcp-client-api/)).
-- **MCP TypeScript SDK** for our own `/mcp` server (already assumed in the stack memo).
+- **MCP TypeScript SDK** for our own `/mcp` server (already assumed).
 - **Cloudflare Workflows `waitForApproval`** as the durable pause behind a decision card. It can wait months without the agent running ([human-in-the-loop guide](https://developers.cloudflare.com/agents/guides/human-in-the-loop/)).
 - **Deferred, not now:** [`vercel/chat`](https://github.com/vercel/chat) (MIT, 2.4k stars, pushed 2026-10-29) for channel bridges. It is TypeScript with adapters for Slack, Teams, Google Chat, Discord, Telegram, GitHub, Linear, WhatsApp, X and more. Whether it runs on Workers is unverified (its README example uses Next.js and Redis).
-- **Deferred, not now:** [Infisical Agent Vault](https://github.com/Infisical/agent-vault) for the E2B hosted-agent case, where the stack memo wants credentials kept outside the VM behind a proxy. It is a Go MITM credential proxy, MIT with an `ee/` carve-out, in research preview as of April 2026 ([launch coverage](https://infisical.com/blog/agent-vault-the-open-source-credential-proxy-and-vault-for-agents)). It protects non-MCP traffic (git, LLM keys) that our broker never sees.
+- **Deferred, not now:** [Infisical Agent Vault](https://github.com/Infisical/agent-vault) for the E2B hosted-agent case, where credentials should be kept outside the VM behind a proxy. It is a Go MITM credential proxy, MIT with an `ee/` carve-out, in research preview as of April 2026 ([launch coverage](https://infisical.com/blog/agent-vault-the-open-source-credential-proxy-and-vault-for-agents)). It protects non-MCP traffic (git, LLM keys) that our broker never sees.
 
 ### CONTRIBUTE UPSTREAM
 - **`cloudflare/agents`:** the docs show no per-tool filter or wrapper hook on the MCP client; `getAITools(filter?)` filters by server only (the docs page states no hook, and I could not confirm there is none in the source). We need a `callTool` interception point so our gate sits inside the client rather than around it. We also need an encrypted storage adapter for OAuth tokens; the docs allow a custom adapter (`DurableObjectOAuthClientProvider`). Send both as PRs rather than forking, per the upstream-first rule. Risk: the SDK is 0.x and `McpAgent` was deprecated in v0.20 (earlier research notes, Cloudflare).
@@ -27,7 +27,7 @@ v3 already contains each piece, in about 3,000 lines across `toolBrokerService.t
 4. **Grant model** (who may use which connection in which pod).
 
 ### Operations, not MCP
-A founder ruling after this paper was first written: the protocol is plain HTTP operations, and MCP
+An owner ruling after this paper was first written: the protocol is plain HTTP operations, and MCP
 is one adapter over them, so the connector layer must not be MCP-shaped either. An upstream is
 modelled as **a set of operations**, whatever it speaks:
 
@@ -112,7 +112,7 @@ Columns: option | licence (verified 2026-10-29) | stars / last push | self-host 
 |---|---|---|---|---|---|---|
 | Cloudflare Agents SDK [1] | MIT | 5.9k / 2026-10-28 | n/a (library) | MCP client, OAuth client, token store | Native; tokens in DO SQLite | Adopt. 0.x churn. No per-tool hook documented |
 | workers-oauth-provider [2] | MIT | 1.9k / 2026-10-27 | n/a (library) | OAuth provider for our `/mcp` | Native | Provider side only |
-| MCP TypeScript SDK [3] | MIT to Apache transition (per research notes) | 13.7k per research notes | n/a | MCP server plumbing | Native | Already assumed |
+| MCP TypeScript SDK [3] | MIT to Apache transition (unverified) | 13.7k (unverified) | n/a | MCP server plumbing | Native | Already assumed |
 | Linear remote MCP [4] | Vendor-hosted; server source not found (unverified) | n/a | None needed | Linear tool catalogue | Fits; OAuth 2.1 + DCR, `/mcp/readonly` | The slice upstream |
 | GitHub MCP server [5] | MIT | 34.1k / 2026-10-29 | Local or remote | GitHub catalogue | Remote works over HTTP | PAT works with hosts |
 | Sentry MCP [6] | FSL-1.1-Apache-2.0 (not OSI) | 949 / 2026-10-29 | Remote hosted | Sentry catalogue | OAuth only | Use hosted, do not vendor |
@@ -145,7 +145,7 @@ Columns: option | licence (verified 2026-10-29) | stars / last push | self-host 
 
 [1] https://github.com/cloudflare/agents/blob/main/LICENSE · https://developers.cloudflare.com/agents/model-context-protocol/mcp-client-api/ · https://developers.cloudflare.com/agents/guides/human-in-the-loop/ · https://www.npmjs.com/package/agents (0.31.0 via `npm view`, 2026-10-29)
 [2] https://github.com/cloudflare/workers-oauth-provider/blob/main/LICENSE.txt · https://github.com/cloudflare/workers-oauth-provider
-[3] Internal research notes, OSS leverage (2026-10-28); not re-read from the repo
+[3] https://github.com/modelcontextprotocol/typescript-sdk (license and star count not re-read for this paper)
 [4] https://linear.app/docs/mcp
 [5] https://github.com/github/github-mcp-server/blob/main/LICENSE · https://github.com/github/github-mcp-server (README)
 [6] https://mcp.sentry.dev/ · https://github.com/getsentry/sentry-mcp (LICENSE: FSL-1.1-Apache-2.0)

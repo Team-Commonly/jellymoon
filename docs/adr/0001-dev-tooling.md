@@ -1,6 +1,6 @@
 # 0001 · Dev tooling and its dependencies
 
-Status: Accepted (owner ruling,2026-10-29). Rule: every new dependency or module gets a note like this one.
+Status: Accepted (maintainers, 2026-10-29). Rule: every new dependency or module gets a note like this one.
 
 Each dependency below is a dev-only dependency, pinned to an exact version at least two weeks old.
 None of them ships in a runtime artifact.

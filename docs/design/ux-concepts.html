@@ -471,8 +471,8 @@ button.g:hover{background:var(--concrete)}
 <script>
 "use strict";
 /* ---------- example data (invented) ---------- */
-const PPL={lily:{n:'Lily Shen',i:'LS',sub:'you · pod lead'},marco:{n:'Marco Ruiz',i:'MR',sub:'billing engineer'}};
-const AG={wren:{n:'Wren',h:'Claude Code',hk:'claude-code',owner:'Lily',pc:'lily-mbp'},otto:{n:'Otto',h:'Codex',hk:'codex',owner:'Marco',pc:'marco-linux'}};
+const PPL={maya:{n:'Maya Okafor',i:'MO',sub:'you · pod lead'},marco:{n:'Marco Ruiz',i:'MR',sub:'billing engineer'}};
+const AG={wren:{n:'Wren',h:'Claude Code',hk:'claude-code',owner:'Maya',pc:'maya-mbp'},otto:{n:'Otto',h:'Codex',hk:'codex',owner:'Marco',pc:'marco-linux'}};
 const OPTS={1:{l:'Merge as is',d:'Half-even rounding everywhere; update the 3 PDF snapshots.',rec:1,then:'Otto merges now. PDFs round half-even from the next deploy; 3 of 212 fixture totals drop by one cent. Marco’s T-42 sign-off has to cover the PDF change too.'},
   2:{l:'Merge, keep PDF rounding',d:'Wren splits the helper so only CSV rounds half-even. About 20 min.',then:'Wren splits the helper after its current T-43 step (about 20 min), Otto re-reviews, merge mid-morning. PDFs do not change.'},
   3:{l:'Hold for finance',d:'Wait for Marco’s sign-off on totals (T-42) before merging.',then:'Nothing merges until Marco signs off T-42 (back 13:00). CSV export slips to the afternoon; T-43 keeps running.'}};
@@ -485,7 +485,7 @@ const RC={
   r1189:{title:'Otto · ask on PR #418',line:'read 6 files · 9 tool calls · 4m 02s · review of #418',run:'cmr_31d0…7c02',agent:'otto',wake:'handoff from Wren (seq 1186)',claim:'T-40 review · lease held while waiting on ruling',win:'10:15:40 → 10:19:42',
     tools:[['Read','PR #418 diff · 6 files'],['Bash','npm test -- invoices → exit 0 · 212 passed'],['Bash','npm run pdf:snap → 3 snapshots changed'],['Read','billing/money.ts roundHalfEven'],['gh','pr review #418 --comment']],
     says:['“Three PDF snapshots moved by one cent.” Matches pdf:snap output above.']},
-  r1191:{title:'Wren · live run on T-43',line:'',run:'cmr_b9e0…12aa',agent:'wren',wake:'task.assigned by Lily Shen (seq 1183)',claim:'T-43 · lease live, renewed by heartbeat (60 s)',win:'10:16:05 → now',
+  r1191:{title:'Wren · live run on T-43',line:'',run:'cmr_b9e0…12aa',agent:'wren',wake:'task.assigned by Maya Okafor (seq 1183)',claim:'T-43 · lease live, renewed by heartbeat (60 s)',win:'10:16:05 → now',
     tools:[['Read','billing/export/csv.ts'],['Bash','npm test -- export.large → timeout at 31s'],['Grep','"buildRows" · 2 hits'],['Read','billing/export/rows.ts'],['Edit','billing/export/rows.ts'],['Bash','npm test -- export.large → timeout at 29s'],['Read','node_modules/csv-stringify/README'],['Edit','billing/export/chunk.ts (new)'],['Bash','npm test -- export.chunk → 4 passed']],
     says:['Plan and step labels are agent-reported.']}
 };
@@ -504,15 +504,15 @@ Object.assign(RC,{
 const LIVE=[['Edit','billing/export/csv.ts'],['Bash','npm test -- export.large → 22s'],['Read','billing/test/invoices/big-2000.json'],['Bash','npm test -- export.chunk → 6 passed'],['Edit','billing/export/chunk.ts'],['Grep','"flushEvery" · 1 hit']];
 const FEED=[
   {seq:1180,t:'09:12',k:'human',who:'marco',text:'Finance checks one thing first: CSV totals have to match the PDF to the cent. <b>@Wren</b>, the fixtures are in <code>billing/test/invoices</code>.'},
-  {seq:1182,t:'09:26',k:'human',who:'lily',text:'Menu label is settled: “Download CSV”, right under “Download PDF”. No new icon.'},
-  {seq:1183,t:'09:40',k:'human',who:'lily',text:'<b>@Wren</b> after the export lands, take T-43: exports over 500 lines time out.'},
+  {seq:1182,t:'09:26',k:'human',who:'maya',text:'Menu label is settled: “Download CSV”, right under “Download PDF”. No new icon.'},
+  {seq:1183,t:'09:40',k:'human',who:'maya',text:'<b>@Wren</b> after the export lands, take T-43: exports over 500 lines time out.'},
   {seq:1184,t:'10:04',k:'result',who:'wren',task:'T-40'},
   {seq:1186,t:'10:15',k:'handoff',from:'wren',to:'otto',what:'review of PR #418'},
   {seq:1189,t:'10:19',k:'ask',who:'otto',task:'T-40'},
   {seq:1191,t:'10:16',k:'progress',who:'wren',task:'T-43'}
 ];
 const TASKS={
-  'T-41':{id:'T-41',title:['Menu label:','Download CSV'],status:'done',who:'lily'},
+  'T-41':{id:'T-41',title:['Menu label:','Download CSV'],status:'done',who:'maya'},
   'T-40':{id:'T-40',title:['CSV export','for invoices'],status:'review',who:'otto'},
   'T-42':{id:'T-42',title:['Finance sign-off','on totals'],status:'doing',who:'marco'},
   'T-43':{id:'T-43',title:['Chunk exports','over 500 lines'],status:'doing',who:'wren'},
@@ -556,7 +556,7 @@ function askBlock(st,{compact=false,anchor=true,ctx=false}={}){
   const r=st.ruling;
   const opts=[1,2,3].map(i=>`<button type="button" class="opt" data-act="rule" data-arg="${i}" ${r?'disabled':''} aria-pressed="${r&&r.opt===i}" aria-keyshortcuts="${i}${OPTS[i].rec?' A':''}" ${anchor&&i===1?'data-anchor="ask"':''}>${kbd(i)}<span><b>${OPTS[i].l}</b>${OPTS[i].rec?'<span class="rec">Otto recommends</span>':''}<span class="opt-d">${OPTS[i].d}</span><span class="then opt-d"><b>Then:</b> ${OPTS[i].then}</span></span></button>`).join('');
   const ruled=r?`<p class="ruled" role="status">Ruled by you at ${r.t}: <b>${OPTS[r.opt].l}</b> · decision d-77 · seq ${r.seq} · ${r.frozen?'<b>frozen</b>':`<button type="button" class="lnk" data-act="undo">Undo (U)</button> before it freezes`}</p>`:'';
-  return `<div class="${compact?'compact':''}">${r?'':'<p class="need-l">Needs you · asks Lily, PR owner</p>'}<p class="sum">Merge PR #418?</p><p class="txt">${ASK_TEXT}</p>${compact?'':ctxBlock(ctx)}<div class="opts" role="group" aria-label="Options for merging PR #418">${opts}</div>${compact?'':`<p class="recline">${REC_WHY}</p>`}${ruled}${r?'':`<p class="keys">${kbd('A')} approve recommended · ${kbd('1')}–${kbd('3')} pick · ${kbd('U')} undo within 5 s</p>`}</div>`;
+  return `<div class="${compact?'compact':''}">${r?'':'<p class="need-l">Needs you · asks Maya, PR owner</p>'}<p class="sum">Merge PR #418?</p><p class="txt">${ASK_TEXT}</p>${compact?'':ctxBlock(ctx)}<div class="opts" role="group" aria-label="Options for merging PR #418">${opts}</div>${compact?'':`<p class="recline">${REC_WHY}</p>`}${ruled}${r?'':`<p class="keys">${kbd('A')} approve recommended · ${kbd('1')}–${kbd('3')} pick · ${kbd('U')} undo within 5 s</p>`}</div>`;
 }
 function resultBlock(st){return `<p class="sum">CSV export works for all four invoice states, and totals match the PDF on 212 fixtures.</p><div class="chips"><span class="chip">Ready for review</span><span class="chip">PR #418</span><span class="chip"><span class="add">+182</span> <span class="del">−14</span> · 6 files</span></div><p class="cav"><b>Caveat</b>Not tested above 480 line items; the largest fixture stops there.</p>${rcptBtn(st,'r1184')}`}
 function wrenRunBlock(st,{acts=true}={}){
@@ -564,7 +564,7 @@ function wrenRunBlock(st,{acts=true}={}){
   return `<p class="sum">${w.task==='T-43'?'Chunking exports over 500 lines':'Load-testing a 2,000-line invoice'} (${w.task})</p><ol class="plan" aria-label="Wren's plan">${plan}</ol>${rcptBtn(st,'r1191')}${acts?`<div class="acts"><button type="button" class="btn btn-s" data-act="redirect" data-arg="wren" data-anchor="redirect">Redirect ${kbd('R')}</button>${w.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Stop</button>'}</div>`:''}`;
 }
 function feedLine(st,f){
-  if(f.k==='redirect')return `<b>Lily → Wren (redirect):</b> ${esc(f.text)}`;
+  if(f.k==='redirect')return `<b>Maya → Wren (redirect):</b> ${esc(f.text)}`;
   if(f.k==='reply')return `<b>${f.who==='marco'?'Marco':AG[f.who].n}:</b> ${f.text}`;
   if(f.k==='human')return `<b>${PPL[f.who].n.split(' ')[0]}:</b> ${f.text}`;
   return f.text;
@@ -590,9 +590,9 @@ function rChat(st){
     <p class="hint" style="margin-top:8px">Built from stored summaries. No model rewrote anything.</p>
     <div class="acts"><button type="button" class="btn btn-s btn-p" data-act="markread">Mark caught up</button></div></section>`:'';
   const side=`<aside class="chat-side" aria-label="Members and board"><h4 class="side-h">In this pod · 2 people, 2 agents</h4>
-    <div class="mem">${av('lily')}<span><b>Lily Shen</b><small>you · pod lead</small></span></div>
+    <div class="mem">${av('maya')}<span><b>Maya Okafor</b><small>you · pod lead</small></span></div>
     <div class="mem">${av('marco')}<span><b>Marco Ruiz</b><small>billing engineer</small></span></div>
-    <div class="mem">${sg(st,'wren')}<span><b>Wren</b> <span class="rt">Claude Code</span><small>agent · works for Lily</small>${lamp(st,'wren')}</span></div>
+    <div class="mem">${sg(st,'wren')}<span><b>Wren</b> <span class="rt">Claude Code</span><small>agent · works for Maya</small>${lamp(st,'wren')}</span></div>
     <div class="mem">${sg(st,'otto')}<span><b>Otto</b> <span class="rt">Codex</span><small>agent · works for Marco · <button type="button" class="lnk" data-act="mate">how to work with it</button></small>${lamp(st,'otto')}</span></div>
     <h4 class="side-h">Board</h4>${Object.values(st.tasks).map(t=>`<div class="mini-task"><span class="id">${t.id}</span><span>${t.title.join(' ')} · <i>${t.status}</i></span></div>`).join('')}</aside>`;
   return `<div class="chat"><div class="chat-main">
@@ -606,11 +606,11 @@ function rChat(st){
 }
 function chatItem(st,f){
   if(f.k==='human')return `<li class="msg"><time class="tm">${f.t}</time>${av(f.who)}<div><p class="by">${PPL[f.who].n}</p><p class="mtext">${f.text}</p></div></li>`;
-  if(f.k==='handoff')return `<li class="handoff" data-anchor="handoff" tabindex="-1"><time class="tm">${f.t}</time><p><span class="tag">Handoff</span><b>Wren</b> → <b>Otto</b> <span>${f.what}</span><span class="own">Lily's agent to Marco's</span></p></li>`;
+  if(f.k==='handoff')return `<li class="handoff" data-anchor="handoff" tabindex="-1"><time class="tm">${f.t}</time><p><span class="tag">Handoff</span><b>Wren</b> → <b>Otto</b> <span>${f.what}</span><span class="own">Maya's agent to Marco's</span></p></li>`;
   if(f.k==='result')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'wren')}<article class="card" data-nav tabindex="0" data-anchor="result" aria-label="Wren result on T-40"><header class="ch">${who(st,'wren')}</header>${resultBlock(st)}</article></li>`;
   if(f.k==='ask')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'otto')}<article class="card ${st.ruling?'':'needs'}" data-nav tabindex="0" aria-label="Otto asks: merge PR 418?"><header class="ch">${who(st,'otto')}${lamp(st,'otto')}</header>${askBlock(st)}${rcptBtn(st,'r1189')}<div class="acts"><button type="button" class="btn btn-s" data-act="mate">Otto is Marco's agent</button></div></article></li>`;
   if(f.k==='progress')return `<li class="msg"><time class="tm">${f.t}</time>${sg(st,'wren')}<article class="card" data-nav tabindex="0" aria-label="Wren running on ${st.wren.task}"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}<p class="hint" style="margin-top:6px">One card per run; it updates in place.</p></article></li>`;
-  if(f.k==='redirect')return `<li class="msg"><time class="tm">${f.t}</time>${av('lily')}<div><p class="by">Lily Shen <span class="rt">redirect → Wren</span></p><p class="mtext">${esc(f.text)}</p></div></li>`;
+  if(f.k==='redirect')return `<li class="msg"><time class="tm">${f.t}</time>${av('maya')}<div><p class="by">Maya Okafor <span class="rt">redirect → Wren</span></p><p class="mtext">${esc(f.text)}</p></div></li>`;
   if(f.k==='reply'){const a=f.who;return a==='marco'?`<li class="msg"><time class="tm">${f.t}</time>${av('marco')}<div><p class="by">Marco Ruiz</p><p class="mtext">${f.text}</p></div></li>`:`<li class="msg"><time class="tm">${f.t}</time>${sg(st,a)}<article class="card"><header class="ch">${who(st,a)}</header><p class="mtext" style="margin-top:6px">${f.text}</p>${f.wake?`<p class="hint" style="margin-top:4px;font-family:var(--mono)">wake: ${f.wake}</p>`:''}</article></li>`}
   if(f.k==='sys')return `<li class="sys">${f.text}</li>`;
   return '';
@@ -625,7 +625,7 @@ function rInbox(st){
   const newItems=c.newCount&&st.feed.some(f=>f.seq>st.lastSeen&&f.seq<=1191);
   const since=newItems?`<section class="grp" data-anchor="catchup" tabindex="-1"><h4 class="grp-h"><span>Since 10:00 · FYI, no action</span><button type="button" class="btn btn-s" data-act="markread">Mark all read</button></h4><ul>
     ${it('wren-result','',`${sg(st,'wren')}<span><span class="it-t">CSV export ready for review</span><span class="it-m">Wren · T-40 · 212 fixtures match the PDF</span></span>`)}
-    ${it('handoff','',`<span class="av sm" aria-hidden="true">⇄</span><span><span class="it-t">Wren handed PR #418 to Otto</span><span class="it-m">10:15 · Lily's agent to Marco's</span></span>`)}</ul></section>`:'';
+    ${it('handoff','',`<span class="av sm" aria-hidden="true">⇄</span><span><span class="it-t">Wren handed PR #418 to Otto</span><span class="it-m">10:15 · Maya's agent to Marco's</span></span>`)}</ul></section>`:'';
   const ex=extra(st).slice(-4);
   const just=ex.length?`<section class="grp"><h4 class="grp-h"><span>Just now</span></h4><ul class="feedmini">${ex.map(f=>`<li>${feedLine(st,f)}</li>`).join('')}</ul></section>`:'';
   const zero=!c.needs&&!newItems?`<div class="zero" data-anchor="catchup" tabindex="-1"><b>You're caught up.</b><span>Agents surface here only when they need you. ${st.wren.state==='run'?'1 agent is':'No agent is'} working quietly.</span></div>`:'';
@@ -677,7 +677,7 @@ function rMap(st){
     if(y1===y2)p=`M${x1+W},${y1+H/2} L${x2-6},${y2+H/2}`;else{const sx=x1+W/2,sy=y1+H,ex=x2+W/2,ey=y2-6;p=`M${sx},${sy} C${sx},${sy+30} ${ex},${ey-30} ${ex},${ey}`}
     return `<path class="edge ${d}" d="${p}" marker-end="url(#ar)"/>`};
   const tok=a=>{const [x,y]=st.replay?(a==='wren'?[POS['T-40'][0]+W-12,POS['T-40'][1]+2]:[296,386]):tokPos(st,a);const s=sgState(st,a);
-    return `<g class="tok ${s}" data-act="sel" data-arg="${a}" role="button" tabindex="0" data-nav data-tok="${a}" style="transform:translate(${x}px,${y}px)" aria-label="${AG[a].n}, ${AG[a].h} agent, works for ${AG[a].owner}, ${STL[s]}"><polygon points="${OCT}"/><text y="4">${AG[a].n[0]}</text><text class="own-t" y="27">${a==='otto'?'Marco’s':'Lily’s'}</text></g>`};
+    return `<g class="tok ${s}" data-act="sel" data-arg="${a}" role="button" tabindex="0" data-nav data-tok="${a}" style="transform:translate(${x}px,${y}px)" aria-label="${AG[a].n}, ${AG[a].h} agent, works for ${AG[a].owner}, ${STL[s]}"><polygon points="${OCT}"/><text y="4">${AG[a].n[0]}</text><text class="own-t" y="27">${a==='otto'?'Marco’s':'Maya’s'}</text></g>`};
   const ex=extra(st).slice(-3);
   return `<div class="map"><div class="map-g">
     <div class="map-bar"><span><b>invoice-export</b> · 5 tasks · 2 agents <span class="ex">Example data</span></span>
@@ -701,7 +701,7 @@ function mapInsp(st){
   if(s==='T-43'||s==='T-44'){const t=st.tasks[s];if(t.who==='wren')return `<p class="hint">${s} · ${t.title.join(' ')}</p><div class="card" style="margin-top:6px"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}</div>`;
     return `<p class="hint">${s} · ${t.title.join(' ')}</p><p class="sum">Unclaimed</p><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="move" data-arg="${s}">Move Wren here</button></div>`}
   if(s==='T-42')return `<p class="hint">T-42</p><p class="sum">Finance sign-off on totals</p><p class="txt">Held by Marco. Blocks T-44 only if finance asks for a load test.</p>`;
-  if(s==='T-41')return `<p class="hint">T-41</p><p class="sum">Menu label: Download CSV · Done by Lily</p>`;
+  if(s==='T-41')return `<p class="hint">T-41</p><p class="sum">Menu label: Download CSV · Done by Maya</p>`;
   if(s==='wren'){const targets=Object.values(st.tasks).filter(t=>t.id!==st.wren.task&&!t.who);
     return `<div class="card"><header class="ch">${who(st,'wren')}${lamp(st,'wren')}</header>${wrenRunBlock(st)}<p class="stamp" style="margin-top:12px">Move to…</p><div class="acts" style="margin-top:4px">${targets.map(t=>`<button type="button" class="btn btn-s" data-act="move" data-arg="${t.id}">${t.id} ${t.title.join(' ')}</button>`).join('')||'<span class="hint">No unclaimed tasks.</span>'}</div><p class="hint" style="margin-top:6px">A move ends the claim on ${st.wren.task} after the current tool call and claims the target.</p></div>`}
   if(s==='otto')return mateCard(st);
@@ -715,7 +715,7 @@ function rTransit(st){
   const old=st.lastSeen>1183;
   const stop=(t,mk,body,cls='',anchor='')=>`<li class="stp ${cls}" ${anchor?`data-anchor="${anchor}" tabindex="-1"`:''}><span class="t">${t}</span><span class="mk ${mk}" aria-hidden="true"></span><div class="sb">${body}</div></li>`;
   const ex=extra(st);
-  const ex40=ex.filter(f=>f.line==='T-40').map(f=>stop(f.t,f.who==='marco'||f.who==='lily'||f.k==='human'?'':'ag',feedLine(st,f)));
+  const ex40=ex.filter(f=>f.line==='T-40').map(f=>stop(f.t,f.who==='marco'||f.who==='maya'||f.k==='human'?'':'ag',feedLine(st,f)));
   const ex43=ex.filter(f=>f.line==='T-43').map(f=>stop(f.t,f.k==='redirect'?'pts':'ag',feedLine(st,f)));
   let ahead40;
   if(!r||!r.frozen)ahead40=[['Merge'],['Live behind export_csv']];
@@ -736,7 +736,7 @@ function rTransit(st){
       <div class="acts">${old?'<span class="hint">Caught up. Board dims what you have seen.</span>':`<button type="button" class="btn btn-s" data-act="markread">Mark caught up ${kbd('C')}</button>`}</div>
     </section>
     <div class="lines">
-      <section aria-label="Line T-40"><p class="line-h"><b>T-40 · CSV export</b><span>Wren (Lily's) ⇄ Otto (Marco's)</span></p><ol class="stops">
+      <section aria-label="Line T-40"><p class="line-h"><b>T-40 · CSV export</b><span>Wren (Maya's) ⇄ Otto (Marco's)</span></p><ol class="stops">
         ${stop('09:12','',`<span class="who">Marco</span> boarded the brief: totals must match the PDF to the cent.`)}
         ${stop('10:04','ag',`<span class="who">Wren</span> built it · ready for review<button type="button" class="route" data-act="receipt" data-arg="r1184" data-anchor="result" aria-label="Open Wren's receipt: read 14 files, ran 212 tests passed, took 6 min 41 s"><span>read 14</span><i>→</i><span>ran 212 ✓</span><i>→</i><span>took 6m 41s</span><span class="term"></span></button>`)}
         ${stop('10:15','',`<span class="xfer">Interchange · Wren → Otto</span> <span class="own">review of PR #418</span>`,'','handoff')}
@@ -744,8 +744,8 @@ function rTransit(st){
         ${signal}${ex40.join('')}
         ${ahead40.map(([s])=>stop('','ghost',s,'ghost')).join('')}
       </ol></section>
-      <section aria-label="Line T-43"><p class="line-h"><b>${w.task} · ${w.task==='T-43'?'Chunk exports over 500 lines':'Load-test 2,000 lines'}</b><span>Wren (Lily's)</span></p><ol class="stops">
-        ${stop('09:40','',`<span class="who">Lily</span> assigned it before stepping out.`)}
+      <section aria-label="Line T-43"><p class="line-h"><b>${w.task} · ${w.task==='T-43'?'Chunk exports over 500 lines':'Load-test 2,000 lines'}</b><span>Wren (Maya's)</span></p><ol class="stops">
+        ${stop('09:40','',`<span class="who">Maya</span> assigned it before stepping out.`)}
         ${stop('10:16','ag',`<span class="who">Wren</span> departed · claim on ${w.task}`)}
         ${w.plan.slice(0,Math.max(doing,0)).map(p=>stop('','ag',`<span style="color:var(--ink-3)">${esc(p[0])}</span>`)).join('')}
         ${ex43.join('')}
@@ -764,11 +764,11 @@ function rRoom(st){
   const desk=(id,cls,figHtml,name,sub,bub='')=>`<button type="button" class="desk ${cls}" data-act="sel" data-arg="${id}" data-nav aria-pressed="${st.sel===id}">${figHtml}<span class="dn">${name}</span><span class="ds">${sub}</span>${bub?`<span class="bub">${bub}</span>`:''}</button>`;
   const caught=st.lastSeen>1183;
   return `<div class="room"><div class="floor" aria-label="Pod floor">
-    ${desk('wren',ws==='run'?'':ws,fig(pose[ws],1),'Wren <span class="rt">Claude Code</span>',`Lily's · ${lamp(st,'wren')}`,ws==='run'?`${st.wren.task} · tool call #<span data-live="wt">${st.wren.tools}</span>`:'')}
+    ${desk('wren',ws==='run'?'':ws,fig(pose[ws],1),'Wren <span class="rt">Claude Code</span>',`Maya's · ${lamp(st,'wren')}`,ws==='run'?`${st.wren.task} · tool call #<span data-live="wt">${st.wren.tools}</span>`:'')}
     ${desk('otto',os==='wait'?'wait':'',fig(pose[os],1),'Otto <span class="rt">Codex</span>',`Marco's · ${lamp(st,'otto')}`,os==='wait'?'Lamp up: has a question for you':'')}
     <div class="aisle"><span>10:15 · Wren passed PR #418 across the aisle to Otto</span></div>
     ${desk('marco','',fig('away',0),'Marco Ruiz','away · back 13:00','Otto sits with Marco')}
-    ${desk('you','',fig('idle',0),'Lily Shen','you · just walked in',st.ruling?'Nothing waiting':'1 lamp is up for you')}
+    ${desk('you','',fig('idle',0),'Maya Okafor','you · just walked in',st.ruling?'Nothing waiting':'1 lamp is up for you')}
     <section class="wb ${caught?'clean':''}" data-anchor="catchup" tabindex="-1" aria-label="Whiteboard: while you were out"><h4><span>Whiteboard · while you were out <span class="ex">Example data</span></span>${caught?'<span class="hint">wiped at '+st.wiped+'</span>':`<button type="button" class="btn btn-s" data-act="markread">Wipe board ${kbd('C')}</button>`}</h4>
       <div class="notes"><button type="button" class="note ${st.ruling?'':'needs'}" data-act="sel" data-arg="otto"><b>${st.ruling?'RULED':'NEEDS YOU'}</b>Otto: merge PR #418?</button><button type="button" class="note" data-act="receipt" data-arg="r1184"><b>DONE 10:04</b>Wren: CSV export, 212 fixtures match</button><button type="button" class="note" data-act="sel" data-arg="otto"><b>HANDOFF 10:15</b>Wren → Otto, review #418</button><button type="button" class="note" data-act="sel" data-arg="wren"><b>RUNNING</b>Wren on ${st.wren.task}</button></div></section>
   </div><div class="visit" aria-live="polite">${roomVisit(st,last)}</div></div>`;
@@ -776,7 +776,7 @@ function rRoom(st){
 function roomVisit(st,last){
   const s=st.sel;
   if(!s)return `<h3>Walk up to a desk</h3><p class="txt">Click a desk to stand at it and see the screen. Otto's lamp is up: it has a question for you.</p><div class="acts"><button type="button" class="btn btn-s" data-act="sel" data-arg="otto">Walk to Otto</button><button type="button" class="btn btn-s" data-act="sel" data-arg="wren">Walk to Wren</button></div>`;
-  if(s==='wren')return `<h3>At Wren's desk</h3><p class="hint">Lily's agent · Claude Code on lily-mbp</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'wren')}</p>${wrenRunBlock(st,{acts:false})}</div><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="redirect" data-arg="wren" data-anchor="redirect">Tap on the shoulder ${kbd('R')}</button>${st.wren.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Ask Wren to stop</button>'}<button type="button" class="btn btn-s" data-act="receipt" data-arg="r1184">Open the binder (last result)</button></div>${last('wren')?`<ul class="feedmini"><li>${last('wren')}</li></ul>`:''}`;
+  if(s==='wren')return `<h3>At Wren's desk</h3><p class="hint">Maya's agent · Claude Code on maya-mbp</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'wren')}</p>${wrenRunBlock(st,{acts:false})}</div><div class="acts"><button type="button" class="btn btn-s btn-p" data-act="redirect" data-arg="wren" data-anchor="redirect">Tap on the shoulder ${kbd('R')}</button>${st.wren.state==='stopped'?'<button type="button" class="btn btn-s" data-act="resume">Resume</button>':'<button type="button" class="btn btn-s" data-act="stop">Ask Wren to stop</button>'}<button type="button" class="btn btn-s" data-act="receipt" data-arg="r1184">Open the binder (last result)</button></div>${last('wren')?`<ul class="feedmini"><li>${last('wren')}</li></ul>`:''}`;
   if(s==='otto')return `<h3>At Otto's desk</h3><p class="hint">Marco's agent · Codex on marco-linux</p><div class="screen"><p class="screen-h">SCREEN · ${lamp(st,'otto')}</p>${askBlock(st,{compact:false})}${rcptBtn(st,'r1189')}</div><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Otto is Marco's: what can I do?</button></div>${last('otto')?`<ul class="feedmini"><li>${last('otto')}</li></ul>`:''}`;
   if(s==='marco')return `<h3>At Marco's desk</h3><p class="txt">Marco is away until 13:00. Otto sits with Marco: to change what Otto is doing, leave Marco a note.</p><div class="acts"><button type="button" class="btn btn-s" data-act="mate">Leave a note for Marco</button></div>`;
   if(s==='you')return `<h3>Your desk</h3><p class="txt">${st.ruling?'Nothing is waiting on you.':'One lamp is up. You can rule from here without walking over.'}</p>${st.ruling?'':`<div class="card needs" style="margin-top:8px">${askBlock(st,{anchor:false})}</div>`}`;
@@ -789,7 +789,7 @@ const TURNS=[
   did:[['Added 8 invoice fixtures covering all four invoice states',[['c9A','commit c_9A · 8 files']]],['Set the rule: CSV totals must match the PDF to the cent',[['m1180','message seq 1180']]]],
   chk:[['Checked PDF totals on the new fixtures by hand: all match',[[null,'person-reported · no receipt']]]],
   need:'Nothing tonight. Marco holds T-42, finance sign-off, and is back 13:00.'},
- {who:'wren',kind:'a',role:'Claude Code · Lily’s agent',time:'00:57–now',needs:0,
+ {who:'wren',kind:'a',role:'Claude Code · Maya’s agent',time:'00:57–now',needs:0,
   did:[['Built CSV export for all four invoice states: PR #418, +182 −14 in 6 files',[['r8F','run r_8F · 23 tool calls']]],['Handed review of PR #418 to Otto at 01:15',[['r31','handoff · seq 1186']]],['Started T-43, chunking exports over 500 lines; still running',[['rB9','run r_B9 · live']]]],
   chk:[['CSV totals match the PDF on 212 fixtures',[['t2C','test t_2C · 212 passed']]],['Preflight before the PR: lint, types, build',[['p4D','preflight p_4D · 3 of 3 ok']]],['Not checked: invoices above 480 line items',[[null,'no run covers this']]]],
   need:'Nothing. Wren keeps going on T-43 unless you redirect it.'},
@@ -818,7 +818,7 @@ function rRound(st){
         <button type="button" class="btn btn-p" data-act="rtnext" ${blocked?'aria-disabled="true"':''}>${blocked?'Rule to continue':'Next turn'} ${kbd('N')}</button></footer></article>`;
   }else{
     const ex=extra(st);
-    body=`<article class="turn" aria-labelledby="turn-h"><header class="turn-h"><span class="av big" aria-hidden="true">LS</span><div><h4 id="turn-h" tabindex="-1" data-anchor="turn">Wrap-up: you’re current</h4><span class="own">what changed because you sat down</span></div><span class="of">turn ${TURNS.length+1} of ${TURNS.length+1}</span></header>
+    body=`<article class="turn" aria-labelledby="turn-h"><header class="turn-h"><span class="av big" aria-hidden="true">MO</span><div><h4 id="turn-h" tabindex="-1" data-anchor="turn">Wrap-up: you’re current</h4><span class="own">what changed because you sat down</span></div><span class="of">turn ${TURNS.length+1} of ${TURNS.length+1}</span></header>
       <div class="wrapup"><p><b>Your ruling.</b> ${r?`${OPTS[r.opt].l} at ${r.t} (${r.frozen?'frozen':'undo still open'}). Then: ${OPTS[r.opt].then}`:'Otto’s ask is still open. It stays at the top of your Inbox with its context.'}</p>
       <p><b>Still running.</b> Wren on ${st.wren.task}, step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1} of ${st.wren.plan.length}. ${rcptBtn(st,'r1191')}</p>
       <p><b>Unverified, carried forward.</b> Invoices above 480 lines (no run); Marco’s hand check of PDF totals (no receipt). T-44’s load test would cover the first.</p>
@@ -931,7 +931,7 @@ const PANELS=[
          X  SIGNAL  your ruling   [1] [2] [3]
          :  merge  :  live behind export_csv
  T-43 chunk exports ==============================
-  09:40  o  Lily    assigned
+  09:40  o  Maya    assigned
   10:16  #  Wren    departed
    now  [>] train   step 2 . tool #12
          Y  points  [s]tream rows  [h]old train
@@ -1034,8 +1034,8 @@ function rule(opt){
 function freeze(st){
   if(!st.ruling||st.ruling.frozen)return;st.ruling.frozen=true;timers.delete(st);
   const o=st.ruling.opt;
-  if(o===1){st.tasks['T-40'].status='done';st.tasks['T-40'].who=null;push(st,{k:'reply',who:'otto',line:'T-40',text:'Merged PR #418 behind <code>export_csv</code>; 3 PDF snapshots updated. T-40 is done.',wake:'ruling on d-77 by Lily'})}
-  else if(o===2){st.tasks['T-40'].status='doing';push(st,{k:'reply',who:'wren',line:'T-40',text:'Woken by your ruling. I will split the rounding helper after my current T-43 step, then hand back to Otto.',wake:'ruling on d-77 by Lily'})}
+  if(o===1){st.tasks['T-40'].status='done';st.tasks['T-40'].who=null;push(st,{k:'reply',who:'otto',line:'T-40',text:'Merged PR #418 behind <code>export_csv</code>; 3 PDF snapshots updated. T-40 is done.',wake:'ruling on d-77 by Maya'})}
+  else if(o===2){st.tasks['T-40'].status='doing';push(st,{k:'reply',who:'wren',line:'T-40',text:'Woken by your ruling. I will split the rounding helper after my current T-43 step, then hand back to Otto.',wake:'ruling on d-77 by Maya'})}
   else{st.tasks['T-40'].status='review';push(st,{k:'sys',line:'T-40',text:'T-40 held for Marco’s finance sign-off (T-42). Marco is notified.'})}
 }
 function undo(){const st=S[cur];if(!st.ruling)return;if(st.ruling.frozen){toast('Frozen. A ruling cannot be undone once frozen.');return}clearTimeout(timers.get(st));timers.delete(st);st.ruling=null;st.otto.state='wait';render();toast('Ruling undone. The ask is open again.')}
@@ -1046,20 +1046,20 @@ const ROUTES={stream:{note:'Stream rows instead of chunking.',plan:[['Stream row
 function redirectWren(key,text){
   const st=S[cur];const r=ROUTES[key];const note=r?r.note:text;if(!note)return;
   const done=st.wren.plan.filter(p=>p[1]==='done');
-  push(st,{k:'redirect',who:'lily',to:'wren',line:'T-43',text:note});
+  push(st,{k:'redirect',who:'maya',to:'wren',line:'T-43',text:note});
   st.wren.state='ack';st.routed=key;render();toast('Redirect sent. It lands at Wren’s next tool call.');
   later(st,1400,()=>{st.wren.tools++;st.wren.state='run';
-    st.wren.plan=r?[...done,...r.plan]:[...done,['Lily: '+note,'doing'],...st.wren.plan.filter(p=>p[1]==='todo')];
-    push(st,{k:'reply',who:'wren',line:'T-43',text:`Got it at tool call #${st.wren.tools}. ${r?r.ack:'Plan updated with your note.'}`,wake:'redirect by Lily'})});
+    st.wren.plan=r?[...done,...r.plan]:[...done,['Maya: '+note,'doing'],...st.wren.plan.filter(p=>p[1]==='todo')];
+    push(st,{k:'reply',who:'wren',line:'T-43',text:`Got it at tool call #${st.wren.tools}. ${r?r.ack:'Plan updated with your note.'}`,wake:'redirect by Maya'})});
 }
-function stopWren(){const st=S[cur];st.wren.state='stopped';push(st,{k:'sys',line:'T-43',text:`Lily stopped Wren’s run on ${st.wren.task}. Lease released; the task stays assigned to Wren with no run.`});render();toast('Wren stopped at its current tool call.')}
-function resumeWren(){const st=S[cur];st.wren.state='run';push(st,{k:'reply',who:'wren',line:'T-43',text:`Resumed on ${st.wren.task} from step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1}.`,wake:'resume by Lily'});render()}
+function stopWren(){const st=S[cur];st.wren.state='stopped';push(st,{k:'sys',line:'T-43',text:`Maya stopped Wren’s run on ${st.wren.task}. Lease released; the task stays assigned to Wren with no run.`});render();toast('Wren stopped at its current tool call.')}
+function resumeWren(){const st=S[cur];st.wren.state='run';push(st,{k:'reply',who:'wren',line:'T-43',text:`Resumed on ${st.wren.task} from step ${st.wren.plan.findIndex(p=>p[1]==='doing')+1}.`,wake:'resume by Maya'});render()}
 function moveWren(target){
   const st=S[cur];const from=st.wren.task;if(from===target)return;
   st.tasks[from].who=null;st.tasks[from].status='todo';st.tasks[target].who='wren';st.tasks[target].status='doing';
   st.wren.task=target;st.wren.state='ack';st.wren.plan=clone(PLAN[target]||[['Start '+target,'doing']]);
-  push(st,{k:'redirect',who:'lily',to:'wren',line:'T-43',text:`Move from ${from} to ${target}.`});st.sel='wren';render();toast(`Wren will release ${from} after its current tool call.`);
-  later(st,1400,()=>{st.wren.state='run';st.wren.tools++;push(st,{k:'reply',who:'wren',line:'T-43',text:`Released ${from}, claimed ${target}.`,wake:'reassign by Lily'})});
+  push(st,{k:'redirect',who:'maya',to:'wren',line:'T-43',text:`Move from ${from} to ${target}.`});st.sel='wren';render();toast(`Wren will release ${from} after its current tool call.`);
+  later(st,1400,()=>{st.wren.state='run';st.wren.tools++;push(st,{k:'reply',who:'wren',line:'T-43',text:`Released ${from}, claimed ${target}.`,wake:'reassign by Maya'})});
 }
 function catchup(){
   const st=S[cur];
@@ -1100,22 +1100,22 @@ function openMate(){
   const st=S[cur];
   $('#tm-body').innerHTML=`<div class="dh"><div><h3 id="tm-title">Otto is Marco's agent</h3><p>Codex on marco-linux · ${STL[st.otto.state]}</p></div><form method="dialog"><button class="btn btn-s">Close</button></form></div>
   <div class="db"><dl class="kv"><dt>you can</dt><dd>mention it, ask it questions, read its receipts, rule on asks addressed to you</dd><dt>via Marco</dt><dd>redirect, stop, or reassign it</dd></dl>
-  <form id="mate-q" class="db" style="padding:0"><label class="stamp" for="mq">ASK OTTO A QUESTION (wakes it with reason “mention by Lily”)</label><input class="field" id="mq" value="Which helper does the rounding now?"><div class="row"><button class="btn btn-p btn-s" type="submit">Ask Otto</button></div></form>
+  <form id="mate-q" class="db" style="padding:0"><label class="stamp" for="mq">ASK OTTO A QUESTION (wakes it with reason “mention by Maya”)</label><input class="field" id="mq" value="Which helper does the rounding now?"><div class="row"><button class="btn btn-p btn-s" type="submit">Ask Otto</button></div></form>
   <form id="mate-s" class="db" style="padding:0"><label class="stamp" for="ms">SUGGEST A REDIRECT TO MARCO</label><input class="field" id="ms" value="Have Otto also check the 480+ line case before merge."><div class="row"><button class="btn btn-s" type="submit" ${st.marco?'disabled':''}>Send to Marco</button>${st.marco?`<span class="hint">${st.marco==='sent'?'Sent; waiting on Marco.':'Marco approved it.'}</span>`:''}</div></form></div>`;
   $('#dlg-mate').showModal();
   $('#mate-q').onsubmit=e=>{e.preventDefault();const q=$('#mq').value.trim();if(!q)return;$('#dlg-mate').close();
-    push(st,{k:'human',who:'lily',line:'T-40',text:'<b>@Otto</b> '+esc(q)});render();toast('Asked Otto. Mentions wake any agent in the pod.');
-    later(st,1300,()=>push(st,{k:'reply',who:'otto',line:'T-40',text:'<code>roundHalfEven</code> in <code>billing/money.ts</code>. CSV and PDF both call it since PR #418.',wake:'mention by Lily'}))};
+    push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Otto</b> '+esc(q)});render();toast('Asked Otto. Mentions wake any agent in the pod.');
+    later(st,1300,()=>push(st,{k:'reply',who:'otto',line:'T-40',text:'<code>roundHalfEven</code> in <code>billing/money.ts</code>. CSV and PDF both call it since PR #418.',wake:'mention by Maya'}))};
   $('#mate-s').onsubmit=e=>{e.preventDefault();const q=$('#ms').value.trim();if(!q)return;$('#dlg-mate').close();st.marco='sent';
-    push(st,{k:'human',who:'lily',line:'T-40',text:'<b>@Marco</b> suggestion for Otto: '+esc(q)});render();toast('Sent to Marco. Otto changes course only on his word.');
+    push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Marco</b> suggestion for Otto: '+esc(q)});render();toast('Sent to Marco. Otto changes course only on his word.');
     later(st,2200,()=>{st.marco='ok';push(st,{k:'reply',who:'marco',line:'T-40',text:'Fine by me. <b>@Otto</b> go ahead.'});push(st,{k:'reply',who:'otto',line:'T-40',text:'Checking the 480+ line case now, at Marco’s word.',wake:'mention by Marco (owner)'})})};
 }
 
 /* composer (chat) */
 document.addEventListener('submit',e=>{const f=e.target;if(f.dataset.form!=='compose')return;e.preventDefault();const v=f.m.value.trim();if(!v)return;const st=S[cur];f.m.value='';
   if(/^@wren\b/i.test(v)){redirectWren(null,v.replace(/^@wren\s*/i,'')||'Check in.');return}
-  if(/^@otto\b/i.test(v)){push(st,{k:'human',who:'lily',line:'T-40',text:'<b>@Otto</b> '+esc(v.replace(/^@otto\s*/i,''))});render();later(st,1300,()=>push(st,{k:'reply',who:'otto',line:'T-40',text:'Answering you directly; I work for Marco, so a change of course goes through him.',wake:'mention by Lily'}));return}
-  push(st,{k:'human',who:'lily',text:esc(v)});render();$('#compose-0').focus()});
+  if(/^@otto\b/i.test(v)){push(st,{k:'human',who:'maya',line:'T-40',text:'<b>@Otto</b> '+esc(v.replace(/^@otto\s*/i,''))});render();later(st,1300,()=>push(st,{k:'reply',who:'otto',line:'T-40',text:'Answering you directly; I work for Marco, so a change of course goes through him.',wake:'mention by Maya'}));return}
+  push(st,{k:'human',who:'maya',text:esc(v)});render();$('#compose-0').focus()});
 
 /* tabs + theme */
 function setTab(i){cur=i;document.querySelectorAll('.tab').forEach((t,j)=>{t.setAttribute('aria-selected',j===i);t.tabIndex=j===i?0:-1});document.querySelectorAll('.panel').forEach((p,j)=>p.hidden=j!==i);render(i)}

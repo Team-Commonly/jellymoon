@@ -13,7 +13,7 @@ const REPO = 'Team-Commonly/jellymoon';
 const HDR = 'pr\thead\tverdict\tby\twhen\tnote\n';
 const rowOf = (verdict, by = 'opus-verifier', head = HEAD) => `5\t${head}\t${verdict}\t${by}\t2026-10-29T10:00:00Z\tn\n`;
 const PROT = ':100644 100644 aaa bbb M\tscripts/x.mjs';
-const NOTE = { userId: { _id: 'id-ada', username: 'ada' }, content: `jellymoon#5 ${HEAD}\nok\nGATE: PASS`, createdAt: '2026-10-29T10:01:00Z' };
+const NOTE = { userId: { _id: 'id-orion', username: 'orion' }, content: `jellymoon#5 ${HEAD}\nok\nGATE: PASS`, createdAt: '2026-10-29T10:01:00Z' };
 const fail = new Error('scripted failure');
 
 const ALL = [];
@@ -26,7 +26,7 @@ async function land(over = {}) {
   (over.topFiles || []).forEach((f) => fs.writeFileSync(path.join(top, f), ''));
   (over.cwdFiles || []).forEach((f) => fs.writeFileSync(path.join(cwd, f), ''));
   const w = { calls: [], fetches: [], pod: [], spawns: [], views: 0, ledger, lockAtMerge: null, kills: [], scanned: [] };
-  const base = { url: `https://github.com/${REPO}/pull/5`, number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'feat', headRefOid: HEAD, createdAt: '2026-10-29T09:00:00Z', isCrossRepository: false, author: { login: 'lily' }, mergeCommit: { oid: MERGED }, ...over.pr };
+  const base = { url: `https://github.com/${REPO}/pull/5`, number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'feat', headRefOid: HEAD, createdAt: '2026-10-29T09:00:00Z', isCrossRepository: false, author: { login: 'alice' }, mergeCommit: { oid: MERGED }, ...over.pr };
   const wt = /^git -C \S+ /;
   const defaults = [
     [/^git rev-parse --git-common-dir/, common], [/^git rev-parse --show-toplevel/, top], [/^git rev-parse HEAD$/, over.checkoutHead ?? MAIN],
@@ -38,7 +38,7 @@ async function land(over = {}) {
     [/^gh pr view 5 .*--json mergeCommit/, JSON.stringify({ mergeCommit: base.mergeCommit })],
     [/^gh pr view/, (a, s) => { s.views += 1; const pr = s.views > 1 ? { ...base, ...over.fresh } : base; return JSON.stringify(Object.fromEntries(a[a.indexOf('--json') + 1].split(',').filter((k) => !(over.omit || []).includes(k)).map((k) => [k, pr[k]]))); }],
     [/^gh pr merge/, (a, s) => { s.lockAtMerge = fs.existsSync(path.join(common, 'jm-land.lock')); return ''; }],
-    [/^gh api .*collaborators/, (a) => ['{"login":"lily","push":true}', ...(a.includes('--paginate') ? over.page2 || [] : [])].join('\n')],
+    [/^gh api .*collaborators/, (a) => ['{"login":"alice","push":true}', ...(a.includes('--paginate') ? over.page2 || [] : [])].join('\n')],
     [/^gh api .*check-runs/, over.runs ?? '{"total":1,"runs":[{"name":"ci","conclusion":"success"}]}'],
     [/^git merge-tree --write-tree/, `${TREE}\n`], [/--raw -M/, over.raw ?? ':100644 100644 aaa bbb M\tdocs/a.md'], [/--numstat/, over.numstat ?? '1\t1\tdocs/a.md'], [/ -U0 /, ''], [/^git .*log -p/, ''], [/^git log --format=%B/, over.messages ?? ''],
     [/^git ls-tree/, 'README.md\0'], [/^make -s secrets-range/, ''],
@@ -61,7 +61,7 @@ async function land(over = {}) {
     return c;
   };
   const fetch = async (url, o) => { w.pod.push({ url, o }); return { ok: true, status: 200, json: async () => (url.includes('before=') ? [] : (over.msgs ?? [NOTE])) }; };
-  const env = { JM_REPO: REPO, JM_TRUSTED_LOGINS: 'lily', JM_LEDGER: ledger, JM_COMMONLY_API: 'https://api.commonly.me', JM_COMMONLY_TOKEN_FILE: path.join(dir, 'token'), JM_VERDICT_POD: 'pod1', JM_VERDICT_REVIEWERS: 'id-ada:Ada', ...over.env };
+  const env = { JM_REPO: REPO, JM_TRUSTED_LOGINS: 'alice', JM_LEDGER: ledger, JM_COMMONLY_API: 'https://api.commonly.me', JM_COMMONLY_TOKEN_FILE: path.join(dir, 'token'), JM_VERDICT_POD: 'pod1', JM_VERDICT_REVIEWERS: 'id-orion:Orion', ...over.env };
   const kill = (pid, sig) => { w.kills.push({ pid, sig, t: Date.now() }); };
   const [log, err] = [console.log, console.error];
   const said = [];
@@ -105,7 +105,7 @@ await t('a CI failure on the head: refused', { runs: '{"total":1,"runs":[{"name"
 await t('a protected PR without a pod verdict: refused', { raw: PROT, msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('a protected PR with a verdict from the configured reviewer id lands', { raw: PROT }, (r) => r.merge);
 await t('a protected PR with JM_VERDICT_REVIEWERS unset refuses, naming it', { raw: PROT, env: { JM_VERDICT_REVIEWERS: '' } }, (r) => no(r, /JM_VERDICT_REVIEWERS/));
-await t('a verdict from a forged username with another id is refused', { raw: PROT, msgs: [{ ...NOTE, userId: { _id: 'id-forged', username: 'ada' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('a verdict from a forged username with another id is refused', { raw: PROT, msgs: [{ ...NOTE, userId: { _id: 'id-forged', username: 'orion' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('a secret hit in the range needs the verdict', { msgs: [], on: [[/^make -s secrets-range/, () => { throw fail; }]] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('a red preflight: refused', { initCode: 1 }, (r) => no(r, /init\.sh/));
 await t('a red preflight in --preflight-only: refused', { argv: PO, initCode: 1 }, (r) => no(r, /init\.sh/));

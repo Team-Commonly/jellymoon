@@ -1,6 +1,6 @@
 # 0003 · A pure pod core
 
-Status: Accepted (owner ruling,2026-10-30; units P09, P10, P11). Accepting it settles none of the acknowledged unknowns: the purity guard is
+Status: Accepted (maintainers, 2026-10-30; units P09, P10, P11). Accepting it settles none of the acknowledged unknowns: the purity guard is
 lexical (a dynamic import or alias can evade it), wake-id uniqueness across pods rests on adapters minting fresh seeds, and every
 item under "Not here yet" and "Open unknowns (carried from ADR 0002)" stays open, including the outcome of a capped run
 (`failed` here; the schema does not say) and the ADR 0002 points NB3, NB4 and NB13. It adds a module (`podcore/`), so it needs this note. The server shape is

@@ -1,101 +1,130 @@
 # Generative UI for ask cards: options paper
 
-Research only, read 2026-10-29. Licences were read from each repo's LICENSE file through the GitHub API, including nested LICENSE files where a repo has them. Stars and last-push dates come from the same pass, and package versions from `npm view`. "Unverified" means I could not confirm it from a primary source.
+Research only, read 2026-10-29. Licences were read from each repo's LICENSE file through the GitHub API, including nested LICENSE files where a repo has them. Stars and last-push dates come from the same pass, and package versions from `npm view`. OpenUI APIs were read from source on `main` at commit `1492107c8d24`. "Unverified" means I could not confirm it from a primary source.
 
-**The question.** When an agent posts an `ask`, the person ruling on it often was not there when the work happened. The card should show the evidence in the shape the decision needs: a diff, a comparison, a chart, a screenshot, a timeline. Two constraints are fixed. (1) Cards render from a fixed catalogue declared in our JSON Schema, so an agent sends typed data for a named component and never markup or code. (2) Every number in a card references a server-stamped receipt or tool-call id.
+**The question.** When an agent posts an `ask`, the person ruling on it often was not there when the work happened. The card should show the evidence in the shape the decision needs: a diff, a comparison, a chart, a screenshot, a timeline. Two constraints are fixed:
+1. Cards render from a fixed catalogue declared in our JSON Schema. An agent picks a card type and sends typed data, never markup, code or OpenUI Lang.
+2. Every number is `{value, ref}`. Each ref resolves to a `tc_` ToolCallRecord, and the value appears in that record's digest; otherwise the post is refused with `ungrounded`.
 
 ## 1. Recommendation
 
-**Build the catalogue ourselves as an `x-variants` map in our schema, and render it with seven plain React components. Adopt no generative-UI runtime in v1.** No candidate gives us the two constraints together:
+**Use OpenUI (thesysdev/openui, MIT) as the renderer. Our JSON Schema stays the contract, and the Worker is the trust boundary.**
+- **Contract.** The seven v1 card types (section 6) live in our schema as an `x-variants` map.
+- **Library.** Each card type is one component registered in an OpenUI library.
+- **What the model does.** It only picks the type and fills the data.
+- **Stored form.** What we store is the validated JSON, never OpenUI Lang.
+- **Rendering.** The browser turns that JSON into an OpenUI element tree and renders it with our registered components.
+- **Disabled features.** No `toolProvider`, no queries, no state, no expressions.
 
-- The catalogue-first projects (A2UI, json-render, OpenUI) all let the model **compose** a layout from the catalogue, and they carry an expression or data-binding layer we would have to switch off. Our cards need a fixed layout per decision type, filled with data. Composition is where numbers without a source get in.
-- The tool-rendering projects (Vercel AI SDK UI, CopilotKit "controlled") have the right pattern: a tool name maps to a component the developer wrote. But they assume the model loop runs inside their runtime. Ours runs in Claude Code or Codex on someone's computer and reaches the pod over MCP. The pattern is free to copy; the runtime adds nothing.
-- None of them has a provenance field, so the receipt rule is ours to build in any case.
+Why OpenUI over writing seven bare React components:
+- Commonly v3 ran OpenUI cards in production, and they worked.
+- Its library gives us one registry, design-system components and streaming.
+- It is the path to the later case, where an agent may compose a free layout, without a second rendering stack.
 
-The core is small: one schema file, a validator for the `x-rules`, seven components, and a ref check in the pod's Durable Object. Two follow-ups keep the build reversible:
+The cost is a JSON-to-Lang round-trip today (section 2) and a few Zod definitions that mirror the schema. We send upstream the mode that removes the round-trip (section 5).
 
-- **Shape each component so it maps one-to-one onto an A2UI custom catalogue entry.** If interop demand appears (an A2UI host, or CopilotKit's declarative mode), an export adapter in one file can serve it. A2UI's own schema uses `oneOf` ([server_to_client.json](https://github.com/a2ui-project/a2ui/blob/main/specification/v0_9/json/server_to_client.json)), so we translate to it rather than import it.
-- **Defer MCP Apps.** It solves the reverse direction (a server shipping UI into a host such as Claude). It becomes useful later, if we want Jellymoon cards to render inside Claude or ChatGPT.
+What we reject, briefly:
+- Using OpenUI the way Commonly v3 did, where the model wrote Lang source. Making that safe took a few hundred lines of server validation (refuse `Query`, `Mutation` and `Run`, cap AST expansion, pin a catalogue hash), and our JSON Schema cannot check Lang.
+- MCP Apps, which renders iframed HTML and works in the reverse direction.
+- CopilotKit and the AI SDK runtimes, which assume they run the model loop.
+- Making A2UI the core: it is in early preview, and its schema uses `oneOf`. Keep our components shaped so a one-file export to A2UI stays possible.
 
-**On OpenUI.** Commonly v3 shipped OpenUI cards in production, and they worked. Two things weigh against making OpenUI the core of v4. In v3 the model wrote OpenUI Lang source, and making that safe took a few hundred lines of server validation: refuse `Query`, `Mutation` and `Run`, cap AST expansion, pin a catalogue hash. And OpenUI Lang is a text language, so `make gen` and our JSON Schema cannot check it. The effort is better spent on the upstream asks in section 5.
+## 2. Pipeline
 
-## 2. What "OpenUI" is: three projects use the name
+```
+agent (Claude Code / Codex)
+  │  MCP tool call: post({ kind:"ask", …, card:{ type:"checks", data:{…} } })
+  ▼
+Worker → PodDO
+  1. JSON Schema: PostInput, then card.data against x-variants[card.type]   → invalid_input
+  2. grounding: every {value, ref}: ref is a tc_ ToolCallRecord on a run of
+     this agent in this pod, and value appears in that record's digest       → ungrounded
+  3. x-rules (compare columns = option ids, cells per row, …)               → invalid_input
+  4. store Message (card JSON as validated) and emit message.created
+  ▼
+web client (React)
+  5. cardToElement(card) → OpenUI ElementNode tree   (pure function, ours)
+  6. jsonToOpenUI(tree, library) → Lang text          (@openuidev/lang-core)
+  7. <Renderer response={text} library={library} />   (@openuidev/react-lang; no toolProvider)
+  8. our registered components draw it; each ref is a chip that opens the ToolCallRecord via evidence
+```
 
-Commonly v3's history shows cards built on `@openuidev/lang-core` and `@openuidev/react-lang` (both pinned at 1.0.1). Those packages come from **thesysdev/openui** (Thesys). The other two projects are unrelated:
+Nothing from the model reaches OpenUI until steps 1–3 pass. Steps 5–6 run on stored data the Worker has already checked, so the Lang text is generated by our code from literals and contains no expressions.
 
-- **thesysdev/openui:** MIT, "The Open Standard for Generative UI" ([repo](https://github.com/thesysdev/openui)). Its centre is OpenUI Lang, "a compact, streaming-first language for model-generated UI". Components are declared with `defineComponent({ name, description, props: z.object(...) })` and grouped by `createLibrary`. A system prompt is generated from the library, and `<Renderer>` parses the model's output as it streams ([react-lang README](https://github.com/thesysdev/openui/tree/main/packages/react-lang)). The CLI can also emit JSON Schema from a library. It also ships `@openuidev/a2ui`, an A2UI v1.0 client. `Query`/`Mutation` bindings call a `toolProvider` that "run[s] in the browser" ([queries-mutations doc](https://github.com/thesysdev/openui/blob/main/docs/content/docs/openui-lang/queries-mutations.mdx)). `react-lang` declares `react >=19` as a peer dependency.
-- **wandb/openui:** Apache-2.0. It turns a prompt into a live HTML page ([repo](https://github.com/wandb/openui)), so it is free-form markup, which our constraint rules out.
-- **openui/open-ui:** the W3C community group for native browser controls ([repo](https://github.com/openui/open-ui)). Not a generative UI project; its licence was not read.
+**Does OpenUI's renderer accept JSON today? No.** `RendererProps.response` is `string | null`, documented as "openui-lang code, or a stored message with protocol markers" ([Renderer.tsx](https://github.com/thesysdev/openui/blob/main/packages/react-lang/src/Renderer.tsx)). There is no prop for a structured tree. What does exist is the inverse direction: `jsonToOpenUI(json: ElementNode, library)` "Convert[s] an ElementNode tree back to openui-lang source text". It escapes string values with `JSON.stringify` ([serialize.ts](https://github.com/thesysdev/openui/blob/main/packages/lang-core/src/parser/serialize.ts)) and is exported from `@openuidev/lang-core` ([index.ts](https://github.com/thesysdev/openui/blob/main/packages/lang-core/src/index.ts)). It landed on 2026-04-28 (#471), before the 1.0 release on 2026-10-12. I did not unpack the published 1.0.2 tarball to confirm the export ships.
 
-## 3. Candidates
+So v1 serializes the validated data to Lang and lets the renderer parse it back. We do this in the client rather than the Worker, so the stored contract stays JSON that `make gen` and our tests understand. The upstream issue asks for `Renderer` to take an `ElementNode` directly, and for a strict mode that refuses everything but literal component calls. With both, steps 6 and the re-parse disappear.
 
-| Candidate | Licence (from file) | Stars / last push | Fixed declared catalogue? | Runs on our stack? | Lock-in |
-|---|---|---|---|---|---|
-| OpenUI (Thesys) [1] | MIT | 14.4k / 2026-10-29; react-lang 1.0.2 | Partly: catalogue-bound, but the model writes a program (layout plus expressions) | `lang-core` is framework-agnostic and documented for Edge; React renderer | Medium: a stored text language, not JSON |
-| Vercel AI SDK, RSC `streamUI` [2] | Apache-2.0 | 27.6k / 2026-10-29; `ai` 7.0.156 | n/a: "AI SDK RSC is currently experimental"; the docs recommend AI SDK UI for production | Needs React Server Components | High |
-| Vercel AI SDK UI, tool parts [2] | Apache-2.0 | same | Yes, by pattern: `tool-${toolName}` parts map to your component | Runs on Workers; but `useChat` assumes we run the model | Low (a pattern) |
-| MCP Apps (ext-apps) [3] | MIT→Apache-2.0 transition (file says so) | 3.0k / 2026-10-27; spec "Stable (2026-01-26)" | No: `ui://` resources are HTML in a sandboxed iframe | Wrong direction for us (section 4) | Low |
-| MCP-UI [4] | Apache-2.0 | 5.2k / 2026-09-16 | No: `rawHtml` or `externalUrl`; now an SDK for MCP Apps | Same as MCP Apps | Low |
-| CopilotKit + AG-UI [5] | MIT (root and every package LICENSE) | 38.3k / 2026-10-29; AG-UI 16.9k | Controlled mode yes (`useComponent`/`useFrontendTool`); declarative mode is A2UI | A Workers runtime example exists; the agent must speak AG-UI | High: runtime plus licence-key features |
-| A2UI [6] | Apache-2.0 | 16.9k / 2026-10-29; v0.9.1 stable, v1.0 RC | Yes: the client owns the catalogue and the agent may only name its components | React renderer `@a2ui/react` 0.14.0; documented over MCP | Low to medium |
-| json-render (Vercel Labs) [7] | Apache-2.0 | 18.8k / 2026-10-29 (created 2026-01-14); core 0.21.3 | Yes: `defineCatalog` with Zod props | React; an MCP Apps package exists | Medium: 0.x, `$state`/`$cond` expressions |
-| Tambo [8] | Mixed: root and `react-sdk` MIT; `apps/api`, `packages/backend`, `packages/core` Apache-2.0 | 11.2k / 2026-10-28 | Registered React components | Has its own backend; not evaluated further | Medium |
+**OpenUI packages and APIs we use** (web client only; the Worker needs none):
 
-**Licence notes.** No candidate is AGPL, ELv2, FSL, BSL or source-available. Three things need care:
+| Package | API | Source |
+|---|---|---|
+| `@openuidev/react-lang` 1.0.2 (MIT) | `defineComponent({name, description, props: z.object(…), component})`, `createLibrary({components, root})`, `<Renderer response library onError>` | [react-lang README](https://github.com/thesysdev/openui/tree/main/packages/react-lang), [library.ts](https://github.com/thesysdev/openui/blob/main/packages/react-lang/src/library.ts) |
+| `@openuidev/lang-core` 1.0.2 (MIT) | `jsonToOpenUI`, the `ElementNode` type `{type:"element", typeName, props, partial}`, `library.toJSONSchema()` | [types.ts](https://github.com/thesysdev/openui/blob/main/packages/lang-core/src/parser/types.ts), [lang-core library.ts](https://github.com/thesysdev/openui/blob/main/packages/lang-core/src/library.ts) |
 
-- **CopilotKit is MIT but has a commercial licence layer in the code.** The React provider shows "Powered by CopilotKit" and "The … feature requires a CopilotKit license" banners when its server reports `none`, `expired` or `invalid`. Some features turn off on `expired` or `invalid` ([banner source](https://github.com/CopilotKit/CopilotKit/blob/main/packages/react-core/src/v2/components/license-warning-banner.tsx), [provider tests](https://github.com/CopilotKit/CopilotKit/blob/main/packages/react-core/src/v2/providers/__tests__/CopilotKitProvider.license.test.tsx)). The tests show no banner when the status is absent ("non-intelligence mode"). Which features are gated is unverified.
-- **The MCP ext-apps LICENSE is a transition notice:** new contributions are Apache-2.0, and older ones stay MIT until their authors consent.
+`library.toJSONSchema()` gives us a drift test: each registered component's props schema must match the corresponding `$defs` entry in our `card.json`. `react-lang` declares `react >=19` and `zod ^3.25 || ^4` as peer dependencies. **Telemetry:** `lang-core` runs a `postinstall` script, and its install telemetry posts to a PostHog host unless `OPENUI_TELEMETRY_DISABLED` or `DO_NOT_TRACK` is set. Runtime telemetry is "opt-in" ([shared.ts](https://github.com/thesysdev/openui/blob/main/packages/lang-core/src/telemetry/shared.ts)). Set the disable flag in CI and in the dev `init.sh` before the first install. A new dependency gets a `docs/adr/` note.
+
+## 3. What "OpenUI" is: three projects use the name
+
+Commonly v3's history shows cards built on `@openuidev/lang-core` and `@openuidev/react-lang` 1.0.1. Those come from **thesysdev/openui** (Thesys): "The Open Standard for Generative UI", centred on OpenUI Lang ([repo](https://github.com/thesysdev/openui)). Its `Query`/`Mutation` bindings call a `toolProvider` whose functions "run in the browser" ([doc](https://github.com/thesysdev/openui/blob/main/docs/content/docs/openui-lang/queries-mutations.mdx)), which is why we pass none. The other two projects are unrelated:
+- **wandb/openui** (Apache-2.0) turns a prompt into a live HTML page ([repo](https://github.com/wandb/openui)).
+- **openui/open-ui** is the W3C group for native browser controls ([repo](https://github.com/openui/open-ui)); its licence was not read.
+
+## 4. Candidates considered
+
+| Candidate | Licence (from file) | Stars / last push | Fixed declared catalogue? | Fit / lock-in |
+|---|---|---|---|---|
+| **OpenUI (Thesys)** [1] | MIT | 14.4k / 2026-10-29; 1.0.2 | Yes when we write the tree; partial when the model writes Lang | **Chosen as renderer.** Low lock-in: our contract is JSON, OpenUI is one client module |
+| Vercel AI SDK RSC `streamUI` [2] | Apache-2.0 | 27.6k / 2026-10-29 | n/a: "AI SDK RSC is currently experimental" ([docs](https://ai-sdk.dev/docs/ai-sdk-rsc/overview)) | Out |
+| Vercel AI SDK UI tool parts [2] | Apache-2.0 | same | Yes, by pattern: `tool-${toolName}` maps to your component ([docs](https://ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces)) | Pattern copied; `useChat` assumes we run the model |
+| MCP Apps (ext-apps) [3] | MIT→Apache-2.0 transition notice | 3.0k / 2026-10-27; spec "Stable (2026-01-26)" | No: `ui://` HTML "in a sandboxed iframe" | Later: Jellymoon cards inside Claude |
+| MCP-UI [4] | Apache-2.0 | 5.2k / 2026-09-16 | No: `rawHtml`/`externalUrl`; now an MCP Apps SDK | Out |
+| CopilotKit + AG-UI [5] | MIT (root and every package LICENSE) | 38.3k / 2026-10-29; AG-UI 16.9k | Controlled mode yes; declarative mode is A2UI ([docs](https://docs.copilotkit.ai/learn/generative-ui)) | High: own runtime and protocol, licence-key features |
+| A2UI [6] | Apache-2.0 | 16.9k / 2026-10-29; v0.9.1, v1.0 RC | Yes: client-owned catalogue; "Early stage public preview" | Export target later; its MCP catalogue runs `callMcpTool`, jmespath and regex in the client |
+| json-render [7] | Apache-2.0 | 18.8k / 2026-10-29; 0.21.3 | Yes: `defineCatalog` with Zod; `$state`/`$cond` expressions | 0.x |
+| Tambo [8] | Mixed: root and `react-sdk` MIT; `apps/api`, `packages/backend`, `packages/core` Apache-2.0 | 11.2k / 2026-10-28 | Registered components | Own backend; not evaluated further |
+
+**Licence notes.** No candidate is AGPL, ELv2, FSL, BSL or source-available. Four things need care:
+- **CopilotKit is MIT but has a commercial licence layer in the code.** It shows a "requires a CopilotKit license" banner and turns features off when its server reports an expired or invalid licence ([banner](https://github.com/CopilotKit/CopilotKit/blob/main/packages/react-core/src/v2/components/license-warning-banner.tsx)). Which features are gated is unverified.
+- **The ext-apps LICENSE is an MIT-to-Apache transition notice.**
 - **Tambo mixes MIT and Apache-2.0 by directory.**
-
-## 4. Per-candidate verdicts
-
-- **OpenUI.** *How an agent would emit it over MCP:* our `post` tool takes `{lang:"openui@1", source}`, as Commonly v3 did. Thesys documents no MCP server or agent-facing tool interface, and the only tool model it documents runs in the browser. Maturity is good: 1.x packages and daily commits. The catalogue is real, but the model still authors a program, and expression features keep arriving upstream, so our validator has to track every release. Fit: medium. Keep it for the later case where an agent needs to compose a free layout, not for ask cards.
-- **Vercel AI SDK.** RSC `streamUI` is out: it is experimental and server-component bound ([RSC overview](https://ai-sdk.dev/docs/ai-sdk-rsc/overview)). AI SDK UI's rule is the one we want: "connecting the results of a tool call to a React component", where you branch on `part.type === 'tool-displayWeather'` ([generative UI docs](https://ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces)). We copy the rule and skip the library, because our pod never runs the model.
-- **MCP Apps / MCP-UI.** A tool declares a `ui://` HTML resource, and the host renders it "in a sandboxed iframe" ([ext-apps README](https://github.com/modelcontextprotocol/ext-apps)). That HTML is written by a server developer, not the model, but it is still arbitrary HTML and JS, and a Claude Code or Codex agent is an MCP *client*, not a UI server. MCP-UI now describes itself as an SDK for the MCP Apps standard ([README](https://github.com/MCP-UI-Org/mcp-ui)). Later use: our pod's MCP server could publish `ui://` views of ask cards so they render inside Claude. Unverified: whether Claude Code renders MCP Apps at all.
-- **CopilotKit / AG-UI.** It names three kinds of generative UI. *Controlled*: "you wrote the component; the agent only picks which one to render and what data to pass." *Declarative* is A2UI, and *open-ended* is MCP Apps ([docs](https://docs.copilotkit.ai/learn/generative-ui)). Controlled mode matches our model, but it routes the agent through CopilotRuntime and AG-UI. A Cloudflare Workers runtime example exists ([examples/v2/runtime/cf-workers](https://github.com/CopilotKit/CopilotKit/tree/main/examples/v2/runtime/cf-workers)). Our agents already have MCP, so this would add a second agent protocol for something a `switch` statement does.
-- **A2UI.** The closest in philosophy: "a declarative data format, not executable code", with a client-owned catalogue ([README](https://github.com/a2ui-project/a2ui); `github.com/google/A2UI` now redirects there). It documents A2UI over MCP: tools return `updateDataModel` messages bound to `a2ui://` template resources ([guide](https://github.com/a2ui-project/a2ui/blob/main/docs/public/guides/a2ui_over_mcp.md)). Three cautions. The README says "Early stage public preview… Expect changes". Its MCP catalogue adds `callMcpTool` plus `jmespath` and regex data functions that run in the client ([catalogs/mcp](https://github.com/a2ui-project/a2ui/blob/main/catalogs/mcp/README.md)); we would refuse that catalogue. And the layout is a flat component list the agent composes.
-- **json-render.** "AI can only use components in your catalog", declared with `defineCatalog` and Zod; `@json-render/mcp` serves the result as an MCP App ([README](https://github.com/vercel-labs/json-render)). It has `visible` conditions and `$state`/`$cond` prop expressions that we would disable. It is under a year old and still 0.x.
+- **OpenUI is plain MIT** (one root LICENSE; the nested ones cover only docs fonts and icons), but its `postinstall` telemetry is opt-out (section 2).
 
 ## 5. Upstream first
 
-**Send upstream:**
-- **OpenUI:** a strict data-only parse mode in `lang-core` that refuses `Query`, `Mutation`, `Run`, custom functions and reactive expressions, and enforces an AST expansion budget. Commonly v3 built exactly this locally; upstreaming it lets OpenUI serve trust-bounded hosts like us. Also ask Thesys whether a JSON input mode, keyed by component name, is on their roadmap.
-- **A2UI:** a provenance convention, an optional `ref` on bound values that names the tool call that produced them, and a "no functions" catalogue profile. Both would help any host that shows agent evidence to a human.
+**Send upstream (drafted in [openui-upstream-issue.md](openui-upstream-issue.md)):**
+- An OpenUI strict data-only mode: `Renderer` takes an `ElementNode` tree directly, and a `strict` parse option refuses `Query`, `Mutation`, `Run`, `$state`, custom functions and reactive expressions, with an expansion budget. Commonly v3 built the refusal side locally; we offer the PR.
+- **A2UI, later:** an optional provenance `ref` on bound values.
 
 **Build ourselves:**
-- The catalogue schema
-- The `x-rules` validator
-- Seven components
-- Ref resolution in the PodDO
-- The daemon change below
+- `card.json` and its `x-rules` validator
+- The grounding check (already specified for `GroundedClaim`; extended to `Num`)
+- `cardToElement`
+- Seven OpenUI component definitions in our design system
+- The `library.toJSONSchema()` drift test
 
-This is a new module, so it gets a `docs/adr/` note.
+**Now in the schema:**
+- The daemon reports harness tool calls over `run.toolcall`.
+- The pod stamps each one as a `ToolCallRecord` (`tc_`, `source: daemon` or `pod`, with a digest of up to 600 characters).
+- Agents read their records through the `evidence` operation and cite the ids.
 
-**A gap the receipt rule exposes.** Today `Receipt.toolCalls` is only a count of "MCP calls the pod saw on this run's token". Most numbers worth showing come from commands the agent ran locally (tests, benchmarks, builds), and the pod never sees those. The daemon does see them: ACP `tool_call` updates carry a required `toolCallId`, along with `status`, `rawInput` and `rawOutput` ([ACP tool calls](https://agentclientprotocol.com/protocol/tool-calls)).
+Say this plainly on the card: a ref proves a call was recorded, and the value was found in its digest. It does not prove the number means what the label says. Daemon records are only as trustworthy as the person's own computer.
 
-**Now in the schema** (added with the grounded ask context):
-1. The daemon reports each harness tool call it sees over the `run.toolcall` event: name, status, times and a digest of up to 600 characters.
-2. The pod stamps it as a `ToolCallRecord` with a `tc_` id and `source: daemon`, next to the MCP calls it records itself (`source: pod`).
-3. The agent reads its run's records through the `evidence` operation and cites their ids. Whether a harness exposes ACP `toolCallId`s to the model no longer matters, because the pod issues the ids and the agent reads them back.
-4. A ref must resolve to a record in the pod, and every number must appear in a cited record's digest, or the post is refused with `ungrounded`.
+## 6. v1 catalogue (unchanged: seven cards)
 
-Say this plainly on the card: a ref proves a call was recorded and lets the person open its output. It does not prove the agent copied the number correctly. Records reported by the daemon are only as trustworthy as the person's own computer.
-
-## 6. Proposed v1 catalogue
-
-`Num` is `{ value: number, unit?: enum, ref: ToolCallId }`. A series or table may carry one `ref` for all of its numbers when they came from one call.
+`Num` is `{ value: number, ref: ToolCallId, unit?: enum }`, and the value must appear in the digest of `ref`. A series may carry one `ref` for all its points.
 
 | type | For deciding | data fields |
 |---|---|---|
 | `diff` | approve a change | `files[≤20]`: `path`, `change` (added, modified, deleted, renamed), `from?`, `additions: Num`, `deletions: Num`, `hunks?[≤5]`: `header`, `lines[≤40]`: `op` (add, del, ctx), `text ≤200`; `ref` |
 | `compare` | pick an option | `columns[2–5]`: OptionId (must equal the ask's option ids); `rows[≤12]`: `label`, `cells[]`: `text? ≤60` or `num?: Num`, `best?: bool` |
-| `metric` | did it regress? | `chart` (line, bar); `unit`; `series[≤4]`: `label`, `ref`, `points[≤200]`: `x` (Timestamp or label), `y: number`; `threshold?: Num`; `baseline?: Num` |
+| `metric` | did it regress? | `chart` (line, bar); `unit`; `series[≤4]`: `label`, `ref`, `points[≤30]`: `x` (Timestamp or label), `y: number`; `threshold?: Num`; `baseline?: Num` |
 | `screenshot` | does it look right? | `shots[1–4]`: `fileId` (pod-stored, never a URL), `caption ≤80`, `viewport` (mobile, desktop), `role` (before, after, only); `ref` (the capture call) |
-| `timeline` | what happened overnight | `events[≤30]`: `at: Timestamp`, `label ≤80`, `actor?: ActorId`, `status?: MessageStatus`, `ref?`. The pod can also compose this card itself from run records |
+| `timeline` | what happened overnight | `events[≤30]`: `at: Timestamp`, `label ≤80`, `actor?: ActorId`, `status?: MessageStatus`, `ref?`. The pod can compose this card itself from ToolCallRecords |
 | `checks` | is it safe to ship? | `suite ≤40`; `items[≤50]`: `name`, `result` (pass, fail, skip, flaky), `durationMs?: Num`, `ref`. Totals are computed by the client, never sent |
 | `excerpt` | read the actual error | `lang` (text, log, json, diff); `lines[≤40]` of text `≤200`; `ref`; `startLine?` |
 
-How it sits in our schema (a new `schema/card.json`, referenced from `PostInput.card` and `Message.card`):
+In our schema (a new `schema/card.json`, referenced from `PostInput.card` and `Message.card`):
 
 ```json
 "x-variants": {
@@ -110,35 +139,39 @@ How it sits in our schema (a new `schema/card.json`, referenced from `PostInput.
     "properties": { "type": { "$ref": "#/$defs/CardType" },
                     "data": { "description": "Matches the definition x-variants names for type.", "type": "object" } } },
   "Num": { "type": "object", "additionalProperties": false, "required": ["value", "ref"],
-    "properties": { "value": { "type": "number" }, "unit": { "$ref": "#/$defs/Unit" },
-                    "ref": { "$ref": "common.json#/$defs/ToolCallId" } } }
+    "properties": { "value": { "type": "number" }, "ref": { "$ref": "common.json#/$defs/ToolCallId" },
+                    "unit": { "$ref": "#/$defs/Unit" } } }
 }
 ```
 
-New `x-rules`:
-- `card` is allowed on `ask` and `result`, and `compare` only on `ask`.
-- Every `ref` resolves to a tool call on this post's run, or the post is refused with `ungrounded`.
+**New `x-rules`:**
+- `card` is allowed on `ask` and `result`; `compare` is allowed only on `ask`.
+- Every `ref` is a ToolCallRecord on a run of this agent in this pod, and every `Num.value` (and every metric `y`) appears in the cited record's digest. Otherwise the post is refused with `ungrounded`.
 - A `compare` cell carries exactly one of `text` or `num`, and every row has one cell per column.
 - An unknown `type` renders `summary` and `body`, never a guess.
-- `body` stays the text fallback.
 
-New common id: `FileId` (`fil_`); `ToolCallId` (`tc_`) now exists. Agents emit a card through the existing `post` tool by adding `card: { type, data }`. The tool description lists the seven types, the way AI SDK and CopilotKit describe their tools.
+`FileId` (`fil_`) is new; `ToolCallId` (`tc_`) exists. Agents emit a card through the existing `post` tool.
 
 ## 7. Risks and open questions
 
-1. **Catalogue creep.** Every new type is a schema change and a reviewed verdict. That is the point, but expect pressure for a generic `table`. Hold the line until three asks need it.
-2. **Ref load.** Agents must quote `tc_` ids, which they get from the `evidence` operation. Measure in the slice how often an agent's first post is refused with `ungrounded`; if it is often, return the run's recent ids with every `post` refusal.
-3. **Screenshots** need a file store (R2) and a capture path. Neither exists in v4 yet.
-4. **Unverified:** CopilotKit's licence-gated feature list; whether Claude Code renders MCP Apps; OpenUI's plans for a JSON input mode; Tambo's self-host story.
+1. **The digest bounds the chart.** A 600-character digest cannot hold 200 points, so `metric` is capped at 30 points per series. A larger chart needs a bigger digest or a hashed full output, which is a schema decision.
+2. **Number matching.** "Appears in the digest" must define its formatting: `1,204` vs `1204`, `12.5%` vs `0.125`, rounding. Specify one normalizer and test it, or agents will hit `ungrounded` on true numbers.
+3. **Round-trip cost and fidelity.** JSON → Lang → parse on every render. It is small for these sizes, but write a test that every fixture card survives the round-trip unchanged.
+4. **Catalogue creep.** Every new type is a schema change and a reviewed verdict. Hold the line on a generic `table` until three asks need it.
+5. **Screenshots** need a file store (R2) and a capture path; neither exists in v4 yet.
+6. **Unverified:**
+   - that `jsonToOpenUI` ships in the 1.0.2 npm tarball;
+   - CopilotKit's gated feature list;
+   - whether Claude Code renders MCP Apps;
+   - Tambo's self-host story.
 
 ## Sources
 
-[1] https://github.com/thesysdev/openui/blob/main/LICENSE · https://github.com/thesysdev/openui · https://github.com/thesysdev/openui/tree/main/packages/react-lang · https://www.npmjs.com/package/@openuidev/react-lang · Commonly v3 git history (Team-Commonly/commonly) · https://github.com/wandb/openui/blob/main/LICENSE · https://github.com/openui/open-ui
+[1] https://github.com/thesysdev/openui/blob/main/LICENSE · https://github.com/thesysdev/openui · https://github.com/thesysdev/openui/blob/main/packages/react-lang/src/Renderer.tsx · https://github.com/thesysdev/openui/blob/main/packages/lang-core/src/parser/serialize.ts · https://github.com/thesysdev/openui/blob/main/packages/lang-core/src/index.ts · https://github.com/thesysdev/openui/blob/main/packages/lang-core/src/telemetry/shared.ts · https://www.npmjs.com/package/@openuidev/react-lang · Commonly v3 git history (Team-Commonly/commonly) · https://github.com/wandb/openui/blob/main/LICENSE
 [2] https://github.com/vercel/ai/blob/main/LICENSE · https://ai-sdk.dev/docs/ai-sdk-rsc/overview · https://ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces
 [3] https://github.com/modelcontextprotocol/ext-apps/blob/main/LICENSE · https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx
 [4] https://github.com/MCP-UI-Org/mcp-ui/blob/main/LICENSE · https://github.com/MCP-UI-Org/mcp-ui
-[5] https://github.com/CopilotKit/CopilotKit/blob/main/LICENSE · https://github.com/ag-ui-protocol/ag-ui/blob/main/LICENSE · https://docs.copilotkit.ai/learn/generative-ui · https://docs.copilotkit.ai/generative-ui
-[6] https://github.com/a2ui-project/a2ui/blob/main/LICENSE · https://github.com/a2ui-project/a2ui · https://github.com/a2ui-project/a2ui/tree/main/typescript/renderers/react
-[7] https://github.com/vercel-labs/json-render/blob/main/LICENSE · https://github.com/vercel-labs/json-render/tree/main/packages/mcp
+[5] https://github.com/CopilotKit/CopilotKit/blob/main/LICENSE · https://github.com/ag-ui-protocol/ag-ui/blob/main/LICENSE · https://docs.copilotkit.ai/learn/generative-ui
+[6] https://github.com/a2ui-project/a2ui/blob/main/LICENSE · https://github.com/a2ui-project/a2ui · https://github.com/a2ui-project/a2ui/blob/main/catalogs/mcp/README.md
+[7] https://github.com/vercel-labs/json-render/blob/main/LICENSE · https://github.com/vercel-labs/json-render
 [8] https://github.com/tambo-ai/tambo/blob/main/LICENSE · https://github.com/tambo-ai/tambo/tree/main/apps/api
-ACP: https://agentclientprotocol.com/protocol/tool-calls

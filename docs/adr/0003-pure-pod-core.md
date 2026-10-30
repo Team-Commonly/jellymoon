@@ -16,10 +16,13 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
   already authenticated and stamped; the core never trusts a role in the input.
 - Event and error shapes come from `gen/`. Nothing in `podcore/` is hand-copied from the schema.
 - Purity is enforced twice: the `podcore-is-pure` dependency rule (imports only `podcore/` and `gen/`) and
-  `podcore/test/purity.test.ts`, which reads `podcore/src` recursively and bans `Date`, timers, `Math.random`,
-  `crypto`, `fetch`, `process`, `performance`, `globalThis`, `await`, `Intl`, `eval`, `Function(`, `Atomics`,
-  `Bun.`, `Temporal`, `queueMicrotask`, `WeakRef`, `FinalizationRegistry`, `.then(` and bracket access on any
-  banned global. `isoOf` throws on a non-integer `now`; adapters pass integer milliseconds.
+  `podcore/test/purity.test.ts`, which reads `podcore/src` recursively, comments included, and bans `Date`, timers,
+  `crypto`, `fetch`, `process`, `performance`, `globalThis`, `self`, `global`, `window`, `console`, `Reflect`,
+  `Intl`, `Atomics`, `Temporal`, `Bun`, `WeakRef`, `FinalizationRegistry`, `queueMicrotask`, `await`, `eval`,
+  `require`, `import(`, `Function (` and `.then(`. Bare `Math` is banned except the calls `Math.floor`, `Math.min`
+  and `Math.max`, so `Math.random`, `Math['random']` and `const M = Math` all fail. It is a lexical backstop, not a
+  proof: it reads text, so a spelling it did not list gets through, and the import rule is the other half.
+  `isoOf` throws on a non-integer `now`; adapters pass integer milliseconds.
 
 ## Why
 
@@ -45,10 +48,15 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 ## Who may call
 
 - A caller that is a run which has ended (any outcome) gets `unauthorized` on EVERY command, before any other check
-  (ADR 0002, F13). A live run calling `run_stop` gets `forbidden`.
+  (ADR 0002, F13). A live run calling `run_stop` gets `forbidden` before any lookup,
+  unknown run ids included.
 - A caller that is a user must be a member of the pod, or gets `forbidden` on every command, before `not_found`, so a
   stranger cannot probe ids. Before `pod_create`, every command gets `not_found`.
-- A refused command never renews anything. A successful run operation renews all of the run's claims.
+- Renewal follows ADR 0002: its lease renews on any operation that run's token makes. A live run's command renews
+  all of that run's claims BEFORE any refusal (`forbidden`, `already_claimed`, `not_found`, `invalid_input`), so
+  what a command is answered never changes when a lease ends. An ended run gets `unauthorized` and renews nothing.
+  This is also what keeps "expiry after a restart is never early" true below. (An earlier draft said a refused
+  command never renews; it contradicted ADR 0002 and broke that line.)
 - A run whose claim a person released gets `forbidden` from `task_release` and `task_update` on that task too.
 - `run_end` carries the reporting `computerId`; a computer that does not host the run gets `forbidden`. `run_end` after
   `run_stop` keeps the outcome `cancelled`.
@@ -62,8 +70,13 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 3. Own the seq log and replay: keep the members events and re-deliver them from `seq`. The core keeps only state; it
    keeps no messages. (`run.wake` and `run.stop` are re-sent by the core, below.)
 4. Authenticate: map a token to its pod and check the token is valid, stamp the caller, handle invites (the adapter calls
-   `member_add` after one is accepted), mint every id (tasks, messages, runs, run tokens, and wakes for `change`), and
-   map reply codes to HTTP statuses. The core derives its own wake ids for assignments and mentions from a counter.
+   `member_add` after one is accepted), mint every id (tasks, messages, runs, run tokens and wakes), validate `reason`
+   length (160) before `apply`, and map reply codes to HTTP statuses. Wake ids are globally unique and minted by the
+   adapter like the rest: `task_create`, `task_update` and `change` carry `wakeId`, `message_post` carries `wakeIds`
+   (one per agent the text may mention, in text order; fewer than the mentions throws). The core uses an id only for a
+   NEW pending wake; a command that coalesces ignores it. `POST /v1/runs {wakeId}` names no pod, so the adapter keeps
+   a wakeId to pod index.
+   Callers pass a non-decreasing `now`; the core does not clamp it.
 5. After restoring state on a (re)start, apply `boot {staleMs}` once, with `now`. `staleMs` is an integer from 0 to
    `LEASE_MS` (anything else throws): the most that the adapter's saved heartbeat renewals can lag the truth. An
    adapter that persists every command passes 0. `boot` runs WITHOUT the leading settle: it first sets every live
@@ -80,7 +93,12 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 only), `claim`, `op`, `heartbeat`, `task_release`, `run_end`, `run_stop`, `wake_ack`, `run_claim`, `tick`, `boot`.
 `task_create` and `task_update` write the `task_assigned` wake, and `message_post` the `mention` wakes, through the
 same writer `change` uses. An `@name` token is a mention when `name` equals a registered agent's name exactly and the
-token is not inside a backtick code span; a run's message never wakes its own agent. Text with no mention writes no wake.
+token is outside CommonMark code: a backtick run of length n opens a span that closes at the next run of exactly n and
+may cross a newline, a fence of three or more backticks or tildes (up to 3 spaces indented) runs to a matching fence or
+the end of the text, and a backslash-escaped backtick is literal. An unclosed single backtick is literal, so text after
+it still mentions. A run never wakes its own agent, through any command. Text with no mention writes no wake.
+`message_post` sets `summary` to the first non-blank line (split on CR, LF or CRLF), trimmed and cut to 120 code points,
+or `(no text)`. `task_update` refuses status `open` with `invalid_input`.
 
 ## Wakes and run start (P10)
 
@@ -93,16 +111,28 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
   wake merges its refs into it, sends nothing and keeps the wakeId. `WakeRefs` holds one id per kind, so on a
   clash the earlier ref stays; the agent reads the pod for the rest. The reason is the first change's.
   Delivery is one to-computer `run.wake` to the hosting computer, with no members event and no seq.
-- Re-send: on a `heartbeat` from the hosting computer, an un-acked wake whose last send is 60 000 ms old or
-  more (>=) is sent again, and the clock restarts. Another computer's heartbeat sends nothing. `wake_ack` from a
-  computer that does not host the agent is ignored. An acked wake is never re-sent.
+- Re-send: on a `heartbeat` from the hosting computer, a pending wake whose last send is 60 000 ms old or
+  more (>=) is sent again, and the clock restarts. That holds for an acked wake too: an ack means the daemon got the
+  push, and only `run_claim` consumes the wake (the exit). Another computer's heartbeat sends nothing. `wake_ack`
+  from a computer that does not host the agent is ignored. `agent_register` that moves an agent to another computer
+  sends its pending wake to the new one at once (un-acked, clock restarted).
 - `run.stop` is re-sent on every heartbeat from the hosting computer, with no wait, until `run_end` clears it.
 - `run_claim {wakeId, computerId, runId}` creates the Run (expiry is the 2 h cap from now), consumes the wake
   and replies `{runId, expiresAt, reason, refs}` for the adapter to build the brief. Unknown or consumed wake:
-  `not_found`. A computer that does not host the agent: `forbidden`, and the wake stays.
+  `not_found`. A computer that does not host the agent: `forbidden`, and the wake stays. A `runId` that already
+  exists, live or ended: `invalid_input` (the schema has no `conflict` code), and the wake stays. A run's owner is
+  captured here, so a later owner change of the agent does not move authority over a run already live.
 - A `change` for an unregistered agent is dropped, not held. A held wake has no computer to go to, and holding
   it would need a delivery rule on register; the agent reads the pod when it first starts, so nothing is lost.
 - Re-send has no deadline: nothing is due until a heartbeat arrives, so `nextDeadline` is unchanged.
+
+## Accepted limits
+
+- Computers can tell an unknown id from a foreign one by the reply code. Accepted: ids are unguessable ULIDs.
+- The boot stretch can turn an `expired` release near the cap into `run_ended`, because a stretched lease may now
+  meet the 2 h run cap first.
+- Size: `podcore/` is held to 1650 lines in `entropy.json` (was 1500), the tests included, for the tests that pin the
+  rules above. No exception was added; it ratchets down from here.
 
 ## Not here yet
 

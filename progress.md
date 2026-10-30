@@ -4,6 +4,9 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · pod core verifier fixes (unit PC2)
+- **Changed:** `podcore/` renews on any live-run operation before refusal (ADR 0002), adapter-minted `wakeId`s, summary/mention (CommonMark)/run_claim/resend fixes, stronger guard and stale-restore property; **Evidence:** `make preflight`, `bun test podcore` (94 tests, 23 mutations red); **Next:** coordinator re-vendors the head into both arms; **Surprising:** a restored timeline can legitimately claim different things, so the property compares only claim instances both timelines started.
+
 ## 2026-10-29 · pod core fixes and freeze (unit P11)
 - **Changed:** `podcore/` settles on one timeline stamped by deadline, records lost=released for a person only, gains `pod_create`, `member_add`, `task_create`, `task_update`, `message_post`, `boot`; run callers and members are gated; **Evidence:** `make preflight`, `bun test podcore` (5 properties x 500 seeds, 6 mutations red); **Next:** freeze `podcore/` and `schema/` until the stack spike verdict; **Surprising:** `TaskUpdateInput` has no assignee, so the core accepts one the schema cannot yet send.
 

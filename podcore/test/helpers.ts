@@ -32,7 +32,7 @@ export function world(): PodState {
     createdBy: U_OWNER, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   });
   return {
-    podId: POD, seq: 0, owners: [U_OWNER], members: [U_OWNER, U_AGENT_OWNER], wakeN: 0,
+    podId: POD, seq: 0, owners: [U_OWNER], members: [U_OWNER, U_AGENT_OWNER],
     runs: { [RUN_A]: run(RUN_A, 1, CMP_1), [RUN_B]: run(RUN_B, 2, CMP_1), [RUN_C]: run(RUN_C, 3, CMP_2) },
     tasks: Object.fromEntries(TASKS.map((t, i) => [t, task(t, i + 1)])),
     claims: {}, lost: {}, wakes: {},

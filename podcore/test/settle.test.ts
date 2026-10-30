@@ -58,7 +58,7 @@ describe('lost=released is recorded for a person only', () => {
   });
 });
 
-describe('a refused command renews nothing; a successful one renews the others', () => {
+describe('a live run\'s operation renews all its claims before any refusal (ADR 0002)', () => {
   const lease = (r: ReturnType<typeof play>, t: string) => r.state.claims[t].leaseUntil;
   test('task_claim renews the run\'s other claims', () => {
     expect(lease(play([[claim(), 0], [claim(T2), 30_000]]), T1)).toBe(90_000);
@@ -67,12 +67,36 @@ describe('a refused command renews nothing; a successful one renews the others',
     const release: Cmd = { type: 'task_release', caller: { kind: 'run', runId: RUN_A }, taskId: T1 };
     expect(lease(play([[claim(), 0], [claim(T2), 0], [release, 30_000]]), T2)).toBe(90_000);
   });
-  test('already_claimed, not_found and forbidden renew nothing', () => {
+  test('already_claimed, not_found and forbidden renew; an ended run renews nothing', () => {
     const base = play([[claim(), 0], [claim(T2, RUN_B), 0]]);
     const refused = (cmd: Cmd) => lease(play([[cmd, 30_000]], base.state), T2);
-    expect(refused(claim(T1, RUN_B))).toBe(60_000);
-    expect(refused({ type: 'claim', runId: RUN_B, taskId: id('tsk', 99) })).toBe(60_000);
-    expect(refused({ type: 'task_release', caller: { kind: 'run', runId: RUN_B }, taskId: T1 })).toBe(60_000);
+    expect(refused(claim(T1, RUN_B))).toBe(90_000);
+    expect(refused({ type: 'claim', runId: RUN_B, taskId: id('tsk', 99) })).toBe(90_000);
+    expect(refused({ type: 'task_release', caller: { kind: 'run', runId: RUN_B }, taskId: T1 })).toBe(90_000);
+    expect(refused({ type: 'run_stop', caller: { kind: 'run', runId: RUN_B }, runId: RUN_A })).toBe(90_000);
+    const gone = play([[{ type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'failed' }, 10], [claim(T1, RUN_B), 20]], base.state);
+    expect(errCode(gone.out)).toBeNull();
+    expect(errCode(play([[{ type: 'op', runId: RUN_A }, 30_000]], gone.state).out)).toBe('unauthorized');
+    expect(lease(gone, T2)).toBe(60_020);
+  });
+  test('the verifier\'s sequence: a refused claim at 50 000 keeps the other claim to 110 000, so a tick at 60 000 releases only the other run\'s own lapsed claim', () => {
+    const r = play([[claim(), 0], [claim(T2, RUN_B), 0], [claim(T2, RUN_A), 50_000]]);
+    expect(errCode(r.out)).toBe('already_claimed');
+    expect(lease(r, T1)).toBe(110_000);
+    const tick = play([[{ type: 'tick' }, 60_000]], r.state);
+    expect(released(tick.out)).toEqual([{ taskId: T2, runId: RUN_B, cause: 'expired' }]);
+    expect(tick.state.claims[T1].runId).toBe(RUN_A);
+  });
+});
+
+describe('a restored claim', () => {
+  test('clears lost, so a later person\'s release is recorded afresh and the run can restore again after expiry', () => {
+    const r = play([[claim(), 0], [{ type: 'tick' }, 60_000]]);
+    expect(r.state.lost).toEqual({ [RUN_A]: { [T1]: 'expired' } });
+    const back = play([[{ type: 'op', runId: RUN_A, taskId: T1 }, 70_000]], r.state);
+    expect(back.state.lost[RUN_A]?.[T1]).toBe(undefined);
+    const again = play([[{ type: 'tick' }, 130_000], [{ type: 'op', runId: RUN_A, taskId: T1 }, 131_000]], back.state);
+    expect(again.state.claims[T1].runId).toBe(RUN_A);
   });
 });
 
@@ -82,13 +106,13 @@ describe('run callers and run_end', () => {
     const caller = { kind: 'run' as const, runId: RUN_A };
     const cmds: Cmd[] = [
       claim(), { type: 'op', runId: RUN_A, taskId: id('tsk', 99) }, { type: 'task_release', caller, taskId: id('tsk', 99) }, { type: 'run_stop', caller, runId: id('run', 99) },
-      { type: 'task_create', caller, taskId: T1, title: 'x', kind: 'chore' }, { type: 'task_update', caller, taskId: id('tsk', 99), status: 'done' },
-      { type: 'message_post', caller, messageId: id('msg', 1), text: 'hi' },
+      { type: 'task_create', caller, taskId: T1, title: 'x', kind: 'chore', wakeId: id('wak', 1) }, { type: 'task_update', caller, taskId: id('tsk', 99), status: 'done', wakeId: id('wak', 1) },
+      { type: 'message_post', caller, messageId: id('msg', 1), text: 'hi', wakeIds: [] },
     ];
     for (const cmd of cmds) expect(errCode(play([[cmd, 2]], ended).out)).toBe('unauthorized');
   });
-  test('a live run calling run_stop gets forbidden', () => {
-    expect(errCode(play([[{ type: 'run_stop', caller: { kind: 'run', runId: RUN_B }, runId: RUN_B }, 2]]).out)).toBe('forbidden');
+  test('a live run calling run_stop gets forbidden before any lookup: itself, another run, an unknown id', () => {
+    for (const runId of [RUN_B, RUN_A, id('run', 99)]) expect(errCode(play([[{ type: 'run_stop', caller: { kind: 'run', runId: RUN_B }, runId }, 2]]).out)).toBe('forbidden');
   });
   test('run_end from a computer that does not host the run is forbidden and ends nothing', () => {
     const r = play([[{ type: 'run_end', runId: RUN_A, computerId: id('cmp', 2), outcome: 'completed' }, 2]]);
@@ -103,7 +127,7 @@ describe('run callers and run_end', () => {
     expect(r.state.runs[RUN_A].outcome).toBe('cancelled');
   });
   test('a task_update by a run follows the restore path and is forbidden after a person\'s release', () => {
-    const upd: Cmd = { type: 'task_update', caller: { kind: 'run', runId: RUN_A }, taskId: T1, status: 'in_progress' };
+    const upd: Cmd = { type: 'task_update', caller: { kind: 'run', runId: RUN_A }, taskId: T1, status: 'in_progress', wakeId: id('wak', 1) };
     const r = play([[claim(), 0], [{ type: 'tick' }, 60_000], [upd, 61_000]]);
     expect(r.state.claims[T1].runId).toBe(RUN_A);
     expect(types(r.out).slice(-2)).toEqual(['task.claimed', 'task.updated']);

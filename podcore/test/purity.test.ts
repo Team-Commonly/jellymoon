@@ -2,25 +2,36 @@ import { expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { isoOf } from '../src';
 
-const BARE = ['Date', 'crypto', 'fetch', 'process', 'performance', 'globalThis', 'Intl', 'Atomics', 'Temporal', 'WeakRef', 'FinalizationRegistry'];
-// Math and Bun stay usable by name (Math.floor); they are only banned for bracket access, Math.random and Bun.
-const GLOBALS = [...BARE, 'Math', 'Bun'];
-const BANNED = [...BARE, 'setTimeout', 'setInterval', 'Math.random', 'await', 'eval', 'queueMicrotask', 'Function(', 'Bun.', '.then('];
-const escape = (w: string): string => w.replace(/[.()[\]]/g, '\\$&');
-const edge = (w: string, pre: boolean): string => (/[A-Za-z]/.test(pre ? w[0] : w[w.length - 1]) ? (pre ? '(?<![A-Za-z0-9_$])' : '(?![A-Za-z0-9_$])') : '');
-const rules = [
-  ...BANNED.map((w) => new RegExp(`${edge(w, true)}${escape(w)}${edge(w, false)}`)),
-  ...GLOBALS.map((g) => new RegExp(`(?<![A-Za-z0-9_$.])${g}\\s*\\[`)),
+// A lexical backstop, not a proof (ADR 0003): it reads text, so it catches the plain and the aliased spellings of
+// a banned name, and the `podcore-is-pure` import rule does the rest. Math is allowed only as these three calls.
+const BANNED = [
+  'Date', 'crypto', 'fetch', 'process', 'performance', 'globalThis', 'self', 'global', 'window', 'console', 'Reflect', 'Intl', 'Atomics', 'Temporal',
+  'WeakRef', 'FinalizationRegistry', 'setTimeout', 'setInterval', 'await', 'eval', 'queueMicrotask', 'require', 'Bun',
 ];
+const MATH_OK = ['floor', 'min', 'max'];
+const rules: RegExp[] = [
+  ...BANNED.map((w) => new RegExp(`(?<![A-Za-z0-9_$])${w}(?![A-Za-z0-9_$])`)),
+  new RegExp(`(?<![A-Za-z0-9_$])Math(?![A-Za-z0-9_$])(?!\\s*\\.\\s*(${MATH_OK.join('|')})(?![A-Za-z0-9_$]))`),
+  /Function\s*\(/, /\bimport\s*\(/, /\.then\s*\(/,
+];
+const violations = (text: string): string[] => rules.filter((re) => re.test(text)).map((re) => re.source);
 
-test('podcore/src, read recursively, uses no clock, timer, randomness, network, platform global, eval or bracket access to one', () => {
+test('podcore/src, read recursively, uses no clock, timer, randomness, network, platform global, eval or alias of one', () => {
   const dir = new URL('../src/', import.meta.url);
   const files = readdirSync(dir, { recursive: true }).filter((f: string) => f.endsWith('.ts'));
   expect(files.length).toBeGreaterThan(0);
-  for (const f of files) {
-    const text = readFileSync(new URL(f, dir), 'utf8');
-    for (const re of rules) expect(re.test(text) ? `${f}: ${re.source}` : null).toBeNull();
-  }
+  for (const f of files) expect([f, violations(readFileSync(new URL(f, dir), 'utf8'))]).toEqual([f, []]);
+});
+
+test('the guard fails each aliasing form, and passes the three allowed Math calls, and a comment is scanned too', () => {
+  const bad = [
+    'const M = Math; M.random()', 'Math.random()', "Math['random']()", 'const { random } = Math', 'Math . round(1)', 'Reflect.get(Math, "random")',
+    'globalThis.Date.now()', 'self.Date', 'global.process', 'window.fetch', 'console.log(1)', 'new Function ("return 1")', 'Function\n("x")', 'import("node:fs")',
+    'require("fs")', '(0, eval)("1")', 'const T = setTimeout; T(f)', 'Bun.file("x")', 'p.then (f)', 'new Date()', 'Date.now()',
+  ];
+  for (const text of bad) expect([text, violations(text).length > 0]).toEqual([text, true]);
+  expect(violations('Math.floor(a) + Math.min(b, c) + Math.max(d, e)')).toEqual([]);
+  expect(violations("const s = '//'; Math.random()").length).toBeGreaterThan(0);
 });
 
 test('isoOf rejects a non-integer now', () => {

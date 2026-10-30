@@ -9,30 +9,34 @@ const USERS = [U_OWNER.id, U_AGENT_OWNER.id, U_STRANGER.id];
 const TEXTS = ['hi', '@agent-1 look', '`@agent-1` no', '@agent-3 and @agent-1', 'x @agent-2'];
 
 /** A random but replayable command with a monotonic clock; big jumps now and then reach the 2 h cap. */
-function sequence(seed: number, length = 60): Array<[Cmd, number]> {
+/** `claimy` keeps to claims, ops, heartbeats, releases and ticks in lease-sized steps, so lease rules are exercised hard. */
+function sequence(seed: number, length = 60, claimy = false): Array<[Cmd, number]> {
   const r = prng(seed);
   const pick = <T>(xs: T[]): T => xs[Math.floor(r() * xs.length)];
   let now = 0;
   let n = 0;
+  let w = 0;
+  const wid = (): string => wak((w += 1));
   return Array.from({ length }, () => {
-    now += r() < 0.05 ? Math.floor(r() * 3_600_000) : Math.floor(r() * 45_000);
+    now += !claimy && r() < 0.05 ? Math.floor(r() * 3_600_000) : Math.floor(r() * (claimy ? 40_000 : 45_000));
     const caller = () => (r() < 0.5 ? { kind: 'user' as const, userId: pick(USERS) } : { kind: 'run' as const, runId: pick(RUNS) });
-    const cmd: Cmd = pick<() => Cmd>([
+    const gens: Array<() => Cmd> = [
       () => ({ type: 'claim', runId: pick(RUNS), taskId: pick(TASKS) }),
       () => ({ type: 'op', runId: pick(RUNS), taskId: pick(TASKS) }),
       () => ({ type: 'heartbeat', computerId: pick([CMP_1, CMP_2]) }),
       () => ({ type: 'task_release', caller: caller(), taskId: pick(TASKS) }),
       () => ({ type: 'run_end', runId: pick(RUNS), computerId: pick([CMP_1, CMP_2]), outcome: 'completed' }),
       () => ({ type: 'run_stop', caller: caller(), runId: pick(RUNS) }),
-      () => ({ type: 'task_create', caller: caller(), taskId: id('tsk', 10 + (n += 1)), title: 't', kind: 'chore', assignee: r() < 0.7 ? pick(AGENTS) : undefined }),
-      () => ({ type: 'task_update', caller: caller(), taskId: pick(TASKS), status: 'in_progress', assignee: pick(AGENTS) }),
-      () => ({ type: 'message_post', caller: caller(), messageId: id('msg', (n += 1)), text: pick(TEXTS) }),
-      () => ({ type: 'change', kind: 'ruling', agentId: pick(AGENTS), refs: {}, wakeId: wak(100 + (n += 1)) }),
-      () => ({ type: 'wake_ack', wakeId: wak(1 + Math.floor(r() * (n + 1))), computerId: pick([CMP_1, CMP_2]) }),
-      () => ({ type: 'run_claim', wakeId: wak(1 + Math.floor(r() * (n + 1))), computerId: pick([CMP_1, CMP_2]), runId: runN((n += 1)) }),
+      () => ({ type: 'task_create', caller: caller(), taskId: id('tsk', 10 + (n += 1)), title: 't', kind: 'chore', assignee: r() < 0.7 ? pick(AGENTS) : undefined, wakeId: wid() }),
+      () => ({ type: 'task_update', caller: caller(), taskId: pick(TASKS), status: 'in_progress', assignee: pick(AGENTS), wakeId: wid() }),
+      () => ({ type: 'message_post', caller: caller(), messageId: id('msg', (n += 1)), text: pick(TEXTS), wakeIds: [wid(), wid(), wid()] }),
+      () => ({ type: 'change', kind: 'ruling', agentId: pick(AGENTS), refs: {}, wakeId: wid() }),
+      () => ({ type: 'wake_ack', wakeId: wak(1 + Math.floor(r() * (w + 1))), computerId: pick([CMP_1, CMP_2]) }),
+      () => ({ type: 'run_claim', wakeId: wak(1 + Math.floor(r() * (w + 1))), computerId: pick([CMP_1, CMP_2]), runId: runN((n += 1)) }),
       () => ({ type: 'agent_register', agentId: pick(AGENTS), ownerId: U_AGENT_OWNER.id, computerId: pick([CMP_1, CMP_2]) }),
       () => ({ type: 'tick' }),
-    ])();
+    ];
+    const cmd: Cmd = pick(claimy ? [gens[0], gens[0], gens[1], gens[1], gens[2], gens[3], gens[13]] : gens)();
     return [cmd, now];
   });
 }
@@ -65,25 +69,33 @@ test('restart property: a JSON round-trip of the state at a random step changes 
   }
 });
 
-test('stale restore property: a snapshot stale only in heartbeat renewals by up to W, booted with W, never expires a claim earlier', () => {
+test('stale restore property: a snapshot stale only in heartbeat renewals by up to W, booted with W, releases no claim earlier, whatever the cause', () => {
+  // A claim instance is (task, run, start time). Each maps to when it was released ('\uffff' = never). Only instances both
+  // timelines started are compared: lateness may legitimately change who claims what afterwards.
+  const instances = (per: Out[][]) => {
+    const live = new Map<string, string>();
+    const m = new Map<string, string>();
+    for (const e of events(per.flat())) {
+      if (e.type === 'task.claimed') {
+        live.set(e.data.taskId, `${e.data.taskId}${e.data.runId}@${e.ts}`);
+        m.set(live.get(e.data.taskId) as string, '\uffff');
+      } else if (e.type === 'claim.released') m.set(live.get(e.data.taskId) as string, e.ts as string);
+    }
+    return m;
+  };
   for (const seed of SEEDS) {
-    const steps = sequence(seed);
+    const steps = sequence(seed, 60, seed % 2 === 0);
     const rnd = prng(seed * 31);
     const at = Math.floor(rnd() * steps.length);
     const w = Math.floor(rnd() * 60_001);
-    const firstExpiry = (per: Out[][]) => {
-      const m = new Map<string, string>();
-      for (const e of events(per.slice(at).flat())) if (e.type === 'claim.released' && e.data.cause === 'expired' && !m.has(e.data.taskId + e.data.runId)) m.set(e.data.taskId + e.data.runId, e.ts as string);
-      return m;
-    };
-    const straight = firstExpiry(run(steps).per);
-    const stale = firstExpiry(run(steps, (s, i) => {
+    const straight = instances(run(steps).per);
+    const stale = instances(run(steps, (s, i) => {
       if (i !== at) return s;
       const old = JSON.parse(JSON.stringify(s)) as PodState;
       for (const k of Object.values(old.claims)) k.leaseUntil -= Math.floor(rnd() * (w + 1));
       return apply(old, { type: 'boot', staleMs: w }, steps[at][1]).state;
     }).per);
-    for (const [key, ts] of stale) if (straight.has(key)) expect(ts >= (straight.get(key) as string)).toBe(true);
+    for (const [key, ts] of stale) if (straight.has(key)) expect([seed, key, ts >= (straight.get(key) as string)]).toEqual([seed, key, true]);
   }
 });
 

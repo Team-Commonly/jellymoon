@@ -41,7 +41,7 @@ export function endClaim(c: Ctx, taskId: TaskId, cause: ClaimReleaseCause, by?: 
 
 const heldBy = (c: Ctx, runId: RunId): TaskId[] => Object.keys(c.s.claims).filter((t) => c.s.claims[t].runId === runId).sort();
 
-/** A renewal: every claim the run holds moves to now + 60 s. Only a command that succeeded may call this. */
+/** A renewal: every claim the run holds moves to now + 60 s (ADR 0002: any operation the run's token makes). */
 export function renewRun(c: Ctx, runId: RunId): void {
   for (const t of heldBy(c, runId)) c.s.claims[t].leaseUntil = c.now + LEASE_MS;
 }
@@ -79,10 +79,10 @@ export function nextDeadlineOf(s: { runs: Record<RunId, Run>; claims: Record<Tas
   return times.length === 0 ? null : Math.min(...times);
 }
 
-/** The run behind a run token, or a refusal: an ended or unknown run's token is dead. */
+/** The run behind a run token, or a refusal: an ended or unknown run's token is dead. A live run renews first, so no refusal below it can skip the renewal. */
 export function liveRun(c: Ctx, runId: RunId): Run | null {
   const run = c.s.runs[runId];
-  if (run !== undefined && run.status === 'active') return run;
+  if (run !== undefined && run.status === 'active') return renewRun(c, runId), run;
   fail(c, 'unauthorized', 'This run has ended; its token no longer works.', runId);
   return null;
 }
@@ -99,8 +99,8 @@ export function who(c: Ctx, caller: Caller): { actor: Actor; run?: Run } | null 
 }
 
 /**
- * Take, keep or restore a claim for `run` on a task. Returns true when it refused (the reply is written and nothing
- * was renewed). With create false, only a restore after expiry may add a claim.
+ * Take, keep or restore a claim for `run` on a task. Returns true when it refused (the reply is written; the caller
+ * already renewed in liveRun). With create false, only a restore after expiry may add a claim.
  */
 export function acquire(c: Ctx, run: Run, taskId: TaskId, create: boolean): boolean {
   const how = lostHow(c, run.id, taskId);
@@ -110,7 +110,6 @@ export function acquire(c: Ctx, run: Run, taskId: TaskId, create: boolean): bool
     const holder = c.s.runs[held.runId].agent;
     return fail(c, 'already_claimed', `${holder.displayName} holds this task.`, holder.id), true;
   }
-  renewRun(c, run.id);
   if (held === undefined && (create || how === 'expired')) startClaim(c, run, taskId);
   return false;
 }

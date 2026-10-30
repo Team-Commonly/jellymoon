@@ -22,7 +22,7 @@ export function claimCmd(c: Ctx, cmd: Of<'claim'>): void {
 export function opCmd(c: Ctx, cmd: Of<'op'>): void {
   const run = liveRun(c, cmd.runId);
   if (run === null) return;
-  if (cmd.taskId === undefined) return renewRun(c, run.id), ok(c);
+  if (cmd.taskId === undefined) return ok(c);
   if (c.s.tasks[cmd.taskId] === undefined) return noTask(c, cmd.taskId);
   if (acquire(c, run, cmd.taskId, false)) return;
   const mine = c.s.claims[cmd.taskId]?.runId === run.id;
@@ -46,7 +46,6 @@ export function releaseCmd(c: Ctx, cmd: Of<'task_release'>): void {
   if (run !== undefined && lostHow(c, run.id, cmd.taskId) === 'released') return fail(c, 'forbidden', 'A person released this claim; it cannot be taken back.', cmd.taskId);
   const held = c.s.claims[cmd.taskId];
   if (held === undefined) {
-    if (run !== undefined) renewRun(c, run.id);
     return ok(c, taskView(c, cmd.taskId));
   }
   const holder = c.s.runs[held.runId];
@@ -54,7 +53,6 @@ export function releaseCmd(c: Ctx, cmd: Of<'task_release'>): void {
   if (run !== undefined) by = run.id === held.runId ? run.agent : undefined;
   else by = holder.owner.id === w.actor.id ? holder.owner : c.s.owners.find((o) => o.id === w.actor.id);
   if (by === undefined) return fail(c, 'forbidden', 'Only the holding run, its agent\'s owner or a pod owner may release.', cmd.taskId);
-  if (run !== undefined) renewRun(c, run.id);
   endClaim(c, cmd.taskId, 'released', by, cmd.reason);
   ok(c, taskView(c, cmd.taskId));
 }
@@ -68,17 +66,17 @@ export function runEndCmd(c: Ctx, cmd: Of<'run_end'>): void {
   ok(c, { runId: run.id, outcome: run.outcome ?? cmd.outcome });
 }
 
-function stopper(c: Ctx, actor: Actor, run: Run, isUser: boolean): Actor | undefined {
-  if (!isUser) return undefined;
+function stopper(c: Ctx, actor: Actor, run: Run): Actor | undefined {
   return run.owner.id === actor.id ? run.owner : c.s.owners.find((o) => o.id === actor.id);
 }
 
 export function runStopCmd(c: Ctx, cmd: Of<'run_stop'>): void {
   const w = who(c, cmd.caller);
   if (w === null) return;
+  if (w.run !== undefined) return fail(c, 'forbidden', 'A run cannot stop a run; only a person may.');
   const run = c.s.runs[cmd.runId];
   if (run === undefined) return fail(c, 'not_found', 'No such run.', cmd.runId);
-  const by = stopper(c, w.actor, run, w.run === undefined);
+  const by = stopper(c, w.actor, run);
   if (by === undefined) return fail(c, 'forbidden', 'Only the agent\'s owner or a pod owner may stop a run.', run.id);
   if (run.status === 'ended') return ok(c, { runId: run.id, outcome: run.outcome ?? 'cancelled' });
   endRun(c, run, 'cancelled', 'stopped', by, cmd.reason);

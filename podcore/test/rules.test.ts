@@ -131,6 +131,14 @@ describe('recourse: task_release', () => {
     expect(released(r.out)).toEqual([{ taskId: T1, runId: RUN_A, cause: 'released', by: r.state.runs[RUN_A].agent, reason: 'switching' }]);
   });
 
+  test('a plain member (neither pod owner nor agent owner) cannot release or stop', () => {
+    const member: Cmd = { type: 'member_add', userId: U_STRANGER.id, name: U_STRANGER.displayName };
+    const r = play([[claimA(), 0], [member, 1], [releaseBy(U_STRANGER.id), 2], [stopBy(U_STRANGER.id), 3]]);
+    expect(r.out.filter((o) => o.kind === 'reply' && !o.ok).map((o) => o.kind === 'reply' && !o.ok && o.error.code)).toEqual(['forbidden', 'forbidden']);
+    expect(r.state.claims[T1].runId).toBe(RUN_A);
+    expect(r.state.runs[RUN_A].status).toBe('active');
+  });
+
   test('anyone else gets forbidden: a stranger, or a different run', () => {
     const base = play([[claimA(), 0]]);
     expect(errCode(play([[releaseBy(U_STRANGER.id), 1000]], base.state).out)).toBe('forbidden');

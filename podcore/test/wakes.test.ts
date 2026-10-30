@@ -5,8 +5,8 @@ import { AG1, AG3, AG_UNREG, CMP_1, CMP_2, RUN_A, RUN_B, TASKS, U_AGENT_OWNER, U
 const [T1, T2] = TASKS;
 const call = { kind: 'user' as const, userId: U_OWNER.id };
 /** Task 10+n, assigned to an agent: the core writes the task_assigned wake itself. */
-const assign = (n: number, assignee = AG1): Cmd => ({ type: 'task_create', caller: call, taskId: id('tsk', 10 + n), title: `T${n}`, kind: 'chore', assignee });
-const say = (n: number, text: string, caller: Cmd extends infer _ ? { kind: 'user'; userId: string } | { kind: 'run'; runId: string } : never = call): Cmd => ({ type: 'message_post', caller, messageId: id('msg', n), text });
+const assign = (n: number, assignee = AG1, wakeId = wak(n)): Cmd => ({ type: 'task_create', caller: call, taskId: id('tsk', 10 + n), title: `T${n}`, kind: 'chore', assignee, wakeId });
+const say = (n: number, text: string, caller: Cmd extends infer _ ? { kind: 'user'; userId: string } | { kind: 'run'; runId: string } : never = call): Cmd => ({ type: 'message_post', caller, messageId: id('msg', n), text, wakeIds: [wak(n), wak(n + 40), wak(n + 80)] });
 const ruling = (n: number): Cmd => ({ type: 'change', kind: 'ruling', agentId: AG1, refs: { decisionId: id('dec', 1) }, wakeId: wak(n) });
 const hb = (computerId: string): Cmd => ({ type: 'heartbeat', computerId });
 const claimWake = (n: number, computerId = CMP_1, r = 1): Cmd => ({ type: 'run_claim', wakeId: wak(n), computerId, runId: runN(r) });
@@ -25,7 +25,7 @@ describe('a change writes a wake only for the agent it addresses', () => {
   });
 
   test('task_update to a new assignee wakes that agent; the same assignee, or an unregistered one, wakes nobody', () => {
-    const upd = (assignee: string): Cmd => ({ type: 'task_update', caller: call, taskId: T1, assignee });
+    const upd = (assignee: string): Cmd => ({ type: 'task_update', caller: call, taskId: T1, assignee, wakeId: wak(1) });
     expect(wakeReasons(play([[upd(AG3), 0]]).out)).toEqual(['task_assigned']);
     expect(wakes(play([[upd(AG1), 0]]).out)).toEqual([]);
     expect(wakes(play([[upd(AG_UNREG), 0]]).out)).toEqual([]);
@@ -39,11 +39,38 @@ describe('a change writes a wake only for the agent it addresses', () => {
   });
 
   test('mentions match registered names exactly, and only outside code spans', () => {
-    for (const text of ['hello there', '@agent-10 hi', '@agent hi', 'a@agent-1 hi', '`@agent-1` hi', 'see ```\n@agent-1\n``` ok', '@Agent-1']) {
+    for (const text of ['hello there', '@agent-10 hi', '@agent hi', 'a@agent-1 hi', '`@agent-1` hi', '@Agent-1']) {
       expect(wakes(play([[say(1, text), 0]]).out)).toEqual([]);
     }
     expect(wakeReasons(play([[say(1, 'cc `x` @agent-1.'), 0]]).out)).toEqual(['mention']);
     expect(wakes(play([[say(1, '@agent-1 @agent-3 @agent-1'), 0]]).out).map((o) => o.computerId)).toEqual([CMP_1, CMP_2]);
+  });
+
+});
+
+describe('mentions, run callers and validation', () => {
+  test('mentions follow CommonMark: spans of any length, across a newline, fences; an escape or an unclosed backtick is literal', () => {
+    const quiet = ['``@agent-1``', '`` @agent-1 ``', 'a `x\n@agent-1\ny` b', '```\n@agent-1', '~~~\n@agent-1\n~~~', '  ```js\n@agent-1\n```', '````\n```\n@agent-1\n````', '``a` @agent-1 `b``'];
+    for (const text of quiet) expect([text, wakes(play([[say(1, text), 0]]).out)]).toEqual([text, []]);
+    for (const text of ['\\`@agent-1\\`', '`@agent-1 with no closer', 'see ```\n@agent-1\n``` ok', '`a` @agent-1 `b`', '``` x`\n@agent-1']) {
+      expect([text, wakeReasons(play([[say(1, text), 0]]).out)]).toEqual([text, ['mention']]);
+    }
+  });
+
+  test('a run never wakes its own agent, through task_create, task_update or message_post; it does wake another', () => {
+    const caller = { kind: 'run' as const, runId: RUN_A };
+    const mk = (assignee: string): Cmd => ({ type: 'task_create', caller, taskId: id('tsk', 30), title: 't', kind: 'chore', assignee, wakeId: wak(1) });
+    const up = (assignee: string): Cmd => ({ type: 'task_update', caller, taskId: T1, assignee, wakeId: wak(1) });
+    for (const f of [mk, up]) {
+      expect(wakes(play([[f(AG1), 0]]).out)).toEqual([]);
+      expect(wakeReasons(play([[f(AG3), 0]]).out)).toEqual(['task_assigned']);
+    }
+    expect(wakes(play([[say(1, '@agent-1', caller), 0]]).out)).toEqual([]);
+  });
+
+  test('task_update refuses status open, and a message needs a wakeId per mentioned agent', () => {
+    expect(errCode(play([[{ type: 'task_update', caller: call, taskId: T1, status: 'open' as never, wakeId: wak(1) }, 0]]).out)).toBe('invalid_input');
+    expect(() => play([[{ ...say(1, '@agent-1 @agent-3'), wakeIds: [wak(1)] } as Cmd, 0]])).toThrow();
   });
 
   test('an ambient message writes no wake', () => {
@@ -112,9 +139,10 @@ describe('resend', () => {
     expect(wakes(at({ type: 'tick' }, 90_000))).toEqual([]);
   });
 
-  test('an acked wake is never resent', () => {
-    const r = play([[{ type: 'wake_ack', wakeId: wak(1), computerId: CMP_1 }, 10], [hb(CMP_1), 500_000]], sent);
-    expect(wakes(r.out)).toEqual([]);
+  test('an acked wake with no run_claim is re-sent like an un-acked one: nothing at 59 999 ms, a resend at 60 000 ms', () => {
+    const ack: Cmd = { type: 'wake_ack', wakeId: wak(1), computerId: CMP_1 };
+    expect(wakes(play([[ack, 10], [hb(CMP_1), 59_999]], sent).out)).toEqual([]);
+    expect(wakes(play([[ack, 10], [hb(CMP_1), 60_000]], sent).out).length).toBe(1);
   });
 
   test('a resend restarts the 60 s wait', () => {
@@ -161,6 +189,15 @@ describe('run_claim', () => {
     expect(r.state.claims[T1].runId).toBe(runN(1));
   });
 
+  test('a run id that exists, live or ended, is refused and the wake stays', () => {
+    const ended = play([[{ type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'completed' }, 1]]).state;
+    for (const from of [world(), ended]) {
+      const r = play([[assign(1), 2], [{ type: 'run_claim', wakeId: wak(1), computerId: CMP_1, runId: RUN_A }, 3]], from);
+      expect(errCode(r.out)).toBe('invalid_input');
+      expect(r.state.wakes[AG1].id).toBe(wak(1));
+    }
+  });
+
   test('an unknown or already consumed wake gets not_found', () => {
     expect(errCode(play([[claimWake(7), 0]]).out)).toBe('not_found');
     expect(errCode(play([[assign(1), 0], [claimWake(1), 1], [claimWake(1, CMP_1, 2), 2]]).out)).toBe('not_found');
@@ -174,7 +211,27 @@ describe('run_claim', () => {
   });
 });
 
+describe('wake ids are minted by the adapter', () => {
+  test('two pods sharing a computer emit the ids they were given, so no wakeId repeats; a coalesced command ignores its id', () => {
+    const other = { ...world(), podId: id('pod', 2) };
+    const a = play([[assign(1), 0], [assign(2), 1]]);
+    const b = play([[assign(3, AG1, wak(7)), 0]], other);
+    const ids = [...wakes(a.out), ...wakes(b.out)].map((o) => (o.event.type === 'run.wake' ? o.event.data.wakeId : ''));
+    expect(ids).toEqual([wak(1), wak(7)]);
+    expect(a.state.wakes[AG1].id).toBe(wak(1));
+  });
+});
+
 describe('agent_register', () => {
+  test('moving an agent re-addresses its pending wake to the new computer; the old computer hears nothing more', () => {
+    const base = play([[assign(1), 0], [{ type: 'wake_ack', wakeId: wak(1), computerId: CMP_1 }, 1]]);
+    const move = play([[{ type: 'agent_register', agentId: AG1, ownerId: U_AGENT_OWNER.id, computerId: CMP_2 }, 5]], base.state);
+    expect(wakes(move.out).map((o) => [o.computerId, o.event.type === 'run.wake' && o.event.data.wakeId])).toEqual([[CMP_2, wak(1)]]);
+    expect(wakes(play([[hb(CMP_1), 70_000]], move.state).out)).toEqual([]);
+    expect(wakes(play([[hb(CMP_2), 65_000]], move.state).out).length).toBe(1);
+    expect(wakes(play([[{ type: 'agent_register', agentId: AG1, ownerId: U_AGENT_OWNER.id, computerId: CMP_2 }, 6]], move.state).out)).toEqual([]);
+  });
+
   test('moves hosting: a later wake goes to the new computer', () => {
     const r = play([[{ type: 'agent_register', agentId: AG1, ownerId: U_AGENT_OWNER.id, computerId: CMP_2 }, 0], [assign(1), 1]]);
     expect(wakes(r.out).map((o) => o.computerId)).toEqual([CMP_2]);

@@ -11,6 +11,9 @@ let proc: string | undefined;
 const processId = (): string => (proc ??= crypto.randomUUID());
 
 export class TestPodDO extends PodDO {
+  /** Minted per instance: a different value after an eviction proves the runtime built a new object. */
+  private readonly instance = crypto.randomUUID();
+  private requests = 0;
   private declare fixed: number | null | undefined;
   private declare writes: Map<string, { commands: number; rowsWritten: number }> | undefined;
 
@@ -36,7 +39,14 @@ export class TestPodDO extends PodDO {
 
   override now(): number { return this.fixedNow() ?? Date.now(); }
 
-  protected override alarmAt(): number | null { return this.fixedNow() === null ? super.alarmAt() : null; }
+  /** A fixed clock stores no alarm, unless a discard stored one: then a pending deadline arms that real time instead. */
+  protected override alarmAt(): number | null {
+    const at = super.alarmAt();
+    if (this.fixedNow() === null) return at;
+    if (at === null) return null;
+    const [row] = this.sql.exec<{ v: string }>("select v from kv where k = 'alarm_at'").toArray();
+    return row === undefined ? null : Number(row.v);
+  }
 
   protected override note(type: string, rowsWritten: number): void {
     this.writes ??= new Map();
@@ -44,13 +54,34 @@ export class TestPodDO extends PodDO {
     this.writes.set(type, { commands: w.commands + 1, rowsWritten: w.rowsWritten + rowsWritten });
   }
 
+  /** The runtime throws this object away: ends in-flight requests, drops sockets, and builds a new instance on the next request or alarm. */
+  private async discard(req: Request): Promise<Response> {
+    const b = await parse(req);
+    const now = b?.now;
+    if (now !== undefined && (typeof now !== 'number' || !Number.isInteger(now) || now < 0)) return new Response('bad', { status: 400 });
+    if (now !== undefined) this.setFixed(now); // the clock moves with no tick: nothing runs until the object is woken
+    // A fixed clock stores no alarm, so a test that wants the alarm to wake the object stores one a few real ms ahead.
+    if (typeof b?.alarmMs === 'number') {
+      const at = Date.now() + b.alarmMs;
+      this.sql.exec("insert or replace into kv (k, v) values ('alarm_at', ?)", String(at));
+      await this.ctx.storage.setAlarm(at);
+    }
+    setTimeout(() => this.ctx.abort('discarded by the test entry'), 0);
+    return Response.json({ discarded: this.instance });
+  }
+
   override alarm(): void {
     this.sql.exec("insert or replace into kv (k, v) values ('alarm_fired', ?)", String(Date.now()));
+    // D1 outlives the object, so the suite reads what woke it without sending the object a request.
+    this.ctx.waitUntil(this.env.DB.prepare("insert or replace into kv (k, v) values (?, ?)").bind(`woke:${this.id}`, JSON.stringify({ instance: this.instance, requests: this.requests })).run());
     super.alarm();
   }
 
   override async fetch(req: Request): Promise<Response> {
     const path = new URL(req.url).pathname;
+    if (path === '/_in/instance') return Response.json({ instance: this.instance, requests: this.requests });
+    this.requests += 1;
+    if (path === '/_in/discard') return this.discard(req);
     if (path === '/_in/evict') { this.evict(); return Response.json({ evicted: true }); }
     if (path === '/_in/stats') return Response.json(Object.fromEntries(this.writes ?? []));
     if (path === '/_in/alarm-fired') return Response.json({ at: this.sql.exec<{ v: string }>("select v from kv where k = 'alarm_fired'").toArray()[0]?.v ?? null });

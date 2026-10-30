@@ -47,6 +47,18 @@ Clock rules, which every server under test must meet:
 - The server applies the core's `boot` command right after restoring state, before serving.
 - A coalesced save of anything else fails `TestKillMidLease` as an early expiry.
 
+## Input validation
+
+Every route that takes a body checks it against the request definition in `schema/` before anything runs. A body the
+schema refuses (a wrong type, a value over a limit such as a 16,385-character `body`, a two-line `summary`, a missing
+`kind`, an unknown field, a field the URL already supplies) answers `400 invalid_input` and changes nothing. Nothing is
+dropped or truncated: a body the schema allows is stored whole.
+
+A field the schema allows but the pod core has no place for is also `400 invalid_input`, never silently dropped. Today
+that is, on `POST /v1/pods/:pod/messages`: `kind` other than `fyi`, `status` other than `done`, `needs`, `options`,
+`context`, `taskId`, `links` and `caveat`; on `PATCH /v1/pods/:pod/tasks/:task`: `note`; on `POST /v1/runs/:run/end`:
+`harnessVersion`. A run's post needs its `summary` (the core stores it as the headline).
+
 ## Assumptions the protocol does not state
 
 The suite asserts these; a server that disagrees should change the protocol, not the suite.
@@ -81,6 +93,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestKillMidLease` | Two claims, `kill -9`, restart. See below. |
 | `TestReplayAcrossRestart` | `subscribe sinceSeq=N` after a restart replays N+1..head in order, once each, equal to what a live socket saw; new events continue after head. |
 | `TestOneReleasePerCause` | For `expired`, `released`, `run_ended` and `stopped`, each member gets exactly one `claim.released` with that cause, with `by` and `reason` as specified. |
+| `TestInputValidation` | Each write route refuses what the schema refuses with `400 invalid_input` (a numeric or 16,385-character `body`, a two-line `summary`, a missing `kind`, a note on a task update, and the other routes' bodies), stores a 16,384-character body whole, and lets a run post with its `summary`. |
 | `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. It judges the run so far, so it is last; it fails if a suite test failed and skips on a partial run. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X

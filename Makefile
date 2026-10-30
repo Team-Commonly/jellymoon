@@ -6,10 +6,14 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a worker-dev land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: e2e e2e-a worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
+
+# The shared toolchain cache refuses a root or entry anyone but you could have written (fixtures only; no download).
+tools-cache:
+	scripts/check-tools-cache.sh
 
 node_modules: package.json bun.lock
 	$(BUN) install --frozen-lockfile
@@ -117,4 +121,4 @@ e2e-a: node_modules
 	if [ $$rc -ne 0 ] && [ "$$k" = "$$n" ]; then echo "e2e-a: red run but STEPS=$$k/$$n"; exit 1; fi; \
 	exit $$rc
 
-preflight: portable check-gen test entropy secrets private e2e-a
+preflight: portable tools-cache check-gen test entropy secrets private e2e-a

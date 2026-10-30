@@ -17,10 +17,23 @@ mkdir -p .tools/bin
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 die() { echo "tools: $*" >&2; exit 1; }
 
+# A cached toolchain runs in every worktree that links to it, so whoever can write to it can run code
+# in all of them. Mode bits only (an ACL is not read). A symlink is refused: the installer never makes
+# one, and whoever owns it could re-point it after this check.
+guard() { # path
+  local why=""
+  if [ -L "$1" ]; then why="is a symlink"
+  elif [ ! -e "$1" ]; then why="is missing"
+  elif [ ! -O "$1" ]; then why="is not owned by you"
+  else case $(ls -ld "$1") in ?????-??-*) ;; *) why="is group- or other-writable" ;; esac; fi # chars 6 and 9
+  [ -z "$why" ] || die "refusing $1: it $why. Only you may be able to change a shared toolchain (docs/development/toolchain-cache.md)"
+}
+
 CACHE=${JM_TOOLCHAIN_CACHE:-}
 if [ -n "$CACHE" ]; then
   case "$CACHE" in /*) ;; *) die "JM_TOOLCHAIN_CACHE must be an absolute path (got $CACHE)" ;; esac
-  mkdir -p "$CACHE"
+  mkdir -p -m 755 "$CACHE"
+  guard "$CACHE" # after mkdir -p, so a root someone else created first is refused
   ROOT=$CACHE
   godir="$CACHE/go-$GO-$os-$goarch"; bundir="$CACHE/bun-$BUN-$os-$goarch"
 else
@@ -31,11 +44,15 @@ fi
 go_ok() { [ "$("$1/bin/go" version 2>/dev/null | cut -d' ' -f3)" = "go$GO" ]; }
 bun_ok() { [ "$("$1/bun" --version 2>/dev/null)" = "$BUN" ]; }
 
-# A cache entry is trusted only with a stamp and the pinned version. Anything else is refused,
-# never re-downloaded over, because another worktree may be running it.
-check_cached() { # dir checker
-  [ -s "$1/.sha256" ] || die "$1 has no .sha256 stamp; remove it deliberately if it is stale"
-  "$2" "$1" || die "$1 does not report the pinned version; remove it deliberately if it is stale"
+# A cache entry is used only if it and every path a worktree links into pass guard, then it must have a
+# stamp and report the pinned version. Both are read from the entry itself, so they catch a partial or
+# stale entry, not a forged one. Anything else is refused, never re-downloaded over, because another
+# worktree may be running it.
+check_cached() { # dir checker linked...: the linked paths, relative to dir
+  local dir=$1 checker=$2 p; shift 2
+  guard "$dir"; for p in "$@"; do guard "$dir/$p"; done
+  [ -s "$dir/.sha256" ] || die "$dir has no .sha256 stamp; remove it deliberately if it is stale"
+  "$checker" "$dir" || die "$dir does not report the pinned version; remove it deliberately if it is stale"
 }
 
 LOCK=""; WORK=""; UNPACK=""
@@ -61,18 +78,18 @@ acquire_lock() { # lockdir
   LOCK=$1; echo $$ > "$1/pid"
 }
 
-# install_into <dir> <fetch-fn> <checker-fn>: download+verify+unpack into a sibling temp dir,
-# stamp, then rename into place under a lock, so a concurrent installer never sees a half-unpacked
+# install_into <dir> <fetch-fn> <checker-fn> <linked...>: download+verify+unpack into a sibling temp
+# dir, stamp, then rename into place under a lock, so a concurrent installer never sees a half-unpacked
 # dir. A cache version dir only ever appears by rename, so an existing one is used with no lock
 # and no write access to the cache.
 install_into() {
-  local dir=$1 fetch=$2 checker=$3 name; name=$(basename "$1")
-  if [ -n "$CACHE" ] && [ -e "$dir" ]; then check_cached "$dir" "$checker"; return; fi
-  [ -w "$ROOT" ] || die "$name is not in $ROOT and $ROOT is not writable; ask whoever owns the cache to install it"
+  local dir=$1 fetch=$2 checker=$3 name; name=$(basename "$1"); shift 3
+  if [ -n "$CACHE" ] && [ -e "$dir" ]; then check_cached "$dir" "$checker" "$@"; return; fi
+  [ -w "$ROOT" ] || die "$name is not in $ROOT and $ROOT is not writable here; install it from a shell that can write to it"
   acquire_lock "$ROOT/.lock-$name"
   # Leftovers of a killed installer. Names are per tool so the other tool's live install is safe.
   for d in "$ROOT"/.dl-"$name".* "$ROOT"/.unpack-"$name".*; do [ -e "$d" ] && { chmod -R u+w "$d"; rm -rf "$d"; }; done
-  if [ -n "$CACHE" ] && [ -e "$dir" ]; then check_cached "$dir" "$checker"; else
+  if [ -n "$CACHE" ] && [ -e "$dir" ]; then check_cached "$dir" "$checker" "$@"; else
     WORK=$(mktemp -d "$ROOT/.dl-$name.XXXXXX"); UNPACK=$(mktemp -d "$ROOT/.unpack-$name.XXXXXX")
     "$fetch" "$WORK" "$UNPACK"
     rm -rf "$WORK"; WORK=""                           # the archive is dead weight once verified
@@ -107,12 +124,12 @@ fetch_bun() {
 put_link() { if [ -n "$CACHE" ]; then ln -sfn "$1" ".tools/bin/$2"; else ln -sf "$3" ".tools/bin/$2"; fi; }
 
 if [ -n "$CACHE" ] || [ "$(go env GOVERSION 2>/dev/null)" != "go$GO" ]; then
-  install_into "$godir" fetch_go go_ok
+  install_into "$godir" fetch_go go_ok bin bin/go bin/gofmt
   for b in go gofmt; do put_link "$godir/bin/$b" "$b" "../go-$GO/bin/$b"; done
 fi
 
 if [ -n "$CACHE" ] || [ "$(bun --version 2>/dev/null)" != "$BUN" ]; then
-  install_into "$bundir" fetch_bun bun_ok
+  install_into "$bundir" fetch_bun bun_ok bun
   put_link "$bundir/bun" bun "../bun-$os-$bunarch/bun"
 fi
 echo "tools: $(go env GOVERSION) bun $(bun --version)"

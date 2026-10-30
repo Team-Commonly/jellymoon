@@ -39,12 +39,11 @@ merges only when all of these hold at the exact PR head:
   security boundary (`landing.md`, Threat model);
 - the verifier's ledger line at the head is `PASS` (the check of record, `docs/development/verifier.md`), and no
   verifier wrote a `FAIL` at that head: a FAIL blocks the head, whoever wrote it, and the fix is a new head;
-- for a protected path, or a PR adding a `gitleaks:allow` line, the review's pod verdict also passes (one review per head; the operator posts it, there is no separate reviewer). It is a
+- the review's pod verdict also passes, for every PR (one review per head; the operator posts it, there is no separate reviewer). It is a
   message by a listed reviewer's immutable user id, whose first line is `jellymoon#<pr> <full head>` and whose
-  last line is `GATE: PASS`. A protected path always needs it.
+  last line is `GATE: PASS`. No path and no scan result waives it;
+- the secret scans (`make secrets-range` over the PR's commits, and `make secrets` in the preflight) found nothing. They can only refuse; a clean scan waives nothing, and what they do not read is listed in `landing.md` (Known limits) for the review to cover.
 - Workers never merge. GitHub review text is not consulted.
-- Protected paths: every changed path except `progress.md` and documentation files under `docs/` (`.md .html` only: gitleaks does not scan images, and
-  `docs/development/` is protected; Go compiles `docs/**/*.go`, so those are protected) (`landing.md`). A rename counts both sides.
   Run land from a clean checkout of main. The check lives in the checked-out tree, so it is operator discipline: it binds
   only a tree that really is main.
 - **Verifiers run PR code only after the same trust gate:** `make verify-preflight PR=<n>` (`landing.md`).

@@ -1,7 +1,6 @@
 // Pure decisions behind scripts/land.mjs (docs/development/landing.md). Every function takes parsed data and
 // returns { ok, reason } (or a plain value); the shell-outs live in land.mjs. Tests: scripts/check-land.mjs.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'BOOTSTRAP'];
 const VERIFIER = /^(opus|sonnet|haiku|fable)-verifier$/;
@@ -18,34 +17,6 @@ export function parseLedger(text) {
     return { pr: ref(pr), head: head.trim().toLowerCase(), verdict: verdict.trim().toUpperCase(), by: by.trim().toLowerCase(), when: when.trim(), note: note.trim() };
   });
 }
-// The one protected-path rule. The preflight and the merge run code from the PR tree, so a path is unprotected only
-// if it is inert: progress.md, or a documentation file (an extension below) under docs/. Go compiles docs/**/*.go, so
-// the extension decides, not the directory. A rename counts both sides. files: { filename, previous_filename? }.
-// docs/development/ is protected: it holds the land rules and the verifier protocol, which a PR must not rewrite unreviewed.
-// Only text that gitleaks scans in git mode is inert: .md and .html. Images (svg, png, ...) are not scanned, so a token in one would
-// land on the ledger alone. Matching is on the lowercased path, because macOS checkouts are case-insensitive.
-const INERT = /^(progress\.md|docs\/(?!development\/).+\.(md|html))$/;
-const REGULAR = ['000000', '100644', '100755']; // add and delete show 000000; a symlink (120000) or gitlink (160000) is never inert
-// A path whose lowercase equals another path's (in main's tree or in the same PR), or a directory spelled two ways, would land on top of
-// that other path on a case-insensitive checkout.
-export function collides(paths, tree) {
-  const spell = new Map();
-  for (const n of [...tree, ...paths]) {
-    const parts = n.split('/');
-    for (let k = 1; k <= parts.length; k += 1) {
-      const p = parts.slice(0, k).join('/');
-      const key = p.toLowerCase();
-      if (!spell.has(key)) spell.set(key, new Set());
-      spell.get(key).add(p);
-    }
-  }
-  return paths.some((n) => n.split('/').some((_, k, a) => spell.get(a.slice(0, k + 1).join('/').toLowerCase()).size > 1));
-}
-// APFS case-folds Unicode (U+017F folds to s, U+212A to k) and ignores normalization, and Windows-style names drop a trailing dot or
-// space. Rather than chase each fold: a non-ASCII byte, an empty, `.` or `..` segment, or a segment ending in a dot or space is protected.
-export const oddPath = (n) => /[^\x20-\x7e]/.test(n) || n.split('/').some((seg) => seg === '' || seg === '.' || seg === '..' || /[. ]$/.test(seg));
-export const touchesProtected = (files, tree = []) => files.some((f) => (f.modes || []).some((m) => !REGULAR.includes(m)) || [f.filename, f.previous_filename].some((n) => n && (oddPath(n) || !INERT.test(n.toLowerCase()))))
-  || collides(files.map((f) => f.filename), tree);
 // Accepted reviewers come from operator env JM_VERDICT_REVIEWERS, `<id>:<Name>,<id>:<Name>`, never from the repo. The id is the pod user's
 // immutable id; a username is a mutable label any pod member can set on an agent they install.
 export const parseReviewers = (text) => String(text || '').split(',').map((e) => e.trim()).filter(Boolean).map((e) => {
@@ -78,7 +49,7 @@ export function checkLedger(rows, { pr, head }) {
   if (primary?.verdict !== 'PASS') return { ok: false, reason: `no verifier PASS for #${pr} at ${head.slice(0, 8)}` };
   return { ok: true, primary };
 }
-const msgUser = (m) => (m.userId && typeof m.userId === 'object' && m.userId._id ? String(m.userId._id) : null); // a string userId is not a populated user: ignored
+const msgUser = (m) => (m.userId && typeof m.userId === 'object' && typeof m.userId._id === 'string' && m.userId._id ? m.userId._id : null); // a string userId is not a populated user: ignored
 const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at) || 0;
 // A message counts for #N only if its FIRST non-empty line is exactly `jellymoon#<N> <head>` and its server-stamped
 // author id is a listed reviewer's. The latest such message per reviewer id decides (messages arrive newest first, so on a
@@ -113,15 +84,6 @@ export function checkHead(pr, local) {
 export function landAction(pr, rows) {
   if (pr.state !== 'MERGED') return 'check';
   return at(rows, pr.number, pr.headRefOid).some((r) => ['LANDED', 'MERGED-UNVERIFIED'].includes(r.verdict)) ? 'already-landed' : 'record-only';
-}
-// `git diff --raw -M` output (`:old new oldsha newsha STATUS<TAB>path[<TAB>path2]`) to the shape touchesProtected reads: renames
-// and copies list both names, and both modes ride along so a symlink or gitlink is protected wherever it sits.
-export function filesFromRaw(text) {
-  return text.split('\n').filter(Boolean).map((l) => {
-    const [meta, a, b] = l.split('\t');
-    const [oldMode, newMode, , , status] = meta.slice(1).split(' ');
-    return { ...(/^[RC]/.test(status) ? { filename: b, previous_filename: a } : { filename: a }), modes: [oldMode, newMode] };
-  });
 }
 export const checkMain = (before, after) => (before === after ? { ok: true }
   : { ok: false, reason: `main moved from ${before.slice(0, 8)} to ${after.slice(0, 8)} during the run; run land again` });
@@ -228,43 +190,10 @@ export function checkCheckout({ head, mainTip, porcelain, remoteV, config, lsv =
   if (/^http\..*extraheader/im.test(config)) return { ok: false, reason: 'the git config carries an http extraheader (a credential); remove it' };
   return { ok: true };
 }
-// An added line with the secret scanner's allow marker is a way to hide a secret: such a PR needs the pod verdict. Header lines
-// (from `diff --git` to the first `@@`) are skipped; an added line starting `++` is content, not a header.
-export function addsAllowMarker(diff) {
-  let header = false;
-  return diff.split('\n').some((l) => {
-    if (l.startsWith('diff --git')) header = true;
-    else if (l.startsWith('@@')) header = false;
-    return !header && l.startsWith('+') && l.includes('gitleaks:allow');
-  });
-}
-// Text, by land's own strict rule: valid UTF-8 (a decoded invalid byte is U+FFFD) with no NUL, no C0 control other than \t \n \f \r, and no DEL.
-// Anything else (ELF, zip, PDF with binary streams, Mach-O, wasm, SQLite, tar) is never handed to the scanner, which types files by their
-// leading bytes and skips what it calls application/*; it makes the PR protected instead.
-export const isPlainText = (x) => !/[\u0000-\u0008\u000b\u000e-\u001f\u007f\ufffd]/.test(x);
-// Every scanned text starts with this fixed plain padding. The scanner types a file by its first bytes, at offsets up to 32773 (tar's
-// "ustar" at 257, DICOM's "DICM" at 128, ISO's "CD001" at 32769), and skips what it calls application/*; with 33,600 bytes of plain lines
-// first, the bytes it sniffs are always this padding, never the content (measured on the pinned gitleaks: docs/development/landing.md).
-export const SCAN_PREFIX = 'jellymoon-range-scan\n'.repeat(1600);
-// What merging head into main's tip would change: the real merge result, not a merge-base diff (a criss-cross history can make
-// that empty). run(args) is `git` with those args. A conflict throws. No external diff or textconv can empty the diff.
-export function mergeResult(run, mainTip, head) {
-  let tree;
-  try { tree = run(['merge-tree', '--write-tree', mainTip, head]).split('\n')[0].trim(); } catch { throw new Error(`${head.slice(0, 8)} does not merge cleanly into main ${mainTip.slice(0, 8)}`); }
-  const diff = (...a) => run(['-c', 'diff.external=', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', ...a, mainTip, tree]);
-  // Every commit's added lines too: `gh pr merge --merge` keeps them all, and gitleaks honours a marker per commit, so a marker
-  // added and removed inside the PR is invisible to the merge result. -m shows merge commits against each parent.
-  const history = run(['-c', 'diff.external=', 'log', '-p', '-m', '-U0', '--no-ext-diff', '--no-textconv', '--no-color', '--format=', `${mainTip}..${head}`]);
-  const treePatch = diff('-U0');
-  const messages = run(['log', '--format=%B', `${mainTip}..${head}`]); // gitleaks git mode never reads commit messages
-  // Git's own verdict on binary: a NUL in the first 8000 bytes, or a `binary`/`-diff` attribute. `-\t-` in --numstat. The scanner skips these.
-  let binary = diff('--numstat').split('\n').some((l) => l.startsWith('-\t-\t'));
-  // Every blob the range adds, not only the ones in the merge result: `gh pr merge --merge` keeps each commit, so a secret added in
-  // commit 1 and deleted in commit 2 stays in main's history, in a place gitleaks git mode may skip (binary, image, lockfile, node_modules).
-  const shas = [...new Set(run(['rev-list', '--objects', '--filter=object:type=blob', '--filter-provided-objects', `${mainTip}..${head}`]).split('\n').filter(Boolean).map((l) => l.split(' ')[0]))];
-  const added = shas.map((sha) => run(['cat-file', 'blob', sha]));
-  binary = binary || !added.every(isPlainText) || !isPlainText(messages); // land decides text itself; the scanner's file-type sniffing is not trusted
-  return { tree, messages, added, files: filesFromRaw(diff('--raw', '-M')), binary, treePatch, patch: `${treePatch}\n${history}` };
+// The tree `git merge-tree --write-tree` gives for main's tip plus the head: what GitHub's merge would produce, and what the preflight
+// must reproduce. run(args) is `git` with those args. A conflict throws.
+export function mergeTree(run, mainTip, head) {
+  try { return run(['merge-tree', '--write-tree', mainTip, head]).split('\n')[0].trim(); } catch { throw new Error(`${head.slice(0, 8)} does not merge cleanly into main ${mainTip.slice(0, 8)}`); }
 }
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
@@ -285,28 +214,8 @@ export function trackThrowaway(dir, wt, run) {
   process.on('exit', clean);
   return () => { process.off('exit', clean); clean(); };
 }
-// Does this PR need the reviewer's pod verdict? A protected path, a gitleaks:allow marker anywhere in its history, or a secret that
-// gitleaks finds once markers are ignored (`hides`).
-export const needsVerdict = ({ files, tree, patch, hides, binary = false }) => binary || touchesProtected(files, tree) || addsAllowMarker(patch) || hides;
-// Inert files are scanned by CONTENT at the merge result, written under neutral names (<dir>/inert/<n>.txt) and scanned with no config
-// from the PR: the scanner skips binaries and its own allowlisted paths (node_modules, bower_components, gitleaks.toml), so a path
-// inside a blind spot must not be able to carry a secret. blob(path) is the file's content at the merge result; scan(dir) is true when clean.
-function inertScan(merged, names, blob, scan) {
-  const inert = merged.files.filter((f) => f.modes[1] !== '000000' && !touchesProtected([f], names));
-  const texts = [...inert.map((f) => blob(`${merged.tree}:${f.filename}`)), ...merged.added, ...(merged.messages?.trim() ? [merged.messages] : [])];
-  if (!texts.length) return true;
-  if (!texts.every(isPlainText)) return false; // not text by land's rule: treated as a hit, so the PR needs the verdict
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-inert-'));
-  try {
-    fs.mkdirSync(path.join(dir, 'inert'));
-    texts.forEach((x, i) => fs.writeFileSync(path.join(dir, 'inert', `${i}.txt`), SCAN_PREFIX + x));
-    return scan(path.join(dir, 'inert'));
-  } finally { removeTree(dir); }
-}
 // A dry run decides everything and merges nothing.
 export const mergeAction = ({ dryRun }) => (dryRun ? 'stop' : 'merge');
 // The ledger note for a landed PR: GitHub's merge commit must have the tree that was tested. A mismatch (main or the base moved in the
 // window between the last re-read and the merge) cannot be undone, but it is recorded and shouted instead of going unseen.
 export const landedNote = (sha, tested, merged) => (tested === merged ? sha : `${sha} TREE-MISMATCH tested ${tested} merged ${merged}`);
-// Did the neutral-name scan find a secret in a PR that no other rule protects? (A PR already protected needs no second look.)
-export const hiddenInInert = (merged, names, blob, scan) => !needsVerdict({ files: merged.files, tree: names, patch: merged.patch, binary: merged.binary, hides: false }) && !inertScan(merged, names, blob, scan);

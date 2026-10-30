@@ -42,5 +42,6 @@ GATE: PASS | GATE: FAIL
   row (`<pr> <head> PASS <model>-verifier <when> <note>`, `landing.md`): the `GATE:` line becomes the verdict, the
   verifier's model becomes `by`, and the `FINDINGS` line goes in `note`. `make land` reads the row. The coordinator
   writes no verdict the report does not carry.
-- A protected-path PR still needs the review's pod verdict at the same head, posted by the operator (one review, no separate reviewer; the accepted ids are operator env `JM_VERDICT_REVIEWERS`)
-  (`landing.md`).
+- Every PR still needs the review's pod verdict at the same head, posted by the operator (one review, no separate reviewer; the accepted ids are operator env `JM_VERDICT_REVIEWERS`)
+  (`landing.md`). The secret scans only refuse, never waive.
+- The verdict covers secrets in what the scanners skip: added-then-deleted blobs, lockfiles, `node_modules`, binaries and images, and commit metadata (headers, author and committer fields, file names, a message after a NUL). Read the range for them (`landing.md`, Known limits).

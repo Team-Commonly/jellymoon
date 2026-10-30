@@ -4,7 +4,11 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
-
+## 2026-10-30 · P08 one review per head, scans only refuse (unit P08, round 16)
+- **Changed:** every land needs the ledger PASS and the pod verdict; no path rule or scan result waives either. Deleted the inert rule, `needsVerdict`, the neutral-name re-scan, the range-blob enumeration, `touchesProtected` and the path cases. `make secrets-range` now exits 3 on a finding; a hit or a failed scan refuses. Reviewers env is checked before the token read ("malformed" if no valid entry); `msgUser` takes only a string `_id`.
+- **Evidence:** check-land 153, check-land-e2e 73, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge; core LOC 2103 to 1787.
+- **Next:** land #10 with `--bootstrap`.
+- **Surprising:** `go run` reports a child's exit 3 as "exit status 3" and exits 1 itself, so land reads stderr to tell a finding from a failed scan.
 
 ## 2026-10-30 · ADR 0003 accepted (unit PC10)
 - **Changed:** ADR 0003 Accepted (owner ruling) with its unknowns named, coalescing leftovers removed, ADR 0002 citations by section and quote, a scope pointer in ADR 0002, GLOSSARY boot entry, nine dead imports and one unused local removed, `noUnusedLocals` on; **Evidence:** `make preflight`, `bun test podcore` (126 tests, per-type stray-caller mutants red except tick, which is equivalent); **Next:** ADR 0002 restart clause; **Surprising:** the well-formed stray-caller rows never reached the refusal path, so a callerOf leak survived until one field was malformed per row.

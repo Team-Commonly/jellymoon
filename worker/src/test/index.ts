@@ -63,6 +63,14 @@ async function testRoute(req: Request, env: Env, path: string): Promise<Response
   if (fired) return internal(env, fired[1], 'alarm-fired', {});
   const evict = /^\/__test\/evict\/([^/]+)$/.exec(path);
   if (evict && req.method === 'POST') return internal(env, evict[1], 'evict', {});
+  const discard = /^\/__test\/discard\/([^/]+)$/.exec(path);
+  if (discard && req.method === 'POST') return internal(env, discard[1], 'discard', await parse(req) ?? {});
+  const who = /^\/__test\/instance\/([^/]+)$/.exec(path);
+  if (who) return internal(env, who[1], 'instance', {});
+  const stored = /^\/__test\/stored-alarm\/([^/]+)$/.exec(path);
+  if (stored) return internal(env, stored[1], 'stored-alarm', {});
+  const woke = /^\/__test\/woke\/([^/]+)$/.exec(path);
+  if (woke) return Response.json(JSON.parse((await env.DB.prepare('select v from kv where k = ?').bind(`woke:${woke[1]}`).first<{ v: string }>())?.v ?? 'null'));
   if (path === '/__test/stats' && req.method === 'GET') return statsRoute(env);
   return fail('not_found', 'No such test route.');
 }

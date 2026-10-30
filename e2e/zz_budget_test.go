@@ -10,6 +10,7 @@ import (
 // partial run.
 func TestF14Budget(t *testing.T) {
 	needFake(t)
+	countTest(t)
 	var missing, failed []string
 	for _, name := range suiteTests {
 		if v, ok := outcomes.Load(name); !ok {

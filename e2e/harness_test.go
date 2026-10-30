@@ -64,6 +64,7 @@ func needFake(t *testing.T) {
 }
 
 func track(t *testing.T) {
+	countTest(t)
 	t.Cleanup(func() { outcomes.Store(t.Name(), t.Failed()) })
 }
 

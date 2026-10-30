@@ -24,7 +24,7 @@
         "a failing step names itself and prints the last 20 events",
         "the run ends with E2E_MS=<n> STEPS=<k>/<k>"
       ],
-      "test": "go test ./e2e -run TestF02",
+      "test": "make e2e-a (steps 1 to 3: go test ./e2e -run TestF02; step 4: the closing-line assertion in the Makefile target)",
       "passes": true
     },
     {

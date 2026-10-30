@@ -96,7 +96,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 
 | Test | What it proves |
 |---|---|
-| `TestF02` | F02: the harness starts the server with a persisted state dir, `/healthz` answers 200 within 10 s, a failing step names itself and prints the last 20 events, and the run ends with the closing line. `TestStepPrinter` checks the printer alone, with a fake failing step. |
+| `TestF02` | F02: the server's own command line (read from the process table) carries `--persist-to <the run's data dir>/state` and that dir holds state, `/healthz` answers 200 within 10 s, and a failing step names itself and prints the last 20 events. The closing line is judged by `make e2e-a`, not by a test. `TestStepPrinter` checks the printer alone, with a fake failing step. |
 | `TestF07` | F07: ambient messages wake nobody; three assignments make one wake; a pending wake is re-sent on the heartbeat at exactly 60 s and not 1 ms before, acked or not (only a run claim consumes it); only the hosting computer is woken or re-woken. |
 | `TestF10` | F10 steps 1 to 7, plus restore after expiry, no restore after a release, and `forbidden` for a member who may not release. |
 | `TestExpiryZeroTraffic` | After the last renewal the suite sends nothing. Still claimed at deadline - 1; at the deadline members get `task.updated` (no claim) and one `claim.released{expired}`. |
@@ -116,7 +116,11 @@ once the clock passes it; one `claim.released` over live delivery and over a rep
 
 ## Output lines
 
-- `E2E_MS=<n> STEPS=<k>/<k>`: the closing line. `n` is the suite wall clock after `go test` finishes its tests; `k/k` counts the named steps that passed over the named steps that ran (F02 names its steps; a failing step prints its name and the last 20 events the suite saw before it).
+- `E2E_MS=<n> STEPS=<k>/<n>`: the closing line, printed once after every test has ended. `n` is the suite wall clock after `go test`
+  finishes its tests. The steps are every named step of the tests that name them (`TestF02`) plus one step for each other test that
+  ran; a skipped test counts nothing. `k` is the steps that passed, so a red run prints `k < n`. A failing named step prints its
+  name and the last 20 events the suite saw before it. A test cannot see the run's last line, so `make e2e-a` judges it: the
+  last line before `go test`'s own `ok`/`FAIL` must be this line, with `k = n` on a green run and `k < n` on a red one.
 - `LATENESS_MS <kind> <ms>`: observed expiry minus the ledger's deadline, real-clock mode only. `kind` is
   `steady` (zero-traffic expiry), `after_restart_ahead` (deadline after the restart) or
   `after_restart_inside` (deadline inside the outage).

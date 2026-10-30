@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: land tools gen check-gen test test-ts test-go entropy portable secrets hooks preflight
+.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets hooks preflight
 
 tools:
 	scripts/tools.sh
@@ -65,5 +65,10 @@ portable:
 # The only merge path (docs/development/landing.md): make land PR=<n> [ARGS=--dry-run], or make land ARGS=--owed. Needs the JM_* env.
 land:
 	$(BUN) scripts/land.mjs $(PR) $(ARGS)
+
+# Verifiers: the sandboxed merge-result preflight of PR=<n> and nothing else (no ledger, no pod). Needs only JM_REPO.
+# Run it from main's checkout, never from the PR's tree: the PR's own scripts must not run outside the sandbox.
+verify-preflight:
+	$(BUN) scripts/land.mjs $(PR) --preflight-only
 
 preflight: portable check-gen test entropy secrets

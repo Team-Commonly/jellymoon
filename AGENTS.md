@@ -36,10 +36,11 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
   area, `TODO(F07)`-style ids, import boundaries. A new dependency or module gets a `docs/adr/` note.
   Every report states lines added and removed, and what it deleted.
 - **Merging.** Local verification is the authority. `make land PR=<n>` is the only merge path: it proves the
-  exact head green in a sandboxed clean shell, requires the verifier's ledger line at that head (each PASS or
-  FAIL is the verifier's own verdict line, copied verbatim; the coordinator never writes one), and for protected
-  paths (every changed path except `docs/` and `progress.md`; a rename counts both sides) also the reviewer
-  reviewer's pod verdict naming the PR and head. The stack lands as
+  exact head green in a sandboxed clean shell, requires the verifier's ledger line at that head (the coordinator transcribes the
+  report's `GATE:` line, model and `FINDINGS` into the row), and for protected paths (every changed path except
+  `progress.md` and documentation files under `docs/`: `.md .html .svg .png .jpg .gif .webp`; a rename counts both
+  sides) also the reviewer's pod verdict naming the PR and head. Verifiers run a PR's code only in the same
+  sandbox: `make verify-preflight PR=<n>`. The stack lands as
   one PR retargeted to `main`. GitHub checks are not consulted and nothing GitHub reports counts. CI is
   disabled while the repo is private; it returns at public launch only as a thin mirror of `make preflight`.
   Only the coordinator lands (`docs/development/landing.md`, `workflow.md`).

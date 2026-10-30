@@ -4,6 +4,11 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · P08 sandbox and inert docs (unit P08, round 4)
+- **Changed:** protection is now an allow-list of inert paths (`progress.md`, doc extensions under `docs/`; `docs/**/*.go` is protected); the preflight sandbox denies the real home, unix sockets and the keychain service, writes only to its throwaway dir, and is proved by a four-probe check before every land and in `make test`; `make verify-preflight PR=<n>` gives verifiers the same sandbox; deleted the GitHub review-gate code (`review-gate.mjs`, `review-gate.yml`); merge without repo hooks, scripts/ must equal main's, one PR number, real worktree-add reason, atomic stale-lock takeover, `MERGED-UNVERIFIED` for out-of-band merges.
+- **Evidence:** check-land 107 cases (sandbox proof included), check-review-gate 11 + 33; core LOC budget 1500 to 1455.
+- **Next:** land #10 with `--bootstrap`; the PR template still lists the old protected paths and `ci.yml` still names the deleted workflow (neither in this unit's scope).
+
 ## 2026-10-29 · P08 final fixes (unit P08, round 3)
 - **Changed:** every path but `docs/` and `progress.md` is now protected (renames count both sides); the preflight runs in a macOS `sandbox-exec`; pod paging dedupes by id and fails closed at a boundary; a bad token file is never echoed; `--dry-run` writes no ledger row; both workflows are `workflow_dispatch` only; CODEOWNERS deleted; one wording for who writes verdict rows; internal labels scrubbed.
 - **Evidence:** `make preflight` green in the stripped shell; check-land 89 cases (sandbox proof included), check-review-gate 44 + 23.

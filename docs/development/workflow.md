@@ -32,26 +32,28 @@ after a surprise.
 
 ## Review and merge
 Local verification is the authority. **GitHub checks are not consulted at all, and nothing GitHub reports counts:**
-both workflows are disabled while the repo is private (CI is a bottleneck and not unlimited), and any PR
+the CI workflow is disabled while the repo is private (CI is a bottleneck and not unlimited), and any PR
 that touches `.github/workflows/` could fake a green check anyway. `make land PR=<n>` is the only merge path
 (`docs/development/landing.md`). It merges only when all of these hold at the exact PR head:
-- a clean-shell `make preflight` passes at that head;
+- a clean-shell `make preflight` passes on the merge result (main plus that head), inside the sandbox land proves before each run;
 - the verifier's ledger line at the head is `PASS` (the check of record, `docs/development/verifier.md`), and the
   preflight ran on the merge result (main plus the head);
 - for a protected path, the reviewer's pod verdict also passes. It is a message by a listed reviewer's
   server-stamped username, whose first line is `jellymoon#<pr> <full head>` and whose last line is `GATE: PASS`.
 - Workers never merge. GitHub review text is not consulted.
-- Protected paths: every changed path except `docs/` and `progress.md` (`landing.md`). A rename counts both
-  sides. Run land from main.
+- Protected paths: every changed path except `progress.md` and documentation files under `docs/` (`.md .html .svg .png
+  .jpg .gif .webp`; Go compiles `docs/**/*.go`, so those are protected) (`landing.md`). A rename counts both sides.
+  Run land from main; it refuses if this checkout's `scripts/` differ from main's.
+- **Verifiers run the PR's code only in the same sandbox:** `make verify-preflight PR=<n>` (`landing.md`).
 - **Accepted reviewers:** `.github/opus-reviewers.txt` is the only place they are written (`Name username`);
   the test asserts the file parses and pins no name.
-- **How the verdict is read** (`scripts/review-gate.mjs`, shared with land). The verdict is the message's LAST
+- **How the verdict is read** (`verdictOf` in `scripts/land-decide.mjs`). The verdict is the message's LAST
   non-empty line, with HTML comments removed and emphasis and list or heading markers stripped. It passes only
   if that is exactly `GATE: PASS` (case-insensitive). A missing line, a FAIL after the PASS, prose after it, an
   indented line, or a fullwidth or zero-width variant blocks. Cases: `scripts/check-review-gate.mjs`; land's
   cases: `scripts/check-land.mjs`.
 - **CI** returns at public launch only as a thin mirror of `make preflight` for outside contributors, never as
-  the gate. The workflow files are kept, with a disabled header.
+  the gate. The review-gate workflow is deleted; `ci.yml` stays disabled.
 - **Why no merge queue:** the repo is private on GitHub Free. `make land` is the one door, with a lock so two lands cannot run at once.
 
 ### Temporary: remove when the reviewers return
@@ -61,7 +63,8 @@ different model family from the first PASS, with a note starting `reviewer-gate-
 second verifier is fresh-context: it has never seen the builder's or the first verifier's reasoning. Every such
 land appends a `REGATE-OWED` row; `make land ARGS=--owed` lists the PRs still owed a reviewer re-gate (it blocks
 nothing). Whatever a later reviewer re-gate fails is fixed forward. The ledger `by` column is `<model>-verifier`
-(`opus`, `sonnet`, `haiku` or `fable`) and `land`. Each PASS or FAIL row is the verifier's own verdict line, copied verbatim into the ledger by the coordinator. The coordinator never writes a verdict of its own.
+(`opus`, `sonnet`, `haiku` or `fable`) and `land`. The coordinator transcribes each PASS or FAIL row from the
+verifier's report: its `GATE:` line becomes the verdict, its model becomes `by`, and its `FINDINGS` line goes in `note`.
 
 ## Design-gated features
 - **F18 (client) and F19 (connectors)** stay blocked until their options docs are reviewed by the maintainers.

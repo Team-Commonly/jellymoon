@@ -1,12 +1,13 @@
 // Pure decisions behind scripts/land.mjs (docs/development/landing.md). Every function takes parsed data and
 // returns { ok, reason } (or a plain value); the shell-outs live in land.mjs. Tests: scripts/check-land.mjs.
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
-import { verdictOf } from './review-gate.mjs';
 
-const KNOWN = ['PASS', 'FAIL', 'LANDED', 'REGATE-OWED', 'BOOTSTRAP'];
+const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'REGATE-OWED', 'BOOTSTRAP'];
 const VERIFIER = /^(opus|sonnet|haiku|fable)-verifier$/;
-const SEAT_NOTE = /^reviewer-gate-unavailable/; // TEMPORARY: remove when the reviewers return
+const SEAT_NOTE = /^reviewer-gate-unavailable/i; // TEMPORARY: remove when the reviewers return
 const ref = (v) => String(v).trim().replace(/^#/, '');
 
 // Rows are normalised (trim, case). The first line is dropped only if it IS the header.
@@ -17,6 +18,30 @@ export function parseLedger(text) {
     const [pr = '', head = '', verdict = '', by = '', when = '', note = ''] = l.split('\t');
     return { pr: ref(pr), head: head.trim().toLowerCase(), verdict: verdict.trim().toUpperCase(), by: by.trim().toLowerCase(), when: when.trim(), note: note.trim() };
   });
+}
+
+// The one protected-path rule. The preflight and the merge run code from the PR tree, so a path is unprotected only
+// if it is inert: progress.md, or a documentation file (an extension below) under docs/. Go compiles docs/**/*.go, so
+// the extension decides, not the directory. A rename counts both sides. files: { filename, previous_filename? }.
+const INERT = /^(progress\.md|docs\/.+\.(md|html|svg|png|jpg|gif|webp))$/;
+export const touchesProtected = (files) => files.some((f) => [f.filename, f.previous_filename].some((n) => n && !INERT.test(n)));
+
+// One reviewer per line: `Name username` (the username is the pod's server-stamped one). A single token is a name with no username.
+export function readReviewerEntries(text) {
+  return text.split('\n').map((l) => l.replace(/#.*/, '').trim()).filter(Boolean).map((l) => {
+    const parts = l.split(/\s+/);
+    return parts.length > 1 ? { name: parts.slice(0, -1).join(' '), username: parts.at(-1) } : { name: l, username: null };
+  });
+}
+
+// The verdict is the LAST non-empty line, HTML comments removed, emphasis and list or heading markers stripped. Only
+// exactly `GATE: PASS` (case-insensitive) passes. Returns 'PASS', 'BLOCK', or null (nothing to judge). An indented line is code and blocks.
+export function verdictOf(text) {
+  const last = text.replace(/<!--[\s\S]*?-->/g, '').split('\n').filter((l) => l.trim()).pop();
+  if (last === undefined) return null;
+  if (/^(\t| {4})/.test(last)) return 'BLOCK';
+  const line = last.replace(/[*_`~]/g, '').trim().replace(/^(#{1,6}|[-+]|\d+\.)\s+/, '');
+  return /^GATE: PASS$/i.test(line) ? 'PASS' : 'BLOCK';
 }
 
 const family = (by) => VERIFIER.exec(by || '')?.[1] ?? null;
@@ -79,10 +104,10 @@ export function checkHead(pr, local) {
   return { ok: true };
 }
 
-// Idempotency: what to do with this PR.
+// Idempotency: what to do with this PR. MERGED-UNVERIFIED (merged out of band, recorded with no check) ends it too.
 export function landAction(pr, rows) {
   if (pr.state !== 'MERGED') return 'check';
-  return at(rows, pr.number, pr.headRefOid).some((r) => r.verdict === 'LANDED') ? 'already-landed' : 'record-only';
+  return at(rows, pr.number, pr.headRefOid).some((r) => ['LANDED', 'MERGED-UNVERIFIED'].includes(r.verdict)) ? 'already-landed' : 'record-only';
 }
 
 // PRs that still owe a reviewer re-gate. regated(pr, head, since) says a reviewer's pod PASS exists after that row.
@@ -158,14 +183,62 @@ export function appendLedger(file, cols, { dry = false } = {}) {
 export const checkPlatform = (platform) => (platform === 'darwin' ? { ok: true }
   : { ok: false, reason: `preflight sandbox is macOS-only; add one for ${platform} before landing here` });
 
-// macOS sandbox-exec profile for the preflight, which runs the PR's own code. Network stays allowed (tools.sh may
-// download a toolchain). Writes are denied except the allow-list; reads and writes of the secret dirs and the
-// ledger's dir are denied LAST so they win over any allow above. Paths are resolved through symlinks first (macOS /tmp is a link).
+
+// One land at a time per clone: an mkdir lock holding the PID. A dead owner, or a lock dir with no readable pid, is
+// stale; it is taken over by renaming the stale dir to a name of our own (atomic: one taker wins), then mkdir.
+export function acquireLock(dir, { pid = process.pid, alive = (p) => { try { process.kill(p, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } } } = {}) {
+  const take = () => { fs.mkdirSync(dir); fs.writeFileSync(path.join(dir, 'pid'), String(pid)); };
+  try { take(); return { ok: true }; } catch (e) { if (e.code !== 'EEXIST') throw e; }
+  let owner = NaN;
+  try { owner = Number(fs.readFileSync(path.join(dir, 'pid'), 'utf8').trim()); } catch { /* no pid file: stale */ }
+  if (owner && alive(owner)) return { ok: false, reason: `another land is running (pid ${owner})` };
+  try { fs.renameSync(dir, `${dir}.stale-${pid}`); } catch { return { ok: false, reason: 'another land took the stale lock first' }; }
+  fs.rmSync(`${dir}.stale-${pid}`, { recursive: true, force: true });
+  try { take(); return { ok: true }; } catch { return { ok: false, reason: 'could not take the land lock' }; }
+}
+
+// macOS sandbox-exec profile for the preflight, which runs the PR's own code. The LAST matching rule wins. Order:
+// everything readable; the real home unreadable; allow back what the preflight needs (read: allowRead and the
+// writable dirs; write: only allowWrite and /dev); then the directories holding the token file and the ledger are hidden
+// for good. Unix sockets are closed (docker.sock and every local daemon) except the DNS resolver's, and securityd is
+// closed so /usr/bin/security cannot read the keychain. TCP stays open (tools.sh may download a toolchain) and trustd
+// stays reachable (TLS needs it). Paths are resolved through symlinks first (macOS /tmp is a link).
 const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
 const quote = (p) => `"${p.replace(/[\\"]/g, '\\$&')}"`;
-export function sandboxProfile({ home, ledger, allowWrite }) {
-  const sub = (ps) => ps.map((p) => `(subpath ${quote(real(p))})`).join(' ');
-  const secrets = ['.commonly', '.claude', '.codex', '.ssh', '.aws', '.config'].map((d) => path.join(real(home), d));
-  return ['(version 1)', '(allow default)', '(deny file-write*)', `(allow file-write* ${sub(allowWrite.filter(Boolean))})`,
-    `(deny file-read* file-write* ${sub([...secrets, path.dirname(ledger)])})`].join('\n');
+export function sandboxProfile({ homes, allowRead = [], allowWrite, hide = [] }) {
+  const rule = (verb, ps) => { const s = [...new Set(ps.filter(Boolean).map(real))].map((p) => `(subpath ${quote(p)})`); return s.length ? `(${verb} ${s.join(' ')})` : ''; };
+  const hidden = hide.filter(Boolean).flatMap((f) => [path.dirname(f), path.dirname(real(f))]);
+  return ['(version 1)', '(allow default)', rule('deny file-read*', homes), rule('allow file-read*', [...allowRead, ...allowWrite]),
+    '(deny file-write*)', rule('allow file-write*', [...allowWrite, '/dev']), rule('deny file-read* file-write*', hidden),
+    '(deny network-outbound (remote unix-socket))', '(allow network-outbound (literal "/private/var/run/mDNSResponder"))',
+    '(deny mach-lookup (global-name "com.apple.SecurityServer"))'].filter(Boolean).join('\n');
+}
+
+// Proves the profile before every preflight, under the exact profile (not nested). Each forbidden action must FAIL;
+// a controls pair guards against a profile that fails everything. Exit codes only: no keychain secret is ever read.
+export async function proveSandbox({ profile, dir, home }) {
+  const where = real(path.dirname(dir));
+  const sock = path.join(where, `jm-probe-${process.pid}.sock`);
+  const outside = path.join(where, `jm-probe-${process.pid}.out`);
+  const run = (boxed, cmd, ...args) => new Promise((done) => {
+    const p = spawn(boxed ? 'sandbox-exec' : cmd, boxed ? ['-p', profile, cmd, ...args] : args, { stdio: 'ignore', cwd: dir });
+    p.on('error', () => done(-1));
+    p.on('exit', (code) => done(code ?? -1));
+  });
+  const sh = (boxed, script, arg) => run(boxed, '/bin/sh', '-c', script, 'sh', arg);
+  const connect = '/usr/bin/nc -w 2 -U "$1" </dev/null';
+  const server = net.createServer((c) => c.end());
+  try {
+    await new Promise((ok, no) => { server.once('error', no); server.listen(sock, ok); });
+    if (await sh(true, 'echo x > "$1"', path.join(dir, 'probe-control')) !== 0) return { ok: false, reason: 'sandbox profile does not run: a control write to the throwaway dir failed' };
+    if (await sh(false, connect, sock) !== 0) return { ok: false, reason: 'sandbox probe is broken: the test socket refused an unsandboxed connect' };
+    const keychain = await run(false, '/usr/bin/security', 'default-keychain') === 0; // a host with no keychain cannot tell
+    const probes = [...[].concat(home).map((h) => [`reading a file under ${h}`, () => run(true, '/bin/ls', h)]),
+      ['connecting to a unix socket', () => sh(true, connect, sock)],
+      ['security find-generic-password (keychain)', () => run(true, '/usr/bin/security', 'find-generic-password', '-s', 'jm-probe-no-such-item')],
+      ['security default-keychain (keychain)', () => (keychain ? run(true, '/usr/bin/security', 'default-keychain') : 1)],
+      ['writing outside the throwaway dir', () => sh(true, 'echo x > "$1"', outside)]];
+    for (const [name, go] of probes) if (await go() === 0) return { ok: false, reason: `sandbox profile is not holding: ${name}` };
+    return fs.existsSync(outside) ? { ok: false, reason: 'sandbox profile is not holding: writing outside the throwaway dir' } : { ok: true };
+  } finally { server.close(); fs.rmSync(sock, { force: true }); fs.rmSync(outside, { force: true }); }
 }

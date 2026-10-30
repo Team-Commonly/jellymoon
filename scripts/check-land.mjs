@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
-  appendLedger, checkApi, checkHead, checkLedger, checkMain, checkPlatform, checkPodVerdict, checkSecondVerifier, cursorOf,
-  filesFromNameStatus, landAction, owedList, parseLedger, readToken, remoteFor, removeTree, sandboxProfile, scrub, takePage,
+  acquireLock, appendLedger, checkApi, checkHead, checkLedger, checkMain, checkPlatform, checkPodVerdict, checkSecondVerifier, cursorOf,
+  filesFromNameStatus, landAction, owedList, parseLedger, proveSandbox, readToken, remoteFor, removeTree, sandboxProfile, scrub, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -71,6 +71,8 @@ const cases = [
   ['a LANDED row at another head does not count', landAction({ number: 5, state: 'MERGED', headRefOid: H }, ledger(row(5, H2, 'LANDED', 'land', 'abc'))), 'record-only'],
   ['merged without a LANDED row is recorded', landAction({ number: 5, state: 'MERGED', headRefOid: H }, ledger()), 'record-only'],
   ['open is checked', landAction(open(), ledger()), 'check'],
+  ['a MERGED-UNVERIFIED row at the head is idempotent', landAction({ number: 5, state: 'MERGED', headRefOid: H }, ledger(row(5, H, 'MERGED-UNVERIFIED', 'land', 'x'))), 'already-landed'],
+  ['MERGED-UNVERIFIED is a known verdict, not an endorsement (no PASS)', led(ledger(row(5, H, 'MERGED-UNVERIFIED', 'land', 'x'))).reason, `no verifier PASS for #5 at ${H.slice(0, 8)}`],
   // TEMPORARY reviewer-gate-unavailable rule (remove when the reviewers return)
   ...(() => {
     const primary = row(5, H, 'PASS', 'opus-verifier');
@@ -80,6 +82,7 @@ const cases = [
       ['a second verifier on a different model passes', ok([primary, second('sonnet-verifier')]), true],
       ['a second verifier on the same model is refused', ok([primary, second('opus-verifier')]), false],
       ['a second row without the note is refused', ok([primary, second('sonnet-verifier', '')]), false],
+      ['the reviewer note matches case-insensitively', ok([primary, second('sonnet-verifier', 'Reviewer-Gate-Unavailable: fresh')]), true],
       ['a later FAIL second row refuses', ok([primary, second('sonnet-verifier'), row(5, H, 'FAIL', 'sonnet-verifier', 'reviewer-gate-unavailable')]), false],
       ['a coordinator second row is refused', ok([primary, second('coordinator')]), false],
       ['the second row alone is not a primary verdict', led(ledger(second('sonnet-verifier'))).ok, false],
@@ -179,34 +182,65 @@ cases.push(
   ['sandbox: linux is refused with the exact message', checkPlatform('linux').reason, 'preflight sandbox is macOS-only; add one for linux before landing here'],
   ['sandbox: darwin is accepted', checkPlatform('darwin').ok, true],
 );
-const probe = (() => {
-  if (process.platform !== 'darwin' || spawnSync('sandbox-exec', ['-p', '(version 1)(allow default)', 'true']).status !== 0) return null;
+// The probe land runs before every preflight, under the exact profile. It must fail all four forbidden actions, and
+// it must catch a profile that does not hold. It cannot nest inside the preflight sandbox, so it skips there.
+const usable = process.platform === 'darwin' && spawnSync('sandbox-exec', ['-p', '(version 1)(allow default)', 'true']).status === 0;
+if (usable) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'check-sandbox-')));
-  const home = path.join(root, 'home');
-  const work = path.join(root, 'work');
-  fs.mkdirSync(path.join(home, '.ssh'), { recursive: true });
-  fs.mkdirSync(path.join(root, 'ledger'));
-  fs.mkdirSync(work);
+  const [home, work, ledgerDir, tokenDir] = ['home', 'work', 'ledger', 'token'].map((d) => path.join(root, d));
+  [path.join(home, '.ssh'), work, ledgerDir, tokenDir].forEach((d) => fs.mkdirSync(d, { recursive: true }));
   fs.writeFileSync(path.join(home, '.ssh', 'id'), 'FAKE-SECRET');
-  fs.writeFileSync(path.join(root, 'ledger', 'l.tsv'), 'x');
-  const outside = path.join(process.cwd(), `sandbox-probe-${process.pid}`); // the repo dir: not on the allow-list
-  const profile = sandboxProfile({ home, ledger: path.join(root, 'ledger', 'l.tsv'), allowWrite: [work] });
-  const run = (cmd) => spawnSync('sandbox-exec', ['-p', profile, 'sh', '-c', cmd], { encoding: 'utf8' }).status;
-  const r = { readSecret: run(`cat '${home}/.ssh/id' >/dev/null`), readLedger: run(`cat '${root}/ledger/l.tsv' >/dev/null`),
-    writeOutside: run(`echo x > '${outside}'`), writeAllowed: run(`echo x > '${work}/ok'`) };
-  r.leaked = fs.existsSync(outside);
-  fs.rmSync(outside, { force: true });
-  fs.rmSync(root, { recursive: true, force: true });
-  return r;
-})();
-if (probe) {
+  fs.writeFileSync(path.join(ledgerDir, 'l.tsv'), 'x');
+  fs.writeFileSync(path.join(tokenDir, 't'), 'x');
+  const hold = { homes: [home], allowRead: [], allowWrite: [work], hide: [path.join(ledgerDir, 'l.tsv'), path.join(tokenDir, 't')] };
+  const prof = sandboxProfile(hold);
+  const run = (cmd) => spawnSync('sandbox-exec', ['-p', prof, 'sh', '-c', cmd], { encoding: 'utf8' }).status;
+  const outside = path.join(root, 'outside'); // the work dir's parent: not on the allow-list
+  const proven = await proveSandbox({ profile: prof, dir: work, home });
+  const weak = await proveSandbox({ profile: sandboxProfile({ ...hold, homes: [path.join(root, 'elsewhere')] }), dir: work, home });
+  const open2 = await proveSandbox({ profile: '(version 1)(allow default)', dir: work, home });
   cases.push(
-    ['sandbox proof: reading a file in a secrets dir fails', probe.readSecret !== 0, true],
-    ['sandbox proof: reading the ledger dir fails', probe.readLedger !== 0, true],
-    ['sandbox proof: writing outside the temp dir fails and leaves no file', probe.writeOutside !== 0 && !probe.leaked, true],
-    ['sandbox proof: writing inside the allowed dir succeeds', probe.writeAllowed, 0],
+    ['sandbox proof: the profile passes every forbidden-action probe', proven.ok, true],
+    ['sandbox proof: a profile that leaves the home readable is caught', weak.reason, `sandbox profile is not holding: reading a file under ${home}`],
+    ['sandbox proof: an open profile is caught', open2.ok, false],
+    ['sandbox proof: reading a file under the home fails', run(`cat '${home}/.ssh/id' >/dev/null`) !== 0, true],
+    ['sandbox proof: reading the ledger dir fails', run(`cat '${ledgerDir}/l.tsv' >/dev/null`) !== 0, true],
+    ['sandbox proof: reading the token dir fails', run(`cat '${tokenDir}/t' >/dev/null`) !== 0, true],
+    ['sandbox proof: writing outside the work dir fails and leaves no file', run(`echo x > '${outside}'`) !== 0 && !fs.existsSync(outside), true],
+    ['sandbox proof: writing inside the work dir succeeds', run(`echo x > '${work}/ok'`), 0],
+    ['sandbox proof: TMPDIR-style writes outside, even in /tmp, fail', run(`echo x > /tmp/jm-sandbox-probe-${process.pid}`) !== 0 && !fs.existsSync(`/tmp/jm-sandbox-probe-${process.pid}`), true],
   );
+  fs.rmSync(root, { recursive: true, force: true });
 } else console.log('check-land: SKIP sandbox proof (needs macOS with a usable sandbox-exec; one cannot nest inside the preflight sandbox itself)');
+
+// The lock: per clone; a dead owner or a lock dir with no pid is stale and taken over by an atomic rename.
+const lroot = fs.mkdtempSync(path.join(os.tmpdir(), 'check-lock-'));
+const L = path.join(lroot, 'jm-land.lock');
+const first = acquireLock(L, { pid: 111, alive: () => true });
+const live = acquireLock(L, { pid: 222, alive: () => true });
+const dead = acquireLock(L, { pid: 333, alive: () => false });
+const deadPid = fs.readFileSync(path.join(L, 'pid'), 'utf8');
+fs.rmSync(path.join(L, 'pid'));
+const nopid = acquireLock(L, { pid: 444, alive: () => true });
+const nopidPid = fs.readFileSync(path.join(L, 'pid'), 'utf8');
+cases.push(
+  ['lock: a free lock is taken', first.ok, true],
+  ['lock: a live owner refuses', live.reason, 'another land is running (pid 111)'],
+  ['lock: a dead owner is taken over and the pid is ours', dead.ok && deadPid === '333', true],
+  ['lock: a lock dir with no pid file is stale, not an error', nopid.ok && nopidPid === '444', true],
+  ['lock: no stale dir is left behind', fs.readdirSync(lroot).join(), 'jm-land.lock'],
+);
+fs.rmSync(lroot, { recursive: true, force: true });
+
+// land.mjs wiring (shell-outs are not unit-testable): no repo hooks on the merge, one PR number, scripts/ equal to main's.
+const landSrc = fs.readFileSync(new URL('./land.mjs', import.meta.url), 'utf8');
+cases.push(
+  ['land.mjs: the merge disables repo hooks', /'core\.hooksPath=\/dev\/null'/.test(landSrc) && /\.\.\.BASE, 'merge'/.test(src), true],
+  ['land.mjs: refuses more than one PR number', /nums\.length !== 1/.test(landSrc), true],
+  ['land.mjs: outside --bootstrap, scripts/ must equal main\'s', /scriptsAreMains\(mainTip\)/.test(landSrc), true],
+  ['land.mjs: TMPDIR is inside the throwaway dir', /TMPDIR: path\.join\(dir, 'tmp'\)/.test(landSrc), true],
+  ['land.mjs: the preflight runs only after the profile is proved', landSrc.indexOf('proveSandbox(') < landSrc.indexOf("'sandbox-exec', ['-p'"), true],
+);
 
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (bad.length) { console.error(`check-land: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }

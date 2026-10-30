@@ -16,8 +16,9 @@ The first `feature_list.json` feature with `passes: false` and no `blockedBy`, o
   feature, the done-test with its output, lines added and removed.
 - `make preflight` must pass locally. CI is disabled while the repo is private; when it returns at public launch
   it is a thin mirror of `make preflight` for outside contributors, never the gate.
-- A maintainer lands it with `make land` once a verifier's ledger line passes at the PR head. Changes to
-  protocol or security paths (listed in `AGENTS.md`) also need the reviewer's pod verdict at the head.
+- A maintainer lands it with `make land` once a verifier's ledger line passes at the PR head. A change to any
+  protected path (everything but `progress.md` and documentation files under `docs/`; see `AGENTS.md`) also needs the
+  reviewer's pod verdict at the head.
   Local verification is the authority; GitHub checks and review text are not consulted.
 - A new dependency or module needs a short note in `docs/adr/`.
 

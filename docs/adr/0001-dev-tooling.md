@@ -29,7 +29,7 @@ The LOC budget for the slice is a deliberate choice to stay small:
 
 | Area | Cap |
 |---|---|
-| core (`schema/`, `scripts/`) | 2,200 |
+| core (`schema/`, `scripts/`) | 2,300 |
 | podcore | 2,050 |
 | worker | 3,000 |
 | daemon | 3,000 |
@@ -48,3 +48,4 @@ That is under 11k hand-written lines. Agent-written comparables grew without bou
 2026-10-30: core cap 1,800 → 2,000, land I/O seam and end-to-end land cases, P08 r12.
 2026-10-30: core cap 2,000 → 2,100, id-keyed verdict, every-range-blob scan and kill/trust/scrub tests, P08 r14.
 2026-10-30: core cap 2,100 → 2,200, text-by-land rule, padded range scan, per-magic and end-to-end tests, P08 r15.
+2026-10-30: core cap 2,200 → 2,300, OS1: the deny check's per-alternative and near-miss cases, the runner cases and the ee/ boundary-rule pin.

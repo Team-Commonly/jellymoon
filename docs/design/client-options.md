@@ -12,7 +12,7 @@
 2. The engine is HTTP plus a typed WebSocket (`docs/protocol.md`), so **a web client is a thin view**. The e2e test stays API-level, with no UI (`docs/development/workflow.md`). The browser is checked only on a few routes.
 3. Web gives the one thing a TUI cannot: a teammate joins from a link. OAuth for connectors is a browser redirect there. In a TUI it needs a browser handoff anyway.
 4. Don't take on Tauri in the 48-72 h slice. It adds a Rust toolchain, per-target sidecar binaries, a signing key, and an Apple Developer account ($99/yr) before anyone has used the product. The web app wrapped later is the cheap way to reach "desktop". Revisit once someone asks for tray notifications or one-click daemon install.
-5. Keep the daemon headless (login via device flow, `status`, `join`). Its local unix socket and the envelope make a Bubble Tea view a later 1-2 day add, and herdr shows a real audience for it (see section 3).
+5. Keep the daemon headless (login via device flow, `status`, `join`). Its local unix socket and the shared envelope (`docs/protocol.md`, "Socket events") make a Bubble Tea view a later 1-2 day add, and herdr shows a real audience for it (see section 3).
 
 ## 2. Slice client scope (web)
 

@@ -34,7 +34,7 @@ modelled as **a set of operations**, whatever it speaks:
 | Upstream speaks | How its operations are listed | How one is called |
 |---|---|---|
 | Remote MCP (Linear) | `tools/list` | `tools/call` |
-| OpenAPI | the protocol's `operationId`s | HTTP, per the protocol |
+| OpenAPI | the upstream's OpenAPI spec `operationId`s | HTTP, per the upstream's OpenAPI spec |
 | Plain REST, no spec (or a spec too large to pin whole) | a hand-written list in the pin file | HTTP |
 
 The vault, the catalogue pin, the drift check, the write gate and the receipt all key on
@@ -58,7 +58,7 @@ SDK touches that one file, and a REST upstream never loads it.
 
 1. A pod admin clicks Connect Linear. The pod's DO (one connection object per pod) calls `addMcpServer("linear", "https://mcp.linear.app/mcp/readonly")`. The vendor runs OAuth 2.1 with dynamic client registration ([Linear docs](https://linear.app/docs/mcp)); the Agents SDK handles the redirect and callback.
 2. The access and refresh tokens land in DO SQLite, encrypted by our envelope layer. They never leave the DO.
-3. The agent holds only `cmr_`. It calls our `POST /mcp` with `tools/list`. Our server answers from the pinned catalogue filtered by the pod's grant, never from the live upstream list.
+3. The agent holds only `jmr_`. It calls our `POST /mcp` with `tools/list`. Our server answers from the pinned catalogue filtered by the pod's grant, never from the live upstream list.
 4. On `tools/call`, the Worker derives the actor from the `jmr_` run token (`docs/protocol.md`) and asks the DO to run the call. The DO attaches the token and calls Linear. The result returns to the agent, and a receipt row is written.
 5. Because the endpoint is `/mcp/readonly`, even a bug in our gate cannot write; the vendor refuses it. This matches v3, which pinned a `read`-scope token.
 
@@ -68,7 +68,7 @@ SDK touches that one file, and a REST upstream never loads it.
 
 | Candidate | Agents avoid raw tokens? | A WRITE through a decision card? | Exit cost |
 |---|---|---|---|
-| **Our build on Agents SDK** | Token stays in the DO; agent has `cmr_` only | Park, card, release once (above) | Low: ciphertext rows plus the pin files, in our code |
+| **Our build on Agents SDK** | Token stays in the DO; agent has `jmr_` only | Park, card, release once (above) | Low: ciphertext rows plus the pin files, in our code |
 | **HumanLayer** | Not a vault | See section 4: not adoptable as an approvals SDK | n/a |
 | **Activepieces** | Connections encrypted; "no API to read stored connections back" ([MCP page](https://www.activepieces.com/mcp/mcp)) | No approval feature mentioned on that page | Medium: a Node server plus its Postgres and Redis; pieces are MIT packages |
 | **Nango (ELv2)** | Tokens stay in Nango's store | Not provided; free self-host is auth and proxy only ([docs search](https://nango.dev/docs/guides/platform/free-self-hosting.md)) | Medium: tokens sit in its database |

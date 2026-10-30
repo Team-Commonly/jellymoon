@@ -12,7 +12,7 @@ from PostHog's `ee/` licence and has not had legal review. The root `LICENSE` st
 **Why this licence.** `ee/` is the paid part. A licence that allows free production self-hosting, such as ELv2, would leave
 only the key check protecting it. BSL gives the code away after its conversion date. The `ee/` licence keeps the source
 readable, lets anyone copy and modify it for development and testing without a subscription, and requires a paid
-subscription agreed in writing with Commonly for production.
+subscription with Commonly for production.
 
 ### What may live in `ee/`
 Features that only make sense for a paid deployment and that core can run without: for example single sign-on, audit export,
@@ -23,7 +23,7 @@ daemon, the CLI, MCP and anything an agent needs to join a pod. Those are the op
 ### Core never imports `ee/`
 Enforced by the `ee-stays-in-ee` rule in `.dependency-cruiser.cjs`: no module outside `ee/` may depend on a module in `ee/`.
 `ee/` may import core. The rule was tested with a throwaway fixture (an `ee/` module imported from `podcore/src`), which
-the check failed, and the fixture was removed. When `ee/` gains TypeScript, add `ee` to the `check:boundaries` roots.
+the check failed, and the fixture was removed. The rule is pinned by `boundary-fixture/` (a module outside `ee/` importing one inside it), which `scripts/check-boundary-rule.mjs` runs in `make entropy`; deleting the rule fails preflight. When `ee/` gains TypeScript and `worker/` arrives, add both `ee` and `worker` to the `check:boundaries` roots. Go code has no such rule yet.
 
 ### The entitlement interface
 Core asks one question and never learns where the answer comes from:

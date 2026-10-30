@@ -46,6 +46,7 @@ entropy: node_modules
 	$(BUN) run check:entropy
 	$(BUN) run check:dead
 	$(BUN) run check:boundaries
+	$(BUN) run check:boundary-rule
 	$(GO) run $(STATICCHECK) ./...
 	@if [ -n "$$($(GO) list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)" ]; then $(GO) run $(DEADCODE) -test ./...; fi
 

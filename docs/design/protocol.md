@@ -80,5 +80,5 @@ only cost a later re-add.
 1. Apply the decisions in one PR: the constants, the token prefixes, and the wording of F08 and F15.
    **Done** for questions 1 to 3; the CLI binary is `jellymoon` (alias `jm`).
 2. Run the schema-text unit.
-3. Mark L0 ready and merge it.
+3. Mark the schema work ready and merge it.
 4. Start F02.

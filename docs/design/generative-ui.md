@@ -17,7 +17,7 @@ The core is small: one schema file, a validator for the `x-rules`, seven compone
 - **Shape each component so it maps one-to-one onto an A2UI custom catalogue entry.** If interop demand appears (an A2UI host, or CopilotKit's declarative mode), an export adapter in one file can serve it. A2UI's own schema uses `oneOf` ([server_to_client.json](https://github.com/a2ui-project/a2ui/blob/main/specification/v0_9/json/server_to_client.json)), so we translate to it rather than import it.
 - **Defer MCP Apps.** It solves the reverse direction (a server shipping UI into a host such as Claude). It becomes useful later, if we want Jellymoon cards to render inside Claude or ChatGPT.
 
-**On OpenUI, our partner.** Commonly v3 shipped OpenUI cards in production, and they worked. Two things weigh against making OpenUI the core of v4. In v3 the model wrote OpenUI Lang source, and making that safe took a few hundred lines of server validation: refuse `Query`, `Mutation` and `Run`, cap AST expansion, pin a catalogue hash. And OpenUI Lang is a text language, so `make gen` and our JSON Schema cannot check it. The partnership is better spent on the upstream asks in section 5.
+**On OpenUI.** Commonly v3 shipped OpenUI cards in production, and they worked. Two things weigh against making OpenUI the core of v4. In v3 the model wrote OpenUI Lang source, and making that safe took a few hundred lines of server validation: refuse `Query`, `Mutation` and `Run`, cap AST expansion, pin a catalogue hash. And OpenUI Lang is a text language, so `make gen` and our JSON Schema cannot check it. The effort is better spent on the upstream asks in section 5.
 
 ## 2. What "OpenUI" is: three projects use the name
 

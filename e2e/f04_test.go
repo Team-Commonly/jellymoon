@@ -61,16 +61,21 @@ func postAll(s *sock, texts ...string) error {
 }
 
 // evict has the test entry drop the pod object's in-memory state, as an eviction does; hibernating sockets stay attached.
-func (w *world) evict() {
-	w.t.Helper()
-	w.c.do("POST", "/__test/evict/"+w.pod, "", nil, nil)
+// The contract promises a 200 (a server with nothing to evict answers 200 too), so anything else is a failure.
+func (w *world) evict() error {
+	if r := w.c.do("POST", "/__test/evict/"+w.pod, "", nil, nil); r.Status != 200 {
+		return fmt.Errorf("POST /__test/evict/%s: HTTP %d code=%q, want 200", w.pod, r.Status, r.Err.Code)
+	}
+	return nil
 }
 
 // evictSteps are F04's hibernation steps: POST /__test/evict/:pod, then a connected socket and a reconnect.
 func (w *world) evictSteps(p *stepper, head int64) {
 	// The test entry's POST /__test/evict/:pod makes the pod's Durable Object lose its in-memory state while its WebSockets stay attached.
 	p.step("the same holds after the Durable Object is evicted: a connected socket keeps receiving with no gap", func() error {
-		w.evict()
+		if err := w.evict(); err != nil {
+			return err
+		}
 		mk := w.sCara.mark()
 		if err := postAll(w.sBen, "evicted one", "evicted two"); err != nil {
 			return err
@@ -86,7 +91,9 @@ func (w *world) evictSteps(p *stepper, head int64) {
 		if err := postAll(w.sBen, "evicted three", "evicted four"); err != nil {
 			return err
 		}
-		w.evict()
+		if err := w.evict(); err != nil {
+			return err
+		}
 		return wantReplay(w.replayed(w.cara.tok, "cara-evicted", head+2), head+2, "evicted three", "evicted four")
 	})
 }

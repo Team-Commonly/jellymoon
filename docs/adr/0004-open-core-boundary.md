@@ -14,6 +14,8 @@ only the key check protecting it. BSL gives the code away after its conversion d
 readable, lets anyone copy and modify it for development and testing without a subscription, and requires a paid
 subscription with Commonly for production.
 
+**Self-hosting stays free.** Self-hosting core stays free under Apache-2.0, with no limit, and this ADR changes nothing about that. Which hosted plans include which `ee/` features is a pricing decision, kept outside this repository.
+
 ### What may live in `ee/`
 Features that only make sense for a paid deployment and that core can run without: for example single sign-on, audit export,
 retention controls and organisation-wide policy. Never in `ee/`: the wire protocol, the pod core, claims and leases, the

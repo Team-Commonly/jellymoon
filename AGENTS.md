@@ -23,7 +23,7 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
 | Review | `code-review` + `deslop` | `GATE:` verdict in a fresh context |
 | Land | `make-pr-easy-to-review` | PR from `.github/pull_request_template.md` |
 | Learn | `retro` | a test, lint rule or doc in the same PR |
-| Continuity | `handoff` | a `progress.md` entry at each boundary |
+| Continuity | `handoff` | a new file in `progress/` at each boundary, one per unit |
 | Entropy | `improve-codebase-architecture` | one removal-only unit per wave |
 
 ## Rules

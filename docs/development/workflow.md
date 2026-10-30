@@ -7,7 +7,7 @@ Jellymoon is built by one long-running builder session, using the harness from A
 |---|---|
 | `feature_list.json` | Every slice feature, written as an end-to-end test. Only `passes` may change. |
 | `init.sh` | Brings up the environment, runs the baseline and prints the scoreboard. |
-| `progress/` | The hand-off between sessions and across context compactions: one file per unit, named `YYYY-MM-DD-HHMM-<unit>.md` (UTC), so the newest sorts last. `progress.md` keeps the entries written before it. |
+| `progress/` | The hand-off between sessions and across context compactions: one file per unit, named `YYYY-MM-DD-HHMM-<unit>.md` (UTC, the time the entry is written), so the newest sorts last. Each entry has four parts (what changed, the evidence, what's next, anything surprising) and stays under 15 lines; the detail goes in the PR. Put nothing else in the directory: any other name sorts above the dated entries under `ls -r`. `progress.md` keeps the entries written before it. |
 | git log | The record. Small commits, one feature per PR. |
 
 ## Why each rule exists
@@ -23,8 +23,8 @@ Jellymoon is built by one long-running builder session, using the harness from A
   the Go e2e that drives the real Worker and daemon. Browser checks join when the client lands (F18).
 - **Compact at feature boundaries.** `progress/` plus git carry the state, so a fresh context can
   resume without the transcript.
-- **One progress file per unit.** Units used to add their entry at the top of `progress.md`, so every
-  land left each other open PR conflicting there. Merging main moves a PR's head, and a moved head
+- **One progress file per unit.** Units used to add their entry at the top of `progress.md`, so a
+  land usually left the other open PRs conflicting there. Merging main moves a PR's head, and a moved head
   needs a new review. Separate files never conflict.
 
 ## Stage skills

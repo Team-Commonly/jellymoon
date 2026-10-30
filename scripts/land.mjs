@@ -73,8 +73,10 @@ async function sandboxed(dir, wt, env) {
 async function preflight(mainTip, head) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-land-'));
   const wt = path.join(dir, 'wt');
-  for (const d of ['home', 'tmp']) fs.mkdirSync(path.join(dir, d));
-  const env = { HOME: path.join(dir, 'home'), TMPDIR: path.join(dir, 'tmp'), PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' };
+  for (const d of ['home', 'tmp', 'bin']) fs.mkdirSync(path.join(dir, d));
+  // bun's own `node` shim lives in /tmp, which the sandbox cannot write; a node link to the tree's bun, inside the throwaway dir, stands in.
+  fs.symlinkSync(path.join(wt, '.tools', 'bin', 'bun'), path.join(dir, 'bin', 'node'));
+  const env = { HOME: path.join(dir, 'home'), TMPDIR: path.join(dir, 'tmp'), PATH: `/usr/bin:/bin:/usr/sbin:/sbin:${path.join(dir, 'bin')}`, TERM: 'dumb' };
   if (process.env.JM_TOOLCHAIN_CACHE) env.JM_TOOLCHAIN_CACHE = process.env.JM_TOOLCHAIN_CACHE; // read-only; read once tools.sh supports it
   let result = { ok: true };
   try {

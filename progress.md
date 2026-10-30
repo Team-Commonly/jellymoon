@@ -4,6 +4,15 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-30 · the pod core's property tests get an explicit timeout (unit PT)
+- **Changed:** the four property tests in `podcore/test/properties.test.ts` (restart, seq, one-release, wake) run with a
+  60 s timeout instead of bun's 5 s default (the local `bun:test` type shim gains bun's optional third argument). No
+  assertion, seed count or step changed.
+- **Evidence:** `bun test podcore` 126 pass in 7.8 s at load average 38; `make preflight` under a clean shell.
+- **Next:** none.
+- **Surprising:** on a shared host the 500-seed runs took 7 to 19 s, so `make preflight` turned red with "timed out" and
+  no failed assertion, and a land refused a reviewed PR on the merge result.
+
 ## 2026-10-30 · review fixes in the Cloudflare adapter and the e2e suite (unit W0, round 2)
 - **Changed:** each dev server gets its own inspector port and the harness waits for the whole process group on kill. Every write route is validated against `gen/` (400 `invalid_input`, nothing dropped); a run's post now carries its summary, and fields the core has no place for (post kind/status other than fyi/done, needs, options, context, taskId, links, caveat; task-update note; run-end harnessVersion) are refused. The stale-ms knob is gone (staleMs is 0, heartbeats persisted); `TestKillMidLease` takes its "no release yet" mark before the clock moves; new `TestRestartPastDeadline`. Ids are fresh random bits, no counter. Invite codes are stored as SHA-256 only and the join link uses `PUBLIC_URL`. New `TestRunTokenOtherPod`. The purity rule covers all of `podcore/`. The closing line counts every step, and `make e2e-a` judges the real last line. Worker cap 1,550 (ADR 0001).
 - **Evidence:** twelve of twelve green over four rounds of three concurrent `make e2e-a` from three clones; `make preflight` three times under a clean shell. Mutants fail a gate: no validator on the message route, body limit 32,768, heartbeat save skipped, `boot` skipped after restore, monotonic ids, invite code stored in the clear, run-token pod check removed, a podcore test importing `worker/`, a deliberately failing step (`STEPS=14/16`).

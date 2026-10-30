@@ -18,7 +18,7 @@
         "schema/",
         "scripts/"
       ],
-      "max": 1650
+      "max": 1750
     },
     "worker": {
       "paths": [

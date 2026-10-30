@@ -12,20 +12,20 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   acquireLock, addsAllowMarker, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns,
-  checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, mergeResult, quoteOutput, stripControls, readReviewerEntries, readToken, remoteFor,
-  removeTree, scrub, takePage, touchesProtected,
+  checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeResult, quoteOutput, stripControls, readReviewerEntries, readToken, remoteFor,
+  scrub, takePage, touchesProtected,
 } from './land-decide.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
 const out = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
 const REPO = process.env.JM_REPO; // every gh call names it: a worktree can carry remotes for several repos
 const gh = (...args) => out('gh', args);
-const say = (m) => console.log(m);
+const say = (m) => console.log(stripControls(m)); // every string land prints is stripped: GitHub text (a branch name, a url) can carry escapes
 let SECRET = ''; // the bearer token once read; scrubbed from anything printed
 const DRY = process.argv.includes('--dry-run');
 // Ctrl-C and kill: exit runs the handlers that kill the preflight's process group and release the lock.
 process.on('SIGINT', () => process.exit(130));
 process.on('SIGTERM', () => process.exit(143));
-const refuse = (m) => { console.error(`land: refused: ${scrub(m, SECRET)}`); process.exit(1); };
+const refuse = (m) => { console.error(`land: refused: ${stripControls(scrub(m, SECRET))}`); process.exit(1); };
 { const nv = checkNode(process.versions.node); if (!nv.ok) refuse(nv.reason); } // before anything else runs
 const readLedger = () => parseLedger(fs.existsSync(process.env.JM_LEDGER) ? fs.readFileSync(process.env.JM_LEDGER, 'utf8') : '');
 const appendLedger = (pr, head, verdict, by, note) => writeLedger(process.env.JM_LEDGER, [pr, head, verdict, by, new Date().toISOString(), note], { dry: DRY });
@@ -63,7 +63,7 @@ function runInit(wt, env) {
     child.stdout.on('data', take);
     child.stderr.on('data', take);
     const kill = () => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* the group is already gone */ } };
-    process.on('exit', kill); // a crash or Ctrl-C of land must not leave the group running
+    process.prependListener('exit', kill); // a crash or Ctrl-C of land must not leave the group running, and it dies before its dir is removed
     const timer = setTimeout(() => { over = true; kill(); setTimeout(() => end(-1), 5000); }, LIMIT_MS); // an escapee holding the pipes cannot stall us
     const end = (code) => {
       if (ended) return;
@@ -85,6 +85,7 @@ async function preflight(mainTip, head, bootstrap) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-land-'));
   const wt = path.join(dir, 'wt');
   for (const d of ['home', 'tmp']) fs.mkdirSync(path.join(dir, d));
+  const release = trackThrowaway(dir, wt);
   const env = { HOME: path.join(dir, 'home'), TMPDIR: path.join(dir, 'tmp'), PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb', JM_ENTROPY_BASE: entropyBase(mainTip, { bootstrap, mainHasEntropy: has(mainTip, 'entropy.json') }) }; // main's tip as fetched, never a ref the PR could move
   let result = { ok: true };
   try {
@@ -94,8 +95,7 @@ async function preflight(mainTip, head, bootstrap) {
     }
     if (result.ok) result = await runInit(wt, env);
   } catch (e) { result = { ok: false, reason: `preflight failed: ${why(e)}` }; }
-  try { execFileSync('chmod', ['-R', 'u+w', dir]); out('git', ['worktree', 'remove', '--force', wt]); } catch { /* removeTree warns */ }
-  removeTree(dir);
+  release();
   return result;
 }
 // Pod messages newest-first, paged back past `since` (ms), deduped by id. Fails closed if the page cap is hit first,
@@ -134,7 +134,7 @@ function bootstrapGate(mainTip, bootstrap) {
 // Trust gate: runs before anything of the PR is fetched or executed. Trust is GitHub identity: not cross-repository, the
 // author and every account with push access are in JM_TRUSTED_LOGINS (an operator env var; a PR cannot widen it).
 function trustGate(pr) {
-  const pushers = gh('api', '--paginate', `repos/${REPO}/collaborators?affiliation=all&permission=push&per_page=100`, '--jq', '.[].login').split('\n').filter(Boolean);
+  const pushers = pushersOf(gh('api', '--paginate', `repos/${REPO}/collaborators?affiliation=all&per_page=100`, '--jq', '.[] | {login, push: .permissions.push}'));
   const t = checkTrust({ pr: { isCrossRepository: pr.isCrossRepository, author: pr.author?.login }, pushers, trusted: parseLogins(process.env.JM_TRUSTED_LOGINS) });
   if (!t.ok) refuse(`#${pr.number}: ${t.reason}`);
 }
@@ -152,7 +152,7 @@ async function decide(pr, mainTip, opts) { // mainTip is the tip fetched for thi
   const merged = mergeResult((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
   // A marker anywhere in the PR's history, or a secret gitleaks finds once markers are ignored, needs the reviewer's verdict.
   const hides = !ok('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]);
-  if (touchesProtected(merged.files) || addsAllowMarker(merged.patch) || hides) {
+  if (touchesProtected(merged.files, out('git', ['ls-tree', '-r', '--name-only', '-z', mainTip], { maxBuffer: 1 << 28 }).split('\0').filter(Boolean)) || addsAllowMarker(merged.patch) || hides) {
     const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers(opts.bootstrap ? head : mainTip) });
     if (!gate.ok) return gate;
     notes.push(gate.reason);

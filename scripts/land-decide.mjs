@@ -1,5 +1,6 @@
 // Pure decisions behind scripts/land.mjs (docs/development/landing.md). Every function takes parsed data and
 // returns { ok, reason } (or a plain value); the shell-outs live in land.mjs. Tests: scripts/check-land.mjs.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'BOOTSTRAP'];
@@ -21,9 +22,27 @@ export function parseLedger(text) {
 // if it is inert: progress.md, or a documentation file (an extension below) under docs/. Go compiles docs/**/*.go, so
 // the extension decides, not the directory. A rename counts both sides. files: { filename, previous_filename? }.
 // docs/development/ is protected: it holds the land rules and the verifier protocol, which a PR must not rewrite unreviewed.
-const INERT = /^(progress\.md|docs\/(?!development\/).+\.(md|html|svg|png|jpg|gif|webp))$/;
+// Only text that gitleaks scans in git mode is inert: .md and .html. Images (svg, png, ...) are not scanned, so a token in one would
+// land on the ledger alone. Matching is on the lowercased path, because macOS checkouts are case-insensitive.
+const INERT = /^(progress\.md|docs\/(?!development\/).+\.(md|html))$/;
 const REGULAR = ['000000', '100644', '100755']; // add and delete show 000000; a symlink (120000) or gitlink (160000) is never inert
-export const touchesProtected = (files) => files.some((f) => (f.modes || []).some((m) => !REGULAR.includes(m)) || [f.filename, f.previous_filename].some((n) => n && !INERT.test(n)));
+// A path whose lowercase equals another path's (in main's tree or in the same PR), or a directory spelled two ways, would land on top of
+// that other path on a case-insensitive checkout.
+export function collides(paths, tree) {
+  const spell = new Map();
+  for (const n of [...tree, ...paths]) {
+    const parts = n.split('/');
+    for (let k = 1; k <= parts.length; k += 1) {
+      const p = parts.slice(0, k).join('/');
+      const key = p.toLowerCase();
+      if (!spell.has(key)) spell.set(key, new Set());
+      spell.get(key).add(p);
+    }
+  }
+  return paths.some((n) => n.split('/').some((_, k, a) => spell.get(a.slice(0, k + 1).join('/').toLowerCase()).size > 1));
+}
+export const touchesProtected = (files, tree = []) => files.some((f) => (f.modes || []).some((m) => !REGULAR.includes(m)) || [f.filename, f.previous_filename].some((n) => n && !INERT.test(n.toLowerCase())))
+  || collides(files.map((f) => f.filename), tree);
 // One reviewer per line: `Name username` (the username is the pod's server-stamped one). A single token is a name with no username.
 export function readReviewerEntries(text) {
   return text.split('\n').map((l) => l.replace(/#.*/, '').trim()).filter(Boolean).map((l) => {
@@ -171,6 +190,8 @@ export function acquireLock(dir, { pid = process.pid, alive = (p) => { try { pro
 // The trust gate: this host runs only code whose authors are trusted. Trust is GitHub identity, never a commit author string.
 // pr: { isCrossRepository, author }; pushers: logins with push access to the repo; trusted: JM_TRUSTED_LOGINS (operator env).
 const REFUSE = 'untrusted PR: not executed on this host, and nowhere else today (CI is off). Re-author it through the loop to land it.';
+// Accounts that can push: `collaborators?affiliation=all` lines of {login, push}. The permission=push filter was seen returning admins only.
+export const pushersOf = (text) => text.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((c) => c.push === true).map((c) => c.login);
 export const parseLogins = (text) => [...new Set(String(text || '').split(',').map((l) => l.trim().toLowerCase()).filter(Boolean))];
 export function checkTrust({ pr, pushers, trusted }) {
   const no = (why) => ({ ok: false, reason: `${REFUSE} (${why})` });
@@ -180,7 +201,7 @@ export function checkTrust({ pr, pushers, trusted }) {
   const author = String(pr.author || '').toLowerCase();
   if (!trusted.includes(author)) return no(`author '${author || 'unknown'}' is not trusted`);
   const strangers = pushers.map((l) => String(l).toLowerCase()).filter((l) => !trusted.includes(l)); // .some-style: an empty login is a stranger too
-  return strangers.length ? no(`'${strangers[0]}' can push to the repo and is not trusted`) : { ok: true };
+  return strangers.length ? { ok: false, reason: `${REFUSE} (an account that can push to the repo is not trusted: ${strangers[0]})` } : { ok: true };
 }
 // Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
 const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
@@ -227,7 +248,7 @@ export function mergeResult(run, mainTip, head) {
 }
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
-export const stripControls = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '');
+export const stripControls = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g, '');
 export const quoteOutput = (text) => stripControls(text).replace(/\n$/, '').split('\n').map((l) => `preflight| ${l}`).join('\n');
 // The entropy ratchet's base: main's tip as fetched. Only the bootstrap land, when main has no entropy.json yet, runs without one.
 export const entropyBase = (mainTip, { bootstrap, mainHasEntropy }) => (bootstrap && !mainHasEntropy ? 'none' : mainTip);
@@ -236,3 +257,11 @@ export const entropyBase = (mainTip, { bootstrap, mainHasEntropy }) => (bootstra
 const NODE_MIN = 20;
 export const checkNode = (version, min = NODE_MIN) => (Number(String(version).split('.')[0]) >= min ? { ok: true }
   : { ok: false, reason: `land needs Node ${min} or newer; this is Node ${version}` });
+
+// The throwaway preflight dir and its git worktree go away on every exit path: normal return, a signal (the handlers call exit), a crash.
+export function trackThrowaway(dir, wt) {
+  const git = (...a) => { try { execFileSync('git', a, { stdio: 'ignore' }); } catch { /* already gone */ } };
+  const clean = () => { try { execFileSync('chmod', ['-R', 'u+w', dir], { stdio: 'ignore' }); } catch { /* gone */ } git('worktree', 'remove', '--force', wt); git('worktree', 'prune'); removeTree(dir); };
+  process.on('exit', clean);
+  return () => { process.off('exit', clean); clean(); };
+}

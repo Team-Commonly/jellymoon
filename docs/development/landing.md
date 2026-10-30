@@ -17,7 +17,7 @@ is refused.
 - **Who is trusted, and why.** The code that runs here is written by people and agents who already had write access
   and already ran the same code on this host while writing it. So a PR runs here only if it is from this repo, not a
   fork, its author's login is in `JM_TRUSTED_LOGINS`, and every account with push access to the repo
-  (`GET /repos/{repo}/collaborators?affiliation=all&permission=push`, paginated) is in that list too. The list is an
+  (`GET /repos/{repo}/collaborators?affiliation=all`, paginated, keeping `.permissions.push === true`) is in that list too. The list is an
   operator env var, comma-separated, never read from the repo, so a PR cannot widen it; unset, land refuses. Trust is
   a GitHub identity, never a commit author string, which anyone can set.
 - **An outside PR gets no execution anywhere today.** Land and `make verify-preflight` refuse it before fetching or running
@@ -39,8 +39,8 @@ is refused.
   the gate sees only the PR author and the push list. Read the diff, not the author.
 - **The pod verdict is the latest per reviewer; the ledger's FAIL is permanent at a head.** A reviewer can flip their own
   verdict with a later message, so a pod PASS is weaker than a ledger FAIL.
-- **`permission=push` was observed returning admins only.** Check that the list the endpoint returns is the list you
-  expect, and keep `JM_TRUSTED_LOGINS` a superset of it.
+- **The `permission=push` filter was seen returning admins only,** so land reads the unfiltered list and keeps
+  `.permissions.push === true` itself. Keep `JM_TRUSTED_LOGINS` a superset of what it returns.
 - **The pusher list is read at land time.** A collaborator removed since writing a commit no longer shows, so their
   earlier commits on a trusted author's branch still pass. Audit the branch's commits when removing access.
 - **Trusted preflight code can persist.** It runs as the operator and can rewrite the land checkout's `.git/config`, its
@@ -123,11 +123,15 @@ starts 1 ms after the oldest message so messages sharing that instant come back;
 or the page cap is reached before paging back past the PR's creation, land refuses rather than guess.
 
 ## Protected paths
-A path is unprotected only if it is inert: the file `progress.md`, or a file under `docs/` whose extension is one of
-`.md .html .svg .png .jpg .gif .webp`. Everything else is protected, `docs/**/*.go` included, because Go compiles
+A path is unprotected only if it is inert: the file `progress.md`, or a file under `docs/` whose extension is `.md` or `.html`
+(never `docs/development/`). Images (`.svg .png .jpg .gif .webp`) are protected: gitleaks does not scan them in git mode, so a
+token in one would otherwise land on the ledger PASS alone, and neither the history scan nor `make secrets-range` can see it.
+Everything else is protected, `docs/**/*.go` included, because Go compiles
 and runs it (`go vet ./...`, `go test ./...`). Anything protected (`GNUmakefile`, `package.json`, `scripts/`,
 `.githooks/`, `go.mod`, `entropy.json`, `docs/x/x_test.go`, `docs/a.js`, ...) runs from the PR tree during the
-preflight, so it needs the reviewer's verdict, as does any PR that adds a `gitleaks:allow` line (it can hide a secret). A rename counts both sides: `docs/a.md` to `docs/a.go` is
+preflight, so it needs the reviewer's verdict, as does any PR that adds a `gitleaks:allow` line (it can hide a secret). Matching is on the lowercased path (macOS is case-insensitive: `docs/Development/x.md` would overwrite
+`docs/development/x.md`), and a path whose lowercase equals another path in main's tree or in the same PR, or a directory spelled
+two ways, is protected. A rename counts both sides: `docs/a.md` to `docs/a.go` is
 protected, and so are `docs/x` to `scripts/x` and the reverse. So is any entry whose old or new mode is not a regular
 file (`100644`, `100755`): a symlink (`120000`) or gitlink (`160000`) is never inert, wherever it sits. The modes come from
 `git diff --raw` on the merge result. `check-portable` resolves each tracked symlink's full target physically and refuses one
@@ -141,6 +145,10 @@ with the same checkout rule as land (`--bootstrap` is the one exception, for the
 PR it refuses before fetching anything, and the verifier reads the code (`git show`, `git diff`, GitHub) and runs nothing.
 
 ## Known limits
+- **A hand `make preflight` with `JM_ENTROPY_BASE=none` switches the entropy ratchet off.** Land sets that only for the bootstrap
+  land of a main with no `entropy.json`; nothing stops a person setting it by hand.
+- **A signal during `gh pr merge` can leave a merged PR with no LANDED row.** Recovery is record-only: the next run sees the PR
+  merged and records `MERGED-UNVERIFIED`; it checks nothing.
 - **Node 20 or newer.** Land refuses to start on an older Node (`process.versions.node`).
 - **A `gitleaks:allow` marker anywhere in the PR's history protects it.** Land scans the added lines of every commit in
   `<main tip>..<head>` (the merge keeps every commit, and gitleaks honours the marker per commit), and `make

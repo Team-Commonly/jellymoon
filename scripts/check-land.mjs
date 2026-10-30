@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -29,6 +29,8 @@ const rem = (...l) => l.map(([n, u]) => `${n}\t${u} (fetch)\n${n}\t${u} (push)`)
 const cases = [
   // GitHub vs local head, base
   ['head mismatch refused', checkHead(open(), 'b'.repeat(40)).ok, false],
+  ['a CLOSED PR is refused (not only MERGED)', checkHead(open({ state: 'CLOSED' }), H).ok, false],
+  ['a MERGED PR is refused', checkHead(open({ state: 'MERGED' }), H).ok, false],
   ['a PR not based on main is refused', checkHead(open({ baseRefName: 'p05' }), H).ok, false],
   // ledger
   ['verifier PASS at the head accepted', led(ledger(row(5, H, 'PASS', 'opus-verifier'))).ok, true],
@@ -37,6 +39,7 @@ const cases = [
   ['an unknown verdict at the head blocks even beside a PASS', led(ledger(row(5, H, 'PASS', 'opus-verifier'), row(5, H, 'MAYBE', 'opus-verifier'))).ok, false],
   ['a PASS for another PR does not count', led(ledger(row(6, H, 'PASS', 'opus-verifier'))).ok, false],
   ['a PASS for #5 is not read as #50 or #15', led(ledger(row(50, H, 'PASS', 'opus-verifier'), row(15, H, 'PASS', 'opus-verifier'))).ok, false],
+  ['a FAIL at another head does not block this head', led(ledger(row(5, H2, 'FAIL', 'opus-verifier'), row(5, H, 'PASS', 'opus-verifier'))).ok, true],
   ['a PASS by a non-verifier is refused', led(ledger(row(5, H, 'PASS', 'coordinator'))).ok, false],
   ['a coordinator PASS beside a verifier PASS still refuses', led(ledger(row(5, H, 'PASS', 'opus-verifier'), row(5, H, 'PASS', 'coordinator'))).ok, false],
   ['no verdict shopping: a FAIL is not superseded by a later PASS from the same verifier', led(ledger(row(5, H, 'FAIL', 'opus-verifier'), row(5, H, 'PASS', 'opus-verifier'))).ok, false],
@@ -46,6 +49,7 @@ const cases = [
   ['a non-reviewer quoting "Written by Ada" is refused', pod([msg('mallory', `Written by Ada, a Commonly agent\n${verdict(5, H)}`)]).ok, false],
   ['a verdict line that is not the first line is refused', pod([msg('ada', `hello\n${verdict(5, H)}`)]).ok, false],
   ['a verdict quoting the head mid-line is refused', pod([msg('ada', `see ${verdict(5, H)}`)]).ok, false],
+  ['a hidden-comment first line does not count', pod([msg('ada', `<!-- jellymoon#5 ${H} -->\nGATE: PASS`)]).ok, false],
   ['a verdict at another head is refused', pod([msg('ada', verdict(5, H2))]).ok, false],
   ['a verdict naming another PR is refused', pod([msg('ada', verdict(50, H))]).ok, false],
   ['a #11 PASS citing #10 cannot override the reviewer\'s earlier #10 FAIL',
@@ -79,13 +83,15 @@ const cases = [
       ['trust: an empty push-access list refuses (the query went wrong)', t({ pushers: [] }).ok, false],
       ['trust: a cross-repository PR is refused', t({ pr: { ...pr, isCrossRepository: true } }).ok, false],
       ['trust: an untrusted PR author is refused', t({ pr: { ...pr, author: 'mallory' } }).ok, false],
-      ['trust: an untrusted push-capable collaborator is refused and named', t({ pushers: ['lily', 'eve'] }).reason.includes("'eve'"), true],
+      ['trust: an untrusted push-capable collaborator is refused and named', t({ pushers: ['lily', 'eve'] }).reason.includes('an account that can push to the repo is not trusted: eve'), true],
+      ['trust: the author message is its own', t({ pr: { ...pr, author: 'mallory' } }).reason.includes("author 'mallory' is not trusted"), true],
       ['trust: an unset list refuses', checkTrust({ pr, pushers: ['lily'], trusted: parseLogins('') }).reason, 'JM_TRUSTED_LOGINS is not set; refusing to run any PR code'],
       ['trust: the refusal says the PR is not executed here', t({ pr: { ...pr, isCrossRepository: true } }).reason.startsWith('untrusted PR: not executed on this host, and nowhere else today (CI is off). Re-author it through the loop to land it.'), true],
     ];
   })(),
   // CI is a second witness only when it exists
   ['checks: none at all is fine', checkRuns([]).ok, true],
+  ['checks: an unfinished run (conclusion null) is not a failure', checkRuns([{ name: 'a', conclusion: null }]).ok, true],
   ['checks: more runs than were read refuses', checkRuns([{ name: 'a', conclusion: 'success' }], 101).ok, false],
   ['checks: a failure refuses and names the run', checkRuns([{ name: 'a', conclusion: 'success' }, { name: 'lint', conclusion: 'failure' }]).reason.includes('lint'), true],
   // the land checkout
@@ -163,12 +169,19 @@ const cases = [
   // land's runtime
   ['node: 20 is accepted', checkNode('20.0.0').ok, true],
   ['node: 18 is refused with a clear message', checkNode('18.19.0').reason, 'land needs Node 20 or newer; this is Node 18.19.0'],
+  // the push list comes from the unfiltered collaborator list
+  ['pushers: a non-admin writer counts, a reader does not, an admin counts', pushersOf('{"login":"w","push":true}\n{"login":"r","push":false}\n{"login":"a","push":true}\n{"login":"n","push":null}').join(), 'w,a'],
+  ['output: zero-width and bidi marks are stripped', stripControls('a\u200bb\u200fc\ufeffd\u061ce'), 'abcde'],
   // PR output is quoted
   ['output: bidi overrides and line separators are stripped', quoteOutput('a\u202eb\u2066c\u2028d\u2029e'), 'preflight| abcde'],
   ['output: control characters are stripped, newline and tab kept', quoteOutput('a\u001b[2Jb\r\nc\td\u0007\n'), 'preflight| a[2Jb\npreflight| c\td'],
   // remotes
   ['remote: a repo with the same prefix is not matched', remoteFor(rem(['x', `https://github.com/${R}-old.git`]), R).error, `no git remote matches ${R}`],
   ['remote: a URL with userinfo is not matched', remoteFor(rem(['jm', `https://tok@github.com/${R}`]), R).error, `no git remote matches ${R}`],
+  ['remote: an https remote matches and is named', remoteFor(rem(['jm', `https://github.com/${R}.git`]), R).remote, 'jm'],
+  ['remote: with two remotes the matching one is picked', remoteFor(rem(['up', 'https://github.com/other/thing.git'], ['jm', `git@github.com:${R}.git`]), R).remote, 'jm'],
+  ['cursor: a message with no time makes the paging cursor unusable', cursorOf([{ createdAt: '2026-10-29T10:00:00Z' }, { content: 'no time' }]), null],
+  ['cursor: with times, one millisecond past the oldest', cursorOf([{ createdAt: '2026-10-29T10:00:00.000Z' }, { createdAt: '2026-10-29T11:00:00.000Z' }]), '2026-10-29T10:00:00.001Z'],
   ['remote: two matches refused', Boolean(remoteFor(rem(['a', `https://github.com/${R}`], ['b', `git@github.com:${R}.git`]), R).error), true],
   // main tip
   ['main moved is refused and names both tips', checkMain('1'.repeat(40), '2'.repeat(40)).ok, false],
@@ -258,6 +271,7 @@ const before = (a, b, within = landSrc) => within.indexOf(a) >= 0 && within.inde
 const body = (from, to) => landSrc.slice(landSrc.indexOf(from), to ? landSrc.indexOf(to) : undefined);
 const [pfBody, mainBody] = [body('async function preflightOnly', 'async function main'), body('async function main')];
 const run = spawnSync(process.execPath, [fileURLToPath(new URL('./land.mjs', import.meta.url))], { encoding: 'utf8', env: { PATH: process.env.PATH } });
+const two = spawnSync(process.execPath, [fileURLToPath(new URL('./land.mjs', import.meta.url)), '5', '6'], { encoding: 'utf8', env: { PATH: process.env.PATH, JM_REPO: R, JM_TRUSTED_LOGINS: 'x', JM_LEDGER: 'x', JM_COMMONLY_API: 'https://api.commonly.me', JM_COMMONLY_TOKEN_FILE: 'x', JM_VERDICT_POD: 'x' } });
 cases.push(
   ['land.mjs: the merge disables repo hooks', /'core\.hooksPath=\/dev\/null'/.test(landSrc) && /\.\.\.BASE, 'merge'/.test(src), true],
   ['land.mjs: the preflight child has no stdin, its own session, quoted output and a group kill', /detached: true/.test(landSrc) && /stdio: \['ignore', 'pipe', 'pipe'\]/.test(landSrc) && /process\.kill\(-child\.pid/.test(landSrc) && /quoteOutput\(/.test(landSrc), true],
@@ -273,8 +287,38 @@ cases.push(
   ['node: land.mjs refuses on a bad version before anything else', before('checkNode(process.versions.node)', 'if (!nv.ok) refuse(nv.reason)') && before('if (!nv.ok) refuse(nv.reason)', 'const readLedger'), true],
   ['land.mjs: untracked files are shown in full for the checkout gate', landSrc.includes("'status.showUntrackedFiles=all'"), true],
   ['land.mjs: history is scanned for the marker and gitleaks runs over the range with markers ignored', landSrc.includes('addsAllowMarker(merged.patch)') && landSrc.includes("'secrets-range'") && /--ignore-gitleaks-allow/.test(fs.readFileSync(new URL('../Makefile', import.meta.url), 'utf8')), true],
+  ['land.mjs: more than one PR number is refused', two.status === 1 && two.stderr.includes('usage:'), true],
+  ['land.mjs: TMPDIR is inside the throwaway dir', landSrc.includes("TMPDIR: path.join(dir, 'tmp')") && landSrc.includes("HOME: path.join(dir, 'home')"), true],
+  ['land.mjs: everything it prints is stripped, and the pusher list is unfiltered', landSrc.includes('console.log(stripControls(m))') && landSrc.includes('${stripControls(scrub(m, SECRET))}') && !landSrc.includes('permission=push'), true],
+  ['land.mjs: the throwaway dir is tracked and the group kill runs first', landSrc.includes('trackThrowaway(dir, wt)') && landSrc.includes("process.prependListener('exit', kill)"), true],
   ['land.mjs imports resolve: run with no arguments it reaches main and refuses', run.status === 1 && !/export named|SyntaxError|ReferenceError/i.test(run.stderr) && run.stderr.includes('land: refused'), true],
 );
+
+// A signal removes the throwaway dir and its git worktree (land's handlers call exit, which runs trackThrowaway's cleanup).
+{
+  const sdir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-signal-'));
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
+  const g = (a, cwd = path.join(sdir, 'repo')) => execFileSync('git', a, { cwd, encoding: 'utf8', env });
+  fs.mkdirSync(path.join(sdir, 'repo'));
+  g(['init', '-q']); fs.writeFileSync(path.join(sdir, 'repo', 'f'), 'x'); g(['add', '-A']); g(['commit', '-qm', 'a']);
+  const lib = fileURLToPath(new URL('./land-decide.mjs', import.meta.url));
+  const results = ['SIGINT', 'SIGTERM'].map((sig) => {
+    const dir = path.join(sdir, `throw-${sig}`);
+    const wt = path.join(dir, 'wt');
+    fs.mkdirSync(dir);
+    g(['worktree', 'add', '--quiet', '--detach', wt]);
+    const code = `import { trackThrowaway } from ${JSON.stringify(lib)};
+      process.on('SIGINT', () => process.exit(130)); process.on('SIGTERM', () => process.exit(143));
+      trackThrowaway(${JSON.stringify(dir)}, ${JSON.stringify(wt)}); process.kill(process.pid, ${JSON.stringify(sig)}); setTimeout(() => {}, 5000);`;
+    const r = spawnSync(process.execPath, ['-e', code], { cwd: path.join(sdir, 'repo'), encoding: 'utf8', env });
+    return [r.status, fs.existsSync(dir), g(['worktree', 'list', '--porcelain']).includes('throw-')];
+  });
+  cases.push(
+    ['signal: SIGINT exits 130, removes the dir and the worktree', results[0].join(), '130,false,false'],
+    ['signal: SIGTERM exits 143, removes the dir and the worktree', results[1].join(), '143,false,false'],
+  );
+  fs.rmSync(sdir, { recursive: true, force: true });
+}
 
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (bad.length) { console.error(`check-land: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }

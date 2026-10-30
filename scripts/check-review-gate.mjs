@@ -40,8 +40,18 @@ const paths = [
   // Go compiles docs/**/*.go, and tooling may run any script: only inert documentation types are unprotected.
   ['docs/x/x_test.go is protected (go test ./... runs it)', [{ filename: 'docs/x/x_test.go' }], true],
   ['docs/a.md is not protected', [{ filename: 'docs/a.md' }], false],
-  ['docs/img/a.png is not protected', [{ filename: 'docs/img/a.png' }], false],
-  ['every inert extension is not protected', ['html', 'svg', 'jpg', 'gif', 'webp'].map((e) => ({ filename: `docs/a.${e}` })), false],
+  ['docs/a.html is not protected', [{ filename: 'docs/a.html' }], false],
+  ['docs/x.svg is protected (gitleaks does not scan images)', [{ filename: 'docs/x.svg' }], true],
+  ['docs/x.png is protected', [{ filename: 'docs/x.png' }], true],
+  ['every image extension is protected', ['png', 'svg', 'jpg', 'gif', 'webp'].map((e) => touchesProtected([{ filename: `docs/a.${e}` }])).every(Boolean), true],
+  ['docs/Development/landing.md is protected (case-insensitive checkout)', [{ filename: 'docs/Development/landing.md' }], true],
+  ['DOCS/development/x.md is protected', [{ filename: 'DOCS/development/x.md' }], true],
+  ['an upper-case extension is read as lower case: docs/a.MD is still docs text', [{ filename: 'docs/a.MD' }], false],
+  ['a case collision with a path in main protects an otherwise inert file', [{ filename: 'docs/Guide.md' }], true, ['docs/guide.md']],
+  ['a case collision between two PR paths is protected', [{ filename: 'docs/a.md' }, { filename: 'docs/A.md' }], true],
+  ['a directory spelled two ways against main is protected', [{ filename: 'DOCS/new.md' }], true, ['docs/old.md']],
+  ['a plain new docs file beside others does not collide', [{ filename: 'docs/new.md' }], false, ['docs/old.md', 'docs/x/y.md']],
+  ['an unchanged path (same spelling in main) does not collide', [{ filename: 'docs/a.md' }], false, ['docs/a.md']],
   ['a rename docs/a.md -> docs/a.go is protected', [{ filename: 'docs/a.go', previous_filename: 'docs/a.md' }], true],
   ['a file with no extension under docs/ is protected', [{ filename: 'docs/Makefile' }], true],
   ['a .md that is a directory of code is protected', [{ filename: 'docs/a.md/run.sh' }], true],
@@ -64,7 +74,7 @@ const markers = [
 ];
 const badMarkers = markers.filter(([, d, want]) => addsAllowMarker(d) !== want).map(([t]) => t);
 if (badMarkers.length) { console.error(`check-review-gate: allow-marker cases wrong\n  ${badMarkers.join('\n  ')}`); process.exit(1); }
-const badPaths = paths.filter(([, files, want]) => touchesProtected(files) !== want).map(([t]) => t);
+const badPaths = paths.filter(([, files, want, tree]) => (Array.isArray(files) ? touchesProtected(files, tree) : files) !== want).map(([t]) => t);
 if (badPaths.length) { console.error(`check-review-gate: protected-path cases wrong\n  ${badPaths.join('\n  ')}`); process.exit(1); }
 const text = fs.readFileSync(new URL('../.github/opus-reviewers.txt', import.meta.url), 'utf8');
 const entries = readReviewerEntries(text);
@@ -141,3 +151,16 @@ const history = [
 const badHist = history.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (badHist.length) { console.error(`check-review-gate: history cases wrong\n  ${badHist.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${history.length} history cases ok`);
+
+// NB6: a symlink path with a space resolves whole (records are NUL-separated): one that leaves the repo is refused by name, one inside passes.
+const pdir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-portable-'));
+const pg = (script) => spawnSync('bash', ['-c', script], { cwd: pdir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
+pg(`mkdir scripts sp && cp '${root}/scripts/check-portable.sh' scripts/ && echo x > scripts/f && ln -s ../scripts "sp/in side.md" && git init -q && git add -A && git commit -qm a`);
+const insideOk = pg('bash scripts/check-portable.sh').status === 0;
+pg('ln -s ../.. "sp/out side.md" && git add -A && git commit -qm b');
+const outside = pg('bash scripts/check-portable.sh');
+fs.rmSync(pdir, { recursive: true, force: true });
+const portable = [['portable: a symlink with a space that stays inside passes', insideOk, true], ['portable: a symlink with a space that leaves the repo is refused by its whole path', outside.status !== 0 && outside.stdout.includes('sp/out side.md'), true]];
+const badPortable = portable.filter(([, got, want]) => got !== want).map(([n]) => n);
+if (badPortable.length) { console.error(`check-review-gate: portable cases wrong\n  ${badPortable.join('\n  ')}`); process.exit(1); }
+console.log(`check-review-gate: ${portable.length} portable cases ok`);

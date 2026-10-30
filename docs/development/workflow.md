@@ -43,8 +43,8 @@ merges only when all of these hold at the exact PR head:
   message by a listed reviewer's server-stamped username, whose first line is `jellymoon#<pr> <full head>` and whose
   last line is `GATE: PASS`. A protected path always needs it.
 - Workers never merge. GitHub review text is not consulted.
-- Protected paths: every changed path except `progress.md` and documentation files under `docs/` (`.md .html .svg .png
-  .jpg .gif .webp`; Go compiles `docs/**/*.go`, so those are protected) (`landing.md`). A rename counts both sides.
+- Protected paths: every changed path except `progress.md` and documentation files under `docs/` (`.md .html` only: gitleaks does not scan images, and
+  `docs/development/` is protected; Go compiles `docs/**/*.go`, so those are protected) (`landing.md`). A rename counts both sides.
   Run land from a clean checkout of main. The check lives in the checked-out tree, so it is operator discipline: it binds
   only a tree that really is main.
 - **Verifiers run PR code only after the same trust gate:** `make verify-preflight PR=<n>` (`landing.md`).

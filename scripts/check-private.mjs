@@ -10,7 +10,8 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
 // Allow-lists, each with a reason and a clean case below.
-const EMAIL_OK = /@(users\.noreply\.github\.com|github\.com|example\.(com|org|net)|evil\.com)$/i; // GitHub noreply; userinfo in test URLs; reserved or obviously synthetic domains
+const EMAIL_OK = /@(users\.noreply\.github\.com|example\.(com|org|net)|evil\.com)$/i; // GitHub noreply; reserved or obviously synthetic domains
+const GIT_REMOTE = (m, line, at) => /@github\.com$/i.test(m) && (m.toLowerCase() === 'git@github.com' || /:\/\/(?:[^\s@/]*:)?$/.test(line.slice(0, at))); // the scp-form remote, or userinfo in a remote URL
 const HEX24_OK = /^(0{24}|deadbeef[0-9a-f]{16})$/; // all zeros, or the documented test prefix `deadbeef`
 const PUBLIC_STANDARD = /(?:\bRFC ?\d+|\bOAuth(?: 2\.\d)?(?: spec)?)\s*$/; // a section mark is allowed after a public standard named in the same line
 // Machine-generated or vendored files are not scanned here (a hash can look like an id, a licence header carries a
@@ -19,7 +20,7 @@ const SKIPPED = /^(?:\.agents\/|go\.sum$|bun\.lock$|package-lock\.json$|pnpm-loc
 
 const CLASSES = [
   { name: 'operator path', re: /(?:\/Users\/[A-Za-z]|(?<!\w)~\/[A-Za-z.]|\/private\/tmp\b|(?<![\w:.])\/home\/[a-z][\w.-]*\/\w)/g },
-  { name: 'email', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g, ok: (m) => EMAIL_OK.test(m) },
+  { name: 'email', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g, ok: (m, line, at) => EMAIL_OK.test(m) || GIT_REMOTE(m, line, at) },
   { name: '24-hex id', re: /\b[0-9a-f]{24}\b/g, ok: (m) => HEX24_OK.test(m) },
   { name: 'registry host', re: /\b[\w-]+(?:-docker\.pkg\.dev|\.gcr\.io|\.dkr\.ecr\.[\w-]+\.amazonaws\.com|\.azurecr\.io)\b/g },
   { name: 'cloud project id', re: /\bproject(?:[_ -]?id)?["'=: ]+[a-z][a-z0-9]*(?:-[a-z0-9]+)*-\d{6,}\b/gi },
@@ -69,6 +70,9 @@ const CASES = [
   // one clean case per allow-list entry
   ['allowed: GitHub noreply address', j('1+x@users.', 'noreply.github.com'), null],
   ['allowed: userinfo in a test URL', j('https://tok@', 'github.com/o/r'), null],
+  ['allowed: user and password in a remote URL', j('ssh://u:p@', 'github.com/o/r'), null],
+  ['allowed: scp-form remote', j('git@', 'github.com:o/r.git'), null],
+  ['email: a github.com address that is not a remote', j('someone@', 'github.com'), 'email'],
   ['allowed: reserved example domain', j('a@', 'example.org'), null],
   ['allowed: obviously synthetic domain', j('http://localhost:80@', 'evil.com'), null],
   ['allowed: all-zero 24-hex id', '0'.repeat(24), null],
@@ -112,9 +116,11 @@ function failedCases(cases, classes) {
 // Every problem as a message, `file:line: class` for a tree hit; no cases means the check ran nothing, which is a problem too.
 function run({ cases, files, classes }) {
   const problems = cases.length === 0 ? ['no cases ran'] : failedCases(cases, classes);
-  for (const [f, text] of files) {
+  const names = classes.filter((c) => c.name === 'private name');
+  files.forEach(([f, text], i) => {
+    if (scan(f, names).length > 0) problems.push(`path: names (tracked file ${i + 1} in git ls-files order)`); // the path is never printed: it holds the name
     if (!SKIPPED.test(f)) for (const h of scan(text, classes)) problems.push(`${f}:${h.line}: ${h.cls}`);
-  }
+  });
   return problems;
 }
 
@@ -143,12 +149,14 @@ function main({ env = process.env, files, meta, cases = CASES, log = console.log
 
 const HIT = j('TASK', '-5');
 const PLAIN = [['a.md', 'plain']];
+const NAMES = { JM_PRIVATE_NAMES: j('zorb', 'lax') };
 const quiet = { log() {}, error() {}, meta: [] };
 const lines = (opts) => { const out = []; const code = main({ ...quiet, ...opts, log: (m) => out.push(m), error: (m) => out.push(m) }); return { code, out }; };
 function runnerChecks() { // the runner and main() themselves
   const R = (cases, files) => run({ cases, files, classes: CLASSES });
   const clean = [['x', 'plain', null]];
-  const secret = lines({ env: { JM_PRIVATE_NAMES: j('zorb', 'lax') }, files: [['a.md', j('hello ', 'Zorblax')]] });
+  const secret = lines({ env: NAMES, files: [['a.md', j('hello ', 'Zorblax')]] });
+  const pathRun = lines({ env: NAMES, files: [[j('docs/zorb', 'lax-notes.md'), 'plain']] });
   const secretCase = R([['lbl', j('hello ', 'Zorblax'), 'email']], []).concat(R([['lbl', j('a@', 'gmail.com'), null]], []));
   return [
     ['a wrong wanted class fails', R([['x', HIT, 'email']], []).length > 0],
@@ -166,6 +174,8 @@ function runnerChecks() { // the runner and main() themselves
     ['main fails when a runner check fails', lines({ files: PLAIN, cases: [['x', 'plain', null]], meta: [['x', false]] }).code !== 0],
     ['main fails on an empty file list', lines({ files: [], cases: [['x', 'plain', null]] }).code !== 0],
     ['a tree hit prints file:line: class and not the matched name', secret.code !== 0 && secret.out.some((l) => l.includes('a.md:1: private name')) && !secret.out.some((l) => /zorblax/i.test(l))],
+    ['a tracked path holding a name fails and is not printed', pathRun.code !== 0 && pathRun.out.some((l) => l.includes('path: names')) && !pathRun.out.some((l) => /zorblax/i.test(l))],
+    ['a clean path passes the names class', lines({ env: NAMES, files: PLAIN, cases: [['x', 'plain', null]] }).code === 0],
     ['a failed case prints no sample text', secretCase.length === 2 && !secretCase.some((l) => /zorblax|gmail/i.test(l))],
   ];
 }

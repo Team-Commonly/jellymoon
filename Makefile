@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range secrets-dir hooks preflight
+.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range secrets-dir hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -82,4 +82,15 @@ land:
 verify-preflight:
 	node scripts/land.mjs $(PR) --preflight-only $(ARGS)
 
-preflight: portable check-gen test entropy secrets
+# Tracked files carry nothing private (scripts/check-private.mjs holds patterns only).
+private: node_modules
+	$(BUN) scripts/check-private.mjs
+
+# Before the repo goes public, and in CI: every ref, every commit (-m so merges count), plus the tracked tree (one scan per top-level entry, so untracked tools are not read). A clone that carries
+# other repositories' refs narrows it: make secrets-all SCAN_REFS="HEAD --remotes=<remote>/".
+SCAN_REFS ?= --all
+secrets-all:
+	$(GO) run $(GITLEAKS) git --log-opts="-m $(SCAN_REFS)" --redact --no-banner .
+	@for p in $$(git ls-files | cut -d/ -f1 | sort -u); do $(GO) run $(GITLEAKS) dir --redact --no-banner "$$p" || exit 1; done
+
+preflight: portable check-gen test entropy secrets private

@@ -20,7 +20,7 @@ None of them ships in a runtime artifact.
 
 Go tools run through `go run pkg@version`. They resolve from the module cache, with no install. Go and
 Bun themselves are pinned in `.tool-versions` and installed into `.tools/` by `scripts/tools.sh`
-(checksum-verified, repo-local), so nothing is installed outside the repo.
+(checksum-verified, repo-local). The tools themselves are repo-local, but Go and Bun keep their caches (module cache, build cache, bun install cache) under HOME, so a first run writes there; the preflight points HOME at its throwaway dir.
 
 The budgets they enforce live in `entropy.json`: a file is at most 400 lines and a function at most 60;
 LOC per area is capped; exceptions only shrink unless the exception cites a note here.
@@ -41,3 +41,4 @@ That is under 11k hand-written lines. Agent-written comparables grew without bou
 2026-10-30: core cap 1,650 → 1,750, land security tests, P08 r10.
 2026-10-30: core cap 1,750 → 1,800, land security tests, P08 r11.
 2026-10-30: core cap 1,800 → 2,000, land I/O seam and end-to-end land cases, P08 r12.
+2026-10-30: core cap 2,000 → 2,100, id-keyed verdict, every-range-blob scan and kill/trust/scrub tests, P08 r14.

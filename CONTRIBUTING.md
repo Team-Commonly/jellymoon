@@ -20,7 +20,7 @@ The first `feature_list.json` feature with `passes: false` and no `blockedBy`, o
   a maintainer re-authors the change through their own loop. Maintainer PRs land with `make land` once a verifier's
   ledger line passes at the PR head. A change to any
   protected path (everything but `progress.md` and documentation files under `docs/`; see `AGENTS.md`) also needs the
-  reviewer's pod verdict at the head.
+  review's pod verdict at the head.
   Local verification is the authority; GitHub checks and review text are not consulted.
 - A new dependency or module needs a short note in `docs/adr/`.
 

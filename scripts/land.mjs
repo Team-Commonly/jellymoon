@@ -5,7 +5,7 @@
 // correctness check, not a security boundary.
 //   land.mjs <pr> [--dry-run] [--bootstrap]
 //   land.mjs <pr> --preflight-only [--bootstrap]   (verifiers: the trust gate and the merge-result preflight only; needs JM_REPO and JM_TRUSTED_LOGINS)
-// Run it from a clean checkout of main: it reads the reviewer list from main's tip, never from the working tree.
+// Run it from a clean checkout of main: the accepted reviewers come from operator env, never from the repo.
 import { execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction, needsVerdict,
-  checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeResult, quoteOutput, stripControls, readReviewerEntries, readToken, remoteFor,
+  checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeResult, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
   scrub, takePage, hiddenInInert,
 } from './land-decide.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
@@ -66,13 +66,16 @@ function runInit(wt, env) {
     const take = (b) => { if (text.length < 2e6) text += b.toString('utf8'); };
     child.stdout.on('data', take);
     child.stderr.on('data', take);
-    const kill = () => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* the group is already gone */ } };
+    const kill = () => { try { IO.kill(-child.pid, 'SIGKILL'); } catch { /* the group is already gone */ } };
+    const grace = IO.graceMs ?? 5000;
+    let late;
     process.prependListener('exit', kill); // a crash or Ctrl-C of land must not leave the group running, and it dies before its dir is removed
-    const timer = setTimeout(() => { over = true; kill(); setTimeout(() => end(-1), 5000); }, LIMIT_MS); // an escapee holding the pipes cannot stall us
+    const timer = setTimeout(() => { over = true; kill(); late = setTimeout(() => end(-1), grace); }, IO.limitMs ?? LIMIT_MS); // an escapee holding the pipes cannot stall us
     const end = (code) => {
       if (ended) return;
       ended = true;
       clearTimeout(timer);
+      clearTimeout(late);
       kill();
       process.off('exit', kill);
       if (text) console.error(scrub(quoteOutput(text), SECRET));
@@ -80,6 +83,8 @@ function runInit(wt, env) {
       return done(code === 0 ? { ok: true } : { ok: false, reason: 'clean-shell ./init.sh (baseline preflight) failed on the merge result' });
     };
     child.on('error', () => end(-1));
+    // 'exit' is the child itself; 'close' waits for every holder of its pipes. Kill the group at exit so a descendant holding a pipe cannot stall land.
+    child.on('exit', (code) => { kill(); late = setTimeout(() => end(code ?? -1), grace); });
     child.on('close', end);
   });
 }
@@ -130,8 +135,6 @@ async function podMessages(since) {
   }
   return refuse('pod messages: page cap reached before paging back past the PR\'s creation; cannot prove no older FAIL');
 }
-// Reviewers come from main's tip, never from the working tree. Bootstrap (main has no land.mjs) reads H instead.
-const reviewers = (ref) => readReviewerEntries(out('git', ['show', `${ref}:.github/opus-reviewers.txt`]));
 const has = (ref, file) => { try { out('git', ['cat-file', '-e', `${ref}:${file}`]); return true; } catch { return false; } };
 // The first land of the gate is --bootstrap and only while main has no land.mjs; after that --bootstrap is refused. Both paths.
 function bootstrapGate(mainTip, bootstrap) {
@@ -145,7 +148,7 @@ function trustGate(pr) {
   if (!t.ok) refuse(`#${pr.number}: ${t.reason}`);
 }
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
-async function decide(pr, mainTip, opts) { // mainTip is the tip fetched for this land
+async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
   const n = String(pr.number);
   const head = pr.headRefOid;
   const rows = readLedger();
@@ -161,9 +164,9 @@ async function decide(pr, mainTip, opts) { // mainTip is the tip fetched for thi
   const base = { files: merged.files, tree: names, patch: merged.patch, binary: merged.binary };
   const hidesRange = !ok('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]);
   // Inert content is scanned under neutral names, so no path allowlist of the scanner can skip it. Binary files are protected, not scanned.
-  const hides = hidesRange || hiddenInInert(merged, names, (p) => out('git', ['cat-file', 'blob', `${merged.tree}:${p}`], { maxBuffer: 1 << 28 }), (d) => ok('make', ['-s', 'secrets-dir', `DIR=${d}`]));
+  const hides = hidesRange || hiddenInInert(merged, names, (spec) => out('git', ['cat-file', 'blob', spec], { maxBuffer: 1 << 28 }), (d) => ok('make', ['-s', 'secrets-dir', `DIR=${d}`]));
   if (needsVerdict({ ...base, hides })) {
-    const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers(opts.bootstrap ? head : mainTip) });
+    const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: parseReviewers(IO.env.JM_VERDICT_REVIEWERS) });
     if (!gate.ok) return gate;
     notes.push(gate.reason);
   }
@@ -234,13 +237,13 @@ async function run(args, hold) {
   if (!h.ok) refuse(h.reason);
   bootstrapGate(mainTip, opts.bootstrap);
   const head = pr.headRefOid.toLowerCase();
-  const d = await decide(pr, mainTip, opts);
+  const d = await decide(pr, mainTip);
   if (!d.ok) refuse(`#${n}: ${d.reason} (nothing merged)`);
   const pf = await preflight(mainTip, head, opts.bootstrap, d.tree);
   if (!pf.ok) refuse(`#${n}: ${pf.reason} (nothing merged)`);
   say(`#${n}: ok, ${[...d.notes, 'merge result preflight green'].join('; ')}`);
   if (mergeAction({ dryRun: DRY }) === 'stop') return say(`dry run: would land #${n} (merge commit, main ${mainTip.slice(0, 8)}); merged nothing`);
-  const again = await decide(pr, mainTip, opts);
+  const again = await decide(pr, mainTip);
   if (!again.ok) refuse(`#${n}: ${again.reason} (changed before the merge; nothing merged)`);
   const fresh = viewPr(n); // --match-head-commit pins only the head: the trust gate, base and state are re-read too
   trustGate(fresh);
@@ -263,6 +266,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   process.on('SIGTERM', () => process.exit(143));
   process.on('SIGHUP', () => process.exit(129));
   const exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
-  main({ exec, fetch, spawn, env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
+  main({ exec, fetch, spawn, kill: process.kill, env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
     .catch((e) => { console.error(`land: refused: ${e.message}`); process.exit(1); });
 }

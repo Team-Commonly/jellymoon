@@ -39,8 +39,8 @@ merges only when all of these hold at the exact PR head:
   security boundary (`landing.md`, Threat model);
 - the verifier's ledger line at the head is `PASS` (the check of record, `docs/development/verifier.md`), and no
   verifier wrote a `FAIL` at that head: a FAIL blocks the head, whoever wrote it, and the fix is a new head;
-- for a protected path, or a PR adding a `gitleaks:allow` line, the reviewer's pod verdict also passes. It is a
-  message by a listed reviewer's server-stamped username, whose first line is `jellymoon#<pr> <full head>` and whose
+- for a protected path, or a PR adding a `gitleaks:allow` line, the review's pod verdict also passes (one review per head; the operator posts it, there is no separate reviewer). It is a
+  message by a listed reviewer's immutable user id, whose first line is `jellymoon#<pr> <full head>` and whose
   last line is `GATE: PASS`. A protected path always needs it.
 - Workers never merge. GitHub review text is not consulted.
 - Protected paths: every changed path except `progress.md` and documentation files under `docs/` (`.md .html` only: gitleaks does not scan images, and
@@ -48,8 +48,7 @@ merges only when all of these hold at the exact PR head:
   Run land from a clean checkout of main. The check lives in the checked-out tree, so it is operator discipline: it binds
   only a tree that really is main.
 - **Verifiers run PR code only after the same trust gate:** `make verify-preflight PR=<n>` (`landing.md`).
-- **Accepted reviewers:** `.github/opus-reviewers.txt` is the only place they are written (`Name username`);
-  the test asserts the file parses and pins no name.
+- **Accepted reviewers:** operator env `JM_VERDICT_REVIEWERS` (`<id>:<Name>,...`), keyed by the immutable pod user id. No repo file lists them, so a PR cannot widen the list, and no id is ever committed.
 - **How the verdict is read** (`verdictOf` in `scripts/land-decide.mjs`). The verdict is the message's LAST
   non-empty line, with HTML comments removed and emphasis and list or heading markers stripped. It passes only
   if that is exactly `GATE: PASS` (case-insensitive). A missing line, a FAIL after the PASS, prose after it, an

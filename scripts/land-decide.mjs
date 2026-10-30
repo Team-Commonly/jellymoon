@@ -46,13 +46,12 @@ export function collides(paths, tree) {
 export const oddPath = (n) => /[^\x20-\x7e]/.test(n) || n.split('/').some((seg) => seg === '' || seg === '.' || seg === '..' || /[. ]$/.test(seg));
 export const touchesProtected = (files, tree = []) => files.some((f) => (f.modes || []).some((m) => !REGULAR.includes(m)) || [f.filename, f.previous_filename].some((n) => n && (oddPath(n) || !INERT.test(n.toLowerCase()))))
   || collides(files.map((f) => f.filename), tree);
-// One reviewer per line: `Name username` (the username is the pod's server-stamped one). A single token is a name with no username.
-export function readReviewerEntries(text) {
-  return text.split('\n').map((l) => l.replace(/#.*/, '').trim()).filter(Boolean).map((l) => {
-    const parts = l.split(/\s+/);
-    return parts.length > 1 ? { name: parts.slice(0, -1).join(' '), username: parts.at(-1) } : { name: l, username: null };
-  });
-}
+// Accepted reviewers come from operator env JM_VERDICT_REVIEWERS, `<id>:<Name>,<id>:<Name>`, never from the repo. The id is the pod user's
+// immutable id; a username is a mutable label any pod member can set on an agent they install.
+export const parseReviewers = (text) => String(text || '').split(',').map((e) => e.trim()).filter(Boolean).map((e) => {
+  const at = e.indexOf(':');
+  return at < 1 ? {} : { id: e.slice(0, at).trim(), name: e.slice(at + 1).trim() };
+}).filter((e) => e.id && e.name && e.id.indexOf(':') < 0);
 // The verdict is the LAST non-empty line, HTML comments removed, emphasis and list or heading markers stripped. Only
 // exactly `GATE: PASS` (case-insensitive) passes. Returns 'PASS', 'BLOCK', or null (nothing to judge). An indented line is code and blocks.
 export function verdictOf(text) {
@@ -79,25 +78,27 @@ export function checkLedger(rows, { pr, head }) {
   if (primary?.verdict !== 'PASS') return { ok: false, reason: `no verifier PASS for #${pr} at ${head.slice(0, 8)}` };
   return { ok: true, primary };
 }
-const msgUser = (m) => m.userId?.username ?? m.username;
+const msgUser = (m) => (m.userId && typeof m.userId === 'object' && m.userId._id ? String(m.userId._id) : null); // a string userId is not a populated user: ignored
 const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at) || 0;
 // A message counts for #N only if its FIRST non-empty line is exactly `jellymoon#<N> <head>` and its server-stamped
-// username is a listed reviewer's. The latest such message per reviewer decides (messages arrive newest first, so on a
+// author id is a listed reviewer's. The latest such message per reviewer id decides (messages arrive newest first, so on a
 // tie the lower index is the newer one); text is never an identity.
 export function checkPodVerdict(messages, { pr, head, entries }) {
-  const byUser = new Map(entries.filter((e) => e.username).map((e) => [e.username, e.name]));
+  if (!entries.length) return { ok: false, reason: 'JM_VERDICT_REVIEWERS is not set; a protected change needs the reviewer verdict and land cannot know whose it is' };
+  const byUser = new Map(entries.map((e) => [e.id, e.name]));
   const first = `jellymoon#${ref(pr)} ${head.toLowerCase()}`;
   const latestBy = new Map();
   messages.forEach((m, i) => {
-    const name = byUser.get(msgUser(m));
+    const id = msgUser(m);
+    const name = byUser.get(id);
     const line = (m.content || '').split('\n').map((l) => l.trim()).find(Boolean);
     if (!name || line?.toLowerCase() !== first) return;
-    const prev = latestBy.get(name);
-    if (!prev || msgTime(m) > msgTime(prev.m) || (msgTime(m) === msgTime(prev.m) && i < prev.i)) latestBy.set(name, { m, i });
+    const prev = latestBy.get(id);
+    if (!prev || msgTime(m) > msgTime(prev.m) || (msgTime(m) === msgTime(prev.m) && i < prev.i)) latestBy.set(id, { m, i, name });
   });
   const pass = [];
   const block = [];
-  for (const [name, { m }] of latestBy) (verdictOf(m.content) === 'PASS' ? pass : block).push(name);
+  for (const { m, name } of latestBy.values()) (verdictOf(m.content) === 'PASS' ? pass : block).push(name);
   if (block.length) return { ok: false, reason: `pod verdict blocked by ${block.join(', ')}` };
   if (!pass.length) return { ok: false, reason: `no accepted reviewer's pod message starts with 'jellymoon#${ref(pr)} <full head>'` };
   return { ok: true, reason: `pod verdict PASS (${pass.join(', ')})` };
@@ -192,7 +193,7 @@ export function acquireLock(dir, { pid = process.pid, alive = (p) => { try { pro
 }
 // The trust gate: this host runs only code whose authors are trusted. Trust is GitHub identity, never a commit author string.
 // pr: { isCrossRepository, author }; pushers: logins with push access to the repo; trusted: JM_TRUSTED_LOGINS (operator env).
-const REFUSE = 'untrusted PR: not executed on this host, and nowhere else today (CI is off). Re-author it through the loop to land it.';
+const REFUSE = 'untrusted PR: not executed on this host. Re-author it through the loop to land it.';
 // Accounts that can push: `collaborators?affiliation=all` lines of {login, push}. The permission=push filter was seen returning admins only.
 export const pushersOf = (text) => text.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((c) => c.push === true).map((c) => c.login);
 export const parseLogins = (text) => [...new Set(String(text || '').split(',').map((l) => l.trim().toLowerCase()).filter(Boolean))];
@@ -249,8 +250,13 @@ export function mergeResult(run, mainTip, head) {
   const treePatch = diff('-U0');
   const messages = run(['log', '--format=%B', `${mainTip}..${head}`]); // gitleaks git mode never reads commit messages
   // Git's own verdict on binary: a NUL in the first 8000 bytes, or a `binary`/`-diff` attribute. `-\t-` in --numstat. The scanner skips these.
-  const binary = diff('--numstat').split('\n').some((l) => l.startsWith('-\t-\t'));
-  return { tree, messages, files: filesFromRaw(diff('--raw', '-M')), binary, treePatch, patch: `${treePatch}\n${history}` };
+  let binary = diff('--numstat').split('\n').some((l) => l.startsWith('-\t-\t'));
+  // Every blob the range adds, not only the ones in the merge result: `gh pr merge --merge` keeps each commit, so a secret added in
+  // commit 1 and deleted in commit 2 stays in main's history, in a place gitleaks git mode may skip (binary, image, lockfile, node_modules).
+  const shas = [...new Set(run(['rev-list', '--objects', '--filter=object:type=blob', '--filter-provided-objects', `${mainTip}..${head}`]).split('\n').filter(Boolean).map((l) => l.split(' ')[0]))];
+  const added = shas.map((sha) => run(['cat-file', 'blob', sha]));
+  binary = binary || added.some((x) => x.slice(0, 8000).includes('\0'));
+  return { tree, messages, added, files: filesFromRaw(diff('--raw', '-M')), binary, treePatch, patch: `${treePatch}\n${history}` };
 }
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
@@ -279,7 +285,7 @@ export const needsVerdict = ({ files, tree, patch, hides, binary = false }) => b
 // inside a blind spot must not be able to carry a secret. blob(path) is the file's content at the merge result; scan(dir) is true when clean.
 function inertScan(merged, names, blob, scan) {
   const inert = merged.files.filter((f) => f.modes[1] !== '000000' && !touchesProtected([f], names));
-  const texts = [...inert.map((f) => blob(f.filename)), ...(merged.messages?.trim() ? [merged.messages] : [])];
+  const texts = [...inert.map((f) => blob(`${merged.tree}:${f.filename}`)), ...merged.added, ...(merged.messages?.trim() ? [merged.messages] : [])];
   if (!texts.length) return true;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-inert-'));
   try {

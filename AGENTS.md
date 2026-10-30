@@ -37,12 +37,12 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
   Every report states lines added and removed, and what it deleted.
 - **Merging.** Local verification is the authority. `make land PR=<n>` is the only merge path. PR code runs on this
   host only for a trusted PR: same repo, author and every push-capable account in the operator's `JM_TRUSTED_LOGINS`;
-  an outside PR gets no execution anywhere today (CI is off); to land one, re-author it through the loop. Land proves the exact head green in a clean shell (a correctness
+  an outside PR is not executed on this host; to land one, re-author it through the loop. Land proves the exact head green in a clean shell (a correctness
   check, not a security boundary), requires the verifier's ledger line at that head (the coordinator transcribes the
   report's `GATE:` line, model and `FINDINGS` into the row; any FAIL at a head blocks it, so the fix is a new head),
   and for protected paths (every changed path except `progress.md` and documentation files under `docs/`:
-  `.md .html`, matched on the lowercased path; a rename counts both sides) or an added `gitleaks:allow` line also the
-  reviewer's pod verdict naming the PR and head. Verifiers run a PR's code only after the same trust gate:
+  `.md .html`, matched on the lowercased path; a rename counts both sides) or an added `gitleaks:allow` line also
+  the review's pod verdict naming the PR and head (one review per head, posted by the operator; accepted ids are operator env `JM_VERDICT_REVIEWERS`, never in the repo). Verifiers run a PR's code only after the same trust gate:
   `make verify-preflight PR=<n>`, from a clean checkout of main; never check out a PR and run make (the one exception is the bootstrap PR, `docs/development/verifier.md`). The stack lands as one PR retargeted to `main`. CI is off by decision; land refuses
   only if check runs exist on the head and one failed. Only the coordinator lands (`docs/development/landing.md`,
   `workflow.md`).

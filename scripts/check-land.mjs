@@ -8,7 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import {
   landedNote, mergeAction, needsVerdict,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, readReviewerEntries, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -17,9 +17,9 @@ const HEADER = 'pr\thead\tverdict\tby\twhen\tnote';
 const ledger = (...rows) => parseLedger([HEADER, ...rows.map((r) => r.join('\t'))].join('\n'));
 const row = (pr, head, verdict, by, note = '') => [pr, head, verdict, by, '2026-10-29T10:00:00Z', note];
 const throws = (f) => { try { f(); return false; } catch { return true; } };
-const entries = [{ name: 'Ada', username: 'ada' }, { name: 'Ben', username: 'ben' }];
+const entries = [{ id: 'id-ada', name: 'Ada' }, { id: 'id-ben', name: 'Ben' }]; // ids are the pod user's immutable id; usernames are labels
 let t = 0;
-const msg = (username, content, o = {}) => ({ userId: { username }, content, createdAt: `2026-10-29T10:${String(++t).padStart(2, '0')}:00Z`, ...o });
+const msg = (username, content, o = {}) => ({ userId: { _id: `id-${username}`, username }, content, createdAt: `2026-10-29T10:${String(++t).padStart(2, '0')}:00Z`, ...o });
 const verdict = (pr, head, gate = 'PASS') => `jellymoon#${pr} ${head}\nlooks right\nGATE: ${gate}`;
 const pod = (msgs, pr = '5', head = H, o = {}) => checkPodVerdict(msgs, { pr, head, entries, ...o });
 const led = (rows, head = H) => checkLedger(rows, { pr: '5', head });
@@ -91,7 +91,7 @@ const cases = [
       ['trust: an untrusted push-capable collaborator is refused and named', t({ pushers: ['lily', 'eve'] }).reason.includes('an account that can push to the repo is not trusted: eve'), true],
       ['trust: the author message is its own', t({ pr: { ...pr, author: 'mallory' } }).reason.includes("author 'mallory' is not trusted"), true],
       ['trust: an unset list refuses', checkTrust({ pr, pushers: ['lily'], trusted: parseLogins('') }).reason, 'JM_TRUSTED_LOGINS is not set; refusing to run any PR code'],
-      ['trust: the refusal says the PR is not executed here', t({ pr: { ...pr, isCrossRepository: true } }).reason.startsWith('untrusted PR: not executed on this host, and nowhere else today (CI is off). Re-author it through the loop to land it.'), true],
+      ['trust: the refusal says the PR is not executed here', t({ pr: { ...pr, isCrossRepository: true } }).reason.startsWith('untrusted PR: not executed on this host. Re-author it through the loop to land it.'), true],
     ];
   })(),
   // CI is a second witness only when it exists
@@ -177,9 +177,19 @@ const cases = [
   ['landed note: a merge commit with the tested tree is just the sha', landedNote('abc', 't1', 't1'), 'abc'],
   ['landed note: a different tree is recorded as TREE-MISMATCH with both trees', landedNote('abc', 't1', 't2'), 'abc TREE-MISMATCH tested t1 merged t2'],
   ['output: a branch name with escapes is stripped', stripControls('x\u001b[31my'), 'x[31my'],
-  ['pod: the operator entry (operator) in the real reviewer file is accepted', pod([msg('operator', verdict(5, H))], '5', H, { entries: readReviewerEntries(fs.readFileSync(new URL('../.github/opus-reviewers.txt', import.meta.url), 'utf8')) }).ok, true],
+  ['pod: a forged username with a different id is rejected', pod([msg('ada', verdict(5, H), { userId: { _id: 'id-forged', username: 'ada' } })]).ok, false],
+  ['pod: the right id with any username is accepted', pod([msg('ada', verdict(5, H), { userId: { _id: 'id-ada', username: 'operator' } })]).ok, true],
+  ['pod: a forged later PASS (other id, same name) does not override the real FAIL', pod([msg('ada', verdict(5, H, 'FAIL')), msg('ada', verdict(5, H), { userId: { _id: 'id-forged', username: 'ada' } })]).ok, false],
+  ['pod: the latest verdict is decided per id (a later PASS from the same id wins)', pod([msg('ada', verdict(5, H, 'FAIL'), { createdAt: '2026-10-29T10:00:00Z' }), msg('ada', verdict(5, H), { createdAt: '2026-10-29T11:00:00Z' })]).ok, true],
+  ['pod: a string userId (not a populated user) is ignored', pod([msg('ada', verdict(5, H), { userId: 'id-ada' })]).ok, false],
+  ['pod: no configured reviewers refuses and names JM_VERDICT_REVIEWERS', pod([msg('ada', verdict(5, H))], '5', H, { entries: [] }).reason.includes('JM_VERDICT_REVIEWERS'), true],
+  ['reviewers: id:Name pairs parse; blanks and malformed entries are dropped', JSON.stringify(parseReviewers(' a1:Lily Shen, ,bad,:x,b2:Ben ')), '[{"id":"a1","name":"Lily Shen"},{"id":"b2","name":"Ben"}]'],
+  ['reviewers: unset or empty gives none', parseReviewers(undefined).length + parseReviewers(' , ').length, 0],
+  ['trust: a list of only blanks and commas is unset', parseLogins(' , ,').length, 0],
+  ['trust: blanks inside a list are dropped, the rest kept', parseLogins('a, ,b').join(), 'a,b'],
+  ['trust: an author with no login never passes, even if the list had a blank', checkTrust({ pr: { isCrossRepository: false, author: undefined }, pushers: ['a'], trusted: parseLogins('a, ,b') }).ok, false],
+  ['trust: an empty author login never passes', checkTrust({ pr: { isCrossRepository: false, author: '' }, pushers: ['a'], trusted: parseLogins('a, ,b') }).ok, false],
   ['output: C1 controls (U+0080 to U+009F) are stripped', stripControls('a\u0080b\u009bc\u009fd'), 'abcd'],
-  ['pod: a reviewer listed by name only (no username) is never matched by display name', pod([msg('Ada', verdict(5, H))], '5', H, { entries: [{ name: 'Ada', username: null }] }).ok, false],
   // check-entropy itself: none passes only when named; an unreadable named base fails, and a PR cannot name one (land sets the env)
   ...(() => {
     const entropy = (base) => spawnSync(process.execPath, [fileURLToPath(new URL('./check-entropy.mjs', import.meta.url))], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME, JM_ENTROPY_BASE: base } }).status;
@@ -287,7 +297,7 @@ const run = spawnSync(process.execPath, [fileURLToPath(new URL('./land.mjs', imp
 cases.push(
   ['land.mjs: the preflight child has a wall-clock limit', /LIMIT_MS/.test(landSrc) && /setTimeout/.test(landSrc), true],
   ['land.mjs: SIGHUP exits 129 like the others', /SIGHUP[^\n]*exit\(129\)/.test(landSrc), true],
-  ['land.mjs: preflight output is scrubbed and the group is killed on return', landSrc.includes('scrub(quoteOutput(text), SECRET)') && /clearTimeout\(timer\);\s*kill\(\);/.test(landSrc), true],
+  ['land.mjs: preflight output is scrubbed and the group is killed on return', landSrc.includes('scrub(quoteOutput(text), SECRET)') && /clearTimeout\(timer\);\s*clearTimeout\(late\);\s*kill\(\);/.test(landSrc), true],
   ['land.mjs: SIGINT and SIGTERM exit, which kills the group and releases the lock', /SIGINT[^\n]*exit\(130\)/.test(landSrc) && /SIGTERM[^\n]*exit\(143\)/.test(landSrc), true],
   ['land.mjs: the throwaway dir is tracked and the group kill runs first', landSrc.includes('trackThrowaway(dir, wt,') && landSrc.includes("process.prependListener('exit', kill)"), true],
   ['land.mjs imports resolve: run with no arguments it reaches main and refuses', run.status === 1 && !/export named|SyntaxError|ReferenceError/i.test(run.stderr) && run.stderr.includes('land: refused'), true],

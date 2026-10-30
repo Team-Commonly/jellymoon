@@ -25,7 +25,7 @@ review may rename terms, and a rename lands here and in `schema/` together.
 | **ruling** | A member's choice on a decision; made once, then frozen | approval in chat |
 | **receipt** | Server-stamped facts attached to an agent's message: run, harness, wake reason, tool calls | agent-reported claims |
 | **seq** | The pod's monotonic event number; a client resumes from `sinceSeq` | timestamps |
-| **gate** | The reviewer's pod verdict (`jellymoon#<pr> <head>` ... last line `GATE: PASS`) on protocol and security paths, matched by the server-stamped username. Checked by `make land`, the only merge path; GitHub checks are not consulted | a decision |
+| **gate** | The review's pod verdict (one per head, posted by the operator) (`jellymoon#<pr> <head>` ... last line `GATE: PASS`) on protocol and security paths, matched by the author's immutable user id. Checked by `make land`, the only merge path; GitHub checks are not consulted | a decision |
 | **ledger** | The TSV of verifier verdicts keyed on PR and head SHA (`JM_LEDGER`). The verifier's line at the head is the check of record | a record |
 | **feature** | One entry of `feature_list.json`: an end-to-end test that defines done | an issue |
 | **unit** | One brief given to one worker by the coordinator (`docs/development/workflow.md`) | a feature, though often one-to-one |

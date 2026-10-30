@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { addsAllowMarker, checkPodVerdict, filesFromRaw, hiddenInInert, mergeResult, needsVerdict, readReviewerEntries, touchesProtected, verdictOf } from './land-decide.mjs';
+import { addsAllowMarker, checkPodVerdict, filesFromRaw, hiddenInInert, mergeResult, needsVerdict, touchesProtected, verdictOf } from './land-decide.mjs';
 
 // Only exactly `GATE: PASS` as the last non-empty line passes; everything else blocks (nothing at all is null).
 const verdicts = [
@@ -23,7 +23,7 @@ const verdicts = [
 const paths = [
   ['a schema edit is protected', [{ filename: 'schema/x.json' }], true],
   ['a workflow edit is protected', [{ filename: '.github/workflows/ci.yml' }], true],
-  ['the land scripts and reviewer list are protected', [{ filename: 'scripts/land-decide.mjs' }, { filename: '.github/opus-reviewers.txt' }], true],
+  ['the land scripts are protected', [{ filename: 'scripts/land-decide.mjs' }], true],
   ['a rename OUT of schema/ is protected (previous_filename)', [{ filename: 'elsewhere/x.json', previous_filename: 'schema/x.json' }], true],
   ['a rename INTO schema/ is protected', [{ filename: 'schema/x.json', previous_filename: 'elsewhere/x.json' }], true],
   ['the Makefile, init.sh and tools.sh are protected', [{ filename: 'Makefile' }], true],
@@ -85,10 +85,6 @@ const badMarkers = markers.filter(([, d, want]) => addsAllowMarker(d) !== want).
 if (badMarkers.length) { console.error(`check-review-gate: allow-marker cases wrong\n  ${badMarkers.join('\n  ')}`); process.exit(1); }
 const badPaths = paths.filter(([, files, want, tree]) => (Array.isArray(files) ? touchesProtected(files, tree) : files) !== want).map(([t]) => t);
 if (badPaths.length) { console.error(`check-review-gate: protected-path cases wrong\n  ${badPaths.join('\n  ')}`); process.exit(1); }
-const text = fs.readFileSync(new URL('../.github/opus-reviewers.txt', import.meta.url), 'utf8');
-const entries = readReviewerEntries(text);
-const fileOk = entries.length > 0 && entries.every((e) => e.name && /^[a-z0-9][a-z0-9-]*$/.test(e.username || ''));
-if (!fileOk) { console.error(`check-review-gate: .github/opus-reviewers.txt does not parse as 'Name username' lines: ${JSON.stringify(entries)}`); process.exit(1); }
 const bad = verdicts.filter(([, text, want]) => verdictOf(text) !== want).map(([t]) => t);
 if (bad.length) { console.error(`check-review-gate: ${bad.length} of ${verdicts.length} verdict cases wrong\n  ${bad.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${verdicts.length} verdict cases and ${paths.length} path cases ok`);
@@ -147,7 +143,7 @@ const hist = (marker) => {
   return out;
 };
 const [marked, control] = [hist(true), hist(false)];
-const noVerdict = (h) => checkPodVerdict([], { pr: '5', head: h, entries: [{ name: 'Ada', username: 'ada' }] }).ok;
+const noVerdict = (h) => checkPodVerdict([], { pr: '5', head: h, entries: [{ id: 'id-ada', name: 'Ada' }] }).ok;
 const history = [
   ['history: the merge result alone shows nothing (the verifier\'s fixture)', marked.merged.files.length === 0 && !addsAllowMarker(marked.merged.treePatch), true],
   ['history: the marker added then removed still protects the PR', addsAllowMarker(marked.merged.patch), true],
@@ -214,7 +210,7 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
     const [mainTip, head] = [git('rev-parse', 'main'), git('rev-parse', 'pr')];
     const merged = mergeResult((a) => git(...a), mainTip, head);
     const names = git('ls-tree', '-r', '--name-only', mainTip).split('\n');
-    const hiddenIn = hiddenInInert(merged, names, (f) => git('cat-file', 'blob', `${merged.tree}:${f}`), (d) => spawnSync('make', ['-s', 'secrets-dir', `DIR=${d}`], { cwd: dir }).status === 0);
+    const hiddenIn = hiddenInInert(merged, names, (spec) => git('cat-file', 'blob', spec), (d) => spawnSync('make', ['-s', 'secrets-dir', `DIR=${d}`], { cwd: dir }).status === 0);
     const range = spawnSync('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`], { cwd: dir }).status !== 0;
     return { merged, needs: needsVerdict({ files: merged.files, tree: names, patch: merged.patch, binary: merged.binary, hides: range || hiddenIn }), range };
   };
@@ -226,6 +222,12 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
   const renamed = probe({ 'docs/gitleaks.toml.md': secret }, { after: 'git mv docs/gitleaks.toml.md docs/guide.md && git commit -qm rename' });
   const inMessage = probe({ 'docs/ok.md': 'no token here\n' }, { msg: `docs\n\n${secret}` });
   const nulB = probe({ 'docs/b.md': Buffer.concat([Buffer.from('x\0\n'), Buffer.from(secret)]) });
+  // Added in commit 1, deleted in commit 2: nothing of it is left in the merge result, but the merge commit keeps both commits.
+  const nulBody = Buffer.concat([Buffer.from('x\0\n'), Buffer.from(secret)]);
+  const gone = (f, body) => probe({ [f]: body, 'docs/ok.md': 'ok\n' }, { after: `git rm -q '${f}' && echo more >> docs/ok.md && git add -A && git commit -qm drop` });
+  const goneVariants = { 'bin.dat': nulBody, 'docs/a.md': nulBody, 'shot.png': secret, 'node_modules/x.js': secret, 'docs/node_modules/x.md': secret, 'package-lock.json': secret, 'go.sum': secret };
+  const goneRes = Object.fromEntries(Object.entries(goneVariants).map(([f, b]) => [f, gone(f, b)]));
+  const goneControl = gone('notes.txt', secret);
   const control = probe({ 'docs/ok.md': 'no token here\n' });
   const inert = [
     ['inert: a .md with a NUL and a token is protected (git calls it binary)', nul.needs && nul.merged.binary, true],
@@ -236,6 +238,8 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
     ...Object.entries(more).map(([f, r]) => [`inert: ${f} with a token needs the verdict`, r.needs, true]),
     ['inert: a token added in docs/gitleaks.toml.md then renamed to docs/guide.md needs the verdict', renamed.needs, true],
     ['inert: a token only in a commit message needs the verdict, though gitleaks\'s range scan misses it', inMessage.needs && !inMessage.range, true],
+    ...Object.entries(goneRes).map(([f, r]) => [`range: ${f} added in commit 1 and deleted in commit 2 needs the verdict`, r.needs && r.merged.files.every((x) => x.filename === 'docs/ok.md'), true]),
+    ['range: the plain-text control (notes.txt) is caught by the range scan itself', goneControl.needs && goneControl.range, true],
     ['inert: the control docs/ok.md with no token stays inert', control.needs, false],
   ];
   fs.rmSync(dir, { recursive: true, force: true });

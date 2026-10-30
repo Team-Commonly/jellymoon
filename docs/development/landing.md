@@ -2,8 +2,8 @@
 
 `make land PR=<n>` is the only merge path. Local verification is the authority; GitHub check runs are consulted only
 as a veto (step 4). It runs `scripts/land.mjs`; the decisions are pure functions in `scripts/land-decide.mjs` and the
-cases are in `scripts/check-land.mjs`. Run it from a checkout of main with a clean tree: it reads the reviewer list
-from main's tip, never from the working tree. One land runs at a time **per clone**: an mkdir lock in that clone's git
+cases are in `scripts/check-land.mjs`. Run it from a checkout of main with a clean tree: the accepted reviewers come from
+operator environment (`JM_VERDICT_REVIEWERS`), never from the repo. One land runs at a time **per clone**: an mkdir lock in that clone's git
 common dir holds the PID, so two clones can land at once. A dead PID, or a lock dir with no pid file, is stale; it is
 taken over by renaming the stale dir to a name of the taker's own (atomic, so only one taker wins) and then creating
 the lock.
@@ -20,9 +20,8 @@ is refused.
   (`GET /repos/{repo}/collaborators?affiliation=all`, paginated, keeping `.permissions.push === true`) is in that list too. The list is an
   operator env var, comma-separated, never read from the repo, so a PR cannot widen it; unset, land refuses. Trust is
   a GitHub identity, never a commit author string, which anyone can set.
-- **An outside PR gets no execution anywhere today.** Land and `make verify-preflight` refuse it before fetching or running
-  any of its code, and CI is `workflow_dispatch` only and stays off: `untrusted PR: not executed on this host, and
-  nowhere else today (CI is off). Re-author it through the loop to land it.`
+- **An outside PR is not executed on this host.** Land and `make verify-preflight` refuse it before fetching or running
+  any of its code: `untrusted PR: not executed on this host. Re-author it through the loop to land it.`
 - **Why the macOS sandbox was removed.** Four rounds of verifiers escaped it (the Docker socket, the keychain, LaunchServices `open`, TIOCSTI tty injection, reads outside home plus TCP egress), so `sandbox-exec` on a full Go and Bun toolchain is not a boundary we can hold.
 - **A trusted PR is trusted fully.** Its preflight runs as the operator and can read any file the operator can; the pod
   token file is the sharp example. Nothing here contains code a trusted account wrote.
@@ -97,6 +96,7 @@ command is `node scripts/land.mjs <n>` from the operator's shell.
 | `JM_COMMONLY_API` | base URL of the API holding the verdict pod; must be exactly `https://api.commonly.me`, unless `JM_ALLOW_API_ORIGIN` equals it (https only), so the bearer goes only to a host the operator chose |
 | `JM_COMMONLY_TOKEN_FILE` | path to a token file; read, never printed |
 | `JM_VERDICT_POD` | id of the pod whose messages carry reviewer verdicts |
+| `JM_VERDICT_REVIEWERS` | the accepted reviewers, `<id>:<Name>,<id>:<Name>`, by immutable pod user id. Read from the environment only. Needed when a verdict is needed; unset or empty refuses |
 | `JM_TRUSTED_LOGINS` | comma-separated GitHub logins that may author code this host runs; read from the environment only. Unset refuses |
 
 A missing variable refuses and names it. The tree holds no pod id, host or path. `--preflight-only` needs only `JM_REPO` and `JM_TRUSTED_LOGINS`.
@@ -110,25 +110,28 @@ is the full 40-character SHA. Values are trimmed and compared case-insensitively
   shopping). The fix is a new head;
 - the latest verdict row must be a `PASS`.
 
-## The verdict message a reviewer posts
-In the verdict pod, from the reviewer's own account:
+## The verdict message
+In the verdict pod, from the reviewer's account:
 ```
 jellymoon#<pr> <40-char head sha>
 ...findings...
 GATE: PASS
 ```
 The FIRST non-empty line must be exactly `jellymoon#<pr> <full head>` and the last non-empty line exactly
-`GATE: PASS` or `GATE: FAIL`. Land matches the message's server-stamped `username` against
-`.github/opus-reviewers.txt` (`Name username`) as it stands on main; the text, including any "Written by" line,
+`GATE: PASS` or `GATE: FAIL`. Land matches the author's immutable user id (`userId._id`; a message whose `userId` is not a populated user is ignored)
+against the accepted reviewers in operator env `JM_VERDICT_REVIEWERS`, formatted `<id>:<Name>,<id>:<Name>`. A username is a
+label any pod member can set on an agent they install, so it is never an identity, and the list is never read from the repo, so a PR
+cannot widen it. Unset or empty, a protected land refuses and names the variable. Ids are deployment config and are never
+committed. The text, including any "Written by" line,
 is never an identity. A message that merely cites another PR, a short SHA, a quoted or commented verdict, or a
-message by anyone else does not count. Each reviewer's latest message at the head decides (on equal timestamps, the newer one), and any reviewer's
+message by anyone else does not count. Each reviewer id's latest message at the head decides (on equal timestamps, the newer one), and any reviewer's
 latest that does not pass refuses. Messages are read newest first and deduped by id across pages. The next page
 starts 1 ms after the oldest message so messages sharing that instant come back; if a full page adds nothing new,
 or the page cap is reached before paging back past the PR's creation, land refuses rather than guess.
 
-Review gate, 2026-10-30 (owner ruling): each head gets one fresh-context Opus review. The operator
-(`operator`, listed in `.github/opus-reviewers.txt`) posts that review subagent's report as the pod verdict: first line
-`jellymoon#N <head>`, last line `GATE: PASS`. That stays until the owner restores a separate review.
+Review gate, 2026-10-30 (owner ruling): each head gets one fresh-context review, and its verdict lands the unit. There is
+no separate reviewer. The operator account (its id is in `JM_VERDICT_REVIEWERS`) posts the review subagent's report as the
+pod verdict: first line `jellymoon#N <head>`, last line `GATE: PASS`. That stays until the owner restores a separate review.
 
 ## Protected paths
 A path is unprotected only if it is inert: the file `progress.md`, or a file under `docs/` whose extension is `.md` or `.html`
@@ -165,6 +168,7 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 - **Windows 8.3 short names and backslash aliases are not folded** by the protected-path rule. The host is macOS.
 - **The throwaway's own `make secrets` reads a PR-added `.gitleaks.toml`.** The decision is unaffected: that file is not inert, so
   the PR is protected, and land's range scan runs in main's tree with main's config.
+- **Every blob the range adds is scanned, not only the merge result.** `gh pr merge --merge` keeps each commit, so a secret added in one commit and deleted in the next sits in main's history while the merge result is clean, and gitleaks git mode skips binaries, images, `node_modules`, lockfiles and `go.sum`. Land lists the blobs with `git rev-list --objects <main tip>..<head>`: a NUL in the first 8000 bytes of any makes the PR protected; every other one is written under a neutral name and scanned with `gitleaks dir` with the inert files. A hit needs the verdict.
 - **Both secret scans pass `-m`** (`make secrets`, `make secrets-range`): gitleaks runs `git log -p` without it, so a secret that
   exists only in a merge commit's own diff (a conflict resolution) would never be scanned.
 - **Every fetch of main names `refs/heads/main`**, never bare `main`: a tag named `main` wins git's DWIM.
@@ -190,11 +194,12 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   "CI is off; a failing run vetoes".
 - **The checkout check** also refuses `assume-unchanged` or `skip-worktree` files, a diff from HEAD, and untracked files
   (all shown).
+- **A message's author, or the pod creator, can change its `created_at`** (Commonly's `PATCH /api/messages/:id/created-at`). A reviewer could reorder their own verdicts, and the creator anyone's; a backdated FAIL could also slip past the paging bound. Same trust class as the deletion below.
 - **A pod creator can delete a reviewer's message.** Land reads only what exists at land time, so deleting a
   reviewer's latest FAIL brings back their earlier PASS at the same head. The pod's creator is trusted.
 - **A trusted author is trusted fully.** Nothing here contains code a trusted account wrote; see the threat model.
 
 ## Bootstrap: the first land of the gate
 While main has no `scripts/land.mjs`, land and `verify-preflight` refuse unless run with `--bootstrap` (and with
-`--bootstrap` they refuse once main has the file). It then reads the reviewer list from the PR head and appends a
+`--bootstrap` they refuse once main has the file). It appends a
 `BOOTSTRAP` row. The first land of the gate is judged by people and recorded as such.

@@ -1,0 +1,18 @@
+# The production bundle: src/index.ts, which has no /__test handler at all.
+name = "jellymoon"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "POD"
+class_name = "PodDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PodDO"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jellymoon"
+database_id = "00000000-0000-0000-0000-000000000000"

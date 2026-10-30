@@ -11,6 +11,7 @@ import fs from 'node:fs';
 
 // Allow-lists, each with a reason and a clean case below.
 const EMAIL_OK = /@(users\.noreply\.github\.com|example\.(com|org|net)|[a-z0-9-]+\.(example|invalid))$/i; // GitHub noreply; RFC 2606 reserved domains only
+const PACKAGE_VERSION = /@\d+\.\d+\.\d+[-+.]/; // a package@x.y.z spec (bun's patchedDependencies key and patch file name), not an address
 // A remote's userinfo is allowed only as the exact synthetic values the tests use: `git@` (the scp form), `tok@` and `u:p@` in a URL.
 // Any other userinfo may be a credential or a personal address, so it stays a hit.
 const SYNTHETIC_USERINFO = new Map([['git', ''], ['tok', '://'], ['p', '://u:']]); // user -> what must precede it
@@ -23,7 +24,7 @@ const SKIPPED = /^(?:\.agents\/|go\.sum$|bun\.lock$|package-lock\.json$|pnpm-loc
 
 const CLASSES = [
   { name: 'operator path', re: /(?:\/Users\/[A-Za-z]|(?<!\w)~\/[A-Za-z.]|\/private\/tmp\b|(?<![\w:.])\/home\/[a-z][\w.-]*\/\w)/g },
-  { name: 'email', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g, ok: (m, line, at) => EMAIL_OK.test(m) || GIT_REMOTE(m, line, at) },
+  { name: 'email', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g, ok: (m, line, at) => EMAIL_OK.test(m) || PACKAGE_VERSION.test(m) || GIT_REMOTE(m, line, at) },
   { name: '24-hex id', re: /\b[0-9a-f]{24}\b/g, ok: (m) => HEX24_OK.test(m) },
   { name: 'registry host', re: /\b[\w-]+(?:-docker\.pkg\.dev|\.gcr\.io|\.dkr\.ecr\.[\w-]+\.amazonaws\.com|\.azurecr\.io)\b/g },
   { name: 'cloud project id', re: /\bproject(?:[_ -]?id)?["'=: ]+[a-z][a-z0-9]*(?:-[a-z0-9]+)*-\d{6,}\b/gi },
@@ -86,6 +87,9 @@ const CASES = [
   ['allowed: a reserved .example domain', j('http://localhost:80@', 'attacker.example'), null],
   ['allowed: a reserved .invalid domain', j('a@', 'host.invalid'), null],
   ['email: a real registrable domain is not synthetic', j('http://localhost:80@', 'evil.com'), 'email'],
+  ['allowed: a package@x.y.z patch file name', j('worker/patches/miniflare', '@5.20261012.0-beta.patch'), null],
+  ['email: a numeric first label is still an address', j('someone@', '163.com'), 'email'],
+  ['email: two numeric labels are not a version', j('someone@', '1.2.example-mail.com'), 'email'],
   ['allowed: all-zero 24-hex id', '0'.repeat(24), null],
   ['allowed: documented test prefix', j('deadbeef', '0123456789abcdef'), null],
   ['allowed: RFC section', j('RFC 6749 ', '§', '4.1'), null],

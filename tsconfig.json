@@ -7,7 +7,9 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "noUnusedLocals": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"]
   },
-  "include": ["gen/ts/**/*.ts", "podcore/**/*.ts"]
+  "include": ["gen/ts/**/*.ts", "podcore/**/*.ts", "worker/**/*.ts"]
 }

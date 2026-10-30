@@ -11,5 +11,5 @@ clone of this repo can load them. They are copied verbatim from MIT-licensed ups
 Skills call each other by name; the set is closed (every skill a vendored skill calls is vendored).
 
 **Updating:** copy the new upstream version over the directory in one PR, record the new pin here, and
-note any behaviour change in `progress.md`. Local edits go in our own docs, never in a vendored file, so
+note any behaviour change in a `progress/` entry. Local edits go in our own docs, never in a vendored file, so
 the next update stays a clean copy.

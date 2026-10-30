@@ -3,7 +3,7 @@
 Paste verbatim into every worker and verifier spawn.
 
 1. Program: Jellymoon, repository Team-Commonly/jellymoon, base branch `main`. Units come from `feature_list.json`; that file,
-   `progress.md` and `init.sh` are the in-repo source of truth.
+   `progress/` (with `progress.md` for older entries) and `init.sh` are the in-repo source of truth.
 2. One long-running coordinator session builds Jellymoon with a defined engineering loop. Workflow comes before building.
 3. Connectors are open-source-first: check for MIT or Apache projects that already do the job before building. F19 waits
    for the reviewed options doc.

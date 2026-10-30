@@ -297,6 +297,8 @@ if (missingAnchors.length || extraAnchors.length || doubled.length) {
 queueOutput('docs/protocol.md', protocolDoc);
 for (const [rel, content] of outputs) {
   const p = path.join(ROOT, rel);
+  // Never write through a symlink (the output path or any directory above it inside the tree): it could point outside the repo.
+  for (let d = p; d !== ROOT; d = path.dirname(d)) if (fs.existsSync(d) && fs.lstatSync(d).isSymbolicLink()) fail(`${path.relative(ROOT, d)} is a symlink; gen will not write through it`);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, content);
 }

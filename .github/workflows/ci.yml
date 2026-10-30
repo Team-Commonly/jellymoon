@@ -6,8 +6,8 @@ name: CI
 # Verification loop (docs/development/workflow.md). When enabled, each check is a
 # job here. A job whose code does not exist
 # yet passes with a notice; it starts enforcing the moment its directory lands.
-# Budget: 5 minutes wall clock for the whole workflow. The review gate is
-# review-gate.yml, kept separate so a review event never re-runs these jobs.
+# Budget: 5 minutes wall clock for the whole workflow. There is no review gate in
+# CI: `make land` is the only merge path (docs/development/landing.md).
 
 on:
   workflow_dispatch:

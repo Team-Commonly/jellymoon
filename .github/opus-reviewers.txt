@@ -1,8 +1,0 @@
-# Accepted Opus reviewers for the protected-path gate, one per line: `Name username`.
-# `username` is the reviewer's server-stamped username in the verdict pod; scripts/land.mjs matches on it.
-# Verify each username against the pod before relying on it. review-gate.yml (disabled) reads only the names.
-Ben ben
-Ada ada
-Eli eli
-Cleo cleo
-Dana dana

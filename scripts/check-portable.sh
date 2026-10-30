@@ -5,10 +5,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 root=$(pwd -P); bad=0
-while IFS= read -r f; do
-  target=$(cd "$(dirname "$f")" && cd "$(dirname "$(readlink "$f")")" 2>/dev/null && pwd -P || echo /missing)
-  case "$target/" in "$root"/*) ;; *) echo "symlink leaves the repo: $f -> $(readlink "$f")"; bad=1 ;; esac
-done < <(git ls-files -s | awk '$1=="120000"{print $4}')
+while IFS= read -r -d '' rec; do
+  [ "${rec%% *}" = 120000 ] || continue
+  f=${rec#*$'\t'} # NUL-separated records: a path with a space or a newline stays whole
+  # the FULL target, followed physically through every component (a link inside a link included), must stay in the repo
+  target=$(perl -MCwd=abs_path -e 'print abs_path($ARGV[0]) // "/unresolvable"' "$f")
+  case "$target/" in "$root"/*) ;; *) echo "symlink leaves the repo: $f -> $(readlink "$f") (resolves to $target)"; bad=1 ;; esac
+done < <(git ls-files -s -z)
 pattern='(~/[.A-Za-z]|/home/[a-z]|/opt/homebrew|/private/t[m]p|\$HOME/|\$\(HOME\)|(^|[^A-Za-z0-9_./-])/Users/[A-Za-z])'
 if git grep -nIiE "$pattern" -- . ':!scripts/check-portable.sh'; then
   echo "machine-local path in a tracked file (above); use a repo-relative path"; bad=1

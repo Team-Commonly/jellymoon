@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: land tools gen check-gen test test-ts test-go entropy portable secrets hooks preflight
+.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range secrets-dir hooks preflight
 
 tools:
 	scripts/tools.sh
@@ -28,6 +28,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-fixtures.mjs
 	$(BUN) scripts/check-review-gate.mjs
 	$(BUN) scripts/check-land.mjs
+	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
 	$(BUN) test podcore
 
@@ -51,7 +52,15 @@ entropy: node_modules
 # No secrets or infrastructure ids, from the first commit (gitleaks over the full history).
 GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 secrets:
-	$(GO) run $(GITLEAKS) git --log-opts=HEAD --redact --no-banner .
+	$(GO) run $(GITLEAKS) git --log-opts="-m HEAD" --redact --no-banner .
+
+# land only: secrets in a commit range, ignoring gitleaks:allow markers (RANGE=<main tip>..<head>).
+secrets-range:
+	$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --redact --no-banner .
+
+# land only: a directory of inert files copied under neutral names (DIR=<dir>); no config from the PR, markers ignored.
+secrets-dir:
+	$(GO) run $(GITLEAKS) dir --ignore-gitleaks-allow --redact --no-banner $(DIR)
 
 # Per worktree: pre-commit runs the fast gates; fence=1 also blocks pushes (worker worktrees).
 hooks:
@@ -63,8 +72,14 @@ hooks:
 portable:
 	scripts/check-portable.sh
 
-# The only merge path (docs/development/landing.md): make land PR=<n> [ARGS=--dry-run], or make land ARGS=--owed. Needs the JM_* env.
+# The only merge path (docs/development/landing.md): make land PR=<n> [ARGS=--dry-run]. Needs the JM_* env.
 land:
-	$(BUN) scripts/land.mjs $(PR) $(ARGS)
+	node scripts/land.mjs $(PR) $(ARGS)
+
+# Verifiers: the trust gate, then the merge-result preflight of PR=<n> and nothing else (no ledger, no pod).
+# Needs JM_REPO and JM_TRUSTED_LOGINS. Run it from a clean checkout of main, never the PR's tree (its Makefile and scripts
+# would run before the trust gate decides). An untrusted PR is refused before any of its code is fetched.
+verify-preflight:
+	node scripts/land.mjs $(PR) --preflight-only $(ARGS)
 
 preflight: portable check-gen test entropy secrets

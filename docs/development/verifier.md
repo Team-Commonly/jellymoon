@@ -9,8 +9,16 @@ A verifier is a fresh-context subagent. It never sees the builder's reasoning. I
 It runs on a different model from the builder.
 
 ## What it does, in order
-1. **Reproduce.** Check out the head and run `./init.sh`, then the feature's `test` command. A red
-   result ends the review with `verifier-failed`.
+1. **Reproduce.** From a clean checkout of main (never the PR's tree: its Makefile and scripts would run before the
+   trust gate decides), run `make verify-preflight PR=<n>` (needs `JM_REPO` and `JM_TRUSTED_LOGINS`; `landing.md`).
+   It checks the trust gate first, then runs the same merge-result preflight land runs, only for a same-repo PR whose
+   author and every push-capable account are trusted. An untrusted PR is not executed on this host; it refuses before fetching; read the code
+   with `git show`, `git diff` or GitHub, never a checkout followed by `make` or `./init.sh`, and
+   report `verifier-blocked`. The bootstrap PR's verifiers run its own land code with an explicit `--bootstrap`,
+   which is trusted under the same rule. Before running it, check by hand with `gh` that the PR is same-repo
+   (`isCrossRepository` false), its author is trusted and every push-capable account is trusted: land.mjs does not exist on
+   main yet, so nothing else checks. `--bootstrap` is refused once main has `scripts/land.mjs`, `--preflight-only` included. Then the feature's `test` command, only for a trusted PR. A red result ends
+   the review with `verifier-failed`.
 2. **Acceptance.** Walk each step of the feature or brief against what the test actually asserts.
    A step that no assertion covers is a finding.
 3. **Review.** Apply Pocock `code-review` to the diff against base `main`. Correctness comes first; then
@@ -30,8 +38,9 @@ FINDINGS <n blocking> <n non-blocking>
 GATE: PASS | GATE: FAIL
 ```
 - `GATE: PASS` requires zero blocking findings.
-- The verifier never pushes, comments on GitHub or merges. Its verdict line is copied verbatim into the ledger
-  by the coordinator (`<pr> <head> PASS <model>-verifier ...`, `landing.md`); `make land` reads it. The coordinator
-  never writes a verdict of its own.
-- A protected-path PR still needs the reviewer's pod verdict at the same head
+- The verifier never pushes, comments on GitHub or merges. The coordinator transcribes the report into the ledger
+  row (`<pr> <head> PASS <model>-verifier <when> <note>`, `landing.md`): the `GATE:` line becomes the verdict, the
+  verifier's model becomes `by`, and the `FINDINGS` line goes in `note`. `make land` reads the row. The coordinator
+  writes no verdict the report does not carry.
+- A protected-path PR still needs the review's pod verdict at the same head, posted by the operator (one review, no separate reviewer; the accepted ids are operator env `JM_VERDICT_REVIEWERS`)
   (`landing.md`).

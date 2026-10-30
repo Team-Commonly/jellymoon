@@ -1,29 +1,70 @@
 // Pure decisions behind scripts/land.mjs (docs/development/landing.md). Every function takes parsed data and
 // returns { ok, reason } (or a plain value); the shell-outs live in land.mjs. Tests: scripts/check-land.mjs.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { verdictOf } from './review-gate.mjs';
-
-const KNOWN = ['PASS', 'FAIL', 'LANDED', 'REGATE-OWED', 'BOOTSTRAP'];
+const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'BOOTSTRAP'];
 const VERIFIER = /^(opus|sonnet|haiku|fable)-verifier$/;
-const SEAT_NOTE = /^reviewer-gate-unavailable/; // TEMPORARY: remove when the reviewers return
 const ref = (v) => String(v).trim().replace(/^#/, '');
-
-// Rows are normalised (trim, case). The first line is dropped only if it IS the header.
+// Rows are normalised (trim, case). The first line is dropped only if it IS the header; blank and `#` lines are skipped. Any
+// other line must have exactly 6 tab columns and a 40-hex head, or the whole ledger is unreadable: a row is never skipped silently.
 export function parseLedger(text) {
-  const lines = text.split('\n').filter((l) => l.trim());
+  const lines = text.split('\n').filter((l) => l.trim() && !l.startsWith('#'));
   const rows = /^pr\t/i.test(lines[0] || '') ? lines.slice(1) : lines;
-  return rows.map((l) => {
-    const [pr = '', head = '', verdict = '', by = '', when = '', note = ''] = l.split('\t');
+  return rows.map((l, i) => {
+    const cols = l.split('\t');
+    if (cols.length !== 6 || !/^#?[1-9]\d*$/.test(cols[0].trim()) || !/^[0-9a-f]{40}$/i.test(cols[1].trim())) throw new Error(`ledger is unreadable: row ${i + 1} is not 6 tab-separated columns with a plain PR number and a 40-hex head`);
+    const [pr, head, verdict, by, when, note] = cols;
     return { pr: ref(pr), head: head.trim().toLowerCase(), verdict: verdict.trim().toUpperCase(), by: by.trim().toLowerCase(), when: when.trim(), note: note.trim() };
   });
 }
-
+// The one protected-path rule. The preflight and the merge run code from the PR tree, so a path is unprotected only
+// if it is inert: progress.md, or a documentation file (an extension below) under docs/. Go compiles docs/**/*.go, so
+// the extension decides, not the directory. A rename counts both sides. files: { filename, previous_filename? }.
+// docs/development/ is protected: it holds the land rules and the verifier protocol, which a PR must not rewrite unreviewed.
+// Only text that gitleaks scans in git mode is inert: .md and .html. Images (svg, png, ...) are not scanned, so a token in one would
+// land on the ledger alone. Matching is on the lowercased path, because macOS checkouts are case-insensitive.
+const INERT = /^(progress\.md|docs\/(?!development\/).+\.(md|html))$/;
+const REGULAR = ['000000', '100644', '100755']; // add and delete show 000000; a symlink (120000) or gitlink (160000) is never inert
+// A path whose lowercase equals another path's (in main's tree or in the same PR), or a directory spelled two ways, would land on top of
+// that other path on a case-insensitive checkout.
+export function collides(paths, tree) {
+  const spell = new Map();
+  for (const n of [...tree, ...paths]) {
+    const parts = n.split('/');
+    for (let k = 1; k <= parts.length; k += 1) {
+      const p = parts.slice(0, k).join('/');
+      const key = p.toLowerCase();
+      if (!spell.has(key)) spell.set(key, new Set());
+      spell.get(key).add(p);
+    }
+  }
+  return paths.some((n) => n.split('/').some((_, k, a) => spell.get(a.slice(0, k + 1).join('/').toLowerCase()).size > 1));
+}
+// APFS case-folds Unicode (U+017F folds to s, U+212A to k) and ignores normalization, and Windows-style names drop a trailing dot or
+// space. Rather than chase each fold: a non-ASCII byte, an empty, `.` or `..` segment, or a segment ending in a dot or space is protected.
+export const oddPath = (n) => /[^\x20-\x7e]/.test(n) || n.split('/').some((seg) => seg === '' || seg === '.' || seg === '..' || /[. ]$/.test(seg));
+export const touchesProtected = (files, tree = []) => files.some((f) => (f.modes || []).some((m) => !REGULAR.includes(m)) || [f.filename, f.previous_filename].some((n) => n && (oddPath(n) || !INERT.test(n.toLowerCase()))))
+  || collides(files.map((f) => f.filename), tree);
+// Accepted reviewers come from operator env JM_VERDICT_REVIEWERS, `<id>:<Name>,<id>:<Name>`, never from the repo. The id is the pod user's
+// immutable id; a username is a mutable label any pod member can set on an agent they install.
+export const parseReviewers = (text) => String(text || '').split(',').map((e) => e.trim()).filter(Boolean).map((e) => {
+  const at = e.indexOf(':');
+  return at < 1 ? {} : { id: e.slice(0, at).trim(), name: e.slice(at + 1).trim() };
+}).filter((e) => e.id && e.name && e.id.indexOf(':') < 0);
+// The verdict is the LAST non-empty line, HTML comments removed, emphasis and list or heading markers stripped. Only
+// exactly `GATE: PASS` (case-insensitive) passes. Returns 'PASS', 'BLOCK', or null (nothing to judge). An indented line is code and blocks.
+export function verdictOf(text) {
+  const last = text.replace(/<!--[\s\S]*?-->/g, '').split('\n').filter((l) => l.trim()).pop();
+  if (last === undefined) return null;
+  if (/^(\t| {4})/.test(last)) return 'BLOCK';
+  const line = last.replace(/[*_`~]/g, '').trim().replace(/^(#{1,6}|[-+]|\d+\.)\s+/, '');
+  return /^GATE: PASS$/i.test(line) ? 'PASS' : 'BLOCK';
+}
 const family = (by) => VERIFIER.exec(by || '')?.[1] ?? null;
 const at = (rows, pr, head) => rows.filter((r) => r.pr === ref(pr) && r.head === head.toLowerCase());
-
-// Fails closed. At (pr, head): an unrecognised verdict blocks; a verdict row by a non-verifier blocks; a FAIL
-// blocks (whatever its note) unless the SAME label recorded a later PASS; the latest primary row must be a PASS.
+// Fails closed. At (pr, head): an unrecognised verdict blocks; a verdict row by a non-verifier blocks; ANY FAIL blocks,
+// whoever wrote it (no verdict shopping: the fix is a new head); the latest verdict row must be a PASS.
 export function checkLedger(rows, { pr, head }) {
   const mine = at(rows, pr, head);
   const odd = mine.find((r) => !KNOWN.includes(r.verdict));
@@ -31,89 +72,76 @@ export function checkLedger(rows, { pr, head }) {
   const verdicts = mine.filter((r) => ['PASS', 'FAIL'].includes(r.verdict));
   const notV = verdicts.find((r) => !family(r.by));
   if (notV) return { ok: false, reason: `#${pr} has a ${notV.verdict} by '${notV.by}', which is not a <model>-verifier` };
-  const failed = verdicts.find((r, i) => r.verdict === 'FAIL' && !verdicts.slice(i + 1).some((p) => p.verdict === 'PASS' && p.by === r.by));
-  if (failed) return { ok: false, reason: `#${pr} has a FAIL by ${failed.by} at ${head.slice(0, 8)} with no later PASS from the same verifier` };
-  const primary = verdicts.filter((r) => !SEAT_NOTE.test(r.note)).at(-1);
+  const failed = verdicts.find((r) => r.verdict === 'FAIL');
+  if (failed) return { ok: false, reason: `#${pr} has a FAIL by ${failed.by} at ${head.slice(0, 8)}; a FAIL blocks that head, so push a new head` };
+  const primary = verdicts.at(-1);
   if (primary?.verdict !== 'PASS') return { ok: false, reason: `no verifier PASS for #${pr} at ${head.slice(0, 8)}` };
   return { ok: true, primary };
 }
-
-// TEMPORARY (remove when the reviewers return): a second verifier from a different model family stands in
-// for the pod verdict.
-export function checkSecondVerifier(rows, { pr, head, primary }) {
-  const row = at(rows, pr, head).filter((r) => ['PASS', 'FAIL'].includes(r.verdict) && SEAT_NOTE.test(r.note)).at(-1);
-  if (!row) return { ok: false, reason: `#${pr} touches a protected path: no pod verdict, and no 'reviewer-gate-unavailable' second-verifier row` };
-  if (row.verdict !== 'PASS') return { ok: false, reason: `#${pr} latest second-verifier row is ${row.verdict}` };
-  if (family(row.by) === family(primary.by)) return { ok: false, reason: `#${pr} second verifier '${row.by}' is the same model family as the first` };
-  return { ok: true, reason: `second verifier ${row.by}` };
-}
-
-const msgUser = (m) => m.userId?.username ?? m.username;
+const msgUser = (m) => (m.userId && typeof m.userId === 'object' && m.userId._id ? String(m.userId._id) : null); // a string userId is not a populated user: ignored
 const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at) || 0;
-
 // A message counts for #N only if its FIRST non-empty line is exactly `jellymoon#<N> <head>` and its server-stamped
-// username is a listed reviewer's. The latest such message per reviewer decides; text is never an identity.
-export function checkPodVerdict(messages, { pr, head, entries, after = 0 }) {
-  const byUser = new Map(entries.filter((e) => e.username).map((e) => [e.username, e.name]));
+// author id is a listed reviewer's. The latest such message per reviewer id decides (messages arrive newest first, so on a
+// tie the lower index is the newer one); text is never an identity.
+export function checkPodVerdict(messages, { pr, head, entries }) {
+  if (!entries.length) return { ok: false, reason: 'JM_VERDICT_REVIEWERS is not set; a protected change needs the reviewer verdict and land cannot know whose it is' };
+  const byUser = new Map(entries.map((e) => [e.id, e.name]));
   const first = `jellymoon#${ref(pr)} ${head.toLowerCase()}`;
   const latestBy = new Map();
   messages.forEach((m, i) => {
-    const name = byUser.get(msgUser(m));
+    const id = msgUser(m);
+    const name = byUser.get(id);
     const line = (m.content || '').split('\n').map((l) => l.trim()).find(Boolean);
-    if (!name || msgTime(m) < after || line?.toLowerCase() !== first) return;
-    const prev = latestBy.get(name);
-    if (!prev || msgTime(m) > msgTime(prev.m) || (msgTime(m) === msgTime(prev.m) && i > prev.i)) latestBy.set(name, { m, i });
+    if (!name || line?.toLowerCase() !== first) return;
+    const prev = latestBy.get(id);
+    if (!prev || msgTime(m) > msgTime(prev.m) || (msgTime(m) === msgTime(prev.m) && i < prev.i)) latestBy.set(id, { m, i, name });
   });
   const pass = [];
   const block = [];
-  for (const [name, { m }] of latestBy) (verdictOf(m.content) === 'PASS' ? pass : block).push(name);
+  for (const { m, name } of latestBy.values()) (verdictOf(m.content) === 'PASS' ? pass : block).push(name);
   if (block.length) return { ok: false, reason: `pod verdict blocked by ${block.join(', ')}` };
   if (!pass.length) return { ok: false, reason: `no accepted reviewer's pod message starts with 'jellymoon#${ref(pr)} <full head>'` };
   return { ok: true, reason: `pod verdict PASS (${pass.join(', ')})` };
 }
-
 export function checkHead(pr, local) {
   if (pr.state !== 'OPEN') return { ok: false, reason: `#${pr.number} is ${pr.state}` };
   if (pr.baseRefName !== 'main') return { ok: false, reason: `#${pr.number} is based on ${pr.baseRefName}, not main; land one PR retargeted to main` };
   if (String(local).toLowerCase() !== pr.headRefOid.toLowerCase()) return { ok: false, reason: `#${pr.number} head on GitHub ${pr.headRefOid.slice(0, 8)} differs from the local fetch ${String(local).slice(0, 8)}` };
   return { ok: true };
 }
-
-// Idempotency: what to do with this PR.
+// Idempotency: what to do with this PR. MERGED-UNVERIFIED (merged out of band, recorded with no check) ends it too.
 export function landAction(pr, rows) {
   if (pr.state !== 'MERGED') return 'check';
-  return at(rows, pr.number, pr.headRefOid).some((r) => r.verdict === 'LANDED') ? 'already-landed' : 'record-only';
+  return at(rows, pr.number, pr.headRefOid).some((r) => ['LANDED', 'MERGED-UNVERIFIED'].includes(r.verdict)) ? 'already-landed' : 'record-only';
 }
-
-// PRs that still owe a reviewer re-gate. regated(pr, head, since) says a reviewer's pod PASS exists after that row.
-export function owedList(rows, regated) {
-  const seen = new Set();
-  return rows.filter((r) => r.verdict === 'REGATE-OWED' && !seen.has(`${r.pr}@${r.head}`) && seen.add(`${r.pr}@${r.head}`)
-    && !regated(r.pr, r.head, Date.parse(r.when) || 0));
-}
-
-// `git diff --name-status -M` output to the shape touchesProtected reads: renames and copies list both names.
-export function filesFromNameStatus(text) {
+// `git diff --raw -M` output (`:old new oldsha newsha STATUS<TAB>path[<TAB>path2]`) to the shape touchesProtected reads: renames
+// and copies list both names, and both modes ride along so a symlink or gitlink is protected wherever it sits.
+export function filesFromRaw(text) {
   return text.split('\n').filter(Boolean).map((l) => {
-    const [status, a, b] = l.split('\t');
-    return /^[RC]/.test(status) ? { filename: b, previous_filename: a } : { filename: a };
+    const [meta, a, b] = l.split('\t');
+    const [oldMode, newMode, , , status] = meta.slice(1).split(' ');
+    return { ...(/^[RC]/.test(status) ? { filename: b, previous_filename: a } : { filename: a }), modes: [oldMode, newMode] };
   });
 }
-
 export const checkMain = (before, after) => (before === after ? { ok: true }
   : { ok: false, reason: `main moved from ${before.slice(0, 8)} to ${after.slice(0, 8)} during the run; run land again` });
-
-export const checkApi = (url) => (/^https:\/\//.test(url) ? { ok: true } : { ok: false, reason: 'JM_COMMONLY_API must be https (the bearer token would travel in clear)' });
-
+const API_ORIGIN = 'https://api.commonly.me';
+export function checkApi(url, allow = '') {
+  const u = String(url).replace(/\/$/, '');
+  return u === API_ORIGIN || (allow && u === allow.replace(/\/$/, '') && /^https:\/\//.test(u)) ? { ok: true }
+    : { ok: false, reason: `JM_COMMONLY_API must be ${API_ORIGIN} (or equal JM_ALLOW_API_ORIGIN, https only): the bearer token goes only to a host the operator chose` };
+}
+// Bun loads .env* and bunfig.toml from the cwd into unset variables (names compare case-insensitively: APFS). This guards the land
+// checkout's cwd, where the operator might run bun or make by habit; a file there must never choose a variable or a host.
+export const checkNoBunConfig = (names) => { const bad = names.find((n) => /^\.env/i.test(n) || /^bunfig\.toml$/i.test(n)); return bad ? { ok: false, reason: `${bad} exists in this checkout; remove it (bun would load it as configuration)` } : { ok: true }; };
 // The one git remote whose URL is the target repo (https or ssh, with or without .git), from `git remote -v`.
 export function remoteFor(remoteV, repo) {
   const esc = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const url = new RegExp(`^(https://([^@/]+@)?github\\.com/|git@github\\.com:|ssh://git@github\\.com/)${esc}(\\.git)?/?$`, 'i');
+  const url = new RegExp(`^(https://github\\.com/|git@github\\.com:|ssh://git@github\\.com/)${esc}(\\.git)?/?$`, 'i');
   const names = [...new Set(remoteV.split('\n').map((l) => l.split(/\s+/)).filter(([, u]) => u && url.test(u)).map(([n]) => n))];
   if (names.length === 1) return { remote: names[0] };
   return { error: names.length ? `more than one git remote matches ${repo}: ${names.join(', ')}` : `no git remote matches ${repo}` };
 }
-
 // Removes a throwaway tree. Go's module cache is read-only, so make it writable first. Never throws: a failed
 // cleanup warns with the directory and the caller's result stands.
 export function removeTree(dir, { rm = (d) => fs.rmSync(d, { recursive: true, force: true }), warn = console.error } = {}) {
@@ -125,7 +153,6 @@ export function removeTree(dir, { rm = (d) => fs.rmSync(d, { recursive: true, fo
   };
   try { writable(dir); rm(dir); return true; } catch (e) { warn(`land: warning: could not remove ${dir}: ${e.message.split('\n')[0]}`); return false; }
 }
-
 // A bearer token is one printable token. Anything else is refused WITHOUT quoting the file: a malformed file once
 // echoed its token into a fetch error.
 export function readToken(file) {
@@ -134,7 +161,6 @@ export function readToken(file) {
   return t;
 }
 export const scrub = (text, secret) => (secret ? String(text).split(secret).join('[token]') : String(text));
-
 // Pod paging. The next cursor is the oldest time + 1 ms so messages sharing that millisecond come back and are
 // deduped by id; a full page that adds nothing new cannot be paged past, so the caller fails closed.
 export function takePage(seen, msgs, limit) {
@@ -145,7 +171,6 @@ export function cursorOf(msgs) {
   const ts = msgs.map(msgTime);
   return ts.some((x) => !x) ? null : new Date(Math.min(...ts) + 1).toISOString();
 }
-
 // --dry-run writes nothing: the ledger line is skipped.
 export function appendLedger(file, cols, { dry = false } = {}) {
   if (dry) return false;
@@ -154,18 +179,134 @@ export function appendLedger(file, cols, { dry = false } = {}) {
   fs.appendFileSync(file, `${exists ? '' : 'pr\thead\tverdict\tby\twhen\tnote\n'}${lead}${cols.join('\t')}\n`);
   return true;
 }
-
-export const checkPlatform = (platform) => (platform === 'darwin' ? { ok: true }
-  : { ok: false, reason: `preflight sandbox is macOS-only; add one for ${platform} before landing here` });
-
-// macOS sandbox-exec profile for the preflight, which runs the PR's own code. Network stays allowed (tools.sh may
-// download a toolchain). Writes are denied except the allow-list; reads and writes of the secret dirs and the
-// ledger's dir are denied LAST so they win over any allow above. Paths are resolved through symlinks first (macOS /tmp is a link).
-const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
-const quote = (p) => `"${p.replace(/[\\"]/g, '\\$&')}"`;
-export function sandboxProfile({ home, ledger, allowWrite }) {
-  const sub = (ps) => ps.map((p) => `(subpath ${quote(real(p))})`).join(' ');
-  const secrets = ['.commonly', '.claude', '.codex', '.ssh', '.aws', '.config'].map((d) => path.join(real(home), d));
-  return ['(version 1)', '(allow default)', '(deny file-write*)', `(allow file-write* ${sub(allowWrite.filter(Boolean))})`,
-    `(deny file-read* file-write* ${sub([...secrets, path.dirname(ledger)])})`].join('\n');
+// One land at a time per clone: an mkdir lock holding the PID. A dead owner, or a lock dir with no readable pid, is
+// stale; it is taken over by renaming the stale dir to a name of our own (atomic: one taker wins), then mkdir.
+export function acquireLock(dir, { pid = process.pid, alive = (p) => { try { process.kill(p, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } } } = {}) {
+  const take = () => { fs.mkdirSync(dir); fs.writeFileSync(path.join(dir, 'pid'), String(pid)); };
+  try { take(); return { ok: true }; } catch (e) { if (e.code !== 'EEXIST') throw e; }
+  let owner = NaN;
+  try { owner = Number(fs.readFileSync(path.join(dir, 'pid'), 'utf8').trim()); } catch { /* no pid file: stale */ }
+  if (owner && alive(owner)) return { ok: false, reason: `another land is running (pid ${owner})` };
+  try { fs.renameSync(dir, `${dir}.stale-${pid}`); } catch { return { ok: false, reason: 'another land took the stale lock first' }; }
+  fs.rmSync(`${dir}.stale-${pid}`, { recursive: true, force: true });
+  try { take(); return { ok: true }; } catch { return { ok: false, reason: 'could not take the land lock' }; }
 }
+// The trust gate: this host runs only code whose authors are trusted. Trust is GitHub identity, never a commit author string.
+// pr: { isCrossRepository, author }; pushers: logins with push access to the repo; trusted: JM_TRUSTED_LOGINS (operator env).
+const REFUSE = 'untrusted PR: not executed on this host. Re-author it through the loop to land it.';
+// Accounts that can push: `collaborators?affiliation=all` lines of {login, push}. The permission=push filter was seen returning admins only.
+export const pushersOf = (text) => text.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((c) => c.push === true).map((c) => c.login);
+export const parseLogins = (text) => [...new Set(String(text || '').split(',').map((l) => l.trim().toLowerCase()).filter(Boolean))];
+export function checkTrust({ pr, pushers, trusted }) {
+  const no = (why) => ({ ok: false, reason: `${REFUSE} (${why})` });
+  if (!trusted.length) return { ok: false, reason: 'JM_TRUSTED_LOGINS is not set; refusing to run any PR code' };
+  if (pr.isCrossRepository !== false) return no('cross-repository, or not known to be same-repo');
+  if (!pushers.length) return no('the push-access list is empty, so the query went wrong');
+  const author = String(pr.author || '').toLowerCase();
+  if (!trusted.includes(author)) return no(`author '${author || 'unknown'}' is not trusted`);
+  const strangers = pushers.map((l) => String(l).toLowerCase()).filter((l) => !trusted.includes(l)); // .some-style: an empty login is a stranger too
+  return strangers.length ? { ok: false, reason: `${REFUSE} (an account that can push to the repo is not trusted: ${strangers[0]})` } : { ok: true };
+}
+// Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
+const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
+export function checkRuns(runs, total = runs.length) {
+  if (total > runs.length) return { ok: false, reason: `${total} check runs on the head; cannot read them all` };
+  const bad = runs.filter((r) => BAD_CONCLUSION.includes(r.conclusion));
+  return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${stripControls(String(r.name))} (${r.conclusion})`).join(', ')}` } : { ok: true };
+}
+// The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere), because
+// the scripts in this tree run before the trust gate decides. mainTip null: before the fetch, HEAD is compared later. Credentials in the
+// checkout's git config would travel into every fetch, so a remote URL with userinfo or an http extraheader refuses.
+const USERINFO = /^https?:\/\/[^/\s]*@|^[a-z+]+:\/\/[^/@\s]*:[^/@\s]*@/i;
+// porcelain is `status --porcelain` with showUntrackedFiles=all; lsv is `ls-files -v`; diffDirty is a non-empty `diff HEAD`.
+export function checkCheckout({ head, mainTip, porcelain, remoteV, config, lsv = '', diffDirty = false, bootstrap = false }) {
+  if (!bootstrap && mainTip !== null && head !== mainTip) return { ok: false, reason: `this checkout is at ${head.slice(0, 8)}, not main's tip ${mainTip.slice(0, 8)}; land from a checkout of main` };
+  if (porcelain.trim()) return { ok: false, reason: 'this checkout has uncommitted or untracked files; land from a clean checkout of main' };
+  if (lsv.split('\n').some((l) => /^[a-zS] /.test(l))) return { ok: false, reason: 'a tracked file is marked assume-unchanged or skip-worktree, which hides edits from git status; clear the flag' };
+  if (diffDirty) return { ok: false, reason: 'this checkout differs from HEAD; land from a clean checkout of main' };
+  if (remoteV.split('\n').some((l) => USERINFO.test(l.split(/\s+/)[1] || ''))) return { ok: false, reason: 'a git remote URL carries credentials (userinfo); remove them' };
+  if (/^http\..*extraheader/im.test(config)) return { ok: false, reason: 'the git config carries an http extraheader (a credential); remove it' };
+  return { ok: true };
+}
+// An added line with the secret scanner's allow marker is a way to hide a secret: such a PR needs the pod verdict. Header lines
+// (from `diff --git` to the first `@@`) are skipped; an added line starting `++` is content, not a header.
+export function addsAllowMarker(diff) {
+  let header = false;
+  return diff.split('\n').some((l) => {
+    if (l.startsWith('diff --git')) header = true;
+    else if (l.startsWith('@@')) header = false;
+    return !header && l.startsWith('+') && l.includes('gitleaks:allow');
+  });
+}
+// Text, by land's own strict rule: valid UTF-8 (a decoded invalid byte is U+FFFD) with no NUL, no C0 control other than \t \n \f \r, and no DEL.
+// Anything else (ELF, zip, PDF with binary streams, Mach-O, wasm, SQLite, tar) is never handed to the scanner, which types files by their
+// leading bytes and skips what it calls application/*; it makes the PR protected instead.
+export const isPlainText = (x) => !/[\u0000-\u0008\u000b\u000e-\u001f\u007f\ufffd]/.test(x);
+// Every scanned text starts with this fixed plain padding. The scanner types a file by its first bytes, at offsets up to 32773 (tar's
+// "ustar" at 257, DICOM's "DICM" at 128, ISO's "CD001" at 32769), and skips what it calls application/*; with 33,600 bytes of plain lines
+// first, the bytes it sniffs are always this padding, never the content (measured on the pinned gitleaks: docs/development/landing.md).
+export const SCAN_PREFIX = 'jellymoon-range-scan\n'.repeat(1600);
+// What merging head into main's tip would change: the real merge result, not a merge-base diff (a criss-cross history can make
+// that empty). run(args) is `git` with those args. A conflict throws. No external diff or textconv can empty the diff.
+export function mergeResult(run, mainTip, head) {
+  let tree;
+  try { tree = run(['merge-tree', '--write-tree', mainTip, head]).split('\n')[0].trim(); } catch { throw new Error(`${head.slice(0, 8)} does not merge cleanly into main ${mainTip.slice(0, 8)}`); }
+  const diff = (...a) => run(['-c', 'diff.external=', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', ...a, mainTip, tree]);
+  // Every commit's added lines too: `gh pr merge --merge` keeps them all, and gitleaks honours a marker per commit, so a marker
+  // added and removed inside the PR is invisible to the merge result. -m shows merge commits against each parent.
+  const history = run(['-c', 'diff.external=', 'log', '-p', '-m', '-U0', '--no-ext-diff', '--no-textconv', '--no-color', '--format=', `${mainTip}..${head}`]);
+  const treePatch = diff('-U0');
+  const messages = run(['log', '--format=%B', `${mainTip}..${head}`]); // gitleaks git mode never reads commit messages
+  // Git's own verdict on binary: a NUL in the first 8000 bytes, or a `binary`/`-diff` attribute. `-\t-` in --numstat. The scanner skips these.
+  let binary = diff('--numstat').split('\n').some((l) => l.startsWith('-\t-\t'));
+  // Every blob the range adds, not only the ones in the merge result: `gh pr merge --merge` keeps each commit, so a secret added in
+  // commit 1 and deleted in commit 2 stays in main's history, in a place gitleaks git mode may skip (binary, image, lockfile, node_modules).
+  const shas = [...new Set(run(['rev-list', '--objects', '--filter=object:type=blob', '--filter-provided-objects', `${mainTip}..${head}`]).split('\n').filter(Boolean).map((l) => l.split(' ')[0]))];
+  const added = shas.map((sha) => run(['cat-file', 'blob', sha]));
+  binary = binary || !added.every(isPlainText) || !isPlainText(messages); // land decides text itself; the scanner's file-type sniffing is not trusted
+  return { tree, messages, added, files: filesFromRaw(diff('--raw', '-M')), binary, treePatch, patch: `${treePatch}\n${history}` };
+}
+// PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
+// stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
+export const stripControls = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g, '');
+export const quoteOutput = (text) => stripControls(text).replace(/\n$/, '').split('\n').map((l) => `preflight| ${l}`).join('\n');
+// The entropy ratchet's base: main's tip as fetched. Only the bootstrap land, when main has no entropy.json yet, runs without one.
+export const entropyBase = (mainTip, { bootstrap, mainHasEntropy }) => (bootstrap && !mainHasEntropy ? 'none' : mainTip);
+
+// Land's own runtime: the oldest Node whose behaviour land.mjs relies on (docs/adr/0001-dev-tooling.md).
+const NODE_MIN = 20;
+export const checkNode = (version, min = NODE_MIN) => (Number(String(version).split('.')[0]) >= min ? { ok: true }
+  : { ok: false, reason: `land needs Node ${min} or newer; this is Node ${version}` });
+
+// The throwaway preflight dir and its git worktree go away on every exit path: normal return, a signal (the handlers call exit), a crash.
+export function trackThrowaway(dir, wt, run) {
+  const git = (...a) => { try { run('git', a); } catch { /* already gone */ } };
+  const clean = () => { try { run('chmod', ['-R', 'u+w', dir]); } catch { /* gone */ } git('worktree', 'remove', '--force', wt); git('worktree', 'prune'); removeTree(dir); };
+  process.on('exit', clean);
+  return () => { process.off('exit', clean); clean(); };
+}
+// Does this PR need the reviewer's pod verdict? A protected path, a gitleaks:allow marker anywhere in its history, or a secret that
+// gitleaks finds once markers are ignored (`hides`).
+export const needsVerdict = ({ files, tree, patch, hides, binary = false }) => binary || touchesProtected(files, tree) || addsAllowMarker(patch) || hides;
+// Inert files are scanned by CONTENT at the merge result, written under neutral names (<dir>/inert/<n>.txt) and scanned with no config
+// from the PR: the scanner skips binaries and its own allowlisted paths (node_modules, bower_components, gitleaks.toml), so a path
+// inside a blind spot must not be able to carry a secret. blob(path) is the file's content at the merge result; scan(dir) is true when clean.
+function inertScan(merged, names, blob, scan) {
+  const inert = merged.files.filter((f) => f.modes[1] !== '000000' && !touchesProtected([f], names));
+  const texts = [...inert.map((f) => blob(`${merged.tree}:${f.filename}`)), ...merged.added, ...(merged.messages?.trim() ? [merged.messages] : [])];
+  if (!texts.length) return true;
+  if (!texts.every(isPlainText)) return false; // not text by land's rule: treated as a hit, so the PR needs the verdict
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-inert-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'inert'));
+    texts.forEach((x, i) => fs.writeFileSync(path.join(dir, 'inert', `${i}.txt`), SCAN_PREFIX + x));
+    return scan(path.join(dir, 'inert'));
+  } finally { removeTree(dir); }
+}
+// A dry run decides everything and merges nothing.
+export const mergeAction = ({ dryRun }) => (dryRun ? 'stop' : 'merge');
+// The ledger note for a landed PR: GitHub's merge commit must have the tree that was tested. A mismatch (main or the base moved in the
+// window between the last re-read and the merge) cannot be undone, but it is recorded and shouted instead of going unseen.
+export const landedNote = (sha, tested, merged) => (tested === merged ? sha : `${sha} TREE-MISMATCH tested ${tested} merged ${merged}`);
+// Did the neutral-name scan find a secret in a PR that no other rule protects? (A PR already protected needs no second look.)
+export const hiddenInInert = (merged, names, blob, scan) => !needsVerdict({ files: merged.files, tree: names, patch: merged.patch, binary: merged.binary, hides: false }) && !inertScan(merged, names, blob, scan);

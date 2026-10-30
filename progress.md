@@ -24,6 +24,14 @@ goes in the PR.
 ## 2026-10-29 · pod core for claims, leases and recourse (unit P09)
 - **Changed:** `podcore/` (pure `apply`/`nextDeadline`, ADR 0003, `podcore-is-pure` rule); **Evidence:** `bun test podcore` (31 tests, 3 properties x 500 seeds, both mutations red); **Next:** wakes (P10); **Surprising:** an op arriving at `leaseUntil` must see the claim already expired, so every command settles first.
 
+## 2026-10-29 · P08 trust gate, not sandbox (unit P08, round 5)
+- **Changed:** deleted the macOS sandbox, its proof, the platform check, `--reviewer-gate-unavailable`, `--owed` and `REGATE-OWED`; land and verify-preflight run PR code only for a same-repo PR whose author and every push-capable account are in `JM_TRUSTED_LOGINS`; the checkout must be at main and clean with no credentials in its git config; any FAIL at a head blocks it; failed check runs veto; an added `gitleaks:allow` line makes a PR protected; preflight output is quoted; check-gen is proved to bite. **Evidence:** check-land 88 cases, core LOC 1455 to 1414 (max 1454). **Next:** land #10 with `--bootstrap`; `ci.yml` stays off. Core LOC max raised from 1454 to 1500 (ADR 0001's cap) so security tests are not deleted to fit.
+
+## 2026-10-29 · P08 sandbox and inert docs (unit P08, round 4)
+- **Changed:** protection is now an allow-list of inert paths (`progress.md`, doc extensions under `docs/`; `docs/**/*.go` is protected); the preflight sandbox denies the real home, unix sockets and the keychain service, writes only to its throwaway dir, and is proved by a four-probe check before every land and in `make test`; `make verify-preflight PR=<n>` gives verifiers the same sandbox; deleted the GitHub review-gate code (`review-gate.mjs`, `review-gate.yml`); merge without repo hooks, scripts/ must equal main's, one PR number, real worktree-add reason, atomic stale-lock takeover, `MERGED-UNVERIFIED` for out-of-band merges.
+- **Evidence:** check-land 107 cases (sandbox proof included), check-review-gate 11 + 33; core LOC budget 1500 to 1455.
+- **Next:** land #10 with `--bootstrap`; the PR template still lists the old protected paths and `ci.yml` still names the deleted workflow (neither in this unit's scope).
+
 ## 2026-10-29 · P08 final fixes (unit P08, round 3)
 - **Changed:** every path but `docs/` and `progress.md` is now protected (renames count both sides); the preflight runs in a macOS `sandbox-exec`; pod paging dedupes by id and fails closed at a boundary; a bad token file is never echoed; `--dry-run` writes no ledger row; both workflows are `workflow_dispatch` only; CODEOWNERS deleted; one wording for who writes verdict rows; internal labels scrubbed.
 - **Evidence:** `make preflight` green in the stripped shell; check-land 89 cases (sandbox proof included), check-review-gate 44 + 23.
@@ -40,20 +48,19 @@ goes in the PR.
 
 ## 2026-10-29 · local landing (unit P08)
 - **Changed:** `make land PR=<n>` (scripts/land.mjs, pure decisions in land-decide.mjs): clean-shell preflight at
-  the exact head, verifier ledger line, and for protected paths the reviewer's pod verdict matched by
-  server-stamped username. Both workflows disabled (headers only). Temporary `--reviewer-gate-unavailable` second
+  the exact head, verifier ledger line, and for protected paths the review's pod verdict matched by
+  the author's immutable user id. Both workflows disabled (headers only). Temporary `--reviewer-gate-unavailable` second
   verifier plus `--owed`. P07 round-2 carry-overs fixed here: verdict is the last non-empty line (N1), credit
-  lines normalised (N2), 14 new gate cases (N3), check-portable case-insensitive again (N4), reviewer names in
-  `.github/opus-reviewers.txt` only (N5); B1 is moot with CI off and is stated in workflow.md, AGENTS.md and the ymls.
+  lines normalised (N2), 14 new gate cases (N3), check-portable case-insensitive again (N4), accepted reviewers in operator env only (N5); B1 is moot with CI off and is stated in workflow.md, AGENTS.md and the ymls.
 - **Evidence:** `make test` runs 44 gate cases and 70 land cases (see the round-2 entry below); the accept-any-username mutation turns two red.
-- **Next:** the coordinator's live dry-run; verify the usernames in opus-reviewers.txt against the pod.
+- **Next:** the coordinator's live dry-run; set JM_VERDICT_REVIEWERS to the operator's pod user id.
 - **Surprising:** the clean shell has no `gh` or `node`, so land runs under bun and the dry-run needs a normal PATH.
 
 ## 2026-10-29 · loop fixes from the PR #1 and #2 verifiers (unit P07)
 - **Changed:** `make` finds `.tools/bin` by path (GNU Make 3.81 ignores the exported PATH for command lookup).
   Review gate decision moved to `scripts/review-gate.mjs`, run from the base branch, fail closed (multi-credit
   blocks, fences and blockquotes ignored, CHANGES_REQUESTED blocks, renames checked), reviewers in
-  `.github/opus-reviewers.txt`. `whoami` agent/runId optional; verificationUri, Invite.url, mcpUrl https only
+  the operator reviewer env (JM_VERDICT_REVIEWERS). `whoami` agent/runId optional; verificationUri, Invite.url, mcpUrl https only
   (mcpUrl: loopback http with optional port). Fixtures: PostInput invalids assert their rule via `expect.json`.
   Docs: worktree init, fence, gate limits, glossary (gate advisory), worker/ and e2e/ marked not yet created.
 - **Evidence:** PATH-stripped `make preflight` green; `make test` runs the 31 gate cases and 7 path cases.

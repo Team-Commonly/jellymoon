@@ -77,15 +77,17 @@ if (files.some((f) => f.endsWith('.go'))) {
   }
 }
 
-// Ratchet: exceptions only shrink, unless the new one cites an ADR note.
-try {
-  const base = JSON.parse(execFileSync('git', ['show', `${process.env.ENTROPY_BASE ?? 'origin/main'}:entropy.json`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
+// Ratchet: exceptions only shrink, unless the new one cites an ADR note. `make land` names the base (JM_ENTROPY_BASE, main's tip as
+// fetched); a named base that cannot be read fails loudly (`none`: the bootstrap land, main has no entropy.json yet). Unnamed, origin/main is used, and a missing one means no base yet.
+const named = process.env.JM_ENTROPY_BASE;
+if (named !== 'none') try {
+  const base = JSON.parse(execFileSync('git', ['show', `${named ?? 'origin/main'}:entropy.json`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
   for (const kind of ['files', 'functions']) {
     for (const [key, reason] of Object.entries(cfg.exceptions[kind])) {
       if (!(key in base.exceptions[kind]) && !reason.includes('docs/adr/')) errors.push(`new ${kind} exception ${key} must cite a docs/adr/ note`);
     }
   }
-} catch { /* no entropy.json on the base yet */ }
+} catch { if (named) errors.push(`ratchet: cannot read entropy.json at JM_ENTROPY_BASE=${named}; the ratchet would switch off`); }
 
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 console.log(`entropy ok: ${files.length} files`);

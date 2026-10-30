@@ -126,6 +126,10 @@ latest that does not pass refuses. Messages are read newest first and deduped by
 starts 1 ms after the oldest message so messages sharing that instant come back; if a full page adds nothing new,
 or the page cap is reached before paging back past the PR's creation, land refuses rather than guess.
 
+Review gate, 2026-10-30 (owner ruling): each head gets one fresh-context Opus review. The operator
+(`operator`, listed in `.github/opus-reviewers.txt`) posts that review subagent's report as the pod verdict: first line
+`jellymoon#N <head>`, last line `GATE: PASS`. That stays until the owner restores a separate review.
+
 ## Protected paths
 A path is unprotected only if it is inert: the file `progress.md`, or a file under `docs/` whose extension is `.md` or `.html`
 (never `docs/development/`). Images (`.svg .png .jpg .gif .webp`) are protected: gitleaks does not scan them in git mode, so a

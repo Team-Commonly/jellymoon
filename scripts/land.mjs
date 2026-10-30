@@ -94,7 +94,7 @@ async function preflight(mainTip, head, bootstrap, expectTree) {
   let result = { ok: true };
   let tree = '';
   try {
-    try { out('git', ['worktree', 'add', '--quiet', '--detach', wt, mainTip]); } catch (e) { result = { ok: false, reason: `git worktree add failed: ${why(e)}` }; }
+    try { out('git', ['-c', 'core.hooksPath=/dev/null', 'worktree', 'add', '--quiet', '--detach', wt, mainTip]); } catch (e) { result = { ok: false, reason: `git worktree add failed: ${why(e)}` }; }
     if (result.ok) try { out('git', ['-C', wt, ...BASE, 'merge', '--no-ff', '--no-edit', head]); } catch {
       result = { ok: false, reason: `merging ${head.slice(0, 8)} into main ${mainTip.slice(0, 8)} conflicts` };
     }

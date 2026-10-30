@@ -8,7 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import {
   landedNote, mergeAction, needsVerdict,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, readReviewerEntries, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -120,6 +120,7 @@ const cases = [
       ['checkout: a dirty tree is refused', c({ porcelain: ' M scripts/land.mjs' }).ok, false],
       ['checkout: an ssh remote with user:password is refused', c({ remoteV: `jm\tssh://u:p@github.com/${R} (push)` }).ok, false],
       ['checkout: an ssh remote without a password is accepted', c({ remoteV: `jm\tssh://git@github.com/${R} (push)` }).ok, true],
+      ['checkout: an scp-form remote (git@github.com:R.git) is accepted', c({ remoteV: `jm\t${'git@github.com:'}${R}.git (push)` }).ok, true],
       ['checkout: a remote URL with userinfo is refused', c({ remoteV: `jm\thttps://tok@github.com/${R}.git (fetch)` }).ok, false],
       ['checkout: an http extraheader is refused', c({ config: 'http.https://github.com/.extraheader AUTHORIZATION: basic x' }).ok, false],
     ];
@@ -176,6 +177,7 @@ const cases = [
   ['landed note: a merge commit with the tested tree is just the sha', landedNote('abc', 't1', 't1'), 'abc'],
   ['landed note: a different tree is recorded as TREE-MISMATCH with both trees', landedNote('abc', 't1', 't2'), 'abc TREE-MISMATCH tested t1 merged t2'],
   ['output: a branch name with escapes is stripped', stripControls('x\u001b[31my'), 'x[31my'],
+  ['pod: the operator entry (operator) in the real reviewer file is accepted', pod([msg('operator', verdict(5, H))], '5', H, { entries: readReviewerEntries(fs.readFileSync(new URL('../.github/opus-reviewers.txt', import.meta.url), 'utf8')) }).ok, true],
   ['output: C1 controls (U+0080 to U+009F) are stripped', stripControls('a\u0080b\u009bc\u009fd'), 'abcd'],
   ['pod: a reviewer listed by name only (no username) is never matched by display name', pod([msg('Ada', verdict(5, H))], '5', H, { entries: [{ name: 'Ada', username: null }] }).ok, false],
   // check-entropy itself: none passes only when named; an unreadable named base fails, and a PR cannot name one (land sets the env)

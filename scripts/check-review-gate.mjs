@@ -206,10 +206,11 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
   const sh = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env });
   const git = (...a) => spawnSync('git', a, { cwd: dir, encoding: 'utf8', env }).stdout.trim();
   const secret = `token = ${token}\n`;
-  const probe = (files) => {
+  const probe = (files, { after = '', msg = 'pr' } = {}) => {
     sh(`rm -rf .git docs README.md && cp '${root}/Makefile' . && git init -q -b main . && echo base > README.md && git add -A && git commit -qm base && git checkout -qb pr`);
     for (const [f, body] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), body); }
-    sh('git add -A && git commit -qm pr');
+    git('add', '-A'); git('commit', '-qm', msg);
+    if (after) sh(after);
     const [mainTip, head] = [git('rev-parse', 'main'), git('rev-parse', 'pr')];
     const merged = mergeResult((a) => git(...a), mainTip, head);
     const names = git('ls-tree', '-r', '--name-only', mainTip).split('\n');
@@ -221,12 +222,20 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
   const nm = probe({ 'docs/node_modules/x.md': secret });
   const bower = probe({ 'docs/sub/bower_components/x.html': secret });
   const toml = probe({ 'docs/gitleaks.toml.md': secret });
+  const more = Object.fromEntries(['docs/gitleaks.toml.md', 'docs/bower_components/notes.md', 'docs/venv/lib/notes.md', 'docs/x-1.0.dist-info/notes.md', 'docs/vendor/github.com/notes.html'].map((f) => [f, probe({ [f]: secret })]));
+  const renamed = probe({ 'docs/gitleaks.toml.md': secret }, { after: 'git mv docs/gitleaks.toml.md docs/guide.md && git commit -qm rename' });
+  const inMessage = probe({ 'docs/ok.md': 'no token here\n' }, { msg: `docs\n\n${secret}` });
+  const nulB = probe({ 'docs/b.md': Buffer.concat([Buffer.from('x\0\n'), Buffer.from(secret)]) });
   const control = probe({ 'docs/ok.md': 'no token here\n' });
   const inert = [
     ['inert: a .md with a NUL and a token is protected (git calls it binary)', nul.needs && nul.merged.binary, true],
     ['inert: docs/node_modules/x.md with a token is protected, though gitleaks\'s range scan misses it', nm.needs && !nm.range, true],
     ['inert: docs/sub/bower_components/x.html with a token is protected, though the range scan misses it', bower.needs && !bower.range, true],
     ['inert: docs/gitleaks.toml.md with a token is protected, though the range scan misses it', toml.needs && !toml.range, true],
+    ['inert: a docs/b.md with a NUL byte and a token is protected', nulB.needs, true],
+    ...Object.entries(more).map(([f, r]) => [`inert: ${f} with a token needs the verdict`, r.needs, true]),
+    ['inert: a token added in docs/gitleaks.toml.md then renamed to docs/guide.md needs the verdict', renamed.needs, true],
+    ['inert: a token only in a commit message needs the verdict, though gitleaks\'s range scan misses it', inMessage.needs && !inMessage.range, true],
     ['inert: the control docs/ok.md with no token stays inert', control.needs, false],
   ];
   fs.rmSync(dir, { recursive: true, force: true });

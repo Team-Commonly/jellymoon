@@ -247,9 +247,10 @@ export function mergeResult(run, mainTip, head) {
   // added and removed inside the PR is invisible to the merge result. -m shows merge commits against each parent.
   const history = run(['-c', 'diff.external=', 'log', '-p', '-m', '-U0', '--no-ext-diff', '--no-textconv', '--no-color', '--format=', `${mainTip}..${head}`]);
   const treePatch = diff('-U0');
+  const messages = run(['log', '--format=%B', `${mainTip}..${head}`]); // gitleaks git mode never reads commit messages
   // Git's own verdict on binary: a NUL in the first 8000 bytes, or a `binary`/`-diff` attribute. `-\t-` in --numstat. The scanner skips these.
   const binary = diff('--numstat').split('\n').some((l) => l.startsWith('-\t-\t'));
-  return { tree, files: filesFromRaw(diff('--raw', '-M')), binary, treePatch, patch: `${treePatch}\n${history}` };
+  return { tree, messages, files: filesFromRaw(diff('--raw', '-M')), binary, treePatch, patch: `${treePatch}\n${history}` };
 }
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
@@ -278,11 +279,12 @@ export const needsVerdict = ({ files, tree, patch, hides, binary = false }) => b
 // inside a blind spot must not be able to carry a secret. blob(path) is the file's content at the merge result; scan(dir) is true when clean.
 function inertScan(merged, names, blob, scan) {
   const inert = merged.files.filter((f) => f.modes[1] !== '000000' && !touchesProtected([f], names));
-  if (!inert.length) return true;
+  const texts = [...inert.map((f) => blob(f.filename)), ...(merged.messages?.trim() ? [merged.messages] : [])];
+  if (!texts.length) return true;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-inert-'));
   try {
     fs.mkdirSync(path.join(dir, 'inert'));
-    inert.forEach((f, i) => fs.writeFileSync(path.join(dir, 'inert', `${i}.txt`), blob(f.filename)));
+    texts.forEach((x, i) => fs.writeFileSync(path.join(dir, 'inert', `${i}.txt`), x));
     return scan(path.join(dir, 'inert'));
   } finally { removeTree(dir); }
 }

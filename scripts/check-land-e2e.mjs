@@ -39,12 +39,12 @@ async function land(over = {}) {
     [/^gh pr merge/, (a, s) => { s.lockAtMerge = fs.existsSync(path.join(common, 'jm-land.lock')); return ''; }],
     [/^gh api .*collaborators/, (a) => ['{"login":"lily","push":true}', ...(a.includes('--paginate') ? over.page2 || [] : [])].join('\n')],
     [/^gh api .*check-runs/, over.runs ?? '{"total":1,"runs":[{"name":"ci","conclusion":"success"}]}'],
-    [/^git merge-tree --write-tree/, `${TREE}\n`], [/--raw -M/, over.raw ?? ':100644 100644 aaa bbb M\tdocs/a.md'], [/--numstat/, over.numstat ?? '1\t1\tdocs/a.md'], [/ -U0 /, ''], [/^git .*log -p/, ''],
+    [/^git merge-tree --write-tree/, `${TREE}\n`], [/--raw -M/, over.raw ?? ':100644 100644 aaa bbb M\tdocs/a.md'], [/--numstat/, over.numstat ?? '1\t1\tdocs/a.md'], [/ -U0 /, ''], [/^git .*log -p/, ''], [/^git log --format=%B/, over.messages ?? ''],
     [/^git ls-tree/, 'README.md\0'], [/^make -s secrets-range/, ''],
     [/^make -s secrets-dir DIR=(\S+)/, (a, s) => { const d = a[3].slice(4); s.scanned = fs.readdirSync(d).map((f) => [f, fs.readFileSync(path.join(d, f), 'utf8')]); if (over.dirHit) throw fail; return ''; }],
     [/^git cat-file blob/, over.blob ?? 'hello'], [/^git cat-file -e/, ''],
     [new RegExp(`^git show ${MAIN}:.github/opus-reviewers.txt`), 'Ada ada'], [/^git show \S+:.github\/opus-reviewers.txt/, 'Mallory mallory'],
-    [/^git worktree|^chmod/, ''], [new RegExp(`${wt.source}.*merge --no-ff`), ''], [new RegExp(`${wt.source}.*rev-parse HEAD\\^\\{tree\\}`), over.wtTree ?? TREE],
+    [/^git (-c \S+ )?worktree|^chmod/, ''], [new RegExp(`${wt.source}.*merge --no-ff`), ''], [new RegExp(`${wt.source}.*rev-parse HEAD\\^\\{tree\\}`), over.wtTree ?? TREE],
   ];
   const exec = (cmd, args, opts) => {
     w.calls.push({ cmd, args, opts });
@@ -89,7 +89,7 @@ await t('diffs run with external diff and textconv off; the history scan covers 
 await t('the secret range is <main tip>..<head>', {}, (r) => argv(r, 'make', 'secrets-range')[0] === `-s secrets-range RANGE=${MAIN}..${HEAD}`);
 await t('the preflight child: stdin ignored, own session, env -i, HOME and TMPDIR inside the throwaway, entropy base is main\'s tip', {}, (r) => {
   const [sp] = r.w.spawns; const home = sp.args.find((a) => a.startsWith('HOME=')).slice(5); const tmp = sp.args.find((a) => a.startsWith('TMPDIR=')).slice(7);
-  return sp.opts.stdio[0] === 'ignore' && sp.opts.detached === true && sp.args[0] === '-i' && path.dirname(home) === path.dirname(tmp) && home.includes('jm-land-') && sp.args.includes(`JM_ENTROPY_BASE=${MAIN}`);
+  return sp.opts.stdio[0] === 'ignore' && sp.opts.detached === true && sp.args[0] === '-i' && path.dirname(home) === path.dirname(tmp) && home.includes('jm-land-') && sp.args.includes(`JM_ENTROPY_BASE=${MAIN}`) && sp.args.includes('PATH=/usr/bin:/bin:/usr/sbin:/sbin');
 });
 await t('untrusted author: refused before any fetch', { pr: { author: { login: 'mallory' } } }, (r) => no(r, /not trusted/) && !fetched(r));
 await t('untrusted author in --preflight-only: refused before any fetch', { argv: PO, pr: { author: { login: 'mallory' } } }, (r) => no(r, /not trusted/) && !fetched(r));
@@ -104,6 +104,8 @@ await t('a verdict by a reviewer only the PR lists is refused', { raw: PROT, msg
 await t('a secret hit in the range needs the verdict', { msgs: [], on: [[/^make -s secrets-range/, () => { throw fail; }]] }, (r) => no(r, /./));
 await t('a red preflight: refused', { initCode: 1 }, (r) => no(r, /init\.sh/));
 await t('a red preflight in --preflight-only: refused', { argv: PO, initCode: 1 }, (r) => no(r, /init\.sh/));
+await t('the PR head differs from the local fetch in --preflight-only: refused', { argv: PO, pullHead: OTHER }, (r) => no(r, /differs from the local fetch/));
+await t('the throwaway worktree is removed on a normal return, not left for process exit', {}, (r) => argv(r, 'git', 'worktree remove').length === 1 && r.w.calls.findIndex((c) => c.args.includes('remove')) > -1);
 await t('the PR head differs from the local fetch: refused', { pullHead: OTHER }, (r) => no(r, /differs from the local fetch/));
 await t('the ledger changes during the preflight: the second decide refuses', { onSpawn: (w) => fs.appendFileSync(w.ledger, rowOf('FAIL', 'sonnet-verifier')) }, (r) => no(r, /changed before the merge/));
 await t('the head moves on GitHub before the merge: refused', { fresh: { headRefOid: OTHER } }, (r) => no(r, /changed before the merge/));
@@ -136,6 +138,8 @@ await t('preflight-only: no ledger, no pod, no merge', { argv: PO }, (r) => r.er
 await t('the worktree merge tree must equal the decision\'s merge-tree result', { wtTree: OTHER }, (r) => no(r, /not the merge result the decision used/) && r.w.spawns.length === 0);
 await t('a binary change (numstat -\\t-) needs the verdict', { numstat: '-\t-\tdocs/a.md', msgs: [] }, (r) => no(r, /./));
 await t('inert files are scanned under neutral names with their content', {}, (r) => r.w.scanned.length === 1 && r.w.scanned[0][0] === '0.txt' && r.w.scanned[0][1] === 'hello');
+await t('commit messages in the range are scanned under neutral names too', { messages: 'subject\nbody' }, (r) => r.w.scanned.length === 2 && r.w.scanned[1][1] === 'subject\nbody' && argv(r, 'git', 'log --format=%B')[0].endsWith(`${MAIN}..${HEAD}`));
+await t('the throwaway worktree is added with repo hooks off', {}, (r) => argv(r, 'git', 'worktree add')[0].startsWith('-c core.hooksPath=/dev/null worktree add'));
 await t('a hit from the neutral-name scan needs the verdict', { dirHit: true, msgs: [] }, (r) => no(r, /./));
 await t('a branch name with escapes is stripped from what land prints', { pr: { headRefName: 'a\u001b[31mb\u009bc' } }, (r) => r.said.includes('branch a[31mbc ') && !/[\u001b\u009b]/.test(r.said));
 await t('the bearer token never appears in a refusal', { raw: PROT, on: [[/^git show \S+:.github/, () => { throw new Error('boom jmu_FAKE-token-abc123'); }]] }, (r) => !r.merge && r.error !== null && !r.error.includes('abc123'));

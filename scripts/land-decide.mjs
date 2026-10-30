@@ -211,7 +211,7 @@ const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 
 export function checkRuns(runs, total = runs.length) {
   if (total > runs.length) return { ok: false, reason: `${total} check runs on the head; cannot read them all` };
   const bad = runs.filter((r) => BAD_CONCLUSION.includes(r.conclusion));
-  return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${r.name} (${r.conclusion})`).join(', ')}` } : { ok: true };
+  return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${stripControls(String(r.name))} (${r.conclusion})`).join(', ')}` } : { ok: true };
 }
 // The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere), because
 // the scripts in this tree run before the trust gate decides. mainTip null: before the fetch, HEAD is compared later. Credentials in the
@@ -268,3 +268,11 @@ export function trackThrowaway(dir, wt) {
   process.on('exit', clean);
   return () => { process.off('exit', clean); clean(); };
 }
+// Does this PR need the reviewer's pod verdict? A protected path, a gitleaks:allow marker anywhere in its history, or a secret that
+// gitleaks finds once markers are ignored (`hides`).
+export const needsVerdict = ({ files, tree, patch, hides }) => touchesProtected(files, tree) || addsAllowMarker(patch) || hides;
+// A dry run decides everything and merges nothing.
+export const mergeAction = ({ dryRun }) => (dryRun ? 'stop' : 'merge');
+// The ledger note for a landed PR: GitHub's merge commit must have the tree that was tested. A mismatch (main or the base moved in the
+// window between the last re-read and the merge) cannot be undone, but it is recorded and shouted instead of going unseen.
+export const landedNote = (sha, tested, merged) => (tested === merged ? sha : `${sha} TREE-MISMATCH tested ${tested} merged ${merged}`);

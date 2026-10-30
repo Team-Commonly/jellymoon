@@ -146,6 +146,12 @@ with the same checkout rule as land (`--bootstrap` is the one exception, for the
 PR it refuses before fetching anything, and the verifier reads the code (`git show`, `git diff`, GitHub) and runs nothing.
 
 ## Known limits
+- **Both secret scans pass `-m`** (`make secrets`, `make secrets-range`): gitleaks runs `git log -p` without it, so a secret that
+  exists only in a merge commit's own diff (a conflict resolution) would never be scanned.
+- **Every fetch of main names `refs/heads/main`**, never bare `main`: a tag named `main` wins git's DWIM.
+- **The merge commit's tree is compared with the tested one.** After `gh pr merge`, land fetches the merge commit and checks its tree
+  against the preflight's merge result. A mismatch (the base or main moved in the last window) is written on the LANDED row as
+  `TREE-MISMATCH` and warned loudly. It is detected, not undone.
 - **A hand `make preflight` with `JM_ENTROPY_BASE=none` switches the entropy ratchet off.** Land sets that only for the bootstrap
   land of a main with no `entropy.json`; nothing stops a person setting it by hand.
 - **A signal during `gh pr merge` can leave a merged PR with no LANDED row.** Recovery is record-only: the next run sees the PR

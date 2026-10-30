@@ -29,7 +29,7 @@ The LOC budget for the slice is a deliberate choice to stay small:
 
 | Area | Cap |
 |---|---|
-| core (`schema/`, `scripts/`) | 1,750 |
+| core (`schema/`, `scripts/`) | 1,800 |
 | worker | 4,000 |
 | daemon | 3,500 |
 | e2e | 1,500 |
@@ -39,3 +39,4 @@ That is under 11k hand-written lines. Agent-written comparables grew without bou
 
 2026-10-30: core cap 1,500 → 1,650, land security tests, P08 r9.
 2026-10-30: core cap 1,650 → 1,750, land security tests, P08 r10.
+2026-10-30: core cap 1,750 → 1,800, land security tests, P08 r11.

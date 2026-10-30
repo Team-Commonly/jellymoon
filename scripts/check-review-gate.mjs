@@ -173,3 +173,27 @@ const portable = [['portable: a symlink with a space that stays inside passes', 
 const badPortable = portable.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (badPortable.length) { console.error(`check-review-gate: portable cases wrong\n  ${badPortable.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${portable.length} portable cases ok`);
+
+// B1 evil merge: gitleaks runs `git log -p` without -m, so a secret that exists only in a merge commit's own diff (a conflict resolution)
+// is never scanned. Both targets pass -m. A trusted branch merges a side branch and adds a token to docs/a.md in the resolution.
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-evil-'));
+  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
+  const evil = (add) => `git init -q -b main . && mkdir docs && echo base > docs/a.md && git add -A && git commit -qm base && git checkout -qb side && echo side > docs/s.md && git add -A && git commit -qm side && git checkout -q main && git checkout -qb pr && echo mine > docs/m.md && git add -A && git commit -qm mine && git merge -q --no-ff --no-commit side && ${add ? `echo 'token = ${token}' >> docs/a.md && git add -A && ` : ''}git commit -qm merge`;
+  const gmake = (target) => spawnSync('make', ['-s', target, 'RANGE=main..pr'], { cwd: dir, encoding: 'utf8' }).status;
+  g(`cp '${root}/Makefile' . && ${evil(true)}`);
+  const [secretsEvil, rangeEvil] = [gmake('secrets'), gmake('secrets-range')];
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir);
+  g(`cp '${root}/Makefile' . && ${evil(false)}`);
+  const [secretsClean, rangeClean] = [gmake('secrets'), gmake('secrets-range')];
+  fs.rmSync(dir, { recursive: true, force: true });
+  const evilCases = [
+    ['evil merge: make secrets finds a token only in a merge commit', secretsEvil !== 0, true],
+    ['evil merge: make secrets-range finds it too', rangeEvil !== 0, true],
+    ['evil merge: the same history without the token is clean under both', secretsClean === 0 && rangeClean === 0, true],
+  ];
+  const badEvil = evilCases.filter(([, got, want]) => got !== want).map(([n]) => n);
+  if (badEvil.length) { console.error(`check-review-gate: evil-merge cases wrong\n  ${badEvil.join('\n  ')}`); process.exit(1); }
+  console.log(`check-review-gate: ${evilCases.length} evil-merge cases ok`);
+}

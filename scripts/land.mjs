@@ -11,9 +11,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  acquireLock, addsAllowMarker, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns,
+  acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction, needsVerdict,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeResult, quoteOutput, stripControls, readReviewerEntries, readToken, remoteFor,
-  scrub, takePage, touchesProtected,
+  scrub, takePage,
 } from './land-decide.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
 const out = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
@@ -25,6 +25,7 @@ const DRY = process.argv.includes('--dry-run');
 // Ctrl-C and kill: exit runs the handlers that kill the preflight's process group and release the lock.
 process.on('SIGINT', () => process.exit(130));
 process.on('SIGTERM', () => process.exit(143));
+process.on('SIGHUP', () => process.exit(129));
 const refuse = (m) => { console.error(`land: refused: ${stripControls(scrub(m, SECRET))}`); process.exit(1); };
 { const nv = checkNode(process.versions.node); if (!nv.ok) refuse(nv.reason); } // before anything else runs
 const readLedger = () => parseLedger(fs.existsSync(process.env.JM_LEDGER) ? fs.readFileSync(process.env.JM_LEDGER, 'utf8') : '');
@@ -42,6 +43,7 @@ function lock() {
   process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true }));
 }
 // Fetches main and (optionally) the PR head from the one remote that is JM_REPO.
+const MAIN_REF = 'refs/heads/main'; // never bare `main`: a tag named main wins git's DWIM
 function fetchRef(ref) {
   const m = remoteFor(out('git', ['remote', '-v']), REPO);
   if (m.error) refuse(m.error);
@@ -88,15 +90,17 @@ async function preflight(mainTip, head, bootstrap) {
   const release = trackThrowaway(dir, wt);
   const env = { HOME: path.join(dir, 'home'), TMPDIR: path.join(dir, 'tmp'), PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb', JM_ENTROPY_BASE: entropyBase(mainTip, { bootstrap, mainHasEntropy: has(mainTip, 'entropy.json') }) }; // main's tip as fetched, never a ref the PR could move
   let result = { ok: true };
+  let tree = '';
   try {
     try { out('git', ['worktree', 'add', '--quiet', '--detach', wt, mainTip]); } catch (e) { result = { ok: false, reason: `git worktree add failed: ${why(e)}` }; }
     if (result.ok) try { out('git', ['-C', wt, ...BASE, 'merge', '--no-ff', '--no-edit', head]); } catch {
       result = { ok: false, reason: `merging ${head.slice(0, 8)} into main ${mainTip.slice(0, 8)} conflicts` };
     }
+    if (result.ok) tree = out('git', ['-C', wt, 'rev-parse', 'HEAD^{tree}']);
     if (result.ok) result = await runInit(wt, env);
   } catch (e) { result = { ok: false, reason: `preflight failed: ${why(e)}` }; }
   release();
-  return result;
+  return { ...result, tree };
 }
 // Pod messages newest-first, paged back past `since` (ms), deduped by id. Fails closed if the page cap is hit first,
 // or if a page boundary cannot be paged past (see takePage).
@@ -152,7 +156,7 @@ async function decide(pr, mainTip, opts) { // mainTip is the tip fetched for thi
   const merged = mergeResult((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
   // A marker anywhere in the PR's history, or a secret gitleaks finds once markers are ignored, needs the reviewer's verdict.
   const hides = !ok('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]);
-  if (touchesProtected(merged.files, out('git', ['ls-tree', '-r', '--name-only', '-z', mainTip], { maxBuffer: 1 << 28 }).split('\0').filter(Boolean)) || addsAllowMarker(merged.patch) || hides) {
+  if (needsVerdict({ files: merged.files, tree: out('git', ['ls-tree', '-r', '--name-only', '-z', mainTip], { maxBuffer: 1 << 28 }).split('\0').filter(Boolean), patch: merged.patch, hides })) {
     const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers(opts.bootstrap ? head : mainTip) });
     if (!gate.ok) return gate;
     notes.push(gate.reason);
@@ -175,7 +179,7 @@ async function preflightOnly(n, bootstrap) {
   lock();
   const pr = viewPr(n);
   trustGate(pr);
-  const mainTip = fetchRef('main');
+  const mainTip = fetchRef(MAIN_REF);
   checkoutGate(mainTip, bootstrap);
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
@@ -206,7 +210,7 @@ async function main() {
     return appendLedger(n, pr.headRefOid.toLowerCase(), 'MERGED-UNVERIFIED', 'land', 'merged out of band; recorded without any check');
   }
   trustGate(pr);
-  const mainTip = fetchRef('main');
+  const mainTip = fetchRef(MAIN_REF);
   checkoutGate(mainTip, opts.bootstrap);
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
@@ -217,18 +221,21 @@ async function main() {
   const pf = await preflight(mainTip, head, opts.bootstrap);
   if (!pf.ok) refuse(`#${n}: ${pf.reason} (nothing merged)`);
   say(`#${n}: ok, ${[...d.notes, 'merge result preflight green'].join('; ')}`);
-  if (DRY) return say(`dry run: would land #${n} (merge commit, main ${mainTip.slice(0, 8)}); merged nothing`);
+  if (mergeAction({ dryRun: DRY }) === 'stop') return say(`dry run: would land #${n} (merge commit, main ${mainTip.slice(0, 8)}); merged nothing`);
   const again = await decide(pr, mainTip, opts);
   if (!again.ok) refuse(`#${n}: ${again.reason} (changed before the merge; nothing merged)`);
   const fresh = viewPr(n); // --match-head-commit pins only the head: the trust gate, base and state are re-read too
   trustGate(fresh);
   const now = checkHead(fresh, head);
   if (!now.ok) refuse(`${now.reason} (changed before the merge; nothing merged)`);
-  const moved = checkMain(mainTip, fetchRef('main')); // last look at main, right before the merge
+  const moved = checkMain(mainTip, fetchRef(MAIN_REF)); // last look at main, right before the merge
   if (!moved.ok) refuse(moved.reason);
   gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
   const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
-  appendLedger(n, head, 'LANDED', 'land', sha);
+  const merged = sha === 'unknown' ? 'unknown' : (() => { try { fetchRef(sha); return out('git', ['rev-parse', `${sha}^{tree}`]); } catch { return 'unreadable'; } })();
+  const note = landedNote(sha, pf.tree, merged);
+  if (note !== sha) console.error(`land: WARNING: #${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the base or main moved in the last window. It cannot be undone; look at it now.`);
+  appendLedger(n, head, 'LANDED', 'land', note);
   if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
   say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);
 }

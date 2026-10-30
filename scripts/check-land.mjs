@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
+  landedNote, mergeAction, needsVerdict,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
   checkNode, entropyBase, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
@@ -40,6 +41,9 @@ const cases = [
   ['a PASS for another PR does not count', led(ledger(row(6, H, 'PASS', 'opus-verifier'))).ok, false],
   ['a PASS for #5 is not read as #50 or #15', led(ledger(row(50, H, 'PASS', 'opus-verifier'), row(15, H, 'PASS', 'opus-verifier'))).ok, false],
   ['a FAIL at another head does not block this head', led(ledger(row(5, H2, 'FAIL', 'opus-verifier'), row(5, H, 'PASS', 'opus-verifier'))).ok, true],
+  ['a later FAIL at the head refuses after a PASS', led(ledger(row(5, H, 'PASS', 'opus-verifier'), row(5, H, 'FAIL', 'sonnet-verifier'))).reason.includes('a FAIL blocks that head'), true],
+  ['a FAIL row with a note still blocks (every real FAIL carries one)', led(ledger(row(5, H, 'FAIL', 'opus-verifier', 'found a real bug in X'))).reason.includes('a FAIL blocks that head'), true],
+  ['the latest PASS is the primary one', led(ledger(row(5, H, 'PASS', 'opus-verifier'), row(5, H, 'PASS', 'sonnet-verifier'))).primary.by, 'sonnet-verifier'],
   ['a PASS by a non-verifier is refused', led(ledger(row(5, H, 'PASS', 'coordinator'))).ok, false],
   ['a coordinator PASS beside a verifier PASS still refuses', led(ledger(row(5, H, 'PASS', 'opus-verifier'), row(5, H, 'PASS', 'coordinator'))).ok, false],
   ['no verdict shopping: a FAIL is not superseded by a later PASS from the same verifier', led(ledger(row(5, H, 'FAIL', 'opus-verifier'), row(5, H, 'PASS', 'opus-verifier'))).ok, false],
@@ -60,6 +64,7 @@ const cases = [
   ['on equal timestamps the newer message (lower index, newest first) decides: FAIL over an older PASS', pod([msg('ada', verdict(5, H, 'FAIL'), { createdAt: '2026-10-29T12:00:00Z' }), msg('ada', verdict(5, H), { createdAt: '2026-10-29T12:00:00Z' })]).ok, false],
   ['on equal timestamps the newer message decides: PASS over an older FAIL', pod([msg('ada', verdict(5, H), { createdAt: '2026-10-29T12:00:00Z' }), msg('ada', verdict(5, H, 'FAIL'), { createdAt: '2026-10-29T12:00:00Z' })]).ok, true],
   // idempotency
+  ['an OPEN PR is to be checked', landAction({ number: 5, state: 'OPEN', headRefOid: H }, ledger()), 'check'],
   ['merged with a LANDED row at the head is already landed', landAction({ number: 5, state: 'MERGED', headRefOid: H }, ledger(row(5, H, 'LANDED', 'land', 'abc'))), 'already-landed'],
   ['a LANDED row at another head does not count', landAction({ number: 5, state: 'MERGED', headRefOid: H }, ledger(row(5, H2, 'LANDED', 'land', 'abc'))), 'record-only'],
   ['a MERGED-UNVERIFIED row at the head is idempotent', landAction({ number: 5, state: 'MERGED', headRefOid: H }, ledger(row(5, H, 'MERGED-UNVERIFIED', 'land', 'x'))), 'already-landed'],
@@ -91,6 +96,9 @@ const cases = [
   })(),
   // CI is a second witness only when it exists
   ['checks: none at all is fine', checkRuns([]).ok, true],
+  ['checks: all success is fine', checkRuns([{ name: 'a', conclusion: 'success' }, { name: 'b', conclusion: 'success' }]).ok, true],
+  ['checks: neutral, skipped and stale runs are not failures', checkRuns([{ name: 'a', conclusion: 'neutral' }, { name: 'b', conclusion: 'skipped' }, { name: 'c', conclusion: 'stale' }]).ok, true],
+  ['checks: a run name in a refusal is stripped of escapes and bidi marks', checkRuns([{ name: 'x\u202e\u200fy', conclusion: 'failure' }]).reason.includes('xy (failure)'), true],
   ['checks: an unfinished run (conclusion null) is not a failure', checkRuns([{ name: 'a', conclusion: null }]).ok, true],
   ['checks: more runs than were read refuses', checkRuns([{ name: 'a', conclusion: 'success' }], 101).ok, false],
   ['checks: a failure refuses and names the run', checkRuns([{ name: 'a', conclusion: 'success' }, { name: 'lint', conclusion: 'failure' }]).reason.includes('lint'), true],
@@ -148,6 +156,7 @@ const cases = [
   })(),
   // the ledger is never read loosely
   ['ledger: a space-separated FAIL row makes the ledger unreadable', throws(() => parseLedger(`${HEADER}\n5 ${H} FAIL opus-verifier now x`)), true],
+  ['ledger: a row with 7 columns is unreadable', throws(() => parseLedger(`${HEADER}\n${[...row(5, H, 'PASS', 'opus-verifier'), 'extra'].join('\t')}`)), true],
   ['ledger: a short-sha FAIL row makes the ledger unreadable', throws(() => parseLedger(`${HEADER}\n${['5', 'abc1234', 'FAIL', 'opus-verifier', 'now', 'x'].join('\t')}`)), true],
   ...['010', '10.0', 'PR10'].map((v) => [`ledger: a PR column of '${v}' makes the ledger unreadable`, throws(() => parseLedger(row(v, H, 'PASS', 'opus-verifier').join('\t'))), true]),
   ['ledger: blank and # lines are skipped', parseLedger(`# note\n\n${row(5, H, 'PASS', 'opus-verifier').join('\t')}`).length, 1],
@@ -156,6 +165,16 @@ const cases = [
   ['entropy base: bootstrap once main HAS entropy.json gets the tip, so the ratchet applies', entropyBase('abc', { bootstrap: true, mainHasEntropy: true }), 'abc'],
   ['entropy base: none only for the bootstrap land of a main without entropy.json', entropyBase('abc', { bootstrap: true, mainHasEntropy: false }), 'none'],
   ['entropy base: a non-bootstrap land never gets none', entropyBase('abc', { bootstrap: false, mainHasEntropy: false }), 'abc'],
+  ['output: U+200E, U+200F and U+061C are stripped from quoted preflight output', quoteOutput('a\u200eb\u200fc\u061cd'), 'preflight| abcd'],
+  // the decision after the scans, and the dry run
+  ['verdict: a hidden secret alone (hides) needs the verdict', needsVerdict({ files: [{ filename: 'docs/a.md' }], tree: [], patch: '', hides: true }), true],
+  ['verdict: a marker in history alone needs the verdict', needsVerdict({ files: [{ filename: 'docs/a.md' }], tree: [], patch: 'diff --git a/x b/x\n@@ -0,0 +1 @@\n+k # gitleaks:allow', hides: false }), true],
+  ['verdict: a protected path alone needs the verdict', needsVerdict({ files: [{ filename: 'Makefile' }], tree: [], patch: '', hides: false }), true],
+  ['verdict: an inert docs change with nothing hidden needs none', needsVerdict({ files: [{ filename: 'docs/a.md' }], tree: [], patch: '', hides: false }), false],
+  ['dry run: stops before the merge', mergeAction({ dryRun: true }), 'stop'],
+  ['a real land goes on to the merge', mergeAction({ dryRun: false }), 'merge'],
+  ['landed note: a merge commit with the tested tree is just the sha', landedNote('abc', 't1', 't1'), 'abc'],
+  ['landed note: a different tree is recorded as TREE-MISMATCH with both trees', landedNote('abc', 't1', 't2'), 'abc TREE-MISMATCH tested t1 merged t2'],
   ['output: a branch name with escapes is stripped', stripControls('x\u001b[31my'), 'x[31my'],
   // check-entropy itself: none passes only when named; an unreadable named base fails, and a PR cannot name one (land sets the env)
   ...(() => {
@@ -203,7 +222,8 @@ cases.push(
 );
 
 // Every gh invocation names the repo (a worktree can carry remotes for several repos).
-const landSrc = fs.readFileSync(new URL('./land.mjs', import.meta.url), 'utf8');
+// Comments are stripped, so a disconnected line (`// trustGate(fresh);`) does not satisfy a wiring check.
+const landSrc = fs.readFileSync(new URL('./land.mjs', import.meta.url), 'utf8').split('\n').map((l) => l.replace(/(^|\s)\/\/.*$/, '')).join('\n');
 const src = landSrc.split('\n');
 const ghCalls = src.map((l, i) => [l, i + 1]).filter(([l]) => /\bgh\(/.test(l) && !l.includes('const gh ='));
 cases.push(
@@ -230,6 +250,7 @@ const bads = [`${SECRET}\n# note`, `${SECRET} extra`, `${SECRET}\u0007`, `\n`].m
 cases.push(
   ['token: a one-line token file is read', tokenOf(`${SECRET}\n`).value, SECRET],
   ['token: every malformed file is refused', bads.every((b) => b.error), true],
+  ['token: no malformed-file error echoes any part of the contents', bads.every((b) => !/abc123|jmu_|note|extra/.test(b.error)), true],
   ['token: scrub removes the token from a message', scrub(`Bearer ${SECRET} rejected`, SECRET).includes('abc123'), false],
   ['token: land.mjs prints errors only through the scrubbing refuse', /main\(\)\.catch\(\(e\) => refuse\(/.test(landSrc), true],
 );
@@ -279,14 +300,17 @@ cases.push(
   ['land.mjs: the trust gate runs before any fetch, in the verify-preflight path', before('trustGate(pr)', 'fetchRef(', pfBody), true],
   ['land.mjs: verify-preflight has the same checkout and bootstrap gates as land (operator discipline: the rule lives in the checked-out tree)', pfBody.includes('checkoutGate(') && pfBody.includes('bootstrapGate(mainTip, bootstrap)') && mainBody.includes('bootstrapGate(mainTip, opts.bootstrap)'), true],
   ['land.mjs: the preflight child has a wall-clock limit', /LIMIT_MS/.test(landSrc) && /setTimeout/.test(landSrc), true],
+  ['land.mjs: SIGHUP exits 129 like the others', /SIGHUP[^\n]*exit\(129\)/.test(landSrc), true],
+  ['land.mjs: every fetch of main names refs/heads/main, never bare main', !/fetchRef\('main'\)/.test(landSrc) && landSrc.includes("const MAIN_REF = 'refs/heads/main'") && (landSrc.match(/fetchRef\(MAIN_REF\)/g) || []).length === 3, true],
+  ['land.mjs: preflight output is scrubbed, the group is killed on return, the merge tree is compared', landSrc.includes('scrub(quoteOutput(text), SECRET)') && /clearTimeout\(timer\);\s*kill\(\);/.test(landSrc) && landSrc.includes('landedNote(sha, pf.tree, merged)') && landSrc.includes('mergeAction({ dryRun: DRY })') && landSrc.includes('needsVerdict({'), true],
   ['land.mjs: SIGINT and SIGTERM exit, which kills the group and releases the lock', /SIGINT[^\n]*exit\(130\)/.test(landSrc) && /SIGTERM[^\n]*exit\(143\)/.test(landSrc), true],
   ['land.mjs: the trust gate runs again before the merge', before('trustGate(fresh)', "gh('pr', 'merge'"), true],
   ['land.mjs: the PR is re-read, re-trusted and re-checked, and a bad result refuses, all before the merge', ['const fresh = viewPr(n)', 'trustGate(fresh)', 'const now = checkHead(fresh, head)', 'if (!now.ok) refuse(', "gh('pr', 'merge'"].every((a, i, all) => i === 0 || before(all[i - 1], a)), true],
-  ['land.mjs: main\'s tip is re-checked after the second decide, a move refuses, and it all happens before the merge', ['const again = await decide', "const moved = checkMain(mainTip, fetchRef('main'))", 'if (!moved.ok) refuse(moved.reason)', "gh('pr', 'merge'"].every((a, i, all) => i === 0 || before(all[i - 1], a)), true],
+  ['land.mjs: main\'s tip is re-checked after the second decide, a move refuses, and it all happens before the merge', ['const again = await decide', "const moved = checkMain(mainTip, fetchRef(MAIN_REF))", 'if (!moved.ok) refuse(moved.reason)', "gh('pr', 'merge'"].every((a, i, all) => i === 0 || before(all[i - 1], a)), true],
       ['entropy: land names the base in a scrubbed env, not from the PR', /JM_ENTROPY_BASE: entropyBase\(/.test(landSrc) && /spawn\('env', \['-i'/.test(landSrc), true],
   ['node: land.mjs refuses on a bad version before anything else', before('checkNode(process.versions.node)', 'if (!nv.ok) refuse(nv.reason)') && before('if (!nv.ok) refuse(nv.reason)', 'const readLedger'), true],
   ['land.mjs: untracked files are shown in full for the checkout gate', landSrc.includes("'status.showUntrackedFiles=all'"), true],
-  ['land.mjs: history is scanned for the marker and gitleaks runs over the range with markers ignored', landSrc.includes('addsAllowMarker(merged.patch)') && landSrc.includes("'secrets-range'") && /--ignore-gitleaks-allow/.test(fs.readFileSync(new URL('../Makefile', import.meta.url), 'utf8')), true],
+  ['land.mjs: history is scanned for the marker and gitleaks runs over the range with markers ignored', landSrc.includes('patch: merged.patch, hides') && landSrc.includes("'secrets-range'") && /--ignore-gitleaks-allow/.test(fs.readFileSync(new URL('../Makefile', import.meta.url), 'utf8')), true],
   ['land.mjs: more than one PR number is refused', two.status === 1 && two.stderr.includes('usage:'), true],
   ['land.mjs: TMPDIR is inside the throwaway dir', landSrc.includes("TMPDIR: path.join(dir, 'tmp')") && landSrc.includes("HOME: path.join(dir, 'home')"), true],
   ['land.mjs: everything it prints is stripped, and the pusher list is unfiltered', landSrc.includes('console.log(stripControls(m))') && landSrc.includes('${stripControls(scrub(m, SECRET))}') && !landSrc.includes('permission=push'), true],
@@ -302,13 +326,13 @@ cases.push(
   fs.mkdirSync(path.join(sdir, 'repo'));
   g(['init', '-q']); fs.writeFileSync(path.join(sdir, 'repo', 'f'), 'x'); g(['add', '-A']); g(['commit', '-qm', 'a']);
   const lib = fileURLToPath(new URL('./land-decide.mjs', import.meta.url));
-  const results = ['SIGINT', 'SIGTERM'].map((sig) => {
+  const results = ['SIGINT', 'SIGTERM', 'SIGHUP'].map((sig) => {
     const dir = path.join(sdir, `throw-${sig}`);
     const wt = path.join(dir, 'wt');
     fs.mkdirSync(dir);
     g(['worktree', 'add', '--quiet', '--detach', wt]);
     const code = `import { trackThrowaway } from ${JSON.stringify(lib)};
-      process.on('SIGINT', () => process.exit(130)); process.on('SIGTERM', () => process.exit(143));
+      process.on('SIGINT', () => process.exit(130)); process.on('SIGTERM', () => process.exit(143)); process.on('SIGHUP', () => process.exit(129));
       trackThrowaway(${JSON.stringify(dir)}, ${JSON.stringify(wt)}); process.kill(process.pid, ${JSON.stringify(sig)}); setTimeout(() => {}, 5000);`;
     const r = spawnSync(process.execPath, ['-e', code], { cwd: path.join(sdir, 'repo'), encoding: 'utf8', env });
     return [r.status, fs.existsSync(dir), g(['worktree', 'list', '--porcelain']).includes('throw-')];
@@ -316,8 +340,26 @@ cases.push(
   cases.push(
     ['signal: SIGINT exits 130, removes the dir and the worktree', results[0].join(), '130,false,false'],
     ['signal: SIGTERM exits 143, removes the dir and the worktree', results[1].join(), '143,false,false'],
+    ['signal: SIGHUP exits 129, removes the dir and the worktree', results[2].join(), '129,false,false'],
   );
   fs.rmSync(sdir, { recursive: true, force: true });
+}
+
+// A tag named main wins git's DWIM for a bare `main`; the explicit ref still gives the branch.
+{
+  const tdir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'check-tag-'));
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
+  const g = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8', env }).trim();
+  const [up, me] = [path.join(tdir2, 'up'), path.join(tdir2, 'me')];
+  fs.mkdirSync(up); g(up, 'init', '-q', '-b', 'main'); g(up, 'commit', '-q', '--allow-empty', '-m', 'one'); const branchTip = g(up, 'rev-parse', 'HEAD');
+  g(up, 'commit', '-q', '--allow-empty', '-m', 'two'); g(up, 'tag', 'main'); const tagTip = g(up, 'rev-parse', 'HEAD'); g(up, 'reset', '-q', '--hard', branchTip);
+  fs.mkdirSync(me); g(me, 'init', '-q'); g(me, 'remote', 'add', 'up', up);
+  const fetched = (ref) => { g(me, 'fetch', '--quiet', 'up', ref); return g(me, 'rev-parse', 'FETCH_HEAD'); };
+  cases.push(
+    ['tag named main: a bare `main` fetch picks the tag (the hole)', fetched('main'), tagTip],
+    ['tag named main: refs/heads/main still gives the branch', fetched('refs/heads/main'), branchTip],
+  );
+  fs.rmSync(tdir2, { recursive: true, force: true });
 }
 
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);

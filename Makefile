@@ -50,11 +50,11 @@ entropy: node_modules
 # No secrets or infrastructure ids, from the first commit (gitleaks over the full history).
 GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 secrets:
-	$(GO) run $(GITLEAKS) git --log-opts=HEAD --redact --no-banner .
+	$(GO) run $(GITLEAKS) git --log-opts="-m HEAD" --redact --no-banner .
 
 # land only: secrets in a commit range, ignoring gitleaks:allow markers (RANGE=<main tip>..<head>).
 secrets-range:
-	$(GO) run $(GITLEAKS) git --log-opts=$(RANGE) --ignore-gitleaks-allow --redact --no-banner .
+	$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --redact --no-banner .
 
 # Per worktree: pre-commit runs the fast gates; fence=1 also blocks pushes (worker worktrees).
 hooks:

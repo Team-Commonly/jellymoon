@@ -15,6 +15,8 @@ None of them ships in a runtime artifact.
 | dependency-cruiser 18.6.0 | TS module boundaries and cycles | Hand-written import greps |
 | staticcheck v0.8.2 (`go run`) | Go unused code and correctness lints | golangci-lint: one more binary to pin, more config |
 | gitleaks v8.30.1 (`go run`) | Secret scan of the full history on every preflight, and of a PR's commit range on land with `--ignore-gitleaks-allow`. It can only refuse, never waive: it skips binaries, images, the paths in the pinned version's built-in allowlist, lockfiles and `go.sum`, never reads commit messages in git mode, and reads files in 100,000-byte chunks with no match across a cut, so a scanner cannot prove a secret absent. Every land therefore needs the ledger PASS and the review's pod verdict, and a scan hit or a failed scan refuses (2026-10-30, land review round 16, #10, after four scanner blind spots each became a way to land without the review) | Hand-written regexes miss token formats |
+| wrangler 4.151.0 | Runs the Cloudflare adapter (`worker/`) locally under `wrangler dev --local` for `make worker-dev` and `make e2e-a`; loopback only, no Cloudflare account or credentials. Its miniflare 5.20261012.0-beta is patched (`worker/patches/`) to import `undici/index.js` under Bun | Hand-rolled Durable Object and D1 fakes drift from the real runtime |
+| @cloudflare/workers-types 5.20261014.1 | Types for the Worker, Durable Object and D1 APIs in `tsc` | Hand-written ambient declarations |
 | Node 20 or newer (land's runtime, not pinned) | `scripts/land.mjs` runs under `node`, never bun, so bun does not auto-load a `.env` from the checkout; land refuses to start on an older Node | bun: loads `.env` and `bunfig.toml` from the cwd into the environment |
 | deadcode, x/tools v0.51.0 (`go run`) | Unreachable Go functions from `main`; starts enforcing when a main package exists | — |
 
@@ -31,11 +33,11 @@ The LOC budget for the slice is a deliberate choice to stay small:
 |---|---|
 | core (`schema/`, `scripts/`) | 2,450 |
 | podcore | 2,050 |
-| worker | 3,000 |
+| worker | 1,550 |
 | daemon | 3,000 |
-| e2e | 1,500 |
+| e2e | 1,900 |
 
-The caps add up to 12,000 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 10,950 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -50,3 +52,6 @@ The caps add up to 12,000 lines. Agent-written comparables grew without bounds: 
 2026-10-30: core cap 2,100 → 2,200, text-by-land rule, padded range scan, per-magic and end-to-end tests, land review round 15, #10.
 2026-10-30: gitleaks row rewritten: scans refuse and never waive; the verdict-free path and its ~320 core lines were deleted, core is 1,787 under the 2,200 cap, land review round 16, #10.
 2026-10-30: core cap 2,200 → 2,450, the pre-public deny check (`scripts/check-private.mjs` and its cases) on top of land review rounds 19 and 20; merged, core measures 2,236, unit OS1.
+2026-10-30: worker cap 3,000 → 1,250 and e2e cap 1,500 → 1,900, the Cloudflare adapter and the contract suite now in the tree at 1,097 and 1,641 lines (each cap is its count plus about 15%); the total is 10,400. Core stays 2,200 and podcore 2,050. W0.
+2026-10-30: worker cap 1,250 → 1,550, input validation against gen/, hashed invite codes, random ids and the test-clock reset now in the Cloudflare adapter at 1,348 lines (the cap is its count plus about 15%); the total is 10,700. e2e stays 1,900 at 1,888. W0 round 2.
+2026-10-30: the adapter merged with the core cap raise above (core 2,450): the total is 10,950. W0.

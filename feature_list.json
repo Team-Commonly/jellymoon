@@ -24,8 +24,8 @@
         "a failing step names itself and prints the last 20 events",
         "the run ends with E2E_MS=<n> STEPS=<k>/<k>"
       ],
-      "test": "go test ./e2e -run TestF02",
-      "passes": false
+      "test": "make e2e-a (steps 1 to 3: go test ./e2e -run TestF02; step 4: the closing-line assertion in the Makefile target)",
+      "passes": true
     },
     {
       "id": "F03",
@@ -89,7 +89,7 @@
         "run.wake goes only to the computer that hosts the agent"
       ],
       "test": "go test ./e2e -run TestF07",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F08",
@@ -132,7 +132,7 @@
         "each way a claim ends (expiry, release, run end, stop) sends members one claim.released with that cause"
       ],
       "test": "go test ./e2e -run TestF10",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F11",

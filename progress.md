@@ -10,6 +10,18 @@ goes in the PR.
 - **Next:** land #10 with `--bootstrap`.
 - **Surprising:** the old count (`rev-list --count`) matched gitleaks on every history the fixtures had because each commit added text; an empty commit was enough to make land refuse an innocent PR.
 
+## 2026-10-30 · review fixes in the Cloudflare adapter and the e2e suite (unit W0, round 2)
+- **Changed:** each dev server gets its own inspector port and the harness waits for the whole process group on kill. Every write route is validated against `gen/` (400 `invalid_input`, nothing dropped); a run's post now carries its summary, and fields the core has no place for (post kind/status other than fyi/done, needs, options, context, taskId, links, caveat; task-update note; run-end harnessVersion) are refused. The stale-ms knob is gone (staleMs is 0, heartbeats persisted); `TestKillMidLease` takes its "no release yet" mark before the clock moves; new `TestRestartPastDeadline`. Ids are fresh random bits, no counter. Invite codes are stored as SHA-256 only and the join link uses `PUBLIC_URL`. New `TestRunTokenOtherPod`. The purity rule covers all of `podcore/`. The closing line counts every step, and `make e2e-a` judges the real last line. Worker cap 1,550 (ADR 0001).
+- **Evidence:** twelve of twelve green over four rounds of three concurrent `make e2e-a` from three clones; `make preflight` three times under a clean shell. Mutants fail a gate: no validator on the message route, body limit 32,768, heartbeat save skipped, `boot` skipped after restore, monotonic ids, invite code stored in the clear, run-token pod check removed, a podcore test importing `worker/`, a deliberately failing step (`STEPS=14/16`).
+- **Next:** F03 onward. The daemon's run-end request may send `harnessVersion`, which the adapter now refuses until the core has a place for it.
+- **Surprising:** a restarted test server kept its fake clock, so a skipped `boot` was invisible; and the kill gate could not see an early release because it took its mark after the clock move.
+
+## 2026-10-30 · the Cloudflare adapter and the e2e suite join the tree (unit W0)
+- **Changed:** `worker/` (Worker, one Durable Object per pod, D1) and `e2e/` (black-box contract suite) came over from the earlier build and now run on this head's `podcore/`. Commands carry an adapter-minted `wakeId` seed. The wake step of `TestF07` now follows ADR 0003: an ack changes nothing, so an acked wake is re-sent until a run claims it. `TestF02` and `TestStepPrinter` are new, and the run ends `E2E_MS=<n> STEPS=<k>/<k>`. New targets `e2e`, `worker-dev`, `e2e-a`; `test-ts` also runs `worker`; `preflight` ends with `e2e-a`. Boundary rules and knip cover `worker/`; caps worker 1,250 and e2e 1,900 (ADR 0001).
+- **Evidence:** `make preflight` and `make e2e-a` under a clean shell; F02, F07 and F10 pass; `podcore/`, `schema/` and `scripts/` are byte-identical to the base.
+- **Next:** F03 onward build on the adapter.
+- **Surprising:** the old suite asserted an acked wake is never re-sent, which the accepted core rule contradicts; and a monotonic ULID is a bad wake seed, because the next seed can land inside the range a pending wake already took.
+
 ## 2026-10-30 · pre-public readiness (unit OS1)
 - **Changed:** private references scrubbed from the tree and docs; `scripts/check-private.mjs` (the deny check, in
   `make preflight` and the pre-commit) refuses operator paths, personal emails, internal ids, cloud identifiers, note labels and

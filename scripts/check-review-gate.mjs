@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Tests the protected-path rule, the verdict reader and the allow-marker rule (scripts/land-decide.mjs), the reviewer list,
 // and that check-gen bites (F01 step 4). Own step in `make test`.
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -47,11 +47,13 @@ const paths = [
   ['a .md that is a directory of code is protected', [{ filename: 'docs/a.md/run.sh' }], true],
   ['a docs change beside one protected file is protected', [{ filename: 'docs/a.md' }, { filename: 'go.mod' }], true],
 ];
+const hunk = (body, name = 'docs/a.md') => `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n@@ -0,0 +1 @@\n${body}`;
 const markers = [
-  ['an added gitleaks:allow line makes the PR protected', '+++ b/docs/a.md\n+key = "x" # gitleaks:allow', true],
-  ['a removed gitleaks:allow line does not', '--- a/x\n-key = "x" # gitleaks:allow', false],
-  ['a context mention in the +++ header does not', '+++ b/gitleaks:allow', false],
-  ['an unrelated added line does not', '+hello', false],
+  ['an added gitleaks:allow line makes the PR protected', hunk('+key = "x" # gitleaks:allow'), true],
+  ['an added line starting "++" cannot hide the marker', hunk('++ secret gitleaks:allow'), true],
+  ['a removed gitleaks:allow line does not', hunk('-key = "x" # gitleaks:allow'), false],
+  ['a file header naming the marker does not', hunk('+hello', 'gitleaks:allow'), false],
+  ['an unrelated added line does not', hunk('+hello'), false],
 ];
 const badMarkers = markers.filter(([, d, want]) => addsAllowMarker(d) !== want).map(([t]) => t);
 if (badMarkers.length) { console.error(`check-review-gate: allow-marker cases wrong\n  ${badMarkers.join('\n  ')}`); process.exit(1); }
@@ -65,27 +67,16 @@ const bad = verdicts.filter(([, text, want]) => verdictOf(text) !== want).map(([
 if (bad.length) { console.error(`check-review-gate: ${bad.length} of ${verdicts.length} verdict cases wrong\n  ${bad.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${verdicts.length} verdict cases and ${paths.length} path cases ok`);
 
-// F01 step 4: a schema edit without `make gen` must fail check-gen. In a throwaway copy of what gen reads and writes: gen leaves it
-// clean, then a schema edit followed by gen changes the generated files, which is what check-gen's `git diff --exit-code` catches.
-const root = path.resolve(import.meta.dirname, '..');
+// F01 step 4: a schema edit without `make gen` must fail check-gen. In a throwaway git copy of what gen reads and writes, gen leaves the
+// tree clean, then a schema edit followed by gen changes the generated files, which is what check-gen's `git diff --exit-code` catches.
 const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'check-gen-bites-'));
-const sh = (cmd, args) => spawnSync(cmd, args, { cwd: copy, encoding: 'utf8' });
-const GEN = ['gen', 'daemon/internal/protocol/gen.go', 'docs/protocol.md'];
-const dirty = () => sh('git', ['diff', '--quiet', '--', ...GEN]).status !== 0;
-for (const f of execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean)) {
-  if (!/^(scripts\/|schema\/|gen\/|daemon\/internal\/protocol\/|docs\/protocol\.md$)/.test(f) || !fs.lstatSync(path.join(root, f)).isFile()) continue;
-  fs.mkdirSync(path.dirname(path.join(copy, f)), { recursive: true });
-  fs.copyFileSync(path.join(root, f), path.join(copy, f));
-}
-sh('git', ['init', '-q']);
-sh('git', ['add', '-A']);
-sh('git', ['-c', 'user.name=t', '-c', 'user.email=t@localhost', 'commit', '-qm', 'base']);
-const gen = () => sh(process.execPath, ['scripts/gen.mjs']).status;
-const first = gen();
-const cleanAfterGen = first === 0 && !dirty();
-const schema = path.join(copy, 'schema', 'common.json');
-fs.writeFileSync(schema, fs.readFileSync(schema, 'utf8').replace('"description": "', '"description": "EDITED '));
-const bites = gen() === 0 && dirty();
+const sh = (script) => spawnSync('bash', ['-c', script], { cwd: copy, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } }).status;
+const root = path.resolve(import.meta.dirname, '..');
+const gen = `'${process.execPath}' scripts/gen.mjs >/dev/null || exit 2; git diff --quiet -- gen daemon/internal/protocol docs/protocol.md`;
+sh(`mkdir -p daemon/internal docs && cp -R '${root}/scripts' '${root}/schema' '${root}/gen' . && cp -R '${root}/daemon/internal/protocol' daemon/internal/ && cp '${root}/docs/protocol.md' docs/ && git init -q && git add -A && git commit -qm base`);
+const cleanAfterGen = sh(gen) === 0;
+sh(`sed -i.bak 's/"description": "/"description": "EDITED /' schema/common.json`);
+const bites = sh(gen) === 1; // 1: gen ran and the generated files differ (2 would be gen itself failing)
 fs.rmSync(copy, { recursive: true, force: true });
 if (!cleanAfterGen || !bites) { console.error(`check-review-gate: check-gen does not bite (gen leaves a clean tree: ${cleanAfterGen}; a schema edit changes generated files: ${bites})`); process.exit(1); }
 console.log('check-review-gate: check-gen bites (a schema edit changes the generated files)');

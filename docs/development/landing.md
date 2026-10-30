@@ -20,8 +20,9 @@ is refused.
   (`GET /repos/{repo}/collaborators?affiliation=all&permission=push`, paginated) is in that list too. The list is an
   operator env var, comma-separated, never read from the repo, so a PR cannot widen it; unset, land refuses. Trust is
   a GitHub identity, never a commit author string, which anyone can set.
-- **An outside PR is never executed here.** Land and `make verify-preflight` refuse it before fetching or running any
-  of its code: `untrusted PR: not executed on this host; CI runs it. Re-author it through the loop to land it.`
+- **An outside PR gets no execution anywhere today.** Land and `make verify-preflight` refuse it before fetching or running
+  any of its code, and CI is `workflow_dispatch` only and stays off: `untrusted PR: not executed on this host, and
+  nowhere else today (CI is off). Re-author it through the loop to land it.`
 - **Why the macOS sandbox was removed.** Four rounds of verifiers escaped it (the Docker socket, the keychain, LaunchServices `open`, TIOCSTI tty injection, reads outside home plus TCP egress), so `sandbox-exec` on a full Go and Bun toolchain is not a boundary we can hold.
 - **A trusted PR is trusted fully.** Its preflight runs as the operator and can read any file the operator can; the pod
   token file is the sharp example. Nothing here contains code a trusted account wrote.
@@ -30,17 +31,25 @@ is refused.
   is later accepted can all put commits on a same-repo branch. Also credentials in `url.<x>.insteadOf` or a git
   credential helper, which the checkout check does not look for. Keep these empty on this repo and on the operator's
   git config.
+- **The pusher list is read at land time.** A collaborator removed since writing a commit no longer shows, so their
+  earlier commits on a trusted author's branch still pass. Audit the branch's commits when removing access.
+- **Trusted preflight code can persist.** It runs as the operator and can rewrite the land checkout's `.git/config`, its
+  hooks or the ignored `.tools/`, and that carries into later lands. Rebuild the checkout after any doubt.
 
 ## Steps
 Each refuses with one line on any mismatch, and nothing merges until all pass:
-0. The trust gate (above), then the checkout: `git status --porcelain` is empty and `HEAD` is main's tip (an explicit
-   `--bootstrap`, the first land of the gate, is the only exception, and only for HEAD), no git remote URL carries userinfo, and no git config carries an
-   `http.*extraheader`.
+0. The checkout, before the first fetch and again after it: `git status --porcelain` is empty and `HEAD` is main's tip (an
+   explicit `--bootstrap`, the first land of the gate, is the only exception, and only for HEAD), no git remote URL
+   carries userinfo, no git config carries an `http.*extraheader`, and no `.env*` or `bunfig.toml` exists in the
+   checkout (the filesystem is checked, ignored files included: bun would load them as configuration). Then the trust
+   gate (above).
 1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.
 2. The ledger at the exact head (below).
 3. For a protected path (below), or any added line containing `gitleaks:allow`, the reviewer's pod verdict. A
-   protected path always needs it. The changed files come from the local `git diff --name-status -M <merge-base>
-   <head>`, so renames count on both sides and no file cap applies.
+   protected path always needs it. The changed files and added lines come from the real merge result:
+   `git merge-tree --write-tree <main tip> <head>` diffed against main's tip (external diff and textconv off), so renames
+   count on both sides, no file cap applies and a criss-cross history cannot hide a path. Hunk headers are skipped, so an
+   added line starting `++` still counts.
 4. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
    `startup_failure`, `action_required`), land refuses. No check runs at all is fine: CI is off by decision.
 5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
@@ -50,8 +59,8 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    captured and printed with control characters stripped and every line prefixed `preflight| `, and its whole
    process group is killed when it returns. Cleanup never turns a pass into a refusal: the tree is made writable
    first, and a failed cleanup only warns naming the directory.
-6. Main's tip is fetched again and must equal the one tested; the ledger, CI and the pod are read again and decided
-   again, and the PR is re-read: its base must still be `main` and its head the decided one. Then `gh pr merge --merge
+6. The ledger, CI and the pod are read again and decided again, and the PR is re-read: the trust gate runs again, its base
+   must still be `main` and its head the decided one, and main's tip is fetched once more and must equal the one tested. Then `gh pr merge --merge
    --match-head-commit <head>` (a merge commit; never squash, never `--delete-branch`) and a `LANDED` row. `gh` cannot
    pin the base, so main can still move in the seconds between the check and the merge; that window is accepted. The
    run says which branch is now safe to delete.
@@ -59,14 +68,15 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
 Re-running is safe: a merged PR with a `LANDED` row at its head exits 0 saying so; merged without one is recorded
 with a warning as `MERGED-UNVERIFIED` (see the ledger format). `--dry-run` runs every check and the preflight, merges nothing and writes no ledger row (git's own
 fetch and worktree bookkeeping and the land lock live in the git dir). An unreadable ledger (a row that is not 6 tab columns with a 40-hex head) refuses; no row is skipped silently. A malformed token file is refused without
-echoing it, and no output ever contains the token.
+echoing it, and no output, the quoted preflight output included, ever contains the token. The preflight also gets
+`JM_ENTROPY_BASE` (main's tip as fetched) so `make entropy` ratchets against it and fails if it cannot read it.
 
 ## Environment (never committed)
 | Variable | Meaning |
 |---|---|
 | `JM_REPO` | the target repo as `owner/name`. Required: a worktree can carry remotes for more than one repo (here `origin` is a different repository), so a bare `gh` call would read or merge in the wrong one. Every `gh` call passes `--repo`, the git remote is the single one whose URL matches, and each PR's URL is checked to be `github.com/<JM_REPO>/pull/<n>` before any action |
 | `JM_LEDGER` | path to the ledger TSV |
-| `JM_COMMONLY_API` | base URL of the API holding the verdict pod; must be https |
+| `JM_COMMONLY_API` | base URL of the API holding the verdict pod; must be exactly `https://api.commonly.me`, unless `JM_ALLOW_API_ORIGIN` equals it (https only), so the bearer goes only to a host the operator chose |
 | `JM_COMMONLY_TOKEN_FILE` | path to a token file; read, never printed |
 | `JM_VERDICT_POD` | id of the pod whose messages carry reviewer verdicts |
 | `JM_TRUSTED_LOGINS` | comma-separated GitHub logins that may author code this host runs; read from the environment only. Unset refuses |
@@ -111,7 +121,7 @@ protected, and so are `docs/x` to `scripts/x` and the reverse. One function, `to
 `make verify-preflight PR=<n>` (`node scripts/land.mjs <n> --preflight-only`) runs the trust gate, the head check and
 the merge-result preflight: no ledger, no pod, no merge. Run it from a clean checkout of main, never from the PR's tree,
 with the same checkout rule as land (`--bootstrap` is the one exception, for the bootstrap PR only). It needs `JM_REPO` and `JM_TRUSTED_LOGINS`. For an untrusted
-PR it refuses before fetching anything, and the verifier reads the CI logs and the code and runs nothing.
+PR it refuses before fetching anything, and the verifier reads the code (`git show`, `git diff`, GitHub) and runs nothing.
 
 ## Known limits
 - **A pod creator can delete a reviewer's message.** Land reads only what exists at land time, so deleting a

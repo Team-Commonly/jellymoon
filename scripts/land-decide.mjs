@@ -69,14 +69,14 @@ const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at) || 0;
 // A message counts for #N only if its FIRST non-empty line is exactly `jellymoon#<N> <head>` and its server-stamped
 // username is a listed reviewer's. The latest such message per reviewer decides (messages arrive newest first, so on a
 // tie the lower index is the newer one); text is never an identity.
-export function checkPodVerdict(messages, { pr, head, entries, after = 0 }) {
+export function checkPodVerdict(messages, { pr, head, entries }) {
   const byUser = new Map(entries.filter((e) => e.username).map((e) => [e.username, e.name]));
   const first = `jellymoon#${ref(pr)} ${head.toLowerCase()}`;
   const latestBy = new Map();
   messages.forEach((m, i) => {
     const name = byUser.get(msgUser(m));
     const line = (m.content || '').split('\n').map((l) => l.trim()).find(Boolean);
-    if (!name || msgTime(m) < after || line?.toLowerCase() !== first) return;
+    if (!name || line?.toLowerCase() !== first) return;
     const prev = latestBy.get(name);
     if (!prev || msgTime(m) > msgTime(prev.m) || (msgTime(m) === msgTime(prev.m) && i < prev.i)) latestBy.set(name, { m, i });
   });
@@ -112,7 +112,15 @@ export function filesFromNameStatus(text) {
 export const checkMain = (before, after) => (before === after ? { ok: true }
   : { ok: false, reason: `main moved from ${before.slice(0, 8)} to ${after.slice(0, 8)} during the run; run land again` });
 
-export const checkApi = (url) => (/^https:\/\//.test(url) ? { ok: true } : { ok: false, reason: 'JM_COMMONLY_API must be https (the bearer token would travel in clear)' });
+const API_ORIGIN = 'https://api.commonly.me';
+export function checkApi(url, allow = '') {
+  const u = String(url).replace(/\/$/, '');
+  return u === API_ORIGIN || (allow && u === allow.replace(/\/$/, '') && /^https:\/\//.test(u)) ? { ok: true }
+    : { ok: false, reason: `JM_COMMONLY_API must be ${API_ORIGIN} (or equal JM_ALLOW_API_ORIGIN, https only): the bearer token goes only to a host the operator chose` };
+}
+
+// Bun loads .env* and bunfig.toml from the cwd into unset variables; a file in the checkout must never choose a variable or a host.
+export const checkNoBunConfig = (names) => { const bad = names.find((n) => /^\.env/.test(n) || n === 'bunfig.toml'); return bad ? { ok: false, reason: `${bad} exists in this checkout; remove it (bun would load it as configuration)` } : { ok: true }; };
 
 // The one git remote whose URL is the target repo (https or ssh, with or without .git), from `git remote -v`.
 export function remoteFor(remoteV, repo) {
@@ -179,7 +187,7 @@ export function acquireLock(dir, { pid = process.pid, alive = (p) => { try { pro
 
 // The trust gate: this host runs only code whose authors are trusted. Trust is GitHub identity, never a commit author string.
 // pr: { isCrossRepository, author }; pushers: logins with push access to the repo; trusted: JM_TRUSTED_LOGINS (operator env).
-const REFUSE = 'untrusted PR: not executed on this host; CI runs it. Re-author it through the loop to land it.';
+const REFUSE = 'untrusted PR: not executed on this host, and nowhere else today (CI is off). Re-author it through the loop to land it.';
 export const parseLogins = (text) => [...new Set(String(text || '').split(',').map((l) => l.trim().toLowerCase()).filter(Boolean))];
 export function checkTrust({ pr, pushers, trusted }) {
   const no = (why) => ({ ok: false, reason: `${REFUSE} (${why})` });
@@ -201,19 +209,36 @@ export function checkRuns(runs, total = runs.length) {
 }
 
 // The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere), because
-// the scripts in this tree run before the trust gate decides. Credentials in the
+// the scripts in this tree run before the trust gate decides. mainTip null: before the fetch, HEAD is compared later. Credentials in the
 // checkout's git config would travel into every fetch, so a remote URL with userinfo or an http extraheader refuses.
 const USERINFO = /^https?:\/\/[^/\s]*@|^[a-z+]+:\/\/[^/@\s]*:[^/@\s]*@/i;
 export function checkCheckout({ head, mainTip, porcelain, remoteV, config, bootstrap = false }) {
-  if (!bootstrap && head !== mainTip) return { ok: false, reason: `this checkout is at ${head.slice(0, 8)}, not main's tip ${mainTip.slice(0, 8)}; land from a checkout of main` };
+  if (!bootstrap && mainTip !== null && head !== mainTip) return { ok: false, reason: `this checkout is at ${head.slice(0, 8)}, not main's tip ${mainTip.slice(0, 8)}; land from a checkout of main` };
   if (porcelain.trim()) return { ok: false, reason: 'this checkout has uncommitted or untracked files; land from a clean checkout of main' };
   if (remoteV.split('\n').some((l) => USERINFO.test(l.split(/\s+/)[1] || ''))) return { ok: false, reason: 'a git remote URL carries credentials (userinfo); remove them' };
   if (/^http\..*extraheader/im.test(config)) return { ok: false, reason: 'the git config carries an http extraheader (a credential); remove it' };
   return { ok: true };
 }
 
-// An added line with the secret scanner's allow marker is a way to hide a secret: such a PR needs the pod verdict.
-export const addsAllowMarker = (diff) => diff.split('\n').some((l) => l.startsWith('+') && !l.startsWith('+++') && l.includes('gitleaks:allow'));
+// An added line with the secret scanner's allow marker is a way to hide a secret: such a PR needs the pod verdict. Header lines
+// (from `diff --git` to the first `@@`) are skipped; an added line starting `++` is content, not a header.
+export function addsAllowMarker(diff) {
+  let header = false;
+  return diff.split('\n').some((l) => {
+    if (l.startsWith('diff --git')) header = true;
+    else if (l.startsWith('@@')) header = false;
+    return !header && l.startsWith('+') && l.includes('gitleaks:allow');
+  });
+}
+
+// What merging head into main's tip would change: the real merge result, not a merge-base diff (a criss-cross history can make
+// that empty). run(args) is `git` with those args. A conflict throws. No external diff or textconv can empty the diff.
+export function mergeResult(run, mainTip, head) {
+  let tree;
+  try { tree = run(['merge-tree', '--write-tree', mainTip, head]).split('\n')[0].trim(); } catch { throw new Error(`${head.slice(0, 8)} does not merge cleanly into main ${mainTip.slice(0, 8)}`); }
+  const diff = (...a) => run(['-c', 'diff.external=', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', ...a, mainTip, tree]);
+  return { files: filesFromNameStatus(diff('--name-status', '-M')), patch: diff('-U0') };
+}
 
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.

@@ -37,7 +37,7 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
   Every report states lines added and removed, and what it deleted.
 - **Merging.** Local verification is the authority. `make land PR=<n>` is the only merge path. PR code runs on this
   host only for a trusted PR: same repo, author and every push-capable account in the operator's `JM_TRUSTED_LOGINS`;
-  an outside PR is never executed here (CI runs it). Land proves the exact head green in a clean shell (a correctness
+  an outside PR gets no execution anywhere today (CI is off); to land one, re-author it through the loop. Land proves the exact head green in a clean shell (a correctness
   check, not a security boundary), requires the verifier's ledger line at that head (the coordinator transcribes the
   report's `GATE:` line, model and `FINDINGS` into the row; any FAIL at a head blocks it, so the fix is a new head),
   and for protected paths (every changed path except `progress.md` and documentation files under `docs/`:

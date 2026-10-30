@@ -49,3 +49,17 @@ only in the code.
   turn (images, then NUL text and allowlisted paths, then content sniffing of PDF/ELF/zip magic). The machinery built to
   work around them (a strict text rule, a protected set for everything else, a fixed prefix so no magic matched) was deleted
   with the verdict-free path it served. The lesson stands: a scanner's blind spots are its own, so it only refuses.
+- A leak check never prints what it matched: it reports file:line and class only, and a name-bearing path is withheld by
+  position. Its test samples are synthetic and are grepped against the base tree before a round ships. A check that echoed
+  a match would copy the secret into a log that masks only whole strings.
+- When a subtraction deletes tests, a case is safe to delete only if every mutant it killed is in deleted code or is killed
+  by another case. P08 r16 dropped the one case proving the range scan reads every commit, and the scan went untested.
+- A test of a recipe runs it in the shape its caller does: same checkout, refs, cwd and env. P08 r17 tested a recipe in a shape its
+  caller does not use, so a pass proved nothing about the real call.
+- After a merge into a renaming branch, re-run the whole rename map over what the base side brought in, and re-run the
+  mutant of every renamed test. OS1 r3 merged into a renaming branch, and what the base side
+  brought in kept the old names.
+- When each round finds new members of one mutant family, stop adding cases: pin the text or share the derivation. A test's
+  reader is the caller's reader, never a copy. P08 r16-r18 added a case per round for one family and never converged.
+- An output-hygiene rule lives in ONE rendering function, and its test combines the triggers (a withheld path together with
+  a content hit). OS1 r4 showed the rule split across places, each tested on one trigger only.

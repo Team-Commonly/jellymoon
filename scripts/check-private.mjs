@@ -91,13 +91,13 @@ const CASES = [
   // near misses stay clean
   ['clean: 12 hex', 'abcdef012345', null],
   ['clean: 24 uppercase hex', 'A1B2C3D4E5F6A7B8C9D0E1F2', null],
-  ['clean: CSS colour', 'color: #D923;', null],
+  ['clean: CSS colour', 'color: #D000;', null],
   ['clean: a camera model', 'Nikon D850', null],
   ['clean: a lowercase d and digits', j('d', '999: x'), null],
-  ['clean: base64', 'x+D923/y', null],
-  ['clean: ledger shape after #', '#D923: x', null],
-  ['clean: ledger shape after +', 'x+D923: y', null],
-  ['clean: ledger shape after a word', 'XD923: y', null],
+  ['clean: base64', 'x+D000/y', null],
+  ['clean: ledger shape after #', '#D000: x', null],
+  ['clean: ledger shape after +', 'x+D000: y', null],
+  ['clean: ledger shape after a word', 'XD000: y', null],
   ['clean: ~/ after a word', j('a~', '/b'), null],
   ['clean: /home after a colon', j('x:/ho', 'me/u/y'), null],
   ['clean: /home after a dot', j('v1./ho', 'me/u/y'), null],
@@ -162,6 +162,9 @@ function main({ env = process.env, files, meta, cases = CASES, log = console.log
 }
 
 const HIT = j('TASK', '-5');
+// [path, skipped?]: pins SKIPPED; a widened pattern (a docs or source directory) flips a negative.
+const SKIP_PROBES = [['bun.lock', true], ['go.sum', true], ['package-lock.json', true], ['pnpm-lock.yaml', true], ['.agents/skills/x.md', true], ['a/b.lock', true],
+  ['docs/a.md', false], ['docs/adr/0004.md', false], ['scripts/a.mjs', false], ['podcore/src/a.ts', false], ['ee/README.md', false], ['daemon/go.sum', false], ['.agentsx/a.md', false], ['a.locked', false], ['sub/package-lock.json', false]];
 const PLAIN = [['a.md', 'plain']];
 const NAMES = { JM_PRIVATE_NAMES: j('zorb', 'lax') };
 const quiet = { log() {}, error() {}, meta: [] };
@@ -184,6 +187,8 @@ function runnerChecks() { // the runner and main() themselves
     ['no cases fails', R([], []).length > 0],
     ['good input passes', R(clean, PLAIN).length === 0],
     ['vendored and generated files are skipped', ['bun.lock', 'go.sum', 'package-lock.json', 'pnpm-lock.yaml', '.agents/skills/x.md', 'a/b.lock'].every((f) => R(clean, [[f, HIT]]).length === 0)],
+    ['a hit in a docs file still fires', R(clean, [['docs/a.md', HIT], ['README.md', HIT], ['CONTRIBUTING.md', HIT]]).length === 3],
+    ['the skip list is exactly the vendored set and nothing wider', SKIP_PROBES.every(([f, skipped]) => SKIPPED.test(f) === skipped)],
     ['a source file is not skipped', R(clean, [['scripts/a.mjs', HIT]]).length === 1],
     ['the names class is built only when the list is supplied', namesFrom({}) === null && namesFrom({ JM_PRIVATE_NAMES: 'q' }) !== null],
     ['main passes on a clean tree', lines({ files: PLAIN, cases: [['x', 'plain', null]] }).code === 0],

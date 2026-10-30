@@ -2,7 +2,7 @@
 
 `make land PR=<n>` is the only merge path. Local verification is the authority; GitHub check runs are consulted only
 as a veto (step 3). It runs `scripts/land.mjs`; the decisions are pure functions in `scripts/land-decide.mjs` and the
-cases are in `scripts/check-land.mjs`. Run it from a checkout of main with a clean tree: the accepted reviewers come from
+cases are in `scripts/check-land.mjs` and `scripts/check-land-scan.mjs`; the range scan itself is `scripts/land-scan.mjs`. Run it from a checkout of main with a clean tree: the accepted reviewers come from
 operator environment (`JM_VERDICT_REVIEWERS`), never from the repo. One land runs at a time **per clone**: an mkdir lock in that clone's git
 common dir holds the PID, so two clones can land at once. A dead PID, or a lock dir with no pid file, is stale; it is
 taken over by renaming the stale dir to a name of the taker's own (atomic, so only one taker wins) and then creating
@@ -58,33 +58,51 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    `startup_failure`, `action_required`), land refuses. No check runs at all is fine: CI is off by decision.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
    First, main's own scan configuration: land lists main's tree at the fetched tip, and refuses (naming the file) when it carries a
-   `.gitleaks.toml` or `.gitleaksignore` at any path, or a `.gitattributes` line that switches files out of the diff (`-diff`, `!diff`,
-   `binary`, or a `!` pattern), unless that file's blob is the one this repo ships. `SHIPPED` in `land-decide.mjs` lists those blobs; this repo
+   `.gitleaks.toml` or `.gitleaksignore` at any path, or a `.gitattributes` line that switches files out of the diff (`-diff` or `binary`;
+   `!diff` and a `!` pattern are refused too, though measured to hide nothing: `!diff` leaves the default diff, and git rejects a negative
+   pattern with a warning), unless that file's blob is the one this repo ships. `SHIPPED` in `land-decide.mjs` lists those blobs; this repo
    ships none, so none is allowed.
-   `make secrets-range` runs gitleaks over `<main tip>..<head>` with `-m` and `--ignore-gitleaks-allow`: a hit (a nonzero exit
-   plus the line "exit status 3") refuses with "a secret was found in the range; remove it from history and push a new head".
+   **Land runs gitleaks itself, not make.** `scanRange` (`land-scan.mjs`) runs the checkout's own `.tools/bin/go` (an absolute path inside the
+   land checkout; refused if missing or not executable) through `spawn` with an argv built from constants in the code: `run
+   github.com/zricethezav/gitleaks/v8@v8.30.1 git --log-opts=-m <main tip>..<head> --ignore-gitleaks-allow --exit-code 3 --redact --no-banner .`,
+   cwd the checkout, env exactly `scanEnv`. No shell, no `PATH` lookup for `go`, and no Makefile is read, so a main Makefile cannot change
+   what the scan reads. (The earlier design ran `make secrets-range` under a text pin of the recipe; a pin cannot close that class, because a
+   built variable name, `$(eval)`, an `include`, a tracked `GNUmakefile`, `SHELL`, a prerequisite that writes `.gitleaks.toml`, or an exported
+   `GITLEAKS_CONFIG` or `GIT_CONFIG_*` all change what make runs while the pinned text still matches. Each of those, put on main, now reads as a
+   hit in `check-review-gate.mjs`.) `scanEnv` keeps `PATH`, `HOME`, `TMPDIR` and the Go cache variables, pins `GIT_CONFIG_GLOBAL=/dev/null`
+   and `GIT_CONFIG_NOSYSTEM=1`, and sets `GOTOOLCHAIN=local` and `GOWORK=off`: a tracked `go.work` or a `go.mod` with a `toolchain` line could
+   otherwise make `go run` fetch and run another Go release (measured), and the module is named with an explicit version, so no tracked `go.mod`,
+   `vendor/` or `replace` line is consulted. The Makefile's `secrets-range` stays for people; `check-review-gate.mjs` checks that its recipe is
+   the same command as land's argv. That check is a consistency check, not a security boundary.
+   A hit (a nonzero exit plus the line "exit status 3") refuses with "a secret was found in the range; remove it from history and push a new head".
    Clean is positive evidence, read from the scan's exit status and stderr together: exit 0; no "exit status 3" line; no gitleaks
    `ERR` (or `FTL`, `PNC`) line and no "failed to scan"; the "no leaks found" line (gitleaks' "no leaks found in partial scan" warning is not
    it); and one "<n> commits scanned." line, each matched as a whole line, where n equals the number of commits gitleaks reads, which land
-   derives itself with git, outside make. The rule, from gitleaks v8.30.1's source (`sources/git.go` `Fragments`, `detect/detect.go`
-   `DetectSource`): gitleaks runs `git log -p -U0 -m <range>`, yields one fragment per hunk of every file that is not deleted and not a
-   non-archive binary, and counts a commit when one of its fragments arrives, even a hunk with no added line. So a commit counts exactly when
-   its diff has a hunk in a file git does not show as deleted. Land runs `git log -m -p -U0 --format=%x01%H <range>` in the scan's own
-   environment (the same allowlist env as make, so git reads the same config) and counts the commits of `git rev-list <range>` that have such a
-   hunk (`textCommits`). An empty commit, a pure rename, a mode-only change, an empty file, a delete-only commit (a revert of an added file
-   too) and a binary-only commit each yield nothing and are not counted; a line-removal-only modification, a symlink, a type change and a
-   rename with an edit are. Measured on each of those shapes, on a merge whose `-m` diff against one parent is empty and against both, and on an
-   octopus (empty and not), the derived count equals gitleaks' printed count (the shape table in `check-review-gate.mjs`), so an innocent
-   history with commits that add no text lands. Limit: the rule follows one gitleaks version; a bump of the pin must re-run the shape table,
-   and a change in what gitleaks counts makes land refuse (fail closed) until `textCommits` follows. No shape is known where the two differ;
-   archives named like archives were measured too and gitleaks reads none in git mode, so they count as no text. Anything else refuses as a scan
-   that failed to run or did not read the whole range: it proves nothing. (A recipe that swallowed an error, a missing object, a
-   `.gitattributes` the scan stumbles on, and a scan of an empty range in place of the PR's all exit 0 and fail one of these.) A clean scan waives nothing. The preflight's
-   `make secrets` (gitleaks over the whole history) is the second scan and refuses by failing the preflight. (The code's order is
-   steps 2, 3, 4 as listed: ledger, CI, scan, pod verdict.) The scan runs the make recipe, which runs `go run`: the land checkout needs
-   `go` (and `make`, `git`, `node`) reachable. Run `./init.sh` once in the land checkout, which installs the pinned Go and Bun into the
-   ignored `.tools/` (the Makefile finds `.tools/bin/go` by path), and put `.tools/bin` on PATH. Without `go`, or without a module cache or network for
-   gitleaks, the recipe fails, the scan reads as failed to run, and land refuses.
+   derives itself with git. The counting rule, from gitleaks v8.30.1's source (`sources/git.go` `Fragments`, `detect/detect.go`
+   `DetectSource`, and go-gitdiff's parser): gitleaks runs `git log -p -U0 -m <range>`, yields one fragment per hunk of every file that is not
+   deleted and not a non-archive binary, and attributes each file to the last "commit" preamble its parser read; it counts a commit when one of
+   its fragments arrives, even a hunk with no added line. So a commit counts when its diff has a hunk in a file git does not show as deleted
+   **and the parser reached that commit's preamble**. Land runs `git log -m -p -U0 --format=%x01%H <range>` in the scan's own environment (so git reads the same
+   config) and counts the commits of `git rev-list <range>` that have such a hunk (`textCommits`). An empty commit, a pure rename, a
+   mode-only change, an empty file, a delete-only commit (a revert of an added file too) and a binary-only commit each yield nothing and are
+   not counted; a line-removal-only modification, a symlink, a type change and a rename with an edit are. Measured on each of those shapes, on
+   a merge whose `-m` diff against one parent is empty and against both, and on an octopus (empty and not), the derived count equals gitleaks'
+   printed count (the shape table in `check-review-gate.mjs`), so an innocent history with commits that add no text lands.
+   **A count says how many commits were read, never which.** The one shape found where the numbers agree over different commits: gitleaks'
+   diff parser ends a quoted file name at the first quote not preceded by a backslash, so a path whose last character is a backslash (git
+   quotes it `"b\\"`) fails to parse. The parser drops that file *and the commit preamble before it*, and the files after it are attributed to
+   the previous commit's header. With commit X adding `b\` (a token) and `c.txt`, and a rename-only commit W on top, gitleaks prints "1 commits
+   scanned", the derived count is also 1 (X), and the one counted is W: equal numbers over disjoint sets, no leak found. So **before the scan
+   land lists every path the range touches, in the scan's env** (`git log -m --no-renames --name-status -z`: added, modified and deleted paths,
+   so both sides of a rename or copy appear, and every parent of a merge), **and refuses, naming the commit and the path, when any path ends in
+   a backslash.** `a.txt` plus `b\` in one commit (the file after the first is never read) and a rename onto or away from such a name are closed
+   the same way. Anything else refuses as a scan that failed to run or did not read the whole range: it proves nothing. (A swallowed error, a
+   missing object, a `.gitattributes` the scan stumbles on, and a scan of an empty range in place of the PR's all exit 0 and fail one of these.)
+   A clean scan waives nothing. The preflight's `make secrets` (gitleaks over the whole history) is the second scan and refuses by failing the
+   preflight. (The code's order is steps 2, 3, 4 as listed: ledger, CI, scan, pod verdict.) The land checkout needs `go` at `.tools/bin/go`
+   (and `git`, `node`): run `./init.sh` once in the land checkout, which installs the pinned Go and Bun into the ignored `.tools/`. Without it
+   land refuses before the scan, naming the path. Without a module cache or network for gitleaks, `go run` fails, the scan reads as failed to
+   run, and land refuses.
 5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
    merge --no-ff --no-edit <head>` (a conflict refuses; the PR's hooks never run), then `./init.sh` (which runs
    `make preflight`) under `env -i` with HOME and `TMPDIR` inside the throwaway dir and system dirs only on PATH.
@@ -92,7 +110,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    captured and printed with control characters stripped and every line prefixed `preflight| `, and its whole
    process group is killed when it returns. Cleanup never turns a pass into a refusal: the tree is made writable
    first, and a failed cleanup only warns naming the directory.
-6. The ledger, CI, the range secret scan (`make secrets-range` runs again) and the pod are read again and decided again, and the PR is re-read: the trust gate runs again, its base
+6. The ledger, CI, the range secret scan (run again) and the pod are read again and decided again, and the PR is re-read: the trust gate runs again, its base
    must still be `main` and its head the decided one, and main's tip is fetched once more and must equal the one tested. Then `gh pr merge --merge
    --match-head-commit <head>` (a merge commit; never squash, never `--delete-branch`) and a `LANDED` row. `gh` cannot
    pin the base, so main can still move in the seconds between the check and the merge; that window is accepted. The
@@ -173,7 +191,7 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 ## Known limits
 - **A grandchild that calls `setsid` again escapes the group kill.** The preflight child is killed as a process group; code that
   starts its own session survives it. That is trusted code (see the threat model).
-- **A PR can switch off its own scans on the bootstrap land and in the preflight.** On the bootstrap land the checkout is the PR head, so the range scan runs the PR's own Makefile `secrets-range` recipe (a recipe of `true` reads as clean) and its `.gitleaksignore`. On every land, the preflight's `make secrets` runs the PR's Makefile, `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` markers. On a normal land the range scan uses main's Makefile and config and ignores markers. These are defence in depth only; the verdict is always required.
+- **A PR can switch off its own scans on the bootstrap land and in the preflight.** On the bootstrap land the checkout is the PR head, so the range scan reads the PR's own `.gitleaksignore` and `.gitleaks.toml`, and its `.tools/bin/go` is the PR checkout's. On every land, the preflight's `make secrets` runs the PR's Makefile, `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` markers. On a normal land the range scan uses main's config, never its Makefile, and ignores markers. These are defence in depth only; the verdict is always required.
 - **The throwaway's own `make secrets` reads a PR-added `.gitleaks.toml`.** Land's range scan runs in the operator's checkout, which is main with main's config, except on the bootstrap land: there the checkout is the PR head, so a PR-added `.gitleaks.toml` or `.gitattributes` configures the scan (a `paths = [".*"]` allowlist makes it clean). The scans only refuse, so a quiet scan is never evidence; the review is.
 - **What the scans do not read, so the review must cover it.** Both scans are defence in depth that can refuse and never waive. Read by neither:
   - **Fragment cuts.** `gitleaks dir` and git mode read a file in 100,000-byte chunks (extended at most 25,000 bytes to a blank line), and no rule matches across chunks, so a token straddling a cut is not matched.
@@ -184,12 +202,22 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   - **File names.**
   - **A commit message after a NUL.** `git log %B` stops at it, and git mode never reads commit messages at all.
 - **The expected commit count follows one gitleaks version.** `textCommits` encodes how v8.30.1 counts (a hunk in a file git does not show as
-  deleted). It is measured against the real recipe on every shape listed in step 4. A gitleaks bump that counts differently makes land
-  refuse every PR with the "did not read the whole range" line until `textCommits` and its shape table follow; it never lands one wrongly.
+  deleted). It is measured against land's own scan on every shape listed in step 4. A gitleaks bump that counts differently makes land
+  refuse every PR with the "did not read the whole range" line until `textCommits` and its shape table follow (fail closed). A count is a
+  count and not a set: the trailing-backslash refusal closes the one shape found where the count and the commits read disagree, and no other
+  is known, but this check cannot prove there is none; the review is the other check.
+- **A path ending in a backslash anywhere in the range is refused,** also when it only arrives through a merge of main into the PR (the
+  `-m` diff against the PR's parent lists it), and also when it is harmless. The cost is an innocent PR refused (fail closed); the remedy is
+  a new head without that name (rename the file on main first, or rebase the history).
+- **A commit message with a line over 64 KB is refused.** gitleaks' log reader cannot take it, so it counts none where land derives one
+  (measured: rev-list 1, gitleaks 0, derived 1); land fails closed with the "did not read the whole range" line on an innocent PR.
+- **`go run` can still be steered by the operator's own files, not by the repo's.** The user-level Go env file under `HOME` (`go env -w`), the
+  module cache and the network are the operator's. A tracked `go.work`, `go.mod` (`toolchain`, `replace`) or `vendor/` has no effect (see step 4).
 - **Main's scan configuration is checked in the committed tree only.** `.git/info/attributes`, the land checkout's own `.git/config`
   (a `diff` driver, `core.attributesFile`) and ignored files are not read; the checkout check and the operator's clean clone cover them. A
-  `.gitattributes` that hides files by a means other than `-diff`, `!diff`, `binary` or a `!` pattern is not caught either.
-- **Both secret scans pass `-m`** (`make secrets`, `make secrets-range`): gitleaks runs `git log -p` without it, so a secret that
+  `.gitattributes` that hides files by a means other than `-diff` or `binary` is not caught either (`!diff` and a `!` pattern hide nothing,
+  but are refused).
+- **Both secret scans pass `-m`** (`make secrets`, and land's range scan): gitleaks runs `git log -p` without it, so a secret that
   exists only in a merge commit's own diff (a conflict resolution) would never be scanned.
 - **Every fetch of main names `refs/heads/main`**, never bare `main`: a tag named `main` wins git's DWIM.
 - **The merge commit's tree is compared with the tested one.** After `gh pr merge`, land fetches the merge commit and checks its tree

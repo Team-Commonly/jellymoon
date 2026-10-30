@@ -31,13 +31,13 @@ The LOC budget for the slice is a deliberate choice to stay small:
 
 | Area | Cap |
 |---|---|
-| core (`schema/`, `scripts/`) | 2,450 |
+| core (`schema/`, `scripts/`) | 2,950 |
 | podcore | 2,050 |
 | worker | 1,550 |
 | daemon | 3,000 |
 | e2e | 2,660 |
 
-The caps add up to 11,710 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 12,210 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -56,3 +56,4 @@ The caps add up to 11,710 lines. Agent-written comparables grew without bounds: 
 2026-10-30: worker cap 1,250 → 1,550, input validation against gen/, hashed invite codes, random ids and the test-clock reset now in the Cloudflare adapter at 1,348 lines (the cap is its count plus about 15%); the total is 10,700. e2e stays 1,900 at 1,888. W0 round 2.
 2026-10-30: the adapter merged with the core cap raise above (core 2,450): the total is 10,950. W0.
 2026-10-30: e2e cap 1,900 → 2,660, the pod feature tests (F03 to F06) and the review fixes to them (computer sockets, refusal-leaves-no-state checks, expired invite, eviction status, poster seqs) take the suite to 2314 lines (the gate printed `LOC e2e 2314 / 2270` before this raise; the cap is that count plus about 15%); the total is 11,710. No other cap changes. W1.
+2026-10-30: core cap 2,450 → 2,950, land runs gitleaks itself (`scripts/land-scan.mjs`) instead of through make, refuses paths gitleaks cannot parse, and the cases that prove both (the shape table, the steering fixtures, the env and argv cases), on top of the merge with main; the gate printed `LOC core 2569 / 2450` before this raise and the cap is that count plus about 15%; the total is 12,210. No other cap changes. P08F round 2.

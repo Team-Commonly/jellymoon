@@ -28,6 +28,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-fixtures.mjs
 	$(BUN) scripts/check-review-gate.mjs
 	$(BUN) scripts/check-land.mjs
+	$(BUN) scripts/check-land-scan.mjs
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
 	$(BUN) test podcore worker

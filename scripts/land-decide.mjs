@@ -174,7 +174,8 @@ export function checkTrust({ pr, pushers, trusted }) {
 // fragment's commit to the count when the fragment arrives, even one with no added lines (detect.go, DetectSource: addCommit before the
 // empty check). So a commit counts exactly when its diff has a hunk in a file git does not show as deleted. An empty commit, a pure rename, a
 // mode change, an empty file, a deleted file, and a binary (git prints no hunk for it) yield nothing. `log` is `git log -m -p -U0
-// --format=%x01%H <range>` and `all` is `git rev-list <range>`. Returns the count gitleaks should print and the commits that add no text.
+// --format=%x01%H <range>` and `all` is `git rev-list <range>`. Returns the count gitleaks should print.
+// The count says how many commits were read, never which: land-scan.mjs refuses the one shape where the numbers agree over different commits.
 export function textCommits(log, all) {
   const read = new Set();
   let sha = '';
@@ -185,7 +186,7 @@ export function textCommits(log, all) {
     else if (l.startsWith('deleted file mode ')) deleted = true;
     else if (l.startsWith('@@ ') && !deleted && sha) read.add(sha);
   }
-  return { expected: all.filter((c) => read.has(c)).length, bare: all.filter((c) => !read.has(c)) };
+  return { expected: all.filter((c) => read.has(c)).length };
 }
 // The one reading of the range scan's result, shared by land and by the fixtures that test the recipe. Clean is positive evidence, all of:
 // exit status 0; no `exit status 3` line (gitleaks' --exit-code 3, which `go run` reports that way); no gitleaks ERR/FTL/PNC log line and no
@@ -220,11 +221,15 @@ export function checkScanConfig(tree, blob, shipped = SHIPPED) {
   }
   return { ok: true };
 }
-// The environment make runs the range scan in: an allowlist, so the operator's MAKEFLAGS (make -i), GITLEAKS_CONFIG or git config
-// cannot switch the scan off. Only what the Go toolchain and git need is kept.
-const SCAN_ENV_KEEP = ['PATH', 'HOME', 'TMPDIR', 'GOPATH', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN'];
+// The environment the range scan runs in (git and `go run`): an allowlist, so the operator's GITLEAKS_CONFIG, GOFLAGS, GIT_DIR or git config
+// cannot change what it reads. PATH, HOME and TMPDIR are kept for the toolchain and git. A tracked go.work, or a go.mod with a `toolchain`
+// line, could otherwise make `go run` fetch and run another Go release (measured), so GOTOOLCHAIN is pinned to the installed one and
+// GOWORK is off; the module is named with an explicit version, so no tracked go.mod, vendor directory or replace line is consulted.
+const SCAN_ENV_KEEP = ['PATH', 'HOME', 'TMPDIR', 'GOPATH', 'GOCACHE', 'GOMODCACHE'];
 export const scanEnv = (env) => ({
   ...Object.fromEntries(SCAN_ENV_KEEP.filter((k) => env[k] !== undefined).map((k) => [k, env[k]])),
+  GOTOOLCHAIN: 'local',
+  GOWORK: 'off',
   GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_CONFIG_NOSYSTEM: '1',
 });

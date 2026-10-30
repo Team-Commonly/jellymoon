@@ -64,11 +64,12 @@ portable:
 
 # The only merge path (docs/development/landing.md): make land PR=<n> [ARGS=--dry-run]. Needs the JM_* env.
 land:
-	$(BUN) scripts/land.mjs $(PR) $(ARGS)
+	node scripts/land.mjs $(PR) $(ARGS)
 
 # Verifiers: the trust gate, then the merge-result preflight of PR=<n> and nothing else (no ledger, no pod).
-# Needs JM_REPO and JM_TRUSTED_LOGINS. An untrusted PR is refused before any of its code is fetched.
+# Needs JM_REPO and JM_TRUSTED_LOGINS. Run it from a clean checkout of main, never the PR's tree (its Makefile and scripts
+# would run before the trust gate decides). An untrusted PR is refused before any of its code is fetched.
 verify-preflight:
-	$(BUN) scripts/land.mjs $(PR) --preflight-only
+	node scripts/land.mjs $(PR) --preflight-only $(ARGS)
 
 preflight: portable check-gen test entropy secrets

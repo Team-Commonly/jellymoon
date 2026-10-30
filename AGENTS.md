@@ -43,13 +43,14 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
   and for protected paths (every changed path except `progress.md` and documentation files under `docs/`:
   `.md .html .svg .png .jpg .gif .webp`; a rename counts both sides) or an added `gitleaks:allow` line also the
   reviewer's pod verdict naming the PR and head. Verifiers run a PR's code only after the same trust gate:
-  `make verify-preflight PR=<n>`. The stack lands as one PR retargeted to `main`. CI is off by decision; land refuses
+  `make verify-preflight PR=<n>`, from a clean checkout of main. The stack lands as one PR retargeted to `main`. CI is off by decision; land refuses
   only if check runs exist on the head and one failed. Only the coordinator lands (`docs/development/landing.md`,
   `workflow.md`).
 - **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new
   worktree runs `./init.sh` first (it installs `.tools/`; the pre-commit hook fails without it), then
   `make hooks fence=1` to install the push fence; plain `make hooks` installs only the pre-commit. The
-  pre-commit runs a subset of preflight (portable, check-gen, entropy, secrets), not the tests.
+  pre-commit runs a subset of preflight (portable, check-gen, entropy, secrets), not the tests. That `./init.sh` is for the
+  loop's own worktrees; to review someone else's PR, never check it out and run `make` or `./init.sh` (`verifier.md`).
 - **Lessons** land in the same PR as a test, lint rule or doc. Never only in private memory.
 
 ## Map

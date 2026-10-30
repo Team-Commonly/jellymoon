@@ -13,6 +13,7 @@ const H2 = 'c'.repeat(40);
 const HEADER = 'pr\thead\tverdict\tby\twhen\tnote';
 const ledger = (...rows) => parseLedger([HEADER, ...rows.map((r) => r.join('\t'))].join('\n'));
 const row = (pr, head, verdict, by, note = '') => [pr, head, verdict, by, '2026-10-29T10:00:00Z', note];
+const throws = (f) => { try { f(); return false; } catch { return true; } };
 const entries = [{ name: 'Ada', username: 'ada' }, { name: 'Ben', username: 'ben' }];
 let t = 0;
 const msg = (username, content, o = {}) => ({ userId: { username }, content, createdAt: `2026-10-29T10:${String(++t).padStart(2, '0')}:00Z`, ...o });
@@ -68,6 +69,8 @@ const cases = [
     return [
       ['trust: same repo, trusted author, only trusted pushers', t().ok, true],
       ['trust: logins compare case-insensitively', t({ pr: { ...pr, author: 'LILY' }, pushers: ['Ada'] }).ok, true],
+      ['trust: a missing isCrossRepository field is untrusted', t({ pr: { author: 'lily' } }).ok, false],
+      ['trust: an empty push-access list refuses (the query went wrong)', t({ pushers: [] }).ok, false],
       ['trust: a cross-repository PR is refused', t({ pr: { ...pr, isCrossRepository: true } }).ok, false],
       ['trust: an untrusted PR author is refused', t({ pr: { ...pr, author: 'mallory' } }).ok, false],
       ['trust: a missing author is refused', t({ pr: { ...pr, author: undefined } }).ok, false],
@@ -90,7 +93,10 @@ const cases = [
     return [
       ['checkout: HEAD at main and clean is accepted', c().ok, true],
       ['checkout: HEAD not at main is refused', c({ head: H }).ok, false],
-      ['checkout: HEAD elsewhere is fine when main is not required', c({ head: H, needMain: false }).ok, true],
+      ['checkout: HEAD elsewhere is fine only under --bootstrap', c({ head: H, bootstrap: true }).ok, true],
+      ['checkout: a dirty tree under --bootstrap is refused', c({ head: H, bootstrap: true, porcelain: ' M Makefile' }).ok, false],
+      ['preflight-only: a non-main HEAD is refused (the PR tree must not run its own Makefile)', c({ head: H }).ok, false],
+      ['preflight-only: a dirty tree is refused', c({ porcelain: '?? GNUmakefile' }).ok, false],
       ['checkout: a dirty tree is refused', c({ porcelain: ' M scripts/land.mjs' }).ok, false],
       ['checkout: an untracked file is refused', c({ porcelain: '?? x' }).ok, false],
       ['checkout: a remote URL with userinfo is refused', c({ remoteV: `jm\thttps://tok@github.com/${R}.git (fetch)` }).ok, false],
@@ -99,7 +105,13 @@ const cases = [
       ['checkout: an http extraheader is refused', c({ config: 'http.https://github.com/.extraheader AUTHORIZATION: basic x' }).ok, false],
     ];
   })(),
+  // the ledger is never read loosely
+  ['ledger: a space-separated FAIL row makes the ledger unreadable', throws(() => parseLedger(`${HEADER}\n5 ${H} FAIL opus-verifier now x`)), true],
+  ['ledger: a short-sha FAIL row makes the ledger unreadable', throws(() => parseLedger(`${HEADER}\n${['5', 'abc1234', 'FAIL', 'opus-verifier', 'now', 'x'].join('\t')}`)), true],
+  ['ledger: a row with 7 columns is unreadable', throws(() => parseLedger(`${row(5, H, 'PASS', 'opus-verifier').join('\t')}\tx`)), true],
+  ['ledger: blank and # lines are skipped', parseLedger(`# note\n\n${row(5, H, 'PASS', 'opus-verifier').join('\t')}`).length, 1],
   // PR output is quoted
+  ['output: bidi overrides and line separators are stripped', quoteOutput('a\u202eb\u2066c\u2028d\u2029e'), 'preflight| abcde'],
   ['output: control characters are stripped, newline and tab kept', quoteOutput('a\u001b[2Jb\r\nc\td\u0007\n'), 'preflight| a[2Jb\npreflight| c\td'],
   ['output: a fake land line is marked', quoteOutput('dry run: would land #5'), 'preflight| dry run: would land #5'],
   // remotes
@@ -201,6 +213,9 @@ cases.push(
   ['land.mjs: refuses more than one PR number', /nums\.length !== 1/.test(landSrc), true],
   ['land.mjs: the preflight child has no stdin, its own session, quoted output and a group kill', /detached: true/.test(landSrc) && /stdio: \['ignore', 'pipe', 'pipe'\]/.test(landSrc) && /process\.kill\(-child\.pid/.test(landSrc) && /quoteOutput\(/.test(landSrc), true],
   ['land.mjs: the trust gate runs before anything is fetched', landSrc.indexOf('trustGate(pr);\n  const mainTip') > 0, true],
+  ['land.mjs: verify-preflight is held to the same checkout rule as land', landSrc.includes('checkoutGate(mainTip, bootstrap)'), true],
+  ['land.mjs: the preflight child has a wall-clock limit', /LIMIT_MS/.test(landSrc) && /setTimeout/.test(landSrc), true],
+  ['land.mjs: the trust gate runs again before the merge', landSrc.indexOf('trustGate(fresh)') < landSrc.indexOf("gh('pr', 'merge'") && landSrc.includes('trustGate(fresh)'), true],
   ['land.mjs: the base is re-read right before the merge', landSrc.indexOf('checkHead(viewPr(n), head)') < landSrc.indexOf("gh('pr', 'merge'"), true],
   ['land.mjs: TMPDIR is inside the throwaway dir', /TMPDIR: path\.join\(dir, 'tmp'\)/.test(landSrc), true],
 );

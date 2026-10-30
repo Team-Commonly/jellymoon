@@ -23,13 +23,18 @@ is refused.
 - **An outside PR is never executed here.** Land and `make verify-preflight` refuse it before fetching or running any
   of its code: `untrusted PR: not executed on this host; CI runs it. Re-author it through the loop to land it.`
 - **Why the macOS sandbox was removed.** Four rounds of verifiers escaped it (the Docker socket, the keychain, LaunchServices `open`, TIOCSTI tty injection, reads outside home plus TCP egress), so `sandbox-exec` on a full Go and Bun toolchain is not a boundary we can hold.
-- **Residual.** A GitHub App with `contents: write` could push to a branch and is not listed by the collaborators
-  endpoint. Install no such app on this repo.
+- **A trusted PR is trusted fully.** Its preflight runs as the operator and can read any file the operator can; the pod
+  token file is the sharp example. Nothing here contains code a trusted account wrote.
+- **Residuals the push-access query does not list.** A GitHub App with `contents: write`, a deploy key with write,
+  a ruleset or branch-protection bypass actor, an Actions token with `contents: write`, and a pending invitation that
+  is later accepted can all put commits on a same-repo branch. Also credentials in `url.<x>.insteadOf` or a git
+  credential helper, which the checkout check does not look for. Keep these empty on this repo and on the operator's
+  git config.
 
 ## Steps
 Each refuses with one line on any mismatch, and nothing merges until all pass:
-0. The trust gate (above), then the checkout: `HEAD` is main's tip and `git status --porcelain` is empty (with
-   `--bootstrap`, only the clean tree), no git remote URL carries userinfo, and no git config carries an
+0. The trust gate (above), then the checkout: `git status --porcelain` is empty and `HEAD` is main's tip (an explicit
+   `--bootstrap`, the first land of the gate, is the only exception, and only for HEAD), no git remote URL carries userinfo, and no git config carries an
    `http.*extraheader`.
 1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.
 2. The ledger at the exact head (below).
@@ -53,7 +58,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
 
 Re-running is safe: a merged PR with a `LANDED` row at its head exits 0 saying so; merged without one is recorded
 with a warning as `MERGED-UNVERIFIED` (see the ledger format). `--dry-run` runs every check and the preflight, merges nothing and writes no ledger row (git's own
-fetch and worktree bookkeeping and the land lock live in the git dir). A malformed token file is refused without
+fetch and worktree bookkeeping and the land lock live in the git dir). An unreadable ledger (a row that is not 6 tab columns with a 40-hex head) refuses; no row is skipped silently. A malformed token file is refused without
 echoing it, and no output ever contains the token.
 
 ## Environment (never committed)
@@ -104,7 +109,8 @@ protected, and so are `docs/x` to `scripts/x` and the reverse. One function, `to
 
 ## Verifiers use the same trust gate
 `make verify-preflight PR=<n>` (`node scripts/land.mjs <n> --preflight-only`) runs the trust gate, the head check and
-the merge-result preflight: no ledger, no pod, no merge. It needs `JM_REPO` and `JM_TRUSTED_LOGINS`. For an untrusted
+the merge-result preflight: no ledger, no pod, no merge. Run it from a clean checkout of main, never from the PR's tree,
+with the same checkout rule as land (`--bootstrap` is the one exception, for the bootstrap PR only). It needs `JM_REPO` and `JM_TRUSTED_LOGINS`. For an untrusted
 PR it refuses before fetching anything, and the verifier reads the CI logs and the code and runs nothing.
 
 ## Known limits

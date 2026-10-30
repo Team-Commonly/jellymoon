@@ -9,12 +9,14 @@ A verifier is a fresh-context subagent. It never sees the builder's reasoning. I
 It runs on a different model from the builder.
 
 ## What it does, in order
-1. **Reproduce.** Run `make verify-preflight PR=<n>` (needs `JM_REPO` and `JM_TRUSTED_LOGINS`; `landing.md`). It checks
-   the trust gate first: the same merge-result preflight land runs, and only for a same-repo PR whose author and every
-   push-capable account are trusted. For an untrusted PR it refuses before fetching; read the CI logs and the code,
-   run nothing, and report `verifier-blocked`. The bootstrap PR's verifiers run its own land code, which is trusted
-   under the same rule. Then the feature's `test` command, only for a trusted PR. A red result ends the review with
-   `verifier-failed`.
+1. **Reproduce.** From a clean checkout of main (never the PR's tree: its Makefile and scripts would run before the
+   trust gate decides), run `make verify-preflight PR=<n>` (needs `JM_REPO` and `JM_TRUSTED_LOGINS`; `landing.md`).
+   It checks the trust gate first, then runs the same merge-result preflight land runs, only for a same-repo PR whose
+   author and every push-capable account are trusted. For an untrusted PR it refuses before fetching; read the code
+   with `git show`, `git diff` or GitHub, and the CI logs, never a checkout followed by `make` or `./init.sh`, and
+   report `verifier-blocked`. The bootstrap PR's verifiers run its own land code with an explicit `--bootstrap`,
+   which is trusted under the same rule. Then the feature's `test` command, only for a trusted PR. A red result ends
+   the review with `verifier-failed`.
 2. **Acceptance.** Walk each step of the feature or brief against what the test actually asserts.
    A step that no assertion covers is a finding.
 3. **Review.** Apply Pocock `code-review` to the diff against base `main`. Correctness comes first; then

@@ -4,7 +4,7 @@
 // --dry-run writes no ledger row. PR code runs here only after the trust gate (checkTrust); the preflight is a
 // correctness check, not a security boundary.
 //   land.mjs <pr> [--dry-run] [--bootstrap]
-//   land.mjs <pr> --preflight-only   (verifiers: the trust gate and the merge-result preflight only; needs JM_REPO and JM_TRUSTED_LOGINS)
+//   land.mjs <pr> --preflight-only [--bootstrap]   (verifiers: the trust gate and the merge-result preflight only; needs JM_REPO and JM_TRUSTED_LOGINS)
 // Run it from a clean checkout of main: it reads the reviewer list from main's tip, never from the working tree.
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -54,18 +54,24 @@ const why = (e) => scrub(String(e.stderr || e.message).split('\n').find(Boolean)
 const BASE = ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=land', '-c', 'user.email=land@localhost'];
 
 // Runs ./init.sh (which runs make preflight) in the throwaway worktree: env -i, stdin /dev/null, a NEW session (no
-// controlling tty), output captured and quoted, and the whole process group killed when it returns.
+// controlling tty), output captured and quoted, a wall-clock limit, and the whole process group killed when it returns.
+const LIMIT_MS = 30 * 60 * 1000;
 function runInit(wt, env) {
   return new Promise((done) => {
     let text = '';
+    let over = false;
     const child = spawn('env', ['-i', ...Object.entries(env).map(([k, v]) => `${k}=${v}`), 'bash', '-c', './init.sh'], { cwd: wt, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const take = (b) => { if (text.length < 2e6) text += b.toString('utf8'); };
     child.stdout.on('data', take);
     child.stderr.on('data', take);
+    const kill = () => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* the group is already gone */ } };
+    const timer = setTimeout(() => { over = true; kill(); }, LIMIT_MS);
     const end = (code) => {
-      try { process.kill(-child.pid, 'SIGKILL'); } catch { /* the group is already gone */ }
+      clearTimeout(timer);
+      kill();
       if (text) console.error(quoteOutput(text));
-      done(code === 0 ? { ok: true } : { ok: false, reason: 'clean-shell ./init.sh (baseline preflight) failed on the merge result' });
+      if (over) return done({ ok: false, reason: `./init.sh did not finish in ${LIMIT_MS / 60000} minutes; killed` });
+      return done(code === 0 ? { ok: true } : { ok: false, reason: 'clean-shell ./init.sh (baseline preflight) failed on the merge result' });
     };
     child.on('error', () => end(-1));
     child.on('close', end);
@@ -153,22 +159,22 @@ async function decide(pr, mainTip, opts) {
 }
 
 const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
-const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only';
+const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only [--bootstrap]';
 
-// The checkout this runs from: credentials out of its git config; for a land, also HEAD == main's tip and a clean tree.
-function checkoutGate(mainTip, { needMain }) {
+// The checkout this runs from: a clean tree at main's tip (only --bootstrap may sit elsewhere), no credentials in its git config.
+function checkoutGate(mainTip, bootstrap) {
   const config = (() => { try { return out('git', ['config', '--get-regexp', 'extraheader']); } catch { return ''; } })();
-  const c = checkCheckout({ head: out('git', ['rev-parse', 'HEAD']), mainTip, porcelain: out('git', ['status', '--porcelain']), remoteV: out('git', ['remote', '-v']), config, needMain });
+  const c = checkCheckout({ head: out('git', ['rev-parse', 'HEAD']), mainTip, porcelain: out('git', ['status', '--porcelain']), remoteV: out('git', ['remote', '-v']), config, bootstrap });
   if (!c.ok) refuse(c.reason);
 }
 
 // Verifiers: the trust gate and the merge-result preflight, nothing else. No ledger, no pod, no merge.
-async function preflightOnly(n) {
+async function preflightOnly(n, bootstrap) {
   lock();
   const pr = viewPr(n);
   trustGate(pr);
   const mainTip = fetchRef('main');
-  checkoutGate(mainTip, { needMain: false });
+  checkoutGate(mainTip, bootstrap);
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
   const pf = await preflight(mainTip, pr.headRefOid.toLowerCase());
@@ -184,8 +190,8 @@ async function main() {
   const api = only ? { ok: true } : checkApi(process.env.JM_COMMONLY_API);
   if (!api.ok) refuse(api.reason);
   const nums = args.filter((a) => /^\d+$/.test(a));
-  if (nums.length !== 1 || args.some((a) => !/^\d+$/.test(a) && !FLAGS.includes(a)) || (only && args.length > 2)) refuse(USAGE);
-  if (only) return preflightOnly(nums[0]);
+  if (nums.length !== 1 || args.some((a) => !/^\d+$/.test(a) && !FLAGS.includes(a)) || (only && args.some((a) => a === '--dry-run'))) refuse(USAGE);
+  if (only) return preflightOnly(nums[0], args.includes('--bootstrap'));
   const n = nums[0];
   const opts = { bootstrap: args.includes('--bootstrap') };
   lock();
@@ -198,7 +204,7 @@ async function main() {
   }
   trustGate(pr);
   const mainTip = fetchRef('main');
-  checkoutGate(mainTip, { needMain: !opts.bootstrap });
+  checkoutGate(mainTip, opts.bootstrap);
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
   if (hasLand(mainTip) === opts.bootstrap) refuse(opts.bootstrap ? 'main already has scripts/land.mjs; --bootstrap is only for the first land of the gate' : 'main has no scripts/land.mjs yet; the first land of the gate needs --bootstrap and is judged by people');
@@ -213,7 +219,9 @@ async function main() {
   if (!moved.ok) refuse(moved.reason);
   const again = await decide(pr, mainTip, opts);
   if (!again.ok) refuse(`#${n}: ${again.reason} (changed before the merge; nothing merged)`);
-  const now = checkHead(viewPr(n), head); // --match-head-commit pins only the head: base and state are re-read too
+  const fresh = viewPr(n); // --match-head-commit pins only the head: the trust gate, base and state are re-read too
+  trustGate(fresh);
+  const now = checkHead(fresh, head);
   if (!now.ok) refuse(`${now.reason} (changed before the merge; nothing merged)`);
   gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
   const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';

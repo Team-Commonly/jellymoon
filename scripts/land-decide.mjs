@@ -7,12 +7,15 @@ const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'BOOTSTRAP'];
 const VERIFIER = /^(opus|sonnet|haiku|fable)-verifier$/;
 const ref = (v) => String(v).trim().replace(/^#/, '');
 
-// Rows are normalised (trim, case). The first line is dropped only if it IS the header.
+// Rows are normalised (trim, case). The first line is dropped only if it IS the header; blank and `#` lines are skipped. Any
+// other line must have exactly 6 tab columns and a 40-hex head, or the whole ledger is unreadable: a row is never skipped silently.
 export function parseLedger(text) {
-  const lines = text.split('\n').filter((l) => l.trim());
+  const lines = text.split('\n').filter((l) => l.trim() && !l.startsWith('#'));
   const rows = /^pr\t/i.test(lines[0] || '') ? lines.slice(1) : lines;
-  return rows.map((l) => {
-    const [pr = '', head = '', verdict = '', by = '', when = '', note = ''] = l.split('\t');
+  return rows.map((l, i) => {
+    const cols = l.split('\t');
+    if (cols.length !== 6 || !/^[0-9a-f]{40}$/i.test(cols[1].trim())) throw new Error(`ledger is unreadable: row ${i + 1} is not 6 tab-separated columns with a 40-hex head`);
+    const [pr, head, verdict, by, when, note] = cols;
     return { pr: ref(pr), head: head.trim().toLowerCase(), verdict: verdict.trim().toUpperCase(), by: by.trim().toLowerCase(), when: when.trim(), note: note.trim() };
   });
 }
@@ -181,7 +184,8 @@ export const parseLogins = (text) => [...new Set(String(text || '').split(',').m
 export function checkTrust({ pr, pushers, trusted }) {
   const no = (why) => ({ ok: false, reason: `${REFUSE} (${why})` });
   if (!trusted.length) return { ok: false, reason: 'JM_TRUSTED_LOGINS is not set; refusing to run any PR code' };
-  if (pr.isCrossRepository) return no('cross-repository');
+  if (pr.isCrossRepository !== false) return no('cross-repository, or not known to be same-repo');
+  if (!pushers.length) return no('the push-access list is empty, so the query went wrong');
   const author = String(pr.author || '').toLowerCase();
   if (!trusted.includes(author)) return no(`author '${author || 'unknown'}' is not trusted`);
   const stranger = pushers.map((l) => String(l).toLowerCase()).find((l) => !trusted.includes(l));
@@ -196,12 +200,13 @@ export function checkRuns(runs, total = runs.length) {
   return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${r.name} (${r.conclusion})`).join(', ')}` } : { ok: true };
 }
 
-// The land checkout: HEAD is main's tip and the tree is clean (the land runs the scripts in this tree). Credentials in the
+// The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere), because
+// the scripts in this tree run before the trust gate decides. Credentials in the
 // checkout's git config would travel into every fetch, so a remote URL with userinfo or an http extraheader refuses.
 const USERINFO = /^https?:\/\/[^/\s]*@|^[a-z+]+:\/\/[^/@\s]*:[^/@\s]*@/i;
-export function checkCheckout({ head, mainTip, porcelain, remoteV, config, needMain = true }) {
-  if (needMain && head !== mainTip) return { ok: false, reason: `this checkout is at ${head.slice(0, 8)}, not main's tip ${mainTip.slice(0, 8)}; land from a checkout of main` };
-  if (needMain && porcelain.trim()) return { ok: false, reason: 'this checkout has uncommitted or untracked files; land from a clean checkout of main' };
+export function checkCheckout({ head, mainTip, porcelain, remoteV, config, bootstrap = false }) {
+  if (!bootstrap && head !== mainTip) return { ok: false, reason: `this checkout is at ${head.slice(0, 8)}, not main's tip ${mainTip.slice(0, 8)}; land from a checkout of main` };
+  if (porcelain.trim()) return { ok: false, reason: 'this checkout has uncommitted or untracked files; land from a clean checkout of main' };
   if (remoteV.split('\n').some((l) => USERINFO.test(l.split(/\s+/)[1] || ''))) return { ok: false, reason: 'a git remote URL carries credentials (userinfo); remove them' };
   if (/^http\..*extraheader/im.test(config)) return { ok: false, reason: 'the git config carries an http extraheader (a credential); remove it' };
   return { ok: true };
@@ -212,4 +217,4 @@ export const addsAllowMarker = (diff) => diff.split('\n').some((l) => l.startsWi
 
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
-export const quoteOutput = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '').replace(/\n$/, '').split('\n').map((l) => `preflight| ${l}`).join('\n');
+export const quoteOutput = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '').replace(/\n$/, '').split('\n').map((l) => `preflight| ${l}`).join('\n');

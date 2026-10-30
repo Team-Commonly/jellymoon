@@ -13,7 +13,7 @@ export const scanArgv = (range) => ['run', GITLEAKS_MODULE, 'git', `--log-opts=-
 // Every path the range touches, listed by git itself (`git log -m --no-renames --name-status -z`, each commit announced by \x01<sha>): added,
 // modified and deleted paths, so both sides of a rename or copy appear, and every parent of a merge (-m). It reads NUL-separated records by
 // position (a status, then its path; a rename or copy status would carry two), so a path that looks like a header is never taken for one.
-export const NAME_STATUS = ['log', '-m', '--no-renames', '--format=%x01%H', '--name-status', '-z'];
+const NAME_STATUS = ['log', '-m', '--no-renames', '--format=%x01%H', '--name-status', '-z'];
 export function touchedPaths(listing) {
   const found = [];
   let sha = '';

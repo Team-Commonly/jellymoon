@@ -4,6 +4,7 @@
     "scripts/check-review-gate.mjs",
     "scripts/check-land.mjs",
     "scripts/check-land-e2e.mjs",
+    "scripts/check-land-scan.mjs",
     "scripts/land.mjs",
     "podcore/src/index.ts",
     "podcore/test/**/*.test.ts",

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"syscall"
@@ -84,6 +85,7 @@ func (l *logBuf) tail(n int) string {
 type server struct {
 	t          *testing.T
 	port       int
+	inspector  int // a second port the server may use for its debugger; never shared between servers
 	dir        string
 	cmd        *exec.Cmd
 	exited     chan struct{}
@@ -92,17 +94,24 @@ type server struct {
 	bootTook   time.Duration // from first start to the first 200 from /healthz
 }
 
-func freePort(t *testing.T) int {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("no free port: %v", err)
+// freePort returns a port nobody listens on, and never one in `not`.
+func freePort(t *testing.T, not ...int) int {
+	for {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("no free port: %v", err)
+		}
+		p := l.Addr().(*net.TCPAddr).Port
+		l.Close()
+		if !slices.Contains(not, p) {
+			return p
+		}
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
 }
 
 func startServer(t *testing.T) *server {
-	s := &server{t: t, port: freePort(t), dir: t.TempDir(), log: &logBuf{}}
+	port := freePort(t)
+	s := &server{t: t, port: port, inspector: freePort(t, port), dir: t.TempDir(), log: &logBuf{}}
 	t.Cleanup(func() {
 		s.kill()
 		if t.Failed() {
@@ -120,7 +129,7 @@ func (s *server) boot() {
 	root, _ := filepath.Abs("..")
 	cmd := exec.Command("sh", "-c", serverCmd)
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", s.port), "ENV=local", "JM_DATA_DIR="+s.dir)
+	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", s.port), fmt.Sprintf("INSPECTOR_PORT=%d", s.inspector), "ENV=local", "JM_DATA_DIR="+s.dir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdout, cmd.Stderr = s.log, s.log
 	if err := cmd.Start(); err != nil {
@@ -167,8 +176,19 @@ func (s *server) kill() {
 	if s.cmd == nil || s.cmd.Process == nil {
 		return
 	}
-	_ = syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL)
+	pgid := s.cmd.Process.Pid
+	_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	<-s.exited
+	// The sh we started is only the group leader. A server that forks (wrangler, then workerd) outlives it, so wait until
+	// no process is left in the group; a restart on the same port must not meet the old server still listening.
+	deadline := time.Now().Add(15 * time.Second)
+	for syscall.Kill(-pgid, 0) == nil {
+		if time.Now().After(deadline) {
+			s.t.Fatalf("processes of the server's group %d still run 15 s after kill -9", pgid)
+		}
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // crash is the injected restart: kill -9 of the process group, an optional hold with the server down

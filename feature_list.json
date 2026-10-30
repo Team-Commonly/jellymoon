@@ -232,7 +232,7 @@
       "id": "F18",
       "category": "client",
       "description": "A person uses the slice from the client chosen in the client options review",
-      "steps": ["defined after docs/design/client-options.md is reviewed with Sam"],
+      "steps": ["defined after docs/design/client-options.md is reviewed with the product owner"],
       "test": "TBD by the review",
       "blockedBy": "client options review (docs/design/client-options.md)",
       "passes": false
@@ -241,7 +241,7 @@
       "id": "F19",
       "category": "connector",
       "description": "An agent reads Linear through a pod grant without ever holding the Linear token",
-      "steps": ["defined after docs/design/connector-options.md is reviewed with Sam"],
+      "steps": ["defined after docs/design/connector-options.md is reviewed with the product owner"],
       "test": "TBD by the review",
       "blockedBy": "connector options review (docs/design/connector-options.md)",
       "passes": false

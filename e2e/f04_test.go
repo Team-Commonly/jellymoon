@@ -60,6 +60,37 @@ func postAll(s *sock, texts ...string) error {
 	return nil
 }
 
+// evict has the test entry drop the pod object's in-memory state, as an eviction does; hibernating sockets stay attached.
+func (w *world) evict() {
+	w.t.Helper()
+	w.c.do("POST", "/__test/evict/"+w.pod, "", nil, nil)
+}
+
+// evictSteps are F04's hibernation steps: POST /__test/evict/:pod, then a connected socket and a reconnect.
+func (w *world) evictSteps(p *stepper, head int64) {
+	// The test entry's POST /__test/evict/:pod makes the pod's Durable Object lose its in-memory state while its WebSockets stay attached.
+	p.step("the same holds after the Durable Object is evicted: a connected socket keeps receiving with no gap", func() error {
+		w.evict()
+		mk := w.sCara.mark()
+		if err := postAll(w.sBen, "evicted one", "evicted two"); err != nil {
+			return err
+		}
+		w.sCara.waitAfter(mk, func(f Frame) bool { return f.Seq == head+2 }, 5*time.Second)
+		if w.sCara.isDead() {
+			return fmt.Errorf("the eviction dropped the connected socket")
+		}
+		return wantReplay(w.sCara.snapshot(mk), head, "evicted one", "evicted two")
+	})
+	p.step("after the eviction a reconnect with subscribe{sinceSeq} replays exactly the missed events", func() error {
+		w.sCara.close()
+		if err := postAll(w.sBen, "evicted three", "evicted four"); err != nil {
+			return err
+		}
+		w.evict()
+		return wantReplay(w.replayed(w.cara.tok, "cara-evicted", head+2), head+2, "evicted three", "evicted four")
+	})
+}
+
 // TestF04: live fan-out, then a reconnect from sinceSeq with no gaps, then the same across a full restart.
 func TestF04(t *testing.T) {
 	needFake(t)
@@ -93,16 +124,17 @@ func TestF04(t *testing.T) {
 	p.step("it receives exactly the three missed events, in order", func() error {
 		return wantReplay(w.sCara.snapshot(0), first, "missed one", "missed two", "missed three")
 	})
-	// A Durable Object cannot be evicted from outside under `wrangler dev`, so the black-box substitute is a full
-	// restart (kill -9 of the server, same state dir) in place of hibernation. Hibernation itself is not asserted.
-	p.step("the same holds after a full restart of the Worker (substituting for Durable Object hibernation)", func() error {
-		w.sCara.close()
+	head := first + 3
+	w.evictSteps(p, head)
+	head += 4
+	// Extra: a full kill -9 restart of the Worker, with the state dir kept.
+	p.step("the same holds after a full restart of the Worker", func() error {
 		if err := postAll(w.sBen, "after one", "after two", "after three"); err != nil {
 			return err
 		}
 		w.crash(0)
 		w.setClock(w.clock)
-		return wantReplay(w.replayed(w.cara.tok, "cara-restart", first+3), first+3, "after one", "after two", "after three")
+		return wantReplay(w.replayed(w.cara.tok, "cara-restart", head), head, "after one", "after two", "after three")
 	})
 	p.count()
 	if p.ok != p.run {

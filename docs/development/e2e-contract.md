@@ -24,6 +24,7 @@ and wrangler do by default).
 | `POST /__test/session` `{name}` | 200 `{token, user}`: a `jmu_` user token and the user's Actor. No device flow. |
 | `POST /__test/clock` `{now}` | Sets the server clock, in unix ms. 200. |
 | `GET /__test/clock` | 200 `{now}` |
+| `POST /__test/evict/:pod` | The pod's object forgets everything it holds in memory and restores from storage, as a woken hibernated object does; its WebSockets stay attached. 200. Needed only by `TestF04`; a server with no such object may make it a no-op. |
 
 Clock rules, which every server under test must meet:
 
@@ -75,7 +76,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 |---|---|
 | `TestF02` | F02: the harness starts the server with a persisted state dir, `/healthz` answers 200 within 10 s, a failing step names itself and prints the last 20 events, and the run ends with the closing line. `TestStepPrinter` checks the printer alone, with a fake failing step. |
 | `TestF03` | F03: a user seeded through `POST /__test/session` (the contract's seed route) creates a pod, and the first frame on its pod WebSocket is `hello` with `headSeq` 0 and that user as the one owner. |
-| `TestF04` | F04: two members subscribe and both get the same `message.created` seq; one disconnects, three posts happen, and `subscribe{sinceSeq}` replays exactly those three in order; the same after a full kill -9 restart (a black-box suite cannot evict a Durable Object, so the restart stands in for hibernation). |
+| `TestF04` | F04: two members subscribe and both get the same `message.created` seq; one disconnects, three posts happen, and `subscribe{sinceSeq}` replays exactly those three in order; after `POST /__test/evict/:pod` a socket that stayed connected keeps receiving with no gap and a reconnect replays exactly the missed events; the same again after a full kill -9 restart. |
 | `TestF05` | F05: an invite is accepted and the new member's `hello` lists them; the same single-use invite returns 410 the second time; a non-member creating an invite gets 403. |
 | `TestF06` | F06: a member sends `task.create` with a registered agent as assignee, and every subscriber gets `task.created` with status `open` and that assignee, at one seq. |
 | `TestF07` | F07: ambient messages wake nobody; three assignments make one wake; a pending wake is re-sent on the heartbeat at exactly 60 s and not 1 ms before, acked or not (only a run claim consumes it); only the hosting computer is woken or re-woken. |

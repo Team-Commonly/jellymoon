@@ -67,6 +67,15 @@ export class PodDO implements Starter {
     this.exec({ type: 'boot', staleMs: 0 });
   }
 
+  /** For the test entry: forget everything held in memory and restore from storage, the way a woken object does. */
+  protected reload(): void {
+    this.state = emptyPod('');
+    this.meta = { name: '', createdAt: '', harness: {} };
+    this.saved = '';
+    this.armed = undefined;
+    this.restore();
+  }
+
   private put(k: string, v: string): number {
     const c = this.sql.exec('insert or replace into kv (k, v) values (?, ?)', k, v);
     c.toArray();

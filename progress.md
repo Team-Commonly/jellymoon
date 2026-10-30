@@ -10,6 +10,21 @@ goes in the PR.
 - **Next:** land #10 with `--bootstrap`.
 - **Surprising:** the old count (`rev-list --count`) matched gitleaks on every history the fixtures had because each commit added text; an empty commit was enough to make land refuse an innocent PR.
 
+## 2026-10-30 · pod creation, invites, replay and agent tasks proved (unit W1)
+- **Changed:** `TestF03`, `TestF05`, `TestF04` and `TestF06` in `e2e/`, each asserting every feature step by name through the step printer; F03 to F06 now pass. The Worker needed no fix. Review round: F06 checks both computer sockets; F04 asserts the eviction route's 200 and compares the poster's seqs with the replay; F05 checks the member list after each refusal and gains an expired-invite step (feature_list.json too); hello must carry `headSeq`; the bundle test pins the eviction to the test entry. `helloData`, `seedUser` and `firstHello` moved to `harness_test.go` (`world.session` calls `seedUser`). The e2e cap rose 1,900 to 2,660 (ADR 0001 note, entropy.json, stated total together).
+- **Evidence:** `make e2e-a` under a clean shell: the closing line reads `STEPS=33/33` at this head (it counts every step of every test; the number moves when a step is added); `make preflight` passes; mutants fail their tests: hello headSeq +1, invite uses not decremented, no membership check on invites, replay skipping one event, task.created to the sender only, task.created withheld from computers, eviction route renamed or removed, a spent invite adding the member, no expiry check, headSeq missing, poster's seq skewed after an eviction, eviction wired into the production entry.
+- **Next:** F08 onward.
+- **Surprising:** `ctx.abort()` drops every attached socket, so it is a crash and not a hibernation. F04's eviction steps use the test entry's `POST /__test/evict/:pod`, which drops the object's in-memory state and re-runs the restore path with the sockets still attached; a mutant that forgets a socket's identity in restore fails F04. The restart case stays as an extra step.
+
+## 2026-10-30 · the pod core's property tests get an explicit timeout (unit PT)
+- **Changed:** the four property tests in `podcore/test/properties.test.ts` (restart, seq, one-release, wake) run with a
+  60 s timeout instead of bun's 5 s default (the local `bun:test` type shim gains bun's optional third argument). No
+  assertion, seed count or step changed.
+- **Evidence:** `bun test podcore` 126 pass in 7.8 s at load average 38; `make preflight` under a clean shell.
+- **Next:** none.
+- **Surprising:** on a shared host the 500-seed runs took 7 to 19 s, so `make preflight` turned red with "timed out" and
+  no failed assertion, and a land refused a reviewed PR on the merge result.
+
 ## 2026-10-30 · review fixes in the Cloudflare adapter and the e2e suite (unit W0, round 2)
 - **Changed:** each dev server gets its own inspector port and the harness waits for the whole process group on kill. Every write route is validated against `gen/` (400 `invalid_input`, nothing dropped); a run's post now carries its summary, and fields the core has no place for (post kind/status other than fyi/done, needs, options, context, taskId, links, caveat; task-update note; run-end harnessVersion) are refused. The stale-ms knob is gone (staleMs is 0, heartbeats persisted); `TestKillMidLease` takes its "no release yet" mark before the clock moves; new `TestRestartPastDeadline`. Ids are fresh random bits, no counter. Invite codes are stored as SHA-256 only and the join link uses `PUBLIC_URL`. New `TestRunTokenOtherPod`. The purity rule covers all of `podcore/`. The closing line counts every step, and `make e2e-a` judges the real last line. Worker cap 1,550 (ADR 0001).
 - **Evidence:** twelve of twelve green over four rounds of three concurrent `make e2e-a` from three clones; `make preflight` three times under a clean shell. Mutants fail a gate: no validator on the message route, body limit 32,768, heartbeat save skipped, `boot` skipped after restore, monotonic ids, invite code stored in the clear, run-token pod check removed, a podcore test importing `worker/`, a deliberately failing step (`STEPS=14/16`).

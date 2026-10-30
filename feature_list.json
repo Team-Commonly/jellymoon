@@ -32,12 +32,12 @@
       "category": "pod",
       "description": "A test user creates a pod and receives hello over the pod WebSocket",
       "steps": [
-        "POST /__test/seed mints a user and returns a jmu_ token (local and preview builds only)",
+        "POST /__test/session mints a user and returns a jmu_ token (local and preview builds only)",
         "POST /v1/pods with that token creates a pod and returns its id",
         "GET /v1/pods/:pod/ws with the token upgrades and the first frame is hello with headSeq 0 and the user as owner"
       ],
       "test": "go test ./e2e -run TestF03",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F04",
@@ -51,7 +51,7 @@
         "the same holds after the Durable Object hibernates"
       ],
       "test": "go test ./e2e -run TestF04",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F05",
@@ -61,10 +61,11 @@
         "the owner creates an invite and a second user accepts it",
         "the second user's hello lists them as a member",
         "accepting the same single-use invite again returns 410",
+        "accepting an expired invite returns 410 and adds no member",
         "a non-member creating an invite gets 403"
       ],
       "test": "go test ./e2e -run TestF05",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F06",
@@ -76,7 +77,7 @@
         "all subscribers receive task.created with status open and the assignee set"
       ],
       "test": "go test ./e2e -run TestF06",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F07",

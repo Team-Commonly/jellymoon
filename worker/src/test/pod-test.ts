@@ -27,6 +27,13 @@ export class TestPodDO extends PodDO {
     return this.fixed;
   }
 
+  /** Drops every in-memory field and runs the restore path, as the constructor does when a hibernated object wakes. The sockets stay attached. */
+  private evict(): void {
+    this.fixed = undefined;
+    this.writes = undefined;
+    this.reload();
+  }
+
   override now(): number { return this.fixedNow() ?? Date.now(); }
 
   protected override alarmAt(): number | null { return this.fixedNow() === null ? super.alarmAt() : null; }
@@ -44,6 +51,7 @@ export class TestPodDO extends PodDO {
 
   override async fetch(req: Request): Promise<Response> {
     const path = new URL(req.url).pathname;
+    if (path === '/_in/evict') { this.evict(); return Response.json({ evicted: true }); }
     if (path === '/_in/stats') return Response.json(Object.fromEntries(this.writes ?? []));
     if (path === '/_in/alarm-fired') return Response.json({ at: this.sql.exec<{ v: string }>("select v from kv where k = 'alarm_fired'").toArray()[0]?.v ?? null });
     if (path === '/_in/clock') {

@@ -7,7 +7,8 @@ check is an API-level e2e. Terms are defined in `docs/GLOSSARY.md`; use them exa
 
 ## Start every session here
 1. `./init.sh` — dependencies, the baseline (`make preflight`) and the feature scoreboard. Red baseline first.
-2. Read `progress.md` (newest first) and `git log --oneline -15`.
+2. Read the newest entries in `progress/` (`ls -r progress/ | head -5`), `progress.md` for older history, and
+   `git log --oneline -15`.
 3. Take the first `feature_list.json` feature with `passes: false` and no `blockedBy`. One feature at a time.
 
 ## The loop: one skill per stage

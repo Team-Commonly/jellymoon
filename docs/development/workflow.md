@@ -7,7 +7,7 @@ Jellymoon is built by one long-running builder session, using the harness from A
 |---|---|
 | `feature_list.json` | Every slice feature, written as an end-to-end test. Only `passes` may change. |
 | `init.sh` | Brings up the environment, runs the baseline and prints the scoreboard. |
-| `progress.md` | The hand-off between sessions and across context compactions. |
+| `progress/` | The hand-off between sessions and across context compactions: one file per unit, named `YYYY-MM-DD-HHMM-<unit>.md` (UTC), so the newest sorts last. `progress.md` keeps the entries written before it. |
 | git log | The record. Small commits, one feature per PR. |
 
 ## Why each rule exists
@@ -21,8 +21,11 @@ Jellymoon is built by one long-running builder session, using the harness from A
 - **Verify at the API, not with unit tests.** The article saw agents mark features done on unit
   tests or a single curl. Here a feature passes only on its `test` command. For the slice, that is
   the Go e2e that drives the real Worker and daemon. Browser checks join when the client lands (F18).
-- **Compact at feature boundaries.** `progress.md` plus git carry the state, so a fresh context can
+- **Compact at feature boundaries.** `progress/` plus git carry the state, so a fresh context can
   resume without the transcript.
+- **One progress file per unit.** Units used to add their entry at the top of `progress.md`, so every
+  land left each other open PR conflicting there. Merging main moves a PR's head, and a moved head
+  needs a new review. Separate files never conflict.
 
 ## Stage skills
 The table in `AGENTS.md` maps each stage to one skill in `.agents/skills/`. They are vendored, not
@@ -62,7 +65,7 @@ merges only when all of these hold at the exact PR head:
   The docs are `docs/design/client-options.md` and `docs/design/connector-options.md`.
 - **After the review:**
   1. add the steps and test to the existing F18 or F19 entry, and clear `blockedBy`;
-  2. note in `progress.md` that the review set them.
+  2. note in a `progress/` entry that the review set them.
 
   This is the only time a feature's text changes, and only for these placeholders.
 

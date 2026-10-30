@@ -51,7 +51,7 @@
         "the same holds after the Durable Object hibernates"
       ],
       "test": "go test ./e2e -run TestF04",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F05",

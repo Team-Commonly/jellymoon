@@ -42,7 +42,7 @@ describe('claims', () => {
   });
 
   test('a heartbeat does not renew a run that has ended', () => {
-    const r = play([[claimA(), 0], [{ type: 'run_end', runId: RUN_A, outcome: 'completed' }, 10_000], [{ type: 'heartbeat', computerId: CMP_1 }, 20_000]]);
+    const r = play([[claimA(), 0], [{ type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'completed' }, 10_000], [{ type: 'heartbeat', computerId: CMP_1 }, 20_000]]);
     expect(r.state.claims).toEqual({});
   });
 });
@@ -96,14 +96,14 @@ describe('expiry', () => {
   test('nextDeadline is the earliest lease or run cap, and null with nothing to do', () => {
     expect(nextDeadline(world())).toBe(7_200_000);
     expect(nextDeadline(play([[claimA(), 1000]]).state)).toBe(61_000);
-    const ended = play([[{ type: 'run_end', runId: RUN_A, outcome: 'completed' }, 1], [{ type: 'run_end', runId: RUN_B, outcome: 'completed' }, 1], [{ type: 'run_end', runId: RUN_C, outcome: 'completed' }, 1]]);
+    const ended = play([[{ type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'completed' }, 1], [{ type: 'run_end', runId: RUN_B, computerId: CMP_1, outcome: 'completed' }, 1], [{ type: 'run_end', runId: RUN_C, computerId: CMP_2, outcome: 'completed' }, 1]]);
     expect(nextDeadline(ended.state)).toBeNull();
   });
 });
 
 describe('run end and token cap', () => {
   test('run_end releases the run claims with cause run_ended', () => {
-    const r = play([[claimA(), 0], [claimA(T2), 0], [{ type: 'run_end', runId: RUN_A, outcome: 'completed' }, 5000]]);
+    const r = play([[claimA(), 0], [claimA(T2), 0], [{ type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'completed' }, 5000]]);
     expect(released(r.out)).toEqual([{ taskId: T1, runId: RUN_A, cause: 'run_ended' }, { taskId: T2, runId: RUN_A, cause: 'run_ended' }]);
     expect(r.state.runs[RUN_A].outcome).toBe('completed');
   });
@@ -139,7 +139,7 @@ describe('recourse: task_release', () => {
   });
 
   test('releasing an unclaimed task is a no-op that returns the task', () => {
-    const r = play([[releaseBy(U_STRANGER.id), 1000]]);
+    const r = play([[releaseBy(U_OWNER.id), 1000]]);
     expect(events(r.out)).toEqual([]);
     const reply = lastReply(r.out);
     expect(reply?.kind === 'reply' && reply.ok && reply.result).toEqual(world().tasks[T1]);
@@ -171,7 +171,7 @@ describe('recourse: run_stop', () => {
   });
 
   test('stopping an ended run returns its outcome unchanged and emits nothing', () => {
-    const base = play([[{ type: 'run_end', runId: RUN_A, outcome: 'completed' }, 1]]);
+    const base = play([[{ type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'completed' }, 1]]);
     const r = play([[stopBy(U_OWNER.id), 2]], base.state);
     const reply = lastReply(r.out);
     expect(reply?.kind === 'reply' && reply.ok && reply.result).toEqual({ runId: RUN_A, outcome: 'completed' });
@@ -182,7 +182,7 @@ describe('recourse: run_stop', () => {
 
 describe('members events', () => {
   test('every claim that ends emits exactly one claim.released, whatever the cause', () => {
-    const ends: Cmd[] = [{ type: 'tick' }, releaseBy(U_OWNER.id), { type: 'run_end', runId: RUN_A, outcome: 'failed' }, stopBy(U_OWNER.id)];
+    const ends: Cmd[] = [{ type: 'tick' }, releaseBy(U_OWNER.id), { type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'failed' }, stopBy(U_OWNER.id)];
     ends.forEach((end) => {
       const r = play([[claimA(), 0], [end, end.type === 'tick' ? 60_000 : 1000]]);
       expect(released(r.out).length).toBe(1);

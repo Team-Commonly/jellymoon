@@ -3,6 +3,7 @@ const pad = (n: number, w = 2): string => String(n).padStart(w, '0');
 
 /** Milliseconds since the epoch to RFC 3339 UTC, by civil-calendar arithmetic. */
 export function isoOf(ms: number): string {
+  if (!Number.isInteger(ms)) throw new Error('isoOf: now must be an integer number of milliseconds');
   const days = Math.floor(ms / DAY);
   const rem = ms - days * DAY;
   const z = days + 719_468;

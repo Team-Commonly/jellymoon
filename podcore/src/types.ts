@@ -1,7 +1,7 @@
 // The pod core's data: plain JSON state, tagged commands, and the ordered output list (ADR 0003).
 import type {
-  Actor, ActorId, AgentId, AnyEvent, ClaimRunResponse, ComputerId, ErrorBody, EventOf, PodId, RunId, RunOutcome,
-  RunStopOutput, RunWake, Task, TaskClaimOutput, TaskId, WakeId, WakeReason, WakeRefs,
+  Actor, ActorId, AgentId, AnyEvent, ClaimRunResponse, ComputerId, ErrorBody, EventOf, Message, MessageId, PodId, RunId, RunOutcome,
+  RunStopOutput, RunWake, Task, TaskClaimOutput, TaskId, TaskKind, TaskStatus, WakeId, WakeReason, WakeRefs,
 } from '../../gen/ts/protocol';
 
 export interface Run {
@@ -30,14 +30,18 @@ export interface PodState {
   podId: PodId;
   /** The last event number handed out. */
   seq: number;
+  /** Every person in the pod, owners included. Only a member may call as a user. Empty until `pod_create`. */
+  members: Actor[];
   owners: Actor[];
+  /** Counts the wake ids the core derives itself (task assigned, mention). */
+  wakeN: number;
   /** Tasks as stored: the claim lives in `claims`, so a task here never carries one. */
   tasks: Record<TaskId, Task>;
   runs: Record<RunId, Run>;
   /** At most one per task; the key makes exclusivity structural. leaseUntil is in milliseconds. */
   claims: Record<TaskId, { runId: RunId; leaseUntil: number }>;
-  /** `${runId}|${taskId}`: how a run lost a claim. Only an expired claim can be restored. */
-  lost: Record<string, 'expired' | 'released'>;
+  /** How a run lost a claim, by run then task. Only an expired claim can be restored; a person's release cannot. */
+  lost: Record<RunId, Record<TaskId, 'expired' | 'released'>>;
   agents: Record<AgentId, Agent>;
   wakes: Record<AgentId, Wake>;
 }
@@ -50,16 +54,22 @@ export type Cmd =
   | { type: 'op'; runId: RunId; taskId?: TaskId }
   | { type: 'heartbeat'; computerId: ComputerId }
   | { type: 'task_release'; caller: Caller; taskId: TaskId; reason?: string }
-  | { type: 'run_end'; runId: RunId; outcome: RunOutcome }
+  | { type: 'run_end'; runId: RunId; computerId: ComputerId; outcome: RunOutcome }
   | { type: 'run_stop'; caller: Caller; runId: RunId; reason?: string }
-  | { type: 'change'; kind: 'task_assigned' | 'mention' | 'ruling'; agentId: AgentId; refs: WakeRefs; wakeId: WakeId }
+  | { type: 'pod_create'; ownerId: ActorId; ownerName: string }
+  | { type: 'member_add'; userId: ActorId; name: string }
+  | { type: 'task_create'; caller: Caller; taskId: TaskId; title: string; kind: TaskKind; assignee?: ActorId; body?: string }
+  | { type: 'task_update'; caller: Caller; taskId: TaskId; status?: TaskStatus; assignee?: ActorId }
+  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; threadOf?: MessageId }
+  | { type: 'boot'; staleMs: number }
+  | { type: 'change'; kind: 'ruling'; agentId: AgentId; refs: WakeRefs; wakeId: WakeId }
   | { type: 'wake_ack'; wakeId: WakeId; computerId: ComputerId }
   | { type: 'run_claim'; wakeId: WakeId; computerId: ComputerId; runId: RunId }
   | { type: 'agent_register'; agentId: AgentId; ownerId: ActorId; computerId: ComputerId; agentName?: string; ownerName?: string }
   | { type: 'tick' };
 
 export type RunClaimed = Pick<ClaimRunResponse, 'runId' | 'expiresAt'> & Omit<RunWake, 'wakeId' | 'agentId'>;
-export type Result = TaskClaimOutput | Task | RunStopOutput | RunClaimed | null;
+export type Result = TaskClaimOutput | Task | RunStopOutput | RunClaimed | Message | null;
 
 export type Out =
   | { kind: 'event'; event: AnyEvent }

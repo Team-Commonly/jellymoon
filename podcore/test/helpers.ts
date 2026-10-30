@@ -2,7 +2,7 @@ import type { Actor } from '../../gen/ts/protocol';
 import { apply } from '../src';
 import type { Cmd, Out, PodState } from '../src';
 
-const id = (prefix: string, n: number): string => `${prefix}_${String(n).padStart(26, '0')}`;
+export const id = (prefix: string, n: number): string => `${prefix}_${String(n).padStart(26, '0')}`;
 const actor = (kind: Actor['kind'], prefix: string, n: number, displayName: string): Actor => ({ kind, id: id(prefix, n), displayName });
 
 const POD = id('pod', 1);
@@ -19,23 +19,24 @@ export const AG3 = id('agt', 3);
 export const AG_UNREG = id('agt', 9);
 export const wak = (n: number): string => id('wak', n);
 export const runN = (n: number): string => id('run', 100 + n);
+export const POD_ID = POD;
 export const TASKS = [id('tsk', 1), id('tsk', 2), id('tsk', 3)];
 
 /** Three runs: A and B on computer 1 (owned by the agent owner), C on computer 2. Three open tasks. */
 export function world(): PodState {
   const run = (rid: string, n: number, computerId: string) => ({
-    id: rid, agent: actor('agent', 'agt', n, `Agent ${n}`), owner: U_AGENT_OWNER, computerId, startedAt: 0, status: 'active' as const,
+    id: rid, agent: actor('agent', 'agt', n, `agent-${n}`), owner: U_AGENT_OWNER, computerId, startedAt: 0, status: 'active' as const,
   });
   const task = (tid: string, n: number) => ({
     id: tid, podId: POD, title: `Task ${n}`, kind: 'chore' as const, status: 'open' as const, assignee: id('agt', 1),
     createdBy: U_OWNER, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   });
   return {
-    podId: POD, seq: 0, owners: [U_OWNER],
+    podId: POD, seq: 0, owners: [U_OWNER], members: [U_OWNER, U_AGENT_OWNER], wakeN: 0,
     runs: { [RUN_A]: run(RUN_A, 1, CMP_1), [RUN_B]: run(RUN_B, 2, CMP_1), [RUN_C]: run(RUN_C, 3, CMP_2) },
     tasks: Object.fromEntries(TASKS.map((t, i) => [t, task(t, i + 1)])),
     claims: {}, lost: {}, wakes: {},
-    agents: Object.fromEntries([[1, CMP_1], [2, CMP_1], [3, CMP_2]].map(([n, cmp]) => [id('agt', n as number), { actor: actor('agent', 'agt', n as number, `Agent ${n}`), owner: U_AGENT_OWNER, computerId: cmp as string }])),
+    agents: Object.fromEntries([[1, CMP_1], [2, CMP_1], [3, CMP_2]].map(([n, cmp]) => [id('agt', n as number), { actor: actor('agent', 'agt', n as number, `agent-${n}`), owner: U_AGENT_OWNER, computerId: cmp as string }])),
   };
 }
 

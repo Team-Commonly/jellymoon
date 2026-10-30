@@ -1,5 +1,5 @@
 // Wakes and run start. A wake is written only for an addressed change; one agent has at most one pending wake.
-import type { ComputerId, WakeReason, WakeRefs } from '../../gen/ts/protocol';
+import type { AgentId, ComputerId, WakeId, WakeReason, WakeRefs } from '../../gen/ts/protocol';
 import { RUN_CAP_MS } from './claims';
 import { fail, ok, push } from './emit';
 import { isoOf } from './time';
@@ -10,7 +10,6 @@ type Of<T extends Cmd['type']> = Extract<Cmd, { type: T }>;
 /** An un-acked wake is re-sent on a heartbeat once it is this old (>=, not >). */
 export const WAKE_RESEND_MS = 60_000;
 
-const REASON: Record<Of<'change'>['kind'], WakeReason> = { task_assigned: 'task_assigned', mention: 'mention', ruling: 'decision_ruled' };
 const REF_KEYS = ['taskId', 'messageId', 'decisionId'] as const;
 
 /** The schema holds one id per kind of ref, so on a clash the earlier ref stays. */
@@ -23,19 +22,27 @@ function send(c: Ctx, computerId: ComputerId, w: Wake): void {
   push(c, computerId, 'run.wake', { wakeId: w.id, agentId: w.agentId, reason: w.reason, refs: w.refs });
 }
 
-/** An unregistered agent has no computer to wake, so its change is dropped, not held (ADR 0003). */
+/**
+ * The one wake writer. An unregistered agent has no computer to wake, so its change is dropped, not held (ADR 0003).
+ * A pending wake absorbs the change; otherwise a new one is written under `wakeId`, or a counter-derived id.
+ */
+export function writeWake(c: Ctx, agentId: AgentId, reason: WakeReason, refs: WakeRefs, wakeId?: WakeId): void {
+  const agent = c.s.agents[agentId];
+  if (agent === undefined) return;
+  const pending = c.s.wakes[agentId];
+  if (pending !== undefined) return mergeRefs(pending.refs, refs);
+  const own: WakeRefs = {};
+  mergeRefs(own, refs);
+  c.s.wakeN += 1;
+  const id = wakeId ?? `wak_${String(c.s.wakeN).padStart(26, '0')}`;
+  const w: Wake = { id, agentId, reason, refs: own, acked: false, sentAt: c.now };
+  c.s.wakes[agentId] = w;
+  send(c, agent.computerId, w);
+}
+
+/** A ruling on an agent's own ask. Assignments and mentions are derived by the task and message commands. */
 export function changeCmd(c: Ctx, cmd: Of<'change'>): void {
-  const agent = c.s.agents[cmd.agentId];
-  if (!Object.hasOwn(REASON, cmd.kind) || agent === undefined) return ok(c);
-  const pending = c.s.wakes[cmd.agentId];
-  if (pending !== undefined) mergeRefs(pending.refs, cmd.refs);
-  else {
-    const refs: WakeRefs = {};
-    mergeRefs(refs, cmd.refs);
-    const w: Wake = { id: cmd.wakeId, agentId: cmd.agentId, reason: REASON[cmd.kind], refs, acked: false, sentAt: c.now };
-    c.s.wakes[cmd.agentId] = w;
-    send(c, agent.computerId, w);
-  }
+  if (cmd.kind === 'ruling') writeWake(c, cmd.agentId, 'decision_ruled', cmd.refs, cmd.wakeId);
   ok(c);
 }
 

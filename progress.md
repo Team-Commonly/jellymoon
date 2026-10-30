@@ -4,6 +4,9 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · pod core fixes and freeze (unit P11)
+- **Changed:** `podcore/` settles on one timeline stamped by deadline, records lost=released for a person only, gains `pod_create`, `member_add`, `task_create`, `task_update`, `message_post`, `boot`; run callers and members are gated; **Evidence:** `make preflight`, `bun test podcore` (5 properties x 500 seeds, 6 mutations red); **Next:** freeze `podcore/` and `schema/` until the stack spike verdict; **Surprising:** `TaskUpdateInput` has no assignee, so the core accepts one the schema cannot yet send.
+
 ## 2026-10-29 · wakes and run start in the pod core (unit P10)
 - **Changed:** `podcore/` gains wakes (addressed-only, coalescing, 60 s resend), `run_claim`, agent registry and `run.stop` re-send; **Evidence:** `bun test podcore` (54 tests, 5 properties x 500 seeds, 3 mutations red); **Next:** F06/F07 adapter; **Surprising:** `WakeRefs` holds one id per kind, so coalescing keeps the first ref.
 
@@ -160,3 +163,11 @@ goes in the PR.
 - **Held:** the CLI binary name (`commonly` in F08/F15) and the npm scope wait for the trademark check.
 - **Surprising:** the org is on GitHub Free, so a private repo gets no rulesets or merge queue.
   Until that is decided, the coordinator merges only on green CI plus a ledger verdict.
+
+## Server stack tripwires (watched from day one)
+- any claim.released{expired} earlier than last renewal + 60 s, in any environment
+- more than 10 min of unplanned downtime in a month
+- storage rows written per pod-day above 1.5x the projection in docs/development/
+- any change to podcore/ or the protocol proposed for billing or platform reasons
+- ops hours above 8 h/month for two months running
+Record a hit here with its date and evidence, and raise it to the coordinator.

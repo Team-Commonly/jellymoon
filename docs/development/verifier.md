@@ -44,4 +44,4 @@ GATE: PASS | GATE: FAIL
   writes no verdict the report does not carry.
 - Every PR still needs the review's pod verdict at the same head, posted by the operator (one review, no separate reviewer; the accepted ids are operator env `JM_VERDICT_REVIEWERS`)
   (`landing.md`). The secret scans only refuse, never waive.
-- The verdict covers secrets in what the scanners skip: added-then-deleted blobs, lockfiles, `node_modules`, binaries and images, and commit metadata (headers, author and committer fields, file names, a message after a NUL). Read the range for them (`landing.md`, Known limits).
+- The verdict covers secrets in what the scanners skip: added-then-deleted blobs in allowlisted paths (`node_modules`, `bower_components`, `gitleaks.toml`), lockfiles and `go.sum` (added-then-deleted text blobs elsewhere ARE read by the range scan), binaries and images, and commit metadata (headers, author and committer fields, file names, a message after a NUL). Read the range for them (`landing.md`, Known limits).

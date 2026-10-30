@@ -32,7 +32,7 @@ const readLedger = () => parseLedger(fs.existsSync(IO.env.JM_LEDGER) ? fs.readFi
 const appendLedger = (pr, head, verdict, by, note) => writeLedger(IO.env.JM_LEDGER, [pr, head, verdict, by, new Date().toISOString(), note], { dry: DRY });
 function viewPr(n) {
   const pr = JSON.parse(gh('pr', 'view', String(n), '--repo', REPO, '--json', 'url,number,state,baseRefName,headRefName,headRefOid,createdAt,isCrossRepository,author'));
-  if (!String(pr.url).includes(`github.com/${REPO}/pull/${n}`)) refuse(`#${n} resolved to ${pr.url}, not ${REPO}`);
+  if (pr.url !== `https://github.com/${REPO}/pull/${n}`) refuse(`#${n} resolved to ${pr.url}, not ${REPO}`);
   return pr;
 }
 // One land at a time per clone (two clones can land at once): an mkdir lock in the git common dir; see acquireLock.
@@ -124,6 +124,7 @@ async function podMessages(since) {
     if (!res.ok) refuse(`pod messages: HTTP ${res.status}`);
     let msgs;
     try { msgs = await res.json(); } catch (e) { return refuse(`pod messages: unreadable reply (${e.name})`); }
+    if (!Array.isArray(msgs)) refuse('pod messages: the reply is not a list of messages');
     const { fresh, stuck } = takePage(seen, msgs, 200);
     if (stuck) refuse('pod messages: a page boundary could hide a message; cannot prove no older FAIL');
     if (!fresh.length) return all;

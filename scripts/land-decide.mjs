@@ -55,7 +55,7 @@ const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at) || 0;
 // author id is a listed reviewer's. The latest such message per reviewer id decides (messages arrive newest first, so on a
 // tie the lower index is the newer one); text is never an identity.
 export function checkPodVerdict(messages, { pr, head, entries }) {
-  if (!entries.length) return { ok: false, reason: 'JM_VERDICT_REVIEWERS is not set; a protected change needs the reviewer verdict and land cannot know whose it is' };
+  if (!entries.length) return { ok: false, reason: 'JM_VERDICT_REVIEWERS is not set; every change needs the reviewer verdict and land cannot know whose it is' };
   const byUser = new Map(entries.map((e) => [e.id, e.name]));
   const first = `jellymoon#${ref(pr)} ${head.toLowerCase()}`;
   const latestBy = new Map();

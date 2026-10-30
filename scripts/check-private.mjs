@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
 // Allow-lists, each with a reason and a clean case below.
-const EMAIL_OK = /@(users\.noreply\.github\.com|example\.(com|org|net)|evil\.com)$/i; // GitHub noreply; reserved or obviously synthetic domains
+const EMAIL_OK = /@(users\.noreply\.github\.com|example\.(com|org|net)|[a-z0-9-]+\.(example|invalid))$/i; // GitHub noreply; RFC 2606 reserved domains only
 // A remote's userinfo is allowed only as the exact synthetic values the tests use: `git@` (the scp form), `tok@` and `u:p@` in a URL.
 // Any other userinfo may be a credential or a personal address, so it stays a hit.
 const SYNTHETIC_USERINFO = new Map([['git', ''], ['tok', '://'], ['p', '://u:']]); // user -> what must precede it
@@ -83,7 +83,9 @@ const CASES = [
   ['email: userinfo at another host is not allowed', j('https://tok@', 'gmail.com/o/r'), 'email'],
   ['email: a github.com address that is not a remote', j('someone@', 'github.com'), 'email'],
   ['allowed: reserved example domain', j('a@', 'example.org'), null],
-  ['allowed: obviously synthetic domain', j('http://localhost:80@', 'evil.com'), null],
+  ['allowed: a reserved .example domain', j('http://localhost:80@', 'attacker.example'), null],
+  ['allowed: a reserved .invalid domain', j('a@', 'host.invalid'), null],
+  ['email: a real registrable domain is not synthetic', j('http://localhost:80@', 'evil.com'), 'email'],
   ['allowed: all-zero 24-hex id', '0'.repeat(24), null],
   ['allowed: documented test prefix', j('deadbeef', '0123456789abcdef'), null],
   ['allowed: RFC section', j('RFC 6749 ', '§', '4.1'), null],

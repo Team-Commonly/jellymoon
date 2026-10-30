@@ -41,6 +41,10 @@ only in the code.
   the refusal path disagreeing with the handler (renewal, unauthorized/forbidden, run_stop, then a stray `caller` field
   read on types that have none). Fixing instances never converged. Ask for a single derivation and a differential test
   that runs both paths on mutated input from the start.
+- A scanner cannot prove absence. Never let a clean scan WAIVE a review; a scan may only REFUSE. Four rounds went to making
+  gitleaks read everything (images; NUL text and allowlisted paths; content sniffing; fragment cuts) so that "inert" PRs
+  could land without the verdict. Each round found another blind spot, and each one was a bypass. The fix was
+  subtraction: every land needs the verdict, and scans are defence in depth.
 - Never let a scanner's own file-type detection decide what gets scanned. Land lost three rounds to gitleaks blind spots in
   turn (images, then NUL text and allowlisted paths, then content sniffing of PDF/ELF/zip magic). The gate decides
   "text" with its own strict rule, makes everything else protected, and writes text with a fixed prefix so no magic matches.

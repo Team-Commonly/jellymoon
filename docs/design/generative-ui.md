@@ -21,7 +21,7 @@ The core is small: one schema file, a validator for the `x-rules`, seven compone
 
 ## 2. What "OpenUI" is: three projects use the name
 
-Commonly v3's history shows cards built on `@openuidev/lang-core` and `@openuidev/react-lang` (both pinned at 1.0.1). Those packages come from **thesysdev/openui** (Thesys), which is the partner. The other two projects are unrelated:
+Commonly v3's history shows cards built on `@openuidev/lang-core` and `@openuidev/react-lang` (both pinned at 1.0.1). Those packages come from **thesysdev/openui** (Thesys). The other two projects are unrelated:
 
 - **thesysdev/openui:** MIT, "The Open Standard for Generative UI" ([repo](https://github.com/thesysdev/openui)). Its centre is OpenUI Lang, "a compact, streaming-first language for model-generated UI". Components are declared with `defineComponent({ name, description, props: z.object(...) })` and grouped by `createLibrary`. A system prompt is generated from the library, and `<Renderer>` parses the model's output as it streams ([react-lang README](https://github.com/thesysdev/openui/tree/main/packages/react-lang)). The CLI can also emit JSON Schema from a library. It also ships `@openuidev/a2ui`, an A2UI v1.0 client. `Query`/`Mutation` bindings call a `toolProvider` that "run[s] in the browser" ([queries-mutations doc](https://github.com/thesysdev/openui/blob/main/docs/content/docs/openui-lang/queries-mutations.mdx)). `react-lang` declares `react >=19` as a peer dependency.
 - **wandb/openui:** Apache-2.0. It turns a prompt into a live HTML page ([repo](https://github.com/wandb/openui)), so it is free-form markup, which our constraint rules out.

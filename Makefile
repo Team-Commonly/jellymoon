@@ -84,8 +84,10 @@ verify-preflight:
 	node scripts/land.mjs $(PR) --preflight-only $(ARGS)
 
 # Tracked files carry nothing private (scripts/check-private.mjs holds patterns only).
-private: node_modules
+private:
 	$(BUN) scripts/check-private.mjs
+	@# an unmutated judge of the exit path: the check must refuse a planted hit
+	@printf 'TASK-%s\n' 5 > .planted-hit.tmp; if $(BUN) scripts/check-private.mjs .planted-hit.tmp >/dev/null 2>&1; then rm -f .planted-hit.tmp; echo 'private: a planted hit was not refused'; exit 1; fi; rm -f .planted-hit.tmp
 
 # Before the repo goes public, and in CI: every ref, every commit (-m so merges count), plus the tracked tree (one scan per top-level entry, so untracked tools are not read). A clone that carries
 # other repositories' refs narrows it: make secrets-all SCAN_REFS="HEAD --remotes=<remote>/".

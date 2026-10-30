@@ -50,9 +50,6 @@ jobs:
   private:
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    env:
-      # Empty on fork pull requests, where GitHub withholds secrets; the check then says the names class was skipped.
-      JM_PRIVATE_NAMES: ${{ secrets.JM_PRIVATE_NAMES }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -61,6 +58,10 @@ jobs:
         with:
           bun-version-file: .tool-versions
       - name: Nothing private in tracked files (the deny check)
+        # Only this step sees the names list. It is empty on fork pull requests, where GitHub withholds secrets; the check
+        # then says the names class was skipped. The check prints `file:line: class`, never the matched text.
+        env:
+          JM_PRIVATE_NAMES: ${{ secrets.JM_PRIVATE_NAMES }}
         run: make private
 
   secrets:
@@ -74,8 +75,6 @@ jobs:
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
-      - name: Fetch every remote branch
-        run: git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
       - name: Full history of all branches (merge commits included) and the tracked tree (gitleaks)
         run: make secrets-all
 
@@ -94,8 +93,11 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -euo pipefail
+          commits=$(git rev-list --no-merges "$BASE..$HEAD")
+          if [ -z "$commits" ]; then echo "::error::no commits found in $BASE..$HEAD"; exit 1; fi
           fail=0
-          for c in $(git rev-list --no-merges "$BASE..$HEAD"); do
+          for c in $commits; do
             author=$(git log -1 --format='%an <%ae>' "$c")
             if ! git log -1 --format=%B "$c" | grep -qxF "Signed-off-by: $author"; then
               echo "::error::$c has no 'Signed-off-by: $author' line (use git commit -s)"; fail=1

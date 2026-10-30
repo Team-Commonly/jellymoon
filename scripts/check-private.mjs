@@ -1,9 +1,10 @@
 // The deny check: tracked files must not carry anything private (operator paths, personal emails, internal ids, cloud
 // identifiers, internal note labels, citations of unpublished documents). It holds PATTERNS only: a literal private
 // value here would leak what it guards, and every case below uses a synthetic sample. Names, handles, project ids,
-// project numbers and other values with no safe pattern belong in the names list instead: an operator supplies it as a
+// project numbers, titles of named private documents and other values with no safe pattern belong in the names list instead: an operator supplies it as a
 // regex in JM_PRIVATE_NAMES (CI passes a repository secret; it is empty on fork pull requests, and the run then says the
-// class was skipped). What the check is for and how to run it: CONTRIBUTING.md, "The deny check".
+// class was skipped). The check never prints matched text, only `file:line: class`, because a CI log masks a secret only
+// as a whole string. What the check is for and how to run it: CONTRIBUTING.md, "The deny check".
 // Run: bun scripts/check-private.mjs  (cases first, then every tracked text file).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -14,7 +15,7 @@ const HEX24_OK = /^(0{24}|deadbeef[0-9a-f]{16})$/; // all zeros, or the document
 const PUBLIC_STANDARD = /(?:\bRFC ?\d+|\bOAuth(?: 2\.\d)?(?: spec)?)\s*$/; // a section mark is allowed after a public standard named in the same line
 // Machine-generated or vendored files are not scanned here (a hash can look like an id, a licence header carries a
 // third party's email). gitleaks still scans every one of them.
-const SKIPPED = /^(?:\.agents\/|go\.sum$|bun\.lock$)|\.lock$/;
+const SKIPPED = /^(?:\.agents\/|go\.sum$|bun\.lock$|package-lock\.json$|pnpm-lock\.yaml$)|\.lock$/;
 
 const CLASSES = [
   { name: 'operator path', re: /(?:\/Users\/[A-Za-z]|(?<!\w)~\/[A-Za-z.]|\/private\/tmp\b|(?<![\w:.])\/home\/[a-z][\w.-]*\/\w)/g },
@@ -25,7 +26,7 @@ const CLASSES = [
   { name: 'cloud account id', re: /(?:account[_ -]?id["'=: ]+[0-9a-f]{32}\b|arn:aws:[a-z0-9-]*:[\w-]*:\d{12}\b)/gi },
   { name: 'ledger id', re: /\(D\d{3}[),;]|(?<![\w#+/])D\d{3}:/g },
   { name: 'task label', re: /\bTASK-\d+\b/g }, // no safe narrowing: a public tracker can use the same shape, so such a hit is reworded
-  { name: 'memo reference', re: /\b(?:[Ll]ocal|[Ii]nternal|[Ss]tack|[Rr]esearch) memo\b|\bmemo [A-HJ-Z]\b/g },
+  { name: 'memo reference', re: /\bmemo [A-HJ-Z]\b/g }, // the lettered form only; a named document goes in the names list,
   { name: 'section mark', re: /§\s*\d/g, ok: (m, line, at) => PUBLIC_STANDARD.test(line.slice(0, at)) },
 ];
 
@@ -61,7 +62,6 @@ const CASES = [
   ['ledger id: parenthesised', j('shipped (D', '999).'), 'ledger id'],
   ['ledger id: with colon', j('D', '999: decided'), 'ledger id'],
   ['task label (kept: no safe narrowing)', j('Fixes TASK', '-12 upstream'), 'task label'],
-  ['memo: kind word', j('stack ', 'memo'), 'memo reference'],
   ['memo: lettered', j('memo', ' Q'), 'memo reference'],
   ['section mark after spec', j('spec ', '§', '9'), 'section mark'],
   ['section mark, bare', j('the ', '§', '9.1 envelope'), 'section mark'],
@@ -82,6 +82,12 @@ const CASES = [
   ['clean: a camera model', 'Nikon D850', null],
   ['clean: a lowercase d and digits', j('d', '999: x'), null],
   ['clean: base64', 'x+D923/y', null],
+  ['clean: ledger shape after #', '#D923: x', null],
+  ['clean: ledger shape after +', 'x+D923: y', null],
+  ['clean: ledger shape after a word', 'XD923: y', null],
+  ['clean: ~/ after a word', j('a~', '/b'), null],
+  ['clean: /home after a colon', j('x:/ho', 'me/u/y'), null],
+  ['clean: /home after a dot', j('v1./ho', 'me/u/y'), null],
   ['clean: React.memo', 'React.memo a component', null],
   ['clean: first-person memo', 'In this memo I argue', null],
   ['clean: a web route', j('GET /ho', 'me/feed'), null],
@@ -97,49 +103,70 @@ function failedCases(cases, classes) {
   for (const [name, text, want, own] of cases) {
     const got = scan(text, own ?? classes);
     const ok = want === null ? got.length === 0 : got.length > 0 && got.every((h) => h.cls === want);
-    if (!ok) bad.push(`case failed: ${name} (wanted ${want ?? 'clean'}, got ${JSON.stringify(got)})`);
+    // label and classes only: the sample text and the matched text are never printed
+    if (!ok) bad.push(`case failed: ${name} (wanted ${want ?? 'clean'}, got ${[...new Set(got.map((h) => h.cls))].join(', ') || 'clean'})`);
   }
   return bad;
 }
 
-// Every problem as a message; no cases means the check ran nothing, which is a problem too.
+// Every problem as a message, `file:line: class` for a tree hit; no cases means the check ran nothing, which is a problem too.
 function run({ cases, files, classes }) {
   const problems = cases.length === 0 ? ['no cases ran'] : failedCases(cases, classes);
   for (const [f, text] of files) {
-    if (!SKIPPED.test(f)) for (const h of scan(text, classes)) problems.push(`${f}:${h.line}: ${h.cls}: ${h.text}`);
+    if (!SKIPPED.test(f)) for (const h of scan(text, classes)) problems.push(`${f}:${h.line}: ${h.cls}`);
   }
   return problems;
 }
 
-const HIT = j('TASK', '-5');
-const META = [ // the runner itself
-  ['a wrong wanted class fails', run({ cases: [['x', HIT, 'email']], files: [], classes: CLASSES }).length > 0],
-  ['a wanted hit that is clean fails', run({ cases: [['x', 'plain', 'email']], files: [], classes: CLASSES }).length > 0],
-  ['a clean case that hits fails', run({ cases: [['x', HIT, null]], files: [], classes: CLASSES }).length > 0],
-  ['a planted tree hit fails', run({ cases: [['x', 'plain', null]], files: [['a.md', HIT]], classes: CLASSES }).length > 0],
-  ['no cases fails', run({ cases: [], files: [], classes: CLASSES }).length > 0],
-  ['good input passes', run({ cases: [['x', 'plain', null]], files: [['a.md', 'plain']], classes: CLASSES }).length === 0],
-  ['vendored and generated files are skipped', ['bun.lock', 'go.sum', '.agents/skills/x.md', 'a/b.lock'].every((f) => run({ cases: [['x', 'plain', null]], files: [[f, HIT]], classes: CLASSES }).length === 0)],
-  ['a source file is not skipped', run({ cases: [['x', 'plain', null]], files: [['scripts/a.mjs', HIT]], classes: CLASSES }).length === 1],
-  ['the names class is built only when the list is supplied', namesFrom({}) === null && namesFrom({ JM_PRIVATE_NAMES: 'q' }) !== null],
-];
-
-function trackedText() {
-  const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter(Boolean);
-  return files.flatMap((f) => {
+// The files named on the command line, else every tracked file.
+function readText(paths = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter(Boolean)) {
+  return paths.flatMap((f) => {
     let buf;
     try { buf = fs.readFileSync(f); } catch { return []; } // a deleted or unreadable path is not text
     return buf.includes(0) ? [] : [[f, buf.toString('utf8')]];
   });
 }
 
-function main() {
-  const names = namesFrom(process.env);
+// Returns the exit code. Everything it reads or prints is injectable, so META can drive it over a fixture.
+function main({ env = process.env, files, meta, cases = CASES, log = console.log, error = console.error } = {}) {
+  const names = namesFrom(env);
   const classes = names ? [...CLASSES, names] : CLASSES;
-  const metaBad = META.filter(([, ok]) => !ok).map(([n]) => `runner check failed: ${n}`);
-  const problems = [...metaBad, ...run({ cases: CASES, files: trackedText(), classes })];
-  if (problems.length > 0) { console.error(`${problems.join('\n')}\ncheck-private: ${problems.length} problem(s); fix the text, or extend a pattern or allow-list with a reason`); process.exit(1); }
-  console.log(`check-private: ${CASES.length + META.length} cases ok; tracked files clean${names ? '' : ' (names class skipped: JM_PRIVATE_NAMES unset)'}`);
+  const tree = files ?? readText(process.argv.length > 2 ? process.argv.slice(2) : undefined);
+  const unread = !files && process.argv.length <= 2 && !tree.some(([f]) => f === 'scripts/check-private.mjs') ? ['the tree read did not include this script'] : [];
+  const checks = meta ?? runnerChecks();
+  const metaBad = checks.filter(([, ok]) => !ok).map(([n]) => `runner check failed: ${n}`);
+  const problems = [...metaBad, ...(tree.length === 0 ? ['no tracked files were read'] : []), ...unread, ...run({ cases, files: tree, classes })];
+  if (problems.length > 0) { error(`${problems.join('\n')}\ncheck-private: ${problems.length} problem(s); fix the text, or extend a pattern or allow-list with a reason`); return 1; }
+  log(`check-private: ${cases.length + checks.length} cases ok; ${tree.length} tracked files clean${names ? '' : ' (names class skipped: JM_PRIVATE_NAMES unset)'}`);
+  return 0;
 }
 
-if (import.meta.main) main();
+const HIT = j('TASK', '-5');
+const PLAIN = [['a.md', 'plain']];
+const quiet = { log() {}, error() {}, meta: [] };
+const lines = (opts) => { const out = []; const code = main({ ...quiet, ...opts, log: (m) => out.push(m), error: (m) => out.push(m) }); return { code, out }; };
+function runnerChecks() { // the runner and main() themselves
+  const R = (cases, files) => run({ cases, files, classes: CLASSES });
+  const clean = [['x', 'plain', null]];
+  const secret = lines({ env: { JM_PRIVATE_NAMES: j('zorb', 'lax') }, files: [['a.md', j('hello ', 'Zorblax')]] });
+  const secretCase = R([['lbl', j('hello ', 'Zorblax'), 'email']], []).concat(R([['lbl', j('a@', 'gmail.com'), null]], []));
+  return [
+    ['a wrong wanted class fails', R([['x', HIT, 'email']], []).length > 0],
+    ['a wanted hit that is clean fails', R([['x', 'plain', 'email']], []).length > 0],
+    ['a clean case that hits fails', R([['x', HIT, null]], []).length > 0],
+    ['a planted tree hit fails', R(clean, [['a.md', HIT]]).length > 0],
+    ['no cases fails', R([], []).length > 0],
+    ['good input passes', R(clean, PLAIN).length === 0],
+    ['vendored and generated files are skipped', ['bun.lock', 'go.sum', 'package-lock.json', 'pnpm-lock.yaml', '.agents/skills/x.md', 'a/b.lock'].every((f) => R(clean, [[f, HIT]]).length === 0)],
+    ['a source file is not skipped', R(clean, [['scripts/a.mjs', HIT]]).length === 1],
+    ['the names class is built only when the list is supplied', namesFrom({}) === null && namesFrom({ JM_PRIVATE_NAMES: 'q' }) !== null],
+    ['main passes on a clean tree', lines({ files: PLAIN, cases: [['x', 'plain', null]] }).code === 0],
+    ['main fails on one planted hit', lines({ files: [...PLAIN, ['b.md', HIT], ['c.md', 'plain']], cases: [['x', 'plain', null]] }).code !== 0],
+    ['main fails on one hit among many clean files', lines({ files: [...Array.from({ length: 50 }, (_, i) => [`f${i}.md`, 'plain']), ['z.md', HIT]], cases: [['x', 'plain', null]] }).code !== 0],
+    ['main fails when a runner check fails', lines({ files: PLAIN, cases: [['x', 'plain', null]], meta: [['x', false]] }).code !== 0],
+    ['main fails on an empty file list', lines({ files: [], cases: [['x', 'plain', null]] }).code !== 0],
+    ['a tree hit prints file:line: class and not the matched name', secret.code !== 0 && secret.out.some((l) => l.includes('a.md:1: private name')) && !secret.out.some((l) => /zorblax/i.test(l))],
+    ['a failed case prints no sample text', secretCase.length === 2 && !secretCase.some((l) => /zorblax|gmail/i.test(l))],
+  ];
+}
+if (import.meta.main) process.exit(main());

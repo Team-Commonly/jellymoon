@@ -27,7 +27,7 @@ The first `feature_list.json` feature with `passes: false` and no `blockedBy`, o
 - A new dependency or module needs a short note in `docs/adr/`.
 
 ## The deny check
-`make preflight` runs `scripts/check-private.mjs`, which fails on private-looking text in tracked files: operator paths, personal emails, internal ids, cloud identifiers, internal note labels and section marks (`§`) that cite no public standard. Names, handles and project ids have no safe pattern: a maintainer supplies them in the `JM_PRIVATE_NAMES` environment variable, and without it that class is skipped.
+`make preflight` runs `scripts/check-private.mjs`, which fails on private-looking text in tracked files: operator paths, personal emails, internal ids, cloud identifiers, internal note labels and section marks (`§`) that cite no public standard. Names, handles and project ids have no safe pattern: a maintainer supplies them in the `JM_PRIVATE_NAMES` environment variable, and without it that class is skipped. The check never prints matched text, only `file:line: class`. On a false positive, reword the text; if the pattern is wrong for honest input, narrow it in `scripts/check-private.mjs` with a clean case, in the same pull request.
 
 ## Licence
 Core is Apache-2.0 (`LICENSE`); contributions are accepted under it. `ee/` is under its own commercial licence

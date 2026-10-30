@@ -108,7 +108,7 @@ SDK touches that one file, and a REST upstream never loads it.
 
 Columns: option | licence (verified 2026-10-29) | stars / last push | self-host | replaces | fit | notes.
 
-| Option | Licence | Stars / last push | Self-host | Replaces | Fit (Workers+DO+TS, cmr_) | Notes |
+| Option | Licence | Stars / last push | Self-host | Replaces | Fit (Workers+DO+TS, jmr_) | Notes |
 |---|---|---|---|---|---|---|
 | Cloudflare Agents SDK [1] | MIT | 5.9k / 2026-10-28 | n/a (library) | MCP client, OAuth client, token store | Native; tokens in DO SQLite | Adopt. 0.x churn. No per-tool hook documented |
 | workers-oauth-provider [2] | MIT | 1.9k / 2026-10-27 | n/a (library) | OAuth provider for our `/mcp` | Native | Provider side only |

@@ -64,7 +64,7 @@
         "a non-member creating an invite gets 403"
       ],
       "test": "go test ./e2e -run TestF05",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F06",

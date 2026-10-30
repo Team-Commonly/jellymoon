@@ -275,13 +275,18 @@ async function run(args, hold) {
   if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
   say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);
 }
+// The real run seam: status, stdout and stderr of a finished command, on success as well as failure. status is null when the command was killed
+// by a signal or never started. The range scan is read from this stderr, so it must not be dropped on a zero exit.
+export const realRun = (cmd, args, opts = {}) => {
+  const r = spawnSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26, ...opts });
+  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+};
 // The CLI: the real I/O. Ctrl-C and kill run the exit handlers that kill the preflight's process group and release the lock.
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   process.on('SIGINT', () => process.exit(130));
   process.on('SIGTERM', () => process.exit(143));
   process.on('SIGHUP', () => process.exit(129));
   const exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
-  const run = (cmd, args, opts = {}) => { const r = spawnSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26, ...opts }); return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }; }; // status is null when killed by a signal or never started
-  main({ exec, run, fetch, spawn, kill: process.kill, env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
+  main({ exec, run: realRun, fetch, spawn, kill: process.kill, env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
     .catch((e) => { console.error(`land: refused: ${e.message}`); process.exit(1); });
 }

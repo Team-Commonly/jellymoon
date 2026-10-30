@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { main } from './land.mjs';
+import { main, realRun } from './land.mjs';
 
 const [MAIN, HEAD, TREE, MERGED, OTHER] = ['1', '2', '3', '4', '5'].map((c) => c.repeat(40));
 const REPO = 'Team-Commonly/jellymoon';
@@ -130,6 +130,8 @@ await t('a zero exit with no output at all (make -s printed nothing): refused as
 await t('a zero exit that scanned fewer commits than the range holds: refused as a scan failure', { count: 4, scanned: 3 }, refusedScan);
 await t('a zero exit that scanned an empty range while the land would merge commits: refused as a scan failure', { scanned: 0 }, refusedScan);
 await t('a zero exit with the count line printed twice: refused as a scan failure', { scanErr: cleanScan(3) + '10:11AM INF 3 commits scanned.\n' }, refusedScan);
+const node = (code) => realRun(process.execPath, ['-e', code]);
+cases.push(['the real run seam keeps stdout and stderr on a zero exit', JSON.stringify(node("console.log('o'); console.error('e')")), JSON.stringify({ status: 0, stdout: 'o\n', stderr: 'e\n' })], ['the real run seam returns the status and stderr of a failing command without throwing', JSON.stringify(node("console.error('bad'); process.exit(2)")), JSON.stringify({ status: 2, stdout: '', stderr: 'bad\n' })], ['the real run seam gives a null status for a command that never started', realRun('/nonexistent-jm-command', []).status, null]);
 await t('JM_VERDICT_REVIEWERS with no valid entry is malformed, refused before the token read and the pod fetch', { env: { JM_VERDICT_REVIEWERS: 'bad,:x' } }, (r) => no(r, /JM_VERDICT_REVIEWERS is malformed/) && r.w.pod.length === 0 && r.w.calls.length === 0);
 await t('a username equal to a listed id, with no _id, is not the reviewer', { msgs: [{ ...NOTE, userId: { username: 'id-ada' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('an _id that is an array holding the listed id is not the reviewer', { msgs: [{ ...NOTE, userId: { _id: ['id-ada'], username: 'x' } }] }, (r) => no(r, /no accepted reviewer's pod message/));

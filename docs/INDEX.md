@@ -20,5 +20,7 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `design/protocol.md` | Protocol review: what the schema decides, the open questions and recommendations |
 | `design/connector-options.md` | Connectors options paper (OSS-first): Linear read through a pod grant, the write gate |
 | `design/client-options.md` | Client strategy options paper: web-first slice, four screens |
-| `design/ux-concepts.html` | Six interaction paradigms (Round table included) as clickable prototypes on one scenario, with verdicts. Exploration only: the client direction is open until the maintainers review it (F18) |
-| `design/generative-ui.md` | Generative UI options paper: a fixed, schema-declared card catalogue, with every number cited |
+| `design/ux-concepts.html` | Six interaction paradigms (Round table included) as clickable prototypes on one scenario, with verdicts. Exploration only: the direction picked from it is `night-shift.html`; the client itself stays open until the maintainers review it (F18) |
+| `design/generative-ui.md` | Generative UI paper: a fixed card catalogue, validated and grounded server-side, rendered with OpenUI |
+| `design/openui-upstream-issue.md` | Draft issue for OpenUI (data-only Renderer input, strict parse). Not posted; needs review |
+| `design/night-shift.html` | Preview: Night shift and Day shift themes, the pod Floor (pose = lease state), Round table, Inbox |

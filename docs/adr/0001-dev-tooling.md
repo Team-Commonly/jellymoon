@@ -14,7 +14,7 @@ None of them ships in a runtime artifact.
 | knip 6.41.0 | Unused files, exports and dependencies on the TS side | ts-prune (unmaintained) |
 | dependency-cruiser 18.6.0 | TS module boundaries and cycles | Hand-written import greps |
 | staticcheck v0.8.2 (`go run`) | Go unused code and correctness lints | golangci-lint: one more binary to pin, more config |
-| gitleaks v8.30.1 (`go run`) | Secret scan of the full history on every preflight, and of a PR's commit range on land with `--ignore-gitleaks-allow`. It does not scan images (svg, png, jpg, gif, webp) in git mode, so those are never inert | Hand-written regexes miss token formats |
+| gitleaks v8.30.1 (`go run`) | Secret scan of the full history on every preflight, and of a PR's commit range on land with `--ignore-gitleaks-allow`. It skips binaries (git's own test: a NUL in the first 8000 bytes, or a `binary`/`-diff` attribute), images, and its own allowlisted paths (`node_modules`, `bower_components`, `gitleaks.toml`). So land protects every binary change, and scans the content of inert files a second time under neutral names (`gitleaks dir`, no config from the PR) | Hand-written regexes miss token formats |
 | Node 20 or newer (land's runtime, not pinned) | `scripts/land.mjs` runs under `node`, never bun, so bun does not auto-load a `.env` from the checkout; land refuses to start on an older Node | bun: loads `.env` and `bunfig.toml` from the cwd into the environment |
 | deadcode, x/tools v0.51.0 (`go run`) | Unreachable Go functions from `main`; starts enforcing when a main package exists | — |
 
@@ -29,7 +29,7 @@ The LOC budget for the slice is a deliberate choice to stay small:
 
 | Area | Cap |
 |---|---|
-| core (`schema/`, `scripts/`) | 1,800 |
+| core (`schema/`, `scripts/`) | 2,000 |
 | worker | 4,000 |
 | daemon | 3,500 |
 | e2e | 1,500 |
@@ -40,3 +40,4 @@ That is under 11k hand-written lines. Agent-written comparables grew without bou
 2026-10-30: core cap 1,500 → 1,650, land security tests, P08 r9.
 2026-10-30: core cap 1,650 → 1,750, land security tests, P08 r10.
 2026-10-30: core cap 1,750 → 1,800, land security tests, P08 r11.
+2026-10-30: core cap 1,800 → 2,000, land I/O seam and end-to-end land cases, P08 r12.

@@ -1,7 +1,7 @@
 // Pure decisions behind scripts/land.mjs (docs/development/landing.md). Every function takes parsed data and
 // returns { ok, reason } (or a plain value); the shell-outs live in land.mjs. Tests: scripts/check-land.mjs.
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'BOOTSTRAP'];
 const VERIFIER = /^(opus|sonnet|haiku|fable)-verifier$/;
@@ -247,7 +247,9 @@ export function mergeResult(run, mainTip, head) {
   // added and removed inside the PR is invisible to the merge result. -m shows merge commits against each parent.
   const history = run(['-c', 'diff.external=', 'log', '-p', '-m', '-U0', '--no-ext-diff', '--no-textconv', '--no-color', '--format=', `${mainTip}..${head}`]);
   const treePatch = diff('-U0');
-  return { files: filesFromRaw(diff('--raw', '-M')), treePatch, patch: `${treePatch}\n${history}` };
+  // Git's own verdict on binary: a NUL in the first 8000 bytes, or a `binary`/`-diff` attribute. `-\t-` in --numstat. The scanner skips these.
+  const binary = diff('--numstat').split('\n').some((l) => l.startsWith('-\t-\t'));
+  return { tree, files: filesFromRaw(diff('--raw', '-M')), binary, treePatch, patch: `${treePatch}\n${history}` };
 }
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
@@ -262,17 +264,32 @@ export const checkNode = (version, min = NODE_MIN) => (Number(String(version).sp
   : { ok: false, reason: `land needs Node ${min} or newer; this is Node ${version}` });
 
 // The throwaway preflight dir and its git worktree go away on every exit path: normal return, a signal (the handlers call exit), a crash.
-export function trackThrowaway(dir, wt) {
-  const git = (...a) => { try { execFileSync('git', a, { stdio: 'ignore' }); } catch { /* already gone */ } };
-  const clean = () => { try { execFileSync('chmod', ['-R', 'u+w', dir], { stdio: 'ignore' }); } catch { /* gone */ } git('worktree', 'remove', '--force', wt); git('worktree', 'prune'); removeTree(dir); };
+export function trackThrowaway(dir, wt, run) {
+  const git = (...a) => { try { run('git', a); } catch { /* already gone */ } };
+  const clean = () => { try { run('chmod', ['-R', 'u+w', dir]); } catch { /* gone */ } git('worktree', 'remove', '--force', wt); git('worktree', 'prune'); removeTree(dir); };
   process.on('exit', clean);
   return () => { process.off('exit', clean); clean(); };
 }
 // Does this PR need the reviewer's pod verdict? A protected path, a gitleaks:allow marker anywhere in its history, or a secret that
 // gitleaks finds once markers are ignored (`hides`).
-export const needsVerdict = ({ files, tree, patch, hides }) => touchesProtected(files, tree) || addsAllowMarker(patch) || hides;
+export const needsVerdict = ({ files, tree, patch, hides, binary = false }) => binary || touchesProtected(files, tree) || addsAllowMarker(patch) || hides;
+// Inert files are scanned by CONTENT at the merge result, written under neutral names (<dir>/inert/<n>.txt) and scanned with no config
+// from the PR: the scanner skips binaries and its own allowlisted paths (node_modules, bower_components, gitleaks.toml), so a path
+// inside a blind spot must not be able to carry a secret. blob(path) is the file's content at the merge result; scan(dir) is true when clean.
+function inertScan(merged, names, blob, scan) {
+  const inert = merged.files.filter((f) => f.modes[1] !== '000000' && !touchesProtected([f], names));
+  if (!inert.length) return true;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-inert-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'inert'));
+    inert.forEach((f, i) => fs.writeFileSync(path.join(dir, 'inert', `${i}.txt`), blob(f.filename)));
+    return scan(path.join(dir, 'inert'));
+  } finally { removeTree(dir); }
+}
 // A dry run decides everything and merges nothing.
 export const mergeAction = ({ dryRun }) => (dryRun ? 'stop' : 'merge');
 // The ledger note for a landed PR: GitHub's merge commit must have the tree that was tested. A mismatch (main or the base moved in the
 // window between the last re-read and the merge) cannot be undone, but it is recorded and shouted instead of going unseen.
 export const landedNote = (sha, tested, merged) => (tested === merged ? sha : `${sha} TREE-MISMATCH tested ${tested} merged ${merged}`);
+// Did the neutral-name scan find a secret in a PR that no other rule protects? (A PR already protected needs no second look.)
+export const hiddenInInert = (merged, names, blob, scan) => !needsVerdict({ files: merged.files, tree: names, patch: merged.patch, binary: merged.binary, hides: false }) && !inertScan(merged, names, blob, scan);

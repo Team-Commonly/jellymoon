@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight
+.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range secrets-dir hooks preflight
 
 tools:
 	scripts/tools.sh
@@ -28,6 +28,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-fixtures.mjs
 	$(BUN) scripts/check-review-gate.mjs
 	$(BUN) scripts/check-land.mjs
+	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
 
 test-go:
@@ -55,6 +56,10 @@ secrets:
 # land only: secrets in a commit range, ignoring gitleaks:allow markers (RANGE=<main tip>..<head>).
 secrets-range:
 	$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --redact --no-banner .
+
+# land only: a directory of inert files copied under neutral names (DIR=<dir>); no config from the PR, markers ignored.
+secrets-dir:
+	$(GO) run $(GITLEAKS) dir --ignore-gitleaks-allow --redact --no-banner $(DIR)
 
 # Per worktree: pre-commit runs the fast gates; fence=1 also blocks pushes (worker worktrees).
 hooks:

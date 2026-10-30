@@ -43,7 +43,7 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
   and for protected paths (every changed path except `progress.md` and documentation files under `docs/`:
   `.md .html`, matched on the lowercased path; a rename counts both sides) or an added `gitleaks:allow` line also the
   reviewer's pod verdict naming the PR and head. Verifiers run a PR's code only after the same trust gate:
-  `make verify-preflight PR=<n>`, from a clean checkout of main. The stack lands as one PR retargeted to `main`. CI is off by decision; land refuses
+  `make verify-preflight PR=<n>`, from a clean checkout of main; never check out a PR and run make (the one exception is the bootstrap PR, `docs/development/verifier.md`). The stack lands as one PR retargeted to `main`. CI is off by decision; land refuses
   only if check runs exist on the head and one failed. Only the coordinator lands (`docs/development/landing.md`,
   `workflow.md`).
 - **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new

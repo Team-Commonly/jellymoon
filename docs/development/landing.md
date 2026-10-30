@@ -31,8 +31,9 @@ is refused.
   is later accepted can all put commits on a same-repo branch. Also credentials in `url.<x>.insteadOf` or a git
   credential helper, which the checkout check does not look for. Keep these empty on this repo and on the operator's
   git config.
-- **GitHub Apps are not logins.** Four org-wide GitHub App installations (claude, cursor, chatgpt-codex-connector, sentry)
-  hold `contents:write` on this repo. An app can push to a trusted author's same-repo branch, and the trust gate checks
+- **GitHub Apps are not logins.** Eight org GitHub App installations hold `contents:write`. Four are installed on all repos
+  (claude, cursor, chatgpt-codex-connector, sentry). Four are installed on selected repos (coderabbitai, commonly-tools,
+  latchkey-app, mintlify), and which repos is unknown, so assume this one. (A ninth, claude-design-import, is read-only.) An app can push to a trusted author's same-repo branch, and the trust gate checks
   logins, not apps, so `verify-preflight` would run that commit. This stays a known hole until an org owner restricts
   those installations.
 - **A trusted account can carry an outsider's commits.** It can push an outsider's commits onto a same-repo branch, and
@@ -48,18 +49,21 @@ is refused.
 
 ## Steps
 Each refuses with one line on any mismatch, and nothing merges until all pass:
-0. The checkout, before the first fetch and again after it: `git status --porcelain` is empty and `HEAD` is main's tip (an
+0. The checkout check runs first, before any network call, and runs again once main is fetched (so HEAD can be compared with
+   main's tip). The order in the code: environment and usage, the checkout check, the lock, the PR read, the trust gate (below), the
+   fetch of main, the checkout check again. The check: `git status --porcelain` is empty and `HEAD` is main's tip (an
    explicit `--bootstrap`, the first land of the gate, is the only exception, and only for HEAD), no git remote URL
    carries userinfo, no git config carries an `http.*extraheader`, and no `.env*` or `bunfig.toml` exists in the
-   checkout (the filesystem is checked, ignored files included: bun would load them as configuration). Then the trust
-   gate (above).
+   checkout (the filesystem is checked, ignored files included: bun would load them as configuration).
 1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.
 2. The ledger at the exact head (below).
 3. For a protected path (below), or any added line containing `gitleaks:allow`, the reviewer's pod verdict. A
    protected path always needs it. The changed files and added lines come from the real merge result:
    `git merge-tree --write-tree <main tip> <head>` diffed against main's tip (external diff and textconv off), so renames
    count on both sides, no file cap applies and a criss-cross history cannot hide a path. Hunk headers are skipped, so an
-   added line starting `++` still counts.
+   added line starting `++` still counts. Git's own binary test applies to that diff (`--numstat` reports `-\t-`): a changed
+   file git treats as binary (a NUL in the first 8000 bytes, or a `binary` or `-diff` attribute) makes the PR protected, and the
+   content of every inert file at the merge result is scanned once more under neutral names (below).
 4. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
    `startup_failure`, `action_required`), land refuses. No check runs at all is fine: CI is off by decision.
 5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
@@ -139,6 +143,12 @@ file (`100644`, `100755`): a symlink (`120000`) or gitlink (`160000`) is never i
 that leaves the repo, and `make gen` will not write through a symlink. One function, `touchesProtected` in
 `scripts/land-decide.mjs`, owns the rule; land reads the changed files through `filesFromRaw` there too.
 
+The scanner has blind spots: gitleaks does not read binaries, and its built-in allowlist skips any path with a `node_modules` or
+`bower_components` segment and any path containing `gitleaks.toml`. So inertness does not depend on a list of those: land writes each
+inert file's blob at the merge result to `<throwaway>/inert/<n>.txt` and runs `gitleaks dir --ignore-gitleaks-allow` over that
+directory (`make secrets-dir`), with no config from the PR. A hit makes the PR protected. Before the preflight runs, the worktree's
+merge tree must equal the `merge-tree --write-tree` result the decision judged, or land refuses.
+
 ## Verifiers use the same trust gate
 `make verify-preflight PR=<n>` (`node scripts/land.mjs <n> --preflight-only`) runs the trust gate, the head check and
 the merge-result preflight: no ledger, no pod, no merge. Run it from a clean checkout of main, never from the PR's tree,
@@ -146,6 +156,11 @@ with the same checkout rule as land (`--bootstrap` is the one exception, for the
 PR it refuses before fetching anything, and the verifier reads the code (`git show`, `git diff`, GitHub) and runs nothing.
 
 ## Known limits
+- **A grandchild that calls `setsid` again escapes the group kill.** The preflight child is killed as a process group; code that
+  starts its own session survives it. That is trusted code (see the threat model).
+- **Windows 8.3 short names and backslash aliases are not folded** by the protected-path rule. The host is macOS.
+- **The throwaway's own `make secrets` reads a PR-added `.gitleaks.toml`.** The decision is unaffected: that file is not inert, so
+  the PR is protected, and land's range scan runs in main's tree with main's config.
 - **Both secret scans pass `-m`** (`make secrets`, `make secrets-range`): gitleaks runs `git log -p` without it, so a secret that
   exists only in a merge commit's own diff (a conflict resolution) would never be scanned.
 - **Every fetch of main names `refs/heads/main`**, never bare `main`: a tag named `main` wins git's DWIM.

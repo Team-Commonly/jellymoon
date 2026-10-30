@@ -7,29 +7,29 @@
 //   land.mjs <pr> --preflight-only [--bootstrap]   (verifiers: the trust gate and the merge-result preflight only; needs JM_REPO and JM_TRUSTED_LOGINS)
 // Run it from a clean checkout of main: it reads the reviewer list from main's tip, never from the working tree.
 import { execFileSync, spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction, needsVerdict,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeResult, quoteOutput, stripControls, readReviewerEntries, readToken, remoteFor,
-  scrub, takePage,
+  scrub, takePage, hiddenInInert,
 } from './land-decide.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
-const out = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
-const REPO = process.env.JM_REPO; // every gh call names it: a worktree can carry remotes for several repos
+// All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
+// git, gh and make call, fetch for the pod read, spawn for the preflight child, env, argv and the Node version.
+export class Refusal extends Error {}
+let IO;
+let REPO = ''; // every gh call names it: a worktree can carry remotes for several repos
+let DRY = false;
+let SECRET = ''; // the bearer token once read; scrubbed from anything printed
+const out = (cmd, args, opts = {}) => IO.exec(cmd, args, opts);
 const gh = (...args) => out('gh', args);
 const say = (m) => console.log(stripControls(m)); // every string land prints is stripped: GitHub text (a branch name, a url) can carry escapes
-let SECRET = ''; // the bearer token once read; scrubbed from anything printed
-const DRY = process.argv.includes('--dry-run');
-// Ctrl-C and kill: exit runs the handlers that kill the preflight's process group and release the lock.
-process.on('SIGINT', () => process.exit(130));
-process.on('SIGTERM', () => process.exit(143));
-process.on('SIGHUP', () => process.exit(129));
-const refuse = (m) => { console.error(`land: refused: ${stripControls(scrub(m, SECRET))}`); process.exit(1); };
-{ const nv = checkNode(process.versions.node); if (!nv.ok) refuse(nv.reason); } // before anything else runs
-const readLedger = () => parseLedger(fs.existsSync(process.env.JM_LEDGER) ? fs.readFileSync(process.env.JM_LEDGER, 'utf8') : '');
-const appendLedger = (pr, head, verdict, by, note) => writeLedger(process.env.JM_LEDGER, [pr, head, verdict, by, new Date().toISOString(), note], { dry: DRY });
+const refuse = (m) => { throw new Refusal(stripControls(scrub(m, SECRET))); };
+const readLedger = () => parseLedger(fs.existsSync(IO.env.JM_LEDGER) ? fs.readFileSync(IO.env.JM_LEDGER, 'utf8') : '');
+const appendLedger = (pr, head, verdict, by, note) => writeLedger(IO.env.JM_LEDGER, [pr, head, verdict, by, new Date().toISOString(), note], { dry: DRY });
 function viewPr(n) {
   const pr = JSON.parse(gh('pr', 'view', String(n), '--repo', REPO, '--json', 'url,number,state,baseRefName,headRefName,headRefOid,createdAt,isCrossRepository,author'));
   if (!String(pr.url).includes(`github.com/${REPO}/pull/${n}`)) refuse(`#${n} resolved to ${pr.url}, not ${REPO}`);
@@ -40,7 +40,9 @@ function lock() {
   const dir = path.join(path.resolve(out('git', ['rev-parse', '--git-common-dir'])), 'jm-land.lock');
   const got = acquireLock(dir);
   if (!got.ok) refuse(got.reason);
-  process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true }));
+  const free = () => fs.rmSync(dir, { recursive: true, force: true });
+  process.on('exit', free);
+  return () => { process.off('exit', free); free(); };
 }
 // Fetches main and (optionally) the PR head from the one remote that is JM_REPO.
 const MAIN_REF = 'refs/heads/main'; // never bare `main`: a tag named main wins git's DWIM
@@ -60,7 +62,7 @@ function runInit(wt, env) {
     let text = '';
     let over = false;
     let ended = false;
-    const child = spawn('env', ['-i', ...Object.entries(env).map(([k, v]) => `${k}=${v}`), 'bash', '-c', './init.sh'], { cwd: wt, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = IO.spawn('env', ['-i', ...Object.entries(env).map(([k, v]) => `${k}=${v}`), 'bash', '-c', './init.sh'], { cwd: wt, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const take = (b) => { if (text.length < 2e6) text += b.toString('utf8'); };
     child.stdout.on('data', take);
     child.stderr.on('data', take);
@@ -83,11 +85,11 @@ function runInit(wt, env) {
 }
 // Throwaway worktree at main's tip, the PR head merged in as GitHub would (no repo hooks), then ./init.sh under env -i with
 // HOME and TMPDIR inside the throwaway dir and system dirs only on PATH. Hygiene, not isolation.
-async function preflight(mainTip, head, bootstrap) {
+async function preflight(mainTip, head, bootstrap, expectTree) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-land-'));
   const wt = path.join(dir, 'wt');
   for (const d of ['home', 'tmp']) fs.mkdirSync(path.join(dir, d));
-  const release = trackThrowaway(dir, wt);
+  const release = trackThrowaway(dir, wt, (c, a) => out(c, a));
   const env = { HOME: path.join(dir, 'home'), TMPDIR: path.join(dir, 'tmp'), PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb', JM_ENTROPY_BASE: entropyBase(mainTip, { bootstrap, mainHasEntropy: has(mainTip, 'entropy.json') }) }; // main's tip as fetched, never a ref the PR could move
   let result = { ok: true };
   let tree = '';
@@ -97,6 +99,7 @@ async function preflight(mainTip, head, bootstrap) {
       result = { ok: false, reason: `merging ${head.slice(0, 8)} into main ${mainTip.slice(0, 8)} conflicts` };
     }
     if (result.ok) tree = out('git', ['-C', wt, 'rev-parse', 'HEAD^{tree}']);
+    if (result.ok && expectTree && tree !== expectTree) result = { ok: false, reason: `the preflight's merge (tree ${tree.slice(0, 8)}) is not the merge result the decision used (${expectTree.slice(0, 8)})` };
     if (result.ok) result = await runInit(wt, env);
   } catch (e) { result = { ok: false, reason: `preflight failed: ${why(e)}` }; }
   release();
@@ -105,18 +108,17 @@ async function preflight(mainTip, head, bootstrap) {
 // Pod messages newest-first, paged back past `since` (ms), deduped by id. Fails closed if the page cap is hit first,
 // or if a page boundary cannot be paged past (see takePage).
 async function podMessages(since) {
-  SECRET = readToken(process.env.JM_COMMONLY_TOKEN_FILE);
+  SECRET = readToken(IO.env.JM_COMMONLY_TOKEN_FILE);
   const all = [];
   const seen = new Set();
   let before = '';
   for (let page = 0; page < 30; page += 1) {
-    const url = `${process.env.JM_COMMONLY_API}/api/messages/${process.env.JM_VERDICT_POD}?limit=200${before}`;
+    const url = `${IO.env.JM_COMMONLY_API}/api/messages/${IO.env.JM_VERDICT_POD}?limit=200${before}`;
+    let res;
+    try { res = await IO.fetch(url, { headers: { Authorization: `Bearer ${SECRET}` } }); } catch (e) { return refuse(`pod messages: request failed (${e.name})`); }
+    if (!res.ok) refuse(`pod messages: HTTP ${res.status}`);
     let msgs;
-    try {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${SECRET}` } });
-      if (!res.ok) refuse(`pod messages: HTTP ${res.status}`);
-      msgs = await res.json();
-    } catch (e) { return refuse(`pod messages: request failed (${e.name})`); }
+    try { msgs = await res.json(); } catch (e) { return refuse(`pod messages: unreadable reply (${e.name})`); }
     const { fresh, stuck } = takePage(seen, msgs, 200);
     if (stuck) refuse('pod messages: a page boundary could hide a message; cannot prove no older FAIL');
     if (!fresh.length) return all;
@@ -139,7 +141,7 @@ function bootstrapGate(mainTip, bootstrap) {
 // author and every account with push access are in JM_TRUSTED_LOGINS (an operator env var; a PR cannot widen it).
 function trustGate(pr) {
   const pushers = pushersOf(gh('api', '--paginate', `repos/${REPO}/collaborators?affiliation=all&per_page=100`, '--jq', '.[] | {login, push: .permissions.push}'));
-  const t = checkTrust({ pr: { isCrossRepository: pr.isCrossRepository, author: pr.author?.login }, pushers, trusted: parseLogins(process.env.JM_TRUSTED_LOGINS) });
+  const t = checkTrust({ pr: { isCrossRepository: pr.isCrossRepository, author: pr.author?.login }, pushers, trusted: parseLogins(IO.env.JM_TRUSTED_LOGINS) });
   if (!t.ok) refuse(`#${pr.number}: ${t.reason}`);
 }
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
@@ -154,15 +156,21 @@ async function decide(pr, mainTip, opts) { // mainTip is the tip fetched for thi
   const ci = checkRuns(runs.runs, runs.total);
   if (!ci.ok) return ci;
   const merged = mergeResult((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
+  const names = out('git', ['ls-tree', '-r', '--name-only', '-z', mainTip], { maxBuffer: 1 << 28 }).split('\0').filter(Boolean);
   // A marker anywhere in the PR's history, or a secret gitleaks finds once markers are ignored, needs the reviewer's verdict.
-  const hides = !ok('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]);
-  if (needsVerdict({ files: merged.files, tree: out('git', ['ls-tree', '-r', '--name-only', '-z', mainTip], { maxBuffer: 1 << 28 }).split('\0').filter(Boolean), patch: merged.patch, hides })) {
+  const base = { files: merged.files, tree: names, patch: merged.patch, binary: merged.binary };
+  const hidesRange = !ok('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]);
+  // Inert content is scanned under neutral names, so no path allowlist of the scanner can skip it. Binary files are protected, not scanned.
+  const hides = hidesRange || hiddenInInert(merged, names, (p) => out('git', ['cat-file', 'blob', `${merged.tree}:${p}`], { maxBuffer: 1 << 28 }), (d) => ok('make', ['-s', 'secrets-dir', `DIR=${d}`]));
+  if (needsVerdict({ ...base, hides })) {
     const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers(opts.bootstrap ? head : mainTip) });
     if (!gate.ok) return gate;
     notes.push(gate.reason);
   }
-  return { ok: true, notes };
+  return { ok: true, notes, tree: merged.tree };
 }
+// The tree `merge-tree --write-tree` gives for main's tip plus the head: what the decision judged and the preflight must reproduce.
+const treeOf = (mainTip, head) => mergeResult((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head).tree;
 const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
 const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only [--bootstrap]';
 // The checkout this runs from, checked before the first fetch (mainTip null) and again after it: a clean tree at main's tip (only --bootstrap may sit elsewhere), no credentials in its git config.
@@ -171,12 +179,12 @@ function checkoutGate(mainTip, bootstrap) {
   const config = (() => { try { return out('git', ['config', '--get-regexp', 'extraheader']); } catch { return ''; } })();
   const c = checkCheckout({ head: out('git', ['rev-parse', 'HEAD']), mainTip, porcelain: out('git', ['-c', 'status.showUntrackedFiles=all', 'status', '--porcelain']), remoteV: out('git', ['remote', '-v']), config, lsv: out('git', ['ls-files', '-v']), diffDirty: !ok('git', ['diff', '--quiet', 'HEAD']), bootstrap });
   if (!c.ok) refuse(c.reason);
-  const b = checkNoBunConfig([...fs.readdirSync(out('git', ['rev-parse', '--show-toplevel'])), ...fs.readdirSync('.')]); // the filesystem, not porcelain: ignored files count
+  const b = checkNoBunConfig([...fs.readdirSync(out('git', ['rev-parse', '--show-toplevel'])), ...fs.readdirSync(IO.cwd)]); // the filesystem, not porcelain: ignored files count
   if (!b.ok) refuse(b.reason);
 }
 // Verifiers: the trust gate and the merge-result preflight, nothing else. No ledger, no pod, no merge.
-async function preflightOnly(n, bootstrap) {
-  lock();
+async function preflightOnly(n, bootstrap, hold) {
+  hold(lock());
   const pr = viewPr(n);
   trustGate(pr);
   const mainTip = fetchRef(MAIN_REF);
@@ -184,24 +192,34 @@ async function preflightOnly(n, bootstrap) {
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
   if (!h.ok) refuse(h.reason);
   bootstrapGate(mainTip, bootstrap);
-  const pf = await preflight(mainTip, pr.headRefOid.toLowerCase(), bootstrap);
+  const pf = await preflight(mainTip, pr.headRefOid.toLowerCase(), bootstrap, treeOf(mainTip, pr.headRefOid.toLowerCase()));
   if (!pf.ok) refuse(`#${n}: ${pf.reason}`);
   say(`#${n}: merge result preflight green (main ${mainTip.slice(0, 8)} + ${pr.headRefOid.slice(0, 8)})`);
 }
-async function main() {
-  const args = process.argv.slice(2);
+export async function main(deps) {
+  IO = deps;
+  REPO = IO.env.JM_REPO;
+  SECRET = '';
+  const args = IO.argv;
+  DRY = args.includes('--dry-run');
+  let release = () => {};
+  try { await run(args, (r) => { release = r; }); } catch (e) { throw e instanceof Refusal ? e : new Refusal(stripControls(scrub(String(e.message).split('\n')[0], SECRET))); } finally { release(); }
+}
+async function run(args, hold) {
+  const nv = checkNode(IO.nodeVersion);
+  if (!nv.ok) refuse(nv.reason);
   const only = args.includes('--preflight-only');
-  const missing = (only ? ['JM_REPO', 'JM_TRUSTED_LOGINS'] : REQUIRED).find((v) => !process.env[v]);
+  const missing = (only ? ['JM_REPO', 'JM_TRUSTED_LOGINS'] : REQUIRED).find((v) => !IO.env[v]);
   if (missing) refuse(`environment variable ${missing} is not set`);
-  const api = only ? { ok: true } : checkApi(process.env.JM_COMMONLY_API, process.env.JM_ALLOW_API_ORIGIN);
+  const api = only ? { ok: true } : checkApi(IO.env.JM_COMMONLY_API, IO.env.JM_ALLOW_API_ORIGIN);
   if (!api.ok) refuse(api.reason);
   const nums = args.filter((a) => /^\d+$/.test(a));
   if (nums.length !== 1 || args.some((a) => !/^\d+$/.test(a) && !FLAGS.includes(a)) || (only && args.some((a) => a === '--dry-run'))) refuse(USAGE);
   checkoutGate(null, args.includes('--bootstrap'));
-  if (only) return preflightOnly(nums[0], args.includes('--bootstrap'));
+  if (only) return preflightOnly(nums[0], args.includes('--bootstrap'), hold);
   const n = nums[0];
   const opts = { bootstrap: args.includes('--bootstrap') };
-  lock();
+  hold(lock());
   const pr = viewPr(n);
   const action = landAction(pr, readLedger());
   if (action === 'already-landed') return say(`#${n} already landed`);
@@ -218,7 +236,7 @@ async function main() {
   const head = pr.headRefOid.toLowerCase();
   const d = await decide(pr, mainTip, opts);
   if (!d.ok) refuse(`#${n}: ${d.reason} (nothing merged)`);
-  const pf = await preflight(mainTip, head, opts.bootstrap);
+  const pf = await preflight(mainTip, head, opts.bootstrap, d.tree);
   if (!pf.ok) refuse(`#${n}: ${pf.reason} (nothing merged)`);
   say(`#${n}: ok, ${[...d.notes, 'merge result preflight green'].join('; ')}`);
   if (mergeAction({ dryRun: DRY }) === 'stop') return say(`dry run: would land #${n} (merge commit, main ${mainTip.slice(0, 8)}); merged nothing`);
@@ -239,4 +257,12 @@ async function main() {
   if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
   say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);
 }
-main().catch((e) => refuse(e.message.split('\n')[0]));
+// The CLI: the real I/O. Ctrl-C and kill run the exit handlers that kill the preflight's process group and release the lock.
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  process.on('SIGINT', () => process.exit(130));
+  process.on('SIGTERM', () => process.exit(143));
+  process.on('SIGHUP', () => process.exit(129));
+  const exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
+  main({ exec, fetch, spawn, env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
+    .catch((e) => { console.error(`land: refused: ${e.message}`); process.exit(1); });
+}

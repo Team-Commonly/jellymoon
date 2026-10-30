@@ -176,6 +176,8 @@ const cases = [
   ['landed note: a merge commit with the tested tree is just the sha', landedNote('abc', 't1', 't1'), 'abc'],
   ['landed note: a different tree is recorded as TREE-MISMATCH with both trees', landedNote('abc', 't1', 't2'), 'abc TREE-MISMATCH tested t1 merged t2'],
   ['output: a branch name with escapes is stripped', stripControls('x\u001b[31my'), 'x[31my'],
+  ['output: C1 controls (U+0080 to U+009F) are stripped', stripControls('a\u0080b\u009bc\u009fd'), 'abcd'],
+  ['pod: a reviewer listed by name only (no username) is never matched by display name', pod([msg('Ada', verdict(5, H))], '5', H, { entries: [{ name: 'Ada', username: null }] }).ok, false],
   // check-entropy itself: none passes only when named; an unreadable named base fails, and a PR cannot name one (land sets the env)
   ...(() => {
     const entropy = (base) => spawnSync(process.execPath, [fileURLToPath(new URL('./check-entropy.mjs', import.meta.url))], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME, JM_ENTROPY_BASE: base } }).status;
@@ -221,15 +223,8 @@ cases.push(
   ['removeTree removes a read-only tree; a failing cleanup warns naming the dir and does not throw', !fs.existsSync(tmp) && !failed && warned.includes('/nonexistent/dir'), true],
 );
 
-// Every gh invocation names the repo (a worktree can carry remotes for several repos).
-// Comments are stripped, so a disconnected line (`// trustGate(fresh);`) does not satisfy a wiring check.
+// Comments are stripped, so a disconnected line (`// x();`) does not satisfy a source check. Everything else about land.mjs is in check-land-e2e.mjs.
 const landSrc = fs.readFileSync(new URL('./land.mjs', import.meta.url), 'utf8').split('\n').map((l) => l.replace(/(^|\s)\/\/.*$/, '')).join('\n');
-const src = landSrc.split('\n');
-const ghCalls = src.map((l, i) => [l, i + 1]).filter(([l]) => /\bgh\(/.test(l) && !l.includes('const gh ='));
-cases.push(
-  ['every gh call in land.mjs carries --repo (or a literal repos/${REPO} api path)',
-    ghCalls.filter(([l]) => !(l.includes("'--repo'") || (l.includes("gh('api'") && l.includes('repos/${REPO}')))).map(([, n]) => n).join(), ''],
-);
 
 // Pod paging: dedupe by id across pages, and fail closed where a boundary could hide a message.
 const at1 = (id, ts) => ({ id, createdAt: ts });
@@ -252,7 +247,6 @@ cases.push(
   ['token: every malformed file is refused', bads.every((b) => b.error), true],
   ['token: no malformed-file error echoes any part of the contents', bads.every((b) => !/abc123|jmu_|note|extra/.test(b.error)), true],
   ['token: scrub removes the token from a message', scrub(`Bearer ${SECRET} rejected`, SECRET).includes('abc123'), false],
-  ['token: land.mjs prints errors only through the scrubbing refuse', /main\(\)\.catch\(\(e\) => refuse\(/.test(landSrc), true],
 );
 fs.rmSync(tdir, { recursive: true, force: true });
 
@@ -264,7 +258,6 @@ const dryTouched = fs.existsSync(lf);
 appendLedger(lf, ['5', H, 'LANDED', 'land', 'now', 'x']);
 cases.push(
   ['dry run: appendLedger reports no write and creates no file', !dryWrote && !dryTouched, true],
-  ['dry run: land.mjs has no ledger writer of its own (only appendLedger with dry)', /appendFileSync/.test(landSrc), false],
 );
 fs.rmSync(ldir, { recursive: true, force: true });
 
@@ -287,34 +280,14 @@ cases.push(
 );
 fs.rmSync(lroot, { recursive: true, force: true });
 
-// land.mjs wiring (shell-outs are not unit-testable). A source-order check fails when either anchor is missing.
-const before = (a, b, within = landSrc) => within.indexOf(a) >= 0 && within.indexOf(b) >= 0 && within.indexOf(a) < within.indexOf(b);
-const body = (from, to) => landSrc.slice(landSrc.indexOf(from), to ? landSrc.indexOf(to) : undefined);
-const [pfBody, mainBody] = [body('async function preflightOnly', 'async function main'), body('async function main')];
+// What check-land-e2e.mjs cannot reach: the CLI entry (signals, the real spawn, the 30-minute limit, the group kill) and the imports.
 const run = spawnSync(process.execPath, [fileURLToPath(new URL('./land.mjs', import.meta.url))], { encoding: 'utf8', env: { PATH: process.env.PATH } });
-const two = spawnSync(process.execPath, [fileURLToPath(new URL('./land.mjs', import.meta.url)), '5', '6'], { encoding: 'utf8', env: { PATH: process.env.PATH, JM_REPO: R, JM_TRUSTED_LOGINS: 'x', JM_LEDGER: 'x', JM_COMMONLY_API: 'https://api.commonly.me', JM_COMMONLY_TOKEN_FILE: 'x', JM_VERDICT_POD: 'x' } });
 cases.push(
-  ['land.mjs: the merge disables repo hooks', /'core\.hooksPath=\/dev\/null'/.test(landSrc) && /\.\.\.BASE, 'merge'/.test(src), true],
-  ['land.mjs: the preflight child has no stdin, its own session, quoted output and a group kill', /detached: true/.test(landSrc) && /stdio: \['ignore', 'pipe', 'pipe'\]/.test(landSrc) && /process\.kill\(-child\.pid/.test(landSrc) && /quoteOutput\(/.test(landSrc), true],
-  ['land.mjs: the trust gate runs before any fetch, in the land path', before('trustGate(pr)', 'fetchRef(', mainBody), true],
-  ['land.mjs: the trust gate runs before any fetch, in the verify-preflight path', before('trustGate(pr)', 'fetchRef(', pfBody), true],
-  ['land.mjs: verify-preflight has the same checkout and bootstrap gates as land (operator discipline: the rule lives in the checked-out tree)', pfBody.includes('checkoutGate(') && pfBody.includes('bootstrapGate(mainTip, bootstrap)') && mainBody.includes('bootstrapGate(mainTip, opts.bootstrap)'), true],
   ['land.mjs: the preflight child has a wall-clock limit', /LIMIT_MS/.test(landSrc) && /setTimeout/.test(landSrc), true],
   ['land.mjs: SIGHUP exits 129 like the others', /SIGHUP[^\n]*exit\(129\)/.test(landSrc), true],
-  ['land.mjs: every fetch of main names refs/heads/main, never bare main', !/fetchRef\('main'\)/.test(landSrc) && landSrc.includes("const MAIN_REF = 'refs/heads/main'") && (landSrc.match(/fetchRef\(MAIN_REF\)/g) || []).length === 3, true],
-  ['land.mjs: preflight output is scrubbed, the group is killed on return, the merge tree is compared', landSrc.includes('scrub(quoteOutput(text), SECRET)') && /clearTimeout\(timer\);\s*kill\(\);/.test(landSrc) && landSrc.includes('landedNote(sha, pf.tree, merged)') && landSrc.includes('mergeAction({ dryRun: DRY })') && landSrc.includes('needsVerdict({'), true],
+  ['land.mjs: preflight output is scrubbed and the group is killed on return', landSrc.includes('scrub(quoteOutput(text), SECRET)') && /clearTimeout\(timer\);\s*kill\(\);/.test(landSrc), true],
   ['land.mjs: SIGINT and SIGTERM exit, which kills the group and releases the lock', /SIGINT[^\n]*exit\(130\)/.test(landSrc) && /SIGTERM[^\n]*exit\(143\)/.test(landSrc), true],
-  ['land.mjs: the trust gate runs again before the merge', before('trustGate(fresh)', "gh('pr', 'merge'"), true],
-  ['land.mjs: the PR is re-read, re-trusted and re-checked, and a bad result refuses, all before the merge', ['const fresh = viewPr(n)', 'trustGate(fresh)', 'const now = checkHead(fresh, head)', 'if (!now.ok) refuse(', "gh('pr', 'merge'"].every((a, i, all) => i === 0 || before(all[i - 1], a)), true],
-  ['land.mjs: main\'s tip is re-checked after the second decide, a move refuses, and it all happens before the merge', ['const again = await decide', "const moved = checkMain(mainTip, fetchRef(MAIN_REF))", 'if (!moved.ok) refuse(moved.reason)', "gh('pr', 'merge'"].every((a, i, all) => i === 0 || before(all[i - 1], a)), true],
-      ['entropy: land names the base in a scrubbed env, not from the PR', /JM_ENTROPY_BASE: entropyBase\(/.test(landSrc) && /spawn\('env', \['-i'/.test(landSrc), true],
-  ['node: land.mjs refuses on a bad version before anything else', before('checkNode(process.versions.node)', 'if (!nv.ok) refuse(nv.reason)') && before('if (!nv.ok) refuse(nv.reason)', 'const readLedger'), true],
-  ['land.mjs: untracked files are shown in full for the checkout gate', landSrc.includes("'status.showUntrackedFiles=all'"), true],
-  ['land.mjs: history is scanned for the marker and gitleaks runs over the range with markers ignored', landSrc.includes('patch: merged.patch, hides') && landSrc.includes("'secrets-range'") && /--ignore-gitleaks-allow/.test(fs.readFileSync(new URL('../Makefile', import.meta.url), 'utf8')), true],
-  ['land.mjs: more than one PR number is refused', two.status === 1 && two.stderr.includes('usage:'), true],
-  ['land.mjs: TMPDIR is inside the throwaway dir', landSrc.includes("TMPDIR: path.join(dir, 'tmp')") && landSrc.includes("HOME: path.join(dir, 'home')"), true],
-  ['land.mjs: everything it prints is stripped, and the pusher list is unfiltered', landSrc.includes('console.log(stripControls(m))') && landSrc.includes('${stripControls(scrub(m, SECRET))}') && !landSrc.includes('permission=push'), true],
-  ['land.mjs: the throwaway dir is tracked and the group kill runs first', landSrc.includes('trackThrowaway(dir, wt)') && landSrc.includes("process.prependListener('exit', kill)"), true],
+  ['land.mjs: the throwaway dir is tracked and the group kill runs first', landSrc.includes('trackThrowaway(dir, wt,') && landSrc.includes("process.prependListener('exit', kill)"), true],
   ['land.mjs imports resolve: run with no arguments it reaches main and refuses', run.status === 1 && !/export named|SyntaxError|ReferenceError/i.test(run.stderr) && run.stderr.includes('land: refused'), true],
 );
 
@@ -331,9 +304,9 @@ cases.push(
     const wt = path.join(dir, 'wt');
     fs.mkdirSync(dir);
     g(['worktree', 'add', '--quiet', '--detach', wt]);
-    const code = `import { trackThrowaway } from ${JSON.stringify(lib)};
+    const code = `import cp from 'node:child_process'; import { trackThrowaway } from ${JSON.stringify(lib)};
       process.on('SIGINT', () => process.exit(130)); process.on('SIGTERM', () => process.exit(143)); process.on('SIGHUP', () => process.exit(129));
-      trackThrowaway(${JSON.stringify(dir)}, ${JSON.stringify(wt)}); process.kill(process.pid, ${JSON.stringify(sig)}); setTimeout(() => {}, 5000);`;
+      trackThrowaway(${JSON.stringify(dir)}, ${JSON.stringify(wt)}, (c, a) => cp.execFileSync(c, a, { stdio: 'ignore' })); process.kill(process.pid, ${JSON.stringify(sig)}); setTimeout(() => {}, 5000);`;
     const r = spawnSync(process.execPath, ['-e', code], { cwd: path.join(sdir, 'repo'), encoding: 'utf8', env });
     return [r.status, fs.existsSync(dir), g(['worktree', 'list', '--porcelain']).includes('throw-')];
   });

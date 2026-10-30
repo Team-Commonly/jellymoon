@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { addsAllowMarker, checkPodVerdict, filesFromRaw, mergeResult, readReviewerEntries, touchesProtected, verdictOf } from './land-decide.mjs';
+import { addsAllowMarker, checkPodVerdict, filesFromRaw, hiddenInInert, mergeResult, needsVerdict, readReviewerEntries, touchesProtected, verdictOf } from './land-decide.mjs';
 
 // Only exactly `GATE: PASS` as the last non-empty line passes; everything else blocks (nothing at all is null).
 const verdicts = [
@@ -196,4 +196,41 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
   const badEvil = evilCases.filter(([, got, want]) => got !== want).map(([n]) => n);
   if (badEvil.length) { console.error(`check-review-gate: evil-merge cases wrong\n  ${badEvil.join('\n  ')}`); process.exit(1); }
   console.log(`check-review-gate: ${evilCases.length} evil-merge cases ok`);
+}
+
+// inert paths that gitleaks cannot see (a NUL makes git call a file binary; its built-in allowlist skips node_modules,
+// bower_components and gitleaks.toml) must still be caught: binaries are protected, and inert content is scanned under neutral names.
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-inert-'));
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
+  const sh = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env });
+  const git = (...a) => spawnSync('git', a, { cwd: dir, encoding: 'utf8', env }).stdout.trim();
+  const secret = `token = ${token}\n`;
+  const probe = (files) => {
+    sh(`rm -rf .git docs README.md && cp '${root}/Makefile' . && git init -q -b main . && echo base > README.md && git add -A && git commit -qm base && git checkout -qb pr`);
+    for (const [f, body] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), body); }
+    sh('git add -A && git commit -qm pr');
+    const [mainTip, head] = [git('rev-parse', 'main'), git('rev-parse', 'pr')];
+    const merged = mergeResult((a) => git(...a), mainTip, head);
+    const names = git('ls-tree', '-r', '--name-only', mainTip).split('\n');
+    const hiddenIn = hiddenInInert(merged, names, (f) => git('cat-file', 'blob', `${merged.tree}:${f}`), (d) => spawnSync('make', ['-s', 'secrets-dir', `DIR=${d}`], { cwd: dir }).status === 0);
+    const range = spawnSync('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`], { cwd: dir }).status !== 0;
+    return { merged, needs: needsVerdict({ files: merged.files, tree: names, patch: merged.patch, binary: merged.binary, hides: range || hiddenIn }), range };
+  };
+  const nul = probe({ 'docs/a.md': Buffer.concat([Buffer.from('x\0\n'), Buffer.from(secret)]) });
+  const nm = probe({ 'docs/node_modules/x.md': secret });
+  const bower = probe({ 'docs/sub/bower_components/x.html': secret });
+  const toml = probe({ 'docs/gitleaks.toml.md': secret });
+  const control = probe({ 'docs/ok.md': 'no token here\n' });
+  const inert = [
+    ['inert: a .md with a NUL and a token is protected (git calls it binary)', nul.needs && nul.merged.binary, true],
+    ['inert: docs/node_modules/x.md with a token is protected, though gitleaks\'s range scan misses it', nm.needs && !nm.range, true],
+    ['inert: docs/sub/bower_components/x.html with a token is protected, though the range scan misses it', bower.needs && !bower.range, true],
+    ['inert: docs/gitleaks.toml.md with a token is protected, though the range scan misses it', toml.needs && !toml.range, true],
+    ['inert: the control docs/ok.md with no token stays inert', control.needs, false],
+  ];
+  fs.rmSync(dir, { recursive: true, force: true });
+  const badInert = inert.filter(([, got, want]) => got !== want).map(([n]) => n);
+  if (badInert.length) { console.error(`check-review-gate: inert cases wrong\n  ${badInert.join('\n  ')}`); process.exit(1); }
+  console.log(`check-review-gate: ${inert.length} inert cases ok`);
 }

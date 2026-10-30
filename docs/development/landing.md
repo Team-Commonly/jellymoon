@@ -1,7 +1,7 @@
 # Landing a PR
 
 `make land PR=<n>` is the only merge path. Local verification is the authority; GitHub check runs are consulted only
-as a veto (step 4). It runs `scripts/land.mjs`; the decisions are pure functions in `scripts/land-decide.mjs` and the
+as a veto (step 3). It runs `scripts/land.mjs`; the decisions are pure functions in `scripts/land-decide.mjs` and the
 cases are in `scripts/check-land.mjs`. Run it from a checkout of main with a clean tree: the accepted reviewers come from
 operator environment (`JM_VERDICT_REVIEWERS`), never from the repo. One land runs at a time **per clone**: an mkdir lock in that clone's git
 common dir holds the PID, so two clones can land at once. A dead PID, or a lock dir with no pid file, is stale; it is
@@ -56,13 +56,14 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    checkout (the filesystem is checked, ignored files included: bun would load them as configuration).
 1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.
 2. The ledger at the exact head (below).
-3. The secret scans, which can only refuse, then the reviewer's pod verdict, which every land needs (below). `make secrets-range`
-   runs gitleaks over `<main tip>..<head>` with `-m` and `--ignore-gitleaks-allow`: a hit refuses with "a secret was found in
-   the range; remove it from history and push a new head", and a scan that fails to run, or exits with anything but 0 or 3
-   (3 is a finding; `go run` shows it as "exit status 3"), refuses too. A clean scan waives nothing. The preflight's `make
-   secrets` (gitleaks over the whole history) is the second scan and refuses by failing the preflight.
-4. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
+3. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
    `startup_failure`, `action_required`), land refuses. No check runs at all is fine: CI is off by decision.
+4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
+   `make secrets-range` runs gitleaks over `<main tip>..<head>` with `-m` and `--ignore-gitleaks-allow`: a hit refuses with "a
+   secret was found in the range; remove it from history and push a new head", and a scan that fails to run, or exits with anything
+   but 0 or 3 (3 is a finding; `go run` shows it as "exit status 3"), refuses too. A clean scan waives nothing. The preflight's
+   `make secrets` (gitleaks over the whole history) is the second scan and refuses by failing the preflight. (The code's order is
+   steps 2, 3, 4 as listed: ledger, CI, scan, pod verdict.)
 5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
    merge --no-ff --no-edit <head>` (a conflict refuses; the PR's hooks never run), then `./init.sh` (which runs
    `make preflight`) under `env -i` with HOME and `TMPDIR` inside the throwaway dir and system dirs only on PATH.
@@ -151,6 +152,7 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 ## Known limits
 - **A grandchild that calls `setsid` again escapes the group kill.** The preflight child is killed as a process group; code that
   starts its own session survives it. That is trusted code (see the threat model).
+- **A PR can switch off its own scans on the bootstrap land and in the preflight.** On the bootstrap land the checkout is the PR head, so the range scan runs the PR's own Makefile `secrets-range` recipe (a recipe of `true` reads as clean) and its `.gitleaksignore`. On every land, the preflight's `make secrets` runs the PR's Makefile, `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` markers. On a normal land the range scan uses main's Makefile and config and ignores markers. These are defence in depth only; the verdict is always required.
 - **The throwaway's own `make secrets` reads a PR-added `.gitleaks.toml`.** Land's range scan runs in the operator's checkout, which is main with main's config, except on the bootstrap land: there the checkout is the PR head, so a PR-added `.gitleaks.toml` or `.gitattributes` configures the scan (a `paths = [".*"]` allowlist makes it clean). The scans only refuse, so a quiet scan is never evidence; the review is.
 - **What the scans do not read, so the review must cover it.** Both scans are defence in depth that can refuse and never waive. Read by neither:
   - **Fragment cuts.** `gitleaks dir` and git mode read a file in 100,000-byte chunks (extended at most 25,000 bytes to a blank line), and no rule matches across chunks, so a token straddling a cut is not matched.

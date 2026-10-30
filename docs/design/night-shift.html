@@ -4,14 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Jellymoon Night Shift</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,CRSV,MONO@-15..0,300..1000,0..1,0..1,0..1&family=Overpass:wght@400..900&family=Overpass+Mono:wght@400..700&display=swap">
 <script>try{var s=localStorage.getItem('jm-shift');if(s==='day'||s==='night')document.documentElement.setAttribute('data-theme',s)}catch(e){}</script>
 <style>
 /* ================= TOKENS =================
    One set of names, two value sets. Every colour literal in this file lives in these two blocks.
-   Night shift = r2 direction C. Day shift = r2 direction B (Timetable). */
+   Night shift is the dark value set; Day shift (the Timetable) is the light one. */
 :root[data-theme="night"]{
   --bg:oklch(25% 0.027 55);
   --bg-deep:oklch(21.5% 0.023 52);
@@ -300,7 +297,7 @@ button.ui-ref:hover{border-color:var(--ink-3);background:var(--panel-2)}
 .mp-statebig{display:inline-block;margin-top:4px;padding:3px 10px;border-radius:var(--r-pill);background:var(--panel-2);font-size:13px;font-weight:750}
 .mp-statebig-waiting{background:var(--ink);color:var(--bg-deep)}
 
-/* time card (r2 signature: the receipt is the agent's time card, punched on the left) */
+/* time card (the signature: the receipt is the agent's time card, punched on the left) */
 .tc{position:relative;margin-top:8px;padding:10px 12px 11px 32px;border-radius:var(--r-btn);background:var(--bg);box-shadow:inset 0 0 0 1px var(--panel)}
 .tc::before{content:"";position:absolute;left:12px;top:50%;width:7px;height:7px;margin-top:-13.5px;border-radius:50%;background:var(--panel-2);box-shadow:0 10px 0 var(--panel-2),0 20px 0 var(--panel-2)}
 .tc-top{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between}
@@ -517,7 +514,7 @@ button.ui-ref:hover{border-color:var(--ink-3);background:var(--panel-2)}
 
   <section class="sc" aria-labelledby="sc-h">
     <h2 id="sc-h">How Room scales</h2>
-    <p>The room view failed four ways in the last round: crowding, keyboard, state carried only by pose, and motion. Here is what this build does about each.</p>
+    <p>The room view failed four ways in the earlier concepts: crowding, keyboard, state carried only by pose, and motion. Here is what this build does about each.</p>
     <div class="sc-grid">
       <article class="sc-card"><h3>Past about 8 members: zones</h3><p>Above 8 members the floor groups desks into zones, by task or by owner. A collapsed zone still shows its counts by state, so a waiting lamp is never hidden. Zones that hold a waiting member open by default.</p><div class="ui-row" style="margin-top:10px"><button type="button" class="ui-btn ui-btn-sm" data-act="demo" id="demo-btn" aria-pressed="false">Show the 14-member pod (demo)</button></div></article>
       <article class="sc-card"><h3>Keyboard</h3><p>Every desk is a real button with a visible focus ring.</p>
@@ -534,7 +531,7 @@ button.ui-ref:hover{border-color:var(--ink-3);background:var(--panel-2)}
       <article class="sc-card"><h3>Reduced motion</h3><p>Typing hands, the lamp wave and blinking all stop under <code>prefers-reduced-motion</code>, and so do zone, popover and scroll transitions. The dawn texture behind the round table header is removed there and under <code>prefers-contrast: more</code>. No state depends on motion. <span id="rm-status" class="u-hint"></span></p></article>
     </div>
   </section>
-  <p class="u-hint" style="padding:6px 0 40px">Preview built 2026-10-29 for the v4 design review. Room and Round table carried over from ux-concepts.html (tabs 5 and 6), restyled in the r2 Night Shift direction.</p>
+  <p class="u-hint" style="padding:6px 0 40px">Preview built 2026-10-29 for a design review. Room and Round table carried over from ux-concepts.html (tabs 5 and 6), restyled for Night shift.</p>
 </div>
 
 <div class="pop" id="desk-pop" role="tooltip"></div>
@@ -711,7 +708,7 @@ function askCard({anchor=true,cards=true}={}){
       ${cards?cardCompare():''}
       <div class="ask-opts" role="group" aria-label="Options">${opts}</div>
       <p class="ask-recline"><b>Recommendation, from Otto:</b> 1. One rounding rule for both formats is what “match to the cent” needs, and half-even is the finance standard.</p>
-      ${r?`<p class="ask-done" role="status">You chose <b>${OPTS[r.opt].l}</b> · decision d-77 · ${r.frozen?'<b>frozen</b>':`<button type="button" class="ui-link" data-act="undo">Undo (U)</button> before it freezes`}</p>`:`<p class="ask-keys">${kbd('A')} approve recommended · ${kbd('1')}–${kbd('3')} pick · ${kbd('U')} undo within 5 s</p>`}
+      ${r?`<p class="ask-done" role="status">You chose <b>${OPTS[r.opt].l}</b> · ruling recorded · ${r.frozen?'<b>frozen</b>':`<button type="button" class="ui-link" data-act="undo">Undo (U)</button> before it freezes`}</p>`:`<p class="ask-keys">${kbd('A')} approve recommended · ${kbd('1')}–${kbd('3')} pick · ${kbd('U')} undo within 5 s</p>`}
     </div></article>`;
 }
 
@@ -884,9 +881,9 @@ function rule(o){
 }
 function freeze(){
   if(!S.ruling||S.ruling.frozen)return;S.ruling.frozen=true;const o=S.ruling.opt;
-  if(o===1){S.otto.state='working';S.feed.push({k:'msg',who:'otto',t:tm(),text:'Merging PR #418 behind <code>export_csv</code>; updating 3 PDF snapshots.',wake:'ruling d-77 by Mira'});
+  if(o===1){S.otto.state='working';S.feed.push({k:'msg',who:'otto',t:tm(),text:'Merging PR #418 behind <code>export_csv</code>; updating 3 PDF snapshots.',wake:'ruling by Mira'});
     setTimeout(()=>{S.otto.state='idle';S.feed.push({k:'msg',who:'otto',t:tm(),text:'Merged. T-40 is done.'});render()},2600)}
-  else if(o===2)S.feed.push({k:'msg',who:'wren',t:tm(),text:'Woken by your ruling. I’ll split the rounding helper after my current T-43 step, then hand back to Otto.',wake:'ruling d-77 by Mira'});
+  else if(o===2)S.feed.push({k:'msg',who:'wren',t:tm(),text:'Woken by your ruling. I’ll split the rounding helper after my current T-43 step, then hand back to Otto.',wake:'ruling by Mira'});
   else S.feed.push({k:'sys',t:tm(),text:'T-40 held for Marco’s finance sign-off (T-42). Marco is notified.'});
   render();
 }

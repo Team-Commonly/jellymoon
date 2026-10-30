@@ -59,9 +59,13 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
 3. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
    `startup_failure`, `action_required`), land refuses. No check runs at all is fine: CI is off by decision.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
-   `make secrets-range` runs gitleaks over `<main tip>..<head>` with `-m` and `--ignore-gitleaks-allow`: a hit refuses with "a
-   secret was found in the range; remove it from history and push a new head", and a scan that fails to run, or exits with anything
-   but 0 or 3 (3 is a finding; `go run` shows it as "exit status 3"), refuses too. A clean scan waives nothing. The preflight's
+   `make secrets-range` runs gitleaks over `<main tip>..<head>` with `-m` and `--ignore-gitleaks-allow`: a hit (a nonzero exit
+   plus the line "exit status 3") refuses with "a secret was found in the range; remove it from history and push a new head".
+   Clean is positive evidence, read from the scan's exit status and stderr together: exit 0; no "exit status 3" line; no gitleaks
+   `ERR` (or `FTL`, `PNC`) line and no "failed to scan"; the "no leaks found" line; and one "<n> commits scanned." line where n
+   equals `git rev-list --count <main tip>..<head>`, which land counts itself, outside make. Anything else refuses as a scan that
+   failed to run or did not read the whole range: it proves nothing. (A recipe that swallowed an error, a missing object, a
+   `.gitattributes` the scan stumbles on, and a scan of an empty range in place of the PR's all exit 0 and fail one of these.) A clean scan waives nothing. The preflight's
    `make secrets` (gitleaks over the whole history) is the second scan and refuses by failing the preflight. (The code's order is
    steps 2, 3, 4 as listed: ledger, CI, scan, pod verdict.)
 5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null

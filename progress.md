@@ -5,14 +5,14 @@ result, or the PR), what's next, and anything surprising. Keep each entry under 
 goes in the PR.
 
 ## 2026-10-30 · pre-public readiness (unit OS1)
-- **Changed:** private references scrubbed from the tree and history-safe docs; `scripts/check-private.mjs` (the deny check, in
+- **Changed:** private references scrubbed from the tree and docs; `scripts/check-private.mjs` (the deny check, in
   `make preflight` and the pre-commit) refuses operator paths, personal emails, internal ids, cloud identifiers, note labels and
   section marks, with an env-supplied names list for values that have no safe pattern; `ee/` holds the commercial-licence area
   with `ee-stays-in-ee` (dependency-cruiser) pinned by `boundary-fixture/`, ADR 0004 and SECURITY.md; DCO sign-off is required
   in CONTRIBUTING.md and checked by the `dco` CI job; CI is a fork-safe, dispatch-only mirror of `make preflight`; the loop
   docs moved to `.loop/`.
-- **Evidence:** `make preflight` green; check-private 65+ cases with a runner mutation sweep (all caught but one self-test
-  blind spot); `make secrets-all` over every branch of the old repo found nothing.
+- **Evidence:** `make preflight` green; check-private 70 cases with a mutation sweep (every mutant caught except one self-test
+  blind spot, a mutated exit path that also hides its own failure); `make secrets-all` over every branch of the old repo found nothing.
 - **Next:** supply the names list in CI, flip the repo public after the owner's go.
 - **Surprising:** the check's first version printed the text it matched, which a CI log masks only as a whole string; it now
   prints `file:line: class` and nothing else.

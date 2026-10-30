@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# The shared toolchain cache must refuse a root or entry that anyone but the current user could have
-# written, before it runs anything in it (docs/development/toolchain-cache.md). Each case runs a copy of
-# scripts/tools.sh in a throwaway repo against a fixture cache. The fixture go and bun print invented
-# pinned versions and log every run; the only curl on PATH logs and fails, so nothing is downloaded.
+# The shared toolchain cache must refuse a root, an entry, or a directory above the root that anyone but the current
+# user (or root, above the root) could have written, before it runs anything in it (docs/development/toolchain-cache.md).
+# Each case runs a copy of scripts/tools.sh in a throwaway repo against a fixture cache. The fixture go and bun print
+# invented pinned versions and log every run; the only curl on PATH logs and fails, so nothing is downloaded. The ls on
+# PATH lists a path named in the case's fake-ls file as the line given there, for shapes one user cannot make (a
+# directory another user owns); every other path is listed by the real ls.
 # Run: scripts/check-tools-cache.sh (part of make preflight).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-tmp=$(mktemp -d "${TMPDIR:-/tmp}/check-tools-cache.XXXXXX")
-trap 'rm -rf "$tmp"' EXIT
+umask 022 # the fixtures' own directories; run() switches to 002 for tools.sh
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/check-tools-cache.XXXXXX"); st=""
+trap 'rm -rf "$tmp" ${st:+"$st"}' EXIT
+tmp=$(cd -P "$tmp" && pwd -P) # tools.sh links to the physical path, so the fixtures name that one
 
 GO=1.99.0; BUN=9.9.9 # invented pins for the throwaway repo
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -20,7 +24,13 @@ printf 'go %s\nbun %s\n' "$GO" "$BUN" > "$tmp/repo/.tool-versions"
 printf '#!/bin/sh\necho "ran curl $*" >> "$JM_FAKE_LOG"; exit 1\n' > "$tmp/bin/curl"
 printf '#!/bin/sh\necho "ran $0 $*" >> "$JM_FAKE_LOG"\ncase "$1" in version) echo "go version go%s fake" ;; env) echo go%s ;; esac\n' "$GO" "$GO" > "$tmp/go"
 printf '#!/bin/sh\necho "ran $0 $*" >> "$JM_FAKE_LOG"\necho %s\n' "$BUN" > "$tmp/bun"
-chmod 755 "$tmp/bin/curl"
+cat > "$tmp/bin/ls" <<'EOF'
+#!/bin/sh
+for a; do p=$a; done
+l=$(awk -F'|' -v p="$p" '$1 == p { print substr($0, length(p) + 2); f = 1 } END { exit !f }' "$JM_FAKE_LS") && { [ -z "$l" ] || echo "$l"; exit 0; }
+exec /bin/ls "$@"
+EOF
+chmod 755 "$tmp/bin/curl" "$tmp/bin/ls"; : > "$tmp/fake-ls"
 
 # A cache as the installer leaves it, but 0755 throughout: owner-writable is allowed, and cleanup needs no chmod.
 make_cache() { # root
@@ -29,27 +39,31 @@ make_cache() { # root
   echo fixture > "$1/$G/.sha256"; echo fixture > "$1/$B/.sha256"
   chmod 755 "$1" "$1/$G" "$1/$G/bin" "$1/$G/bin/go" "$1/$G/bin/gofmt" "$1/$B" "$1/$B/bun"
 }
+fake() { printf '%s|%s\n' "$1" "$2" >> "$tmp/fake-ls"; } # path line: how the next case's ls lists path
 
 fails=0; count=0
-# run <name> <root> <want> [<forbid>]. want is "used"; "download" (the root passed and the install reached
-# curl); or the refusal tools.sh must print. A refused case must run no curl and no fixture binary under
-# <forbid> (default: the whole root). umask 002 throughout: a root tools.sh creates must still be 0755.
+# run <name> <root> <want> [<path>]. want is "used" (<path>: the physical root every run and link must use, default
+# <root>); "download" (the root and the two directories above it, all made by tools.sh, came out 0755 under umask 002
+# and the install reached curl); or the refusal tools.sh must print, and then no curl and no fixture binary under <path>
+# (default: the root) may have run.
 run() {
-  local name=$1 root=$2 want=$3 forbid=${4:-$2/} out rc=0 bad="" log=$tmp/log
+  local name=$1 root=$2 want=$3 at=${4:-$2} out rc=0 bad="" log=$tmp/log
   : > "$log"; count=$((count+1))
   out=$(cd "$tmp/repo" && umask 002 && env -i PATH="$tmp/bin:/usr/bin:/bin:/usr/sbin:/sbin" JM_FAKE_LOG="$log" \
-    JM_TOOLCHAIN_CACHE="$root" scripts/tools.sh 2>&1) || rc=$?
+    JM_FAKE_LS="$tmp/fake-ls" JM_TOOLCHAIN_CACHE="$root" scripts/tools.sh 2>&1) || rc=$?
+  : > "$tmp/fake-ls"
   case $want in
     used)
-      [ "$rc" = 0 ] && grep -qF "ran $root/$G/bin/go version" "$log" && grep -qF "ran $root/$B/bun --version" "$log" \
-        && ! grep -q '^ran curl' "$log" && [ "$(readlink "$tmp/repo/.tools/bin/go")" = "$root/$G/bin/go" ] \
+      [ "$rc" = 0 ] && grep -qF "ran $at/$G/bin/go version" "$log" && grep -qF "ran $at/$B/bun --version" "$log" \
+        && ! grep -q '^ran curl' "$log" && [ "$(readlink "$tmp/repo/.tools/bin/go")" = "$at/$G/bin/go" ] \
         && [ "${out##*$'\n'}" = "tools: go$GO bun $BUN" ] || bad="the cache was not used" ;;
     download)
       [ "$rc" != 0 ] && grep -q '^ran curl' "$log" && ! grep -qv '^ran curl' "$log" \
-        && [ "$(ls -ld "$root" | cut -c1-10)" = drwxr-xr-x ] || bad="the root was not created 0755 and accepted" ;;
+        && [ "$(ls -ld "$root" "${root%/*}" "${root%/*/*}" | cut -c1-10 | sort -u)" = drwxr-xr-x ] \
+        || bad="the root and its parents were not created 0755 and accepted" ;;
     *)
       [ "$rc" != 0 ] && case $out in *"tools: refusing $want"*) true ;; *) false ;; esac \
-        && ! grep -qF -e "ran $forbid" -e "ran curl" "$log" || bad="not refused before anything in it ran" ;;
+        && ! grep -qF -e "ran ${4:-$2/}" -e "ran curl" "$log" || bad="not refused before anything in it ran" ;;
   esac
   if [ -z "$bad" ]; then echo "ok   $name"; else
     fails=$((fails+1)); echo "FAIL $name: $bad"; echo "$out" | sed 's/^/       /'; sed 's/^/       log: /' "$log"
@@ -72,7 +86,35 @@ run 'a symlinked go binary, though its target is yours' "$c/link" "$c/link/$G/bi
 # A directory another user owns cannot be made as one user, but / is owned by root wherever this runs.
 if [ "$(id -u)" = 0 ]; then echo "skip a root owned by another user: running as root, who owns /"
 else run 'a root owned by another user (/, owned by root)' / "/: it is not owned by you"; fi
-run 'a missing root is created 0755 and accepted' "$c/fresh/cache" download
+run 'a missing root and its missing parents are created 0755 and accepted' "$c/fresh/p1/cache" download
+
+# Above the root, and the forms of the root's path.
+mkdir "$c/g-par"; chmod 775 "$c/g-par"; run 'group-writable parent, before the root exists' "$c/g-par/cache" "$c/g-par: $w"
+make_cache "$c/o-par/cache"; chmod o+w "$c/o-par"; run 'other-writable parent of a cache' "$c/o-par/cache" "$c/o-par: $w"
+make_cache "$c/sl/target"; ln -s "$c/sl/target" "$c/sl/link"
+run 'a symlinked root written with a trailing /' "$c/sl/link/" "$c/sl/link: it is a symlink" "$c/sl/"
+run 'a root written with /.' "$c/sl/link/." "$c/sl/link/.: it has a . or .. component" "$c/sl/"
+make_cache "$c/vlink";     mv "$c/vlink/$G" "$c/vlink-go"; ln -s "$c/vlink-go" "$c/vlink/$G"
+run 'a symlinked version dir' "$c/vlink" "$c/vlink/$G: it is a symlink" "$c/vlink"
+make_cache "$c/real/cache"; ln -s "$c/real" "$c/via"
+run 'a root reached through a symlinked parent is used by its physical path' "$c/via/cache" used "$c/real/cache"
+
+# Shapes one user cannot make, listed by the fake ls.
+make_cache "$c/f1/p/cache"; fake "$c/f1/p" "drwxr-xr-x 2 $(( $(id -u) + 1 )) 0 64 Jan 1 00:00 $c/f1/p"
+run 'a parent owned by another user' "$c/f1/p/cache" "$c/f1/p: it is not owned by you or root"
+make_cache "$c/f2/p/cache"; fake "$c/f2/p" ''
+run 'a parent ls prints nothing for' "$c/f2/p/cache" "$c/f2/p: it could not be listed (ls printed nothing)"
+make_cache "$c/f3/p/cache"; fake "$c/f3/p" "drwxrwxrwt 2 0 0 64 Jan 1 00:00 $c/f3/p"
+run 'a root-owned sticky parent above a directory of yours is accepted' "$c/f3/p/cache" used
+make_cache "$c/f4/p/q/cache"; fake "$c/f4/p" "drwxrwxrwt 2 0 0 64 Jan 1 00:00 $c/f4/p"; fake "$c/f4/p/q" "drwxr-xr-x 2 0 0 64 Jan 1 00:00 $c/f4/p/q"
+run 'a root-owned sticky parent above a directory that is not yours' "$c/f4/p/q/cache" "$c/f4/p: it is writable by others, and $c/f4/p/q below it is not yours"
+
+# The real thing: /tmp is a root-owned sticky directory on macOS and Linux, and a directory mktemp makes in it is yours.
+tp=$(cd -P /tmp && pwd -P)
+if ls -ldn "$tp" | awk '{ exit !($3 == 0 && $1 ~ /^d........[tT]/) }'; then
+  st=$(mktemp -d /tmp/check-tools-cache.XXXXXX); make_cache "$st/cache"
+  run 'a root in a directory of yours under /tmp (root-owned, sticky) is used' "$st/cache" used "$tp/${st##*/}/cache"
+else echo "skip a root under /tmp: $tp is not a root-owned sticky directory here"; fi
 
 echo "tools-cache: $count cases, $fails failed"
 [ "$fails" = 0 ]

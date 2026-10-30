@@ -17,23 +17,52 @@ mkdir -p .tools/bin
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 die() { echo "tools: $*" >&2; exit 1; }
 
-# A cached toolchain runs in every worktree that links to it, so whoever can write to it can run code
-# in all of them. Mode bits only (an ACL is not read). A symlink is refused: the installer never makes
-# one, and whoever owns it could re-point it after this check.
-guard() { # path
-  local why=""
+# A cached toolchain runs in every worktree that links to it, so whoever can change it, or rename any
+# directory above it, can run code in all of them. A symlink is refused: the installer never makes one,
+# and whoever owns it could re-point it after this check.
+ME=$(id -u)
+meta() { ls -ldn -- "$1" 2>/dev/null | awk 'NR == 1 { print substr($1, 1, 10), $3 }'; } # path -> "<mode> <uid>"
+guard() { # path [next]: with next, path is a directory above the cache root and next the one below it
+  local why="" mode="" uid=""
   if [ -L "$1" ]; then why="is a symlink"
   elif [ ! -e "$1" ]; then why="is missing"
-  elif [ ! -O "$1" ]; then why="is not owned by you"
-  else case $(ls -ld "$1") in ?????-??-*) ;; *) why="is group- or other-writable" ;; esac; fi # chars 6 and 9
+  else
+    read -r mode uid < <(meta "$1") || true
+    if [ -z "$mode" ]; then why="could not be listed (ls printed nothing)"
+    elif [ "$uid" != "$ME" ] && { [ -z "${2:-}" ] || [ "$uid" != 0 ]; }; then why="is not owned by you${2:+ or root}"
+    else case $mode in
+      ?????-??-?) ;; # chars 6 and 9: group and other write
+      # A root-owned sticky directory (/tmp): others can add entries but cannot rename one they do not own.
+      *[tT]) if [ -z "${2:-}" ] || [ "$uid" != 0 ]; then why="is group- or other-writable"
+             elif [ "$(meta "$2" | cut -d' ' -f2)" != "$ME" ]; then why="is writable by others, and $2 below it is not yours"; fi ;;
+      *) why="is group- or other-writable" ;;
+    esac; fi
+  fi
   [ -z "$why" ] || die "refusing $1: it $why. Only you may be able to change a shared toolchain (docs/development/toolchain-cache.md)"
 }
+# Every directory from / down to the root, which must be yours: whoever could rename the root aside could put
+# their own tree at the path every worktree's links follow.
+walk() { # physical path
+  local p=/ rest=${1#/} next
+  while [ -n "$rest" ]; do
+    next=${p%/}/${rest%%/*}; guard "$p" "$next"; p=$next
+    case $rest in */*) rest=${rest#*/} ;; *) rest="" ;; esac
+  done
+  guard "$p"
+}
+# One directory at a time with mode 755: mkdir -p would leave the parents it makes at the umask.
+mk755() { [ -d "$1" ] || { local up=${1%/*}; mk755 "${up:-/}"; mkdir -m 755 "$1" 2>/dev/null || [ -d "$1" ] || die "cannot create $1"; }; }
 
 CACHE=${JM_TOOLCHAIN_CACHE:-}
 if [ -n "$CACHE" ]; then
   case "$CACHE" in /*) ;; *) die "JM_TOOLCHAIN_CACHE must be an absolute path (got $CACHE)" ;; esac
-  mkdir -p -m 755 "$CACHE"
-  guard "$CACHE" # after mkdir -p, so a root someone else created first is refused
+  case "$CACHE/" in */./*|*/../*) die "refusing $CACHE: it has a . or .. component. Set the plain absolute path" ;; esac
+  while [ "$CACHE" != / ] && [ "${CACHE%/}" != "$CACHE" ]; do CACHE=${CACHE%/}; done # a trailing / would test the link's target
+  [ -L "$CACHE" ] || mk755 "$CACHE"
+  [ ! -L "$CACHE" ] || guard "$CACHE" # refuses: the root itself must not be a symlink
+  # From here on only the physical path is used: for every check, every install and every link in .tools/bin.
+  CACHE=$(cd -P -- "$CACHE" && pwd -P) || die "cannot resolve $JM_TOOLCHAIN_CACHE"
+  walk "$CACHE" # after the directories are made, so one someone else created first is refused
   ROOT=$CACHE
   godir="$CACHE/go-$GO-$os-$goarch"; bundir="$CACHE/bun-$BUN-$os-$goarch"
 else

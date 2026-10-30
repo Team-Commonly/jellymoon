@@ -4,12 +4,15 @@
     "scripts/check-review-gate.mjs",
     "scripts/check-land.mjs",
     "scripts/check-land-e2e.mjs",
-    "scripts/land.mjs"
+    "scripts/land.mjs",
+    "podcore/src/index.ts",
+    "podcore/test/**/*.test.ts"
   ],
   "project": [
     "scripts/**/*.mjs",
     "worker/**/*.ts",
-    "e2e/**/*.ts"
+    "e2e/**/*.ts",
+    "podcore/**/*.ts"
   ],
   "ignoreBinaries": [
     "go",

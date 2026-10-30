@@ -30,13 +30,18 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | Area | Cap |
 |---|---|
 | core (`schema/`, `scripts/`) | 2,200 |
-| worker | 4,000 |
-| daemon | 3,500 |
+| podcore | 2,050 |
+| worker | 3,000 |
+| daemon | 3,000 |
 | e2e | 1,500 |
 
-The caps add up to 11,200 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 11,750 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
+- 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, PC rounds 1–3). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
+- 10-30: podcore 1,750 → 1,850, refusal-path tests, PC round 4
+- 10-30: podcore 1,850 → 1,950, caller-first refusal rules and the tests that pin them, PC round 6
+- 10-30: podcore 1,950 → 2,050, the differential caller property test and its regression rows (one caller derivation, PC round 8)
 2026-10-30: core cap 1,500 → 1,650, land security tests, P08 r9.
 2026-10-30: core cap 1,650 → 1,750, land security tests, P08 r10.
 2026-10-30: core cap 1,750 → 1,800, land security tests, P08 r11.

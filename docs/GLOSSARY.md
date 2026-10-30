@@ -27,5 +27,9 @@ review may rename terms, and a rename lands here and in `schema/` together.
 | **seq** | The pod's monotonic event number; a client resumes from `sinceSeq` | timestamps |
 | **gate** | The review's pod verdict (one per head, posted by the operator) (`jellymoon#<pr> <head>` ... last line `GATE: PASS`) required for every land, matched by the author's immutable user id. Checked by `make land`, the only merge path; GitHub check runs are only a veto (a failed run refuses), never a pass | a decision |
 | **ledger** | The TSV of verifier verdicts keyed on PR and head SHA (`JM_LEDGER`). The verifier's line at the head is the check of record | a record |
+| **pod core** | The pure TypeScript module (`podcore/`) holding the claim, lease and recourse rules: `apply(state, cmd, now)` returns the new state and the output, with no I/O or clock (ADR 0003) | the Worker or the pod itself |
+| **boot** | The command an adapter applies once after restoring state: a plain settle at `now`; `staleMs` must be 0 (ADR 0003). On a created pod it equals a tick; on an uncreated pod it answers nothing | a stretch of leases |
+| **settle** | What the pod core does before every command: end everything due, in deadline order, each stamped with its own deadline | a command |
+| **adapter** | The thin shell around the pod core for one server shape: persists state, delivers output, owns the one timer | an MCP adapter, which wraps operations |
 | **feature** | One entry of `feature_list.json`: an end-to-end test that defines done | an issue |
 | **unit** | One brief given to one worker by the coordinator (`docs/development/workflow.md`) | a feature, though often one-to-one |

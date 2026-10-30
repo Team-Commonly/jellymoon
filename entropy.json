@@ -24,13 +24,19 @@
       "paths": [
         "worker/"
       ],
-      "max": 4000
+      "max": 3000
+    },
+    "podcore": {
+      "paths": [
+        "podcore/"
+      ],
+      "max": 2050
     },
     "daemon": {
       "paths": [
         "daemon/"
       ],
-      "max": 3500
+      "max": 3000
     },
     "e2e": {
       "paths": [

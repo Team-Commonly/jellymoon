@@ -30,6 +30,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-land.mjs
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
+	$(BUN) test podcore
 
 test-go:
 	$(GO) vet ./...

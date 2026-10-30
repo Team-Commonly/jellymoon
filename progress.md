@@ -27,6 +27,24 @@ goes in the PR.
 - **Next:** land #10 with `--bootstrap`.
 - **Surprising:** `go run` reports a child's exit 3 as "exit status 3" and exits 1 itself, so land reads stderr to tell a finding from a failed scan.
 
+## 2026-10-30 · ADR 0003 accepted (unit PC10)
+- **Changed:** ADR 0003 Accepted (owner ruling) with its unknowns named, coalescing leftovers removed, ADR 0002 citations by section and quote, a scope pointer in ADR 0002, GLOSSARY boot entry, nine dead imports and one unused local removed, `noUnusedLocals` on; **Evidence:** `make preflight`, `bun test podcore` (126 tests, per-type stray-caller mutants red except tick, which is equivalent); **Next:** ADR 0002 restart clause; **Surprising:** the well-formed stray-caller rows never reached the refusal path, so a callerOf leak survived until one field was malformed per row.
+
+## 2026-10-30 · pod core hardening (unit PC9)
+- **Changed:** `podcore/` treats a non-string `type` as an unknown command, refuses `boot` with `staleMs` other than 0 (stretch code, its tests and the stale-restore property removed), ADR 0003 corrected; **Evidence:** `make preflight`, `bun test podcore` (117 tests, 4 mutants red); **Next:** ADR 0002 restart clause before any stretch returns; **Surprising:** `Object.hasOwn(HANDLERS, ['change'])` coerces the key, so a guard and the strict compares after it disagreed.
+
+## 2026-10-29 · pod core verifier fixes (unit PC2)
+- **Changed:** `podcore/` renews on any live-run operation before refusal (ADR 0002), adapter-minted `wakeId`s, summary/mention (CommonMark)/run_claim/resend fixes, stronger guard and stale-restore property; **Evidence:** `make preflight`, `bun test podcore` (120 tests, 69 mutations red); **Next:** coordinator re-vendors the head into both arms; **Surprising:** a restored timeline can legitimately claim different things, so the property compares only claim instances both timelines started.
+
+## 2026-10-29 · pod core fixes and freeze (unit P11)
+- **Changed:** `podcore/` settles on one timeline stamped by deadline, records lost=released for a person only, gains `pod_create`, `member_add`, `task_create`, `task_update`, `message_post`, `boot`; run callers and members are gated; **Evidence:** `make preflight`, `bun test podcore` (5 properties x 500 seeds, 6 mutations red); **Next:** freeze `podcore/` and `schema/` until the stack spike verdict; **Surprising:** `TaskUpdateInput` has no assignee, so the core accepts one the schema cannot yet send.
+
+## 2026-10-29 · wakes and run start in the pod core (unit P10)
+- **Changed:** `podcore/` gains wakes (addressed-only, coalescing, 60 s resend), `run_claim`, agent registry and `run.stop` re-send; **Evidence:** `bun test podcore` (54 tests, 5 properties x 500 seeds, 3 mutations red); **Next:** F06/F07 adapter; **Surprising:** `WakeRefs` holds one id per kind, so coalescing keeps the first ref.
+
+## 2026-10-29 · pod core for claims, leases and recourse (unit P09)
+- **Changed:** `podcore/` (pure `apply`/`nextDeadline`, ADR 0003, `podcore-is-pure` rule); **Evidence:** `bun test podcore` (31 tests, 3 properties x 500 seeds, both mutations red); **Next:** wakes (P10); **Surprising:** an op arriving at `leaseUntil` must see the claim already expired, so every command settles first.
+
 ## 2026-10-29 · P08 trust gate, not sandbox (unit P08, round 5)
 - **Changed:** deleted the macOS sandbox, its proof, the platform check, `--reviewer-gate-unavailable`, `--owed` and `REGATE-OWED`; land and verify-preflight run PR code only for a same-repo PR whose author and every push-capable account are in `JM_TRUSTED_LOGINS`; the checkout must be at main and clean with no credentials in its git config; any FAIL at a head blocks it; failed check runs veto; an added `gitleaks:allow` line makes a PR protected; preflight output is quoted; check-gen is proved to bite. **Evidence:** check-land 88 cases, core LOC 1455 to 1414 (max 1454). **Next:** land #10 with `--bootstrap`; `ci.yml` stays off. Core LOC max raised from 1454 to 1500 (ADR 0001's cap) so security tests are not deleted to fit.
 
@@ -184,3 +202,13 @@ goes in the PR.
 - **Held:** the CLI binary name (`commonly` in F08/F15) and the npm scope wait for the trademark check.
 - **Surprising:** the org is on GitHub Free, so a private repo gets no rulesets or merge queue.
   Until that is decided, the coordinator merges only on green CI plus a ledger verdict.
+
+## Server stack tripwires (watched from day one)
+- any claim.released{expired} earlier than last renewal + 60 s, in any environment
+- more than 10 min of unplanned downtime in a month
+- storage rows written per pod-day above 1.5x the projection in docs/development/
+- any change to podcore/ or the protocol proposed for billing or platform reasons
+- ops hours above 8 h/month for two months running
+Record a hit here with its date and evidence, and raise it to the coordinator.
+
+Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (PC4 N10).

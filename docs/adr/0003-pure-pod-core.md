@@ -131,7 +131,7 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
 
 ## Throws
 
-`apply` never throws on adapter input: a non-integer or negative `now`, an unknown command type, a bad `staleMs`, a
+`apply` never throws on JSON-sourced input. The adapter validates every Cmd against `gen/` before `apply` (title, kind, status, name, body and assignee types); the core's own shape checks are a backstop. Refused: a non-integer or negative `now`, an unknown command type, a bad `staleMs`, a
 malformed or exhausted `wakeId` and a non-string message `text`, a `now` past the end of year 9999, and a `run_end` outcome outside the schema enum are all `invalid_input` and change nothing. An id that is `__proto__` or names an `Object.prototype` member (`constructor`, `toString`, ...) in any `*Id` field or `assignee` is `not_found`, refused before any lookup or write; every record lookup also goes through `own()` (`Object.hasOwn`). What can
 still throw is an invariant violation, i.e. a bug or a corrupt saved state: `structuredClone` of a non-JSON state,
 `isoOf` on a non-integer (unreachable once `now` is checked), and a missing record that state invariants guarantee
@@ -142,13 +142,16 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 - Computers can tell an unknown id from a foreign one by the reply code. Accepted: ids are unguessable ULIDs.
 - The boot stretch can turn an `expired` release near the cap into `run_ended`, because a stretched lease may now
   meet the 2 h run cap first.
-- Size: `podcore/` is capped at 1,750 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
+- Size: `podcore/` is capped at 1,850 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
   exception was added; it ratchets down from here.
 - Indented code blocks are NOT recognised as code, so a mention inside one wakes (deliberate).
 - Adapters pass `staleMs: 0` until ADR 0002 gains a restart clause: a stretched lease can outlive "last renewal + 60 s".
 - The save-lag bound is PER LEASE; a pod-wide save throttle does not bound it. Coalescing applies only to a heartbeat whose
   out is only its reply. A heartbeat whose settle emits member events or re-sends `run.stop` or a wake is persisted before emission.
 - The adapter authorizes `agent_register`: only the agent's owner, from a computer that owner registered, may register or move it.
+- `out` events may share objects with the returned state; the adapter treats `out` as read-only.
+- A refused command from a live run (bad shape, prototype-key id) still renews that run's claims (ADR 0002), after settling.
+- A `wakeId` seed whose first id equals a pending wake's id is `invalid_input`, so a retry reusing its seed opens no second wake.
 - Expiry is inclusive at `leaseUntil`.
 - A run's `message_post` needs a `summary` (`summary_required` otherwise, per `schema/message.json`); a person's is derived.
   `ErrorBody.ref` echoes an id only when it is a string of at most 40 characters.

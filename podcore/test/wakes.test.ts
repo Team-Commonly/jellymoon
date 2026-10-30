@@ -131,7 +131,7 @@ describe('input an adapter could get wrong', () => {
 
 describe('coalescing', () => {
   test('three assignments in a row leave one pending wake, delivered once, under the first wakeId', () => {
-    const r = play([[assign(1), 0], [assign(2), 1], [say(1, '@agent-1 look'), 2]]);
+    const r = play([[assign(1), 0], [assign(2), 1], [{ ...say(1, '@agent-1 look'), wakeId: wak(3) } as Cmd, 2]]);
     expect(wakes(r.out).length).toBe(1);
     expect(Object.values(r.state.wakes).length).toBe(1);
     expect(r.state.wakes[AG1]).toMatchObject({ id: wak(1), refs: { taskId: id('tsk', 11), messageId: id('msg', 1) } });
@@ -278,5 +278,11 @@ describe('agent_register', () => {
     const r = play([[{ type: 'agent_register', agentId: AG1, ownerId: U_AGENT_OWNER.id, computerId: CMP_2 }, 0], [assign(1), 1]]);
     expect(wakes(r.out).map((o) => o.computerId)).toEqual([CMP_2]);
     expect(world().agents[AG1].computerId).toBe(CMP_1);
+  });
+
+  test('a retried command reusing its seed is invalid_input while the first wake is pending', () => {
+    const cmd = assign(1, AG1, wak(7));
+    const r = play([[cmd, 0], [{ ...cmd, taskId: id('tsk', 40) } as Cmd, 1]]);
+    expect([errCode(r.out), Object.values(r.state.wakes).length]).toEqual(['invalid_input', 1]);
   });
 });

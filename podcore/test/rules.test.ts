@@ -250,4 +250,17 @@ describe('one claim per task', () => {
     expect((events(apply(world(), post(run, 'Done'), 5).out)[0].data as { summary: string }).summary).toBe('Done');
     expect((events(apply(world(), post({ kind: 'user', userId: U_OWNER.id }), 5).out)[0].data as { summary: string }).summary).toBe('body');
   });
+  test('a live run\'s refused command still renews its claims (ADR 0002): T1 is held to 110 000 in all four sequences', () => {
+    const wid = id('wak', 1);
+    const refused: Cmd[] = [
+      { type: 'op', runId: RUN_A, taskId: 'constructor' }, { type: 'op', runId: RUN_A, taskId: 'nonexistent' },
+      { type: 'task_create', caller: { kind: 'run', runId: RUN_A }, taskId: id('tsk', 30), title: 't', kind: 'chore' } as unknown as Cmd,
+      { type: 'task_update', caller: { kind: 'run', runId: RUN_A }, taskId: T1, assignee: '__proto__', wakeId: wid },
+    ];
+    for (const cmd of refused) {
+      const r = play([[claimA(), 0], [cmd, 50_000], [{ type: 'tick' }, 109_999]]);
+      expect([JSON.stringify(cmd), r.state.claims[T1]?.runId]).toEqual([JSON.stringify(cmd), RUN_A]);
+      expect(play([[{ type: 'tick' }, 110_000]], r.state).state.claims[T1]).toBe(undefined);
+    }
+  });
 });

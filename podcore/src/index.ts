@@ -1,6 +1,6 @@
 // The pod core (ADR 0003): apply(state, cmd, now) -> { state, out }. Pure; adapters own I/O and the timer.
 import { messagePostCmd, memberAddCmd, podCreateCmd, taskCreateCmd, taskUpdateCmd } from './board';
-import { LEASE_MS, nextDeadline, settle } from './claims';
+import { LEASE_MS, nextDeadline, own, renewRun, settle } from './claims';
 import { bootCmd, claimCmd, heartbeatCmd, opCmd, releaseCmd, runEndCmd, runStopCmd } from './commands';
 import { fail } from './emit';
 import { agentRegisterCmd, changeCmd, runClaimCmd, wakeAckCmd } from './wakes';
@@ -48,6 +48,13 @@ const shapeBad = (cmd: Cmd): boolean => {
 const protoKeyed = (v: unknown): boolean => typeof v === 'object' && v !== null && Object.entries(v).some(([k, x]) => (
   typeof x === 'string' ? (/Id$|^assignee$/.test(k) && (x === '__proto__' || x in {})) : protoKeyed(x)));
 
+/** The run id a command's token names, if it names one as a string: a run caller, or `claim`/`op`. */
+const runOf = (cmd: Cmd): string | null => {
+  const o = cmd as Record<string, unknown>;
+  if (isObj(o.caller)) return o.caller.kind === 'run' && typeof o.caller.runId === 'string' ? o.caller.runId : null;
+  return (cmd.type === 'claim' || cmd.type === 'op') && typeof o.runId === 'string' ? o.runId : null;
+};
+
 /** Why a call cannot run at all: input the types promise and an adapter might still get wrong. Never a throw. */
 function refusal(cmd: Cmd, now: number): { code: 'invalid_input' | 'not_found'; why: string } | null {
   if (!Number.isInteger(now) || now < 0 || now > MAX_NOW) return { code: 'invalid_input', why: 'now must be an integer from 0 to the end of year 9999, in milliseconds.' };
@@ -61,7 +68,16 @@ function refusal(cmd: Cmd, now: number): { code: 'invalid_input' | 'not_found'; 
 export function apply(state: PodState, cmd: Cmd, now: number): { state: PodState; out: Out[] } {
   const c: Ctx = { s: structuredClone(state), now, out: [], opened: 0 };
   const bad = refusal(cmd, now);
-  if (bad !== null) return fail(c, bad.code, bad.why), { state: c.s, out: c.out };
+  if (bad !== null) {
+    // ADR 0002: ANY operation a live run's token makes renews its claims, a refused one too. With a usable clock, settle then renew.
+    const id = runOf(cmd);
+    if (id !== null && Number.isInteger(now) && now >= 0 && now <= MAX_NOW) {
+      settle(c);
+      const run = own(c.s.runs, id);
+      if (run?.status === 'active') renewRun(c, id);
+    }
+    return fail(c, bad.code, bad.why), { state: c.s, out: c.out };
+  }
   // boot stretches stale leases BEFORE the settle, or a lease that only looks lapsed would be expired early.
   if (cmd.type === 'boot') bootCmd(c, cmd);
   settle(c);

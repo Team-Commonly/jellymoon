@@ -12,7 +12,7 @@ const MATH_OK = ['floor', 'min', 'max'];
 const rules: RegExp[] = [
   ...BANNED.map((w) => new RegExp(`(?<![A-Za-z0-9_$])${w}(?![A-Za-z0-9_$])`)),
   new RegExp(`(?<![A-Za-z0-9_$])Math(?![A-Za-z0-9_$])(?!\\s*\\.\\s*(${MATH_OK.join('|')})(?![A-Za-z0-9_$]))`),
-  /Function\s*\(/, /\\u[0-9a-fA-F{]/, /\.\s*constructor(?![A-Za-z0-9_$])/, /\bimport\s*\(/, /\.then\s*\(/,
+  /Function\s*\(/, /\\u[0-9a-fA-F{]/, /\.\s*constructor(?![A-Za-z0-9_$])/, /\[\s*(['"`])constructor\1\s*\]/, /\bimport\s*\(/, /\.then\s*\(/,
 ];
 const violations = (text: string): string[] => rules.filter((re) => re.test(text)).map((re) => re.source);
 
@@ -27,7 +27,7 @@ test('the guard fails each aliasing form, and passes the three allowed Math call
   const bad = [
     'const M = Math; M.random()', 'Math.random()', "Math['random']()", 'const { random } = Math', 'Math . round(1)', 'Reflect.get(Math, "random")',
     'globalThis.Date.now()', 'self.Date', 'global.process', 'window.fetch', 'console.log(1)', 'new Function ("return 1")', 'Function\n("x")', 'import("node:fs")',
-    'require("fs")', '(0, eval)("1")', 'const T = setTimeout; T(f)', 'Bun.file("x")', 'p.then (f)', 'new Date()', 'Date.now()', 'const D = \\u0044ate', 'x.constructor.constructor("return 1")()', 'setImmediate(f)',
+    'require("fs")', '(0, eval)("1")', 'const T = setTimeout; T(f)', 'Bun.file("x")', 'p.then (f)', 'new Date()', 'Date.now()', 'const D = \\u0044ate', 'x.constructor.constructor("return 1")()', 'setImmediate(f)', "Math.min['constructor']('return Dat'+'e.now()')()", 'x["constructor"]', 'x[`constructor`]',
     'WebAssembly.compile(b)', 'navigator.userAgent', 'new MessageChannel()', 'new SharedArrayBuffer(8)',
   ];
   for (const text of bad) expect([text, violations(text).length > 0]).toEqual([text, true]);

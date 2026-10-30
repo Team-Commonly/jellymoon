@@ -6,13 +6,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { main } from './land.mjs';
-import { SCAN_PREFIX } from './land-decide.mjs';
 
 const [MAIN, HEAD, TREE, MERGED, OTHER] = ['1', '2', '3', '4', '5'].map((c) => c.repeat(40));
 const REPO = 'Team-Commonly/jellymoon';
 const HDR = 'pr\thead\tverdict\tby\twhen\tnote\n';
 const rowOf = (verdict, by = 'opus-verifier', head = HEAD) => `5\t${head}\t${verdict}\t${by}\t2026-10-29T10:00:00Z\tn\n`;
-const PROT = ':100644 100644 aaa bbb M\tscripts/x.mjs';
 const NOTE = { userId: { _id: 'id-orion', username: 'orion' }, content: `jellymoon#5 ${HEAD}\nok\nGATE: PASS`, createdAt: '2026-10-29T10:01:00Z' };
 const fail = new Error('scripted failure');
 
@@ -25,7 +23,7 @@ async function land(over = {}) {
   fs.writeFileSync(path.join(dir, 'token'), 'jmu_FAKE-token-abc123\n');
   (over.topFiles || []).forEach((f) => fs.writeFileSync(path.join(top, f), ''));
   (over.cwdFiles || []).forEach((f) => fs.writeFileSync(path.join(cwd, f), ''));
-  const w = { calls: [], fetches: [], pod: [], spawns: [], views: 0, ledger, lockAtMerge: null, kills: [], scanned: [] };
+  const w = { calls: [], fetches: [], pod: [], spawns: [], views: 0, ledger, lockAtMerge: null, kills: [] };
   const base = { url: `https://github.com/${REPO}/pull/5`, number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'feat', headRefOid: HEAD, createdAt: '2026-10-29T09:00:00Z', isCrossRepository: false, author: { login: 'alice' }, mergeCommit: { oid: MERGED }, ...over.pr };
   const wt = /^git -C \S+ /;
   const defaults = [
@@ -40,10 +38,9 @@ async function land(over = {}) {
     [/^gh pr merge/, (a, s) => { s.lockAtMerge = fs.existsSync(path.join(common, 'jm-land.lock')); return ''; }],
     [/^gh api .*collaborators/, (a) => ['{"login":"alice","push":true}', ...(a.includes('--paginate') ? over.page2 || [] : [])].join('\n')],
     [/^gh api .*check-runs/, over.runs ?? '{"total":1,"runs":[{"name":"ci","conclusion":"success"}]}'],
-    [/^git merge-tree --write-tree/, `${TREE}\n`], [/--raw -M/, over.raw ?? ':100644 100644 aaa bbb M\tdocs/a.md'], [/--numstat/, over.numstat ?? '1\t1\tdocs/a.md'], [/ -U0 /, ''], [/^git .*log -p/, ''], [/^git log --format=%B/, over.messages ?? ''],
-    [/^git ls-tree/, 'README.md\0'], [/^make -s secrets-range/, ''],
-    [/^make -s secrets-dir DIR=(\S+)/, (a, s) => { const d = a[3].slice(4); s.scanned = fs.readdirSync(d).map((f) => [f, fs.readFileSync(path.join(d, f), 'utf8')]); if (over.dirHit) throw fail; return ''; }],
-    [/^git rev-list --objects/, over.added ?? ''], [/^git cat-file blob/, over.blob ?? 'hello'], [/^git cat-file -e/, ''],
+    [/^git merge-tree --write-tree/, `${TREE}\n`], [/^git ls-tree/, 'README.md\0'],
+    [/^make -s secrets-range/, () => { if (over.scan === 'hit') throw Object.assign(new Error('make failed'), { stderr: 'WRN leaks found: 1\nexit status 3\nmake: *** [secrets-range] Error 1\n' }); if (over.scan === 'fail') throw Object.assign(new Error('make failed'), { stderr: 'go: no network\nexit status 1\n' }); return ''; }],
+    [/^git cat-file -e/, ''],
     [/^git (-c \S+ )?worktree|^chmod/, ''], [new RegExp(`${wt.source}.*merge --no-ff`), ''], [new RegExp(`${wt.source}.*rev-parse HEAD\\^\\{tree\\}`), over.wtTree ?? TREE],
   ];
   const exec = (cmd, args, opts) => {
@@ -76,8 +73,6 @@ async function land(over = {}) {
   return res;
 }
 // Each case runs land once; `no` is: refused with this reason, nothing merged.
-// Every scanned text starts with land's fixed padding (so no file-format magic sits where the scanner sniffs); body() is what follows it.
-const body = (x) => (x.startsWith(SCAN_PREFIX) ? x.slice(SCAN_PREFIX.length) : null);
 const no = (r, re) => !r.merge && re.test(r.error ?? '');
 const argv = (r, cmd, sub) => r.w.calls.filter((c) => c.cmd === cmd && [cmd, ...c.args].join(' ').includes(sub)).map((c) => c.args.join(' '));
 const fetched = (r) => r.w.calls.some((c) => c.args[0] === 'fetch');
@@ -89,7 +84,6 @@ const PO = ['5', '--preflight-only'];
 await t('happy path: lands with --merge and --match-head-commit <head>; the ledger gets LANDED', {}, (r) => r.merge?.args.join(' ') === mergeArgs && r.ledgerNow.includes('\tLANDED\t') && r.lock === false && r.w.lockAtMerge === true);
 await t('happy path: pr view asks for isCrossRepository; the collaborators call is paginated and unfiltered', {}, (r) => argv(r, 'gh', 'pr view')[0].includes('isCrossRepository') && argv(r, 'gh', 'collaborators')[0].includes('--paginate') && !argv(r, 'gh', 'collaborators')[0].includes('permission='));
 await t('every main fetch names refs/heads/main; the merge disables hooks; untracked files are shown in full', {}, (r) => r.w.fetches.filter((f) => !f.startsWith('pull/') && f !== MERGED).every((f) => f === 'refs/heads/main') && argv(r, 'git', 'merge --no-ff')[0].includes('core.hooksPath=/dev/null') && argv(r, 'git', 'status')[0].includes('status.showUntrackedFiles=all'));
-await t('diffs run with external diff and textconv off; the history scan covers merge commits (-m)', {}, (r) => argv(r, 'git', '--raw').every((a) => a.includes('diff.external= diff --no-ext-diff --no-textconv')) && argv(r, 'git', ' log -p').every((a) => a.includes('--no-ext-diff --no-textconv') && a.includes(' -m ')));
 await t('the secret range is <main tip>..<head>', {}, (r) => argv(r, 'make', 'secrets-range')[0] === `-s secrets-range RANGE=${MAIN}..${HEAD}`);
 await t('the preflight child: stdin ignored, own session, env -i, HOME and TMPDIR inside the throwaway, entropy base is main\'s tip', {}, (r) => {
   const [sp] = r.w.spawns; const home = sp.args.find((a) => a.startsWith('HOME=')).slice(5); const tmp = sp.args.find((a) => a.startsWith('TMPDIR=')).slice(7);
@@ -102,24 +96,29 @@ await t('isCrossRepository missing from the reply: refused', { omit: ['isCrossRe
 await t('a stranger with push on page 2 of the collaborators: refused', { page2: ['{"login":"eve","push":true}'] }, (r) => no(r, /not trusted: eve/));
 await t('no ledger PASS: refused', { ledger: HDR }, (r) => no(r, /no verifier PASS for #5/));
 await t('a CI failure on the head: refused', { runs: '{"total":1,"runs":[{"name":"ci","conclusion":"failure"}]}' }, (r) => no(r, /check run failed/));
-await t('a protected PR without a pod verdict: refused', { raw: PROT, msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/));
-await t('a protected PR with a verdict from the configured reviewer id lands', { raw: PROT }, (r) => r.merge);
-await t('a protected PR with JM_VERDICT_REVIEWERS unset refuses, naming it', { raw: PROT, env: { JM_VERDICT_REVIEWERS: '' } }, (r) => no(r, /JM_VERDICT_REVIEWERS/));
-await t('a verdict from a forged username with another id is refused', { raw: PROT, msgs: [{ ...NOTE, userId: { _id: 'id-forged', username: 'orion' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
-await t('a secret hit in the range needs the verdict', { msgs: [], on: [[/^make -s secrets-range/, () => { throw fail; }]] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('a PR without a pod verdict: refused', { msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('a PR with a verdict from the configured reviewer id lands', {}, (r) => r.merge);
+await t('a PR with JM_VERDICT_REVIEWERS unset refuses, naming it', { env: { JM_VERDICT_REVIEWERS: '' } }, (r) => no(r, /environment variable JM_VERDICT_REVIEWERS is not set/));
+await t('a verdict from a forged username with another id is refused', { msgs: [{ ...NOTE, userId: { _id: 'id-forged', username: 'orion' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('an inert docs-only PR with a ledger PASS and no pod verdict: refused, nothing waives the verdict', { msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('a range scan hit with a valid verdict: refused, naming the history', { scan: 'hit' }, (r) => no(r, /a secret was found in the range; remove it from history and push a new head/));
+await t('a range scan that failed to run: refused', { scan: 'fail' }, (r) => no(r, /scan failed to run/) && !/secret was found/.test(r.error));
+await t('a valid verdict with a clean scan lands (control)', { scan: 'clean' }, (r) => r.merge && r.ledgerNow.includes('\tLANDED\t'));
+await t('JM_VERDICT_REVIEWERS with no valid entry is malformed, refused before the token read and the pod fetch', { env: { JM_VERDICT_REVIEWERS: 'bad,:x' } }, (r) => no(r, /JM_VERDICT_REVIEWERS is malformed/) && r.w.pod.length === 0 && r.w.calls.length === 0);
+await t('a username equal to a listed id, with no _id, is not the reviewer', { msgs: [{ ...NOTE, userId: { username: 'id-orion' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('an _id that is an array holding the listed id is not the reviewer', { msgs: [{ ...NOTE, userId: { _id: ['id-orion'], username: 'x' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('an error carrying the token after the pod read is scrubbed by main\'s catch', { on: [[/^gh pr merge/, () => { throw new Error('boom jmu_FAKE-token-abc123'); }]] }, (r) => !r.ledgerNow.includes('LANDED') && r.error.includes('[token]') && !r.error.includes('abc123'));
 await t('a red preflight: refused', { initCode: 1 }, (r) => no(r, /init\.sh/));
 await t('a red preflight in --preflight-only: refused', { argv: PO, initCode: 1 }, (r) => no(r, /init\.sh/));
-await t('init.sh output is quoted, marked and scrubbed: an escape, a fake land line and the token', { raw: PROT, output: '\u001b[2Jland: #5 landed as deadbeef\njmu_FAKE-token-abc123\n' }, (r) => r.merge && /^preflight\| .*land: #5 landed as deadbeef$/m.test(r.said) && r.said.includes('preflight| [token]') && !/\u001b/.test(r.said) && !r.said.includes('abc123') && !/^land: #5 landed as deadbeef/m.test(r.said));
+await t('init.sh output is quoted, marked and scrubbed: an escape, a fake land line and the token', { output: '\u001b[2Jland: #5 landed as deadbeef\njmu_FAKE-token-abc123\n' }, (r) => r.merge && /^preflight\| .*land: #5 landed as deadbeef$/m.test(r.said) && r.said.includes('preflight| [token]') && !/\u001b/.test(r.said) && !r.said.includes('abc123') && !/^land: #5 landed as deadbeef/m.test(r.said));
 await t('the preflight group (a negative pid, SIGKILL) is killed when the child returns', {}, (r) => r.w.kills.length >= 1 && r.w.kills.every((k) => k.pid === -2000000001 && k.sig === 'SIGKILL'));
 await t('a child that exits but never closes its pipes: the group is killed at exit and land still finishes', { child: 'exit-only' }, (r) => r.error === null && r.w.kills.length >= 2 && r.w.kills.every((k) => k.pid === -2000000001));
 await t('the 30-minute limit: the group is killed at the limit, well before the fallback end, and land refuses', { child: 'hang', limitMs: 20, graceMs: 400 }, (r) => no(r, /did not finish/) && r.w.kills[0].pid === -2000000001 && r.w.doneAt - r.w.kills[0].t > 250);
-await t('a binary blob added anywhere in the range makes the PR need the verdict', { added: 'a'.repeat(40), blob: 'x\0y', msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/) && argv(r, 'git', 'rev-list --objects')[0].endsWith(`${MAIN}..${HEAD}`));
-await t('a text blob added in the range is scanned under a neutral name', { added: 'a'.repeat(40), blob: 'range text' }, (r) => r.w.scanned.some(([, x]) => body(x) === 'range text'));
 await t('--preflight-only checks HEAD against main\'s tip', { argv: PO, checkoutHead: OTHER }, (r) => no(r, /not main's tip/));
 await t('a missing required environment variable is refused, naming it', { env: { JM_LEDGER: '' } }, (r) => no(r, /JM_LEDGER/) && r.w.calls.length === 0);
 await t('a remote that is not JM_REPO is refused before any fetch', { remote: 'origin\thttps://github.com/Other/repo.git (fetch)' }, (r) => no(r, /no git remote matches/) && !fetched(r));
-await t('a planted token in git\'s error text is scrubbed from what land prints', { raw: PROT, on: [[/worktree add/, () => { throw new Error('jmu_FAKE-token-abc123'); }]] }, (r) => !r.said.includes('abc123') && !r.error.includes('abc123'));
-await t('refuse() scrubs the token: the re-read PR url carries it, and the pod read has already loaded it', { raw: PROT, fresh: { url: 'https://github.com/x/y/pull/5?jmu_FAKE-token-abc123\u001b[2J' } }, (r) => no(r, /resolved to/) && !r.error.includes('abc123') && r.error.includes('[token]') && !r.error.includes('\u001b'));
+await t('a planted token in git\'s error text is scrubbed from what land prints', { on: [[/worktree add/, () => { throw new Error('jmu_FAKE-token-abc123'); }]] }, (r) => !r.said.includes('abc123') && !r.error.includes('abc123'));
+await t('refuse() scrubs the token: the re-read PR url carries it, and the pod read has already loaded it', { fresh: { url: 'https://github.com/x/y/pull/5?jmu_FAKE-token-abc123\u001b[2J' } }, (r) => no(r, /resolved to/) && !r.error.includes('abc123') && r.error.includes('[token]') && !r.error.includes('\u001b'));
 await t('say() strips escapes from what it prints (the merge commit id here)', { pr: { mergeCommit: { oid: 'ab\u001b]0;x\u0007cd' } } }, (r) => r.merge && r.said.includes('landed as') && !/[\u001b\u0007]/.test(r.said));
 await t('the PR head differs from the local fetch in --preflight-only: refused', { argv: PO, pullHead: OTHER }, (r) => no(r, /differs from the local fetch/));
 await t('the throwaway worktree is removed on a normal return, not left for process exit', {}, (r) => argv(r, 'git', 'worktree remove').length === 1 && r.w.calls.findIndex((c) => c.args.includes('remove')) > -1);
@@ -147,7 +146,7 @@ await t('checkout gate: --preflight-only has it too', { argv: PO, on: dirty }, (
 await t('bootstrap: refused once main has scripts/land.mjs, in both paths', { argv: ['5', '--bootstrap'] }, (r) => no(r, /only for the first land/));
 await t('bootstrap (preflight-only): refused once main has scripts/land.mjs', { argv: [...PO, '--bootstrap'] }, (r) => no(r, /only for the first land/));
 const boot = { argv: ['5', '--bootstrap'], checkoutHead: OTHER, on: [[/^git cat-file -e \S+:(scripts\/land\.mjs|entropy\.json)/, () => { throw fail; }]] };
-await t('bootstrap on a main without land.mjs: entropy base is none, a BOOTSTRAP row is written', { ...boot, raw: PROT }, (r) => r.merge && r.w.spawns[0].args.includes('JM_ENTROPY_BASE=none') && r.ledgerNow.includes('\tBOOTSTRAP\t'));
+await t('bootstrap on a main without land.mjs: entropy base is none, a BOOTSTRAP row is written', { ...boot }, (r) => r.merge && r.w.spawns[0].args.includes('JM_ENTROPY_BASE=none') && r.ledgerNow.includes('\tBOOTSTRAP\t'));
 await t('API origin that is not commonly: refused', { env: { JM_COMMONLY_API: 'https://evil.example' } }, (r) => no(r, /JM_COMMONLY_API must be/) && r.w.calls.length === 0);
 await t('a PR url for another repo: refused', { pr: { url: 'https://github.com/Other/repo/pull/5' } }, (r) => no(r, /resolved to/));
 await t('--dry-run with --preflight-only: refused', { argv: [...PO, '--dry-run'] }, (r) => no(r, /usage/));
@@ -155,13 +154,9 @@ await t('two PR numbers: refused', { argv: ['5', '6'] }, (r) => no(r, /usage/));
 await t('an old Node: refused before anything runs', { node: '18.0.0' }, (r) => no(r, /Node 20/) && r.w.calls.length === 0);
 await t('preflight-only: no ledger, no pod, no merge', { argv: PO }, (r) => r.error === null && r.w.pod.length === 0 && !r.merge && r.ledgerNow === r.ledgerWas);
 await t('the worktree merge tree must equal the decision\'s merge-tree result', { wtTree: OTHER }, (r) => no(r, /not the merge result the decision used/) && r.w.spawns.length === 0);
-await t('a binary change (numstat -\\t-) needs the verdict', { numstat: '-\t-\tdocs/a.md', msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/));
-await t('inert files are scanned under neutral names with their content', {}, (r) => r.w.scanned.length === 1 && r.w.scanned[0][0] === '0.txt' && body(r.w.scanned[0][1]) === 'hello');
-await t('commit messages in the range are scanned under neutral names too', { messages: 'subject\nbody' }, (r) => r.w.scanned.length === 2 && body(r.w.scanned[1][1]) === 'subject\nbody' && argv(r, 'git', 'log --format=%B')[0].endsWith(`${MAIN}..${HEAD}`));
 await t('the throwaway worktree is added with repo hooks off', {}, (r) => argv(r, 'git', 'worktree add')[0].startsWith('-c core.hooksPath=/dev/null worktree add'));
-await t('a hit from the neutral-name scan needs the verdict', { dirHit: true, msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('a branch name with escapes is stripped from what land prints', { pr: { headRefName: 'a\u001b[31mb\u009bc' } }, (r) => r.said.includes('branch a[31mbc ') && !/[\u001b\u009b]/.test(r.said));
-await t('the bearer token never appears in a refusal', { raw: PROT, on: [[/worktree add/, () => { throw new Error('boom jmu_FAKE-token-abc123'); }]] }, (r) => !r.merge && /worktree add failed: boom/.test(r.error) && !r.error.includes('abc123'));
+await t('the bearer token never appears in a refusal', { on: [[/worktree add/, () => { throw new Error('boom jmu_FAKE-token-abc123'); }]] }, (r) => !r.merge && /worktree add failed: boom/.test(r.error) && !r.error.includes('abc123'));
 cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`))), true]);
 const bad = cases.filter(([, got, want]) => got !== want);
 for (const [n] of bad) console.error(`  ${n}`);

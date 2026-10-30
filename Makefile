@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range secrets-dir hooks preflight private secrets-all
+.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -55,13 +55,10 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 secrets:
 	$(GO) run $(GITLEAKS) git --log-opts="-m HEAD" --redact --no-banner .
 
-# land only: secrets in a commit range, ignoring gitleaks:allow markers (RANGE=<main tip>..<head>).
+# land only: secrets in a commit range, ignoring gitleaks:allow markers (RANGE=<main tip>..<head>). It can only refuse. A finding makes
+# gitleaks exit 3, which `go run` reports on stderr as "exit status 3"; any other failure exits 1, so land can name which it was.
 secrets-range:
-	$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --redact --no-banner .
-
-# land only: a directory of inert files copied under neutral names (DIR=<dir>); no config from the PR, markers ignored.
-secrets-dir:
-	$(GO) run $(GITLEAKS) dir --ignore-gitleaks-allow --redact --no-banner $(DIR)
+	$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --exit-code 3 --redact --no-banner .
 
 # Per worktree: pre-commit runs the fast gates; fence=1 also blocks pushes (worker worktrees).
 hooks:

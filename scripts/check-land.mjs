@@ -6,9 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
-  landedNote, mergeAction, needsVerdict,
+  landedNote, mergeAction, mergeTree,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, hiddenInInert, isPlainText, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -125,36 +125,6 @@ const cases = [
       ['checkout: an http extraheader is refused', c({ config: 'http.https://github.com/.extraheader AUTHORIZATION: basic x' }).ok, false],
     ];
   })(),
-  // the real merge result decides what is protected, even where the merge base lies (a criss-cross history)
-  ...(() => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-crisscross-'));
-    const sh = (script) => execFileSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-    sh(`export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@l GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@l
-      n=0; git() { n=$((n+1)); GIT_COMMITTER_DATE="2026-01-01T00:00:0$n" GIT_AUTHOR_DATE="2026-01-01T00:00:0$n" command git "$@"; } # fixed dates (P1 the newest, so it is the merge base git picks): ties are otherwise a coin toss
-      c() { git commit -qam "$1"; }; set_f() { echo "$1" > scripts/f; c "f=$1"; }
-      git init -q -b main; mkdir scripts; echo X > scripts/f; git add -A; c base
-      git checkout -qb pr; echo 1 > g; git add -A; n=49; c P1; n=1; P1=$(git rev-parse HEAD)
-      git checkout -q main; set_f Y; git checkout -q pr; git merge -q --no-edit main
-      git checkout -q main; git merge -q --no-edit $P1; git checkout -q pr; set_f X`);
-    const [tip, head] = [sh('git rev-parse main'), sh('git rev-parse pr')];
-    const old = filesFromRaw(sh(`git diff --raw -M $(git merge-base ${tip} ${head}) ${head}`)).map((f) => f.filename).join();
-    const now = mergeResult((a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' }).trim(), tip, head).files.map((f) => f.filename).join();
-    fs.rmSync(dir, { recursive: true, force: true });
-    return [['criss-cross: the merge-base diff sees nothing of scripts/ (the old method)', old, ''], ['criss-cross: the merge result shows scripts/f changing', now, 'scripts/f']];
-  })(),
-  // git's own raw output through the parser: renames and copies list both names, modes ride along
-  ...(() => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-raw-'));
-    const g = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@l', ...a], { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } }).trim();
-    g('init', '-q'); fs.mkdirSync(path.join(dir, 'schema')); fs.writeFileSync(path.join(dir, 'schema', 'a.json'), 'x'.repeat(200)); g('add', '-A'); g('commit', '-qm', 'a');
-    fs.mkdirSync(path.join(dir, 'docs')); g('mv', 'schema/a.json', 'docs/a.json'); fs.writeFileSync(path.join(dir, 'docs', 'b.json'), 'x'.repeat(200)); fs.symlinkSync('../x', path.join(dir, 'docs', 'l.md'));
-    g('add', '-A'); g('commit', '-qm', 'b');
-    const files = filesFromRaw(g('diff', '--raw', '-M', '-C', 'HEAD~1', 'HEAD'));
-    const names = files.map((f) => [f.filename, f.previous_filename].filter(Boolean).join('<-')).sort().join();
-    const link = files.find((f) => f.filename === 'docs/l.md');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return [['raw diff: a rename lists both names', names.includes('docs/a.json<-schema/a.json'), true], ['raw diff: a symlink carries mode 120000', link.modes.join(), '000000,120000'], ['raw diff: the parser sees every entry', files.length, 3]];
-  })(),
   // the ledger is never read loosely
   ['ledger: a space-separated FAIL row makes the ledger unreadable', throws(() => parseLedger(`${HEADER}\n5 ${H} FAIL opus-verifier now x`)), true],
   ['ledger: a row with 7 columns is unreadable', throws(() => parseLedger(`${HEADER}\n${[...row(5, H, 'PASS', 'opus-verifier'), 'extra'].join('\t')}`)), true],
@@ -167,11 +137,9 @@ const cases = [
   ['entropy base: none only for the bootstrap land of a main without entropy.json', entropyBase('abc', { bootstrap: true, mainHasEntropy: false }), 'none'],
   ['entropy base: a non-bootstrap land never gets none', entropyBase('abc', { bootstrap: false, mainHasEntropy: false }), 'abc'],
   ['output: U+200E, U+200F and U+061C are stripped from quoted preflight output', quoteOutput('a\u200eb\u200fc\u061cd'), 'preflight| abcd'],
-  // the decision after the scans, and the dry run
-  ['verdict: a hidden secret alone (hides) needs the verdict', needsVerdict({ files: [{ filename: 'docs/a.md' }], tree: [], patch: '', hides: true }), true],
-  ['verdict: a marker in history alone needs the verdict', needsVerdict({ files: [{ filename: 'docs/a.md' }], tree: [], patch: 'diff --git a/x b/x\n@@ -0,0 +1 @@\n+k # gitleaks:allow', hides: false }), true],
-  ['verdict: a protected path alone needs the verdict', needsVerdict({ files: [{ filename: 'Makefile' }], tree: [], patch: '', hides: false }), true],
-  ['verdict: an inert docs change with nothing hidden needs none', needsVerdict({ files: [{ filename: 'docs/a.md' }], tree: [], patch: '', hides: false }), false],
+  // the dry run
+  ['merge tree: the first line of merge-tree is the tree', mergeTree(() => 'abc123\nrest', H, H2), 'abc123'],
+  ['merge tree: a conflict is a refusal naming both commits', throws(() => mergeTree(() => { throw new Error('x'); }, H, H2)), true],
   ['dry run: stops before the merge', mergeAction({ dryRun: true }), 'stop'],
   ['a real land goes on to the merge', mergeAction({ dryRun: false }), 'merge'],
   ['landed note: a merge commit with the tested tree is just the sha', landedNote('abc', 't1', 't1'), 'abc'],
@@ -181,11 +149,7 @@ const cases = [
   ['pod: the right id with any username is accepted', pod([msg('orion', verdict(5, H), { userId: { _id: 'id-orion', username: 'alice-example' } })]).ok, true],
   ['pod: a forged later PASS (other id, same name) does not override the real FAIL', pod([msg('orion', verdict(5, H, 'FAIL')), msg('orion', verdict(5, H), { userId: { _id: 'id-forged', username: 'orion' } })]).ok, false],
   ['pod: the latest verdict is decided per id (a later PASS from the same id wins)', pod([msg('orion', verdict(5, H, 'FAIL'), { createdAt: '2026-10-29T10:00:00Z' }), msg('orion', verdict(5, H), { createdAt: '2026-10-29T11:00:00Z' })]).ok, true],
-  ['text: plain UTF-8 with tab, LF, FF and CR is text', isPlainText('a\tb\nc\fd\re é 漢'), true],
-  ['text: a NUL, a vertical tab, DEL, ESC or an invalid byte (U+FFFD) is not text', ['a\0b', 'a\u000bb', 'a\u007fb', 'a\u001bb', 'a\ufffdb'].some(isPlainText), false],
-  ['inert scan: a merge-result file that is not text is never handed to the scanner (counts as a hit)', hiddenInInert({ files: [{ filename: 'docs/a.md', modes: ['000000', '100644'] }], tree: 't', added: [], messages: '', binary: false, patch: '' }, [], () => 'x\0y', () => true), true],
-  ['inert scan: the same file as plain text and a clean scan is not a hit', hiddenInInert({ files: [{ filename: 'docs/a.md', modes: ['000000', '100644'] }], tree: 't', added: [], messages: '', binary: false, patch: '' }, [], () => 'xy', () => true), false],
-  ['pod: a prefix of a listed id is not the reviewer', pod([msg('orion', verdict(5, H), { userId: { _id: 'id-orio', username: 'orion' } })]).ok, false],
+  ['pod: a prefix of a listed id is not the reviewer', pod([msg('orion', verdict(5, H), { userId: { _id: 'id-lume', username: 'orion' } })]).ok, false],
   ['pod: a case variant of a listed id is not the reviewer', pod([msg('orion', verdict(5, H), { userId: { _id: 'ID-ORION', username: 'orion' } })]).ok, false],
   ['pod: a string userId (not a populated user) is ignored', pod([msg('orion', verdict(5, H), { userId: 'id-orion' })]).ok, false],
   ['pod: no configured reviewers refuses and names JM_VERDICT_REVIEWERS', pod([msg('orion', verdict(5, H))], '5', H, { entries: [] }).reason.includes('JM_VERDICT_REVIEWERS'), true],

@@ -4,14 +4,18 @@
 // that violation. Deleting, downgrading or exempting the rule fails preflight.
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { isDeepStrictEqual } from 'node:util';
 
 const fail = (msg) => { console.error(`check-boundary-rule: ${msg}`); process.exit(1); };
 
 const rule = createRequire(import.meta.url)('../.dependency-cruiser.cjs').forbidden.find((r) => r.name === 'ee-stays-in-ee');
 if (!rule) fail('the ee-stays-in-ee rule is missing');
 if (rule.severity !== 'error') fail(`the rule severity is ${rule.severity}, want error`);
-if (rule.from.pathNot !== '^ee/' || rule.from.path !== undefined) fail('the rule source must be everything outside ee/, with no other exemption');
-if (rule.to.path !== '^ee/') fail('the rule must refuse every import of ee/');
+// Exact objects, not key checks: ANY extra key (a pathNot on `to`, an exemption on `from`) widens the rule and fails here.
+const FROM = { pathNot: '^ee/' }; // everything outside ee/, no other exemption
+const TO = { path: '^ee/' }; // every import of ee/
+if (!isDeepStrictEqual(rule.from, FROM)) fail('the rule source must be exactly everything outside ee/, with no other key');
+if (!isDeepStrictEqual(rule.to, TO)) fail('the rule target must be exactly every import of ee/, with no other key');
 
 const dep = (type) => spawnSync('../node_modules/.bin/depcruise', ['.', '--config', '../.dependency-cruiser.cjs', '-T', type], { cwd: 'boundary-fixture', encoding: 'utf8' });
 if (dep('err').status === 0) fail('depcruise exited 0 on a core file importing ee/');

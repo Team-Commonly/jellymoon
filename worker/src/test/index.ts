@@ -61,6 +61,8 @@ async function testRoute(req: Request, env: Env, path: string): Promise<Response
   if (path === '/__test/clock' && local) return clockRoute(req, env);
   const fired = /^\/__test\/alarm\/([^/]+)$/.exec(path);
   if (fired) return internal(env, fired[1], 'alarm-fired', {});
+  const evict = /^\/__test\/evict\/([^/]+)$/.exec(path);
+  if (evict && req.method === 'POST') return internal(env, evict[1], 'evict', {});
   if (path === '/__test/stats' && req.method === 'GET') return statsRoute(env);
   return fail('not_found', 'No such test route.');
 }

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -28,7 +29,7 @@ var (
 	suiteStart = time.Now()
 	serverCmd  = os.Getenv("JM_E2E_SERVER")
 	realClock  = os.Getenv("JM_E2E_REAL_CLOCK") == "1"
-	suiteTests = []string{"TestF02", "TestF07", "TestF10", "TestExpiryZeroTraffic", "TestRenewRace",
+	suiteTests = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF10", "TestExpiryZeroTraffic", "TestRenewRace",
 		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline", "TestRunTokenOtherPod"}
 	outcomes sync.Map // test name -> failed bool
 )
@@ -211,4 +212,45 @@ func (w *world) crash(holdUntil int64) int64 {
 	w.srv.boot()
 	w.srv.restarting = false
 	return time.Now().UnixMilli()
+}
+
+type helloData struct {
+	PodID   string `json:"podId"`
+	HeadSeq *int64 `json:"headSeq"` // a pointer: a hello with no headSeq is not a hello with headSeq 0
+	You     Actor  `json:"you"`
+	Members []struct {
+		Actor Actor
+		Role  string
+	} `json:"members"`
+	Agents []struct{ Agent Actor } `json:"agents"`
+}
+
+// seedUser mints a user through the contract's seed route (POST /__test/session) and checks the jmu_ token.
+func seedUser(c *client, name string) (user, error) {
+	var out struct {
+		Token string `json:"token"`
+		User  Actor  `json:"user"`
+	}
+	if r := c.do("POST", "/__test/session", "", map[string]any{"name": name}, &out); !r.ok() {
+		return user{}, fmt.Errorf("HTTP %d code=%q", r.Status, r.Err.Code)
+	}
+	if !strings.HasPrefix(out.Token, "jmu_") || out.User.ID == "" {
+		return user{}, fmt.Errorf("token %q user %+v", out.Token, out.User)
+	}
+	return user{tok: out.Token, actor: out.User}, nil
+}
+
+// firstHello checks that the first frame s received is hello, and decodes it.
+func firstHello(s *sock) (helloData, error) {
+	var h helloData
+	s.waitAfter(0, func(Frame) bool { return true }, 5*time.Second)
+	first := s.snapshot(0)
+	if len(first) == 0 || first[0].Type != "hello" {
+		return h, fmt.Errorf("the first frame is %+v, want hello", first)
+	}
+	first[0].dec(&h)
+	if h.HeadSeq == nil {
+		return h, fmt.Errorf("hello carries no headSeq: %s", first[0].Data)
+	}
+	return h, nil
 }

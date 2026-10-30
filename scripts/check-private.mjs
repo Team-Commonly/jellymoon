@@ -79,6 +79,7 @@ const CASES = [
   ['email: a password in ssh remote userinfo', j('ssh://', 'someone:secretpw@', 'github.com/o/r'), 'email'],
   ['email: a percent-encoded address in remote userinfo', j('https://', 'someone%40gmail.com@', 'github.com/o/r'), 'email'],
   ['email: userinfo that is not the synthetic value', j('https://u:', 'q@', 'github.com/o/r'), 'email'],
+  ['email: the synthetic user outside a URL', j('mail ', 'tok@', 'github.com'), 'email'],
   ['email: userinfo at another host is not allowed', j('https://tok@', 'gmail.com/o/r'), 'email'],
   ['email: a github.com address that is not a remote', j('someone@', 'github.com'), 'email'],
   ['allowed: reserved example domain', j('a@', 'example.org'), null],

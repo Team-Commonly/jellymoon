@@ -11,7 +11,10 @@ import fs from 'node:fs';
 
 // Allow-lists, each with a reason and a clean case below.
 const EMAIL_OK = /@(users\.noreply\.github\.com|example\.(com|org|net)|evil\.com)$/i; // GitHub noreply; reserved or obviously synthetic domains
-const GIT_REMOTE = (m, line, at) => /@github\.com$/i.test(m) && (m.toLowerCase() === 'git@github.com' || /:\/\/(?:[^\s@/]*:)?$/.test(line.slice(0, at))); // the scp-form remote, or userinfo in a remote URL
+// A remote's userinfo is allowed only as the exact synthetic values the tests use: `git@` (the scp form), `tok@` and `u:p@` in a URL.
+// Any other userinfo may be a credential or a personal address, so it stays a hit.
+const SYNTHETIC_USERINFO = new Map([['git', ''], ['tok', '://'], ['p', '://u:']]); // user -> what must precede it
+const GIT_REMOTE = (m, line, at) => { const [user, host] = m.toLowerCase().split('@'); return host === 'github.com' && line.slice(0, at).endsWith(SYNTHETIC_USERINFO.get(user) ?? '\0'); };
 const HEX24_OK = /^(0{24}|deadbeef[0-9a-f]{16})$/; // all zeros, or the documented test prefix `deadbeef`
 const PUBLIC_STANDARD = /(?:\bRFC ?\d+|\bOAuth(?: 2\.\d)?(?: spec)?)\s*$/; // a section mark is allowed after a public standard named in the same line
 // Machine-generated or vendored files are not scanned here (a hash can look like an id, a licence header carries a
@@ -31,7 +34,7 @@ const CLASSES = [
   { name: 'section mark', re: /§\s*\d/g, ok: (m, line, at) => PUBLIC_STANDARD.test(line.slice(0, at)) },
 ];
 
-const namesFrom = (env) => (env.JM_PRIVATE_NAMES ? { name: 'private name', re: new RegExp(env.JM_PRIVATE_NAMES, 'gi') } : null);
+const namesFrom = (env) => (env.JM_PRIVATE_NAMES ? { name: 'private name', re: new RegExp(env.JM_PRIVATE_NAMES, 'gi') } : null); // throws on an invalid pattern; callers never print the error, which quotes the list
 
 function scan(text, classes) {
   const hits = [];
@@ -72,6 +75,10 @@ const CASES = [
   ['allowed: userinfo in a test URL', j('https://tok@', 'github.com/o/r'), null],
   ['allowed: user and password in a remote URL', j('ssh://u:p@', 'github.com/o/r'), null],
   ['allowed: scp-form remote', j('git@', 'github.com:o/r.git'), null],
+  ['email: a password in remote userinfo', j('https://', 'someone:secretpw@', 'github.com/o/r'), 'email'],
+  ['email: a password in ssh remote userinfo', j('ssh://', 'someone:secretpw@', 'github.com/o/r'), 'email'],
+  ['email: a percent-encoded address in remote userinfo', j('https://', 'someone%40gmail.com@', 'github.com/o/r'), 'email'],
+  ['email: userinfo that is not the synthetic value', j('https://u:', 'q@', 'github.com/o/r'), 'email'],
   ['email: userinfo at another host is not allowed', j('https://tok@', 'gmail.com/o/r'), 'email'],
   ['email: a github.com address that is not a remote', j('someone@', 'github.com'), 'email'],
   ['allowed: reserved example domain', j('a@', 'example.org'), null],
@@ -116,11 +123,14 @@ function failedCases(cases, classes) {
 
 // Every problem as a message, `file:line: class` for a tree hit; no cases means the check ran nothing, which is a problem too.
 function run({ cases, files, classes }) {
-  const problems = cases.length === 0 ? ['no cases ran'] : failedCases(cases, classes);
   const names = classes.filter((c) => c.name === 'private name');
+  // The self-test cases never see the operator's names list, so a list entry that matches a public sample cannot label a case in a log.
+  const problems = cases.length === 0 ? ['no cases ran'] : failedCases(cases, classes.filter((c) => !names.includes(c)));
   files.forEach(([f, text], i) => {
-    if (scan(f, names).length > 0) problems.push(`path: names (tracked file ${i + 1} in git ls-files order)`); // the path is never printed: it holds the name
-    if (!SKIPPED.test(f)) for (const h of scan(text, classes)) problems.push(`${f}:${h.line}: ${h.cls}`);
+    // THE one place a file is named in output: a path that holds a name is given by its position, never printed.
+    const ref = scan(f, names).length > 0 ? `tracked file ${i + 1} (path withheld)` : f;
+    if (ref !== f) problems.push(`${ref}: path: names`);
+    if (!SKIPPED.test(f)) for (const h of scan(text, classes)) problems.push(`${ref}:${h.line}: ${h.cls}`);
   });
   return problems;
 }
@@ -136,7 +146,8 @@ function readText(paths = execFileSync('git', ['ls-files', '-z'], { encoding: 'u
 
 // Returns the exit code. Everything it reads or prints is injectable, so META can drive it over a fixture.
 function main({ env = process.env, files, meta, cases = CASES, log = console.log, error = console.error } = {}) {
-  const names = namesFrom(env);
+  let names;
+  try { names = namesFrom(env); } catch { error('JM_PRIVATE_NAMES is not a valid pattern'); return 1; }
   const classes = names ? [...CLASSES, names] : CLASSES;
   const tree = files ?? readText(process.argv.length > 2 ? process.argv.slice(2) : undefined);
   const unread = !files && process.argv.length <= 2 && !tree.some(([f]) => f === 'scripts/check-private.mjs') ? ['the tree read did not include this script'] : [];
@@ -157,6 +168,8 @@ function runnerChecks() { // the runner and main() themselves
   const R = (cases, files) => run({ cases, files, classes: CLASSES });
   const clean = [['x', 'plain', null]];
   const secret = lines({ env: NAMES, files: [['a.md', j('hello ', 'Zorblax')]] });
+  const leaks = (f, text) => { const out = lines({ env: NAMES, files: [[f, text]] }); return out.code !== 0 && out.out.length > 0 && !out.out.some((l) => /zorblax/i.test(l)); };
+  const badPattern = lines({ env: { JM_PRIVATE_NAMES: j('(zorb', 'lax') }, files: PLAIN });
   const pathRun = lines({ env: NAMES, files: [[j('docs/zorb', 'lax-notes.md'), 'plain']] });
   const secretCase = R([['lbl', j('hello ', 'Zorblax'), 'email']], []).concat(R([['lbl', j('a@', 'gmail.com'), null]], []));
   return [
@@ -176,6 +189,11 @@ function runnerChecks() { // the runner and main() themselves
     ['main fails on an empty file list', lines({ files: [], cases: [['x', 'plain', null]] }).code !== 0],
     ['a tree hit prints file:line: class and not the matched name', secret.code !== 0 && secret.out.some((l) => l.includes('a.md:1: private name')) && !secret.out.some((l) => /zorblax/i.test(l))],
     ['a tracked path holding a name fails and is not printed', pathRun.code !== 0 && pathRun.out.some((l) => l.includes('path: names')) && !pathRun.out.some((l) => /zorblax/i.test(l))],
+    ['a name-bearing path with a content hit never prints the name (task label)', leaks(j('notes/zorb', 'lax-notes.md'), HIT)],
+    ['a name-bearing path with a content hit never prints the name (the person mentioned)', leaks(j('notes/zorb', 'lax.md'), j('met ', 'Zorblax today'))],
+    ['a name-bearing directory with a content hit never prints the name (personal email)', leaks(j('zorb', 'lax/a.md'), j('a@', 'gmail.com'))],
+    ['an invalid names pattern prints a fixed message and not the pattern', badPattern.code === 1 && badPattern.out.join('\n') === 'JM_PRIVATE_NAMES is not a valid pattern'],
+    ['a names entry matching a public sample does not label a self-test case', lines({ env: { JM_PRIVATE_NAMES: 'plainsample' }, files: [['a.md', 'x']], cases: [['lbl', 'plainsample', null]] }).code === 0],
     ['a clean path passes the names class', lines({ env: NAMES, files: PLAIN, cases: [['x', 'plain', null]] }).code === 0],
     ['a failed case prints no sample text', secretCase.length === 2 && !secretCase.some((l) => /zorblax|gmail/i.test(l))],
   ];

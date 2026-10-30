@@ -25,6 +25,7 @@ const pod = (msgs, pr = '5', head = H, o = {}) => checkPodVerdict(msgs, { pr, he
 const led = (rows, head = H) => checkLedger(rows, { pr: '5', head });
 const open = (o = {}) => ({ number: 5, state: 'OPEN', baseRefName: 'main', headRefOid: H, ...o });
 const R = 'Team-Commonly/jellymoon';
+const TAB = '\t'; // a real tab, written so it cannot run into the address after it
 const rem = (...l) => l.map(([n, u]) => `${n}\t${u} (fetch)\n${n}\t${u} (push)`).join('\n');
 
 const cases = [
@@ -122,7 +123,7 @@ const cases = [
       ['checkout: a dirty tree is refused', c({ porcelain: ' M scripts/land.mjs' }).ok, false],
       ['checkout: an ssh remote with user:password is refused', c({ remoteV: `jm\tssh://u:p@github.com/${R} (push)` }).ok, false],
       ['checkout: an ssh remote without a password is accepted', c({ remoteV: `jm\tssh://git@github.com/${R} (push)` }).ok, true],
-      ['checkout: an scp-form remote (git@github.com:R.git) is accepted', c({ remoteV: `jm\t${'git@github.com:'}${R}.git (push)` }).ok, true],
+      ['checkout: an scp-form remote (git@github.com:R.git) is accepted', c({ remoteV: `jm${TAB}git@github.com:${R}.git (push)` }).ok, true],
       ['checkout: a remote URL with userinfo is refused', c({ remoteV: `jm\thttps://tok@github.com/${R}.git (fetch)` }).ok, false],
       ['checkout: an http extraheader is refused', c({ config: 'http.https://github.com/.extraheader AUTHORIZATION: basic x' }).ok, false],
     ];

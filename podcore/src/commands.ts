@@ -1,8 +1,9 @@
 // One function per command. Authorization is read from state, never from the input's own claims.
 import type { Actor, RunId, TaskId } from '../../gen/ts/protocol';
 import { endClaim, endRun, lostHow, renewRun, startClaim, taskView } from './claims';
-import { fail, ok } from './emit';
+import { fail, ok, push } from './emit';
 import { isoOf } from './time';
+import { resendWakes } from './wakes';
 import type { Caller, Cmd, Ctx, Run } from './types';
 
 type Of<T extends Cmd['type']> = Extract<Cmd, { type: T }>;
@@ -53,7 +54,9 @@ export function opCmd(c: Ctx, cmd: Of<'op'>): void {
 export function heartbeatCmd(c: Ctx, cmd: Of<'heartbeat'>): void {
   for (const run of Object.values(c.s.runs)) {
     if (run.status === 'active' && run.computerId === cmd.computerId) renewRun(c, run.id);
+    if (run.stop !== undefined && run.computerId === cmd.computerId) push(c, run.computerId, 'run.stop', { runId: run.id, ...run.stop });
   }
+  resendWakes(c, cmd.computerId);
   ok(c);
 }
 
@@ -82,6 +85,7 @@ export function runEndCmd(c: Ctx, cmd: Of<'run_end'>): void {
   const run = c.s.runs[cmd.runId];
   if (run === undefined) return fail(c, 'not_found', 'No such run.', cmd.runId);
   if (run.status === 'active') endRun(c, run, cmd.outcome, 'run_ended');
+  delete run.stop;
   ok(c, { runId: run.id, outcome: run.outcome ?? cmd.outcome });
 }
 
@@ -98,10 +102,7 @@ export function runStopCmd(c: Ctx, cmd: Of<'run_stop'>): void {
   if (run.status === 'ended') return ok(c, { runId: run.id, outcome: run.outcome ?? 'cancelled' });
   endRun(c, run, 'cancelled', 'stopped', by, cmd.reason);
   const data = cmd.reason === undefined ? { runId: run.id } : { runId: run.id, reason: cmd.reason };
-  c.out.push({
-    kind: 'to-computer',
-    computerId: run.computerId,
-    event: { v: 1, type: 'run.stop', podId: c.s.podId, ts: isoOf(c.now), data },
-  });
+  run.stop = cmd.reason === undefined ? {} : { reason: cmd.reason };
+  push(c, run.computerId, 'run.stop', data);
   ok(c, { runId: run.id, outcome: 'cancelled' });
 }

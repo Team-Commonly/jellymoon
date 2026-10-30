@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test';
 import { apply } from '../src';
 import type { Cmd, Out, PodState } from '../src';
-import { CMP_1, CMP_2, RUN_A, RUN_B, RUN_C, TASKS, U_AGENT_OWNER, U_OWNER, U_STRANGER, events, prng, world } from './helpers';
+import { AG1, AG3, CMP_1, CMP_2, RUN_A, RUN_B, RUN_C, TASKS, U_AGENT_OWNER, U_OWNER, U_STRANGER, events, prng, runN, wak, world } from './helpers';
 
 const RUNS = [RUN_A, RUN_B, RUN_C];
+const AGENTS = [AG1, AG3, 'agt_00000000000000000000000002'];
 const USERS = [U_OWNER.id, U_AGENT_OWNER.id, U_STRANGER.id];
 
 /** A random but replayable command with a monotonic clock; big jumps now and then reach the 2 h cap. */
@@ -11,6 +12,7 @@ function sequence(seed: number, length = 60): Array<[Cmd, number]> {
   const r = prng(seed);
   const pick = <T>(xs: T[]): T => xs[Math.floor(r() * xs.length)];
   let now = 0;
+  let n = 0;
   return Array.from({ length }, () => {
     now += r() < 0.05 ? Math.floor(r() * 3_600_000) : Math.floor(r() * 45_000);
     const caller = () => (r() < 0.5 ? { kind: 'user' as const, userId: pick(USERS) } : { kind: 'run' as const, runId: pick(RUNS) });
@@ -21,6 +23,10 @@ function sequence(seed: number, length = 60): Array<[Cmd, number]> {
       () => ({ type: 'task_release', caller: caller(), taskId: pick(TASKS) }),
       () => ({ type: 'run_end', runId: pick(RUNS), outcome: 'completed' }),
       () => ({ type: 'run_stop', caller: caller(), runId: pick(RUNS) }),
+      () => ({ type: 'change', kind: pick(['task_assigned', 'mention', 'ruling'] as const), agentId: pick(AGENTS), refs: r() < 0.5 ? { taskId: pick(TASKS) } : {}, wakeId: wak((n += 1)) }),
+      () => ({ type: 'wake_ack', wakeId: wak(1 + Math.floor(r() * (n + 1))), computerId: pick([CMP_1, CMP_2]) }),
+      () => ({ type: 'run_claim', wakeId: wak(1 + Math.floor(r() * (n + 1))), computerId: pick([CMP_1, CMP_2]), runId: runN((n += 1)) }),
+      () => ({ type: 'agent_register', agentId: pick(AGENTS), ownerId: U_AGENT_OWNER.id, computerId: pick([CMP_1, CMP_2]) }),
       () => ({ type: 'tick' }),
     ])();
     return [cmd, now];
@@ -82,5 +88,33 @@ test('exclusivity property: at no step do two runs hold one task, and every clai
     const final = run(sequence(seed)).state;
     expect(started - ended).toBe(Object.keys(final.claims).length);
     expect(Object.fromEntries(holder)).toEqual(Object.fromEntries(Object.entries(final.claims).map(([t, k]) => [t, k.runId])));
+  }
+});
+
+test('wake property: at no step does an agent have more than one pending wake', () => {
+  for (const seed of SEEDS) {
+    let state = world();
+    for (const [cmd, now] of sequence(seed)) {
+      state = apply(state, cmd, now).state;
+      const byAgent = Object.values(state.wakes).map((w) => w.agentId);
+      expect(new Set(byAgent).size).toBe(byAgent.length);
+      for (const [agentId, w] of Object.entries(state.wakes)) expect(w.agentId).toBe(agentId);
+    }
+  }
+});
+
+test('wake property: every run.wake output goes to the computer that hosts the agent', () => {
+  for (const seed of SEEDS) {
+    let state = world();
+    for (const [cmd, now] of sequence(seed)) {
+      const r = apply(state, cmd, now);
+      for (const o of r.out) {
+        if (o.kind === 'to-computer' && o.event.type === 'run.wake') {
+          expect(o.computerId).toBe(r.state.agents[o.event.data.agentId].computerId);
+          expect(r.state.wakes[o.event.data.agentId].id).toBe(o.event.data.wakeId);
+        }
+      }
+      state = r.state;
+    }
   }
 });

@@ -1,6 +1,6 @@
 # 0003 · A pure pod core
 
-Status: Proposed (unit P09). It adds a module (`podcore/`), so it needs this note. The server shape is
+Status: Proposed (units P09, P10). It adds a module (`podcore/`), so it needs this note. The server shape is
 still open; this decision holds under every shape being weighed.
 
 ## Decision
@@ -9,7 +9,7 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 
 - `apply(state, cmd, now)` returns `{ state, out }`. `nextDeadline(state)` returns the next time the core has
   work, or `null`. `state` is plain JSON data; `cmd` is a tagged union; `out` is an ordered list of members
-  events, `run.stop` for a computer, and replies (ok, or a schema error code).
+  events, `run.wake` and `run.stop` for a computer, and replies (ok, or a schema error code).
 - Time is an argument. The core has no clock, no timer, no randomness and no I/O. Every command first settles
   whatever is due at `now` (lapsed leases, run tokens past 2 h), so a late tick and an early request agree.
 - Authorization is decided from state (pod owners, each run's agent owner, the claim's holder). Actors arrive
@@ -31,15 +31,35 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 1. Persist the new state atomically with emitting `out`: never one without the other.
 2. Own the single timer: call `apply(state, { type: 'tick' }, now)` at or after `nextDeadline(state)`. A second
    timer firing is harmless; a repeated tick at the same `now` emits nothing.
-3. Re-deliver output that was not acknowledged (members events from `seq`; `run.stop` until the daemon
-   reports the run ended).
-4. Stamp the caller, seed pods, runs and tasks into state, and map reply codes to HTTP statuses.
+3. Re-deliver members events from `seq`. (`run.wake` and `run.stop` are re-sent by the core, below.)
+4. Stamp the caller, seed pods and tasks into state, mint every id and token (wakes, runs, run tokens), and map
+   reply codes to HTTP statuses.
+
+## Wakes and run start (P10)
+
+All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the addressing facts; the core decides.
+
+- `agent_register` tells the core who owns an agent and which computer hosts it. `change` carries
+  `{kind: task_assigned | mention | ruling, agentId, refs, wakeId}`; an ambient message never reaches the core,
+  and an unknown kind writes nothing.
+- One pending wake per agent, structurally (`wakes` is keyed by agent). A `change` for an agent with a pending
+  wake merges its refs into it, sends nothing and keeps the wakeId. `WakeRefs` holds one id per kind, so on a
+  clash the earlier ref stays; the agent reads the pod for the rest. The reason is the first change's.
+  Delivery is one to-computer `run.wake` to the hosting computer, with no members event and no seq.
+- Re-send: on a `heartbeat` from the hosting computer, an un-acked wake whose last send is 60 000 ms old or
+  more (>=) is sent again, and the clock restarts. Another computer's heartbeat sends nothing. `wake_ack` from a
+  computer that does not host the agent is ignored. An acked wake is never re-sent.
+- `run.stop` is re-sent on every heartbeat from the hosting computer, with no wait, until `run_end` clears it.
+- `run_claim {wakeId, computerId, runId}` creates the Run (expiry is the 2 h cap from now), consumes the wake
+  and replies `{runId, expiresAt, reason, refs}` for the adapter to build the brief. Unknown or consumed wake:
+  `not_found`. A computer that does not host the agent: `forbidden`, and the wake stays.
+- A `change` for an unregistered agent is dropped, not held. A held wake has no computer to go to, and holding
+  it would need a delivery rule on register; the agent reads the pod when it first starts, so nothing is lost.
+- Re-send has no deadline: nothing is due until a heartbeat arrives, so `nextDeadline` is unchanged.
 
 ## Not here yet
 
-- Wakes (addressed-only, coalescing, resend after 60 s) are the next unit. They will be another command family
-  over the same state; the `Cmd` union and `PodState` have room for them.
-- Creating pods, tasks and runs: the adapter writes those rows into state until commands exist for them.
+- Creating pods and tasks: the adapter writes those rows into state until commands exist for them (F06).
 
 ## Open unknowns (carried from ADR 0002)
 

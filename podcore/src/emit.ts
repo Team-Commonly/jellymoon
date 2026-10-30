@@ -1,4 +1,4 @@
-import type { AnyEvent, ErrorCode, EventDataMap, EventType } from '../../gen/ts/protocol';
+import type { AnyEvent, ComputerId, ErrorCode, EventDataMap, EventOf, EventType } from '../../gen/ts/protocol';
 import { isoOf } from './time';
 import type { Ctx, Result } from './types';
 
@@ -7,6 +7,11 @@ export function emit<T extends EventType>(c: Ctx, type: T, data: EventDataMap[T]
   c.s.seq += 1;
   const event = { v: 1, type, seq: c.s.seq, podId: c.s.podId, ts: isoOf(c.now), data };
   c.out.push({ kind: 'event', event: event as AnyEvent });
+}
+
+/** A to-computer push: no seq, because it is not a members event. */
+export function push<T extends 'run.wake' | 'run.stop'>(c: Ctx, computerId: ComputerId, type: T, data: EventDataMap[T]): void {
+  c.out.push({ kind: 'to-computer', computerId, event: { v: 1, type, podId: c.s.podId, ts: isoOf(c.now), data } as EventOf<'run.wake'> | EventOf<'run.stop'> });
 }
 
 export function ok(c: Ctx, result: Result = null): void {

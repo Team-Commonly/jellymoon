@@ -4,6 +4,9 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · wakes and run start in the pod core (unit P10)
+- **Changed:** `podcore/` gains wakes (addressed-only, coalescing, 60 s resend), `run_claim`, agent registry and `run.stop` re-send; **Evidence:** `bun test podcore` (54 tests, 5 properties x 500 seeds, 3 mutations red); **Next:** F06/F07 adapter; **Surprising:** `WakeRefs` holds one id per kind, so coalescing keeps the first ref.
+
 ## 2026-10-29 · pod core for claims, leases and recourse (unit P09)
 - **Changed:** `podcore/` (pure `apply`/`nextDeadline`, ADR 0003, `podcore-is-pure` rule); **Evidence:** `bun test podcore` (31 tests, 3 properties x 500 seeds, both mutations red); **Next:** wakes (P10); **Surprising:** an op arriving at `leaseUntil` must see the claim already expired, so every command settles first.
 

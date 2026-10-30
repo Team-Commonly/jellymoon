@@ -14,6 +14,11 @@ export const RUN_B = id('run', 2);
 export const RUN_C = id('run', 3);
 export const CMP_1 = id('cmp', 1);
 export const CMP_2 = id('cmp', 2);
+export const AG1 = id('agt', 1);
+export const AG3 = id('agt', 3);
+export const AG_UNREG = id('agt', 9);
+export const wak = (n: number): string => id('wak', n);
+export const runN = (n: number): string => id('run', 100 + n);
 export const TASKS = [id('tsk', 1), id('tsk', 2), id('tsk', 3)];
 
 /** Three runs: A and B on computer 1 (owned by the agent owner), C on computer 2. Three open tasks. */
@@ -29,7 +34,8 @@ export function world(): PodState {
     podId: POD, seq: 0, owners: [U_OWNER],
     runs: { [RUN_A]: run(RUN_A, 1, CMP_1), [RUN_B]: run(RUN_B, 2, CMP_1), [RUN_C]: run(RUN_C, 3, CMP_2) },
     tasks: Object.fromEntries(TASKS.map((t, i) => [t, task(t, i + 1)])),
-    claims: {}, lost: {},
+    claims: {}, lost: {}, wakes: {},
+    agents: Object.fromEntries([[1, CMP_1], [2, CMP_1], [3, CMP_2]].map(([n, cmp]) => [id('agt', n as number), { actor: actor('agent', 'agt', n as number, `Agent ${n}`), owner: U_AGENT_OWNER, computerId: cmp as string }])),
   };
 }
 
@@ -52,6 +58,7 @@ export const errCode = (out: Out[]) => {
   const r = lastReply(out);
   return r !== undefined && r.kind === 'reply' && !r.ok ? r.error.code : null;
 };
+export const toComputer = (out: Out[]) => out.flatMap((o) => (o.kind === 'to-computer' ? [o] : []));
 export const released = (out: Out[]) => events(out).flatMap((e) => (e.type === 'claim.released' ? [e.data] : []));
 
 /** mulberry32: a seeded PRNG for the properties (Math.random is banned in src, not here, but seeds replay). */

@@ -31,6 +31,10 @@ is refused.
   is later accepted can all put commits on a same-repo branch. Also credentials in `url.<x>.insteadOf` or a git
   credential helper, which the checkout check does not look for. Keep these empty on this repo and on the operator's
   git config.
+- **GitHub Apps are not logins.** Four org-wide GitHub App installations (claude, cursor, chatgpt-codex-connector, sentry)
+  hold `contents:write` on this repo. An app can push to a trusted author's same-repo branch, and the trust gate checks
+  logins, not apps, so `verify-preflight` would run that commit. This stays a known hole until an org owner restricts
+  those installations.
 - **A trusted account can carry an outsider's commits.** It can push an outsider's commits onto a same-repo branch, and
   the gate sees only the PR author and the push list. Read the diff, not the author.
 - **The pod verdict is the latest per reviewer; the ledger's FAIL is permanent at a head.** A reviewer can flip their own
@@ -137,6 +141,13 @@ with the same checkout rule as land (`--bootstrap` is the one exception, for the
 PR it refuses before fetching anything, and the verifier reads the code (`git show`, `git diff`, GitHub) and runs nothing.
 
 ## Known limits
+- **Node 20 or newer.** Land refuses to start on an older Node (`process.versions.node`).
+- **A `gitleaks:allow` marker anywhere in the PR's history protects it.** Land scans the added lines of every commit in
+  `<main tip>..<head>` (the merge keeps every commit, and gitleaks honours the marker per commit), and `make
+  secrets-range` runs gitleaks over that range with `--ignore-gitleaks-allow`. A hit needs the pod verdict.
+- **`docs/development/` is protected**, because it holds these rules and the verifier protocol.
+- **The checkout check** also refuses `assume-unchanged` or `skip-worktree` files, a diff from HEAD, and untracked files
+  (all shown).
 - **A pod creator can delete a reviewer's message.** Land reads only what exists at land time, so deleting a
   reviewer's latest FAIL brings back their earlier PASS at the same head. The pod's creator is trusted.
 - **A trusted author is trusted fully.** Nothing here contains code a trusted account wrote; see the threat model.

@@ -15,7 +15,9 @@ It runs on a different model from the builder.
    author and every push-capable account are trusted. An untrusted PR gets no execution anywhere today (CI is off); it refuses before fetching; read the code
    with `git show`, `git diff` or GitHub, never a checkout followed by `make` or `./init.sh`, and
    report `verifier-blocked`. The bootstrap PR's verifiers run its own land code with an explicit `--bootstrap`,
-   which is trusted under the same rule. Then the feature's `test` command, only for a trusted PR. A red result ends
+   which is trusted under the same rule. Before running it, check by hand with `gh` that the PR is same-repo
+   (`isCrossRepository` false), its author is trusted and every push-capable account is trusted: land.mjs does not exist on
+   main yet, so nothing else checks. `--bootstrap` is refused once main has `scripts/land.mjs`, `--preflight-only` included. Then the feature's `test` command, only for a trusted PR. A red result ends
    the review with `verifier-failed`.
 2. **Acceptance.** Walk each step of the feature or brief against what the test actually asserts.
    A step that no assertion covers is a finding.

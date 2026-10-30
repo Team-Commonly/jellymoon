@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { addsAllowMarker, filesFromRaw, readReviewerEntries, touchesProtected, verdictOf } from './land-decide.mjs';
+import { addsAllowMarker, checkPodVerdict, filesFromRaw, mergeResult, readReviewerEntries, touchesProtected, verdictOf } from './land-decide.mjs';
 
 // Only exactly `GATE: PASS` as the last non-empty line passes; everything else blocks (nothing at all is null).
 const verdicts = [
@@ -49,6 +49,9 @@ const paths = [
   ['a symlink turned into a regular .md is protected (old mode 120000)', [{ filename: 'docs/a.md', modes: ['120000', '100644'] }], true],
   ['a gitlink under docs/ is protected (mode 160000)', [{ filename: 'docs/sub.md', modes: ['000000', '160000'] }], true],
   ['a regular docs file with modes is not protected', [{ filename: 'docs/a.md', modes: ['100644', '100644'] }, { filename: 'docs/b.md', modes: ['000000', '100755'] }], false],
+  ['the land rules under docs/development/ are protected', [{ filename: 'docs/development/landing.md' }], true],
+  ['the verifier protocol under docs/development/ is protected', [{ filename: 'docs/development/verifier.md' }], true],
+  ['a rename out of docs/development/ is protected', [{ filename: 'docs/x.md', previous_filename: 'docs/development/workflow.md' }], true],
   ['a docs change beside one protected file is protected', [{ filename: 'docs/a.md' }, { filename: 'go.mod' }], true],
 ];
 const hunk = (body, name = 'docs/a.md') => `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n@@ -0,0 +1 @@\n${body}`;
@@ -107,3 +110,34 @@ fs.rmSync(base, { recursive: true, force: true });
 const badChain = results.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (badChain.length) { console.error(`check-review-gate: symlink cases wrong\n  ${badChain.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${results.length} symlink cases ok`);
+
+// B2: a gitleaks:allow marker added and removed inside the PR's history leaves the merge result clean, yet the merge keeps both commits and
+// gitleaks honours the marker per commit. The history scan must protect it (and the pod verdict must then be missing: refused), and a
+// secret scan that ignores markers must find what the marker hid. The control carries no marker and is caught as is.
+const token = ['ghp_', 'aB3dE5gH7jK9m', 'N1pQ3sT5vW7yZ9bD2fH4jL6'].join('');
+const hist = (marker) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-hist-'));
+  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
+  g(`git init -q -b main && echo base > f && git add -A && git commit -qm base && git checkout -qb pr && echo 'token = ${token}${marker ? ' # gitleaks:allow' : ''}' > t.txt && git add -A && git commit -qm add && git rm -q t.txt && git commit -qm drop`);
+  const run = (a) => g(`git ${a.map((x) => `'${x}'`).join(' ')}`).stdout.trim();
+  const [tip, head] = [run(['rev-parse', 'main']), run(['rev-parse', 'pr'])];
+  const merged = mergeResult(run, tip, head);
+  const leaks = (ignore) => spawnSync('go', ['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', `--log-opts=${tip}..${head}`, ...(ignore ? ['--ignore-gitleaks-allow'] : []), '--redact', '--no-banner', dir], { encoding: 'utf8' }).status !== 0;
+  const out = { merged, head, found: leaks(true), foundHonouringMarker: leaks(false) };
+  fs.rmSync(dir, { recursive: true, force: true });
+  return out;
+};
+const [marked, control] = [hist(true), hist(false)];
+const noVerdict = (h) => checkPodVerdict([], { pr: '5', head: h, entries: [{ name: 'Ada', username: 'ada' }] }).ok;
+const history = [
+  ['history: the merge result alone shows nothing (the verifier\'s fixture)', marked.merged.files.length === 0 && !addsAllowMarker(marked.merged.treePatch), true],
+  ['history: the marker added then removed still protects the PR', addsAllowMarker(marked.merged.patch), true],
+  ['history: such a PR is refused without a pod verdict', noVerdict(marked.head), false],
+  ['history: ignoring markers, gitleaks finds the hidden token', marked.found, true],
+  ['history: honouring the marker, gitleaks sees nothing (the hole)', marked.foundHonouringMarker, false],
+  ['history: the control without a marker is caught by gitleaks', control.found && control.foundHonouringMarker, true],
+  ['history: the control without a marker does not trip the marker scan', addsAllowMarker(control.merged.patch), false],
+];
+const badHist = history.filter(([, got, want]) => got !== want).map(([n]) => n);
+if (badHist.length) { console.error(`check-review-gate: history cases wrong\n  ${badHist.join('\n  ')}`); process.exit(1); }
+console.log(`check-review-gate: ${history.length} history cases ok`);

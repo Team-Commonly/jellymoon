@@ -20,7 +20,8 @@ export function parseLedger(text) {
 // The one protected-path rule. The preflight and the merge run code from the PR tree, so a path is unprotected only
 // if it is inert: progress.md, or a documentation file (an extension below) under docs/. Go compiles docs/**/*.go, so
 // the extension decides, not the directory. A rename counts both sides. files: { filename, previous_filename? }.
-const INERT = /^(progress\.md|docs\/.+\.(md|html|svg|png|jpg|gif|webp))$/;
+// docs/development/ is protected: it holds the land rules and the verifier protocol, which a PR must not rewrite unreviewed.
+const INERT = /^(progress\.md|docs\/(?!development\/).+\.(md|html|svg|png|jpg|gif|webp))$/;
 const REGULAR = ['000000', '100644', '100755']; // add and delete show 000000; a symlink (120000) or gitlink (160000) is never inert
 export const touchesProtected = (files) => files.some((f) => (f.modes || []).some((m) => !REGULAR.includes(m)) || [f.filename, f.previous_filename].some((n) => n && !INERT.test(n)));
 // One reviewer per line: `Name username` (the username is the pod's server-stamped one). A single token is a name with no username.
@@ -178,8 +179,8 @@ export function checkTrust({ pr, pushers, trusted }) {
   if (!pushers.length) return no('the push-access list is empty, so the query went wrong');
   const author = String(pr.author || '').toLowerCase();
   if (!trusted.includes(author)) return no(`author '${author || 'unknown'}' is not trusted`);
-  const stranger = pushers.map((l) => String(l).toLowerCase()).find((l) => !trusted.includes(l));
-  return stranger ? no(`'${stranger}' can push to the repo and is not trusted`) : { ok: true };
+  const strangers = pushers.map((l) => String(l).toLowerCase()).filter((l) => !trusted.includes(l)); // .some-style: an empty login is a stranger too
+  return strangers.length ? no(`'${strangers[0]}' can push to the repo and is not trusted`) : { ok: true };
 }
 // Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
 const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
@@ -192,9 +193,12 @@ export function checkRuns(runs, total = runs.length) {
 // the scripts in this tree run before the trust gate decides. mainTip null: before the fetch, HEAD is compared later. Credentials in the
 // checkout's git config would travel into every fetch, so a remote URL with userinfo or an http extraheader refuses.
 const USERINFO = /^https?:\/\/[^/\s]*@|^[a-z+]+:\/\/[^/@\s]*:[^/@\s]*@/i;
-export function checkCheckout({ head, mainTip, porcelain, remoteV, config, bootstrap = false }) {
+// porcelain is `status --porcelain` with showUntrackedFiles=all; lsv is `ls-files -v`; diffDirty is a non-empty `diff HEAD`.
+export function checkCheckout({ head, mainTip, porcelain, remoteV, config, lsv = '', diffDirty = false, bootstrap = false }) {
   if (!bootstrap && mainTip !== null && head !== mainTip) return { ok: false, reason: `this checkout is at ${head.slice(0, 8)}, not main's tip ${mainTip.slice(0, 8)}; land from a checkout of main` };
   if (porcelain.trim()) return { ok: false, reason: 'this checkout has uncommitted or untracked files; land from a clean checkout of main' };
+  if (lsv.split('\n').some((l) => /^[a-zS] /.test(l))) return { ok: false, reason: 'a tracked file is marked assume-unchanged or skip-worktree, which hides edits from git status; clear the flag' };
+  if (diffDirty) return { ok: false, reason: 'this checkout differs from HEAD; land from a clean checkout of main' };
   if (remoteV.split('\n').some((l) => USERINFO.test(l.split(/\s+/)[1] || ''))) return { ok: false, reason: 'a git remote URL carries credentials (userinfo); remove them' };
   if (/^http\..*extraheader/im.test(config)) return { ok: false, reason: 'the git config carries an http extraheader (a credential); remove it' };
   return { ok: true };
@@ -215,7 +219,11 @@ export function mergeResult(run, mainTip, head) {
   let tree;
   try { tree = run(['merge-tree', '--write-tree', mainTip, head]).split('\n')[0].trim(); } catch { throw new Error(`${head.slice(0, 8)} does not merge cleanly into main ${mainTip.slice(0, 8)}`); }
   const diff = (...a) => run(['-c', 'diff.external=', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', ...a, mainTip, tree]);
-  return { files: filesFromRaw(diff('--raw', '-M')), patch: diff('-U0') };
+  // Every commit's added lines too: `gh pr merge --merge` keeps them all, and gitleaks honours a marker per commit, so a marker
+  // added and removed inside the PR is invisible to the merge result. -m shows merge commits against each parent.
+  const history = run(['-c', 'diff.external=', 'log', '-p', '-m', '-U0', '--no-ext-diff', '--no-textconv', '--no-color', '--format=', `${mainTip}..${head}`]);
+  const treePatch = diff('-U0');
+  return { files: filesFromRaw(diff('--raw', '-M')), treePatch, patch: `${treePatch}\n${history}` };
 }
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
@@ -223,3 +231,8 @@ export const stripControls = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f
 export const quoteOutput = (text) => stripControls(text).replace(/\n$/, '').split('\n').map((l) => `preflight| ${l}`).join('\n');
 // The entropy ratchet's base: main's tip as fetched. Only the bootstrap land, when main has no entropy.json yet, runs without one.
 export const entropyBase = (mainTip, { bootstrap, mainHasEntropy }) => (bootstrap && !mainHasEntropy ? 'none' : mainTip);
+
+// Land's own runtime: the oldest Node whose behaviour land.mjs relies on (docs/adr/0001-dev-tooling.md).
+const NODE_MIN = 20;
+export const checkNode = (version, min = NODE_MIN) => (Number(String(version).split('.')[0]) >= min ? { ok: true }
+  : { ok: false, reason: `land needs Node ${min} or newer; this is Node ${version}` });

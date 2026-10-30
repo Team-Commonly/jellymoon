@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  entropyBase, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -33,6 +33,10 @@ const cases = [
   // ledger
   ['verifier PASS at the head accepted', led(ledger(row(5, H, 'PASS', 'opus-verifier'))).ok, true],
   ['a PASS at another head does not count (a stale-head PASS never lands)', led(ledger(row(5, H2, 'PASS', 'opus-verifier'))).ok, false],
+  ['a PASS by a lookalike (prefix or suffix on the verifier name) is refused', [`x-opus-verifier`, `opus-verifier-2`].map((by) => led(ledger(row(5, H, 'PASS', by))).ok).join(), 'false,false'],
+  ['an unknown verdict at the head blocks even beside a PASS', led(ledger(row(5, H, 'PASS', 'opus-verifier'), row(5, H, 'MAYBE', 'opus-verifier'))).ok, false],
+  ['a PASS for another PR does not count', led(ledger(row(6, H, 'PASS', 'opus-verifier'))).ok, false],
+  ['a PASS for #5 is not read as #50 or #15', led(ledger(row(50, H, 'PASS', 'opus-verifier'), row(15, H, 'PASS', 'opus-verifier'))).ok, false],
   ['a PASS by a non-verifier is refused', led(ledger(row(5, H, 'PASS', 'coordinator'))).ok, false],
   ['a coordinator PASS beside a verifier PASS still refuses', led(ledger(row(5, H, 'PASS', 'opus-verifier'), row(5, H, 'PASS', 'coordinator'))).ok, false],
   ['no verdict shopping: a FAIL is not superseded by a later PASS from the same verifier', led(ledger(row(5, H, 'FAIL', 'opus-verifier'), row(5, H, 'PASS', 'opus-verifier'))).ok, false],
@@ -40,6 +44,8 @@ const cases = [
   // pod verdict
   ['a listed reviewer PASS naming the PR and full head passes', pod([msg('ada', verdict(5, H))]).ok, true],
   ['a non-reviewer quoting "Written by Ada" is refused', pod([msg('mallory', `Written by Ada, a Commonly agent\n${verdict(5, H)}`)]).ok, false],
+  ['a verdict line that is not the first line is refused', pod([msg('ada', `hello\n${verdict(5, H)}`)]).ok, false],
+  ['a verdict quoting the head mid-line is refused', pod([msg('ada', `see ${verdict(5, H)}`)]).ok, false],
   ['a verdict at another head is refused', pod([msg('ada', verdict(5, H2))]).ok, false],
   ['a verdict naming another PR is refused', pod([msg('ada', verdict(50, H))]).ok, false],
   ['a #11 PASS citing #10 cannot override the reviewer\'s earlier #10 FAIL',
@@ -67,6 +73,8 @@ const cases = [
     return [
       ['trust: same repo, trusted author, only trusted pushers', t().ok, true],
       ['trust: the PR author compares lowercased', t({ pr: { ...pr, author: 'LILY' }, pushers: ['Ada'] }).ok, true],
+      ['trust: a PR with no author is refused', t({ pr: { isCrossRepository: false } }).ok, false],
+      ['trust: an empty-string pusher is a stranger', t({ pushers: ['lily', ''] }).ok, false],
       ['trust: a missing isCrossRepository field is untrusted', t({ pr: { author: 'lily' } }).ok, false],
       ['trust: an empty push-access list refuses (the query went wrong)', t({ pushers: [] }).ok, false],
       ['trust: a cross-repository PR is refused', t({ pr: { ...pr, isCrossRepository: true } }).ok, false],
@@ -90,6 +98,11 @@ const cases = [
       ['checkout: HEAD elsewhere is fine only under --bootstrap', c({ head: H, bootstrap: true }).ok, true],
       ['checkout: a dirty tree under --bootstrap is refused', c({ head: H, bootstrap: true, porcelain: ' M Makefile' }).ok, false],
       ['preflight-only: a non-main HEAD is refused (the PR tree must not run its own Makefile)', c({ head: H }).ok, false],
+      ['checkout: an assume-unchanged file (h) is refused', c({ lsv: 'H a\nh scripts/land.mjs' }).ok, false],
+      ['checkout: a skip-worktree file (S) is refused', c({ lsv: 'S scripts/land.mjs' }).ok, false],
+      ['checkout: a plain tracked listing is accepted', c({ lsv: 'H a\nH b' }).ok, true],
+      ['checkout: a diff from HEAD is refused', c({ diffDirty: true }).ok, false],
+      ['checkout: untracked files (porcelain with showUntrackedFiles=all) are refused', c({ porcelain: '?? scripts/new/x.mjs' }).ok, false],
       ['checkout: a dirty tree is refused', c({ porcelain: ' M scripts/land.mjs' }).ok, false],
       ['checkout: an ssh remote with user:password is refused', c({ remoteV: `jm\tssh://u:p@github.com/${R} (push)` }).ok, false],
       ['checkout: an ssh remote without a password is accepted', c({ remoteV: `jm\tssh://git@github.com/${R} (push)` }).ok, true],
@@ -134,9 +147,22 @@ const cases = [
   ['ledger: blank and # lines are skipped', parseLedger(`# note\n\n${row(5, H, 'PASS', 'opus-verifier').join('\t')}`).length, 1],
   // the entropy ratchet base and a branch name
   ['entropy base: the tip as fetched', entropyBase('abc', { bootstrap: false, mainHasEntropy: true }), 'abc'],
+  ['entropy base: bootstrap once main HAS entropy.json gets the tip, so the ratchet applies', entropyBase('abc', { bootstrap: true, mainHasEntropy: true }), 'abc'],
   ['entropy base: none only for the bootstrap land of a main without entropy.json', entropyBase('abc', { bootstrap: true, mainHasEntropy: false }), 'none'],
   ['entropy base: a non-bootstrap land never gets none', entropyBase('abc', { bootstrap: false, mainHasEntropy: false }), 'abc'],
   ['output: a branch name with escapes is stripped', stripControls('x\u001b[31my'), 'x[31my'],
+  // check-entropy itself: none passes only when named; an unreadable named base fails, and a PR cannot name one (land sets the env)
+  ...(() => {
+    const entropy = (base) => spawnSync(process.execPath, [fileURLToPath(new URL('./check-entropy.mjs', import.meta.url))], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME, JM_ENTROPY_BASE: base } }).status;
+    return [
+      ['entropy: bootstrap with no base file passes with base none', entropy('none'), 0],
+      ['entropy: a normal land with no base file is refused (the tip is unreadable)', entropy('0'.repeat(40)), 1],
+      ['entropy: a readable base runs the ratchet and passes', entropy('HEAD'), 0],
+    ];
+  })(),
+  // land's runtime
+  ['node: 20 is accepted', checkNode('20.0.0').ok, true],
+  ['node: 18 is refused with a clear message', checkNode('18.19.0').reason, 'land needs Node 20 or newer; this is Node 18.19.0'],
   // PR output is quoted
   ['output: bidi overrides and line separators are stripped', quoteOutput('a\u202eb\u2066c\u2028d\u2029e'), 'preflight| abcde'],
   ['output: control characters are stripped, newline and tab kept', quoteOutput('a\u001b[2Jb\r\nc\td\u0007\n'), 'preflight| a[2Jb\npreflight| c\td'],
@@ -145,6 +171,7 @@ const cases = [
   ['remote: a URL with userinfo is not matched', remoteFor(rem(['jm', `https://tok@github.com/${R}`]), R).error, `no git remote matches ${R}`],
   ['remote: two matches refused', Boolean(remoteFor(rem(['a', `https://github.com/${R}`], ['b', `git@github.com:${R}.git`]), R).error), true],
   // main tip
+  ['main moved is refused and names both tips', checkMain('1'.repeat(40), '2'.repeat(40)).ok, false],
   ['main unchanged is accepted', checkMain('1'.repeat(40), '1'.repeat(40)).ok, true],
 ];
 
@@ -240,8 +267,12 @@ cases.push(
   ['land.mjs: the preflight child has a wall-clock limit', /LIMIT_MS/.test(landSrc) && /setTimeout/.test(landSrc), true],
   ['land.mjs: SIGINT and SIGTERM exit, which kills the group and releases the lock', /SIGINT[^\n]*exit\(130\)/.test(landSrc) && /SIGTERM[^\n]*exit\(143\)/.test(landSrc), true],
   ['land.mjs: the trust gate runs again before the merge', before('trustGate(fresh)', "gh('pr', 'merge'"), true],
-  ['land.mjs: the base and head are re-read right before the merge', before('const now = checkHead(fresh, head)', "gh('pr', 'merge'"), true],
-  ['land.mjs: main\'s tip is re-checked after the second decide and before the merge', before('const again = await decide', "const moved = checkMain(mainTip, fetchRef('main'))") && before("const moved = checkMain(mainTip, fetchRef('main'))", "gh('pr', 'merge'"), true],
+  ['land.mjs: the PR is re-read, re-trusted and re-checked, and a bad result refuses, all before the merge', ['const fresh = viewPr(n)', 'trustGate(fresh)', 'const now = checkHead(fresh, head)', 'if (!now.ok) refuse(', "gh('pr', 'merge'"].every((a, i, all) => i === 0 || before(all[i - 1], a)), true],
+  ['land.mjs: main\'s tip is re-checked after the second decide, a move refuses, and it all happens before the merge', ['const again = await decide', "const moved = checkMain(mainTip, fetchRef('main'))", 'if (!moved.ok) refuse(moved.reason)', "gh('pr', 'merge'"].every((a, i, all) => i === 0 || before(all[i - 1], a)), true],
+      ['entropy: land names the base in a scrubbed env, not from the PR', /JM_ENTROPY_BASE: entropyBase\(/.test(landSrc) && /spawn\('env', \['-i'/.test(landSrc), true],
+  ['node: land.mjs refuses on a bad version before anything else', before('checkNode(process.versions.node)', 'if (!nv.ok) refuse(nv.reason)') && before('if (!nv.ok) refuse(nv.reason)', 'const readLedger'), true],
+  ['land.mjs: untracked files are shown in full for the checkout gate', landSrc.includes("'status.showUntrackedFiles=all'"), true],
+  ['land.mjs: history is scanned for the marker and gitleaks runs over the range with markers ignored', landSrc.includes('addsAllowMarker(merged.patch)') && landSrc.includes("'secrets-range'") && /--ignore-gitleaks-allow/.test(fs.readFileSync(new URL('../Makefile', import.meta.url), 'utf8')), true],
   ['land.mjs imports resolve: run with no arguments it reaches main and refuses', run.status === 1 && !/export named|SyntaxError|ReferenceError/i.test(run.stderr) && run.stderr.includes('land: refused'), true],
 );
 

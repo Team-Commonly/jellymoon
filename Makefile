@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets hooks preflight
+.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight
 
 tools:
 	scripts/tools.sh
@@ -51,6 +51,10 @@ entropy: node_modules
 GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 secrets:
 	$(GO) run $(GITLEAKS) git --log-opts=HEAD --redact --no-banner .
+
+# land only: secrets in a commit range, ignoring gitleaks:allow markers (RANGE=<main tip>..<head>).
+secrets-range:
+	$(GO) run $(GITLEAKS) git --log-opts=$(RANGE) --ignore-gitleaks-allow --redact --no-banner .
 
 # Per worktree: pre-commit runs the fast gates; fence=1 also blocks pushes (worker worktrees).
 hooks:

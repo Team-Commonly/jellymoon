@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  acquireLock, addsAllowMarker, appendLedger as writeLedger, checkApi, checkCheckout, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns,
+  acquireLock, addsAllowMarker, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, mergeResult, quoteOutput, stripControls, readReviewerEntries, readToken, remoteFor,
   removeTree, scrub, takePage, touchesProtected,
 } from './land-decide.mjs';
@@ -26,6 +26,7 @@ const DRY = process.argv.includes('--dry-run');
 process.on('SIGINT', () => process.exit(130));
 process.on('SIGTERM', () => process.exit(143));
 const refuse = (m) => { console.error(`land: refused: ${scrub(m, SECRET)}`); process.exit(1); };
+{ const nv = checkNode(process.versions.node); if (!nv.ok) refuse(nv.reason); } // before anything else runs
 const readLedger = () => parseLedger(fs.existsSync(process.env.JM_LEDGER) ? fs.readFileSync(process.env.JM_LEDGER, 'utf8') : '');
 const appendLedger = (pr, head, verdict, by, note) => writeLedger(process.env.JM_LEDGER, [pr, head, verdict, by, new Date().toISOString(), note], { dry: DRY });
 function viewPr(n) {
@@ -149,7 +150,9 @@ async function decide(pr, mainTip, opts) { // mainTip is the tip fetched for thi
   const ci = checkRuns(runs.runs, runs.total);
   if (!ci.ok) return ci;
   const merged = mergeResult((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
-  if (touchesProtected(merged.files) || addsAllowMarker(merged.patch)) {
+  // A marker anywhere in the PR's history, or a secret gitleaks finds once markers are ignored, needs the reviewer's verdict.
+  const hides = !ok('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]);
+  if (touchesProtected(merged.files) || addsAllowMarker(merged.patch) || hides) {
     const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers(opts.bootstrap ? head : mainTip) });
     if (!gate.ok) return gate;
     notes.push(gate.reason);
@@ -159,9 +162,10 @@ async function decide(pr, mainTip, opts) { // mainTip is the tip fetched for thi
 const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
 const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only [--bootstrap]';
 // The checkout this runs from, checked before the first fetch (mainTip null) and again after it: a clean tree at main's tip (only --bootstrap may sit elsewhere), no credentials in its git config.
+const ok = (cmd, a) => { try { out(cmd, a); return true; } catch { return false; } }; // did the command exit 0
 function checkoutGate(mainTip, bootstrap) {
   const config = (() => { try { return out('git', ['config', '--get-regexp', 'extraheader']); } catch { return ''; } })();
-  const c = checkCheckout({ head: out('git', ['rev-parse', 'HEAD']), mainTip, porcelain: out('git', ['status', '--porcelain']), remoteV: out('git', ['remote', '-v']), config, bootstrap });
+  const c = checkCheckout({ head: out('git', ['rev-parse', 'HEAD']), mainTip, porcelain: out('git', ['-c', 'status.showUntrackedFiles=all', 'status', '--porcelain']), remoteV: out('git', ['remote', '-v']), config, lsv: out('git', ['ls-files', '-v']), diffDirty: !ok('git', ['diff', '--quiet', 'HEAD']), bootstrap });
   if (!c.ok) refuse(c.reason);
   const b = checkNoBunConfig([...fs.readdirSync(out('git', ['rev-parse', '--show-toplevel'])), ...fs.readdirSync('.')]); // the filesystem, not porcelain: ignored files count
   if (!b.ok) refuse(b.reason);

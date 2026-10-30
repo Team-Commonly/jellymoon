@@ -169,6 +169,31 @@ export function checkTrust({ pr, pushers, trusted }) {
   const strangers = pushers.map((l) => String(l).toLowerCase()).filter((l) => !trusted.includes(l)); // .some-style: an empty login is a stranger too
   return strangers.length ? { ok: false, reason: `${REFUSE} (an account that can push to the repo is not trusted: ${strangers[0]})` } : { ok: true };
 }
+// The one reading of the range scan's result, shared by land and by the fixtures that test the recipe. Clean is positive evidence, all of:
+// exit status 0; no `exit status 3` line (gitleaks' --exit-code 3, which `go run` reports that way); no gitleaks ERR/FTL/PNC log line and no
+// "failed to scan"; the "no leaks found" line; and exactly one "<n> commits scanned." line with n equal to `expected`, the number of commits
+// the land would merge, which the caller counts itself with `git rev-list --count <main tip>..<head>`. Measured on gitleaks 8.30.1 with -m:
+// its count equals rev-list --count on a linear range, a merged side branch, main moved after branching, an octopus merge, main merged
+// into the PR, and an empty range. A hit is a nonzero exit with the hit line. Everything else, including a zero exit that printed the hit
+// line or an error (a recipe that swallowed the failure) or scanned fewer commits than the range holds, is a failure, and a failure refuses.
+// gitleaks colours its log even into a pipe, so the escape codes are stripped before reading.
+export const scanResult = ({ status, stderr, expected }) => {
+  const text = String(stderr || '').replace(/\u001b\[[0-9;]*m/g, '');
+  const hitLine = /^exit status 3$/m.test(text);
+  if (typeof status === 'number' && status !== 0 && hitLine) return 'hit';
+  const counts = [...text.matchAll(/^\S+ INF (\d+) commits? scanned\.$/gm)].map((m) => Number(m[1]));
+  const errLine = /^\S+ (ERR|FTL|PNC) /m.test(text) || /failed to scan/.test(text);
+  const read = counts.length === 1 && Number.isInteger(expected) && expected >= 0 && counts[0] === expected;
+  return status === 0 && !hitLine && !errLine && /^\S+ INF no leaks found$/m.test(text) && read ? 'clean' : 'failure';
+};
+// The environment make runs the range scan in: an allowlist, so the operator's MAKEFLAGS (make -i), GITLEAKS_CONFIG or git config
+// cannot switch the scan off. Only what the Go toolchain and git need is kept.
+const SCAN_ENV_KEEP = ['PATH', 'HOME', 'TMPDIR', 'GOPATH', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN'];
+export const scanEnv = (env) => ({
+  ...Object.fromEntries(SCAN_ENV_KEEP.filter((k) => env[k] !== undefined).map((k) => [k, env[k]])),
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
+});
 // Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
 const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
 export function checkRuns(runs, total = runs.length) {
@@ -176,7 +201,7 @@ export function checkRuns(runs, total = runs.length) {
   const bad = runs.filter((r) => BAD_CONCLUSION.includes(r.conclusion));
   return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${stripControls(String(r.name))} (${r.conclusion})`).join(', ')}` } : { ok: true };
 }
-// The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere), because
+// The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere, and then only at the PR head), because
 // the scripts in this tree run before the trust gate decides. mainTip null: before the fetch, HEAD is compared later. Credentials in the
 // checkout's git config would travel into every fetch, so a remote URL with userinfo or an http extraheader refuses.
 const USERINFO = /^https?:\/\/[^/\s]*@|^[a-z+]+:\/\/[^/@\s]*:[^/@\s]*@/i;

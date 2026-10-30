@@ -47,7 +47,7 @@ is refused.
 ## Steps
 Each refuses with one line on any mismatch, and nothing merges until all pass:
 0. The checkout check runs first, before any network call, and runs again once main is fetched (so HEAD can be compared with
-   main's tip). The order in the code: environment and usage, the checkout check, the lock, the PR read, the trust gate (below), the
+   main's tip). The order in the code: environment and usage, the checkout check, the lock, the PR read, the already-landed check (which can record `MERGED-UNVERIFIED` and stop), the trust gate (below), the
    fetch of main, the checkout check again. The check: `git status --porcelain` is empty and `HEAD` is main's tip (an
    explicit `--bootstrap`, the first land of the gate, is the only exception, and only for HEAD: with `--bootstrap`, `HEAD` must be the PR head), no git remote URL
    carries userinfo, no git config carries an `http.*extraheader`, and no `.env*` or `bunfig.toml` exists in the
@@ -57,9 +57,13 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
 3. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
    `startup_failure`, `action_required`), land refuses. No check runs at all is fine: CI is off by decision.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
-   `make secrets-range` runs gitleaks over `<main tip>..<head>` with `-m` and `--ignore-gitleaks-allow`: a hit refuses with "a
-   secret was found in the range; remove it from history and push a new head", and a scan that fails to run, or exits with anything
-   but 0 or 3 (3 is a finding; `go run` shows it as "exit status 3"), refuses too. A clean scan waives nothing. The preflight's
+   `make secrets-range` runs gitleaks over `<main tip>..<head>` with `-m` and `--ignore-gitleaks-allow`: a hit (a nonzero exit
+   plus the line "exit status 3") refuses with "a secret was found in the range; remove it from history and push a new head".
+   Clean is positive evidence, read from the scan's exit status and stderr together: exit 0; no "exit status 3" line; no gitleaks
+   `ERR` (or `FTL`, `PNC`) line and no "failed to scan"; the "no leaks found" line; and one "<n> commits scanned." line where n
+   equals `git rev-list --count <main tip>..<head>`, which land counts itself, outside make. Anything else refuses as a scan that
+   failed to run or did not read the whole range: it proves nothing. (A recipe that swallowed an error, a missing object, a
+   `.gitattributes` the scan stumbles on, and a scan of an empty range in place of the PR's all exit 0 and fail one of these.) A clean scan waives nothing. The preflight's
    `make secrets` (gitleaks over the whole history) is the second scan and refuses by failing the preflight. (The code's order is
    steps 2, 3, 4 as listed: ledger, CI, scan, pod verdict.)
 5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
@@ -69,7 +73,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    captured and printed with control characters stripped and every line prefixed `preflight| `, and its whole
    process group is killed when it returns. Cleanup never turns a pass into a refusal: the tree is made writable
    first, and a failed cleanup only warns naming the directory.
-6. The ledger, CI and the pod are read again and decided again, and the PR is re-read: the trust gate runs again, its base
+6. The ledger, CI, the range secret scan (`make secrets-range` runs again) and the pod are read again and decided again, and the PR is re-read: the trust gate runs again, its base
    must still be `main` and its head the decided one, and main's tip is fetched once more and must equal the one tested. Then `gh pr merge --merge
    --match-head-commit <head>` (a merge commit; never squash, never `--delete-branch`) and a `LANDED` row. `gh` cannot
    pin the base, so main can still move in the seconds between the check and the merge; that window is accepted. The
@@ -144,7 +148,7 @@ not write through a symlink.
 ## Verifiers use the same trust gate
 `make verify-preflight PR=<n>` (`node scripts/land.mjs <n> --preflight-only`) runs the trust gate, the head check and
 the merge-result preflight: no ledger, no pod, no merge. Run it from a clean checkout of main, never from the PR's tree,
-with the same checkout rule as land (`--bootstrap` is the one exception, for the bootstrap PR only). It needs `JM_REPO` and `JM_TRUSTED_LOGINS`. For an untrusted
+with the same checkout rule as land (`--bootstrap` is the one exception, for the bootstrap PR only, and then `HEAD` must be the PR head). It needs `JM_REPO` and `JM_TRUSTED_LOGINS`. For an untrusted
 PR it refuses before fetching anything, and the verifier reads the code (`git show`, `git diff`, GitHub) and runs nothing.
 
 ## Known limits
@@ -192,5 +196,5 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 
 ## Bootstrap: the first land of the gate
 While main has no `scripts/land.mjs`, land and `verify-preflight` refuse unless run with `--bootstrap` (and with
-`--bootstrap` they refuse once main has the file). It appends a
+`--bootstrap` they refuse once main has the file). With `--bootstrap` the checkout must be at the PR head itself, not main's tip. It appends a
 `BOOTSTRAP` row. The first land of the gate is judged by people and recorded as such.

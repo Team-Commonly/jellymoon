@@ -206,9 +206,11 @@ export function acquireLock(dir, { pid = process.pid, alive = (p) => { try { pro
 const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
 const quote = (p) => `"${p.replace(/[\\"]/g, '\\$&')}"`;
 export function sandboxProfile({ homes, allowRead = [], allowWrite, hide = [] }) {
-  const rule = (verb, ps) => { const s = [...new Set(ps.filter(Boolean).map(real))].map((p) => `(subpath ${quote(p)})`); return s.length ? `(${verb} ${s.join(' ')})` : ''; };
+  const rule = (verb, ps, kind = 'subpath') => { const s = [...new Set(ps.filter(Boolean).map(real))].map((p) => `(${kind} ${quote(p)})`); return s.length ? `(${verb} ${s.join(' ')})` : ''; };
   const hidden = hide.filter(Boolean).flatMap((f) => [path.dirname(f), path.dirname(real(f))]);
-  return ['(version 1)', '(allow default)', rule('deny file-read*', homes), rule('allow file-read*', [...allowRead, ...allowWrite]),
+  // git stats every ancestor of the allowed paths: metadata (not listing) of those directories stays readable.
+  const above = [...allowRead, ...allowWrite].filter(Boolean).flatMap((p) => { const up = []; for (let d = path.dirname(real(p)); d !== path.dirname(d); d = path.dirname(d)) up.push(d); return up; });
+  return ['(version 1)', '(allow default)', rule('deny file-read*', homes), rule('allow file-read-metadata', above, 'literal'), rule('allow file-read*', [...allowRead, ...allowWrite]),
     '(deny file-write*)', rule('allow file-write*', [...allowWrite, '/dev']), rule('deny file-read* file-write*', hidden),
     '(deny network-outbound (remote unix-socket))', '(allow network-outbound (literal "/private/var/run/mDNSResponder"))',
     '(deny mach-lookup (global-name "com.apple.SecurityServer"))'].filter(Boolean).join('\n');

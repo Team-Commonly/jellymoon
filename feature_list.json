@@ -32,7 +32,7 @@
       "category": "pod",
       "description": "A test user creates a pod and receives hello over the pod WebSocket",
       "steps": [
-        "POST /__test/seed mints a user and returns a jmu_ token (local and preview builds only)",
+        "POST /__test/session mints a user and returns a jmu_ token (local and preview builds only)",
         "POST /v1/pods with that token creates a pod and returns its id",
         "GET /v1/pods/:pod/ws with the token upgrades and the first frame is hello with headSeq 0 and the user as owner"
       ],

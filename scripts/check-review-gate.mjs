@@ -96,10 +96,12 @@ const badPortable = portable.filter(([, got, want]) => got !== want).map(([n]) =
 if (badPortable.length) { console.error(`check-review-gate: portable cases wrong\n  ${badPortable.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${portable.length} portable cases ok`);
 
-// The scan runs the way land runs it: make -s in the checkout, the allowlist env, and the shared reading of its result (scanResult).
+// The scan runs the way land runs it: make -s in the checkout, the allowlist env, and the shared reading of its result (scanResult), with the
+// commit count land computes for itself (git rev-list --count <range>) as the expected scanned count.
 const makeIn = (cwd, target, range) => {
   const r = spawnSync('make', ['-s', target, ...(range ? [`RANGE=${range}`] : [])], { cwd, encoding: 'utf8', env: scanEnv(process.env) });
-  return { status: r.status, stderr: r.stderr };
+  const expected = range ? Number(spawnSync('git', ['rev-list', '--count', range], { cwd, encoding: 'utf8' }).stdout) : undefined;
+  return { status: r.status, stderr: r.stderr, expected };
 };
 const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
 
@@ -158,32 +160,40 @@ const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-range-'));
   const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: gitEnv });
-  const tok = (marker) => `echo 'token = ${token}${marker ? ' # gitleaks:allow' : ''}'`;
+  let plain = false; // the same shapes with the token replaced by harmless text, to read the scanned count on clean merges
+  const tok = (marker) => `echo '${plain ? 'nothing here' : `token = ${token}${marker ? ' # gitleaks:allow' : ''}`}'`;
   const shapes = {
     linear: (m) => `git checkout -qb pr && ${tok(m)} > notes.txt && git commit -qam add && echo base > notes.txt && git commit -qam drop`,
     // the token lives only on a side branch (added then deleted there) that the PR merges
     sidebranch: (m) => `git checkout -qb pr && echo mine > mine.txt && git add -A && git commit -qm mine && git checkout -qb side main && ${tok(m)} > side.txt && git add -A && git commit -qm add && git rm -q side.txt && echo s > s.txt && git add -A && git commit -qm drop && git checkout -q pr && git merge -q --no-ff --no-edit side`,
     // main gains a commit after the PR branched
     oldbase: (m) => `git checkout -qb pr && ${tok(m)} > notes.txt && git commit -qam add && echo base > notes.txt && git commit -qam drop && git checkout -q main && echo next > next.txt && git add -A && git commit -qm next`,
+    // an octopus merge of two side branches, the token added then deleted on one of them
+    octopus: (m) => `git checkout -qb pr && echo mine > mine.txt && git add -A && git commit -qm mine && git checkout -qb s1 main && ${tok(m)} > s1.txt && git add -A && git commit -qm add && git rm -q s1.txt && echo s > s.txt && git add -A && git commit -qm drop && git checkout -qb s2 main && echo t > t.txt && git add -A && git commit -qm t && git checkout -q pr && git merge -q --no-ff --no-edit s1 s2`,
+    // main moved after the PR branched, and the PR merged that tip in
+    mainmerged: (m) => `git checkout -qb pr && ${tok(m)} > notes.txt && git commit -qam add && echo base > notes.txt && git commit -qam drop && git checkout -q main && echo next > next.txt && git add -A && git commit -qm next && git checkout -q pr && git merge -q --no-ff --no-edit main`,
     clean: () => 'git checkout -qb pr && echo more > notes.txt && git commit -qam add',
   };
-  const status = (shape, marker, refs) => {
+  const extras = { sidebranch: 'side', octopus: 's1 s2' };
+  const status = (shape, marker, refs, harmless = false) => {
+    plain = harmless;
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir);
     g(`cp '${root}/Makefile' . && git init -q -b main . && echo base > notes.txt && git add -A && git commit -qm base && ${shapes[shape](marker)}`);
     const head = g('git rev-parse pr').stdout.trim();
     const keep = refs ? `git branch -q kept ${head} && git update-ref refs/remotes/origin/pr ${head}` : 'true';
-    const tip = g(`${keep} && git checkout -q main && git branch -qD pr ${shape === 'sidebranch' ? 'side' : ''} && git rev-parse main`).stdout.trim();
+    const tip = g(`${keep} && git checkout -q main && git branch -qD pr ${extras[shape] ?? ''} && git rev-parse main`).stdout.trim();
     return scanResult(makeIn(dir, 'secrets-range', `${tip}..${head}`));
   };
   const rangeCases = [];
   for (const refs of [false, true]) {
     const where = refs ? 'refs at the head' : 'no ref at the head';
-    for (const shape of ['linear', 'sidebranch', 'oldbase']) {
+    for (const shape of ['linear', 'sidebranch', 'oldbase', 'octopus', 'mainmerged']) {
       rangeCases.push([`range (${shape}, ${where}): a token added then deleted in the range is found by the recipe itself`, status(shape, false, refs), 'hit']);
       rangeCases.push([`range (${shape}, ${where}): a gitleaks:allow marker does not hide it`, status(shape, true, refs), 'hit']);
     }
     rangeCases.push([`range (${where}): a range without a token is clean`, status('clean', false, refs), 'clean']);
+    for (const shape of ['linear', 'sidebranch', 'oldbase', 'octopus', 'mainmerged']) rangeCases.push([`range (${shape}, ${where}): without the token it reads clean, so gitleaks' scanned count equals rev-list --count`, status(shape, false, refs, true), 'clean']);
   }
   process.env.MAKEFLAGS = 'i'; // make -i would turn a hit into exit 0; the scan env drops it
   rangeCases.push(['range: an operator MAKEFLAGS=i does not switch the scan off', status('linear', false, false), 'hit']);

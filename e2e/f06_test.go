@@ -21,7 +21,8 @@ func TestF06(t *testing.T) {
 		}
 		return fmt.Errorf("hello agents %+v do not list %s (err=%v)", h.Agents, w.a1.id, err)
 	})
-	subs := []*sock{w.sO, w.sBen, w.sCara}
+	// Every socket subscribed in newWorld: the three people and both computers.
+	subs := []*sock{w.sO, w.sBen, w.sCara, w.compA.sock, w.compB.sock}
 	marks := map[*sock]int{}
 	for _, s := range subs {
 		marks[s] = s.mark()

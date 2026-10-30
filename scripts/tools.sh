@@ -115,7 +115,7 @@ fetch_bun() {
   curl -fsSL "$base/$d.zip" -o "$1/$d.zip"
   curl -fsSL "$base/SHASUMS256.txt" -o "$1/SHASUMS256.txt"
   local got; got=$(sha "$1/$d.zip")
-  grep -q "$got  $d.zip" "$1/SHASUMS256.txt" || die "bun checksum mismatch"
+  grep -qxF "$got  $d.zip" "$1/SHASUMS256.txt" || die "bun checksum mismatch"
   unzip -q -j -o "$1/$d.zip" -d "$2"
   echo "$got" > "$2/.sha256"
 }

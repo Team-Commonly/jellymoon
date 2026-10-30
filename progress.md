@@ -217,4 +217,4 @@ goes in the PR.
 - ops hours above 8 h/month for two months running
 Record a hit here with its date and evidence, and raise it to the coordinator.
 
-Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (unit PC4).
+Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (raised in an earlier pod-core review).

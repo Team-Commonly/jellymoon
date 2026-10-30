@@ -4,6 +4,12 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-30 · the Cloudflare adapter and the e2e suite join the tree (unit W0)
+- **Changed:** `worker/` (Worker, one Durable Object per pod, D1) and `e2e/` (black-box contract suite) came over from the earlier build and now run on this head's `podcore/`. Commands carry an adapter-minted `wakeId` seed. The wake step of `TestF07` now follows ADR 0003: an ack changes nothing, so an acked wake is re-sent until a run claims it. `TestF02` and `TestStepPrinter` are new, and the run ends `E2E_MS=<n> STEPS=<k>/<k>`. New targets `e2e`, `worker-dev`, `e2e-a`; `test-ts` also runs `worker`; `preflight` ends with `e2e-a`. Boundary rules and knip cover `worker/`; caps worker 1,250 and e2e 1,900 (ADR 0001).
+- **Evidence:** `make preflight` and `make e2e-a` under a clean shell; F02, F07 and F10 pass; `podcore/`, `schema/` and `scripts/` are byte-identical to the base.
+- **Next:** F03 onward build on the adapter.
+- **Surprising:** the old suite asserted an acked wake is never re-sent, which the accepted core rule contradicts; and a monotonic ULID is a bad wake seed, because the next seed can land inside the range a pending wake already took.
+
 ## 2026-10-30 · P08 one reading of the scan, recipe pinned (unit P08, round 19)
 - **Changed:** `scanResult` in land-decide.mjs is the one reading of the range scan (clean only on exit 0; hit only on a nonzero exit with `exit status 3`; anything else, a zero exit that printed the hit line included, is a failure), used by `rangeScan` and by every fixture. The `secrets-range` recipe and the go/gitleaks definitions are text-pinned. Every range shape runs with no ref at the head and with refs (a branch and a `refs/remotes` ref); the evil-merge block is land-shaped. The scan runs under an allowlist env (`scanEnv`): no `MAKEFLAGS`, no operator gitleaks or git config. Docs: bootstrap checkout must be the PR head, step order, step 6.
 - **Evidence:** check-land 163, check-land-e2e 98, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge + 2 recipe pin + 15 range.

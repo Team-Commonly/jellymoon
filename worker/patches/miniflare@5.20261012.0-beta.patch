@@ -1,0 +1,49 @@
+diff --git a/dist/src/index.js b/dist/src/index.js
+index 204ea83c2fc8e73b73abd255a3fc68a5a08e46a7..5b2db6f28c5145c7a667c9650bd574ee48225d30 100644
+--- a/dist/src/index.js
++++ b/dist/src/index.js
+@@ -58851,3 +58851,3 @@
+ var import_stoppable = __toESM(require_stoppable());
+-var import_undici7 = require("undici");
++var import_undici7 = require("undici/index.js");
+ 
+@@ -78565,3 +78565,3 @@
+ var import_node_path = __toESM(require("node:path"));
+-var import_undici = require("undici");
++var import_undici = require("undici/index.js");
+ function getDefaultCfPath() {
+@@ -89579,7 +89579,7 @@
+ var import_node_assert6 = __toESM(require("node:assert"));
+-var undici = __toESM(require("undici"));
++var undici = __toESM(require("undici/index.js"));
+ var import_ws2 = __toESM(require("ws"));
+ 
+ // src/http/request.ts
+-var import_undici2 = require("undici");
++var import_undici2 = require("undici/index.js");
+ var kCf = /* @__PURE__ */ Symbol("kCf");
+@@ -89610,3 +89610,3 @@
+ // src/http/response.ts
+-var import_undici3 = require("undici");
++var import_undici3 = require("undici/index.js");
+ var kWebSocket = /* @__PURE__ */ Symbol("kWebSocket");
+@@ -90518,3 +90518,3 @@
+ // src/http/index.ts
+-var import_undici4 = require("undici");
++var import_undici4 = require("undici/index.js");
+ 
+@@ -94135,3 +94135,3 @@
+ var import_node_url2 = require("node:url");
+-var import_undici5 = require("undici");
++var import_undici5 = require("undici/index.js");
+ var import_node_child_process2 = require("node:child_process");
+@@ -119908,3 +119908,3 @@
+ 
+-// When running Miniflare from Jest, regular 'require("undici")' will fail here
++// When running Miniflare from Jest, regular 'require("undici/index.js")' will fail here
+ // with "Error: Cannot find module 'undici'". Instead we need to create a
+@@ -120067,3 +120067,3 @@
+ var import_web3 = require("node:stream/web");
+-var import_undici6 = require("undici");
++var import_undici6 = require("undici/index.js");
+ var NODE_PLATFORM_IMPL = {

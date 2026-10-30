@@ -6,7 +6,10 @@
     "scripts/check-land-e2e.mjs",
     "scripts/land.mjs",
     "podcore/src/index.ts",
-    "podcore/test/**/*.test.ts"
+    "podcore/test/**/*.test.ts",
+    "worker/src/index.ts",
+    "worker/src/test/index.ts",
+    "worker/test/**/*.test.ts"
   ],
   "project": [
     "scripts/**/*.mjs",
@@ -14,6 +17,7 @@
     "e2e/**/*.ts",
     "podcore/**/*.ts"
   ],
+  "ignoreDependencies": ["wrangler"],
   "ignoreBinaries": [
     "go",
     "gofmt",

@@ -1,0 +1,24 @@
+# Local runs and deploys that the e2e suite and the load driver talk to: the test entry (public routes plus /__test/*).
+# No account_id, no routes, no zone: workers.dev only. The all-zero database_id is a placeholder; local runs never read it.
+name = "jellymoon"
+main = "src/test/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[rules]]
+type = "Text"
+globs = ["**/*.sql"]
+fallthrough = true
+
+[[durable_objects.bindings]]
+name = "POD"
+class_name = "PodDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PodDO"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jellymoon"
+database_id = "00000000-0000-0000-0000-000000000000"

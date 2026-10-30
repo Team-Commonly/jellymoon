@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight
+.PHONY: e2e e2e-a worker-dev land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight
 
 tools:
 	scripts/tools.sh
@@ -30,7 +30,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-land.mjs
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
-	$(BUN) test podcore
+	$(BUN) test podcore worker
 
 test-go:
 	$(GO) vet ./...
@@ -79,4 +79,16 @@ land:
 verify-preflight:
 	node scripts/land.mjs $(PR) --preflight-only $(ARGS)
 
-preflight: portable check-gen test entropy secrets
+# The black-box contract suite (docs/development/e2e-contract.md). Needs JM_E2E_SERVER; ends with E2E_MS=<n> STEPS=<k>/<k>.
+e2e:
+	$(GO) test ./e2e -count=1 -v
+
+# The Cloudflare adapter (worker/) under `wrangler dev --local`. Loopback only.
+worker-dev: node_modules
+	ENV=local PORT=$${PORT:-8787} JM_DATA_DIR=$${JM_DATA_DIR:-$(CURDIR)/.wrangler-data} worker/dev.sh
+
+# The contract suite against the Cloudflare adapter. It persists every command, so staleMs is 0.
+e2e-a: node_modules
+	JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' JM_E2E_STALE_MS=0 $(GO) test ./e2e -count=1 -v
+
+preflight: portable check-gen test entropy secrets e2e-a

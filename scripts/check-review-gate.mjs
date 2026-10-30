@@ -5,6 +5,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { EventEmitter } from 'node:events';
+import { main } from './land.mjs';
 import { addsAllowMarker, checkPodVerdict, filesFromRaw, hiddenInInert, mergeResult, needsVerdict, touchesProtected, verdictOf } from './land-decide.mjs';
 
 // Only exactly `GATE: PASS` as the last non-empty line passes; everything else blocks (nothing at all is null).
@@ -205,14 +207,15 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
   const probe = (files, { after = '', msg = 'pr' } = {}) => {
     sh(`rm -rf .git docs README.md && cp '${root}/Makefile' . && git init -q -b main . && echo base > README.md && git add -A && git commit -qm base && git checkout -qb pr`);
     for (const [f, body] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), body); }
-    git('add', '-A'); git('commit', '-qm', msg);
+    git('add', '-A');
+    if (Buffer.isBuffer(msg)) { const mf = path.join(os.tmpdir(), `check-msg-${process.pid}`); fs.writeFileSync(mf, msg); git('commit', '-qF', mf); fs.rmSync(mf, { force: true }); } else git('commit', '-qm', msg);
     if (after) sh(after);
     const [mainTip, head] = [git('rev-parse', 'main'), git('rev-parse', 'pr')];
     const merged = mergeResult((a) => git(...a), mainTip, head);
     const names = git('ls-tree', '-r', '--name-only', mainTip).split('\n');
     const hiddenIn = hiddenInInert(merged, names, (spec) => git('cat-file', 'blob', spec), (d) => spawnSync('make', ['-s', 'secrets-dir', `DIR=${d}`], { cwd: dir }).status === 0);
     const range = spawnSync('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`], { cwd: dir }).status !== 0;
-    return { merged, needs: needsVerdict({ files: merged.files, tree: names, patch: merged.patch, binary: merged.binary, hides: range || hiddenIn }), range };
+    return { merged, hit: hiddenIn, tokenKept: git('log', '--format=%B', `${mainTip}..${head}`).includes(token) || git('log', '--all', '-p', '--format=%B').includes(token), needs: needsVerdict({ files: merged.files, tree: names, patch: merged.patch, binary: merged.binary, hides: range || hiddenIn }), range };
   };
   const nul = probe({ 'docs/a.md': Buffer.concat([Buffer.from('x\0\n'), Buffer.from(secret)]) });
   const nm = probe({ 'docs/node_modules/x.md': secret });
@@ -228,6 +231,63 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
   const goneVariants = { 'bin.dat': nulBody, 'docs/a.md': nulBody, 'shot.png': secret, 'node_modules/x.js': secret, 'docs/node_modules/x.md': secret, 'package-lock.json': secret, 'go.sum': secret };
   const goneRes = Object.fromEntries(Object.entries(goneVariants).map(([f, b]) => [f, gone(f, b)]));
   const goneControl = gone('notes.txt', secret);
+  // File-format magics: the scanner types a file by its first bytes and skips application/* whatever the name. Land decides text itself
+  // (valid UTF-8, no NUL or C0 control but \t \n \f \r, no DEL) and scans only text, behind fixed padding. Each case is a REAL pinned gitleaks.
+  const b = (...x) => Buffer.from(x.flatMap((v) => (typeof v === 'number' ? [v] : [...Buffer.from(v)])));
+  const magics = {
+    '%PDF-': b('%PDF-1.4\n'), '\\x7fELF': b(0x7f, 'ELF', 2, 1, 1, '\n'), 'PK\\x03\\x04': b('PK', 3, 4, '\n'), '%!PS-Adobe': b('%!PS-Adobe-3.0\n'), '{\\rtf1': b('{\\rtf1\n'),
+    GIF89a: b('GIF89a\n'), '\\x89PNG': b(0x89, 'PNG\r\n', 0x1a, '\n'), 'gzip \\x1f\\x8b': b(0x1f, 0x8b, 8, '\n'), 'Mach-O': b(0xcf, 0xfa, 0xed, 0xfe, '\n'), '\\0asm': b(0, 'asm', 1, 0, 0, 0),
+    'SQLite format 3\\0': b('SQLite format 3', 0), '\\xca\\xfe\\xba\\xbe': b(0xca, 0xfe, 0xba, 0xbe, '\n'), 'ustar at 257': b('x'.repeat(257), 'ustar\n'), 'DICM at 128': b('x'.repeat(128), 'DICM\n'),
+    'ustar at 236': b('x'.repeat(236), 'ustar\n'), 'DICM at 107': b('x'.repeat(107), 'DICM\n'), // 21 bytes shorter: the offsets a one-line prefix would leave sniffable
+    'CD001 at 32748': b(`${`${'y'.repeat(99)}\n`.repeat(327)}${'y'.repeat(48)}CD001\n`),
+    'CD001 at 32769': b(`${`${'y'.repeat(99)}\n`.repeat(327)}${'y'.repeat(69)}CD001\n`),
+  };
+  const magicRows = Object.entries(magics).map(([name, m]) => {
+    const body = Buffer.concat([m, Buffer.from(secret)]);
+    return { name, blob: gone('node_modules/x.js', body), message: probe({ 'docs/ok.md': 'ok\n' }, { msg: Buffer.concat([Buffer.from('docs\n\n'), m, Buffer.from(secret)]) }) };
+  });
+  const how = (r) => (!r.needs ? 'CLEAN' : r.merged.binary ? 'protected (not text)' : r.hit ? 'secrets-dir HIT' : 'protected');
+  if (process.env.PER_MAGIC) magicRows.forEach((r) => console.log(`${r.name.padEnd(20)} blob: ${how(r.blob).padEnd(22)} message: ${r.message.tokenKept ? how(r.message) : 'not stored by git'}`));
+  // End to end through land's own main(): real git and real make, scripted gh and an empty verdict pod. A PDF-prefixed token that is
+  // added and deleted must make land ask the pod (and refuse with no verdict), never say "would land".
+  const toolEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' };
+  const landDry = async () => {
+    const [mainTip, head] = [git('rev-parse', 'main'), git('rev-parse', 'pr')];
+    const ledger = path.join(os.tmpdir(), `check-ledger-${process.pid}.tsv`);
+    const tokenFile = path.join(os.tmpdir(), `check-token-${process.pid}`);
+    fs.writeFileSync(ledger, `pr\thead\tverdict\tby\twhen\tnote\n5\t${head}\tPASS\topus-verifier\t2026-10-30T12:00:00Z\tsim\n`);
+    fs.writeFileSync(tokenFile, 'jmu_FAKE-e2e-token');
+    const w = { pod: 0, said: [] };
+    let fetched = '';
+    const exec = (cmd, args, opts = {}) => {
+      if (cmd === 'gh' && args[0] === 'pr') return JSON.stringify({ url: 'https://github.com/o/r/pull/5', number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'pr', headRefOid: head, createdAt: '2026-10-29T00:00:00Z', isCrossRepository: false, author: { login: 'lily' } });
+      if (cmd === 'gh' && args.some((a) => a.includes('collaborators'))) return '{"login":"lily","push":true}';
+      if (cmd === 'gh' && args.some((a) => a.includes('check-runs'))) return '{"total":0,"runs":[]}';
+      if (cmd === 'git' && args[0] === 'remote') return 'origin\thttps://github.com/o/r.git (fetch)';
+      if (cmd === 'git' && args[0] === 'fetch') { fetched = args.at(-1); return ''; }
+      if (cmd === 'git' && args.join(' ') === 'rev-parse FETCH_HEAD') return fetched === 'refs/heads/main' ? mainTip : head;
+      if (cmd === 'git' || cmd === 'make' || cmd === 'chmod') { const r = spawnSync(cmd, args, { cwd: dir, env: toolEnv, encoding: 'utf8', maxBuffer: 1 << 28, ...opts }); if (r.status !== 0) throw Object.assign(new Error(`${cmd} failed`), { stderr: r.stderr }); return r.stdout.trim(); }
+      throw new Error(`unscripted ${cmd}`);
+    };
+    const fetch = async () => { w.pod += 1; return { ok: true, status: 200, json: async () => [] }; };
+    const spawn = () => { const c = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), pid: 2000000001 }); setImmediate(() => c.emit('close', 0)); return c; };
+    const env = { JM_REPO: 'o/r', JM_TRUSTED_LOGINS: 'lily', JM_LEDGER: ledger, JM_COMMONLY_API: 'https://api.commonly.me', JM_COMMONLY_TOKEN_FILE: tokenFile, JM_VERDICT_POD: 'pod', JM_VERDICT_REVIEWERS: 'id-op:Operator' };
+    const [log, err, cwd] = [console.log, console.error, process.cwd()];
+    console.log = (m) => w.said.push(String(m)); console.error = (m) => w.said.push(String(m));
+    process.chdir(dir);
+    let error = null;
+    try { await main({ exec, fetch, spawn, kill: () => {}, env, argv: ['5', '--dry-run', '--bootstrap'], nodeVersion: process.versions.node, cwd: dir }); } catch (e) { error = e.message; } finally { process.chdir(cwd); console.log = log; console.error = err; }
+    fs.rmSync(ledger, { force: true }); fs.rmSync(tokenFile, { force: true });
+    return { pod: w.pod, error, wouldLand: w.said.some((s) => s.startsWith('dry run: would land')) };
+  };
+  const pdfBody = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.from(secret)]);
+  gone('node_modules/x.js', pdfBody);
+  const e2eBlob = await landDry();
+  probe({ 'docs/ok.md': 'ok\n' }, { msg: Buffer.concat([Buffer.from('%PDF-1.4\n\n'), Buffer.from(secret)]) });
+  const e2eMsg = await landDry();
+  probe({ 'docs/ok.md': 'ok\n' });
+  const e2eClean = await landDry();
+  if (process.env.PER_MAGIC) console.log(JSON.stringify([e2eBlob, e2eMsg, e2eClean]));
   const control = probe({ 'docs/ok.md': 'no token here\n' });
   const inert = [
     ['inert: a .md with a NUL and a token is protected (git calls it binary)', nul.needs && nul.merged.binary, true],
@@ -239,6 +299,12 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
     ['inert: a token added in docs/gitleaks.toml.md then renamed to docs/guide.md needs the verdict', renamed.needs, true],
     ['inert: a token only in a commit message needs the verdict, though gitleaks\'s range scan misses it', inMessage.needs && !inMessage.range, true],
     ...Object.entries(goneRes).map(([f, r]) => [`range: ${f} added in commit 1 and deleted in commit 2 needs the verdict`, r.needs && r.merged.files.every((x) => x.filename === 'docs/ok.md'), true]),
+    ...magicRows.flatMap((r) => [[`magic ${r.name}: a range blob (added then deleted) is never clean`, r.blob.needs, true], [`magic ${r.name}: a commit message is never clean when git stored it`, !r.message.tokenKept || r.message.needs, true]]),
+    ...magicRows.filter((r) => /ELF|PK|PNG|gzip|Mach|asm|SQLite|xca/.test(r.name)).map((r) => [`magic ${r.name}: a range blob that is not text by land's rule is protected on that rule alone`, r.blob.merged.binary, true]),
+    ['e2e: a PDF-prefixed token in a deleted node_modules blob makes land ask the pod and refuse', e2eBlob.pod > 0 && !e2eBlob.wouldLand && /pod|verdict/.test(String(e2eBlob.error)), true],
+    ['e2e: a PDF-prefixed token in a commit message makes land ask the pod and refuse', e2eMsg.pod > 0 && !e2eMsg.wouldLand && /pod|verdict/.test(String(e2eMsg.error)), true],
+    ['e2e: the clean inert control would land with no pod read', e2eClean.pod === 0 && e2eClean.wouldLand, true],
+    ...magicRows.filter((r) => /ELF|PK/.test(r.name)).map((r) => [`magic ${r.name}: a commit message that is not text is protected on that rule alone`, !r.message.tokenKept || r.message.merged.binary, true]),
     ['range: the plain-text control (notes.txt) is caught by the range scan itself', goneControl.needs && goneControl.range, true],
     ['inert: the control docs/ok.md with no token stays inert', control.needs, false],
   ];

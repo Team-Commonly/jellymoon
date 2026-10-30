@@ -8,7 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import {
   landedNote, mergeAction, needsVerdict,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, hiddenInInert, isPlainText, pushersOf, trackThrowaway, filesFromRaw, landAction, mergeResult, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -181,6 +181,12 @@ const cases = [
   ['pod: the right id with any username is accepted', pod([msg('ada', verdict(5, H), { userId: { _id: 'id-ada', username: 'operator' } })]).ok, true],
   ['pod: a forged later PASS (other id, same name) does not override the real FAIL', pod([msg('ada', verdict(5, H, 'FAIL')), msg('ada', verdict(5, H), { userId: { _id: 'id-forged', username: 'ada' } })]).ok, false],
   ['pod: the latest verdict is decided per id (a later PASS from the same id wins)', pod([msg('ada', verdict(5, H, 'FAIL'), { createdAt: '2026-10-29T10:00:00Z' }), msg('ada', verdict(5, H), { createdAt: '2026-10-29T11:00:00Z' })]).ok, true],
+  ['text: plain UTF-8 with tab, LF, FF and CR is text', isPlainText('a\tb\nc\fd\re é 漢'), true],
+  ['text: a NUL, a vertical tab, DEL, ESC or an invalid byte (U+FFFD) is not text', ['a\0b', 'a\u000bb', 'a\u007fb', 'a\u001bb', 'a\ufffdb'].some(isPlainText), false],
+  ['inert scan: a merge-result file that is not text is never handed to the scanner (counts as a hit)', hiddenInInert({ files: [{ filename: 'docs/a.md', modes: ['000000', '100644'] }], tree: 't', added: [], messages: '', binary: false, patch: '' }, [], () => 'x\0y', () => true), true],
+  ['inert scan: the same file as plain text and a clean scan is not a hit', hiddenInInert({ files: [{ filename: 'docs/a.md', modes: ['000000', '100644'] }], tree: 't', added: [], messages: '', binary: false, patch: '' }, [], () => 'xy', () => true), false],
+  ['pod: a prefix of a listed id is not the reviewer', pod([msg('ada', verdict(5, H), { userId: { _id: 'id-lume', username: 'ada' } })]).ok, false],
+  ['pod: a case variant of a listed id is not the reviewer', pod([msg('ada', verdict(5, H), { userId: { _id: 'ID-ADA', username: 'ada' } })]).ok, false],
   ['pod: a string userId (not a populated user) is ignored', pod([msg('ada', verdict(5, H), { userId: 'id-ada' })]).ok, false],
   ['pod: no configured reviewers refuses and names JM_VERDICT_REVIEWERS', pod([msg('ada', verdict(5, H))], '5', H, { entries: [] }).reason.includes('JM_VERDICT_REVIEWERS'), true],
   ['reviewers: id:Name pairs parse; blanks and malformed entries are dropped', JSON.stringify(parseReviewers(' a1:Lily Shen, ,bad,:x,b2:Ben ')), '[{"id":"a1","name":"Lily Shen"},{"id":"b2","name":"Ben"}]'],

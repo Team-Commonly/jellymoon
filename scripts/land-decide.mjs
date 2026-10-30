@@ -238,6 +238,14 @@ export function addsAllowMarker(diff) {
     return !header && l.startsWith('+') && l.includes('gitleaks:allow');
   });
 }
+// Text, by land's own strict rule: valid UTF-8 (a decoded invalid byte is U+FFFD) with no NUL, no C0 control other than \t \n \f \r, and no DEL.
+// Anything else (ELF, zip, PDF with binary streams, Mach-O, wasm, SQLite, tar) is never handed to the scanner, which types files by their
+// leading bytes and skips what it calls application/*; it makes the PR protected instead.
+export const isPlainText = (x) => !/[\u0000-\u0008\u000b\u000e-\u001f\u007f\ufffd]/.test(x);
+// Every scanned text starts with this fixed plain padding. The scanner types a file by its first bytes, at offsets up to 32773 (tar's
+// "ustar" at 257, DICOM's "DICM" at 128, ISO's "CD001" at 32769), and skips what it calls application/*; with 33,600 bytes of plain lines
+// first, the bytes it sniffs are always this padding, never the content (measured on the pinned gitleaks: docs/development/landing.md).
+export const SCAN_PREFIX = 'jellymoon-range-scan\n'.repeat(1600);
 // What merging head into main's tip would change: the real merge result, not a merge-base diff (a criss-cross history can make
 // that empty). run(args) is `git` with those args. A conflict throws. No external diff or textconv can empty the diff.
 export function mergeResult(run, mainTip, head) {
@@ -255,7 +263,7 @@ export function mergeResult(run, mainTip, head) {
   // commit 1 and deleted in commit 2 stays in main's history, in a place gitleaks git mode may skip (binary, image, lockfile, node_modules).
   const shas = [...new Set(run(['rev-list', '--objects', '--filter=object:type=blob', '--filter-provided-objects', `${mainTip}..${head}`]).split('\n').filter(Boolean).map((l) => l.split(' ')[0]))];
   const added = shas.map((sha) => run(['cat-file', 'blob', sha]));
-  binary = binary || added.some((x) => x.slice(0, 8000).includes('\0'));
+  binary = binary || !added.every(isPlainText) || !isPlainText(messages); // land decides text itself; the scanner's file-type sniffing is not trusted
   return { tree, messages, added, files: filesFromRaw(diff('--raw', '-M')), binary, treePatch, patch: `${treePatch}\n${history}` };
 }
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
@@ -287,10 +295,11 @@ function inertScan(merged, names, blob, scan) {
   const inert = merged.files.filter((f) => f.modes[1] !== '000000' && !touchesProtected([f], names));
   const texts = [...inert.map((f) => blob(`${merged.tree}:${f.filename}`)), ...merged.added, ...(merged.messages?.trim() ? [merged.messages] : [])];
   if (!texts.length) return true;
+  if (!texts.every(isPlainText)) return false; // not text by land's rule: treated as a hit, so the PR needs the verdict
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-inert-'));
   try {
     fs.mkdirSync(path.join(dir, 'inert'));
-    texts.forEach((x, i) => fs.writeFileSync(path.join(dir, 'inert', `${i}.txt`), x));
+    texts.forEach((x, i) => fs.writeFileSync(path.join(dir, 'inert', `${i}.txt`), SCAN_PREFIX + x));
     return scan(path.join(dir, 'inert'));
   } finally { removeTree(dir); }
 }

@@ -12,11 +12,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction, needsVerdict,
-  checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeResult, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, takePage, hiddenInInert,
+  acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
+  checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
+  scrub, takePage,
 } from './land-decide.mjs';
-const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
+const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
 // All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
 // git, gh and make call, fetch for the pod read, spawn for the preflight child, env, argv and the Node version.
 export class Refusal extends Error {}
@@ -147,6 +147,20 @@ function trustGate(pr) {
   const t = checkTrust({ pr: { isCrossRepository: pr.isCrossRepository, author: pr.author?.login }, pushers, trusted: parseLogins(IO.env.JM_TRUSTED_LOGINS) });
   if (!t.ok) refuse(`#${pr.number}: ${t.reason}`);
 }
+// Accepted reviewers, from operator env only: checked before the token is read or the pod fetched. Unset is caught with the other
+// variables; a value with no valid `<id>:<Name>` entry is malformed.
+const reviewers = () => {
+  const list = parseReviewers(IO.env.JM_VERDICT_REVIEWERS);
+  if (!list.length) refuse('JM_VERDICT_REVIEWERS is malformed: it has no valid <id>:<Name> entry');
+  return list;
+};
+// The commit-range secret scan (gitleaks git mode, -m, markers ignored). It only refuses. A finding exits gitleaks with 3, which `go run`
+// reports as "exit status 3" on stderr; any other failure of the scan refuses too, because a scan that did not run proves nothing.
+const rangeScan = (mainTip, head) => {
+  try { out('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]); return { ok: true }; } catch (e) {
+    return { ok: false, reason: /^exit status 3$/m.test(String(e.stderr || '')) ? 'a secret was found in the range; remove it from history and push a new head' : 'the range secret scan failed to run; it proves nothing, so land refuses' };
+  }
+};
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
 async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
   const n = String(pr.number);
@@ -158,22 +172,17 @@ async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
   const runs = JSON.parse(gh('api', `repos/${REPO}/commits/${head}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, conclusion}]}'));
   const ci = checkRuns(runs.runs, runs.total);
   if (!ci.ok) return ci;
-  const merged = mergeResult((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
-  const names = out('git', ['ls-tree', '-r', '--name-only', '-z', mainTip], { maxBuffer: 1 << 28 }).split('\0').filter(Boolean);
-  // A marker anywhere in the PR's history, or a secret gitleaks finds once markers are ignored, needs the reviewer's verdict.
-  const base = { files: merged.files, tree: names, patch: merged.patch, binary: merged.binary };
-  const hidesRange = !ok('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]);
-  // Inert content is scanned under neutral names, so no path allowlist of the scanner can skip it. Binary files are protected, not scanned.
-  const hides = hidesRange || hiddenInInert(merged, names, (spec) => out('git', ['cat-file', 'blob', spec], { maxBuffer: 1 << 28 }), (d) => ok('make', ['-s', 'secrets-dir', `DIR=${d}`]));
-  if (needsVerdict({ ...base, hides })) {
-    const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: parseReviewers(IO.env.JM_VERDICT_REVIEWERS) });
-    if (!gate.ok) return gate;
-    notes.push(gate.reason);
-  }
-  return { ok: true, notes, tree: merged.tree };
+  // The secret scan can only REFUSE; a clean scan waives nothing. Every land needs the ledger PASS above and the reviewer's verdict below.
+  const scan = rangeScan(mainTip, head);
+  if (!scan.ok) return scan;
+  const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers() });
+  if (!gate.ok) return gate;
+  notes.push(gate.reason);
+  const tree = treeOf(mainTip, head);
+  return { ok: true, notes, tree };
 }
 // The tree `merge-tree --write-tree` gives for main's tip plus the head: what the decision judged and the preflight must reproduce.
-const treeOf = (mainTip, head) => mergeResult((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head).tree;
+const treeOf = (mainTip, head) => mergeTree((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
 const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
 const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only [--bootstrap]';
 // The checkout this runs from, checked before the first fetch (mainTip null) and again after it: a clean tree at main's tip (only --bootstrap may sit elsewhere), no credentials in its git config.
@@ -214,6 +223,7 @@ async function run(args, hold) {
   const only = args.includes('--preflight-only');
   const missing = (only ? ['JM_REPO', 'JM_TRUSTED_LOGINS'] : REQUIRED).find((v) => !IO.env[v]);
   if (missing) refuse(`environment variable ${missing} is not set`);
+  if (!only) reviewers();
   const api = only ? { ok: true } : checkApi(IO.env.JM_COMMONLY_API, IO.env.JM_ALLOW_API_ORIGIN);
   if (!api.ok) refuse(api.reason);
   const nums = args.filter((a) => /^\d+$/.test(a));

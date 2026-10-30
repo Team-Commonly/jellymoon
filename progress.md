@@ -4,6 +4,12 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-30 · P08 one review per head, scans only refuse (unit P08, round 16)
+- **Changed:** every land needs the ledger PASS and the pod verdict; no path rule or scan result waives either. Deleted the inert rule, `needsVerdict`, the neutral-name re-scan, the range-blob enumeration, `touchesProtected` and the path cases. `make secrets-range` now exits 3 on a finding; a hit or a failed scan refuses. Reviewers env is checked before the token read ("malformed" if no valid entry); `msgUser` takes only a string `_id`.
+- **Evidence:** check-land 153, check-land-e2e 73, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge; core LOC 2103 to 1787.
+- **Next:** land #10 with `--bootstrap`.
+- **Surprising:** `go run` reports a child's exit 3 as "exit status 3" and exits 1 itself, so land reads stderr to tell a finding from a failed scan.
+
 ## 2026-10-29 · P08 trust gate, not sandbox (unit P08, round 5)
 - **Changed:** deleted the macOS sandbox, its proof, the platform check, `--reviewer-gate-unavailable`, `--owed` and `REGATE-OWED`; land and verify-preflight run PR code only for a same-repo PR whose author and every push-capable account are in `JM_TRUSTED_LOGINS`; the checkout must be at main and clean with no credentials in its git config; any FAIL at a head blocks it; failed check runs veto; an added `gitleaks:allow` line makes a PR protected; preflight output is quoted; check-gen is proved to bite. **Evidence:** check-land 88 cases, core LOC 1455 to 1414 (max 1454). **Next:** land #10 with `--bootstrap`; `ci.yml` stays off. Core LOC max raised from 1454 to 1500 (ADR 0001's cap) so security tests are not deleted to fit.
 

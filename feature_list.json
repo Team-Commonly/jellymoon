@@ -37,7 +37,7 @@
         "GET /v1/pods/:pod/ws with the token upgrades and the first frame is hello with headSeq 0 and the user as owner"
       ],
       "test": "go test ./e2e -run TestF03",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F04",

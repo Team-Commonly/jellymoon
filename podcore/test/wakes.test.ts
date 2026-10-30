@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { apply, nthWakeId } from '../src';
 import type { Cmd } from '../src';
-import { AG1, AG3, AG_UNREG, CMP_1, CMP_2, RUN_A, RUN_B, TASKS, U_AGENT_OWNER, U_OWNER, errCode, events, id, lastReply, play, runN, toComputer, wak, world } from './helpers';
+import { AG1, AG3, AG_UNREG, CMP_1, CMP_2, RUN_A, TASKS, U_AGENT_OWNER, U_OWNER, errCode, events, id, lastReply, play, runN, toComputer, wak, world } from './helpers';
 
-const [T1, T2] = TASKS;
+const [T1] = TASKS;
 const call = { kind: 'user' as const, userId: U_OWNER.id };
 /** Task 10+n, assigned to an agent: the core writes the task_assigned wake itself. */
 const assign = (n: number, assignee = AG1, wakeId = wak(n)): Cmd => ({ type: 'task_create', caller: call, taskId: id('tsk', 10 + n), title: `T${n}`, kind: 'chore', assignee, wakeId });

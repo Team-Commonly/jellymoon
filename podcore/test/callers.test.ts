@@ -50,7 +50,7 @@ test('refusal path and handler path agree on the caller: outcome and renewal, ov
     const res = apply(base, cmd as unknown as Cmd, NOW);
     const rep = res.out.find((o) => o.kind === 'reply');
     const code = rep?.kind === 'reply' && !rep.ok ? rep.error.code : null;
-    if (typeof cmd.type !== 'string' || !(cmd.type in FIELDS)) expect([JSON.stringify(cmd), code]).toEqual([JSON.stringify(cmd), 'invalid_input']);
+    if (typeof cmd.type !== 'string' || !Object.hasOwn(FIELDS, cmd.type)) expect([JSON.stringify(cmd), code]).toEqual([JSON.stringify(cmd), 'invalid_input']);
     const live = spec?.kind === 'run' && (spec.id === RUN_A || spec.id === RUN_B);
     const members = [U_OWNER.id, id('usr', 2)];
     const want = spec?.kind === 'run' && !live ? 'unauthorized' : live && type === 'run_stop' ? 'forbidden' : spec?.kind === 'user' && cmd.caller && !members.includes(spec.id as string) && (spec.id === U_STRANGER.id || BAD.includes(spec.id)) ? 'forbidden' : undefined;
@@ -118,5 +118,22 @@ test('a non-string or prototype-key type is an unknown command: no throw, no sta
       const r = apply(base, bad as unknown as Cmd, NOW);
       expect([JSON.stringify(bad), errCode(r.out), r.out.length, r.state]).toEqual([JSON.stringify(bad), 'invalid_input', 1, base]);
     }
+  }
+});
+
+describe('a stray caller or runId on a command that has none changes nothing, one row per type', () => {
+  const NONE = ['pod_create', 'member_add', 'change', 'run_claim', 'agent_register', 'tick', 'boot'];
+  const strays = [{ kind: 'run', runId: RUN_A }, { kind: 'run', runId: RUN_C }, { kind: 'run', runId: id('run', 99) }, { kind: 'user', userId: U_STRANGER.id }];
+  for (const type of NONE) {
+    test(type, () => {
+      const cmd: Record<string, unknown> = { type };
+      for (const f of FIELDS[type]) cmd[f] = GOOD[f];
+      if (type === 'change') Object.assign(cmd, { kind: 'ruling', refs: {} });
+      const plain = apply(base, cmd as unknown as Cmd, NOW);
+      for (const caller of strays) {
+        const stray = { ...cmd, caller, ...(type === 'run_claim' ? {} : { runId: RUN_A }) };
+        expect([type, JSON.stringify(caller), apply(base, stray as unknown as Cmd, NOW)]).toEqual([type, JSON.stringify(caller), plain]);
+      }
+    });
   }
 });

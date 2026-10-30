@@ -1,6 +1,6 @@
 // The pod core (ADR 0003): apply(state, cmd, now) -> { state, out }. Pure; adapters own I/O and the timer.
 import { messagePostCmd, memberAddCmd, podCreateCmd, taskCreateCmd, taskUpdateCmd } from './board';
-import { CALLER_TYPES, LEASE_MS, callerOf, isObj, nextDeadline, own, renewRun, settle } from './claims';
+import { CALLER_TYPES, callerOf, isObj, own, renewRun, settle } from './claims';
 import { claimCmd, heartbeatCmd, opCmd, releaseCmd, runEndCmd, runStopCmd } from './commands';
 import { fail } from './emit';
 import { agentRegisterCmd, changeCmd, runClaimCmd, wakeAckCmd } from './wakes';

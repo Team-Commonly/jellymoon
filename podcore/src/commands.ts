@@ -1,7 +1,7 @@
 // One function per command. Authorization is read from state, never from the input's own claims.
 import { RunOutcomeValues } from '../../gen/ts/protocol';
 import type { Actor } from '../../gen/ts/protocol';
-import { LEASE_MS, acquire, endClaim, endRun, lostHow, own, renewRun, taskView, who } from './claims';
+import { acquire, endClaim, endRun, lostHow, own, renewRun, taskView, who } from './claims';
 import { fail, ok, push } from './emit';
 import { isoOf } from './time';
 import { resendWakes } from './wakes';

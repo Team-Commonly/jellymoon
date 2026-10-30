@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { LEASE_MS, apply, emptyPod, isoOf, nextDeadline } from '../src';
+import { LEASE_MS, apply, emptyPod, isoOf } from '../src';
 import type { Cmd } from '../src';
-import { CMP_1, POD_ID, RUN_A, RUN_C, TASKS, U_OWNER, U_STRANGER, errCode, events, id, lastReply, play, released, types, world } from './helpers';
+import { CMP_1, POD_ID, RUN_A, TASKS, U_OWNER, U_STRANGER, errCode, events, id, lastReply, play } from './helpers';
 
 const [T1] = TASKS;
 const owner = { kind: 'user' as const, userId: U_OWNER.id };
@@ -64,14 +64,27 @@ describe('message_post summary', () => {
 
 describe('boot', () => {
   const claimed = play([[{ type: 'claim', runId: RUN_A, taskId: T1 }, 0]]).state;
-  test('boot with staleMs 0 equals a plain tick', () => {
+  test('boot with staleMs 0 is a plain settle: on a created pod it equals a tick', () => {
     for (const now of [30_000, 70_000]) expect(apply(claimed, { type: 'boot', staleMs: 0 }, now)).toEqual(apply(claimed, { type: 'tick' }, now));
   });
+  const STALES: unknown[] = [1, 15_000, LEASE_MS, -1, 1.5, Number.NaN, undefined, '0', null, false];
   test('boot with any staleMs other than 0 is invalid_input and changes nothing (no restart clause in ADR 0002 yet)', () => {
-    for (const staleMs of [1, 15_000, LEASE_MS, -1, 1.5, Number.NaN]) {
-      const r = apply(claimed, { type: 'boot', staleMs }, 30_000);
+    for (const staleMs of STALES) {
+      const r = apply(claimed, { type: 'boot', staleMs } as unknown as Cmd, 30_000);
       expect([staleMs, errCode(r.out), r.state]).toEqual([staleMs, 'invalid_input', claimed]);
     }
+  });
+  test('a refused boot changes nothing beyond the settle: at a now where a lease is due it equals a tick plus the refusal', () => {
+    const tick = apply(claimed, { type: 'tick' }, 70_000);
+    for (const staleMs of STALES) {
+      const r = apply(claimed, { type: 'boot', staleMs } as unknown as Cmd, 70_000);
+      expect([staleMs, errCode(r.out), r.state]).toEqual([staleMs, 'invalid_input', tick.state]);
+      expect(r.out.filter((o) => o.kind !== 'reply')).toEqual(tick.out);
+    }
+  });
+  test('boot on an uncreated pod answers nothing (the exemption); tick answers not_found', () => {
+    expect(apply(emptyPod(POD_ID), { type: 'boot', staleMs: 0 }, 5_000).out).toEqual([]);
+    expect(errCode(apply(emptyPod(POD_ID), { type: 'tick' }, 5_000).out)).toBe('not_found');
   });
 });
 

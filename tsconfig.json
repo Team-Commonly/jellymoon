@@ -6,6 +6,7 @@
     "strict": true,
     "noEmit": true,
     "resolveJsonModule": true,
+    "noUnusedLocals": true,
     "skipLibCheck": true
   },
   "include": ["gen/ts/**/*.ts", "podcore/**/*.ts"]

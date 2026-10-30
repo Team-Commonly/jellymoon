@@ -8,7 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import {
   landedNote, mergeAction, mergeTree,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scanEnv, scanResult, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -140,6 +140,14 @@ const cases = [
   ['entropy base: a non-bootstrap land never gets none', entropyBase('abc', { bootstrap: false, mainHasEntropy: false }), 'abc'],
   ['output: U+200E, U+200F and U+061C are stripped from quoted preflight output', quoteOutput('a\u200eb\u200fc\u061cd'), 'preflight| abcd'],
   // the dry run
+  ['scan result: exit 0 is clean', scanResult({ status: 0, stderr: '' }), 'clean'],
+  ['scan result: a nonzero exit with the hit line is a hit', scanResult({ status: 2, stderr: 'WRN leaks found: 1\nexit status 3\nmake: *** Error 1\n' }), 'hit'],
+  ['scan result: exit 0 that printed the hit line (a swallowed failure) is a failure, not clean', scanResult({ status: 0, stderr: 'exit status 3\n' }), 'failure'],
+  ['scan result: a nonzero exit without the hit line is a failure', scanResult({ status: 2, stderr: 'go: no network\nexit status 1\n' }), 'failure'],
+  ['scan result: no exit status at all is a failure', scanResult({ status: null, stderr: 'exit status 3\n' }), 'failure'],
+  ['scan result: the hit line must be a whole line', scanResult({ status: 2, stderr: 'not exit status 30\n' }), 'failure'],
+  ['scan env: MAKEFLAGS and the gitleaks variables are dropped, PATH HOME TMPDIR kept, git config pinned off', JSON.stringify(scanEnv({ MAKEFLAGS: 'i', GITLEAKS_CONFIG: 'x', PATH: '/p', HOME: '/h', TMPDIR: '/t' })), JSON.stringify({ PATH: '/p', HOME: '/h', TMPDIR: '/t', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' })],
+  ['scan env: the Go variables pass when set', Object.keys(scanEnv({ GOPATH: 'a', GOCACHE: 'b', GOMODCACHE: 'c', GOTOOLCHAIN: 'd' })).join(), 'GOPATH,GOCACHE,GOMODCACHE,GOTOOLCHAIN,GIT_CONFIG_GLOBAL,GIT_CONFIG_NOSYSTEM'],
   ['merge tree: the first line of merge-tree is the tree', mergeTree(() => 'abc123\nrest', H, H2), 'abc123'],
   ['merge tree: a conflict is a refusal naming both commits', throws(() => mergeTree(() => { throw new Error('x'); }, H, H2)), true],
   ['dry run: stops before the merge', mergeAction({ dryRun: true }), 'stop'],

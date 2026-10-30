@@ -4,6 +4,12 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-30 · P08 one reading of the scan, recipe pinned (unit P08, round 19)
+- **Changed:** `scanResult` in land-decide.mjs is the one reading of the range scan (clean only on exit 0; hit only on a nonzero exit with `exit status 3`; anything else, a zero exit that printed the hit line included, is a failure), used by `rangeScan` and by every fixture. The `secrets-range` recipe and the go/gitleaks definitions are text-pinned. Every range shape runs with no ref at the head and with refs (a branch and a `refs/remotes` ref); the evil-merge block is land-shaped. The scan runs under an allowlist env (`scanEnv`): no `MAKEFLAGS`, no operator gitleaks or git config. Docs: bootstrap checkout must be the PR head, step order, step 6.
+- **Evidence:** check-land 163, check-land-e2e 98, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge + 2 recipe pin + 15 range.
+- **Next:** land #10 with `--bootstrap`.
+- **Surprising:** the two fixture readers and land each had their own reading of the same result, so a recipe that exited 0 on a hit passed every gate.
+
 ## 2026-10-30 · P08 range control, land-shaped (unit P08, round 18)
 - **Changed:** the range cases now model a normal land (checkout on main, PR head reachable by SHA only) in three shapes: linear, a merged side branch, main moved after branching. `--bootstrap` requires HEAD to be the PR head. A pod page holding a non-object refuses in words. Doc fixes: built-in allowlist cited by reference, stale wording in GLOSSARY, INDEX, ADR and the design doc.
 - **Evidence:** check-land 155, check-land-e2e 93, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge + 7 range.

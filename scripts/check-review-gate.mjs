@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { verdictOf } from './land-decide.mjs';
+import { scanEnv, scanResult, verdictOf } from './land-decide.mjs';
 
 // Only exactly `GATE: PASS` as the last non-empty line passes; everything else blocks (nothing at all is null).
 const verdicts = [
@@ -96,38 +96,68 @@ const badPortable = portable.filter(([, got, want]) => got !== want).map(([n]) =
 if (badPortable.length) { console.error(`check-review-gate: portable cases wrong\n  ${badPortable.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${portable.length} portable cases ok`);
 
+// The scan runs the way land runs it: make -s in the checkout, the allowlist env, and the shared reading of its result (scanResult).
+const makeIn = (cwd, target, range) => {
+  const r = spawnSync('make', ['-s', target, ...(range ? [`RANGE=${range}`] : [])], { cwd, encoding: 'utf8', env: scanEnv(process.env) });
+  return { status: r.status, stderr: r.stderr };
+};
+const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
+
 // B1 evil merge: gitleaks runs `git log -p` without -m, so a secret that exists only in a merge commit's own diff (a conflict resolution)
-// is never scanned. Both targets pass -m. A trusted branch merges a side branch and adds a token to docs/a.md in the resolution.
+// is never scanned. Both targets pass -m. A trusted branch merges a side branch and adds a token to docs/a.md in the resolution. The
+// shape is land's: make secrets runs on the detached head (the preflight's merged tree), the range scan from main with the head by SHA.
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-evil-'));
-  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
+  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: gitEnv });
   const evil = (add) => `git init -q -b main . && mkdir docs && echo base > docs/a.md && git add -A && git commit -qm base && git checkout -qb side && echo side > docs/s.md && git add -A && git commit -qm side && git checkout -q main && git checkout -qb pr && echo mine > docs/m.md && git add -A && git commit -qm mine && git merge -q --no-ff --no-commit side && ${add ? `echo 'token = ${token}' >> docs/a.md && git add -A && ` : ''}git commit -qm merge`;
-  const gmake = (target) => { const r = spawnSync('make', ['-s', target, 'RANGE=main..pr'], { cwd: dir, encoding: 'utf8' }); return target === 'secrets-range' ? (/^exit status 3$/m.test(r.stderr) ? 3 : r.status) : r.status; };
-  g(`cp '${root}/Makefile' . && ${evil(true)}`);
-  const [secretsEvil, rangeEvil] = [gmake('secrets'), gmake('secrets-range')];
-  fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(dir);
-  g(`cp '${root}/Makefile' . && ${evil(false)}`);
-  const [secretsClean, rangeClean] = [gmake('secrets'), gmake('secrets-range')];
+  const run = (add) => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir);
+    g(`cp '${root}/Makefile' . && ${evil(add)}`);
+    const head = g('git rev-parse pr').stdout.trim();
+    g(`git checkout -q --detach ${head}`);
+    const tree = makeIn(dir, 'secrets');
+    const tip = g('git checkout -q main && git branch -qD pr side && git rev-parse main').stdout.trim();
+    return { tree: tree.status, range: scanResult(makeIn(dir, 'secrets-range', `${tip}..${head}`)) };
+  };
+  const [evilRun, cleanRun] = [run(true), run(false)];
   fs.rmSync(dir, { recursive: true, force: true });
   const evilCases = [
-    ['evil merge: make secrets finds a token only in a merge commit', secretsEvil !== 0, true],
-    ['evil merge: make secrets-range finds it too: gitleaks exit 3, shown as "exit status 3", which is how land tells a hit from a scan that failed', rangeEvil, 3],
-    ['evil merge: the same history without the token is clean under both', secretsClean === 0 && rangeClean === 0, true],
+    ['evil merge: make secrets finds a token only in a merge commit', evilRun.tree !== 0, true],
+    ['evil merge: make secrets-range finds it too, read as a hit (exit status 3 and a nonzero exit), from main with the head by SHA', evilRun.range, 'hit'],
+    ['evil merge: the same history without the token is clean under both', cleanRun.tree === 0 && cleanRun.range === 'clean', true],
   ];
   const badEvil = evilCases.filter(([, got, want]) => got !== want).map(([n]) => n);
   if (badEvil.length) { console.error(`check-review-gate: evil-merge cases wrong\n  ${badEvil.join('\n  ')}`); process.exit(1); }
   console.log(`check-review-gate: ${evilCases.length} evil-merge cases ok`);
 }
 
+// The recipe is pinned as text: every flag on it (git log filters, gitleaks filters, ref exclusions, an error-swallowing prefix) changes what
+// the scan reads, and no fixture can show all of them. Changing the line means changing this pin, in review.
+{
+  const mk = fs.readFileSync(path.join(root, 'Makefile'), 'utf8');
+  const lines = mk.split('\n');
+  const at = lines.findIndex((l) => l === 'secrets-range:');
+  const recipe = at < 0 ? '' : lines.slice(at, lines.indexOf('', at)).join('\n');
+  const vars = lines.filter((l) => /^(GO|GITLEAKS) :=/.test(l)).join('\n');
+  const PIN = 'secrets-range:\n\t$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --exit-code 3 --redact --no-banner .';
+  const VARS = 'GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)\nGITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1';
+  const pinCases = [
+    ['recipe pin: the secrets-range recipe is exactly the pinned line', recipe, PIN],
+    ['recipe pin: the go and gitleaks definitions are exactly the pinned ones', vars, VARS],
+  ];
+  const badPin = pinCases.filter(([, got, want]) => got !== want).map(([n]) => n);
+  if (badPin.length) { console.error(`check-review-gate: recipe pin wrong\n  ${badPin.join('\n  ')}`); process.exit(1); }
+  console.log(`check-review-gate: ${pinCases.length} recipe pin cases ok`);
+}
+
 // The range scan reads every commit of <main tip>..<head> through the real recipe, markers ignored, in the shape of a normal land: the
-// checkout is main, and the PR head exists only as a SHA (land fetches it to FETCH_HEAD, no ref). A token added then deleted in the range is
-// still in history and must be found, whatever shape the history has. The recipe must scan the range, not the working tree, HEAD, --all,
-// the head commit only, one parent line or an ancestry path, and it must not honour a gitleaks:allow marker.
+// checkout is main, and the PR head exists as a SHA (land fetches it to FETCH_HEAD). Each shape runs twice: with no ref at the head, and
+// with one (a local branch and a refs/remotes ref, which any later git fetch leaves behind). A token added then deleted in the range is
+// still in history and must be found whatever shape the history has, and a ref holding the head must not hide the range from the scan.
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-range-'));
-  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
-  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env });
+  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: gitEnv });
   const tok = (marker) => `echo 'token = ${token}${marker ? ' # gitleaks:allow' : ''}'`;
   const shapes = {
     linear: (m) => `git checkout -qb pr && ${tok(m)} > notes.txt && git commit -qam add && echo base > notes.txt && git commit -qam drop`,
@@ -137,22 +167,27 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
     oldbase: (m) => `git checkout -qb pr && ${tok(m)} > notes.txt && git commit -qam add && echo base > notes.txt && git commit -qam drop && git checkout -q main && echo next > next.txt && git add -A && git commit -qm next`,
     clean: () => 'git checkout -qb pr && echo more > notes.txt && git commit -qam add',
   };
-  const status = (shape, marker) => {
+  const status = (shape, marker, refs) => {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir);
     g(`cp '${root}/Makefile' . && git init -q -b main . && echo base > notes.txt && git add -A && git commit -qm base && ${shapes[shape](marker)}`);
     const head = g('git rev-parse pr').stdout.trim();
-    const tip = g(`git checkout -q main && git branch -qD pr ${shape === 'sidebranch' ? 'side' : ''} && git rev-parse main`).stdout.trim(); // land's checkout: main, the head reachable by SHA only
-    const r = spawnSync('make', ['-s', 'secrets-range', `RANGE=${tip}..${head}`], { cwd: dir, encoding: 'utf8' });
-    return /^exit status 3$/m.test(r.stderr) ? 3 : r.status;
+    const keep = refs ? `git branch -q kept ${head} && git update-ref refs/remotes/origin/pr ${head}` : 'true';
+    const tip = g(`${keep} && git checkout -q main && git branch -qD pr ${shape === 'sidebranch' ? 'side' : ''} && git rev-parse main`).stdout.trim();
+    return scanResult(makeIn(dir, 'secrets-range', `${tip}..${head}`));
   };
-  const rangeCases = [
-    ...['linear', 'sidebranch', 'oldbase'].flatMap((shape) => [
-      [`range (${shape}): a token added then deleted in the range is found (exit status 3) by the recipe itself`, status(shape, false), 3],
-      [`range (${shape}): a gitleaks:allow marker does not hide it (the recipe ignores markers)`, status(shape, true), 3],
-    ]),
-    ['range: a range without a token is clean', status('clean', false), 0],
-  ];
+  const rangeCases = [];
+  for (const refs of [false, true]) {
+    const where = refs ? 'refs at the head' : 'no ref at the head';
+    for (const shape of ['linear', 'sidebranch', 'oldbase']) {
+      rangeCases.push([`range (${shape}, ${where}): a token added then deleted in the range is found by the recipe itself`, status(shape, false, refs), 'hit']);
+      rangeCases.push([`range (${shape}, ${where}): a gitleaks:allow marker does not hide it`, status(shape, true, refs), 'hit']);
+    }
+    rangeCases.push([`range (${where}): a range without a token is clean`, status('clean', false, refs), 'clean']);
+  }
+  process.env.MAKEFLAGS = 'i'; // make -i would turn a hit into exit 0; the scan env drops it
+  rangeCases.push(['range: an operator MAKEFLAGS=i does not switch the scan off', status('linear', false, false), 'hit']);
+  delete process.env.MAKEFLAGS;
   fs.rmSync(dir, { recursive: true, force: true });
   const badRange = rangeCases.filter(([, got, want]) => got !== want).map(([n]) => n);
   if (badRange.length) { console.error(`check-review-gate: range cases wrong\n  ${badRange.join('\n  ')}`); process.exit(1); }

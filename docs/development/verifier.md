@@ -17,7 +17,7 @@ It runs on a different model from the builder.
    report `verifier-blocked`. The bootstrap PR's verifiers run its own land code with an explicit `--bootstrap`,
    which is trusted under the same rule. Before running it, check by hand with `gh` that the PR is same-repo
    (`isCrossRepository` false), its author is trusted and every push-capable account is trusted: land.mjs does not exist on
-   main yet, so nothing else checks. `--bootstrap` is refused once main has `scripts/land.mjs`, `--preflight-only` included. Then the feature's `test` command, only for a trusted PR. A red result ends
+   main yet, so nothing else checks. `--bootstrap` is refused once main has `scripts/land.mjs`, `--preflight-only` included, and with it the checkout must be at the PR head, not main's tip. Then the feature's `test` command, only for a trusted PR. A red result ends
    the review with `verifier-failed`.
 2. **Acceptance.** Walk each step of the feature or brief against what the test actually asserts.
    A step that no assertion covers is a finding.

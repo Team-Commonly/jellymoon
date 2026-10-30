@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, takePage,
+  scrub, scanEnv, scanResult, takePage,
 } from './land-decide.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
 // All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
@@ -158,9 +158,12 @@ const reviewers = () => {
 // The commit-range secret scan (gitleaks git mode, -m, markers ignored). It only refuses. A finding exits gitleaks with 3, which `go run`
 // reports as "exit status 3" on stderr; any other failure of the scan refuses too, because a scan that did not run proves nothing.
 const rangeScan = (mainTip, head) => {
-  try { out('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`]); return { ok: true }; } catch (e) {
-    return { ok: false, reason: /^exit status 3$/m.test(String(e.stderr || '')) ? 'a secret was found in the range; remove it from history and push a new head' : 'the range secret scan failed to run; it proves nothing, so land refuses' };
-  }
+  let status = 0;
+  let stderr = '';
+  try { out('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`], { env: scanEnv(IO.env) }); } catch (e) { status = typeof e.status === 'number' ? e.status : null; stderr = String(e.stderr || ''); }
+  const res = scanResult({ status, stderr });
+  if (res === 'clean') return { ok: true };
+  return { ok: false, reason: res === 'hit' ? 'a secret was found in the range; remove it from history and push a new head' : 'the range secret scan failed to run; it proves nothing, so land refuses' };
 };
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
 async function decide(pr, mainTip) { // mainTip is the tip fetched for this land

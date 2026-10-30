@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a worker-dev land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight
+.PHONY: e2e e2e-a worker-dev land verify-preflight tools gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -46,6 +46,7 @@ entropy: node_modules
 	$(BUN) run check:entropy
 	$(BUN) run check:dead
 	$(BUN) run check:boundaries
+	$(BUN) run check:boundary-rule
 	$(GO) run $(STATICCHECK) ./...
 	@if [ -n "$$($(GO) list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...)" ]; then $(GO) run $(DEADCODE) -test ./...; fi
 
@@ -79,6 +80,20 @@ land:
 verify-preflight:
 	node scripts/land.mjs $(PR) --preflight-only $(ARGS)
 
+# Tracked files carry nothing private (scripts/check-private.mjs holds patterns only).
+private:
+	$(BUN) scripts/check-private.mjs
+	@# an unmutated judge of the exit path: the check must refuse a planted hit
+	@printf 'TASK-%s\n' 5 > .planted-hit.tmp; if $(BUN) scripts/check-private.mjs .planted-hit.tmp >/dev/null 2>&1; then rm -f .planted-hit.tmp; echo 'private: a planted hit was not refused'; exit 1; fi; rm -f .planted-hit.tmp
+
+# Before the repo goes public, and in CI: every ref, every commit (-m so merges count), plus the tracked tree (one scan per top-level entry, so untracked tools are not read). A clone that carries
+# other repositories' refs narrows it: make secrets-all SCAN_REFS="HEAD --remotes=<remote>/".
+SCAN_REFS ?= --all
+secrets-all:
+	$(GO) run $(GITLEAKS) git --log-opts="-m $(SCAN_REFS)" --redact --no-banner .
+	@git -c core.quotepath=off ls-files | cut -d/ -f1 | sort -u | while IFS= read -r p; do $(GO) run $(GITLEAKS) dir --redact --no-banner "$$p" </dev/null || exit 1; done
+
+
 # The black-box contract suite (docs/development/e2e-contract.md). Needs JM_E2E_SERVER; ends with E2E_MS=<n> STEPS=<k>/<k>.
 e2e:
 	$(GO) test ./e2e -count=1 -v
@@ -102,4 +117,4 @@ e2e-a: node_modules
 	if [ $$rc -ne 0 ] && [ "$$k" = "$$n" ]; then echo "e2e-a: red run but STEPS=$$k/$$n"; exit 1; fi; \
 	exit $$rc
 
-preflight: portable check-gen test entropy secrets e2e-a
+preflight: portable check-gen test entropy secrets private e2e-a

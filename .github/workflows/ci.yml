@@ -1,37 +1,41 @@
 name: CI
-# Disabled while the repo is private: it runs only when dispatched by hand. Local `make land` is the gate and
-# nothing GitHub reports counts (a PR touching .github/workflows/ can fake any check). At public launch CI
-# returns as a thin mirror of `make preflight` for outside contributors. See docs/development/landing.md.
+# Runs only when dispatched by hand until the public flip. After the flip CI mirrors the local checks, and a failing check run
+# blocks a land (docs/development/landing.md). CI never lands anything: `make land` stays the only merge path. The workflow is
+# already fork-safe, so enabling it is a one-line change.
 
-# Verification loop (docs/development/workflow.md). When enabled, each check is a
-# job here. A job whose code does not exist
+# Verification loop (docs/development/workflow.md). Each check is a job here. A job whose code does not exist
 # yet passes with a notice; it starts enforcing the moment its directory lands.
-# Budget: 5 minutes wall clock for the whole workflow. There is no review gate in
-# CI: `make land` is the only merge path (docs/development/landing.md).
+# Budget: 5 minutes wall clock for the whole workflow.
 
 on:
   workflow_dispatch:
+  # The public flip enables these two triggers (uncomment). Never `pull_request_target`: it runs with secrets.
+  # pull_request:
+  # push:
+  #   branches: [main]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# Read-only by default. The only secrets are CLOUDFLARE_API_TOKEN (e2e-preview, skipped for fork pull requests) and the names list of the
+# deny check (private; GitHub withholds it from fork pull requests, so it is empty there).
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   gen-drift:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version-file: .tool-versions
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
       - name: Portable (no symlink out of the repo, no machine-local path)
@@ -42,14 +46,72 @@ jobs:
         run: make test-ts
       - name: Entropy gate (budgets, ratchet, dead code, boundaries)
         run: make entropy
-      - name: No secrets in history (gitleaks)
-        run: make secrets
+
+  private:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version-file: .tool-versions
+      - name: Nothing private in tracked files (the deny check)
+        # Only this step sees the names list. It is empty on fork pull requests, where GitHub withholds secrets; the check
+        # then says the names class was skipped. The check prints `file:line: class`, never the matched text.
+        env:
+          JM_PRIVATE_NAMES: ${{ secrets.JM_PRIVATE_NAMES }}
+        run: make private
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - name: Full history of all branches (merge commits included) and the tracked tree (gitleaks)
+        run: make secrets-all
+
+  # Only on a pull request: every commit the PR adds must be signed off by its own author (DCO, CONTRIBUTING.md).
+  dco:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Signed-off-by matches the commit author
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          commits=$(git rev-list --no-merges "$BASE..$HEAD")
+          if [ -z "$commits" ]; then echo "::error::no commits found in $BASE..$HEAD"; exit 1; fi
+          fail=0
+          for c in $commits; do
+            author=$(git log -1 --format='%an <%ae>' "$c")
+            if ! git log -1 --format=%B "$c" | grep -qxF "Signed-off-by: $author"; then
+              echo "::error::$c has no 'Signed-off-by: $author' line (use git commit -s)"; fail=1
+            fi
+          done
+          exit $fail
 
   worker:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Worker, DO and MCP tests
         run: |
           if [ ! -f worker/package.json ]; then echo "::notice::no worker/ yet; skipping"; exit 0; fi
@@ -59,8 +121,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
       - name: Daemon, ACP and TUI tests
@@ -70,7 +134,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: install.sh against a fixture release
         run: |
           if [ ! -f worker/public/install.sh ]; then echo "::notice::no install.sh yet; skipping"; exit 0; fi
@@ -80,24 +146,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Full slice, local
         run: |
           if [ ! -d e2e ]; then echo "::notice::no e2e/ yet; skipping"; exit 0; fi
           make e2e
 
   e2e-preview:
+    # Needs a secret, so it never runs on a pull request from a fork.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: gen-drift
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Deploy a per-PR preview and run the slice against it
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ ! -f worker/wrangler.toml ] && [ ! -f worker/wrangler.jsonc ]; then echo "::notice::no worker/wrangler config yet; skipping"; exit 0; fi
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::warning::CLOUDFLARE_API_TOKEN secret not set yet (owner action, the build plan); preview skipped"; exit 0
+            echo "::warning::CLOUDFLARE_API_TOKEN secret not set yet (owner action); preview skipped"; exit 0
           fi
-          echo "::error::preview deploy not wired yet (the build plan)"; exit 1
+          echo "::error::preview deploy not wired yet"; exit 1

@@ -16,6 +16,21 @@ goes in the PR.
 - **Next:** F03 onward build on the adapter.
 - **Surprising:** the old suite asserted an acked wake is never re-sent, which the accepted core rule contradicts; and a monotonic ULID is a bad wake seed, because the next seed can land inside the range a pending wake already took.
 
+## 2026-10-30 · pre-public readiness (unit OS1)
+- **Changed:** private references scrubbed from the tree and docs; `scripts/check-private.mjs` (the deny check, in
+  `make preflight` and the pre-commit) refuses operator paths, personal emails, internal ids, cloud identifiers, note labels and
+  section marks, with an env-supplied names list for values that have no safe pattern; `ee/` holds the commercial-licence area
+  with `ee-stays-in-ee` (dependency-cruiser) pinned by `boundary-fixture/`, ADR 0004 and SECURITY.md; DCO sign-off is required
+  in CONTRIBUTING.md (nothing checks it today; the `dco` CI job will once CI runs on pull requests); CI is a fork-safe,
+  dispatch-only mirror of `make preflight`; the loop
+  docs moved to `.loop/`.
+- **Evidence:** `make preflight` green; check-private 81 cases with a mutation sweep (every mutant caught except one self-test
+  blind spot, a mutated exit path that also hides its own failure); `make secrets-all` over every branch of the old repo found nothing.
+- **Next:** supply the names list in CI, flip the repo public after the owner's go.
+- **Surprising:** the check's first version printed the text it matched, which a CI log masks only as a whole string; it now
+  prints `file:line: class` for a content hit and, for a path that holds a name, only its position in the file list; never the
+  matched text and never such a path.
+
 ## 2026-10-30 · P08 one reading of the scan, recipe pinned (unit P08, round 19)
 - **Changed:** `scanResult` in land-decide.mjs is the one reading of the range scan (clean only on exit 0; hit only on a nonzero exit with `exit status 3`; anything else, a zero exit that printed the hit line included, is a failure), used by `rangeScan` and by every fixture. The `secrets-range` recipe and the go/gitleaks definitions are text-pinned. Every range shape runs with no ref at the head and with refs (a branch and a `refs/remotes` ref); the evil-merge block is land-shaped. The scan runs under an allowlist env (`scanEnv`): no `MAKEFLAGS`, no operator gitleaks or git config. Docs: bootstrap checkout must be the PR head, step order, step 6.
 - **Evidence:** check-land 163, check-land-e2e 98, check-review-gate 10 verdict + 4 symlink + 3 history + 2 portable + 3 evil-merge + 2 recipe pin + 15 range.
@@ -40,7 +55,7 @@ goes in the PR.
 - **Surprising:** `go run` reports a child's exit 3 as "exit status 3" and exits 1 itself, so land reads stderr to tell a finding from a failed scan.
 
 ## 2026-10-30 · ADR 0003 accepted (unit PC10)
-- **Changed:** ADR 0003 Accepted (owner ruling) with its unknowns named, coalescing leftovers removed, ADR 0002 citations by section and quote, a scope pointer in ADR 0002, GLOSSARY boot entry, nine dead imports and one unused local removed, `noUnusedLocals` on; **Evidence:** `make preflight`, `bun test podcore` (126 tests, per-type stray-caller mutants red except tick, which is equivalent); **Next:** ADR 0002 restart clause; **Surprising:** the well-formed stray-caller rows never reached the refusal path, so a callerOf leak survived until one field was malformed per row.
+- **Changed:** ADR 0003 Accepted (maintainers) with its unknowns named, coalescing leftovers removed, ADR 0002 citations by section and quote, a scope pointer in ADR 0002, GLOSSARY boot entry, nine dead imports and one unused local removed, `noUnusedLocals` on; **Evidence:** `make preflight`, `bun test podcore` (126 tests, per-type stray-caller mutants red except tick, which is equivalent); **Next:** ADR 0002 restart clause; **Surprising:** the well-formed stray-caller rows never reached the refusal path, so a callerOf leak survived until one field was malformed per row.
 
 ## 2026-10-30 · pod core hardening (unit PC9)
 - **Changed:** `podcore/` treats a non-string `type` as an unknown command, refuses `boot` with `staleMs` other than 0 (stretch code, its tests and the stale-restore property removed), ADR 0003 corrected; **Evidence:** `make preflight`, `bun test podcore` (117 tests, 4 mutants red); **Next:** ADR 0002 restart clause before any stretch returns; **Surprising:** `Object.hasOwn(HANDLERS, ['change'])` coerces the key, so a guard and the strict compares after it disagreed.
@@ -159,14 +174,14 @@ goes in the PR.
   `make check-gen` fail until regenerated; `make preflight` green.
 - **Open:** a definition without a schema description shows an empty Notes cell; fixing that is a schema edit.
 
-## 2026-10-29 · Jellymoon names applied (build session)
+## 2026-10-29 · Jellymoon names applied (builder session)
 - **Changed:** decided at the protocol review: MCP adapter prefix `jm_`, tokens `jmu_`/`jmc_`/`jmr_`,
   schema `$id` on `jellymoon.dev/schema/v1`, CLI binary `jellymoon` (alias `jm`), package `jellymoon`.
   Feature step text changed only for these names (F03, F08, F09, F10, F11, F12, F13, F15); no step's
   meaning changed. This resolves the naming hold noted below.
 - **Evidence:** `make preflight` green.
 
-## 2026-10-29 · two founder directions applied to the schema (build session)
+## 2026-10-29 · two owner directions applied to the schema (builder session)
 - **Changed:** asks carry a required grounded `context` (happened, checked, stakes, recommendation) and
   each option a `consequence`; every claim cites `tc_` tool-call or message ids, and a post whose
   numbers aren't in its cited evidence is refused with `ungrounded`. The pod stamps tool calls itself
@@ -177,12 +192,12 @@ goes in the PR.
 - **Next:** the grounding x-rules need Worker tests when F-posting lands; features F08/F15 still quote
   MCP-first wording, changed in the naming PR after the design review.
 
-## 2026-10-29 · portability fixes from loop review (build session)
+## 2026-10-29 · portability fixes from loop review (builder session)
 - **Changed:** the repo now works from a fresh clone anywhere. Stage skills are vendored in
   `.agents/skills/` (pins in `docs/skills/SOURCES.md`); Go and Bun are pinned in `.tool-versions` and
   `init.sh` installs them into `.tools/`; `make portable` (preflight, pre-commit, CI) fails on a symlink
   out of the repo or a machine-local path. The merge rule says what actually runs: coordinator merges on
-  green CI plus a ledger verdict, since GitHub Free gives a private repo no merge queue.
+  green CI plus a ledger verdict.
 - **Evidence:** `./init.sh` green with `HOME` set to an empty dir and only system dirs on `PATH` (35 s
   cold, tools downloaded and checksum-verified). Mutation checks: an outside symlink and a `~/` path
   each fail `make portable`.
@@ -193,27 +208,24 @@ goes in the PR.
   review. The prefix is one constant (`x-tool-prefix` in `schema/tools.json`); feature text still
   quotes today's names.
 
-## 2026-10-29 · initializer (build session)
+## 2026-10-29 · initializer (builder session)
 - **Changed:** set up the long-running harness. `feature_list.json` holds 20 slice features as e2e
   tests (F01 passes). Also added `init.sh`, this file, the `AGENTS.md` loop, the PR template and
   `docs/development/workflow.md`.
 - **Plan:** one builder session works top-down through the list. Two design docs run alongside as
   subagents (connectors, OSS-first; client options). F18 and F19 are blocked until the maintainers review those
   docs.
-- **Evidence:** F01 is `make check-gen test`, green on #2977 (L0).
+- **Evidence:** F01 is `make check-gen test`, green.
 - **Next:** F02, the `make e2e` harness (wrangler dev, /healthz, E2E_MS).
 - **Surprising:** the fleet's husky pre-commit hook doesn't apply here; `make hooks` installs
   this repo's own pre-commit. F17 needs a Cloudflare API token
   secret, an owner action.
 
-## 2026-10-29 · repo move (build session)
-- **Changed:** the build moved from the `v4` branch of the Commonly repo to its own private repo,
+## 2026-10-29 · repo move (builder session)
+- **Changed:** the build moved from the `v4` branch of the Commonly repo to its own repo,
   `Team-Commonly/jellymoon` (the company stays Commonly). History was rebuilt clean:
   a fixture token that tripped gitleaks became an obviously fake one, and the Go module is
   `github.com/Team-Commonly/jellymoon`.
-- **Held:** the CLI binary name (`commonly` in F08/F15) and the npm scope wait for the trademark check.
-- **Surprising:** the org is on GitHub Free, so a private repo gets no rulesets or merge queue.
-  Until that is decided, the coordinator merges only on green CI plus a ledger verdict.
 
 ## Server stack tripwires (watched from day one)
 - any claim.released{expired} earlier than last renewal + 60 s, in any environment
@@ -223,4 +235,4 @@ goes in the PR.
 - ops hours above 8 h/month for two months running
 Record a hit here with its date and evidence, and raise it to the coordinator.
 
-Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (PC4 N10).
+Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (raised in an earlier pod-core review).

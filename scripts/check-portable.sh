@@ -12,6 +12,7 @@ while IFS= read -r -d '' rec; do
   target=$(perl -MCwd=abs_path -e 'print abs_path($ARGV[0]) // "/unresolvable"' "$f")
   case "$target/" in "$root"/*) ;; *) echo "symlink leaves the repo: $f -> $(readlink "$f") (resolves to $target)"; bad=1 ;; esac
 done < <(git ls-files -s -z)
+# `/private/t[m]p` is written with a bracket so this line does not match its own pattern, and neither does any other tracked file's text of it
 pattern='(~/[.A-Za-z]|/home/[a-z]|/opt/homebrew|/private/t[m]p|\$HOME/|\$\(HOME\)|(^|[^A-Za-z0-9_./-])/Users/[A-Za-z])'
 if git grep -nIiE "$pattern" -- . ':!scripts/check-portable.sh'; then
   echo "machine-local path in a tracked file (above); use a repo-relative path"; bad=1

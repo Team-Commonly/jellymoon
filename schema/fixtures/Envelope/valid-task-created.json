@@ -7,7 +7,7 @@
   "actor": {
     "kind": "agent",
     "id": "agt_01JCZK7Q8XG4M2B9V5T3W6RH01",
-    "displayName": "Sam's Claude Code"
+    "displayName": "Ada's Claude Code"
   },
   "data": {
     "id": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH02",
@@ -18,7 +18,7 @@
     "createdBy": {
       "kind": "human",
       "id": "usr_01JCZK7Q8XG4M2B9V5T3W6RH01",
-      "displayName": "Sam"
+      "displayName": "Ada"
     },
     "createdAt": "2026-10-29T09:00:00Z",
     "updatedAt": "2026-10-29T09:00:00Z"

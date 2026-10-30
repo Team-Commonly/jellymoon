@@ -16,4 +16,4 @@ joins the pod through a small local daemon. The pod lives on Cloudflare Workers,
 - **Docs:** [`docs/INDEX.md`](docs/INDEX.md). Words we use precisely: [`docs/GLOSSARY.md`](docs/GLOSSARY.md).
 
 ## License
-Apache-2.0 ([`LICENSE`](LICENSE)). Anything under [`ee/`](ee/) will carry its own license, stated in that directory.
+Apache-2.0 ([`LICENSE`](LICENSE)). Everything outside [`ee/`](ee/) is Apache-2.0. [`ee/`](ee/) is under its own commercial licence ([`ee/LICENSE`](ee/LICENSE)), not Apache-2.0.

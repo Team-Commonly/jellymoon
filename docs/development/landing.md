@@ -69,7 +69,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    what the scan reads. (The earlier design ran `make secrets-range` under a text pin of the recipe; a pin cannot close that class, because a
    built variable name, `$(eval)`, an `include`, a tracked `GNUmakefile`, `SHELL`, a prerequisite that writes `.gitleaks.toml`, or an exported
    `GITLEAKS_CONFIG` or `GIT_CONFIG_*` all change what make runs while the pinned text still matches. Each of those, put on main, now reads as a
-   hit in `check-review-gate.mjs`.) `scanEnv` keeps `PATH`, `HOME`, `TMPDIR` and the Go cache variables, pins `GIT_CONFIG_GLOBAL=/dev/null`
+   hit in `check-scan-history.mjs`.) `scanEnv` keeps `PATH`, `HOME`, `TMPDIR` and the Go cache variables, pins `GIT_CONFIG_GLOBAL=/dev/null`
    and `GIT_CONFIG_NOSYSTEM=1`, and sets `GOTOOLCHAIN=local` and `GOWORK=off`: a tracked `go.work` or a `go.mod` with a `toolchain` line could
    otherwise make `go run` fetch and run another Go release (measured), and the module is named with an explicit version, so no tracked `go.mod`,
    `vendor/` or `replace` line is consulted. The Makefile's `secrets-range` stays for people; `check-review-gate.mjs` checks that its recipe is
@@ -87,7 +87,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    mode-only change, an empty file, a delete-only commit (a revert of an added file too) and a binary-only commit each yield nothing and are
    not counted; a line-removal-only modification, a symlink, a type change and a rename with an edit are. Measured on each of those shapes, on
    a merge whose `-m` diff against one parent is empty and against both, and on an octopus (empty and not), the derived count equals gitleaks'
-   printed count (the shape table in `check-review-gate.mjs`), so an innocent history with commits that add no text lands.
+   printed count (the shape table in `check-scan-history.mjs`), so an innocent history with commits that add no text lands.
    **A count says how many commits were read, never which.** The one shape found where the numbers agree over different commits: gitleaks'
    diff parser ends a quoted file name at the first quote not preceded by a backslash, so a path whose last character is a backslash (git
    quotes it `"b\\"`) fails to parse. The parser drops that file *and the commit preamble before it*, and the files after it are attributed to

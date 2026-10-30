@@ -1,4 +1,4 @@
-// The range secret scan, in one place so land (scripts/land.mjs) and the fixtures (check-review-gate.mjs) run the same code. Make is not
+// The range secret scan, in one place so land (scripts/land.mjs) and the fixtures (check-scan-history.mjs, through scan-fixture.mjs) run the same code. Make is not
 // on this path: land runs gitleaks itself with an argv built here from constants, because a text pin on the Makefile cannot stop a main
 // Makefile from changing what the scan reads while passing the pin (a built variable name, $(eval), include, SHELL, an exported variable).
 // The Makefile's secrets-range stays for people; check-review-gate only checks that its recipe is the same command (docs/development/landing.md).

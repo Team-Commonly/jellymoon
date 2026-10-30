@@ -107,7 +107,7 @@ describe('run callers and run_end', () => {
     const cmds: Cmd[] = [
       claim(), { type: 'op', runId: RUN_A, taskId: id('tsk', 99) }, { type: 'task_release', caller, taskId: id('tsk', 99) }, { type: 'run_stop', caller, runId: id('run', 99) },
       { type: 'task_create', caller, taskId: T1, title: 'x', kind: 'chore', wakeId: id('wak', 1) }, { type: 'task_update', caller, taskId: id('tsk', 99), status: 'done', wakeId: id('wak', 1) },
-      { type: 'message_post', caller, messageId: id('msg', 1), text: 'hi', wakeId: id('wak', 1) },
+      { type: 'message_post', caller, messageId: id('msg', 1), text: 'hi', summary: 's', wakeId: id('wak', 1) },
     ];
     for (const cmd of cmds) expect(errCode(play([[cmd, 2]], ended).out)).toBe('unauthorized');
   });

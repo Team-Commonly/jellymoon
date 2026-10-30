@@ -42,7 +42,7 @@ describe('message_post summary', () => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   ajv.addSchema(bundle);
   const valid = ajv.getSchema(`${bundle.$id}#/$defs/Message`);
-  const post = (text: string) => events(play([[{ type: 'message_post', caller: owner, messageId: id('msg', 1), text, wakeId: id('wak', 1) }, 0]]).out)[0].data as { summary: string };
+  const post = (text: string) => events(play([[{ type: 'message_post', caller: owner, messageId: id('msg', 1), text, summary: 's', wakeId: id('wak', 1) }, 0]]).out)[0].data as { summary: string };
   const cases: Array<[string, string]> = [['\nhello', 'hello'], ['line one\r\nline two', 'line one'], ['a\rb', 'a'], ['   ', '(no text)'], ['', '(no text)'], ['\u{1F600}'.repeat(200), '\u{1F600}'.repeat(120)], ['hello', 'hello'], ['  \n  padded  \nnext', 'padded']];
   test('the first non-blank line, trimmed and cut to 120 code points, validates as a Message for every text', () => {
     for (const [text, summary] of cases) {
@@ -86,4 +86,17 @@ describe('boot', () => {
     expect(lastReply(r.out)).toBe(undefined);
   });
 
+});
+
+describe('ErrorBody.ref', () => {
+  const bundle = JSON.parse(readFileSync(new URL('../../gen/ts/schemas.json', import.meta.url), 'utf8'));
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  ajv.addSchema(bundle);
+  const valid = ajv.getSchema(`${bundle.$id}#/$defs/ErrorBody`);
+  test('a 200-character id or a numeric id still gives a schema-valid ErrorBody, with ref left out', () => {
+    for (const cmd of [{ type: 'claim', runId: RUN_A, taskId: 't'.repeat(200) }, { type: 'run_claim', wakeId: 'w'.repeat(200), computerId: CMP_1, runId: id('run', 60) }, { type: 'claim', runId: RUN_A, taskId: 5 }]) {
+      const e = (lastReply(play([[cmd as Cmd, 5]]).out) as { error: { ref?: string } }).error;
+      expect([JSON.stringify(cmd).slice(0, 60), valid?.(e), e.ref]).toEqual([JSON.stringify(cmd).slice(0, 60), true, undefined]);
+    }
+  });
 });

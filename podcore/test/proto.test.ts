@@ -14,7 +14,7 @@ const SAMPLES: Cmd[] = [
   { type: 'pod_create', ownerId: U_OWNER.id, ownerName: 'x' }, { type: 'member_add', userId: id('usr', 9), name: 'x' },
   { type: 'task_create', caller: user, taskId: id('tsk', 20), title: 't', kind: 'chore', assignee: AG1, wakeId: wak(1) },
   { type: 'task_update', caller: user, taskId: TASKS[0], status: 'done', assignee: AG1, wakeId: wak(1) },
-  { type: 'message_post', caller: run, messageId: id('msg', 1), threadOf: id('msg', 2), text: '@agent-1', wakeId: wak(1) },
+  { type: 'message_post', caller: run, summary: 's', messageId: id('msg', 1), threadOf: id('msg', 2), text: '@agent-1', wakeId: wak(1) },
   { type: 'change', kind: 'ruling', agentId: AG1, refs: { taskId: TASKS[0], messageId: id('msg', 1) }, wakeId: wak(1) },
   { type: 'wake_ack', wakeId: wak(1), computerId: CMP_1 }, { type: 'run_claim', wakeId: wak(1), computerId: CMP_1, runId: id('run', 50) },
   { type: 'agent_register', agentId: AG1, ownerId: U_OWNER.id, computerId: CMP_1 },

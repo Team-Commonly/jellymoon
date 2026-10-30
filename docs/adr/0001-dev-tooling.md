@@ -28,7 +28,7 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | Area | Cap |
 |---|---|
 | core (`schema/`, `scripts/`) | 1,500 |
-| podcore | 1,750 |
+| podcore | 1,850 |
 | worker | 3,000 |
 | daemon | 3,000 |
 | e2e | 1,500 |
@@ -37,3 +37,4 @@ That is under 11k hand-written lines. Agent-written comparables grew without bou
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, PC rounds 1–3); worker 4,000 → 3,000 and daemon 3,500 → 3,000 to match entropy.json
+- 10-30: podcore 1,750 → 1,850, refusal-path tests, PC round 4

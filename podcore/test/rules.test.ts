@@ -228,4 +228,26 @@ describe('one claim per task', () => {
     const r = apply(world(), { type: 'run_end', runId: RUN_A, computerId: CMP_1, outcome: 'done' as never }, 5);
     expect([errCode(r.out), r.state.runs[RUN_A].status]).toEqual(['invalid_input', 'active']);
   });
+  test('a malformed call is invalid_input and leaves the state alone: missing or null caller, bad caller kind, null refs', () => {
+    const base = { taskId: T1, wakeId: id('wak', 1) };
+    const bad: unknown[] = [
+      { type: 'task_release', taskId: T1 }, { type: 'task_release', caller: null, taskId: T1 }, { type: 'run_stop', runId: RUN_A }, { type: 'run_stop', caller: null, runId: RUN_A },
+      { type: 'task_create', ...base, title: 't', kind: 'chore' }, { type: 'task_update', ...base, caller: null },
+      { type: 'message_post', messageId: id('msg', 1), text: 'x', wakeId: id('wak', 1) }, { type: 'message_post', caller: null, messageId: id('msg', 1), text: 'x', wakeId: id('wak', 1) },
+      { type: 'task_release', caller: { kind: 'other', userId: 'u' }, taskId: T1 }, { type: 'task_release', caller: { kind: 'run' }, taskId: T1 },
+      { type: 'change', kind: 'ruling', agentId: id('agt', 1), refs: null, wakeId: id('wak', 1) }, { type: 'claim', runId: 5, taskId: T1 },
+    ];
+    for (const cmd of bad) {
+      const r = apply(world(), cmd as Cmd, 5);
+      expect([JSON.stringify(cmd), errCode(r.out), r.state]).toEqual([JSON.stringify(cmd), 'invalid_input', world()]);
+    }
+  });
+  test('a run\'s message_post without a summary is summary_required; a person\'s is derived; a given summary is used', () => {
+    const post = (caller: { kind: 'run'; runId: string } | { kind: 'user'; userId: string }, summary?: string): Cmd => ({ type: 'message_post', caller, messageId: id('msg', 1), text: 'body', summary, wakeId: id('wak', 1) });
+    const run = { kind: 'run' as const, runId: RUN_A };
+    expect(errCode(apply(world(), post(run), 5).out)).toBe('summary_required');
+    expect(errCode(apply(world(), post(run, '  '), 5).out)).toBe('summary_required');
+    expect((events(apply(world(), post(run, 'Done'), 5).out)[0].data as { summary: string }).summary).toBe('Done');
+    expect((events(apply(world(), post({ kind: 'user', userId: U_OWNER.id }), 5).out)[0].data as { summary: string }).summary).toBe('body');
+  });
 });

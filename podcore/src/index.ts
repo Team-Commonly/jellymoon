@@ -30,6 +30,20 @@ const HANDLERS: Handlers = {
 /** The last millisecond of year 9999, the most isoOf renders as RFC 3339. */
 const MAX_NOW = 253_402_300_799_999;
 
+/** The string fields each command must carry; a missing or mistyped one would otherwise throw deep in a handler. */
+const STRINGS: Record<string, string[]> = {
+  claim: ['runId', 'taskId'], op: ['runId'], heartbeat: ['computerId'], task_release: ['taskId'], run_end: ['runId', 'computerId'], run_stop: ['runId'],
+  pod_create: ['ownerId'], member_add: ['userId'], task_create: ['taskId', 'wakeId'], task_update: ['taskId', 'wakeId'], message_post: ['messageId', 'wakeId'],
+  change: ['agentId', 'wakeId'], wake_ack: ['wakeId', 'computerId'], run_claim: ['wakeId', 'computerId', 'runId'], agent_register: ['agentId', 'ownerId', 'computerId'],
+};
+const CALLERS = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post'];
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+const callerOk = (v: unknown): boolean => isObj(v) && ((v.kind === 'user' && typeof v.userId === 'string') || (v.kind === 'run' && typeof v.runId === 'string'));
+const shapeBad = (cmd: Cmd): boolean => {
+  const o = cmd as Record<string, unknown>;
+  return (STRINGS[cmd.type] ?? []).some((k) => typeof o[k] !== 'string') || (CALLERS.includes(cmd.type) && !callerOk(o.caller)) || (cmd.type === 'change' && !isObj(o.refs));
+};
+
 /** True when any id-like field (a name ending in Id, or assignee), at any depth, is an Object.prototype key such as `__proto__`. */
 const protoKeyed = (v: unknown): boolean => typeof v === 'object' && v !== null && Object.entries(v).some(([k, x]) => (
   typeof x === 'string' ? (/Id$|^assignee$/.test(k) && (x === '__proto__' || x in {})) : protoKeyed(x)));
@@ -39,6 +53,7 @@ function refusal(cmd: Cmd, now: number): { code: 'invalid_input' | 'not_found'; 
   if (!Number.isInteger(now) || now < 0 || now > MAX_NOW) return { code: 'invalid_input', why: 'now must be an integer from 0 to the end of year 9999, in milliseconds.' };
   if (!Object.hasOwn(HANDLERS, cmd.type)) return { code: 'invalid_input', why: 'Unknown command type.' };
   if (cmd.type === 'boot' && !(Number.isInteger(cmd.staleMs) && cmd.staleMs >= 0 && cmd.staleMs <= LEASE_MS)) return { code: 'invalid_input', why: 'staleMs must be an integer from 0 to LEASE_MS.' };
+  if (shapeBad(cmd)) return { code: 'invalid_input', why: 'A required field is missing or has the wrong type.' };
   return protoKeyed(cmd) ? { code: 'not_found', why: 'No such id.' } : null;
 }
 

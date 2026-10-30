@@ -18,6 +18,9 @@ export function ok(c: Ctx, result: Result = null): void {
   c.out.push({ kind: 'reply', ok: true, result });
 }
 
+/** ErrorBody.ref is at most 40 characters in the schema; a longer or non-string id is left out rather than echoed. */
+const MAX_REF = 40;
+
 export function fail(c: Ctx, code: ErrorCode, message: string, ref?: string): void {
-  c.out.push({ kind: 'reply', ok: false, error: ref === undefined ? { code, message } : { code, message, ref } });
+  c.out.push({ kind: 'reply', ok: false, error: typeof ref === 'string' && ref.length <= MAX_REF ? { code, message, ref } : { code, message } });
 }

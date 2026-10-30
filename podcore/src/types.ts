@@ -57,7 +57,7 @@ export type Cmd =
   | { type: 'member_add'; userId: ActorId; name: string }
   | { type: 'task_create'; caller: Caller; taskId: TaskId; title: string; kind: TaskKind; assignee?: ActorId; body?: string; wakeId: WakeId }
   | { type: 'task_update'; caller: Caller; taskId: TaskId; status?: TaskUpdateStatus; assignee?: ActorId; wakeId: WakeId }
-  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; threadOf?: MessageId; wakeId: WakeId }
+  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; summary?: string; threadOf?: MessageId; wakeId: WakeId }
   | { type: 'boot'; staleMs: number }
   | { type: 'change'; kind: 'ruling'; agentId: AgentId; refs: WakeRefs; wakeId: WakeId }
   | { type: 'wake_ack'; wakeId: WakeId; computerId: ComputerId }

@@ -145,6 +145,13 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 - Size: `podcore/` is capped at 1,750 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
   exception was added; it ratchets down from here.
 - Indented code blocks are NOT recognised as code, so a mention inside one wakes (deliberate).
+- Adapters pass `staleMs: 0` until ADR 0002 gains a restart clause: a stretched lease can outlive "last renewal + 60 s".
+- The save-lag bound is PER LEASE; a pod-wide save throttle does not bound it. Coalescing applies only to a heartbeat whose
+  out is only its reply. A heartbeat whose settle emits member events or re-sends `run.stop` or a wake is persisted before emission.
+- The adapter authorizes `agent_register`: only the agent's owner, from a computer that owner registered, may register or move it.
+- Expiry is inclusive at `leaseUntil`.
+- A run's `message_post` needs a `summary` (`summary_required` otherwise, per `schema/message.json`); a person's is derived.
+  `ErrorBody.ref` echoes an id only when it is a string of at most 40 characters.
 - The adapter mints `messageId` and owns the message log, so message id uniqueness is the adapter's; the core keeps no set of them.
 - The adapter bounds message body size: `stripSpans` is super-linear on growing backtick runs.
 - A run's `task_update` on a task another live run holds is `already_claimed` naming the holder (one claim per task,

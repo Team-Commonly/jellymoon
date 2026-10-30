@@ -78,10 +78,13 @@ export function messagePostCmd(c: Ctx, cmd: Of<'message_post'>): void {
   const w = who(c, cmd.caller);
   if (w === null) return;
   if (typeof cmd.text !== 'string') return fail(c, 'invalid_input', 'text must be a string.');
+  // A run must write its own headline (schema/message.json); a person's post gets one derived from the text.
+  const given = w.run !== undefined && typeof cmd.summary === 'string' && cmd.summary.trim() !== '' ? summaryOf(cmd.summary) : null;
+  if (w.run !== undefined && given === null) return fail(c, 'summary_required', 'A run\'s post needs a summary.');
   const ids = mentioned(c, cmd.text).filter((id) => id !== w.actor.id);
   if (!seedFits(c, cmd.wakeId, ids.length)) return;
   const msg: Message = {
-    id: cmd.messageId, seq: c.s.seq + 1, podId: c.s.podId, author: w.actor, createdAt: isoOf(c.now), summary: summaryOf(cmd.text),
+    id: cmd.messageId, seq: c.s.seq + 1, podId: c.s.podId, author: w.actor, createdAt: isoOf(c.now), summary: given ?? summaryOf(cmd.text),
     kind: 'fyi', status: 'done', body: cmd.text,
   };
   if (w.run !== undefined) msg.runId = w.run.id;

@@ -29,7 +29,7 @@ function sequence(seed: number, length = 60, claimy = false): Array<[Cmd, number
       () => ({ type: 'run_stop', caller: caller(), runId: pick(RUNS) }),
       () => ({ type: 'task_create', caller: caller(), taskId: id('tsk', 10 + (n += 1)), title: 't', kind: 'chore', assignee: r() < 0.7 ? pick(AGENTS) : undefined, wakeId: wid() }),
       () => ({ type: 'task_update', caller: caller(), taskId: pick(TASKS), status: 'in_progress', assignee: pick(AGENTS), wakeId: wid() }),
-      () => ({ type: 'message_post', caller: caller(), messageId: id('msg', (n += 1)), text: pick(TEXTS), wakeId: wid() }),
+      () => ({ type: 'message_post', caller: caller(), messageId: id('msg', (n += 1)), text: pick(TEXTS), summary: 's', wakeId: wid() }),
       () => ({ type: 'change', kind: 'ruling', agentId: pick(AGENTS), refs: {}, wakeId: wid() }),
       () => ({ type: 'wake_ack', wakeId: wak(4 * (1 + Math.floor(r() * (w / 4 + 1)))), computerId: pick([CMP_1, CMP_2]) }),
       () => ({ type: 'run_claim', wakeId: wak(4 * (1 + Math.floor(r() * (w / 4 + 1)))), computerId: pick([CMP_1, CMP_2]), runId: runN((n += 1)) }),

@@ -31,6 +31,16 @@ func (w *world) replayed(tok, name string, since int64) []Frame {
 	return s.snapshot(0)
 }
 
+// sameSeqs checks that two members saw the same messages at the same seqs.
+func sameSeqs(a, b []Frame) error {
+	ta, sa := posted(a)
+	tb, sb := posted(b)
+	if !slices.Equal(ta, tb) || !slices.Equal(sa, sb) {
+		return fmt.Errorf("one member saw %q at seqs %v, another %q at seqs %v", ta, sa, tb, sb)
+	}
+	return nil
+}
+
 // wantReplay judges a replay: exactly the texts, in order, with consecutive seqs starting after `since`.
 func wantReplay(fs []Frame, since int64, texts ...string) error {
 	got, ss := posted(fs)
@@ -76,7 +86,7 @@ func (w *world) evictSteps(p *stepper, head int64) {
 		if err := w.evict(); err != nil {
 			return err
 		}
-		mk := w.sCara.mark()
+		mk, mkBen := w.sCara.mark(), w.sBen.mark()
 		if err := postAll(w.sBen, "evicted one", "evicted two"); err != nil {
 			return err
 		}
@@ -84,17 +94,25 @@ func (w *world) evictSteps(p *stepper, head int64) {
 		if w.sCara.isDead() {
 			return fmt.Errorf("the eviction dropped the connected socket")
 		}
-		return wantReplay(w.sCara.snapshot(mk), head, "evicted one", "evicted two")
+		if err := wantReplay(w.sCara.snapshot(mk), head, "evicted one", "evicted two"); err != nil {
+			return err
+		}
+		return sameSeqs(w.sBen.snapshot(mkBen), w.sCara.snapshot(mk)) // ben, who posted them, saw the same seqs
 	})
 	p.step("after the eviction a reconnect with subscribe{sinceSeq} replays exactly the missed events", func() error {
 		w.sCara.close()
+		mkBen := w.sBen.mark()
 		if err := postAll(w.sBen, "evicted three", "evicted four"); err != nil {
 			return err
 		}
 		if err := w.evict(); err != nil {
 			return err
 		}
-		return wantReplay(w.replayed(w.cara.tok, "cara-evicted", head+2), head+2, "evicted three", "evicted four")
+		got := w.replayed(w.cara.tok, "cara-evicted", head+2)
+		if err := wantReplay(got, head+2, "evicted three", "evicted four"); err != nil {
+			return err
+		}
+		return sameSeqs(w.sBen.snapshot(mkBen), got)
 	})
 }
 
@@ -136,12 +154,18 @@ func TestF04(t *testing.T) {
 	head += 4
 	// Extra: a full kill -9 restart of the Worker, with the state dir kept.
 	p.step("the same holds after a full restart of the Worker", func() error {
+		mkBen := w.sBen.mark()
 		if err := postAll(w.sBen, "after one", "after two", "after three"); err != nil {
 			return err
 		}
+		before := w.sBen.snapshot(mkBen) // what ben saw before the crash
 		w.crash(0)
 		w.setClock(w.clock)
-		return wantReplay(w.replayed(w.cara.tok, "cara-restart", head), head, "after one", "after two", "after three")
+		got := w.replayed(w.cara.tok, "cara-restart", head)
+		if err := wantReplay(got, head, "after one", "after two", "after three"); err != nil {
+			return err
+		}
+		return sameSeqs(before, got)
 	})
 	p.count(t)
 	if p.ok != p.run {

@@ -4,6 +4,15 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-30 · the pod core's property tests get an explicit timeout (unit PT)
+- **Changed:** the four property tests in `podcore/test/properties.test.ts` (restart, seq, one-release, wake) run with a
+  60 s timeout instead of bun's 5 s default (the local `bun:test` type shim gains bun's optional third argument). No
+  assertion, seed count or step changed.
+- **Evidence:** `bun test podcore` 126 pass in 7.8 s at load average 38; `make preflight` under a clean shell.
+- **Next:** none.
+- **Surprising:** on a shared host the 500-seed runs took 7 to 19 s, so `make preflight` turned red with "timed out" and
+  no failed assertion, and a land refused a reviewed PR on the merge result.
+
 ## 2026-10-30 · pre-public readiness (unit OS1)
 - **Changed:** private references scrubbed from the tree and docs; `scripts/check-private.mjs` (the deny check, in
   `make preflight` and the pre-commit) refuses operator paths, personal emails, internal ids, cloud identifiers, note labels and

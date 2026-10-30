@@ -56,6 +56,7 @@ function run(steps: Array<[Cmd, number]>, mid?: (state: PodState, i: number) => 
 }
 
 const SEEDS = Array.from({ length: 500 }, (_, i) => i + 1);
+const PROPERTY_MS = 60_000; // 500 seeds run in ~1 s alone but took 7-19 s on a loaded shared host, past bun's 5 s default
 const stamps = (out: Out[]) => out.flatMap((o) => (o.kind === 'reply' ? [] : [o.event.ts as string]));
 
 test('restart property: a JSON round-trip of the state at a random step changes nothing', () => {
@@ -67,7 +68,7 @@ test('restart property: a JSON round-trip of the state at a random step changes 
     expect(restarted.out).toEqual(straight.out);
     expect(restarted.state).toEqual(straight.state);
   }
-});
+}, PROPERTY_MS);
 
 test('seq property: members-event seq has no gaps, and ts never decreases', () => {
   for (const seed of SEEDS) {
@@ -77,7 +78,7 @@ test('seq property: members-event seq has no gaps, and ts never decreases', () =
     const ts = stamps(out);
     expect(ts).toEqual([...ts].sort());
   }
-});
+}, PROPERTY_MS);
 
 test('one-release property: claims started = claim.released + claims still held, per cause, against a tiny reference model', () => {
   for (const seed of SEEDS) {
@@ -101,7 +102,7 @@ test('one-release property: claims started = claim.released + claims still held,
     expect(started).toBe(total + Object.keys(state.claims).length);
     expect(Object.fromEntries(held)).toEqual(Object.fromEntries(Object.entries(state.claims).map(([t, k]) => [t, k.runId])));
   }
-});
+}, PROPERTY_MS);
 
 test('wake property: one pending wake per agent, and every run.wake goes to the computer hosting the agent', () => {
   for (const seed of SEEDS) {
@@ -118,4 +119,4 @@ test('wake property: one pending wake per agent, and every run.wake goes to the 
       state = r.state;
     }
   }
-});
+}, PROPERTY_MS);

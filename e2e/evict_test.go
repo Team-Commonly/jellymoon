@@ -129,3 +129,22 @@ func TestEvictAlarmWake(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	w.oneRelease(s, 0, tk.ID, 1)
 }
+
+// TestEvictPastDeadline: the object is discarded with the clock stored past the deadline, and the first thing to reach the new
+// instance is a socket reconnect, which runs no command. The release must come from the restore itself (`boot`), once.
+func TestEvictPastDeadline(t *testing.T) {
+	needFake(t)
+	w := newWorld(t)
+	r := w.startRun(w.a1, "wake")
+	tk := w.newTask("past due", "")
+	w.mustClaim(r, tk.ID)
+	w.checkLease(tk.ID, r)
+	last := maxSeq(w.sBen.snapshot(0))
+	w.discard(w.expected(r)+5000, 0)
+	s := w.openSince(w.ben.tok, "ben-after-discard", last)
+	if _, ok := w.awaitExpiry(s, 0, tk.ID, r, 5*time.Second); !ok {
+		t.FailNow()
+	}
+	time.Sleep(300 * time.Millisecond)
+	w.oneRelease(s, 0, tk.ID, 1)
+}

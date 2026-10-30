@@ -120,26 +120,40 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
   console.log(`check-review-gate: ${evilCases.length} evil-merge cases ok`);
 }
 
-// The range scan reads every commit of <main tip>..<head> through the real recipe, markers ignored: a plain-text token added in one commit
-// and deleted in the next (in a path the scanner does not allowlist) is still in history and must be found. It must scan the range, not the
-// working tree (the checkout is main on a normal land) and not only the head commit, and it must not honour a gitleaks:allow marker.
+// The range scan reads every commit of <main tip>..<head> through the real recipe, markers ignored, in the shape of a normal land: the
+// checkout is main, and the PR head exists only as a SHA (land fetches it to FETCH_HEAD, no ref). A token added then deleted in the range is
+// still in history and must be found, whatever shape the history has. The recipe must scan the range, not the working tree, HEAD, --all,
+// the head commit only, one parent line or an ancestry path, and it must not honour a gitleaks:allow marker.
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-range-'));
-  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
-  const rangeStatus = (marker) => {
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' };
+  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env });
+  const tok = (marker) => `echo 'token = ${token}${marker ? ' # gitleaks:allow' : ''}'`;
+  const shapes = {
+    linear: (m) => `git checkout -qb pr && ${tok(m)} > notes.txt && git commit -qam add && echo base > notes.txt && git commit -qam drop`,
+    // the token lives only on a side branch (added then deleted there) that the PR merges
+    sidebranch: (m) => `git checkout -qb pr && echo mine > mine.txt && git add -A && git commit -qm mine && git checkout -qb side main && ${tok(m)} > side.txt && git add -A && git commit -qm add && git rm -q side.txt && echo s > s.txt && git add -A && git commit -qm drop && git checkout -q pr && git merge -q --no-ff --no-edit side`,
+    // main gains a commit after the PR branched
+    oldbase: (m) => `git checkout -qb pr && ${tok(m)} > notes.txt && git commit -qam add && echo base > notes.txt && git commit -qam drop && git checkout -q main && echo next > next.txt && git add -A && git commit -qm next`,
+    clean: () => 'git checkout -qb pr && echo more > notes.txt && git commit -qam add',
+  };
+  const status = (shape, marker) => {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir);
-    g(`cp '${root}/Makefile' . && git init -q -b main . && echo base > notes.txt && git add -A && git commit -qm base && git checkout -qb pr && echo 'token = ${token}${marker ? ' # gitleaks:allow' : ''}' > notes.txt && git add -A && git commit -qm add && git checkout -q main -- notes.txt && git commit -qam drop`);
-    const r = spawnSync('make', ['-s', 'secrets-range', 'RANGE=main..pr'], { cwd: dir, encoding: 'utf8' });
+    g(`cp '${root}/Makefile' . && git init -q -b main . && echo base > notes.txt && git add -A && git commit -qm base && ${shapes[shape](marker)}`);
+    const head = g('git rev-parse pr').stdout.trim();
+    const tip = g(`git checkout -q main && git branch -qD pr ${shape === 'sidebranch' ? 'side' : ''} && git rev-parse main`).stdout.trim(); // land's checkout: main, the head reachable by SHA only
+    const r = spawnSync('make', ['-s', 'secrets-range', `RANGE=${tip}..${head}`], { cwd: dir, encoding: 'utf8' });
     return /^exit status 3$/m.test(r.stderr) ? 3 : r.status;
   };
-  const [plain, marked, none] = [rangeStatus(false), rangeStatus(true), (() => { fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir); g(`cp '${root}/Makefile' . && git init -q -b main . && echo base > notes.txt && git add -A && git commit -qm base && git checkout -qb pr && echo more > notes.txt && git add -A && git commit -qm add`); return spawnSync('make', ['-s', 'secrets-range', 'RANGE=main..pr'], { cwd: dir, encoding: 'utf8' }).status; })()];
-  fs.rmSync(dir, { recursive: true, force: true });
   const rangeCases = [
-    ['range: a plain-text token added then deleted in the range is found (exit status 3), by the recipe itself', plain, 3],
-    ['range: a gitleaks:allow marker does not hide it (the recipe ignores markers)', marked, 3],
-    ['range: a range without a token is clean', none, 0],
+    ...['linear', 'sidebranch', 'oldbase'].flatMap((shape) => [
+      [`range (${shape}): a token added then deleted in the range is found (exit status 3) by the recipe itself`, status(shape, false), 3],
+      [`range (${shape}): a gitleaks:allow marker does not hide it (the recipe ignores markers)`, status(shape, true), 3],
+    ]),
+    ['range: a range without a token is clean', status('clean', false), 0],
   ];
+  fs.rmSync(dir, { recursive: true, force: true });
   const badRange = rangeCases.filter(([, got, want]) => got !== want).map(([n]) => n);
   if (badRange.length) { console.error(`check-review-gate: range cases wrong\n  ${badRange.join('\n  ')}`); process.exit(1); }
   console.log(`check-review-gate: ${rangeCases.length} range cases ok`);

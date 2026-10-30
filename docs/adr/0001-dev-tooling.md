@@ -34,7 +34,7 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | daemon | 3,500 |
 | e2e | 1,500 |
 
-That is under 11k hand-written lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 11,200 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 2026-10-30: core cap 1,500 → 1,650, land security tests, P08 r9.

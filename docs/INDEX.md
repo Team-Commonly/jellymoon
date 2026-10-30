@@ -10,6 +10,8 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `development/workflow.md` | How Jellymoon is built: the long-running harness, stage skills, entropy gate, review and merge (local verification is the authority) |
 | `development/landing.md` | `make land`: the only merge path, its environment variables, the ledger format and the verdict message the operator posts |
 | `development/verifier.md` | The verifier protocol: what a fresh-context reviewer checks, and its verdict format |
+| `development/e2e-contract.md` | The black-box e2e contract suite in `e2e/`: how it starts a server, the `/__test/*` routes, the clock and persistence rules, and what each test proves |
+| `../worker/README.md` | The Cloudflare adapter in `worker/`: what it is, `make worker-dev`, `make e2e-a` |
 | `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the slice LOC caps |
 | `adr/0002-claims-and-leases.md` | When a task claim's lease renews, expires and is released; the unknowns left open |
 | `adr/0003-pure-pod-core.md` | Why claims, leases and recourse are a pure module, and what an adapter must do around it |

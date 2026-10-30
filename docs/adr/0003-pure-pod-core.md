@@ -74,7 +74,9 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
    length (160) before `apply`, and map reply codes to HTTP statuses. Wake ids are globally unique and minted by the
    adapter like the rest: `task_create`, `task_update`, `message_post` and `change` each carry ONE
    fresh `wakeId`. The k-th new wake a command opens (text order) gets `nthWakeId(wakeId, k)`: k = 0 is the id itself,
-   k > 0 adds k to the ULID's 80-bit random part with carry, so ids stay unique while the seed is fresh. A command that
+   k > 0 adds k to the ULID's 80-bit random part with carry. So the seed's random part must be new CSPRNG output for
+   every command, never a monotonic ULID factory's +1: with one, seed+1 is the next command's seed and two wakes share
+   an id. Under fresh random bits, a clash needs two seeds within k of each other in the same millisecond. A command that
    coalesces uses no id; a malformed seed or an overflow is `invalid_input`. `POST /v1/runs {wakeId}` names no pod, so the adapter keeps
    a wakeId to pod index.
    Callers pass a non-decreasing `now`; the core does not clamp it.

@@ -119,3 +119,28 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
   if (badEvil.length) { console.error(`check-review-gate: evil-merge cases wrong\n  ${badEvil.join('\n  ')}`); process.exit(1); }
   console.log(`check-review-gate: ${evilCases.length} evil-merge cases ok`);
 }
+
+// The range scan reads every commit of <main tip>..<head> through the real recipe, markers ignored: a plain-text token added in one commit
+// and deleted in the next (in a path the scanner does not allowlist) is still in history and must be found. It must scan the range, not the
+// working tree (the checkout is main on a normal land) and not only the head commit, and it must not honour a gitleaks:allow marker.
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-range-'));
+  const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
+  const rangeStatus = (marker) => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir);
+    g(`cp '${root}/Makefile' . && git init -q -b main . && echo base > notes.txt && git add -A && git commit -qm base && git checkout -qb pr && echo 'token = ${token}${marker ? ' # gitleaks:allow' : ''}' > notes.txt && git add -A && git commit -qm add && git checkout -q main -- notes.txt && git commit -qam drop`);
+    const r = spawnSync('make', ['-s', 'secrets-range', 'RANGE=main..pr'], { cwd: dir, encoding: 'utf8' });
+    return /^exit status 3$/m.test(r.stderr) ? 3 : r.status;
+  };
+  const [plain, marked, none] = [rangeStatus(false), rangeStatus(true), (() => { fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir); g(`cp '${root}/Makefile' . && git init -q -b main . && echo base > notes.txt && git add -A && git commit -qm base && git checkout -qb pr && echo more > notes.txt && git add -A && git commit -qm add`); return spawnSync('make', ['-s', 'secrets-range', 'RANGE=main..pr'], { cwd: dir, encoding: 'utf8' }).status; })()];
+  fs.rmSync(dir, { recursive: true, force: true });
+  const rangeCases = [
+    ['range: a plain-text token added then deleted in the range is found (exit status 3), by the recipe itself', plain, 3],
+    ['range: a gitleaks:allow marker does not hide it (the recipe ignores markers)', marked, 3],
+    ['range: a range without a token is clean', none, 0],
+  ];
+  const badRange = rangeCases.filter(([, got, want]) => got !== want).map(([n]) => n);
+  if (badRange.length) { console.error(`check-review-gate: range cases wrong\n  ${badRange.join('\n  ')}`); process.exit(1); }
+  console.log(`check-review-gate: ${rangeCases.length} range cases ok`);
+}

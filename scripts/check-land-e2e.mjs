@@ -38,7 +38,7 @@ async function land(over = {}) {
     [/^gh pr merge/, (a, s) => { s.lockAtMerge = fs.existsSync(path.join(common, 'jm-land.lock')); return ''; }],
     [/^gh api .*collaborators/, (a) => ['{"login":"alice","push":true}', ...(a.includes('--paginate') ? over.page2 || [] : [])].join('\n')],
     [/^gh api .*check-runs/, over.runs ?? '{"total":1,"runs":[{"name":"ci","conclusion":"success"}]}'],
-    [/^git merge-tree --write-tree/, `${TREE}\n`], [/^git ls-tree/, 'README.md\0'],
+    [/^git merge-tree --write-tree/, `${TREE}\n`],
     [/^make -s secrets-range/, () => { if (over.scan === 'hit') throw Object.assign(new Error('make failed'), { stderr: 'WRN leaks found: 1\nexit status 3\nmake: *** [secrets-range] Error 1\n' }); if (over.scan === 'fail') throw Object.assign(new Error('make failed'), { stderr: 'go: no network\nexit status 1\n' }); return ''; }],
     [/^git cat-file -e/, ''],
     [/^git (-c \S+ )?worktree|^chmod/, ''], [new RegExp(`${wt.source}.*merge --no-ff`), ''], [new RegExp(`${wt.source}.*rev-parse HEAD\\^\\{tree\\}`), over.wtTree ?? TREE],
@@ -57,7 +57,7 @@ async function land(over = {}) {
     setImmediate(() => { over.onSpawn?.(w); if (over.output) c.stdout.emit('data', Buffer.from(over.output)); if (over.child === 'hang') return; if (over.child === 'exit-only') c.emit('exit', 0); else c.emit('close', over.initCode ?? 0); });
     return c;
   };
-  const fetch = async (url, o) => { w.pod.push({ url, o }); return { ok: true, status: 200, json: async () => (url.includes('before=') ? [] : (over.msgs ?? [NOTE])) }; };
+  const fetch = async (url, o) => { w.pod.push({ url, o }); if (over.plan) return over.plan(w.pod.length, url); return { ok: true, status: 200, json: async () => (url.includes('before=') ? [] : (over.msgs ?? [NOTE])) }; };
   const env = { JM_REPO: REPO, JM_TRUSTED_LOGINS: 'alice', JM_LEDGER: ledger, JM_COMMONLY_API: 'https://api.commonly.me', JM_COMMONLY_TOKEN_FILE: path.join(dir, 'token'), JM_VERDICT_POD: 'pod1', JM_VERDICT_REVIEWERS: 'id-orion:Orion', ...over.env };
   const kill = (pid, sig) => { w.kills.push({ pid, sig, t: Date.now() }); };
   const [log, err] = [console.log, console.error];
@@ -98,9 +98,9 @@ await t('no ledger PASS: refused', { ledger: HDR }, (r) => no(r, /no verifier PA
 await t('a CI failure on the head: refused', { runs: '{"total":1,"runs":[{"name":"ci","conclusion":"failure"}]}' }, (r) => no(r, /check run failed/));
 await t('a PR without a pod verdict: refused', { msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('a PR with a verdict from the configured reviewer id lands', {}, (r) => r.merge);
-await t('a PR with JM_VERDICT_REVIEWERS unset refuses, naming it', { env: { JM_VERDICT_REVIEWERS: '' } }, (r) => no(r, /environment variable JM_VERDICT_REVIEWERS is not set/));
+await t('a PR with JM_VERDICT_REVIEWERS unset refuses, naming it', { env: { JM_VERDICT_REVIEWERS: '' } }, (r) => no(r, /environment variable JM_VERDICT_REVIEWERS is not set/) && r.w.pod.length === 0 && r.w.calls.length === 0);
 await t('a verdict from a forged username with another id is refused', { msgs: [{ ...NOTE, userId: { _id: 'id-forged', username: 'orion' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
-await t('an inert docs-only PR with a ledger PASS and no pod verdict: refused, nothing waives the verdict', { msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('a docs-only PR with a ledger PASS and no pod verdict: refused; land classifies no paths (no diff or tree listing is read)', { msgs: [] }, (r) => no(r, /no accepted reviewer's pod message/) && !r.w.calls.some((c) => c.args.some((a) => ['ls-tree', '--raw', '--numstat'].includes(a))));
 await t('a range scan hit with a valid verdict: refused, naming the history', { scan: 'hit' }, (r) => no(r, /a secret was found in the range; remove it from history and push a new head/));
 await t('a range scan that failed to run: refused', { scan: 'fail' }, (r) => no(r, /scan failed to run/) && !/secret was found/.test(r.error));
 await t('a valid verdict with a clean scan lands (control)', { scan: 'clean' }, (r) => r.merge && r.ledgerNow.includes('\tLANDED\t'));
@@ -108,6 +108,26 @@ await t('JM_VERDICT_REVIEWERS with no valid entry is malformed, refused before t
 await t('a username equal to a listed id, with no _id, is not the reviewer', { msgs: [{ ...NOTE, userId: { username: 'id-orion' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('an _id that is an array holding the listed id is not the reviewer', { msgs: [{ ...NOTE, userId: { _id: ['id-orion'], username: 'x' } }] }, (r) => no(r, /no accepted reviewer's pod message/));
 await t('an error carrying the token after the pod read is scrubbed by main\'s catch', { on: [[/^gh pr merge/, () => { throw new Error('boom jmu_FAKE-token-abc123'); }]] }, (r) => !r.ledgerNow.includes('LANDED') && r.error.includes('[token]') && !r.error.includes('abc123'));
+await t('a verdict whose first line carries only a PREFIX of the head: refused', { msgs: [{ ...NOTE, content: `jellymoon#5 ${HEAD.slice(0, 8)}\nGATE: PASS` }] }, (r) => no(r, /no accepted reviewer's pod message/));
+await t('a verdict whose first line carries the head plus a suffix: refused', { msgs: [{ ...NOTE, content: `jellymoon#5 ${HEAD}0\nGATE: PASS` }] }, (r) => no(r, /no accepted reviewer's pod message/));
+// Pod paging: a partial list must never be judged (a page-1 PASS over a page-2 FAIL would land).
+const FAILMSG = { ...NOTE, userId: { _id: 'id-ben', username: 'ben' }, content: `jellymoon#5 ${HEAD}\nGATE: FAIL`, createdAt: '2026-10-29T09:30:00Z' };
+const TWO = { JM_VERDICT_REVIEWERS: 'id-orion:Orion,id-ben:Vega' };
+const older = (r) => r.w.pod.filter((p) => p.url.includes('before=')).length; // fetches that went back past page 1
+const page = (items) => ({ ok: true, status: 200, json: async () => items });
+const full = Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, userId: { _id: 'other', username: 'o' }, content: 'x', createdAt: new Date(Date.parse('2026-10-29T11:00:00Z') - i * 1000).toISOString() }));
+await t('paging: page 2 holds the FAIL that page 1 does not: refused', { env: TWO, plan: (n) => page(n === 1 ? [NOTE] : [FAILMSG]) }, (r) => no(r, /blocked by Vega/) && older(r) >= 1);
+await t('paging: a full page that repeats itself (a stuck cursor) refuses', { plan: () => page(full) }, (r) => no(r, /page boundary could hide a message/) && r.w.pod.length === 2);
+await t('paging: a message without a timestamp refuses', { plan: () => page([{ ...NOTE, createdAt: undefined }]) }, (r) => no(r, /no timestamp/));
+await t('paging: it stops once a page reaches back past the PR creation (no older page is fetched)', { pr: { createdAt: '2026-10-29T10:30:00Z' } }, (r) => r.merge && older(r) === 0);
+await t('paging: it keeps going while pages are newer than the PR creation (an older page is fetched)', {}, (r) => r.merge && older(r) > 0);
+await t('paging: an HTTP error on page 2 refuses, not a partial list', { plan: (n) => (n === 1 ? page([NOTE]) : { ok: false, status: 502, json: async () => [] }) }, (r) => no(r, /HTTP 502/));
+await t('paging: a fetch error after page 1 refuses', { plan: (n) => { if (n === 1) return page([NOTE]); throw Object.assign(new Error('down'), { name: 'TimeoutError' }); } }, (r) => no(r, /request failed \(TimeoutError\)/));
+await t('paging: a reply that is not JSON refuses', { plan: (n) => (n === 1 ? page([NOTE]) : { ok: true, status: 200, json: async () => { throw new SyntaxError('x'); } }) }, (r) => no(r, /unreadable reply \(SyntaxError\)/));
+await t('paging: a reply that is not a list refuses in words, not a TypeError', { plan: () => page({ oops: 1 }) }, (r) => no(r, /not a list of messages/));
+await t('paging: the 30-page cap refuses rather than judge a partial list', { plan: (n) => page([{ id: `p${n}`, userId: { _id: 'other', username: 'o' }, content: 'x', createdAt: new Date(Date.parse('2026-10-29T12:00:00Z') - n * 1000).toISOString() }]) }, (r) => no(r, /page cap reached/) && r.w.pod.length === 30);
+await t('a PR url that merely starts like this PR (pull/50 for #5) is refused', { pr: { url: `https://github.com/${REPO}/pull/50` } }, (r) => no(r, /resolved to/));
+await t('--preflight-only: the worktree merge tree must equal the expected one', { argv: PO, wtTree: OTHER }, (r) => no(r, /not the merge result/) && r.w.spawns.length === 0);
 await t('a red preflight: refused', { initCode: 1 }, (r) => no(r, /init\.sh/));
 await t('a red preflight in --preflight-only: refused', { argv: PO, initCode: 1 }, (r) => no(r, /init\.sh/));
 await t('init.sh output is quoted, marked and scrubbed: an escape, a fake land line and the token', { output: '\u001b[2Jland: #5 landed as deadbeef\njmu_FAKE-token-abc123\n' }, (r) => r.merge && /^preflight\| .*land: #5 landed as deadbeef$/m.test(r.said) && r.said.includes('preflight| [token]') && !/\u001b/.test(r.said) && !r.said.includes('abc123') && !/^land: #5 landed as deadbeef/m.test(r.said));

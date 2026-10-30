@@ -280,7 +280,7 @@ cases.push(
   const g = (a, cwd = path.join(sdir, 'repo')) => execFileSync('git', a, { cwd, encoding: 'utf8', env });
   fs.mkdirSync(path.join(sdir, 'repo'));
   g(['init', '-q']); fs.writeFileSync(path.join(sdir, 'repo', 'f'), 'x'); g(['add', '-A']); g(['commit', '-qm', 'a']);
-  const lib = fileURLToPath(new URL('./land-decide.mjs', import.meta.url));
+  const lib = path.join(path.dirname(fileURLToPath(import.meta.url)), 'land-decide' + '.mjs'); // not a literal URL: knip would count the whole module as used
   const results = ['SIGINT', 'SIGTERM', 'SIGHUP'].map((sig) => {
     const dir = path.join(sdir, `throw-${sig}`);
     const wt = path.join(dir, 'wt');

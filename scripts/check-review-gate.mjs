@@ -40,7 +40,7 @@ fs.rmSync(copy, { recursive: true, force: true });
 if (!cleanAfterGen || !bites) { console.error(`check-review-gate: check-gen does not bite (gen leaves a clean tree: ${cleanAfterGen}; a schema edit changes generated files: ${bites})`); process.exit(1); }
 console.log('check-review-gate: check-gen bites (a schema edit changes the generated files)');
 
-// B2 end to end: two symlinks, docs/lnk.md -> ../.. and docs/protocol.md -> lnk.md/../victim.txt, would let `make gen` overwrite a file above the tree
+// A symlink chain gen must not write through: two symlinks, docs/lnk.md -> ../.. and docs/protocol.md -> lnk.md/../victim.txt, would let `make gen` overwrite a file above the tree
 // check-portable refuses the chain, and gen will not write through it. The victim must stay intact.
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'check-symlink-'));
 const repo = path.join(base, 'a', 'repo');
@@ -107,7 +107,7 @@ const badHist = history.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (badHist.length) { console.error(`check-review-gate: history cases wrong\n  ${badHist.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${history.length} history cases ok`);
 
-// NB6: a symlink path with a space resolves whole (records are NUL-separated): one that leaves the repo is refused by name, one inside passes.
+// check-portable reads whole paths: a symlink path with a space resolves whole (records are NUL-separated): one that leaves the repo is refused by name, one inside passes.
 const pdir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-portable-'));
 const pg = (script) => spawnSync('bash', ['-c', script], { cwd: pdir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@l', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@l' } });
 pg(`mkdir scripts sp && cp '${root}/scripts/check-portable.sh' scripts/ && echo x > scripts/f && ln -s ../scripts "sp/in side.md" && git init -q && git add -A && git commit -qm a`);
@@ -120,7 +120,7 @@ const badPortable = portable.filter(([, got, want]) => got !== want).map(([n]) =
 if (badPortable.length) { console.error(`check-review-gate: portable cases wrong\n  ${badPortable.join('\n  ')}`); process.exit(1); }
 console.log(`check-review-gate: ${portable.length} portable cases ok`);
 
-// B1 evil merge: gitleaks runs `git log -p` without -m, so a secret that exists only in a merge commit's own diff (a conflict resolution)
+// An evil merge: gitleaks runs `git log -p` without -m, so a secret that exists only in a merge commit's own diff (a conflict resolution)
 // is never scanned. Both targets pass -m. A trusted branch merges a side branch and adds a token to docs/a.md in the resolution. The
 // shape is land's: make secrets runs on the detached head (the preflight's merged tree), the range scan from main with the head by SHA.
 {

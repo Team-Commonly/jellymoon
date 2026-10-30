@@ -56,7 +56,7 @@ const feed: Handler = (k) => {
   const messages = events.flatMap((e) => (e.type === 'message.created' ? [e.data as Message] : [])).slice(0, limit)
     .map(({ body, ...rest }) => (withBody && body !== undefined ? { ...rest, body } : rest));
   const ids = new Set(events.flatMap((e) => (e.type === 'task.created' || e.type === 'task.updated' ? [e.data.id] : [])));
-  const out: ReadOutput = { messages, tasks: [...ids].sort().map((id) => taskView(k.pod.state, id)), headSeq: k.pod.state.seq };
+  const out: ReadOutput = { messages, tasks: [...ids].map((id) => taskView(k.pod.state, id)), headSeq: k.pod.state.seq };
   return Response.json(out);
 };
 

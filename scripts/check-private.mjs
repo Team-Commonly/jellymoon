@@ -136,12 +136,13 @@ function run({ cases, files, classes }) {
   return problems;
 }
 
-// The files named on the command line, else every tracked file.
-function readText(paths = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter(Boolean)) {
-  return paths.flatMap((f) => {
+// The files named on the command line, else every tracked file. Every path is kept, so the path scan sees binary,
+// NUL-containing, unreadable and dangling-symlink entries too; such a file carries empty text, which has no content to scan.
+function readText(paths = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter(Boolean), read = fs.readFileSync) {
+  return paths.map((f) => {
     let buf;
-    try { buf = fs.readFileSync(f); } catch { return []; } // a deleted or unreadable path is not text
-    return buf.includes(0) ? [] : [[f, buf.toString('utf8')]];
+    try { buf = read(f); } catch { return [f, '']; }
+    return [f, buf.includes(0) ? '' : buf.toString('utf8')];
   });
 }
 
@@ -171,6 +172,8 @@ function runnerChecks() { // the runner and main() themselves
   const secret = lines({ env: NAMES, files: [['a.md', j('hello ', 'Zorblax')]] });
   const leaks = (f, text) => { const out = lines({ env: NAMES, files: [[f, text]] }); return out.code !== 0 && out.out.length > 0 && !out.out.some((l) => /zorblax/i.test(l)); };
   const badPattern = lines({ env: { JM_PRIVATE_NAMES: j('(zorb', 'lax') }, files: PLAIN });
+  const nulTree = readText([j('docs/zorb', 'lax-notes.bin'), 'ok.bin', 'gone.md'], (f) => { if (f === 'gone.md') throw new Error('unreadable'); return Buffer.from([0, 1, 2]); });
+  const nulRun = lines({ env: NAMES, files: nulTree });
   const pathRun = lines({ env: NAMES, files: [[j('docs/zorb', 'lax-notes.md'), 'plain']] });
   const secretCase = R([['lbl', j('hello ', 'Zorblax'), 'email']], []).concat(R([['lbl', j('a@', 'gmail.com'), null]], []));
   return [
@@ -190,6 +193,8 @@ function runnerChecks() { // the runner and main() themselves
     ['main fails on an empty file list', lines({ files: [], cases: [['x', 'plain', null]] }).code !== 0],
     ['a tree hit prints file:line: class and not the matched name', secret.code !== 0 && secret.out.some((l) => l.includes('a.md:1: private name')) && !secret.out.some((l) => /zorblax/i.test(l))],
     ['a tracked path holding a name fails and is not printed', pathRun.code !== 0 && pathRun.out.some((l) => l.includes('path: names')) && !pathRun.out.some((l) => /zorblax/i.test(l))],
+    ['a binary or unreadable entry is kept for the path scan', nulTree.length === 3 && nulTree.every(([, t]) => t === '')],
+    ['a name-bearing path whose content has a NUL byte fails, path withheld', nulRun.code !== 0 && nulRun.out.some((l) => l.includes('tracked file 1 (path withheld): path: names')) && !nulRun.out.some((l) => /zorblax|lax-notes/i.test(l))],
     ['a name-bearing path with a content hit never prints the name (task label)', leaks(j('notes/zorb', 'lax-notes.md'), HIT)],
     ['a name-bearing path with a content hit never prints the name (the person mentioned)', leaks(j('notes/zorb', 'lax.md'), j('met ', 'Zorblax today'))],
     ['a name-bearing directory with a content hit never prints the name (personal email)', leaks(j('zorb', 'lax/a.md'), j('a@', 'gmail.com'))],

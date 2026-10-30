@@ -16,5 +16,5 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `design/protocol.md` | Protocol review: what the schema decides, the open questions and recommendations |
 | `design/connector-options.md` | Connectors options paper (OSS-first): Linear read through a pod grant, the write gate |
 | `design/client-options.md` | Client strategy options paper: web-first slice, four screens |
-| `design/ux-concepts.html` | Six interaction paradigms (Round table included) as clickable prototypes on one scenario, with verdicts. Exploration only: the client direction is open until the review with Sam (F18) |
+| `design/ux-concepts.html` | Six interaction paradigms (Round table included) as clickable prototypes on one scenario, with verdicts. Exploration only: the client direction is open until the maintainers review it (F18) |
 | `design/generative-ui.md` | Generative UI options paper: a fixed, schema-declared card catalogue, with every number cited |

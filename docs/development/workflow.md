@@ -32,7 +32,7 @@ after a surprise.
 
 ## Review and merge
 Local verification is the authority. **GitHub checks are not consulted at all, and nothing GitHub reports counts:**
-both workflows are disabled while the repo is private (owner ruling:CI is a bottleneck and not unlimited), and any PR
+both workflows are disabled while the repo is private (CI is a bottleneck and not unlimited), and any PR
 that touches `.github/workflows/` could fake a green check anyway. `make land PR=<n>` is the only merge path
 (`docs/development/landing.md`). It merges only when all of these hold at the exact PR head:
 - a clean-shell `make preflight` passes at that head;
@@ -41,8 +41,8 @@ that touches `.github/workflows/` could fake a green check anyway. `make land PR
 - for a protected path, the reviewer's pod verdict also passes. It is a message by a listed reviewer's
   server-stamped username, whose first line is `jellymoon#<pr> <full head>` and whose last line is `GATE: PASS`.
 - Workers never merge. GitHub review text is not consulted.
-- Protected paths are listed in `landing.md`; they include `land.mjs`, `land-decide.mjs`, `review-gate.mjs`,
-  `Makefile`, `init.sh` and `scripts/tools.sh`. A rename out of a protected path counts. Run land from main.
+- Protected paths: every changed path except `docs/` and `progress.md` (`landing.md`). A rename counts both
+  sides. Run land from main.
 - **Accepted reviewers:** `.github/opus-reviewers.txt` is the only place they are written (`Name username`);
   the test asserts the file parses and pins no name.
 - **How the verdict is read** (`scripts/review-gate.mjs`, shared with land). The verdict is the message's LAST
@@ -61,10 +61,10 @@ different model family from the first PASS, with a note starting `reviewer-gate-
 second verifier is fresh-context: it has never seen the builder's or the first verifier's reasoning. Every such
 land appends a `REGATE-OWED` row; `make land ARGS=--owed` lists the PRs still owed a reviewer re-gate (it blocks
 nothing). Whatever a later reviewer re-gate fails is fixed forward. The ledger `by` column is `<model>-verifier`
-(`opus`, `sonnet`, `haiku` or `fable`) and `land`; the coordinator never writes `PASS` or `FAIL`.
+(`opus`, `sonnet`, `haiku` or `fable`) and `land`. Each PASS or FAIL row is the verifier's own verdict line, copied verbatim into the ledger by the coordinator. The coordinator never writes a verdict of its own.
 
 ## Design-gated features
-- **F18 (client) and F19 (connectors)** stay blocked until their options docs are reviewed with Sam.
+- **F18 (client) and F19 (connectors)** stay blocked until their options docs are reviewed by the maintainers.
   The docs are `docs/design/client-options.md` and `docs/design/connector-options.md`.
 - **After the review:**
   1. add the steps and test to the existing F18 or F19 entry, and clear `blockedBy`;
@@ -73,8 +73,7 @@ nothing). Whatever a later reviewer re-gate fails is fixed forward. The ledger `
   This is the only time a feature's text changes, and only for these placeholders.
 
 ## Entropy gate
-Maintainability is a gate in the loop, not a cleanup phase. `make preflight` runs `make entropy`, and
-so does CI.
+Maintainability is a gate in the loop, not a cleanup phase. `make preflight` runs `make entropy`.
 - **Budgets** live in `entropy.json`:
   - each file at most 400 lines and each function at most 60;
   - a LOC cap per area;

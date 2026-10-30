@@ -1,6 +1,7 @@
 // Pure decisions behind scripts/land.mjs (docs/development/landing.md). Every function takes parsed data and
 // returns { ok, reason } (or a plain value); the shell-outs live in land.mjs. Tests: scripts/check-land.mjs.
 import fs from 'node:fs';
+import path from 'node:path';
 import { verdictOf } from './review-gate.mjs';
 
 const KNOWN = ['PASS', 'FAIL', 'LANDED', 'REGATE-OWED', 'BOOTSTRAP'];
@@ -48,7 +49,7 @@ export function checkSecondVerifier(rows, { pr, head, primary }) {
 }
 
 const msgUser = (m) => m.userId?.username ?? m.username;
-const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at ?? 0) || 0;
+const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at) || 0;
 
 // A message counts for #N only if its FIRST non-empty line is exactly `jellymoon#<N> <head>` and its server-stamped
 // username is a listed reviewer's. The latest such message per reviewer decides; text is never an identity.
@@ -123,4 +124,48 @@ export function removeTree(dir, { rm = (d) => fs.rmSync(d, { recursive: true, fo
     } catch { /* best effort */ }
   };
   try { writable(dir); rm(dir); return true; } catch (e) { warn(`land: warning: could not remove ${dir}: ${e.message.split('\n')[0]}`); return false; }
+}
+
+// A bearer token is one printable token. Anything else is refused WITHOUT quoting the file: a malformed file once
+// echoed its token into a fetch error.
+export function readToken(file) {
+  const t = fs.readFileSync(file, 'utf8').trim();
+  if (!/^[\x21-\x7e]+$/.test(t)) throw new Error('token file is not a single printable token (contents not shown)');
+  return t;
+}
+export const scrub = (text, secret) => (secret ? String(text).split(secret).join('[token]') : String(text));
+
+// Pod paging. The next cursor is the oldest time + 1 ms so messages sharing that millisecond come back and are
+// deduped by id; a full page that adds nothing new cannot be paged past, so the caller fails closed.
+export function takePage(seen, msgs, limit) {
+  const fresh = msgs.filter((m) => { const k = m.id ?? m._id ?? JSON.stringify(m); return !seen.has(k) && seen.add(k); });
+  return { fresh, stuck: msgs.length >= limit && fresh.length === 0 };
+}
+export function cursorOf(msgs) {
+  const ts = msgs.map(msgTime);
+  return ts.some((x) => !x) ? null : new Date(Math.min(...ts) + 1).toISOString();
+}
+
+// --dry-run writes nothing: the ledger line is skipped.
+export function appendLedger(file, cols, { dry = false } = {}) {
+  if (dry) return false;
+  const exists = fs.existsSync(file);
+  const lead = exists && !fs.readFileSync(file, 'utf8').endsWith('\n') ? '\n' : '';
+  fs.appendFileSync(file, `${exists ? '' : 'pr\thead\tverdict\tby\twhen\tnote\n'}${lead}${cols.join('\t')}\n`);
+  return true;
+}
+
+export const checkPlatform = (platform) => (platform === 'darwin' ? { ok: true }
+  : { ok: false, reason: `preflight sandbox is macOS-only; add one for ${platform} before landing here` });
+
+// macOS sandbox-exec profile for the preflight, which runs the PR's own code. Network stays allowed (tools.sh may
+// download a toolchain). Writes are denied except the allow-list; reads and writes of the secret dirs and the
+// ledger's dir are denied LAST so they win over any allow above. Paths are resolved through symlinks first (macOS /tmp is a link).
+const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+const quote = (p) => `"${p.replace(/[\\"]/g, '\\$&')}"`;
+export function sandboxProfile({ home, ledger, allowWrite }) {
+  const sub = (ps) => ps.map((p) => `(subpath ${quote(real(p))})`).join(' ');
+  const secrets = ['.commonly', '.claude', '.codex', '.ssh', '.aws', '.config'].map((d) => path.join(real(home), d));
+  return ['(version 1)', '(allow default)', '(deny file-write*)', `(allow file-write* ${sub(allowWrite.filter(Boolean))})`,
+    `(deny file-read* file-write* ${sub([...secrets, path.dirname(ledger)])})`].join('\n');
 }

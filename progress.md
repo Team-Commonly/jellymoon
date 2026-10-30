@@ -4,6 +4,11 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-10-29 · P08 final fixes (unit P08, round 3)
+- **Changed:** every path but `docs/` and `progress.md` is now protected (renames count both sides); the preflight runs in a macOS `sandbox-exec`; pod paging dedupes by id and fails closed at a boundary; a bad token file is never echoed; `--dry-run` writes no ledger row; both workflows are `workflow_dispatch` only; CODEOWNERS deleted; one wording for who writes verdict rows; internal labels scrubbed.
+- **Evidence:** `make preflight` green in the stripped shell; check-land 89 cases (sandbox proof included), check-review-gate 44 + 23.
+- **Next:** land #10 with `--bootstrap`; the PR template still lists the old protected paths (not in this unit's scope).
+
 ## 2026-10-29 · P08 review fixes (unit P08, round 2)
 - **Changed:** land simplified to one PR based on `main` (no `--stack`, chains or FIXED-FWD). It now tests main plus
   the head in a throwaway worktree, takes changed files from the local `git diff --name-status -M`, re-reads the
@@ -133,7 +138,7 @@ goes in the PR.
   tests (F01 passes). Also added `init.sh`, this file, the `AGENTS.md` loop, the PR template and
   `docs/development/workflow.md`.
 - **Plan:** one builder session works top-down through the list. Two design docs run alongside as
-  subagents (connectors, OSS-first; client options). F18 and F19 are blocked until Sam reviews those
+  subagents (connectors, OSS-first; client options). F18 and F19 are blocked until the maintainers review those
   docs.
 - **Evidence:** F01 is `make check-gen test`, green on #2977 (L0).
 - **Next:** F02, the `make e2e` harness (wrangler dev, /healthz, E2E_MS).
@@ -143,7 +148,7 @@ goes in the PR.
 
 ## 2026-10-29 · repo move (build session)
 - **Changed:** the build moved from the `v4` branch of the Commonly repo to its own private repo,
-  `Team-Commonly/jellymoon` (owner ruling;the company stays Commonly). History was rebuilt clean:
+  `Team-Commonly/jellymoon` (the company stays Commonly). History was rebuilt clean:
   a fixture token that tripped gitleaks became an obviously fake one, and the Go module is
   `github.com/Team-Commonly/jellymoon`.
 - **Held:** the CLI binary name (`commonly` in F08/F15) and the npm scope wait for the trademark check.

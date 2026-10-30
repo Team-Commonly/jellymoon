@@ -1,6 +1,6 @@
 # Client strategy: options paper
 
-2026-10-29. Research only. "Local" means internal research memos A-N and the v4 build spec. Everything about another product carries a URL; where I could not confirm a claim, it says so.
+2026-10-29. Research only. "Local" means earlier research notes and the v4 build spec. Everything about another product carries a URL; where I could not confirm a claim, it says so.
 
 **Read with:** `ux-concepts.html`, the five-paradigm prototype on the same scenario. It recommends Inbox as home and Chat as the pod surface, which matches screens 2 and 3 below.
 

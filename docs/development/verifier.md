@@ -30,7 +30,8 @@ FINDINGS <n blocking> <n non-blocking>
 GATE: PASS | GATE: FAIL
 ```
 - `GATE: PASS` requires zero blocking findings.
-- The verifier never pushes, comments on GitHub or merges. The coordinator records the ledger row
-  (`<pr> <head> PASS <model>-verifier ...`, `landing.md`); `make land` reads it.
+- The verifier never pushes, comments on GitHub or merges. Its verdict line is copied verbatim into the ledger
+  by the coordinator (`<pr> <head> PASS <model>-verifier ...`, `landing.md`); `make land` reads it. The coordinator
+  never writes a verdict of its own.
 - A protected-path PR still needs the reviewer's pod verdict at the same head
   (`landing.md`).

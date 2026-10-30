@@ -3,9 +3,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
-  checkApi, checkHead, checkLedger, checkMain, checkPodVerdict, checkSecondVerifier, filesFromNameStatus,
-  landAction, owedList, parseLedger, remoteFor, removeTree,
+  appendLedger, checkApi, checkHead, checkLedger, checkMain, checkPlatform, checkPodVerdict, checkSecondVerifier, cursorOf,
+  filesFromNameStatus, landAction, owedList, parseLedger, readToken, remoteFor, removeTree, sandboxProfile, scrub, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -132,6 +133,80 @@ cases.push(
   ['land.mjs has gh calls to scan', ghCalls.length >= 3, true],
   ['land.mjs has no stack or FIXED-FWD code', /--stack|FIXED-FWD|chainOf/.test(src.join('\n')), false],
 );
+
+// Pod paging: dedupe by id across pages, and fail closed where a boundary could hide a message.
+const at1 = (id, ts) => ({ id, createdAt: ts });
+const seen = new Set();
+takePage(seen, [at1('a', '2026-10-29T10:00:00.005Z'), at1('b', '2026-10-29T10:00:00.002Z')], 200);
+const page2 = takePage(seen, [at1('b', '2026-10-29T10:00:00.002Z'), at1('c', '2026-10-29T10:00:00.001Z')], 200);
+cases.push(
+  ['paging: a message seen on a previous page is dropped', page2.fresh.map((m) => m.id).join(), 'c'],
+  ['paging: the next cursor is the oldest time + 1 ms, so same-millisecond messages return', cursorOf([at1('a', '2026-10-29T10:00:00.005Z'), at1('c', '2026-10-29T10:00:00.001Z')]), '2026-10-29T10:00:00.002Z'],
+  ['paging: a message without a time makes the cursor unusable', cursorOf([at1('a', '2026-10-29T10:00:00.005Z'), { id: 'x' }]), null],
+  ['paging: a full page with nothing new is stuck (fail closed)', takePage(seen, [at1('a', '2026-10-29T10:00:00.005Z'), at1('b', '2026-10-29T10:00:00.002Z')], 2).stuck, true],
+  ['paging: a short page with nothing new is the end, not stuck', takePage(seen, [at1('a', '2026-10-29T10:00:00.005Z')], 200).stuck, false],
+);
+
+// Token hygiene: a malformed token file is never echoed, and scrub removes a token from any text.
+const tdir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-token-'));
+const tokenOf = (body) => { const f = path.join(tdir, 'tok'); fs.writeFileSync(f, body); try { return { value: readToken(f) }; } catch (e) { return { error: e.message }; } };
+const SECRET = 'jmu_FAKE-token-abc123';
+const bads = [`${SECRET}\n# note`, `${SECRET} extra`, `${SECRET}\u0007`, `\n`].map(tokenOf);
+cases.push(
+  ['token: a one-line token file is read', tokenOf(`${SECRET}\n`).value, SECRET],
+  ['token: every malformed file is refused', bads.every((b) => b.error), true],
+  ['token: no refusal message contains the token', bads.some((b) => b.error?.includes('jmu_FAKE') || b.error?.includes('abc123')), false],
+  ['token: scrub removes the token from a message', scrub(`Bearer ${SECRET} rejected`, SECRET).includes('abc123'), false],
+  ['token: land.mjs prints errors only through the scrubbing refuse', /main\(\)\.catch\(\(e\) => refuse\(/.test(fs.readFileSync(new URL('./land.mjs', import.meta.url), 'utf8')), true],
+);
+fs.rmSync(tdir, { recursive: true, force: true });
+
+// --dry-run writes no ledger row; land.mjs has no other ledger writer.
+const ldir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-ledger-'));
+const lf = path.join(ldir, 'ledger.tsv');
+const dryWrote = appendLedger(lf, ['5', H, 'LANDED', 'land', 'now', 'x'], { dry: true });
+const dryTouched = fs.existsSync(lf);
+appendLedger(lf, ['5', H, 'LANDED', 'land', 'now', 'x']);
+cases.push(
+  ['dry run: appendLedger reports no write and creates no file', !dryWrote && !dryTouched, true],
+  ['dry run: the real write creates header and row', fs.readFileSync(lf, 'utf8').split('\n').filter(Boolean).length, 2],
+  ['dry run: land.mjs has no ledger writer of its own (only appendLedger with dry)', /appendFileSync/.test(fs.readFileSync(new URL('./land.mjs', import.meta.url), 'utf8')), false],
+);
+fs.rmSync(ldir, { recursive: true, force: true });
+
+// Sandbox: the preflight runs the PR's code. Any platform but macOS refuses; on macOS the profile is proved below.
+cases.push(
+  ['sandbox: linux is refused with the exact message', checkPlatform('linux').reason, 'preflight sandbox is macOS-only; add one for linux before landing here'],
+  ['sandbox: darwin is accepted', checkPlatform('darwin').ok, true],
+);
+const probe = (() => {
+  if (process.platform !== 'darwin' || spawnSync('sandbox-exec', ['-n', 'no-network', 'true']).error) return null;
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'check-sandbox-')));
+  const home = path.join(root, 'home');
+  const work = path.join(root, 'work');
+  fs.mkdirSync(path.join(home, '.ssh'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'ledger'));
+  fs.mkdirSync(work);
+  fs.writeFileSync(path.join(home, '.ssh', 'id'), 'FAKE-SECRET');
+  fs.writeFileSync(path.join(root, 'ledger', 'l.tsv'), 'x');
+  const outside = path.join(process.cwd(), `sandbox-probe-${process.pid}`); // the repo dir: not on the allow-list
+  const profile = sandboxProfile({ home, ledger: path.join(root, 'ledger', 'l.tsv'), allowWrite: [work] });
+  const run = (cmd) => spawnSync('sandbox-exec', ['-p', profile, 'sh', '-c', cmd], { encoding: 'utf8' }).status;
+  const r = { readSecret: run(`cat '${home}/.ssh/id' >/dev/null`), readLedger: run(`cat '${root}/ledger/l.tsv' >/dev/null`),
+    writeOutside: run(`echo x > '${outside}'`), writeAllowed: run(`echo x > '${work}/ok'`) };
+  r.leaked = fs.existsSync(outside);
+  fs.rmSync(outside, { force: true });
+  fs.rmSync(root, { recursive: true, force: true });
+  return r;
+})();
+if (probe) {
+  cases.push(
+    ['sandbox proof: reading a file in a secrets dir fails', probe.readSecret !== 0, true],
+    ['sandbox proof: reading the ledger dir fails', probe.readLedger !== 0, true],
+    ['sandbox proof: writing outside the temp dir fails and leaves no file', probe.writeOutside !== 0 && !probe.leaked, true],
+    ['sandbox proof: writing inside the allowed dir succeeds', probe.writeAllowed, 0],
+  );
+} else console.log('check-land: SKIP sandbox proof (needs macOS with /usr/bin/sandbox-exec)');
 
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (bad.length) { console.error(`check-land: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }

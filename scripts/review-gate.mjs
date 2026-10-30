@@ -7,19 +7,21 @@
 //    non-empty line (see verdictOf). It passes only if that line is exactly GATE: PASS and the review state
 //    is not CHANGES_REQUESTED;
 //  - the gate passes iff at least one reviewer's latest review passes and none blocks.
-// DISABLED with its workflow (owner ruling): scripts/land.mjs reuses touchesProtected, verdictOf and the reviewer
+// DISABLED with its workflow: scripts/land.mjs reuses touchesProtected, verdictOf and the reviewer
 // list; there the server-stamped pod username decides, not a credit line.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const CREDIT = /written by ([^,\n]+), a commonly agent/gi;
 
-const PROTECTED = /^(schema\/|worker\/src\/auth\/|worker\/src\/mcp\/|daemon\/internal\/(acp|run)\/|worker\/public\/install\.sh$|\.github\/workflows\/|\.github\/opus-reviewers\.txt$|scripts\/(review-gate\.mjs|land\.mjs|land-decide\.mjs|tools\.sh)$|Makefile$|init\.sh$)/;
+// The one protected-path rule, used by land and by the (disabled) workflow. Everything the preflight or the
+// merge runs comes from the PR tree, so EVERY changed path is protected except documentation: paths under
+// docs/ and the file progress.md. A rename counts both sides: docs/x -> scripts/x is protected.
+const UNPROTECTED = /^(docs\/|progress\.md$)/;
 
-// files: the PR's changed files as GitHub lists them. A rename OUT of a protected path lists only the new
-// name in `filename`, so previous_filename counts too.
+// files: the PR's changed files as { filename, previous_filename? }.
 export function touchesProtected(files) {
-  return files.some((f) => [f.filename, f.previous_filename].some((n) => n && PROTECTED.test(n)));
+  return files.some((f) => [f.filename, f.previous_filename].some((n) => n && !UNPROTECTED.test(n)));
 }
 
 // One reviewer per line: `Name username` (the username is the pod's server-stamped one, used by

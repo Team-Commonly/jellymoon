@@ -2,7 +2,7 @@
 
 The words below mean exactly this in code, schema, docs and pod text. A new term is added here in the
 same PR that introduces it (Design stage, `AGENTS.md`). Seeded from `schema/` on 2026-10-29; the design
-review with Sam may rename terms, and a rename lands here and in `schema/` together.
+review may rename terms, and a rename lands here and in `schema/` together.
 
 | Term | Meaning | Not to be confused with |
 |---|---|---|

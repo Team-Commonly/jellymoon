@@ -78,8 +78,19 @@ const paths = [
   ['init.sh is protected', [{ filename: 'init.sh' }], true],
   ['tools.sh is protected', [{ filename: 'scripts/tools.sh' }], true],
   ['a rename out of land.mjs is protected', [{ filename: 'scripts/x.mjs', previous_filename: 'scripts/land.mjs' }], true],
-  ['an unrelated edit is not protected', [{ filename: 'docs/INDEX.md' }, { filename: 'scripts/gen.mjs' }], false],
-  ['a rename between unprotected paths is not protected', [{ filename: 'docs/b.md', previous_filename: 'docs/a.md' }], false],
+  ['a docs-only PR is not protected', [{ filename: 'docs/INDEX.md' }, { filename: 'docs/design/x.md' }], false],
+  ['progress.md alone is not protected', [{ filename: 'progress.md' }], false],
+  ['a rename between docs paths is not protected', [{ filename: 'docs/b.md', previous_filename: 'docs/a.md' }], false],
+  ['a root GNUmakefile is protected', [{ filename: 'GNUmakefile' }], true],
+  ['package.json is protected', [{ filename: 'package.json' }], true],
+  ['a git hook is protected', [{ filename: '.githooks/pre-commit' }], true],
+  ['a check script is protected', [{ filename: 'scripts/check-x.mjs' }], true],
+  ['gen.mjs and entropy.json are protected', [{ filename: 'scripts/gen.mjs' }, { filename: 'entropy.json' }], true],
+  ['a file named progress.md.sh or sub/progress.md is protected', [{ filename: 'sub/progress.md' }], true],
+  ['docs-lookalike docsx/ is protected', [{ filename: 'docsx/a.md' }], true],
+  ['a rename docs/a -> scripts/a is protected', [{ filename: 'scripts/a', previous_filename: 'docs/a' }], true],
+  ['a rename scripts/a -> docs/a is protected', [{ filename: 'docs/a', previous_filename: 'scripts/a' }], true],
+  ['a docs change beside one protected file is protected', [{ filename: 'docs/a.md' }, { filename: 'go.mod' }], true],
 ];
 const badPaths = paths.filter(([, files, want]) => touchesProtected(files) !== want).map(([t]) => t);
 if (badPaths.length) { console.error(`check-review-gate: protected-path cases wrong\n  ${badPaths.join('\n  ')}`); process.exit(1); }

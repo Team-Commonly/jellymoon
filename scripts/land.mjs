@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // make land PR=<n>: the only merge path (docs/development/landing.md). Thin shell-outs to git, gh and the pod API;
-// every decision is a pure function in land-decide.mjs, tested by check-land.mjs. Read-only unless merging.
+// every decision is a pure function in land-decide.mjs, tested by check-land.mjs. Read-only unless merging:
+// --dry-run writes no ledger row and the preflight runs in a macOS sandbox.
 //   land.mjs <pr> [--dry-run] [--reviewer-gate-unavailable] [--bootstrap]     land.mjs --owed
 // Run it from main's checkout: it reads the reviewer list from main's tip, never from the working tree.
 import { execFileSync } from 'node:child_process';
@@ -9,8 +10,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { readReviewerEntries, touchesProtected } from './review-gate.mjs';
 import {
-  checkApi, checkHead, checkLedger, checkMain, checkPodVerdict, checkSecondVerifier, filesFromNameStatus,
-  landAction, owedList, parseLedger, remoteFor, removeTree,
+  appendLedger as writeLedger, checkApi, checkHead, checkLedger, checkMain, checkPlatform, checkPodVerdict, checkSecondVerifier,
+  cursorOf, filesFromNameStatus, landAction, owedList, parseLedger, readToken, remoteFor, removeTree, sandboxProfile, scrub, takePage,
 } from './land-decide.mjs';
 
 const REQUIRED = ['JM_REPO', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD'];
@@ -18,16 +19,12 @@ const out = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8'
 const REPO = process.env.JM_REPO; // every gh call names it: a worktree can carry remotes for several repos
 const gh = (...args) => out('gh', args);
 const say = (m) => console.log(m);
-const refuse = (m) => { console.error(`land: refused: ${m}`); process.exit(1); };
+let SECRET = ''; // the bearer token once read; scrubbed from anything printed
+const DRY = process.argv.includes('--dry-run');
+const refuse = (m) => { console.error(`land: refused: ${scrub(m, SECRET)}`); process.exit(1); };
 
 const readLedger = () => parseLedger(fs.existsSync(process.env.JM_LEDGER) ? fs.readFileSync(process.env.JM_LEDGER, 'utf8') : '');
-function appendLedger(pr, head, verdict, by, note) {
-  const f = process.env.JM_LEDGER;
-  const exists = fs.existsSync(f);
-  const lead = exists && !fs.readFileSync(f, 'utf8').endsWith('\n') ? '\n' : '';
-  const header = exists ? '' : 'pr\thead\tverdict\tby\twhen\tnote\n';
-  fs.appendFileSync(f, `${header}${lead}${[pr, head, verdict, by, new Date().toISOString(), note].join('\t')}\n`);
-}
+const appendLedger = (pr, head, verdict, by, note) => writeLedger(process.env.JM_LEDGER, [pr, head, verdict, by, new Date().toISOString(), note], { dry: DRY });
 
 function viewPr(n) {
   const pr = JSON.parse(gh('pr', 'view', String(n), '--repo', REPO, '--json', 'url,number,state,baseRefName,headRefName,headRefOid,createdAt'));
@@ -64,7 +61,7 @@ function fetchRef(ref) {
 }
 
 // Throwaway worktree at main's tip, the PR head merged in as GitHub would, then ./init.sh (which runs
-// make preflight) under env -i with an empty HOME and system dirs only.
+// make preflight) under env -i with an empty HOME and system dirs only, inside sandbox-exec.
 function preflight(mainTip, head) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-land-'));
   const wt = path.join(dir, 'wt');
@@ -77,28 +74,43 @@ function preflight(mainTip, head) {
     try { out('git', ['-C', wt, '-c', 'user.name=land', '-c', 'user.email=land@localhost', 'merge', '--no-ff', '--no-edit', head]); } catch {
       result = { ok: false, reason: `merging ${head.slice(0, 8)} into main ${mainTip.slice(0, 8)} conflicts` };
     }
-    if (result.ok) execFileSync('env', ['-i', ...Object.entries(env).map(([k, v]) => `${k}=${v}`), 'bash', '-c', './init.sh'], { cwd: wt, stdio: 'inherit' });
+    if (result.ok) {
+      // The PR's own code runs here: sandboxed, with no read of the secret dirs or the ledger's dir, and no write outside temp.
+      const tmp = os.tmpdir();
+      const profile = sandboxProfile({ home: os.homedir(), ledger: process.env.JM_LEDGER, allowWrite: [dir, process.env.JM_TOOLCHAIN_CACHE, tmp,
+        path.basename(tmp) === 'T' ? path.dirname(tmp) : '', '/tmp', '/var/tmp', '/dev'] });
+      const cmd = ['env', '-i', ...Object.entries(env).map(([k, v]) => `${k}=${v}`), 'bash', '-c', './init.sh'];
+      execFileSync('sandbox-exec', ['-p', profile, ...cmd], { cwd: wt, stdio: 'inherit' });
+    }
   } catch { result = { ok: false, reason: `clean-shell ./init.sh (baseline preflight) failed on main + ${head.slice(0, 8)}` }; }
   try { execFileSync('chmod', ['-R', 'u+w', dir]); out('git', ['worktree', 'remove', '--force', wt]); } catch { /* removeTree warns */ }
   removeTree(dir);
   return result;
 }
 
-// Pod messages newest-first, paged back past `since` (ms). Fails closed if the page cap is hit first.
+// Pod messages newest-first, paged back past `since` (ms), deduped by id. Fails closed if the page cap is hit first,
+// or if a page boundary cannot be paged past (see takePage).
 async function podMessages(since) {
-  const token = fs.readFileSync(process.env.JM_COMMONLY_TOKEN_FILE, 'utf8').trim();
+  SECRET = readToken(process.env.JM_COMMONLY_TOKEN_FILE);
   const all = [];
+  const seen = new Set();
   let before = '';
   for (let page = 0; page < 30; page += 1) {
     const url = `${process.env.JM_COMMONLY_API}/api/messages/${process.env.JM_VERDICT_POD}?limit=200${before}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) refuse(`pod messages: HTTP ${res.status}`);
-    const msgs = await res.json();
-    if (!msgs.length) return all;
-    all.push(...msgs);
-    const t = msgs.map((m) => m.createdAt ?? m.created_at).sort()[0];
-    if (Date.parse(t) < since) return all;
-    before = `&before=${encodeURIComponent(t)}`;
+    let msgs;
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${SECRET}` } });
+      if (!res.ok) refuse(`pod messages: HTTP ${res.status}`);
+      msgs = await res.json();
+    } catch (e) { return refuse(`pod messages: request failed (${e.name})`); }
+    const { fresh, stuck } = takePage(seen, msgs, 200);
+    if (stuck) refuse('pod messages: a page boundary could hide a message; cannot prove no older FAIL');
+    if (!fresh.length) return all;
+    all.push(...fresh);
+    const cursor = cursorOf(msgs);
+    if (!cursor) refuse('pod messages: a message has no timestamp; cannot page');
+    if (Date.parse(cursor) - 1 < since) return all;
+    before = `&before=${encodeURIComponent(cursor)}`;
   }
   return refuse('pod messages: page cap reached before paging back past the PR\'s creation; cannot prove no older FAIL');
 }
@@ -145,6 +157,8 @@ async function main() {
   if (missing) refuse(`environment variable ${missing} is not set`);
   const api = checkApi(process.env.JM_COMMONLY_API);
   if (!api.ok) refuse(api.reason);
+  const sb = checkPlatform(process.platform);
+  if (!sb.ok) refuse(sb.reason);
   if (args.includes('--owed')) return owed();
   const n = args.find((a) => /^\d+$/.test(a));
   if (!n || args.some((a) => !/^\d+$/.test(a) && !['--dry-run', '--reviewer-gate-unavailable', '--bootstrap'].includes(a))) {
@@ -156,7 +170,7 @@ async function main() {
   const action = landAction(pr, readLedger());
   if (action === 'already-landed') return say(`#${n} already landed`);
   if (action === 'record-only') {
-    console.error(`land: warning: #${n} was merged without a LANDED row; recording it`);
+    console.error(`land: warning: #${n} was merged without a LANDED row; ${DRY ? 'dry run, not recording it' : 'recording it'}`);
     return appendLedger(n, pr.headRefOid.toLowerCase(), 'LANDED', 'land', 'recorded after an out-of-band merge');
   }
   const mainTip = fetchRef('main');

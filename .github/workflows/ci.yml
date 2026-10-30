@@ -1,20 +1,16 @@
 name: CI
-# DISABLED (owner ruling): CI is a bottleneck and not unlimited on a private repo, so this workflow is turned off
-# and kept. GitHub checks are not consulted at all: `make land` is the only merge path and nothing GitHub
-# reports counts (a PR touching .github/workflows/ can fake any check). It returns at public launch only as a
-# thin mirror of `make preflight` for outside contributors. See docs/development/landing.md.
+# Disabled while the repo is private: it runs only when dispatched by hand. Local `make land` is the gate and
+# nothing GitHub reports counts (a PR touching .github/workflows/ can fake any check). At public launch CI
+# returns as a thin mirror of `make preflight` for outside contributors. See docs/development/landing.md.
 
-# Verification loop (docs/development/workflow.md). Every required check on `main` is a
-# job here, so a check name never goes missing. A job whose code does not exist
+# Verification loop (docs/development/workflow.md). When enabled, each check is a
+# job here. A job whose code does not exist
 # yet passes with a notice; it starts enforcing the moment its directory lands.
 # Budget: 5 minutes wall clock for the whole workflow. The review gate is
 # review-gate.yml, kept separate so a review event never re-runs these jobs.
 
 on:
-  pull_request:
-  merge_group:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}

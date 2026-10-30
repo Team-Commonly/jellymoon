@@ -22,4 +22,4 @@ The first `feature_list.json` feature with `passes: false` and no `blockedBy`, o
 - A new dependency or module needs a short note in `docs/adr/`.
 
 ## Reporting a security issue
-Don't open a public issue. Email the maintainers listed in `.github/CODEOWNERS` with the details.
+Don't open a public issue. Use the repository's private security advisory (Security tab) with the details.

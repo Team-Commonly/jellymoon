@@ -91,6 +91,6 @@ private:
 SCAN_REFS ?= --all
 secrets-all:
 	$(GO) run $(GITLEAKS) git --log-opts="-m $(SCAN_REFS)" --redact --no-banner .
-	@for p in $$(git ls-files | cut -d/ -f1 | sort -u); do $(GO) run $(GITLEAKS) dir --redact --no-banner "$$p" || exit 1; done
+	@git -c core.quotepath=off ls-files | cut -d/ -f1 | sort -u | while IFS= read -r p; do $(GO) run $(GITLEAKS) dir --redact --no-banner "$$p" </dev/null || exit 1; done
 
 preflight: portable check-gen test entropy secrets private

@@ -12,7 +12,6 @@
   ],
   "ignoreBinaries": [
     "go",
-    "gofmt",
-    "sandbox-exec"
+    "gofmt"
   ]
 }

@@ -84,15 +84,12 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
    coalesces uses no id; a malformed seed or an overflow is `invalid_input`. `POST /v1/runs {wakeId}` names no pod, so the adapter keeps
    a wakeId to pod index.
    Callers pass a non-decreasing `now`; the core does not clamp it.
-5. After restoring state on a (re)start, apply `boot {staleMs}` once, with `now`. `staleMs` is an integer from 0 to
-   `LEASE_MS` (anything else is `invalid_input`): the most that the adapter's saved heartbeat renewals can lag the truth. An
-   adapter that persists every command passes 0. `boot` runs WITHOUT the leading settle: it first sets every live
-   claim's `leaseUntil = max(leaseUntil, min(leaseUntil + staleMs, now + LEASE_MS))`, then settles at `now`, deadline
-   stamped, and emits only what that settle emits.
-   Why: if settle ran first, a claim whose saved `leaseUntil` lags its true deadline would be expired early at boot.
-   With this rule, expiry after a restart is never early, and lateness is bounded by the larger of the outage and
-   `staleMs`. That lets an adapter coalesce saves of heartbeat-only renewals; every other command is still
-   persisted before its reply or emission.
+5. After restoring state on a (re)start, apply `boot {staleMs}` once, with `now`. `staleMs` MUST be 0 (anything else is
+   `invalid_input` and changes nothing) until ADR 0002 gains a restart clause. The adapter therefore persists every command that
+   moves a lease, heartbeat renewals included, before its reply or emission; with 0, `boot` is a plain settle at `now`.
+   Why not a stretch: lengthening saved leases by `staleMs` on boot was removed, because a stretch plus the renewals that
+   follow can hold a claim well past "last renewal + 60 s", so lateness was not bounded by the outage and `staleMs`
+   as an earlier draft claimed. Coalescing heartbeat saves returns when ADR 0002 says how.
 
 ## Commands
 
@@ -135,7 +132,7 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
 
 ## Throws
 
-`apply` never throws on input that passes adapter validation (JSON-sourced, and not nested deeper than any real command: a 200k-deep array can exhaust the stack in the id scan). A null or non-object command is `invalid_input`. The adapter validates every Cmd against `gen/` before `apply` (title, kind, status, name, body and assignee types); the core's own shape checks are a backstop. Refused: a non-integer or negative `now`, an unknown command type, a bad `staleMs`, a
+`apply` never throws on input that passes adapter validation (JSON-sourced, and not nested deeper than any real command: a 200k-deep array can exhaust the stack in the id scan). A null or non-object command is `invalid_input`. The adapter validates every Cmd against `gen/` before `apply` (title, kind, status, name, body, assignee and threadOf types); the core's own shape checks are a backstop. Refused: a non-integer or negative `now`, an unknown command type, a bad `staleMs`, a
 malformed or exhausted `wakeId` and a non-string message `text`, a `now` past the end of year 9999, and a `run_end` outcome outside the schema enum are all `invalid_input` and change nothing. An id that is `__proto__` or names an `Object.prototype` member (`constructor`, `toString`, ...) in any `*Id` field or `assignee` is `not_found`, refused before any lookup or write; every record lookup also goes through `own()` (`Object.hasOwn`). What can
 still throw is an invariant violation, i.e. a bug or a corrupt saved state: `structuredClone` of a non-JSON state,
 `isoOf` on a non-integer (unreachable once `now` is checked), and a missing record that state invariants guarantee
@@ -144,14 +141,12 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 ## Accepted limits
 
 - Computers can tell an unknown id from a foreign one by the reply code. Accepted: ids are unguessable ULIDs.
-- The boot stretch can turn an `expired` release near the cap into `run_ended`, because a stretched lease may now
-  meet the 2 h run cap first.
 - Size: `podcore/` is capped at 2,050 lines in `entropy.json`, tests included; the raise is noted in ADR 0001. No
   exception was added; it ratchets down from here.
 - Fence rules cover top-level fences only: a fence inside a list item still wakes. That is an extra wake, never a missed one.
 - A run's `summary` over 120 characters is cut, not refused; the adapter's schema refuses it first.
 - Indented code blocks are NOT recognised as code, so a mention inside one wakes (deliberate).
-- Adapters pass `staleMs: 0` until ADR 0002 gains a restart clause: a stretched lease can outlive "last renewal + 60 s".
+- The core refuses `boot` with `staleMs` other than 0 until ADR 0002 gains a restart clause; a non-string command `type` is an unknown command.
 - The save-lag bound is PER LEASE; a pod-wide save throttle does not bound it. Coalescing applies only to a heartbeat whose
   out is only its reply. A heartbeat whose settle emits member events or re-sends `run.stop` or a wake is persisted before emission.
 - The adapter authorizes `agent_register`: only the agent's owner, from a computer that owner registered, may register or move it.
@@ -188,6 +183,5 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 - ADR 0002 (NB3): for a run whose claim expired, `task_release` while another run holds the task is `forbidden` here (0002:38-40,
   "anyone else") but 0002:18-19 can be read as `already_claimed`. The same run's `task_release` on a free task is a no-op that keeps
   the expiry marker, so a later `op` restores a claim it asked to release. ADR 0002 should settle both.
-- ADR 0002 (NB4): `boot` with `staleMs` > 0 can hold a lease past "last renewal + 60 s" (0002:15). The restore is never early, but the
-  late side needs a restart clause in ADR 0002, or the core should enforce 0 until then. Adapters pass 0 for now.
+- ADR 0002 (NB4): a restart stretch (`staleMs` > 0) can hold a lease past "last renewal + 60 s" (0002:15), so the core refuses it. ADR 0002 needs a restart clause before coalescing heartbeat saves can return.
 - ADR 0002 (NB13): expiry is inclusive at `leaseUntil`, so with an exact 15 s heartbeat cadence a claim drops after 3 missed heartbeats, not the "four" in 0002:15. A wording point.

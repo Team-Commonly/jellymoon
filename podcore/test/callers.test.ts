@@ -11,13 +11,17 @@ const base = play([[{ type: 'claim', runId: RUN_A, taskId: T[0] }, 0], [{ type: 
   [{ type: 'run_end', runId: RUN_C, computerId: CMP_2, outcome: 'completed' }, 1], [{ type: 'claim', runId: RUN_B, taskId: T[2] }, 2]]).state;
 const NOW = 30_000;
 const BAD: unknown[] = ['__proto__', 'constructor', 'toString', 'valueOf', 7, null, [], {}, 'x', undefined];
-const GOOD: Record<string, unknown> = { taskId: T[0], title: 't', kind: 'chore', assignee: AG1, wakeId: wak(3), status: 'done', messageId: id('msg', 1), text: 'hi', summary: 's', runId: RUN_A, computerId: CMP_1, reason: 'r', outcome: 'completed' };
+const GOOD: Record<string, unknown> = { taskId: T[0], title: 't', kind: 'chore', assignee: AG1, wakeId: wak(3), status: 'done', messageId: id('msg', 1), text: 'hi', summary: 's', runId: RUN_A, computerId: CMP_1, reason: 'r', outcome: 'completed', agentId: AG1, ownerId: U_OWNER.id, userId: U_STRANGER.id, staleMs: 0 };
 const FIELDS: Record<string, string[]> = {
   claim: ['runId', 'taskId'], op: ['runId', 'taskId'], task_release: ['taskId'], run_stop: ['runId'], task_create: ['taskId', 'title', 'kind', 'wakeId'],
   task_update: ['taskId', 'status', 'wakeId'], message_post: ['messageId', 'text', 'summary', 'wakeId'], heartbeat: ['computerId'], wake_ack: ['wakeId', 'computerId'], run_end: ['runId', 'computerId', 'outcome'],
+  // the seven types with no caller: a stray caller or runId must change nothing about them
+  pod_create: ['ownerId'], member_add: ['userId'], change: ['agentId', 'wakeId'], run_claim: ['wakeId', 'computerId', 'runId'], agent_register: ['agentId', 'ownerId', 'computerId'], tick: [], boot: ['staleMs'],
 };
 const CALLERS: unknown[] = [{ kind: 'run', runId: RUN_A }, { kind: 'run', runId: RUN_C }, { kind: 'run', runId: id('run', 99) }, { kind: 'run', runId: 'constructor' },
   { kind: 'user', userId: U_OWNER.id }, { kind: 'user', userId: U_STRANGER.id }, { kind: 'user', userId: '__proto__' }, {}];
+/** A `type` that is not the command's own string: arrays that coerce to it, numbers, null, objects, prototype keys. */
+const BAD_TYPES = (t: string): unknown[] => [[t], 7, null, {}, [], ['change'], ['run_end'], 'constructor', '__proto__', 'toString'];
 const WITH_CALLER = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post'];
 
 /** The caller, by command type alone: a run for claim/op, the caller field for the five, nobody otherwise. */
@@ -37,13 +41,16 @@ test('refusal path and handler path agree on the caller: outcome and renewal, ov
     const type = pick(Object.keys(FIELDS));
     const cmd: Record<string, unknown> = { type };
     for (const f of FIELDS[type]) cmd[f] = GOOD[f];
+    if (type === 'change') Object.assign(cmd, { kind: 'ruling', refs: {} });
     if (WITH_CALLER.includes(type)) cmd.caller = pick(CALLERS);
-    if (r() < 0.8) cmd[pick(FIELDS[type])] = pick(BAD);
+    if (FIELDS[type].length > 0 && r() < 0.8) cmd[pick(FIELDS[type])] = pick(BAD);
     if (r() < 0.5) cmd[pick(['caller', 'runId', 'computerId'])] = pick([...CALLERS, RUN_B, CMP_2]);
+    if (r() < 0.1) cmd.type = pick(BAD_TYPES(type));
     const spec = callerSpec(cmd);
     const res = apply(base, cmd as unknown as Cmd, NOW);
     const rep = res.out.find((o) => o.kind === 'reply');
     const code = rep?.kind === 'reply' && !rep.ok ? rep.error.code : null;
+    if (typeof cmd.type !== 'string' || !(cmd.type in FIELDS)) expect([JSON.stringify(cmd), code]).toEqual([JSON.stringify(cmd), 'invalid_input']);
     const live = spec?.kind === 'run' && (spec.id === RUN_A || spec.id === RUN_B);
     const members = [U_OWNER.id, id('usr', 2)];
     const want = spec?.kind === 'run' && !live ? 'unauthorized' : live && type === 'run_stop' ? 'forbidden' : spec?.kind === 'user' && cmd.caller && !members.includes(spec.id as string) && (spec.id === U_STRANGER.id || BAD.includes(spec.id)) ? 'forbidden' : undefined;
@@ -93,4 +100,23 @@ describe('the reviewer\'s caller cases, as rows', () => {
     const cmd = { type: 'task_release', caller: user(U_AGENT_OWNER.id), taskId: '__proto__' } as unknown as Cmd;
     expect(errCode(play([[cmd, 1]]).out)).toBe('not_found');
   });
+});
+
+test('a non-string or prototype-key type is an unknown command: no throw, no state change, no renewal, for all 17 types', () => {
+  const user = { kind: 'user', userId: U_OWNER.id };
+  const ok: Record<string, unknown>[] = Object.keys(FIELDS).map((type) => {
+    const cmd: Record<string, unknown> = { type };
+    for (const f of FIELDS[type]) cmd[f] = GOOD[f];
+    if (type === 'change') Object.assign(cmd, { kind: 'ruling', refs: {} });
+    if (WITH_CALLER.includes(type)) cmd.caller = user;
+    return cmd;
+  });
+  expect(ok.length).toBe(17);
+  for (const cmd of ok) {
+    for (const type of BAD_TYPES(cmd.type as string)) {
+      const bad = { ...cmd, type, caller: { kind: 'run', runId: RUN_A } };
+      const r = apply(base, bad as unknown as Cmd, NOW);
+      expect([JSON.stringify(bad), errCode(r.out), r.out.length, r.state]).toEqual([JSON.stringify(bad), 'invalid_input', 1, base]);
+    }
+  }
 });

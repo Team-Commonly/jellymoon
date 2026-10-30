@@ -1,7 +1,7 @@
 // The pod core (ADR 0003): apply(state, cmd, now) -> { state, out }. Pure; adapters own I/O and the timer.
 import { messagePostCmd, memberAddCmd, podCreateCmd, taskCreateCmd, taskUpdateCmd } from './board';
 import { CALLER_TYPES, LEASE_MS, callerOf, isObj, nextDeadline, own, renewRun, settle } from './claims';
-import { bootCmd, claimCmd, heartbeatCmd, opCmd, releaseCmd, runEndCmd, runStopCmd } from './commands';
+import { claimCmd, heartbeatCmd, opCmd, releaseCmd, runEndCmd, runStopCmd } from './commands';
 import { fail } from './emit';
 import { agentRegisterCmd, changeCmd, runClaimCmd, wakeAckCmd } from './wakes';
 import type { Cmd, Ctx, Out, PodState } from './types';
@@ -53,8 +53,8 @@ const protoKeyed = (v: unknown): boolean => typeof v === 'object' && v !== null 
 function refusal(cmd: Cmd, now: number): { code: 'invalid_input' | 'not_found'; why: string } | null {
   if (!isObj(cmd)) return { code: 'invalid_input', why: 'A command must be an object.' };
   if (!clockOk(now)) return { code: 'invalid_input', why: 'now must be an integer from 0 to the end of year 9999, in milliseconds.' };
-  if (!Object.hasOwn(HANDLERS, cmd.type)) return { code: 'invalid_input', why: 'Unknown command type.' };
-  if (cmd.type === 'boot' && !(Number.isInteger(cmd.staleMs) && cmd.staleMs >= 0 && cmd.staleMs <= LEASE_MS)) return { code: 'invalid_input', why: 'staleMs must be an integer from 0 to LEASE_MS.' };
+  if (typeof cmd.type !== 'string' || !Object.hasOwn(HANDLERS, cmd.type)) return { code: 'invalid_input', why: 'Unknown command type.' };
+  if (cmd.type === 'boot' && cmd.staleMs !== 0) return { code: 'invalid_input', why: 'staleMs must be 0 until ADR 0002 has a restart clause.' };
   if (shapeBad(cmd)) return { code: 'invalid_input', why: 'A required field is missing or has the wrong type.' };
   return protoKeyed(cmd) ? { code: 'not_found', why: 'No such id.' } : null;
 }
@@ -82,8 +82,6 @@ export function apply(state: PodState, cmd: Cmd, now: number): { state: PodState
   const c: Ctx = { s: structuredClone(state), now, out: [], opened: 0 };
   const bad = refusal(cmd, now);
   if (bad !== null) return refuse(c, cmd, bad), { state: c.s, out: c.out };
-  // boot stretches stale leases BEFORE the settle, or a lease that only looks lapsed would be expired early.
-  if (cmd.type === 'boot') bootCmd(c, cmd);
   settle(c);
   const noPod = cmd.type !== 'pod_create' && c.s.members.length === 0;
   if (noPod && cmd.type !== 'boot') fail(c, 'not_found', 'No such pod.', c.s.podId);

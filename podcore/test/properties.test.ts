@@ -69,41 +69,6 @@ test('restart property: a JSON round-trip of the state at a random step changes 
   }
 });
 
-test('stale restore property: a snapshot stale only in heartbeat renewals by up to W, booted with W, releases no claim earlier, whatever the cause', () => {
-  // A claim instance is (task, run, start time). Each maps to when it was released ('\uffff' = never). Only instances both
-  // timelines started are compared: lateness may legitimately change who claims what afterwards.
-  const instances = (per: Out[][]) => {
-    const live = new Map<string, string>();
-    const m = new Map<string, string>();
-    for (const e of events(per.flat())) {
-      if (e.type === 'task.claimed') {
-        live.set(e.data.taskId, `${e.data.taskId}${e.data.runId}@${e.ts}`);
-        m.set(live.get(e.data.taskId) as string, '\uffff');
-      } else if (e.type === 'claim.released') m.set(live.get(e.data.taskId) as string, e.ts as string);
-    }
-    return m;
-  };
-  for (const seed of SEEDS) {
-    const steps = sequence(seed, 60, seed % 2 === 0);
-    const rnd = prng(seed * 31);
-    const at = Math.floor(rnd() * steps.length);
-    const w = Math.floor(rnd() * 60_001);
-    const straight = instances(run(steps).per);
-    let boot: Out[] = [];
-    const staleRun = run(steps, (s, i) => {
-      if (i !== at) return s;
-      const old = JSON.parse(JSON.stringify(s)) as PodState;
-      for (const k of Object.values(old.claims)) k.leaseUntil -= Math.floor(rnd() * (w + 1));
-      const b = apply(old, { type: 'boot', staleMs: w }, steps[at][1]);
-      boot = b.out;
-      return b.state;
-    });
-    // boot's own events (the settle it runs) come before the step's, so they belong in the comparison
-    const stale = instances([...staleRun.per.slice(0, at), boot, ...staleRun.per.slice(at)]);
-    for (const [key, ts] of stale) if (straight.has(key)) expect([seed, key, ts >= (straight.get(key) as string)]).toEqual([seed, key, true]);
-  }
-});
-
 test('seq property: members-event seq has no gaps, and ts never decreases', () => {
   for (const seed of SEEDS) {
     const out = run(sequence(seed)).out;

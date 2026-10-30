@@ -4,6 +4,10 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+
+## 2026-10-30 · pod core hardening (unit PC9)
+- **Changed:** `podcore/` treats a non-string `type` as an unknown command, refuses `boot` with `staleMs` other than 0 (stretch code, its tests and the stale-restore property removed), ADR 0003 corrected; **Evidence:** `make preflight`, `bun test podcore` (117 tests, 4 mutants red); **Next:** ADR 0002 restart clause before any stretch returns; **Surprising:** `Object.hasOwn(HANDLERS, ['change'])` coerces the key, so a guard and the strict compares after it disagreed.
+
 ## 2026-10-29 · pod core verifier fixes (unit PC2)
 - **Changed:** `podcore/` renews on any live-run operation before refusal (ADR 0002), adapter-minted `wakeId`s, summary/mention (CommonMark)/run_claim/resend fixes, stronger guard and stale-restore property; **Evidence:** `make preflight`, `bun test podcore` (120 tests, 69 mutations red); **Next:** coordinator re-vendors the head into both arms; **Surprising:** a restored timeline can legitimately claim different things, so the property compares only claim instances both timelines started.
 

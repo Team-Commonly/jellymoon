@@ -87,8 +87,3 @@ export function runStopCmd(c: Ctx, cmd: Of<'run_stop'>): void {
   push(c, run.computerId, 'run.stop', data);
   ok(c, { runId: run.id, outcome: 'cancelled' });
 }
-
-/** Restart: stretch each live lease by up to `staleMs` (never past now + 60 s, never shorter), then settle at `now`. */
-export function bootCmd(c: Ctx, cmd: Of<'boot'>): void {
-  for (const k of Object.values(c.s.claims)) k.leaseUntil = Math.max(k.leaseUntil, Math.min(k.leaseUntil + cmd.staleMs, c.now + LEASE_MS));
-}

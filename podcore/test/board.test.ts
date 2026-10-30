@@ -63,38 +63,16 @@ describe('message_post summary', () => {
 });
 
 describe('boot', () => {
-  test('the verifier\'s boot sequence: a restored timeline holds the same claim at 130 000 as the straight one', () => {
-    const s0 = play([[{ type: 'claim', runId: RUN_C, taskId: TASKS[1] }, 0]]).state;
-    const rest: Array<[Cmd, number]> = [[{ type: 'claim', runId: RUN_C, taskId: TASKS[2] }, 62_000], [{ type: 'claim', runId: RUN_A, taskId: T1 }, 63_000], [{ type: 'claim', runId: RUN_A, taskId: TASKS[1] }, 100_000], [{ type: 'tick' }, 130_000]];
-    const straight = play(rest, s0);
-    const restored = play(rest, apply(JSON.parse(JSON.stringify(s0)), { type: 'boot', staleMs: 15_000 }, 10_000).state);
-    expect(straight.state.claims[T1]).toEqual({ runId: RUN_A, leaseUntil: 160_000 });
-    expect(restored.state.claims[T1]).toEqual(straight.state.claims[T1]);
-    expect(released(restored.out).filter((x) => x.taskId === T1)).toEqual([]);
-  });
   const claimed = play([[{ type: 'claim', runId: RUN_A, taskId: T1 }, 0]]).state;
-  const boot = (staleMs: number, now: number) => apply(claimed, { type: 'boot', staleMs }, now);
-  test('a saved lease within staleMs of the restart is still claimed', () => {
-    expect(boot(15_000, 70_000).state.claims[T1].leaseUntil).toBe(75_000);
-    expect(boot(15_000, 70_000).out).toEqual([]);
+  test('boot with staleMs 0 equals a plain tick', () => {
+    for (const now of [30_000, 70_000]) expect(apply(claimed, { type: 'boot', staleMs: 0 }, now)).toEqual(apply(claimed, { type: 'tick' }, now));
   });
-  test('staleMs 0 equals a plain tick', () => {
-    for (const now of [30_000, 70_000]) expect(boot(0, now)).toEqual(apply(claimed, { type: 'tick' }, now));
+  test('boot with any staleMs other than 0 is invalid_input and changes nothing (no restart clause in ADR 0002 yet)', () => {
+    for (const staleMs of [1, 15_000, LEASE_MS, -1, 1.5, Number.NaN]) {
+      const r = apply(claimed, { type: 'boot', staleMs }, 30_000);
+      expect([staleMs, errCode(r.out), r.state]).toEqual([staleMs, 'invalid_input', claimed]);
+    }
   });
-  test('boot never shortens a lease and never touches the run cap', () => {
-    const early = boot(LEASE_MS, 0);
-    expect(early.state.claims[T1].leaseUntil).toBe(60_000);
-    expect(early.state.runs).toEqual(claimed.runs);
-    expect(nextDeadline(boot(15_000, 10_000).state)).toBe(70_000);
-  });
-  test('a lease whose extended deadline has passed is released by the settle inside boot, stamped with it', () => {
-    const r = boot(30_000, 200_000);
-    expect(released(r.out)).toEqual([{ taskId: T1, runId: RUN_A, cause: 'expired' }]);
-    expect(events(r.out).map((e) => e.ts)).toEqual([isoOf(90_000), isoOf(90_000)]);
-    expect(types(r.out)).toEqual(['task.updated', 'claim.released']);
-    expect(lastReply(r.out)).toBe(undefined);
-  });
-
 });
 
 describe('ErrorBody.ref', () => {

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { verdictOf } from './land-decide.mjs';
-import { GITLEAKS_MODULE, scanArgv } from './land-scan.mjs';
+import { GITLEAKS_MODULE, SCAN_CONFIG, scanArgv } from './land-scan.mjs';
 
 // Only exactly `GATE: PASS` as the last non-empty line passes; everything else blocks (nothing at all is null).
 const verdicts = [
@@ -96,8 +96,8 @@ console.log(`check-review-gate: ${portable.length} portable cases ok`);
 // consistency check that the recipe people run is the command land runs, and it is NOT a security boundary: a main Makefile can change what
 // make reads while passing any text pin (a built variable name, $(eval), include, a tracked GNUmakefile, SHELL, an exported variable), which is why
 // make is off land's path. Comparisons are exact, and no other line may assign RANGE, GO or GITLEAKS in a plain form. Backslash continuations
-// are joined first; full-line comments are skipped.
-const PIN = 'secrets-range:\n\t$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --exit-code 3 --redact --no-banner .';
+// are joined first; full-line comments are skipped. Like land, the recipe writes its own config to a fresh directory and passes it.
+const PIN = 'secrets-range:\n\td=$$(mktemp -d) || exit 1; printf \'[extend]\\nuseDefault = true\\n\' > "$$d/gitleaks.toml" && mkdir "$$d/empty" && $(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --exit-code 3 --redact --no-banner --config "$$d/gitleaks.toml" --gitleaks-ignore-path "$$d/empty" .; rc=$$?; rm -f "$$d/gitleaks.toml"; rmdir "$$d/empty" "$$d"; exit $$rc';
 const VARS = 'GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)\nGITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1';
 const OURS = /^(GO|GITLEAKS) :=/;
 const pinProblems = (mk) => {
@@ -113,7 +113,8 @@ const pinProblems = (mk) => {
 };
 {
   const mk = fs.readFileSync(path.join(root, 'Makefile'), 'utf8');
-  const recipe = mk.split('\n').find((l) => l.startsWith('\t$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)"'));
+  const recipe = mk.split('\n').find((l) => l.startsWith('\td=$$(mktemp -d)'));
+  // a mutant of the recipe line is spliced in with a replacer function: a replacement string would read the recipe's `$$` as one `$`
   const mutants = [
     ['an override RANGE line', `${mk}\noverride RANGE := HEAD\n`],
     ['a target-specific GO', `${mk}\nsecrets-range: GO = true\n`],
@@ -123,14 +124,17 @@ const pinProblems = (mk) => {
     ['a define GO block', `${mk}\ndefine GO\ntrue\nendef\n`],
     ['an assignment hidden by a continuation', `${mk}\noverride \\\nRANGE := HEAD\n`],
     ['a second secrets-range target', `${mk}\nsecrets-range:\n\ttrue\n`],
-    ['|| true appended to the recipe line', mk.replace(recipe, `${recipe} || true`)],
-    ['a prefix of the recipe line (a flag dropped from the end)', mk.replace(recipe, recipe.replace(' --no-banner .', ''))],
+    ['|| true appended to the recipe line', mk.replace(recipe, () => `${recipe} || true`)],
+    ['a prefix of the recipe line (its last command dropped)', mk.replace(recipe, () => recipe.slice(0, recipe.lastIndexOf(';')))],
+    ['--config dropped from the recipe line', mk.replace(recipe, () => recipe.replace(' --config "$$d/gitleaks.toml"', ''))],
+    ['another config text in the recipe line', mk.replace(recipe, () => recipe.replace('useDefault = true', 'useDefault = true\\n[allowlist]\\npaths = [\'\'\'.*\'\'\']'))],
     ['the GITLEAKS version changed', mk.replace('gitleaks/v8@v8.30.1', 'gitleaks/v8@v8.30.2')],
     ['a second GO := line in the pinned form (only the exact compare of the two definitions sees it)', `${mk}\nGO := /usr/bin/true\n`],
   ];
   const pinCases = [
     ['recipe pin: the real Makefile passes every check', pinProblems(mk).join('; '), ''],
-    ['recipe pin: the pinned recipe, expanded, is the argv land runs (the Makefile and land cannot drift apart)', PIN.split('\n')[1].trim().replace('$(GO) run ', '').replace('$(GITLEAKS)', GITLEAKS_MODULE).replace('"-m $(RANGE)"', '-m R'), scanArgv('R').slice(1).join(' ')],
+    ['recipe pin: the pinned recipe, expanded, is the argv land runs (the Makefile and land cannot drift apart)', /\$\(GO\) (run .*? \.);/.exec(PIN)[1].replace('$(GITLEAKS)', GITLEAKS_MODULE).replace('"-m $(RANGE)"', '-m R').replace('"$$d/gitleaks.toml"', 'C').replace('"$$d/empty"', 'E'), scanArgv('R', 'C', 'E').join(' ')],
+    ['recipe pin: the config the pinned recipe writes is the one land writes', /printf '([^']*)'/.exec(PIN)[1].replace(/\\n/g, '\n'), SCAN_CONFIG],
     ...mutants.map(([name, text]) => [`recipe pin: ${name} is refused`, pinProblems(text).length > 0, true]),
   ];
   const badPin = pinCases.filter(([, got, want]) => got !== want).map(([n]) => n);

@@ -4,13 +4,19 @@
 // variable). The Makefile's secrets-range stays for people; check-review-gate only checks that its recipe is the same command
 // (docs/development/landing.md).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { checkScanConfig, scanEnv, scanResult, textCommits } from './land-decide.mjs';
+import { checkScanConfig, foldName, scanEnv, scanResult, textCommits } from './land-decide.mjs';
 
 export const GITLEAKS_MODULE = 'github.com/zricethezav/gitleaks/v8@v8.30.1';
 // `go run <module>@<version> git ...`: the argument list is the whole command. `.` is the checkout (the cwd), --exit-code 3 makes a finding
-// exit 3 (go run prints "exit status 3"), --ignore-gitleaks-allow so a marker in history hides nothing.
-export const scanArgv = (range) => ['run', GITLEAKS_MODULE, 'git', `--log-opts=-m ${range}`, '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '.'];
+// exit 3 (go run prints "exit status 3"), --ignore-gitleaks-allow so a marker in history hides nothing. --config names land's own config
+// file, so gitleaks looks for none in the checkout (no `.gitleaks.toml`, and none of the `.gitleaks.<ext>` it would load beside one), and
+// --gitleaks-ignore-path an empty directory; both are outside the checkout (scanRange).
+export const scanArgv = (range, config, ignore) => ['run', GITLEAKS_MODULE, 'git', `--log-opts=-m ${range}`, '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '--config', config, '--gitleaks-ignore-path', ignore, '.'];
+// The config land passes: gitleaks' built-in rules and nothing else. `useDefault` loads the same embedded default config that gitleaks
+// reads when it finds no config at all (gitleaks v8.30.1 config/config.go extendDefault; measured: the same findings on the same history).
+export const SCAN_CONFIG = '[extend]\nuseDefault = true\n';
 // Every path the range touches, listed by git itself (`git log -m --no-renames --name-status -z`, each commit announced by \x01<sha>): added,
 // modified and deleted paths, so both sides of a rename or copy appear, and every parent of a merge (-m). It reads NUL-separated records by
 // position (a status, then its path; a rename or copy status would carry two), so a path that looks like a header is never taken for one.
@@ -64,6 +70,9 @@ function findGo(top) {
   if (within(real, fs.realpathSync.native(top)) && !within(real, fs.realpathSync.native(path.join(top, '.tools')))) return { reason: `${go} resolves to ${real}, inside the checkout but outside .tools; land runs only an installed toolchain, so remove it and run ./init.sh` };
   return { go: real, goroot: path.dirname(path.dirname(real)) };
 }
+// gitleaks reads `<source>/.gitleaksignore` whatever its flags say (--gitleaks-ignore-path only adds another), and a line `file:rule:line`
+// there drops that finding in every commit. So one at the top of the checkout, tracked or ignored, in any case, is refused on the filesystem.
+const ignoreFileIn = (top) => fs.readdirSync(top).find((n) => foldName(n) === '.gitleaksignore');
 // Reads the range the way gitleaks will and runs the scan. git(args) returns stdout in the scan's env; run(cmd, args, opts) is { status,
 // stdout, stderr }. result: 'clean' | 'hit' | 'failure' (scanResult) or 'refused' with a reason (the range or the checkout cannot be scanned).
 export function scanRange({ range, top, git, run, env }) {
@@ -75,6 +84,14 @@ export function scanRange({ range, top, git, run, env }) {
   const { expected } = textCommits(git(['log', '-m', '-p', '-U0', '--format=%x01%H', range]), all);
   const tools = findGo(top);
   if (!tools.go) return { result: 'refused', reason: tools.reason };
-  const r = run(tools.go, scanArgv(range), { cwd: top, env: { ...scanEnv(env), GOROOT: tools.goroot } });
-  return { result: scanResult({ status: r.status, stderr: r.stderr, expected }), expected, revlist: all.length, stderr: r.stderr };
+  const ignored = ignoreFileIn(top);
+  if (ignored) return { result: 'refused', reason: `${path.join(top, ignored)} exists; gitleaks would drop the findings it lists, so remove it` };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-scan-')); // the operator's TMPDIR, outside the checkout
+  try {
+    const [config, ignore] = [path.join(dir, 'gitleaks.toml'), path.join(dir, 'empty')];
+    fs.writeFileSync(config, SCAN_CONFIG);
+    fs.mkdirSync(ignore);
+    const r = run(tools.go, scanArgv(range, config, ignore), { cwd: top, env: { ...scanEnv(env), GOROOT: tools.goroot } });
+    return { result: scanResult({ status: r.status, stderr: r.stderr, expected }), expected, revlist: all.length, stderr: r.stderr };
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }

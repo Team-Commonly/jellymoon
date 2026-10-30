@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // The real range scan against what a land checkout itself holds, run the way land runs it (scan-fixture.mjs): the .tools that land takes go
-// from. Each fixture is a checkout of main whose tip carries the variant, and a PR commit off that tip that adds a token, scanned with the
+// from, and the gitleaks configuration a tree or the checkout could carry. Each fixture is a checkout of main whose tip carries the variant, and a PR commit off that tip that adds a token, scanned with the
 // checkout's OWN .tools (never this repo's). Every variant must be refused, never clean; the honest layouts must land. Own step in `make test`.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -42,6 +42,7 @@ const landIn = ({ onMain = 'true', inPr = 'true', inCheckout = () => {}, text = 
 };
 const refused = (r, re) => `${r.result}/${re.test(r.reason ?? '')}`;
 const FAKE_DIR = `mkdir -p tools-fake/bin && cp '${fake}' tools-fake/bin/go`;
+const ALLOW = '[extend]\\nuseDefault = true\\n[allowlist]\\npaths = ["t.txt"]\\n'; // a config that would hide the PR's t.txt, for printf
 
 // A tracked .tools, in each form main could ship it: refused from the trees, before any go runs. The force-tracked and the upper-case forms
 // pass every filesystem check (real directories, go under .tools), so only the tree refusal, case-folded, stops them.
@@ -60,6 +61,14 @@ const cases = [
   ['checkout .tools: the shared-cache layout reads a harmless range as clean', landIn({ inCheckout: cacheTools, text: 'nothing here' }).result, 'clean'],
   ['checkout .tools: the init.sh layout (go under .tools/go-<version>) finds the token', landIn({ inCheckout: ownTools }).result, 'hit'],
   ['checkout .tools: the init.sh layout reads a harmless range as clean', landIn({ inCheckout: ownTools, text: 'nothing here' }).result, 'clean'],
+  // A directory named .gitleaks.toml makes gitleaks load `.gitleaks.<ext>` beside it (json first, then yaml and the rest), in any case. In a
+  // tree land checks, each is refused, naming the path; land's own --config means the same files merely present in the checkout are not read
+  // (the steering cases in check-scan-history.mjs). A .gitleaksignore is read whatever the flags, so the checkout may not hold one at all.
+  ['checkout config: main ships a directory .gitleaks.toml/ beside a .gitleaks.json: refused, naming a path of either', refused(landIn({ onMain: `mkdir .gitleaks.toml && echo x > .gitleaks.toml/keep && printf '${ALLOW}' > .gitleaks.json` }), /^main carries \.gitleaks\.(json|toml\/keep),/), 'refused/true'],
+  ['checkout config: main ships a directory .gitleaks.toml/ beside a .gitleaks.yaml: refused', refused(landIn({ onMain: `mkdir .gitleaks.toml && echo x > .gitleaks.toml/keep && printf '${ALLOW}' > .gitleaks.yaml` }), /^main carries \.gitleaks\./), 'refused/true'],
+  ['checkout config: main ships .GITLEAKS.TOML/ beside .GITLEAKS.JSON (the filesystem folds case): refused', refused(landIn({ onMain: `mkdir .GITLEAKS.TOML && echo x > .GITLEAKS.TOML/keep && printf '${ALLOW}' > .GITLEAKS.JSON` }), /^main carries \.GITLEAKS\./), 'refused/true'],
+  ['checkout config: a range commit that adds .gitleaks.toml/ and .gitleaks.json is refused, naming the commit', refused(landIn({ inPr: `mkdir .gitleaks.toml && echo x > .gitleaks.toml/keep && printf '${ALLOW}' > .gitleaks.json` }), /^commit [0-9a-f]{8} in the range carries \.gitleaks\./), 'refused/true'],
+  ['checkout config: a .gitleaksignore in the checkout, in no tree, that lists the token\'s finding: refused before the scan', refused(landIn({ inCheckout: (d) => fs.writeFileSync(path.join(d, '.gitleaksignore'), 't.txt:generic-api-key:1\n') }), /\/\.gitleaksignore exists;/), 'refused/true'],
 ];
 fs.rmSync(dir0, { recursive: true, force: true });
 const bad = cases.filter(([, got, want]) => got !== want).map(([name, got]) => `${name} (got ${got})`);

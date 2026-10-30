@@ -27,6 +27,8 @@ const runOf = (f) => { try { const v = f(); return typeof v === 'object' ? { std
 // The commits of <main tip>..<head>; any other range holds one.
 const commitsOf = (range, n = 3) => Array.from({ length: range.endsWith(`..${HEAD}`) && !range.startsWith(HEAD) ? n : 1 }, (_, i) => `c${i}`.padEnd(40, '0'));
 const ALL = [];
+// What the scan's config and ignore paths held while it ran (land removes them after): read from the argv land passed.
+const seenOf = (a) => { const [config, ignore] = ['--config', '--gitleaks-ignore-path'].map((f) => a[a.indexOf(f) + 1]); return { config, ignore, text: fs.readFileSync(config, 'utf8'), entries: fs.readdirSync(ignore) }; };
 const seedGo = (top) => { fs.mkdirSync(path.join(top, '.tools', 'bin'), { recursive: true }); fs.writeFileSync(path.join(top, '.tools', 'bin', 'go'), '', { mode: 0o755 }); }; // the checkout's own go
 async function land(over = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'land-e2e-'));
@@ -36,7 +38,7 @@ async function land(over = {}) {
   fs.writeFileSync(path.join(dir, 'token'), 'jmu_FAKE-token-abc123\n');
   (over.topFiles || []).forEach((f) => fs.writeFileSync(path.join(top, f), '')); if (!over.noGo) seedGo(top);
   (over.cwdFiles || []).forEach((f) => fs.writeFileSync(path.join(cwd, f), ''));
-  const w = { calls: [], fetches: [], pod: [], spawns: [], views: 0, ledger, lockAtMerge: null, kills: [], top, go: over.noGo ? null : fs.realpathSync.native(path.join(top, '.tools', 'bin', 'go')) }; // go: what land runs, the checkout's go resolved
+  const w = { calls: [], fetches: [], pod: [], spawns: [], views: 0, ledger, lockAtMerge: null, kills: [], seen: [], top, go: over.noGo ? null : fs.realpathSync.native(path.join(top, '.tools', 'bin', 'go')) }; // go: what land runs, the checkout's go resolved
   const base = { url: `https://github.com/${REPO}/pull/5`, number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'feat', headRefOid: HEAD, createdAt: '2026-10-29T09:00:00Z', isCrossRepository: false, author: { login: 'alice' }, mergeCommit: { oid: MERGED }, ...over.pr };
   const wt = /^git -C \S+ /;
   const defaults = [
@@ -54,7 +56,7 @@ async function land(over = {}) {
     [/^git merge-tree --write-tree/, `${TREE}\n`],
     [/^git rev-list /, (a) => commitsOf(a.at(-1), over.count).join('\n')],
     [/^git log -m -p -U0 --format=%x01%H /, (a) => commitsOf(a.at(-1), over.count).map((c, i) => `\u0001${c}\n\n${i < (over.bare ?? 0) ? '' : 'diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -0,0 +1 @@\n+x\n'}`).join('')], // the first over.bare commits add no text
-    [/\/\.tools\/bin\/go run /, () => scanCall(over)], [/^git log -m --no-renames --format=%x01%H --name-status -z /, over.names ?? ''],
+    [/\/\.tools\/bin\/go run /, (a, s) => { s.seen.push(seenOf(a)); return scanCall(over); }], [/^git log -m --no-renames --format=%x01%H --name-status -z /, over.names ?? ''],
     [/^git cat-file -e/, ''], [/^git ls-tree -r -z /, over.tree ?? ''], [/^git cat-file blob /, over.attrs ?? ''],
     [/^git (-c \S+ )?worktree|^chmod/, ''], [new RegExp(`${wt.source}.*merge --no-ff`), ''], [new RegExp(`${wt.source}.*rev-parse HEAD\\^\\{tree\\}`), over.wtTree ?? TREE],
   ];
@@ -101,7 +103,11 @@ const PO = ['5', '--preflight-only'];
 await t('happy path: lands with --merge and --match-head-commit <head>; the ledger gets LANDED', {}, (r) => r.merge?.args.join(' ') === mergeArgs && r.ledgerNow.includes('\tLANDED\t') && r.lock === false && r.w.lockAtMerge === true);
 await t('happy path: pr view asks for isCrossRepository; the collaborators call is paginated and unfiltered', {}, (r) => argv(r, 'gh', 'pr view')[0].includes('isCrossRepository') && argv(r, 'gh', 'collaborators')[0].includes('--paginate') && !argv(r, 'gh', 'collaborators')[0].includes('permission='));
 await t('every main fetch names refs/heads/main; the merge disables hooks; untracked files are shown in full', {}, (r) => r.w.fetches.filter((f) => !f.startsWith('pull/') && f !== MERGED).every((f) => f === 'refs/heads/main') && argv(r, 'git', 'merge --no-ff')[0].includes('core.hooksPath=/dev/null') && argv(r, 'git', 'status')[0].includes('status.showUntrackedFiles=all'));
-await t('the range scan is the checkout\'s own .tools/bin/go, resolved to its real absolute path, run with exactly this argv, cwd the checkout, no shell, and no make', {}, (r) => scans(r).length === 2 && scans(r).every((c) => JSON.stringify(c.args) === JSON.stringify(['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', `--log-opts=-m ${MAIN}..${HEAD}`, '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '.']) && c.opts.cwd === r.w.top && !('shell' in c.opts)) && !r.w.calls.some((c) => c.cmd === 'make' || c.cmd === 'go' || c.cmd === 'sh' || c.cmd === 'bash'));
+await t('the range scan is the checkout\'s own .tools/bin/go, resolved to its real absolute path, run with exactly this argv, cwd the checkout, no shell, and no make', {}, (r) => scans(r).length === 2 && scans(r).every((c) => JSON.stringify(c.args) === JSON.stringify(['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', `--log-opts=-m ${MAIN}..${HEAD}`, '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '--config', c.args[10], '--gitleaks-ignore-path', c.args[12], '.']) && c.opts.cwd === r.w.top && !('shell' in c.opts)) && !r.w.calls.some((c) => c.cmd === 'make' || c.cmd === 'go' || c.cmd === 'sh' || c.cmd === 'bash'));
+const outside = (p, top) => path.isAbsolute(p) && path.relative(top, p).startsWith('..');
+await t('the scan\'s --config is a file land wrote outside the checkout, a fresh one per scan, holding only gitleaks\' built-in rules, removed after', {}, (r) => r.w.seen.length === 2 && r.w.seen[0].config !== r.w.seen[1].config && r.w.seen.every((s) => outside(s.config, r.w.top) && s.text === '[extend]\nuseDefault = true\n' && !fs.existsSync(path.dirname(s.config))));
+await t('the scan\'s --gitleaks-ignore-path is an empty directory outside the checkout, removed after', {}, (r) => r.w.seen.length === 2 && r.w.seen.every((s) => outside(s.ignore, r.w.top) && s.entries.length === 0 && !fs.existsSync(s.ignore)));
+await t('a .gitleaksignore at the top of the checkout (ignored, in any case) is refused before the scan, naming it', { topFiles: ['.GitleaksIgnore'] }, (r) => no(r, /\/\.GitleaksIgnore exists; gitleaks would drop the findings it lists/) && !scans(r).length && r.w.pod.length === 0);
 // Every name the allowlist keeps, set to a recognisable value, plus operator variables that must not pass (and a git config the operator points at its own).
 const KEPT = { PATH: '/usr/bin:/bin', HOME: '/opt/opuser', TMPDIR: '/var/tmp', GOPATH: '/opt/gopath', GOCACHE: '/opt/gocache', GOMODCACHE: '/opt/gomod' };
 const MAKEENV = { ...KEPT, MAKEFLAGS: 'i', GITLEAKS_CONFIG: '/tmp/off.toml', GITLEAKS_ENABLE_RULES: 'x', GIT_DIR: '/nope', GOFLAGS: '-x', GOTOOLCHAIN: 'go9.9', GOWORK: '/nope/go.work', GIT_CONFIG_GLOBAL: '/opt/opuser/.gitconfig', GIT_CONFIG_NOSYSTEM: '0' };
@@ -149,6 +155,7 @@ const entry = (file) => `100644 blob ${'a'.repeat(40)}\t${file}\0`;
 const refusedConfig = (file) => (r) => no(r, new RegExp(`main carries ${file.replace('.', '\\.')}`)) && r.w.pod.length === 0 && !scans(r).length && !r.ledgerNow.includes('LANDED');
 await t('main\'s tree at the fetched tip, then each range commit\'s, is read for scan configuration, whole (--full-tree) and with -r -z, at both decisions', {}, (r) => JSON.stringify(argv(r, 'git', 'ls-tree')) === JSON.stringify([...listed, ...listed].map((c) => `ls-tree -r -z --full-tree ${c}`)));
 await t('main carries a .gitleaks.toml: refused, naming it, before the scan or the pod', { tree: entry('README.md') + entry('.gitleaks.toml') }, refusedConfig('.gitleaks.toml'));
+await t('main carries a directory .gitleaks.toml/ and a .gitleaks.json (gitleaks would load the json): refused, naming the directory\'s path', { tree: entry('.gitleaks.toml/keep') + entry('.gitleaks.json') }, refusedConfig('.gitleaks.toml/keep'));
 await t('main carries a .gitleaksignore: refused, naming it', { tree: entry('.gitleaksignore') }, refusedConfig('.gitleaksignore'));
 await t('main carries a .gitattributes with -diff: refused, naming it', { tree: entry('.gitattributes'), attrs: '* -diff\n' }, refusedConfig('.gitattributes'));
 await t('main carries a .gitattributes with binary: refused', { tree: entry('.gitattributes'), attrs: '*.js binary\n' }, refusedConfig('.gitattributes'));

@@ -157,8 +157,8 @@ const reviewers = () => {
   return list;
 };
 // The commit-range secret scan (gitleaks git mode, -m, markers ignored), run by scanRange (land-scan.mjs): land runs the checkout's own
-// installed go with an argv it builds, not make. It only refuses. Before the scan, main's tree and every range commit's tree are read for a
-// file that would steer the scan (checkScanConfig), and the checkout's .tools is checked. Clean is positive evidence read from the scan's own
+// installed go with an argv it builds (its own gitleaks config included), not make. It only refuses. Before the scan, main's tree and every
+// range commit's tree are read for a file that would steer the scan (checkScanConfig), and the checkout's .tools is checked. Clean is positive evidence read from the scan's own
 // exit status AND stderr (see scanResult): exit 0, no hit or error line, "no leaks found", and a scanned count equal to the commits gitleaks
 // reads (those whose diff has a text hunk, see textCommits). A range that touches a path ending in a backslash is refused first, because the
 // count cannot show which commits were read. A scan that did not read the range proves nothing, so it refuses too.

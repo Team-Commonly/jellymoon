@@ -58,10 +58,12 @@ GITLEAKS := github.com/zricethezav/gitleaks/v8@v8.30.1
 secrets:
 	$(GO) run $(GITLEAKS) git --log-opts="-m HEAD" --redact --no-banner .
 
-# land only: secrets in a commit range, ignoring gitleaks:allow markers (RANGE=<main tip>..<head>). It can only refuse. A finding makes
-# gitleaks exit 3, which `go run` reports on stderr as "exit status 3"; any other failure exits 1, so land can name which it was.
+# For people: the command land's range scan runs (scripts/land-scan.mjs), over RANGE=<main tip>..<head>, ignoring gitleaks:allow markers.
+# Land does not run this target; check-review-gate checks the two are the same command. Like land, it passes its own config (gitleaks'
+# built-in rules, written to a fresh directory under TMPDIR) and an empty ignore directory, so no .gitleaks.* in the checkout is read.
+# A finding makes gitleaks exit 3, which `go run` reports on stderr as "exit status 3"; any other failure exits 1.
 secrets-range:
-	$(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --exit-code 3 --redact --no-banner .
+	d=$$(mktemp -d) || exit 1; printf '[extend]\nuseDefault = true\n' > "$$d/gitleaks.toml" && mkdir "$$d/empty" && $(GO) run $(GITLEAKS) git --log-opts="-m $(RANGE)" --ignore-gitleaks-allow --exit-code 3 --redact --no-banner --config "$$d/gitleaks.toml" --gitleaks-ignore-path "$$d/empty" .; rc=$$?; rm -f "$$d/gitleaks.toml"; rmdir "$$d/empty" "$$d"; exit $$rc
 
 # Per worktree: pre-commit runs the fast gates; fence=1 also blocks pushes (worker worktrees).
 hooks:

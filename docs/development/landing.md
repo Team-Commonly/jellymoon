@@ -63,8 +63,10 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
    First, the scan configuration: land lists main's tree at the fetched tip and the tree of every commit in the range (whole, NUL-separated,
    in the scan's env), and refuses (naming the tree and the path) when one carries a path whose first component, compared case-folded (APFS
-   opens `.TOOLS` for `.tools`), is `.tools` (always refused: land runs go from there), a
-   `.gitleaks.toml` or `.gitleaksignore` at any path, or a `.gitattributes` line that switches files out of the diff (`-diff` or `binary`;
+   opens `.TOOLS` for `.tools`), is `.tools` (always refused: land runs go from there); a path with a component named `.gitleaks.toml` or
+   `.gitleaksignore` at any depth (a directory counts: without a config flag, gitleaks only asks whether `<checkout>/.gitleaks.toml` exists,
+   then loads `.gitleaks.json`, `.gitleaks.yaml` or another `.gitleaks.<ext>` beside it); a top-level entry named `.gitleaks` or starting
+   with `.gitleaks.`; or a `.gitattributes` line that switches files out of the diff (`-diff` or `binary`;
    `!diff` and a `!` pattern are refused too, though measured to hide nothing: `!diff` leaves the default diff, and git rejects a negative
    pattern with a warning), unless that file's blob is the one this repo ships. `SHIPPED` in `land-decide.mjs` lists those blobs; this repo
    ships none, so none is allowed.
@@ -76,8 +78,14 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    above its `bin/`: go started through the link looks for its GOROOT two and three levels above the link, and three levels above
    `.tools/bin/go` is the checkout, so a tracked top-level `pkg/tool/` would make the checkout the GOROOT, its `go.env` read and its tools
    run (measured, a case in `check-scan-history.mjs`). It runs through `spawn` with an argv built from constants in the code: `run
-   github.com/zricethezav/gitleaks/v8@v8.30.1 git --log-opts=-m <main tip>..<head> --ignore-gitleaks-allow --exit-code 3 --redact --no-banner .`,
-   cwd the checkout, env exactly `scanEnv` plus that `GOROOT`. No shell and no Makefile is read, so a main Makefile cannot change what the
+   github.com/zricethezav/gitleaks/v8@v8.30.1 git --log-opts=-m <main tip>..<head> --ignore-gitleaks-allow --exit-code 3 --redact --no-banner
+   --config <file> --gitleaks-ignore-path <dir> .`, cwd the checkout, env exactly `scanEnv` plus that `GOROOT`. Land writes `<file>` to a
+   fresh directory under the operator's `TMPDIR`, outside the checkout, holding `[extend] useDefault = true` and nothing else: that loads
+   the same embedded default rules gitleaks uses when it finds no config (v8.30.1 `config/config.go` `extendDefault`; measured: the same
+   findings on the same history), and `<dir>` is an empty directory beside it; both are removed after the scan. With `--config` set,
+   gitleaks runs no config discovery at all (`cmd/root.go` `initConfig`), so no `.gitleaks.*` in the checkout, tracked or ignored, is
+   read, and `GITLEAKS_CONFIG` would lose to it too. gitleaks still reads `<checkout>/.gitleaksignore` whatever the flags say (`cmd/root.go`
+   adds it after the ignore path), so land refuses one at the top of the checkout, in any case, on the filesystem (ignored files count). No shell and no Makefile is read, so a main Makefile cannot change what the
    scan reads, and land does not look `go` up on `PATH` (gitleaks itself runs `git` from the operator's `PATH`). (The earlier design ran `make secrets-range` under a text pin of the recipe; a pin cannot close that class, because a
    built variable name, `$(eval)`, an `include`, a tracked `GNUmakefile`, `SHELL`, a prerequisite that writes `.gitleaks.toml`, or an exported
    `GITLEAKS_CONFIG` or `GIT_CONFIG_*` all change what make runs while the pinned text still matches. Each of those, put on main, now reads as a
@@ -203,8 +211,8 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 ## Known limits
 - **A grandchild that calls `setsid` again escapes the group kill.** The preflight child is killed as a process group; code that
   starts its own session survives it. That is trusted code (see the threat model).
-- **A PR can switch off its own scans on the bootstrap land and in the preflight.** On the bootstrap land the checkout is the PR head, so the range scan reads the PR's own `.gitleaksignore` and `.gitleaks.toml`, and its `.tools/bin/go` is the PR checkout's own install (a tracked `.tools` is refused there too). On every land, the preflight's `make secrets` runs the PR's Makefile, `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` markers. On a normal land the range scan uses main's config, never its Makefile, and ignores markers. These are defence in depth only; the verdict is always required.
-- **The throwaway's own `make secrets` reads a PR-added `.gitleaks.toml`.** Land's range scan runs in the operator's checkout, which is main with main's config, except on the bootstrap land: there the checkout is the PR head, so a PR-added `.gitleaks.toml` or `.gitattributes` configures the scan (a `paths = [".*"]` allowlist makes it clean). The scans only refuse, so a quiet scan is never evidence; the review is.
+- **A PR can switch off its own scans on the bootstrap land and in the preflight.** On the bootstrap land the checkout is the PR head. Its range's trees are checked as on any land and land passes its own config, so a PR's `.gitleaks*`, `.gitleaksignore` and tracked `.tools` are refused, not read; but the `.tools/bin/go` it runs is the PR checkout's own install. On every land, the preflight's `make secrets` runs the PR's Makefile, `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` markers. On a normal land the range scan uses main's config, never its Makefile, and ignores markers. These are defence in depth only; the verdict is always required.
+- **The throwaway's own `make secrets` reads a PR-added `.gitleaks.toml`.** The preflight runs `make secrets` in the merged tree, so a PR-added `.gitleaks.toml`, `.gitleaksignore` or `.gitattributes` configures that scan (a `paths = [".*"]` allowlist makes it clean). Land's range scan is not configured by one: it checks every range commit's tree (step 4) and passes its own config. The scans only refuse, so a quiet scan is never evidence; the review is.
 - **What the scans do not read, so the review must cover it.** Both scans are defence in depth that can refuse and never waive. Read by neither:
   - **Fragment cuts.** `gitleaks dir` and git mode read a file in 100,000-byte chunks (extended at most 25,000 bytes to a blank line), and no rule matches across chunks, so a token straddling a cut is not matched.
   - **File-type sniffing.** `gitleaks dir` types a file by its leading bytes (offsets up to 32,773) and skips what it calls `application/*`.
@@ -227,7 +235,7 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   the cache its links point into: see the threat model), the user-level Go env file under `HOME` (`go env -w`), the module and build
   caches (`GOMODCACHE`, `GOPATH`, `GOCACHE`) and the network. From the repo, a tracked `.tools` is refused in every tree land checks, and
   a tracked `go.work`, `go.mod` (`toolchain`, `replace`), `vendor/` or top-level `pkg/tool/` has no effect (see step 4).
-- **The scan configuration is checked in the committed trees, and on the filesystem only for `.tools`.** The scan also reads files that
+- **The scan configuration is checked in the committed trees, and on the filesystem only for `.tools` and a top-level `.gitleaksignore`.** The scan also reads files that
   are in no tree: `.git/info/attributes`, the land checkout's own `.git/config` (a `diff` driver, `core.attributesFile`), and an ignored
   file at a path gitleaks or go looks for. The checkout check refuses untracked files and a diff from HEAD, but an ignored file passes it,
   so keep the land checkout a clean clone and rebuild it after any doubt. A `.gitattributes` that hides files by a means other than

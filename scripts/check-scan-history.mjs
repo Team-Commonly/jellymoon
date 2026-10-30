@@ -79,6 +79,7 @@ console.log(`check-scan-history: ${history.length} history cases ok`);
 // A main that carries a build file meant to steer the scan: land does not run make, so each of these reads exactly like the plain repo. The PR's
 // one commit adds a.txt (harmless) and b.txt (a token); main's tip (committed after the range, so the range is unchanged) carries the variant, and
 // the scan runs the way land runs it. Every one must be a hit: with make on the path, each of the first eight read CLEAN with the token unread.
+// No tree land checks carries the variant, so these show what the checkout's files alone can do; the last four read clean without --config.
 {
   const MK = fs.readFileSync(path.join(root, 'Makefile'), 'utf8');
   const EXCL = ' -- . :!b.txt';
@@ -98,6 +99,11 @@ console.log(`check-scan-history: ${history.length} history cases ok`);
     ['a tracked go.mod with a toolchain line and a replace of the scanner', { 'go.mod': 'module x\ngo 1.99\ntoolchain go1.99.0\nreplace github.com/zricethezav/gitleaks/v8 => ./nope\n' }],
     // go started through the .tools/bin/go link looks three levels up for its GOROOT, which is the checkout; land runs the resolved go with GOROOT set
     ['a tracked pkg/tool/ and go.env at the top, which would make the checkout the GOROOT of a go started through the .tools/bin link', { 'pkg/tool/README': 'x\n', 'go.env': 'GOPROXY=off\nGOFLAGS=-mod=mod\n' }],
+    // gitleaks looks for a config only without --config: a .gitleaks.toml, or a directory of that name, which makes it load `.gitleaks.<ext>`
+    ['a .gitleaks.toml that allowlists the token\'s file', { '.gitleaks.toml': cfg }],
+    ['a directory .gitleaks.toml/ beside a .gitleaks.json that allowlists it', { '.gitleaks.toml/keep': 'x\n', '.gitleaks.json': cfg }],
+    ['a directory .gitleaks.toml/ beside a .gitleaks.yaml that allowlists it', { '.gitleaks.toml/keep': 'x\n', '.gitleaks.yaml': cfg }],
+    ['.GITLEAKS.TOML/ beside .GITLEAKS.JSON (the filesystem folds case)', { '.GITLEAKS.TOML/keep': 'x\n', '.GITLEAKS.JSON': cfg }],
   ];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-steer-'));
   const g = (script) => spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: gitEnv });

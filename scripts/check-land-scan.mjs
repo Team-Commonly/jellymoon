@@ -2,7 +2,7 @@
 // Tests the range secret scan's pure decisions: how its result is read (scanResult), the environment it runs in (scanEnv), main's own
 // scan configuration (checkScanConfig) and land-scan.mjs (the argv, the paths gitleaks cannot parse). No network. Own step in `make test`.
 import { checkScanConfig, foldName, scanEnv, scanResult, textCommits } from './land-decide.mjs';
-import { backslashPaths, GITLEAKS_MODULE, scanArgv, touchedPaths } from './land-scan.mjs';
+import { backslashPaths, GITLEAKS_MODULE, SCAN_CONFIG, scanArgv, touchedPaths } from './land-scan.mjs';
 
 const CLEAN = '10:11AM INF 3 commits scanned.\n10:11AM INF no leaks found\n'; // what a clean gitleaks run prints to stderr
 
@@ -41,7 +41,8 @@ const cases = [
   ['scan env: only the names that are set pass', JSON.stringify(Object.entries(scanEnv({ PATH: '/p' })).sort()), JSON.stringify(Object.entries({ PATH: '/p', GOTOOLCHAIN: 'local', GOWORK: 'off', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }).sort())],
   ['scan env: GIT_CONFIG_GLOBAL and GIT_CONFIG_NOSYSTEM set by the operator are overridden, not taken', JSON.stringify([scanEnv({ GIT_CONFIG_GLOBAL: '/etc/operator-gitconfig', GIT_CONFIG_NOSYSTEM: '0' }).GIT_CONFIG_GLOBAL, scanEnv({ GIT_CONFIG_GLOBAL: '/etc/operator-gitconfig', GIT_CONFIG_NOSYSTEM: '0' }).GIT_CONFIG_NOSYSTEM]), JSON.stringify(['/dev/null', '1'])],
   // land runs gitleaks itself: the argv is built from constants, never read from the Makefile
-  ['scan argv: exactly the pinned command, one element per argument (an array, no shell string)', JSON.stringify(scanArgv('A..B')), JSON.stringify(['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', '--log-opts=-m A..B', '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '.'])],
+  ['scan argv: exactly the pinned command, one element per argument (an array, no shell string), with land\'s own config and an empty ignore directory', JSON.stringify(scanArgv('A..B', '/x/c.toml', '/x/empty')), JSON.stringify(['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', '--log-opts=-m A..B', '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '--config', '/x/c.toml', '--gitleaks-ignore-path', '/x/empty', '.'])],
+  ['scan config text: gitleaks\' built-in rules and nothing else', SCAN_CONFIG, '[extend]\nuseDefault = true\n'],
   ['scan argv: the module is the pinned version', GITLEAKS_MODULE, 'github.com/zricethezav/gitleaks/v8@v8.30.1'],
   ['text commits: only the count is returned', Object.keys(textCommits('\u0001' + 'a'.repeat(40) + '\n@@ -0,0 +1 @@\n+x\n', ['a'.repeat(40)])).join(), 'expected'],
   // the paths a range touches: `git log -m --no-renames --format=%x01%H --name-status -z`, read by position
@@ -95,6 +96,14 @@ const cases = [
       ['scan config: a .tools listed as shipped is still refused (no blob is allowed)', checkScanConfig(tree('.tools/bin/go'), () => '', { '.tools/bin/go': A }).ok, false],
       ['scan config: only the first component counts (.toolsrc, my.tools/x and sub/.tools/x pass here; check-portable refuses the last)', [named('.toolsrc').ok, named('my.tools/x').ok, named('sub/.tools/x').ok].join(), 'true,true,true'],
       ['scan config: the refusal names the tree it was found in', checkScanConfig(tree('.tools/bin/go'), () => '', undefined, 'commit abcd1234 in the range').reason?.startsWith('commit abcd1234 in the range carries .tools/bin/go;'), true],
+      // a directory named .gitleaks.toml makes gitleaks load `.gitleaks.<ext>` beside it: any component with either name, and any top-level
+      // entry gitleaks could take for a config, is refused
+      ['scan config: a directory named .gitleaks.toml (a path through it) is refused, naming the path', named('.gitleaks.toml/keep').reason?.startsWith('main carries .gitleaks.toml/keep,'), true],
+      ['scan config: .GITLEAKS.TOML/keep is refused (folded)', named('.GITLEAKS.TOML/keep').ok, false],
+      ['scan config: a .gitleaks.toml or .gitleaksignore component at any depth is refused', [named('docs/.gitleaks.toml/x').ok, named('a/.GitleaksIgnore/b').ok].join(), 'false,false'],
+      ['scan config: a top-level .gitleaks.json, .gitleaks.yaml, .gitleaks and .Gitleaks.YML are refused', ['.gitleaks.json', '.gitleaks.yaml', '.gitleaks', '.Gitleaks.YML'].map((p) => named(p).ok).join(), 'false,false,false,false'],
+      ['scan config: a top-level directory named .gitleaks.json is refused', named('.gitleaks.json/x').ok, false],
+      ['scan config: a nested .gitleaks.json and a top-level .gitleaksrc pass (gitleaks discovers neither)', [named('docs/.gitleaks.json').ok, named('.gitleaksrc').ok].join(), 'true,true'],
       ['fold: case, the long s, the Kelvin sign and sharp s fold the way APFS compares them', ['.ToOLS', '.tool\u017f', '\u212Aeep', 'stra\u00dfe', 'STRA\u1E9EE'].map(foldName).join(), '.tools,.tools,keep,strasse,strasse'],
     ];
   })(),

@@ -211,8 +211,9 @@ export const scanResult = ({ status, stderr, expected }) => {
 export const foldName = (name) => name.normalize('NFKC').toLowerCase().toUpperCase().toLowerCase();
 // What a tree carries that changes what the range scan runs or reads. The scan runs in a checkout of main, so these, committed to main, change
 // every later land: land checks main's tree and the tree of every commit in the range (land-scan.mjs), so a PR cannot bring one onto main.
-// - a path whose FIRST component is `.tools`: land runs go from `<checkout>/.tools/bin`, so a tracked `.tools` (a symlink, or a force-added
-//   `.tools/bin/go`) would choose the go land runs. Never allowed, whatever the blob.
+// - a path with any component that folds to `.tools`, at any depth: land runs go from `<checkout>/.tools/bin`, so a tracked `.tools` (a symlink,
+//   or a force-added `.tools/bin/go`) would choose the go land runs, and `.gitignore` hides a `.tools` at any depth, so git, diffing a range
+//   path under a nested one, opens the ignored `.gitattributes` there. Never allowed, whatever the blob (owner ruling; check-portable agrees).
 // - a path with any component named `.gitleaks.toml` or `.gitleaksignore` (a directory counts: gitleaks only asks whether
 //   `<source>/.gitleaks.toml` exists, then loads `.gitleaks.json`, `.yaml` and the rest beside it), or whose top-level entry is `.gitleaks`
 //   or starts with `.gitleaks.` (a config gitleaks could discover). Allowed only when its blob id is the one this repo ships: SHIPPED maps a
@@ -228,7 +229,7 @@ export function checkScanConfig(tree, shipped = SHIPPED, where = 'main') {
     const [meta, file] = [entry.slice(0, entry.indexOf('\t')), entry.slice(entry.indexOf('\t') + 1)];
     const id = meta.split(' ')[2];
     const parts = file.split('/').map(foldName);
-    if (parts[0] === '.tools') return { ok: false, reason: `${where} carries ${file}; land runs go from the checkout's own .tools, so a tracked .tools would choose the scanner; remove it` };
+    if (parts.includes('.tools')) return { ok: false, reason: `${where} carries ${file}; land runs go from the checkout's own .tools and .gitignore hides a .tools at any depth, so no tree may carry one; remove it` };
     if (parts.includes('.gitattributes')) return { ok: false, reason: `${where} carries ${file}; git reads a .gitattributes while it diffs, and land refuses every one, so remove it` };
     const bad = parts.some((p) => p === '.gitleaks.toml' || p === '.gitleaksignore') || parts[0] === '.gitleaks' || parts[0].startsWith('.gitleaks.');
     if (bad && shipped[file] !== id) return { ok: false, reason: `${where} carries ${file}, which changes what the range scan reads; remove it or ship it from this repo` };

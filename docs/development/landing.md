@@ -64,11 +64,14 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    does not wait, so a land run while required checks are pending fails at the merge step.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
    First, the scan configuration: land lists main's tree at the fetched tip and the tree of every commit in the range (whole, NUL-separated,
-   in the scan's env), and refuses (naming the tree and the path) when one carries a path whose first component, compared case-folded (APFS
-   opens `.TOOLS` for `.tools`), is `.tools` (always refused: land runs go from there); a path with any component named `.gitattributes`,
-   compared case-folded, at any depth, whatever the file holds (always refused, by owner ruling: git reads one in the checkout while it
-   diffs, and a line can switch a file out of the diff in more ways than land could parse, among them `-diff=<any value>`, a macro, and a
-   pattern after a form feed, a vertical tab or U+00A0, each measured to hide a token); a path with a component named `.gitleaks.toml` or
+   in the scan's env), and refuses (naming the tree and the path) when one carries a path with a component named `.tools`, at any depth,
+   compared case-folded (APFS opens `.TOOLS` for `.tools`), always refused by owner ruling: land runs go from the top one, and `.gitignore`
+   hides one at any depth, so git, diffing a range path under a nested one, would open an ignored `.gitattributes` there (check-portable
+   refuses the same in CI, but only at the PR head, so a range that adds such a path and then deletes it passes there); a path with any
+   component named `.gitattributes`, compared case-folded, at any depth, whatever the file holds (always refused, by owner ruling: git
+   reads one in the checkout while it diffs, and a line can switch a file out of the diff in more ways than land could parse, among them
+   `-diff=<any value>`, a macro, and a pattern after a form feed, a vertical tab or U+00A0, each measured to hide a token); a path with a
+   component named `.gitleaks.toml` or
    `.gitleaksignore` at any depth (a directory counts: without a config flag, gitleaks only asks whether `<checkout>/.gitleaks.toml` exists,
    then loads `.gitleaks.json`, `.gitleaks.yaml` or another `.gitleaks.<ext>` beside it); or a top-level entry named `.gitleaks` or
    starting with `.gitleaks.`, unless that file's blob is the one this repo ships. `SHIPPED` in `land-decide.mjs` lists those blobs;

@@ -96,7 +96,7 @@ const cases = [
       ['scan config: .TOOLS and .Tools are refused (the filesystem folds case)', [named('.TOOLS/bin/go').ok, named('.Tools').ok].join(), 'false,false'],
       ['scan config: .tool\u017f (a long s, which APFS folds to s) is refused', named('.tool\u017f/bin/go').ok, false],
       ['scan config: a .tools listed as shipped is still refused (no blob is allowed)', checkScanConfig(tree('.tools/bin/go'), { '.tools/bin/go': A }).ok, false],
-      ['scan config: only the first component counts (.toolsrc, my.tools/x and sub/.tools/x pass here; check-portable refuses the last)', [named('.toolsrc').ok, named('my.tools/x').ok, named('sub/.tools/x').ok].join(), 'true,true,true'],
+      ['scan config: a .tools component at any depth is refused, naming it (sub/.tools/x, a/b/.TOOLS/x); .toolsrc and my.tools/x pass', [named('sub/.tools/x').reason?.startsWith('main carries sub/.tools/x;'), named('a/b/.TOOLS/x').ok, named('.toolsrc').ok, named('my.tools/x').ok].join(), 'true,false,true,true'],
       ['scan config: the refusal names the tree it was found in', checkScanConfig(tree('.tools/bin/go'), undefined, 'commit abcd1234 in the range').reason?.startsWith('commit abcd1234 in the range carries .tools/bin/go;'), true],
       // a directory named .gitleaks.toml makes gitleaks load `.gitleaks.<ext>` beside it: any component with either name, and any top-level
       // entry gitleaks could take for a config, is refused

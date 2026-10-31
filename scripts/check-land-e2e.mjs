@@ -57,7 +57,7 @@ async function land(over = {}) {
     [/^git rev-list /, (a) => commitsOf(a.at(-1), over.count).join('\n')],
     [/^git log -m -p -U0 --format=%x01%H /, (a) => commitsOf(a.at(-1), over.count).map((c, i) => `\u0001${c}\n\n${i < (over.bare ?? 0) ? '' : 'diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -0,0 +1 @@\n+x\n'}`).join('')], // the first over.bare commits add no text
     [/\/\.tools\/bin\/go run /, (a, s) => { s.seen.push(seenOf(a)); return scanCall(over); }], [/^git log -m --no-renames --format=%x01%H --name-status -z /, over.names ?? ''],
-    [/^git cat-file -e/, ''], [/^git ls-tree -r -z /, over.tree ?? ''], [/^git cat-file blob /, over.attrs ?? ''],
+    [/^git cat-file -e/, ''], [/^git ls-tree -r -z /, over.tree ?? ''],
     [/^git (-c \S+ )?worktree|^chmod/, ''], [new RegExp(`${wt.source}.*merge --no-ff`), ''], [new RegExp(`${wt.source}.*rev-parse HEAD\\^\\{tree\\}`), over.wtTree ?? TREE],
   ];
   const exec = (cmd, args, opts) => {
@@ -157,10 +157,9 @@ await t('main\'s tree at the fetched tip, then each range commit\'s, is read for
 await t('main carries a .gitleaks.toml: refused, naming it, before the scan or the pod', { tree: entry('README.md') + entry('.gitleaks.toml') }, refusedConfig('.gitleaks.toml'));
 await t('main carries a directory .gitleaks.toml/ and a .gitleaks.json (gitleaks would load the json): refused, naming the directory\'s path', { tree: entry('.gitleaks.toml/keep') + entry('.gitleaks.json') }, refusedConfig('.gitleaks.toml/keep'));
 await t('main carries a .gitleaksignore: refused, naming it', { tree: entry('.gitleaksignore') }, refusedConfig('.gitleaksignore'));
-await t('main carries a .gitattributes with -diff: refused, naming it', { tree: entry('.gitattributes'), attrs: '* -diff\n' }, refusedConfig('.gitattributes'));
-await t('main carries a .gitattributes with binary: refused', { tree: entry('.gitattributes'), attrs: '*.js binary\n' }, refusedConfig('.gitattributes'));
-await t('main carries a .gitattributes with a negative pattern: refused', { tree: entry('.gitattributes'), attrs: '!*.md text\n' }, refusedConfig('.gitattributes'));
-await t('main carries a .gitattributes that only sets text: lands', { tree: entry('.gitattributes'), attrs: '* text=auto\n' }, (r) => r.merge);
+await t('main carries a .gitattributes (any, owner ruling): refused, naming it, before the scan or the pod, and no blob is read', { tree: entry('README.md') + entry('.gitattributes') }, (r) => refusedConfig('.gitattributes')(r) && !argv(r, 'git', 'cat-file blob').length);
+await t('main carries a nested docs/.GitAttributes: refused, naming it', { tree: entry('docs/.GitAttributes') }, refusedConfig('docs/.GitAttributes'));
+await t('the checkout holds a .gitattributes in no tree: refused before the scan, naming its path, nothing merged', { topFiles: ['.gitattributes'] }, (r) => no(r, new RegExp(`${r.w.top}/\\.gitattributes exists; git reads a \\.gitattributes while it diffs`)) && !scans(r).length && r.w.pod.length === 0 && !r.ledgerNow.includes('LANDED'));
 await t('commits that add no text (empty, rename, delete-only): gitleaks reads fewer than rev-list holds, and that is clean', { count: 5, bare: 2 }, (r) => r.merge && argv(r, 'git', 'log').includes(`log -m -p -U0 --format=%x01%H ${MAIN}..${HEAD}`));
 await t('a range of only commits that add no text, scanned as 0: clean', { count: 2, bare: 2 }, (r) => r.merge);
 await t('a scan that counted every rev-list commit although two add no text: refused as a scan failure', { count: 5, bare: 2, scanned: 5 }, refusedScan);

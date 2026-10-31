@@ -215,22 +215,22 @@ export const foldName = (name) => name.normalize('NFKC').toLowerCase().toUpperCa
 //   `.tools/bin/go`) would choose the go land runs. Never allowed, whatever the blob.
 // - a path with any component named `.gitleaks.toml` or `.gitleaksignore` (a directory counts: gitleaks only asks whether
 //   `<source>/.gitleaks.toml` exists, then loads `.gitleaks.json`, `.yaml` and the rest beside it), or whose top-level entry is `.gitleaks`
-//   or starts with `.gitleaks.` (a config gitleaks could discover), or a `.gitattributes` that switches files out of the diff (`-diff`,
-//   `!diff`, `binary`, a `!` pattern). Allowed only when its blob id is the one this repo ships: SHIPPED maps a path to that id, and this
-//   repo ships none. Land passes its own --config, so discovery does not run; this keeps every tree land checks free of what it would find.
-// `tree` is `git ls-tree -r -z --full-tree <commit>`, blob(id) reads a blob, `where` names the tree in the reason. Names compare folded.
+//   or starts with `.gitleaks.` (a config gitleaks could discover). Allowed only when its blob id is the one this repo ships: SHIPPED maps a
+//   path to that id, and this repo ships none. Land passes its own --config, so discovery does not run; this keeps every tree land checks
+//   free of what it would find.
+// - a path with any component named `.gitattributes`, at any depth, whatever it holds. Never allowed (owner ruling): git reads one in the
+//   checkout while it diffs, and a line can switch a file out of the diff in more ways than a parser here followed (`-diff=<any value>`, a
+//   macro, a pattern after a form feed). The repo carries none; land-scan.mjs refuses one on the checkout's filesystem too.
+// `tree` is `git ls-tree -r -z --full-tree <commit>`, `where` names the tree in the reason. Names compare folded.
 const SHIPPED = {};
-const SWITCHES = new Set(['-diff', '!diff', 'binary']);
-const switchesOff = (line) => { const [pat, ...attrs] = line.trim().split(/\s+/); return !pat.startsWith('#') && (pat.startsWith('!') || attrs.some((a) => SWITCHES.has(a))); };
-export function checkScanConfig(tree, blob, shipped = SHIPPED, where = 'main') {
+export function checkScanConfig(tree, shipped = SHIPPED, where = 'main') {
   for (const entry of String(tree).split('\0').filter(Boolean)) {
     const [meta, file] = [entry.slice(0, entry.indexOf('\t')), entry.slice(entry.indexOf('\t') + 1)];
     const id = meta.split(' ')[2];
     const parts = file.split('/').map(foldName);
     if (parts[0] === '.tools') return { ok: false, reason: `${where} carries ${file}; land runs go from the checkout's own .tools, so a tracked .tools would choose the scanner; remove it` };
-    const name = parts.at(-1);
-    const bad = parts.some((p) => p === '.gitleaks.toml' || p === '.gitleaksignore') || parts[0] === '.gitleaks' || parts[0].startsWith('.gitleaks.')
-      || (name === '.gitattributes' && blob(id).split('\n').some((l) => l.trim() && switchesOff(l)));
+    if (parts.includes('.gitattributes')) return { ok: false, reason: `${where} carries ${file}; git reads a .gitattributes while it diffs, and land refuses every one, so remove it` };
+    const bad = parts.some((p) => p === '.gitleaks.toml' || p === '.gitleaksignore') || parts[0] === '.gitleaks' || parts[0].startsWith('.gitleaks.');
     if (bad && shipped[file] !== id) return { ok: false, reason: `${where} carries ${file}, which changes what the range scan reads; remove it or ship it from this repo` };
   }
   return { ok: true };

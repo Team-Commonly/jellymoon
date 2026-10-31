@@ -43,9 +43,8 @@ export const backslashPaths = (listing) => touchedPaths(listing).filter((p) => p
 // whole (`--full-tree`, so the directory land runs from cannot narrow it) and NUL-separated. checkScanConfig refuses a tree that carries a file
 // that would steer this scan or a later one.
 function checkTrees(range, commits, git) {
-  const blob = (id) => git(['cat-file', 'blob', id]);
   for (const [commit, where] of [[range.split('..')[0], 'main'], ...commits.map((c) => [c, `commit ${c.slice(0, 8)} in the range`])]) {
-    const r = checkScanConfig(git(['ls-tree', '-r', '-z', '--full-tree', commit]), blob, undefined, where);
+    const r = checkScanConfig(git(['ls-tree', '-r', '-z', '--full-tree', commit]), undefined, where);
     if (!r.ok) return r;
   }
   return { ok: true };
@@ -76,6 +75,21 @@ function findGo(top) {
 // gitleaks reads `<source>/.gitleaksignore` whatever its flags say (--gitleaks-ignore-path only adds another), and a line `file:rule:line`
 // there drops that finding in every commit. So one at the top of the checkout, tracked or ignored, in any case, is refused on the filesystem.
 const ignoreFileIn = (top) => fs.readdirSync(top).find((n) => foldName(n) === '.gitleaksignore');
+// git opens `<dir>/.gitattributes` in the checkout for every directory of a path it diffs, tracked or not, and land refuses every one (owner
+// ruling; checkScanConfig refuses them in the trees). So the checkout is listed on the filesystem, every entry at every depth, ignored ones
+// included, names compared folded, and the first .gitattributes found is returned, relative to the top. Two top-level entries are skipped:
+// `.git` (git's own) and `.tools`, which no checked tree may carry a path under, so git diffs nothing there and opens no attributes file in
+// it (and an installed Go ships one in its source tree). Symbolic links are not followed.
+const attributesIn = (top, rel = '') => {
+  for (const e of fs.readdirSync(path.join(top, rel), { withFileTypes: true })) {
+    const name = foldName(e.name);
+    const at = rel ? `${rel}/${e.name}` : e.name;
+    if (name === '.gitattributes') return at;
+    const found = e.isDirectory() && !(rel === '' && (name === '.git' || name === '.tools')) && attributesIn(top, at);
+    if (found) return found;
+  }
+  return undefined;
+};
 // Reads the range the way gitleaks will and runs the scan. git(args) returns stdout in the scan's env; run(cmd, args, opts) is { status,
 // stdout, stderr }. result: 'clean' | 'hit' | 'failure' (scanResult) or 'refused' with a reason (the range or the checkout cannot be scanned).
 export function scanRange({ range, top, git, run, env }) {
@@ -89,6 +103,8 @@ export function scanRange({ range, top, git, run, env }) {
   if (!tools.go) return { result: 'refused', reason: tools.reason };
   const ignored = ignoreFileIn(top);
   if (ignored) return { result: 'refused', reason: `${path.join(top, ignored)} exists; gitleaks would drop the findings it lists, so remove it` };
+  const attributes = attributesIn(top);
+  if (attributes) return { result: 'refused', reason: `${path.join(top, attributes)} exists; git reads a .gitattributes while it diffs, and land refuses every one in the checkout, tracked or not, so remove it` };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jm-scan-')); // the operator's TMPDIR, outside the checkout
   try {
     const [config, ignore] = [path.join(dir, 'gitleaks.toml'), path.join(dir, 'empty')];

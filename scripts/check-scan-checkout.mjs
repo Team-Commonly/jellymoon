@@ -30,9 +30,11 @@ const [own, path1, path2] = [path.join(withTools, '.tools', 'bin'), path.join(di
 const resolved = (top, dirs) => { try { return fixtureGo({ top, PATH: dirs.join(path.delimiter) }); } catch (e) { return e.message; } };
 
 let n = 0;
-// main's tip runs `onMain` before its commit (it may force-add what .gitignore hides); the PR runs `inPr`, then adds `text`; the checkout goes
-// back to main and `inCheckout(dir)` adds what the checkout holds untracked. Returns land's scan of <main tip>..<PR head> in that checkout.
-const landIn = ({ onMain = 'true', inPr = 'true', inCheckout = () => {}, text = `token = ${token}` } = {}) => {
+const put = (rel, body) => (d) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), body); };
+// main's tip runs `onMain` before its commit (it may force-add what .gitignore hides); the PR runs `inPr`, then writes `text` to `file`; each
+// step is a bash script or a function of the checkout directory. The checkout goes back to main and `inCheckout(dir)` adds what the checkout
+// holds untracked. Returns land's scan of <main tip>..<PR head> in that checkout.
+const landIn = ({ onMain = 'true', inPr = 'true', inCheckout = () => {}, text = `token = ${token}`, file = 't.txt' } = {}) => {
   const dir = path.join(dir0, `c${n += 1}`);
   fs.mkdirSync(dir);
   const g = (script) => {
@@ -40,19 +42,29 @@ const landIn = ({ onMain = 'true', inPr = 'true', inCheckout = () => {}, text = 
     if (r.status !== 0) throw new Error(`fixture setup failed: ${script}\n${r.stderr}`);
     return r.stdout.trim();
   };
-  g(`git init -q -b main . && printf '.tools/\\n' > .gitignore && echo base > notes.txt && git add -A && git commit -qm base && ${onMain} && git add -A && git commit -q --allow-empty -m main`);
+  const step = (s) => (typeof s === 'function' ? s(dir) : g(s));
+  g(`git init -q -b main . && printf '.tools/\\n' > .gitignore && echo base > notes.txt && git add -A && git commit -qm base`);
+  step(onMain);
+  g('git add -A && git commit -q --allow-empty -m main');
   const tip = g('git rev-parse HEAD');
-  g(`git checkout -qb pr && ${inPr} && echo '${text}' > t.txt && git add -A && git commit -qm pr && git checkout -q main`);
+  g('git checkout -qb pr');
+  step(inPr);
+  put(file, `${text}\n`)(dir);
+  g('git add -A && git commit -qm pr && git checkout -q main');
   const head = g('git rev-parse pr');
   inCheckout(dir);
   return rangeIn(dir, `${tip}..${head}`);
 };
 const refused = (r, re) => `${r.result}/${re.test(r.reason ?? '')}`;
+const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const FAKE_DIR = `mkdir -p tools-fake/bin && cp '${fake}' tools-fake/bin/go`;
 const ALLOW = '[extend]\\nuseDefault = true\\n[allowlist]\\npaths = ["t.txt"]\\n'; // a config that would hide the PR's t.txt, for printf
 
 // A tracked .tools, in each form main could ship it: refused from the trees, before any go runs. The force-tracked and the upper-case forms
 // pass every filesystem check (real directories, go under .tools), so only the tree refusal, case-folded, stops them.
+// The .gitattributes shapes: [path, contents, the file the PR adds the token to].
+const ATTRS = [['.gitattributes', '* -diff=x\n', 'b.txt'], ['.gitattributes', 'b.txt -diff=\n', 'b.txt'], ['.gitattributes', '[attr]hide -diff=1\n* hide\n', 'b.txt'], ['.gitattributes', '\f#x -diff\n', '\f#x'],
+  ['.gitattributes', '\v#x -diff\n', '\v#x'], ['.gitattributes', '\u00a0#x -diff\n', '\u00a0#x'], ['sub/.gitattributes', '* -diff\n', 'sub/t.txt'], ['.GITATTRIBUTES', '* -diff\n', 't.txt']];
 const cases = [
   ['fixture go: <top>/.tools/bin/go is the one used when it exists, over a go on PATH', resolved(withTools, [path.dirname(path1)]), own],
   ['fixture go: with no .tools, the first go on PATH, by its real path (a PATH directory without one is passed over)', resolved(noTools, [path0, path.dirname(path1), path.dirname(path2)]), path1],
@@ -79,6 +91,21 @@ const cases = [
   ['checkout config: main ships .GITLEAKS.TOML/ beside .GITLEAKS.JSON (the filesystem folds case): refused', refused(landIn({ onMain: `mkdir .GITLEAKS.TOML && echo x > .GITLEAKS.TOML/keep && printf '${ALLOW}' > .GITLEAKS.JSON` }), /^main carries \.GITLEAKS\./), 'refused/true'],
   ['checkout config: a range commit that adds .gitleaks.toml/ and .gitleaks.json is refused, naming the commit', refused(landIn({ inPr: `mkdir .gitleaks.toml && echo x > .gitleaks.toml/keep && printf '${ALLOW}' > .gitleaks.json` }), /^commit [0-9a-f]{8} in the range carries \.gitleaks\./), 'refused/true'],
   ['checkout config: a .gitleaksignore in the checkout, in no tree, that lists the token\'s finding: refused before the scan', refused(landIn({ inCheckout: (d) => fs.writeFileSync(path.join(d, '.gitleaksignore'), 't.txt:generic-api-key:1\n') }), /\/\.gitleaksignore exists;/), 'refused/true'],
+  // .gitattributes (owner ruling): land refuses every one. Each shape made the scan read a token range as clean while land parsed the lines
+  // (git reads `-diff=<any value>` as -diff, expands a macro, and takes a form feed, vertical tab or U+00A0 before `#` as part of a pattern),
+  // and git reads a nested or an upper-case one too. Each is refused on main, where git reads it, and in a range commit, which would bring it
+  // onto main; the controls, the same ranges with no .gitattributes, find the token.
+  ...ATTRS.flatMap(([at, body, file]) => [
+    [`attributes: main ships ${at} holding ${JSON.stringify(body)}: refused, naming it`, refused(landIn({ onMain: put(at, body), file }), new RegExp(`^main carries ${esc(at)}; git reads`)), 'refused/true'],
+    [`attributes: a range commit adds ${at} holding ${JSON.stringify(body)}: refused, naming the commit`, refused(landIn({ inPr: put(at, body), file }), new RegExp(`^commit [0-9a-f]{8} in the range carries ${esc(at)}; git reads`)), 'refused/true'],
+  ]),
+  ...[...new Set(ATTRS.map(([, , file]) => file))].map((file) => [`attributes control: the range with no .gitattributes finds the token in ${JSON.stringify(file)}`, landIn({ file }).result, 'hit']),
+  // On the checkout's filesystem, in no tree: an untracked one at the top (also upper-case) and an ignored nested one, each hiding the token
+  // from git. Under .tools, which no tree may carry a path under, one is not read and not refused: the init.sh layout with one there lands.
+  ['attributes: an untracked .gitattributes at the top of the checkout, in no tree: refused, naming it', refused(landIn({ inCheckout: put('.gitattributes', '* -diff\n') }), /\/\.gitattributes exists; git reads/), 'refused/true'],
+  ['attributes: an untracked .GITATTRIBUTES at the top: refused, naming it', refused(landIn({ inCheckout: put('.GITATTRIBUTES', '* -diff\n') }), /\/\.GITATTRIBUTES exists; git reads/), 'refused/true'],
+  ['attributes: an ignored sub/.gitattributes (sub/ in .git/info/exclude) over the token in sub/t.txt: refused, naming it', refused(landIn({ file: 'sub/t.txt', inCheckout: (d) => { fs.appendFileSync(path.join(d, '.git', 'info', 'exclude'), 'sub/\n'); put('sub/.gitattributes', '* -diff\n')(d); } }), /\/sub\/\.gitattributes exists; git reads/), 'refused/true'],
+  ['attributes: the init.sh layout with a .gitattributes inside .tools (an installed Go ships one) finds the token', landIn({ inCheckout: (d) => { ownTools(d); put('.tools/go-src/x/.gitattributes', '* -text\n')(d); } }).result, 'hit'],
 ];
 fs.rmSync(dir0, { recursive: true, force: true });
 const bad = cases.filter(([, got, want]) => got !== want).map(([name, got]) => `${name} (got ${got})`);

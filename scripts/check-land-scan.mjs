@@ -71,35 +71,33 @@ const cases = [
   ...(() => {
     const A = 'a'.repeat(40);
     const tree = (...paths) => paths.map((p) => `100644 blob ${A}\t${p}\0`).join('');
-    const attrs = (text, shipped) => checkScanConfig(tree('docs/x.md', '.gitattributes'), () => text, shipped);
-    const named = (path, shipped) => checkScanConfig(tree('README.md', path), () => { throw new Error('a blob read for a file that is not .gitattributes'); }, shipped);
+    const named = (path, shipped) => checkScanConfig(tree('README.md', path), shipped);
     return [
       ['scan config: a tree with none of the files is accepted', named('src/a.mjs').ok, true],
       ['scan config: a .gitleaks.toml at the root is refused, naming it', named('.gitleaks.toml').reason?.includes('main carries .gitleaks.toml'), true],
       ['scan config: a .gitleaksignore at the root is refused, naming it', named('.gitleaksignore').reason?.includes('main carries .gitleaksignore'), true],
       ['scan config: a nested .gitleaksignore is refused, naming its path', named('sub/dir/.gitleaksignore').reason?.includes('sub/dir/.gitleaksignore'), true],
       ['scan config: the name compares case-insensitively', named('.GitLeaks.TOML').ok, false],
-      ['scan config: a .gitattributes with `-diff` is refused', attrs('*.md text\n* -diff\n').ok, false],
-      ['scan config: a .gitattributes with `binary` is refused', attrs('*.lock binary\n').ok, false],
-      ['scan config: a .gitattributes with `!diff` is refused', attrs('docs/** !diff\n').ok, false],
-      ['scan config: a .gitattributes with a negative pattern is refused', attrs('!*.md text\n').ok, false],
-      ['scan config: a macro that switches diff off is refused', attrs('[attr]quiet -diff\n*.x quiet\n').ok, false],
-      ['scan config: a tab-separated `-diff` is refused', attrs('*.md\t-diff\n').ok, false],
-      ['scan config: a .gitattributes that only sets text and eol is accepted', attrs('# -diff is not here\n* text=auto eol=lf\n*.sh text\n\n').ok, true],
-      ['scan config: a comment that mentions -diff is not a line that switches it', attrs('# * -diff\n').ok, true],
-      ['scan config: the refusal names the .gitattributes path', checkScanConfig(tree('web/.gitattributes'), () => '* binary').reason.includes('main carries web/.gitattributes'), true],
+      // a .gitattributes (owner ruling): every one is refused, at any depth, in any case, as a file or a directory, whatever it holds
+      ['scan config: a .gitattributes at the root is refused, naming it, whatever it holds', named('.gitattributes').reason?.startsWith('main carries .gitattributes; git reads a .gitattributes while it diffs'), true],
+      ['scan config: a .gitattributes at any depth is refused, naming its path', [named('sub/.gitattributes').reason?.startsWith('main carries sub/.gitattributes;'), named('a/b/c/.gitattributes').ok].join(), 'true,false'],
+      ['scan config: .GITATTRIBUTES and docs/.GitAttributes are refused (the filesystem folds case)', [named('.GITATTRIBUTES').ok, named('docs/.GitAttributes').ok].join(), 'false,false'],
+      ['scan config: a directory named .gitattributes (a path through it) is refused', named('.gitattributes/x').ok, false],
+      ['scan config: a .gitattributes listed as shipped is still refused (no blob is allowed)', checkScanConfig(tree('.gitattributes'), { '.gitattributes': A }).ok, false],
+      ['scan config: names that only contain the word pass (.gitattributes.md, my.gitattributes)', [named('.gitattributes.md').ok, named('docs/my.gitattributes').ok].join(), 'true,true'],
+      ['scan config: the .gitattributes refusal names the tree it was found in', checkScanConfig(tree('x/.gitattributes'), undefined, 'commit abcd1234 in the range').reason?.startsWith('commit abcd1234 in the range carries x/.gitattributes;'), true],
       ['scan config: a file whose blob is the one this repo ships is accepted', named('.gitleaks.toml', { '.gitleaks.toml': A }).ok, true],
-      ['scan config: a file at a shipped path with another blob is refused', checkScanConfig(`100644 blob ${'b'.repeat(40)}\t.gitleaks.toml\0`, () => '', { '.gitleaks.toml': A }).ok, false],
-      ['scan config: a shipped blob at another path is refused', checkScanConfig(tree('other/.gitleaks.toml'), () => '', { '.gitleaks.toml': A }).ok, false],
-      ['scan config: this repo ships none, so none is allowed', checkScanConfig(tree('.gitleaks.toml'), () => '').ok, false],
+      ['scan config: a file at a shipped path with another blob is refused', checkScanConfig(`100644 blob ${'b'.repeat(40)}\t.gitleaks.toml\0`, { '.gitleaks.toml': A }).ok, false],
+      ['scan config: a shipped blob at another path is refused', checkScanConfig(tree('other/.gitleaks.toml'), { '.gitleaks.toml': A }).ok, false],
+      ['scan config: this repo ships none, so none is allowed', checkScanConfig(tree('.gitleaks.toml')).ok, false],
       // a tracked .tools: land runs go from <checkout>/.tools, so no tree land checks may carry one, in any form, whatever the blob
-      ['scan config: a tracked .tools entry (a symlink, no slash) is refused, naming it', checkScanConfig(`120000 blob ${A}\t.tools\0`, () => '').reason?.startsWith('main carries .tools;'), true],
+      ['scan config: a tracked .tools entry (a symlink, no slash) is refused, naming it', checkScanConfig(`120000 blob ${A}\t.tools\0`).reason?.startsWith('main carries .tools;'), true],
       ['scan config: a force-tracked .tools/bin/go is refused, naming it', named('.tools/bin/go').reason?.startsWith('main carries .tools/bin/go;'), true],
       ['scan config: .TOOLS and .Tools are refused (the filesystem folds case)', [named('.TOOLS/bin/go').ok, named('.Tools').ok].join(), 'false,false'],
       ['scan config: .tool\u017f (a long s, which APFS folds to s) is refused', named('.tool\u017f/bin/go').ok, false],
-      ['scan config: a .tools listed as shipped is still refused (no blob is allowed)', checkScanConfig(tree('.tools/bin/go'), () => '', { '.tools/bin/go': A }).ok, false],
+      ['scan config: a .tools listed as shipped is still refused (no blob is allowed)', checkScanConfig(tree('.tools/bin/go'), { '.tools/bin/go': A }).ok, false],
       ['scan config: only the first component counts (.toolsrc, my.tools/x and sub/.tools/x pass here; check-portable refuses the last)', [named('.toolsrc').ok, named('my.tools/x').ok, named('sub/.tools/x').ok].join(), 'true,true,true'],
-      ['scan config: the refusal names the tree it was found in', checkScanConfig(tree('.tools/bin/go'), () => '', undefined, 'commit abcd1234 in the range').reason?.startsWith('commit abcd1234 in the range carries .tools/bin/go;'), true],
+      ['scan config: the refusal names the tree it was found in', checkScanConfig(tree('.tools/bin/go'), undefined, 'commit abcd1234 in the range').reason?.startsWith('commit abcd1234 in the range carries .tools/bin/go;'), true],
       // a directory named .gitleaks.toml makes gitleaks load `.gitleaks.<ext>` beside it: any component with either name, and any top-level
       // entry gitleaks could take for a config, is refused
       ['scan config: a directory named .gitleaks.toml (a path through it) is refused, naming the path', named('.gitleaks.toml/keep').reason?.startsWith('main carries .gitleaks.toml/keep,'), true],

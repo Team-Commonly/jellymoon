@@ -59,7 +59,9 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
 1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.
 2. The ledger at the exact head (below).
 3. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
-   `startup_failure`, `action_required`), land refuses. No check runs at all is fine: CI is off by decision.
+   `startup_failure`, `action_required`), land refuses. No check runs at all is fine: land does not wait for CI. Once the
+   repository is public, a ruleset on `main` will make GitHub refuse the merge until CI's checks pass; land still
+   does not wait, so a land run while required checks are pending fails at the merge step.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
    First, the scan configuration: land lists main's tree at the fetched tip and the tree of every commit in the range (whole, NUL-separated,
    in the scan's env), and refuses (naming the tree and the path) when one carries a path whose first component, compared case-folded (APFS
@@ -268,16 +270,17 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   `git remote -v`, which shows the rewrite). It does not look at `credential.helper`, and it lets a non-http URL carry a
   plain user (`ssh://git@host`); only a user:password pair is refused there.
 - **The base can be retargeted between the last re-read and the merge.** `--match-head-commit` pins the head only.
-- **The CI veto reads completed check runs only.** In-progress runs and legacy commit statuses are ignored, which matches
-  "CI is off; a failing run vetoes".
+- **The CI veto reads completed check runs only.** In-progress runs and legacy commit statuses are ignored, so land never
+  waits for CI; a failed completed run vetoes.
 - **The checkout check** also refuses `assume-unchanged` or `skip-worktree` files, a diff from HEAD, and untracked files
   (all shown).
 - **A message's author, or the pod creator, can change its `created_at`** (Commonly's `PATCH /api/messages/:id/created-at`). A reviewer could reorder their own verdicts, and the creator anyone's; a backdated FAIL could also slip past the paging bound. Same trust class as the deletion below.
 - **A pod creator can delete a reviewer's message.** Land reads only what exists at land time, so deleting a
   reviewer's latest FAIL brings back their earlier PASS at the same head. The pod's creator is trusted.
 - **The deny check's names class does not run on the merge path.** Land builds the preflight environment without
-  `JM_PRIVATE_NAMES`, so `make private` skips that class during a land. It runs in CI once CI is enabled, and locally when the
-  operator exports `JM_PRIVATE_NAMES`. Passing it through land's environment is a follow-up.
+  `JM_PRIVATE_NAMES`, so `make private` skips that class during a land. It runs in CI only once a
+  `JM_PRIVATE_NAMES` repository secret is set, which it is not yet, and locally when the operator exports
+  `JM_PRIVATE_NAMES`. Passing it through land's environment is a follow-up.
 - **A trusted author is trusted fully.** Nothing here contains code a trusted account wrote; see the threat model.
 
 ## Bootstrap: the first land of the gate

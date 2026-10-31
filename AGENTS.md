@@ -42,8 +42,8 @@ Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SO
   check, not a security boundary), requires the verifier's ledger line at that head (the coordinator transcribes the
   report's `GATE:` line, model and `FINDINGS` into the row; any FAIL at a head blocks it, so the fix is a new head),
   and, for every land, the review's pod verdict naming the PR and head (one review per head, posted by the operator; accepted ids are operator env `JM_VERDICT_REVIEWERS`, never in the repo). No path and no scan result waives the ledger line or the verdict: the secret scans (`make secrets-range`, the preflight's `make secrets`) can only refuse, never waive. Verifiers run a PR's code only after the same trust gate:
-  `make verify-preflight PR=<n>`, from a clean checkout of main; never check out a PR and run make (the one exception is the bootstrap PR, `docs/development/verifier.md`). The stack lands as one PR retargeted to `main`. CI is off by decision; land refuses
-  only if check runs exist on the head and one failed. Only the coordinator lands (`docs/development/landing.md`,
+  `make verify-preflight PR=<n>`, from a clean checkout of main; never check out a PR and run make (the one exception is the bootstrap PR, `docs/development/verifier.md`). The stack lands as one PR retargeted to `main`. Land does not wait for CI; it refuses
+  when a completed check run on the head failed. Only the coordinator lands (`docs/development/landing.md`,
   `workflow.md`).
 - **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new
   worktree runs `./init.sh` first (it installs `.tools/`; the pre-commit hook fails without it), then

@@ -1,7 +1,6 @@
 name: CI
-# Runs only when dispatched by hand until the public flip. After the flip CI mirrors the local checks, and a failing check run
-# blocks a land (docs/development/landing.md). CI never lands anything: `make land` stays the only merge path. The workflow is
-# already fork-safe, so enabling it is a one-line change.
+# Runs on every pull request and every push to main, and runs the checks `make preflight` runs. A failing check run blocks a land
+# (docs/development/landing.md). CI never lands anything: `make land` stays the only merge path.
 
 # Verification loop (docs/development/workflow.md). Each check is a job here. A job whose code does not exist
 # yet passes with a notice; it starts enforcing the moment its directory lands.
@@ -9,10 +8,10 @@ name: CI
 
 on:
   workflow_dispatch:
-  # The public flip enables these two triggers (uncomment). Never `pull_request_target`: it runs with secrets.
-  # pull_request:
-  # push:
-  #   branches: [main]
+  # Never `pull_request_target`: it runs with secrets.
+  pull_request:
+  push:
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -144,15 +143,21 @@ jobs:
 
   e2e-local:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Full slice, local
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version-file: .tool-versions
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - name: The contract suite against the Worker under wrangler dev --local (make e2e-a, as in make preflight)
         run: |
           if [ ! -d e2e ]; then echo "::notice::no e2e/ yet; skipping"; exit 0; fi
-          make e2e
+          make e2e-a
 
   e2e-preview:
     # Needs a secret, so it never runs on a pull request from a fork.

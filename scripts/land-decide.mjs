@@ -210,7 +210,8 @@ export const scanResult = ({ status, stderr, expected }) => {
 // refuses more.
 export const foldName = (name) => name.normalize('NFKC').toLowerCase().toUpperCase().toLowerCase();
 // What a tree carries that changes what the range scan runs or reads. The scan runs in a checkout of main, so these, committed to main, change
-// every later land: land checks main's tree and the tree of every commit in the range (land-scan.mjs), so a PR cannot bring one onto main.
+// every later land: land checks main's tree and the tree of every commit in the range (land-scan.mjs), so a PR cannot bring one onto main. The
+// one exception, a chain of links that passes the lexical rule below, is refused on disk by every later land (land-scan.mjs, linkOnDisk).
 // - a path with any component that folds to `.tools`, at any depth: land runs go from `<checkout>/.tools/bin`, so a tracked `.tools` (a symlink,
 //   or a force-added `.tools/bin/go`) would choose the go land runs, and `.gitignore` hides a `.tools` at any depth, so git, diffing a range
 //   path under a nested one, opens the ignored `.gitattributes` there. Never allowed, whatever the blob (owner ruling; check-portable agrees).
@@ -222,15 +223,33 @@ export const foldName = (name) => name.normalize('NFKC').toLowerCase().toUpperCa
 // - a path with any component named `.gitattributes`, at any depth, whatever it holds. Never allowed (owner ruling): git reads one in the
 //   checkout while it diffs, and a line can switch a file out of the diff in more ways than a parser here followed (`-diff=<any value>`, a
 //   macro, a pattern after a form feed). The repo carries none; land-scan.mjs refuses one on the checkout's filesystem too.
-// `tree` is `git ls-tree -r -z --full-tree <commit>`, `where` names the tree in the reason. Names compare folded.
+// - a symbolic link whose target linkFault (below) refuses. git follows a link in the checkout while it diffs a later range that replaces it with
+//   a directory, so it opens `<link>/.gitattributes` wherever the link points, where the checkout listing never looks (measured: a link to a
+//   directory outside whose attributes file says `* -diff` read a token at `<link>/t.txt` as clean).
+// `tree` is `git ls-tree -r -z --full-tree <commit>`, `where` names the tree in the reason, and targetOf(blob id) is a link's target. Names
+// compare folded.
 const SHIPPED = {};
-export function checkScanConfig(tree, shipped = SHIPPED, where = 'main') {
+// A link's target read lexically (owner ruling): refused when it is empty or absolute or, normalised against the link's own directory, leaves
+// the checkout or starts with a component that folds to `.git` or `.tools`, the two top-level entries the listing skips. Returns the fault or null.
+export function linkFault(file, target) {
+  if (!target) return 'is empty';
+  if (target.startsWith('/')) return 'is absolute';
+  const parts = [];
+  for (const p of [...file.split('/').slice(0, -1), ...target.split('/')]) {
+    if (p === '..') { if (parts.pop() === undefined) return 'leaves the checkout'; } else if (p && p !== '.') parts.push(p);
+  }
+  return ['.git', '.tools'].includes(foldName(parts[0] ?? '')) ? `points into ${parts[0]}` : null;
+}
+export function checkScanConfig(tree, shipped = SHIPPED, where = 'main', targetOf = () => '') {
   for (const entry of String(tree).split('\0').filter(Boolean)) {
     const [meta, file] = [entry.slice(0, entry.indexOf('\t')), entry.slice(entry.indexOf('\t') + 1)];
     const id = meta.split(' ')[2];
     const parts = file.split('/').map(foldName);
     if (parts.includes('.tools')) return { ok: false, reason: `${where} carries ${file}; land runs go from the checkout's own .tools and .gitignore hides a .tools at any depth, so no tree may carry one; remove it` };
     if (parts.includes('.gitattributes')) return { ok: false, reason: `${where} carries ${file}; git reads a .gitattributes while it diffs, and land refuses every one, so remove it` };
+    const target = meta.startsWith('120000 ') ? targetOf(id) : null;
+    const fault = target !== null && linkFault(file, target);
+    if (fault) return { ok: false, reason: `${where} carries ${file}, a symbolic link whose target ${JSON.stringify(target)} ${fault}; git follows it while it diffs, so remove it` };
     const bad = parts.some((p) => p === '.gitleaks.toml' || p === '.gitleaksignore') || parts[0] === '.gitleaks' || parts[0].startsWith('.gitleaks.');
     if (bad && shipped[file] !== id) return { ok: false, reason: `${where} carries ${file}, which changes what the range scan reads; remove it or ship it from this repo` };
   }

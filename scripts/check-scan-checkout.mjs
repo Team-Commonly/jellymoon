@@ -34,9 +34,9 @@ const put = (rel, body) => (d) => { fs.mkdirSync(path.dirname(path.join(d, rel))
 // main's tip runs `onMain` before its commit (it may force-add what .gitignore hides); the PR runs `inPr`, then writes `text` to `file`; each
 // step is a bash script or a function of the checkout directory. The checkout goes back to main and `inCheckout(dir)` adds what the checkout
 // holds untracked. Returns land's scan of <main tip>..<PR head> in that checkout.
-const landIn = ({ onMain = 'true', inPr = 'true', inCheckout = () => {}, text = `token = ${token}`, file = 't.txt' } = {}) => {
-  const dir = path.join(dir0, `c${n += 1}`);
-  fs.mkdirSync(dir);
+const landIn = ({ onMain = 'true', inPr = 'true', inCheckout = () => {}, text = `token = ${token}`, file = 't.txt', nest = [] } = {}) => {
+  const dir = path.join(dir0, `c${n += 1}`, ...nest); // nest: the checkout sits that many directories below c<n>
+  fs.mkdirSync(dir, { recursive: true });
   const g = (script) => {
     const r = spawnSync('bash', ['-ec', script], { cwd: dir, encoding: 'utf8', env: gitEnv });
     if (r.status !== 0) throw new Error(`fixture setup failed: ${script}\n${r.stderr}`);
@@ -63,6 +63,12 @@ const ALLOW = '[extend]\\nuseDefault = true\\n[allowlist]\\npaths = ["t.txt"]\\n
 // A tracked .tools, in each form main could ship it: refused from the trees, before any go runs. The force-tracked and the upper-case forms
 // pass every filesystem check (real directories, go under .tools), so only the tree refusal, case-folded, stops them.
 // The .gitattributes shapes: [path, contents, the file the PR adds the token to].
+// Tracked symbolic links (owner ruling): [what, target, what the checkout holds]. `out` is a directory outside every checkout whose attributes
+// file switches every diff off; each link, tracked on main and replaced in the range by lnk/t.txt (the token), would read clean through it.
+const out = path.join(dir0, 'x');
+put('.gitattributes', '* -diff\n')(out);
+const LINKS = [['an absolute link', out], ['a link to ../x', '../x'], ['a link into .git', '.git/hide', put('.git/hide/.gitattributes', '* -diff\n')],
+  ['a link into .tools', '.tools/x', (d) => { cacheTools(d); put('.tools/x/.gitattributes', '* -diff\n')(d); }], ['a link with an empty target', '']];
 const ATTRS = [['.gitattributes', '* -diff=x\n', 'b.txt'], ['.gitattributes', 'b.txt -diff=\n', 'b.txt'], ['.gitattributes', '[attr]hide -diff=1\n* hide\n', 'b.txt'], ['.gitattributes', '\f#x -diff\n', '\f#x'],
   ['.gitattributes', '\v#x -diff\n', '\v#x'], ['.gitattributes', '\u00a0#x -diff\n', '\u00a0#x'], ['sub/.gitattributes', '* -diff\n', 'sub/t.txt'], ['.GITATTRIBUTES', '* -diff\n', 't.txt']];
 const cases = [
@@ -111,6 +117,17 @@ const cases = [
   ['attributes: an untracked .GITATTRIBUTES at the top: refused, naming it', refused(landIn({ inCheckout: put('.GITATTRIBUTES', '* -diff\n') }), /\/\.GITATTRIBUTES exists; git reads/), 'refused/true'],
   ['attributes: an ignored sub/.gitattributes (sub/ in .git/info/exclude) over the token in sub/t.txt: refused, naming it', refused(landIn({ file: 'sub/t.txt', inCheckout: (d) => { fs.appendFileSync(path.join(d, '.git', 'info', 'exclude'), 'sub/\n'); put('sub/.gitattributes', '* -diff\n')(d); } }), /\/sub\/\.gitattributes exists; git reads/), 'refused/true'],
   ['attributes: the init.sh layout with a .gitattributes inside .tools (an installed Go ships one) finds the token', landIn({ inCheckout: (d) => { ownTools(d); put('.tools/go-src/x/.gitattributes', '* -text\n')(d); } }).result, 'hit'],
+  // Each link is refused lexically in main's tree and in a range commit's tree, before the scan.
+  ...LINKS.flatMap(([what, to, held]) => [
+    [`links: main tracks ${what}, the range puts the token at lnk/t.txt: refused, naming it`, refused(landIn({ onMain: `ln -s '${to}' lnk`, inPr: 'git rm -q lnk', file: 'lnk/t.txt', inCheckout: held }), /^main carries lnk, a symbolic link whose target /), 'refused/true'],
+    [`links: a range commit adds ${what}, the next puts the token at lnk/t.txt: refused, naming the commit`, refused(landIn({ inPr: `ln -s '${to}' lnk && git add -A && git commit -qm link && git rm -q lnk`, file: 'lnk/t.txt' }), /^commit [0-9a-f]{8} in the range carries lnk, a symbolic link whose target /), 'refused/true'],
+  ]),
+  // A chain passes the lexical rule (p normalises to the top) and resolves three levels above it, where an attributes file switches the diff off.
+  ['links: main tracks q -> . and p -> q/q/q/../../.., the range puts the token at p/t.txt: refused on disk, naming p', refused(landIn({ nest: ['u', 'v', 'w'], onMain: 'ln -s . q && ln -s q/q/q/../../.. p', inPr: 'git rm -q p', file: 'p/t.txt', inCheckout: (d) => put('.gitattributes', '* -diff\n')(path.resolve(d, '../../..')) }), /\/p, a symbolic link main tracks, resolves to /), 'refused/true'],
+  ['links control: main tracks the repo\'s own two links (CLAUDE.md -> AGENTS.md, .claude/skills -> ../.agents/skills): the token is found', landIn({ onMain: 'echo a > AGENTS.md && mkdir -p .agents/skills .claude && echo s > .agents/skills/s.md && ln -s AGENTS.md CLAUDE.md && ln -s ../.agents/skills .claude/skills' }).result, 'hit'],
+  ['links control: main tracks lnk -> d, a directory in the checkout, and the range puts the token at lnk/t.txt: found', landIn({ onMain: 'mkdir d && echo d > d/keep && ln -s d lnk', inPr: 'git rm -q lnk', file: 'lnk/t.txt' }).result, 'hit'],
+  ['links control: a range commit adds lnk -> d, the next puts the token at lnk/t.txt: found', landIn({ inPr: 'mkdir d && echo d > d/keep && ln -s d lnk && git add -A && git commit -qm link && git rm -q lnk', file: 'lnk/t.txt' }).result, 'hit'],
+  ['links: the listing does not follow a link (an ignored ign -> x, with no range path under it): the token is found', landIn({ inCheckout: (d) => { fs.symlinkSync(out, path.join(d, 'ign')); fs.appendFileSync(path.join(d, '.git', 'info', 'exclude'), 'ign\n'); } }).result, 'hit'],
 ];
 fs.rmSync(dir0, { recursive: true, force: true });
 const bad = cases.filter(([, got, want]) => got !== want).map(([name, got]) => `${name} (got ${got})`);

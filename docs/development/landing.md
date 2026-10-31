@@ -76,6 +76,16 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    then loads `.gitleaks.json`, `.gitleaks.yaml` or another `.gitleaks.<ext>` beside it); or a top-level entry named `.gitleaks` or
    starting with `.gitleaks.`, unless that file's blob is the one this repo ships. `SHIPPED` in `land-decide.mjs` lists those blobs;
    this repo ships none, so none is allowed. The repository carries no `.gitattributes`, by owner ruling, because land refuses any.
+   **Symbolic links** (owner ruling). git follows a link in the checkout while it diffs, so a link on main that a later range replaces with
+   a directory makes git open `<link>/.gitattributes` wherever the link points, where the listing below never looks (measured: a link to a
+   directory outside the checkout whose attributes file says `* -diff` read a token at `<link>/t.txt` as clean). So the same tree check
+   refuses a tracked link, naming the tree, the link and its target, when the target is empty or absolute or, normalised lexically against
+   the link's own directory, leaves the checkout or starts with a component that folds to `.git` or `.tools` (`linkFault`). A chain of
+   links can pass that and still leave: `q -> .` with `p -> q/q/q/../../..` normalises to the top and resolves three levels above it. So
+   land also resolves every link main's tree tracks physically, in the checkout, and refuses one that cannot be resolved or that lands
+   outside the checkout's top or under its `.git` or `.tools`, naming it (the rule `check-portable` applies to the PR head in CI). A chain
+   a PR adds passes the range check and is refused by the next land. The repository's two links, `CLAUDE.md -> AGENTS.md` and
+   `.claude/skills -> ../.agents/skills`, pass both.
    **Land runs gitleaks itself, not make,** with the go installed in the land checkout's `.tools`, checked on the filesystem first (ignored
    files count). `<checkout>/.tools` and `<checkout>/.tools/bin` must be real directories, not symbolic links, and `.tools/bin/go`, followed
    through every link, must be an executable under `<checkout>/.tools` (what `scripts/tools.sh` installs: `.tools/bin/go -> ../go-<version>/bin/go`)
@@ -93,9 +103,10 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    read, and `GITLEAKS_CONFIG` would lose to it too. gitleaks still reads `<checkout>/.gitleaksignore` whatever the flags say (`cmd/root.go`
    adds it after the ignore path), so land refuses one at the top of the checkout, in any case, on the filesystem (ignored files count). Git opens `<dir>/.gitattributes` in
    the checkout for every directory of a path it diffs, tracked or not, so land also lists the checkout on the filesystem, every entry at
-   every depth (ignored ones included, names compared case-folded, symbolic links not followed), and refuses, naming the path, when it finds a
-   `.gitattributes`. It skips two top-level entries: `.git`, and `.tools`, under which no checked tree may carry a path, so git diffs
-   nothing there (and the Go `scripts/tools.sh` installs ships a `.gitattributes` in its source tree). `node_modules` is not skipped, and
+   every depth (ignored ones included, names compared case-folded, symbolic links not followed: main's links are checked as above
+   instead), and refuses, naming the path, when it finds a `.gitattributes`. It skips two top-level entries: `.git`, and `.tools`, under
+   which no checked tree may carry a path and no checked link may lead, so git diffs nothing there (and the Go `scripts/tools.sh` installs
+   ships a `.gitattributes` in its source tree). A `.tools` below the top is listed, because a link main tracks may lead into one. `node_modules` is not skipped, and
    a dependency ships one (`fast-uri`), so a land checkout where `make` installed `node_modules` (`./init.sh` does) is refused until it is
    removed; land needs none there, since its preflight installs its own in a throwaway worktree. The full listing (what a checkout
    holding none costs) took about 50 ms on a checkout with an installed `.tools` and `node_modules` (1,407 directories, 8,508 entries), and
@@ -263,13 +274,13 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   network (what is not in the module cache comes through the public proxy and is checked against the checksum database, both pinned in
   `scanEnv`; what is in it is used as it stands). The operator's Go env file is not read (`GOENV=off`). From the repo, a tracked `.tools` is refused in every tree land checks, and
   a tracked `go.work`, `go.mod` (`toolchain`, `replace`), `vendor/` or top-level `pkg/tool/` has no effect (see step 4).
-- **The scan configuration is checked in the committed trees, and on the filesystem only for `.tools`, a top-level `.gitleaksignore` and
-  a `.gitattributes` outside the top-level `.git` and `.tools`.** The scan also reads attributes and config that are in no tree, and land
+- **The scan configuration is checked in the committed trees, and on the filesystem only for `.tools`, a top-level `.gitleaksignore`,
+  a `.gitattributes` outside the top-level `.git` and `.tools`, and where the links main tracks resolve.** The scan also reads attributes and config that are in no tree, and land
   checks none of them: `.git/info/attributes`; the land checkout's own `.git/config` and `.git/config.worktree` (a `diff` driver,
   `core.attributesFile`, `attr.tree`); the operator's global attributes file, `.config/git/attributes` in their home directory (git's default `core.attributesFile`, read although
   `scanEnv` points `GIT_CONFIG_GLOBAL` at `/dev/null`); the system attributes file (`git var GIT_ATTR_SYSTEM` names `/etc/gitattributes` for
   the macOS git; by git's documentation `GIT_CONFIG_NOSYSTEM` does not turn it off, not measured here); a `.gitattributes` under an ignored symbolic link to a directory (git follows the link, the
-  listing does not); and an ignored file at a path gitleaks or go looks for. The checkout check refuses untracked files and a diff from HEAD,
+  listing does not, and the on-disk link check resolves only the links main's tree tracks, so it does not close this); and an ignored file at a path gitleaks or go looks for. The checkout check refuses untracked files and a diff from HEAD,
   but an ignored file passes it, so keep the land checkout a clean clone and rebuild it after any doubt.
 - **Both secret scans pass `-m`** (`make secrets`, and land's range scan): gitleaks runs `git log -p` without it, so a secret that
   exists only in a merge commit's own diff (a conflict resolution) would never be scanned.

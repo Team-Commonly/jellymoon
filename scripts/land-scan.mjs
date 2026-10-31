@@ -41,13 +41,32 @@ export function touchedPaths(listing) {
 export const backslashPaths = (listing) => touchedPaths(listing).filter((p) => p.path.endsWith('\\'));
 // The trees read before the scan, by git in the scan's env: main's tip (the left end of the range) and every commit of the range, each listed
 // whole (`--full-tree`, so the directory land runs from cannot narrow it) and NUL-separated. checkScanConfig refuses a tree that carries a file
-// that would steer this scan or a later one.
+// that would steer this scan or a later one; a link's target is read once per blob. Returns main's tree for linkOnDisk.
 function checkTrees(range, commits, git) {
+  const targets = new Map();
+  const targetOf = (id) => (targets.has(id) ? targets.get(id) : targets.set(id, git(['cat-file', 'blob', id])).get(id));
+  let main;
   for (const [commit, where] of [[range.split('..')[0], 'main'], ...commits.map((c) => [c, `commit ${c.slice(0, 8)} in the range`])]) {
-    const r = checkScanConfig(git(['ls-tree', '-r', '-z', '--full-tree', commit]), undefined, where);
+    const tree = git(['ls-tree', '-r', '-z', '--full-tree', commit]);
+    main ??= tree;
+    const r = checkScanConfig(tree, undefined, where, targetOf);
     if (!r.ok) return r;
   }
-  return { ok: true };
+  return { ok: true, main };
+}
+// A chain of links passes the lexical rule and can still leave the checkout (`q -> .` with `p -> q/q/q/../../..` normalises to the top, and
+// `p` resolves three levels above it), so each link main's tree tracks is also resolved physically in the checkout (owner ruling) and refused
+// when it cannot be, or lands outside the top or under its `.git` or `.tools`. The idea is check-portable's, applied to the land checkout.
+function linkOnDisk(top, tree) {
+  const real = fs.realpathSync.native(top);
+  for (const e of String(tree).split('\0').filter((x) => x.startsWith('120000 '))) {
+    const at = path.join(top, e.slice(e.indexOf('\t') + 1));
+    let to;
+    try { to = fs.realpathSync.native(at); } catch { return `${at}, a symbolic link main tracks, cannot be resolved`; }
+    const first = foldName(path.relative(real, to).split(path.sep)[0]);
+    if ((to !== real && !to.startsWith(`${real}${path.sep}`)) || first === '.git' || first === '.tools') return `${at}, a symbolic link main tracks, resolves to ${to}`;
+  }
+  return null;
 }
 // The go land runs, checked on the filesystem (an ignored file counts). `<top>/.tools` and `<top>/.tools/bin` must be real directories, not
 // symlinks, and go must resolve either outside the checkout (a shared toolchain cache: .tools/bin holds absolute links into it) or under
@@ -79,7 +98,7 @@ const ignoreFileIn = (top) => fs.readdirSync(top).find((n) => foldName(n) === '.
 // ruling; checkScanConfig refuses them in the trees). So the checkout is listed on the filesystem, every entry at every depth, ignored ones
 // included, names compared folded, and the first .gitattributes found is returned, relative to the top. Two top-level entries are skipped:
 // `.git` (git's own) and `.tools`, which no checked tree may carry a path under, so git diffs nothing there and opens no attributes file in
-// it (and an installed Go ships one in its source tree). Symbolic links are not followed.
+// it (and an installed Go ships one in its source tree). Symbolic links are not followed: main's tracked links are checked above instead.
 const attributesIn = (top, rel = '') => {
   for (const e of fs.readdirSync(path.join(top, rel), { withFileTypes: true })) {
     const name = foldName(e.name);
@@ -96,6 +115,8 @@ export function scanRange({ range, top, git, run, env }) {
   const all = git(['rev-list', range]).split('\n').filter(Boolean);
   const trees = checkTrees(range, all, git);
   if (!trees.ok) return { result: 'refused', reason: trees.reason };
+  const link = linkOnDisk(top, trees.main);
+  if (link) return { result: 'refused', reason: `${link}; git follows a link while it diffs, and land refuses one that leaves the checkout or leads into its .git or .tools, so remove it` };
   const bad = backslashPaths(git(NAME_STATUS.concat(range)))[0];
   if (bad) return { result: 'refused', reason: `commit ${bad.sha.slice(0, 8)} touches the path ${JSON.stringify(bad.path)}, which ends in a backslash; gitleaks cannot parse that file name and would skip the files after it, so land refuses` };
   const { expected } = textCommits(git(['log', '-m', '-p', '-U0', '--format=%x01%H', range]), all);

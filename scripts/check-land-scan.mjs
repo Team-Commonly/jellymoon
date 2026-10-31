@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Tests the range secret scan's pure decisions: how its result is read (scanResult), the environment it runs in (scanEnv), main's own
 // scan configuration (checkScanConfig) and land-scan.mjs (the argv, the paths gitleaks cannot parse). No network. Own step in `make test`.
-import { checkScanConfig, foldName, scanEnv, scanResult, textCommits } from './land-decide.mjs';
+import { checkScanConfig, foldName, linkFault, scanEnv, scanResult, textCommits } from './land-decide.mjs';
 import { backslashPaths, GITLEAKS_MODULE, SCAN_CONFIG, scanArgv, touchedPaths } from './land-scan.mjs';
 
 const CLEAN = '10:11AM INF 3 commits scanned.\n10:11AM INF no leaks found\n'; // what a clean gitleaks run prints to stderr
@@ -98,6 +98,10 @@ const cases = [
       ['scan config: a .tools listed as shipped is still refused (no blob is allowed)', checkScanConfig(tree('.tools/bin/go'), { '.tools/bin/go': A }).ok, false],
       ['scan config: a .tools component at any depth is refused, naming it (sub/.tools/x, a/b/.TOOLS/x); .toolsrc and my.tools/x pass', [named('sub/.tools/x').reason?.startsWith('main carries sub/.tools/x;'), named('a/b/.TOOLS/x').ok, named('.toolsrc').ok, named('my.tools/x').ok].join(), 'true,false,true,true'],
       ['scan config: the refusal names the tree it was found in', checkScanConfig(tree('.tools/bin/go'), undefined, 'commit abcd1234 in the range').reason?.startsWith('commit abcd1234 in the range carries .tools/bin/go;'), true],
+      // a tracked symbolic link, read lexically against its own directory (owner ruling)
+      ['link target: in-repo targets pass (the repo\'s two links, q -> ., the chain p -> q/q/q/../../.., a nested .tools)', [['CLAUDE.md', 'AGENTS.md'], ['.claude/skills', '../.agents/skills'], ['q', '.'], ['p', 'q/q/q/../../..'], ['lnk', 'sub/.tools']].map(([f, t]) => linkFault(f, t)).join(), ',,,,'],
+      ['link target: empty, absolute, out of the checkout, and into .git or .tools after normalising, in any case, are refused', [['l', ''], ['l', '/x'], ['l', '../x'], ['a/b', '../../x'], ['l', '.git/x'], ['a/l', '../.TOOLS/x'], ['l', 'a/../.Git']].map(([f, t]) => linkFault(f, t)).join('|'), 'is empty|is absolute|leaves the checkout|leaves the checkout|points into .git|points into .TOOLS|points into .Git'],
+      ['scan config: a link whose target is refused names the tree, the link and its target; an in-repo one passes', [checkScanConfig(`120000 blob ${A}\tlnk\0`, undefined, 'commit abcd1234 in the range', () => '/x').reason?.startsWith('commit abcd1234 in the range carries lnk, a symbolic link whose target "/x" is absolute;'), checkScanConfig(`120000 blob ${A}\tlnk\0`, undefined, 'main', () => 'docs').ok].join(), 'true,true'],
       // a directory named .gitleaks.toml makes gitleaks load `.gitleaks.<ext>` beside it: any component with either name, and any top-level
       // entry gitleaks could take for a config, is refused
       ['scan config: a directory named .gitleaks.toml (a path through it) is refused, naming the path', named('.gitleaks.toml/keep').reason?.startsWith('main carries .gitleaks.toml/keep,'), true],

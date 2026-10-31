@@ -1,9 +1,9 @@
 // Command fakeagent is the fake ACP agent the e2e suite hands to the daemon: JSON-RPC 2.0 over stdio, one message per line.
 // It is NOT a model. It writes what it received (argv, env, the ACP requests) to the file named by its first argument,
 // calls jm_whoami through the MCP server session/new gave it, records the answer, and exits. After the record path, the
-// arguments are: "hold" (record, then stay up, ignoring a closed stdin, to stand for an agent that will not leave by itself)
-// and "script=<file>" (a JSON list of {"tool", "arguments"}: the agent makes those MCP calls in order instead of jm_whoami,
-// and records each reply under Calls. It never decides anything from a reply: a script is the whole of its behaviour).
+// arguments are: "hold" (record, then stay up, ignoring a closed stdin and SIGTERM, to stand for an agent that will not leave by
+// itself and has to be killed) and "script=<file>" (a JSON list of {"tool", "arguments"}: the agent makes those MCP calls in order
+// instead of jm_whoami, and records each reply under Calls. It never decides anything from a reply: a script is the whole of its behaviour).
 package main
 
 import (
@@ -13,7 +13,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -159,6 +161,9 @@ func main() {
 			scripted = f
 		}
 	}
+	if hold {
+		signal.Ignore(syscall.SIGTERM)
+	}
 	rec.PID, rec.Argv, rec.Env = os.Getpid(), os.Args, os.Environ()
 	save()
 	sc := bufio.NewScanner(os.Stdin)
@@ -192,6 +197,13 @@ func main() {
 		save()
 	}
 	if hold {
-		select {}
+		stayUp()
+	}
+}
+
+// stayUp never returns. A bare select would end the process with a deadlock error once nothing else runs, which is a way out.
+func stayUp() {
+	for {
+		time.Sleep(time.Hour)
 	}
 }

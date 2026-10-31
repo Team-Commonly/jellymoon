@@ -53,3 +53,10 @@ test('the pod is told of each tool call a run makes once it is answered, refused
   await ask(run, { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'jm_nothing' } });
   expect(counted).toEqual(['run_1@pod_1', 'run_1@pod_1']);
 });
+
+test('a tool name that is an inherited object property is no such tool, not a server error', async () => {
+  for (const name of ['jm_constructor', 'jm___proto__', 'jm_toString', 'jm_hasOwnProperty']) {
+    const r = await ask(run, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name, arguments: {} } });
+    expect([name, r.error]).toEqual([name, { code: -32602, message: `No such tool: ${name}` }]);
+  }
+});

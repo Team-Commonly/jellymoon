@@ -28,8 +28,10 @@ func harnessCommand(h protocol.Harness) ([]string, error) {
 
 // agentEnv is the whole environment an agent gets: a short list of the daemon's, never the rest. The daemon's environment can
 // hold the user token or settings of its own, and the agent's only credential is the run token in its MCP server config.
+// The result is never nil: os/exec gives a child whose Env is nil the whole parent environment, so "none of them set" must be
+// an empty list, not an absent one.
 func agentEnv() []string {
-	var env []string
+	env := []string{}
 	for _, k := range []string{"PATH", "HOME", "TMPDIR", "USER", "LANG", "LC_ALL", "TERM"} {
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)

@@ -1,6 +1,6 @@
 # 0005 · How the daemon starts an agent
 
-Status: Accepted (owner ruling, 2026-10-30), for the slice. The open items at the end are not settled by it.
+Status: Accepted (maintainers, 2026-10-30; the run claim work, F09, #3). The open items at the end are not settled by it.
 
 ## Decision
 

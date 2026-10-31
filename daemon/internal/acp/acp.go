@@ -117,15 +117,25 @@ func lines(r io.Reader, done <-chan struct{}) <-chan message {
 	return out
 }
 
+// command builds the agent's process: its own process group, and exactly the environment the Spec names. A nil Env would give the
+// agent the daemon's whole environment, so it becomes an empty one.
+func command(s Spec) *exec.Cmd {
+	cmd := exec.Command(s.Command[0], s.Command[1:]...)
+	cmd.Dir, cmd.Env = s.Dir, s.Env
+	if cmd.Env == nil {
+		cmd.Env = []string{}
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return cmd
+}
+
 // Run starts the agent, runs one turn and returns nil when the turn ended. When ctx ends first, or the agent fails, it returns
 // an error. Either way the agent's whole process group is gone before it returns.
 func Run(ctx context.Context, s Spec) error {
 	if len(s.Command) == 0 {
 		return errors.New("no agent command")
 	}
-	cmd := exec.Command(s.Command[0], s.Command[1:]...)
-	cmd.Dir, cmd.Env = s.Dir, s.Env
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd := command(s)
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err

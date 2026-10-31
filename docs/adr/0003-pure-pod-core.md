@@ -94,7 +94,8 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 ## Commands
 
 `pod_create`, `member_add`, `agent_register`, `task_create`, `task_update`, `message_post`, `change` (kind `ruling`
-only), `claim`, `op`, `heartbeat`, `task_release`, `run_end`, `run_stop`, `wake_ack`, `run_claim`, `tick`, `boot`.
+only), `claim`, `op`, `heartbeat`, `task_release`, `run_end`, `run_stop`, `wake_ack`, `run_claim`, `computer_online`,
+`computer_offline`, `tick`, `boot`.
 `task_create` and `task_update` write the `task_assigned` wake, and `message_post` the `mention` wakes, through the
 same writer `change` uses. An `@name` token is a mention when `name` equals a registered agent's name exactly and the
 token is outside CommonMark code: a backtick run of length n opens a span that closes at the next run of exactly n and
@@ -129,6 +130,21 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
 - A `change` for an unregistered agent is dropped, not held. A held wake has no computer to go to, and holding
   it would need a delivery rule on register; the agent reads the pod when it first starts, so nothing is lost.
 - Re-send has no deadline: nothing is due until a heartbeat arrives, so `nextDeadline` is unchanged.
+
+## Presence
+In `podcore/src/presence.ts`, over the same state (F08). `online` maps each online computer to its last sign of life.
+- `computer_online` and `computer_offline` are the adapter's report of sockets; a `heartbeat` is also a sign of life, so a
+  heartbeat from a computer the pod thinks offline brings it back. The core alone decides staleness: a computer with no sign
+  of life for 45 s (three missed 15 s heartbeats) goes offline at that deadline on the same timeline as leases, so a hung
+  daemon whose socket stays open is caught by a tick, an alarm or the next command, whichever comes first.
+- Each change tells the pod about every agent the computer hosts whose presence changed, as `presence.changed` in a `live` out:
+  no seq, never in the log, never replayed. Presence is current state; a client that connects later reads it from hello,
+  so a replay never shows a stale "online". An agent with an active run shows `working`; a run starting or ending does not
+  announce yet. `agent_register` announces the agent (new, or moved to another computer) with what it shows now.
+- Adapter duties: report a computer online when its socket is accepted and offline when its last socket to the pod closes or
+  errors; and on restore, after `boot`, report offline every computer in `online` that has no live socket (a restarted
+  server or a woken hibernated object). It never reports the other direction: a live socket is in the map already unless
+  the core ruled it stale, and that ruling stands until the daemon's next heartbeat.
 
 ## Throws
 

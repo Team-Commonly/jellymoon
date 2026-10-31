@@ -4,6 +4,7 @@ import type { Actor } from '../../gen/ts/protocol';
 import { acquire, endClaim, endRun, lostHow, own, renewRun, taskView, who } from './claims';
 import { fail, ok, push } from './emit';
 import { isoOf } from './time';
+import { computerSeen } from './presence';
 import { resendWakes } from './wakes';
 import type { Cmd, Ctx, Run } from './types';
 
@@ -31,6 +32,7 @@ export function opCmd(c: Ctx, cmd: Of<'op'>): void {
 }
 
 export function heartbeatCmd(c: Ctx, cmd: Of<'heartbeat'>): void {
+  computerSeen(c, cmd.computerId);
   for (const run of Object.values(c.s.runs)) {
     if (run.status === 'active' && run.computerId === cmd.computerId) renewRun(c, run.id);
     if (run.stop !== undefined && run.computerId === cmd.computerId) push(c, run.computerId, 'run.stop', { runId: run.id, ...run.stop });

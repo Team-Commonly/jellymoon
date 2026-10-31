@@ -3,6 +3,7 @@ import type { AgentId, ComputerId, WakeId, WakeReason, WakeRefs } from '../../ge
 import { RUN_CAP_MS, own } from './claims';
 import { nthWakeId } from './wakeid';
 import { fail, ok, push } from './emit';
+import { announceAgent } from './presence';
 import { isoOf } from './time';
 import type { Cmd, Ctx, Wake } from './types';
 
@@ -91,6 +92,7 @@ export function agentRegisterCmd(c: Ctx, cmd: Of<'agent_register'>): void {
     owner: { kind: 'human', id: cmd.ownerId, displayName: cmd.ownerName ?? old?.owner.displayName ?? cmd.ownerId },
     computerId: cmd.computerId,
   };
+  if (old?.computerId !== cmd.computerId) announceAgent(c, cmd.agentId);
   const pending = own(c.s.wakes, cmd.agentId);
   if (pending !== undefined && old?.computerId !== cmd.computerId) send(c, cmd.computerId, pending);
   ok(c);

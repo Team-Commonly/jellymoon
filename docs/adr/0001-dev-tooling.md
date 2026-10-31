@@ -32,12 +32,12 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | Area | Cap |
 |---|---|
 | core (`schema/`, `scripts/`) | 3,000 |
-| podcore | 2,050 |
+| podcore | 2,500 |
 | worker | 1,550 |
 | daemon | 3,000 |
-| e2e | 2,660 |
+| e2e | 3,130 |
 
-The caps add up to 12,260 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 13,180 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -58,3 +58,6 @@ The caps add up to 12,260 lines. Agent-written comparables grew without bounds: 
 2026-10-30: e2e cap 1,900 → 2,660, the pod feature tests (F03 to F06) and the review fixes to them (computer sockets, refusal-leaves-no-state checks, expired invite, eviction status, poster seqs) take the suite to 2314 lines (the gate printed `LOC e2e 2314 / 2270` before this raise; the cap is that count plus about 15%); the total is 11,710. No other cap changes. W1.
 2026-10-30: core cap 2,450 → 2,950, land runs gitleaks itself (`scripts/land-scan.mjs`) instead of through make, refuses paths gitleaks cannot parse, and the cases that prove both (the shape table, the steering fixtures, the env and argv cases), on top of the merge with main; the gate printed `LOC core 2569 / 2450` before this raise and the cap is that count plus about 15%; the total is 12,210. No other cap changes. P08F round 2.
 2026-10-30: core cap 2,950 → 3,000, land refuses a tracked symbolic link whose target leaves the checkout or leads into its `.git` or `.tools` (read lexically in every tree land checks, and resolved on disk for the links main tracks) and a `.tools` at any depth in those trees, with the real-scan cases that prove both; the gate printed `LOC core 2973 / 2950` before this raise; the total is 12,260. No other cap changes. P08F round 5.
+2026-10-30: e2e cap 2,660 → 3,130, the F08 test (a built daemon run as a black box: registration, presence online and offline, a hung daemon, a crashed server) takes the suite to 2,714 lines (the gate printed `LOC e2e 2700 / 2660` before this raise; the cap is the final count plus about 15%); the total is 12,630. No other cap changes. F08.
+2026-10-30: podcore cap 2,050 → 2,500, presence (which computers are online, the 45 s staleness bound, the presence events) and its tests take the core to 2,162 lines (the gate printed `LOC podcore 2162 / 2050` before this raise; the cap is that count plus about 15%); the total is 12,600. No other cap changes. F08.
+2026-10-31: the merge with main keeps main's core cap (3,000) and this branch's podcore (2,500) and e2e (3,130) caps, all as they stand in entropy.json; no cap changes; the total is 13,180. F08.

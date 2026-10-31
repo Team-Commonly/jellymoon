@@ -1,10 +1,9 @@
 // The pod operations of schema/operations.json over HTTP, as the pod object serves them. Rules live in the core;
 // this file maps requests to commands. The Worker has already authenticated and checked the token kind and pod.
 // Not served: evidence (the Worker answers 404). A request field the core has no place for is refused with invalid_input, never
-// dropped: a post's kind (other than fyi), status (other than done), needs, options, context, taskId, links and caveat, and a task
-// update's note.
+// dropped: a task update's note.
 import { TaskStatusValues } from '../../gen/ts/protocol';
-import type { Message, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
+import type { Harness, Message, PostInput, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
 import type { Caller } from '../../podcore/src/index';
 import { newId, newWakeSeed } from './ids';
 import { taskView, tasksOf } from './views';
@@ -80,17 +79,16 @@ const release: Handler = (k) => respond(k.pod.exec({ type: 'task_release', calle
 
 const stop: Handler = (k) => respond(k.pod.exec({ type: 'run_stop', caller: k.caller, runId: k.params[1], reason: k.body.reason as string | undefined }));
 
-/** The core stores every post as kind fyi, status done, with none of the ask fields (podcore/src/board.ts messagePostCmd). */
+/**
+ * The poster's input goes to the core whole; the adapter adds only what the core cannot know: fresh ids, and the harness this
+ * agent was registered with (the daemon said where it runs; the post never does).
+ */
 const post: Handler = (k) => {
-  const refused = refuse(k, ['needs', 'options', 'context', 'taskId', 'links', 'caveat']);
-  if (refused) return refused;
-  if (k.body.kind !== 'fyi') return bad('body.kind: this server stores only fyi posts yet');
-  if (k.body.status !== 'done') return bad('body.status: this server stores only done posts yet');
-  const summary = k.body.summary as string;
-  const body = k.body.body as string | undefined;
   const messageId = newId('msg_');
-  const reply = k.pod.exec({ type: 'message_post', caller: k.caller, messageId, wakeId: newWakeSeed(), summary, text: body === undefined || body === '' ? summary : `${summary}\n${body}` });
-  return respond(reply, (m) => ({ messageId, seq: (m as Message).seq }));
+  const agentId = k.caller.kind === 'run' ? k.pod.state.runs[k.caller.runId]?.agent.id : undefined;
+  const harness = agentId === undefined ? undefined : (k.pod.meta.harness[agentId] as Harness | undefined);
+  const reply = k.pod.exec({ type: 'post', caller: k.caller, messageId, decisionId: newId('dec_'), wakeId: newWakeSeed(), harness, input: k.body as unknown as PostInput });
+  return respond(reply, (m) => ({ messageId, seq: (m as Message).seq, ...((m as Message).decision === undefined ? {} : { decisionId: (m as Message).decision?.id }) }));
 };
 
 const agent: Handler = (k) => {
@@ -114,7 +112,7 @@ const agent: Handler = (k) => {
  * or null for a read, whose input is the query string. podRoute checks before the handler runs, so a handler sees only
  * a valid body and a new write route cannot skip the check without writing `null` here.
  */
-interface Route { method: string; re: RegExp; fn: Handler; def: string | null; fromPath?: string[] }
+interface Route { method: string; re: RegExp; fn: Handler; def: string | null; fromPath?: string[]; optional?: string[] }
 const ROUTES: Route[] = [
   { method: 'GET', re: /^\/v1\/pods\/([^/]+)\/me$/, fn: whoami, def: null },
   { method: 'GET', re: /^\/v1\/pods\/([^/]+)\/feed$/, fn: feed, def: null },
@@ -123,19 +121,19 @@ const ROUTES: Route[] = [
   { method: 'PATCH', re: /^\/v1\/pods\/([^/]+)\/tasks\/([^/]+)$/, fn: update, def: 'TaskUpdateInput', fromPath: ['taskId'] },
   { method: 'POST', re: /^\/v1\/pods\/([^/]+)\/tasks\/([^/]+)\/release$/, fn: release, def: 'TaskReleaseInput', fromPath: ['taskId'] },
   { method: 'POST', re: /^\/v1\/pods\/([^/]+)\/runs\/([^/]+)\/stop$/, fn: stop, def: 'RunStopInput', fromPath: ['runId'] },
-  { method: 'POST', re: /^\/v1\/pods\/([^/]+)\/messages$/, fn: post, def: 'PostInput' },
+  { method: 'POST', re: /^\/v1\/pods\/([^/]+)\/messages$/, fn: post, def: 'PostInput', optional: ['summary'] },
   { method: 'POST', re: /^\/v1\/pods\/([^/]+)\/agents$/, fn: agent, def: 'RegisterAgentRequest' },
 ];
 
 /** Null when no route matches (the socket upgrade and the internal routes are handled elsewhere). */
 export async function podRoute(pod: PodPort, req: Request, who: Who): Promise<Response | null> {
   const url = new URL(req.url);
-  for (const { method, re, fn, def, fromPath } of ROUTES) {
+  for (const { method, re, fn, def, fromPath, optional } of ROUTES) {
     const m = method === req.method ? re.exec(url.pathname) : null;
     if (m === null) continue;
     const body = req.method === 'GET' ? {} : await parse(req);
     if (body === null) return bad('The body must be a JSON object.');
-    const problem = def === null ? null : check(def, body, fromPath);
+    const problem = def === null ? null : check(def, body, fromPath, optional);
     if (problem !== null) return bad(problem);
     const caller: Caller = who.kind === 'run' ? { kind: 'run', runId: who.runId } : { kind: 'user', userId: who.kind === 'user' ? who.actor.id : '' };
     return fn({ pod, who, caller, req, url, params: m.slice(1), body });

@@ -135,7 +135,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
   if (m === 'POST' && path === '/v1/runs') return setup(env, req, ['computer'], 'ClaimRunRequest', (w, b) => startRun(env, w, b, url.origin));
   if (m === 'POST' && path === '/mcp') {
     const g = await guard(env, req, ['run', 'user']);
-    return g instanceof Response ? g : mcp(req, url.origin, g.who, (r) => handle(r, env));
+    return g instanceof Response ? g : mcp(req, url.origin, g.who, (r) => handle(r, env), (runId, podId) => internal(env, podId, 'tool-call', { runId }));
   }
   const run = /^\/v1\/runs\/([^/]+)\/end$/.exec(path);
   if (m === 'POST' && run) return setup(env, req, ['computer'], 'EndRunRequest', (w, b) => endRun(env, w, b, run[1]));

@@ -7,11 +7,13 @@ const user: Who = { kind: 'user', actor: { kind: 'human', id: 'usr_1', displayNa
 const rpc = (body: unknown): Request => new Request('https://x/mcp', { method: 'POST', headers: { Authorization: 'Bearer jmr_t' }, body: JSON.stringify(body) });
 const seen: Request[] = [];
 const dispatch = async (r: Request): Promise<Response> => { seen.push(r); return Response.json({ podId: 'pod_1' }); };
-const ask = async (who: Who, body: unknown) => (await mcp(rpc(body), 'https://x', who, dispatch)).json() as Promise<Record<string, any>>;
+const counted: string[] = [];
+const count = async (runId: string, podId: string): Promise<void> => { counted.push(`${runId}@${podId}`); };
+const ask = async (who: Who, body: unknown) => (await mcp(rpc(body), 'https://x', who, dispatch, count)).json() as Promise<Record<string, any>>;
 
 test('initialize answers, and a notification gets 202 with no body', async () => {
   expect((await ask(run, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } })).result.serverInfo.name).toBe('jellymoon');
-  const note = await mcp(rpc({ jsonrpc: '2.0', method: 'notifications/initialized' }), 'https://x', run, dispatch);
+  const note = await mcp(rpc({ jsonrpc: '2.0', method: 'notifications/initialized' }), 'https://x', run, dispatch, count);
   expect([note.status, await note.text()]).toEqual([202, '']);
 });
 
@@ -39,4 +41,15 @@ test('an unknown tool, an unknown method and a user token with no pod are refuse
   expect((await ask(run, { jsonrpc: '2.0', id: 5, method: 'resources/list' })).error.code).toBe(-32601);
   expect((await ask(user, { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'jm_whoami' } })).error.code).toBe(-32602);
   expect((await ask(run, [1])).error.code).toBe(-32600);
+});
+
+test('the pod is told of each tool call a run makes once it is answered, refused or not, and of nothing else', async () => {
+  counted.length = 0;
+  await ask(run, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+  await ask(run, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  await ask(user, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'jm_whoami', arguments: { podId: 'pod_1' } } });
+  expect(counted).toEqual([]);
+  await ask(run, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'jm_whoami', arguments: {} } });
+  await ask(run, { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'jm_nothing' } });
+  expect(counted).toEqual(['run_1@pod_1', 'run_1@pod_1']);
 });

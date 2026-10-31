@@ -40,3 +40,10 @@ test('an unknown tool, an unknown method and a user token with no pod are refuse
   expect((await ask(user, { jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'jm_whoami' } })).error.code).toBe(-32602);
   expect((await ask(run, [1])).error.code).toBe(-32600);
 });
+
+test('a tool name that is an inherited object property is no such tool, not a server error', async () => {
+  for (const name of ['jm_constructor', 'jm___proto__', 'jm_toString', 'jm_hasOwnProperty']) {
+    const r = await ask(run, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name, arguments: {} } });
+    expect([name, r.error]).toEqual([name, { code: -32602, message: `No such tool: ${name}` }]);
+  }
+});

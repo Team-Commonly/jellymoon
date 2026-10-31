@@ -16,7 +16,8 @@ const refuse = (id: Id, code: number, message: string): Response => Response.jso
 
 /** The operation's HTTP request: {podId} is the run's pod (a user token names it), other {names} come from the arguments, the rest is the query or body. */
 function operation(name: string, who: Who, args: Args, origin: string, authorization: string): Request | string {
-  const op = name.startsWith(TOOL_PREFIX) ? ops[name.slice(TOOL_PREFIX.length)] : undefined;
+  const key = name.slice(TOOL_PREFIX.length);
+  const op = name.startsWith(TOOL_PREFIX) && Object.hasOwn(ops, key) ? ops[key] : undefined; // own keys only: `constructor` is not a tool
   if (op === undefined) return `No such tool: ${name}`;
   const podId = who.kind === 'run' ? who.podId : args.podId;
   if (typeof podId !== 'string') return 'podId is required with a user token.';

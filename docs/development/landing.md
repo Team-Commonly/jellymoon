@@ -232,6 +232,12 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 - **A path ending in a backslash anywhere in the range is refused,** also when it only arrives through a merge of main into the PR (the
   `-m` diff against the PR's parent lists it), and also when it is harmless. The cost is an innocent PR refused (fail closed); the remedy is
   a new head without that name (rename the file on main first, or rebase the history).
+- **A directory path of 1,009 bytes or more in the range is refused.** For each directory a diff touches, git opens that directory's
+  `.gitattributes` in the checkout, by its path relative to the top. From 1,009 bytes `<dir>/.gitattributes` reaches the macOS `PATH_MAX`
+  of 1,024, so git prints "warning: unable to access …: File name too long", gitleaks logs it as an `ERR` line, and land reads the scan as a
+  failure ("the range secret scan failed to run, or did not read the whole range"). It fails closed: an innocent PR with such a path is
+  refused too (measured: a directory path of 1,008 bytes reads clean and 1,009 fails; the absolute path, 1,180 bytes at 1,008, does not count).
+  Shorten the path.
 - **A commit message with a line over 64 KB is refused.** gitleaks' log reader cannot take it, so it counts none where land derives one
   (measured: rev-list 1, gitleaks 0, derived 1); land fails closed with the "did not read the whole range" line on an innocent PR.
 - **What `go run` still takes from the operator, and from whatever writes the operator's files.** The installed toolchain (`.tools/`, or

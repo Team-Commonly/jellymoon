@@ -2,8 +2,11 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "scripts/check-review-gate.mjs",
+    "scripts/check-scan-history.mjs",
+    "scripts/check-scan-checkout.mjs",
     "scripts/check-land.mjs",
     "scripts/check-land-e2e.mjs",
+    "scripts/check-land-scan.mjs",
     "scripts/land.mjs",
     "podcore/src/index.ts",
     "podcore/test/**/*.test.ts",

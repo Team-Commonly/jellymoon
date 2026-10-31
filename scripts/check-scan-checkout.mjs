@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { cacheTools, gitEnv, ownTools, rangeIn, token } from './scan-fixture.mjs';
+import { cacheTools, fixtureGo, gitEnv, ownTools, rangeIn, token } from './scan-fixture.mjs';
 
 const dir0 = fs.mkdtempSync(path.join(os.tmpdir(), 'check-checkout-'));
 // A go that main could carry: for `run ... git --log-opts=-m <range> ...` it prints what land reads as clean, with the count land derives.
@@ -21,6 +21,13 @@ const elsewhere = path.join(dir0, 'elsewhere'); // outside every fixture checkou
 fs.mkdirSync(path.join(elsewhere, 'bin'), { recursive: true });
 fs.copyFileSync(fake, path.join(elsewhere, 'bin', 'go'));
 fs.chmodSync(path.join(elsewhere, 'bin', 'go'), 0o755);
+// The go the checks run fixtures with (fixtureGo): <top>/.tools/bin/go first, else the first go on PATH, else an error naming both. Fixture
+// tops with and without a .tools/bin/go, and PATH directories that hold an executable go (path1, path2) or none (path0).
+const goIn = (d) => { fs.mkdirSync(d, { recursive: true }); fs.copyFileSync(fake, path.join(d, 'go')); fs.chmodSync(path.join(d, 'go'), 0o755); return fs.realpathSync.native(path.join(d, 'go')); };
+const [withTools, noTools, path0] = ['with-tools', 'no-tools', 'path0'].map((d) => path.join(dir0, d));
+const [own, path1, path2] = [path.join(withTools, '.tools', 'bin'), path.join(dir0, 'path1'), path.join(dir0, 'path2')].map(goIn);
+[noTools, path0].forEach((d) => fs.mkdirSync(d));
+const resolved = (top, dirs) => { try { return fixtureGo({ top, PATH: dirs.join(path.delimiter) }); } catch (e) { return e.message; } };
 
 let n = 0;
 // main's tip runs `onMain` before its commit (it may force-add what .gitignore hides); the PR runs `inPr`, then adds `text`; the checkout goes
@@ -47,6 +54,9 @@ const ALLOW = '[extend]\\nuseDefault = true\\n[allowlist]\\npaths = ["t.txt"]\\n
 // A tracked .tools, in each form main could ship it: refused from the trees, before any go runs. The force-tracked and the upper-case forms
 // pass every filesystem check (real directories, go under .tools), so only the tree refusal, case-folded, stops them.
 const cases = [
+  ['fixture go: <top>/.tools/bin/go is the one used when it exists, over a go on PATH', resolved(withTools, [path.dirname(path1)]), own],
+  ['fixture go: with no .tools, the first go on PATH, by its real path (a PATH directory without one is passed over)', resolved(noTools, [path0, path.dirname(path1), path.dirname(path2)]), path1],
+  ['fixture go: no .tools and no go on PATH fails, naming both', resolved(noTools, [path0]), `no go to run the fixtures with: ${path.join(noTools, '.tools', 'bin', 'go')} does not exist and there is no go on PATH`],
   ['checkout .tools: main ships .tools as a tracked symlink to a tracked fake go: refused, naming it', refused(landIn({ onMain: `${FAKE_DIR} && ln -s tools-fake .tools` }), /^main carries \.tools;/), 'refused/true'],
   ['checkout .tools: main ships a force-tracked .tools/bin/go: refused, naming it', refused(landIn({ onMain: `mkdir -p .tools/bin && cp '${fake}' .tools/bin/go && git add -f .tools/bin/go` }), /^main carries \.tools\/bin\/go;/), 'refused/true'],
   ['checkout .tools: main ships .TOOLS/bin/go (the filesystem folds case): refused, naming it', refused(landIn({ onMain: `mkdir -p .TOOLS/bin && cp '${fake}' .TOOLS/bin/go && git add -f .TOOLS/bin/go` }), /^main carries \.TOOLS\/bin\/go;/), 'refused/true'],

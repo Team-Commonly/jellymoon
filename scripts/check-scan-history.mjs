@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { scanEnv } from './land-decide.mjs';
 import { GITLEAKS_MODULE } from './land-scan.mjs';
-import { gitEnv, makeIn, rangeIn, root, token } from './scan-fixture.mjs';
+import { fixtureGo, gitEnv, makeIn, rangeIn, root, token } from './scan-fixture.mjs';
 
 // A gitleaks:allow marker added and removed inside the PR's history leaves the merge result clean, yet the merge keeps both commits and
 // gitleaks honours the marker per commit. The range scan ignores markers and must find what the marker hid; it can only refuse.
@@ -21,7 +21,7 @@ const hist = (marker) => {
   // --ignore-gitleaks-allow, and this run is the demonstration of the hole), so it runs gitleaks directly in the same allowlist env and
   // is read by its own exit status.
   const found = rangeIn(dir, `${tip}..${head}`).result === 'hit';
-  const honoured = spawnSync(path.join(root, '.tools', 'bin', 'go'), ['run', GITLEAKS_MODULE, 'git', `--log-opts=${tip}..${head}`, '--redact', '--no-banner', dir], { encoding: 'utf8', env: scanEnv(process.env) }).status !== 0;
+  const honoured = spawnSync(fixtureGo(), ['run', GITLEAKS_MODULE, 'git', `--log-opts=${tip}..${head}`, '--redact', '--no-banner', dir], { encoding: 'utf8', env: scanEnv(process.env) }).status !== 0;
   fs.rmSync(dir, { recursive: true, force: true });
   return { found, foundHonouringMarker: honoured };
 };
@@ -56,7 +56,7 @@ console.log(`check-scan-history: ${history.length} history cases ok`);
     fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(path.join(d, 'env'), 'GOFLAGS=-x\nGOPROXY=off\nGOSUMDB=off\nGOINSECURE=*\nGOPRIVATE=*\nGONOSUMDB=*\n');
   }
-  const go = fs.realpathSync(path.join(root, '.tools', 'bin', 'go'));
+  const go = fixtureGo();
   const read = (env) => spawnSync(go, ['env', 'GOFLAGS', 'GOPROXY', 'GOSUMDB', 'GOINSECURE', 'GOPRIVATE', 'GONOSUMDB'], { encoding: 'utf8', env: { ...env, HOME: home, GOROOT: path.dirname(path.dirname(go)) } }).stdout.split('\n').slice(0, 6).join('|');
   const { GOENV: off, ...withFile } = scanEnv(process.env);
   const goEnvCases = [

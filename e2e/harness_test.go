@@ -3,10 +3,12 @@
 package e2e
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,8 +30,11 @@ const (
 var (
 	suiteStart = time.Now()
 	serverCmd  = os.Getenv("JM_E2E_SERVER")
-	realClock  = os.Getenv("JM_E2E_REAL_CLOCK") == "1"
-	suiteTests = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF10", "TestExpiryZeroTraffic", "TestRenewRace",
+	// remoteURL is a deployed server the suite does not boot (docs/development/e2e-contract.md, "Remote mode"). It implies the real clock.
+	remoteURL    = strings.TrimRight(os.Getenv("JM_E2E_URL"), "/")
+	remoteBearer = os.Getenv("JM_E2E_TEST_BEARER")
+	realClock    = os.Getenv("JM_E2E_REAL_CLOCK") == "1" || remoteURL != ""
+	suiteTests   = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF10", "TestExpiryZeroTraffic", "TestRenewRace",
 		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline", "TestRunTokenOtherPod", "TestEvictMidClaim", "TestEvictAlarmWake", "TestEvictPastDeadline"}
 	outcomes sync.Map // test name -> failed bool
 )
@@ -41,17 +46,56 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "JM_E2E_STALE_MS is no longer a setting: staleMs must be 0 (docs/adr/0003-pure-pod-core.md, item 5)")
 		os.Exit(2)
 	}
+	if err := checkRemote(serverCmd, remoteURL, remoteBearer); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	code := m.Run()
-	if serverCmd != "" {
+	if serverCmd != "" || remoteURL != "" {
 		fmt.Println(summaryLine(time.Since(suiteStart).Milliseconds(), stepsOK.Load(), stepsRun.Load()))
+		if code = judgeRan(code, stepsRun.Load()); code == 1 && stepsRun.Load() == 0 {
+			fmt.Fprintln(os.Stderr, "no test ran against the server; a run that tests nothing is a failure")
+		}
 	}
 	os.Exit(code)
 }
 
+// judgeRan turns a green run in which no test ran into a failure: a server that nothing tested has not passed.
+func judgeRan(code int, ran int64) int {
+	if ran == 0 && code == 0 {
+		return 1
+	}
+	return code
+}
+
+// checkRemote refuses a remote setup that would test something other than what it names.
+func checkRemote(cmd, url, bearer string) error {
+	switch {
+	case url == "":
+		return nil
+	case cmd != "":
+		return fmt.Errorf("JM_E2E_URL and JM_E2E_SERVER are both set: the suite either boots a server or tests a deployed one")
+	case !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://127.0.0.1"):
+		return fmt.Errorf("JM_E2E_URL must be https (or http on 127.0.0.1)")
+	case bearer == "":
+		return fmt.Errorf("JM_E2E_URL needs JM_E2E_TEST_BEARER: a deployed server's /__test routes need the bearer")
+	}
+	return nil
+}
+
 func need(t *testing.T) {
 	t.Helper()
-	if serverCmd == "" {
-		t.Skip("JM_E2E_SERVER is not set; run `make e2e` with a server command (docs/development/e2e-contract.md)")
+	if serverCmd == "" && remoteURL == "" {
+		t.Skip("JM_E2E_SERVER and JM_E2E_URL are not set; run `make e2e` with a server command (docs/development/e2e-contract.md)")
+	}
+}
+
+// needLocal skips tests that start, kill or inspect the server process; a deployed server is not ours to restart.
+func needLocal(t *testing.T) {
+	t.Helper()
+	need(t)
+	if remoteURL != "" {
+		t.Skip("JM_E2E_URL is set: this test needs to kill and restart the server, or read its process")
 	}
 }
 
@@ -60,9 +104,12 @@ func needFake(t *testing.T) {
 	t.Helper()
 	need(t)
 	if realClock {
-		t.Skip("JM_E2E_REAL_CLOCK=1: only TestExpiryZeroTraffic and TestKillMidLease run in real-clock mode")
+		t.Skip("real-clock mode: this test needs the fake clock (/__test/clock)")
 	}
 }
+
+// needClockFree is for a test that never touches the clock and never restarts the server, so it runs in every mode, remote included.
+func needClockFree(t *testing.T) { t.Helper(); need(t) }
 
 func track(t *testing.T) {
 	countTest(t)
@@ -91,6 +138,7 @@ func (l *logBuf) tail(n int) string {
 // command again with the same data dir, is a restart.
 type server struct {
 	t          *testing.T
+	remote     string // the deployed server's URL; no process, no port
 	port       int
 	inspector  int // a second port the server may use for its debugger; never shared between servers
 	dir        string
@@ -117,6 +165,9 @@ func freePort(t *testing.T, not ...int) int {
 }
 
 func startServer(t *testing.T) *server {
+	if remoteURL != "" {
+		return &server{t: t, remote: remoteURL}
+	}
 	port := freePort(t)
 	s := &server{t: t, port: port, inspector: freePort(t, port), dir: t.TempDir(), log: &logBuf{}}
 	t.Cleanup(func() {
@@ -129,7 +180,27 @@ func startServer(t *testing.T) *server {
 	return s
 }
 
-func (s *server) base() string { return fmt.Sprintf("http://127.0.0.1:%d", s.port) }
+func (s *server) base() string {
+	if s.remote != "" {
+		return s.remote
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", s.port)
+}
+
+// dial opens the pod WebSocket upgrade on the server, over TLS when the server is remote and https.
+func (s *server) dial(path, token string) (net.Conn, *bufio.Reader, error) {
+	if s.remote == "" {
+		return wsDial(fmt.Sprintf("127.0.0.1:%d", s.port), path, token)
+	}
+	u, err := url.Parse(s.remote)
+	if err != nil {
+		return nil, nil, err
+	}
+	if u.Scheme != "https" {
+		return wsDial(u.Host, path, token)
+	}
+	return wsDialTLS(u.Hostname()+":443", u.Hostname(), path, token)
+}
 
 func (s *server) boot() {
 	begin := time.Now()

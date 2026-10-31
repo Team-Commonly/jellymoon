@@ -5,7 +5,7 @@ import "testing"
 // TestRunTokenOtherPod: a run token belongs to one pod. On another pod's routes it gets 403 forbidden, whatever the route,
 // before the pod is even looked at; on its own pod's routes it works.
 func TestRunTokenOtherPod(t *testing.T) {
-	needFake(t)
+	needClockFree(t)
 	w := newWorld(t)
 	r := w.startRun(w.a1, "own pod")
 	var other struct {

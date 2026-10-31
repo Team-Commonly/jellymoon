@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,6 +46,8 @@ type client struct {
 	t    *testing.T
 	base string
 	hc   *http.Client
+	// testBearer is sent on /__test/ routes, which a deployed server (ENV unset) refuses without it. Empty against a local server.
+	testBearer string
 }
 
 // do sends a JSON request. It is safe to call from goroutines: it reports through t.Errorf and
@@ -59,6 +62,8 @@ func (c *client) do(method, path, tok string, in, out any) res {
 	req.Header.Set("Content-Type", "application/json")
 	if tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
+	} else if strings.HasPrefix(path, "/__test/") && c.testBearer != "" {
+		req.Header.Set("Authorization", "Bearer "+c.testBearer)
 	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
@@ -80,7 +85,7 @@ func (c *client) do(method, path, tok string, in, out any) res {
 }
 
 func newClient(t *testing.T, base string) *client {
-	return &client{t: t, base: base, hc: &http.Client{Timeout: 10 * time.Second}}
+	return &client{t: t, base: base, hc: &http.Client{Timeout: 10 * time.Second}, testBearer: remoteBearer}
 }
 
 func ms(ts string) int64 {

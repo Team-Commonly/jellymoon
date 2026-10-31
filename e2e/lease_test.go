@@ -126,7 +126,7 @@ func (w *world) pause(d int64) {
 // max(restart, deadline) + 6 s once the clock passes it; no claim.released repeats. Every mark a "not yet" check
 // reads is taken before the clock moves, so a release sent during the move is seen.
 func TestKillMidLease(t *testing.T) {
-	need(t)
+	needLocal(t)
 	if realClock {
 		t.Parallel()
 	}

@@ -127,7 +127,7 @@ func (w *world) addAgent(c *computer, name string) *agent {
 }
 
 func (w *world) dial(tok, name string) *sock {
-	conn, br, err := wsDial(fmt.Sprintf("127.0.0.1:%d", w.srv.port), "/v1/pods/"+w.pod+"/ws", tok)
+	conn, br, err := w.srv.dial("/v1/pods/"+w.pod+"/ws", tok)
 	if err != nil {
 		w.t.Fatalf("%s: WebSocket /v1/pods/:pod/ws: %v", name, err)
 	}

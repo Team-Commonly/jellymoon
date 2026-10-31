@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -22,10 +23,25 @@ func wsDial(addr, path, token string) (net.Conn, *bufio.Reader, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	return wsUpgrade(c, addr, "http", path, token)
+}
+
+// wsDialTLS is wsDial to a server behind TLS. It offers only HTTP/1.1, which the upgrade needs.
+func wsDialTLS(addr, host, path, token string) (net.Conn, *bufio.Reader, error) {
+	d := &net.Dialer{Timeout: 5 * time.Second}
+	c, err := tls.DialWithDialer(d, "tcp", addr, &tls.Config{ServerName: host, NextProtos: []string{"http/1.1"}})
+	if err != nil {
+		return nil, nil, err
+	}
+	return wsUpgrade(c, host, "https", path, token)
+}
+
+func wsUpgrade(c net.Conn, addr, scheme, path, token string) (net.Conn, *bufio.Reader, error) {
+	var err error
 	raw := make([]byte, 16)
 	_, _ = rand.Read(raw)
 	key := base64.StdEncoding.EncodeToString(raw)
-	req, _ := http.NewRequest("GET", "http://"+addr+path, nil)
+	req, _ := http.NewRequest("GET", scheme+"://"+addr+path, nil)
 	for k, v := range map[string]string{"Upgrade": "websocket", "Connection": "Upgrade", "Sec-WebSocket-Key": key,
 		"Sec-WebSocket-Version": "13", "Authorization": "Bearer " + token} {
 		req.Header.Set(k, v)

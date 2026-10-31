@@ -21,7 +21,7 @@ func post(over map[string]any) map[string]any {
 // TestInputValidation: a write route refuses a body the schema refuses, with 400 invalid_input, and a body the schema allows
 // is stored whole. Nothing is dropped or truncated (ADR 0003, "The adapter validates every Cmd against gen/").
 func TestInputValidation(t *testing.T) {
-	needFake(t)
+	needClockFree(t)
 	w := newWorld(t)
 	w.refusedPosts()
 	r := w.startRun(w.a1, "report")

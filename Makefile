@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: e2e e2e-a preview test-worker worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -42,6 +42,13 @@ test-ts: node_modules
 test-go:
 	$(GO) vet ./...
 	$(GO) test -race ./...
+
+# The Worker's own tests (what `bun test podcore worker` in test-ts also runs), judged alone for CI: a run that executes no test fails.
+test-worker: node_modules
+	@out=$$(mktemp); $(BUN) test worker > "$$out" 2>&1; rc=$$?; cat "$$out"; \
+	n=$$(sed -n -E 's/^ *([0-9]+) pass$$/\1/p' "$$out"); rm -f "$$out"; \
+	[ $$rc -eq 0 ] || exit $$rc; \
+	[ "$${n:-0}" -gt 0 ] || { echo "test-worker: no test ran"; exit 1; }
 
 test: test-ts test-go
 
@@ -115,15 +122,11 @@ worker-dev: node_modules
 # It also judges the closing line, which no test can see: the last line before go test's own ok/FAIL/PASS must be
 # E2E_MS=<n> STEPS=<k>/<n>, with k = n when the suite passed and k < n when it did not.
 e2e-a: node_modules
-	@out=$$(mktemp); \
-	JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' $(GO) test ./e2e -count=1 -v > "$$out" 2>&1; rc=$$?; \
-	cat "$$out"; \
-	last=$$(grep -v -E '^(ok|FAIL|PASS)([[:space:]]|$$)|^$$' "$$out" | tail -1); \
-	rm -f "$$out"; \
-	echo "$$last" | grep -E -q '^E2E_MS=[0-9]+ STEPS=[0-9]+/[0-9]+$$' || { echo "e2e-a: the closing line is not E2E_MS=<n> STEPS=<k>/<n>: $$last"; exit 1; }; \
-	k=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\1/'); n=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\2/'); \
-	if [ $$rc -eq 0 ] && [ "$$k" != "$$n" ]; then echo "e2e-a: green run but STEPS=$$k/$$n"; exit 1; fi; \
-	if [ $$rc -ne 0 ] && [ "$$k" = "$$n" ]; then echo "e2e-a: red run but STEPS=$$k/$$n"; exit 1; fi; \
-	exit $$rc
+	JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' e2e/judge.sh
+
+# One preview Worker from a laptop: deploys, runs the suite against it, tears it down. PREVIEW is pr-<number> or main.
+# Takes JM_CF_PREVIEW_TOKEN (and optionally JM_CF_ACCOUNT_ID) from the environment only. See worker/preview.sh.
+preview: node_modules
+	worker/preview.sh all $(PREVIEW)
 
 preflight: portable tools-cache check-gen test entropy secrets private e2e-a

@@ -37,7 +37,7 @@ func TestF03(t *testing.T) {
 		return nil
 	})
 	p.step("GET /v1/pods/:pod/ws with the token upgrades and the first frame is hello with headSeq 0 and the user as owner", func() error {
-		conn, br, err := wsDial(fmt.Sprintf("127.0.0.1:%d", srv.port), "/v1/pods/"+podID+"/ws", u.tok)
+		conn, br, err := srv.dial("/v1/pods/"+podID+"/ws", u.tok)
 		if err != nil {
 			return err
 		}

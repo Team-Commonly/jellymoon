@@ -223,10 +223,10 @@
       "description": "Every PR deploys a Workers preview and F14 passes against it",
       "steps": [
         "the preview job deploys the PR to its own preview with its own DO namespace and the preview D1",
-        "COMMONLY_URL=<preview> go test ./e2e -run TestF14 passes"
+        "JM_E2E_URL=<preview> JM_E2E_TEST_BEARER=<bearer> go test ./e2e -run TestF14 passes"
       ],
       "test": "CI job e2e-preview",
-      "blockedBy": "CLOUDFLARE_API_TOKEN secret (owner action)",
+      "blockedBy": "JM_CF_PREVIEW_TOKEN and JM_CF_ACCOUNT_ID secrets (owner action)",
       "passes": false
     },
     {

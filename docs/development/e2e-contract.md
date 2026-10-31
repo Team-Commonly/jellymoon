@@ -5,8 +5,8 @@ contract below. It is black box: HTTP and the pod WebSocket only, real `jmu_`, `
 import of server code. It writes no server. `daemon/internal/protocol` is Go-internal and cannot be imported
 from `e2e/`, so the suite keeps its own small wire structs.
 
-Run it: `JM_E2E_SERVER='<shell command>' make e2e`. With `JM_E2E_SERVER` unset every test skips, so
-`make test` stays green. `make e2e` ends with `E2E_MS=<n> STEPS=<k>/<k>`.
+Run it: `JM_E2E_SERVER='<shell command>' make e2e`. With `JM_E2E_SERVER` and `JM_E2E_URL` both unset every test skips, so
+`make test` stays green. `make e2e` ends with `E2E_MS=<n> STEPS=<k>/<k>`. Against a deployed Worker, see "Remote mode" below.
 
 ## How the suite starts the server
 
@@ -147,9 +147,40 @@ once the clock passes it; one `claim.released` over live delivery and over a rep
 
 ## Real-clock mode
 
-`JM_E2E_REAL_CLOCK=1` never calls `/__test/clock`. Only `TestExpiryZeroTraffic` and `TestKillMidLease` run,
-in parallel, and take about 100 s. Thresholds asserted: lateness in [-2, 6000] ms for `steady`; for the
+`JM_E2E_REAL_CLOCK=1` never calls `/__test/clock`. The tests that do not need the fake clock run: `TestExpiryZeroTraffic` and
+`TestKillMidLease` in parallel (about 100 s), plus the clock-free `TestF03`, `TestF06`, `TestRunTokenOtherPod` and `TestInputValidation`. Thresholds asserted: lateness in [-2, 6000] ms for `steady`; for the
 restart kinds, not before the deadline (-2 ms rounding) and not after `max(restart, deadline) + stale + 6 s`.
+
+## Remote mode
+
+`JM_E2E_URL=<https url> JM_E2E_TEST_BEARER=<bearer>` runs the suite against a server it does not boot (a deployed Worker). It
+implies the real clock, never calls `/__test/clock`, and never starts, kills or restarts anything. The setup is refused (exit 2) when
+`JM_E2E_SERVER` is also set, when the bearer is missing, or when the URL is not https (http on 127.0.0.1 is allowed). The test-route
+client sends `Authorization: Bearer <bearer>` on every `/__test/` call; a deployed Worker (ENV unset) refuses those without it and
+has no clock route. The pod WebSocket goes over TLS. The closing `E2E_MS=<n> STEPS=<k>/<n>` line and its judge (`e2e/judge.sh`) apply
+unchanged, and a run in which no test ran is a failure (`STEPS=0/0`).
+
+`worker/preview.sh` is the one way to run it against a throwaway deploy: `make preview PREVIEW=pr-<number>` from a laptop (token in
+`JM_CF_PREVIEW_TOKEN`, optionally `JM_CF_ACCOUNT_ID`, from the environment only), and the `e2e-preview` CI job in three steps (up,
+run, down; down runs even when the suite fails). The Worker and its D1 database are both named `jellymoon-spike-pr-<number>`, or
+`jellymoon-spike-main` on a push to main.
+
+Which tests run remotely:
+
+| Test | Remote? | Why |
+|---|---|---|
+| `TestF03`, `TestF06`, `TestRunTokenOtherPod`, `TestInputValidation` | yes | They touch no clock and restart nothing. |
+| `TestExpiryZeroTraffic` | yes | The real alarm path on the real clock (about 75 s). |
+| `TestKillMidLease` | no | It `kill -9`s the server and starts it again. |
+| `TestF02` | no | It reads the server's command line and data dir from the local process table. |
+| `TestF04`, `TestReplayAcrossRestart`, `TestRestartPastDeadline` | no | They restart the server (and F04 needs the fake clock). |
+| `TestF05`, `TestF07`, `TestF10`, `TestOneReleasePerCause`, `TestRenewRace`, `TestF14Budget` | no | They move the fake clock (`/__test/clock`), which a deployed Worker does not have. |
+| `TestEvictMidClaim`, `TestEvictAlarmWake`, `TestEvictPastDeadline` | no | They move the fake clock, and plant an alarm a few real ms ahead. |
+| `TestF08` | no | It builds and runs the daemon against a server it can kill, on the fake clock. |
+
+Each skipped test names its reason when it skips. **When F14 lands**, the job runs it with one line: the `Run the contract suite`
+step in `.github/workflows/ci.yml` gains `env: { JM_E2E_RUN: TestF14 }` (`JM_E2E_RUN` is go test's `-run` pattern, read by
+`e2e/judge.sh`). F14 must be written to run on the real clock (use `need`, not `needFake`).
 
 ## Self-check without a server
 

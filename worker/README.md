@@ -14,3 +14,12 @@ make e2e-a        # the black-box contract suite against it (docs/development/e2
 ```
 
 `make test-ts` runs the unit and bundle tests in `worker/test/`.
+
+Run it against a real, throwaway deploy (needs a Cloudflare token with Workers and D1 edit rights, from the environment only):
+
+```
+JM_CF_PREVIEW_TOKEN=... make preview PREVIEW=pr-123   # deploy jellymoon-spike-pr-123, run the suite over HTTPS, tear it down
+```
+
+`worker/preview.sh` deploys only `jellymoon-spike-pr-<number>` and `jellymoon-spike-main`, on workers.dev, each with its own Durable
+Object namespace and D1 database. The CI job `e2e-preview` runs the same script in three steps (docs/development/e2e-contract.md, "Remote mode").

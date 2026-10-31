@@ -1,7 +1,9 @@
 // Command fakeagent is the fake ACP agent the e2e suite hands to the daemon: JSON-RPC 2.0 over stdio, one message per line.
 // It is NOT a model. It writes what it received (argv, env, the ACP requests) to the file named by its first argument,
-// calls jm_whoami through the MCP server session/new gave it, records the answer, and exits. With a second argument
-// "hold" it records and then stays up, ignoring a closed stdin, to stand for an agent that will not leave by itself.
+// calls jm_whoami through the MCP server session/new gave it, records the answer, and exits. After the record path, the
+// arguments are: "hold" (record, then stay up, ignoring a closed stdin, to stand for an agent that will not leave by itself)
+// and "script=<file>" (a JSON list of {"tool", "arguments"}: the agent makes those MCP calls in order instead of jm_whoami,
+// and records each reply under Calls. It never decides anything from a reply: a script is the whole of its behaviour).
 package main
 
 import (
@@ -11,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -33,6 +36,19 @@ type record struct {
 	Prompt      json.RawMessage
 	Whoami      json.RawMessage
 	WhoamiError string
+	Calls       []callRec
+}
+
+// callRec is one scripted MCP call and the server's whole answer to it.
+type callRec struct {
+	Tool  string
+	Reply json.RawMessage
+	Error string
+}
+
+type step struct {
+	Tool      string
+	Arguments map[string]any
 }
 
 type request struct {
@@ -100,12 +116,49 @@ func whoami(params json.RawMessage) {
 	rec.Whoami = out
 }
 
+// script makes the scripted calls, one per tools/call, after one initialize.
+func script(params json.RawMessage, file string) {
+	var p struct{ McpServers []server }
+	var steps []step
+	raw, err := os.ReadFile(file)
+	if err == nil {
+		err = json.Unmarshal(raw, &steps)
+	}
+	if err != nil || json.Unmarshal(params, &p) != nil || len(p.McpServers) == 0 {
+		rec.WhoamiError = "the script or the MCP server is unusable"
+		return
+	}
+	s := p.McpServers[0]
+	if _, err := call(s, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": map[string]any{
+		"protocolVersion": "2025-03-26", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "fakeagent", "version": "0"}}}); err != nil {
+		rec.WhoamiError = err.Error()
+		return
+	}
+	for i, st := range steps {
+		out, err := call(s, map[string]any{"jsonrpc": "2.0", "id": i + 2, "method": "tools/call", "params": map[string]any{"name": st.Tool, "arguments": st.Arguments}})
+		c := callRec{Tool: st.Tool, Reply: out}
+		if err != nil {
+			c.Error = err.Error()
+		}
+		rec.Calls = append(rec.Calls, c)
+		save()
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		os.Exit(2)
 	}
 	path = os.Args[1]
-	hold := len(os.Args) > 2 && os.Args[2] == "hold"
+	hold, scripted := false, ""
+	for _, a := range os.Args[2:] {
+		if a == "hold" {
+			hold = true
+		}
+		if f, ok := strings.CutPrefix(a, "script="); ok {
+			scripted = f
+		}
+	}
 	rec.PID, rec.Argv, rec.Env = os.Getpid(), os.Args, os.Environ()
 	save()
 	sc := bufio.NewScanner(os.Stdin)
@@ -124,7 +177,11 @@ func main() {
 			reply(r.ID, map[string]any{"sessionId": "sess_fake"})
 		case "session/prompt":
 			rec.Prompt = r.Params
-			whoami(rec.SessionNew)
+			if scripted != "" {
+				script(rec.SessionNew, scripted)
+			} else {
+				whoami(rec.SessionNew)
+			}
 			save()
 			if hold {
 				select {}

@@ -92,6 +92,11 @@ type agentRec struct {
 	Prompt      json.RawMessage
 	Whoami      json.RawMessage
 	WhoamiError string
+	Calls       []struct {
+		Tool  string
+		Reply json.RawMessage
+		Error string
+	}
 }
 
 // set: the fake agent writes a field it has not learned yet as null.

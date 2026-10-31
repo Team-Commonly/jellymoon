@@ -21,15 +21,26 @@ die() { echo "tools: $*" >&2; exit 1; }
 # directory above it, can run code in all of them. A symlink is refused: the installer never makes one,
 # and whoever owns it could re-point it after this check.
 ME=$(id -u)
-meta() { ls -ldn -- "$1" 2>/dev/null | awk 'NR == 1 { print substr($1, 1, 10), $3 }'; } # path -> "<mode> <uid>"
+# meta <path> -> "<mode> <uid> <acl>". An ACL can let others write whatever the mode says. acl is "-" (none),
+# "deny" (macOS, deny entries only: they cannot grant anything, and a home directory carries one), or anything else,
+# which is refused. macOS prints "@", not "+", when a path also has extended attributes, so there the entries are read
+# (ls -e); elsewhere a "+" after the mode is the only sign, and it is refused.
+meta() {
+  if [ "$os" = darwin ]; then ls -lden -- "$1"; else ls -ldn -- "$1"; fi 2>/dev/null | awk '
+    NR == 1 { m = substr($1, 1, 10); u = $3; a = substr($1, 11, 1) == "+" ? "+" : "-"; next }
+    /^ *[0-9]+: [^ ]+ (inherited )?deny [^ ]+$/ { if (a != "allow") a = "deny"; next }
+    { a = "allow" }
+    END { if (NR) print m, u, a }'
+}
 guard() { # path [next]: with next, path is a directory above the cache root and next the one below it
-  local why="" mode="" uid=""
+  local why="" mode="" uid="" acl=""
   if [ -L "$1" ]; then why="is a symlink"
   elif [ ! -e "$1" ]; then why="is missing"
   else
-    read -r mode uid < <(meta "$1") || true
+    read -r mode uid acl < <(meta "$1") || true
     if [ -z "$mode" ]; then why="could not be listed (ls printed nothing)"
     elif [ "$uid" != "$ME" ] && { [ -z "${2:-}" ] || [ "$uid" != 0 ]; }; then why="is not owned by you${2:+ or root}"
+    elif [ "$acl" != - ] && [ "$acl" != deny ]; then why="has an ACL that may let others write"
     else case $mode in
       ?????-??-?) ;; # chars 6 and 9: group and other write
       # A root-owned sticky directory (/tmp): others can add entries but cannot rename one they do not own.

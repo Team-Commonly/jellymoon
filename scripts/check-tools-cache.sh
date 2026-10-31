@@ -10,7 +10,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 umask 022 # the fixtures' own directories; run() switches to 002 for tools.sh
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/check-tools-cache.XXXXXX"); st=""
-trap 'rm -rf "$tmp" ${st:+"$st"}' EXIT
+trap '[ ! -e "$tmp/c/m5" ] || chmod -N "$tmp/c/m5"; rm -rf "$tmp" ${st:+"$st"}' EXIT # m5's deny delete entry would stop rm
 tmp=$(cd -P "$tmp" && pwd -P) # tools.sh links to the physical path, so the fixtures name that one
 
 GO=1.99.0; BUN=9.9.9 # invented pins for the throwaway repo
@@ -108,6 +108,22 @@ make_cache "$c/f3/p/cache"; fake "$c/f3/p" "drwxrwxrwt 2 0 0 64 Jan 1 00:00 $c/f
 run 'a root-owned sticky parent above a directory of yours is accepted' "$c/f3/p/cache" used
 make_cache "$c/f4/p/q/cache"; fake "$c/f4/p" "drwxrwxrwt 2 0 0 64 Jan 1 00:00 $c/f4/p"; fake "$c/f4/p/q" "drwxr-xr-x 2 0 0 64 Jan 1 00:00 $c/f4/p/q"
 run 'a root-owned sticky parent above a directory that is not yours' "$c/f4/p/q/cache" "$c/f4/p: it is writable by others, and $c/f4/p/q below it is not yours"
+a='it has an ACL that may let others write'
+make_cache "$c/f5/p/cache"; fake "$c/f5/p" "drwxr-xr-x+ 2 $(id -u) 0 64 Jan 1 00:00 $c/f5/p"
+run 'a parent with a "+" after its mode, the only sign of an ACL on Linux' "$c/f5/p/cache" "$c/f5/p: $a"
+
+# macOS ACLs, set for real. ls shows "@", not "+", when the path also has an extended attribute.
+if [ "$os" = darwin ]; then
+  make_cache "$c/m1"; chmod +a 'everyone allow write' "$c/m1"; run 'an ACL on the root' "$c/m1" "$c/m1: $a"
+  make_cache "$c/m2"; xattr -w com.example.fixture 1 "$c/m2/$G/bin/go"; chmod +a 'everyone allow write' "$c/m2/$G/bin/go"
+  run 'an ACL on the go binary, shown as "@" (it also has an extended attribute)' "$c/m2" "$c/m2/$G/bin/go: $a"
+  mkdir "$c/m3"; chmod +a 'everyone allow write,file_inherit,directory_inherit' "$c/m3"
+  run 'an inheritable ACL on a parent, before tools.sh creates the root' "$c/m3/cache" "$c/m3: $a"
+  mkdir "$c/m4"; chmod +a 'everyone allow write,file_inherit,directory_inherit' "$c/m4"; make_cache "$c/m4/cache"; chmod -N "$c/m4"
+  run 'an ACL the cache inherited from a parent that no longer has it' "$c/m4/cache" "$c/m4/cache: $a"
+  make_cache "$c/m5"; chmod +a 'everyone deny delete' "$c/m5"
+  run 'a deny-only ACL, as a home directory carries, is accepted' "$c/m5" used
+else echo "skip the macOS ACL cases: not macOS"; fi
 
 # The real thing: /tmp is a root-owned sticky directory on macOS and Linux, and a directory mktemp makes in it is yours.
 tp=$(cd -P /tmp && pwd -P)

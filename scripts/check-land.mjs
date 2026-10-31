@@ -1,17 +1,17 @@
 #!/usr/bin/env bun
 // Tests the pure decisions behind scripts/land.mjs (scripts/land-decide.mjs). No network, no gh. Own step in `make test`.
+// The range scan's decisions (scanResult, scanEnv, checkScanConfig, land-scan.mjs) are in check-land-scan.mjs.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { realRun } from './land.mjs';
 import {
   landedNote, mergeAction, mergeTree,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scanEnv, scanResult, scrub, stripControls, takePage,
+  checkNode, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
-
-const CLEAN = '10:11AM INF 3 commits scanned.\n10:11AM INF no leaks found\n'; // what a clean gitleaks run prints to stderr
 
 const H = 'a'.repeat(40);
 const H2 = 'c'.repeat(40);
@@ -142,31 +142,6 @@ const cases = [
   ['entropy base: none only for the bootstrap land of a main without entropy.json', entropyBase('abc', { bootstrap: true, mainHasEntropy: false }), 'none'],
   ['entropy base: a non-bootstrap land never gets none', entropyBase('abc', { bootstrap: false, mainHasEntropy: false }), 'abc'],
   ['output: U+200E, U+200F and U+061C are stripped from quoted preflight output', quoteOutput('a\u200eb\u200fc\u061cd'), 'preflight| abcd'],
-  // the dry run
-  ['scan result: exit 0, no leaks found and the expected count is clean', scanResult({ status: 0, stderr: CLEAN, expected: 3 }), 'clean'],
-  ['scan result: gitleaks colour codes are stripped before reading', scanResult({ status: 0, stderr: '\x1b[90m10:11AM\x1b[0m \x1b[32mINF\x1b[0m \x1b[1m3 commits scanned.\x1b[0m\n10:11AM INF \x1b[1mno leaks found\x1b[0m\n', expected: 3 }), 'clean'],
-  ['scan result: an empty range scanned as 0 commits is clean when 0 are expected', scanResult({ status: 0, stderr: '10:11AM INF 0 commits scanned.\n10:11AM INF no leaks found\n', expected: 0 }), 'clean'],
-  ['scan result: a nonzero exit with the hit line is a hit', scanResult({ status: 2, stderr: 'WRN leaks found: 1\nexit status 3\nmake: *** Error 1\n', expected: 3 }), 'hit'],
-  ['scan result: exit 0 that printed the hit line (a swallowed failure) is a failure, not clean', scanResult({ status: 0, stderr: CLEAN + 'exit status 3\n', expected: 3 }), 'failure'],
-  ['scan result: a nonzero exit without the hit line is a failure', scanResult({ status: 2, stderr: 'go: no network\nexit status 1\n', expected: 3 }), 'failure'],
-  ['scan result: no exit status at all is a failure, whatever the stderr says', scanResult({ status: null, stderr: 'exit status 3\n', expected: 3 }), 'failure'],
-  ['scan result: a null status with a clean-looking stderr is a failure (status === 0, not !status)', scanResult({ status: null, stderr: CLEAN, expected: 3 }), 'failure'],
-  ['scan result: a null status with an empty stderr is a failure', scanResult({ status: null, stderr: '', expected: 0 }), 'failure'],
-  ['scan result: an undefined status is a failure', scanResult({ stderr: CLEAN, expected: 3 }), 'failure'],
-  ['scan result: a zero exit with an empty stderr is a failure (nothing proves a scan ran)', scanResult({ status: 0, stderr: '', expected: 3 }), 'failure'],
-  ['scan result: the hit line must be a whole line', scanResult({ status: 2, stderr: 'not exit status 30\n', expected: 3 }), 'failure'],
-  ['scan result: a zero exit with an ERR log line is a failure', scanResult({ status: 0, stderr: '10:11AM ERR failed to read an object\n' + CLEAN, expected: 3 }), 'failure'],
-  ['scan result: a zero exit with a FTL log line is a failure', scanResult({ status: 0, stderr: '10:11AM FTL boom\n' + CLEAN, expected: 3 }), 'failure'],
-  ['scan result: a zero exit with "failed to scan" is a failure', scanResult({ status: 0, stderr: 'could not read: failed to scan the repo\n' + CLEAN, expected: 3 }), 'failure'],
-  ['scan result: a zero exit without "no leaks found" is a failure', scanResult({ status: 0, stderr: '10:11AM INF 3 commits scanned.\n', expected: 3 }), 'failure'],
-  ['scan result: a zero exit without the commit count line is a failure', scanResult({ status: 0, stderr: '10:11AM INF no leaks found\n', expected: 3 }), 'failure'],
-  ['scan result: a scanned count below the expected one is a failure', scanResult({ status: 0, stderr: CLEAN, expected: 4 }), 'failure'],
-  ['scan result: a scanned count above the expected one is a failure too (exact, not at least)', scanResult({ status: 0, stderr: CLEAN, expected: 2 }), 'failure'],
-  ['scan result: no expected count is a failure', scanResult({ status: 0, stderr: CLEAN }), 'failure'],
-  ['scan result: a non-numeric expected count is a failure', scanResult({ status: 0, stderr: CLEAN, expected: NaN }), 'failure'],
-  ['scan result: two count lines are a failure', scanResult({ status: 0, stderr: CLEAN + '10:11AM INF 3 commits scanned.\n', expected: 3 }), 'failure'],
-  ['scan env: MAKEFLAGS and the gitleaks variables are dropped, PATH HOME TMPDIR kept, git config pinned off', JSON.stringify(scanEnv({ MAKEFLAGS: 'i', GITLEAKS_CONFIG: 'x', PATH: '/p', HOME: '/h', TMPDIR: '/t' })), JSON.stringify({ PATH: '/p', HOME: '/h', TMPDIR: '/t', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' })],
-  ['scan env: the Go variables pass when set', Object.keys(scanEnv({ GOPATH: 'a', GOCACHE: 'b', GOMODCACHE: 'c', GOTOOLCHAIN: 'd' })).join(), 'GOPATH,GOCACHE,GOMODCACHE,GOTOOLCHAIN,GIT_CONFIG_GLOBAL,GIT_CONFIG_NOSYSTEM'],
   ['merge tree: the first line of merge-tree is the tree', mergeTree(() => 'abc123\nrest', H, H2), 'abc123'],
   ['merge tree: a conflict is a refusal naming both commits', throws(() => mergeTree(() => { throw new Error('x'); }, H, H2)), true],
   ['dry run: stops before the merge', mergeAction({ dryRun: true }), 'stop'],
@@ -299,6 +274,9 @@ cases.push(
   ['land.mjs: preflight output is scrubbed and the group is killed on return', landSrc.includes('scrub(quoteOutput(text), SECRET)') && /clearTimeout\(timer\);\s*clearTimeout\(late\);\s*kill\(\);/.test(landSrc), true],
   ['land.mjs: SIGINT and SIGTERM exit, which kills the group and releases the lock', /SIGINT[^\n]*exit\(130\)/.test(landSrc) && /SIGTERM[^\n]*exit\(143\)/.test(landSrc), true],
   ['land.mjs: the throwaway dir is tracked and the group kill runs first', landSrc.includes('trackThrowaway(dir, wt,') && landSrc.includes("process.prependListener('exit', kill)"), true],
+  ['land.mjs: the CLI hands the scan seam the real realRun, unwrapped (a wrapper could drop stderr or force a status)', landSrc.includes('main({ exec, run: realRun, fetch, spawn, kill: process.kill,'), true],
+  ['land.mjs: the CLI exec passes its options through to execFileSync (the scan env and maxBuffer reach git)', landSrc.includes("const exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();"), true],
+  ['land.mjs: the real run seam passes its options through to spawnSync', realRun(process.execPath, ['-e', "process.stdout.write(process.env.JM_SEEN ?? 'unset')"], { env: { JM_SEEN: 'seen', PATH: process.env.PATH } }).stdout, 'seen'],
   ['land.mjs imports resolve: run with no arguments it reaches main and refuses', run.status === 1 && !/export named|SyntaxError|ReferenceError/i.test(run.stderr) && run.stderr.includes('land: refused'), true],
 );
 

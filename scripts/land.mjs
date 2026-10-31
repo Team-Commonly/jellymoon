@@ -14,8 +14,9 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, scanEnv, scanResult, takePage,
+  scrub, scanEnv, takePage,
 } from './land-decide.mjs';
+import { scanRange } from './land-scan.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
 // All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
 // git and gh call (stdout, throws on failure), run(cmd, args, opts) for the range scan ({ status, stdout, stderr }, never throws), fetch for the pod read, spawn for the preflight child, env, argv and the Node version.
@@ -155,16 +156,19 @@ const reviewers = () => {
   if (!list.length) refuse('JM_VERDICT_REVIEWERS is malformed: it has no valid <id>:<Name> entry');
   return list;
 };
-// The commit-range secret scan (gitleaks git mode, -m, markers ignored). It only refuses. Clean is positive evidence read from the scan's own
-// exit status AND stderr, on success as well as failure (see scanResult): exit 0, no hit or error line, "no leaks found", and a scanned
-// count equal to the commits this land would merge, which land counts itself with git, outside make. A scan that did not read the range
-// (a recipe that swallowed an error, an object missing from the checkout, an empty range) proves nothing, so it refuses too.
+// The commit-range secret scan (gitleaks git mode, -m, markers ignored), run by scanRange (land-scan.mjs): land runs the checkout's own
+// installed go with an argv it builds (its own gitleaks config included), not make. It only refuses. Before the scan, main's tree and every
+// range commit's tree are read for a file that would steer the scan (checkScanConfig), and the checkout's .tools is checked. Clean is positive evidence read from the scan's own
+// exit status AND stderr (see scanResult): exit 0, no hit or error line, "no leaks found", and a scanned count equal to the commits gitleaks
+// reads (those whose diff has a text hunk, see textCommits). A range that touches a path ending in a backslash is refused first, because the
+// count cannot show which commits were read. A scan that did not read the range proves nothing, so it refuses too.
 const rangeScan = (mainTip, head) => {
-  const expected = Number(out('git', ['rev-list', '--count', `${mainTip}..${head}`]));
-  const r = IO.run('make', ['-s', 'secrets-range', `RANGE=${mainTip}..${head}`], { env: scanEnv(IO.env) });
-  const res = scanResult({ status: r.status, stderr: r.stderr, expected });
-  if (res === 'clean') return { ok: true };
-  return { ok: false, reason: res === 'hit' ? 'a secret was found in the range; remove it from history and push a new head' : 'the range secret scan failed to run, or did not read the whole range; it proves nothing, so land refuses' };
+  const top = out('git', ['rev-parse', '--show-toplevel']);
+  const git = (a) => out('git', a, { env: scanEnv(IO.env), maxBuffer: 1 << 28 }); // the scan's own git environment, so both count the same way
+  const r = scanRange({ range: `${mainTip}..${head}`, top, git, run: IO.run, env: IO.env });
+  if (r.result === 'clean') return { ok: true };
+  if (r.result === 'refused') return { ok: false, reason: r.reason };
+  return { ok: false, reason: r.result === 'hit' ? 'a secret was found in the range; remove it from history and push a new head' : 'the range secret scan failed to run, or did not read the whole range; it proves nothing, so land refuses' };
 };
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
 async function decide(pr, mainTip) { // mainTip is the tip fetched for this land

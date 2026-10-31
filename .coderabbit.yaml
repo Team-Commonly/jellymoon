@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit's review is information for the author, never a gate. A land vetoes on any failed check run on the head, from
+# any app (docs/development/landing.md), so CodeRabbit must post none: review_progress off means no `CodeRabbit` check run,
+# commit_status off means no commit status in its place, and auto_approvals off means it never approves or requests changes.
+language: en-US
+reviews:
+  review_progress: false
+  commit_status: false
+  fail_commit_status: false
+  auto_approvals:
+    enabled: false
+  auto_review:
+    enabled: true
+    drafts: false

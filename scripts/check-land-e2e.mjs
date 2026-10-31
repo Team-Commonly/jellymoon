@@ -110,14 +110,14 @@ await t('the scan\'s --gitleaks-ignore-path is an empty directory outside the ch
 await t('a .gitleaksignore at the top of the checkout (ignored, in any case) is refused before the scan, naming it', { topFiles: ['.GitleaksIgnore'] }, (r) => no(r, /\/\.GitleaksIgnore exists; gitleaks would drop the findings it lists/) && !scans(r).length && r.w.pod.length === 0);
 // Every name the allowlist keeps, set to a recognisable value, plus operator variables that must not pass (and a git config the operator points at its own).
 const KEPT = { PATH: '/usr/bin:/bin', HOME: '/opt/opuser', TMPDIR: '/var/tmp', GOPATH: '/opt/gopath', GOCACHE: '/opt/gocache', GOMODCACHE: '/opt/gomod' };
-const MAKEENV = { ...KEPT, MAKEFLAGS: 'i', GITLEAKS_CONFIG: '/tmp/off.toml', GITLEAKS_ENABLE_RULES: 'x', GIT_DIR: '/nope', GOFLAGS: '-x', GOTOOLCHAIN: 'go9.9', GOWORK: '/nope/go.work', GIT_CONFIG_GLOBAL: '/opt/opuser/.gitconfig', GIT_CONFIG_NOSYSTEM: '0' };
-const PINNED = { ...KEPT, GOTOOLCHAIN: 'local', GOWORK: 'off', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+const MAKEENV = { ...KEPT, MAKEFLAGS: 'i', GITLEAKS_CONFIG: '/tmp/off.toml', GITLEAKS_ENABLE_RULES: 'x', GIT_DIR: '/nope', GOFLAGS: '-x', GOTOOLCHAIN: 'go9.9', GOWORK: '/nope/go.work', GIT_CONFIG_GLOBAL: '/opt/opuser/.gitconfig', GIT_CONFIG_NOSYSTEM: '0', GOENV: '/opt/opuser/go.env', GOPROXY: 'off', GOSUMDB: 'off', GONOSUMDB: '*', GOPRIVATE: '*', GOINSECURE: '*' };
+const PINNED = { ...KEPT, GOTOOLCHAIN: 'local', GOWORK: 'off', GOENV: 'off', GOFLAGS: '', GOPROXY: 'https://proxy.golang.org,direct', GOSUMDB: 'sum.golang.org', GONOSUMDB: '', GOPRIVATE: '', GOINSECURE: '', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 const EXACT = JSON.stringify(Object.entries(PINNED).sort()); // git's env; the scan adds GOROOT, the resolved toolchain's own directory
 const scanExact = (r) => JSON.stringify(Object.entries({ ...PINNED, GOROOT: path.dirname(path.dirname(r.w.go)) }).sort());
 const envOf = (c) => c && JSON.stringify(Object.entries(c.opts.env).sort());
 const scanEnvOf = (r) => envOf(scans(r)[0]);
 await t('a scan killed by a signal (no exit status) refuses as a failed scan, not a finding or clean', { scan: 'killed' }, (r) => no(r, /failed to run/) && !r.ledgerNow.includes('LANDED'));
-await t('the range scan runs with exactly the allowlisted env (Go pinned to the installed toolchain, no workspace, GOROOT the toolchain\'s own) and git config pinned off', { env: MAKEENV }, (r) => scanEnvOf(r) === scanExact(r));
+await t('the range scan runs with exactly the allowlisted env (Go pinned to the installed toolchain, no workspace, no env file, Go\'s default fetch settings, GOROOT the toolchain\'s own) and git config pinned off', { env: MAKEENV }, (r) => scanEnvOf(r) === scanExact(r));
 await t('the commits the scan should read, and the paths the range touches, are derived by git in that same env (the name list, the rev-list and the diff, once for each of the two decisions)', { env: MAKEENV }, (r) => {
   const mine = r.w.calls.filter((c) => c.cmd === 'git' && ['log', 'rev-list'].includes(c.args[0]));
   return mine.length === 6 && mine.every((c) => envOf(c) === EXACT);

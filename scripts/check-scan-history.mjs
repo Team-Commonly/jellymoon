@@ -47,6 +47,28 @@ const badHist = history.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (badHist.length) { console.error(`check-scan-history: history cases wrong\n  ${badHist.join('\n  ')}`); process.exit(1); }
 console.log(`check-scan-history: ${history.length} history cases ok`);
 
+// The operator's go env file (`go env -w` writes it under HOME's config directory) must not reach the scan's go: scanEnv turns it off
+// (GOENV=off) and pins the fetch settings. Read with `go env`, in the scan's env and with the GOROOT land sets, under a HOME whose env file
+// sets each of them. The control drops GOENV=off only: a pin with a value still holds, an empty pin falls through to the file.
+{
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'check-goenv-'));
+  for (const d of [path.join(home, 'Library', 'Application Support', 'go'), path.join(home, '.config', 'go')]) {
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, 'env'), 'GOFLAGS=-x\nGOPROXY=off\nGOSUMDB=off\nGOINSECURE=*\nGOPRIVATE=*\nGONOSUMDB=*\n');
+  }
+  const go = fs.realpathSync(path.join(root, '.tools', 'bin', 'go'));
+  const read = (env) => spawnSync(go, ['env', 'GOFLAGS', 'GOPROXY', 'GOSUMDB', 'GOINSECURE', 'GOPRIVATE', 'GONOSUMDB'], { encoding: 'utf8', env: { ...env, HOME: home, GOROOT: path.dirname(path.dirname(go)) } }).stdout.split('\n').slice(0, 6).join('|');
+  const { GOENV: off, ...withFile } = scanEnv(process.env);
+  const goEnvCases = [
+    ['go env file: in the scan\'s env, the operator\'s file is not read, and the fetch settings are Go\'s own defaults', read(scanEnv(process.env)), '|https://proxy.golang.org,direct|sum.golang.org|||'],
+    ['go env file: the control without GOENV=off reads the file wherever a pin is empty', `${off}:${read(withFile)}`, 'off:-x|https://proxy.golang.org,direct|sum.golang.org|*|*|*'],
+  ];
+  fs.rmSync(home, { recursive: true, force: true });
+  const badGoEnv = goEnvCases.filter(([, got, want]) => got !== want).map(([n, got]) => `${n} (got ${got})`);
+  if (badGoEnv.length) { console.error(`check-scan-history: go env file cases wrong\n  ${badGoEnv.join('\n  ')}`); process.exit(1); }
+  console.log(`check-scan-history: ${goEnvCases.length} go env file cases ok`);
+}
+
 // An evil merge: gitleaks runs `git log -p` without -m, so a secret that exists only in a merge commit's own diff (a conflict resolution)
 // is never scanned. Both targets pass -m. A trusted branch merges a side branch and adds a token to docs/a.md in the resolution. The
 // shape is land's: make secrets runs on the detached head (the preflight's merged tree), the range scan from main with the head by SHA.

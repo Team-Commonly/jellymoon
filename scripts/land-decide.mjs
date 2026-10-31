@@ -239,14 +239,15 @@ export function checkScanConfig(tree, blob, shipped = SHIPPED, where = 'main') {
 // cannot change what it reads. PATH, HOME and TMPDIR are kept for the toolchain and git. A tracked go.work, or a go.mod with a `toolchain`
 // line, could otherwise make `go run` fetch and run another Go release (measured), so GOTOOLCHAIN is pinned to the installed one and
 // GOWORK is off; the module is named with an explicit version, so no tracked go.mod, vendor directory or replace line is consulted.
+// A variable left out still reaches go through its env file (`go env -w`, read from the operator's config dir), so GOENV is off, and the
+// fetch settings are pinned to Go's own defaults: the module proxy and checksum database, no private or insecure patterns, no GOFLAGS.
+// An empty value means "not set" to go, which then reads only $GOROOT/go.env, the installed toolchain's own file.
 const SCAN_ENV_KEEP = ['PATH', 'HOME', 'TMPDIR', 'GOPATH', 'GOCACHE', 'GOMODCACHE'];
-export const scanEnv = (env) => ({
-  ...Object.fromEntries(SCAN_ENV_KEEP.filter((k) => env[k] !== undefined).map((k) => [k, env[k]])),
-  GOTOOLCHAIN: 'local',
-  GOWORK: 'off',
-  GIT_CONFIG_GLOBAL: '/dev/null',
-  GIT_CONFIG_NOSYSTEM: '1',
-});
+const SCAN_ENV_PINS = {
+  GOTOOLCHAIN: 'local', GOWORK: 'off', GOENV: 'off', GOFLAGS: '', GOPROXY: 'https://proxy.golang.org,direct', GOSUMDB: 'sum.golang.org',
+  GONOSUMDB: '', GOPRIVATE: '', GOINSECURE: '', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
+};
+export const scanEnv = (env) => ({ ...Object.fromEntries(SCAN_ENV_KEEP.filter((k) => env[k] !== undefined).map((k) => [k, env[k]])), ...SCAN_ENV_PINS });
 // Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
 const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
 export function checkRuns(runs, total = runs.length) {

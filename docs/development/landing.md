@@ -90,10 +90,13 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    built variable name, `$(eval)`, an `include`, a tracked `GNUmakefile`, `SHELL`, a prerequisite that writes `.gitleaks.toml`, or an exported
    `GITLEAKS_CONFIG` or `GIT_CONFIG_*` all change what make runs while the pinned text still matches. Each of those, put on main, now reads as a
    hit in `check-scan-history.mjs`.) `scanEnv` keeps `PATH`, `HOME`, `TMPDIR` and the Go cache variables, pins `GIT_CONFIG_GLOBAL=/dev/null`
-   and `GIT_CONFIG_NOSYSTEM=1`, and sets `GOTOOLCHAIN=local` and `GOWORK=off`: a tracked `go.work` or a `go.mod` with a `toolchain` line could
+   and `GIT_CONFIG_NOSYSTEM=1`, and sets `GOTOOLCHAIN=local` and `GOWORK=off` (a tracked `go.work` or a `go.mod` with a `toolchain` line could
    otherwise make `go run` fetch and run another Go release (measured), and the module is named with an explicit version, so no tracked `go.mod`,
-   `vendor/` or `replace` line is consulted. The Makefile's `secrets-range` stays for people; `check-review-gate.mjs` checks that its recipe is
-   the same command as land's argv. That check is a consistency check, not a security boundary.
+   `vendor/` or `replace` line is consulted). It also sets `GOENV=off`, so the operator's Go env file (`go env -w`) is not read, and pins
+   the fetch settings to Go's own defaults: `GOPROXY=https://proxy.golang.org,direct`, `GOSUMDB=sum.golang.org`, and `GOFLAGS`,
+   `GONOSUMDB`, `GOPRIVATE` and `GOINSECURE` empty (go reads an empty value as unset, and then only the toolchain's own `go.env`); without
+   `GOENV=off` an empty pin would fall through to the operator's file (measured, a case in `check-scan-history.mjs`).
+   The Makefile's `secrets-range` stays for people; `check-review-gate.mjs` checks that its recipe is the same command as land's argv. That check is a consistency check, not a security boundary.
    A hit (a nonzero exit plus the line "exit status 3") refuses with "a secret was found in the range; remove it from history and push a new head".
    Clean is positive evidence, read from the scan's exit status and stderr together: exit 0; no "exit status 3" line; no gitleaks
    `ERR` (or `FTL`, `PNC`) line and no "failed to scan"; the "no leaks found" line (gitleaks' "no leaks found in partial scan" warning is not
@@ -232,8 +235,9 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 - **A commit message with a line over 64 KB is refused.** gitleaks' log reader cannot take it, so it counts none where land derives one
   (measured: rev-list 1, gitleaks 0, derived 1); land fails closed with the "did not read the whole range" line on an innocent PR.
 - **What `go run` still takes from the operator, and from whatever writes the operator's files.** The installed toolchain (`.tools/`, or
-  the cache its links point into: see the threat model), the user-level Go env file under `HOME` (`go env -w`), the module and build
-  caches (`GOMODCACHE`, `GOPATH`, `GOCACHE`) and the network. From the repo, a tracked `.tools` is refused in every tree land checks, and
+  the cache its links point into: see the threat model), the module and build caches (`GOMODCACHE`, `GOPATH`, `GOCACHE`) and the
+  network (what is not in the module cache comes through the public proxy and is checked against the checksum database, both pinned in
+  `scanEnv`; what is in it is used as it stands). The operator's Go env file is not read (`GOENV=off`). From the repo, a tracked `.tools` is refused in every tree land checks, and
   a tracked `go.work`, `go.mod` (`toolchain`, `replace`), `vendor/` or top-level `pkg/tool/` has no effect (see step 4).
 - **The scan configuration is checked in the committed trees, and on the filesystem only for `.tools` and a top-level `.gitleaksignore`.** The scan also reads files that
   are in no tree: `.git/info/attributes`, the land checkout's own `.git/config` (a `diff` driver, `core.attributesFile`), and an ignored

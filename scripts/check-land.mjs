@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
+import './check-land-coderabbit.mjs'; // the CodeRabbit path's cases run on import, in this step
 import { realRun } from './land.mjs';
 import {
   landedNote, mergeAction, mergeTree,

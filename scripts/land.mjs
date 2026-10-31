@@ -17,6 +17,7 @@ import {
   scrub, scanEnv, takePage,
 } from './land-decide.mjs';
 import { scanRange } from './land-scan.mjs';
+import { checkCodeRabbit, checkEarlierReview, threadPage } from './land-coderabbit.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
 // All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
 // git and gh call (stdout, throws on failure), run(cmd, args, opts) for the range scan ({ status, stdout, stderr }, never throws), fetch for the pod read, spawn for the preflight child, env, argv and the Node version.
@@ -170,6 +171,31 @@ const rangeScan = (mainTip, head) => {
   if (r.result === 'refused') return { ok: false, reason: r.reason };
   return { ok: false, reason: r.result === 'hit' ? 'a secret was found in the range; remove it from history and push a new head' : 'the range secret scan failed to run, or did not read the whole range; it proves nothing, so land refuses' };
 };
+// The CodeRabbit path's reads, all from GitHub and git at this moment, never from the ledger row: the PR's commits, CodeRabbit's reviews, and
+// the review threads (GraphQL, paginated).
+const jsonLines = (text) => text.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+const THREADS = 'query($owner:String!,$name:String!,$n:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$n){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor}nodes{isResolved isOutdated comments(first:100){pageInfo{hasNextPage}nodes{author{__typename login}body}}}}}}}';
+function reviewThreads(n) {
+  const [owner, name] = REPO.split('/');
+  const nodes = [];
+  let after = [];
+  for (let page = 0; page < 20; page += 1) {
+    const got = threadPage(JSON.parse(gh('api', 'graphql', '-f', `query=${THREADS}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${n}`, ...after)));
+    nodes.push(...got.nodes);
+    if (!got.next) return nodes;
+    after = ['-f', `after=${got.next}`];
+  }
+  return refuse('CodeRabbit threads: more than 2000 review threads; cannot read them all');
+}
+function codeRabbitGate(rows, n, head, mainTip) {
+  const range = out('git', ['rev-list', `${mainTip}..${head}`], { maxBuffer: 1 << 26 }).split('\n').filter(Boolean).map((s) => s.toLowerCase());
+  if (range.length > 250) refuse(`${range.length} commits in main..head; the CodeRabbit path reads at most 250`);
+  const early = checkEarlierReview(rows, { pr: n, head, range }); // no network read if the one local review is missing
+  if (!early.ok) return early;
+  const reviews = jsonLines(gh('api', '--paginate', `repos/${REPO}/pulls/${n}/reviews?per_page=100`, '--jq', '.[] | {user: {login: .user.login, type: .user.type}, commit_id, state}'));
+  const infos = range.map((sha) => JSON.parse(gh('api', `repos/${REPO}/commits/${sha}`, '--jq', '{sha, author: {login: .author.login}, committer: {login: .committer.login}}')));
+  return checkCodeRabbit({ rows, pr: n, head, range, reviews, threads: reviewThreads(n), infos, trusted: parseLogins(IO.env.JM_TRUSTED_LOGINS) });
+}
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
 async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
   const n = String(pr.number);
@@ -177,18 +203,22 @@ async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
   const rows = readLedger();
   const led = checkLedger(rows, { pr: n, head });
   if (!led.ok) return led;
-  const notes = [`ledger PASS by ${led.primary.by}`];
+  let via = `verifier PASS by ${led.primary.by}`;
   const runs = JSON.parse(gh('api', `repos/${REPO}/commits/${head}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, conclusion}]}'));
   const ci = checkRuns(runs.runs, runs.total);
   if (!ci.ok) return ci;
   // The secret scan can only REFUSE; a clean scan waives nothing. Every land needs the ledger PASS above and the reviewer's verdict below.
   const scan = rangeScan(mainTip, head);
   if (!scan.ok) return scan;
+  if (led.path === 'coderabbit') { // the row only names the path: land reads (a) and (c) to (e) itself
+    const cr = codeRabbitGate(rows, n, head, mainTip);
+    if (!cr.ok) return cr;
+    via = cr.note;
+  }
   const gate = checkPodVerdict(await podMessages(Date.parse(pr.createdAt)), { pr: n, head, entries: reviewers() });
   if (!gate.ok) return gate;
-  notes.push(gate.reason);
   const tree = treeOf(mainTip, head);
-  return { ok: true, notes, tree };
+  return { ok: true, notes: [via, gate.reason], tree, via };
 }
 // The tree `merge-tree --write-tree` gives for main's tip plus the head: what the decision judged and the preflight must reproduce.
 const treeOf = (mainTip, head) => mergeTree((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
@@ -273,8 +303,8 @@ async function run(args, hold) {
   gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
   const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
   const merged = sha === 'unknown' ? 'unknown' : (() => { try { fetchRef(sha); return out('git', ['rev-parse', `${sha}^{tree}`]); } catch { return 'unreadable'; } })();
-  const note = landedNote(sha, pf.tree, merged);
-  if (note !== sha) console.error(`land: WARNING: #${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the base or main moved in the last window. It cannot be undone; look at it now.`);
+  const note = landedNote(sha, pf.tree, merged, d.via);
+  if (pf.tree !== merged) console.error(`land: WARNING: #${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the base or main moved in the last window. It cannot be undone; look at it now.`);
   appendLedger(n, head, 'LANDED', 'land', note);
   if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
   say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);

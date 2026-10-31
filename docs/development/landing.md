@@ -42,7 +42,7 @@ is refused.
 - **The pusher list is read at land time.** A collaborator removed since writing a commit no longer shows, so their
   earlier commits on a trusted author's branch still pass. Audit the branch's commits when removing access.
 - **Whatever can write the land checkout's `.tools/` chooses the scanner.** Land runs the go installed there (step 4), or, with a
-  shared toolchain cache, the go its absolute links point to outside the checkout. `./init.sh` writes it; so can any preflight
+  shared toolchain cache, the go its absolute links point to outside the checkout. `scripts/tools.sh` writes it (`./init.sh` runs it); so can any preflight
   (it runs as the operator) and anything else the operator runs, and that carries into later lands, as do the checkout's
   `.git/config` and hooks, which preflight code can rewrite too. A tracked `.tools` cannot: git would write it into the
   checkout on a fresh clone or a `merge --ff-only` to main, so land refuses every tree it checks that carries one, and refuses a
@@ -74,7 +74,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    ships none, so none is allowed.
    **Land runs gitleaks itself, not make,** with the go installed in the land checkout's `.tools`, checked on the filesystem first (ignored
    files count). `<checkout>/.tools` and `<checkout>/.tools/bin` must be real directories, not symbolic links, and `.tools/bin/go`, followed
-   through every link, must be an executable under `<checkout>/.tools` (what `./init.sh` installs: `.tools/bin/go -> ../go-<version>/bin/go`)
+   through every link, must be an executable under `<checkout>/.tools` (what `scripts/tools.sh` installs: `.tools/bin/go -> ../go-<version>/bin/go`)
    or outside the checkout (a shared toolchain cache: `.tools/bin/go` is an absolute link into it). A go that resolves anywhere else in the
    checkout is refused, and so is a missing one. `scanRange` (`land-scan.mjs`) runs that resolved path, with `GOROOT` set to the directory
    above its `bin/`: go started through the link looks for its GOROOT two and three levels above the link, and three levels above
@@ -125,7 +125,11 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    missing object, a `.gitattributes` the scan stumbles on, and a scan of an empty range in place of the PR's all exit 0 and fail one of these.)
    A clean scan waives nothing. The preflight's `make secrets` (gitleaks over the whole history) is the second scan and refuses by failing the
    preflight. (The code's order is steps 2, 3, 4 as listed: ledger, CI, scan, pod verdict.) The land checkout needs `go` at `.tools/bin/go`
-   (and `git`, `node`): run `./init.sh` once in the land checkout, which installs the pinned Go and Bun into the ignored `.tools/`. Without it,
+   (and `git`, `node`): run `env PATH=/usr/bin:/bin:/usr/sbin:/sbin scripts/tools.sh` once in the land checkout, which installs the pinned Go and
+   Bun into the ignored `.tools/` (or `JM_TOOLCHAIN_CACHE=<dir> scripts/tools.sh`, which links a shared cache into it whatever is on `PATH`).
+   The system `PATH` is the point: `scripts/tools.sh` installs nothing into `.tools/` when a go of the pinned version is already on `PATH`,
+   so `./init.sh`, which runs it with the operator's `PATH`, can leave the checkout without one (on a system whose `/usr/bin` holds that go,
+   use the cache form). Land's refusal names this command. Without it,
    or with a `.tools` that fails the checks above, land refuses before the scan, naming the path. Without a module cache or network for gitleaks, `go run` fails, the scan reads as failed to
    run, and land refuses.
 5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null

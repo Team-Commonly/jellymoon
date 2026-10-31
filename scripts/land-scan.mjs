@@ -52,22 +52,25 @@ function checkTrees(range, commits, git) {
 }
 // The go land runs, checked on the filesystem (an ignored file counts). `<top>/.tools` and `<top>/.tools/bin` must be real directories, not
 // symlinks, and go must resolve either outside the checkout (a shared toolchain cache: .tools/bin holds absolute links into it) or under
-// `<top>/.tools` (./init.sh's own download: .tools/bin/go -> ../go-<version>/bin/go). A tracked .tools is refused with the trees, so no
+// `<top>/.tools` (scripts/tools.sh's own download: .tools/bin/go -> ../go-<version>/bin/go). A tracked .tools is refused with the trees, so no
 // tracked file can place one. Returns the resolved go and its GOROOT (the directory above its bin/), and the scan runs that go with that
 // GOROOT: go started through the link looks for its GOROOT two and three levels above the link, and three levels above .tools/bin/go is the
 // checkout, so a tracked `pkg/tool/` at the top would make the checkout the GOROOT (measured: its go.env is read, and its toolchain run).
+// How to install it. scripts/tools.sh installs into .tools only when no go of the pinned version is on PATH, or with a shared cache, so the advice
+// gives it the system PATH alone (no go there on macOS); ./init.sh runs it with the operator's PATH and may install nothing.
+const INSTALL = 'run `env PATH=/usr/bin:/bin:/usr/sbin:/sbin scripts/tools.sh` in the land checkout (`JM_TOOLCHAIN_CACHE=<dir> scripts/tools.sh` links a shared toolchain cache instead)';
 function findGo(top) {
   const go = path.join(top, '.tools', 'bin', 'go');
-  const missing = { reason: `${go} is missing or not executable; run ./init.sh once in the land checkout so land can run gitleaks` };
+  const missing = { reason: `${go} is missing or not executable; land runs gitleaks with the checkout's own go, so ${INSTALL}` };
   for (const dir of [path.join(top, '.tools'), path.join(top, '.tools', 'bin')]) {
     let st;
     try { st = fs.lstatSync(dir); } catch { return missing; }
-    if (st.isSymbolicLink() || !st.isDirectory()) return { reason: `${dir} is ${st.isSymbolicLink() ? 'a symbolic link' : 'not a directory'}; land runs go only from a real .tools directory in the checkout, so remove it and run ./init.sh` };
+    if (st.isSymbolicLink() || !st.isDirectory()) return { reason: `${dir} is ${st.isSymbolicLink() ? 'a symbolic link' : 'not a directory'}; land runs go only from a real .tools directory in the checkout, so remove it and ${INSTALL}` };
   }
   let real;
   try { real = fs.realpathSync.native(go); fs.accessSync(real, fs.constants.X_OK); } catch { return missing; }
   const within = (p, dir) => p.startsWith(`${dir}${path.sep}`);
-  if (within(real, fs.realpathSync.native(top)) && !within(real, fs.realpathSync.native(path.join(top, '.tools')))) return { reason: `${go} resolves to ${real}, inside the checkout but outside .tools; land runs only an installed toolchain, so remove it and run ./init.sh` };
+  if (within(real, fs.realpathSync.native(top)) && !within(real, fs.realpathSync.native(path.join(top, '.tools')))) return { reason: `${go} resolves to ${real}, inside the checkout but outside .tools; land runs only an installed toolchain, so remove it and ${INSTALL}` };
   return { go: real, goroot: path.dirname(path.dirname(real)) };
 }
 // gitleaks reads `<source>/.gitleaksignore` whatever its flags say (--gitleaks-ignore-path only adds another), and a line `file:rule:line`

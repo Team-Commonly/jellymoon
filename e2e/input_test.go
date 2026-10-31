@@ -44,12 +44,7 @@ func (w *world) refusedPosts() {
 		{"unknown kind", post(map[string]any{"kind": "essay"})},
 		{"unknown status", post(map[string]any{"status": "bogus"})},
 		{"field only the server sets", post(map[string]any{"receipt": map[string]any{}})},
-		// The core stores a post as fyi/done with none of these; refusing them keeps a post from being stored as something it is not.
-		{"kind the core cannot store", post(map[string]any{"kind": "result"})},
-		{"status the core cannot store", post(map[string]any{"status": "blocked"})},
 		{"needs", post(map[string]any{"needs": map[string]any{"to": map[string]any{"role": "owner"}, "action": "review"}})},
-		{"caveat", post(map[string]any{"caveat": "unchecked"})},
-		{"links", post(map[string]any{"links": []any{}})},
 	}
 	for _, c := range refused {
 		w.wantErr(w.c.do("POST", w.podPath("messages"), w.owner.tok, c.body, nil), 400, "invalid_input", "post with "+c.name)
@@ -67,6 +62,21 @@ func (w *world) storedPosts(r *run) {
 	w.must(w.c.do("POST", msgs, w.owner.tok, post(map[string]any{"body": whole}), &posted), "post with a 16,384-character body")
 	if got := w.feedBody(posted.MessageID); !strings.HasSuffix(got, whole) {
 		t.Errorf("a 16,384-character body came back as %d characters, not whole", len(got))
+	}
+
+	// F11 lifted the old limit that only fyi/done posts were stored: every kind, status, caveat and links the schema allows is stored whole.
+	for name, over := range map[string]map[string]any{
+		"kind result": {"kind": "result"}, "status blocked": {"status": "blocked"}, "a caveat": {"caveat": "unchecked"},
+		"links": {"links": []any{map[string]any{"label": "PR", "url": "https://example.com/pr/1", "type": "pr"}}},
+	} {
+		over["summary"] = "stored with " + name
+		var out struct {
+			MessageID string `json:"messageId"`
+		}
+		w.must(w.c.do("POST", msgs, w.owner.tok, post(over), &out), "post with "+name)
+		if s := w.feedSummary(out.MessageID); s != "stored with "+name {
+			t.Errorf("post with %s came back with the summary %q", name, s)
+		}
 	}
 
 	// A run posts with its summary (it used to answer summary_required for every post).

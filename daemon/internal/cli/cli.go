@@ -52,6 +52,9 @@ func Main(args []string, stdout, stderr io.Writer) int {
 
 // computerFor returns the stored computer, registering one first when the dir has none.
 func computerFor(s config.Store, a *api.Client) (config.Computer, error) {
+	// The user token is for registering and nothing else. It is dropped on every path, including a restart that never reads it,
+	// so nothing the daemon starts later can inherit it.
+	defer func() { _ = os.Unsetenv(userTokenEnv) }()
 	stored, err := s.Computer()
 	if err != nil {
 		return config.Computer{}, err

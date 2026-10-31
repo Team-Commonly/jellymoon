@@ -147,7 +147,7 @@
         "the ask carries an open decision"
       ],
       "test": "go test ./e2e -run TestF11",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F12",

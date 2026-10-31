@@ -311,7 +311,7 @@ func TestF09(t *testing.T) {
 	needFake(t)
 	track(t)
 	f := newF09(t)
-	record, held := filepath.Join(t.TempDir(), "agent.json"), filepath.Join(t.TempDir(), "held.json")
+	record, held, scrubbed := filepath.Join(t.TempDir(), "agent.json"), filepath.Join(t.TempDir(), "held.json"), filepath.Join(t.TempDir(), "scrubbed.json")
 	f.harness(record)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return f.obs[0].snapshot(0) }}
 	defer p.count(t)
@@ -321,6 +321,7 @@ func TestF09(t *testing.T) {
 	p.step("jm_whoami over MCP returns the agent, pod and run", func() error { return f.whoami(record) })
 	p.step("the agent's argv and env never hold jmc_ or jmu_, and the jmr_ reaches it only in its MCP server config", func() error { return f.tokens(record) })
 	p.step("when the agent finishes the daemon ends the run as completed", f.ends)
+	p.step("a daemon restarted with a user token and none of the allowed names still gives the agent only allowed names", func() error { return f.scrubbedEnv(scrubbed) })
 	p.step("a stopped daemon takes an agent that will not leave with it", func() error { return f.stops(held) })
 	p.step("no token reaches the daemon's output", f.leaksNothing)
 	if p.ok != p.run {

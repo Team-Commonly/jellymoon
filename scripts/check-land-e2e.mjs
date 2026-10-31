@@ -101,8 +101,8 @@ const mergeArgs = `pr merge 5 --repo ${REPO} --merge --match-head-commit ${HEAD}
 const dirty = [[/status --porcelain/, ' M x']];
 const PO = ['5', '--preflight-only'];
 await t('happy path: lands with --merge and --match-head-commit <head>; the ledger gets LANDED', {}, (r) => r.merge?.args.join(' ') === mergeArgs && r.ledgerNow.includes('\tLANDED\t') && r.lock === false && r.w.lockAtMerge === true);
-await t('happy path: pr view asks for isCrossRepository; the collaborators call is paginated and unfiltered', {}, (r) => argv(r, 'gh', 'pr view')[0].includes('isCrossRepository') && argv(r, 'gh', 'collaborators')[0].includes('--paginate') && !argv(r, 'gh', 'collaborators')[0].includes('permission='));
-await t('every main fetch names refs/heads/main; the merge disables hooks; untracked files are shown in full', {}, (r) => r.w.fetches.filter((f) => !f.startsWith('pull/') && f !== MERGED).every((f) => f === 'refs/heads/main') && argv(r, 'git', 'merge --no-ff')[0].includes('core.hooksPath=/dev/null') && argv(r, 'git', 'status')[0].includes('status.showUntrackedFiles=all'));
+await t('happy path: pr view asks for isCrossRepository; the collaborators call is paginated and unfiltered', {}, (r) => argv(r, 'gh', 'pr view')[0]?.includes('isCrossRepository') && argv(r, 'gh', 'collaborators')[0]?.includes('--paginate') && !argv(r, 'gh', 'collaborators')[0]?.includes('permission='));
+await t('every main fetch names refs/heads/main; the merge disables hooks; untracked files are shown in full', {}, (r) => r.w.fetches.filter((f) => !f.startsWith('pull/') && f !== MERGED).every((f) => f === 'refs/heads/main') && argv(r, 'git', 'merge --no-ff')[0]?.includes('core.hooksPath=/dev/null') && argv(r, 'git', 'status')[0]?.includes('status.showUntrackedFiles=all'));
 await t('the range scan is the checkout\'s own .tools/bin/go, resolved to its real absolute path, run with exactly this argv, cwd the checkout, no shell, and no make', {}, (r) => scans(r).length === 2 && scans(r).every((c) => JSON.stringify(c.args) === JSON.stringify(['run', 'github.com/zricethezav/gitleaks/v8@v8.30.1', 'git', `--log-opts=-m ${MAIN}..${HEAD}`, '--ignore-gitleaks-allow', '--exit-code', '3', '--redact', '--no-banner', '--config', c.args[10], '--gitleaks-ignore-path', c.args[12], '.']) && c.opts.cwd === r.w.top && !('shell' in c.opts)) && !r.w.calls.some((c) => c.cmd === 'make' || c.cmd === 'go' || c.cmd === 'sh' || c.cmd === 'bash'));
 const outside = (p, top) => path.isAbsolute(p) && path.relative(top, p).startsWith('..');
 await t('the scan\'s --config is a file land wrote outside the checkout, a fresh one per scan, holding only gitleaks\' built-in rules, removed after', {}, (r) => r.w.seen.length === 2 && r.w.seen[0].config !== r.w.seen[1].config && r.w.seen.every((s) => outside(s.config, r.w.top) && s.text === '[extend]\nuseDefault = true\n' && !fs.existsSync(path.dirname(s.config))));
@@ -123,7 +123,7 @@ await t('the commits the scan should read, and the paths the range touches, are 
   return mine.length === 6 && mine.every((c) => envOf(c) === EXACT);
 });
 await t('the preflight child: stdin ignored, own session, env -i, HOME and TMPDIR inside the throwaway, entropy base is main\'s tip', {}, (r) => {
-  const [sp] = r.w.spawns; const home = sp.args.find((a) => a.startsWith('HOME=')).slice(5); const tmp = sp.args.find((a) => a.startsWith('TMPDIR=')).slice(7);
+  const [sp] = r.w.spawns; if (!sp) return false; const home = sp.args.find((a) => a.startsWith('HOME='))?.slice(5) ?? ''; const tmp = sp.args.find((a) => a.startsWith('TMPDIR='))?.slice(7) ?? '';
   return sp.opts.stdio[0] === 'ignore' && sp.opts.detached === true && sp.args[0] === '-i' && path.dirname(home) === path.dirname(tmp) && home.includes('jm-land-') && sp.args.includes(`JM_ENTROPY_BASE=${MAIN}`) && sp.args.includes('PATH=/usr/bin:/bin:/usr/sbin:/sbin');
 });
 await t('untrusted author: refused before any fetch', { pr: { author: { login: 'mallory' } } }, (r) => no(r, /not trusted/) && !fetched(r));
@@ -251,7 +251,7 @@ await t('two PR numbers: refused', { argv: ['5', '6'] }, (r) => no(r, /usage/));
 await t('an old Node: refused before anything runs', { node: '18.0.0' }, (r) => no(r, /Node 20/) && r.w.calls.length === 0);
 await t('preflight-only: no ledger, no pod, no merge', { argv: PO }, (r) => r.error === null && r.w.pod.length === 0 && !r.merge && r.ledgerNow === r.ledgerWas);
 await t('the worktree merge tree must equal the decision\'s merge-tree result', { wtTree: OTHER }, (r) => no(r, /not the merge result the decision used/) && r.w.spawns.length === 0);
-await t('the throwaway worktree is added with repo hooks off', {}, (r) => argv(r, 'git', 'worktree add')[0].startsWith('-c core.hooksPath=/dev/null worktree add'));
+await t('the throwaway worktree is added with repo hooks off', {}, (r) => argv(r, 'git', 'worktree add')[0]?.startsWith('-c core.hooksPath=/dev/null worktree add'));
 await t('a branch name with escapes is stripped from what land prints', { pr: { headRefName: 'a\u001b[31mb\u009bc' } }, (r) => r.said.includes('branch a[31mbc ') && !/[\u001b\u009b]/.test(r.said));
 await t('the bearer token never appears in a refusal', { on: [[/worktree add/, () => { throw new Error('boom jmu_FAKE-token-abc123'); }]] }, (r) => !r.merge && /worktree add failed: boom/.test(r.error) && !r.error.includes('abc123'));
 cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`))), true]);

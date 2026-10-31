@@ -169,31 +169,105 @@ export function checkTrust({ pr, pushers, trusted }) {
   const strangers = pushers.map((l) => String(l).toLowerCase()).filter((l) => !trusted.includes(l)); // .some-style: an empty login is a stranger too
   return strangers.length ? { ok: false, reason: `${REFUSE} (an account that can push to the repo is not trusted: ${strangers[0]})` } : { ok: true };
 }
+// How gitleaks v8.30.1 counts commits ("<n> commits scanned."): its git source runs `git log -p -U0 <log-opts>` and yields one fragment per
+// hunk (TextFragment) of every file that is not deleted and not a non-archive binary (sources/git.go, Fragments); the detector adds a
+// fragment's commit to the count when the fragment arrives, even one with no added lines (detect.go, DetectSource: addCommit before the
+// empty check). So a commit counts exactly when its diff has a hunk in a file git does not show as deleted. An empty commit, a pure rename, a
+// mode change, an empty file, a deleted file, and a binary (git prints no hunk for it) yield nothing. `log` is `git log -m -p -U0
+// --format=%x01%H <range>` and `all` is `git rev-list <range>`. Returns the count gitleaks should print.
+// The count says how many commits were read, never which: land-scan.mjs refuses the one shape where the numbers agree over different commits.
+export function textCommits(log, all) {
+  const read = new Set();
+  let sha = '';
+  let deleted = false;
+  for (const l of String(log).split('\n')) { // a diff line starts with + - space or backslash, so these prefixes are headers
+    if (l.startsWith('\u0001')) sha = l.slice(1);
+    else if (l.startsWith('diff --git ')) deleted = false;
+    else if (l.startsWith('deleted file mode ')) deleted = true;
+    else if (l.startsWith('@@ ') && !deleted && sha) read.add(sha);
+  }
+  return { expected: all.filter((c) => read.has(c)).length };
+}
 // The one reading of the range scan's result, shared by land and by the fixtures that test the recipe. Clean is positive evidence, all of:
 // exit status 0; no `exit status 3` line (gitleaks' --exit-code 3, which `go run` reports that way); no gitleaks ERR/FTL/PNC log line and no
 // "failed to scan"; the "no leaks found" line; and exactly one "<n> commits scanned." line with n equal to `expected`, the number of commits
-// the land would merge, which the caller counts itself with `git rev-list --count <main tip>..<head>`. Measured on gitleaks 8.30.1 with -m:
-// its count equals rev-list --count on a linear range, a merged side branch, main moved after branching, an octopus merge, main merged
-// into the PR, and an empty range. A hit is a nonzero exit with the hit line. Everything else, including a zero exit that printed the hit
-// line or an error (a recipe that swallowed the failure) or scanned fewer commits than the range holds, is a failure, and a failure refuses.
-// gitleaks colours its log even into a pipe, so the escape codes are stripped before reading.
+// gitleaks should read, which the caller derives itself with textCommits (above), outside make. A hit is a nonzero exit with the hit line.
+// Everything else, including a zero exit that printed the hit line or an error (a recipe that swallowed the failure) or scanned fewer
+// commits than the range holds, is a failure, and a failure refuses. gitleaks colours its log even into a pipe, so the escape codes are
+// stripped before reading.
 export const scanResult = ({ status, stderr, expected }) => {
   const text = String(stderr || '').replace(/\u001b\[[0-9;]*m/g, '');
   const hitLine = /^exit status 3$/m.test(text);
   if (typeof status === 'number' && status !== 0 && hitLine) return 'hit';
   const counts = [...text.matchAll(/^\S+ INF (\d+) commits? scanned\.$/gm)].map((m) => Number(m[1]));
   const errLine = /^\S+ (ERR|FTL|PNC) /m.test(text) || /failed to scan/.test(text);
-  const read = counts.length === 1 && Number.isInteger(expected) && expected >= 0 && counts[0] === expected;
+  const read = counts.length === 1 && counts[0] === expected; // === also rules out an expected that is missing, NaN, negative, fractional or a string
   return status === 0 && !hitLine && !errLine && /^\S+ INF no leaks found$/m.test(text) && read ? 'clean' : 'failure';
 };
-// The environment make runs the range scan in: an allowlist, so the operator's MAKEFLAGS (make -i), GITLEAKS_CONFIG or git config
-// cannot switch the scan off. Only what the Go toolchain and git need is kept.
-const SCAN_ENV_KEEP = ['PATH', 'HOME', 'TMPDIR', 'GOPATH', 'GOCACHE', 'GOMODCACHE', 'GOTOOLCHAIN'];
-export const scanEnv = (env) => ({
-  ...Object.fromEntries(SCAN_ENV_KEEP.filter((k) => env[k] !== undefined).map((k) => [k, env[k]])),
-  GIT_CONFIG_GLOBAL: '/dev/null',
-  GIT_CONFIG_NOSYSTEM: '1',
-});
+// A name folded the way a case-insensitive filesystem may compare it. APFS opens `.TOOLS` for `.tools`, and also takes ſ (long s) for s, the
+// Kelvin sign for k, and ß or ẞ for ss (measured by probing every BMP code point against the letters of the names below; no code point is
+// ignored inside a name). NFKC and a lower, upper, lower round trip fold each of those the same way; they fold more besides, which only
+// refuses more.
+export const foldName = (name) => name.normalize('NFKC').toLowerCase().toUpperCase().toLowerCase();
+// What a tree carries that changes what the range scan runs or reads. The scan runs in a checkout of main, so these, committed to main, change
+// every later land: land checks main's tree and the tree of every commit in the range (land-scan.mjs), so a PR cannot bring one onto main. The
+// one exception, a chain of links that passes the lexical rule below, is refused on disk by every later land (land-scan.mjs, linkOnDisk).
+// - a path with any component that folds to `.tools`, at any depth: land runs go from `<checkout>/.tools/bin`, so a tracked `.tools` (a symlink,
+//   or a force-added `.tools/bin/go`) would choose the go land runs, and `.gitignore` hides a `.tools` at any depth, so git, diffing a range
+//   path under a nested one, opens the ignored `.gitattributes` there. Never allowed, whatever the blob (owner ruling; check-portable agrees).
+// - a path with any component named `.gitleaks.toml` or `.gitleaksignore` (a directory counts: gitleaks only asks whether
+//   `<source>/.gitleaks.toml` exists, then loads `.gitleaks.json`, `.yaml` and the rest beside it), or whose top-level entry is `.gitleaks`
+//   or starts with `.gitleaks.` (a config gitleaks could discover). Allowed only when its blob id is the one this repo ships: SHIPPED maps a
+//   path to that id, and this repo ships none. Land passes its own --config, so discovery does not run; this keeps every tree land checks
+//   free of what it would find.
+// - a path with any component named `.gitattributes`, at any depth, whatever it holds. Never allowed (owner ruling): git reads one in the
+//   checkout while it diffs, and a line can switch a file out of the diff in more ways than a parser here followed (`-diff=<any value>`, a
+//   macro, a pattern after a form feed). The repo carries none; land-scan.mjs refuses one on the checkout's filesystem too.
+// - a symbolic link whose target linkFault (below) refuses. git follows a link in the checkout while it diffs a later range that replaces it with
+//   a directory, so it opens `<link>/.gitattributes` wherever the link points, where the checkout listing never looks (measured: a link to a
+//   directory outside whose attributes file says `* -diff` read a token at `<link>/t.txt` as clean).
+// `tree` is `git ls-tree -r -z --full-tree <commit>`, `where` names the tree in the reason, and targetOf(blob id) is a link's target. Names
+// compare folded.
+const SHIPPED = {};
+// A link's target read lexically (owner ruling): refused when it is empty or absolute or, normalised against the link's own directory, leaves
+// the checkout or starts with a component that folds to `.git` or `.tools`, the two top-level entries the listing skips. Returns the fault or null.
+export function linkFault(file, target) {
+  if (!target) return 'is empty';
+  if (target.startsWith('/')) return 'is absolute';
+  const parts = [];
+  for (const p of [...file.split('/').slice(0, -1), ...target.split('/')]) {
+    if (p === '..') { if (parts.pop() === undefined) return 'leaves the checkout'; } else if (p && p !== '.') parts.push(p);
+  }
+  return ['.git', '.tools'].includes(foldName(parts[0] ?? '')) ? `points into ${parts[0]}` : null;
+}
+export function checkScanConfig(tree, shipped = SHIPPED, where = 'main', targetOf = () => '') {
+  for (const entry of String(tree).split('\0').filter(Boolean)) {
+    const [meta, file] = [entry.slice(0, entry.indexOf('\t')), entry.slice(entry.indexOf('\t') + 1)];
+    const id = meta.split(' ')[2];
+    const parts = file.split('/').map(foldName);
+    if (parts.includes('.tools')) return { ok: false, reason: `${where} carries ${file}; land runs go from the checkout's own .tools and .gitignore hides a .tools at any depth, so no tree may carry one; remove it` };
+    if (parts.includes('.gitattributes')) return { ok: false, reason: `${where} carries ${file}; git reads a .gitattributes while it diffs, and land refuses every one, so remove it` };
+    const target = meta.startsWith('120000 ') ? targetOf(id) : null;
+    const fault = target !== null && linkFault(file, target);
+    if (fault) return { ok: false, reason: `${where} carries ${file}, a symbolic link whose target ${JSON.stringify(target)} ${fault}; git follows it while it diffs, so remove it` };
+    const bad = parts.some((p) => p === '.gitleaks.toml' || p === '.gitleaksignore') || parts[0] === '.gitleaks' || parts[0].startsWith('.gitleaks.');
+    if (bad && shipped[file] !== id) return { ok: false, reason: `${where} carries ${file}, which changes what the range scan reads; remove it or ship it from this repo` };
+  }
+  return { ok: true };
+}
+// The environment the range scan runs in (git and `go run`): an allowlist, so the operator's GITLEAKS_CONFIG, GOFLAGS, GIT_DIR or git config
+// cannot change what it reads. PATH, HOME and TMPDIR are kept for the toolchain and git. A tracked go.work, or a go.mod with a `toolchain`
+// line, could otherwise make `go run` fetch and run another Go release (measured), so GOTOOLCHAIN is pinned to the installed one and
+// GOWORK is off; the module is named with an explicit version, so no tracked go.mod, vendor directory or replace line is consulted.
+// A variable left out still reaches go through its env file (`go env -w`, read from the operator's config dir), so GOENV is off, and the
+// fetch settings are pinned to Go's own defaults: the module proxy and checksum database, no private or insecure patterns, no GOFLAGS.
+// An empty value means "not set" to go, which then reads only $GOROOT/go.env, the installed toolchain's own file.
+const SCAN_ENV_KEEP = ['PATH', 'HOME', 'TMPDIR', 'GOPATH', 'GOCACHE', 'GOMODCACHE'];
+const SCAN_ENV_PINS = {
+  GOTOOLCHAIN: 'local', GOWORK: 'off', GOENV: 'off', GOFLAGS: '', GOPROXY: 'https://proxy.golang.org,direct', GOSUMDB: 'sum.golang.org',
+  GONOSUMDB: '', GOPRIVATE: '', GOINSECURE: '', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
+};
+export const scanEnv = (env) => ({ ...Object.fromEntries(SCAN_ENV_KEEP.filter((k) => env[k] !== undefined).map((k) => [k, env[k]])), ...SCAN_ENV_PINS });
 // Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
 const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
 export function checkRuns(runs, total = runs.length) {

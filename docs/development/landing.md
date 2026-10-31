@@ -263,7 +263,7 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 - **The scan configuration is checked in the committed trees, and on the filesystem only for `.tools`, a top-level `.gitleaksignore` and
   a `.gitattributes` outside the top-level `.git` and `.tools`.** The scan also reads attributes and config that are in no tree, and land
   checks none of them: `.git/info/attributes`; the land checkout's own `.git/config` and `.git/config.worktree` (a `diff` driver,
-  `core.attributesFile`, `attr.tree`); the operator's `~/.config/git/attributes` (git's default `core.attributesFile`, read although
+  `core.attributesFile`, `attr.tree`); the operator's global attributes file, `.config/git/attributes` in their home directory (git's default `core.attributesFile`, read although
   `scanEnv` points `GIT_CONFIG_GLOBAL` at `/dev/null`); the system attributes file (`git var GIT_ATTR_SYSTEM` names `/etc/gitattributes` for
   the macOS git; by git's documentation `GIT_CONFIG_NOSYSTEM` does not turn it off, not measured here); a `.gitattributes` under an ignored symbolic link to a directory (git follows the link, the
   listing does not); and an ignored file at a path gitleaks or go looks for. The checkout check refuses untracked files and a diff from HEAD,

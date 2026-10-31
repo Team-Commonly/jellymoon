@@ -3,6 +3,7 @@
 import { addAgentPod, addInvite, addPod, authenticate, createComputer, dropInvite, dropPod, dropRunToken, mintRunToken, podExists, podOfInvite, podOfRun, podsOfComputer } from './directory';
 import type { Env } from './env';
 import { hashToken, newId, newInviteCode } from './ids';
+import { mcp } from './mcp';
 import { check } from './validate';
 import { bad, encodeWho, fail, parse, WHO_HEADER } from './wire';
 import type { Body, Who } from './wire';
@@ -132,6 +133,10 @@ export async function handle(req: Request, env: Env): Promise<Response> {
   if (m === 'POST' && path === '/v1/pods') return setup(env, req, ['user'], 'CreatePodRequest', (w, b) => createPod(env, w, b));
   if (m === 'POST' && path === '/v1/computers') return setup(env, req, ['user'], 'RegisterComputerRequest', (w, b) => newComputer(env, w, b));
   if (m === 'POST' && path === '/v1/runs') return setup(env, req, ['computer'], 'ClaimRunRequest', (w, b) => startRun(env, w, b, url.origin));
+  if (m === 'POST' && path === '/mcp') {
+    const g = await guard(env, req, ['run', 'user']);
+    return g instanceof Response ? g : mcp(req, url.origin, g.who, (r) => handle(r, env));
+  }
   const run = /^\/v1\/runs\/([^/]+)\/end$/.exec(path);
   if (m === 'POST' && run) return setup(env, req, ['computer'], 'EndRunRequest', (w, b) => endRun(env, w, b, run[1]));
   const inv = /^\/v1\/invites\/([^/]+)\/accept$/.exec(path);

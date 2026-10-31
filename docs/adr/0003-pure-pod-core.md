@@ -173,6 +173,14 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
   `ErrorBody.ref` echoes an id only when it is a string of at most 40 characters.
 - The adapter mints `messageId` and owns the message log, so message id uniqueness is the adapter's; the core keeps no set of them.
 - The adapter bounds message body size: `stripSpans` is super-linear on growing backtick runs.
+- `post` is the PostInput command (F11). The core stamps `receipt` on a run's post and opens `decision` on an ask. Lengths
+  and patterns are the schema's, checked by the adapter first; the core owns what the schema cannot say: a blank headline
+  (`summary_required`), an ask's `needs`/`options`/`context` (required then, refused otherwise), unique option ids, and a
+  recommendation that names an option. A post that names a pod-set field is `invalid_input`. The adapter supplies the facts
+  the core cannot know: `decisionId` and `messageId`, and `harness` (what the daemon registered the agent with, never the
+  post). The run supplies `wakeReason` (from its wake) and the call count. `tool_call` is the MCP adapter telling the pod it
+  answered one; a receipt's `toolCalls` counts those tools/call requests on the run's token, refused ones included, and
+  excludes the call stamping the receipt, which has not been answered yet. Plain HTTP calls with the token are not MCP calls.
 - A run's `task_update` on a task another live run holds is `already_claimed` naming the holder (one claim per task,
   `operations.json`); a person may still update.
 
@@ -181,8 +189,7 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 - Decisions (rulings) are not modelled; `change` carries them until they are.
 - `task_update` takes `status` and `assignee`; the schema's `TaskUpdateInput` has no `assignee` yet.
 - Purity-guard spellings beyond the listed ones are accepted risk (the guard is a lexical backstop).
-- A run's `message_post` is always kind `fyi`, status `done`, with no receipt; `schema/message.json`'s "receipt is set
-  on every agent post" is not modelled yet (F11).
+- `message_post` (the socket's human post) still stores kind `fyi`, status `done`; the HTTP post is `post` (below).
 - `pod_create.ownerName` and `member_add.name` are not shape-checked here; the adapter validates them (1 to 80 characters).
 - `now` is bounded by `MAX_NOW`, but derived times are not: a claim within 2 h of year 9999 gets an `expiresAt` the
   schema rejects. The adapter's clock keeps this out of reach.

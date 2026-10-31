@@ -289,6 +289,7 @@ func (f *f11) receipt() error {
 
 // agentCannotSteer: an agent that lies in headers changes nothing, and plain HTTP calls are not MCP calls, so the count stays.
 func (f *f11) agentCannotSteer(before int) error {
+	// The ask itself was an MCP call by now, so the next post sees before+1; the plain HTTP calls in between add nothing.
 	lies := map[string]string{"X-Jm-Tool-Calls": "99", "X-Jm-Harness": "codex", "X-Jm-Wake-Reason": "mention", "X-Jm-Run": "run_01JCZK7Q8XG4M2B9V5T3W6RH01"}
 	st, raw := f.httpAs(f.run.RunToken, validAsk("The same ask over plain HTTP"), lies)
 	if st != 200 {
@@ -298,8 +299,8 @@ func (f *f11) agentCannotSteer(before int) error {
 	if err != nil || m.Receipt == nil {
 		return fmt.Errorf("the plain HTTP ask is not stored with a receipt: %+v %v", m, err)
 	}
-	if r := *m.Receipt; r.ToolCalls != before || r.Harness != "fake" || r.WakeReason != "task_assigned" || r.RunID != f.run.RunID {
-		return fmt.Errorf("after headers claiming 99 calls, harness codex, wake mention: receipt %+v, want toolCalls %d harness fake wakeReason task_assigned", r, before)
+	if r := *m.Receipt; r.ToolCalls != before+1 || r.Harness != "fake" || r.WakeReason != "task_assigned" || r.RunID != f.run.RunID {
+		return fmt.Errorf("after headers claiming 99 calls, harness codex, wake mention: receipt %+v, want toolCalls %d (the MCP calls made, the ask itself now included) harness fake wakeReason task_assigned", r, before+1)
 	}
 	return nil
 }

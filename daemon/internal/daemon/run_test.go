@@ -74,3 +74,19 @@ func TestAgentEnvKeepsNoSecrets(t *testing.T) {
 		t.Errorf("agentEnv = %q", got)
 	}
 }
+
+// With none of the allowed names set, the agent still gets a list of its own: a nil one would mean the daemon's whole environment.
+func TestAgentEnvIsEmptyNotNilWhenNothingIsAllowed(t *testing.T) {
+	for _, k := range []string{"PATH", "HOME", "TMPDIR", "USER", "LANG", "LC_ALL", "TERM"} {
+		if v, ok := os.LookupEnv(k); ok {
+			os.Unsetenv(k)
+			t.Cleanup(func() { os.Setenv(k, v) })
+		}
+	}
+	t.Setenv("JELLYMOON_USER_TOKEN", "jmu_secret")
+	t.Setenv("JELLYMOON_HOME", "/somewhere")
+	got := agentEnv()
+	if got == nil || len(got) != 0 {
+		t.Errorf("agentEnv = %#v, want an empty, non-nil list", got)
+	}
+}

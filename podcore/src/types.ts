@@ -1,6 +1,6 @@
 // The pod core's data: plain JSON state, tagged commands, and the ordered output list (ADR 0003).
 import type {
-  Actor, ActorId, AgentId, AnyEvent, ClaimRunResponse, ComputerId, ErrorBody, EventOf, Message, MessageId, PodId, RunId, RunOutcome,
+  Actor, ActorId, AgentId, AnyEvent, ClaimRunResponse, ComputerId, DecisionId, ErrorBody, EventOf, Harness, Message, MessageId, PodId, PostInput, RunId, RunOutcome,
   RunStopOutput, RunWake, Task, TaskClaimOutput, TaskId, TaskKind, TaskUpdateStatus, WakeId, WakeReason, WakeRefs,
 } from '../../gen/ts/protocol';
 
@@ -15,6 +15,10 @@ export interface Run {
   startedAt: number;
   status: 'active' | 'ended';
   outcome?: RunOutcome;
+  /** Why the wake that started this run was sent. Absent on a run recorded before receipts. */
+  wakeReason?: WakeReason;
+  /** MCP calls the pod saw on this run's token (`tool_call`). Absent reads as 0. */
+  toolCalls?: number;
   /** Set when a person stopped the run; cleared when the daemon reports it ended. Re-sent on each heartbeat until then. */
   stop?: { reason?: string };
 }
@@ -60,6 +64,9 @@ export type Cmd =
   | { type: 'task_create'; caller: Caller; taskId: TaskId; title: string; kind: TaskKind; assignee?: ActorId; body?: string; wakeId: WakeId }
   | { type: 'task_update'; caller: Caller; taskId: TaskId; status?: TaskUpdateStatus; assignee?: ActorId; wakeId: WakeId }
   | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; summary?: string; threadOf?: MessageId; wakeId: WakeId }
+  /** `harness` is the adapter's record of where the caller's agent runs; `decisionId` is the id an ask's decision takes. */
+  | { type: 'post'; caller: Caller; messageId: MessageId; decisionId: DecisionId; input: PostInput; harness?: Harness; wakeId: WakeId }
+  | { type: 'tool_call'; runId: RunId }
   | { type: 'boot'; staleMs: number }
   | { type: 'change'; kind: 'ruling'; agentId: AgentId; refs: WakeRefs; wakeId: WakeId }
   | { type: 'wake_ack'; wakeId: WakeId; computerId: ComputerId }

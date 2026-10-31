@@ -62,7 +62,7 @@ export function taskUpdateCmd(c: Ctx, cmd: Of<'task_update'>): void {
 }
 
 /** `@name` tokens outside code spans and fenced blocks, in text order, matched exactly against registered agent names. */
-function mentioned(c: Ctx, text: string): string[] {
+export function mentioned(c: Ctx, text: string): string[] {
   const names = Array.from(prose(text).matchAll(/(?<![\w@])@([\w.-]+)/g), (m) => m[1].replace(/[.-]+$/, ''));
   const ids = names.flatMap((n) => Object.values(c.s.agents).filter((a) => a.actor.displayName === n).map((a) => a.actor.id));
   return ids.filter((id, i) => ids.indexOf(id) === i);

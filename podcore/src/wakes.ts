@@ -80,7 +80,7 @@ export function runClaimCmd(c: Ctx, cmd: Of<'run_claim'>): void {
   const agent = c.s.agents[w.agentId];
   if (agent.computerId !== cmd.computerId) return fail(c, 'forbidden', 'This computer does not host that agent.', w.agentId);
   if (own(c.s.runs, cmd.runId) !== undefined) return fail(c, 'invalid_input', 'That run id is taken.', cmd.runId);
-  c.s.runs[cmd.runId] = { id: cmd.runId, agent: agent.actor, owner: agent.owner, computerId: cmd.computerId, startedAt: c.now, status: 'active' };
+  c.s.runs[cmd.runId] = { id: cmd.runId, agent: agent.actor, owner: agent.owner, computerId: cmd.computerId, startedAt: c.now, status: 'active', wakeReason: w.reason, toolCalls: 0 };
   delete c.s.wakes[w.agentId];
   ok(c, { runId: cmd.runId, expiresAt: isoOf(c.now + RUN_CAP_MS), reason: w.reason, refs: w.refs });
 }

@@ -15,9 +15,10 @@ The first `feature_list.json` feature with `passes: false` and no `blockedBy`, o
 - Base `main`. Fill in [`.github/pull_request_template.md`](.github/pull_request_template.md): the
   feature, the done-test with its output, lines added and removed.
 - Every commit carries a `Signed-off-by` line matching its author: use `git commit -s`. That certifies the
-  [Developer Certificate of Origin](https://developercertificate.org). Nothing checks this today. Once CI runs on pull requests, its `dco` job checks that each commit a pull request adds, merges excluded, has a `Signed-off-by` line matching its author; a maintainer who re-authors an outside change signs off the new commits.
-- `make preflight` is what a pull request must pass, and it must pass locally. CI runs only when dispatched by hand until the public flip. After the flip CI
-  mirrors the local checks and a failing check run blocks a land; CI never lands anything, and `make land` stays the only merge path.
+  [Developer Certificate of Origin](https://developercertificate.org). CI's `dco` job checks that each commit a pull request adds, merges excluded, has a `Signed-off-by` line matching its author; a maintainer who re-authors an outside change signs off the new commits.
+- `make preflight` is what a pull request must pass, and it must pass locally. CI runs on every pull request and every push to
+  `main`, runs the checks `make preflight` runs, and a failing check run blocks a land; CI never lands anything, and `make land` stays the only
+  merge path. CodeRabbit may comment on a pull request; its review is information for the author, never a gate.
 - A pull request from a fork or an outside account is not run by the maintainers' tooling and is not landed with `make land`:
   a maintainer re-authors the change through their own loop. Maintainer PRs land with `make land` once a verifier's
   ledger line passes at the PR head. Every land also needs the
@@ -27,7 +28,7 @@ The first `feature_list.json` feature with `passes: false` and no `blockedBy`, o
 - A new dependency or module needs a short note in `docs/adr/`.
 
 ## The deny check
-`make preflight` runs `scripts/check-private.mjs`, which fails on private-looking text in tracked files: operator paths, personal emails, internal ids, cloud identifiers, internal note labels and section marks (`§`) that cite no public standard. Names, handles and project ids have no safe pattern: a maintainer supplies them in the `JM_PRIVATE_NAMES` environment variable, and without it that class is skipped. The names class runs in CI, or locally when the operator exports `JM_PRIVATE_NAMES`; it does not run during `make land`. The names class also checks tracked file paths and reports one as `path: names` without printing it. The check never prints matched text, only `file:line: class`. On a false positive, reword the text; if the pattern is wrong for honest input, narrow it in `scripts/check-private.mjs` with a clean case, in the same pull request.
+`make preflight` runs `scripts/check-private.mjs`, which fails on private-looking text in tracked files: operator paths, personal emails, internal ids, cloud identifiers, internal note labels and section marks (`§`) that cite no public standard. Names, handles and project ids have no safe pattern: a maintainer supplies them in the `JM_PRIVATE_NAMES` environment variable, and without it that class is skipped. The names class runs in CI once a `JM_PRIVATE_NAMES` repository secret is set (it is not yet), or locally when the operator exports `JM_PRIVATE_NAMES`; it does not run during `make land`. The names class also checks tracked file paths and reports one as `path: names` without printing it. The check never prints matched text, only `file:line: class`. On a false positive, reword the text; if the pattern is wrong for honest input, narrow it in `scripts/check-private.mjs` with a clean case, in the same pull request.
 
 ## Licence
 Core is Apache-2.0 (`LICENSE`); contributions are accepted under it. `ee/` is under its own commercial licence

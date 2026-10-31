@@ -34,8 +34,8 @@ installed, so the loop works from a fresh clone; pins and update rules are in `d
 after a surprise.
 
 ## Review and merge
-Local verification is the authority. CI is off by decision, so land does not require check runs; it only refuses when
-check runs exist on the head and one failed. `make land PR=<n>` is the only merge path (`docs/development/landing.md`).
+Local verification is the authority. Land does not wait for CI: it refuses when a completed check run on the head
+failed, and no check runs at all is fine. `make land PR=<n>` is the only merge path (`docs/development/landing.md`).
 It runs PR code only for a trusted PR (same repo, author and every push-capable account in `JM_TRUSTED_LOGINS`) and
 merges only when all of these hold at the exact PR head:
 - a clean-shell `make preflight` passes on the merge result (main plus that head); it is a correctness check, not a
@@ -56,8 +56,8 @@ merges only when all of these hold at the exact PR head:
   if that is exactly `GATE: PASS` (case-insensitive). A missing line, a FAIL after the PASS, prose after it, an
   indented line, or a fullwidth or zero-width variant blocks. Cases: `scripts/check-review-gate.mjs`; land's
   cases: `scripts/check-land.mjs`.
-- **CI** runs only when dispatched by hand until the public flip. After the flip it mirrors the local checks and a failing
-  check run blocks a land; CI never lands anything, and `make land` stays the only merge path. The review-gate workflow is deleted.
+- **CI** runs on every pull request and every push to `main`. It runs the checks `make preflight` runs, and a failing check run blocks a
+  land; CI never lands anything, and `make land` stays the only merge path. The review-gate workflow is deleted.
 - **One door:** `make land` is the only merge path, with a lock so two lands cannot run at once.
 
 ## Design-gated features

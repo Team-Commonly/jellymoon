@@ -25,6 +25,10 @@ and wrangler do by default).
 | `POST /__test/clock` `{now}` | Sets the server clock, in unix ms. 200. |
 | `GET /__test/clock` | 200 `{now}` |
 | `POST /__test/evict/:pod` | The pod's object forgets everything it holds in memory and restores from storage, as a woken hibernated object does; its WebSockets stay attached. 200. Needed only by `TestF04`; a server with no such object may make it a no-op. |
+| `POST /__test/discard/:pod` `{now?, alarmMs?, alarmNow?}` | The runtime throws the pod's object away, not just its fields: in-flight requests end, every WebSocket drops, and the next request or alarm builds a new instance. `now` (unix ms) is stored as the server clock with no tick. `alarmMs` moves the alarm the object itself stored to fire that many real ms ahead (it plants no new one; 409 when the object has none), and `alarmNow` is the clock once that alarm runs. 200 `{discarded, alarm}` before the object goes, `alarm` being the object's stored alarm time before the move. Needed only by `TestEvictMidClaim`, `TestEvictAlarmWake` and `TestEvictPastDeadline`; a server with no such object cannot run them. |
+| `GET /__test/instance/:pod` | 200 `{instance, requests}`: an id minted when the object was built, and how many requests it has served (this one excluded). A discard changes the id. |
+| `GET /__test/stored-alarm/:pod` | 200 `{at}`: the alarm time the object itself has stored (`ctx.storage.getAlarm()`), unix ms or `null`. Under a fixed clock the object stores its own deadline, a far-future time that never fires by itself. Not counted as a request. |
+| `GET /__test/woke/:pod` | 200 `{instance, requests, was}` recorded by the object's alarm handler when it last ran (read without waking the object), or `null`; `was` is the stored alarm time a discard moved, which is the alarm that ran. |
 
 Clock rules, which every server under test must meet:
 
@@ -33,11 +37,14 @@ Clock rules, which every server under test must meet:
   mints a session, so a restarted server on its real clock never finds a lease due.
 - **A restarted server is a new process and starts on its real clock again** (`kill -9` plus the same command). The suite sets the clock again
   after a restart when a test needs fake time.
-- **When the clock moves, the server applies any due `tick` at once, independent of its real timer or
+- **When the clock moves through `/__test/clock`, the server applies any due `tick` at once, independent of its real timer or
   alarm.** Expiry must fire with zero other traffic. The response may come before events are delivered;
-  the suite waits up to 5 s.
-- **The real timer or alarm path is exercised only in real-clock mode** (`JM_E2E_REAL_CLOCK=1`).
-  Fake-clock mode proves the rules; real-clock mode proves the alarm.
+  the suite waits up to 5 s. The one exception is `/__test/discard`, whose `now` moves the clock with no tick: the object is
+  being thrown away, and whatever releases the claim afterwards is the restore or the alarm.
+- **The real timer or alarm path is exercised end to end only in real-clock mode** (`JM_E2E_REAL_CLOCK=1`).
+  Fake-clock mode proves the rules; real-clock mode proves the alarm. The fake clock still proves the object's own alarm: it stores
+  its deadline (read back by `/__test/stored-alarm`), and `TestEvictAlarmWake` has the runtime fire that stored alarm on a discarded
+  object, with the clock stored for the alarm's tick.
 - Everything else goes through the real routes in `schema/pod-api.json` and `schema/operations.json`.
 
 ## Persistence rule
@@ -113,6 +120,9 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestInputValidation` | Each write route refuses what the schema refuses with `400 invalid_input` (a numeric or 16,385-character `body`, a two-line `summary`, a missing `kind`, a note on a task update, and the other routes' bodies), stores a 16,384-character body whole, and lets a run post with its `summary`. |
 | `TestRestartPastDeadline` | A claim made on a fake clock two minutes behind real time, then `kill -9` and a restart with no clock call: the restarted server is on its real clock, so the deadline is already past, and the first frames after the restart carry `task.updated` (no claim) and one `claim.released{expired}`. It needs the server to settle when it restores state. |
 | `TestRunTokenOtherPod` | A run token on another pod's routes (read, list, feed, post) gets `403 forbidden`; on its own pod it works. |
+| `TestEvictMidClaim` | The runtime discards the pod's object while a run holds a claim and the server process stays up: the object's own stored alarm equals the claim's deadline before the discard and on the new object; the instance id changes, every socket drops, and with the clock stored one second short of the deadline the new object has released nothing and still holds the old `leaseUntil`. A renewal after the eviction moves `leaseUntil` to that clock plus 60 s and the stored alarm with it, a second run's claim is refused with `already_claimed` naming the holder, the old deadline passes without a release, and the new one gives exactly one `claim.released{expired}`. |
+| `TestEvictAlarmWake` | The object's own stored alarm equals the claim's deadline (and the request counter is above 0). The object is discarded with the clock stored one millisecond short of the deadline, and that stored alarm, which the discard reports and records, is moved to fire a few real ms ahead; the clock becomes the deadline when it runs. Nothing is sent to it. The runtime builds a new instance (its restore releases nothing) and calls its alarm, whose tick finds the deadline due: the alarm handler's record names a new instance that had served no request and the stored alarm time it was moved from, `alarm_fired` moved and then holds still, and every member's replay has exactly one `claim.released{expired}`, stamped at the deadline or later, and still one after the clock moves on. |
+| `TestEvictPastDeadline` | The object is discarded with the clock stored five seconds past a claim's deadline; the first thing to reach the new instance is a socket reconnect, which runs no command, and it already carries the `claim.released{expired}`, exactly once. It needs the restore to settle (`boot`). |
 | `TestF08` | F08: builds the repo's `daemon/cmd/jellymoon` and runs it as a black box (own process group, output captured, config dir `JELLYMOON_HOME`, server `JELLYMOON_SERVER`, first-registration jmu_ token in `JELLYMOON_USER_TOKEN`, never argv). It registers the computer and stores `computer.json` at 0600 in a 0700 dir; `agent add fake --pod` registers an agent; members get `presence.changed` online within 5 s; a daemon stopped with SIGSTOP (socket open, no heartbeat) goes offline when the fake clock is exactly 45 s past its last sign of life and not 1 ms before; a second start reuses the stored computer; `kill -9` gives offline within 45 s; no token appears in any output or in any process's argv; plain http to a non-local host is refused; and after a server crash with the daemon gone, hello lists the agent offline. |
 | `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. It judges the run so far, so it is last; it fails if a suite test failed and skips on a partial run. |
 

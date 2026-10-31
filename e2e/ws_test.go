@@ -110,6 +110,7 @@ type Frame struct {
 	Type  string          `json:"type"`
 	Seq   int64           `json:"seq"`
 	PodID string          `json:"podId"`
+	Ts    string          `json:"ts"`
 	Data  json.RawMessage `json:"data"`
 	recv  int64
 }

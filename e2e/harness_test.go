@@ -52,10 +52,10 @@ func TestMain(m *testing.M) {
 	}
 	code := m.Run()
 	if serverCmd != "" || remoteURL != "" {
-		fmt.Println(summaryLine(time.Since(suiteStart).Milliseconds(), stepsOK.Load(), stepsRun.Load()))
 		if code = judgeRan(code, stepsRun.Load()); code == 1 && stepsRun.Load() == 0 {
 			fmt.Fprintln(os.Stderr, "no test ran against the server; a run that tests nothing is a failure")
 		}
+		fmt.Println(summaryLine(time.Since(suiteStart).Milliseconds(), stepsOK.Load(), stepsRun.Load()))
 	}
 	os.Exit(code)
 }

@@ -4,36 +4,68 @@
 worktree's own `.tools/`, about 360 MB each time. With many worktrees on one machine, share one copy.
 
 ## Turn it on
-Set an absolute path, once, in your shell profile or the launcher that starts your sessions:
+Set an absolute path under your home directory, once, in your shell profile or the launcher that starts
+your sessions:
 
-    export JM_TOOLCHAIN_CACHE=/abs/path/to/jellymoon-toolchains
+    export JM_TOOLCHAIN_CACHE=<your home directory>/.cache/jellymoon-toolchains
+
+Use your home directory because every directory above the cache must be yours or root's (see below), and
+a home directory and the system directories above it normally are. A shared directory such as
+`/tmp` is accepted only when the directory you make in it is yours, and it is often cleared on restart.
 
 A worktree that already has its own `.tools/` must drop it first, or the old copies stay on disk:
-`rm -rf .tools`. Then run `./init.sh` (or `make tools`) as usual. The first worktree downloads; the rest download
-nothing. Each worktree keeps only `.tools/bin/` with three symlinks into the cache, so `du -sh .tools`
-is a few kilobytes. Unset the variable and nothing changes: CI and fresh clones install under
-`.tools/` exactly as before.
+`rm -rf .tools`. Then run `./init.sh` (or `make tools`) as usual. The first worktree downloads; the rest
+download nothing. Each worktree keeps only `.tools/bin/` with three symlinks into the cache, so
+`du -sh .tools` is a few kilobytes.
 
 The cache holds `go-<ver>-<os>-<arch>/` and `bun-<ver>-<os>-<arch>/`. A version bump in
 `.tool-versions` adds a new directory; old ones are safe to delete once no worktree links to them.
 
+## With the variable unset
+`tools.sh` installs into `.tools/` as it did before the cache existed, and still uses a `go` or `bun` on
+PATH that already reports the pinned version. Three things differ: the downloaded archives are deleted
+once verified and unpacked (they used to stay in `.tools/dl/`), each version directory gains a `.sha256`
+stamp, and the version directories are made `0755` whatever the umask (they used to follow it). CI does
+not run `tools.sh`; its jobs install Go and Bun with their own setup steps.
+
+## What is checked
+With the variable set, `tools.sh` does the following before anything in the cache runs or is installed.
+Before these checks, the only change it makes on the cache path is to create missing directories.
+
+- **The path as written.** It must be absolute and have no `.` or `..` component. Trailing slashes are
+  dropped, and the path itself must not be a symlink; a directory above it may be. Missing directories
+  are created one at a time with mode `0755`, whatever the umask.
+- **The physical path, and only that.** The path is then resolved (`cd -P`, `pwd -P`), and the result
+  is used for every check, every install and every link written into `.tools/bin`, so no link passes
+  through a symlink.
+- **Every directory above the root.** From `/` down, each must be owned by you or by root and writable by
+  no one else. Otherwise its owner, or anyone who can write to it, could rename the root aside and put a
+  tree of their own at the path every worktree's links follow. The one exception is a root-owned
+  directory with the sticky bit, such as `/tmp`: others may write to it, since they can add entries there
+  but cannot rename or remove one they do not own. It is accepted when the directory below it is yours.
+- **The root and what a worktree links to.** The root, each version directory already in the cache,
+  Go's `bin/`, and the `go`, `gofmt` and `bun` binaries must be owned by you, must not be symlinks, and
+  must be neither group- nor other-writable. A cache owned by another user is refused, so one cache
+  serves one user's worktrees.
+- **ACLs, on every path above.** An ACL can let others write whatever the mode says. On macOS the entries
+  are listed (`ls -le`; `ls -l` prints `@`, not `+`, when a path also has extended attributes), and any
+  entry other than a deny entry is refused. Deny entries cannot grant anything, and a macOS home
+  directory carries one. Elsewhere a `+` after the mode is the only sign, and it is refused.
+- **What it cannot read.** A path that is missing, or that `ls` lists as nothing, is refused as such.
+
+A failure stops `tools.sh` with an error that names the path.
+
 ## Why it is safe to share
-- **Yours alone, or refused.** Before it uses or installs anything, `tools.sh` checks the cache
-  root (after `mkdir -p`, so a directory someone else created there first is refused), each version
-  directory it uses, Go's `bin/`, and the `go`, `gofmt` and `bun` binaries a worktree links to. Each
-  must be owned by you, must not be a symlink, and must be neither group- nor other-writable.
-  Otherwise `tools.sh` stops and names the path. A root it creates is `0755`. A cache owned by
-  another user is refused, so one cache serves one user's worktrees. The check reads mode bits, not
-  ACLs, and does not look above the root: keep the root where no one else can rename it.
 - **Checksummed at install, not on use.** Each archive is verified against the vendor's checksum
   (Go's `.sha256`, Bun's `SHASUMS256.txt`, fetched over HTTPS beside it) before it is unpacked, then
-  deleted. The `.sha256` file in the version directory records that verified install and is never
-  checked again. On use, a version directory needs the ownership check above, the stamp, and its
-  own `go version` / `bun --version` reporting the pinned version. The last two are read from the
-  directory itself, so they catch a partial or stale copy, not a forged one.
-- **Refuses, never overwrites.** Anything that fails these checks stops `tools.sh` with an error and
-  is left alone, because another worktree may be running it. Fix it (`chmod go-w <path>` for a mode)
-  or delete it yourself.
+  deleted. The `.sha256` file in the version directory records that verified install. On use it must
+  exist and not be empty, but its value is never re-verified. A version directory also needs the checks
+  above and its own `go version` / `bun --version` reporting the pinned version. Those two are read from
+  the directory itself, so they catch a partial or stale copy, not a forged one.
+- **Refuses, never overwrites.** Anything that fails these checks is left alone, because another
+  worktree may be running it. Delete it yourself, or fix it: `chmod -R go-w <dir>` for a version
+  directory (it also covers the files the check does not read), `chmod -N <path>` to remove a macOS ACL
+  from one path.
 - **Read-only against accidents.** The unpacked tree is `chmod -R a-w`, which stops an accidental
   write. It is not a lock: you, or anything running as you, can undo it. To remove a version:
   `chmod -R u+w <dir> && rm -rf <dir>`.
@@ -52,6 +84,11 @@ The cache holds `go-<ver>-<os>-<arch>/` and `bun-<ver>-<os>-<arch>/`. A version 
   `.unpack-*` temp directories. If the holder is alive but stuck, a waiter gives up after 2 minutes
   and names the lock.
 
-**What it does not stop.** Anything running as you can still replace a cached toolchain, and every
-worktree that links to it runs the replacement on its next `make`. So a cache must never be writable
-by anything you would not let edit your worktrees.
+## What it does not stop
+Anything running as you, or as root, can still replace a cached toolchain, and every worktree that links
+to it runs the replacement on its next `make`, without `tools.sh` in between. So a cache must never be
+writable by anything you would not let edit your worktrees. The checks run when `tools.sh` runs, not each
+time `make` follows a link; between runs, the path stays safe only because no one else can write to
+anything on it. Of the Go tree, the check reads the version directory, `bin/` and the two binaries, not
+the rest (`go.env`, `pkg/tool/`, `src/`): those rely on the installer's `chmod -R a-w` and on a version
+directory no one else can write to.

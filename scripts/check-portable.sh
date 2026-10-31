@@ -17,8 +17,12 @@ pattern='(~/[.A-Za-z]|/home/[a-z]|/opt/homebrew|/private/t[m]p|\$HOME/|\$\(HOME\
 if git grep -nIiE "$pattern" -- . ':!scripts/check-portable.sh'; then
   echo "machine-local path in a tracked file (above); use a repo-relative path"; bad=1
 fi
-if git ls-files | grep -E '(^|/)(\.tools|node_modules)/' | head -3 | grep .; then
-  echo "installed tools or dependencies are tracked (above); they belong in .gitignore"; bad=1
+# any path component named .tools or node_modules, in any case (APFS folds it), as a directory or as an entry itself (a symlink). The list is
+# read whole before printing: piped into head under pipefail, a list longer than a pipe buffer failed the pipeline and passed the check.
+# grep's "no match" (1) is the only failure let through; any other failure stops the script (set -e), which fails the check.
+tracked=$(git ls-files -z | tr '\0' '\n' | { grep -iE '(^|/)(\.tools|node_modules)(/|$)' || [ $? = 1 ]; })
+if [ -n "$tracked" ]; then
+  head -3 <<<"$tracked"; echo "installed tools or dependencies are tracked (above); they belong in .gitignore"; bad=1
 fi
 big=$(git ls-files -s | awk '$1!="120000"{print $2" "$4}' | git cat-file --batch-check='%(objectsize) %(rest)' | awk '$1>1048576{print $2}')
 if [ -n "$big" ]; then echo "tracked files over 1 MB:"; echo "$big"; bad=1; fi

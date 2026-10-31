@@ -14,7 +14,7 @@ import (
 var allowedAgentEnv = []string{"PATH", "HOME", "TMPDIR", "USER", "LANG", "LC_ALL", "TERM", "PWD"}
 
 // scrubbedEnv: the daemon is restarted with computer.json already stored and a user token in its environment, and the suite's
-// own environment holds none of the allowed names. The agent must still get only allowed names, which here means none.
+// own environment holds none of the allowed names. The agent must still get only allowed names: here, at most the PWD os/exec adds.
 func (f *f09) scrubbedEnv(record string) error {
 	f.daemon.signal(syscall.SIGTERM)
 	if _, ok := f.daemon.finish(15 * time.Second); !ok {

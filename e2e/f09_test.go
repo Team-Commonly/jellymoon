@@ -238,7 +238,10 @@ func (f *f09) whoami(record string) error {
 
 // Step 5: the agent's argv and env hold no token. The run token reached it in its MCP server config, and no computer or user token did.
 func (f *f09) tokens(record string) error {
-	rec, _ := f.recorded(record, func(r agentRec) bool { return set(r.Prompt) })
+	rec, err := f.recorded(record, func(r agentRec) bool { return set(r.Prompt) })
+	if err != nil {
+		return err
+	}
 	where := map[string]string{"argv": strings.Join(rec.Argv, "\n"), "env": strings.Join(rec.Env, "\n"), "session/new": string(rec.SessionNew), "initialize": string(rec.Initialize), "prompt": string(rec.Prompt)}
 	for name, text := range where {
 		for _, secret := range []string{f.comp.Token, f.owner.tok} {
@@ -286,14 +289,19 @@ func (f *f09) stops(record string) error {
 	if _, ok := f.daemon.finish(15 * time.Second); !ok {
 		return fmt.Errorf("the daemon did not exit within 15 s of SIGTERM with an agent running")
 	}
-	for end := time.Now().Add(5 * time.Second); syscall.Kill(rec.PID, 0) == nil; time.Sleep(25 * time.Millisecond) {
+	// The agent ignores SIGTERM, so it is gone only if the daemon killed its process group.
+	for end := time.Now().Add(5 * time.Second); syscall.Kill(-rec.PID, 0) == nil; time.Sleep(25 * time.Millisecond) {
 		if time.Now().After(end) {
 			_ = syscall.Kill(-rec.PID, syscall.SIGKILL)
-			return fmt.Errorf("the agent (pid %d) still runs 5 s after the daemon stopped", rec.PID)
+			return fmt.Errorf("the agent's process group %d still runs 5 s after the daemon stopped", rec.PID)
 		}
 	}
-	if _, ok := f.px.find("POST", regexp.MustCompile(`^/v1/runs/run_[0-9A-Z]{26}/end$`), time.Second); !ok {
-		return fmt.Errorf("no run was ended")
+	var who struct{ Result struct{ StructuredContent struct{ RunID string } } }
+	_ = json.Unmarshal(rec.Whoami, &who)
+	held := who.Result.StructuredContent.RunID
+	h, ok := f.px.find("POST", regexp.MustCompile(`^/v1/runs/`+held+`/end$`), 5*time.Second)
+	if held == "" || !ok || h.Status != 200 || !bytes.Contains(h.In, []byte(`"failed"`)) {
+		return fmt.Errorf("the run held at stop (%q): end found=%v HTTP %d body %s, want 200 and failed", held, ok, h.Status, h.In)
 	}
 	return nil
 }

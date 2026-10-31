@@ -40,7 +40,8 @@ func newRecorder(t *testing.T, target string) *recorder {
 	r := &recorder{}
 	rp := &httputil.ReverseProxy{Rewrite: func(pr *httputil.ProxyRequest) {
 		pr.SetURL(u)
-		pr.Out.Host = pr.In.Host // the server builds the MCP URL from the host it was asked on, so it names the proxy
+		pr.Out.Header.Del("Accept-Encoding") // keep bodies readable here
+		pr.Out.Host = pr.In.Host             // the server builds the MCP URL from the host it was asked on, so it names the proxy
 		if pr.Out.Header.Get("Upgrade") == "" {
 			in, _ := io.ReadAll(pr.In.Body)
 			pr.Out.Body = io.NopCloser(bytes.NewReader(in))
@@ -92,6 +93,9 @@ type agentRec struct {
 	Whoami      json.RawMessage
 	WhoamiError string
 }
+
+// set: the fake agent writes a field it has not learned yet as null.
+func set(m json.RawMessage) bool { return len(m) > 0 && string(m) != "null" }
 
 type mcpServer struct {
 	Type, Name, URL string
@@ -190,7 +194,7 @@ func (f *f09) response() error {
 
 // Step 3: session/new carries the MCP server with the run token, and the brief is the first prompt.
 func (f *f09) sessionNew(record string) error {
-	rec, err := f.recorded(record, func(r agentRec) bool { return len(r.Prompt) > 0 })
+	rec, err := f.recorded(record, func(r agentRec) bool { return set(r.Prompt) })
 	if err != nil {
 		return err
 	}
@@ -210,7 +214,7 @@ func (f *f09) sessionNew(record string) error {
 
 // Step 4: the agent called jm_whoami over MCP and the pod answered with the agent, the pod and the run.
 func (f *f09) whoami(record string) error {
-	rec, err := f.recorded(record, func(r agentRec) bool { return len(r.Whoami) > 0 || r.WhoamiError != "" })
+	rec, err := f.recorded(record, func(r agentRec) bool { return set(r.Whoami) || r.WhoamiError != "" })
 	if err != nil {
 		return err
 	}
@@ -227,14 +231,14 @@ func (f *f09) whoami(record string) error {
 	_ = json.Unmarshal(rec.Whoami, &out)
 	got := out.Result.StructuredContent
 	if got.Agent.ID != f.agentID || got.PodID != f.pod || got.RunID != f.run.RunID || out.Result.IsError {
-		return fmt.Errorf("jm_whoami answered agent %q pod %q run %q (error=%v %s), want %s %s %s", got.Agent.ID, got.PodID, got.RunID, out.Result.IsError, rec.WhoamiError, f.agentID, f.pod, f.run.RunID)
+		return fmt.Errorf("jm_whoami answered agent %q pod %q run %q (error=%v %s), want %s %s %s\nraw: %s", got.Agent.ID, got.PodID, got.RunID, out.Result.IsError, rec.WhoamiError, f.agentID, f.pod, f.run.RunID, rec.Whoami)
 	}
 	return nil
 }
 
 // Step 5: the agent's argv and env hold no token. The run token reached it in its MCP server config, and no computer or user token did.
 func (f *f09) tokens(record string) error {
-	rec, _ := f.recorded(record, func(r agentRec) bool { return len(r.Prompt) > 0 })
+	rec, _ := f.recorded(record, func(r agentRec) bool { return set(r.Prompt) })
 	where := map[string]string{"argv": strings.Join(rec.Argv, "\n"), "env": strings.Join(rec.Env, "\n"), "session/new": string(rec.SessionNew), "initialize": string(rec.Initialize), "prompt": string(rec.Prompt)}
 	for name, text := range where {
 		for _, secret := range []string{f.comp.Token, f.owner.tok} {
@@ -274,7 +278,7 @@ func (f *f09) stops(record string) error {
 		return err
 	}
 	f.assign("hold the agent")
-	rec, err := f.recorded(record, func(r agentRec) bool { return len(r.Whoami) > 0 })
+	rec, err := f.recorded(record, func(r agentRec) bool { return set(r.Whoami) })
 	if err != nil {
 		return err
 	}

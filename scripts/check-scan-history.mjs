@@ -29,6 +29,9 @@ const hist = (marker) => {
 // both run in scanEnv, which pins GIT_CONFIG_GLOBAL to /dev/null. Under such a config the control must still be found, and a clean range
 // must still read clean (the count is taken in the same env).
 const poison = fs.mkdtempSync(path.join(os.tmpdir(), 'check-poison-'));
+// The range cases below use it too, and a failing group ends the check with process.exit, which skips any finally: the exit handler removes
+// the directory on every way out (a pass, a failing group, a throw).
+process.on('exit', () => fs.rmSync(poison, { recursive: true, force: true }));
 fs.writeFileSync(path.join(poison, 'attrs'), '* -diff\n');
 fs.writeFileSync(path.join(poison, 'gitconfig'), `[core]\n\tattributesFile = ${path.join(poison, 'attrs')}\n`);
 const poisoned = (f) => {

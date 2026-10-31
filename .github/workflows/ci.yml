@@ -2,8 +2,7 @@ name: CI
 # Runs on every pull request and every push to main, and runs the checks `make preflight` runs. A failing check run blocks a land
 # (docs/development/landing.md). CI never lands anything: `make land` stays the only merge path.
 
-# Verification loop (docs/development/workflow.md). Each check is a job here. A job whose code does not exist
-# yet passes with a notice; it starts enforcing the moment its directory lands.
+# Verification loop (docs/development/workflow.md). Each check is a job here.
 # Budget: 5 minutes wall clock for the whole workflow.
 
 on:
@@ -17,8 +16,10 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# Read-only by default. The only secrets are CLOUDFLARE_API_TOKEN (e2e-preview, skipped for fork pull requests) and the names list of the
-# deny check (private; GitHub withholds it from fork pull requests, so it is empty there).
+# Read-only by default. The only secrets are JM_CF_PREVIEW_TOKEN and JM_CF_ACCOUNT_ID (e2e-preview, skipped for fork pull requests)
+# and the names list of the deny check (private; GitHub withholds it from fork pull requests, so it is empty there).
+# No job passes by skipping: a job that has nothing to test fails. The one job whose code does not exist yet, install, is not here;
+# the unit that adds worker/public/install.sh adds that job back.
 permissions:
   contents: read
 
@@ -111,10 +112,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Worker, DO and MCP tests
-        run: |
-          if [ ! -f worker/package.json ]; then echo "::notice::no worker/ yet; skipping"; exit 0; fi
-          cd worker && npm ci && npx vitest run
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version-file: .tool-versions
+      - name: Worker tests (make test-worker; fails if no test runs)
+        run: make test-worker
 
   go:
     runs-on: ubuntu-latest
@@ -128,18 +130,6 @@ jobs:
           go-version-file: go.mod
       - name: Daemon, ACP and TUI tests
         run: make test-go
-
-  install:
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - name: install.sh against a fixture release
-        run: |
-          if [ ! -f worker/public/install.sh ]; then echo "::notice::no install.sh yet; skipping"; exit 0; fi
-          make test-install
 
   e2e-local:
     runs-on: ubuntu-latest
@@ -156,25 +146,46 @@ jobs:
           go-version-file: go.mod
       - name: The contract suite against the Worker under wrangler dev --local (make e2e-a, as in make preflight)
         run: |
-          if [ ! -d e2e ]; then echo "::notice::no e2e/ yet; skipping"; exit 0; fi
           make e2e-a
 
   e2e-preview:
-    # Needs a secret, so it never runs on a pull request from a fork.
+    # Deploys this run's code to its own Worker (jellymoon-spike-pr-<number>, or jellymoon-spike-main on a push to main) with its own
+    # Durable Object namespace and D1 database, runs the contract suite against it over HTTPS and the pod WebSocket, and removes both
+    # (worker/preview.sh, docs/development/e2e-contract.md "Remote mode"). Needs secrets, so it never runs on a pull request from a fork.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: gen-drift
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 10
+    env:
+      PREVIEW_NAME: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }}
+      JM_CF_PREVIEW_TOKEN: ${{ secrets.JM_CF_PREVIEW_TOKEN }}
+      JM_CF_ACCOUNT_ID: ${{ secrets.JM_CF_ACCOUNT_ID }}
     steps:
+      - name: Refuse without the preview secrets
+        # A skip that exits 0 would pass without testing what the job names. Here a missing secret is a failure.
+        run: |
+          if [ -z "$JM_CF_PREVIEW_TOKEN" ] || [ -z "$JM_CF_ACCOUNT_ID" ]; then
+            echo "::error::JM_CF_PREVIEW_TOKEN and JM_CF_ACCOUNT_ID must both be set as repository secrets; e2e-preview cannot test the preview without them"
+            exit 1
+          fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Deploy a per-PR preview and run the slice against it
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          if [ ! -f worker/wrangler.toml ] && [ ! -f worker/wrangler.jsonc ]; then echo "::notice::no worker/wrangler config yet; skipping"; exit 0; fi
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::warning::CLOUDFLARE_API_TOKEN secret not set yet (owner action); preview skipped"; exit 0
-          fi
-          echo "::error::preview deploy not wired yet"; exit 1
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version-file: .tool-versions
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Deploy the preview (own Worker, own Durable Object namespace, own D1 database)
+        run: worker/preview.sh up "$PREVIEW_NAME"
+      - name: Run the contract suite against the preview
+        # The whole suite runs; each test skips itself with a reason when it cannot run on a deployed Worker. When F14 lands, add the
+        # next line to name it (docs/development/e2e-contract.md, "Remote mode"):
+        #   env: { JM_E2E_RUN: TestF14 }
+        run: worker/preview.sh run
+      - name: Tear the preview down
+        if: always()
+        run: worker/preview.sh down "$PREVIEW_NAME"

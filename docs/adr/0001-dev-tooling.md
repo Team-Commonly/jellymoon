@@ -33,11 +33,11 @@ The LOC budget for the slice is a deliberate choice to stay small:
 |---|---|
 | core (`schema/`, `scripts/`) | 2,450 |
 | podcore | 2,500 |
-| worker | 1,550 |
+| worker | 1,790 |
 | daemon | 3,000 |
 | e2e | 3,930 |
 
-The caps add up to 13,430 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 13,670 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -59,3 +59,4 @@ The caps add up to 13,430 lines. Agent-written comparables grew without bounds: 
 2026-10-30: e2e cap 2,660 → 3,130, the F08 test (a built daemon run as a black box: registration, presence online and offline, a hung daemon, a crashed server) takes the suite to 2,714 lines (the gate printed `LOC e2e 2700 / 2660` before this raise; the cap is the final count plus about 15%); the total is 12,630. No other cap changes. F08.
 2026-10-30: podcore cap 2,050 → 2,500, presence (which computers are online, the 45 s staleness bound, the presence events) and its tests take the core to 2,162 lines (the gate printed `LOC podcore 2162 / 2050` before this raise; the cap is that count plus about 15%); the total is 12,600. No other cap changes. F08.
 2026-10-30: e2e cap 3,130 → 3,930, the F09 test (a recording proxy between the daemon and the server, the wake claimed over it, a built fake ACP agent that records argv, env and what it was told, a stubborn-agent case) takes the suite to 3,420 lines (the gate printed `LOC e2e 3420 / 3130` before this raise; the cap is that count plus about 15%); the total is 13,430. F09.
+2026-10-30: worker cap 1,550 → 1,790, the MCP adapter at POST /mcp (initialize, tools/list and tools/call as the operation's own HTTP route) and its tests take the Worker to 1,552 lines (the gate printed `LOC worker 1552 / 1550` before this raise; the cap is that count plus about 15%); the total is 13,670. F09.

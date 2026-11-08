@@ -203,7 +203,7 @@
         "a revoked or invalid GitHub token gets unauthorized"
       ],
       "test": "go test ./e2e -run TestF15",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F16",

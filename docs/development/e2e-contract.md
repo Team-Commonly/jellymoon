@@ -5,7 +5,7 @@ contract below. It is black box: HTTP and the pod WebSocket only, real `jmu_`, `
 import of server code. It writes no server. `daemon/internal/protocol` is Go-internal and cannot be imported
 from `e2e/`, so the suite keeps its own small wire structs.
 
-Run it against the pod-state server (ADR 0005) with `make e2e` (the same as `make e2e-c`), against the Cloudflare adapter
+Run it against the pod-state server (ADR 0006) with `make e2e` (the same as `make e2e-c`), against the Cloudflare adapter
 with `make e2e-a`, or against any other server with `JM_E2E_SERVER='<shell command>' make e2e-any`. With `JM_E2E_SERVER` unset
 every test skips, so `make test` stays green. `make e2e`, `make e2e-c` and `make e2e-a` end with `E2E_MS=<n> STEPS=<k>/<k>`.
 

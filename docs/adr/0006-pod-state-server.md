@@ -1,4 +1,4 @@
-# 0005 · The pod-state server is one Bun process, Hono and Postgres
+# 0006 · The pod-state server is one Bun process, Hono and Postgres
 
 Status: Accepted, by the owner, 2026-11-08. It adds `server/` and two runtime dependencies (`hono`, `@electric-sql/pglite`),
 so it needs this note. It chooses between two adapters of the pure pod core (ADR 0003) and leaves two questions open (below).

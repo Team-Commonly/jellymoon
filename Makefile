@@ -108,7 +108,7 @@ secrets-all:
 e2e-any:
 	$(GO) test ./e2e -count=1 -v
 
-# The pod-state server (ADR 0005): one Bun process, Hono, Postgres. `make server` serves on $PORT (default 8787) with the
+# The pod-state server (ADR 0006): one Bun process, Hono, Postgres. `make server` serves on $PORT (default 8787) with the
 # in-process Postgres kept in .tools/server-data; set DATABASE_URL to use a real one.
 server: node_modules
 	$(if $(DATABASE_URL),,ENV=local) PORT=$${PORT:-8787} $(BUN) server/src/main.ts $(if $(DATABASE_URL),,--persist-to $(CURDIR)/.tools/server-data)

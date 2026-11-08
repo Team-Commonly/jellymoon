@@ -1,4 +1,4 @@
-// Just enough of the Bun and Node globals for tsc; Bun ships them, so no @types package is added (ADR 0005).
+// Just enough of the Bun and Node globals for tsc; Bun ships them, so no @types package is added (ADR 0006).
 declare const process: { env: Record<string, string | undefined>; argv: string[]; exit(code?: number): never };
 
 interface BunSql {

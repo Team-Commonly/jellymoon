@@ -1,4 +1,4 @@
-// The one storage seam (ADR 0005): a real Postgres when DATABASE_URL is set, PGlite (in-process Postgres) otherwise, for local runs.
+// The one storage seam (ADR 0006): a real Postgres when DATABASE_URL is set, PGlite (in-process Postgres) otherwise, for local runs.
 // Everything above this file speaks SQL through `rows` and `tx` and does not know which one it has.
 import { existsSync, readFileSync } from 'node:fs';
 

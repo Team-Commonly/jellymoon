@@ -11,6 +11,7 @@ const quiet = 400 * time.Millisecond
 // heartbeat after 60 s, and run.wake goes only to the computer that hosts the agent.
 func TestF07(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	a, b, wake := w.compA.sock, w.compB.sock, isType("run.wake")
 	mkA, mkB := a.mark(), b.mark()

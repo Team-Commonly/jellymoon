@@ -33,10 +33,24 @@ var (
 	// stateInDatabase is set by `make e2e-c` when the server keeps its state in a real database (DATABASE_URL): the --persist-to
 	// directory then holds no files by design. TestF02 says so aloud and skips only its directory-content check.
 	stateInDatabase = os.Getenv("JM_E2E_STATE_IN_DB") == "1"
-	suiteTests = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF09", "TestF10", "TestF11", "TestExpiryZeroTraffic", "TestRenewRace",
+	suiteTests = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF09", "TestF10", "TestF11", "TestF12", "TestExpiryZeroTraffic", "TestRenewRace",
 		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline", "TestRunTokenOtherPod", "TestEvictMidClaim", "TestEvictAlarmWake", "TestEvictPastDeadline"}
 	outcomes sync.Map // test name -> failed bool
 )
+
+// suiteWG counts the parallel suite tests that have started and not yet finished (cleanups included); the budget test waits on it.
+var suiteWG sync.WaitGroup
+
+// par runs the test in parallel with the others. Every test that calls it owns its server, its data dir and its pod, so
+// nothing is shared but the process: two tests that shared a pod would see each other's events. Call it right after need.
+// The budget test waits for every test that called it, so it still judges the whole run.
+func par(t *testing.T) {
+	t.Helper()
+	suiteWG.Add(1)
+	t.Cleanup(suiteWG.Done) // registered first, so it runs last: after track's outcome and the server's kill
+	noStrays(t)
+	t.Parallel()
+}
 
 func TestMain(m *testing.M) {
 	// staleMs is 0 (ADR 0003, "What an adapter must do", item 5): every command is persisted, heartbeats included.

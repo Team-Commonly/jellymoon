@@ -1,6 +1,6 @@
 // The pod core's data: plain JSON state, tagged commands, and the ordered output list (ADR 0003).
 import type {
-  Actor, ActorId, AgentId, AnyEvent, ClaimRunResponse, ComputerId, DecisionId, ErrorBody, EventOf, Harness, Message, MessageId, PodId, PostInput, RunId, RunOutcome,
+  Actor, ActorId, AgentId, AnyEvent, ClaimRunResponse, ComputerId, Decision, DecisionId, ErrorBody, EventOf, Harness, Message, MessageId, OptionId, PodId, PostInput, RunId, RunOutcome,
   RunStopOutput, RunWake, Task, TaskClaimOutput, TaskId, TaskKind, TaskUpdateStatus, WakeId, WakeReason, WakeRefs,
 } from '../../gen/ts/protocol';
 
@@ -31,6 +31,12 @@ export interface Agent { actor: Actor; owner: Actor; computerId: ComputerId }
 /** A pending wake. Keyed by agent in PodState, so a second pending wake for one agent cannot exist. */
 export interface Wake { id: WakeId; agentId: AgentId; reason: WakeReason; refs: WakeRefs; sentAt: number }
 
+/**
+ * What the pod keeps of an ask so it can be ruled once (the adapter owns the messages, the core keeps no text). One per ask, a
+ * fixed size: a ruled record drops `options`, so ruling it again, or rereading it, grows nothing.
+ */
+interface DecisionRec { messageId: MessageId; askedBy: ActorId; options: OptionId[]; decision: Decision }
+
 export interface PodState {
   podId: PodId;
   /** The last event number handed out. */
@@ -49,6 +55,8 @@ export interface PodState {
   wakes: Record<AgentId, Wake>;
   /** Computers that are online, by the time of their last sign of life (ms). Absent in a pod saved before presence; read as empty. */
   online?: Record<ComputerId, number>;
+  /** The decision of each ask posted since asks were recorded. Absent in a pod saved before; read as empty, and an older ask has no record to rule. */
+  decisions?: Record<DecisionId, DecisionRec>;
 }
 
 /** Already authenticated and stamped by the adapter; the core decides what each may do. */
@@ -70,6 +78,8 @@ export type Cmd =
    *  adapter saying this post rides on an MCP call already counted, which the receipt leaves out. */
   | { type: 'post'; caller: Caller; messageId: MessageId; decisionId: DecisionId; input: PostInput; harness?: Harness; viaMcp?: boolean; wakeId: WakeId }
   | { type: 'tool_call'; runId: RunId }
+  /** A member rules on an ask: `option` is an option id of that ask (a plain string here, so a bad one is refused, never looked up as a key). */
+  | { type: 'rule'; caller: Caller; decisionId: DecisionId; option: string; wakeId: WakeId }
   | { type: 'boot'; staleMs: number }
   | { type: 'change'; kind: 'ruling'; agentId: AgentId; refs: WakeRefs; wakeId: WakeId }
   | { type: 'wake_ack'; wakeId: WakeId; computerId: ComputerId }

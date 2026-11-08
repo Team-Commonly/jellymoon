@@ -14,8 +14,7 @@ import (
 	"time"
 )
 
-// The daemon under test is the repo's own jellymoon binary, built into a temp dir and run as a black box: its argv, its
-// environment, its config dir (JELLYMOON_HOME) and its output (docs/development/e2e-contract.md).
+// The daemon under test is the repo's own jellymoon binary, built into a temp dir and run as a black box: argv, env (JELLYMOON_HOME), output.
 // dproc is one daemon or CLI process in its own process group, with its output captured.
 type dproc struct {
 	cmd  *exec.Cmd
@@ -33,7 +32,7 @@ func spawn(t *testing.T, bin string, env []string, args ...string) *dproc {
 		t.Fatalf("cannot start %s %v: %v", bin, args, err)
 	}
 	go func() { _ = p.cmd.Wait(); close(p.done) }()
-	t.Cleanup(p.kill)
+	t.Cleanup(p.stop)
 	return p
 }
 
@@ -158,8 +157,6 @@ func waitComputer(cfg string) (sc storedComputer, fi os.FileInfo, err error) {
 	return
 }
 
-var secretShape = regexp.MustCompile(`jm[ucr]_[A-Za-z0-9]{10}`)
-
 // groupArgv is the command line of every process in the group, as `ps` reports it: what any user on the host can read.
 func groupArgv(pgid int) string {
 	out, _ := exec.Command("ps", "-ww", "-axo", "pgid=,args=").Output()
@@ -170,26 +167,6 @@ func groupArgv(pgid int) string {
 		}
 	}
 	return strings.Join(mine, "\n")
-}
-
-// leaks lists every place a token shows: the captured output of each process and the argv seen while the daemon ran.
-func leaks(procs map[string]*dproc, argv string, secrets ...string) []string {
-	var hits []string
-	check := func(where, text string) {
-		for _, s := range secrets {
-			if strings.Contains(text, s) {
-				hits = append(hits, where+" holds a full token")
-			}
-		}
-		if m := secretShape.FindString(text); m != "" {
-			hits = append(hits, where+" holds a token-shaped string "+m)
-		}
-	}
-	for name, p := range procs {
-		check(name+" output", p.text())
-	}
-	check("argv", argv)
-	return hits
 }
 
 // f08 is the test's state: one server, a pod with two members watching it, and the daemon's config dir.
@@ -334,7 +311,8 @@ func (f *f08) goesOfflineWhenKilled() error {
 }
 
 func (f *f08) leaksNothing() error {
-	if hits := leaks(f.procs, f.argv, f.owner.tok, f.comp.Token); len(hits) > 0 {
+	hits := append(leaks(f.procs, f.argv, f.owner.tok, f.comp.Token), fileLeaks(f.cfg, "computer.json", f.owner.tok, f.comp.Token)...)
+	if len(hits) > 0 {
 		return fmt.Errorf("%s", strings.Join(hits, "; "))
 	}
 	return nil
@@ -371,6 +349,7 @@ func (f *f08) restoredPodIsHonest() error {
 // TestF08: the daemon registers its computer and an agent, and the pod shows the agent online and then offline.
 func TestF08(t *testing.T) {
 	needFake(t)
+	par(t)
 	track(t)
 	f := newF08(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return f.obs[0].snapshot(0) }}

@@ -242,13 +242,11 @@ describe('one claim per task', () => {
       expect([JSON.stringify(cmd), errCode(r.out), r.state]).toEqual([JSON.stringify(cmd), 'invalid_input', world()]);
     }
   });
-  test('a run\'s message_post without a summary is summary_required; a person\'s is derived; a given summary is used', () => {
-    const post = (caller: { kind: 'run'; runId: string } | { kind: 'user'; userId: string }, summary?: string): Cmd => ({ type: 'message_post', caller, messageId: id('msg', 1), text: 'body', summary, wakeId: id('wak', 1) });
-    const run = { kind: 'run' as const, runId: RUN_A };
-    expect(errCode(apply(world(), post(run), 5).out)).toBe('summary_required');
-    expect(errCode(apply(world(), post(run, '  '), 5).out)).toBe('summary_required');
-    expect((events(apply(world(), post(run, 'Done'), 5).out)[0].data as { summary: string }).summary).toBe('Done');
-    expect((events(apply(world(), post({ kind: 'user', userId: U_OWNER.id }), 5).out)[0].data as { summary: string }).summary).toBe('body');
+  test('message_post derives its summary from the text, whoever posts: a run\'s own headline is written through `post`, not here', () => {
+    const post = (caller: { kind: 'run'; runId: string } | { kind: 'user'; userId: string }): Cmd => ({ type: 'message_post', caller, messageId: id('msg', 1), text: 'body', wakeId: id('wak', 1) });
+    for (const caller of [{ kind: 'run' as const, runId: RUN_A }, { kind: 'user' as const, userId: U_OWNER.id }]) {
+      expect([caller.kind, (events(apply(world(), post(caller), 5).out)[0].data as { summary: string }).summary]).toEqual([caller.kind, 'body']);
+    }
   });
   test('a live run\'s refused command still renews its claims (ADR 0002): T1 is held to 110 000 in all four sequences', () => {
     const wid = id('wak', 1);

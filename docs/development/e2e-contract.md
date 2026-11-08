@@ -143,7 +143,7 @@ once the clock passes it; one `claim.released` over live delivery and over a rep
 ## Skipped on the server
 
 `JM_E2E_SKIP` is a comma-separated list of test names. `make e2e-c` sets it to the three tests below; each one skips, says so,
-and still counts as passed for `TestF14Budget`. A skip needs a reason here. Nothing else is skipped, and no assertion differs
+and still counts as passed for `TestF14Budget`. The make targets set the variable themselves, so an inherited `JM_E2E_SKIP` never applies: `make e2e-a` clears it (a deliberate skip there is `make e2e-a E2E_A_SKIP=<names>`) and `make e2e-c` takes its list from `E2E_C_SKIP`. A skip needs a reason here. Nothing else is skipped, and no assertion differs
 between servers.
 
 | Test | Reason |
@@ -166,7 +166,7 @@ and the check runs in full.
   finishes its tests. The steps are every named step of the tests that name them (`TestF02`) plus one step for each other test that
   ran; a skipped test counts nothing. `k` is the steps that passed, so a red run prints `k < n`. A failing named step prints its
   name and the last 20 events the suite saw before it. A test cannot see the run's last line, so `make e2e-c` and `make e2e-a` judge it: the
-  last line before `go test`'s own `ok`/`FAIL` must be this line, with `k = n` on a green run and `k < n` on a red one.
+  last line before `go test`'s own `ok`/`FAIL`/`PASS` lines (blank lines ignored) must match `^E2E_MS=[0-9]+ STEPS=[0-9]+/[0-9]+$`, with `k = n` on a green run and `k < n` on a red one.
 - `LATENESS_MS <kind> <ms>`: observed expiry minus the ledger's deadline, real-clock mode only. `kind` is
   `steady` (zero-traffic expiry), `after_restart_ahead` (deadline after the restart) or
   `after_restart_inside` (deadline inside the outage).

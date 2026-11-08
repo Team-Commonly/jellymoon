@@ -71,13 +71,11 @@ describe('the public base URL', () => {
 
   test('an empty PUBLIC_URL counts as unset: the request origin stands in', async () => {
     const l = await links('');
-    expect(l.invite).toBe(`http://x/join/${l.code}`);
-    expect(l.mcp).toBe('http://x/mcp');
+    expect([l.invite, l.mcp]).toEqual([`http://x/join/${l.code}`, 'http://x/mcp']);
   });
 
   test('a trailing slash is dropped once, for the invite link and the mcpUrl alike', async () => {
     const l = await links('https://x/');
-    expect(l.invite).toBe(`https://x/join/${l.code}`);
-    expect(l.mcp).toBe('https://x/mcp');
+    expect([l.invite, l.mcp]).toEqual([`https://x/join/${l.code}`, 'https://x/mcp']);
   });
 });

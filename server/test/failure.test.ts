@@ -24,12 +24,15 @@ async function claimed() {
 }
 
 describe('a database that fails', () => {
-  test('a failed tick leaves the timer armed, so the next deadline still fires and releases the claim', async () => {
+  test('a tick that keeps failing is retried on a back-off, not in a loop, and releases the claim once the database recovers', async () => {
     const w = await claimed();
     const t0 = Date.now();
     w.hub.now = () => w.lease - 150 + (Date.now() - t0);
-    w.f.ctl.fail = true;
+    w.f.ctl.down = true;
     w.hub.rearm();
+    await new Promise((r) => setTimeout(r, 1600));
+    expect(w.f.ctl.refused >= 2 && w.f.ctl.refused <= 6).toBe(true);
+    w.f.ctl.down = false;
     const released = await until(async () => (await eventsAfter(w.db, w.pod.id, 0, 100)).some((e) => e.type === 'claim.released'));
     expect(released).toBe(true);
   });
@@ -92,14 +95,11 @@ describe('a replay that fails', () => {
     w.rt.conns.add(conn);
     const pending = w.rt.subscribe(conn, 0).then(() => 'ok', (e: unknown) => String(e));
     await until(async () => gate.read !== null);
-    // A live event lands while the replay read is in flight; it is buffered for this connection.
     const made = await w.rt.exec({ type: 'task_create', caller: { kind: 'user', userId: w.olivia.user.id }, taskId: 'tsk_00000000000000000000000002', title: 'live', kind: 'chore', wakeId: 'wak_00000000000000000000000002' });
     expect(made?.ok).toBe(true);
     gate.read?.();
     expect(await pending).toContain('db down');
-    expect(frames.length).toBe(0);
-    expect(conn.subscribed).toBe(false);
-    expect(conn.buf.length).toBe(0);
+    expect([frames.length, conn.subscribed, conn.buf.length]).toEqual([0, false, 0]);
     gate.failReads = false;
     await w.rt.subscribe(conn, 0);
     expect(frames.some((f) => f.includes('"live"'))).toBe(true);

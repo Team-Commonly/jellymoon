@@ -74,9 +74,8 @@ schema refuses (a wrong type, a value over a limit such as a 16,385-character `b
 dropped or truncated: a body the schema allows is stored whole.
 
 A field the schema allows but the pod core has no place for is also `400 invalid_input`, never silently dropped. Today
-that is, on `POST /v1/pods/:pod/messages`: `kind` other than `fyi`, `status` other than `done`, `needs`, `options`,
-`context`, `taskId`, `links` and `caveat`; on `PATCH /v1/pods/:pod/tasks/:task`: `note`; on `POST /v1/runs/:run/end`:
-`harnessVersion`. A run's post needs its `summary` (the core stores it as the headline).
+that is, on `PATCH /v1/pods/:pod/tasks/:task`: `note`; on `POST /v1/runs/:run/end`: `harnessVersion`. A post stores
+every field its definition allows (every `kind`, `status`, `needs`, `options`, `context`, `taskId`, `links` and `caveat`). A run's post needs its `summary` (the core stores it as the headline).
 
 ## Invites
 

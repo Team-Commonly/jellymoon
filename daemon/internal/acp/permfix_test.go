@@ -12,8 +12,8 @@ import (
 
 var errDeadline = errors.New("deadline")
 
-// stop ends the run's context with cause once the agent has the prompt, and returns Run's error.
-func stop(t *testing.T, mode string, cause error) error {
+// stop ends the run's context with cause once the agent has the prompt, and returns Run's error and the agent's record.
+func stop(t *testing.T, mode string, cause error) (string, error) {
 	s, rec := spec(t, mode)
 	ctx, cancel := context.WithCancelCause(context.Background())
 	done := make(chan error, 1)
@@ -22,10 +22,10 @@ func stop(t *testing.T, mode string, cause error) error {
 	cancel(cause)
 	select {
 	case err := <-done:
-		return err
+		return rec, err
 	case <-time.After(10 * time.Second):
 		t.Fatalf("mode %s: Run did not return after the stop", mode)
-		return nil
+		return rec, nil
 	}
 }
 
@@ -34,7 +34,7 @@ func stop(t *testing.T, mode string, cause error) error {
 func TestAnyEndingAfterAStopReportsTheStopsCause(t *testing.T) {
 	for _, mode := range []string{"cancel", "error-on-cancel", "exit-on-cancel"} {
 		for _, cause := range []error{errStopped, errDeadline} {
-			if err := stop(t, mode, cause); !errors.Is(err, cause) {
+			if _, err := stop(t, mode, cause); !errors.Is(err, cause) {
 				t.Errorf("mode %s: Run = %v, want %v", mode, err, cause)
 			}
 		}
@@ -71,8 +71,16 @@ func TestPermissionAnswerShape(t *testing.T) {
 // An agent that ignores SIGTERM is killed after it: Run returns instead of waiting for the agent to leave on its own.
 func TestAgentThatIgnoresSIGTERMIsKilled(t *testing.T) {
 	began := time.Now()
-	stop(t, "stubborn", errStopped)
+	_, _ = stop(t, "stubborn", errStopped)
 	if took := time.Since(began); took > 8*time.Second {
 		t.Errorf("Run took %v; it waited for the agent instead of sending SIGKILL", took)
+	}
+}
+
+// An agent that leaves with no stop asked is a failed run: only a stop turns the ending into the stop's cause.
+func TestAgentThatLeavesWithNoStopFails(t *testing.T) {
+	s, _ := spec(t, "exit-on-prompt")
+	if err := Run(context.Background(), s); err == nil {
+		t.Error("Run = nil, want the agent's own failure")
 	}
 }

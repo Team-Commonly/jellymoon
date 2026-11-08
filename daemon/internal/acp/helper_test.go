@@ -43,6 +43,7 @@ func send(v map[string]any) {
 //	cancel           on the prompt, wait for session/cancel, then end the turn cancelled and exit
 //	deaf             on the prompt, ignore everything; a SIGTERM is recorded and ends it
 //	stubborn         like deaf, but it ignores SIGTERM, so only SIGKILL ends it before its 20 s are up
+//	exit-on-prompt   on the prompt, exit without answering and with no stop asked
 //	exit-on-cancel   on session/cancel, exit without answering the prompt
 //	error-on-cancel  on session/cancel, answer the prompt with a JSON-RPC error
 func agentMain(mode, rec string) {
@@ -76,8 +77,7 @@ func agentMain(mode, rec string) {
 				fallthrough
 			case "exit-on-cancel":
 				return
-			}
-			if mode == "cancel" {
+			case "cancel":
 				time.Sleep(300 * time.Millisecond) // winding a turn down takes a moment, so a client that signals at once is caught
 				send(map[string]any{"id": 3, "result": map[string]any{"stopReason": "cancelled"}})
 				return
@@ -88,6 +88,8 @@ func agentMain(mode, rec string) {
 			case strings.HasPrefix(mode, "ask:"):
 				ask(sc, strings.Split(strings.TrimPrefix(mode, "ask:"), ","), rec)
 				send(map[string]any{"id": m.ID, "result": map[string]any{"stopReason": "end_turn"}})
+				return
+			case mode == "exit-on-prompt":
 				return
 			case mode == "ask-other":
 				send(map[string]any{"id": 77, "method": "fs/read_text_file", "params": map[string]any{}})
@@ -119,9 +121,9 @@ func ask(sc *bufio.Scanner, kinds []string, rec string) {
 		}
 	}
 	_ = json.Unmarshal(sc.Bytes(), &r)
-	if r.Result.Outcome.Outcome == "selected" {
-		note(rec, "answer:"+r.Result.Outcome.OptionId)
-	} else {
-		note(rec, "answer:"+r.Result.Outcome.Outcome)
+	a := r.Result.Outcome.Outcome
+	if a == "selected" {
+		a = r.Result.Outcome.OptionId
 	}
+	note(rec, "answer:"+a)
 }

@@ -171,6 +171,7 @@ func codeOf(raw []byte) string {
 type postedMsg struct {
 	ID, Kind, Status, Summary, RunID string
 	Seq                              int
+	Author                           struct{ ID string }
 	Decision                         *struct {
 		ID, State string
 		Ruling    json.RawMessage
@@ -369,6 +370,7 @@ func TestF11(t *testing.T) {
 	p.step("a post carrying receipt is rejected", f.receiptRefused)
 	p.step("a valid ask creates a message whose receipt has the runId, harness fake, wakeReason and toolCalls equal to the MCP calls made so far", f.receipt)
 	p.step("the ask carries an open decision", f.decision)
+	p.step("a forged identity header changes nothing: a run's or a member's post is theirs, a run's with its receipt", f.forgedIdentity)
 	if p.ok != p.run {
 		t.Fatalf("%d of %d steps passed", p.ok, p.run)
 	}

@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Team-Commonly/jellymoon/daemon/internal/api"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/config"
@@ -88,5 +92,68 @@ func TestAgentEnvIsEmptyNotNilWhenNothingIsAllowed(t *testing.T) {
 	got := agentEnv()
 	if got == nil || len(got) != 0 {
 		t.Errorf("agentEnv = %#v, want an empty, non-nil list", got)
+	}
+}
+
+// pidIsGone reports whether no process has the pid. Signal 0 only checks that the process exists.
+func pidIsGone(pid int) bool { return syscall.Kill(pid, 0) == syscall.ESRCH }
+
+// An agent that never answers is stopped when its run token expires: the run is ended failed, and the agent's process is gone.
+// The expiry here is a second away; without the deadline the claim would wait on the agent for as long as the daemon runs.
+func TestRunEndsWhenItsTokenExpires(t *testing.T) {
+	var ended []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/runs":
+			exp := time.Now().Add(time.Second).UTC().Format(time.RFC3339Nano)
+			_ = json.NewEncoder(w).Encode(protocol.ClaimRunResponse{RunID: "run_x", RunToken: "jmr_x", Brief: "go", MCPURL: "http://127.0.0.1:1/mcp", ExpiresAt: exp})
+		case "/v1/runs/run_x/end":
+			var b protocol.EndRunRequest
+			_ = json.NewDecoder(r.Body).Decode(&b)
+			ended = append(ended, string(b.Outcome))
+			_, _ = w.Write([]byte("{}"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "pid")
+	script := filepath.Join(dir, "hung-agent.sh")
+	// The agent records its pid and then ignores its turn: it never reads stdin and never answers.
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho $$ > "+pidFile+"\nexec sleep 300\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JELLYMOON_HARNESS_FAKE", script)
+	c, err := api.New(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := New(c, config.Store{Dir: dir}, config.Computer{Token: "jmc_x"}, log.New(io.Discard, "", 0))
+	ctx, cancel := context.WithCancel(context.Background())
+	d.ctx = ctx
+	done := make(chan struct{})
+	go func() {
+		d.claim(config.Agent{AgentID: "agt_x", Harness: protocol.HarnessFake}, protocol.RunWake{WakeID: "wak_x"})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(8 * time.Second):
+		cancel() // stop the hung agent so the test can report
+		<-done
+		t.Fatal("the run outlived its token: the agent was still running 8 s after expiresAt")
+	}
+	cancel()
+	if strings.Join(ended, ",") != "failed" {
+		t.Errorf("run ended %v, want one failed", ended)
+	}
+	raw, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatalf("the agent never started: %v", err)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
+	if pid == 0 || !pidIsGone(pid) {
+		t.Errorf("agent process %q is still running", raw)
 	}
 }

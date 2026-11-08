@@ -53,3 +53,20 @@ func TestPostReturnsTheReadErrorOfABrokenBody(t *testing.T) {
 		})
 	}
 }
+
+// A 2xx with an empty body is not a result when the caller needs one: a claim must not come back as an unset response.
+// A call that passes no result (EndRun) still succeeds on an empty body.
+func TestPostRefusesAnEmptyBodyWhenAResultIsNeeded(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer srv.Close()
+	cl, err := New(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := cl.ClaimRun("jmc_x", "wak_x"); err == nil {
+		t.Errorf("ClaimRun accepted an empty 200 body and returned %+v", got)
+	}
+	if err := cl.EndRun("jmc_x", "run_x", "completed"); err != nil {
+		t.Errorf("EndRun, which wants no result, failed on an empty body: %v", err)
+	}
+}

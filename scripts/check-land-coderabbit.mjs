@@ -27,9 +27,19 @@ const MINOR = '_⚠️ Potential issue_ | _🟡 Minor_\n\nA wording problem.';
 const thr = (list) => checkThreads(list, TRUSTED);
 const info = (sha, author = 'maintainer-a', committer = 'maintainer-a') => ({ sha, author: { login: author }, committer: { login: committer } });
 const cmt = (infos, range = RANGE) => checkCommits(range, infos, TRUSTED);
-const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED };
+const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], comments: [], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED };
 const all = (o = {}) => checkCodeRabbit({ ...good, ...o });
 const gql = (nodes, next = null) => ({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: !!next, endCursor: next }, nodes } } } } });
+// Trimmed copy of CodeRabbit's summary comment on PR 13 (issue comment 6725328362) at its head: only the status line and the two hidden markers.
+const PR13_HEAD = 'd5ca009199e228676ad54fff308ad586814f0cce';
+const PR13_SUMMARY = "<!-- coderabbit-ai-generated:v1 -->\n\nNo actionable comments were generated in the recent review.\n<!-- change_assessment_commit:\"d5ca009199e228676ad54fff308ad586814f0cce\" -->\n<!-- final_review_risk_coverage:{\"sourceCommitId\":\"d5ca009199e228676ad54fff308ad586814f0cce\",\"coveredCommitId\":\"d5ca009199e228676ad54fff308ad586814f0cce\",\"kind\":\"reviewed\"} -->\n";
+const LINE = 'No actionable comments were generated in the recent review.';
+const marker = (o = {}) => `<!-- final_review_risk_coverage:${JSON.stringify({ sourceCommitId: HEAD, coveredCommitId: HEAD, kind: 'reviewed', ...o })} -->`;
+const BOTU = { login: 'coderabbitai[bot]', type: 'Bot' };
+const HUMAN = { login: 'maintainer-a', type: 'User' };
+const sum = (o = {}) => ({ id: 1, user: BOTU, body: `<!-- x -->\n\n${LINE}\n\n${marker()}`, ...o });
+const withBody = (body, o = {}) => sum({ body, ...o });
+const cmts = (list, reviews = [], head = HEAD) => checkReviews(reviews, head, list);
 const throws = (f) => { try { f(); return false; } catch { return true; } };
 
 const cases = [
@@ -67,6 +77,37 @@ const cases = [
   ['c: a review with no commit_id refuses the whole read', rev([review(), { user: { login: 'coderabbitai[bot]', type: 'Bot' }, state: 'COMMENTED' }]).ok, false],
   ['c: a reply that is not a list refuses', rev({ message: 'rate limited' }).ok, false],
   ['c: the head compares case-insensitively', rev([review({ commit_id: HEAD.toUpperCase() })]).ok, true],
+  // (c') a clean incremental review files no review; CodeRabbit's summary comment carries the proof
+  ['c2: the PR 13 summary comment (real shape) satisfies (c) with no review at the head', checkReviews([], PR13_HEAD, [{ user: BOTU, body: PR13_SUMMARY }]).ok, true],
+  ['c2: the result says which way (c) was met', [checkReviews([review()], HEAD, []).via, cmts([sum()]).via].join(), 'review,summary'],
+  ['c2: a good summary passes through checkCodeRabbit with no review, and the note names the way', all({ reviews: [], comments: [sum()] }).note, `coderabbit at ${HEAD.slice(0, 8)} (summary comment), after the review at ${OLD.slice(0, 8)}`],
+  ['c2: the marker covers another commit', cmts([withBody(`${LINE}\n${marker({ sourceCommitId: OLD, coveredCommitId: OLD })}`)]).ok, false],
+  ['c2: source equals the head but covered is another commit', cmts([withBody(`${LINE}\n${marker({ coveredCommitId: OLD })}`)]).ok, false],
+  ['c2: covered equals the head but source is another commit', cmts([withBody(`${LINE}\n${marker({ sourceCommitId: OLD })}`)]).ok, false],
+  ['c2: kind other than reviewed', cmts([withBody(`${LINE}\n${marker({ kind: 'skipped' })}`)]).ok, false],
+  ['c2: the same comment by a User (a human quoting it)', cmts([sum({ user: HUMAN })]).ok, false],
+  ['c2: a User with the bot login does not count', cmts([sum({ user: { login: 'coderabbitai[bot]', type: 'User' } })]).ok, false],
+  ['c2: the status line is missing', cmts([withBody(marker())]).ok, false],
+  ['c2: the status line only inside an HTML comment', cmts([withBody(`<!-- ${LINE} -->\n${marker()}`)]).ok, false],
+  ['c2: the status line inside a multi-line HTML comment', cmts([withBody(`<!--\n${LINE}\n-->\n${marker()}`)]).ok, false],
+  ['c2: the status line must be a line of its own', cmts([withBody(`Note: ${LINE} (not really)\n${marker()}`)]).ok, false],
+  ['c2: two CodeRabbit comments with markers', cmts([sum(), sum({ id: 2 })]).ok, false],
+  ['c2: two markers in one comment', cmts([withBody(`${LINE}\n${marker()}\n${marker()}`)]).ok, false],
+  ['c2: a human quoting the whole comment beside the real one is ignored', cmts([sum(), sum({ id: 2, user: HUMAN })]).ok, true],
+  ['c2: malformed JSON in the marker', cmts([withBody(`${LINE}\n<!-- final_review_risk_coverage:{"sourceCommitId": -->`)]).ok, false],
+  ['c2: a marker that is JSON but not an object', cmts([withBody(`${LINE}\n<!-- final_review_risk_coverage:"${HEAD}" -->`)]).ok, false],
+  ['c2: a CodeRabbit comment with no marker is ignored', cmts([sum(), sum({ id: 2, body: 'Review rate limited.' })]).ok, true],
+  ['c2: the comments reply is not an array', [cmts({ message: 'rate limited' }).ok, cmts(undefined).ok, cmts(null).ok].join(), 'false,false,false'],
+  ['c2: a comment that is not an object refuses', cmts([sum(), null]).ok, false],
+  ['c2: a CHANGES_REQUESTED review at the head refuses beside a good marker', cmts([sum()], [review({ state: 'CHANGES_REQUESTED' })]).ok, false],
+  ['c2: a CHANGES_REQUESTED review at another head does not block', cmts([sum()], [review({ state: 'CHANGES_REQUESTED', commit_id: OLD })]).ok, true],
+  ['c2: ids compare case-insensitively', cmts([withBody(`${LINE}\n${marker({ sourceCommitId: HEAD.toUpperCase(), coveredCommitId: HEAD.toUpperCase() })}`)]).ok, true],
+  ['c2: ids that are not 40 hex refuse', cmts([withBody(`${LINE}\n${marker({ sourceCommitId: HEAD.slice(0, 8), coveredCommitId: HEAD.slice(0, 8) })}`)], [], HEAD.slice(0, 8)).ok, false],
+  ['c2: a submitted review at the head still satisfies (c) with no comments read', checkReviews([review()], HEAD, undefined).ok, true],
+  ['c2: the reasons name what was missing', [cmts([withBody(LINE)]).reason, cmts([withBody(marker())]).reason].map((r) => /marker/.test(r) ? 'marker' : /status line/.test(r) ? 'line' : r).join(), 'marker,line'],
+  ['c2: a bad review list still refuses even with a good comment', checkReviews({ message: 'x' }, HEAD, [sum()]).ok, false],
+  ['c2: d and e still run on the summary path', [all({ reviews: [], comments: [sum()], threads: [thread([comment(BOT, MAJOR)])] }).ok, all({ reviews: [], comments: [sum()], infos: [info(OLD), info(HEAD, 'mallory')] }).ok].join(), 'false,false'],
+  ['c2: a is still required on the summary path', all({ reviews: [], comments: [sum()], rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }).ok, false],
   // (d) severity and threads
   ['d: severity: Major and Critical are major', [MAJOR, '_⚠️ Potential issue_ | _🔴 Critical_\n\nx'].map(severityOf).join(), 'major,major'],
   ['d: severity: Minor, Trivial and Nitpick are low', [MINOR, '_🧹 Nitpick_ | _🔵 Trivial_\n\nx', '_🛠️ Refactor suggestion_ | _🟡 Minor_'].map(severityOf).join(), 'low,low,low'],

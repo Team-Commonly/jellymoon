@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: acp-tools record-acp e2e e2e-a worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -18,6 +18,15 @@ tools-cache:
 node_modules: package.json bun.lock
 	$(BUN) install --frozen-lockfile
 	@touch node_modules
+
+# The real Claude Code adapter for scripts/record-acp.mjs, pinned exactly, in this clone's own ignored prefix. Never global.
+ACP_ADAPTER := @agentclientprotocol/claude-agent-acp@0.99.1
+acp-tools:
+	npm install --prefix .tools/acp --ignore-scripts --save-exact --no-audit --no-fund $(ACP_ADAPTER)
+
+# Records a fresh daemon/testdata/acp/claude-slice.jsonl with a real Claude Code run (docs/development/record-acp.md).
+record-acp: acp-tools
+	$(BUN) scripts/record-acp.mjs
 
 # Regenerate every contract from schema/. Never hand-edit gen/, protocol/gen.go or docs/protocol.md.
 gen: node_modules

@@ -10,6 +10,7 @@
     "check:entropy": "bun scripts/check-entropy.mjs",
     "check:dead": "knip",
     "check:boundaries": "depcruise scripts gen podcore worker --config .dependency-cruiser.cjs",
+    "record:acp": "bun scripts/record-acp.mjs",
     "check:private": "bun scripts/check-private.mjs",
     "check:boundary-rule": "bun scripts/check-boundary-rule.mjs"
   },

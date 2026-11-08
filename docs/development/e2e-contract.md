@@ -172,6 +172,11 @@ The cost is serial server starts, not sleeps: the real sleeps in the whole suite
 2 s on a CI runner, and no two tests overlapped. The fake clock already replaces the long waits. The 60 s budget did not change;
 the Worker suite on the CI runner sat 0.3 s under it before PR 13 added one test and tipped it over.
 
+After the parallel run (same machine, same STEPS counts: 58/58 on the pod-state server, 61/61 on the Worker): pod-state 26.0 s to
+about 11 s (10.4 to 13.8 s over four runs, some under load 9 to 16), Worker 43.2 s to 10.0 s (10.0 to 15.2 s over four runs). With
+`GOMAXPROCS=4`, the slot count of a four-core CI runner, the Worker suite took 14.4 s at load 9. The cut is the overlap of server
+starts; no sleep, wait or assertion changed.
+
 ## Running in parallel
 
 The suite tests call `par(t)` right after `need`/`needFake`, so they run at the same time, up to `go test`'s `-parallel` (the CPU

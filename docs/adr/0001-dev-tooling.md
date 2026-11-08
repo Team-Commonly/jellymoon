@@ -38,9 +38,9 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | worker | 1,790 |
 | server | 1,800 |
 | daemon | 3,000 |
-| e2e | 4,650 |
+| e2e | 4,950 |
 
-The caps add up to 16,740 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 17,760 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -73,3 +73,4 @@ The caps add up to 16,740 lines. Agent-written comparables grew without bounds: 
 2026-11-08: the merge with main keeps main's core cap (3,720) and this branch's podcore (2,500), worker (1,790) and e2e (3,930) caps, all as they stand in entropy.json; no cap changes; the total is 14,940. F09.
 2026-11-08: server cap (new) 1,800, the pod-state server and its tests (ADR 0006) are 1,267 lines at the first green contract run; the cap is that count plus room for the tests the port still needs (the brief allows at most 3,000); the total is 15,700. No other cap changes. CPORT.
 2026-11-08: the merge of main (F09) into the pod-state server branch keeps main's worker (1,790) and e2e (3,930) caps and this branch's server (1,800) cap, all as they stand in entropy.json; no cap changes; the total is 16,740. CPORT.
+2026-11-08: e2e cap 4,650 → 4,950, the F15 sign-in test (a stub GitHub for the OAuth web flow and GET /user, a browser leg with a cookie jar, `jellymoon login` run as a black box, the state, next, CSRF, one-exchange and expiry refusals) takes the suite to 4,912 lines (the gate printed `LOC e2e 4912 / 4650` before this raise; the cap is that count plus a little for its fix pass, not 15%). The total was stated as 16,740 but the table added up to 17,460 (the server cap raise was never added to it); corrected, and with this raise the total is 17,760. No other cap changes. F15.

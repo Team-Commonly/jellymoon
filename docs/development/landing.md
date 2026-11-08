@@ -1,6 +1,6 @@
 # Landing a PR
 
-`make land PR=<n>` is the only merge path. Local verification is the authority; GitHub check runs are consulted only
+`make land PR=<n>` is the only merge path. Local verification is the authority, except that CI may stand in for the preflight (step 5); GitHub check runs are otherwise consulted only
 as a veto (step 3). It runs `scripts/land.mjs`; the decisions are pure functions in `scripts/land-decide.mjs` and the
 cases are in `scripts/check-land.mjs` and `scripts/check-land-scan.mjs`; the range scan itself is `scripts/land-scan.mjs`, and the CodeRabbit path's decisions are `scripts/land-coderabbit.mjs` (cases in `scripts/check-land-coderabbit.mjs`). Run it from a checkout of main with a clean tree: the accepted reviewers come from
 operator environment (`JM_VERDICT_REVIEWERS`), never from the repo. One land runs at a time **per clone**: an mkdir lock in that clone's git
@@ -162,13 +162,25 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    use the cache form). Land's refusal names this command. Without it,
    or with a `.tools` that fails the checks above, land refuses before the scan, naming the path. Without a module cache or network for gitleaks, `go run` fails, the scan reads as failed to
    run, and land refuses.
-5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
+5. A clean-shell preflight of what will land, unless CI already proved the same merge result (next paragraph). The preflight is: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
    merge --no-ff --no-edit <head>` (a conflict refuses; the PR's hooks never run), then `./init.sh` (which runs
    `make preflight`) under `env -i` with HOME and `TMPDIR` inside the throwaway dir and system dirs only on PATH.
    Hygiene, not isolation: stdin is `/dev/null`, the child runs in a new session (no controlling tty), its output is
    captured and printed with control characters stripped and every line prefixed `preflight| `, and its whole
    process group is killed when it returns. Cleanup never turns a pass into a refusal: the tree is made writable
    first, and a failed cleanup only warns naming the directory.
+   **Reading CI instead of the preflight.** The preflight is about ten minutes of heavy load per land and CI runs the same gates, so land
+   skips it when ALL of these hold, and otherwise runs it exactly as above (the reason is printed to stderr as `no CI proof (...)`):
+   - the tree of GitHub's merge ref for the PR (`merge_commit_sha` of `GET pulls/<n>`, its tree from `GET git/commits/<sha>`) equals the
+     merge-result tree the decision computed (`git merge-tree --write-tree` of main's tip and the head). Trees are compared, not SHAs. A merge
+     ref built on an older main has a different tree, so the skip is refused;
+   - every check the branch rules require (`GET rules/branches/main`, then classic protection when the rules name none; never the PR) has a
+     run on that ref that is `completed` with conclusion `success` (skipped, neutral, pending, failed and missing all refuse), and every run
+     of a required name was made by the GitHub Actions app (slug `github-actions`), so a same-named check from a user or another app refuses;
+   - every one of those reads worked: a rule list that cannot be read, or is empty, is no proof. The bootstrap land never skips.
+   The LANDED row and the run's output name the path: `CI proved merge tree <8>` or `local preflight`, so the two are countable.
+   `--preflight-only` (verifiers) is unchanged and always runs the preflight. The skip changes nothing else: the ledger, the head's CI veto,
+   the range scan, the CodeRabbit path and the pod verdict all run first, and the merge is still `--match-head-commit`.
 6. The ledger, CI, the range secret scan (run again) and the pod are read again and decided again, and the PR is re-read: the trust gate runs again, its base
    must still be `main` and its head the decided one, and main's tip is fetched once more and must equal the one tested. Then `gh pr merge --merge
    --match-head-commit <head>` (a merge commit; never squash, never `--delete-branch`) and a `LANDED` row. `gh` cannot

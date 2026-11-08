@@ -11,7 +11,7 @@ import { realRun } from './land.mjs';
 import {
   landedNote, mergeAction, mergeTree,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, requiredChecks, ciProof, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -323,6 +323,32 @@ cases.push(
     ['tag named main: refs/heads/main still gives the branch', fetched('refs/heads/main'), branchTip],
   );
   fs.rmSync(tdir2, { recursive: true, force: true });
+}
+
+// LPRE: CI proves the merge result, or the preflight runs.
+{
+  const T = 'b'.repeat(40);
+  const run = (name, o = {}) => ({ name, status: 'completed', conclusion: 'success', app: 'github-actions', ...o });
+  const proof = (o = {}) => ciProof({ required: ['a', 'b'], tree: T, ciTree: T, runs: [run('a'), run('b'), run('extra', { conclusion: 'failure' })], ...o });
+  const rule = (...ctx) => ({ type: 'required_status_checks', parameters: { required_status_checks: ctx.map((context) => ({ context })) } });
+  cases.push(
+    ['ci proof: tree match and every required check green by Actions skips the preflight, naming the tree', proof().ok && proof().note, `CI proved merge tree ${T.slice(0, 8)}`],
+    ['ci proof: a CI tree that is not the merge result runs the preflight', proof({ ciTree: 'c'.repeat(40) }).ok, false],
+    ['ci proof: no CI tree runs the preflight', proof({ ciTree: undefined }).ok, false],
+    ['ci proof: a pending required check runs the preflight', proof({ runs: [run('a'), run('b', { status: 'in_progress', conclusion: null })] }).ok, false],
+    ['ci proof: a skipped required check is not success', proof({ runs: [run('a'), run('b', { conclusion: 'skipped' })] }).ok, false],
+    ['ci proof: a neutral required check is not success', proof({ runs: [run('a'), run('b', { conclusion: 'neutral' })] }).ok, false],
+    ['ci proof: a failed required check runs the preflight', proof({ runs: [run('a'), run('b', { conclusion: 'failure' })] }).ok, false],
+    ['ci proof: a required check with no run runs the preflight', proof({ runs: [run('a')] }).ok, false],
+    ['ci proof: a same-named run from another app runs the preflight', proof({ runs: [run('a'), run('b', { app: 'evil-app' })] }).ok, false],
+    ['ci proof: a user-made run (no app) runs the preflight', proof({ runs: [run('a'), run('b', { app: null })] }).ok, false],
+    ['ci proof: an extra same-named run from another app beside a green Actions one runs the preflight', proof({ runs: [run('a'), run('b'), run('b', { app: 'evil-app' })] }).ok, false],
+    ['ci proof: runs cut short by paging run the preflight', proof({ total: 150 }).ok, false],
+    ['ci proof: an unreadable required list runs the preflight', [ciProof({ required: null, tree: T, ciTree: T, runs: [] }).ok, ciProof({ required: [], tree: T, ciTree: T, runs: [] }).ok].join(), 'false,false'],
+    ['required checks: read from every required_status_checks rule, deduped', requiredChecks({ rules: [rule('a', 'b'), { type: 'pull_request' }, rule('b', 'c')] }).join(), 'a,b,c'],
+    ['required checks: classic protection when the rules name none', requiredChecks({ rules: [{ type: 'pull_request' }], protection: { contexts: ['a'], checks: [{ context: 'a' }, { context: 'z' }] } }).join(), 'a,z'],
+    ['required checks: none anywhere is unreadable', requiredChecks({ rules: [] }), null],
+  );
 }
 
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);

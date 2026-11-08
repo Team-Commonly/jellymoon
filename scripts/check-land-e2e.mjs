@@ -296,6 +296,35 @@ await t('coderabbit gap: an unanswered Major thread refuses beside a gap', cr({ 
 await t('coderabbit gap: a failed comments read is no gap and refuses', cr({ reviews: '' }), (r) => no(r, /could not be read/) && !r.ledgerNow.includes('LANDED'));
 await t('coderabbit summary way: a review at the head settles (c) without reading the comments', cr(), (r) => r.merge && argv(r, 'gh', 'issues/5/comments').length === 0);
 await t('verifier path: unchanged, says so, reads nothing from CodeRabbit', {}, (r) => r.merge && r.said.includes('verifier PASS by opus-verifier') && r.ledgerNow.includes('admitted by verifier PASS by opus-verifier') && argv(r, 'gh', 'api graphql').length === 0 && argv(r, 'gh', 'pulls/5/reviews').length === 0);
+// LPRE: land reads CI instead of running the preflight only when CI proved the merge-result tree; every other case runs the preflight as before.
+const MREF = 'a'.repeat(40);
+const RULES = '{"type":"pull_request","parameters":{}}\n{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci","integration_id":15368}]}}';
+const crun = (o = {}) => ({ name: 'ci', status: 'completed', conclusion: 'success', app: 'github-actions', ...o });
+const ci = (o = {}) => ({ on: [
+  [/\/rules\/branches\/main/, () => { if (o.rules === null) throw fail; return o.rules ?? RULES; }],
+  [/\/branches\/main\/protection\/required_status_checks/, () => { throw fail; }],
+  [/\/pulls\/5 --jq/, JSON.stringify({ sha: o.mref === undefined ? MREF : o.mref })],
+  [/\/git\/commits\//, o.ciTree ?? TREE],
+  [new RegExp(`commits/${MREF}/check-runs`), JSON.stringify({ total: (o.runs ?? [crun()]).length, runs: o.runs ?? [crun()] })],
+], ...o.over });
+const skipped = (r) => r.merge && r.w.spawns.length === 0 && r.said.includes(`CI proved merge tree ${TREE.slice(0, 8)}`) && r.ledgerNow.includes(`CI proved merge tree ${TREE.slice(0, 8)}`);
+const local = (r, re) => r.merge && r.w.spawns.length === 1 && r.ledgerNow.includes('; local preflight') && re.test(r.said);
+await t('ci proof: tree match and every required check green by Actions lands without the preflight, and the note says so', ci(), skipped);
+await t('ci proof: the same with --dry-run says so and merges nothing', { ...ci(), argv: ['5', '--dry-run'] }, (r) => !r.merge && r.w.spawns.length === 0 && r.said.includes(`CI proved merge tree ${TREE.slice(0, 8)}`));
+await t('ci proof: the reads are GET only, the required list comes from the branch rules, and no preflight child ran', ci(), (r) => argv(r, 'gh', 'rules/branches/main').length === 1 && r.w.calls.filter((c) => c.cmd === 'gh' && /rules\/branches|pulls\/5 |git\/commits|check-runs/.test(c.args.join(' '))).every((c) => !c.args.some((a) => ['-X', '--method', '-f', '-F', '--input'].includes(a))));
+await t('ci proof: no CI read scripted (the default) runs the local preflight and the note says so', {}, (r) => local(r, /local preflight: merge result preflight green/));
+await t('ci proof: a merge ref built on an older main (tree differs) runs the local preflight', ci({ ciTree: OTHER }), (r) => local(r, /not the merge result/));
+await t('ci proof: a required check still pending runs the local preflight', ci({ runs: [crun({ status: 'in_progress', conclusion: null })] }), (r) => local(r, /not a successful Actions run/));
+await t('ci proof: a skipped required check runs the local preflight', ci({ runs: [crun({ conclusion: 'skipped' })] }), (r) => local(r, /skipped/));
+await t('ci proof: a neutral required check runs the local preflight', ci({ runs: [crun({ conclusion: 'neutral' })] }), (r) => local(r, /neutral/));
+await t('ci proof: a failed required check on the merge ref runs the local preflight', ci({ runs: [crun({ conclusion: 'failure' })] }), (r) => local(r, /completed, failure/));
+await t('ci proof: a required check missing from the runs runs the local preflight', ci({ runs: [crun({ name: 'other' })] }), (r) => local(r, /has no run on the merge ref/));
+await t('ci proof: an unreadable ruleset (and no classic protection) runs the local preflight', ci({ rules: null }), (r) => local(r, /CI could not be read/));
+await t('ci proof: a ruleset with no required checks runs the local preflight', ci({ rules: '{"type":"pull_request"}' }), (r) => local(r, /required checks could not be read/));
+await t('ci proof: a same-named check from another app runs the local preflight', ci({ runs: [crun({ app: 'some-other-app' })] }), (r) => local(r, /some-other-app/));
+await t('ci proof: a same-named check with no app (a user) runs the local preflight', ci({ runs: [crun({ app: null })] }), (r) => local(r, /no app/));
+await t('ci proof: no merge ref yet runs the local preflight', ci({ mref: null }), (r) => local(r, /no merge ref/));
+await t('ci proof: a failing local preflight still refuses after a CI read that did not prove', { ...ci({ ciTree: OTHER }), initCode: 1 }, (r) => no(r, /baseline preflight\) failed/));
 cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`)) || (c.args[1] === 'graphql' && c.args.includes('owner=Team-Commonly') && c.args.includes('name=jellymoon'))), true]);
 const bad = cases.filter(([, got, want]) => got !== want);
 for (const [n] of bad) console.error(`  ${n}`);

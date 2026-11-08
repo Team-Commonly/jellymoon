@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, scanEnv, takePage,
+  scrub, scanEnv, takePage, requiredChecks, ciProof,
 } from './land-decide.mjs';
 import { scanRange } from './land-scan.mjs';
 import { checkCodeRabbit, checkEarlierReview, checkReviews, threadPage } from './land-coderabbit.mjs';
@@ -225,6 +225,20 @@ async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
 }
 // The tree `merge-tree --write-tree` gives for main's tip plus the head: what the decision judged and the preflight must reproduce.
 const treeOf = (mainTip, head) => mergeTree((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
+// Reads CI instead of the preflight: the branch rules' required checks, the tree of GitHub's merge ref for the PR, and that ref's check runs. Any failed
+// read is no proof (ciProof refuses), never an error. GET only.
+function ciProved(n, tree) {
+  try {
+    const rules = jsonLines(gh('api', '--paginate', `repos/${REPO}/rules/branches/main?per_page=100`, '--jq', '.[]'));
+    let protection = null;
+    if (!requiredChecks({ rules })) { try { protection = JSON.parse(gh('api', `repos/${REPO}/branches/main/protection/required_status_checks`)); } catch { /* none or unreadable: no list */ } }
+    const sha = String(JSON.parse(gh('api', `repos/${REPO}/pulls/${n}`, '--jq', '{sha: .merge_commit_sha}')).sha);
+    if (!/^[0-9a-f]{40}$/.test(sha)) return { ok: false, reason: 'GitHub has no merge ref for the PR yet' };
+    const ciTree = gh('api', `repos/${REPO}/git/commits/${sha}`, '--jq', '.tree.sha');
+    const r = JSON.parse(gh('api', `repos/${REPO}/commits/${sha}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, status, conclusion, app: .app.slug}]}'));
+    return ciProof({ required: requiredChecks({ rules, protection }), tree, ciTree, runs: r.runs, total: r.total });
+  } catch (e) { return { ok: false, reason: `CI could not be read: ${why(e)}` }; }
+}
 const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
 const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only [--bootstrap]';
 // The checkout this runs from, checked before the first fetch (mainTip null) and again after it: a clean tree at main's tip (only --bootstrap may sit elsewhere), no credentials in its git config.
@@ -291,9 +305,12 @@ async function run(args, hold) {
   const head = pr.headRefOid.toLowerCase();
   const d = await decide(pr, mainTip);
   if (!d.ok) refuse(`#${n}: ${d.reason} (nothing merged)`);
-  const pf = await preflight(mainTip, head, opts.bootstrap, d.tree);
+  const proof = opts.bootstrap ? { ok: false, reason: 'the bootstrap land is judged by people' } : ciProved(n, d.tree); // the bootstrap land never skips
+  if (!proof.ok) console.error(`land: no CI proof (${proof.reason}); running the local preflight`);
+  const pf = proof.ok ? { ok: true, tree: d.tree } : await preflight(mainTip, head, opts.bootstrap, d.tree);
   if (!pf.ok) refuse(`#${n}: ${pf.reason} (nothing merged)`);
-  say(`#${n}: ok, ${[...d.notes, 'merge result preflight green'].join('; ')}`);
+  const route = proof.ok ? proof.note : 'local preflight';
+  say(`#${n}: ok, ${[...d.notes, proof.ok ? route : `${route}: merge result preflight green`].join('; ')}`);
   if (mergeAction({ dryRun: DRY }) === 'stop') return say(`dry run: would land #${n} (merge commit, main ${mainTip.slice(0, 8)}); merged nothing`);
   const again = await decide(pr, mainTip);
   if (!again.ok) refuse(`#${n}: ${again.reason} (changed before the merge; nothing merged)`);
@@ -306,7 +323,7 @@ async function run(args, hold) {
   gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
   const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
   const merged = sha === 'unknown' ? 'unknown' : (() => { try { fetchRef(sha); return out('git', ['rev-parse', `${sha}^{tree}`]); } catch { return 'unreadable'; } })();
-  const note = landedNote(sha, pf.tree, merged, d.via);
+  const note = landedNote(sha, pf.tree, merged, `${d.via}; ${route}`);
   if (pf.tree !== merged) console.error(`land: WARNING: #${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the base or main moved in the last window. It cannot be undone; look at it now.`);
   appendLedger(n, head, 'LANDED', 'land', note);
   if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');

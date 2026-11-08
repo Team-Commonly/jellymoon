@@ -298,6 +298,30 @@ export function checkCheckout({ head, mainTip, prHead = null, porcelain, remoteV
 export function mergeTree(run, mainTip, head) {
   try { return run(['merge-tree', '--write-tree', mainTip, head]).split('\n')[0].trim(); } catch { throw new Error(`${head.slice(0, 8)} does not merge cleanly into main ${mainTip.slice(0, 8)}`); }
 }
+// Skipping the local preflight (docs/development/landing.md, "Reading CI instead of the preflight"). Only when CI already ran the same gates on a ref whose tree
+// IS the merge result the decision computed, every check the branch rules require concluded success, and each such run was made by the Actions app. Anything
+// else, or anything unreadable, is no proof: the caller runs the preflight as before. requiredChecks takes the branch rules (an array of rule objects) and,
+// when they name none, classic protection ({ contexts, checks }); the list never comes from the PR.
+export function requiredChecks({ rules = [], protection = null }) {
+  const names = new Set();
+  for (const r of rules) if (r?.type === 'required_status_checks') for (const c of r.parameters?.required_status_checks ?? []) if (typeof c?.context === 'string') names.add(c.context);
+  if (!names.size && protection) for (const c of [...(protection.contexts ?? []), ...(protection.checks ?? []).map((k) => k?.context)]) if (typeof c === 'string') names.add(c);
+  return names.size ? [...names] : null;
+}
+// runs: [{ name, status, conclusion, app }] where app is the app slug. Every run of a required name must qualify, so a same-named run from another app refuses.
+export function ciProof({ required, tree, ciTree, runs, total = runs?.length }) {
+  const no = (reason) => ({ ok: false, reason: stripControls(reason) });
+  if (!Array.isArray(required) || !required.length) return no('the required checks could not be read from the branch rules');
+  if (!/^[0-9a-f]{40}$/.test(String(ciTree)) || ciTree !== tree) return no(`CI's merge ref (tree ${String(ciTree).slice(0, 8)}) is not the merge result (tree ${String(tree).slice(0, 8)})`);
+  if (!Array.isArray(runs) || total > runs.length) return no('the check runs on the merge ref could not all be read');
+  for (const name of required) {
+    const mine = runs.filter((r) => r.name === name);
+    if (!mine.length) return no(`required check ${name} has no run on the merge ref`);
+    const bad = mine.find((r) => r.app !== 'github-actions' || r.status !== 'completed' || r.conclusion !== 'success');
+    if (bad) return no(`required check ${name} is not a successful Actions run (${bad.app ?? 'no app'}, ${bad.status}, ${bad.conclusion ?? 'no conclusion'})`);
+  }
+  return { ok: true, note: `CI proved merge tree ${tree.slice(0, 8)}` };
+}
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
 export const stripControls = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g, '');

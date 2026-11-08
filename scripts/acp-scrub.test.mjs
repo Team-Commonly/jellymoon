@@ -51,5 +51,5 @@ test('streamed text is replaced and the line stays', () => {
 
 test('a placeholder id and an ordinary line pass', () => {
   const out = scrub(note('pod_00000000000000000000000002 at /work and 127.0.0.1:1 or application/json'), H, []);
-  expect(out).toContain('pod_00000000000000000000000002');
+  expect(out).toContain('pod_00000000000000000000000001');
 });

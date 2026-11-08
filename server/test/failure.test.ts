@@ -73,6 +73,9 @@ describe('a database that fails', () => {
     expect(again.pods.get(w.pod.id)?.state.claims[TASK] === undefined).toBe(true);
   });
 
+});
+
+describe('a database that fails mid-write', () => {
   test('a failed pod_create writes no row', async () => {
     const s = await setup();
     const owner = (await s.call('POST', '/__test/session', undefined, { name: 'o' })).json.user as Actor;

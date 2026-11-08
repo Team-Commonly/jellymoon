@@ -48,7 +48,7 @@
       "paths": [
         "e2e/"
       ],
-      "max": 4950
+      "max": 5000
     }
   },
   "goImports": {

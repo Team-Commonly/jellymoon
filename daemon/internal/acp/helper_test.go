@@ -42,9 +42,15 @@ func send(v map[string]any) {
 //	ask-other        on the prompt, make a request the client does not serve, record the error code, end the turn
 //	cancel           on the prompt, wait for session/cancel, then end the turn cancelled and exit
 //	deaf             on the prompt, ignore everything; a SIGTERM is recorded and ends it
+//	stubborn         like deaf, but it ignores SIGTERM, so only SIGKILL ends it before its 20 s are up
+//	exit-on-cancel   on session/cancel, exit without answering the prompt
+//	error-on-cancel  on session/cancel, answer the prompt with a JSON-RPC error
 func agentMain(mode, rec string) {
 	term := make(chan os.Signal, 1)
 	signal.Notify(term, syscall.SIGTERM)
+	if mode == "stubborn" {
+		signal.Ignore(syscall.SIGTERM)
+	}
 	go func() { <-term; note(rec, "term"); os.Exit(143) }()
 	sc := bufio.NewScanner(os.Stdin)
 	for sc.Scan() {
@@ -64,6 +70,13 @@ func agentMain(mode, rec string) {
 			send(map[string]any{"id": m.ID, "result": map[string]any{"sessionId": "sess_t"}})
 		case "session/cancel":
 			note(rec, "cancel")
+			switch mode {
+			case "error-on-cancel":
+				send(map[string]any{"id": 3, "error": map[string]any{"code": -32000, "message": "boom"}})
+				fallthrough
+			case "exit-on-cancel":
+				return
+			}
 			if mode == "cancel" {
 				time.Sleep(300 * time.Millisecond) // winding a turn down takes a moment, so a client that signals at once is caught
 				send(map[string]any{"id": 3, "result": map[string]any{"stopReason": "cancelled"}})
@@ -87,8 +100,8 @@ func agentMain(mode, rec string) {
 			}
 		}
 	}
-	for mode == "deaf" {
-		time.Sleep(time.Hour) // a stuck agent does not leave when its stdin closes
+	if mode == "deaf" || mode == "stubborn" {
+		time.Sleep(20 * time.Second) // a stuck agent does not leave when its stdin closes; this one gives up after 20 s
 	}
 }
 

@@ -269,10 +269,10 @@ async function ciLand(n, mainTip, head, tree) {
     const remote = remoteFor(out('git', ['remote', '-v']), REPO).remote;
     const there = out('git', ['ls-remote', remote, ref]).split(/\s+/)[0];
     if (there && !/^[0-9a-f]{40}$/.test(there)) return { ok: false, reason: `${ref} could not be read` };
-    // a leftover is reused when its tree is the merge result, else overwritten under a lease on exactly that commit
-    const reuse = !!there && gh('api', `repos/${REPO}/git/commits/${there}`, '--jq', '.tree.sha') === tree;
+    // A leftover is reused only when it IS the land commit: the merge tree AND exactly main's tip then the head as parents (dco reads the parents); else overwritten under a lease on it
+    const reuse = !!there && gh('api', `repos/${REPO}/git/commits/${there}`, '--jq', '([.tree.sha] + [.parents[].sha]) | join(" ")') === [tree, mainTip, head].join(' ');
     if (reuse) sha = there; else out('git', ['push', '--quiet', `--force-with-lease=${ref}:${there}`, remote, `${sha}:${ref}`]);
-    MADE = { remote, ref };
+    MADE = { remote, ref }; process.on('exit', ciClean); // Ctrl-C and kill end through process.exit (see the CLI), so the ref goes on signals too; a signal runs only after this block, so none lands between the push and MADE
   } catch (e) { return { ok: false, reason: `could not push ${ref}: ${why(e)}` }; }
   say(`#${n}: pushed ${sha.slice(0, 8)} to ${ref}; waiting for ${required.length} required checks`);
   const p = await ciWait(sha, tree, required);
@@ -281,7 +281,7 @@ async function ciLand(n, mainTip, head, tree) {
 }
 // Deletes the land ref this run made, and only that: a ref under refs/heads/land/. A failure is said and does not stop the land.
 function ciClean() {
-  const made = MADE;
+  process.off('exit', ciClean); const made = MADE;
   MADE = null; if (!made) return;
   try {
     if (!/^refs\/heads\/land\/\d+$/.test(made.ref)) throw new Error('not a land ref');

@@ -81,10 +81,10 @@ async function land(over = {}) {
   const [log, err] = [console.log, console.error];
   const said = [];
   console.log = (m) => said.push(m); console.error = (m) => said.push(m);
-  let error = null;
-  try { await main({ exec, run, fetch, spawn, sleep: async (ms) => { w.sleeps.push(ms); if (w.sleeps.length > 200) throw new Error('runaway wait'); }, kill, graceMs: over.graceMs ?? 20, limitMs: over.limitMs, env, argv: over.argv ?? ['5'], nodeVersion: over.node ?? '22.0.0', cwd, now: () => over.now ?? Date.now() }); } catch (e) { error = e.message; } finally { console.log = log; console.error = err; }
+  let error = null; const listeners = process.listenerCount('exit');
+  try { await main({ exec, run, fetch, spawn, sleep: async (ms) => { w.sleeps.push(ms); over.onSleep?.(w); if (w.sleeps.length > 200) throw new Error('runaway wait'); }, kill, graceMs: over.graceMs ?? 20, limitMs: over.limitMs, env, argv: over.argv ?? ['5'], nodeVersion: over.node ?? '22.0.0', cwd, now: () => over.now ?? Date.now() }); } catch (e) { error = e.message; } finally { console.log = log; console.error = err; }
   const merge = w.calls.find((c) => c.cmd === 'gh' && c.args[1] === 'merge');
-  w.doneAt = Date.now();
+  w.doneAt = Date.now(); w.exitListenersLeft = process.listenerCount('exit') - listeners;
   const res = { error, w, merge, said: said.join('\n'), ledgerNow: fs.readFileSync(ledger, 'utf8'), ledgerWas: over.ledger ?? HDR + rowOf('PASS'), lock: fs.existsSync(path.join(common, 'jm-land.lock')) };
   fs.rmSync(dir, { recursive: true, force: true });
   ALL.push(...w.calls);
@@ -306,6 +306,7 @@ const pending = crun({ status: 'in_progress', conclusion: null });
 const ci = (o = {}) => {
   let k = 0;
   const polls = o.polls ?? [[crun()]];
+  const reused = o.thereTree === TREE && sameArgs(o.thereParents ?? [MAIN, HEAD], [MAIN, HEAD]); // land reuses a leftover only for the merge tree AND parents main's tip, then the head
   return { on: [
     [/\/rules\/branches\/main/, () => { if (o.rules === null) throw fail; return o.rules ?? RULES; }],
     [/\/branches\/main\/protection\/required_status_checks/, () => { throw fail; }],
@@ -313,9 +314,9 @@ const ci = (o = {}) => {
     [new RegExp(`^git rev-parse ${LAND}\\^\\{tree\\}`), o.landTree ?? TREE],
     [/^git ls-remote /, o.there ? `${o.there}\t${LREF}` : ''],
     [/^git push /, (a) => { if (o.pushFails && !a.includes('--delete')) throw fail; if (o.deleteFails && a.includes('--delete')) throw fail; return ''; }],
-    ...(o.there ? [[new RegExp(`/git/commits/${o.there}`), o.thereTree ?? OTHER]] : []),
+    ...(o.there ? [[new RegExp(`/git/commits/${o.there}`), (a) => { if (o.thereUnreadable) throw fail; return a.some((x) => x.includes('.parents')) ? [o.thereTree ?? OTHER, ...(o.thereParents ?? [MAIN, HEAD])].join(' ') : (o.thereTree ?? OTHER); }]] : []),
     [new RegExp(`/git/commits/${LAND}`), () => o.ciTree ?? TREE],
-    [new RegExp(`commits/${o.thereTree === TREE ? o.there : LAND}/check-runs`), () => { if (o.runsFail) throw fail; const runs = polls[Math.min(k, polls.length - 1)]; k += 1; return JSON.stringify({ total: runs.length, runs }); }],
+    [new RegExp(`commits/${reused ? o.there : LAND}/check-runs`), () => { if (o.runsFail) throw fail; const runs = polls[Math.min(k, polls.length - 1)]; k += 1; return JSON.stringify({ total: runs.length, runs }); }],
   ], ...o.over };
 };
 const pushes = (r) => r.w.calls.filter((c) => c.cmd === 'git' && c.args[0] === 'push').map((c) => c.args);
@@ -344,6 +345,17 @@ await t('ci proof: GitHub\'s tree for the pushed land commit not the merge resul
 await t('ci proof: the delete only ever names the land ref, never the PR branch, even when the refusal comes later', { ...ci(), mainTips: [MAIN, OTHER] }, (r) => no(r, /main/i) && lastIs(r, DEL) && pushes(r).every((a) => !a.includes('feat') && !a.includes('refs/heads/feat') && !a.includes('main')));
 await t('ci proof: a leftover land ref with a different tree is overwritten under a lease on exactly that commit', ci({ there: 'd'.repeat(40) }), (r) => skipped(r) && sameArgs(pushes(r)[0], makeArgs('d'.repeat(40))));
 await t('ci proof: a leftover land ref with the same tree is reused, not pushed over, and still deleted', ci({ there: 'd'.repeat(40), thereTree: TREE }), (r) => r.merge && pushes(r).length === 1 && lastIs(r, DEL));
+await t('ci proof: a leftover land ref with the merge tree but other parents (the head differs) is overwritten under a lease, not reused', ci({ there: 'd'.repeat(40), thereTree: TREE, thereParents: [MAIN, OTHER] }), (r) => skipped(r) && sameArgs(pushes(r)[0], makeArgs('d'.repeat(40))) && pushes(r).length === 2);
+await t('ci proof: a leftover land ref with the merge tree but another base is overwritten under a lease, not reused', ci({ there: 'd'.repeat(40), thereTree: TREE, thereParents: [OTHER, HEAD] }), (r) => skipped(r) && sameArgs(pushes(r)[0], makeArgs('d'.repeat(40))));
+await t('ci proof: a leftover land ref with the merge tree and the parents swapped is overwritten (dco reads the order)', ci({ there: 'd'.repeat(40), thereTree: TREE, thereParents: [HEAD, MAIN] }), (r) => skipped(r) && sameArgs(pushes(r)[0], makeArgs('d'.repeat(40))));
+await t('ci proof: a leftover land ref with the merge tree and one parent only is overwritten', ci({ there: 'd'.repeat(40), thereTree: TREE, thereParents: [MAIN] }), (r) => skipped(r) && sameArgs(pushes(r)[0], makeArgs('d'.repeat(40))));
+await t('ci proof: a leftover land ref with the merge tree and a third parent is overwritten', ci({ there: 'd'.repeat(40), thereTree: TREE, thereParents: [MAIN, HEAD, OTHER] }), (r) => skipped(r) && sameArgs(pushes(r)[0], makeArgs('d'.repeat(40))));
+await t('ci proof: a leftover land ref whose commit cannot be read pushes nothing and runs the local preflight', ci({ there: 'd'.repeat(40), thereUnreadable: true }), (r) => local(r, /could not push/) && pushes(r).length === 0);
+await t('ci proof: an interrupt (SIGINT or SIGTERM exit) while waiting deletes the land ref at once, once, and leaves no listener behind', { ...ci({ polls: [[pending]] }), onSleep: (w) => { if (w.sleeps.length === 1) { process.emit('exit', 143); w.atInterrupt = w.calls.filter((c) => c.cmd === 'git' && sameArgs(c.args, DEL)).length; } } }, (r) => r.w.atInterrupt === 1 && r.w.sleeps.length > 1 && pushes(r).filter((a) => sameArgs(a, DEL)).length === 1 && r.w.exitListenersLeft === 0);
+await t('ci proof: an interrupt deletes only a refs/heads/land/<n> ref', { ...ci({ polls: [[pending]] }), onSleep: (w) => { if (w.sleeps.length === 1) { process.emit('exit', 130); w.atInterrupt = w.calls.filter((c) => c.cmd === 'git' && sameArgs(c.args, DEL)).length; } } }, (r) => r.w.atInterrupt === 1 && pushes(r).every((a) => !a.includes('--delete') || sameArgs(a, DEL)));
+await t('ci proof: no listener is left on exit after a normal land, a dry run or a refusal', ci(), (r) => r.w.exitListenersLeft === 0);
+await t('ci proof: the merged tree not the proven one (main moved under the merge) is recorded TREE-MISMATCH on the CI path, with the warning', { ...ci(), mergedTree: OTHER }, (r) => r.merge && r.w.spawns.length === 0 && r.ledgerNow.includes(`TREE-MISMATCH tested ${TREE} merged ${OTHER}`) && r.said.includes('is not the tested merge result'));
+await t('ci proof: the merged tree equal to the proven one carries no TREE-MISMATCH and no warning', ci(), (r) => r.merge && !r.ledgerNow.includes('TREE-MISMATCH') && !r.said.includes('is not the tested merge result'));
 await t('ci proof: a push that fails runs the local preflight and deletes nothing', ci({ pushFails: true }), (r) => local(r, /could not push/) && pushes(r).length === 1);
 await t('ci proof: unreadable check runs run the local preflight', ci({ runsFail: true }), (r) => local(r, /CI could not be read/) && lastIs(r, DEL));
 await t('ci proof: a ruleset that cannot be read pushes nothing and runs the local preflight', ci({ rules: null }), (r) => local(r, /required checks could not be read/) && pushes(r).length === 0);

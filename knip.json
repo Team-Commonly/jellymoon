@@ -12,11 +12,15 @@
     "podcore/test/**/*.test.ts",
     "worker/src/index.ts",
     "worker/src/test/index.ts",
-    "worker/test/**/*.test.ts"
+    "worker/test/**/*.test.ts",
+    "server/src/main.ts",
+    "server/src/pglite-template.ts",
+    "server/test/**/*.test.ts"
   ],
   "project": [
     "scripts/**/*.mjs",
     "worker/**/*.ts",
+    "server/**/*.ts",
     "e2e/**/*.ts",
     "podcore/**/*.ts"
   ],

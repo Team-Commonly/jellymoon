@@ -24,6 +24,7 @@ func (w *world) podPath(parts ...string) string {
 // release behave, and every way a claim ends sends one claim.released.
 func TestF10(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	r1, r2 := w.startRun(w.a1, "wake-1"), w.startRun(w.a2, "wake-2")
 	win := w.f10Race(r1, r2)
@@ -103,6 +104,7 @@ func (w *world) f10Release(win *run) {
 // TestOneReleasePerCause: for each cause, every member gets exactly one claim.released with that cause.
 func TestOneReleasePerCause(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	for _, cause := range causes {
 		w.scenario(cause)

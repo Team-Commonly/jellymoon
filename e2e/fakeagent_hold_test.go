@@ -12,6 +12,7 @@ import (
 // The fake agent in hold mode is the "will not leave on its own" agent that TestF09 relies on. Once it has its prompt and
 // nothing else runs it must stay up, not end with Go's "all goroutines are asleep" error, which is a way out.
 func TestFakeAgentHoldStaysUp(t *testing.T) {
+	par(t)
 	root, _ := filepath.Abs("..")
 	dir := t.TempDir()
 	bin, record := filepath.Join(dir, "fakeagent"), filepath.Join(dir, "rec.json")

@@ -3,6 +3,7 @@ import { messagePostCmd, memberAddCmd, podCreateCmd, taskCreateCmd, taskUpdateCm
 import { CALLER_TYPES, callerOf, isObj, own, renewRun, settle } from './claims';
 import { claimCmd, heartbeatCmd, opCmd, releaseCmd, runEndCmd, runStopCmd } from './commands';
 import { fail } from './emit';
+import { postCmd, toolCallCmd } from './post';
 import { computerOfflineCmd, computerOnlineCmd } from './presence';
 import { agentRegisterCmd, changeCmd, runClaimCmd, wakeAckCmd } from './wakes';
 import type { Cmd, Ctx, Out, PodState } from './types';
@@ -22,7 +23,7 @@ export const emptyPod = (podId: string): PodState => ({
 type Handlers = { [K in Cmd['type']]: (c: Ctx, cmd: Extract<Cmd, { type: K }>) => void };
 const HANDLERS: Handlers = {
   pod_create: podCreateCmd, member_add: memberAddCmd, agent_register: agentRegisterCmd,
-  task_create: taskCreateCmd, task_update: taskUpdateCmd, message_post: messagePostCmd,
+  task_create: taskCreateCmd, task_update: taskUpdateCmd, message_post: messagePostCmd, post: postCmd, tool_call: toolCallCmd,
   claim: claimCmd, op: opCmd, heartbeat: heartbeatCmd, task_release: releaseCmd, run_end: runEndCmd, run_stop: runStopCmd,
   change: changeCmd, wake_ack: wakeAckCmd, run_claim: runClaimCmd, computer_online: computerOnlineCmd, computer_offline: computerOfflineCmd,
   tick: () => undefined,
@@ -35,12 +36,12 @@ const MAX_NOW = 253_402_300_799_999;
 /** The string fields each command must carry; a missing or mistyped one would otherwise throw deep in a handler. */
 const STRINGS: Record<string, string[]> = {
   claim: ['runId', 'taskId'], op: ['runId'], heartbeat: ['computerId'], task_release: ['taskId'], run_end: ['runId', 'computerId'], run_stop: ['runId'],
-  pod_create: ['ownerId'], member_add: ['userId'], task_create: ['taskId', 'wakeId'], task_update: ['taskId', 'wakeId'], message_post: ['messageId', 'wakeId'],
+  pod_create: ['ownerId'], member_add: ['userId'], task_create: ['taskId', 'wakeId'], task_update: ['taskId', 'wakeId'], message_post: ['messageId', 'wakeId'], post: ['messageId', 'decisionId', 'wakeId'], tool_call: ['runId'],
   change: ['agentId', 'wakeId'], wake_ack: ['wakeId', 'computerId'], run_claim: ['wakeId', 'computerId', 'runId'], agent_register: ['agentId', 'ownerId', 'computerId'],
   computer_online: ['computerId'], computer_offline: ['computerId'],
 };
 /** Optional string fields: absent is fine, present must be a string (an array id would otherwise slip past the id checks). */
-const OPTIONAL: Record<string, string[]> = { op: ['taskId'], task_create: ['assignee'], task_update: ['assignee'] };
+const OPTIONAL: Record<string, string[]> = { op: ['taskId'], post: ['harness'], task_create: ['assignee'], task_update: ['assignee'] };
 const shapeBad = (cmd: Cmd): boolean => {
   const o = cmd as Record<string, unknown>;
   return (STRINGS[cmd.type] ?? []).some((k) => typeof o[k] !== 'string') || (OPTIONAL[cmd.type] ?? []).some((k) => o[k] !== undefined && typeof o[k] !== 'string') || (CALLER_TYPES.includes(cmd.type) && callerOf(cmd) === null) || (cmd.type === 'change' && !isObj(o.refs));

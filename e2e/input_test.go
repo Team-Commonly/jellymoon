@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -22,6 +23,7 @@ func post(over map[string]any) map[string]any {
 // is stored whole. Nothing is dropped or truncated (ADR 0003, "The adapter validates every Cmd against gen/").
 func TestInputValidation(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	w.refusedPosts()
 	r := w.startRun(w.a1, "report")
@@ -44,12 +46,7 @@ func (w *world) refusedPosts() {
 		{"unknown kind", post(map[string]any{"kind": "essay"})},
 		{"unknown status", post(map[string]any{"status": "bogus"})},
 		{"field only the server sets", post(map[string]any{"receipt": map[string]any{}})},
-		// The core stores a post as fyi/done with none of these; refusing them keeps a post from being stored as something it is not.
-		{"kind the core cannot store", post(map[string]any{"kind": "result"})},
-		{"status the core cannot store", post(map[string]any{"status": "blocked"})},
 		{"needs", post(map[string]any{"needs": map[string]any{"to": map[string]any{"role": "owner"}, "action": "review"}})},
-		{"caveat", post(map[string]any{"caveat": "unchecked"})},
-		{"links", post(map[string]any{"links": []any{}})},
 	}
 	for _, c := range refused {
 		w.wantErr(w.c.do("POST", w.podPath("messages"), w.owner.tok, c.body, nil), 400, "invalid_input", "post with "+c.name)
@@ -67,6 +64,32 @@ func (w *world) storedPosts(r *run) {
 	w.must(w.c.do("POST", msgs, w.owner.tok, post(map[string]any{"body": whole}), &posted), "post with a 16,384-character body")
 	if got := w.feedBody(posted.MessageID); !strings.HasSuffix(got, whole) {
 		t.Errorf("a 16,384-character body came back as %d characters, not whole", len(got))
+	}
+
+	// A kind other than fyi, a status other than done, a caveat and links are stored, and each is read back from the feed and compared
+	// field by field: everything sent is there exactly as sent, and the only other fields are the ones the pod sets.
+	podSets := map[string]bool{"id": true, "seq": true, "podId": true, "author": true, "createdAt": true}
+	for name, over := range map[string]map[string]any{
+		"kind result": {"kind": "result"}, "status blocked": {"status": "blocked"}, "a caveat": {"caveat": "unchecked"},
+		"links": {"links": []any{map[string]any{"label": "PR", "url": "https://example.com/pr/1", "type": "pr"}}},
+	} {
+		over["summary"] = "stored with " + name
+		sent := post(over)
+		var out struct {
+			MessageID string `json:"messageId"`
+		}
+		w.must(w.c.do("POST", msgs, w.owner.tok, sent, &out), "post with "+name)
+		got := w.feedMessage(out.MessageID)
+		for k, want := range sent {
+			if !reflect.DeepEqual(got[k], want) {
+				t.Errorf("post with %s: stored %s is %v, sent %v", name, k, got[k], want)
+			}
+		}
+		for k := range got {
+			if _, sentIt := sent[k]; !sentIt && !podSets[k] {
+				t.Errorf("post with %s: stored a field that was not sent: %s = %v", name, k, got[k])
+			}
+		}
 	}
 
 	// A run posts with its summary (it used to answer summary_required for every post).
@@ -111,6 +134,21 @@ func (w *world) feedMessages() []struct{ ID, Summary, Body string } {
 	}
 	w.must(w.c.do("GET", w.podPath("feed")+"?withBody=true&limit=50", w.owner.tok, nil, &out), "read the feed")
 	return out.Messages
+}
+
+// feedMessage reads one message back from the feed with its body, as the owner, as the raw fields the pod stored.
+func (w *world) feedMessage(id string) map[string]any {
+	var out struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	w.must(w.c.do("GET", w.podPath("feed")+"?withBody=true&limit=50", w.owner.tok, nil, &out), "read the feed")
+	for _, m := range out.Messages {
+		if m["id"] == id {
+			return m
+		}
+	}
+	w.t.Fatalf("message %s is not in the feed", id)
+	return nil
 }
 
 func (w *world) feedBody(id string) string {

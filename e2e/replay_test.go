@@ -19,6 +19,7 @@ func seqs(fs []Frame, upTo int64) (out []int64) {
 // N in order, with no gaps or duplicates. New events then continue after the old head.
 func TestReplayAcrossRestart(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	r := w.startRun(w.a1, "wake")
 	for _, text := range []string{"one", "two", "three"} {

@@ -92,6 +92,11 @@ type agentRec struct {
 	Prompt      json.RawMessage
 	Whoami      json.RawMessage
 	WhoamiError string
+	Calls       []struct {
+		Tool  string
+		Reply json.RawMessage
+		Error string
+	}
 }
 
 // set: the fake agent writes a field it has not learned yet as null.
@@ -317,6 +322,7 @@ func (f *f09) leaksNothing() error {
 // TestF09: on run.wake the daemon claims a run and starts the agent with a run token and the pod's MCP server.
 func TestF09(t *testing.T) {
 	needFake(t)
+	par(t)
 	track(t)
 	f := newF09(t)
 	record, held, scrubbed := filepath.Join(t.TempDir(), "agent.json"), filepath.Join(t.TempDir(), "held.json"), filepath.Join(t.TempDir(), "scrubbed.json")

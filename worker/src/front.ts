@@ -5,7 +5,7 @@ import type { Env } from './env';
 import { hashToken, newId, newInviteCode } from './ids';
 import { mcp } from './mcp';
 import { check } from './validate';
-import { bad, encodeWho, fail, parse, WHO_HEADER } from './wire';
+import { bad, encodeWho, fail, MCP_HEADER, parse, WHO_HEADER } from './wire';
 import type { Body, Who } from './wire';
 
 type Kind = Who['kind'];
@@ -28,10 +28,12 @@ export function internal(env: Env, podId: string, name: string, body: Body): Pro
   return stub(env, podId).fetch(`https://pod/_in/${name}`, { method: 'POST', body: JSON.stringify(body) });
 }
 
-function forward(env: Env, req: Request, podId: string, who: Who): Promise<Response> {
+function forward(env: Env, req: Request, podId: string, who: Who, viaMcp = false): Promise<Response> {
   const headers = new Headers(req.headers);
   headers.delete(WHO_HEADER);
   headers.set(WHO_HEADER, encodeWho(who));
+  headers.delete(MCP_HEADER);
+  if (viaMcp) headers.set(MCP_HEADER, '1');
   return stub(env, podId).fetch(new Request(req, { headers }));
 }
 
@@ -125,7 +127,7 @@ async function newComputer(env: Env, who: Who, body: Body): Promise<Response> {
 }
 
 /** Every public route. The test entry wraps this; the production entry is this alone. */
-export async function handle(req: Request, env: Env): Promise<Response> {
+export async function handle(req: Request, env: Env, viaMcp = false): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
   const m = req.method;
@@ -135,7 +137,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
   if (m === 'POST' && path === '/v1/runs') return setup(env, req, ['computer'], 'ClaimRunRequest', (w, b) => startRun(env, w, b, url.origin));
   if (m === 'POST' && path === '/mcp') {
     const g = await guard(env, req, ['run', 'user']);
-    return g instanceof Response ? g : mcp(req, url.origin, g.who, (r) => handle(r, env));
+    return g instanceof Response ? g : mcp(req, url.origin, g.who, (r) => handle(r, env, true), async (runId, podId) => (await internal(env, podId, 'tool-call', { runId })).ok);
   }
   const run = /^\/v1\/runs\/([^/]+)\/end$/.exec(path);
   if (m === 'POST' && run) return setup(env, req, ['computer'], 'EndRunRequest', (w, b) => endRun(env, w, b, run[1]));
@@ -155,7 +157,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
     if (hit === null) continue;
     const podId = hit[1];
     if (re.source.endsWith('/agents$')) return podCall(env, req, kinds, podId, (w) => registerAgent(env, req, podId, w));
-    return podCall(env, req, kinds, podId, (w) => forward(env, req, podId, w));
+    return podCall(env, req, kinds, podId, (w) => forward(env, req, podId, w, viaMcp));
   }
   return fail('not_found', 'No such route.');
 }

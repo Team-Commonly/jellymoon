@@ -77,6 +77,7 @@ func (w *world) reconnect() {
 // ADR 0002 says, and a second run's claim is still refused with the holder named.
 func TestEvictMidClaim(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	opened := w.clock // newWorld opened both computers' sockets at this clock, their last sign of life before the discard
 	r := w.startRun(w.a1, "wake")
@@ -135,6 +136,7 @@ func TestEvictMidClaim(t *testing.T) {
 // it had served by then, and the time the alarm had before it was moved.
 func TestEvictAlarmWake(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	r := w.startRun(w.a1, "wake")
 	tk := w.newTask("alarm", "")
@@ -227,6 +229,7 @@ func (w *world) membersReplay(tk Task, r *run, since, deadline int64) []*sock {
 // instance is a socket reconnect, which runs no command. The release must come from the restore itself (`boot`), once.
 func TestEvictPastDeadline(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	r := w.startRun(w.a1, "wake")
 	tk := w.newTask("past due", "")

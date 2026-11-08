@@ -132,6 +132,7 @@ func serverArgv(s *server) (string, error) {
 // since a test cannot see the run's last line: `make e2e-a` asserts it (see the Makefile).
 func TestF02(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sO.snapshot(0) }}
 	defer p.count(t)
@@ -146,6 +147,10 @@ func TestF02(t *testing.T) {
 		}
 		if tmp, _ := filepath.EvalSymlinks(os.TempDir()); !strings.HasPrefix(w.srv.dir, os.TempDir()) && !strings.HasPrefix(w.srv.dir, tmp) {
 			return fmt.Errorf("data dir %s is not under the temp dir %s", w.srv.dir, os.TempDir())
+		}
+		if stateInDatabase {
+			fmt.Printf("STEP PARTLY SKIPPED: the state is in the database, so %s holds no files by design; TestReplayAcrossRestart and TestRestartPastDeadline prove it persisted (docs/development/e2e-contract.md, \"Skipped on the server\")\n", state)
+			return nil
 		}
 		ents, err := os.ReadDir(state)
 		if err != nil || len(ents) == 0 {

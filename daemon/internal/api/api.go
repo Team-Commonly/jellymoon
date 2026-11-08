@@ -32,6 +32,15 @@ func CheckServer(raw string) (*url.URL, error) {
 	return &url.URL{Scheme: u.Scheme, Host: u.Host}, nil
 }
 
+// CheckMCP applies the same rule to the MCP URL a claim returns: protocol.md puts the check on the daemon, and it runs before
+// the run token is sent anywhere. It returns the URL as given, path included.
+func CheckMCP(raw string) (string, error) {
+	if _, err := CheckServer(raw); err != nil {
+		return "", fmt.Errorf("the MCP URL is refused: %w", err)
+	}
+	return raw, nil
+}
+
 // Client calls the Worker.
 type Client struct {
 	Base *url.URL
@@ -64,13 +73,24 @@ func (c *Client) post(path, token string, in, out any) error {
 		return fmt.Errorf("POST %s: %w", path, redact(err))
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		// Checked before the status or the body is looked at: a body that broke mid-read is not an empty success, and not a
+		// status error with the real cause missing.
+		return fmt.Errorf("POST %s: reading the response (HTTP %d): %w", path, resp.StatusCode, redact(err))
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var e protocol.ErrorBody
 		if json.Unmarshal(raw, &e) == nil {
 			return fmt.Errorf("POST %s: HTTP %d %s: %s", path, resp.StatusCode, e.Code, e.Message)
 		}
 		return fmt.Errorf("POST %s: HTTP %d", path, resp.StatusCode)
+	}
+	if out == nil {
+		return nil
+	}
+	if len(raw) == 0 {
+		return fmt.Errorf("POST %s: HTTP %d with an empty body, but a result is needed", path, resp.StatusCode)
 	}
 	return json.Unmarshal(raw, out)
 }
@@ -107,4 +127,15 @@ func (c *Client) RegisterAgent(computerToken, podID string, harness protocol.Har
 // PodSocket is the pod socket's URL, as an http(s) URL for the ws package to upgrade.
 func (c *Client) PodSocket(podID string) *url.URL {
 	return c.Base.JoinPath("v1", "pods", podID, "ws")
+}
+
+// ClaimRun claims the run a wake asks for. The response carries the run token: it goes to the agent and nowhere else.
+func (c *Client) ClaimRun(computerToken string, wakeID protocol.WakeID) (protocol.ClaimRunResponse, error) {
+	var out protocol.ClaimRunResponse
+	return out, c.post("/v1/runs", computerToken, protocol.ClaimRunRequest{WakeID: wakeID}, &out)
+}
+
+// EndRun tells the pod a run ended.
+func (c *Client) EndRun(computerToken string, runID protocol.RunID, outcome protocol.RunOutcome) error {
+	return c.post("/v1/runs/"+url.PathEscape(runID)+"/end", computerToken, protocol.EndRunRequest{Outcome: outcome}, nil)
 }

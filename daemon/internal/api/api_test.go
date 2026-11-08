@@ -55,3 +55,17 @@ func TestNoRedirects(t *testing.T) {
 		t.Errorf("err=%v, the redirect target was hit=%v; want an error and no hit", err, hit)
 	}
 }
+
+// The MCP URL a claim returns gets the server rule before the run token is sent: https, or http on localhost or 127.0.0.1.
+func TestCheckMCP(t *testing.T) {
+	for _, in := range []string{"https://mcp.example.com/mcp", "http://127.0.0.1:8787/mcp", "http://localhost/mcp"} {
+		if got, err := CheckMCP(in); err != nil || got != in {
+			t.Errorf("CheckMCP(%q) = %q, %v; want it accepted unchanged", in, got, err)
+		}
+	}
+	for _, in := range []string{"http://example.com/mcp", "http://localhost.evil.com/mcp", "http://127.0.0.1.evil.com/mcp", "ftp://example.com/mcp", "https://user:pw" + at + "example.com/mcp", "/mcp", ""} {
+		if got, err := CheckMCP(in); err == nil {
+			t.Errorf("CheckMCP(%q) accepted %q", in, got)
+		}
+	}
+}

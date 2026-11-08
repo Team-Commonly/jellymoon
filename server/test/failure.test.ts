@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Actor } from '../../gen/ts/protocol';
 import { buildApp } from '../src/app';
+import type { Db } from '../src/db';
 import { openDb } from '../src/db';
 import { Hub } from '../src/hub';
 import { PodRuntime } from '../src/pod';
@@ -73,6 +74,36 @@ describe('a database that fails', () => {
     expect(again.pods.get(w.pod.id)?.state.claims[TASK] === undefined).toBe(true);
   });
 
+});
+
+describe('a replay that fails', () => {
+  test('the subscription ends: a live event that landed meanwhile is not sent, and a later subscribe replays from its own sinceSeq', async () => {
+    const base = await openDb({});
+    const gate = { read: null as null | (() => void), failReads: true };
+    const db: Db = { ...base, rows: async (sql, params) => {
+      if (!gate.failReads || !sql.includes('from events')) return base.rows(sql, params);
+      await new Promise<void>((r) => { gate.read = r; });
+      throw new Error('db down');
+    } };
+    const w = await world(db);
+    const frames: string[] = [];
+    const conn = fakeConn({ kind: 'user', actor: w.olivia.user }, frames);
+    conn.subscribed = false;
+    w.rt.conns.add(conn);
+    const pending = w.rt.subscribe(conn, 0).then(() => 'ok', (e: unknown) => String(e));
+    await until(async () => gate.read !== null);
+    // A live event lands while the replay read is in flight; it is buffered for this connection.
+    const made = await w.rt.exec({ type: 'task_create', caller: { kind: 'user', userId: w.olivia.user.id }, taskId: 'tsk_00000000000000000000000002', title: 'live', kind: 'chore', wakeId: 'wak_00000000000000000000000002' });
+    expect(made?.ok).toBe(true);
+    gate.read?.();
+    expect(await pending).toContain('db down');
+    expect(frames.length).toBe(0);
+    expect(conn.subscribed).toBe(false);
+    expect(conn.buf.length).toBe(0);
+    gate.failReads = false;
+    await w.rt.subscribe(conn, 0);
+    expect(frames.some((f) => f.includes('"live"'))).toBe(true);
+  });
 });
 
 describe('a database that fails mid-write', () => {

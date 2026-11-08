@@ -141,15 +141,9 @@ func (d *Daemon) claim(a config.Agent, w protocol.RunWake) {
 }
 
 // runContext is the context one run lives in. It ends when the daemon stops, when a person stops the run (run.stop finds it by
-// run id) and at the run's deadline, the expiry of its run token. The cause says which. done releases it.
+// run id). execute adds the deadline, the expiry of the run token. The cause says which. done releases it.
 func (d *Daemon) runContext(c protocol.ClaimRunResponse) (context.Context, func()) {
 	ctx, cancel := context.WithCancelCause(d.ctx)
-	release := func() {}
-	if t, err := time.Parse(time.RFC3339, c.ExpiresAt); err == nil {
-		var stop context.CancelFunc
-		ctx, stop = context.WithDeadlineCause(ctx, t, errDeadline)
-		release = stop
-	}
 	d.mu.Lock()
 	d.runs[c.RunID] = cancel
 	d.mu.Unlock()
@@ -157,7 +151,6 @@ func (d *Daemon) runContext(c protocol.ClaimRunResponse) (context.Context, func(
 		d.mu.Lock()
 		delete(d.runs, c.RunID)
 		d.mu.Unlock()
-		release()
 		cancel(nil)
 	}
 }
@@ -176,6 +169,17 @@ func (d *Daemon) execute(ctx context.Context, a config.Agent, c protocol.ClaimRu
 	if err != nil {
 		return err
 	}
+	// The run token stops working at expiresAt, so the agent stops with it: a hung agent cannot outlive its credential. A
+	// timestamp that cannot be read means the token cannot be bounded, so the run is refused before the agent starts.
+	expires, err := time.Parse(time.RFC3339Nano, c.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("the claim's expiresAt %q is not a timestamp: %w", c.ExpiresAt, err)
+	}
+	if !time.Now().Before(expires) {
+		return fmt.Errorf("the claim expired at %s, before the agent could start", c.ExpiresAt)
+	}
+	ctx, cancel := context.WithDeadlineCause(ctx, expires, errDeadline) // inside the run's context, so a stop or a daemon stop still ends it first
+	defer cancel()
 	d.log.Printf("run %s: starting agent %s", c.RunID, a.AgentID)
 	return acp.Run(ctx, acp.Spec{
 		Command: cmd, Dir: dir, Env: agentEnv(), Prompt: c.Brief, Allow: a.AllowPermissions,

@@ -18,6 +18,11 @@ import (
 // HeartbeatEvery is docs/protocol.md's interval: three missed beats make the pod call the computer offline.
 const HeartbeatEvery = 15 * time.Second
 
+// ReadTimeout is how long a pod socket may be silent before the daemon drops it and dials again: three heartbeat intervals, the
+// same 45 s after which the pod marks the computer offline. The daemon pings with every heartbeat and the pod's pong (or any
+// other frame) restarts the clock, so a healthy idle socket never trips it, and a half-open one is gone within a minute.
+const ReadTimeout = 3 * HeartbeatEvery
+
 // Daemon is one computer.
 type Daemon struct {
 	api   *api.Client
@@ -32,6 +37,9 @@ type Daemon struct {
 	wg     sync.WaitGroup
 	ctx    context.Context
 	beat   func(*ws.Conn, []byte) error // sends a heartbeat; a test seam, nil means Conn.Send
+
+	readTimeout    time.Duration // how long a pod socket may stay silent; a test seam, zero means ReadTimeout
+	heartbeatEvery time.Duration // the heartbeat interval; a test seam, zero means HeartbeatEvery
 }
 
 // New makes a daemon for a stored computer.
@@ -81,25 +89,42 @@ func (d *Daemon) keep(podID protocol.PodID) {
 	for d.ctx.Err() == nil {
 		began := time.Now()
 		err := d.session(podID)
-		if time.Since(began) > time.Minute {
-			wait = time.Second
-		}
-		d.log.Printf("pod %s: socket ended (%v); reconnecting in %v", podID, err, wait)
+		sleep, next := backoff(wait, time.Since(began), d.readTimeoutOrDefault())
+		d.log.Printf("pod %s: socket ended (%v); reconnecting in %v", podID, err, sleep)
 		select {
 		case <-d.ctx.Done():
-		case <-time.After(wait):
+		case <-time.After(sleep):
 		}
-		wait = min(wait*2, 30*time.Second)
+		wait = next
 	}
 }
 
-// session is one connection: dial, heartbeat at once and then every 15 s, and read until the socket fails.
+// backoff is how long to wait before the next dial, and the wait after that. A connection that lived longer than one read
+// timeout was healthy (it survived at least one silent stretch), so it starts the wait over at 1 s; otherwise the wait doubles,
+// up to 30 s.
+func backoff(wait, lived, readTimeout time.Duration) (sleep, next time.Duration) {
+	if lived > readTimeout {
+		wait = time.Second
+	}
+	return wait, min(wait*2, 30*time.Second)
+}
+
+func (d *Daemon) readTimeoutOrDefault() time.Duration {
+	if d.readTimeout != 0 {
+		return d.readTimeout
+	}
+	return ReadTimeout
+}
+
+// session is one connection: dial, heartbeat and ping at once and then every 15 s, and read until the socket fails or goes
+// silent for ReadTimeout.
 func (d *Daemon) session(podID protocol.PodID) error {
 	conn, err := ws.Dial(d.ctx, d.api.PodSocket(podID), d.comp.Token)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
+	conn.ReadTimeout = d.readTimeoutOrDefault()
 	d.log.Printf("pod %s: connected", podID)
 	ctx, stop := context.WithCancel(d.ctx)
 	defer stop()
@@ -113,10 +138,18 @@ func (d *Daemon) session(podID protocol.PodID) error {
 	}
 	failed := make(chan error, 1)
 	go func() {
-		t := time.NewTicker(HeartbeatEvery)
+		every := d.heartbeatEvery
+		if every == 0 {
+			every = HeartbeatEvery
+		}
+		t := time.NewTicker(every)
 		defer t.Stop()
 		for {
-			if err := send(conn, d.heartbeat(podID)); err != nil {
+			err := send(conn, d.heartbeat(podID))
+			if err == nil {
+				err = conn.Ping() // its pong tells Read the path is still up
+			}
+			if err != nil {
 				failed <- err
 				stop() // closes conn, so the Read below returns and session reports this error
 				return

@@ -58,6 +58,11 @@ func (s Store) write(name string, v any) error {
 	if err != nil {
 		return err
 	}
+	return s.writeFile(name, raw)
+}
+
+// writeFile writes raw to a 0600 temp file in the dir and renames it over name.
+func (s Store) writeFile(name string, raw []byte) error {
 	tmp, err := os.CreateTemp(s.Dir, name+".tmp") // created 0600
 	if err != nil {
 		return err
@@ -120,6 +125,11 @@ func (s Store) AddAgent(a Agent) error {
 		}
 	}
 	return s.write("agents.json", append(list, a))
+}
+
+// SaveUserToken stores the jmu_ token `jellymoon login` got, where UserToken reads it: 0600, written whole and renamed.
+func (s Store) SaveUserToken(token string) error {
+	return s.writeFile("user-token", []byte(token+"\n"))
 }
 
 // UserToken reads the jmu_ token used once, to register the computer: the env var, else a 0600 file in the dir. Never argv.

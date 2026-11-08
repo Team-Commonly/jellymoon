@@ -37,6 +37,8 @@ func Main(args []string, stdout, stderr io.Writer) int {
 	switch {
 	case len(args) >= 2 && args[0] == "daemon" && args[1] == "start":
 		err = start(args[2:], stderr)
+	case len(args) == 1 && args[0] == "login":
+		err = login(stdout)
 	case len(args) >= 2 && args[0] == "agent" && args[1] == "add":
 		err = agentAdd(args[2:], stdout)
 	default:

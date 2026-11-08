@@ -81,6 +81,9 @@ export default {
     ready ??= prepare(env);
     await ready;
     const path = new URL(req.url).pathname;
-    return path.startsWith('/__test/') ? testRoute(req, env, path) : handle(req, env);
+    if (path.startsWith('/__test/')) return testRoute(req, env, path);
+    // The sign-in routes run in the Worker, not a pod, so they read the test clock here (a device code's expiry).
+    const clock = env.ENV === 'local' && path.startsWith('/v1/auth/') ? await env.DB.prepare("select v from kv where k = 'clock'").first<{ v: string }>() : null;
+    return handle(req, clock === null ? env : { ...env, CLOCK_MS: Number(clock.v) });
   },
 };

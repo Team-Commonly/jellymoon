@@ -108,17 +108,25 @@ func (c *conn) call(ctx context.Context, method string, params any) (json.RawMes
 		case m, ok := <-c.msgs:
 			switch {
 			case !ok:
-				return nil, fmt.Errorf("%s: the agent exited before it answered", method)
+				return nil, c.ended(ctx, fmt.Errorf("%s: the agent exited before it answered", method))
 			case m.Method != "" && m.ID != nil:
 				c.serve(m)
 			case m.Method == "" && string(m.ID) == strconv.Itoa(c.next):
 				if m.Error != nil {
-					return nil, fmt.Errorf("%s: agent error %d: %s", method, m.Error.Code, m.Error.Message)
+					return nil, c.ended(ctx, fmt.Errorf("%s: agent error %d: %s", method, m.Error.Code, m.Error.Message))
 				}
 				return m.Result, nil
 			}
 		}
 	}
+}
+
+// ended is err, unless the turn was already being abandoned: then however it ended, it ended for the cause that abandoned it.
+func (c *conn) ended(ctx context.Context, err error) error {
+	if c.cancelling {
+		return context.Cause(ctx)
+	}
+	return err
 }
 
 func lines(r io.Reader, done <-chan struct{}) <-chan message {

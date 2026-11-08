@@ -59,7 +59,10 @@ func (d *Daemon) listen() (net.Listener, error) {
 	return l, err
 }
 
-func (d *Daemon) serve(l net.Listener) {
+func (d *Daemon) serve(l net.Listener) { d.serveAs(l, uint32(os.Geteuid())) }
+
+// serveAs accepts connections; self is the uid they must come from.
+func (d *Daemon) serveAs(l net.Listener, self uint32) {
 	for {
 		c, err := l.Accept()
 		if err != nil {

@@ -5,12 +5,13 @@ import { claimCmd, heartbeatCmd, opCmd, releaseCmd, runEndCmd, runStopCmd } from
 import { fail } from './emit';
 import { postCmd, toolCallCmd } from './post';
 import { computerOfflineCmd, computerOnlineCmd } from './presence';
+import { ruleCmd } from './rule';
 import { agentRegisterCmd, changeCmd, runClaimCmd, wakeAckCmd } from './wakes';
 import type { Cmd, Ctx, Out, PodState } from './types';
 
 export type { Agent, Caller, Cmd, Out, PodState, Result, Run, RunClaimed, Wake } from './types';
 export { isoOf } from './time';
-export { LEASE_MS, RUN_CAP_MS, nextDeadline } from './claims';
+export { LEASE_MS, RUN_CAP_MS, nextDeadline, runLive } from './claims';
 export { WAKE_RESEND_MS } from './wakes';
 export { PRESENCE_STALE_MS, agentPresence } from './presence';
 export { nthWakeId } from './wakeid';
@@ -23,7 +24,7 @@ export const emptyPod = (podId: string): PodState => ({
 type Handlers = { [K in Cmd['type']]: (c: Ctx, cmd: Extract<Cmd, { type: K }>) => void };
 const HANDLERS: Handlers = {
   pod_create: podCreateCmd, member_add: memberAddCmd, agent_register: agentRegisterCmd,
-  task_create: taskCreateCmd, task_update: taskUpdateCmd, message_post: messagePostCmd, post: postCmd, tool_call: toolCallCmd,
+  task_create: taskCreateCmd, task_update: taskUpdateCmd, message_post: messagePostCmd, post: postCmd, tool_call: toolCallCmd, rule: ruleCmd,
   claim: claimCmd, op: opCmd, heartbeat: heartbeatCmd, task_release: releaseCmd, run_end: runEndCmd, run_stop: runStopCmd,
   change: changeCmd, wake_ack: wakeAckCmd, run_claim: runClaimCmd, computer_online: computerOnlineCmd, computer_offline: computerOfflineCmd,
   tick: () => undefined,
@@ -36,7 +37,7 @@ const MAX_NOW = 253_402_300_799_999;
 /** The string fields each command must carry; a missing or mistyped one would otherwise throw deep in a handler. */
 const STRINGS: Record<string, string[]> = {
   claim: ['runId', 'taskId'], op: ['runId'], heartbeat: ['computerId'], task_release: ['taskId'], run_end: ['runId', 'computerId'], run_stop: ['runId'],
-  pod_create: ['ownerId'], member_add: ['userId'], task_create: ['taskId', 'wakeId'], task_update: ['taskId', 'wakeId'], message_post: ['messageId', 'wakeId'], post: ['messageId', 'decisionId', 'wakeId'], tool_call: ['runId'],
+  pod_create: ['ownerId'], member_add: ['userId'], task_create: ['taskId', 'wakeId'], task_update: ['taskId', 'wakeId'], message_post: ['messageId', 'wakeId'], post: ['messageId', 'decisionId', 'wakeId'], tool_call: ['runId'], rule: ['decisionId', 'option', 'wakeId'],
   change: ['agentId', 'wakeId'], wake_ack: ['wakeId', 'computerId'], run_claim: ['wakeId', 'computerId', 'runId'], agent_register: ['agentId', 'ownerId', 'computerId'],
   computer_online: ['computerId'], computer_offline: ['computerId'],
 };
@@ -75,8 +76,9 @@ function refuse(c: Ctx, cmd: Cmd, bad: { code: 'invalid_input' | 'not_found'; wh
     const run = own(c.s.runs, caller.runId);
     if (run?.status !== 'active') return fail(c, 'unauthorized', 'This run has ended; its token no longer works.', caller.runId);
     renewRun(c, run.id);
-    // The one rule that depends on the caller alone: a run token cannot stop a run (operations.json), whatever it names.
+    // The rules that depend on the caller alone: a run token cannot stop a run (operations.json) or rule on an ask, whatever it names.
     if (cmd.type === 'run_stop') return fail(c, 'forbidden', 'A run cannot stop a run; only a person may.');
+    if (cmd.type === 'rule') return fail(c, 'forbidden', 'A run cannot rule; only a member may.');
   } else if (caller !== null && c.s.members.length > 0 && !c.s.members.some((m) => m.id === caller.userId)) return fail(c, 'forbidden', 'Only members of this pod may do this.');
   fail(c, bad.code, bad.why);
 }

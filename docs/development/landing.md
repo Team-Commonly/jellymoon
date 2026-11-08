@@ -1,6 +1,6 @@
 # Landing a PR
 
-`make land PR=<n>` is the only merge path. Local verification is the authority; GitHub check runs are consulted only
+`make land PR=<n>` is the only merge path. Local verification is the authority, except that CI may stand in for the preflight (step 5); GitHub check runs are otherwise consulted only
 as a veto (step 3). It runs `scripts/land.mjs`; the decisions are pure functions in `scripts/land-decide.mjs` and the
 cases are in `scripts/check-land.mjs` and `scripts/check-land-scan.mjs`; the range scan itself is `scripts/land-scan.mjs`, and the CodeRabbit path's decisions are `scripts/land-coderabbit.mjs` (cases in `scripts/check-land-coderabbit.mjs`). Run it from a checkout of main with a clean tree: the accepted reviewers come from
 operator environment (`JM_VERDICT_REVIEWERS`), never from the repo. One land runs at a time **per clone**: an mkdir lock in that clone's git
@@ -162,13 +162,35 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    use the cache form). Land's refusal names this command. Without it,
    or with a `.tools` that fails the checks above, land refuses before the scan, naming the path. Without a module cache or network for gitleaks, `go run` fails, the scan reads as failed to
    run, and land refuses.
-5. A clean-shell preflight of what will land: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
+5. A clean-shell preflight of what will land, unless CI already proved the same merge result (next paragraph). The preflight is: a throwaway worktree at main's tip, `git -c core.hooksPath=/dev/null
    merge --no-ff --no-edit <head>` (a conflict refuses; the PR's hooks never run), then `./init.sh` (which runs
    `make preflight`) under `env -i` with HOME and `TMPDIR` inside the throwaway dir and system dirs only on PATH.
    Hygiene, not isolation: stdin is `/dev/null`, the child runs in a new session (no controlling tty), its output is
    captured and printed with control characters stripped and every line prefixed `preflight| `, and its whole
    process group is killed when it returns. Cleanup never turns a pass into a refusal: the tree is made writable
    first, and a failed cleanup only warns naming the directory.
+   **Reading CI instead of the preflight.** The preflight is about ten minutes of heavy load per land, and GitHub's runner runs the same gates in
+   about two and a half. CI attaches its check runs to the commit it ran for (the PR head, or a pushed branch tip), so no run ever proves the merge
+   result of a PR. Land therefore asks CI to prove the exact merge commit, and runs the preflight only when that does not come back green:
+   - after the decision, land reads the required checks from the branch rules (`GET rules/branches/main`, then classic protection when the rules
+     name none; never the PR). If they cannot be read, or none is named, nothing is pushed and the preflight runs;
+   - it builds the merge commit locally, `git commit-tree <merge-result tree> -p <main tip> -p <head>`, authored by the checkout's configured git
+     identity, and refuses if that commit's tree is not the tree the decision computed (nothing is pushed);
+   - it pushes that commit to `refs/heads/land/<n>` (`ci.yml` runs on pushes to `land/**`; its `dco` job checks the commits between the commit's two
+     parents on such a push). The push is create-only (`--force-with-lease=<ref>:`); a leftover `land/<n>` is reused if its tree is the merge result,
+     else overwritten under a lease on exactly that commit. `--dry-run` builds the commit, pushes nothing, says what it would do, and runs the
+     preflight as before;
+   - it polls every 20 seconds, for at most 15 minutes, until every required check has a run on THAT commit that is `completed` with conclusion
+     `success`. Only runs by the GitHub Actions app (slug `github-actions`) count: a same-named run from another app or a user is ignored. A required
+     check that completed without success (failure, cancelled, skipped, neutral, timed out), the cap, an unreadable run list or a failed push means
+     no proof: the reason is printed to stderr as `no CI proof (...)` and the preflight runs exactly as above. GitHub's tree for the land commit
+     not being the merge result refuses outright;
+   - then the merge goes through the API as before, and the merged tree is compared with the tested one (the LANDED note shows a mismatch);
+   - `refs/heads/land/<n>` is deleted after the land, whether it landed, fell back or refused. Land only ever pushes or deletes a ref it builds with
+     `landRef` (`refs/heads/land/<digits>`), never the PR branch or any other. A failed delete is said and the land continues.
+   The bootstrap land never uses CI, and `--preflight-only` (verifiers) always runs the preflight. The LANDED row and the run's output name the
+   path: `CI proved merge tree <8>` or `local preflight (<why>)`, so the two are countable. The skip changes nothing else: the ledger, the head's CI
+   veto, the range scan, the CodeRabbit path and the pod verdict all run first, and the merge is still `--match-head-commit`.
 6. The ledger, CI, the range secret scan (run again) and the pod are read again and decided again, and the PR is re-read: the trust gate runs again, its base
    must still be `main` and its head the decided one, and main's tip is fetched once more and must equal the one tested. Then `gh pr merge --merge
    --match-head-commit <head>` (a merge commit; never squash, never `--delete-branch`) and a `LANDED` row. `gh` cannot
@@ -253,16 +275,19 @@ shape refuses.
   body starts with `<!-- coderabbit-ai-generated:v1 -->` and whose leading HTML-comment lines include
   `<!-- This is an auto-generated comment: summarize by coderabbit.ai -->`.
   - **A gap passes at once, with no ask and no wait:** no CodeRabbit review and no summary comment; a summary whose header says
-    `rate limited by coderabbit.ai` or `skip review by coderabbit.ai`; or a well-formed summary whose coverage marker names another commit.
+    `rate limited by coderabbit.ai` or `skip review by coderabbit.ai`; a summary with no readable `recent_review_status` block (CodeRabbit
+    stopped writing one, so its newer summaries have none), whatever else it holds; a summary whose coverage marker names another commit;
+    or one whose marker `kind` is anything but `"reviewed"` (such as `skipped`). Land still reads the reviews and the threads in every gap case.
     The output and the `LANDED` note say `no CodeRabbit review at this head`.
   - **A well-formed summary at the head passes, clean or not.** The one review already happened, and what it found is read by (d). Well-formed
-    means its status, walkthrough and risk blocks (`recent_review_status`, `walkthrough`, `final_review_risk` start and end delimiters, each
+    means its status (the block CodeRabbit's older summaries carry), walkthrough and risk blocks (`recent_review_status`, `walkthrough`, `final_review_risk` start and end delimiters, each
     once, in that order, fenced code ignored) are all there, and the one hidden `final_review_risk_coverage` marker sits inside the risk
     block, parses as JSON with no repeated key, and has `sourceCommitId` and `coveredCommitId` both equal to the head (40 hex, compared
     lower-case) and `kind` exactly `"reviewed"`.
   - **Still refuses, because the shape could be forged or is unreadable:** two or more summary comments; a coverage marker in any other
-    CodeRabbit comment (a reply or notice can repeat text other people chose); a missing block, a marker outside the risk block, two
-    markers, unparseable JSON, a repeated key, or a marker of another kind; a reviews or comments reply that is not a list.
+    CodeRabbit comment (a reply or notice can repeat text other people chose); with a status block present, a missing walkthrough or risk
+    block, a marker outside the risk block, two markers, unparseable JSON, a repeated key, or ids that are not the head's; a reviews or
+    comments reply that is not a list. A gap never excuses `CHANGES_REQUESTED` at the head or an unanswered Major or Critical thread.
   The land output says which way (c) was met.
 - **(d) No unanswered Major or Critical thread.** Land reads every review thread with the GraphQL `reviewThreads` query (100 per page, up
   to 20 pages, comments first 100 per thread; more than that refuses). A thread counts as CodeRabbit's when its first comment's author is

@@ -73,7 +73,12 @@ func (c *Client) post(path, token string, in, out any) error {
 		return fmt.Errorf("POST %s: %w", path, redact(err))
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		// Checked before the status or the body is looked at: a body that broke mid-read is not an empty success, and not a
+		// status error with the real cause missing.
+		return fmt.Errorf("POST %s: reading the response (HTTP %d): %w", path, resp.StatusCode, redact(err))
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var e protocol.ErrorBody
 		if json.Unmarshal(raw, &e) == nil {

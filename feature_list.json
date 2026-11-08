@@ -161,7 +161,7 @@
         "the agent calls jm_task_update done and members receive task.updated done"
       ],
       "test": "go test ./e2e -run TestF12",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F13",
@@ -233,18 +233,31 @@
       "id": "F18",
       "category": "client",
       "description": "A person uses the slice from the client chosen in the client options review",
-      "steps": ["defined after docs/design/client-options.md is reviewed with the product owner"],
-      "test": "TBD by the review",
-      "blockedBy": "client options review (docs/design/client-options.md)",
+      "steps": [
+        "the four slice screens (/device, /pod/:id, the needs-you queue as a filter on the same stream, /invite/:token) render inside one layout shell",
+        "/device approves a daemon's device code after GitHub sign-in",
+        "/pod/:id shows each card with its summary line, status and receipt chip, folded body and composer",
+        "the needs-you filter lists the open asks of the same stream, and a, 1..n and j/k work with the keyboard only",
+        "pressing a on an open ask makes the ruled state appear live over the WebSocket, with no reload",
+        "/invite/:token joins a teammate who has no install to the pod",
+        "the same specs pass at 390 and 1440 px, with no horizontal page scroll and no clipped text on any route"
+      ],
+      "test": "Playwright specs at 390 and 1440 px: sign-in and /device approval; open pod, see card, press a, ruled state appears live; invite link join; layout invariants on each route; keyboard approve driven by key presses, not clicks",
       "passes": false
     },
     {
       "id": "F19",
       "category": "connector",
       "description": "An agent reads Linear through a pod grant without ever holding the Linear token",
-      "steps": ["defined after docs/design/connector-options.md is reviewed with the product owner"],
-      "test": "TBD by the review",
-      "blockedBy": "connector options review (docs/design/connector-options.md)",
+      "steps": [
+        "against a stub Linear, a pod admin connects Linear and grants an agent read access through the pod",
+        "the agent reads Linear through the pod grant, and the result comes back to it",
+        "the Linear token is absent from every agent-visible payload: tool lists, results, errors and the run's env",
+        "a write call from the agent parks as a decision card with the exact arguments, and the stub Linear sees no write while it is parked",
+        "one approval releases exactly one upstream call; a rejection or expiry releases none",
+        "the receipt is stamped by the server and links the card, the approver and the result"
+      ],
+      "test": "go test ./e2e -run TestF19 (against a stub Linear)",
       "passes": false
     },
     {

@@ -38,14 +38,14 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | Area | Cap |
 |---|---|
 | core (`schema/`, `scripts/`) | 3,720 |
-| podcore | 2,500 |
+| podcore | 3,000 |
 | worker | 1,790 |
 | server | 1,800 |
 | daemon | 3,000 |
 | e2e | 4,650 |
 | web | 840 |
 
-The caps add up to 16,740 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 17,960 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -79,3 +79,5 @@ The caps add up to 16,740 lines. Agent-written comparables grew without bounds: 
 2026-11-08: server cap (new) 1,800, the pod-state server and its tests (ADR 0006) are 1,267 lines at the first green contract run; the cap is that count plus room for the tests the port still needs (the brief allows at most 3,000); the total is 15,700. No other cap changes. CPORT.
 2026-11-08: the merge of main (F09) into the pod-state server branch keeps main's worker (1,790) and e2e (3,930) caps and this branch's server (1,800) cap, all as they stand in entropy.json; no cap changes; the total is 16,740. CPORT.
 2026-11-08: web cap (new) 840, the web client package (shell, generated-type socket store, card model, key map and their tests, F18 PR 1) is 730 lines at the first green run; the cap is that count plus about 15%; the total is 17,580. No other cap changes. F18.
+2026-11-08: podcore cap 2,500 → 3,000, rulings on an ask (the `rule` command, the decision record an ask now keeps, and the tests that pin each refusal and the old-saved-state load) take the core to 2,585 lines (the gate printed `LOC podcore 2534 / 2500` with the tests alone, before this raise; the cap is that final count plus about 15%); the total is 17,960. No other cap changes. F12.
+2026-11-08: the merge with main keeps this branch's web (840) cap and main's podcore (3,000) cap, with the core (3,720), worker (1,790), server (1,800) and e2e (4,650) caps, all as they stand in entropy.json; no cap changes; the total is 18,800. F18.

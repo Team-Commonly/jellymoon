@@ -65,6 +65,7 @@ func agentMain(mode, rec string) {
 		case "session/cancel":
 			note(rec, "cancel")
 			if mode == "cancel" {
+				time.Sleep(300 * time.Millisecond) // winding a turn down takes a moment, so a client that signals at once is caught
 				send(map[string]any{"id": 3, "result": map[string]any{"stopReason": "cancelled"}})
 				return
 			}

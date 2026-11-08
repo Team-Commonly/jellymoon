@@ -263,6 +263,7 @@ func main() {
 			rec.Cancelled = true
 			save()
 			if f.cancel && pending != nil {
+				time.Sleep(300 * time.Millisecond) // winding a turn down takes a moment, so a client that signals at once is caught
 				reply(pending, map[string]any{"stopReason": "cancelled"})
 				return
 			}

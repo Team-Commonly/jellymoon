@@ -6,7 +6,7 @@
 // instead of jm_whoami, and records each reply under Calls. It never decides anything from a reply: a script is the whole of its behaviour),
 // "permission=<kind,kind>" (before the calls, ask the client's permission offering one option per kind, an option's id being its kind,
 // and record the answer under Permission), "cancel" (after the calls, wait for session/cancel, end the turn with stopReason cancelled and
-// exit) and "deaf" (after the calls, never end the turn and ignore session/cancel; a SIGTERM is recorded under Signalled and ends it).
+// exit) and "deaf" (after the calls, never end the turn and ignore session/cancel). In cancel and deaf modes a SIGTERM is recorded under Signalled and ends the agent.
 package main
 
 import (
@@ -45,7 +45,7 @@ type record struct {
 	Calls       []callRec
 	Permission  json.RawMessage
 	Cancelled   bool
-	Signalled   bool
+	Signalled   bool // SIGTERM arrived (cancel and deaf modes)
 }
 
 // callRec is one scripted MCP call and the server's whole answer to it.
@@ -193,6 +193,20 @@ func askPermission(sc *bufio.Scanner, kinds string) {
 	}
 }
 
+// doCalls is the agent's work in a turn: the permission request, then the scripted MCP calls or jm_whoami.
+func doCalls(sc *bufio.Scanner, f flags, prompt json.RawMessage) {
+	rec.Prompt = prompt
+	if f.permission != "" {
+		askPermission(sc, f.permission)
+	}
+	if f.script != "" {
+		script(rec.SessionNew, f.script)
+	} else {
+		whoami(rec.SessionNew)
+	}
+	save()
+}
+
 // onTerm records a SIGTERM and exits, so a test can tell an agent that was signalled from one that left on its own.
 func onTerm() {
 	term := make(chan os.Signal, 1)
@@ -214,7 +228,7 @@ func main() {
 	if f.hold {
 		signal.Ignore(syscall.SIGTERM)
 	}
-	if f.deaf {
+	if f.deaf || f.cancel {
 		onTerm()
 	}
 	rec.PID, rec.Argv, rec.Env = os.Getpid(), os.Args, os.Environ()
@@ -235,16 +249,7 @@ func main() {
 			rec.SessionNew = r.Params
 			reply(r.ID, map[string]any{"sessionId": "sess_fake"})
 		case "session/prompt":
-			rec.Prompt = r.Params
-			if f.permission != "" {
-				askPermission(sc, f.permission)
-			}
-			if f.script != "" {
-				script(rec.SessionNew, f.script)
-			} else {
-				whoami(rec.SessionNew)
-			}
-			save()
+			doCalls(sc, f, r.Params)
 			if f.hold {
 				stayUp()
 			}

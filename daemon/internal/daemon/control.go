@@ -94,7 +94,7 @@ func (d *Daemon) add(req AddRequest) (protocol.AgentID, error) {
 	}
 	// AddAgent reads, changes and rewrites agents.json, so one add at a time; watch takes d.mu again only after this.
 	d.mu.Lock()
-	err = d.store.AddAgent(config.Agent{PodID: req.PodID, AgentID: id, Harness: req.Harness, DisplayName: req.DisplayName})
+	err = d.store.AddAgent(config.Agent{PodID: req.PodID, AgentID: id, Harness: req.Harness, DisplayName: req.DisplayName, AllowPermissions: req.AllowPermissions})
 	d.mu.Unlock()
 	if err != nil {
 		return "", err

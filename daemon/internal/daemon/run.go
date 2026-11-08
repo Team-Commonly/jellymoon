@@ -1,10 +1,13 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Team-Commonly/jellymoon/daemon/internal/acp"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/api"
@@ -40,12 +43,39 @@ func agentEnv() []string {
 	return env
 }
 
-// onFrame handles one frame from a pod socket. Only run.wake matters here: it is acked, then claimed.
+// Why a run's context ended, as the cause the ACP client hands back. Only a stop makes the run `cancelled`.
+var (
+	errStopped  = errors.New("the run was stopped")
+	errDeadline = errors.New("the run reached its deadline")
+)
+
+// onFrame handles one frame from a pod socket. run.wake is acked, then claimed; run.stop cancels that run's session.
 func (d *Daemon) onFrame(conn *ws.Conn, raw []byte) {
 	var env protocol.Envelope
-	if json.Unmarshal(raw, &env) != nil || env.Type != protocol.EventTypeRunWake {
+	if json.Unmarshal(raw, &env) != nil {
 		return
 	}
+	switch env.Type {
+	case protocol.EventTypeRunWake:
+		d.onWake(conn, env)
+	case protocol.EventTypeRunStop:
+		var s protocol.RunStop
+		if json.Unmarshal(env.Data, &s) != nil {
+			d.log.Printf("pod %s: unreadable run.stop", env.PodID)
+			return
+		}
+		d.mu.Lock()
+		cancel := d.runs[s.RunID]
+		d.mu.Unlock()
+		if cancel != nil { // a run that is not running here (ended, or claimed by nobody yet) has nothing to cancel
+			d.log.Printf("run %s: stopped", s.RunID)
+			cancel(errStopped)
+		}
+	}
+}
+
+// onWake acks a run.wake and starts its run.
+func (d *Daemon) onWake(conn *ws.Conn, env protocol.Envelope) {
 	var w protocol.RunWake
 	if err := json.Unmarshal(env.Data, &w); err != nil {
 		d.log.Printf("pod %s: unreadable run.wake: %v", env.PodID, err)
@@ -93,11 +123,16 @@ func (d *Daemon) claim(a config.Agent, w protocol.RunWake) {
 		d.log.Printf("wake %s: not claimed: %v", w.WakeID, err)
 		return
 	}
+	ctx, done := d.runContext(c)
 	outcome := protocol.RunOutcomeCompleted
-	if err := d.execute(a, c); err != nil {
+	if err := d.execute(ctx, a, c); err != nil {
 		d.log.Printf("run %s: %v", c.RunID, strings.ReplaceAll(err.Error(), c.RunToken, "[run token]"))
 		outcome = protocol.RunOutcomeFailed
+		if errors.Is(err, errStopped) {
+			outcome = protocol.RunOutcomeCancelled // ADR 0002: a stopped run ends cancelled; a deadline or a daemon stop is a failure
+		}
 	}
+	done()
 	if err := d.api.EndRun(d.comp.Token, c.RunID, outcome); err != nil {
 		d.log.Printf("run %s: not ended: %v", c.RunID, err)
 		return
@@ -105,8 +140,30 @@ func (d *Daemon) claim(a config.Agent, w protocol.RunWake) {
 	d.log.Printf("run %s ended %s", c.RunID, outcome)
 }
 
+// runContext is the context one run lives in. It ends when the daemon stops, when a person stops the run (run.stop finds it by
+// run id) and at the run's deadline, the expiry of its run token. The cause says which. done releases it.
+func (d *Daemon) runContext(c protocol.ClaimRunResponse) (context.Context, func()) {
+	ctx, cancel := context.WithCancelCause(d.ctx)
+	release := func() {}
+	if t, err := time.Parse(time.RFC3339, c.ExpiresAt); err == nil {
+		var stop context.CancelFunc
+		ctx, stop = context.WithDeadlineCause(ctx, t, errDeadline)
+		release = stop
+	}
+	d.mu.Lock()
+	d.runs[c.RunID] = cancel
+	d.mu.Unlock()
+	return ctx, func() {
+		d.mu.Lock()
+		delete(d.runs, c.RunID)
+		d.mu.Unlock()
+		release()
+		cancel(nil)
+	}
+}
+
 // execute runs the agent for a claimed run. The MCP URL is checked before the run token goes anywhere near the agent.
-func (d *Daemon) execute(a config.Agent, c protocol.ClaimRunResponse) error {
+func (d *Daemon) execute(ctx context.Context, a config.Agent, c protocol.ClaimRunResponse) error {
 	mcpURL, err := api.CheckMCP(c.MCPURL)
 	if err != nil {
 		return err
@@ -120,8 +177,9 @@ func (d *Daemon) execute(a config.Agent, c protocol.ClaimRunResponse) error {
 		return err
 	}
 	d.log.Printf("run %s: starting agent %s", c.RunID, a.AgentID)
-	return acp.Run(d.ctx, acp.Spec{
-		Command: cmd, Dir: dir, Env: agentEnv(), Prompt: c.Brief,
+	return acp.Run(ctx, acp.Spec{
+		Command: cmd, Dir: dir, Env: agentEnv(), Prompt: c.Brief, Allow: a.AllowPermissions,
+		Logf:    func(f string, args ...any) { d.log.Printf("run %s: "+f, append([]any{c.RunID}, args...)...) },
 		Servers: []acp.MCPServer{{Type: "http", Name: "jellymoon", URL: mcpURL, Headers: []acp.Header{{Name: "Authorization", Value: "Bearer " + c.RunToken}}}},
 	})
 }

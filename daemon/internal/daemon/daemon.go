@@ -28,6 +28,7 @@ type Daemon struct {
 	mu     sync.Mutex
 	pods   map[protocol.PodID]bool
 	waking map[protocol.WakeID]bool
+	runs   map[protocol.RunID]context.CancelCauseFunc // the runs in progress, so run.stop can reach them
 	wg     sync.WaitGroup
 	ctx    context.Context
 	beat   func(*ws.Conn, []byte) error // sends a heartbeat; a test seam, nil means Conn.Send
@@ -35,7 +36,7 @@ type Daemon struct {
 
 // New makes a daemon for a stored computer.
 func New(a *api.Client, s config.Store, c config.Computer, l *log.Logger) *Daemon {
-	return &Daemon{api: a, store: s, comp: c, log: l, pods: map[protocol.PodID]bool{}, waking: map[protocol.WakeID]bool{}}
+	return &Daemon{api: a, store: s, comp: c, log: l, pods: map[protocol.PodID]bool{}, waking: map[protocol.WakeID]bool{}, runs: map[protocol.RunID]context.CancelCauseFunc{}}
 }
 
 // Run keeps a socket open to every pod in the stored agent list until ctx ends, and serves `agent add` on the control socket.

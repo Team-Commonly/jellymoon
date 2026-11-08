@@ -132,6 +132,7 @@ func serverArgv(s *server) (string, error) {
 // since a test cannot see the run's last line: `make e2e-a` asserts it (see the Makefile).
 func TestF02(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sO.snapshot(0) }}
 	defer p.count(t)

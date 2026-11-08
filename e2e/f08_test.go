@@ -14,8 +14,7 @@ import (
 	"time"
 )
 
-// The daemon under test is the repo's own jellymoon binary, built into a temp dir and run as a black box: its argv, its
-// environment, its config dir (JELLYMOON_HOME) and its output (docs/development/e2e-contract.md).
+// The daemon under test is the repo's own jellymoon binary, built into a temp dir and run as a black box: argv, env (JELLYMOON_HOME), output.
 // dproc is one daemon or CLI process in its own process group, with its output captured.
 type dproc struct {
 	cmd  *exec.Cmd
@@ -371,6 +370,7 @@ func (f *f08) restoredPodIsHonest() error {
 // TestF08: the daemon registers its computer and an agent, and the pod shows the agent online and then offline.
 func TestF08(t *testing.T) {
 	needFake(t)
+	par(t)
 	track(t)
 	f := newF08(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return f.obs[0].snapshot(0) }}

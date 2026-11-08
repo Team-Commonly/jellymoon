@@ -10,6 +10,7 @@ import (
 // TestF03: a seeded user creates a pod and gets hello as its first pod WebSocket frame.
 func TestF03(t *testing.T) {
 	need(t)
+	par(t)
 	track(t)
 	srv := startServer(t)
 	c := newClient(t, srv.base())

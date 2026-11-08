@@ -119,6 +119,7 @@ func (w *world) evictSteps(p *stepper, head int64) {
 // TestF04: live fan-out, then a reconnect from sinceSeq with no gaps, then the same across a full restart.
 func TestF04(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sCara.snapshot(0) }}
 	var first int64

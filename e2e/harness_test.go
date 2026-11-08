@@ -38,6 +38,19 @@ var (
 	outcomes sync.Map // test name -> failed bool
 )
 
+// suiteWG counts the parallel suite tests that have started and not yet finished (cleanups included); the budget test waits on it.
+var suiteWG sync.WaitGroup
+
+// par runs the test in parallel with the others. Every test that calls it owns its server, its data dir and its pod, so
+// nothing is shared but the process: two tests that shared a pod would see each other's events. Call it right after need.
+// The budget test waits for every test that called it, so it still judges the whole run.
+func par(t *testing.T) {
+	t.Helper()
+	suiteWG.Add(1)
+	t.Cleanup(suiteWG.Done) // registered first, so it runs last: after track's outcome and the server's kill
+	t.Parallel()
+}
+
 func TestMain(m *testing.M) {
 	// staleMs is 0 (ADR 0003, "What an adapter must do", item 5): every command is persisted, heartbeats included.
 	// The knob that once widened the early-expiry bound is gone, and a value other than 0 is an error, not ignored.

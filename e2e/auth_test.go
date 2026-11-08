@@ -6,6 +6,7 @@ import "testing"
 // before the pod is even looked at; on its own pod's routes it works.
 func TestRunTokenOtherPod(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	r := w.startRun(w.a1, "own pod")
 	var other struct {

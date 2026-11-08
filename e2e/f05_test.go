@@ -36,6 +36,7 @@ func (w *world) onlyMembers(want ...user) error {
 // TestF05: invites add members; a used invite is refused with 410 and a non-member cannot invite.
 func TestF05(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sO.snapshot(0) }}
 	dana, eli, fay := w.session("dana"), w.session("eli"), w.session("fay")

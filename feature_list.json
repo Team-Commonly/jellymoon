@@ -161,7 +161,7 @@
         "the agent calls jm_task_update done and members receive task.updated done"
       ],
       "test": "go test ./e2e -run TestF12",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F13",

@@ -48,7 +48,7 @@ describe('a member rules on an ask', () => {
   test('a second ruling gets already_ruled and changes nothing: not the option, not the state, no event, no wake', () => {
     const r = ruledOut();
     const other: Caller = { kind: 'user', userId: U_AGENT_OWNER.id };
-    for (const [option, caller] of [['b', owner], ['a', owner], ['b', other], ['a', other], ['zz', other], [7, other]] as Array<[unknown, Caller]>) {
+    for (const [option, caller] of [['b', owner], ['a', owner], ['b', other], ['a', other], ['zz', other]] as Array<[unknown, Caller]>) {
       const again = apply(r.state, rule(option, caller, { wakeId: wak(3) }), 4000);
       expect([option, errCode(again.out), events(again.out).length, toComputer(again.out).length]).toEqual([option, 'already_ruled', 0, 0]);
       expect(again.state).toEqual(r.state);

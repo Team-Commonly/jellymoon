@@ -37,7 +37,8 @@ type Daemon struct {
 	ctx    context.Context
 	beat   func(*ws.Conn, []byte) error // sends a heartbeat; a test seam, nil means Conn.Send
 
-	readTimeout time.Duration // how long a pod socket may stay silent; a test seam, zero means ReadTimeout
+	readTimeout    time.Duration // how long a pod socket may stay silent; a test seam, zero means ReadTimeout
+	heartbeatEvery time.Duration // the heartbeat interval; a test seam, zero means HeartbeatEvery
 }
 
 // New makes a daemon for a stored computer.
@@ -124,7 +125,11 @@ func (d *Daemon) session(podID protocol.PodID) error {
 	}
 	failed := make(chan error, 1)
 	go func() {
-		t := time.NewTicker(HeartbeatEvery)
+		every := d.heartbeatEvery
+		if every == 0 {
+			every = HeartbeatEvery
+		}
+		t := time.NewTicker(every)
 		defer t.Stop()
 		for {
 			err := send(conn, d.heartbeat(podID))

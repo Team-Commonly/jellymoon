@@ -1,7 +1,7 @@
 // Every pod in the process, the directory (users, computers), token lookup, the clock and the one timer.
 import type { Actor } from '../../gen/ts/protocol';
 import { emptyPod } from '../../podcore/src/index';
-import type { Db } from './db';
+import type { Db, Tx } from './db';
 import { openDb } from './db';
 import type { DbEnv } from './db';
 import { hashToken, newId, newToken } from './ids';
@@ -17,6 +17,8 @@ export type Principal =
 
 const PREFIX: Record<string, 'user' | 'computer' | 'run'> = { jmu_: 'user', jmc_: 'computer', jmr_: 'run' };
 const MAX_TIMER = 2 ** 31 - 1;
+/** The wait before a failed tick is tried again, so a database that is down is not hammered. */
+const RETRY_MS = 500;
 
 const actorOf = (u: UserRow): Actor => ({ kind: 'human', id: u.id, displayName: u.name });
 
@@ -86,21 +88,21 @@ export class Hub {
 
   async createUser(name: string): Promise<{ token: string; user: Actor }> {
     const u: UserRow = { id: newId('usr_'), name };
-    await saveUser(this.db, u);
+    const token = await this.db.tx(async (t) => { await saveUser(t, u); return this.mint(t, 'jmu_', 'user', u.id); });
     this.users.set(u.id, u);
-    return { token: await this.mint('jmu_', 'user', u.id), user: actorOf(u) };
+    return { token, user: actorOf(u) };
   }
 
   async createComputer(userId: string, name: string, os: string, arch: string): Promise<{ computerId: string; token: string }> {
     const c: ComputerRow = { id: newId('cmp_'), userId, name, os, arch };
-    await saveComputer(this.db, c);
+    const token = await this.db.tx(async (t) => { await saveComputer(t, c); return this.mint(t, 'jmc_', 'computer', c.id); });
     this.computers.set(c.id, c);
-    return { computerId: c.id, token: await this.mint('jmc_', 'computer', c.id) };
+    return { computerId: c.id, token };
   }
 
-  private async mint(prefix: string, kind: string, subject: string): Promise<string> {
+  private async mint(t: Tx, prefix: string, kind: string, subject: string): Promise<string> {
     const token = newToken(prefix);
-    await this.db.tx((t) => saveToken(t, hashToken(token), kind, subject));
+    await saveToken(t, hashToken(token), kind, subject);
     return token;
   }
 
@@ -128,18 +130,28 @@ export class Hub {
   private async tickDue(): Promise<void> {
     const now = this.now();
     const due = [...this.pods.values()].filter((p) => p.deadline !== null && p.deadline <= now);
-    await Promise.all(due.map((p) => p.exec({ type: 'tick' })));
-    this.rearm();
+    let failed = false;
+    try {
+      const done = await Promise.allSettled(due.map((p) => p.exec({ type: 'tick' })));
+      done.forEach((d, i) => {
+        if (d.status === 'fulfilled') return;
+        failed = true;
+        console.error('tick failed for pod', due[i].id, d.reason);
+      });
+    } finally {
+      // A pod whose write failed keeps its old deadline, so the re-armed timer retries it. The timer must never end up unarmed.
+      this.rearm(failed ? RETRY_MS : 0);
+    }
   }
 
-  /** One timer, armed at the earliest deadline of any pod; re-armed after every command. A fixed clock never fires it. */
-  rearm(): void {
+  /** One timer, armed at the earliest deadline of any pod; re-armed after every command. A fixed clock never fires it. `least` is the shortest wait. */
+  rearm(least = 0): void {
     clearTimeout(this.timer);
     this.timer = undefined;
     if (this.fixed !== null) return;
     let next: number | null = null;
     for (const p of this.pods.values()) if (p.deadline !== null && (next === null || p.deadline < next)) next = p.deadline;
     if (next === null) return;
-    this.timer = setTimeout(() => { this.timer = undefined; this.tickDue().catch((e) => console.error('tick failed', e)); }, Math.min(Math.max(0, next - this.now()), MAX_TIMER));
+    this.timer = setTimeout(() => { this.timer = undefined; this.tickDue().catch((e) => console.error('tick failed', e)); }, Math.min(Math.max(least, next - this.now()), MAX_TIMER));
   }
 }

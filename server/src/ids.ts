@@ -2,7 +2,7 @@
 // can tell an unknown id from a foreign one only because ids are unguessable, so an id's neighbour must not be another id. Nothing
 // orders by id: creation order is the order of the state's keys and of the event log (seq).
 // Tokens are a kind prefix plus random base62; only their SHA-256 is stored.
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const B62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -38,3 +38,9 @@ export function base62(n: number): string {
 export const newToken = (prefix: string): string => prefix + base62(43);
 export const newInviteCode = (): string => `inv_${base62(22)}`;
 export const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
+
+/** Equal secrets, compared in constant time: both are hashed to the same length first, so neither length nor content leaks. */
+export const sameSecret = (a: string, b: string): boolean => {
+  const enc = new TextEncoder();
+  return timingSafeEqual(enc.encode(hashToken(a)), enc.encode(hashToken(b)));
+};

@@ -55,10 +55,10 @@ export async function findToken(db: Db, hash: string): Promise<TokenRow | undefi
   return r;
 }
 
-export const saveUser = (db: Db, u: UserRow): Promise<unknown> => db.rows('insert into users (id, name) values ($1, $2)', [u.id, u.name]);
+export const saveUser = (db: Tx, u: UserRow): Promise<unknown> => db.rows('insert into users (id, name) values ($1, $2)', [u.id, u.name]);
 export const allUsers = (db: Db): Promise<UserRow[]> => db.rows<UserRow>('select id, name from users');
 
-export const saveComputer = (db: Db, c: ComputerRow): Promise<unknown> =>
+export const saveComputer = (db: Tx, c: ComputerRow): Promise<unknown> =>
   db.rows('insert into computers (id, user_id, name, os, arch) values ($1, $2, $3, $4, $5)', [c.id, c.userId, c.name, c.os, c.arch]);
 export const allComputers = (db: Db): Promise<ComputerRow[]> =>
   db.rows<ComputerRow>('select id, user_id as "userId", name, os, arch from computers');

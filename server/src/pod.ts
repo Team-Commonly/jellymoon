@@ -70,6 +70,15 @@ export class PodRuntime {
   }
 
   private async step(cmd: Cmd, o: Opts): Promise<Reply | undefined> {
+    try {
+      return await this.run(cmd, o);
+    } finally {
+      // A failed write leaves the memory as it was and the old deadline in place; the timer is re-armed either way.
+      this.deps.rearm();
+    }
+  }
+
+  private async run(cmd: Cmd, o: Opts): Promise<Reply | undefined> {
     const early = await o.pre?.(this.state);
     if (early) return early;
     const { state, out } = apply(this.state, cmd, this.deps.now());
@@ -79,7 +88,9 @@ export class PodRuntime {
     const meta = good && o.meta ? structuredClone(this.meta) : this.meta;
     if (meta !== this.meta) o.meta?.(meta);
     const text = JSON.stringify(state);
-    if (events.length > 0 || text !== this.saved || meta !== this.meta || (good && o.extra)) {
+    // A pod not yet stored (saved is empty) is written only by a command that succeeded: a failed pod_create leaves no row.
+    const changed = text !== this.saved && (this.saved !== '' || good);
+    if (events.length > 0 || changed || meta !== this.meta || (good && o.extra)) {
       await this.deps.db.tx(async (t) => {
         await savePod(t, { id: this.id, state, meta }, events);
         if (good) await o.extra?.(t);
@@ -90,7 +101,6 @@ export class PodRuntime {
     this.saved = text;
     this.deadline = nextDeadline(state);
     this.fanOut(out);
-    this.deps.rearm();
     return reply;
   }
 

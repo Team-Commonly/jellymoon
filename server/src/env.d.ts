@@ -14,6 +14,7 @@ declare const Bun: {
 declare module 'node:crypto' {
   export function createHash(alg: 'sha256'): { update(s: string): { digest(enc: 'hex'): string } };
   export function randomBytes(n: number): Uint8Array;
+  export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean;
 }
 
 declare module 'node:fs' {

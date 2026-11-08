@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import type { Actor } from '../../gen/ts/protocol';
-import { emptyPod } from '../../podcore/src/index';
 import { buildApp } from '../src/app';
 import { openDb } from '../src/db';
 import { Hub } from '../src/hub';
@@ -11,7 +10,7 @@ import { caller, fakeConn, flaky, setup, world } from './world';
 const TASK = 'tsk_00000000000000000000000001';
 
 async function until(check: () => Promise<boolean>, ms = 3000): Promise<boolean> {
-  for (const end = Date.now() + ms; Date.now() < end; await Bun.sleep(25)) if (await check()) return true;
+  for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 25))) if (await check()) return true;
   return false;
 }
 

@@ -111,7 +111,7 @@ e2e-any:
 # The pod-state server (ADR 0005): one Bun process, Hono, Postgres. `make server` serves on $PORT (default 8787) with the
 # in-process Postgres kept in .tools/server-data; set DATABASE_URL to use a real one.
 server: node_modules
-	ENV=local PORT=$${PORT:-8787} $(BUN) server/src/main.ts $(if $(DATABASE_URL),,--persist-to $(CURDIR)/.tools/server-data)
+	$(if $(DATABASE_URL),,ENV=local) PORT=$${PORT:-8787} $(BUN) server/src/main.ts $(if $(DATABASE_URL),,--persist-to $(CURDIR)/.tools/server-data)
 
 # A fresh PGlite data directory as one tar, so each e2e server skips initdb. Rebuilt when the lockfile changes.
 PGLITE_TPL := $(CURDIR)/.tools/pglite-template.tar

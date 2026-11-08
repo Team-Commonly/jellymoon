@@ -2,6 +2,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Hub } from './hub';
+import { sameSecret } from './ids';
 import { bad, fail, parse, str } from './kit';
 import { opRoutes } from './routes-ops';
 import { setupAll } from './routes-setup';
@@ -17,7 +18,7 @@ export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: stri
 
 function testRoutes(app: Hono, hub: Hub, local: boolean, bearer: string | undefined): void {
   if (!local) {
-    app.use('/__test/*', async (c, next) => (c.req.header('Authorization') === `Bearer ${bearer}` ? next() : fail(c, 'unauthorized', 'Send the test bearer.')));
+    app.use('/__test/*', async (c, next) => (sameSecret(c.req.header('Authorization') ?? '', `Bearer ${bearer}`) ? next() : fail(c, 'unauthorized', 'Send the test bearer.')));
   }
   app.post('/__test/session', async (c) => {
     const name = str((await parse(c))?.name, 1, 80);

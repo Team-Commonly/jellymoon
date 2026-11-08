@@ -1,0 +1,45 @@
+# Recording a real Claude Code session
+
+`daemon/testdata/acp/claude-slice.jsonl` is one real Claude Code run through the `claude-agent-acp` adapter. `TestReplayClaude`
+replays it through the daemon on every `go test`, with no model, no network and no sign-in. You only need this page to make a new
+recording: when the adapter version moves, when the slice's calls change, or when a second machine wants to confirm it.
+
+## What you need
+
+- A normal Claude Code sign-in on this machine. The adapter reads it; the scripts here never touch it and no API key goes in any file.
+- Node and npm on PATH (for the adapter only), and the repo's pinned Go and Bun (`make tools`).
+- Nothing global: the adapter is installed into `.tools/acp/` (ignored), at an exact version.
+
+## Record
+
+```
+make acp-tools      # npm install of the pinned adapter into .tools/acp, scripts off, no lockfile outside it
+make record-acp     # one real run, then the scrub; writes daemon/testdata/acp/claude-slice.jsonl
+```
+
+`make record-acp` is `bun scripts/record-acp.mjs [out.jsonl]`. It starts a local server (`worker/dev.sh`, loopback only), makes a user
+and a pod, starts the daemon with an empty working directory, registers one `claude-code` agent, and assigns it one task ("Say hello
+to the pod"). The daemon wakes the agent and starts the adapter the way it starts any agent, except that the program it runs is
+`e2e/testdata/acprec`, a tee. The tee copies every ACP line in both directions and points the MCP server `session/new` names at a local
+proxy, so the agent's calls to the pod are logged in the same order. One run takes about a minute.
+
+Keep it short: one task, one reply. A run that goes wrong is not worth fixing by hand-editing the file; record again.
+
+## Scrub
+
+The script scrubs the raw log before anything is kept (`scripts/acp-scrub.mjs`): pod, user, agent, run, task and message ids become
+numbered placeholders, tool-use and session ids become numbered placeholders, home and working paths and ports are replaced, any URL
+becomes `[url]`, tokens become `[token]`, and the adapter's sign-in status and the machine's skill list are dropped. Then it refuses
+the file if anything token-, home-path-, email- or non-loopback-host-shaped is left. A refused scrub leaves the raw log in its scratch
+directory (the script says where); fix the rule and run `bun scripts/record-acp.mjs --scrub <raw.jsonl>` instead of recording again.
+
+Before committing a recording, read it once for model-written text that quotes something it should not (the model sees this machine's
+own Claude Code settings), and run `make private secrets`.
+
+## After a new recording
+
+1. The first line names the adapter and the date. If you changed the pin, change `ACP_ADAPTER` in the Makefile and `ADAPTER` in the
+   script together.
+2. Run `go test ./daemon/internal/daemon -run TestReplayClaude`. It fails if the calls differ from `claude-slice.golden`. Read the
+   printed list against the recording's `"t":"mcp"` lines, and only then update the golden file by hand.
+3. Note in `progress.md` what the run showed.

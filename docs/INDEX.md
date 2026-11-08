@@ -16,7 +16,8 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `adr/0002-claims-and-leases.md` | When a task claim's lease renews, expires and is released; the unknowns left open |
 | `adr/0003-pure-pod-core.md` | Why claims, leases and recourse are a pure module, and what an adapter must do around it |
 | `adr/0004-open-core-boundary.md` | Proposed: the Apache-2.0 core and the commercial `ee/`, the one-way import rule and the entitlement interface core calls |
-| `adr/0005-how-the-daemon-starts-an-agent.md` | The agent as an ACP child, where the run token travels, the MCP URL check and how a run ends |
+| `adr/0005-how-the-daemon-starts-an-agent.md` | The agent as an ACP child, where the run token travels, the MCP URL check, how a run ends and how a real Claude Code session is replayed |
+| `development/record-acp.md` | How to record a real Claude Code session through the pinned adapter, scrub it and replay it (`make record-acp`) |
 | `skills/SOURCES.md` | Where the vendored stage skills in `.agents/skills/` come from, their pins and how to update them |
 | `design/protocol.md` | Protocol review: what the schema decides, the open questions and recommendations |
 | `design/connector-options.md` | Connectors options paper (OSS-first): Linear read through a pod grant, the write gate |

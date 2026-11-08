@@ -7,7 +7,7 @@ import {
 } from './land-coderabbit.mjs';
 
 const [HEAD, OLD, FIX, MAIN_C] = ['a', 'b', 'c', 'd'].map((c) => c.repeat(40));
-const TRUSTED = ['lilyshen0722', 'samxu01'];
+const TRUSTED = ['maintainer-a', 'maintainer-b'];
 const ledger = (...rows) => parseLedger(['pr\thead\tverdict\tby\twhen\tnote', ...rows.map((r) => r.join('\t'))].join('\n'));
 const row = (head, verdict, by, pr = 5) => [pr, head, verdict, by, '2026-10-30T10:00:00Z', ''];
 const led = (...rows) => checkLedger(ledger(...rows), { pr: '5', head: HEAD });
@@ -25,7 +25,7 @@ const thread = (comments, o = {}) => ({ isResolved: false, isOutdated: false, co
 const MAJOR = '_⚠️ Potential issue_ | _🟠 Major_\n\n**The check can be skipped.**';
 const MINOR = '_⚠️ Potential issue_ | _🟡 Minor_\n\nA wording problem.';
 const thr = (list) => checkThreads(list, TRUSTED);
-const info = (sha, author = 'lilyshen0722', committer = 'lilyshen0722') => ({ sha, author: { login: author }, committer: { login: committer } });
+const info = (sha, author = 'maintainer-a', committer = 'maintainer-a') => ({ sha, author: { login: author }, committer: { login: committer } });
 const cmt = (infos, range = RANGE) => checkCommits(range, infos, TRUSTED);
 const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED };
 const all = (o = {}) => checkCodeRabbit({ ...good, ...o });
@@ -60,7 +60,7 @@ const cases = [
   ['c: an APPROVED review at the head passes', rev([review({ state: 'APPROVED' })]).ok, true],
   ['c: a review on an older head is refused', rev([review({ commit_id: OLD })]).ok, false],
   ['c: no reviews is refused', rev([]).ok, false],
-  ['c: a review by a human at the head does not count', rev([review({ user: { login: 'lilyshen0722', type: 'User' } })]).ok, false],
+  ['c: a review by a human at the head does not count', rev([review({ user: { login: 'maintainer-a', type: 'User' } })]).ok, false],
   ['c: a User with the bot\'s login does not count', rev([review({ user: { login: 'coderabbitai[bot]', type: 'User' } })]).ok, false],
   ['c: CHANGES_REQUESTED at the head refuses even beside a COMMENTED', rev([review(), review({ state: 'CHANGES_REQUESTED' })]).ok, false],
   ['c: a DISMISSED or PENDING review alone is not a review', [rev([review({ state: 'DISMISSED' })]).ok, rev([review({ state: 'PENDING' })]).ok].join(), 'false,false'],
@@ -75,16 +75,16 @@ const cases = [
   ['d: an unresolved Major thread with no reply refuses', thr([thread([comment(BOT, MAJOR)])]).ok, false],
   ['d: a Critical thread with no reply refuses', thr([thread([comment(BOT, '_⚠️ Potential issue_ | _🔴 Critical_')])]).ok, false],
   ['d: an unreadable-severity thread with no reply refuses', thr([thread([comment(BOT, 'please look at this')])]).ok, false],
-  ['d: a Major thread with a reply from a trusted login passes', thr([thread([comment(BOT, MAJOR), comment(user('LilyShen0722'), 'fixed in abc')])]).ok, true],
+  ['d: a Major thread with a reply from a trusted login passes', thr([thread([comment(BOT, MAJOR), comment(user('Maintainer-A'), 'fixed in abc')])]).ok, true],
   ['d: a reply from an untrusted login does not answer it', thr([thread([comment(BOT, MAJOR), comment(user('mallory'), 'false positive')])]).ok, false],
   ['d: CodeRabbit\'s own follow-up does not answer it', thr([thread([comment(BOT, MAJOR), comment(BOT, 'still applies')])]).ok, false],
-  ['d: a Bot account whose login is a trusted name does not answer it', thr([thread([comment(BOT, MAJOR), comment({ __typename: 'Bot', login: 'samxu01' }, 'ok')])]).ok, false],
+  ['d: a Bot account whose login is a trusted name does not answer it', thr([thread([comment(BOT, MAJOR), comment({ __typename: 'Bot', login: 'maintainer-b' }, 'ok')])]).ok, false],
   ['d: a resolved Major thread passes', thr([thread([comment(BOT, MAJOR)], { isResolved: true })]).ok, true],
   ['d: an outdated Major thread passes', thr([thread([comment(BOT, MAJOR)], { isOutdated: true })]).ok, true],
   ['d: an unresolved Minor thread passes', thr([thread([comment(BOT, MINOR)])]).ok, true],
-  ['d: a thread opened by a person is not CodeRabbit\'s', thr([thread([comment(user('lilyshen0722'), MAJOR)])]).ok, true],
+  ['d: a thread opened by a person is not CodeRabbit\'s', thr([thread([comment(user('maintainer-a'), MAJOR)])]).ok, true],
   ['d: a thread opened by a deleted account is not CodeRabbit\'s', thr([thread([comment(null, MAJOR)])]).ok, true],
-  ['d: one unanswered Major among answered and Minor ones refuses', thr([thread([comment(BOT, MINOR)]), thread([comment(BOT, MAJOR), comment(user('samxu01'), 'x')]), thread([comment(BOT, MAJOR)])]).ok, false],
+  ['d: one unanswered Major among answered and Minor ones refuses', thr([thread([comment(BOT, MINOR)]), thread([comment(BOT, MAJOR), comment(user('maintainer-b'), 'x')]), thread([comment(BOT, MAJOR)])]).ok, false],
   ['d: no threads passes', thr([]).ok, true],
   ['d: a thread with more comments than were read refuses', thr([thread([comment(BOT, MINOR)], { comments: { pageInfo: { hasNextPage: true }, nodes: [comment(BOT, MINOR)] } })]).ok, false],
   ['d: a malformed thread (no isResolved, no comments) refuses', [thr([{ isOutdated: false, comments: { pageInfo: { hasNextPage: false }, nodes: [] } }]).ok, thr([{ isResolved: false, isOutdated: false }]).ok, thr(null).ok].join(), 'false,false,false'],
@@ -94,13 +94,13 @@ const cases = [
   // (e) every commit's author and committer are trusted logins
   ['e: trusted author and committer on every commit pass', cmt(RANGE.map((s) => info(s))).ok, true],
   ['e: an untrusted author refuses', cmt([info(OLD), info(HEAD, 'mallory')]).ok, false],
-  ['e: an untrusted committer refuses', cmt([info(OLD), info(HEAD, 'lilyshen0722', 'mallory')]).ok, false],
-  ['e: an app as author or committer refuses', [cmt([info(OLD), info(HEAD, 'coderabbitai[bot]')]).ok, cmt([info(OLD), info(HEAD, 'samxu01', 'web-flow')]).ok].join(), 'false,false'],
-  ['e: a null author login refuses (an unmatched email)', cmt([info(OLD), { sha: HEAD, author: { login: null }, committer: { login: 'samxu01' } }]).ok, false],
-  ['e: a null committer, a missing author and an empty login refuse', [{ sha: HEAD, author: { login: 'samxu01' }, committer: { login: null } }, { sha: HEAD, committer: { login: 'samxu01' } }, info(HEAD, '')].map((i) => cmt([info(OLD), i]).ok).join(), 'false,false,false'],
+  ['e: an untrusted committer refuses', cmt([info(OLD), info(HEAD, 'maintainer-a', 'mallory')]).ok, false],
+  ['e: an app as author or committer refuses', [cmt([info(OLD), info(HEAD, 'coderabbitai[bot]')]).ok, cmt([info(OLD), info(HEAD, 'maintainer-b', 'web-flow')]).ok].join(), 'false,false'],
+  ['e: a null author login refuses (an unmatched email)', cmt([info(OLD), { sha: HEAD, author: { login: null }, committer: { login: 'maintainer-b' } }]).ok, false],
+  ['e: a null committer, a missing author and an empty login refuse', [{ sha: HEAD, author: { login: 'maintainer-b' }, committer: { login: null } }, { sha: HEAD, committer: { login: 'maintainer-b' } }, info(HEAD, '')].map((i) => cmt([info(OLD), i]).ok).join(), 'false,false,false'],
   ['e: a commit the API did not return refuses', cmt([info(OLD)]).ok, false],
   ['e: a commit read under another sha does not stand in for it', cmt([info(OLD), info(FIX)]).ok, false],
-  ['e: logins compare case-insensitively', cmt(RANGE.map((s) => info(s, 'LilyShen0722', 'SAMXU01'))).ok, true],
+  ['e: logins compare case-insensitively', cmt(RANGE.map((s) => info(s, 'Maintainer-A', 'MAINTAINER-B'))).ok, true],
   ['e: an empty range or a non-list refuses', [cmt([], []).ok, cmt(null).ok].join(), 'false,false'],
   // all together
   ['all: a clean head passes and the note names the path and both heads', all().note, `coderabbit at ${HEAD.slice(0, 8)}, after the review at ${OLD.slice(0, 8)}`],

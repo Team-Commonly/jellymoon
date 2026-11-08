@@ -7,6 +7,7 @@
 // machine's normal Claude Code sign-in (the adapter reads it; nothing here does).
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { scrub } from './acp-scrub.mjs';
 
@@ -15,7 +16,7 @@ const root = resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2);
 const again = args[0] === '--scrub' ? resolve(args[1]) : null;
 const out = resolve(args[again ? 2 : 0] ?? join(root, 'daemon/testdata/acp/claude-slice.jsonl'));
-const tmp = again ? dirname(again) : mkdtempSync('/private/tmp/claude-501/jmrec-');
+const tmp = again ? dirname(again) : mkdtempSync(join(tmpdir(), 'jmrec-'));
 const procs = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -78,7 +79,7 @@ async function assign(s, agentId) {
 
 /** The scrubbed recording is the only file kept; the raw log goes once it is written. */
 function keep(raw) {
-  const swaps = [[join(tmp, 'work'), '/work'], [tmp, '/tmp/rec'], [root, '/repo'], [process.env.HOME, '/home/user']];
+  const swaps = [[join(tmp, 'work'), '/work'], [tmp, '/tmp/rec'], [root, '/repo'], [process.env.HOME, '/sandbox/home']];
   let text;
   try { text = scrub(readFileSync(raw, 'utf8'), { ...ADAPTER, date: new Date().toISOString().slice(0, 10) }, swaps); } catch (e) { throw new Error(`${e.message}\nthe raw log is kept at ${raw}`); }
   writeFileSync(out, text);

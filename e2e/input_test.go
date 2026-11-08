@@ -23,6 +23,7 @@ func post(over map[string]any) map[string]any {
 // is stored whole. Nothing is dropped or truncated (ADR 0003, "The adapter validates every Cmd against gen/").
 func TestInputValidation(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	w.refusedPosts()
 	r := w.startRun(w.a1, "report")

@@ -10,6 +10,7 @@ import (
 // TestF06: a member creates a task assigned to a registered agent and every subscriber sees task.created.
 func TestF06(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sCara.snapshot(0) }}
 	p.step("a registered agent exists in the pod", func() error {

@@ -143,6 +143,38 @@ jobs:
 
   e2e-local:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version-file: .tool-versions
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - name: The contract suite against the pod-state server on a Postgres service container (make e2e-c)
+        run: |
+          if [ ! -d e2e ]; then echo "::notice::no e2e/ yet; skipping"; exit 0; fi
+          make e2e-c
+
+  e2e-worker:
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -154,7 +186,7 @@ jobs:
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: go.mod
-      - name: The contract suite against the Worker under wrangler dev --local (make e2e-a, as in make preflight)
+      - name: The contract suite against the Worker under wrangler dev --local (make e2e-a)
         run: |
           if [ ! -d e2e ]; then echo "::notice::no e2e/ yet; skipping"; exit 0; fi
           make e2e-a

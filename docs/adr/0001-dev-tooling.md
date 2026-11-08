@@ -15,6 +15,8 @@ None of them ships in a runtime artifact.
 | dependency-cruiser 18.6.0 | TS module boundaries and cycles | Hand-written import greps |
 | staticcheck v0.8.2 (`go run`) | Go unused code and correctness lints | golangci-lint: one more binary to pin, more config |
 | gitleaks v8.30.1 (`go run`) | Secret scan of the full history on every preflight, and of a PR's commit range on land with `--ignore-gitleaks-allow`. It can only refuse, never waive: it skips binaries, images, the paths in the pinned version's built-in allowlist, lockfiles and `go.sum`, never reads commit messages in git mode, and reads files in 100,000-byte chunks with no match across a cut, so a scanner cannot prove a secret absent. Every land therefore needs the ledger PASS and the review's pod verdict, and a scan hit or a failed scan refuses (2026-10-30, land review round 16, #10, after four scanner blind spots each became a way to land without the review) | Hand-written regexes miss token formats |
+| hono 4.13.14 | HTTP routing and the pod WebSocket of the pod-state server (`server/`, ADR 0005); one small dependency with no transitive packages | Hand-rolled routing and upgrade handling |
+| @electric-sql/pglite 0.5.13 | In-process Postgres for `make e2e` and a clean shell, when `DATABASE_URL` is unset and `ENV=local`; production uses a real Postgres through Bun's built-in `Bun.SQL`, so there is no driver package (ADR 0005) | Requiring a Postgres install for every checkout and every preflight |
 | wrangler 4.151.0 | Runs the Cloudflare adapter (`worker/`) locally under `wrangler dev --local` for `make worker-dev` and `make e2e-a`; loopback only, no Cloudflare account or credentials. Its miniflare 5.20261012.0-beta is patched (`worker/patches/`) to import `undici/index.js` under Bun | Hand-rolled Durable Object and D1 fakes drift from the real runtime |
 | @cloudflare/workers-types 5.20261014.1 | Types for the Worker, Durable Object and D1 APIs in `tsc` | Hand-written ambient declarations |
 | Node 20 or newer (land's runtime, not pinned) | `scripts/land.mjs` runs under `node`, never bun, so bun does not auto-load a `.env` from the checkout; land refuses to start on an older Node | bun: loads `.env` and `bunfig.toml` from the cwd into the environment |
@@ -34,10 +36,11 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | core (`schema/`, `scripts/`) | 3,720 |
 | podcore | 2,500 |
 | worker | 1,550 |
+| server | 1,800 |
 | daemon | 3,000 |
 | e2e | 3,130 |
 
-The caps add up to 13,900 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 15,700 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -63,3 +66,4 @@ The caps add up to 13,900 lines. Agent-written comparables grew without bounds: 
 2026-10-30: podcore cap 2,050 → 2,500, presence (which computers are online, the 45 s staleness bound, the presence events) and its tests take the core to 2,162 lines (the gate printed `LOC podcore 2162 / 2050` before this raise; the cap is that count plus about 15%); the total is 12,600. No other cap changes. F08.
 2026-10-31: the merge with main keeps main's core cap (3,000) and this branch's podcore (2,500) and e2e (3,130) caps, all as they stand in entropy.json; no cap changes; the total is 13,180. F08.
 2026-11-08: the merge with main keeps this branch's core cap (3,720) and main's podcore (2,500) and e2e (3,130) caps, all as they stand in entropy.json; no cap changes; the total is 13,900. LCR.
+2026-11-08: server cap (new) 1,800, the pod-state server and its tests (ADR 0005) are 1,267 lines at the first green contract run; the cap is that count plus room for the tests the port still needs (the brief allows at most 3,000); the total is 15,700. No other cap changes. CPORT.

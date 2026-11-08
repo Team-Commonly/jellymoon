@@ -18,7 +18,7 @@ declare module 'node:crypto' {
 
 declare module 'node:fs' {
   export function existsSync(path: string): boolean;
-  export function readFileSync(path: string): Uint8Array;
+  export function readFileSync(path: string): Uint8Array<ArrayBuffer>;
   export function writeFileSync(path: string, data: Uint8Array): void;
   export function renameSync(from: string, to: string): void;
 }

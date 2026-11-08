@@ -22,6 +22,7 @@ interface PodState {
   pending: Record<string, OptionId>;
   ruleErrors: Record<string, string>;
   postError?: string;
+  droppedFrames: number;
 }
 
 export interface PodStore {
@@ -34,7 +35,7 @@ export interface PodStore {
 }
 
 const fresh = (): PodState => ({
-  status: 'connecting', members: [], agents: [], presence: {}, headSeq: 0, lastSeq: 0, messages: [], tasks: {}, pending: {}, ruleErrors: {},
+  status: 'connecting', members: [], agents: [], presence: {}, headSeq: 0, lastSeq: 0, messages: [], tasks: {}, pending: {}, ruleErrors: {}, droppedFrames: 0,
 });
 
 type Apply = (s: PodState, data: never) => PodState;
@@ -72,10 +73,17 @@ const SEQ_EVENTS: Record<string, Apply> = {
 };
 
 function applyError(s: PodState, e: ErrorBody): PodState {
-  const waiting = Object.keys(s.pending).at(-1);
-  if (!waiting) return { ...s, postError: e.message };
+  // ref = the ruling's decision id; no ref (an older server) means the most recent waiting ruling; a stale ref changes nothing.
+  const waiting = e.ref === undefined ? Object.keys(s.pending).at(-1) : e.ref in s.pending ? e.ref : undefined;
+  if (!waiting) return e.ref === undefined ? { ...s, postError: e.message } : s;
   const { [waiting]: _gone, ...pending } = s.pending;
   return { ...s, pending, ruleErrors: { ...s.ruleErrors, [waiting]: e.message } };
+}
+
+/** A dropped socket may have lost a ruling in flight: mark each waiting one unsent so the card can be ruled again. */
+function markUnsent(s: PodState): PodState {
+  const note = Object.fromEntries(Object.keys(s.pending).map((d) => [d, 'Your ruling may not have reached the pod. Choose again to try again.']));
+  return Object.keys(note).length === 0 ? s : { ...s, pending: {}, ruleErrors: { ...s.ruleErrors, ...note } };
 }
 
 export function createPodStore(opts: { podId: string; connect: Connect; schedule?: (fn: () => void) => void }): PodStore {
@@ -91,7 +99,9 @@ export function createPodStore(opts: { podId: string; connect: Connect; schedule
   const send = (type: string, data: object) => link?.send(JSON.stringify({ v: 1, type, podId: opts.podId, data }));
 
   function onFrame(raw: string) {
-    const env = JSON.parse(raw) as Envelope;
+    let env: Envelope | null = null;
+    try { env = JSON.parse(raw) as Envelope | null; } catch { /* dropped below */ }
+    if (typeof env?.type !== 'string') return set({ ...state, droppedFrames: state.droppedFrames + 1 }); // a bad frame is dropped and counted
     if (env.type === 'hello') return set(applyHello(state, env.data as never));
     if (env.type === 'error') return set(applyError(state, env.data as unknown as ErrorBody));
     const apply = SEQ_EVENTS[env.type];
@@ -108,7 +118,7 @@ export function createPodStore(opts: { podId: string; connect: Connect; schedule
       message: onFrame,
       close: () => {
         if (state.status === 'stopped') return;
-        set({ ...state, status: 'reconnecting' });
+        set({ ...markUnsent(state), status: 'reconnecting' });
         schedule(() => state.status === 'reconnecting' && connect());
       },
     });

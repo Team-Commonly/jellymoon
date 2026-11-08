@@ -127,3 +127,38 @@ describe('writes are never optimistic', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('errors, bad frames and reconnects', () => {
+  const two = () => {
+    const s = setup();
+    [1, 2].forEach((n) => { s.net.deliver(frame('message.created', n, ask(n))); s.store.rule(`dec_${n}`, n === 1 ? 'a' : 'b'); });
+    return s;
+  };
+  const err = (s: ReturnType<typeof setup>, ref?: string) => s.net.deliver(frame('error', undefined, { code: 'already_ruled', message: 'No', ...(ref && { ref }) }));
+  it('lands an error with a ref on the ruling it names, even when it is not the latest', () => {
+    const s = two();
+    err(s, 'dec_1');
+    expect(s.store.getState().ruleErrors).toEqual({ dec_1: 'No' });
+    expect(s.store.getState().pending).toEqual({ dec_2: 'b' });
+  });
+  it('falls back to the most recent ruling with no ref, and ignores a ref that names nothing waiting', () => {
+    const s = two();
+    err(s);
+    err(s, 'dec_9');
+    expect(s.store.getState().ruleErrors).toEqual({ dec_2: 'No' });
+    expect(s.store.getState().pending).toEqual({ dec_1: 'a' });
+  });
+  it('drops a malformed frame and counts it', () => {
+    const s = setup();
+    expect(() => { s.net.deliver('{not json'); s.net.deliver('null'); }).not.toThrow();
+    expect(s.store.getState().droppedFrames).toBe(2);
+  });
+  it('re-marks a pending ruling unsent when the socket drops, and lets the person rule again', () => {
+    const s = two();
+    s.net.drop();
+    expect(s.store.getState().pending).toEqual({});
+    expect(s.store.getState().ruleErrors.dec_1).toMatch(/try again/i);
+    s.timers[0](); s.net.open(); s.store.rule('dec_1', 'a');
+    expect(s.store.getState().ruleErrors.dec_1).toBeUndefined();
+  });
+});

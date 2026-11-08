@@ -68,6 +68,10 @@ func (d *Daemon) serveAs(l net.Listener, self uint32) {
 		if err != nil {
 			return
 		}
+		if !permit(c, self) {
+			c.Close() // no reply: a stranger learns nothing, not even that a daemon answers
+			continue
+		}
 		go d.handle(c)
 	}
 }

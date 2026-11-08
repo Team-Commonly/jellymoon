@@ -54,7 +54,7 @@ func TestPeerUIDIsTheCallersOwn(t *testing.T) {
 	defer cl.Close()
 	srv := <-accepted
 	defer srv.Close()
-	uid, err := peerUID(srv)
+	uid, err := peerUID(srv.(*net.UnixConn))
 	if err != nil {
 		t.Fatalf("peerUID: %v", err)
 	}

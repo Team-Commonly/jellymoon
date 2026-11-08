@@ -117,7 +117,7 @@
         "the agent's argv and env contain jmr_ and never jmc_"
       ],
       "test": "go test ./e2e -run TestF09",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F10",

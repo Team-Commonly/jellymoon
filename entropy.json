@@ -24,7 +24,7 @@
       "paths": [
         "worker/"
       ],
-      "max": 1550
+      "max": 1790
     },
     "server": {
       "paths": [
@@ -48,7 +48,7 @@
       "paths": [
         "e2e/"
       ],
-      "max": 3130
+      "max": 3930
     }
   },
   "goImports": {

@@ -25,15 +25,17 @@ type Daemon struct {
 	comp  config.Computer
 	log   *log.Logger
 
-	mu   sync.Mutex
-	pods map[protocol.PodID]bool
-	wg   sync.WaitGroup
-	ctx  context.Context
+	mu     sync.Mutex
+	pods   map[protocol.PodID]bool
+	waking map[protocol.WakeID]bool
+	wg     sync.WaitGroup
+	ctx    context.Context
+	beat   func(*ws.Conn, []byte) error // sends a heartbeat; a test seam, nil means Conn.Send
 }
 
 // New makes a daemon for a stored computer.
 func New(a *api.Client, s config.Store, c config.Computer, l *log.Logger) *Daemon {
-	return &Daemon{api: a, store: s, comp: c, log: l, pods: map[protocol.PodID]bool{}}
+	return &Daemon{api: a, store: s, comp: c, log: l, pods: map[protocol.PodID]bool{}, waking: map[protocol.WakeID]bool{}}
 }
 
 // Run keeps a socket open to every pod in the stored agent list until ctx ends, and serves `agent add` on the control socket.
@@ -104,13 +106,18 @@ func (d *Daemon) session(podID protocol.PodID) error {
 		<-ctx.Done()
 		_ = conn.Close() // unblocks Read
 	}()
+	send := d.beat
+	if send == nil {
+		send = (*ws.Conn).Send
+	}
 	failed := make(chan error, 1)
 	go func() {
 		t := time.NewTicker(HeartbeatEvery)
 		defer t.Stop()
 		for {
-			if err := conn.Send(d.heartbeat(podID)); err != nil {
+			if err := send(conn, d.heartbeat(podID)); err != nil {
 				failed <- err
+				stop() // closes conn, so the Read below returns and session reports this error
 				return
 			}
 			select {
@@ -121,7 +128,10 @@ func (d *Daemon) session(podID protocol.PodID) error {
 		}
 	}()
 	for {
-		if _, err := conn.Read(); err != nil {
+		raw, err := conn.Read()
+		if err == nil {
+			d.onFrame(conn, raw)
+		} else {
 			select {
 			case werr := <-failed:
 				return werr

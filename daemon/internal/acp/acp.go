@@ -2,6 +2,10 @@
 // stdout. The daemon is the client. It starts the agent program in its own process group, sends initialize, session/new (the
 // MCP servers the agent may use, which is where the run token travels) and session/prompt (the brief), waits for the turn to
 // end, and always takes the whole process group down afterwards. Standard library only.
+//
+// The agent may ask the client for things while a turn runs. The only request answered is session/request_permission (policy in
+// permission.go); every other request gets -32601. When the context ends mid-turn the client sends session/cancel first and gives
+// the turn grace to end, and only then signals the process group (docs/adr/0007-agent-permission-and-cancel.md).
 package acp
 
 import (
@@ -51,6 +55,7 @@ type Spec struct {
 type message struct {
 	ID     json.RawMessage `json:"id"`
 	Method string          `json:"method"`
+	Params json.RawMessage `json:"params"`
 	Result json.RawMessage `json:"result"`
 	Error  *struct {
 		Code    int    `json:"code"`
@@ -59,9 +64,13 @@ type message struct {
 }
 
 type conn struct {
-	in   io.Writer
-	msgs <-chan message
-	next int
+	in         io.Writer
+	msgs       <-chan message
+	next       int
+	allow      bool
+	logf       func(string, ...any)
+	sessionID  string // set once session/new answered
+	cancelling bool   // session/cancel has been sent: the turn is being abandoned
 }
 
 func (c *conn) write(v map[string]any) error {
@@ -74,22 +83,34 @@ func (c *conn) write(v map[string]any) error {
 	return err
 }
 
-// call sends a request and waits for its answer. A request the agent makes meanwhile (permissions, files) is answered "not supported".
+// call sends a request and waits for its answer. A request the agent makes meanwhile is answered by serve. When ctx ends while
+// session/prompt is outstanding, the turn is cancelled (session/cancel) and given grace to end; before that, ctx ends the call at once.
 func (c *conn) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	c.next++
 	if err := c.write(map[string]any{"id": c.next, "method": method, "params": params}); err != nil {
 		return nil, fmt.Errorf("%s: %w", method, err)
 	}
+	done := ctx.Done()
+	var expired <-chan time.Time
 	for {
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
+		case <-done:
+			if method != "session/prompt" || c.sessionID == "" {
+				return nil, context.Cause(ctx)
+			}
+			c.cancelling, done = true, nil
+			_ = c.write(map[string]any{"method": "session/cancel", "params": map[string]any{"sessionId": c.sessionID}})
+			t := time.NewTimer(grace)
+			defer t.Stop()
+			expired = t.C
+		case <-expired:
+			return nil, context.Cause(ctx)
 		case m, ok := <-c.msgs:
 			switch {
 			case !ok:
 				return nil, fmt.Errorf("%s: the agent exited before it answered", method)
 			case m.Method != "" && m.ID != nil:
-				_ = c.write(map[string]any{"id": m.ID, "error": map[string]any{"code": -32601, "message": "not supported by this client"}})
+				c.serve(m)
 			case m.Method == "" && string(m.ID) == strconv.Itoa(c.next):
 				if m.Error != nil {
 					return nil, fmt.Errorf("%s: agent error %d: %s", method, m.Error.Code, m.Error.Message)
@@ -159,11 +180,14 @@ func Run(ctx context.Context, s Spec) error {
 	go func() { _ = cmd.Wait(); close(exited) }()
 	stop := make(chan struct{})
 	defer close(stop)
-	c := &conn{in: in, msgs: lines(pr, stop)}
+	c := &conn{in: in, msgs: lines(pr, stop), allow: s.Allow, logf: s.Logf}
 	err = turn(ctx, c, s)
 	_ = in.Close()
 	if err == nil {
 		wait(exited, grace) // a finished agent leaves when its stdin closes
+		if c.cancelling {
+			err = context.Cause(ctx) // the turn ended on cancel: the run was still cut short
+		}
 	}
 	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	if !wait(exited, grace) {
@@ -198,6 +222,7 @@ func turn(ctx context.Context, c *conn, s Spec) error {
 	if err := json.Unmarshal(res, &ses); err != nil || ses.SessionID == "" {
 		return errors.New("session/new: the agent returned no sessionId")
 	}
+	c.sessionID = ses.SessionID
 	_, err = c.call(ctx, "session/prompt", map[string]any{"sessionId": ses.SessionID, "prompt": []map[string]any{{"type": "text", "text": s.Prompt}}})
 	return err
 }

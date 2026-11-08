@@ -38,7 +38,7 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | worker | 1,790 |
 | server | 1,800 |
 | daemon | 3,000 |
-| e2e | 3,930 |
+| e2e | 4,650 |
 
 The caps add up to 16,740 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
@@ -68,6 +68,7 @@ The caps add up to 16,740 lines. Agent-written comparables grew without bounds: 
 2026-10-30: e2e cap 3,130 → 3,930, the F09 test (a recording proxy between the daemon and the server, the wake claimed over it, a built fake ACP agent that records argv, env and what it was told, a stubborn-agent case) takes the suite to 3,430 lines (the gate measures `LOC e2e 3430 / 3130` on the tree before this raise; the cap is that count plus about 15%); the total is 13,430. F09.
 2026-10-30: worker cap 1,550 → 1,790, the MCP adapter at POST /mcp (initialize, tools/list and tools/call as the operation's own HTTP route) and its tests take the Worker to 1,552 lines (the gate printed `LOC worker 1552 / 1550` before this raise; the cap is that count plus about 15%); the total is 13,670. F09.
 2026-10-31: the merge with main keeps main's core cap (3,000) and this branch's worker (1,790) and e2e (3,930) caps, all as they stand in entropy.json; no cap changes; the total is 14,220. F09.
+2026-11-08: e2e cap 3,930 → 4,650, the F11 fix pass (every stored post read back field by field, the receipt task checked from outside, a forged identity header, and the count of MCP calls shown unreachable by any public path) takes the suite to 4,051 lines (the gate printed `LOC e2e 4051 / 3930` before this raise; the cap is that count plus about 15%); the total is 14,940. No other cap changes. F11.
 2026-11-08: the merge with main keeps this branch's core cap (3,720) and main's podcore (2,500) and e2e (3,130) caps, all as they stand in entropy.json; no cap changes; the total is 13,900. LCR.
 2026-11-08: the merge with main keeps main's core cap (3,720) and this branch's podcore (2,500), worker (1,790) and e2e (3,930) caps, all as they stand in entropy.json; no cap changes; the total is 14,940. F09.
 2026-11-08: server cap (new) 1,800, the pod-state server and its tests (ADR 0006) are 1,267 lines at the first green contract run; the cap is that count plus room for the tests the port still needs (the brief allows at most 3,000); the total is 15,700. No other cap changes. CPORT.

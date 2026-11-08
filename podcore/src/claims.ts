@@ -98,7 +98,7 @@ function liveRun(c: Ctx, runId: RunId): Run | null {
 export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 
 /** The commands whose `caller` field names who is calling. `claim` and `op` are called by the run in `runId`; no other command has a caller. */
-export const CALLER_TYPES = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post'];
+export const CALLER_TYPES = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post', 'post'];
 
 /**
  * The ONE place a caller is derived, for the handlers and for the refusal path alike: a run for `claim`/`op` (from `runId`),

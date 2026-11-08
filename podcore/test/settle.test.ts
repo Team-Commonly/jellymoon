@@ -107,7 +107,7 @@ describe('run callers and run_end', () => {
     const cmds: Cmd[] = [
       claim(), { type: 'op', runId: RUN_A, taskId: id('tsk', 99) }, { type: 'task_release', caller, taskId: id('tsk', 99) }, { type: 'run_stop', caller, runId: id('run', 99) },
       { type: 'task_create', caller, taskId: T1, title: 'x', kind: 'chore', wakeId: id('wak', 1) }, { type: 'task_update', caller, taskId: id('tsk', 99), status: 'done', wakeId: id('wak', 1) },
-      { type: 'message_post', caller, messageId: id('msg', 1), text: 'hi', summary: 's', wakeId: id('wak', 1) },
+      { type: 'message_post', caller, messageId: id('msg', 1), text: 'hi', wakeId: id('wak', 1) },
       // malformed or prototype-key: the caller is judged first (ADR 0002, ADR 0003)
       { type: 'op', runId: RUN_A, taskId: 'constructor' }, { type: 'claim', runId: RUN_A, taskId: 7 }, { type: 'claim', runId: RUN_A, taskId: '__proto__' },
       { type: 'task_create', caller, taskId: T1, title: 'x', kind: 'chore' }, { type: 'task_update', caller, taskId: T1, assignee: '__proto__', wakeId: id('wak', 1) },

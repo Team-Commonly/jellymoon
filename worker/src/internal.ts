@@ -79,8 +79,14 @@ function runEnd(pod: PodPort, b: Body): Response {
   return respond(pod.exec({ type: 'run_end', runId, computerId, outcome }));
 }
 
+/** The MCP adapter answered a tool call on a run's token; the pod counts it for the receipt. */
+function toolCall(pod: PodPort, b: Body): Response {
+  const runId = str(b.runId, 1, 64);
+  return runId === undefined ? bad('runId is required.') : respond(pod.exec({ type: 'tool_call', runId }));
+}
+
 const TABLE: Record<string, (pod: Starter, b: Body) => Response> = {
-  create, invite, accept, 'has-wake': hasWake, 'run-claim': runClaim, 'run-end': runEnd, ping: () => Response.json({}),
+  create, invite, accept, 'has-wake': hasWake, 'run-claim': runClaim, 'run-end': runEnd, 'tool-call': toolCall, ping: () => Response.json({}),
 };
 
 export async function internalRoute(pod: Starter, req: Request): Promise<Response | null> {

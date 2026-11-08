@@ -11,18 +11,18 @@ const base = play([[{ type: 'claim', runId: RUN_A, taskId: T[0] }, 0], [{ type: 
   [{ type: 'run_end', runId: RUN_C, computerId: CMP_2, outcome: 'completed' }, 1], [{ type: 'claim', runId: RUN_B, taskId: T[2] }, 2]]).state;
 const NOW = 30_000;
 const BAD: unknown[] = ['__proto__', 'constructor', 'toString', 'valueOf', 7, null, [], {}, 'x', undefined];
-const GOOD: Record<string, unknown> = { taskId: T[0], title: 't', kind: 'chore', assignee: AG1, wakeId: wak(3), status: 'done', messageId: id('msg', 1), text: 'hi', summary: 's', runId: RUN_A, computerId: CMP_1, reason: 'r', outcome: 'completed', agentId: AG1, ownerId: U_OWNER.id, userId: U_STRANGER.id, staleMs: 0 };
+const GOOD: Record<string, unknown> = { taskId: T[0], title: 't', kind: 'chore', assignee: AG1, wakeId: wak(3), status: 'done', messageId: id('msg', 1), text: 'hi', runId: RUN_A, computerId: CMP_1, reason: 'r', outcome: 'completed', decisionId: id('dec', 1), input: { summary: 's', kind: 'fyi', status: 'done' }, agentId: AG1, ownerId: U_OWNER.id, userId: U_STRANGER.id, staleMs: 0 };
 const FIELDS: Record<string, string[]> = {
   claim: ['runId', 'taskId'], op: ['runId', 'taskId'], task_release: ['taskId'], run_stop: ['runId'], task_create: ['taskId', 'title', 'kind', 'wakeId'],
-  task_update: ['taskId', 'status', 'wakeId'], message_post: ['messageId', 'text', 'summary', 'wakeId'], heartbeat: ['computerId'], wake_ack: ['wakeId', 'computerId'], run_end: ['runId', 'computerId', 'outcome'],
-  // the seven types with no caller: a stray caller or runId must change nothing about them
+  task_update: ['taskId', 'status', 'wakeId'], message_post: ['messageId', 'text', 'wakeId'], post: ['messageId', 'decisionId', 'wakeId', 'input'], tool_call: ['runId'], heartbeat: ['computerId'], wake_ack: ['wakeId', 'computerId'], run_end: ['runId', 'computerId', 'outcome'],
+  // the types with no caller (tool_call is the MCP adapter's, not a caller's): a stray caller or runId must change nothing about them
   pod_create: ['ownerId'], member_add: ['userId'], change: ['agentId', 'wakeId'], run_claim: ['wakeId', 'computerId', 'runId'], agent_register: ['agentId', 'ownerId', 'computerId'], tick: [], boot: ['staleMs'],
 };
 const CALLERS: unknown[] = [{ kind: 'run', runId: RUN_A }, { kind: 'run', runId: RUN_C }, { kind: 'run', runId: id('run', 99) }, { kind: 'run', runId: 'constructor' },
   { kind: 'user', userId: U_OWNER.id }, { kind: 'user', userId: U_STRANGER.id }, { kind: 'user', userId: '__proto__' }, {}];
 /** A `type` that is not the command's own string: arrays that coerce to it, numbers, null, objects, prototype keys. */
 const BAD_TYPES = (t: string): unknown[] => [[t], 7, null, {}, [], ['change'], ['run_end'], 'constructor', '__proto__', 'toString'];
-const WITH_CALLER = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post'];
+const WITH_CALLER = ['task_release', 'run_stop', 'task_create', 'task_update', 'message_post', 'post'];
 
 /** The caller, by command type alone: a run for claim/op, the caller field for the five, nobody otherwise. */
 function callerSpec(cmd: Record<string, unknown>): { kind: 'run' | 'user'; id: unknown } | null {
@@ -102,7 +102,7 @@ describe('the reviewer\'s caller cases, as rows', () => {
   });
 });
 
-test('a non-string or prototype-key type is an unknown command: no throw, no state change, no renewal, for all 17 types', () => {
+test('a non-string or prototype-key type is an unknown command: no throw, no state change, no renewal, for all 19 types', () => {
   const user = { kind: 'user', userId: U_OWNER.id };
   const ok: Record<string, unknown>[] = Object.keys(FIELDS).map((type) => {
     const cmd: Record<string, unknown> = { type };
@@ -111,7 +111,7 @@ test('a non-string or prototype-key type is an unknown command: no throw, no sta
     if (WITH_CALLER.includes(type)) cmd.caller = user;
     return cmd;
   });
-  expect(ok.length).toBe(17);
+  expect(ok.length).toBe(19);
   for (const cmd of ok) {
     for (const type of BAD_TYPES(cmd.type as string)) {
       const bad = { ...cmd, type, caller: { kind: 'run', runId: RUN_A } };
@@ -122,7 +122,7 @@ test('a non-string or prototype-key type is an unknown command: no throw, no sta
 });
 
 describe('a stray caller or runId on a command that has none changes nothing, one row per type', () => {
-  const NONE = ['pod_create', 'member_add', 'change', 'run_claim', 'agent_register', 'tick', 'boot'];
+  const NONE = ['pod_create', 'member_add', 'change', 'run_claim', 'tool_call', 'agent_register', 'tick', 'boot'];
   const strays = [{ kind: 'run', runId: RUN_A }, { kind: 'run', runId: RUN_C }, { kind: 'run', runId: id('run', 99) }, { kind: 'user', userId: U_STRANGER.id }];
   for (const type of NONE) {
     test(type, () => {
@@ -132,7 +132,7 @@ describe('a stray caller or runId on a command that has none changes nothing, on
       if (FIELDS[type].length > 0) cmd[FIELDS[type][0]] = 7; // malformed, so the command takes the refusal path, where callerOf is read
       const plain = apply(base, cmd as unknown as Cmd, NOW);
       for (const caller of strays) {
-        const stray = { ...cmd, caller, ...(type === 'run_claim' ? {} : { runId: RUN_A }) };
+        const stray = { ...cmd, caller, ...(type === 'run_claim' || type === 'tool_call' ? {} : { runId: RUN_A }) };
         expect([type, JSON.stringify(caller), apply(base, stray as unknown as Cmd, NOW)]).toEqual([type, JSON.stringify(caller), plain]);
       }
     });

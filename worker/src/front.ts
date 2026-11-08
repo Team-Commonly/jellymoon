@@ -28,7 +28,7 @@ export function internal(env: Env, podId: string, name: string, body: Body): Pro
   return stub(env, podId).fetch(`https://pod/_in/${name}`, { method: 'POST', body: JSON.stringify(body) });
 }
 
-function forward(env: Env, req: Request, podId: string, who: Who, viaMcp: boolean): Promise<Response> {
+function forward(env: Env, req: Request, podId: string, who: Who, viaMcp = false): Promise<Response> {
   const headers = new Headers(req.headers);
   headers.delete(WHO_HEADER);
   headers.set(WHO_HEADER, encodeWho(who));

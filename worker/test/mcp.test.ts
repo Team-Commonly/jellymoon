@@ -66,8 +66,8 @@ const call = { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'jm_
 test('the pod is told before the call is dispatched, so a dispatch that throws is still counted', async () => {
   counted.length = 0;
   const boom = async (): Promise<Response> => { throw new Error('dispatch failed'); };
-  await expect(mcp(rpc(call), 'https://x', run, boom, count)).rejects.toThrow('dispatch failed');
-  expect(counted).toEqual(['run_1@pod_1']);
+  const outcome = await mcp(rpc(call), 'https://x', run, boom, count).then(() => 'answered', (e: Error) => e.message);
+  expect([outcome, counted]).toEqual(['dispatch failed', ['run_1@pod_1']]);
 });
 
 test('a call the pod could not count is refused before it takes effect: the operation is never dispatched', async () => {

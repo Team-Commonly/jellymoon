@@ -30,6 +30,9 @@ var (
 	suiteStart = time.Now()
 	serverCmd  = os.Getenv("JM_E2E_SERVER")
 	realClock  = os.Getenv("JM_E2E_REAL_CLOCK") == "1"
+	// stateInDatabase is set by `make e2e-c` when the server keeps its state in a real database (DATABASE_URL): the --persist-to
+	// directory then holds no files by design. TestF02 says so aloud and skips only its directory-content check.
+	stateInDatabase = os.Getenv("JM_E2E_STATE_IN_DB") == "1"
 	suiteTests = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF10", "TestExpiryZeroTraffic", "TestRenewRace",
 		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline", "TestRunTokenOtherPod", "TestEvictMidClaim", "TestEvictAlarmWake", "TestEvictPastDeadline"}
 	outcomes sync.Map // test name -> failed bool

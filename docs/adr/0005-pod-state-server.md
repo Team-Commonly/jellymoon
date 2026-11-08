@@ -59,7 +59,7 @@ because there is no object to throw away. The three tests that need them are ski
 ## Consequences
 
 - `make preflight` runs the contract suite against the server. The Worker's run is `make e2e-a`.
-- The server is capped at 3,000 lines including tests (ADR 0001, `entropy.json`).
+- The server is capped at 1,800 lines including tests (ADR 0001, `entropy.json`).
 - The core exports no read model, so the adapter derives `taskView` and `hello` itself (about 30 lines in `views.ts`). The Worker
   does the same.
 - Not served by the server: MCP (`/mcp`), the device flow, evidence, decisions and `ask` posts (stored as plain messages). The

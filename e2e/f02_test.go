@@ -147,6 +147,10 @@ func TestF02(t *testing.T) {
 		if tmp, _ := filepath.EvalSymlinks(os.TempDir()); !strings.HasPrefix(w.srv.dir, os.TempDir()) && !strings.HasPrefix(w.srv.dir, tmp) {
 			return fmt.Errorf("data dir %s is not under the temp dir %s", w.srv.dir, os.TempDir())
 		}
+		if stateInDatabase {
+			fmt.Printf("STEP PARTLY SKIPPED: the state is in the database, so %s holds no files by design; TestReplayAcrossRestart and TestRestartPastDeadline prove it persisted (docs/development/e2e-contract.md, \"Skipped on the server\")\n", state)
+			return nil
+		}
 		ents, err := os.ReadDir(state)
 		if err != nil || len(ents) == 0 {
 			return fmt.Errorf("%s holds no persisted state (err=%v)", state, err)

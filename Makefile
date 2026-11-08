@@ -143,7 +143,7 @@ endef
 # need the Cloudflare adapter's object routes are skipped, each with its reason (docs/development/e2e-contract.md, "Skipped on the server").
 E2E_C_SKIP := TestEvictMidClaim,TestEvictAlarmWake,TestEvictPastDeadline
 e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
-	$(call judge_e2e,e2e-c,JM_E2E_SERVER='$(SERVER_E2E)' JM_E2E_SKIP='$(E2E_C_SKIP)' $(if $(DATABASE_URL),,JM_PGLITE_TEMPLATE='$(PGLITE_TPL)'))
+	$(call judge_e2e,e2e-c,JM_E2E_SERVER='$(SERVER_E2E)' JM_E2E_SKIP='$(E2E_C_SKIP)' $(if $(DATABASE_URL),JM_E2E_STATE_IN_DB=1,JM_PGLITE_TEMPLATE='$(PGLITE_TPL)'))
 
 # `make e2e` is the contract suite against the server that ships.
 e2e: e2e-c

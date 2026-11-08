@@ -170,7 +170,8 @@ jobs:
           go-version-file: go.mod
       - name: The contract suite against the pod-state server on a Postgres service container (make e2e-c)
         run: |
-          if [ ! -d e2e ]; then echo "::notice::no e2e/ yet; skipping"; exit 0; fi
+          if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL is unset: this job must run on Postgres, never on the in-process fallback"; exit 1; fi
+          if [ ! -d e2e ]; then echo "::error::no e2e/ directory"; exit 1; fi
           make e2e-c
 
   e2e-worker:

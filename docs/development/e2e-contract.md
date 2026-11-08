@@ -149,6 +149,14 @@ between servers.
 | `TestEvictAlarmWake` | Needs `/__test/discard` with `alarmMs` and `/__test/woke`: the runtime firing an object's own stored alarm on a new instance. The server's single timer is covered by `TestExpiryZeroTraffic` (fake clock) and, in real-clock mode, by `TestKillMidLease`. |
 | `TestEvictPastDeadline` | Needs `/__test/discard` with `now`: an object thrown away with a deadline already past, then woken by a reconnect. `TestRestartPastDeadline` proves the same rule (the restore settles an expired claim before the first frame) for a restart. |
 
+One step is skipped, not a whole test. On a real Postgres (`DATABASE_URL` set, which is how CI runs `make e2e-c`) the state lives
+in the database, so the `--persist-to` directory holds no files. `TestF02` still checks that the server was started with
+`--persist-to <dir>/state` and prints `STEP PARTLY SKIPPED` for the one check that the directory is not empty (`make e2e-c` sets
+`JM_E2E_STATE_IN_DB=1`). That the state persisted is proved against the same database by `TestReplayAcrossRestart` and
+`TestRestartPastDeadline`, which kill -9 the server and read back events and a lease. The server writes no marker file: a file
+made only to satisfy the check would prove nothing. Against PGlite (no `DATABASE_URL`) the directory holds the database files
+and the check runs in full.
+
 ## Output lines
 
 - `E2E_MS=<n> STEPS=<k>/<n>`: the closing line, printed once after every test has ended. `n` is the suite wall clock after `go test`

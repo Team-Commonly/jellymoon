@@ -8,6 +8,9 @@ A verifier is a fresh-context subagent. It never sees the builder's reasoning. I
 
 It runs on a different model from the builder.
 
+A verifier reviews a PR once, at its first head. Its blocking findings get one fix pass, and the fix head (and any head that only
+merges main) is then admitted by CodeRabbit plus green CI, never by a second verifier review ("The CodeRabbit path", `landing.md`).
+
 ## What it does, in order
 1. **Reproduce.** From a clean checkout of main (never the PR's tree: its Makefile and scripts would run before the
    trust gate decides), run `make verify-preflight PR=<n>` (needs `JM_REPO` and `JM_TRUSTED_LOGINS`; `landing.md`).
@@ -38,9 +41,9 @@ FINDINGS <n blocking> <n non-blocking>
 GATE: PASS | GATE: FAIL
 ```
 - `GATE: PASS` requires zero blocking findings.
-- The verifier never pushes, comments on GitHub or merges. The coordinator transcribes the report into the ledger
+- The verifier never pushes, comments on GitHub or merges. The operator transcribes the report into the ledger
   row (`<pr> <head> PASS <model>-verifier <when> <note>`, `landing.md`): the `GATE:` line becomes the verdict, the
-  verifier's model becomes `by`, and the `FINDINGS` line goes in `note`. `make land` reads the row. The coordinator
+  verifier's model becomes `by`, and the `FINDINGS` line goes in `note`. `make land` reads the row. The operator
   writes no verdict the report does not carry.
 - Every PR still needs the review's pod verdict at the same head, posted by the operator (one review, no separate reviewer; the accepted ids are operator env `JM_VERDICT_REVIEWERS`)
   (`landing.md`). The secret scans only refuse, never waive.

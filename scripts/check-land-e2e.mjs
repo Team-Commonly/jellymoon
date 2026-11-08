@@ -253,7 +253,27 @@ await t('the worktree merge tree must equal the decision\'s merge-tree result', 
 await t('the throwaway worktree is added with repo hooks off', {}, (r) => argv(r, 'git', 'worktree add')[0]?.startsWith('-c core.hooksPath=/dev/null worktree add'));
 await t('a branch name with escapes is stripped from what land prints', { pr: { headRefName: 'a\u001b[31mb\u009bc' } }, (r) => r.said.includes('branch a[31mbc ') && !/[\u001b\u009b]/.test(r.said));
 await t('the bearer token never appears in a refusal', { on: [[/worktree add/, () => { throw new Error('boom jmu_FAKE-token-abc123'); }]] }, (r) => !r.merge && /worktree add failed: boom/.test(r.error) && !r.error.includes('abc123'));
-cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`))), true]);
+// The CodeRabbit path: the ledger row names it, land reads the reviews, threads and commits itself (shaped like the API's replies).
+const EARLY = 'c'.padEnd(40, '0'); // the first commit of the fake range
+const BOT_REVIEW = (head = HEAD, state = 'COMMENTED') => `{"user":{"login":"coderabbitai[bot]","type":"Bot"},"commit_id":"${head}","state":"${state}"}`;
+const GQL = (nodes = []) => JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } } } });
+const MAJOR_THREAD = { isResolved: false, isOutdated: false, comments: { pageInfo: { hasNextPage: false }, nodes: [{ author: { __typename: 'Bot', login: 'coderabbitai' }, body: '_⚠️ Potential issue_ | _🟠 Major_\n\nx' }] } };
+const CR_LEDGER = HDR + rowOf('PASS', 'opus-verifier', EARLY) + rowOf('PASS', 'coderabbit');
+const cr = (o = {}) => ({ ledger: CR_LEDGER, on: [
+  [/^gh api .*pulls\/5\/reviews/, o.reviews ?? BOT_REVIEW()], [/^gh api graphql/, o.threads ?? GQL()],
+  [/^gh api repos\/\S+\/commits\/c\d+ /, (a) => { const sha = a.find((x) => x.includes('/commits/')).split('/').pop(); return JSON.stringify({ sha, author: { login: o.author ?? 'alice' }, committer: { login: o.committer ?? 'alice' } }); }],
+], ...o.over });
+await t('coderabbit path: lands, says so, and the LANDED note records the path and both heads', cr(), (r) => r.merge && r.said.includes(`coderabbit at ${HEAD.slice(0, 8)}, after the review at ${EARLY.slice(0, 8)}`) && r.ledgerNow.includes(`admitted by coderabbit at ${HEAD.slice(0, 8)}, after the review at ${EARLY.slice(0, 8)}`));
+await t('coderabbit path: the reads are the PR\'s reviews, a paginated GraphQL threads query, and one commit read per commit of main..head', cr(), (r) => argv(r, 'gh', 'pulls/5/reviews')[0]?.includes('--paginate') && argv(r, 'gh', 'api graphql').length === 2 && argv(r, 'gh', '/commits/c').length === 6);
+await t('coderabbit path: a review only on an older head refuses, nothing merged', cr({ reviews: BOT_REVIEW(OTHER) }), (r) => no(r, /CodeRabbit has not reviewed/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit path: an unanswered Major thread refuses', cr({ threads: GQL([MAJOR_THREAD]) }), (r) => no(r, /unresolved and unanswered/));
+await t('coderabbit path: a commit by an untrusted login refuses', cr({ committer: 'mallory' }), (r) => no(r, /no committer login in JM_TRUSTED_LOGINS/));
+await t('coderabbit path: a GraphQL error reply refuses', cr({ threads: '{"errors":[{"message":"x"}],"data":null}' }), (r) => no(r, /unexpected reply/));
+await t('coderabbit path: no earlier verifier row refuses before any CodeRabbit read', cr({ over: { ledger: HDR + rowOf('PASS', 'coderabbit') } }), (r) => no(r, /one local review is missing/) && argv(r, 'gh', 'api graphql').length === 0);
+await t('coderabbit path: a FAIL at the head refuses even with a coderabbit PASS', cr({ over: { ledger: CR_LEDGER + rowOf('FAIL', 'sonnet-verifier') } }), (r) => no(r, /a FAIL blocks that head/));
+await t('coderabbit path: the pod verdict is still required', cr({ over: { msgs: [] } }), (r) => no(r, /no accepted reviewer/));
+await t('verifier path: unchanged, says so, reads nothing from CodeRabbit', {}, (r) => r.merge && r.said.includes('verifier PASS by opus-verifier') && r.ledgerNow.includes('admitted by verifier PASS by opus-verifier') && argv(r, 'gh', 'api graphql').length === 0 && argv(r, 'gh', 'pulls/5/reviews').length === 0);
+cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`)) || (c.args[1] === 'graphql' && c.args.includes('owner=Team-Commonly') && c.args.includes('name=jellymoon'))), true]);
 const bad = cases.filter(([, got, want]) => got !== want);
 for (const [n] of bad) console.error(`  ${n}`);
 if (bad.length) { console.error(`check-land-e2e: ${bad.length} of ${cases.length} wrong`); process.exit(1); }

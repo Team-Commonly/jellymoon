@@ -34,12 +34,12 @@ describe('server behaviour', () => {
   test('a computer socket marks its agents online, and the last close marks them offline', async () => {
     const w = await pod();
     const watcher: string[] = [];
-    w.rt.conns.add(conn({ kind: 'user', user: w.olivia.user }, watcher));
+    w.rt.conns.add(conn({ kind: 'user', actor: w.olivia.user }, watcher));
     const socket = conn({ kind: 'computer', computerId: w.comp.computerId, owner: w.olivia.user }, []);
     await w.rt.attach(socket);
-    expect(Object.keys(w.rt.state.online)).toContain(w.comp.computerId);
+    expect(Object.keys(w.rt.state.online ?? {}).includes(w.comp.computerId)).toBe(true);
     await w.rt.detach(socket);
-    expect(Object.keys(w.rt.state.online)).not.toContain(w.comp.computerId);
+    expect(Object.keys(w.rt.state.online ?? {}).includes(w.comp.computerId)).toBe(false);
     expect(watcher.map((f) => JSON.parse(f).data.state)).toEqual(['online', 'offline']);
   });
 
@@ -47,7 +47,7 @@ describe('server behaviour', () => {
     const w = await pod();
     await w.rt.attach(conn({ kind: 'computer', computerId: w.comp.computerId, owner: w.olivia.user }, []));
     const again = await Hub.restore(w.db);
-    expect(Object.keys(again.pods.get(w.p.id)!.state.online)).toEqual([]);
+    expect(Object.keys(again.pods.get(w.p.id)!.state.online ?? {})).toEqual([]);
   });
 
   test('evict reloads the pod from storage and keeps the sequence', async () => {
@@ -70,15 +70,15 @@ describe('server behaviour', () => {
     const inv = (await w.call('POST', `/v1/pods/${w.p.id}/invites`, w.olivia.token, {})).json;
     const rows = await w.db.rows<{ hash: string }>('select hash from invites');
     expect(rows.length).toBe(1);
-    expect(rows[0].hash).not.toBe(inv.code);
-    expect(JSON.stringify(rows)).not.toContain(inv.code);
+    expect(rows[0].hash === inv.code).toBe(false);
+    expect(JSON.stringify(rows).includes(inv.code)).toBe(false);
   });
 
   test('test routes: open in local, bearer-gated with a bearer, absent with neither', async () => {
     const open = await setup({ local: true });
     expect((await open.call('POST', '/__test/session', undefined, { name: 'a' })).status).toBe(200);
     const gated = await setup({ local: false, testBearer: 'sekret' });
-    expect((await gated.call('POST', '/__test/session', undefined, { name: 'a' })).status).not.toBe(200);
+    expect((await gated.call('POST', '/__test/session', undefined, { name: 'a' })).status === 200).toBe(false);
     expect((await gated.call('POST', '/__test/session', 'sekret', { name: 'a' })).status).toBe(200);
     expect((await gated.call('POST', '/__test/clock', 'sekret', { now: 1 })).status).toBe(404);
     const none = await setup({ local: false });

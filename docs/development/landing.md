@@ -254,6 +254,8 @@ shape refuses.
   only when that line holds nothing but the known label words (potential, issue, refactor, suggestion, nitpick, trivial, minor, major,
   critical) and every severity word in it is Minor, Trivial or Nitpick. Anything else, an unknown word, a mix with Major, no such line, counts as Major (fail
   closed), and the way out is a trusted reply in the thread (`fixed in <sha>`, `false positive: <why>` or `not fixing: <why>`) or resolving it.
+  Limit: (d) reads review threads only. A finding CodeRabbit posts only in its review body (one outside the diff, for example) is not
+  read by land, so the operator reads that body at the head before writing the `coderabbit` row.
 - **(e) Only trusted people's commits.** For every commit of `main..head` land reads `GET /repos/{repo}/commits/{sha}` and needs both
   `author.login` and `committer.login` in `JM_TRUSTED_LOGINS` (case-insensitive). A null login (an email GitHub cannot match), a missing
   commit, a count above 250, or any app account refuses. Land's own merge commit is made by `gh pr merge` after these checks and is not in the range.

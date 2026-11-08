@@ -199,7 +199,7 @@ function codeRabbitGate(rows, n, head, mainTip) {
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
 async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
   const n = String(pr.number);
-  const head = pr.headRefOid;
+  const head = pr.headRefOid.toLowerCase();
   const rows = readLedger();
   const led = checkLedger(rows, { pr: n, head });
   if (!led.ok) return led;

@@ -99,7 +99,11 @@ func ask(sc *bufio.Scanner, kinds []string, rec string) {
 	send(map[string]any{"id": 99, "method": "session/request_permission", "params": map[string]any{
 		"sessionId": "sess_t", "toolCall": map[string]any{"toolCallId": "call_1", "kind": "execute", "title": "rm -rf SECRET_ARG"}, "options": opts}})
 	sc.Scan()
-	var r struct{ Result struct{ Outcome struct{ Outcome, OptionId string } } }
+	var r struct {
+		Result struct {
+			Outcome struct{ Outcome, OptionId string }
+		}
+	}
 	_ = json.Unmarshal(sc.Bytes(), &r)
 	if r.Result.Outcome.Outcome == "selected" {
 		note(rec, "answer:"+r.Result.Outcome.OptionId)

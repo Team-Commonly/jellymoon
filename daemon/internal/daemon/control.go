@@ -26,6 +26,8 @@ type AddRequest struct {
 	PodID       protocol.PodID   `json:"podId"`
 	Harness     protocol.Harness `json:"harness"`
 	DisplayName string           `json:"displayName"`
+	// AllowPermissions is the agent's allow setting (config.Agent).
+	AllowPermissions bool `json:"allowPermissions,omitempty"`
 }
 
 type addReply struct {

@@ -1,25 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { buildApp } from '../src/app';
 import { openDb } from '../src/db';
 import { Hub } from '../src/hub';
-import type { Conn } from '../src/pod';
 import { eventsAfter } from '../src/store';
-
-type Json = Record<string, any>;
-
-async function setup(opts: { local: boolean; testBearer?: string } = { local: true }) {
-  const db = await openDb({});
-  const hub = await Hub.restore(db);
-  const app = buildApp(hub, opts);
-  const call = async (method: string, path: string, token?: string, body?: unknown): Promise<{ status: number; json: Json }> => {
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await app.fetch(new Request(`http://x${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }));
-    return { status: res.status, json: (await res.json()) as Json };
-  };
-  return { db, hub, call };
-}
-
-const conn = (who: Conn['who'], frames: string[]): Conn => ({ who, send: (t) => { frames.push(t); }, subscribed: true, replaying: false, buf: [], sent: 0 });
+import { fakeConn as conn, setup } from './world';
 
 async function pod() {
   const s = await setup();
@@ -75,13 +58,15 @@ describe('server behaviour', () => {
   });
 
   test('test routes: open in local, bearer-gated with a bearer, absent with neither', async () => {
-    const open = await setup({ local: true });
+    // One Db under all three apps: PGlite starts once, so the test holds under load.
+    const db = await openDb({});
+    const open = await setup(db, { local: true });
     expect((await open.call('POST', '/__test/session', undefined, { name: 'a' })).status).toBe(200);
-    const gated = await setup({ local: false, testBearer: 'sekret' });
+    const gated = await setup(db, { local: false, testBearer: 'sekret' });
     expect((await gated.call('POST', '/__test/session', undefined, { name: 'a' })).status === 200).toBe(false);
     expect((await gated.call('POST', '/__test/session', 'sekret', { name: 'a' })).status).toBe(200);
     expect((await gated.call('POST', '/__test/clock', 'sekret', { now: 1 })).status).toBe(404);
-    const none = await setup({ local: false });
+    const none = await setup(db, { local: false });
     expect((await none.call('POST', '/__test/session', 'sekret', { name: 'a' })).status).toBe(404);
   });
 });

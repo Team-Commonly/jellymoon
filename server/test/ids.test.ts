@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { nthWakeId } from '../../podcore/src/index';
 import { base62, hashToken, newId, newInviteCode, newToken, newWakeSeed } from '../src/ids';
 
 describe('ids', () => {
@@ -15,6 +16,13 @@ describe('ids', () => {
     const seed = newWakeSeed();
     expect(/^wak_[0-9A-HJKMNP-TV-Z]{26}$/.test(seed)).toBe(true);
     expect(newWakeSeed() === seed).toBe(false);
+  });
+
+  test('two wake seeds never sit next to each other, so the core counting up from one cannot reach another', () => {
+    const seeds = Array.from({ length: 50 }, () => newWakeSeed());
+    for (const s of seeds) expect(nthWakeId(s, 1000) !== null).toBe(true);
+    const taken = new Set(seeds.flatMap((s) => [0, 1, 2].map((k) => nthWakeId(s, k))));
+    expect(taken.size).toBe(seeds.length * 3);
   });
 
   test('tokens are the prefix plus 43 base62 characters, and only the hash is derived from them', () => {

@@ -3,43 +3,8 @@ import type { AnyEvent } from '../../gen/ts/protocol';
 import { buildApp } from '../src/app';
 import { openDb } from '../src/db';
 import { Hub } from '../src/hub';
-import type { Conn } from '../src/pod';
 import { eventsAfter } from '../src/store';
-
-type Json = Record<string, any>;
-
-async function setup() {
-  const db = await openDb({});
-  const hub = await Hub.restore(db);
-  const app = buildApp(hub, { local: true });
-  const call = async (method: string, path: string, token?: string, body?: unknown): Promise<{ status: number; json: Json }> => {
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await app.fetch(new Request(`http://x${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }));
-    return { status: res.status, json: (await res.json()) as Json };
-  };
-  return { db, hub, call };
-}
-
-const fakeConn = (who: Conn['who'], frames: string[]): Conn => ({ who, send: (t) => { frames.push(t); }, subscribed: true, replaying: false, buf: [], sent: 0 });
-
-/** olivia owns a pod; ben (a member via invite) owns a computer with one agent; a task assigned to the agent has woken it. */
-async function world() {
-  const s = await setup();
-  const olivia = (await s.call('POST', '/__test/session', undefined, { name: 'olivia' })).json;
-  const ben = (await s.call('POST', '/__test/session', undefined, { name: 'ben' })).json;
-  const pod = (await s.call('POST', '/v1/pods', olivia.token, { name: 'p' })).json;
-  const inv = (await s.call('POST', `/v1/pods/${pod.id}/invites`, olivia.token, {})).json;
-  await s.call('POST', `/v1/invites/${inv.code}/accept`, ben.token);
-  const comp = (await s.call('POST', '/v1/computers', ben.token, { name: 'mac', os: 'darwin', arch: 'arm64' })).json;
-  const agent = (await s.call('POST', `/v1/pods/${pod.id}/agents`, comp.token, { harness: 'fake', displayName: 'bee' })).json;
-  const frames: string[] = [];
-  const rt = s.hub.pods.get(pod.id)!;
-  rt.conns.add(fakeConn({ kind: 'computer', computerId: comp.computerId, owner: ben.user }, frames));
-  const made = await rt.exec({ type: 'task_create', caller: { kind: 'user', userId: olivia.user.id }, taskId: 'tsk_00000000000000000000000001', title: 't', kind: 'chore', assignee: agent.agentId, wakeId: 'wak_00000000000000000000000001' });
-  expect(made?.ok).toBe(true);
-  const wake = JSON.parse(frames.find((f) => f.includes('"run.wake"')) as string).data;
-  return { ...s, olivia, ben, pod, comp, agent, wake, rt };
-}
+import { world } from './world';
 
 describe('server', () => {
   test('a restart restores users, tokens, pods and the event log, with no seq gap', async () => {

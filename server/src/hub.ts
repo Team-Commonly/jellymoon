@@ -65,7 +65,7 @@ export class Hub {
   now = (): number => this.fixed ?? Date.now();
 
   private runtime(id: string, state: PodRuntime['state'], meta: PodRuntime['meta'], persisted: boolean): PodRuntime {
-    return new PodRuntime(id, state, meta, { db: this.db, now: this.now, rearm: () => this.rearm() }, persisted);
+    return new PodRuntime(id, state, meta, { db: this.db, now: () => this.now(), rearm: () => this.rearm() }, persisted);
   }
 
   indexPod(pod: PodRuntime): void {

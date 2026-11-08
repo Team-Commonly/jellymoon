@@ -33,21 +33,24 @@ export function verdictOf(text) {
   return /^GATE: PASS$/i.test(line) ? 'PASS' : 'BLOCK';
 }
 const family = (by) => VERIFIER.exec(by || '')?.[1] ?? null;
+export const isVerifier = (by) => family(by) !== null;
+const CODERABBIT = 'coderabbit'; // the only non-verifier `by` whose PASS is accepted, and only after land's own checks (land-coderabbit.mjs)
 const at = (rows, pr, head) => rows.filter((r) => r.pr === ref(pr) && r.head === head.toLowerCase());
-// Fails closed. At (pr, head): an unrecognised verdict blocks; a verdict row by a non-verifier blocks; ANY FAIL blocks,
-// whoever wrote it (no verdict shopping: the fix is a new head); the latest verdict row must be a PASS.
+// Fails closed. At (pr, head): an unrecognised verdict blocks; a verdict row by a non-verifier blocks (a `coderabbit` PASS excepted: it only
+// names the CodeRabbit path, whose conditions land checks itself); ANY FAIL blocks, whoever wrote it (no verdict shopping: the fix is a new
+// head); the latest verifier row must be a PASS, and that is the verifier path. With no verifier row, a `coderabbit` PASS is the CodeRabbit path.
 export function checkLedger(rows, { pr, head }) {
   const mine = at(rows, pr, head);
   const odd = mine.find((r) => !KNOWN.includes(r.verdict));
   if (odd) return { ok: false, reason: `#${pr} has an unrecognised verdict '${odd.verdict}' at ${head.slice(0, 8)}` };
   const verdicts = mine.filter((r) => ['PASS', 'FAIL'].includes(r.verdict));
-  const notV = verdicts.find((r) => !family(r.by));
+  const notV = verdicts.find((r) => !family(r.by) && !(r.by === CODERABBIT && r.verdict === 'PASS'));
   if (notV) return { ok: false, reason: `#${pr} has a ${notV.verdict} by '${notV.by}', which is not a <model>-verifier` };
   const failed = verdicts.find((r) => r.verdict === 'FAIL');
   if (failed) return { ok: false, reason: `#${pr} has a FAIL by ${failed.by} at ${head.slice(0, 8)}; a FAIL blocks that head, so push a new head` };
-  const primary = verdicts.at(-1);
+  const primary = verdicts.filter((r) => r.by !== CODERABBIT).at(-1) ?? verdicts.at(-1);
   if (primary?.verdict !== 'PASS') return { ok: false, reason: `no verifier PASS for #${pr} at ${head.slice(0, 8)}` };
-  return { ok: true, primary };
+  return { ok: true, primary, path: primary.by === CODERABBIT ? 'coderabbit' : 'verifier' };
 }
 const msgUser = (m) => (m.userId && typeof m.userId === 'object' && typeof m.userId._id === 'string' && m.userId._id ? m.userId._id : null); // a string userId is not a populated user: ignored
 const msgTime = (m) => Date.parse(m.createdAt ?? m.created_at) || 0;
@@ -318,4 +321,4 @@ export function trackThrowaway(dir, wt, run) {
 export const mergeAction = ({ dryRun }) => (dryRun ? 'stop' : 'merge');
 // The ledger note for a landed PR: GitHub's merge commit must have the tree that was tested. A mismatch (main or the base moved in the
 // window between the last re-read and the merge) cannot be undone, but it is recorded and shouted instead of going unseen.
-export const landedNote = (sha, tested, merged) => (tested === merged ? sha : `${sha} TREE-MISMATCH tested ${tested} merged ${merged}`);
+export const landedNote = (sha, tested, merged, via = '') => `${tested === merged ? sha : `${sha} TREE-MISMATCH tested ${tested} merged ${merged}`}${via ? `; admitted by ${via}` : ''}`;

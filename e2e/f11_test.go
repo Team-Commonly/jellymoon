@@ -176,8 +176,9 @@ type postedMsg struct {
 		Ruling    json.RawMessage
 	}
 	Receipt *struct {
-		RunID, AgentID, ComputerID, Harness, StartedAt, PostedAt, WakeReason string
-		ToolCalls                                                            int
+		RunID, AgentID, ComputerID, Harness, StartedAt, PostedAt, WakeReason, TaskID string
+		HarnessVersion                                                               *string
+		ToolCalls                                                                    int
 	}
 }
 
@@ -187,6 +188,15 @@ func (f *f11) stored() ([]postedMsg, error) {
 		return nil, fmt.Errorf("GET feed: HTTP %d", r.Status)
 	}
 	return out.Messages, nil
+}
+
+// wakeTask is the task whose assignment woke the run: the only task the pod can say the run was woken for.
+func (f *f11) wakeTask() (string, error) {
+	var out struct{ Tasks []struct{ ID, Title string } }
+	if r := f.c.do("GET", "/v1/pods/"+f.pod+"/tasks", f.owner.tok, nil, &out); !r.ok() || len(out.Tasks) != 1 {
+		return "", fmt.Errorf("GET tasks: HTTP %d with %d tasks, want 1 (the one that woke the run)", r.Status, len(out.Tasks))
+	}
+	return out.Tasks[0].ID, nil
 }
 
 func (f *f11) storedWith(summary string) (postedMsg, error) {
@@ -284,11 +294,18 @@ func (f *f11) receipt() error {
 	if !stamp.MatchString(r.StartedAt) || !stamp.MatchString(r.PostedAt) || r.PostedAt < r.StartedAt {
 		return fmt.Errorf("receipt times startedAt %q postedAt %q, want RFC 3339 with postedAt not before startedAt", r.StartedAt, r.PostedAt)
 	}
-	return f.agentCannotSteer(r.ToolCalls)
+	woke, err := f.wakeTask()
+	if err != nil {
+		return err
+	}
+	if r.TaskID != woke || r.HarnessVersion != nil {
+		return fmt.Errorf("receipt %+v, want taskId %s (the task that woke the run, though the ask names none) and no harnessVersion (the pod stores none)", *r, woke)
+	}
+	return f.agentCannotSteer(r.ToolCalls, woke)
 }
 
 // agentCannotSteer: an agent that lies in headers changes nothing, and plain HTTP calls are not MCP calls, so the count stays.
-func (f *f11) agentCannotSteer(before int) error {
+func (f *f11) agentCannotSteer(before int, woke string) error {
 	// The ask itself was an MCP call by now, so the next post sees before+1; the plain HTTP calls in between add nothing.
 	lies := map[string]string{"X-Jm-Tool-Calls": "99", "X-Jm-Harness": "codex", "X-Jm-Wake-Reason": "mention", "X-Jm-Run": "run_01JCZK7Q8XG4M2B9V5T3W6RH01"}
 	st, raw := f.httpAs(f.run.RunToken, validAsk("The same ask over plain HTTP"), lies)
@@ -301,6 +318,17 @@ func (f *f11) agentCannotSteer(before int) error {
 	}
 	if r := *m.Receipt; r.ToolCalls != before+1 || r.Harness != "fake" || r.WakeReason != "task_assigned" || r.RunID != f.run.RunID {
 		return fmt.Errorf("after headers claiming 99 calls, harness codex, wake mention: receipt %+v, want toolCalls %d (the MCP calls made, the ask itself now included) harness fake wakeReason task_assigned", r, before+1)
+	}
+	// The receipt is the pod's record, not the post's: a post that names another task, or one that does not exist, is stamped with the task that woke the run.
+	for name, named := range map[string]string{"another task": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH99", "a task that does not exist": "tsk_00000000000000000000000000"} {
+		summary := "Naming " + name
+		if st, raw := f.httpAs(f.run.RunToken, plus(validAsk(summary), "taskId", named), nil); st != 200 {
+			return fmt.Errorf("plain HTTP ask naming %s: HTTP %d %s, want 200", name, st, raw)
+		}
+		m, err := f.storedWith(summary)
+		if err != nil || m.Receipt == nil || m.Receipt.TaskID != woke || m.Receipt.HarnessVersion != nil {
+			return fmt.Errorf("a post naming %s (%s): receipt %+v (err %v), want taskId %s, the task that woke the run, and no harnessVersion", name, named, m.Receipt, err, woke)
+		}
 	}
 	return nil
 }

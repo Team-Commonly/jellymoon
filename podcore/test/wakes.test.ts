@@ -210,6 +210,12 @@ describe('run_claim', () => {
     expect(events(r.out).length).toBe(1);
   });
 
+  test('the run records the task that woke it, and none when the wake was about something else', () => {
+    expect(play([[assign(1), 0], [claimWake(1), 5000]]).state.runs[runN(1)].wakeTaskId).toBe(id('tsk', 11));
+    const other = play([[ruling(2), 0], [claimWake(2), 5000]]).state.runs[runN(1)];
+    expect([other.wakeReason, other.wakeTaskId]).toEqual(['decision_ruled', undefined]);
+  });
+
   test('the new run is live: it can claim a task', () => {
     const r = play([[assign(1), 0], [claimWake(1), 1], [{ type: 'claim', runId: runN(1), taskId: T1 }, 2]]);
     expect(r.state.claims[T1].runId).toBe(runN(1));

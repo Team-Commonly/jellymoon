@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import type { AskContext, Message, PostInput } from '../../gen/ts/protocol';
 import { isoOf } from '../src';
 import type { Cmd } from '../src';
-import { RUN_A, RUN_B, U_OWNER, U_STRANGER, errCode, events, id, play, world } from './helpers';
+import { RUN_A, RUN_B, TASKS, U_OWNER, U_STRANGER, errCode, events, id, play, world } from './helpers';
 
-/** The test world's runs are hand-built, so give run A the facts a woken run carries. */
-const woken = () => {
+/** The test world's runs are hand-built, so give run A the facts a woken run carries; `wakeTaskId` is the task that woke it. */
+const woken = (wakeTaskId: string | undefined = TASKS[0]) => {
   const s = world();
-  Object.assign(s.runs[RUN_A], { startedAt: 1000, wakeReason: 'task_assigned' });
+  Object.assign(s.runs[RUN_A], { startedAt: 1000, wakeReason: 'task_assigned', wakeTaskId });
   return s;
 };
 const DEC = id('dec', 1);
@@ -41,14 +41,23 @@ describe('the receipt and the decision', () => {
     const r = play([[{ type: 'tool_call', runId: RUN_A }, 1500], [{ type: 'tool_call', runId: RUN_A }, 1600], [post(ask), 3000]], woken());
     const m = stored(r.out);
     expect(m.receipt).toEqual({ runId: RUN_A, agentId: r.state.runs[RUN_A].agent.id, computerId: r.state.runs[RUN_A].computerId, harness: 'fake',
-      startedAt: isoOf(1000), postedAt: isoOf(3000), toolCalls: 2, wakeReason: 'task_assigned' });
+      startedAt: isoOf(1000), postedAt: isoOf(3000), toolCalls: 2, wakeReason: 'task_assigned', taskId: TASKS[0] });
     expect(m.runId).toBe(RUN_A);
     expect(m.decision).toEqual({ id: DEC, state: 'open' });
   });
 
-  test('a task id in the post is echoed into the receipt; a post that is not an ask has no decision', () => {
-    const m = stored(play([[post({ ...fyi, taskId: id('tsk', 1) }), 3000]], woken()).out);
-    expect([m.receipt?.taskId, m.decision]).toEqual([id('tsk', 1), undefined]);
+  test('the receipt names the task that woke the run, whatever the post names: another task, one that does not exist, or none', () => {
+    for (const named of [id('tsk', 9), TASKS[1], undefined]) {
+      const m = stored(play([[post({ ...fyi, ...(named === undefined ? {} : { taskId: named }) }), 3000]], woken()).out);
+      expect([named, m.receipt?.taskId, m.decision]).toEqual([named, TASKS[0], undefined]);
+    }
+  });
+
+  test('a run recorded before the wake task was kept has no task to stamp: the receipt carries none, even if the post names one', () => {
+    for (const named of [id('tsk', 9), undefined]) {
+      const m = stored(play([[post({ ...fyi, ...(named === undefined ? {} : { taskId: named }) }), 3000]], woken(undefined)).out);
+      expect([named, m.receipt !== undefined, m.receipt !== undefined && 'taskId' in m.receipt]).toEqual([named, true, false]);
+    }
   });
 
   test('a person\'s post has no receipt and no run; an ask by a person still carries a decision', () => {

@@ -65,7 +65,7 @@ export type Cmd =
   | { type: 'member_add'; userId: ActorId; name: string }
   | { type: 'task_create'; caller: Caller; taskId: TaskId; title: string; kind: TaskKind; assignee?: ActorId; body?: string; wakeId: WakeId }
   | { type: 'task_update'; caller: Caller; taskId: TaskId; status?: TaskUpdateStatus; assignee?: ActorId; wakeId: WakeId }
-  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; summary?: string; threadOf?: MessageId; wakeId: WakeId }
+  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; threadOf?: MessageId; wakeId: WakeId }
   /** `harness` is the adapter's record of where the caller's agent runs; `decisionId` is the id an ask's decision takes. */
   | { type: 'post'; caller: Caller; messageId: MessageId; decisionId: DecisionId; input: PostInput; harness?: Harness; wakeId: WakeId }
   | { type: 'tool_call'; runId: RunId }

@@ -18,6 +18,11 @@ import (
 // HeartbeatEvery is docs/protocol.md's interval: three missed beats make the pod call the computer offline.
 const HeartbeatEvery = 15 * time.Second
 
+// ReadTimeout is how long a pod socket may be silent before the daemon drops it and dials again: three heartbeat intervals, the
+// same 45 s after which the pod marks the computer offline. The daemon pings with every heartbeat and the pod's pong (or any
+// other frame) restarts the clock, so a healthy idle socket never trips it, and a half-open one is gone within a minute.
+const ReadTimeout = 3 * HeartbeatEvery
+
 // Daemon is one computer.
 type Daemon struct {
 	api   *api.Client
@@ -94,13 +99,18 @@ func (d *Daemon) keep(podID protocol.PodID) {
 	}
 }
 
-// session is one connection: dial, heartbeat at once and then every 15 s, and read until the socket fails.
+// session is one connection: dial, heartbeat and ping at once and then every 15 s, and read until the socket fails or goes
+// silent for ReadTimeout.
 func (d *Daemon) session(podID protocol.PodID) error {
 	conn, err := ws.Dial(d.ctx, d.api.PodSocket(podID), d.comp.Token)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
+	conn.ReadTimeout = d.readTimeout
+	if conn.ReadTimeout == 0 {
+		conn.ReadTimeout = ReadTimeout
+	}
 	d.log.Printf("pod %s: connected", podID)
 	ctx, stop := context.WithCancel(d.ctx)
 	defer stop()
@@ -117,7 +127,11 @@ func (d *Daemon) session(podID protocol.PodID) error {
 		t := time.NewTicker(HeartbeatEvery)
 		defer t.Stop()
 		for {
-			if err := send(conn, d.heartbeat(podID)); err != nil {
+			err := send(conn, d.heartbeat(podID))
+			if err == nil {
+				err = conn.Ping() // its pong tells Read the path is still up
+			}
+			if err != nil {
 				failed <- err
 				stop() // closes conn, so the Read below returns and session reports this error
 				return

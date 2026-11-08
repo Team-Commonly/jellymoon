@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -80,5 +81,27 @@ func TestAPongKeepsTheSocketAlive(t *testing.T) {
 	got, err := c.Read()
 	if err != nil || string(got) != "hi" {
 		t.Errorf("Read = %q, %v; want hi", got, err)
+	}
+}
+
+// Ping puts a final ping frame on the wire.
+func TestPingSendsAPingFrame(t *testing.T) {
+	got := make(chan byte, 1)
+	c := dial(t, serve(t, func(s net.Conn) {
+		var h [2]byte
+		if _, err := io.ReadFull(s, h[:]); err == nil {
+			got <- h[0]
+		}
+	}))
+	if err := c.Ping(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case b := <-got:
+		if b != 0x80|opPing {
+			t.Errorf("first byte %#x, want a final ping frame", b)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the server saw no frame")
 	}
 }

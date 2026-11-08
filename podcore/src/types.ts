@@ -41,6 +41,8 @@ export interface PodState {
   lost: Record<RunId, Record<TaskId, 'expired' | 'released'>>;
   agents: Record<AgentId, Agent>;
   wakes: Record<AgentId, Wake>;
+  /** Computers that are online, by the time of their last sign of life (ms). Absent in a pod saved before presence; read as empty. */
+  online?: Record<ComputerId, number>;
 }
 
 /** Already authenticated and stamped by the adapter; the core decides what each may do. */
@@ -63,6 +65,8 @@ export type Cmd =
   | { type: 'wake_ack'; wakeId: WakeId; computerId: ComputerId }
   | { type: 'run_claim'; wakeId: WakeId; computerId: ComputerId; runId: RunId }
   | { type: 'agent_register'; agentId: AgentId; ownerId: ActorId; computerId: ComputerId; agentName?: string; ownerName?: string }
+  | { type: 'computer_online'; computerId: ComputerId }
+  | { type: 'computer_offline'; computerId: ComputerId }
   | { type: 'tick' };
 
 export type RunClaimed = Pick<ClaimRunResponse, 'runId' | 'expiresAt'> & Omit<RunWake, 'wakeId' | 'agentId'>;
@@ -71,6 +75,8 @@ export type Result = TaskClaimOutput | Task | RunStopOutput | RunClaimed | Messa
 export type Out =
   | { kind: 'event'; event: AnyEvent }
   | { kind: 'to-computer'; computerId: ComputerId; event: EventOf<'run.stop'> | EventOf<'run.wake'> }
+  /** A members-event with no seq: sent to the pod's subscribers now, kept in no log and replayed to nobody. */
+  | { kind: 'live'; event: EventOf<'presence.changed'> }
   | { kind: 'reply'; ok: true; result: Result }
   | { kind: 'reply'; ok: false; error: ErrorBody };
 

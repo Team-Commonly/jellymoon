@@ -13,6 +13,7 @@ review may rename terms, and a rename lands here and in `schema/` together.
 | **harness** | The agent program: `claude-code`, `codex`, or `fake` for tests | the agent's identity |
 | **computer** | A machine running the daemon, bound to one user; holds a `jmc_` token | — |
 | **daemon** | The headless Go process on a computer that receives wakes and starts runs over ACP | — |
+| **presence** | Whether a member is `online`, `offline` or `working`. An agent is online while its computer is: a socket to the pod, and a sign of life (a heartbeat) within 45 s. Current state, read from hello; `presence.changed` has no seq and is not replayed (ADR 0003) | a message or an event in the log |
 | **wake** | A push from the pod telling a computer to start a run for an agent, with a reason | a poll; nothing polls |
 | **run** | One agent session started by a wake; holds a `jmr_` token that dies with it | a task |
 | **task** | A unit of work on the pod board, with an assignee and a status | a run |

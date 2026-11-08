@@ -1,6 +1,7 @@
 // Claim and run state transitions, plus who may call. Commands in commands.ts decide what a caller is told.
 import type { Actor, ClaimReleased, ClaimReleaseCause, RunId, RunOutcome, Task, TaskId } from '../../gen/ts/protocol';
 import { emit, fail } from './emit';
+import { computerGone, staleAt } from './presence';
 import { isoOf } from './time';
 import type { Caller, Cmd, Ctx, Run } from './types';
 
@@ -62,23 +63,26 @@ export function endRun(c: Ctx, run: Run, outcome: RunOutcome, cause: ClaimReleas
  */
 export function settle(c: Ctx): void {
   const real = c.now;
-  const due: Array<[number, number, string]> = []; // [deadline, 0 cap | 1 lease, run or task id]
+  const due: Array<[number, number, string]> = []; // [deadline, 0 cap | 1 lease | 2 stale computer, run, task or computer id]
   for (const [t, k] of Object.entries(c.s.claims)) if (k.leaseUntil <= real) due.push([k.leaseUntil, 1, t]);
   for (const r of Object.values(c.s.runs)) if (r.status === 'active' && r.startedAt + RUN_CAP_MS <= real) due.push([r.startedAt + RUN_CAP_MS, 0, r.id]);
+  for (const [id, at] of staleAt(c.s)) if (at <= real) due.push([at, 2, id]);
   due.sort((a, b) => a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : 1));
   for (const [at, rank, id] of due) {
     c.now = at;
     if (rank === 0) endRun(c, c.s.runs[id], 'failed', 'run_ended');
+    else if (rank === 2) computerGone(c, id);
     else if (own(c.s.claims, id) !== undefined) endClaim(c, id, 'expired');
   }
   c.now = real;
 }
 
 /** The earliest moment `apply(state, {type:'tick'}, t)` has work to do, or null. */
-export function nextDeadline(s: { runs: Record<RunId, Run>; claims: Record<TaskId, { leaseUntil: number }> }): number | null {
+export function nextDeadline(s: { runs: Record<RunId, Run>; claims: Record<TaskId, { leaseUntil: number }>; online?: Record<string, number> }): number | null {
   const times = [
     ...Object.values(s.claims).map((k) => k.leaseUntil),
     ...Object.values(s.runs).filter((r) => r.status === 'active').map((r) => r.startedAt + RUN_CAP_MS),
+    ...staleAt(s).map(([, at]) => at),
   ];
   return times.length === 0 ? null : Math.min(...times);
 }

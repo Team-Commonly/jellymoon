@@ -49,9 +49,13 @@ func (w *world) storedAlarm() int64 {
 func (w *world) wantAlarm(want int64, when string) {
 	w.t.Helper()
 	if got := w.storedAlarm(); got != want {
-		w.t.Fatalf("stored alarm %s is %d, want the claim's deadline %d", when, got, want)
+		w.t.Fatalf("stored alarm %s is %d, want the object's earliest deadline %d", when, got, want)
 	}
 }
+
+// presenceBoundMs (F08): an online computer goes stale 45 s after its last sign of life on the server clock, and the object
+// stores its earliest deadline, so a computer seen when a claim was made stores its bound 15 s before the claim's deadline.
+const presenceBoundMs = 45000
 
 // instanceOf reads the object's instance id and the count of requests it has served (the read itself is not counted).
 // If the object was discarded, the read is the request that builds the new one.
@@ -74,12 +78,13 @@ func (w *world) reconnect() {
 func TestEvictMidClaim(t *testing.T) {
 	needFake(t)
 	w := newWorld(t)
+	opened := w.clock // newWorld opened both computers' sockets at this clock, their last sign of life before the discard
 	r := w.startRun(w.a1, "wake")
 	tk := w.newTask("evicted", "")
 	w.mustClaim(r, tk.ID)
 	w.checkLease(tk.ID, r)
 	deadline := w.expected(r)
-	w.wantAlarm(deadline, "after the claim") // the object stored its own deadline alarm
+	w.wantAlarm(min(deadline, opened+presenceBoundMs), "after the claim, both computers online") // the object stored its own earliest deadline
 	last := maxSeq(w.sBen.snapshot(0))
 	before := w.instanceOf()
 	w.discard(deadline-1000, 0, 0)
@@ -92,7 +97,6 @@ func TestEvictMidClaim(t *testing.T) {
 		return true, ""
 	})
 	s := w.openSince(w.ben.tok, "ben-after-discard", last) // the first request the new object serves
-	w.reconnect()
 	if after := w.instanceOf(); after.Instance == before.Instance {
 		t.Fatalf("the object is the same instance %s after the discard: it was reset, not thrown away", after.Instance)
 	}
@@ -105,6 +109,9 @@ func TestEvictMidClaim(t *testing.T) {
 		t.Fatalf("renewal stamped %d, want %d", w.expected(r), deadline+59000)
 	}
 	w.wantAlarm(w.expected(r), "after the renewal") // the new object moved its alarm with the lease
+	// The others rejoin only now: a computer seen at this clock goes stale 15 s before the renewed lease, and its bound would be
+	// the stored alarm instead (F08). The second run needs computer A's socket for its wake.
+	w.reconnect()
 	r2 := w.startRun(w.a2, "wake-2")
 	rs := w.claim(r2, tk.ID)
 	w.wantErr(rs, 409, "already_claimed", "a second run's claim after the eviction")
@@ -134,11 +141,11 @@ func TestEvictAlarmWake(t *testing.T) {
 	w.mustClaim(r, tk.ID)
 	w.checkLease(tk.ID, r)
 	deadline := w.expected(r)
-	w.wantAlarm(deadline, "before the discard") // the object stored its own deadline alarm
 	last := maxSeq(w.sBen.snapshot(0))
 	mk := w.sBen.mark()
 	w.setClock(deadline - 1)
 	w.noRelease(w.sBen, mk, tk.ID, 300*time.Millisecond)
+	w.wantAlarm(deadline, "before the discard") // the object stored its own deadline alarm; both computers went stale at this clock (F08)
 	before := w.instanceOf()
 	if before.Requests == 0 {
 		t.Fatalf("the request counter reads 0 on an object that has served the whole setup: it counts nothing")

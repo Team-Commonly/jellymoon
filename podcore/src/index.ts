@@ -3,6 +3,7 @@ import { messagePostCmd, memberAddCmd, podCreateCmd, taskCreateCmd, taskUpdateCm
 import { CALLER_TYPES, callerOf, isObj, own, renewRun, settle } from './claims';
 import { claimCmd, heartbeatCmd, opCmd, releaseCmd, runEndCmd, runStopCmd } from './commands';
 import { fail } from './emit';
+import { computerOfflineCmd, computerOnlineCmd } from './presence';
 import { agentRegisterCmd, changeCmd, runClaimCmd, wakeAckCmd } from './wakes';
 import type { Cmd, Ctx, Out, PodState } from './types';
 
@@ -10,6 +11,7 @@ export type { Agent, Caller, Cmd, Out, PodState, Result, Run, RunClaimed, Wake }
 export { isoOf } from './time';
 export { LEASE_MS, RUN_CAP_MS, nextDeadline } from './claims';
 export { WAKE_RESEND_MS } from './wakes';
+export { PRESENCE_STALE_MS, agentPresence } from './presence';
 export { nthWakeId } from './wakeid';
 
 /** A pod nobody has created yet: every command but `pod_create` (and `boot`) gets not_found. */
@@ -22,7 +24,7 @@ const HANDLERS: Handlers = {
   pod_create: podCreateCmd, member_add: memberAddCmd, agent_register: agentRegisterCmd,
   task_create: taskCreateCmd, task_update: taskUpdateCmd, message_post: messagePostCmd,
   claim: claimCmd, op: opCmd, heartbeat: heartbeatCmd, task_release: releaseCmd, run_end: runEndCmd, run_stop: runStopCmd,
-  change: changeCmd, wake_ack: wakeAckCmd, run_claim: runClaimCmd,
+  change: changeCmd, wake_ack: wakeAckCmd, run_claim: runClaimCmd, computer_online: computerOnlineCmd, computer_offline: computerOfflineCmd,
   tick: () => undefined,
   boot: () => undefined,
 };
@@ -35,6 +37,7 @@ const STRINGS: Record<string, string[]> = {
   claim: ['runId', 'taskId'], op: ['runId'], heartbeat: ['computerId'], task_release: ['taskId'], run_end: ['runId', 'computerId'], run_stop: ['runId'],
   pod_create: ['ownerId'], member_add: ['userId'], task_create: ['taskId', 'wakeId'], task_update: ['taskId', 'wakeId'], message_post: ['messageId', 'wakeId'],
   change: ['agentId', 'wakeId'], wake_ack: ['wakeId', 'computerId'], run_claim: ['wakeId', 'computerId', 'runId'], agent_register: ['agentId', 'ownerId', 'computerId'],
+  computer_online: ['computerId'], computer_offline: ['computerId'],
 };
 /** Optional string fields: absent is fine, present must be a string (an array id would otherwise slip past the id checks). */
 const OPTIONAL: Record<string, string[]> = { op: ['taskId'], task_create: ['assignee'], task_update: ['assignee'] };

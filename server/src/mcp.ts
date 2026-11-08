@@ -5,8 +5,9 @@
 // count: before a run's tool call is dispatched, `seen` tells the pod, which is where a receipt's toolCalls comes from. A call the
 // pod could not count is refused before it takes effect, so the agent is never told of an error for something that happened.
 import tools from '../../gen/ts/tools.json';
-import { OPERATIONS, TOOL_PREFIX } from '../../gen/ts/protocol';
+import { ERROR_STATUS, OPERATIONS, TOOL_PREFIX } from '../../gen/ts/protocol';
 import type { Hono } from 'hono';
+import { runLive } from '../../podcore/src/index';
 import type { Hub, Principal as Who } from './hub';
 import { fail } from './kit';
 
@@ -14,6 +15,8 @@ type Id = string | number | null;
 type Dispatch = (req: Request) => Promise<Response>;
 /** Called before a run's tools/call is dispatched, refused or not; true when the pod counted it. */
 type Seen = (runId: string, podId: string) => Promise<boolean>;
+/** Asked before any method but tools/call of a run's token is answered: false when the run has ended or was stopped, so its token is dead here too. */
+type Live = (runId: string, podId: string) => Promise<boolean>;
 type Args = Record<string, unknown>;
 const PROTOCOL = '2025-03-26';
 const ops = OPERATIONS as Record<string, { method: string; path: string }>;
@@ -60,10 +63,11 @@ async function callTool(id: Id, who: Who, params: Args, origin: string, authoriz
 }
 
 /** One JSON-RPC message from an authenticated caller. */
-async function mcp(req: Request, origin: string, who: Who, dispatch: Dispatch, seen: Seen): Promise<Response> {
+async function mcp(req: Request, origin: string, who: Who, dispatch: Dispatch, seen: Seen, live: Live): Promise<Response> {
   let msg: { id?: Id; method?: unknown; params?: Args };
   try { msg = (await req.json()) as typeof msg; } catch { return refuse(null, -32700, 'The body is not JSON.'); }
   if (msg === null || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.method !== 'string') return refuse(null, -32600, 'Send one JSON-RPC request.');
+  if (who.kind === 'run' && msg.method !== 'tools/call' && !(await live(who.runId, who.podId))) return Response.json({ code: 'unauthorized', message: 'This run has ended; its token no longer works.' }, { status: ERROR_STATUS.unauthorized });
   const id = msg.id ?? null;
   const params = msg.params ?? {};
   if (msg.id === undefined) return new Response(null, { status: 202 }); // a notification takes no answer
@@ -84,10 +88,11 @@ export const viaMcp = (req: Request): boolean => carried.has(req);
 export function mcpRoute(app: Hono, hub: Hub): void {
   const dispatch = (r: Request): Promise<Response> => { carried.add(r); return Promise.resolve(app.fetch(r)); };
   const seen = async (runId: string, podId: string): Promise<boolean> => (await hub.pods.get(podId)?.exec({ type: 'tool_call', runId }))?.ok === true;
+  const live = async (runId: string, podId: string): Promise<boolean> => { const pod = hub.pods.get(podId); return pod !== undefined && runLive(pod.state, runId); };
   app.post('/mcp', async (c) => {
     const who = await hub.authenticate(c.req.header('Authorization'));
     if (who === null) return fail(c, 'unauthorized', 'Send a valid bearer token.');
     if (who.kind === 'computer') return fail(c, 'forbidden', 'This kind of token may not call this route.');
-    return mcp(c.req.raw, new URL(c.req.url).origin, who, dispatch, seen);
+    return mcp(c.req.raw, new URL(c.req.url).origin, who, dispatch, seen, live);
   });
 }

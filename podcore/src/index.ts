@@ -11,7 +11,7 @@ import type { Cmd, Ctx, Out, PodState } from './types';
 
 export type { Agent, Caller, Cmd, Out, PodState, Result, Run, RunClaimed, Wake } from './types';
 export { isoOf } from './time';
-export { LEASE_MS, RUN_CAP_MS, nextDeadline } from './claims';
+export { LEASE_MS, RUN_CAP_MS, nextDeadline, runLive } from './claims';
 export { WAKE_RESEND_MS } from './wakes';
 export { PRESENCE_STALE_MS, agentPresence } from './presence';
 export { nthWakeId } from './wakeid';

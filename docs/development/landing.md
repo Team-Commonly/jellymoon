@@ -244,14 +244,19 @@ shape refuses.
 - **(c) CodeRabbit reviewed this exact head**, in one of two ways. (1) Land reads `GET /repos/{repo}/pulls/{n}/reviews` (paginated) and
   finds a review whose `commit_id` is the head, whose state is `COMMENTED` or `APPROVED`, and whose user is the GitHub App account: REST
   `user.type` is `Bot` and `user.login` is exactly `coderabbitai[bot]`. A display name is never read, and a person cannot hold that login
-  (a `User` with it does not count). (2) When CodeRabbit re-reviews a new head and finds nothing, it files no review and only edits its
-  summary comment, so land also reads `GET /repos/{repo}/issues/{n}/comments` (paginated, only when (1) does not settle it) and accepts
-  the summary comment if all of these hold: exactly one comment by CodeRabbit (the same login and type test) carries a hidden
-  `final_review_risk_coverage` marker, and it carries exactly one; the marker parses as JSON with `sourceCommitId` and `coveredCommitId`
-  both equal to the head (40 hex, compared lower-case) and `kind` exactly `"reviewed"`; and that same comment, with HTML comments
-  stripped, has the line `No actionable comments were generated in the recent review.` on a line of its own. A comment by anyone else is
-  ignored, even if it quotes the marker. Two markers, unparseable JSON, another commit, another kind, a missing line, or a comments reply
-  that is not a list refuses with a reason naming what was missing. A `CHANGES_REQUESTED` review of CodeRabbit's at the head refuses
+  (a `User` with it does not count). (2) When CodeRabbit re-reviews a new head and finds nothing, it files no review and only edits
+  its summary comment, so land also reads `GET /repos/{repo}/issues/{n}/comments` (paginated, only when (1) does not settle it) and accepts
+  the summary comment if all of these hold. Only CodeRabbit's summary comment is read (same login and type test; a comment by anyone else
+  is ignored, even if it quotes the marker): its body starts with `<!-- coderabbit-ai-generated:v1 -->` and its leading HTML-comment
+  lines include `<!-- This is an auto-generated comment: summarize by coderabbit.ai -->`, there is exactly one such comment, and its header
+  does not say `rate limited by coderabbit.ai` or `skip review by coderabbit.ai`. Its status, walkthrough and risk blocks
+  (`recent_review_status`, `walkthrough`, `final_review_risk` start and end delimiters, each once, in that order, fenced code ignored) are
+  all there. The one hidden `final_review_risk_coverage` marker sits inside the risk block, parses as JSON with no repeated key, has
+  `sourceCommitId` and `coveredCommitId` both equal to the head (40 hex, compared lower-case) and `kind` exactly `"reviewed"`; and the
+  status block, with HTML comments stripped, has the line `No actionable comments were generated in the recent review.` on a line of its
+  own. A marker in any other CodeRabbit comment (a reply, a rate-limited notice) refuses outright, because those can repeat text other people
+  chose. Two markers, unparseable JSON, another commit, another kind, a missing line, or a comments reply that is not a list refuses with a
+  reason naming what was missing. A `CHANGES_REQUESTED` review of CodeRabbit's at the head refuses
   whichever way (c) is met; `DISMISSED` and `PENDING` reviews are ignored. The land output says which way (c) was met.
 - **(d) No unanswered Major or Critical thread.** Land reads every review thread with the GraphQL `reviewThreads` query (100 per page, up
   to 20 pages, comments first 100 per thread; more than that refuses). A thread counts as CodeRabbit's when its first comment's author is

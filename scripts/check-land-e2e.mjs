@@ -261,6 +261,7 @@ const MAJOR_THREAD = { isResolved: false, isOutdated: false, comments: { pageInf
 const CR_LEDGER = HDR + rowOf('PASS', 'opus-verifier', EARLY) + rowOf('PASS', 'coderabbit');
 const cr = (o = {}) => ({ ledger: CR_LEDGER, on: [
   [/^gh api .*pulls\/5\/reviews/, o.reviews ?? BOT_REVIEW()], [/^gh api graphql/, o.threads ?? GQL()],
+  [/^gh api .*issues\/5\/comments/, () => { if (o.comments === undefined) throw new Error('comments read failed'); return o.comments; }],
   [/^gh api repos\/\S+\/commits\/c\d+ /, (a) => { const sha = a.find((x) => x.includes('/commits/')).split('/').pop(); return JSON.stringify({ sha, author: { login: o.author ?? 'alice' }, committer: { login: o.committer ?? 'alice' } }); }],
 ], ...o.over });
 await t('coderabbit path: lands, says so, and the LANDED note records the path and both heads', cr(), (r) => r.merge && r.said.includes(`coderabbit at ${HEAD.slice(0, 8)}, after the review at ${EARLY.slice(0, 8)}`) && r.ledgerNow.includes(`admitted by coderabbit at ${HEAD.slice(0, 8)}, after the review at ${EARLY.slice(0, 8)}`));
@@ -272,6 +273,16 @@ await t('coderabbit path: a GraphQL error reply refuses', cr({ threads: '{"error
 await t('coderabbit path: no earlier verifier row refuses before any CodeRabbit read', cr({ over: { ledger: HDR + rowOf('PASS', 'coderabbit') } }), (r) => no(r, /one local review is missing/) && argv(r, 'gh', 'api graphql').length === 0);
 await t('coderabbit path: a FAIL at the head refuses even with a coderabbit PASS', cr({ over: { ledger: CR_LEDGER + rowOf('FAIL', 'sonnet-verifier') } }), (r) => no(r, /a FAIL blocks that head/));
 await t('coderabbit path: the pod verdict is still required', cr({ over: { msgs: [] } }), (r) => no(r, /no accepted reviewer/));
+// The summary way: a clean incremental review files no review, so land reads the issue comments (paginated) and finds CodeRabbit's summary.
+const SUMMARY = (head = HEAD) => '<!-- coderabbit-ai-generated:v1 -->\n\n<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n<!-- recent_review_status_start -->\n\nNo actionable comments were generated in the recent review.\n\n<!-- recent_review_status_end -->\n<!-- walkthrough_start -->\nx\n<!-- walkthrough_end -->\n<!-- final_review_risk_start -->\n<!-- final_review_risk_coverage:' + JSON.stringify({ sourceCommitId: head, coveredCommitId: head, kind: 'reviewed' }) + ' -->\n<!-- final_review_risk_end -->\n';
+const CMT = (login, type, body) => JSON.stringify({ user: { login, type }, body });
+const PAGE1 = Array.from({ length: 100 }, (_, i) => CMT('alice', 'User', `comment ${i}`)).join('\n'); // a full first page, the summary is on page 2
+const withSummary = (head = HEAD) => PAGE1 + '\n' + CMT('coderabbitai[bot]', 'Bot', SUMMARY(head));
+await t('coderabbit summary way: no review at the head, the summary on page 2 of the comments, lands and says so', cr({ reviews: '', comments: withSummary() }), (r) => r.merge && r.said.includes(`coderabbit at ${HEAD.slice(0, 8)} (summary comment), after the review at ${EARLY.slice(0, 8)}`) && argv(r, 'gh', 'issues/5/comments')[0]?.includes('--paginate'));
+await t('coderabbit summary way: a summary for another head refuses, nothing merged', cr({ reviews: '', comments: withSummary(OTHER) }), (r) => no(r, /not a review of/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit summary way: a failed comments read refuses, nothing merged', cr({ reviews: '' }), (r) => no(r, /CodeRabbit has not reviewed/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit summary way: the marker in another bot\'s comment refuses', cr({ reviews: '', comments: CMT('github-actions[bot]', 'Bot', SUMMARY()) }), (r) => no(r, /summary comments were found/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit summary way: a review at the head settles (c) without reading the comments', cr(), (r) => r.merge && argv(r, 'gh', 'issues/5/comments').length === 0);
 await t('verifier path: unchanged, says so, reads nothing from CodeRabbit', {}, (r) => r.merge && r.said.includes('verifier PASS by opus-verifier') && r.ledgerNow.includes('admitted by verifier PASS by opus-verifier') && argv(r, 'gh', 'api graphql').length === 0 && argv(r, 'gh', 'pulls/5/reviews').length === 0);
 cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`)) || (c.args[1] === 'graphql' && c.args.includes('owner=Team-Commonly') && c.args.includes('name=jellymoon'))), true]);
 const bad = cases.filter(([, got, want]) => got !== want);

@@ -19,20 +19,55 @@ export function checkEarlierReview(rows, { pr, head, range }) {
 // (c) CodeRabbit reviewed this exact head, in one of two ways. Either a submitted CodeRabbit review whose commit_id is the head (COMMENTED and
 // APPROVED count; DISMISSED and PENDING are ignored), or, because an incremental review that finds nothing files no review and only edits
 // the summary comment, that comment's hidden coverage marker plus its status line (checkSummary). CHANGES_REQUESTED at the head refuses either way.
+// Only CodeRabbit's SUMMARY comment is read, and only its own blocks: CodeRabbit also writes replies and rate-limited notices that repeat text
+// other people chose, so a marker anywhere else refuses outright.
 const CLEAN_LINE = 'No actionable comments were generated in the recent review.';
+const GENERATED = '<!-- coderabbit-ai-generated:v1 -->';
+const SUMMARIZE = '<!-- This is an auto-generated comment: summarize by coderabbit.ai -->';
+const NOT_A_REVIEW = ['rate limited by coderabbit.ai', 'skip review by coderabbit.ai']; // header lines of a summary that reviewed nothing
 const MARKER = /<!--\s*final_review_risk_coverage:([\s\S]*?)-->/g;
+const FENCE = new RegExp('```[\\s\\S]*?```|~{3}[\\s\\S]*?~{3}', 'g');
 const HEX40 = /^[0-9a-f]{40}$/;
+const D = { statusStart: '<!-- recent_review_status_start -->', statusEnd: '<!-- recent_review_status_end -->', walk: '<!-- walkthrough_start -->', riskStart: '<!-- final_review_risk_start -->', riskEnd: '<!-- final_review_risk_end -->' };
+// The comment's leading HTML-comment lines (blank lines allowed): its header.
+const header = (body) => {
+  const out = [];
+  for (const l of body.trimStart().split('\n')) { const t = l.trim(); if (t && !/^<!--.*-->$/.test(t)) break; if (t) out.push(t); }
+  return out;
+};
+const isSummary = (body) => { const h = header(body); return h[0] === GENERATED && h.includes(SUMMARIZE); };
+const hasMarker = (body) => body.includes('final_review_risk_coverage');
+const hasDuplicateKey = (text) => { const keys = [...text.matchAll(/"((?:[^"\\]|\\.)*)"\s*:/g)].map((m) => m[1]); return new Set(keys).size !== keys.length; };
+// The summary's marker and status line, each from its own block, in CodeRabbit's order (status, walkthrough, risk), every delimiter once.
+function summaryParts(body) {
+  const text = body.replace(FENCE, ''); // a fenced copy is quoted text, not a block
+  const at = Object.fromEntries(Object.entries(D).map(([k, d]) => [k, text.split(d).length === 2 ? text.indexOf(d) : -1]));
+  const order = [at.statusStart, at.statusEnd, at.walk, at.riskStart, at.riskEnd];
+  if (order.some((x) => x < 0) || order.some((x, i) => i && x <= order[i - 1])) return null;
+  return { status: text.slice(at.statusStart + D.statusStart.length, at.statusEnd), risk: text.slice(at.riskStart + D.riskStart.length, at.riskEnd) };
+}
 function checkSummary(comments, head) {
   if (!Array.isArray(comments) || comments.some((c) => !c || typeof c !== 'object' || typeof c.body !== 'string')) return no(`CodeRabbit has not reviewed ${h8(head)}, and its summary comment could not be read (the comments reply is not a list of comments)`);
-  // Only comments by CodeRabbit count; a person quoting the marker is ignored.
-  const marked = comments.filter((c) => isCodeRabbit(c.user)).map((c) => ({ c, found: [...c.body.matchAll(MARKER)].map((m) => m[1]) })).filter((x) => x.found.length);
-  if (marked.length !== 1 || marked[0].found.length !== 1) return no(`CodeRabbit has not reviewed ${h8(head)}, and ${marked.length} CodeRabbit comment(s) carry a coverage marker (exactly one is needed)`);
+  const mine = comments.filter((c) => isCodeRabbit(c.user)); // a person or another bot quoting the marker is ignored
+  const stray = mine.filter((c) => !isSummary(c.body) && hasMarker(c.body));
+  if (stray.length) return no(`CodeRabbit has not reviewed ${h8(head)}, and ${stray.length} CodeRabbit comment(s) that are not its summary carry a coverage marker (a reply or notice can repeat text others chose)`);
+  const sums = mine.filter((c) => isSummary(c.body));
+  if (sums.length !== 1) return no(`CodeRabbit has not reviewed ${h8(head)}, and ${sums.length} CodeRabbit summary comments were found (exactly one is needed)`);
+  const body = sums[0].body;
+  if (header(body).some((l) => NOT_A_REVIEW.some((n) => l.includes(n)))) return no(`CodeRabbit has not reviewed ${h8(head)}: its summary comment says it was rate limited or skipped`);
+  const found = [...body.matchAll(MARKER)].map((m) => m[1]);
+  if (found.length !== 1) return no(`the CodeRabbit summary comment carries ${found.length} coverage markers (exactly one is needed)`);
+  const parts = summaryParts(body);
+  if (!parts) return no('the CodeRabbit summary comment does not have its status, walkthrough and risk blocks once each, in that order');
+  const inRisk = [...parts.risk.matchAll(MARKER)].map((m) => m[1]);
+  if (inRisk.length !== 1 || inRisk[0] !== found[0]) return no('the CodeRabbit summary comment\'s coverage marker is not inside its risk block');
+  if (hasDuplicateKey(found[0])) return no('the coverage marker repeats a key');
   let m;
-  try { m = JSON.parse(marked[0].found[0]); } catch { return no('the CodeRabbit summary comment has a coverage marker that is not valid JSON'); }
+  try { m = JSON.parse(found[0]); } catch { return no('the CodeRabbit summary comment has a coverage marker that is not valid JSON'); }
   const ids = [m?.sourceCommitId, m?.coveredCommitId].map((x) => (typeof x === 'string' ? x.toLowerCase() : ''));
   if (!ids.every((x) => HEX40.test(x) && x === head) || m.kind !== 'reviewed') return no(`the CodeRabbit summary comment's coverage marker is not a review of ${h8(head)} (source, covered and kind must be that head, that head and "reviewed")`);
-  const visible = marked[0].c.body.replace(/<!--[\s\S]*?-->/g, '');
-  return visible.split('\n').some((l) => l.trim() === CLEAN_LINE) ? { ok: true } : no(`the CodeRabbit summary comment has no status line "${CLEAN_LINE}" outside HTML comments`);
+  const visible = parts.status.replace(/<!--[\s\S]*?-->/g, '');
+  return visible.split('\n').some((l) => l.trim() === CLEAN_LINE) ? { ok: true } : no(`the CodeRabbit summary comment has no status line "${CLEAN_LINE}" in its status block`);
 }
 export function checkReviews(reviews, head, comments) {
   if (!Array.isArray(reviews) || reviews.some((r) => !r || typeof r !== 'object' || typeof r.commit_id !== 'string' || typeof r.state !== 'string')) return no('CodeRabbit reviews: the reply is not a list of reviews');

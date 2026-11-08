@@ -32,7 +32,7 @@ func spawn(t *testing.T, bin string, env []string, args ...string) *dproc {
 		t.Fatalf("cannot start %s %v: %v", bin, args, err)
 	}
 	go func() { _ = p.cmd.Wait(); close(p.done) }()
-	t.Cleanup(p.kill)
+	t.Cleanup(p.stop)
 	return p
 }
 

@@ -38,3 +38,15 @@ func noStrays(t *testing.T) {
 		}
 	})
 }
+
+// stop is how a test ends a daemon it is finished with. SIGKILL cannot reach an agent, which runs in its own process group
+// (ADR 0005), so a daemon killed while its agent runs leaves the agent behind. SIGTERM lets the daemon end the agent's group
+// (SIGTERM, then SIGKILL after 2 s); the kill is only for a daemon that does not leave. kill stays for the tests that
+// inject a crash.
+func (p *dproc) stop() {
+	p.signal(syscall.SIGCONT) // a stopped daemon would sit on the SIGTERM
+	p.signal(syscall.SIGTERM)
+	if _, ok := p.finish(10 * time.Second); !ok {
+		p.kill()
+	}
+}

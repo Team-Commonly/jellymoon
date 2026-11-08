@@ -8,5 +8,8 @@ interface ImportMeta {
   readonly url: string;
 }
 
-// The bundle test uses Bun.build; this is the part of it that the test touches.
-declare const Bun: { build(o: { entrypoints: string[]; target: string; minify?: boolean; loader?: Record<string, string> }): Promise<{ success: boolean; outputs: Array<{ text(): Promise<string> }> }> };
+// The bundle test uses Bun.build and the preview test Bun.spawnSync; this is the part of them that the tests touch.
+declare const Bun: {
+  spawnSync(cmd: string[], o?: { env?: Record<string, string> }): { exitCode: number; stderr: { toString(): string } };
+  build(o: { entrypoints: string[]; target: string; minify?: boolean; loader?: Record<string, string> }): Promise<{ success: boolean; outputs: Array<{ text(): Promise<string> }> }>;
+};

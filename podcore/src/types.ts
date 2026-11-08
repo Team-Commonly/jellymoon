@@ -17,6 +17,8 @@ export interface Run {
   outcome?: RunOutcome;
   /** Why the wake that started this run was sent. Absent on a run recorded before receipts. */
   wakeReason?: WakeReason;
+  /** The task the wake was about, if it was about one: the task a receipt names. Absent on a run recorded before this was kept, and then the receipt names none. */
+  wakeTaskId?: TaskId;
   /** MCP calls the pod saw on this run's token (`tool_call`). Absent reads as 0. */
   toolCalls?: number;
   /** Set when a person stopped the run; cleared when the daemon reports it ended. Re-sent on each heartbeat until then. */

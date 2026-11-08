@@ -35,13 +35,13 @@ function shapeProblem(input: PostInput): string | null {
 }
 
 /** The receipt of a run's post: what the pod recorded of the run, plus the harness its adapter knows the agent runs on. */
-function receiptOf(c: Ctx, run: Run, harness: Harness | undefined, taskId: string | undefined): Receipt | null {
+function receiptOf(c: Ctx, run: Run, harness: Harness | undefined): Receipt | null {
   if (harness === undefined || !(HarnessValues as readonly string[]).includes(harness) || run.wakeReason === undefined) return null;
   const r: Receipt = {
     runId: run.id, agentId: run.agent.id, computerId: run.computerId, harness, startedAt: isoOf(run.startedAt), postedAt: isoOf(c.now),
     toolCalls: run.toolCalls ?? 0, wakeReason: run.wakeReason,
   };
-  if (taskId !== undefined) r.taskId = taskId;
+  if (run.wakeTaskId !== undefined) r.taskId = run.wakeTaskId; // the pod's record of the wake, never the post's own taskId
   return r;
 }
 
@@ -53,7 +53,7 @@ export function postCmd(c: Ctx, cmd: Of<'post'>): void {
   if (typeof input.summary !== 'string' || input.summary.trim() === '') return fail(c, 'summary_required', 'A post needs a summary: the headline people read.');
   const problem = shapeProblem(input);
   if (problem !== null) return fail(c, 'invalid_input', problem);
-  const receipt = w.run === undefined ? undefined : receiptOf(c, w.run, cmd.harness, input.taskId);
+  const receipt = w.run === undefined ? undefined : receiptOf(c, w.run, cmd.harness);
   if (receipt === null) return fail(c, 'internal', 'The run record is missing a fact the receipt needs.');
   const ids = mentioned(c, `${input.summary}\n${input.body ?? ''}`).filter((id) => id !== w.actor.id);
   if (!seedFits(c, cmd.wakeId, ids.length)) return;

@@ -5,9 +5,9 @@ import type { Cmd } from '../src';
 import { RUN_A, RUN_B, TASKS, U_OWNER, U_STRANGER, errCode, events, id, play, world } from './helpers';
 
 /** The test world's runs are hand-built, so give run A the facts a woken run carries; `wakeTaskId` is the task that woke it. */
-const woken = (wakeTaskId: string | undefined = TASKS[0]) => {
+const woken = (wakeTaskId: string | null = TASKS[0]) => {
   const s = world();
-  Object.assign(s.runs[RUN_A], { startedAt: 1000, wakeReason: 'task_assigned', wakeTaskId });
+  Object.assign(s.runs[RUN_A], { startedAt: 1000, wakeReason: 'task_assigned', ...(wakeTaskId === null ? {} : { wakeTaskId }) });
   return s;
 };
 const DEC = id('dec', 1);
@@ -55,7 +55,7 @@ describe('the receipt and the decision', () => {
 
   test('a run recorded before the wake task was kept has no task to stamp: the receipt carries none, even if the post names one', () => {
     for (const named of [id('tsk', 9), undefined]) {
-      const m = stored(play([[post({ ...fyi, ...(named === undefined ? {} : { taskId: named }) }), 3000]], woken(undefined)).out);
+      const m = stored(play([[post({ ...fyi, ...(named === undefined ? {} : { taskId: named }) }), 3000]], woken(null)).out);
       expect([named, m.receipt !== undefined, m.receipt !== undefined && 'taskId' in m.receipt]).toEqual([named, true, false]);
     }
   });

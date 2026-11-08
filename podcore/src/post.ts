@@ -53,6 +53,7 @@ export function postCmd(c: Ctx, cmd: Of<'post'>): void {
   if (typeof input.summary !== 'string' || input.summary.trim() === '') return fail(c, 'summary_required', 'A post needs a summary: the headline people read.');
   const problem = shapeProblem(input);
   if (problem !== null) return fail(c, 'invalid_input', problem);
+  if (input.kind === 'ask' && own(c.s.decisions ?? {}, cmd.decisionId) !== undefined) return fail(c, 'invalid_input', 'That decision id is taken.', cmd.decisionId);
   const receipt = w.run === undefined ? undefined : receiptOf(c, w.run, cmd.harness, cmd.viaMcp === true);
   if (receipt === null) return fail(c, 'internal', 'The run record is missing a fact the receipt needs.');
   const ids = mentioned(c, `${input.summary}\n${input.body ?? ''}`).filter((id) => id !== w.actor.id);
@@ -61,7 +62,10 @@ export function postCmd(c: Ctx, cmd: Of<'post'>): void {
   Object.assign(msg, Object.fromEntries(COPIED.filter((k) => input[k] !== undefined).map((k) => [k, input[k]])));
   if (w.run !== undefined) msg.runId = w.run.id;
   if (receipt !== undefined) msg.receipt = receipt;
-  if (input.kind === 'ask') msg.decision = { id: cmd.decisionId, state: 'open' };
+  if (input.kind === 'ask') {
+    msg.decision = { id: cmd.decisionId, state: 'open' };
+    (c.s.decisions ??= {})[cmd.decisionId] = { messageId: cmd.messageId, askedBy: w.actor.id, options: (input.options ?? []).map((o) => o.id), decision: { id: cmd.decisionId, state: 'open' } };
+  }
   emit(c, 'message.created', msg);
   ids.forEach((id) => writeWake(c, id, 'mention', { messageId: cmd.messageId }, cmd.wakeId));
   ok(c, msg);

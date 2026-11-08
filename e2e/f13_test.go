@@ -68,6 +68,30 @@ func (w *world) mcp(tok, tool, args string) mcpReply {
 	return r
 }
 
+// rpc sends a JSON-RPC method that is not a tool call (initialize, tools/list, ping) and returns the HTTP status.
+func (w *world) rpc(tok, method string) int {
+	w.t.Helper()
+	req, _ := http.NewRequest("POST", w.srv.base()+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"`+method+`","params":{}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		w.t.Fatalf("POST /mcp %s: %v", method, err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+// wantDeadRPC: a dead run token gets 401 on every JSON-RPC method, not only on a tool call.
+func (w *world) wantDeadRPC(tok, what string) {
+	w.t.Helper()
+	for _, m := range []string{"initialize", "tools/list", "ping"} {
+		if st := w.rpc(tok, m); st != 401 {
+			w.t.Errorf("%s, MCP %s: HTTP %d, want 401", what, m, st)
+		}
+	}
+}
+
 // wantDead: a dead run token over /mcp gets unauthorized, either as the transport's 401 or as the tool's refusal carrying
 // the HTTP route's own error (the adapter forwards the route's answer).
 func (w *world) wantDead(r mcpReply, what string) {
@@ -144,6 +168,7 @@ func (w *world) f13EndedRun(keep *run) {
 	w.wantErr(w.c.do("POST", w.podPath("tasks", "tsk_00000000000000000000000000", "claim"), r.tok, map[string]any{}, nil), 401, "unauthorized", "ended run, claim")
 	w.wantDead(w.mcp(r.tok, "jm_whoami", `{}`), "ended run, MCP")
 	w.wantDead(w.mcp(r.tok, "jm_post", `{"summary":"after the end","kind":"fyi","status":"done"}`), "ended run, MCP post")
+	w.wantDeadRPC(r.tok, "ended run")
 	for _, m := range w.f13Feed() {
 		if m.Summary == "after the end" {
 			w.t.Errorf("a post from an ended run is stored: %+v", m)
@@ -209,7 +234,7 @@ func (w *world) f13ActorIgnored(r *run) {
 // and the Worker's production entry under wrangler. The two bun tests are also part of `make test`.
 func (w *world) f13Production() {
 	root, _ := filepath.Abs("..")
-	for _, file := range []string{"server/test/production.test.ts", "worker/test/production.test.ts"} {
+	for _, file := range []string{"./server/test/production.test.ts", "./worker/test/production.test.ts"} {
 		cmd := exec.Command("bun", "test", file)
 		cmd.Dir = root
 		cmd.Env = append(os.Environ(), "JM_PROD_CHECK_DIR="+w.t.TempDir())
@@ -257,6 +282,7 @@ func (w *world) f13Stop() {
 	// At once: the very next call, with no wait for the daemon, is unauthorized.
 	w.wantErr(w.c.do("GET", w.podPath("me"), r.tok, nil, nil), 401, "unauthorized", "the stopped run's token, next call")
 	w.wantDead(w.mcp(r.tok, "jm_whoami", `{}`), "the stopped run's token over MCP")
+	w.wantDeadRPC(r.tok, "stopped run")
 	var stop Released
 	w.expect(w.compA.sock, cm, func(f Frame) bool { f.dec(&stop); return f.Type == "run.stop" && stop.RunID == r.id }, "run.stop on the hosting computer")
 	if stop.Reason != "owner says stop" {

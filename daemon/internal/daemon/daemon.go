@@ -88,16 +88,30 @@ func (d *Daemon) keep(podID protocol.PodID) {
 	for d.ctx.Err() == nil {
 		began := time.Now()
 		err := d.session(podID)
-		if time.Since(began) > time.Minute {
-			wait = time.Second
-		}
-		d.log.Printf("pod %s: socket ended (%v); reconnecting in %v", podID, err, wait)
+		sleep, next := backoff(wait, time.Since(began), d.readTimeoutOrDefault())
+		d.log.Printf("pod %s: socket ended (%v); reconnecting in %v", podID, err, sleep)
 		select {
 		case <-d.ctx.Done():
-		case <-time.After(wait):
+		case <-time.After(sleep):
 		}
-		wait = min(wait*2, 30*time.Second)
+		wait = next
 	}
+}
+
+// backoff is how long to wait before the next dial, and the wait after that. A connection that lived for longer than a minute
+// starts the wait over at 1 s; otherwise it doubles, up to 30 s.
+func backoff(wait, lived, readTimeout time.Duration) (sleep, next time.Duration) {
+	if lived > time.Minute {
+		wait = time.Second
+	}
+	return wait, min(wait*2, 30*time.Second)
+}
+
+func (d *Daemon) readTimeoutOrDefault() time.Duration {
+	if d.readTimeout != 0 {
+		return d.readTimeout
+	}
+	return ReadTimeout
 }
 
 // session is one connection: dial, heartbeat and ping at once and then every 15 s, and read until the socket fails or goes
@@ -108,10 +122,7 @@ func (d *Daemon) session(podID protocol.PodID) error {
 		return err
 	}
 	defer conn.Close()
-	conn.ReadTimeout = d.readTimeout
-	if conn.ReadTimeout == 0 {
-		conn.ReadTimeout = ReadTimeout
-	}
+	conn.ReadTimeout = d.readTimeoutOrDefault()
 	d.log.Printf("pod %s: connected", podID)
 	ctx, stop := context.WithCancel(d.ctx)
 	defer stop()

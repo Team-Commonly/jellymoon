@@ -95,6 +95,43 @@ func TestAgentEnvIsEmptyNotNilWhenNothingIsAllowed(t *testing.T) {
 	}
 }
 
+// A claim that is already past its expiresAt ends the run failed without starting the agent.
+func TestExpiredClaimNeverStartsTheAgent(t *testing.T) {
+	var ended []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/runs":
+			exp := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
+			_ = json.NewEncoder(w).Encode(protocol.ClaimRunResponse{RunID: "run_x", RunToken: "jmr_x", Brief: "go", MCPURL: "http://127.0.0.1:1/mcp", ExpiresAt: exp})
+		case "/v1/runs/run_x/end":
+			var b protocol.EndRunRequest
+			_ = json.NewDecoder(r.Body).Decode(&b)
+			ended = append(ended, string(b.Outcome))
+			_, _ = w.Write([]byte("{}"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	marker := filepath.Join(t.TempDir(), "started")
+	t.Setenv("JELLYMOON_HARNESS_FAKE", "/usr/bin/touch "+marker)
+	c, err := api.New(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	d := New(c, config.Store{Dir: t.TempDir()}, config.Computer{Token: "jmc_x"}, log.New(&logs, "", 0))
+	d.ctx = context.Background()
+	d.claim(config.Agent{AgentID: "agt_x", Harness: protocol.HarnessFake}, protocol.RunWake{WakeID: "wak_x"})
+	// The log line is the deterministic signal: a started program may be killed before it touches the marker.
+	if _, err := os.Stat(marker); err == nil || strings.Contains(logs.String(), "starting agent") {
+		t.Errorf("the agent was started for a claim that had already expired:\n%s", logs.String())
+	}
+	if strings.Join(ended, ",") != "failed" {
+		t.Errorf("run ended %v, want one failed", ended)
+	}
+}
+
 // pidIsGone reports whether no process has the pid. Signal 0 only checks that the process exists.
 func pidIsGone(pid int) bool { return syscall.Kill(pid, 0) == syscall.ESRCH }
 

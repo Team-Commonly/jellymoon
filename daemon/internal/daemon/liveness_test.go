@@ -85,6 +85,26 @@ func stayConnected(t *testing.T, srv *httptest.Server, hits *atomic.Int32) int32
 	return hits.Load()
 }
 
+// A connection that lived longer than one read timeout was healthy, so the next dial starts the wait over at 1 s; one that died
+// sooner keeps doubling the wait, up to 30 s.
+func TestBackoffResetsAfterAConnectionThatLived(t *testing.T) {
+	const rt = 45 * time.Second
+	for _, c := range []struct {
+		name         string
+		wait, lived  time.Duration
+		sleep, after time.Duration
+	}{
+		{"a short-lived socket doubles", 4 * time.Second, time.Second, 4 * time.Second, 8 * time.Second},
+		{"the wait caps at 30 s", 20 * time.Second, time.Second, 20 * time.Second, 30 * time.Second},
+		{"a socket that outlived a timeout resets", 16 * time.Second, rt + time.Second, time.Second, 2 * time.Second},
+		{"a socket that lived exactly a timeout does not", 16 * time.Second, rt, 16 * time.Second, 30 * time.Second},
+	} {
+		if sleep, after := backoff(c.wait, c.lived, rt); sleep != c.sleep || after != c.after {
+			t.Errorf("%s: backoff = %v, %v; want %v, %v", c.name, sleep, after, c.sleep, c.after)
+		}
+	}
+}
+
 // The ping after each heartbeat is the only sign of life on an idle socket. This pod answers a pong only to a ping that comes
 // right after a heartbeat, and says nothing otherwise. With the ping the daemon stays on one connection for several timeouts;
 // without it the socket looks dead every timeout and the daemon redials.

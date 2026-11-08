@@ -42,6 +42,10 @@ type Spec struct {
 	Env     []string
 	Servers []MCPServer
 	Prompt  string
+	// Allow answers the agent's permission requests with their allow_once option. The default is to reject them.
+	Allow bool
+	// Logf, when set, is told each permission request and its answer. It is never given a tool's arguments.
+	Logf func(format string, args ...any)
 }
 
 type message struct {

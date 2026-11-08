@@ -81,8 +81,7 @@ async function land(over = {}) {
   const [log, err] = [console.log, console.error];
   const said = [];
   console.log = (m) => said.push(m); console.error = (m) => said.push(m);
-  let error = null;
-  const listeners = process.listenerCount('exit');
+  let error = null; const listeners = process.listenerCount('exit');
   try { await main({ exec, run, fetch, spawn, sleep: async (ms) => { w.sleeps.push(ms); over.onSleep?.(w); if (w.sleeps.length > 200) throw new Error('runaway wait'); }, kill, graceMs: over.graceMs ?? 20, limitMs: over.limitMs, env, argv: over.argv ?? ['5'], nodeVersion: over.node ?? '22.0.0', cwd, now: () => over.now ?? Date.now() }); } catch (e) { error = e.message; } finally { console.log = log; console.error = err; }
   const merge = w.calls.find((c) => c.cmd === 'gh' && c.args[1] === 'merge');
   w.doneAt = Date.now(); w.exitListenersLeft = process.listenerCount('exit') - listeners;

@@ -82,7 +82,9 @@ request's own origin when unset), never from a fixed host.
 
 The suite asserts these; a server that disagrees should change the protocol, not the suite.
 
-- The server sends `hello` right after the WebSocket upgrade; the client then sends `subscribe`.
+- The server sends `hello` right after the WebSocket upgrade; the client then sends `subscribe`. Once the replay is sent
+  and the socket is live, the server sends `hello` once more, so presence that changed in between (it has no `seq`) is not
+  lost. A client takes the latest `hello` as current.
 - The WebSocket token travels in `Authorization: Bearer ...` on the upgrade request.
 - The pod sends each Envelope as one unfragmented text frame (the suite's client does not reassemble fragments).
 - Any run of an agent in the pod may claim any task, assigned or not.

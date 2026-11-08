@@ -11,7 +11,7 @@ import { realRun } from './land.mjs';
 import {
   landedNote, mergeAction, mergeTree,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, requiredChecks, ciProof, landRef, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const H = 'a'.repeat(40);
@@ -323,6 +323,38 @@ cases.push(
     ['tag named main: refs/heads/main still gives the branch', fetched('refs/heads/main'), branchTip],
   );
   fs.rmSync(tdir2, { recursive: true, force: true });
+}
+
+// LPRE: CI proves the merge result, or the preflight runs.
+{
+  const T = 'b'.repeat(40);
+  const run = (name, o = {}) => ({ name, status: 'completed', conclusion: 'success', app: 'github-actions', ...o });
+  const proof = (o = {}) => ciProof({ required: ['a', 'b'], tree: T, ciTree: T, runs: [run('a'), run('b'), run('extra', { conclusion: 'failure' })], ...o });
+  const rule = (...ctx) => ({ type: 'required_status_checks', parameters: { required_status_checks: ctx.map((context) => ({ context })) } });
+  cases.push(
+    ['ci proof: tree match and every required check green by Actions proves the merge, naming the tree', proof().ok && proof().note, `CI proved merge tree ${T.slice(0, 8)}`],
+    ['ci proof: a CI tree that is not the merge result is kind tree (land refuses)', proof({ ciTree: 'c'.repeat(40) }).kind, 'tree'],
+    ['ci proof: no CI tree is kind tree', proof({ ciTree: undefined }).kind, 'tree'],
+    ['ci proof: a pending required check is kind wait', proof({ runs: [run('a'), run('b', { status: 'in_progress', conclusion: null })] }).kind, 'wait'],
+    ['ci proof: a queued required check is kind wait', proof({ runs: [run('a'), run('b', { status: 'queued', conclusion: null })] }).kind, 'wait'],
+    ['ci proof: a skipped required check is red', proof({ runs: [run('a'), run('b', { conclusion: 'skipped' })] }).kind, 'red'],
+    ['ci proof: a neutral required check is red', proof({ runs: [run('a'), run('b', { conclusion: 'neutral' })] }).kind, 'red'],
+    ['ci proof: a failed required check is red', proof({ runs: [run('a'), run('b', { conclusion: 'failure' })] }).kind, 'red'],
+    ['ci proof: a cancelled required check is red', proof({ runs: [run('a'), run('b', { conclusion: 'cancelled' })] }).kind, 'red'],
+    ['ci proof: a red check wins over a wait elsewhere (the poll ends at once)', proof({ runs: [run('a', { status: 'in_progress', conclusion: null }), run('b', { conclusion: 'failure' })] }).kind, 'red'],
+    ['ci proof: a required check with no run yet is kind wait', proof({ runs: [run('a')] }).kind, 'wait'],
+    ['ci proof: a same-named run from another app alone is no proof (kind wait)', [proof({ runs: [run('a'), run('b', { app: 'evil-app' })] }).ok, proof({ runs: [run('a'), run('b', { app: 'evil-app' })] }).kind].join(), 'false,wait'],
+    ['ci proof: a user-made run (no app) alone is no proof', proof({ runs: [run('a'), run('b', { app: null })] }).ok, false],
+    ['ci proof: a green run from another app does not stand in for a pending Actions one', proof({ runs: [run('a'), run('b', { status: 'in_progress', conclusion: null }), run('b', { app: 'evil-app' })] }).kind, 'wait'],
+    ['ci proof: a same-named run from another app is ignored beside a green Actions run (even a red one)', proof({ runs: [run('a'), run('b'), run('b', { app: 'evil-app', conclusion: 'failure' })] }).ok, true],
+    ['ci proof: runs cut short by paging are kind unread', proof({ total: 150 }).kind, 'unread'],
+    ['ci proof: an unreadable required list runs the preflight', [ciProof({ required: null, tree: T, ciTree: T, runs: [] }).ok, ciProof({ required: [], tree: T, ciTree: T, runs: [] }).ok].join(), 'false,false'],
+    ['required checks: read from every required_status_checks rule, deduped', requiredChecks({ rules: [rule('a', 'b'), { type: 'pull_request' }, rule('b', 'c')] }).join(), 'a,b,c'],
+    ['required checks: classic protection when the rules name none', requiredChecks({ rules: [{ type: 'pull_request' }], protection: { contexts: ['a'], checks: [{ context: 'a' }, { context: 'z' }] } }).join(), 'a,z'],
+    ['required checks: none anywhere is unreadable', requiredChecks({ rules: [] }), null],
+    ['land ref: only refs/heads/land/<digits>', [landRef(21), landRef('7')].join(), 'refs/heads/land/21,refs/heads/land/7'],
+    ['land ref: a branch name, a path or an empty value throws', ['main', '../x', '', '5/../../main', '5 6'].map((v) => { try { landRef(v); return 'ok'; } catch { return 'throws'; } }).join(), 'throws,throws,throws,throws,throws'],
+  );
 }
 
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);

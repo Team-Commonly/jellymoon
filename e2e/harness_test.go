@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -87,6 +88,12 @@ func (l *logBuf) tail(n int) string {
 	return string(b[max(0, len(b)-n*100):])
 }
 
+func (l *logBuf) bytes() []byte {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.b.Bytes())
+}
+
 // server is the process under test. The suite owns it: kill -9 of its process group, then the same
 // command again with the same data dir, is a restart.
 type server struct {
@@ -116,6 +123,13 @@ func freePort(t *testing.T, not ...int) int {
 	}
 }
 
+// portTries bounds the first start of a server. freePort closes its listener before the server binds, so
+// another process can take the port in between; only that failure is retried, on fresh ports.
+const portTries = 3
+
+// portTaken matches the output of a start that exited because its port was taken.
+var portTaken = regexp.MustCompile(`(?i)address already in use|EADDRINUSE`)
+
 func startServer(t *testing.T) *server {
 	port := freePort(t)
 	s := &server{t: t, port: port, inspector: freePort(t, port), dir: t.TempDir(), log: &logBuf{}}
@@ -125,13 +139,29 @@ func startServer(t *testing.T) *server {
 			t.Logf("server log tail:\n%s", s.log.tail(40))
 		}
 	})
-	s.boot()
+	for try := 1; !s.start(); try++ {
+		if try == portTries || !portTaken.Match(s.log.bytes()) {
+			s.t.Fatalf("server exited before /healthz answered 200; log tail:\n%s", s.log.tail(20))
+		}
+		s.kill()
+		fmt.Printf("PORT_RETRY test=%s port=%d try=%d\n", t.Name(), s.port, try+1)
+		s.port = freePort(t, s.port, s.inspector)
+		s.inspector = freePort(t, s.port)
+		s.dir, s.log = t.TempDir(), &logBuf{}
+	}
 	return s
 }
 
 func (s *server) base() string { return fmt.Sprintf("http://127.0.0.1:%d", s.port) }
 
 func (s *server) boot() {
+	if !s.start() {
+		s.t.Fatalf("server exited before /healthz answered 200; log tail:\n%s", s.log.tail(20))
+	}
+}
+
+// start runs the server command and waits for /healthz. It returns false if the process exited first.
+func (s *server) start() bool {
 	begin := time.Now()
 	root, _ := filepath.Abs("..")
 	cmd := exec.Command("sh", "-c", serverCmd)
@@ -144,13 +174,16 @@ func (s *server) boot() {
 	}
 	s.cmd, s.exited = cmd, make(chan struct{})
 	go func(c *exec.Cmd, ch chan struct{}) { _ = c.Wait(); close(ch) }(cmd, s.exited)
-	s.waitHealthy()
+	if !s.waitHealthy() {
+		return false
+	}
 	if s.bootTook == 0 {
 		s.bootTook = time.Since(begin)
 	}
+	return true
 }
 
-func (s *server) waitHealthy() {
+func (s *server) waitHealthy() bool {
 	hc := &http.Client{Timeout: 2 * time.Second}
 	limit := 40 * time.Second
 	if s.restarting {
@@ -160,13 +193,13 @@ func (s *server) waitHealthy() {
 	for time.Now().Before(deadline) {
 		select {
 		case <-s.exited:
-			s.t.Fatalf("server exited before /healthz answered 200; log tail:\n%s", s.log.tail(20))
+			return false
 		default:
 		}
 		if resp, err := hc.Get(s.base() + "/healthz"); err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == 200 {
-				return
+				return true
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -177,6 +210,7 @@ func (s *server) waitHealthy() {
 		fmt.Println("E2E_INVALID restart took over 10 s to answer /healthz")
 	}
 	s.t.Fatalf("%s; log tail:\n%s", msg, s.log.tail(20))
+	return false
 }
 
 func (s *server) kill() {

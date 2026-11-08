@@ -14,6 +14,8 @@ import {
   checkNode, entropyBase, requiredChecks, ciProof, landRef, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // the repo, wherever this is run from
+const CHILD = { cwd: ROOT, env: { PATH: `${ROOT}/.tools/bin:/usr/bin:/bin:/usr/sbin:/sbin` } }; // a child runs in the repo with the repo's pinned tools first, never the caller's PATH or cwd
 const H = 'a'.repeat(40);
 const H2 = 'c'.repeat(40);
 const HEADER = 'pr\thead\tverdict\tby\twhen\tnote';
@@ -167,7 +169,7 @@ const cases = [
   ['output: C1 controls (U+0080 to U+009F) are stripped', stripControls('a\u0080b\u009bc\u009fd'), 'abcd'],
   // check-entropy itself: none passes only when named; an unreadable named base fails, and a PR cannot name one (land sets the env)
   ...(() => {
-    const entropy = (base) => spawnSync(process.execPath, [fileURLToPath(new URL('./check-entropy.mjs', import.meta.url))], { encoding: 'utf8', env: { PATH: process.env.PATH, HOME: process.env.HOME, JM_ENTROPY_BASE: base } }).status;
+    const entropy = (base) => spawnSync(process.execPath, [fileURLToPath(new URL('./check-entropy.mjs', import.meta.url))], { encoding: 'utf8', ...CHILD, env: { ...CHILD.env, HOME: process.env.HOME, JM_ENTROPY_BASE: base } }).status;
     return [
       ['entropy: bootstrap with no base file passes with base none', entropy('none'), 0],
       ['entropy: a normal land with no base file is refused (the tip is unreadable)', entropy('0'.repeat(40)), 1],
@@ -268,7 +270,7 @@ cases.push(
 fs.rmSync(lroot, { recursive: true, force: true });
 
 // What check-land-e2e.mjs cannot reach: the CLI entry (signals, the real spawn, the 30-minute limit, the group kill) and the imports.
-const run = spawnSync(process.execPath, [fileURLToPath(new URL('./land.mjs', import.meta.url))], { encoding: 'utf8', env: { PATH: process.env.PATH } });
+const run = spawnSync(process.execPath, [fileURLToPath(new URL('./land.mjs', import.meta.url))], { encoding: 'utf8', ...CHILD });
 cases.push(
   ['land.mjs: the preflight child has a wall-clock limit', /LIMIT_MS/.test(landSrc) && /setTimeout/.test(landSrc), true],
   ['land.mjs: SIGHUP exits 129 like the others', /SIGHUP[^\n]*exit\(129\)/.test(landSrc), true],

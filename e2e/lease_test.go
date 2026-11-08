@@ -11,9 +11,7 @@ import (
 // operation and no heartbeat; only the clock moves (fake mode) or time passes (real-clock mode).
 func TestExpiryZeroTraffic(t *testing.T) {
 	need(t)
-	if realClock {
-		t.Parallel()
-	}
+	par(t)
 	w := newWorld(t)
 	r := w.startRun(w.a1, "wake")
 	tk := w.newTask("lease", "")
@@ -52,6 +50,7 @@ func TestExpiryZeroTraffic(t *testing.T) {
 // only moves forward; it always equals the last recorded renewal plus 60 s.
 func TestRenewRace(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	r1, r2 := w.startRun(w.a1, "wake-1"), w.startRun(w.a2, "wake-2")
 	holder, lease := map[string]*run{}, map[string]int64{}
@@ -127,9 +126,7 @@ func (w *world) pause(d int64) {
 // reads is taken before the clock moves, so a release sent during the move is seen.
 func TestKillMidLease(t *testing.T) {
 	need(t)
-	if realClock {
-		t.Parallel()
-	}
+	par(t)
 	w := newWorld(t)
 	ry, rx := w.startRun(w.a1, "wake-y"), w.startRun(w.b1, "wake-x")
 	ty, tx := w.newTask("claim-y", ""), w.newTask("claim-x", "")
@@ -201,6 +198,7 @@ func (w *world) dueAndReleased(kind string, s *sock, mk int, tk Task, r *run, de
 // A server that does not settle (`boot`) when it restores state fails this.
 func TestRestartPastDeadline(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorldAt(t, time.Now().UnixMilli()-120000)
 	r := w.startRun(w.a1, "wake")
 	tk := w.newTask("past due", "")

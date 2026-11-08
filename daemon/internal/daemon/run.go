@@ -1,10 +1,12 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Team-Commonly/jellymoon/daemon/internal/acp"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/api"
@@ -125,8 +127,19 @@ func (d *Daemon) execute(a config.Agent, c protocol.ClaimRunResponse) (err error
 			d.log.Printf("run %s: workspace: %v", c.RunID, ferr)
 		}
 	}()
+	// The run token stops working at expiresAt, so the agent stops with it: a hung agent cannot outlive its credential. A
+	// timestamp that cannot be read means the token cannot be bounded, so the run is refused before the agent starts.
+	expires, err := time.Parse(time.RFC3339Nano, c.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("the claim's expiresAt %q is not a timestamp: %w", c.ExpiresAt, err)
+	}
+	if !time.Now().Before(expires) {
+		return fmt.Errorf("the claim expired at %s, before the agent could start", c.ExpiresAt)
+	}
+	ctx, cancel := context.WithDeadline(d.ctx, expires)
+	defer cancel()
 	d.log.Printf("run %s: starting agent %s", c.RunID, a.AgentID)
-	return acp.Run(d.ctx, acp.Spec{
+	return acp.Run(ctx, acp.Spec{
 		Command: cmd, Dir: dir, Env: agentEnv(), Prompt: c.Brief,
 		Servers: []acp.MCPServer{{Type: "http", Name: "jellymoon", URL: mcpURL, Headers: []acp.Header{{Name: "Authorization", Value: "Bearer " + c.RunToken}}}},
 	})

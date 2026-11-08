@@ -93,7 +93,7 @@ The rules of ADR 0002 (claims, leases, recourse) live in `podcore/`, a pure Type
 
 ## Commands
 
-`pod_create`, `member_add`, `agent_register`, `task_create`, `task_update`, `message_post`, `change` (kind `ruling`
+`pod_create`, `member_add`, `agent_register`, `task_create`, `task_update`, `message_post`, `post`, `rule`, `tool_call`, `change` (kind `ruling`
 only), `claim`, `op`, `heartbeat`, `task_release`, `run_end`, `run_stop`, `wake_ack`, `run_claim`, `computer_online`,
 `computer_offline`, `tick`, `boot`.
 `task_create` and `task_update` write the `task_assigned` wake, and `message_post` the `mention` wakes, through the
@@ -130,6 +130,26 @@ All in `podcore/src/wakes.ts`, over the same state. The adapter extracts the add
 - A `change` for an unregistered agent is dropped, not held. A held wake has no computer to go to, and holding
   it would need a delivery rule on register; the agent reads the pod when it first starts, so nothing is lost.
 - Re-send has no deadline: nothing is due until a heartbeat arrives, so `nextDeadline` is unchanged.
+
+## Rulings
+
+Modelled 2026-11-08 (F12), in `podcore/src/rule.ts`. An ask records its decision when it is posted: `decisions` maps each decision id to
+the message it belongs to, who asked, the option ids it offers and its `Decision`. `rule {caller, decisionId, option, wakeId}` is the
+command the socket's `decision.rule` becomes; the adapter parses the frame and passes the facts, and decides nothing.
+
+- Order of refusals: who is calling first (a stranger `forbidden`, an ended run `unauthorized`), a run caller `forbidden` before any
+  lookup (also on the refusal path, as for `run_stop`), a malformed command `invalid_input`, an unknown decision, or one that names a
+  prototype key, `not_found`, a decision already ruled `already_ruled` (before the option is looked at, so a late ruling is told what
+  stands), then an option the ask does not offer `invalid_input`, then a bad `wakeId` seed `invalid_input`. A refused ruling changes nothing.
+- `option` is a plain string compared against the ask's list, never used as a key, so `__proto__` or `constructor` is an option that
+  is not on the ask. A decision id is a key and goes through `own()`.
+- A ruling sets the decision `ruled` with `{optionId, by, at}`, drops the record's option list, emits `message.updated` carrying only the
+  decision, and writes the `decision_ruled` wake for the asking agent through the same writer `change` uses, with refs `{decisionId,
+  messageId}`: a pending wake absorbs it, an unregistered asker (a person) gets none. The run that wake starts stamps its posts with
+  `wakeReason: decision_ruled`.
+- State: one record per ask, of fixed size once ruled; `decisions` is absent in a pod saved before it existed and reads as empty.
+  An ask posted before records were kept has none, so ruling on it is `not_found`.
+- `change` stays as the raw wake write the tests drive; the adapters use `rule`. The `expired` decision state is not modelled.
 
 ## Presence
 In `podcore/src/presence.ts`, over the same state (F08). `online` maps each online computer to its last sign of life.
@@ -189,7 +209,6 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 
 ## Not here yet
 
-- Decisions (rulings) are not modelled; `change` carries them until they are.
 - `task_update` takes `status` and `assignee`; the schema's `TaskUpdateInput` has no `assignee` yet.
 - Purity-guard spellings beyond the listed ones are accepted risk (the guard is a lexical backstop).
 - `message_post` (the socket's human post) still stores kind `fyi`, status `done`; the HTTP post is `post` (below).

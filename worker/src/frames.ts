@@ -7,7 +7,8 @@ import { check } from './validate';
 import { str } from './wire';
 import type { PodPort, Who } from './wire';
 
-const TYPES = ['subscribe', 'message.post', 'task.create', 'presence.heartbeat', 'wake.ack'];
+const TYPES = ['subscribe', 'message.post', 'task.create', 'decision.rule', 'presence.heartbeat', 'wake.ack'];
+const SHAPE: Record<string, string> = { 'message.post': 'MessagePost', 'task.create': 'TaskCreate', 'decision.rule': 'DecisionRule' };
 type Data = Record<string, unknown>;
 
 /** What the socket does with a parsed frame. `subscribe` is the socket's own business; the rest are core commands. */
@@ -15,8 +16,9 @@ export type Parsed = { subscribe: number } | { cmd: Cmd } | ErrorBody;
 
 function userCommand(type: string, d: Data, who: Extract<Who, { kind: 'user' }>): Cmd | ErrorBody {
   const caller = { kind: 'user', userId: who.actor.id } as const;
-  const problem = check(type === 'message.post' ? 'MessagePost' : 'TaskCreate', d);
+  const problem = check(SHAPE[type], d);
   if (problem !== null) return { code: 'invalid_input', message: problem };
+  if (type === 'decision.rule') return { type: 'rule', caller, decisionId: d.decisionId as string, option: d.optionId as string, wakeId: newWakeSeed() };
   if (type === 'message.post') {
     return { type: 'message_post', caller, messageId: newId('msg_'), wakeId: newWakeSeed(), text: d.text as string, ...(d.threadOf === undefined ? {} : { threadOf: d.threadOf as string }) };
   }
@@ -43,8 +45,8 @@ export function parseFrame(podId: string, who: Who, text: string): Parsed {
     const since = (d as Data).sinceSeq;
     return typeof since === 'number' && Number.isInteger(since) && since >= 0 ? { subscribe: since } : { code: 'invalid_input', message: 'subscribe needs sinceSeq, an integer from 0.' };
   }
-  const posts = type === 'message.post' || type === 'task.create';
-  if (posts && who.kind !== 'user') return { code: 'forbidden', message: 'Only a person posts or creates tasks.' };
+  const posts = Object.hasOwn(SHAPE, type);
+  if (posts && who.kind !== 'user') return { code: 'forbidden', message: 'Only a person posts, creates tasks or rules.' };
   if (!posts && who.kind !== 'computer') return { code: 'forbidden', message: 'Only a computer sends this.' };
   const cmd = who.kind === 'user' ? userCommand(type, d as Data, who) : computerCommand(type, d as Data, who as Extract<Who, { kind: 'computer' }>);
   return 'code' in cmd ? cmd : { cmd };

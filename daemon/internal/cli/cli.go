@@ -20,6 +20,7 @@ import (
 	"github.com/Team-Commonly/jellymoon/daemon/internal/config"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/daemon"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/protocol"
+	"github.com/Team-Commonly/jellymoon/daemon/internal/redact"
 )
 
 // Environment: the server to talk to, and the jmu_ token for the first registration.
@@ -34,6 +35,9 @@ var podIDShape = regexp.MustCompile(`^pod_[0-9A-Z]{26}$`)
 
 // Main runs one command and returns the exit code.
 func Main(args []string, stdout, stderr io.Writer) int {
+	// The only two outputs of the process, and the log and the flag set are built on stderr, so this is every write site:
+	// nothing the CLI or the daemon prints reaches a stream except through redact.
+	stdout, stderr = redact.Writer(stdout), redact.Writer(stderr)
 	var err error
 	switch {
 	case len(args) >= 2 && args[0] == "daemon" && args[1] == "start":

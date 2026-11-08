@@ -11,6 +11,7 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `development/landing.md` | `make land`: the only merge path, its environment variables, the ledger format and the verdict message the operator posts |
 | `development/verifier.md` | The verifier protocol: what a fresh-context reviewer checks, and its verdict format |
 | `development/e2e-contract.md` | The black-box e2e contract suite in `e2e/`: how it starts a server, the `/__test/*` routes, the clock and persistence rules, and what each test proves |
+| `adr/0006-pod-state-server.md` | The decision that the server is one Bun process with Hono and Postgres, the five adapter duties, storage, test routes, and the two open questions |
 | `../worker/README.md` | The Cloudflare adapter in `worker/`: what it is, `make worker-dev`, `make e2e-a` |
 | `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the slice LOC caps |
 | `adr/0002-claims-and-leases.md` | When a task claim's lease renews, expires and is released; the unknowns left open |

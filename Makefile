@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: e2e e2e-a e2e-c e2e-any e2e-deployed deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-goentropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -37,7 +37,11 @@ test-ts: node_modules
 	$(BUN) scripts/check-land-scan.mjs
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
-	$(BUN) test podcore worker
+	$(BUN) test podcore worker server
+
+# The Cloudflare adapter's unit tests alone (CI's `worker` job). bun test exits 1 when it finds no test, so an empty run is red.
+test-worker: node_modules
+	$(BUN) test worker
 
 test-go:
 	$(GO) vet ./...
@@ -103,27 +107,112 @@ secrets-all:
 	@git -c core.quotepath=off ls-files | cut -d/ -f1 | sort -u | while IFS= read -r p; do $(GO) run $(GITLEAKS) dir --redact --no-banner "$$p" </dev/null || exit 1; done
 
 
-# The black-box contract suite (docs/development/e2e-contract.md). Needs JM_E2E_SERVER; ends with E2E_MS=<n> STEPS=<k>/<k>.
-e2e:
+# The black-box contract suite against any server: `JM_E2E_SERVER='<shell command>' make e2e-any` (docs/development/e2e-contract.md).
+# With JM_E2E_SERVER unset every test skips.
+e2e-any:
 	$(GO) test ./e2e -count=1 -v
+
+# The pod-state server (ADR 0006): one Bun process, Hono, Postgres. `make server` serves on $PORT (default 8787) with the
+# in-process Postgres kept in .tools/server-data; set DATABASE_URL to use a real one.
+server: node_modules
+	$(if $(DATABASE_URL),,ENV=local) PORT=$${PORT:-8787} $(BUN) server/src/main.ts $(if $(DATABASE_URL),,--persist-to $(CURDIR)/.tools/server-data)
+
+# A fresh PGlite data directory as one tar, so each e2e server skips initdb. Rebuilt when the lockfile changes.
+PGLITE_TPL := $(CURDIR)/.tools/pglite-template.tar
+$(PGLITE_TPL): bun.lock | node_modules
+	mkdir -p $(dir $@)
+	$(BUN) server/src/pglite-template.ts $@
+
+# The suite starts it with PORT, ENV=local and JM_DATA_DIR. The state dir sits under JM_DATA_DIR (TestF02 reads the flag from
+# the process table). Against a real Postgres, each server gets its own schema, named from its data dir, so every test starts fresh.
+SERVER_E2E := if [ -n "$$DATABASE_URL" ]; then export JM_PG_SCHEMA="e2e_$$(printf %s "$$JM_DATA_DIR" | cksum | tr -d -c 0-9)"; fi; exec $(BUN) server/src/main.ts --persist-to "$$JM_DATA_DIR/state"
+
+# Runs the contract suite with the given server environment and judges the closing line, which no test can see: the last line
+# before go test's own ok/FAIL/PASS must be E2E_MS=<n> STEPS=<k>/<n>, with k = n when the suite passed and k < n when it did not.
+# $(1) names the target in messages. $(2) is the environment that picks the server.
+define judge_e2e
+	@out=$$(mktemp); \
+	env $(2) $(GO) test ./e2e -count=1 -v > "$$out" 2>&1; rc=$$?; \
+	cat "$$out"; \
+	last=$$(grep -v -E '^(ok|FAIL|PASS)([[:space:]]|$$)|^$$' "$$out" | tail -1); \
+	rm -f "$$out"; \
+	echo "$$last" | grep -E -q '^E2E_MS=[0-9]+ STEPS=[0-9]+/[0-9]+$$' || { echo "$(1): the closing line is not E2E_MS=<n> STEPS=<k>/<n>: $$last"; exit 1; }; \
+	k=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\1/'); n=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\2/'); \
+	if [ $$rc -eq 0 ] && [ "$$k" != "$$n" ]; then echo "$(1): green run but STEPS=$$k/$$n"; exit 1; fi; \
+	if [ $$rc -ne 0 ] && [ "$$k" = "$$n" ]; then echo "$(1): red run but STEPS=$$k/$$n"; exit 1; fi; \
+	exit $$rc
+endef
+
+# The contract suite against the pod-state server. It persists every command, heartbeats included (staleMs is 0). The tests that
+# need the Cloudflare adapter's object routes are skipped, each with its reason (docs/development/e2e-contract.md, "Skipped on the server").
+E2E_C_SKIP := TestEvictMidClaim,TestEvictAlarmWake,TestEvictPastDeadline
+e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
+	$(call judge_e2e,e2e-c,JM_E2E_SERVER='$(SERVER_E2E)' JM_E2E_SKIP='$(E2E_C_SKIP)' $(if $(DATABASE_URL),JM_E2E_STATE_IN_DB=1,JM_PGLITE_TEMPLATE='$(PGLITE_TPL)'))
+
+# `make e2e` is the contract suite against the server that ships.
+e2e: e2e-c
+
+# The contract suite against the Cloudflare adapter (worker/), which stays in the tree as a second adapter.
+e2e-a: node_modules
+	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh')
 
 # The Cloudflare adapter (worker/) under `wrangler dev --local`. Loopback only.
 worker-dev: node_modules
 	ENV=local PORT=$${PORT:-8787} JM_DATA_DIR=$${JM_DATA_DIR:-$(CURDIR)/.wrangler-data} worker/dev.sh
 
-# The contract suite against the Cloudflare adapter. It persists every command, heartbeats included (staleMs is 0).
-# It also judges the closing line, which no test can see: the last line before go test's own ok/FAIL/PASS must be
-# E2E_MS=<n> STEPS=<k>/<n>, with k = n when the suite passed and k < n when it did not.
-e2e-a: node_modules
-	@out=$$(mktemp); \
-	JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' $(GO) test ./e2e -count=1 -v > "$$out" 2>&1; rc=$$?; \
-	cat "$$out"; \
-	last=$$(grep -v -E '^(ok|FAIL|PASS)([[:space:]]|$$)|^$$' "$$out" | tail -1); \
-	rm -f "$$out"; \
-	echo "$$last" | grep -E -q '^E2E_MS=[0-9]+ STEPS=[0-9]+/[0-9]+$$' || { echo "e2e-a: the closing line is not E2E_MS=<n> STEPS=<k>/<n>: $$last"; exit 1; }; \
-	k=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\1/'); n=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\2/'); \
-	if [ $$rc -eq 0 ] && [ "$$k" != "$$n" ]; then echo "e2e-a: green run but STEPS=$$k/$$n"; exit 1; fi; \
-	if [ $$rc -ne 0 ] && [ "$$k" = "$$n" ]; then echo "e2e-a: red run but STEPS=$$k/$$n"; exit 1; fi; \
-	exit $$rc
+# The server the way a self-hoster runs it (ADR 0006, "Deployed form"): the release bundle, one Bun process, config from env.
+# `make e2e-deployed` builds the bundle, boots it as its own process (deployed-boot, below), then runs the contract suite with the
+# bundle as the server under test. With DATABASE_URL set it is the hosted shape: Postgres, ENV unset, test routes behind a bearer.
+# Unset, it falls back to the in-process Postgres (ENV=local) so a laptop with no Postgres can still run it. pglite stays external to
+# the bundle: it is the local fallback only, and its wasm files are not part of a bundle.
+DEPLOYED := $(CURDIR)/.tools/deployed
+DEPLOYED_BUNDLE := $(DEPLOYED)/server.js
+SERVER_DEPLOYED := if [ -n "$$DATABASE_URL" ]; then export JM_PG_SCHEMA="e2e_$$(printf %s "$$JM_DATA_DIR" | cksum | tr -d -c 0-9)"; fi; exec $(BUN) $(DEPLOYED_BUNDLE) --persist-to "$$JM_DATA_DIR/state"
 
-preflight: portable tools-cache check-gen test entropy secrets private e2e-a
+e2e-deployed: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
+	mkdir -p $(DEPLOYED)
+	$(BUN) build server/src/main.ts --target=bun --external @electric-sql/pglite --outfile $(DEPLOYED_BUNDLE)
+	@$(MAKE) --no-print-directory deployed-boot
+	$(call judge_e2e,e2e-deployed,JM_E2E_SERVER='$(SERVER_DEPLOYED)' JM_E2E_SKIP='$(E2E_C_SKIP)' $(if $(DATABASE_URL),JM_E2E_STATE_IN_DB=1,JM_PGLITE_TEMPLATE='$(PGLITE_TPL)'))
+
+# Boots the bundle as its own process and drives it by URL only: it must refuse to start with no database, answer /healthz, keep the
+# test routes closed in the hosted shape (no bearer is 401, no clock route), serve a user's pod through the real routes, and keep that
+# pod across kill -9 and a second start. Any failed check, or a server that never answers, fails the target; nothing skips.
+# A failing Postgres (a wrong DATABASE_URL) makes the server exit at boot, and that fails this target too.
+deployed-boot:
+	@set -u; \
+	bun="$(BUN)"; bundle="$(DEPLOYED_BUNDLE)"; dir=$$(mktemp -d); log="$$dir/server.log"; pid=0; \
+	port=$$($(BUN) -e 'const s = Bun.serve({ port: 0, fetch() { return new Response(); } }); console.log(s.port); s.stop(true);'); \
+	code() { curl -s -o /dev/null -w '%{http_code}' "$$@"; }; \
+	want() { [ "$$2" = "$$3" ] || { echo "deployed-boot: $$1: got $$2, want $$3"; tail -20 "$$log"; exit 1; }; echo "deployed-boot: ok $$1 -> $$2"; }; \
+	trap 'kill $$pid 2>/dev/null; wait $$pid 2>/dev/null' EXIT; \
+	out=$$(env -u ENV -u DATABASE_URL PORT=$$port "$$bun" "$$bundle" 2>&1); rc=$$?; \
+	if [ $$rc -eq 0 ] || ! echo "$$out" | grep -q 'DATABASE_URL is required'; then echo "deployed-boot: with no ENV and no DATABASE_URL the server must refuse to start (rc=$$rc)"; exit 1; fi; \
+	echo "deployed-boot: ok the server refuses to start with no database (rc=$$rc)"; \
+	if [ -n "$${DATABASE_URL:-}" ]; then mode=hosted; bearer=$$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n'); auth="authorization: Bearer $$bearer"; \
+	  start() { env -u ENV -u JM_PG_SCHEMA PORT=$$port TEST_BEARER=$$bearer "$$bun" "$$bundle" >> "$$log" 2>&1 & pid=$$!; }; \
+	else mode=local; bearer=""; auth="x-smoke: local"; \
+	  start() { env ENV=local PORT=$$port "$$bun" "$$bundle" --persist-to "$$dir/state" >> "$$log" 2>&1 & pid=$$!; }; fi; \
+	up() { i=0; until curl -fsS -o /dev/null "http://127.0.0.1:$$port/healthz" 2>/dev/null; do i=$$((i+1)); \
+	  if ! kill -0 $$pid 2>/dev/null; then echo "deployed-boot: the server exited before /healthz answered; log tail:"; tail -20 "$$log"; exit 1; fi; \
+	  if [ $$i -gt 600 ]; then echo "deployed-boot: no /healthz 200 within 60 s; log tail:"; tail -20 "$$log"; exit 1; fi; sleep 0.1; done; }; \
+	base="http://127.0.0.1:$$port"; json='content-type: application/json'; \
+	start; up; echo "deployed-boot: the server is its own process: pid=$$pid port=$$port mode=$$mode"; \
+	want "GET /healthz" "$$(code $$base/healthz)" 200; \
+	if [ $$mode = hosted ]; then \
+	  want "POST /__test/session without the bearer" "$$(code -X POST -H "$$json" -d '{"name":"x"}' $$base/__test/session)" 401; \
+	  want "GET /__test/clock with the bearer (the hosted shape has no clock route)" "$$(code -H "$$auth" $$base/__test/clock)" 404; \
+	else \
+	  want "GET /__test/clock (local shape)" "$$(code $$base/__test/clock)" 200; \
+	fi; \
+	tok=$$(curl -s -X POST -H "$$auth" -H "$$json" -d '{"name":"smoke"}' $$base/__test/session | sed -n 's/.*"token":"\(jmu_[^"]*\)".*/\1/p'); \
+	if [ -z "$$tok" ]; then echo "deployed-boot: /__test/session gave no jmu_ token"; tail -20 "$$log"; exit 1; fi; \
+	podid=$$(curl -s -X POST -H "authorization: Bearer $$tok" -H "$$json" -d '{"name":"deployed-smoke"}' $$base/v1/pods | sed -n 's/.*"id":"\(pod_[^"]*\)".*/\1/p'); \
+	if [ -z "$$podid" ]; then echo "deployed-boot: POST /v1/pods gave no pod id"; tail -20 "$$log"; exit 1; fi; \
+	want "GET /v1/pods/<pod>/me as its owner" "$$(code -H "authorization: Bearer $$tok" $$base/v1/pods/$$podid/me)" 200; \
+	want "GET /v1/pods/<pod>/me with no token" "$$(code $$base/v1/pods/$$podid/me)" 401; \
+	kill -9 $$pid; wait $$pid 2>/dev/null; start; up; echo "deployed-boot: restarted after kill -9: pid=$$pid port=$$port"; \
+	want "GET /v1/pods/<pod>/me after the restart" "$$(code -H "authorization: Bearer $$tok" $$base/v1/pods/$$podid/me)" 200; \
+	echo "deployed-boot: all checks passed"
+
+preflight: portable tools-cache check-gen test entropy secrets private e2e-c

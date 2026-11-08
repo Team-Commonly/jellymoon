@@ -48,6 +48,7 @@ func par(t *testing.T) {
 	t.Helper()
 	suiteWG.Add(1)
 	t.Cleanup(suiteWG.Done) // registered first, so it runs last: after track's outcome and the server's kill
+	noStrays(t)
 	t.Parallel()
 }
 

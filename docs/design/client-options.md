@@ -1,5 +1,8 @@
 # Client strategy: options paper
 
+Status: ratified 2026-11-08 by the product owner: option 1 (web-first).
+The web client is served by the pod-state server now that it replaced the Worker (ADR 0006), not by Worker assets.
+
 2026-10-29. Research only. "Local" means earlier research notes and the repo's own docs. Everything about another product carries a URL; where I could not confirm a claim, it says so.
 
 **Read with:** `ux-concepts.html`, the five-paradigm prototype on the same scenario. It recommends Inbox as home and Chat as the pod surface, which matches screens 2 and 3 below.

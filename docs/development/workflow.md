@@ -46,6 +46,10 @@ merges only when all of these hold at the exact PR head:
   message by a listed reviewer's immutable user id, whose first line is `jellymoon#<pr> <full head>` and whose
   last line is `GATE: PASS`. No path and no scan result waives it;
 - the secret scans (`make secrets-range` over the PR's commits, and `make secrets` in the preflight) found nothing. They can only refuse; a clean scan waives nothing, and what they do not read is listed in `landing.md` (Known limits) for the review to cover.
+- the review rule is one review from any one source (the local verifier, another agent, or CodeRabbit) plus green CI. CodeRabbit is asked
+  when there is allowance but never awaited: a head it has not reviewed does not block a land. Land still refuses what CodeRabbit already
+  said at the head, a `CHANGES_REQUESTED` review or an unanswered Major or Critical thread (`landing.md`, "The CodeRabbit path"). A Major or
+  Critical it raises after the merge becomes a fix PR, first in the queue.
 - Workers never merge. GitHub review text is not consulted.
   Run land from a clean checkout of main. The check lives in the checked-out tree, so it is operator discipline: it binds
   only a tree that really is main.

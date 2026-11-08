@@ -26,6 +26,12 @@
       ],
       "max": 1790
     },
+    "server": {
+      "paths": [
+        "server/"
+      ],
+      "max": 1800
+    },
     "podcore": {
       "paths": [
         "podcore/"

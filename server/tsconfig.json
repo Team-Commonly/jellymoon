@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "types": [], "lib": ["ES2022", "DOM"] },
+  "include": ["../gen/ts/**/*.ts", "../podcore/src/**/*.ts", "../podcore/test/bun-test.d.ts", "./**/*.ts"]
+}

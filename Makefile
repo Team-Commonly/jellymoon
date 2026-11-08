@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: e2e e2e-a e2e-c e2e-any server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -37,7 +37,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-land-scan.mjs
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
-	$(BUN) test podcore worker
+	$(BUN) test podcore worker server
 
 test-go:
 	$(GO) vet ./...
@@ -103,27 +103,57 @@ secrets-all:
 	@git -c core.quotepath=off ls-files | cut -d/ -f1 | sort -u | while IFS= read -r p; do $(GO) run $(GITLEAKS) dir --redact --no-banner "$$p" </dev/null || exit 1; done
 
 
-# The black-box contract suite (docs/development/e2e-contract.md). Needs JM_E2E_SERVER; ends with E2E_MS=<n> STEPS=<k>/<k>.
-e2e:
+# The black-box contract suite against any server: `JM_E2E_SERVER='<shell command>' make e2e-any` (docs/development/e2e-contract.md).
+# With JM_E2E_SERVER unset every test skips.
+e2e-any:
 	$(GO) test ./e2e -count=1 -v
+
+# The pod-state server (ADR 0006): one Bun process, Hono, Postgres. `make server` serves on $PORT (default 8787) with the
+# in-process Postgres kept in .tools/server-data; set DATABASE_URL to use a real one.
+server: node_modules
+	$(if $(DATABASE_URL),,ENV=local) PORT=$${PORT:-8787} $(BUN) server/src/main.ts $(if $(DATABASE_URL),,--persist-to $(CURDIR)/.tools/server-data)
+
+# A fresh PGlite data directory as one tar, so each e2e server skips initdb. Rebuilt when the lockfile changes.
+PGLITE_TPL := $(CURDIR)/.tools/pglite-template.tar
+$(PGLITE_TPL): bun.lock | node_modules
+	mkdir -p $(dir $@)
+	$(BUN) server/src/pglite-template.ts $@
+
+# The suite starts it with PORT, ENV=local and JM_DATA_DIR. The state dir sits under JM_DATA_DIR (TestF02 reads the flag from
+# the process table). Against a real Postgres, each server gets its own schema, named from its data dir, so every test starts fresh.
+SERVER_E2E := if [ -n "$$DATABASE_URL" ]; then export JM_PG_SCHEMA="e2e_$$(printf %s "$$JM_DATA_DIR" | cksum | tr -d -c 0-9)"; fi; exec $(BUN) server/src/main.ts --persist-to "$$JM_DATA_DIR/state"
+
+# Runs the contract suite with the given server environment and judges the closing line, which no test can see: the last line
+# before go test's own ok/FAIL/PASS must be E2E_MS=<n> STEPS=<k>/<n>, with k = n when the suite passed and k < n when it did not.
+# $(1) names the target in messages. $(2) is the environment that picks the server.
+define judge_e2e
+	@out=$$(mktemp); \
+	env $(2) $(GO) test ./e2e -count=1 -v > "$$out" 2>&1; rc=$$?; \
+	cat "$$out"; \
+	last=$$(grep -v -E '^(ok|FAIL|PASS)([[:space:]]|$$)|^$$' "$$out" | tail -1); \
+	rm -f "$$out"; \
+	echo "$$last" | grep -E -q '^E2E_MS=[0-9]+ STEPS=[0-9]+/[0-9]+$$' || { echo "$(1): the closing line is not E2E_MS=<n> STEPS=<k>/<n>: $$last"; exit 1; }; \
+	k=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\1/'); n=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\2/'); \
+	if [ $$rc -eq 0 ] && [ "$$k" != "$$n" ]; then echo "$(1): green run but STEPS=$$k/$$n"; exit 1; fi; \
+	if [ $$rc -ne 0 ] && [ "$$k" = "$$n" ]; then echo "$(1): red run but STEPS=$$k/$$n"; exit 1; fi; \
+	exit $$rc
+endef
+
+# The contract suite against the pod-state server. It persists every command, heartbeats included (staleMs is 0). The tests that
+# need the Cloudflare adapter's object routes are skipped, each with its reason (docs/development/e2e-contract.md, "Skipped on the server").
+E2E_C_SKIP := TestEvictMidClaim,TestEvictAlarmWake,TestEvictPastDeadline
+e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
+	$(call judge_e2e,e2e-c,JM_E2E_SERVER='$(SERVER_E2E)' JM_E2E_SKIP='$(E2E_C_SKIP)' $(if $(DATABASE_URL),JM_E2E_STATE_IN_DB=1,JM_PGLITE_TEMPLATE='$(PGLITE_TPL)'))
+
+# `make e2e` is the contract suite against the server that ships.
+e2e: e2e-c
+
+# The contract suite against the Cloudflare adapter (worker/), which stays in the tree as a second adapter.
+e2e-a: node_modules
+	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh')
 
 # The Cloudflare adapter (worker/) under `wrangler dev --local`. Loopback only.
 worker-dev: node_modules
 	ENV=local PORT=$${PORT:-8787} JM_DATA_DIR=$${JM_DATA_DIR:-$(CURDIR)/.wrangler-data} worker/dev.sh
 
-# The contract suite against the Cloudflare adapter. It persists every command, heartbeats included (staleMs is 0).
-# It also judges the closing line, which no test can see: the last line before go test's own ok/FAIL/PASS must be
-# E2E_MS=<n> STEPS=<k>/<n>, with k = n when the suite passed and k < n when it did not.
-e2e-a: node_modules
-	@out=$$(mktemp); \
-	JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' $(GO) test ./e2e -count=1 -v > "$$out" 2>&1; rc=$$?; \
-	cat "$$out"; \
-	last=$$(grep -v -E '^(ok|FAIL|PASS)([[:space:]]|$$)|^$$' "$$out" | tail -1); \
-	rm -f "$$out"; \
-	echo "$$last" | grep -E -q '^E2E_MS=[0-9]+ STEPS=[0-9]+/[0-9]+$$' || { echo "e2e-a: the closing line is not E2E_MS=<n> STEPS=<k>/<n>: $$last"; exit 1; }; \
-	k=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\1/'); n=$$(echo "$$last" | sed -E 's/.*STEPS=([0-9]+)\/([0-9]+)/\2/'); \
-	if [ $$rc -eq 0 ] && [ "$$k" != "$$n" ]; then echo "e2e-a: green run but STEPS=$$k/$$n"; exit 1; fi; \
-	if [ $$rc -ne 0 ] && [ "$$k" = "$$n" ]; then echo "e2e-a: red run but STEPS=$$k/$$n"; exit 1; fi; \
-	exit $$rc
-
-preflight: portable tools-cache check-gen test entropy secrets private e2e-a
+preflight: portable tools-cache check-gen test entropy secrets private e2e-c

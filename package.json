@@ -6,10 +6,10 @@
   "scripts": {
     "gen": "bun scripts/gen.mjs",
     "check:fixtures": "bun scripts/check-fixtures.mjs",
-    "check:types": "tsc -p tsconfig.json",
+    "check:types": "tsc -p tsconfig.json && tsc -p server/tsconfig.json",
     "check:entropy": "bun scripts/check-entropy.mjs",
     "check:dead": "knip",
-    "check:boundaries": "depcruise scripts gen podcore worker --config .dependency-cruiser.cjs",
+    "check:boundaries": "depcruise scripts gen podcore worker server --config .dependency-cruiser.cjs",
     "check:private": "bun scripts/check-private.mjs",
     "check:boundary-rule": "bun scripts/check-boundary-rule.mjs"
   },
@@ -20,6 +20,10 @@
     "knip": "6.41.0",
     "typescript": "5.9.3",
     "wrangler": "4.151.0"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.13",
+    "hono": "4.13.14"
   },
   "patchedDependencies": {
     "miniflare@5.20261012.0-beta": "worker/patches/miniflare@5.20261012.0-beta.patch"

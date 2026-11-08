@@ -5,8 +5,9 @@ contract below. It is black box: HTTP and the pod WebSocket only, real `jmu_`, `
 import of server code. It writes no server. `daemon/internal/protocol` is Go-internal and cannot be imported
 from `e2e/`, so the suite keeps its own small wire structs.
 
-Run it: `JM_E2E_SERVER='<shell command>' make e2e`. With `JM_E2E_SERVER` unset every test skips, so
-`make test` stays green. `make e2e` ends with `E2E_MS=<n> STEPS=<k>/<k>`.
+Run it against the pod-state server (ADR 0006) with `make e2e` (the same as `make e2e-c`), against the Cloudflare adapter
+with `make e2e-a`, or against any other server with `JM_E2E_SERVER='<shell command>' make e2e-any`. With `JM_E2E_SERVER` unset
+every test skips, so `make test` stays green. `make e2e`, `make e2e-c` and `make e2e-a` end with `E2E_MS=<n> STEPS=<k>/<k>`.
 
 ## How the suite starts the server
 
@@ -29,6 +30,11 @@ and wrangler do by default).
 | `GET /__test/instance/:pod` | 200 `{instance, requests}`: an id minted when the object was built, and how many requests it has served (this one excluded). A discard changes the id. |
 | `GET /__test/stored-alarm/:pod` | 200 `{at}`: the alarm time the object itself has stored (`ctx.storage.getAlarm()`), unix ms or `null`. Under a fixed clock the object stores its own deadline, a far-future time that never fires by itself. Not counted as a request. |
 | `GET /__test/woke/:pod` | 200 `{instance, requests, was}` recorded by the object's alarm handler when it last ran (read without waking the object), or `null`; `was` is the stored alarm time a discard moved, which is the alarm that ran. |
+
+A deployed build (no `ENV=local`) opens these routes only behind `Authorization: Bearer <TEST_BEARER>`, has no `/__test/clock`, and
+a build with no bearer has no `/__test` handler at all. The pod-state server serves `session`, `clock` and `evict`; its `evict`
+drops the pod's in-memory state and restores it from Postgres, with the sockets attached, which is the whole of what `TestF04`
+asks. It has no object to discard, so it does not serve `discard`, `instance`, `stored-alarm` or `woke`.
 
 Clock rules, which every server under test must meet:
 
@@ -107,7 +113,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 
 | Test | What it proves |
 |---|---|
-| `TestF02` | F02: the server's own command line (read from the process table) carries `--persist-to <the run's data dir>/state` and that dir holds state, `/healthz` answers 200 within 10 s, and a failing step names itself and prints the last 20 events. The closing line is judged by `make e2e-a`, not by a test. `TestStepPrinter` checks the printer alone, with a fake failing step. |
+| `TestF02` | F02: the server's own command line (read from the process table) carries `--persist-to <the run's data dir>/state` and that dir holds state, `/healthz` answers 200 within 10 s, and a failing step names itself and prints the last 20 events. The closing line is judged by `make e2e-c` and `make e2e-a`, not by a test. `TestStepPrinter` checks the printer alone, with a fake failing step. |
 | `TestF03` | F03: a user seeded through `POST /__test/session` (the contract's seed route) creates a pod, and the first frame on its pod WebSocket is `hello` with `headSeq` 0 and that user as the one owner. |
 | `TestF04` | F04: two members subscribe and both get the same `message.created` seq; one disconnects, three posts happen, and `subscribe{sinceSeq}` replays exactly those three in order; after `POST /__test/evict/:pod` a socket that stayed connected keeps receiving with no gap and a reconnect replays exactly the missed events; the same again after a full kill -9 restart. |
 | `TestF05` | F05: an invite is accepted and the new member's `hello` lists them; the same single-use invite returns 410 the second time; an invite accepted after its `ttlSeconds` (the suite moves the clock past it) returns 410; a non-member creating an invite gets 403. After each refusal the owner's `hello` still lists exactly the members it had. |
@@ -134,12 +140,32 @@ early-expiry and lateness check reads it, so every server is measured identicall
 released before its recorded deadline; released no later than `max(restart, deadline) + 6 s`
 once the clock passes it; one `claim.released` over live delivery and over a replay from seq 0.
 
+## Skipped on the server
+
+`JM_E2E_SKIP` is a comma-separated list of test names. `make e2e-c` sets it to the three tests below; each one skips, says so,
+and still counts as passed for `TestF14Budget`. A skip needs a reason here. Nothing else is skipped, and no assertion differs
+between servers.
+
+| Test | Reason |
+|---|---|
+| `TestEvictMidClaim` | Needs `/__test/discard`, `/__test/instance` and `/__test/stored-alarm`: the runtime throwing away a Durable Object and the alarm that object stored. The server is one process with one timer and no object to discard. Its restore path is covered by `TestF04` (evict), `TestKillMidLease` and `TestRestartPastDeadline` (kill -9 and restart). |
+| `TestEvictAlarmWake` | Needs `/__test/discard` with `alarmMs` and `/__test/woke`: the runtime firing an object's own stored alarm on a new instance. The server's single timer is covered by `TestExpiryZeroTraffic` (fake clock) and, in real-clock mode, by `TestKillMidLease`. |
+| `TestEvictPastDeadline` | Needs `/__test/discard` with `now`: an object thrown away with a deadline already past, then woken by a reconnect. `TestRestartPastDeadline` proves the same rule (the restore settles an expired claim before the first frame) for a restart. |
+
+One step is skipped, not a whole test. On a real Postgres (`DATABASE_URL` set, which is how CI runs `make e2e-c`) the state lives
+in the database, so the `--persist-to` directory holds no files. `TestF02` still checks that the server was started with
+`--persist-to <dir>/state` and prints `STEP PARTLY SKIPPED` for the one check that the directory is not empty (`make e2e-c` sets
+`JM_E2E_STATE_IN_DB=1`). That the state persisted is proved against the same database by `TestReplayAcrossRestart` and
+`TestRestartPastDeadline`, which kill -9 the server and read back events and a lease. The server writes no marker file: a file
+made only to satisfy the check would prove nothing. Against PGlite (no `DATABASE_URL`) the directory holds the database files
+and the check runs in full.
+
 ## Output lines
 
 - `E2E_MS=<n> STEPS=<k>/<n>`: the closing line, printed once after every test has ended. `n` is the suite wall clock after `go test`
   finishes its tests. The steps are every named step of the tests that name them (`TestF02`) plus one step for each other test that
   ran; a skipped test counts nothing. `k` is the steps that passed, so a red run prints `k < n`. A failing named step prints its
-  name and the last 20 events the suite saw before it. A test cannot see the run's last line, so `make e2e-a` judges it: the
+  name and the last 20 events the suite saw before it. A test cannot see the run's last line, so `make e2e-c` and `make e2e-a` judge it: the
   last line before `go test`'s own `ok`/`FAIL` must be this line, with `k = n` on a green run and `k < n` on a red one.
 - `LATENESS_MS <kind> <ms>`: observed expiry minus the ledger's deadline, real-clock mode only. `kind` is
   `steady` (zero-traffic expiry), `after_restart_ahead` (deadline after the restart) or

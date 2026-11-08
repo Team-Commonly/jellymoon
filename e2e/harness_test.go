@@ -30,6 +30,9 @@ var (
 	suiteStart = time.Now()
 	serverCmd  = os.Getenv("JM_E2E_SERVER")
 	realClock  = os.Getenv("JM_E2E_REAL_CLOCK") == "1"
+	// stateInDatabase is set by `make e2e-c` when the server keeps its state in a real database (DATABASE_URL): the --persist-to
+	// directory then holds no files by design. TestF02 says so aloud and skips only its directory-content check.
+	stateInDatabase = os.Getenv("JM_E2E_STATE_IN_DB") == "1"
 	suiteTests = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF09", "TestF10", "TestF11", "TestExpiryZeroTraffic", "TestRenewRace",
 		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline", "TestRunTokenOtherPod", "TestEvictMidClaim", "TestEvictAlarmWake", "TestEvictPastDeadline"}
 	outcomes sync.Map // test name -> failed bool
@@ -53,6 +56,12 @@ func need(t *testing.T) {
 	t.Helper()
 	if serverCmd == "" {
 		t.Skip("JM_E2E_SERVER is not set; run `make e2e` with a server command (docs/development/e2e-contract.md)")
+	}
+	// A server may skip the tests that need a route it cannot serve (the object routes of the Cloudflare adapter). Each
+	// name is in the contract doc with its reason. A skipped test counts as passed for the budget: it is not a failure.
+	if slices.Contains(strings.Split(os.Getenv("JM_E2E_SKIP"), ","), t.Name()) {
+		outcomes.Store(t.Name(), false)
+		t.Skip("named in JM_E2E_SKIP: this server has no route for it (docs/development/e2e-contract.md, \"Skipped on the server\")")
 	}
 }
 

@@ -34,6 +34,9 @@ type Conn struct {
 	c   net.Conn
 	br  *bufio.Reader
 	wmu sync.Mutex
+
+	// ReadTimeout, when set, is how long Read waits for the next frame of any kind. Zero waits for ever.
+	ReadTimeout time.Duration
 }
 
 // Dial upgrades an http(s) URL with a bearer token in Authorization, as the pod socket requires.

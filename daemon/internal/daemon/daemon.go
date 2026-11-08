@@ -31,6 +31,8 @@ type Daemon struct {
 	wg     sync.WaitGroup
 	ctx    context.Context
 	beat   func(*ws.Conn, []byte) error // sends a heartbeat; a test seam, nil means Conn.Send
+
+	readTimeout time.Duration // how long a pod socket may stay silent; a test seam, zero means ReadTimeout
 }
 
 // New makes a daemon for a stored computer.

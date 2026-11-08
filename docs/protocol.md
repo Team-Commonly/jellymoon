@@ -159,7 +159,9 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 - A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token; a poll sooner than interval after the last one gets slow_down.
 - Jellymoon mints the device code itself; GitHub only proves who the person is, through its OAuth web flow at /v1/auth/github/*. The GitHub token is dropped after GET /user: never stored, logged or returned. A GitHub 401 there gets unauthorized; any other GitHub failure gets upstream.
 - The callback is refused (forbidden) when its state is missing, differs from the state cookie, or was already used: a state is good for one callback, and the next path it carries is the one bound at start. A next that is not a same-origin path (one leading /, not // or /\, no scheme) becomes /.
-- The session cookie (httpOnly, SameSite=Lax, Secure except ENV=local) is accepted, besides a Bearer jmu_, only by GET /v1/me and POST /v1/auth/device/approve.
+- The session cookie (httpOnly, SameSite=Lax, Secure except ENV=local) is accepted, besides a Bearer jmu_, by every route whose auth includes user, the pod WebSocket included, and by every user operation. A request with a Bearer uses it and ignores the cookie. The cookie must hold a jmu_: any other token in it is no caller (unauthorized). Routes and operations whose auth is only run or computer, and POST /mcp, read the Bearer alone.
+- A cookie-authenticated request that changes state (any method but GET, HEAD and OPTIONS) needs Content-Type application/json and an Origin header equal to the server's own origin (PUBLIC_URL, or the request's origin, https except ENV=local); a missing Origin is refused too (forbidden). The pod WebSocket opened by the cookie needs the same Origin. A token never rides in the query string. Bearer requests need neither. POST /v1/auth/device/approve keeps its own rule below.
+- POST /v1/auth/logout (cookie or Bearer jmu_) revokes the token the request presented, at once, and clears the session cookie.
 - POST /v1/auth/device/approve needs Content-Type application/json and, when an Origin header is sent, the server's own origin (forbidden otherwise). An unknown user code gets not_found, an expired one expired_token, an approved one gone. It is the only route that approves a device code.
 - A used or expired invite gets gone (HTTP 410). Only a member can create an invite.
 - cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome.
@@ -174,6 +176,7 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 | GET | `/v1/auth/github/start` | `none`: no token | — | 302 to GitHub's authorize page, with a same-origin path in ?next; sets the one-use state cookie |
 | GET | `/v1/auth/github/callback` | `none`: no token | — | 302 to the next path bound to the state; sets the session cookie |
 | GET | `/v1/me` | `user`: user token (`jmu_`) | — | [Actor](#def-Actor) |
+| POST | `/v1/auth/logout` | `user`: user token (`jmu_`) | — | [LogoutResponse](#def-LogoutResponse) |
 | POST | `/v1/pods` | `user`: user token (`jmu_`) | [CreatePodRequest](#def-CreatePodRequest) | [Pod](#def-Pod) |
 | POST | `/v1/pods/:pod/invites` | `user`: user token (`jmu_`) | [CreateInviteRequest](#def-CreateInviteRequest) | [Invite](#def-Invite) |
 | POST | `/v1/invites/:code/accept` | `user`: user token (`jmu_`) | — | [AcceptInviteResponse](#def-AcceptInviteResponse) |
@@ -214,6 +217,13 @@ A signed-in person approves the device code they were shown, binding it to thems
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `userCode` | string | yes | The code the sign-in page shows, e.g. WDJB-MJHT. Limit: matches `^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$` |
+
+<a id="def-LogoutResponse"></a>
+### LogoutResponse
+
+A logout carries no data: the token it presented no longer authenticates, and the session cookie is cleared.
+
+No fields.
 
 <a id="def-DeviceApproveResponse"></a>
 ### DeviceApproveResponse

@@ -57,8 +57,8 @@ export type Harness = "claude-code" | "codex" | "fake";
 export const HarnessValues = ["claude-code","codex","fake"] as const;
 
 /** Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event. */
-export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "internal";
-export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","internal"] as const;
+export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "upstream" | "internal";
+export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","upstream","internal"] as const;
 
 /** The body of every error response, and the data of the error socket event. */
 export interface ErrorBody {
@@ -510,6 +510,16 @@ export interface DeviceTokenRequest {
   deviceCode: string;
 }
 
+/** A signed-in person approves the device code they were shown, binding it to themselves. */
+export interface DeviceApproveRequest {
+  /** The code the sign-in page shows, e.g. WDJB-MJHT. */
+  userCode: string;
+}
+
+/** An approval carries no data: the device that polls gets the token. */
+export interface DeviceApproveResponse {
+}
+
 /** A user token and the user it belongs to. */
 export interface DeviceTokenResponse {
   token: UserToken;
@@ -832,6 +842,7 @@ export const ERROR_STATUS = {
   "invalid_grant": 400,
   "ungrounded": 422,
   "rate_limited": 429,
+  "upstream": 502,
   "internal": 500,
 } as const;
 export const TOOL_PREFIX = "jm_";

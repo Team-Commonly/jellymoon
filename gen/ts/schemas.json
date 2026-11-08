@@ -128,6 +128,7 @@
         "invalid_grant",
         "ungrounded",
         "rate_limited",
+        "upstream",
         "internal"
       ]
     },
@@ -1440,6 +1441,27 @@
           "maxLength": 128
         }
       }
+    },
+    "DeviceApproveRequest": {
+      "description": "A signed-in person approves the device code they were shown, binding it to themselves.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userCode"
+      ],
+      "properties": {
+        "userCode": {
+          "description": "The code the sign-in page shows, e.g. WDJB-MJHT.",
+          "type": "string",
+          "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"
+        }
+      }
+    },
+    "DeviceApproveResponse": {
+      "description": "An approval carries no data: the device that polls gets the token.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
     },
     "DeviceTokenResponse": {
       "description": "A user token and the user it belongs to.",

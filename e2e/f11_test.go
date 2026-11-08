@@ -359,6 +359,7 @@ func (f *f11) decision() error {
 // TestF11: jm_post enforces the headline contract and the pod stamps the receipt.
 func TestF11(t *testing.T) {
 	needFake(t)
+	par(t)
 	track(t)
 	f := newF11(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return f.obs[0].snapshot(0) }}

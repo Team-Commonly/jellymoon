@@ -13,7 +13,7 @@ every test skips, so `make test` stays green. `make e2e`, `make e2e-c` and `make
 
 The suite owns the process. It runs `JM_E2E_SERVER` with `sh -c`, from the repo root, with env `PORT`,
 `ENV=local` and `JM_DATA_DIR=<fresh dir>`, in its own process group, and waits for `GET /healthz` = 200.
-Each test gets a fresh server and data dir. A restart is `kill -9` of the process group plus the same
+Each test gets a fresh server and data dir, on its own ports, so the tests run in parallel (below). A restart is `kill -9` of the process group plus the same
 command again, on the same port and the same data dir. The server must bind with `SO_REUSEADDR` (Bun, Node
 and wrangler do by default).
 
@@ -133,7 +133,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestEvictPastDeadline` | The object is discarded with the clock stored five seconds past a claim's deadline; the first thing to reach the new instance is a socket reconnect, which runs no command, and it already carries the `claim.released{expired}`, exactly once. It needs the restore to settle (`boot`). |
 | `TestF08` | F08: builds the repo's `daemon/cmd/jellymoon` and runs it as a black box (own process group, output captured, config dir `JELLYMOON_HOME`, server `JELLYMOON_SERVER`, first-registration jmu_ token in `JELLYMOON_USER_TOKEN`, never argv). It registers the computer and stores `computer.json` at 0600 in a 0700 dir; `agent add fake --pod` registers an agent; members get `presence.changed` online within 5 s; a daemon stopped with SIGSTOP (socket open, no heartbeat) goes offline when the fake clock is exactly 45 s past its last sign of life and not 1 ms before; a second start reuses the stored computer; `kill -9` gives offline within 45 s; no token appears in any output or in any process's argv; plain http to a non-local host is refused; and after a server crash with the daemon gone, hello lists the agent offline. |
 | `TestF09` | F09: behind a recording proxy, a task assigned to the agent makes the built daemon claim the wake with `POST /v1/runs` and its computer token; the response carries a `run_` id, a 47-character `jmr_` token, a brief and the `/mcp` URL; the fake ACP agent starts with that MCP server (HTTP, `Authorization: Bearer <the run's jmr_>`) in `session/new` and the brief as its first prompt; its `jm_whoami` call over MCP answers with the agent, pod and run; no `jmc_` or `jmu_` token and no token-shaped string is in its argv or environment; a finished agent ends the run `completed`; a daemon restarted with a user token in its environment and none of the allowed names still hands the agent only allow-listed names; a daemon stopped while an agent that ignores SIGTERM runs takes its process group with it and ends that run (matched by its own id) `failed`; and no token reaches any daemon output. |
-| `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. It judges the run so far, so it is last; it fails if a suite test failed and skips on a partial run. |
+| `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. The suite tests run in parallel, so this one is parallel too and waits for every one of them before it judges the run. It fails if a suite test failed, if one never reported in a whole-suite run, or if the run took 60 s or more; it skips only when `-run` narrowed the run. `TestBudgetVerdict` checks that judgment with made-up outcomes and needs no server. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X
 (renewed by a heartbeat; its deadline falls after the restart), then crashes. For each it asserts: not
@@ -171,6 +171,19 @@ on the Worker.
 The cost is serial server starts, not sleeps: the real sleeps in the whole suite add up to about 4 s, a Worker start takes 1.4 to
 2 s on a CI runner, and no two tests overlapped. The fake clock already replaces the long waits. The 60 s budget did not change;
 the Worker suite on the CI runner sat 0.3 s under it before PR 13 added one test and tipped it over.
+
+## Running in parallel
+
+The suite tests call `par(t)` right after `need`/`needFake`, so they run at the same time, up to `go test`'s `-parallel` (the CPU
+count by default). That is safe because each of them builds its own world: its own server process group, ports, data dir, pod,
+users and sockets. Two tests that shared a pod, a data dir or a port would see each other's events, so a new test must not.
+`TestStepPrinter` and `TestPortRetry` (which starts a child test process) stay serial. The only state the tests share is the harness's
+bookkeeping (`outcomes`, the step counters), which is a `sync.Map` and atomics.
+
+`TestF14Budget` is parallel as well and waits on `suiteWG`, which every `par` test joins before it pauses and leaves in its last
+cleanup, so it judges after the outcomes and the server kills. It needs `-parallel` 2 or more and says so if given 1. A server
+start is CPU-bound (a Worker start is `wrangler dev` plus `workerd`), so a runner with few cores overlaps fewer of them; with
+four slots (`GOMAXPROCS=4`) the Worker suite took 14 s on a dev machine against 10 s with ten, far under the budget.
 
 ## Skipped on the server
 

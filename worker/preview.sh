@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # A per-run Workers preview: deploys this checkout's test entry (src/test/index.ts, ENV unset) to its own Worker, its own Durable
 # Object namespace and its own D1 database, runs the contract suite against it over HTTPS and the pod WebSocket, and removes both.
+#   preview.sh need-secrets  fail unless JM_CF_PREVIEW_TOKEN and JM_CF_ACCOUNT_ID are both set (the CI job's first step; a skip would pass untested)
 #   preview.sh up <name>    create the database, apply schema.sql, deploy, set the bearer, wait for /healthz
 #   preview.sh run          run the suite against $JM_E2E_URL with $JM_E2E_TEST_BEARER (from `up`)
 #   preview.sh down <name>  delete the Worker and the database, then check both are gone; safe after a partial `up`
@@ -87,7 +88,12 @@ down() {
   echo "preview: $NAME and its database are gone"
 }
 
+need_secrets() {
+  [ -n "${JM_CF_PREVIEW_TOKEN:-}" ] && [ -n "${JM_CF_ACCOUNT_ID:-}" ] || die "JM_CF_PREVIEW_TOKEN and JM_CF_ACCOUNT_ID must both be set (repository secrets in CI); the preview cannot be tested without them"
+}
+
 case "${1:-}" in
+  need-secrets) need_secrets ;;
   up) up "${2:-}" ;;
   run) run ;;
   down) down "${2:-}" ;;
@@ -96,5 +102,5 @@ case "${1:-}" in
     ( up "${2:-}" && run ) || rc=$?
     down "${2:-}" || rc=$?
     exit $rc ;;
-  *) die "usage: preview.sh up|run|down|all <pr-N|main>" ;;
+  *) die "usage: preview.sh need-secrets|up|run|down|all <pr-N|main>" ;;
 esac

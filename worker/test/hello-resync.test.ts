@@ -75,3 +75,20 @@ test('presence that changes between hello and subscribe reaches the client in a 
   const last = client.frames('hello').at(-1);
   expect(agentState(last)).toBe('online');
 });
+
+// A refused ruling names the decision it was about, so the web store can put the error on that card.
+const sendFrame = async (type: string, data: unknown): Promise<Array<{ data: Record<string, unknown> }>> => {
+  const { pod, sockets } = podObject();
+  await connect(pod, user);
+  pod.webSocketMessage(sockets[0].ws as unknown as WebSocket, JSON.stringify({ v: 1, type, podId: 'pod_1', data }));
+  return sockets[0].ws.frames('error');
+};
+
+test('a ruling the core refuses comes back as an error frame whose ref is the decision id', async () => {
+  const decisionId = 'dec_01ARZ3NDEKTSV4RRFFQ69G5FAZ';
+  expect((await sendFrame('decision.rule', { decisionId, optionId: 'a' })).map((f) => f.data)).toEqual([{ code: 'not_found', message: 'No such decision.', ref: decisionId }]);
+});
+
+test('an error frame that is not about a ruling carries no ref', async () => {
+  expect((await sendFrame('message.post', {})).map((f) => Object.keys(f.data))).toEqual([['code', 'message']]);
+});

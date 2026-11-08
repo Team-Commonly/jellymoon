@@ -98,10 +98,11 @@ func (d *Daemon) keep(podID protocol.PodID) {
 	}
 }
 
-// backoff is how long to wait before the next dial, and the wait after that. A connection that lived for longer than a minute
-// starts the wait over at 1 s; otherwise it doubles, up to 30 s.
+// backoff is how long to wait before the next dial, and the wait after that. A connection that lived longer than one read
+// timeout was healthy (it survived at least one silent stretch), so it starts the wait over at 1 s; otherwise the wait doubles,
+// up to 30 s.
 func backoff(wait, lived, readTimeout time.Duration) (sleep, next time.Duration) {
-	if lived > time.Minute {
+	if lived > readTimeout {
 		wait = time.Second
 	}
 	return wait, min(wait*2, 30*time.Second)

@@ -127,6 +127,9 @@ func (d *Daemon) execute(a config.Agent, c protocol.ClaimRunResponse) error {
 	if err != nil {
 		return fmt.Errorf("the claim's expiresAt %q is not a timestamp: %w", c.ExpiresAt, err)
 	}
+	if !time.Now().Before(expires) {
+		return fmt.Errorf("the claim expired at %s, before the agent could start", c.ExpiresAt)
+	}
 	ctx, cancel := context.WithDeadline(d.ctx, expires)
 	defer cancel()
 	d.log.Printf("run %s: starting agent %s", c.RunID, a.AgentID)

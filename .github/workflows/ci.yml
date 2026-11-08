@@ -161,12 +161,13 @@ jobs:
       JM_CF_PREVIEW_TOKEN: ${{ secrets.JM_CF_PREVIEW_TOKEN }}
       JM_CF_ACCOUNT_ID: ${{ secrets.JM_CF_ACCOUNT_ID }}
     steps:
-      - name: Refuse without the preview secrets
-        # A skip that exits 0 would pass without testing what the job names. Here a missing secret is a failure.
-        run: worker/preview.sh need-secrets
+      # The checkout comes first: the secrets check below is a script in the repo.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Refuse without the preview secrets
+        # A skip that exits 0 would pass without testing what the job names. Here a missing secret is a failure.
+        run: worker/preview.sh need-secrets
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version-file: .tool-versions

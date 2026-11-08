@@ -1,14 +1,14 @@
 // The pod operations of schema/operations.json over HTTP. Rules live in the core; this file maps requests to commands.
 // Not served here: evidence (404). A request field the core has no place for is refused with invalid_input, never dropped: a
-// post's kind (other than fyi), status (other than done), needs, options, context, taskId, links and caveat, and a task
-// update's note.
+// task update's note.
 import type { Hono } from 'hono';
 import { TaskStatusValues } from '../../gen/ts/protocol';
-import type { Message, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
+import type { Harness, Message, PostInput, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
 import type { Hub } from './hub';
 import { newId, newWakeSeed } from './ids';
 import { bad, fail, memberRoute, pick, respond } from './kit';
 import type { Call } from './kit';
+import { viaMcp } from './mcp';
 import { eventsAfter } from './store';
 import { taskView, tasksOf } from './views';
 
@@ -80,17 +80,13 @@ const release = async (k: Call): Promise<Response> =>
 const stop = async (k: Call): Promise<Response> =>
   respond(k.c, await k.pod.exec({ type: 'run_stop', caller: k.caller, runId: k.c.req.param('run') ?? '', reason: k.body.reason as string | undefined }));
 
-/** The core stores every post as kind fyi, status done, with none of the ask fields (podcore/src/board.ts messagePostCmd). */
+/** A post is the core's `post` command (podcore/src/post.ts): the receipt, the ask and the decision are the core's. The harness is the adapter's record of where the agent runs; viaMcp says the post came in on /mcp, whose carrying call the receipt leaves out. */
 const post = async (k: Call): Promise<Response> => {
-  const refused = refuse(k, ['needs', 'options', 'context', 'taskId', 'links', 'caveat']);
-  if (refused) return refused;
-  if (k.body.kind !== 'fyi') return bad(k.c, 'body.kind: this server stores only fyi posts yet');
-  if (k.body.status !== 'done') return bad(k.c, 'body.status: this server stores only done posts yet');
-  const summary = k.body.summary as string;
-  const body = k.body.body as string | undefined;
+  const agentId = k.caller.kind === 'run' ? k.pod.state.runs[k.caller.runId]?.agent.id : undefined;
+  const harness = agentId === undefined ? undefined : (k.pod.meta.harness[agentId] as Harness | undefined);
   const messageId = newId('msg_');
-  const reply = await k.pod.exec({ type: 'message_post', caller: k.caller, messageId, wakeId: newWakeSeed(), summary, text: body === undefined || body === '' ? summary : `${summary}\n${body}` });
-  return respond(k.c, reply, (m) => ({ messageId, seq: (m as Message).seq }));
+  const reply = await k.pod.exec({ type: 'post', caller: k.caller, messageId, decisionId: newId('dec_'), wakeId: newWakeSeed(), harness, viaMcp: viaMcp(k.c.req.raw), input: k.body as unknown as PostInput });
+  return respond(k.c, reply, (m) => ({ messageId, seq: (m as Message).seq, ...((m as Message).decision === undefined ? {} : { decisionId: (m as Message).decision?.id }) }));
 };
 
 /**

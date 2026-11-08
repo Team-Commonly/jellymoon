@@ -27,7 +27,7 @@ core command, and every answer and event comes out of the core. It meets the fiv
 | 4. Authenticate and mint ids | `jmu_`, `jmc_` and `jmr_` tokens are random and stored only as SHA-256; a run token is bound to its pod. Ids are a timestamp plus 80 fresh random bits, never a counter, and each command gets a new wake seed. The adapter keeps the wake and run indexes the core cannot: `POST /v1/runs {wakeId}` names no pod |
 | 5. Boot | `Hub.restore`: load every pod, apply `boot {staleMs: 0}` once, then set every computer the pod held online to offline, because a restarted process has no sockets. Every command is persisted, heartbeats included, and saves are never coalesced |
 
-The server serves `POST /mcp` like the Worker: `server/src/mcp.ts` is a twin of `worker/src/mcp.ts`, adds no behaviour, and sends each tool call through the server's own routes with the caller's token.
+The server serves `POST /mcp` like the Worker: `server/src/mcp.ts` is a twin of `worker/src/mcp.ts`, adds no behaviour, and sends each tool call through the server's own routes with the caller's token. Like the Worker, it tells the pod about each run's `tools/call` before dispatching it (the core's `tool_call`), and a post is the core's `post` command, so a receipt counts tool calls exactly as on the Worker; a request the adapter dispatched itself is recognised by object identity, not by a header a caller could forge.
 
 One writer per pod is a per-pod promise chain; no lock spans pods. Request bodies are checked against `gen/ts/schemas.json`
 with the same walker the Worker uses, before anything runs, and a field the core has no place for is refused (400), never

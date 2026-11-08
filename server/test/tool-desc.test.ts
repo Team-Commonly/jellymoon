@@ -29,3 +29,13 @@ test('a post of every kind, an ask and a taskId are stored as sent, over HTTP an
     expect(await feed(out.messageId)).toMatchObject({ kind: 'ask', decision: { id: out.decisionId, state: 'open' } });
   }
 });
+
+test('jm_task_update does not offer a note, and a task_update carrying one is refused at the edge', async () => {
+  const w = await world();
+  const run = (await w.call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json;
+  const tools = (await w.call('POST', '/mcp', run.runToken, { jsonrpc: '2.0', id: 1, method: 'tools/list' })).json.result.tools as Json[];
+  expect(Object.keys(tools.find((t) => t.name === 'jm_task_update')?.inputSchema.properties)).not.toContain('note');
+  await w.call('POST', `/v1/pods/${w.pod.id}/tasks/${TASK}/claim`, run.runToken, {});
+  const res = await w.call('PATCH', `/v1/pods/${w.pod.id}/tasks/${TASK}`, run.runToken, { status: 'in_progress', note: 'halfway' });
+  expect([res.status, res.json.code]).toEqual([400, 'invalid_input']);
+});

@@ -52,3 +52,8 @@ test('the pod post route stores every kind, an ask and a taskId as sent (twin of
   const out = (await res?.json()) as { messageId: string; decisionId: string };
   expect(stored(p, out.messageId)).toMatchObject({ kind: 'ask', decision: { id: out.decisionId, state: 'open' } });
 });
+
+test('a task_update carrying a note is refused at the edge', async () => {
+  const res = await podRoute(pod(), new Request(`http://x/v1/pods/p/tasks/${TASK}`, { method: 'PATCH', body: JSON.stringify({ status: 'in_progress', note: 'halfway' }) }), who);
+  expect([res?.status, ((await res?.json()) as { code: string }).code]).toEqual([400, 'invalid_input']);
+});

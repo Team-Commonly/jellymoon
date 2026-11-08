@@ -48,7 +48,8 @@ const applyCreated = on<Message>((s, m) => {
 });
 const applyUpdated = on<MessageUpdated>((s, u) => {
   const { [u.decision.id]: _gone, ...pending } = s.pending;
-  return { ...s, pending, messages: s.messages.map((m) => (m.id === u.id ? { ...m, decision: u.decision } : m)) };
+  const { [u.decision.id]: _stale, ...ruleErrors } = s.ruleErrors; // a ruling that landed during a drop clears its "unsent" note
+  return { ...s, pending, ruleErrors, messages: s.messages.map((m) => (m.id === u.id ? { ...m, decision: u.decision } : m)) };
 });
 const applyTask = on<Task>((s, t) => ({ ...s, tasks: { ...s.tasks, [t.id]: t } }));
 const applyClaimed = on<TaskClaimed>((s, c) => {
@@ -74,7 +75,7 @@ const SEQ_EVENTS: Record<string, Apply> = {
 
 function applyError(s: PodState, e: ErrorBody): PodState {
   // ref = the ruling's decision id; no ref (an older server) means the most recent waiting ruling; a stale ref changes nothing.
-  const waiting = e.ref === undefined ? Object.keys(s.pending).at(-1) : e.ref in s.pending ? e.ref : undefined;
+  const waiting = e.ref === undefined ? Object.keys(s.pending).at(-1) : Object.hasOwn(s.pending, e.ref) ? e.ref : undefined;
   if (!waiting) return e.ref === undefined ? { ...s, postError: e.message } : s;
   const { [waiting]: _gone, ...pending } = s.pending;
   return { ...s, pending, ruleErrors: { ...s.ruleErrors, [waiting]: e.message } };
@@ -99,14 +100,15 @@ export function createPodStore(opts: { podId: string; connect: Connect; schedule
   const send = (type: string, data: object) => link?.send(JSON.stringify({ v: 1, type, podId: opts.podId, data }));
 
   function onFrame(raw: string) {
-    let env: Envelope | null = null;
-    try { env = JSON.parse(raw) as Envelope | null; } catch { /* dropped below */ }
-    if (typeof env?.type !== 'string') return set({ ...state, droppedFrames: state.droppedFrames + 1 }); // a bad frame is dropped and counted
-    if (env.type === 'hello') return set(applyHello(state, env.data as never));
-    if (env.type === 'error') return set(applyError(state, env.data as unknown as ErrorBody));
-    const apply = SEQ_EVENTS[env.type];
-    if (!apply || env.seq === undefined || env.seq <= state.lastSeq) return;
-    set({ ...apply(state, env.data as never), lastSeq: env.seq });
+    try { // a frame that is not JSON, or has no body or a wrong one, is dropped and counted; nothing throws out of here
+      const env = JSON.parse(raw) as Envelope;
+      if (typeof env.type !== 'string' || typeof env.data !== 'object' || env.data === null) throw new Error('bad frame');
+      if (env.type === 'hello') return set(applyHello(state, env.data as never));
+      if (env.type === 'error') return set(applyError(state, env.data as unknown as ErrorBody));
+      const apply = SEQ_EVENTS[env.type];
+      if (!apply || env.seq === undefined || env.seq <= state.lastSeq) return;
+      set({ ...apply(state, env.data as never), lastSeq: env.seq });
+    } catch { set({ ...state, droppedFrames: state.droppedFrames + 1 }); }
   }
 
   function connect() {

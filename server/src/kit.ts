@@ -48,10 +48,10 @@ async function guard<K extends Principal['kind']>(hub: Hub, c: Context, kinds: r
 }
 
 /** The body as an object (400 when it is not one), checked against the request definition `def` in gen/; null skips the check. */
-async function checked(c: Context, def: string | null, fromPath: readonly string[] = []): Promise<Body | Response> {
+async function checked(c: Context, def: string | null, fromPath: readonly string[] = [], optional: readonly string[] = []): Promise<Body | Response> {
   const body = await parse(c);
   if (body === null) return bad(c, 'The body must be a JSON object.');
-  const problem = def === null ? null : check(def, body, fromPath);
+  const problem = def === null ? null : check(def, body, fromPath, optional);
   return problem === null ? body : bad(c, problem);
 }
 
@@ -68,7 +68,7 @@ export function setup<K extends Principal['kind']>(hub: Hub, kinds: readonly K[]
 export interface Call { c: Context; pod: PodRuntime; who: Principal; caller: Caller; body: Body }
 
 /** A route under /v1/pods/:pod: a run token must belong to that pod (403 otherwise, even for a pod that does not exist). */
-export function podRoute(hub: Hub, kinds: readonly Principal['kind'][], def: string | null, fromPath: readonly string[], fn: (k: Call) => Promise<Response>) {
+export function podRoute(hub: Hub, kinds: readonly Principal['kind'][], def: string | null, fromPath: readonly string[], fn: (k: Call) => Promise<Response>, optional: readonly string[] = []) {
   return async (c: Context): Promise<Response> => {
     const g = await guard(hub, c, kinds);
     if (g instanceof Response) return g;
@@ -77,7 +77,7 @@ export function podRoute(hub: Hub, kinds: readonly Principal['kind'][], def: str
     if (who.kind === 'run' && who.podId !== id) return fail(c, 'forbidden', 'This run token belongs to another pod.');
     const pod = hub.pods.get(id);
     if (pod === undefined) return fail(c, 'not_found', 'No such pod.', id);
-    const body = c.req.method === 'GET' ? {} : await checked(c, def, fromPath);
+    const body = c.req.method === 'GET' ? {} : await checked(c, def, fromPath, optional);
     if (body instanceof Response) return body;
     const caller: Caller = who.kind === 'run' ? { kind: 'run', runId: who.runId } : { kind: 'user', userId: who.kind === 'user' ? who.actor.id : '' };
     return fn({ c, pod, who, caller, body });
@@ -85,5 +85,5 @@ export function podRoute(hub: Hub, kinds: readonly Principal['kind'][], def: str
 }
 
 /** Shorthand for the pod routes that accept a person or a run. */
-export const memberRoute = (hub: Hub, def: string | null, fromPath: readonly string[], fn: (k: Call) => Promise<Response>) =>
-  podRoute(hub, ['user', 'run'] as const, def, fromPath, fn);
+export const memberRoute = (hub: Hub, def: string | null, fromPath: readonly string[], fn: (k: Call) => Promise<Response>, optional: readonly string[] = []) =>
+  podRoute(hub, ['user', 'run'] as const, def, fromPath, fn, optional);

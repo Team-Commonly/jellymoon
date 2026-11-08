@@ -102,6 +102,6 @@ export function opRoutes(app: Hono, hub: Hub): void {
   app.patch('/v1/pods/:pod/tasks/:task', memberRoute(hub, 'TaskUpdateInput', ['taskId'], update));
   app.post('/v1/pods/:pod/tasks/:task/release', memberRoute(hub, 'TaskReleaseInput', ['taskId'], release));
   app.post('/v1/pods/:pod/runs/:run/stop', memberRoute(hub, 'RunStopInput', ['runId'], stop));
-  app.post('/v1/pods/:pod/messages', memberRoute(hub, 'PostInput', [], post));
+  app.post('/v1/pods/:pod/messages', memberRoute(hub, 'PostInput', [], post, ['summary']));
   app.get('/v1/pods/:pod/runs/:run/tool-calls', (c) => fail(c, 'not_found', 'Evidence is not served by this server.'));
 }

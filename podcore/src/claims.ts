@@ -3,7 +3,7 @@ import type { Actor, ClaimReleased, ClaimReleaseCause, RunId, RunOutcome, Task, 
 import { emit, fail } from './emit';
 import { computerGone, staleAt } from './presence';
 import { isoOf } from './time';
-import type { Caller, Cmd, Ctx, Run } from './types';
+import type { Caller, Cmd, Ctx, PodState, Run } from './types';
 
 export const LEASE_MS = 60_000;
 
@@ -88,6 +88,9 @@ export function nextDeadline(s: { runs: Record<RunId, Run>; claims: Record<TaskI
 }
 
 /** The run behind a run token, or a refusal: an ended or unknown run's token is dead. A live run renews first, so no refusal below it can skip the renewal. */
+/** Whether `runId` names a run that is still active: the one fact an adapter may ask about a run token that is not a command (the MCP handshake). */
+export const runLive = (s: PodState, runId: string): boolean => own(s.runs, runId)?.status === 'active';
+
 function liveRun(c: Ctx, runId: RunId): Run | null {
   const run = own(c.s.runs, runId);
   if (run !== undefined && run.status === 'active') return renewRun(c, runId), run;

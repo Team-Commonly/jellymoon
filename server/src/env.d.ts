@@ -7,7 +7,7 @@ interface BunSql {
 }
 
 declare const Bun: {
-  serve(opts: { port: number; fetch: (req: Request, server: unknown) => Response | Promise<Response>; websocket: unknown }): { port: number };
+  serve(opts: { port: number; hostname?: string; fetch: (req: Request, server: unknown) => Response | Promise<Response>; websocket: unknown }): { port: number; stop(close?: boolean): void };
   SQL: new (url: string) => BunSql;
 };
 

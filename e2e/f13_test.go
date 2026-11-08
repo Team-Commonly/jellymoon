@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -230,30 +230,51 @@ func (w *world) f13ActorIgnored(r *run) {
 	w.must(w.runCall(r, "GET", w.podPath("me"), nil, nil), "the run token after the stop attempt")
 }
 
-// Step 4: the production builds carry no /__test handler. Each is run, not read: the server over real HTTP without ENV=local,
-// and the Worker's production entry under wrangler. The two bun tests are also part of `make test`.
+// Step 4: the production builds carry no /__test handler. Each is run, not read: the server over real HTTP without ENV=local
+// (server/test/production.test.ts, also part of `make test`), and the Worker's production entry under wrangler.
 func (w *world) f13Production() {
 	root, _ := filepath.Abs("..")
-	for _, file := range []string{"./server/test/production.test.ts", "./worker/test/production.test.ts"} {
-		cmd := exec.Command("bun", "test", file)
-		cmd.Dir = root
-		cmd.Env = append(os.Environ(), "JM_PROD_CHECK_DIR="+w.t.TempDir())
-		var out bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &out, &out
-		done := make(chan error, 1)
-		if err := cmd.Start(); err != nil {
-			w.t.Errorf("bun test %s: %v", file, err)
-			continue
+	cmd := exec.Command("bun", "test", "./server/test/production.test.ts")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		w.t.Errorf("the server's production check failed: %v\n%s", err, out)
+	}
+	dir, port := w.t.TempDir(), freePort(w.t)
+	wr := exec.Command("bun", filepath.Join(root, "node_modules/wrangler/bin/wrangler.js"), "dev", "-c", "wrangler.prod.toml", "--local", "--ip", "127.0.0.1", "--port", fmt.Sprint(port),
+		"--inspector-port", fmt.Sprint(freePort(w.t, port)), "--persist-to", filepath.Join(dir, "state"), "--show-interactive-dev-session=false")
+	wr.Dir = filepath.Join(root, "worker")
+	wr.Env = append(os.Environ(), "WRANGLER_SEND_METRICS=false", "NO_UPDATE_NOTIFIER=1", "CI=1", "XDG_CONFIG_HOME="+filepath.Join(dir, "cfg"), "WRANGLER_LOG_PATH="+filepath.Join(dir, "logs"),
+		"CLOUDFLARE_API_TOKEN=", "CLOUDFLARE_ACCOUNT_ID=", "CLOUDFLARE_API_KEY=", "CLOUDFLARE_EMAIL=")
+	wr.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := wr.Start(); err != nil {
+		w.t.Fatalf("cannot start the production Worker: %v", err)
+	}
+	w.t.Cleanup(func() { _ = syscall.Kill(-wr.Process.Pid, syscall.SIGKILL); _ = wr.Wait() })
+	base, hc := fmt.Sprintf("http://127.0.0.1:%d", port), &http.Client{Timeout: 2 * time.Second}
+	up := false
+	for end := time.Now().Add(60 * time.Second); !up && time.Now().Before(end); time.Sleep(100 * time.Millisecond) {
+		if r, err := hc.Get(base + "/healthz"); err == nil {
+			up = r.StatusCode == 200
+			r.Body.Close()
 		}
-		go func() { done <- cmd.Wait() }()
-		select {
-		case err := <-done:
+	}
+	if !up {
+		w.t.Fatalf("the production Worker did not answer /healthz within 60 s")
+	}
+	for _, path := range []string{"/__test", "/__test/", "/__test/session", "/__test/clock", "/__test/evict/pod_1", "/__test/discard/pod_1", "/__test/instance/pod_1", "/__test/woke/pod_1",
+		"/__test/stored-alarm/pod_1", "//__test/session", "/%5F%5Ftest/session", "/_in/evict", "/_in/discard"} {
+		for _, method := range []string{"GET", "POST"} {
+			req, _ := http.NewRequest(method, base+path, strings.NewReader(`{"name":"a","now":1}`))
+			req.Header.Set("Authorization", "Bearer sekret")
+			resp, err := hc.Do(req)
 			if err != nil {
-				w.t.Errorf("bun test %s failed: %v\n%s", file, err, out.String())
+				w.t.Errorf("%s %s on the production Worker: %v", method, path, err)
+				continue
 			}
-		case <-time.After(90 * time.Second):
-			_ = cmd.Process.Kill()
-			w.t.Errorf("bun test %s took over 90 s", file)
+			resp.Body.Close()
+			if resp.StatusCode != 404 {
+				w.t.Errorf("%s %s on the production Worker: HTTP %d, want 404", method, path, resp.StatusCode)
+			}
 		}
 	}
 }

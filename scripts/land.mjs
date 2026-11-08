@@ -17,7 +17,7 @@ import {
   scrub, scanEnv, takePage,
 } from './land-decide.mjs';
 import { scanRange } from './land-scan.mjs';
-import { checkCodeRabbit, checkEarlierReview, threadPage } from './land-coderabbit.mjs';
+import { checkCodeRabbit, checkEarlierReview, checkReviews, threadPage } from './land-coderabbit.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
 // All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
 // git and gh call (stdout, throws on failure), run(cmd, args, opts) for the range scan ({ status, stdout, stderr }, never throws), fetch for the pod read, spawn for the preflight child, env, argv and the Node version.
@@ -193,8 +193,11 @@ function codeRabbitGate(rows, n, head, mainTip) {
   const early = checkEarlierReview(rows, { pr: n, head, range }); // no network read if the one local review is missing
   if (!early.ok) return early;
   const reviews = jsonLines(gh('api', '--paginate', `repos/${REPO}/pulls/${n}/reviews?per_page=100`, '--jq', '.[] | {user: {login: .user.login, type: .user.type}, commit_id, state}'));
+  // A clean incremental review files no review, only an edit of CodeRabbit's summary comment: read the comments only when no review at the head settles (c).
+  const readComments = () => { try { return jsonLines(gh('api', '--paginate', `repos/${REPO}/issues/${n}/comments?per_page=100`, '--jq', '.[] | {user: {login: .user.login, type: .user.type}, body}')); } catch { return null; } }; // a failed read is no list: (c) refuses
+  const comments = checkReviews(reviews, head).ok ? undefined : readComments();
   const infos = range.map((sha) => JSON.parse(gh('api', `repos/${REPO}/commits/${sha}`, '--jq', '{sha, author: {login: .author.login}, committer: {login: .committer.login}}')));
-  return checkCodeRabbit({ rows, pr: n, head, range, reviews, threads: reviewThreads(n), infos, trusted: parseLogins(IO.env.JM_TRUSTED_LOGINS) });
+  return checkCodeRabbit({ rows, pr: n, head, range, reviews, comments, threads: reviewThreads(n), infos, trusted: parseLogins(IO.env.JM_TRUSTED_LOGINS) });
 }
 // Every ledger, CI and pod check at this moment. Run before the preflight and again right before the merge.
 async function decide(pr, mainTip) { // mainTip is the tip fetched for this land

@@ -2,7 +2,10 @@
 // data itself and checks every condition here; nothing is taken from a ledger row. Any missing or malformed field refuses. Cases: scripts/check-land-coderabbit.mjs.
 import { isVerifier } from './land-decide.mjs';
 
-const no = (reason) => ({ ok: false, reason });
+const no = (reason, extra) => ({ ok: false, reason, ...extra });
+// A result that only says CodeRabbit has not reviewed THIS head (no summary, a rate limited or skipped one, or one of an older head). It passes at
+// once, with no ask and no wait, and the land note says so. Every other refusal (unreadable, ambiguous or steered) carries no `gap`.
+const gap = (reason) => no(reason, { gap: true });
 const h8 = (s) => String(s).slice(0, 8);
 // The App's user as the REST API gives it (reviews: login `coderabbitai[bot]`, type Bot) and as GraphQL gives it (author __typename Bot, login
 // `coderabbitai`, the same account without the suffix). Exact and case-sensitive; a display name is never read.
@@ -16,13 +19,66 @@ export function checkEarlierReview(rows, { pr, head, range }) {
   const hit = rows.filter((r) => r.pr === String(pr) && r.head !== head && ['PASS', 'FAIL'].includes(r.verdict) && isVerifier(r.by) && mine.has(r.head)).at(-1);
   return hit ? { ok: true, earlier: hit.head } : no(`#${pr} has no earlier verifier verdict at a head in this PR's history, so the one local review is missing`);
 }
-// (c) A submitted CodeRabbit review whose commit_id is this exact head. COMMENTED and APPROVED count; CHANGES_REQUESTED at the head refuses;
-// DISMISSED and PENDING are ignored.
-export function checkReviews(reviews, head) {
+// (c) The one review need not come from CodeRabbit, and land never waits for it. A submitted CodeRabbit review whose commit_id is the head
+// (COMMENTED and APPROVED count; DISMISSED and PENDING are ignored) passes; so does a well-formed summary comment at the head (its hidden coverage
+// marker, whatever its status line says); so does a gap, CodeRabbit having reviewed nothing at this head. CHANGES_REQUESTED at the head refuses.
+// Only CodeRabbit's SUMMARY comment is read, and only its own blocks: CodeRabbit also writes replies and rate-limited notices that repeat text
+// other people chose, so a marker anywhere else refuses outright.
+const GENERATED = '<!-- coderabbit-ai-generated:v1 -->';
+const SUMMARIZE = '<!-- This is an auto-generated comment: summarize by coderabbit.ai -->';
+const NOT_A_REVIEW = ['rate limited by coderabbit.ai', 'skip review by coderabbit.ai']; // header lines of a summary that reviewed nothing
+const MARKER = /<!--\s*final_review_risk_coverage:([\s\S]*?)-->/g;
+const FENCE = new RegExp('```[\\s\\S]*?```|~{3}[\\s\\S]*?~{3}', 'g');
+const HEX40 = /^[0-9a-f]{40}$/;
+const D = { statusStart: '<!-- recent_review_status_start -->', statusEnd: '<!-- recent_review_status_end -->', walk: '<!-- walkthrough_start -->', riskStart: '<!-- final_review_risk_start -->', riskEnd: '<!-- final_review_risk_end -->' };
+// The comment's leading HTML-comment lines (blank lines allowed): its header.
+const header = (body) => {
+  const out = [];
+  for (const l of body.trimStart().split('\n')) { const t = l.trim(); if (t && !/^<!--.*-->$/.test(t)) break; if (t) out.push(t); }
+  return out;
+};
+const isSummary = (body) => { const h = header(body); return h[0] === GENERATED && h.includes(SUMMARIZE); };
+const hasMarker = (body) => body.includes('final_review_risk_coverage');
+const hasDuplicateKey = (text) => { const keys = [...text.matchAll(/"((?:[^"\\]|\\.)*)"\s*:/g)].map((m) => m[1]); return new Set(keys).size !== keys.length; };
+// The summary's marker and status line, each from its own block, in CodeRabbit's order (status, walkthrough, risk), every delimiter once.
+function summaryParts(body) {
+  const text = body.replace(FENCE, ''); // a fenced copy is quoted text, not a block
+  const at = Object.fromEntries(Object.entries(D).map(([k, d]) => [k, text.split(d).length === 2 ? text.indexOf(d) : -1]));
+  const order = [at.statusStart, at.statusEnd, at.walk, at.riskStart, at.riskEnd];
+  if (order.some((x) => x < 0) || order.some((x, i) => i && x <= order[i - 1])) return null;
+  return { risk: text.slice(at.riskStart + D.riskStart.length, at.riskEnd) };
+}
+function checkSummary(comments, head) {
+  if (!Array.isArray(comments) || comments.some((c) => !c || typeof c !== 'object' || typeof c.body !== 'string')) return no(`CodeRabbit has not reviewed ${h8(head)}, and its summary comment could not be read (the comments reply is not a list of comments)`);
+  const mine = comments.filter((c) => isCodeRabbit(c.user)); // a person or another bot quoting the marker is ignored
+  const stray = mine.filter((c) => !isSummary(c.body) && hasMarker(c.body));
+  if (stray.length) return no(`CodeRabbit has not reviewed ${h8(head)}, and ${stray.length} CodeRabbit comment(s) that are not its summary carry a coverage marker (a reply or notice can repeat text others chose)`);
+  const sums = mine.filter((c) => isSummary(c.body));
+  if (sums.length === 0) return gap(`CodeRabbit has not reviewed ${h8(head)}, and 0 CodeRabbit summary comments were found (exactly one is needed)`);
+  if (sums.length !== 1) return no(`CodeRabbit has not reviewed ${h8(head)}, and ${sums.length} CodeRabbit summary comments were found (exactly one is needed)`);
+  const body = sums[0].body;
+  if (header(body).some((l) => NOT_A_REVIEW.some((n) => l.includes(n)))) return gap(`CodeRabbit has not reviewed ${h8(head)}: its summary comment says it was rate limited or skipped`);
+  const found = [...body.matchAll(MARKER)].map((m) => m[1]);
+  if (found.length !== 1) return no(`the CodeRabbit summary comment carries ${found.length} coverage markers (exactly one is needed)`);
+  const parts = summaryParts(body);
+  if (!parts) return no('the CodeRabbit summary comment does not have its status, walkthrough and risk blocks once each, in that order');
+  const inRisk = [...parts.risk.matchAll(MARKER)].map((m) => m[1]);
+  if (inRisk.length !== 1 || inRisk[0] !== found[0]) return no('the CodeRabbit summary comment\'s coverage marker is not inside its risk block');
+  if (hasDuplicateKey(found[0])) return no('the coverage marker repeats a key');
+  let m;
+  try { m = JSON.parse(found[0]); } catch { return no('the CodeRabbit summary comment has a coverage marker that is not valid JSON'); }
+  const ids = [m?.sourceCommitId, m?.coveredCommitId].map((x) => (typeof x === 'string' ? x.toLowerCase() : ''));
+  if (HEX40.test(head) && ids.every((x) => HEX40.test(x)) && ids.some((x) => x !== head)) return gap(`the CodeRabbit summary comment's coverage marker is not a review of ${h8(head)} (it covers another commit)`); // a well-formed summary of an older head: no review of this one
+  if (!ids.every((x) => HEX40.test(x) && x === head) || m.kind !== 'reviewed') return no(`the CodeRabbit summary comment's coverage marker is not a review of ${h8(head)} (source, covered and kind must be that head, that head and "reviewed")`);
+  return { ok: true };
+}
+export function checkReviews(reviews, head, comments) {
   if (!Array.isArray(reviews) || reviews.some((r) => !r || typeof r !== 'object' || typeof r.commit_id !== 'string' || typeof r.state !== 'string')) return no('CodeRabbit reviews: the reply is not a list of reviews');
   const mine = reviews.filter((r) => isCodeRabbit(r.user) && r.commit_id.toLowerCase() === head);
   if (mine.some((r) => r.state === 'CHANGES_REQUESTED')) return no(`CodeRabbit requested changes at ${h8(head)}`);
-  return mine.some((r) => ['COMMENTED', 'APPROVED'].includes(r.state)) ? { ok: true } : no(`CodeRabbit has not reviewed ${h8(head)}`);
+  if (mine.some((r) => ['COMMENTED', 'APPROVED'].includes(r.state))) return { ok: true, via: 'review' };
+  const s = checkSummary(comments, head);
+  return s.gap ? { ok: true, via: 'gap' } : s.ok ? { ok: true, via: 'summary' } : s;
 }
 // Severity from the first non-empty line of a thread's first comment, where CodeRabbit writes it (`_⚠️ Potential issue_ | _🟠 Major_`).
 // Low only when that line holds nothing but known label words and every severity word in it is Minor, Trivial or Nitpick; anything else
@@ -60,11 +116,13 @@ export function checkCommits(range, infos, trusted) {
   return { ok: true };
 }
 // All of (a), (c), (d), (e). (b), no FAIL at this head from anyone, is checkLedger's, which runs first.
-export function checkCodeRabbit({ rows, pr, head, range, reviews, threads, infos, trusted }) {
+export function checkCodeRabbit({ rows, pr, head, range, reviews, comments, threads, infos, trusted }) {
   const earlier = checkEarlierReview(rows, { pr, head, range });
   if (!earlier.ok) return earlier;
-  const bad = [checkReviews(reviews, head), checkThreads(threads, trusted), checkCommits(range, infos, trusted)].find((c) => !c.ok);
-  return bad ?? { ok: true, note: `coderabbit at ${h8(head)}, after the review at ${h8(earlier.earlier)}` };
+  const c = checkReviews(reviews, head, comments);
+  const bad = [c, checkThreads(threads, trusted), checkCommits(range, infos, trusted)].find((x) => !x.ok);
+  const way = c.via === 'summary' ? ' (summary comment)' : c.via === 'gap' ? ' (no CodeRabbit review at this head)' : '';
+  return bad ?? { ok: true, note: `coderabbit at ${h8(head)}${way}, after the review at ${h8(earlier.earlier)}` };
 }
 // One page of the reviewThreads GraphQL reply: its nodes and the next cursor (null on the last page). A reply with errors, no data or no
 // pagination info throws, and land refuses.

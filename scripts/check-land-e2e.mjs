@@ -280,9 +280,21 @@ const CMT = (login, type, body) => JSON.stringify({ user: { login, type }, body 
 const PAGE1 = Array.from({ length: 100 }, (_, i) => CMT('alice', 'User', `comment ${i}`)).join('\n'); // a full first page, the summary is on page 2
 const withSummary = (head = HEAD) => PAGE1 + '\n' + CMT('coderabbitai[bot]', 'Bot', SUMMARY(head));
 await t('coderabbit summary way: no review at the head, the summary on page 2 of the comments, lands and says so', cr({ reviews: '', comments: withSummary() }), (r) => r.merge && r.said.includes(`coderabbit at ${HEAD.slice(0, 8)} (summary comment), after the review at ${EARLY.slice(0, 8)}`) && argv(r, 'gh', 'issues/5/comments')[0]?.includes('--paginate'));
-await t('coderabbit summary way: a summary for another head refuses, nothing merged', cr({ reviews: '', comments: withSummary(OTHER) }), (r) => no(r, /not a review of/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit summary way: a summary for another head is a gap and lands at once, with the countable note', cr({ reviews: '', comments: withSummary(OTHER) }), (r) => r.merge && r.ledgerNow.includes('no CodeRabbit review at this head'));
 await t('coderabbit summary way: a failed comments read refuses, nothing merged', cr({ reviews: '' }), (r) => no(r, /CodeRabbit has not reviewed/) && !r.ledgerNow.includes('LANDED'));
-await t('coderabbit summary way: the marker in another bot\'s comment refuses', cr({ reviews: '', comments: CMT('github-actions[bot]', 'Bot', SUMMARY()) }), (r) => no(r, /summary comments were found/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit summary way: the marker in another bot\'s comment is no summary: a gap, lands with the note', cr({ reviews: '', comments: CMT('github-actions[bot]', 'Bot', SUMMARY()) }), (r) => r.merge && r.ledgerNow.includes('no CodeRabbit review at this head'));
+// LCR3R: a gap lands at once, with no ask, no clock and no timeline read; what CodeRabbit already said at the head still decides.
+const NOTCLEAN = SUMMARY().replace('No actionable comments were generated in the recent review.', 'Actionable comments posted: 2');
+const LIMITED = SUMMARY().replace('summarize by coderabbit.ai', 'rate limited by coderabbit.ai');
+await t('coderabbit gap: no review and no summary lands at once with no ask, and says so', cr({ reviews: '', comments: CMT('alice', 'User', 'looks fine') }), (r) => r.merge && r.said.includes(`coderabbit at ${HEAD.slice(0, 8)} (no CodeRabbit review at this head), after the review at ${EARLY.slice(0, 8)}`));
+await t('coderabbit gap: the LANDED note records "no CodeRabbit review at this head"', cr({ reviews: '', comments: '' }), (r) => r.merge && r.ledgerNow.includes(`admitted by coderabbit at ${HEAD.slice(0, 8)} (no CodeRabbit review at this head), after the review at`));
+await t('coderabbit gap: a rate limited summary lands at once', cr({ reviews: '', comments: CMT('coderabbitai[bot]', 'Bot', LIMITED) }), (r) => r.merge && r.ledgerNow.includes('no CodeRabbit review at this head'));
+await t('coderabbit gap: land reads no timeline and no ask', cr({ reviews: '', comments: '' }), (r) => r.merge && argv(r, 'gh', 'timeline').length === 0);
+await t('coderabbit not clean: a not-clean summary at the head with no unanswered Major lands', cr({ reviews: '', comments: CMT('coderabbitai[bot]', 'Bot', NOTCLEAN) }), (r) => r.merge && r.said.includes('(summary comment)'));
+await t('coderabbit not clean: the same beside an unanswered Major thread refuses', cr({ reviews: '', comments: CMT('coderabbitai[bot]', 'Bot', NOTCLEAN), threads: GQL([MAJOR_THREAD]) }), (r) => no(r, /unresolved and unanswered/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit gap: CHANGES_REQUESTED at the head refuses', cr({ reviews: BOT_REVIEW(HEAD, 'CHANGES_REQUESTED'), comments: '' }), (r) => no(r, /requested changes/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit gap: an unanswered Major thread refuses beside a gap', cr({ reviews: '', comments: '', threads: GQL([MAJOR_THREAD]) }), (r) => no(r, /unresolved and unanswered/) && !r.ledgerNow.includes('LANDED'));
+await t('coderabbit gap: a failed comments read is no gap and refuses', cr({ reviews: '' }), (r) => no(r, /could not be read/) && !r.ledgerNow.includes('LANDED'));
 await t('coderabbit summary way: a review at the head settles (c) without reading the comments', cr(), (r) => r.merge && argv(r, 'gh', 'issues/5/comments').length === 0);
 // The fallback: an ask by a trusted User, CodeRabbit silent for 30 minutes at this head. The clock is fixed so the ages are exact.
 const NOW = Date.parse('2026-11-08T21:00:00Z');

@@ -25,7 +25,7 @@ describe('server /mcp', () => {
     const run = (await w.call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json;
     const r = (await rpc(w, run.runToken, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'jm_whoami', arguments: {} } })).json.result;
     expect([r.isError, r.structuredContent.podId, r.structuredContent.runId]).toEqual([false, w.pod.id, run.runId]);
-    expect(r.structuredContent.agent).toBe(w.agent.agentId);
+    expect(r.structuredContent.agent.id).toBe(w.agent.agentId);
   });
 
   test('an unknown tool and an unknown method are refused, and a bad token is 401', async () => {

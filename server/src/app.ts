@@ -4,6 +4,7 @@ import type { Context } from 'hono';
 import type { Hub } from './hub';
 import { sameSecret } from './ids';
 import { bad, fail, parse, str } from './kit';
+import { mcpRoute } from './mcp';
 import { opRoutes } from './routes-ops';
 import { setupAll } from './routes-setup';
 import { wsRoute } from './ws';
@@ -46,6 +47,7 @@ export function buildApp(hub: Hub, opts: AppOpts): Hono {
   setupAll(app, hub, opts.publicUrl);
   opRoutes(app, hub);
   wsRoute(app, hub);
+  mcpRoute(app, hub); // twin of the Worker's POST /mcp (worker/src/mcp.ts)
   if (opts.local || (opts.testBearer !== undefined && opts.testBearer !== '')) testRoutes(app, hub, opts.local, opts.testBearer);
   app.notFound((c) => fail(c, 'not_found', 'No such route.'));
   app.onError((e, c) => { console.error('request failed', e); return fail(c, 'internal', 'The server failed.'); });

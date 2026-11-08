@@ -7,6 +7,7 @@ import type { Env } from './env';
 import { base62, hashToken, newId, newToken } from './ids';
 import { check } from './validate';
 import { bad, fail, parse } from './wire';
+import type { Who } from './wire';
 
 const DEVICE_S = 900;
 const INTERVAL_S = 2;
@@ -14,6 +15,7 @@ const STATE_S = 600;
 const SESSION_S = 30 * 86400;
 const SESSION = 'jm_session';
 const STATE = 'jm_oauth_state';
+const JSON_TYPE = /^application\/json\s*(;|$)/i;
 
 interface GitHub { web: string; api: string; id: string; secret: string }
 interface Device { expires_at: number; user_id: string | null; exchanged: number }
@@ -69,11 +71,51 @@ async function userToken(db: D1Database, userId: string): Promise<string> {
   return token;
 }
 
-/** The person behind a Bearer jmu_ or the session cookie. */
+/** The server's own base URL: PUBLIC_URL or the request's origin, upgraded to https except under ENV=local. A browser session's Origin must be its origin. */
+function ownBase(env: Env, req: Request): string {
+  const b = (env.PUBLIC_URL ?? new URL(req.url).origin).replace(/\/+$/, '');
+  return env.ENV === 'local' ? b : b.replace(/^http:/, 'https:');
+}
+
+/** The token a request presents: its Bearer, else, where a person may call, the session cookie. */
+function presented(req: Request, cookie: boolean): { token: string; byCookie: boolean } | null {
+  const h = req.headers.get('Authorization');
+  if (h !== null) return { token: h.startsWith('Bearer ') ? h.slice(7).trim() : '', byCookie: false };
+  const s = cookie ? cookieOf(req, SESSION) : undefined;
+  return s ? { token: s, byCookie: true } : null;
+}
+
+/**
+ * The one authentication function (ADR 0008, "Browser session"), twin of the server's kit.ts authOf. Bearer first; else, when
+ * `cookie`, the session cookie, which must hold a jmu_. A cookie request that changes state, or opens the socket, must carry this
+ * server's own Origin, and a state change must be JSON (forbidden otherwise). Null is no valid caller.
+ */
+export async function authOf(env: Env, req: Request, cookie: boolean): Promise<Who | null | Response> {
+  const p = presented(req, cookie);
+  if (p === null || !p.byCookie) return authenticate(env.DB, p === null ? null : `Bearer ${p.token}`);
+  const write = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if ((write || req.headers.has('upgrade')) && req.headers.get('Origin') !== new URL(ownBase(env, req)).origin) return fail('forbidden', 'A browser session works only from this server\'s own pages.');
+  if (write && !JSON_TYPE.test(req.headers.get('Content-Type') ?? '')) return fail('forbidden', 'A browser session sends JSON.');
+  const who = await authenticate(env.DB, `Bearer ${p.token}`);
+  return who?.kind === 'user' ? who : null;
+}
+
+/** The person behind a Bearer jmu_ or the session cookie. Approve keeps its own F15 check (item 4); /v1/me is a read. */
 async function person(env: Env, req: Request): Promise<Actor | null> {
-  const s = cookieOf(req, SESSION);
-  const who = await authenticate(env.DB, req.headers.get('Authorization') ?? (s ? `Bearer ${s}` : null));
+  const p = presented(req, true);
+  const who = p === null ? null : await authenticate(env.DB, `Bearer ${p.token}`);
   return who?.kind === 'user' ? who.actor : null;
+}
+
+/** POST /v1/auth/logout: revokes the token the caller presented and clears the cookie. */
+async function logout(env: Env, req: Request, now: number): Promise<Response> {
+  const who = await authOf(env, req, true);
+  if (who instanceof Response) return who;
+  const p = presented(req, true);
+  if (who === null || p === null) return fail('unauthorized', 'Sign in first.');
+  if (who.kind !== 'user') return fail('forbidden', 'Only a person signs out.');
+  await env.DB.prepare('update tokens set revoked_at = ? where hash = ? and revoked_at is null').bind(now, await hashToken(p.token)).run();
+  return Response.json({}, { headers: { 'Set-Cookie': setCookie(env, SESSION, '', '/', 0) } });
 }
 
 async function deviceToken(env: Env, req: Request, now: number): Promise<Response> {
@@ -95,7 +137,7 @@ async function deviceToken(env: Env, req: Request, now: number): Promise<Respons
 
 async function approve(env: Env, req: Request, base: string, now: number): Promise<Response> {
   const origin = req.headers.get('Origin');
-  if (!/^application\/json\s*(;|$)/i.test(req.headers.get('Content-Type') ?? '') || (origin !== null && origin !== new URL(base).origin)) {
+  if (!JSON_TYPE.test(req.headers.get('Content-Type') ?? '') || (origin !== null && origin !== new URL(base).origin)) {
     return fail('forbidden', 'Approve from this server\'s own page, with a JSON body.');
   }
   const me = await person(env, req);
@@ -129,9 +171,9 @@ async function callback(env: Env, req: Request, gh: GitHub, base: string, now: n
 /** The sign-in routes; null for any other path. `now` is the server clock (the test entry's, under ENV=local). */
 export async function authRoute(req: Request, env: Env, now: number): Promise<Response | null> {
   const url = new URL(req.url);
-  const b = (env.PUBLIC_URL ?? url.origin).replace(/\/+$/, '');
-  const base = env.ENV === 'local' ? b : b.replace(/^http:/, 'https:');
+  const base = ownBase(env, req);
   const route = `${req.method} ${url.pathname}`;
+  if (route === 'POST /v1/auth/logout') return logout(env, req, now);
   if (route === 'POST /v1/auth/device') {
     const deviceCode = base62(43);
     const code = userCode();

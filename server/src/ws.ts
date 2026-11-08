@@ -1,4 +1,4 @@
-// GET /v1/pods/:pod/ws. The token rides in Authorization on the upgrade; hello is sent at once; the client then subscribes.
+// GET /v1/pods/:pod/ws. The token rides in Authorization on the upgrade, or a browser's session cookie does (never the query string); hello is sent at once; the client then subscribes.
 // Frames are handled one at a time per socket, in arrival order, and only after hello has gone out.
 import type { Hono } from 'hono';
 import { upgradeWebSocket } from 'hono/bun';
@@ -6,7 +6,7 @@ import type { ErrorBody } from '../../gen/ts/protocol';
 import { isoOf } from '../../podcore/src/index';
 import { parseFrame } from './frames';
 import type { Hub } from './hub';
-import { fail } from './kit';
+import { authOf, fail } from './kit';
 import type { Conn, PodRuntime, Who } from './pod';
 import { hello } from './views';
 
@@ -28,7 +28,8 @@ async function onFrame(hub: Hub, s: Session, conn: Conn, text: string): Promise<
 export function wsRoute(app: Hono, hub: Hub): void {
   app.get('/v1/pods/:pod/ws', async (c, next) => {
     if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') return next();
-    const p = await hub.authenticate(c.req.header('Authorization'));
+    const p = await authOf(hub, c, true); // a browser's cookie only from this server's own Origin (cross-site socket hijacking)
+    if (p instanceof Response) return p;
     if (p === null) return fail(c, 'unauthorized', 'Send a valid bearer token.');
     if (p.kind === 'run') return fail(c, 'forbidden', 'A run token does not open the pod socket.');
     const pod = hub.pods.get(c.req.param('pod') ?? '');

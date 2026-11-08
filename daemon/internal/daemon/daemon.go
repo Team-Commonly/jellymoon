@@ -117,6 +117,7 @@ func (d *Daemon) session(podID protocol.PodID) error {
 		for {
 			if err := send(conn, d.heartbeat(podID)); err != nil {
 				failed <- err
+				stop() // closes conn, so the Read below returns and session reports this error
 				return
 			}
 			select {

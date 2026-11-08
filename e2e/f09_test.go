@@ -296,7 +296,9 @@ func (f *f09) stops(record string) error {
 			return fmt.Errorf("the agent's process group %d still runs 5 s after the daemon stopped", rec.PID)
 		}
 	}
-	var who struct{ Result struct{ StructuredContent struct{ RunID string } } }
+	var who struct {
+		Result struct{ StructuredContent struct{ RunID string } }
+	}
 	_ = json.Unmarshal(rec.Whoami, &who)
 	held := who.Result.StructuredContent.RunID
 	h, ok := f.px.find("POST", regexp.MustCompile(`^/v1/runs/`+held+`/end$`), 5*time.Second)
@@ -306,9 +308,14 @@ func (f *f09) stops(record string) error {
 	return nil
 }
 
-// leaksNothing: no token reaches the daemon's output.
-func (f *f09) leaksNothing() error {
-	if hits := leaks(f.procs, "", f.owner.tok, f.comp.Token, f.run.RunToken); len(hits) > 0 {
+// leaksNothing: no token reaches the daemon's output, any file of its config dir but computer.json, or the agent's env.
+func (f *f09) leaksNothing(records ...string) error {
+	secrets := []string{f.owner.tok, f.comp.Token, f.run.RunToken}
+	hits := append(leaks(f.procs, "", secrets...), fileLeaks(f.cfg, "computer.json", secrets...)...)
+	for _, r := range records {
+		hits = append(hits, envLeaks(r, secrets...)...)
+	}
+	if len(hits) > 0 {
 		return fmt.Errorf("%s", strings.Join(hits, "; "))
 	}
 	return nil
@@ -331,7 +338,7 @@ func TestF09(t *testing.T) {
 	p.step("when the agent finishes the daemon ends the run as completed", f.ends)
 	p.step("a daemon restarted with a user token and none of the allowed names still gives the agent only allowed names", func() error { return f.scrubbedEnv(scrubbed) })
 	p.step("a stopped daemon takes an agent that will not leave with it", func() error { return f.stops(held) })
-	p.step("no token reaches the daemon's output", f.leaksNothing)
+	p.step("no token reaches the daemon's output, its config dir beyond computer.json, or the agent's env", func() error { return f.leaksNothing(record, held, scrubbed) })
 	if p.ok != p.run {
 		t.Fatalf("%d of %d steps passed", p.ok, p.run)
 	}

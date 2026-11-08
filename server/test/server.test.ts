@@ -4,7 +4,7 @@ import { buildApp } from '../src/app';
 import { openDb } from '../src/db';
 import { Hub } from '../src/hub';
 import { eventsAfter } from '../src/store';
-import { world } from './world';
+import { caller, world } from './world';
 
 describe('server', () => {
   test('a restart restores users, tokens, pods and the event log, with no seq gap', async () => {
@@ -57,5 +57,27 @@ describe('server', () => {
     const app = buildApp(await Hub.restore(db), { local: false });
     expect((await app.fetch(new Request('http://x/__test/session', { method: 'POST', body: '{"name":"a"}' }))).status).toBe(404);
     expect((await app.fetch(new Request('http://x/healthz'))).status).toBe(200);
+  });
+});
+
+describe('the public base URL', () => {
+  const links = async (publicUrl: string | undefined) => {
+    const w = await world();
+    const call = caller(buildApp(w.hub, { local: true, publicUrl }));
+    const invite = (await call('POST', `/v1/pods/${w.pod.id}/invites`, w.olivia.token, {})).json.url as string;
+    const mcp = (await call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json.mcpUrl as string;
+    return { invite, code: invite.split('/join/')[1], mcp };
+  };
+
+  test('an empty PUBLIC_URL counts as unset: the request origin stands in', async () => {
+    const l = await links('');
+    expect(l.invite).toBe(`http://x/join/${l.code}`);
+    expect(l.mcp).toBe('http://x/mcp');
+  });
+
+  test('a trailing slash is dropped once, for the invite link and the mcpUrl alike', async () => {
+    const l = await links('https://x/');
+    expect(l.invite).toBe(`https://x/join/${l.code}`);
+    expect(l.mcp).toBe('https://x/mcp');
   });
 });

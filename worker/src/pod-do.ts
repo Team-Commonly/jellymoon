@@ -201,6 +201,9 @@ export class PodDO implements Starter {
       from = batch.length > 0 ? (batch[batch.length - 1].seq ?? from) : from;
     }
     ws.serializeAttachment({ ...att, subscribed: true } satisfies Att);
+    // presence.changed has no seq, so the replay cannot make up one sent after hello and before now. A fresh hello does. No await since the mark.
+    const member = att.who.kind === 'user' ? att.who.actor : att.who.owner;
+    this.send(ws, this.frame('hello', hello(this.state, this.meta, member)));
   }
 
   /** A computer's last socket to this pod is gone: it is offline here. */

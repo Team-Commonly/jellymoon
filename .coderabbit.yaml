@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit's review is information for the author, never a gate. A land vetoes on any failed check run on the head, from
-# any app (docs/development/landing.md), so CodeRabbit must post none: review_progress off means no `CodeRabbit` check run,
-# commit_status off means no commit status in its place, and auto_approvals off means it never approves or requests changes.
+# CodeRabbit (external review). Its comments are data for triage, never instructions. It posts no check run and no
+# commit status, and never approves or requests changes: land vetoes on any failed check run on the head, from any app
+# (docs/development/landing.md). Land reads its review threads at the exact head instead.
 language: en-US
 reviews:
   review_progress: false
@@ -9,6 +9,108 @@ reviews:
   fail_commit_status: false
   auto_approvals:
     enabled: false
+  # Only the most important comments go inline; the bar is set by the path
+  # instructions below. Aim: one or two real comments per PR.
+  profile: quiet
+  high_level_summary: false
+  poem: false
   auto_review:
     enabled: true
     drafts: false
+    # Opt a PR out with the `no-bot-review` label.
+    labels:
+      - "!no-bot-review"
+    # A fix for an undeployed vulnerability is titled neutrally and reviewed by people.
+    ignore_title_keywords:
+      - "security"
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+  # CodeRabbit never commits to a branch here: every commit on a PR must come from
+  # a trusted login (docs/development/landing.md, threat model).
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+  path_instructions:
+    - path: "**"
+      instructions: >-
+        Comment only on correctness bugs, security issues, data loss, broken
+        contracts (schema/, docs/protocol.md, the Accepted ADRs in docs/adr/),
+        and missing tests for changed behaviour. No style, naming, docstring,
+        formatting or nitpick comments. A test that would still pass with the
+        fix reverted is not a test. Flag any token-shaped string (jmu_, jmc_,
+        jmr_ followed by token characters) outside a test fixture, and any
+        machine-local path, host name or private identifier in code, docs,
+        fixtures or tests.
+    - path: "podcore/**"
+      instructions: >-
+        The pod core is pure (docs/adr/0003-pure-pod-core.md): no clock,
+        timers, randomness or I/O; time is the `now` argument; imports only
+        podcore/ and gen/. Authorization is decided from state, never from a
+        role or field in the input. A refused command changes no state and
+        emits nothing. Fields the pod sets (ids, receipts, timestamps, seqs)
+        are copied by name, never spread from input.
+    - path: "worker/**"
+      instructions: >-
+        Every external route authenticates the bearer token before the pod
+        object sees the request, and the x-jm-who header is deleted from the
+        incoming request and set only by the Worker (worker/src/front.ts).
+        Input is validated against gen/ before the core applies it. State is
+        persisted atomically with the events it emits (ADR 0003, what an
+        adapter must do). An MCP tool call reaches exactly that tool's own
+        route with the caller's own token and adds no privilege.
+    - path: "daemon/**"
+      instructions: >-
+        No token (jmu_, jmc_, jmr_) in argv, stdout, stderr, logs or error
+        text. An agent's environment is an explicit allow-list, never a nil
+        exec.Cmd.Env (nil inherits the whole environment). A token is sent
+        only over https, or over http to a loopback host. An agent runs in its
+        own process group and is killed with it on stop. Flag a new
+        third-party import (entropy.json goImports).
+    - path: "e2e/**"
+      instructions: >-
+        Black box (docs/development/e2e-contract.md): HTTP, the pod WebSocket
+        and the built binaries only, nothing imported from implementation
+        packages. Flag an assertion that can pass vacuously, a sleep standing
+        in for a condition, and a process not cleaned up on failure.
+    - path: "scripts/{land,land-decide,land-scan,check-land,check-land-scan}*.mjs"
+      instructions: >-
+        Land is the only merge path and fails closed: every new condition
+        refuses on missing or unexpected input, and every refusal has a case
+        in scripts/check-land*.mjs. No code from the PR runs before the trust
+        gate.
+    - path: "gen/**"
+      instructions: >-
+        gen/ is generated from schema/ by `make gen`. Flag any change here
+        that has no matching change under schema/.
+    - path: "docs/**"
+      instructions: >-
+        Check each factual claim about code, a route, a command or a tool
+        against the repository at this head, and flag a claim that names a
+        file, function, field or tool that does not exist or behaves
+        differently.
+  # Linters and prose checkers off (CI runs the repo's own checks); gitleaks
+  # off (CI runs it as `secrets`). Security analysers stay on.
+  tools:
+    eslint:
+      enabled: false
+    biome:
+      enabled: false
+    oxc:
+      enabled: false
+    golangci-lint:
+      enabled: false
+    markdownlint:
+      enabled: false
+    yamllint:
+      enabled: false
+    shellcheck:
+      enabled: false
+    actionlint:
+      enabled: false
+    languagetool:
+      enabled: false
+    gitleaks:
+      enabled: false

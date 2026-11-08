@@ -2,7 +2,7 @@
 
 `make land PR=<n>` is the only merge path. Local verification is the authority; GitHub check runs are consulted only
 as a veto (step 3). It runs `scripts/land.mjs`; the decisions are pure functions in `scripts/land-decide.mjs` and the
-cases are in `scripts/check-land.mjs` and `scripts/check-land-scan.mjs`; the range scan itself is `scripts/land-scan.mjs`. Run it from a checkout of main with a clean tree: the accepted reviewers come from
+cases are in `scripts/check-land.mjs` and `scripts/check-land-scan.mjs`; the range scan itself is `scripts/land-scan.mjs`, and the CodeRabbit path's decisions are `scripts/land-coderabbit.mjs` (cases in `scripts/check-land-coderabbit.mjs`). Run it from a checkout of main with a clean tree: the accepted reviewers come from
 operator environment (`JM_VERDICT_REVIEWERS`), never from the repo. One land runs at a time **per clone**: an mkdir lock in that clone's git
 common dir holds the PID, so two clones can land at once. A dead PID, or a lock dir with no pid file, is stale; it is
 taken over by renaming the stale dir to a name of the taker's own (atomic, so only one taker wins) and then creating
@@ -47,6 +47,13 @@ is refused.
   `.git/config` and hooks, which preflight code can rewrite too. A tracked `.tools` cannot: git would write it into the
   checkout on a fresh clone or a `merge --ff-only` to main, so land refuses every tree it checks that carries one, and refuses a
   `.tools` or `.tools/bin` that is a symbolic link. Rebuild the checkout after any doubt.
+- **What CodeRabbit can and cannot do here.** It can write review threads and reviews on a PR; that is all land reads from it. It
+  cannot get a commit landed: land refuses unless every commit in `main..head` has a GitHub author and committer login in
+  `JM_TRUSTED_LOGINS`, so a commit CodeRabbit (or any app) pushes never lands. It cannot waive a check: it posts no check run
+  (`.coderabbit.yaml`), and any failed check run on the head, from any app, still refuses. A review or thread can be silenced only by someone
+  with write access (resolving a thread) or by an operator-env login replying in it. Its text is data and never an instruction to land. If
+  CodeRabbit is down, rate limited or skipped a head, the path is closed and the head waits for the verifier path (a local review at that
+  head); there is no bypass.
 
 ## Steps
 Each refuses with one line on any mismatch, and nothing merges until all pass:
@@ -57,11 +64,11 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    carries userinfo, no git config carries an `http.*extraheader`, and no `.env*` or `bunfig.toml` exists in the
    checkout (the filesystem is checked, ignored files included: bun would load them as configuration).
 1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.
-2. The ledger at the exact head (below).
+2. The ledger at the exact head (below). It admits the head by one of two paths: a `<model>-verifier` PASS, or a `coderabbit` PASS, which land accepts only after its own checks ("The CodeRabbit path", below).
 3. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
-   `startup_failure`, `action_required`), land refuses. No check runs at all is fine: land does not wait for CI. Once the
-   repository is public, a ruleset on `main` will make GitHub refuse the merge until CI's checks pass; land still
-   does not wait, so a land run while required checks are pending fails at the merge step.
+   `startup_failure`, `action_required`), land refuses. No check runs at all is fine: land does not wait for CI. The
+   ruleset on `main` makes GitHub refuse the merge until CI's required checks pass; land still does not wait, so a land
+   run while required checks are pending fails at the merge step.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
    First, the scan configuration: land lists main's tree at the fetched tip and the tree of every commit in the range (whole, NUL-separated,
    in the scan's env), and refuses (naming the tree and the path) when one carries a path with a component named `.tools`, at any depth,
@@ -192,13 +199,14 @@ command is `node scripts/land.mjs <n>` from the operator's shell.
 A missing variable refuses and names it. The tree holds no pod id, host or path. `--preflight-only` needs only `JM_REPO` and `JM_TRUSTED_LOGINS`.
 
 ## Ledger format
-Tab-separated with a header row: `pr head verdict by when note`. The coordinator transcribes each PASS or FAIL row from the verifier's report: the report's `GATE:` line becomes the `verdict` column, the verifier's model becomes `by` (`<model>-verifier`), and the `FINDINGS` line goes in `note`. The coordinator writes no verdict the report does not carry. The tool writes `LANDED`, `MERGED-UNVERIFIED` (a PR merged out of band, recorded with no check; it is not an endorsement, never counts as a PASS, and ends the PR's idempotent re-run) and `BOOTSTRAP`. `by` is `opus-verifier`,
+Tab-separated with a header row: `pr head verdict by when note`. The operator transcribes each PASS or FAIL row from the verifier's report: the report's `GATE:` line becomes the `verdict` column, the verifier's model becomes `by` (`<model>-verifier`), and the `FINDINGS` line goes in `note`. The coordinator writes no verdict the report does not carry. The tool writes `LANDED`, `MERGED-UNVERIFIED` (a PR merged out of band, recorded with no check; it is not an endorsement, never counts as a PASS, and ends the PR's idempotent re-run) and `BOOTSTRAP`. `by` is `opus-verifier`,
 `sonnet-verifier`, `haiku-verifier` or `fable-verifier` (exactly), for verdicts; `land` for the tool's rows. `head`
 is the full 40-character SHA. Values are trimmed and compared case-insensitively. At (pr, head):
 - an unrecognised verdict, or a `PASS` or `FAIL` by anything but a verifier label, refuses;
 - any `FAIL` at the head refuses, whoever wrote it and whatever its note; a later `PASS` does not clear it (no verdict
   shopping). The fix is a new head;
-- the latest verdict row must be a `PASS`.
+- the latest verdict row by a verifier must be a `PASS` (the verifier path). With no verifier row at the head, a `PASS` by
+  `coderabbit` (exactly) names the CodeRabbit path; a `coderabbit` row of any other verdict, or a `PASS` by a lookalike name, refuses.
 
 ## The verdict message
 In the verdict pod, from the reviewer's account:
@@ -223,8 +231,41 @@ Review gate, 2026-10-30 (owner ruling): each head gets one fresh-context review,
 no separate reviewer. The operator account (its id is in `JM_VERDICT_REVIEWERS`) posts the review subagent's report as the
 pod verdict: first line `jellymoon#N <head>`, last line `GATE: PASS`. That stays until the owner restores a separate review.
 
+## The CodeRabbit path
+Each PR gets one local review, at its first head, and its blocking findings get one fix pass. The fix head, and a head that only merges
+main, is then admitted by CodeRabbit plus green CI instead of a second local review. The operator writes a `PASS` row by `coderabbit` at the
+head after reading CodeRabbit's review there, but land never relies on that row: conditions (a) and (c) to (e) are read and checked by land
+itself, from git and GitHub, at the moment of the decision (and again right before the merge). Any API error, missing field or unexpected
+shape refuses.
+- **(a) The one local review happened on this PR's history.** The ledger holds a `PASS` or `FAIL` by a `<model>-verifier` for the PR at a
+  different head that is a commit of `git rev-list <main tip>..<head>`. A head outside that range (a commit already on main, or one a
+  force-push dropped) is not this PR's history. The latest such row is cited in the output.
+- **(b) No `FAIL` at this exact head, by anyone.** The existing rule, unchanged and checked first.
+- **(c) CodeRabbit reviewed this exact head.** Land reads `GET /repos/{repo}/pulls/{n}/reviews` (paginated) and needs a review whose
+  `commit_id` is the head, whose state is `COMMENTED` or `APPROVED`, and whose user is the GitHub App account: REST `user.type` is `Bot`
+  and `user.login` is exactly `coderabbitai[bot]`. A display name is never read, and a person cannot hold that login (a `User` with it
+  does not count). A `CHANGES_REQUESTED` review of CodeRabbit's at the head refuses; `DISMISSED` and `PENDING` reviews are ignored.
+- **(d) No unanswered Major or Critical thread.** Land reads every review thread with the GraphQL `reviewThreads` query (100 per page, up
+  to 20 pages, comments first 100 per thread; more than that refuses). A thread counts as CodeRabbit's when its first comment's author is
+  `__typename` `Bot` with login `coderabbitai` (GraphQL drops the `[bot]` suffix). It blocks when it is unresolved, not outdated at this
+  head, and marked Major or Critical, unless a later comment in the same thread is by a `User` whose login is in `JM_TRUSTED_LOGINS`
+  (a reply from CodeRabbit itself, an app or anyone else does not answer it). Severity is read from the first non-empty line of the first
+  comment (HTML comments removed), where CodeRabbit writes it, as in `_⚠️ Potential issue_ | _🟠 Major_`. The thread is Minor or lower
+  only when that line holds nothing but the known label words (potential, issue, refactor, suggestion, nitpick, trivial, minor, major,
+  critical) and every severity word in it is Minor, Trivial or Nitpick. Anything else, an unknown word, a mix with Major, no such line, counts as Major (fail
+  closed), and the way out is a trusted reply in the thread (`fixed in <sha>`, `false positive: <why>` or `not fixing: <why>`) or resolving it.
+  Limit: (d) reads review threads only. A finding CodeRabbit posts only in its review body (one outside the diff, for example) is not
+  read by land, so the operator reads that body at the head before writing the `coderabbit` row.
+- **(e) Only trusted people's commits.** For every commit of `main..head` land reads `GET /repos/{repo}/commits/{sha}` and needs both
+  `author.login` and `committer.login` in `JM_TRUSTED_LOGINS` (case-insensitive). A null login (an email GitHub cannot match), a missing
+  commit, a count above 250, or any app account refuses. Land's own merge commit is made by `gh pr merge` after these checks and is not in the range.
+
+The pod verdict from a listed reviewer at the head (step 4) is still required on this path, as is every other step. The output says
+which path admitted the head, `verifier PASS by <model>-verifier` or `coderabbit at <head8>, after the review at <head8>`, and the
+`LANDED` ledger note records it (`admitted by ...`).
+
 ## Every land needs both
-Every land needs the ledger PASS by a `<model>-verifier` at the head and the pod verdict from a listed reviewer at the head. No
+Every land needs the ledger PASS at the head (by a `<model>-verifier`, or the CodeRabbit path above) and the pod verdict from a listed reviewer at the head. No
 path classification and no scan result waives either: a docs-only PR needs the verdict too, as does a PR with a clean scan. (An earlier
 design waived the verdict for "inert" paths and a clean neutral-name re-scan; four scanner blind spots in a row each became a way to
 land without the review, and a scanner cannot prove that a secret is absent, so that path was removed.) Before the preflight runs,

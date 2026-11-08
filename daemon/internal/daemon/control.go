@@ -90,7 +90,11 @@ func (d *Daemon) add(req AddRequest) (protocol.AgentID, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := d.store.AddAgent(config.Agent{PodID: req.PodID, AgentID: id, Harness: req.Harness, DisplayName: req.DisplayName}); err != nil {
+	// AddAgent reads, changes and rewrites agents.json, so one add at a time; watch takes d.mu again only after this.
+	d.mu.Lock()
+	err = d.store.AddAgent(config.Agent{PodID: req.PodID, AgentID: id, Harness: req.Harness, DisplayName: req.DisplayName})
+	d.mu.Unlock()
+	if err != nil {
 		return "", err
 	}
 	d.log.Printf("agent %s registered in pod %s", id, req.PodID)

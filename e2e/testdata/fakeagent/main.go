@@ -189,7 +189,7 @@ func main() {
 			}
 			save()
 			if hold {
-				select {}
+				stayUp()
 			}
 			reply(r.ID, map[string]any{"stopReason": "end_turn"})
 			return

@@ -47,6 +47,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
 	$(BUN) test podcore worker
+	$(BUN) run test:scrub
 
 test-go:
 	$(GO) vet ./...

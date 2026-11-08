@@ -275,16 +275,19 @@ shape refuses.
   body starts with `<!-- coderabbit-ai-generated:v1 -->` and whose leading HTML-comment lines include
   `<!-- This is an auto-generated comment: summarize by coderabbit.ai -->`.
   - **A gap passes at once, with no ask and no wait:** no CodeRabbit review and no summary comment; a summary whose header says
-    `rate limited by coderabbit.ai` or `skip review by coderabbit.ai`; or a well-formed summary whose coverage marker names another commit.
+    `rate limited by coderabbit.ai` or `skip review by coderabbit.ai`; a summary with no readable `recent_review_status` block (CodeRabbit
+    stopped writing one, so its newer summaries have none), whatever else it holds; a summary whose coverage marker names another commit;
+    or one whose marker `kind` is anything but `"reviewed"` (such as `skipped`). Land still reads the reviews and the threads in every gap case.
     The output and the `LANDED` note say `no CodeRabbit review at this head`.
   - **A well-formed summary at the head passes, clean or not.** The one review already happened, and what it found is read by (d). Well-formed
-    means its status, walkthrough and risk blocks (`recent_review_status`, `walkthrough`, `final_review_risk` start and end delimiters, each
+    means its status (the block CodeRabbit's older summaries carry), walkthrough and risk blocks (`recent_review_status`, `walkthrough`, `final_review_risk` start and end delimiters, each
     once, in that order, fenced code ignored) are all there, and the one hidden `final_review_risk_coverage` marker sits inside the risk
     block, parses as JSON with no repeated key, and has `sourceCommitId` and `coveredCommitId` both equal to the head (40 hex, compared
     lower-case) and `kind` exactly `"reviewed"`.
   - **Still refuses, because the shape could be forged or is unreadable:** two or more summary comments; a coverage marker in any other
-    CodeRabbit comment (a reply or notice can repeat text other people chose); a missing block, a marker outside the risk block, two
-    markers, unparseable JSON, a repeated key, or a marker of another kind; a reviews or comments reply that is not a list.
+    CodeRabbit comment (a reply or notice can repeat text other people chose); with a status block present, a missing walkthrough or risk
+    block, a marker outside the risk block, two markers, unparseable JSON, a repeated key, or ids that are not the head's; a reviews or
+    comments reply that is not a list. A gap never excuses `CHANGES_REQUESTED` at the head or an unanswered Major or Critical thread.
   The land output says which way (c) was met.
 - **(d) No unanswered Major or Critical thread.** Land reads every review thread with the GraphQL `reviewThreads` query (100 per page, up
   to 20 pages, comments first 100 per thread; more than that refuses). A thread counts as CodeRabbit's when its first comment's author is

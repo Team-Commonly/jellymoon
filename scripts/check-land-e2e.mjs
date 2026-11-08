@@ -82,7 +82,7 @@ async function land(over = {}) {
   const said = [];
   console.log = (m) => said.push(m); console.error = (m) => said.push(m);
   let error = null;
-  try { await main({ exec, run, fetch, spawn, kill, graceMs: over.graceMs ?? 20, limitMs: over.limitMs, env, argv: over.argv ?? ['5'], nodeVersion: over.node ?? '22.0.0', cwd }); } catch (e) { error = e.message; } finally { console.log = log; console.error = err; }
+  try { await main({ exec, run, fetch, spawn, kill, graceMs: over.graceMs ?? 20, limitMs: over.limitMs, env, argv: over.argv ?? ['5'], nodeVersion: over.node ?? '22.0.0', cwd, now: () => over.now ?? Date.now() }); } catch (e) { error = e.message; } finally { console.log = log; console.error = err; }
   const merge = w.calls.find((c) => c.cmd === 'gh' && c.args[1] === 'merge');
   w.doneAt = Date.now();
   const res = { error, w, merge, said: said.join('\n'), ledgerNow: fs.readFileSync(ledger, 'utf8'), ledgerWas: over.ledger ?? HDR + rowOf('PASS'), lock: fs.existsSync(path.join(common, 'jm-land.lock')) };
@@ -262,6 +262,7 @@ const CR_LEDGER = HDR + rowOf('PASS', 'opus-verifier', EARLY) + rowOf('PASS', 'c
 const cr = (o = {}) => ({ ledger: CR_LEDGER, on: [
   [/^gh api .*pulls\/5\/reviews/, o.reviews ?? BOT_REVIEW()], [/^gh api graphql/, o.threads ?? GQL()],
   [/^gh api .*issues\/5\/comments/, () => { if (o.comments === undefined) throw new Error('comments read failed'); return o.comments; }],
+  [/^gh api .*issues\/5\/timeline/, () => { if (o.timeline === undefined) throw new Error('timeline read failed'); return o.timeline; }],
   [/^gh api repos\/\S+\/commits\/c\d+ /, (a) => { const sha = a.find((x) => x.includes('/commits/')).split('/').pop(); return JSON.stringify({ sha, author: { login: o.author ?? 'alice' }, committer: { login: o.committer ?? 'alice' } }); }],
 ], ...o.over });
 await t('coderabbit path: lands, says so, and the LANDED note records the path and both heads', cr(), (r) => r.merge && r.said.includes(`coderabbit at ${HEAD.slice(0, 8)}, after the review at ${EARLY.slice(0, 8)}`) && r.ledgerNow.includes(`admitted by coderabbit at ${HEAD.slice(0, 8)}, after the review at ${EARLY.slice(0, 8)}`));
@@ -283,6 +284,12 @@ await t('coderabbit summary way: a summary for another head refuses, nothing mer
 await t('coderabbit summary way: a failed comments read refuses, nothing merged', cr({ reviews: '' }), (r) => no(r, /CodeRabbit has not reviewed/) && !r.ledgerNow.includes('LANDED'));
 await t('coderabbit summary way: the marker in another bot\'s comment refuses', cr({ reviews: '', comments: CMT('github-actions[bot]', 'Bot', SUMMARY()) }), (r) => no(r, /summary comments were found/) && !r.ledgerNow.includes('LANDED'));
 await t('coderabbit summary way: a review at the head settles (c) without reading the comments', cr(), (r) => r.merge && argv(r, 'gh', 'issues/5/comments').length === 0);
+// The fallback: an ask by a trusted User, CodeRabbit silent for 30 minutes at this head. The clock is fixed so the ages are exact.
+const NOW = Date.parse('2026-11-08T21:00:00Z');
+const minAgo = (m) => new Date(NOW - m * 60000).toISOString();
+const ASKED = (m) => JSON.stringify({ user: { login: 'alice', type: 'User' }, body: '@coderabbitai review', created_at: minAgo(m) });
+const HEAD_EVENT = JSON.stringify({ event: 'committed', sha: HEAD, committer: { date: '2026-11-08T19:00:00Z' } });
+await t('coderabbit fallback: an ask 31 minutes old and no review at the head lands, and says so', cr({ reviews: '', comments: ASKED(31), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => r.merge && r.said.includes('fallback: CodeRabbit silent for 31 min after the ask at'));
 await t('verifier path: unchanged, says so, reads nothing from CodeRabbit', {}, (r) => r.merge && r.said.includes('verifier PASS by opus-verifier') && r.ledgerNow.includes('admitted by verifier PASS by opus-verifier') && argv(r, 'gh', 'api graphql').length === 0 && argv(r, 'gh', 'pulls/5/reviews').length === 0);
 cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`)) || (c.args[1] === 'graphql' && c.args.includes('owner=Team-Commonly') && c.args.includes('name=jellymoon'))), true]);
 const bad = cases.filter(([, got, want]) => got !== want);

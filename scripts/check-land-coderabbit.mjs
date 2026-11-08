@@ -27,7 +27,14 @@ const MINOR = '_⚠️ Potential issue_ | _🟡 Minor_\n\nA wording problem.';
 const thr = (list) => checkThreads(list, TRUSTED);
 const info = (sha, author = 'maintainer-a', committer = 'maintainer-a') => ({ sha, author: { login: author }, committer: { login: committer } });
 const cmt = (infos, range = RANGE) => checkCommits(range, infos, TRUSTED);
-const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], comments: [], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED };
+// The fallback's clock and the PR timeline: the head became the head at HEAD_AT (a `committed` event), and land reads the clock at NOW.
+const NOW = Date.parse('2026-11-08T21:00:00Z');
+const HEAD_AT = '2026-11-08T19:00:00Z';
+const TL = [{ event: 'committed', sha: OLD, committer: { date: '2026-11-08T18:00:00Z' } }, { event: 'committed', sha: HEAD, committer: { date: HEAD_AT } }];
+const minAgo = (m) => new Date(NOW - m * 60000).toISOString();
+const ASK = '@coderabbitai review';
+const ask = (m, o = {}) => ({ user: { login: 'maintainer-a', type: 'User' }, body: ASK, created_at: minAgo(m), ...o });
+const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], comments: [], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED, timeline: TL, now: NOW };
 const all = (o = {}) => checkCodeRabbit({ ...good, ...o });
 const gql = (nodes, next = null) => ({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: !!next, endCursor: next }, nodes } } } } });
 // Trimmed copy of CodeRabbit's summary comment on PR 13 (issue comment 6725328362) at its head: the two header lines, the status block, the
@@ -176,6 +183,9 @@ const cases = [
   ['all: a clean head passes and the note names the path and both heads', all().note, `coderabbit at ${HEAD.slice(0, 8)}, after the review at ${OLD.slice(0, 8)}`],
   ['all: each of a, c, d, e failing alone refuses', [all({ rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }), all({ reviews: [review({ commit_id: OLD })] }), all({ threads: [thread([comment(BOT, MAJOR)])] }), all({ infos: [info(OLD), info(HEAD, 'mallory')] })].map((c) => c.ok).join(), 'false,false,false,false'],
   ['all: a commit from main (not in main..head) is never read', all({ range: [OLD, HEAD], infos: [info(OLD), info(HEAD), info(MAIN_C, 'mallory')] }).ok, true],
+  // (c'') the fallback: an ask 30 minutes old, CodeRabbit silent
+  ['fallback: an ask 31 minutes old and no review at the head passes', all({ reviews: [], comments: [ask(31)] }).ok, true],
+  ['fallback: an ask 31 minutes old beside a summary of an older head passes', all({ reviews: [review({ commit_id: OLD })], comments: [ask(31), sum({ body: layout({ risk: marker({ sourceCommitId: OLD, coveredCommitId: OLD }) }) })] }).ok, true],
 ];
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (bad.length) { console.error(`check-land-coderabbit: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }

@@ -35,6 +35,13 @@ triggers and the outcome each reports to the pod:
 (`docs/protocol.md`), so a stop that arrives before the run is claimed here, or after it ended, is ignored. A cancel sent before
 `session/new` has answered has no session to cancel: the run's context ends the call at once, as it did.
 
+2026-11-08: after `session/cancel`, however the session ends (stop reason `cancelled`, a JSON-RPC error on `session/prompt`, or
+the agent exiting without answering) the run ends with the cause that cancelled it, so a stop is `cancelled` in all three and a
+deadline or daemon stop is `failed` in all three. Before it, an error or an exit read as a failure and hid the stop.
+
+2026-11-08: an option with a missing, non-string or empty `optionId` is never selected. If no usable option of the wanted kind
+is left, the answer is the `cancelled` outcome.
+
 ## ACP shapes used
 
 Read from the protocol's published documentation (agentclientprotocol.com, pages "Tool Calls" and "Prompt Turn"), 2026-11-08:

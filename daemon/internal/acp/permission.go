@@ -7,11 +7,11 @@ type option struct {
 	Kind string `json:"kind"`
 }
 
-// pick returns the first option of the first kind in order that the request offers.
+// pick returns the first option of the first kind in order that the request offers. An option with no optionId cannot be answered.
 func pick(opts []option, order ...string) (option, bool) {
 	for _, k := range order {
 		for _, o := range opts {
-			if o.Kind == k {
+			if o.Kind == k && o.ID != "" {
 				return o, true
 			}
 		}

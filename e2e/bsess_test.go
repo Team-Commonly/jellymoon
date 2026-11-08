@@ -145,7 +145,7 @@ func (b *bsess) steps(p *stepper) {
 	p.step("a message posted with the cookie fans out to the socket and reads back from the feed by cookie", func() error {
 		return b.fanOut(ana, bo, s, pod.ID)
 	})
-	p.step("a cookie POST without a JSON content type, from a foreign Origin, or with no Origin is refused", func() error {
+	p.step("a cookie POST or PATCH without a JSON content type, from a foreign, look-alike or other-port Origin, or with no Origin is refused", func() error {
 		return b.csrf(ana, pod.ID)
 	})
 	p.step("the pod WebSocket with the cookie from a foreign Origin, or none, is refused", func() error {
@@ -204,14 +204,15 @@ func (b *bsess) fanOut(ana, bo *http.Client, s *sock, pod string) error {
 }
 
 func (b *bsess) csrf(ana *http.Client, pod string) error {
-	for _, h := range []map[string]string{{"Content-Type": "text/plain"}, {"Origin": "https://evil.example"}, {"Origin": "null"}, {"Origin": ""}} {
-		for _, path := range []string{"/v1/pods", "/v1/pods/" + pod + "/messages"} {
-			in := any(map[string]any{"name": "forged"})
-			if strings.HasSuffix(path, "/messages") {
-				in = post(map[string]any{"summary": "forged"})
-			}
-			if st, code := b.send(ana, "POST", path, in, h, nil); st != 403 || code != "forbidden" {
-				return fmt.Errorf("cookie POST %s with %v: HTTP %d %q, want 403 forbidden", path, h, st, code)
+	other := fmt.Sprintf("http://127.0.0.1:%d", b.w.srv.port%60000+1) // the same host on another port
+	hs := []map[string]string{{"Content-Type": "text/plain"}, {"Origin": "https://evil.example"}, {"Origin": "null"}, {"Origin": ""}, {"Origin": b.own + ".evil.example"}, {"Origin": other}}
+	for _, h := range hs {
+		for _, c := range []struct {
+			method, path string
+			in           any
+		}{{"POST", "/v1/pods", map[string]any{"name": "forged"}}, {"POST", "/v1/pods/" + pod + "/messages", post(map[string]any{"summary": "forged"})}, {"PATCH", "/v1/pods/" + pod + "/tasks/tsk_forged", map[string]any{"status": "done"}}} {
+			if st, code := b.send(ana, c.method, c.path, c.in, h, nil); st != 403 || code != "forbidden" {
+				return fmt.Errorf("cookie %s %s with %v: HTTP %d %q, want 403 forbidden", c.method, c.path, h, st, code)
 			}
 		}
 	}

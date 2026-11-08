@@ -175,7 +175,7 @@
         "a pod owner stops a live run; the daemon receives run.stop, the run ends cancelled, and its jmr_ gets unauthorized at once"
       ],
       "test": "go test ./e2e -run TestF13",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F14",

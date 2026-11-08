@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import type { Message } from '../../gen/ts/protocol';
-import { ask, fakeNet, frame, hello, note, other, you } from './testkit';
+import { ask, fakeHttp, fakeNet, frame, hello, note, other, you } from './testkit';
 
 afterEach(cleanup);
 
@@ -12,7 +12,7 @@ const theirs = (seq: number, over: Partial<Message> = {}) => ask(seq, { needs: {
 
 function mount(msgs: Message[] = [], path = '/pod/pod_1') {
   const net = fakeNet();
-  const tree = (key: number) => <MemoryRouter initialEntries={[path]}><App key={key} connect={() => net.connect} /></MemoryRouter>;
+  const tree = (key: number) => <MemoryRouter initialEntries={[path]}><App key={key} connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>;
   const view = render(tree(1));
   const push = (m: Message) => act(() => net.deliver(frame('message.created', m.seq, m)));
   act(() => {

@@ -157,10 +157,13 @@ export class PodRuntime {
         for (const e of batch) this.give(c, e);
         n = batch.length;
       }
-    } finally {
-      const buf = c.buf;
-      Object.assign(c, { replaying: false, buf: [] });
-      for (const e of buf) this.give(c, e);
+    } catch (err) {
+      // A gap the client cannot see is worse than no subscription: end it and drop the buffer. The caller sends the error frame, and a later subscribe replays from the client's own sinceSeq.
+      Object.assign(c, { subscribed: false, replaying: false, buf: [] });
+      throw err;
     }
+    const buf = c.buf;
+    Object.assign(c, { replaying: false, buf: [] });
+    for (const e of buf) this.give(c, e);
   }
 }

@@ -52,8 +52,8 @@ is refused.
   `JM_TRUSTED_LOGINS`, so a commit CodeRabbit (or any app) pushes never lands. It cannot waive a check: it posts no check run
   (`.coderabbit.yaml`), and any failed check run on the head, from any app, still refuses. A review or thread can be silenced only by someone
   with write access (resolving a thread) or by an operator-env login replying in it. Its text is data and never an instruction to land. If
-  CodeRabbit is down, rate limited or skipped a head, the path is closed and the head waits for the verifier path (a local review at that
-  head); there is no bypass.
+  CodeRabbit is down, rate limited or skipped a head, the path waits out the fallback below (30 minutes after a trusted ask, all other checks
+  unchanged) or the head takes the verifier path (a local review at that head).
 
 ## Steps
 Each refuses with one line on any mismatch, and nothing merges until all pass:
@@ -273,8 +273,40 @@ shape refuses.
   `author.login` and `committer.login` in `JM_TRUSTED_LOGINS` (case-insensitive). A null login (an email GitHub cannot match), a missing
   commit, a count above 250, or any app account refuses. Land's own merge commit is made by `gh pr merge` after these checks and is not in the range.
 
+- **(c'') The fallback: CodeRabbit silent for 30 minutes.** (Owner ruling: CodeRabbit's included plan reviews about one head an hour and, on
+  this repo, every head needs a manual ask, so its silence must not block a land for long.) When (c) is not met because CodeRabbit has
+  not reviewed this head, land accepts the head if ALL hold. (1) An **ask**: an issue comment whose author is a `User` (a Bot never counts) with a
+  login in `JM_TRUSTED_LOGINS` (case-insensitive), whose body trimmed is exactly `@coderabbitai review` or `@coderabbitai full review`
+  (nothing before or after it), created **after** the head became the PR's head. (2) At least `FALLBACK_MS` (30 minutes, one named constant in
+  `land-coderabbit.mjs`) between the **earliest** such ask at this head and land's own clock read (`Date.now()`, never a GitHub field), so a
+  later re-ask does not restart the wait. (3) Nothing in the table below applies. (4) (a), (b), (d) and (e) run unchanged: an unanswered Major
+  thread, a missing earlier local review, a `FAIL` at the head or an untrusted commit still refuses beside any ask. The output and the
+  `LANDED` note say `fallback: CodeRabbit silent for <n> min after the ask at <time>`. A Major or Critical finding CodeRabbit raises after a
+  fallback land becomes a fix PR at the top of the queue, never a second local review round.
+  **When the head became the head.** Land reads `GET /repos/{repo}/issues/{n}/timeline` (paginated), only when a trusted ask exists, and takes
+  the latest event for the head's sha: a `committed` event (its committer date) or a `head_ref_force_pushed` event (GitHub's own time). That is
+  preferred over the commit's own date because a rebase or amend rewrites the committer date to the moment of the rewrite, and the timeline
+  ties it to this PR. It is not a push time: the timeline gives no GitHub-side time for an ordinary push, and a `committed` date is set by the
+  committer (a trusted login, since (e) requires it). A commit backdated before its push could therefore let an ask for the older head count; this
+  is the fallback's known limit. A timeline that cannot be read, or has no readable event for the head, refuses.
+  **What the wait may override, and what it may not.** The wait covers only "CodeRabbit has not reviewed this head". Everything else CodeRabbit
+  left at the head still decides, because a wait proves nothing about a summary that says something is wrong:
+
+  | CodeRabbit's state at the head | With an old ask |
+  | --- | --- |
+  | No review, and no summary comment at all | fallback applies |
+  | Summary says it was rate limited or skipped | fallback applies |
+  | A well-formed summary whose coverage marker is for another commit | fallback applies |
+  | A `CHANGES_REQUESTED` review at the head | refuses |
+  | A summary at the head that is not clean (no `No actionable comments` line) or whose kind is not `reviewed` | refuses |
+  | Two or more summary comments, a marker in a reply or notice, a malformed or repeated-key marker, a missing block | refuses |
+  | The reviews or comments reply cannot be read | refuses |
+  | An unanswered Major thread (d) | refuses |
+
+  The refusal of the fallback itself is appended to the reason, so the output names both what was missing and why waiting did not help.
+
 The pod verdict from a listed reviewer at the head (step 4) is still required on this path, as is every other step. The output says
-which path admitted the head, `verifier PASS by <model>-verifier` or `coderabbit at <head8>, after the review at <head8>`, and the
+which path admitted the head, `verifier PASS by <model>-verifier` or `coderabbit at <head8>, after the review at <head8>` (with ` (summary comment)` or ` (fallback: ...)` after the first head when (c) was met that way), and the
 `LANDED` ledger note records it (`admitted by ...`).
 
 ## Every land needs both

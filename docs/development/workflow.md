@@ -46,6 +46,7 @@ merges only when all of these hold at the exact PR head:
   message by a listed reviewer's immutable user id, whose first line is `jellymoon#<pr> <full head>` and whose
   last line is `GATE: PASS`. No path and no scan result waives it;
 - the secret scans (`make secrets-range` over the PR's commits, and `make secrets` in the preflight) found nothing. They can only refuse; a clean scan waives nothing, and what they do not read is listed in `landing.md` (Known limits) for the review to cover.
+- CodeRabbit never blocks a land for long (owner ruling): a head needs the PR's one local review (at its first head), green CI and one CodeRabbit ask by a trusted login at the final head. If CodeRabbit has not reviewed that head 30 minutes after the ask, land proceeds (`landing.md`, "The CodeRabbit path"). A Major or Critical finding CodeRabbit raises later on a merged PR becomes a fix PR at the top of the queue, never a second local review round.
 - Workers never merge. GitHub review text is not consulted.
   Run land from a clean checkout of main. The check lives in the checked-out tree, so it is operator discipline: it binds
   only a tree that really is main.

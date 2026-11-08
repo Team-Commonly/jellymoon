@@ -66,9 +66,9 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
 1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.
 2. The ledger at the exact head (below). It admits the head by one of two paths: a `<model>-verifier` PASS, or a `coderabbit` PASS, which land accepts only after its own checks ("The CodeRabbit path", below).
 3. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
-   `startup_failure`, `action_required`), land refuses. No check runs at all is fine: land does not wait for CI. Once the
-   repository is public, a ruleset on `main` will make GitHub refuse the merge until CI's checks pass; land still
-   does not wait, so a land run while required checks are pending fails at the merge step.
+   `startup_failure`, `action_required`), land refuses. No check runs at all is fine: land does not wait for CI. The
+   ruleset on `main` makes GitHub refuse the merge until CI's required checks pass; land still does not wait, so a land
+   run while required checks are pending fails at the merge step.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
    First, the scan configuration: land lists main's tree at the fetched tip and the tree of every commit in the range (whole, NUL-separated,
    in the scan's env), and refuses (naming the tree and the path) when one carries a path with a component named `.tools`, at any depth,

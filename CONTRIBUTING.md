@@ -23,9 +23,10 @@ The first `feature_list.json` feature with `passes: false` and no `blockedBy`, o
   a maintainer re-authors the change through their own loop. Maintainer PRs land with `make land`, and every land needs a
   ledger `PASS` at the head, admitted one of two ways ([`docs/development/landing.md`](docs/development/landing.md)):
   - a verifier's ledger line passes at the head (the one local review, at a PR's first head);
-  - or, for a later head (a fix, or a merge of main), the CodeRabbit path: the one local review is on the PR's history, and
-    CodeRabbit reviewed this exact head with no unanswered Major or Critical thread. Land reads CodeRabbit's review and threads
-    on GitHub itself; that is the only GitHub review text it consults.
+  - or, for a later head (a fix, or a merge of main), the CodeRabbit path: the one local review is on the PR's history, no
+    `FAIL` is recorded at this head, CodeRabbit reviewed this exact head with no unanswered Major or Critical thread, and every
+    commit the PR adds is authored and committed by a trusted maintainer. Land reads CodeRabbit's review and threads on GitHub
+    itself; that is the only GitHub review text it consults.
   Every land also needs the review's pod verdict at the head (see `AGENTS.md`). The secret scans can only refuse a land, never
   waive either requirement. Local verification is the authority. A failed check run on the head refuses the land, and land
   itself does not wait for CI (no check runs is fine); the ruleset on `main` then holds the merge until the required checks pass.

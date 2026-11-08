@@ -8,7 +8,7 @@ import type { Caller } from '../../podcore/src/index';
 import { newId, newWakeSeed } from './ids';
 import { taskView, tasksOf } from './views';
 import { check } from './validate';
-import { bad, fail, parse, pick, respond } from './wire';
+import { bad, fail, MCP_HEADER, parse, pick, respond } from './wire';
 import type { Body, PodPort, Who } from './wire';
 
 interface Call { pod: PodPort; who: Who; caller: Caller; req: Request; url: URL; params: string[]; body: Body }
@@ -87,7 +87,7 @@ const post: Handler = (k) => {
   const messageId = newId('msg_');
   const agentId = k.caller.kind === 'run' ? k.pod.state.runs[k.caller.runId]?.agent.id : undefined;
   const harness = agentId === undefined ? undefined : (k.pod.meta.harness[agentId] as Harness | undefined);
-  const reply = k.pod.exec({ type: 'post', caller: k.caller, messageId, decisionId: newId('dec_'), wakeId: newWakeSeed(), harness, input: k.body as unknown as PostInput });
+  const reply = k.pod.exec({ type: 'post', caller: k.caller, messageId, decisionId: newId('dec_'), wakeId: newWakeSeed(), harness, viaMcp: k.req.headers.get(MCP_HEADER) === '1', input: k.body as unknown as PostInput });
   return respond(reply, (m) => ({ messageId, seq: (m as Message).seq, ...((m as Message).decision === undefined ? {} : { decisionId: (m as Message).decision?.id }) }));
 };
 

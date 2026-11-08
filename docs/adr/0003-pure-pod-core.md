@@ -182,7 +182,8 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
   the post's own `taskId`; a run saved before this was kept has none, and its receipts carry none) and the call count.
   `tool_call` is the MCP adapter telling the pod about one tools/call before it dispatches it; a call the pod cannot count is
   refused before it takes effect. A receipt's `toolCalls` counts those requests on the run's token, refused ones included, and
-  includes the call stamping the receipt, which was counted before it ran. Plain HTTP calls with the token are not MCP calls.
+  excludes the call stamping the receipt: the adapter marks the post it dispatches (`viaMcp`, a header the Worker deletes from every
+  incoming request and sets itself), and the core takes that one call off. Plain HTTP calls with the token are not MCP calls.
 - A run's `task_update` on a task another live run holds is `already_claimed` naming the holder (one claim per task,
   `operations.json`); a person may still update.
 

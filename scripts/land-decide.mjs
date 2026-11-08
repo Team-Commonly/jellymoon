@@ -298,6 +298,42 @@ export function checkCheckout({ head, mainTip, prHead = null, porcelain, remoteV
 export function mergeTree(run, mainTip, head) {
   try { return run(['merge-tree', '--write-tree', mainTip, head]).split('\n')[0].trim(); } catch { throw new Error(`${head.slice(0, 8)} does not merge cleanly into main ${mainTip.slice(0, 8)}`); }
 }
+// Skipping the local preflight (docs/development/landing.md, "Reading CI instead of the preflight"). Only when CI already ran the same gates on a ref whose tree
+// IS the merge result the decision computed, every check the branch rules require concluded success, and each such run was made by the Actions app. Anything
+// else, or anything unreadable, is no proof: the caller runs the preflight as before. requiredChecks takes the branch rules (an array of rule objects) and,
+// when they name none, classic protection ({ contexts, checks }); the list never comes from the PR.
+export function requiredChecks({ rules = [], protection = null }) {
+  const names = new Set();
+  for (const r of rules) if (r?.type === 'required_status_checks') for (const c of r.parameters?.required_status_checks ?? []) if (typeof c?.context === 'string') names.add(c.context);
+  if (!names.size && protection) for (const c of [...(protection.contexts ?? []), ...(protection.checks ?? []).map((k) => k?.context)]) if (typeof c === 'string') names.add(c);
+  return names.size ? [...names] : null;
+}
+// runs: [{ name, status, conclusion, app }] where app is the app slug, read from the check runs on the land commit. Only runs made by the GitHub
+// Actions app count; a same-named run from another app or a user is ignored (it can neither prove nor veto). The answer carries `kind` when it is
+// not ok: 'wait' (a required check has no run yet or is still running: poll again), 'red' (an Actions run of a required name completed without
+// success, a skipped one included: it will not turn green), 'tree' (the commit's tree is not the merge result: refuse), 'unread' (the list is
+// incomplete or unreadable: no proof). A red anywhere wins over a wait elsewhere, so a failure ends the poll at once.
+export function ciProof({ required, tree, ciTree, runs, total = runs?.length }) {
+  const no = (kind, reason) => ({ ok: false, kind, reason: stripControls(reason) });
+  if (!Array.isArray(required) || !required.length) return no('unread', 'the required checks could not be read from the branch rules');
+  if (!/^[0-9a-f]{40}$/.test(String(ciTree)) || ciTree !== tree) return no('tree', `CI's land commit (tree ${String(ciTree).slice(0, 8)}) is not the merge result (tree ${String(tree).slice(0, 8)})`);
+  if (!Array.isArray(runs) || total > runs.length) return no('unread', 'the check runs on the land commit could not all be read');
+  let waiting = null;
+  for (const name of required) {
+    const mine = runs.filter((r) => r.name === name && r.app === 'github-actions');
+    const bad = mine.find((r) => r.status === 'completed' && r.conclusion !== 'success');
+    if (bad) return no('red', `required check ${name} did not succeed on the land commit (${bad.conclusion ?? 'no conclusion'})`);
+    if (!mine.length) waiting ??= `required check ${name} has no run on the land commit yet`;
+    else if (mine.some((r) => r.status !== 'completed')) waiting ??= `required check ${name} is still running`;
+  }
+  if (waiting) return no('wait', waiting);
+  return { ok: true, note: `CI proved merge tree ${tree.slice(0, 8)}` };
+}
+// Land's own ref for a PR: refs/heads/land/<n>, n digits only. Every push land makes (create, overwrite, delete) names a ref built here.
+export const landRef = (n) => {
+  if (!/^\d+$/.test(String(n))) throw new Error(`not a PR number: ${n}`);
+  return `refs/heads/land/${Number(n)}`;
+};
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
 export const stripControls = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g, '');

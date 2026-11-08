@@ -10,3 +10,8 @@ export function startupRefusal(env: Record<string, string | undefined>): string 
     ? 'ENV=local is refused with DATABASE_URL: it opens the test routes with no bearer. Unset ENV, or set TEST_BEARER.'
     : undefined;
 }
+
+/** What buildApp is given, from the environment. Test routes open only for ENV=local or a configured TEST_BEARER; kept apart from main.ts so a test can start the app as production does. */
+export function appOptions(env: Record<string, string | undefined>): { publicUrl: string | undefined; local: boolean; testBearer: string | undefined } {
+  return { publicUrl: env.PUBLIC_URL, local: env.ENV === 'local', testBearer: env.TEST_BEARER };
+}

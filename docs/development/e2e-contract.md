@@ -140,6 +140,38 @@ early-expiry and lateness check reads it, so every server is measured identicall
 released before its recorded deadline; released no later than `max(restart, deadline) + 6 s`
 once the clock passes it; one `claim.released` over live delivery and over a replay from seq 0.
 
+## Where the suite's time goes (measured before the parallel run)
+
+Every test but `TestStepPrinter`, `TestPortRetry` and `TestF14Budget` boots its own server, and they ran one after another, so
+the suite's wall time was the sum of the tests. Per-test seconds, serial: one pod-state run and one Worker run on a dev machine
+at load below 4, and the latest CI run of each on `main` after #8. PR 13 failed only `TestF14Budget`, at 61.1 s and then 64.9 s
+on the Worker.
+
+| Test | Pod-state, local | Worker, local | Worker, CI | What it waits on |
+|---|---|---|---|---|
+| `TestRunTokenOtherPod` | 0.4 | 5.8 (first boot) | 2.3 | one server start; the first Worker start of a run is cold |
+| `TestEvictMidClaim` / `TestEvictAlarmWake` / `TestEvictPastDeadline` | skipped | 2.0 / 2.2 / 0.8 | 2.6 / 3.1 / 1.9 | a start each, 300 to 500 ms of real sleep |
+| `TestF02` | 0.4 | 0.6 | 1.6 | a start |
+| `TestF03` | 0.5 | 0.5 | 1.4 | a start |
+| `TestF04` | 1.8 | 2.4 | 4.2 | a start, two 400 ms quiet windows, a kill and restart |
+| `TestF05` | 0.4 | 0.7 | 1.6 | a start |
+| `TestF06` | 0.4 | 1.2 | 1.6 | a start |
+| `TestF07` | 2.3 | 3.0 | 3.4 | a start, a 200 ms sleep |
+| `TestF08` | 2.1 | 3.1 | 4.6 | `go build` of the daemon, a start, daemon registration and presence, a 300 ms sleep |
+| `TestF09` | 4.0 | 4.6 | 4.7 | the same, then an agent process and a stop that waits for its process group |
+| `TestF10` / `TestOneReleasePerCause` | 1.7 / 1.6 | 1.9 / 2.2 | 3.1 / 2.9 | a start, a 300 ms sleep in `TestF10` |
+| `TestF11` | 2.7 | 1.8 | 2.8 | a start, a daemon |
+| `TestFakeAgentHoldStaysUp` | 1.0 | 1.1 | 0.9 | `go build` of the fake agent, a 500 ms hold |
+| `TestInputValidation` | 0.5 | 0.6 | 1.8 | a start |
+| `TestExpiryZeroTraffic` / `TestRenewRace` | 1.0 / 0.5 | 1.3 / 0.8 | 2.2 / 2.0 | a start, a 300 ms sleep in `TestExpiryZeroTraffic` |
+| `TestKillMidLease` | 2.2 | 2.9 | 4.4 | a start, a kill and restart, a 300 and a 500 ms sleep |
+| `TestRestartPastDeadline` / `TestReplayAcrossRestart` | 0.6 / 1.4 | 1.2 / 1.8 | 2.9 / 3.5 | a start, a kill and restart, two 200 ms sleeps in the replay test |
+| **Suite (`E2E_MS`)** | **26.0** (CI 19.1) | **43.2** | **59.7** | |
+
+The cost is serial server starts, not sleeps: the real sleeps in the whole suite add up to about 4 s, a Worker start takes 1.4 to
+2 s on a CI runner, and no two tests overlapped. The fake clock already replaces the long waits. The 60 s budget did not change;
+the Worker suite on the CI runner sat 0.3 s under it before PR 13 added one test and tipped it over.
+
 ## Skipped on the server
 
 `JM_E2E_SKIP` is a comma-separated list of test names. `make e2e-c` sets it to the three tests below; each one skips, says so,

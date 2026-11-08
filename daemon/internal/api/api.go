@@ -86,8 +86,11 @@ func (c *Client) post(path, token string, in, out any) error {
 		}
 		return fmt.Errorf("POST %s: HTTP %d", path, resp.StatusCode)
 	}
-	if out == nil || len(raw) == 0 {
+	if out == nil {
 		return nil
+	}
+	if len(raw) == 0 {
+		return fmt.Errorf("POST %s: HTTP %d with an empty body, but a result is needed", path, resp.StatusCode)
 	}
 	return json.Unmarshal(raw, out)
 }

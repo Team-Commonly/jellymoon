@@ -47,3 +47,44 @@ describe('server /mcp', () => {
     expect(no.isError).toBe(true);
   });
 });
+
+describe('server /mcp counts the run\'s tool calls', () => {
+  const call = (name: string, id: number) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: {} } });
+  const receiptOf = async (w: Awaited<ReturnType<typeof world>>, token: string, messageId: string) => {
+    const feed = (await w.call('GET', `/v1/pods/${w.pod.id}/feed`, token)).json;
+    return feed.messages.find((m: Json) => m.id === messageId)?.receipt;
+  };
+
+  test('N tools/call requests, refused ones included, and a post over HTTP carries a receipt with toolCalls N', async () => {
+    const w = await world();
+    const run = (await w.call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json;
+    await rpc(w, run.runToken, call('jm_whoami', 1));
+    await rpc(w, run.runToken, call('jm_nothing', 2));
+    await rpc(w, run.runToken, { jsonrpc: '2.0', id: 3, method: 'tools/list' }); // not a tools/call: not counted
+    await rpc(w, run.runToken, call('jm_constructor', 4));
+    const post = await w.call('POST', `/v1/pods/${w.pod.id}/messages`, run.runToken, { summary: 'done', kind: 'fyi', status: 'done' });
+    expect(post.status).toBe(200);
+    const receipt = await receiptOf(w, run.runToken, post.json.messageId);
+    expect([receipt?.runId, receipt?.harness, receipt?.toolCalls]).toEqual([run.runId, 'fake', 3]);
+  });
+
+  test('a post carried by an MCP call does not count its own carrying call', async () => {
+    const w = await world();
+    const run = (await w.call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json;
+    await rpc(w, run.runToken, call('jm_whoami', 1));
+    const carried = (await rpc(w, run.runToken, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'jm_post', arguments: { summary: 'via mcp', kind: 'fyi', status: 'done' } } })).json.result;
+    expect(carried.isError).toBe(false);
+    expect((await receiptOf(w, run.runToken, carried.structuredContent.messageId))?.toolCalls).toBe(1);
+  });
+
+  test('a forged header on a plain request changes nothing, and a user token is not counted', async () => {
+    const w = await world();
+    const run = (await w.call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json;
+    await rpc(w, run.runToken, call('jm_whoami', 1));
+    const res = await w.app.fetch(new Request(`http://x/v1/pods/${w.pod.id}/messages`, { method: 'POST', headers: { Authorization: `Bearer ${run.runToken}`, 'x-jm-mcp': '1' }, body: JSON.stringify({ summary: 'forged', kind: 'fyi', status: 'done' }) }));
+    expect((await receiptOf(w, run.runToken, ((await res.json()) as Json).messageId))?.toolCalls).toBe(1);
+    await rpc(w, w.olivia.token, call('jm_whoami', 2));
+    const again = (await w.call('POST', `/v1/pods/${w.pod.id}/messages`, run.runToken, { summary: 'later', kind: 'fyi', status: 'done' })).json;
+    expect((await receiptOf(w, run.runToken, again.messageId))?.toolCalls).toBe(1);
+  });
+});

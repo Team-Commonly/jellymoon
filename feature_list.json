@@ -220,13 +220,13 @@
     {
       "id": "F17",
       "category": "preview",
-      "description": "Every PR deploys a Workers preview and F14 passes against it",
+      "description": "Every PR boots the server as a self-hoster runs it, from the PR's own build, and the contract suite passes against it",
       "steps": [
-        "the preview job deploys the PR to its own preview with its own DO namespace and the preview D1",
-        "COMMONLY_URL=<preview> go test ./e2e -run TestF14 passes"
+        "the e2e-deployed job builds the server bundle and boots it as its own process on a Postgres service container, with env config only (make deployed-boot)",
+        "deployed-boot refuses a server with no database, finds the test routes closed in the hosted shape, serves a pod through the real routes and keeps it across kill -9",
+        "the contract suite, TestF14Budget included, passes with that bundle as the server under test (make e2e-deployed); a server that fails to boot fails the job"
       ],
-      "test": "CI job e2e-preview",
-      "blockedBy": "CLOUDFLARE_API_TOKEN secret (owner action)",
+      "test": "CI job e2e-deployed",
       "passes": false
     },
     {

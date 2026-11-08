@@ -60,6 +60,13 @@ describe('the receipt and the decision', () => {
     }
   });
 
+  test('a post made over MCP leaves out the call that carries it: the receipt counts the calls before it, and a plain HTTP post counts them all', () => {
+    const calls: Array<[Cmd, number]> = [1500, 1600, 1700].map((t) => [{ type: 'tool_call', runId: RUN_A }, t]);
+    const over = stored(play([...calls, [{ ...post(fyi), viaMcp: true } as Cmd, 3000]], woken()).out).receipt?.toolCalls;
+    const plain = stored(play([...calls, [post(fyi), 3000]], woken()).out).receipt?.toolCalls;
+    expect([over, plain]).toEqual([2, 3]);
+  });
+
   test('a person\'s post has no receipt and no run; an ask by a person still carries a decision', () => {
     const m = stored(play([[post(ask, { kind: 'user', userId: U_OWNER.id }), 3000]], woken()).out);
     expect([m.receipt, m.runId, m.author.id, m.decision?.state]).toEqual([undefined, undefined, U_OWNER.id, 'open']);

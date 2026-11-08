@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a preview test-worker worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: e2e e2e-a preview worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -37,18 +37,14 @@ test-ts: node_modules
 	$(BUN) scripts/check-land-scan.mjs
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
-	$(BUN) test podcore worker
+	@out=$$(mktemp); $(BUN) test podcore worker > "$$out" 2>&1; rc=$$?; cat "$$out"; \
+	n=$$(sed -n -E 's/^ *([0-9]+) pass$$/\1/p' "$$out"); rm -f "$$out"; \
+	[ $$rc -eq 0 ] || exit $$rc; \
+	[ "$${n:-0}" -gt 0 ] || { echo "test-ts: no test ran"; exit 1; }
 
 test-go:
 	$(GO) vet ./...
 	$(GO) test -race ./...
-
-# The Worker's own tests (what `bun test podcore worker` in test-ts also runs), judged alone for CI: a run that executes no test fails.
-test-worker: node_modules
-	@out=$$(mktemp); $(BUN) test worker > "$$out" 2>&1; rc=$$?; cat "$$out"; \
-	n=$$(sed -n -E 's/^ *([0-9]+) pass$$/\1/p' "$$out"); rm -f "$$out"; \
-	[ $$rc -eq 0 ] || exit $$rc; \
-	[ "$${n:-0}" -gt 0 ] || { echo "test-worker: no test ran"; exit 1; }
 
 test: test-ts test-go
 

@@ -115,8 +115,8 @@ jobs:
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version-file: .tool-versions
-      - name: Worker tests (make test-worker; fails if no test runs)
-        run: make test-worker
+      - name: TypeScript tests (make test-ts; fails if no test runs)
+        run: make test-ts
 
   go:
     runs-on: ubuntu-latest

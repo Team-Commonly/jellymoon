@@ -105,8 +105,9 @@ func (d *Daemon) claim(a config.Agent, w protocol.RunWake) {
 	d.log.Printf("run %s ended %s", c.RunID, outcome)
 }
 
-// execute runs the agent for a claimed run. The MCP URL is checked before the run token goes anywhere near the agent.
-func (d *Daemon) execute(a config.Agent, c protocol.ClaimRunResponse) error {
+// execute runs the agent for a claimed run, in a working directory of its own. The MCP URL is checked before the run token goes
+// anywhere near the agent. The directory goes when the run completed and stays when it failed (package workspace).
+func (d *Daemon) execute(a config.Agent, c protocol.ClaimRunResponse) (err error) {
 	mcpURL, err := api.CheckMCP(c.MCPURL)
 	if err != nil {
 		return err
@@ -115,10 +116,15 @@ func (d *Daemon) execute(a config.Agent, c protocol.ClaimRunResponse) error {
 	if err != nil {
 		return err
 	}
-	dir, err := os.Getwd()
+	dir, err := d.ws.Prepare(c.RunID, a.Repo)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if ferr := d.ws.Finish(c.RunID, err == nil); ferr != nil {
+			d.log.Printf("run %s: workspace: %v", c.RunID, ferr)
+		}
+	}()
 	d.log.Printf("run %s: starting agent %s", c.RunID, a.AgentID)
 	return acp.Run(d.ctx, acp.Spec{
 		Command: cmd, Dir: dir, Env: agentEnv(), Prompt: c.Brief,

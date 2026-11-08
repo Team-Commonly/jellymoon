@@ -29,6 +29,7 @@ type Agent struct {
 	AgentID     protocol.AgentID `json:"agentId"`
 	Harness     protocol.Harness `json:"harness"`
 	DisplayName string           `json:"displayName"`
+	Repo        string           `json:"repo,omitempty"` // an absolute path: runs get a worktree of it. Empty: a fresh empty dir.
 }
 
 // Store is one config dir.
@@ -48,6 +49,12 @@ func Open() (Store, error) {
 		return Store{}, err
 	}
 	return Store{Dir: dir}, os.Chmod(dir, 0o700)
+}
+
+// WorkspaceRoot is where runs get their working directories: the config dir's sibling, so a run never starts inside the dir that
+// holds the token. It is made (0700) by the first run.
+func (s Store) WorkspaceRoot() string {
+	return filepath.Join(filepath.Dir(s.Dir), filepath.Base(s.Dir)+"-workspaces")
 }
 
 // Path is where a file of the dir lives.

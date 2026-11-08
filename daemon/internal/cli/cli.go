@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"syscall"
 
@@ -27,7 +28,7 @@ const (
 	userTokenEnv = "JELLYMOON_USER_TOKEN"
 )
 
-const usage = "usage:\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>]\n"
+const usage = "usage:\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>] [--repo <path>]\n"
 
 var podIDShape = regexp.MustCompile(`^pod_[0-9A-Z]{26}$`)
 
@@ -119,8 +120,16 @@ func agentAdd(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("agent add", flag.ContinueOnError)
 	pod := fs.String("pod", "", "the pod to register the agent in")
 	name := fs.String("name", string(harness), "the name shown to people")
+	repo := fs.String("repo", "", "a git repo: each run gets a worktree of it (default: a fresh empty directory)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
+	}
+	if *repo != "" {
+		abs, err := filepath.Abs(*repo)
+		if err != nil {
+			return err
+		}
+		*repo = abs
 	}
 	if !harness.Valid() {
 		return fmt.Errorf("unknown harness %q", harness)
@@ -132,7 +141,7 @@ func agentAdd(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	id, err := daemon.Add(store, daemon.AddRequest{PodID: *pod, Harness: harness, DisplayName: *name})
+	id, err := daemon.Add(store, daemon.AddRequest{PodID: *pod, Harness: harness, DisplayName: *name, Repo: *repo})
 	if err != nil {
 		return err
 	}

@@ -1,18 +1,22 @@
-// The shell: one layout with a top bar and a router.
-import { Outlet, Route, Routes } from 'react-router-dom';
+// The shell: one layout with a top bar and a router. The pod screen puts its needs-you toggle into the bar's slot.
+import { useState } from 'react';
+import { Outlet, Route, Routes, useParams } from 'react-router-dom';
 import { PodPage } from './PodScreen';
 import type { Connect } from './store';
 
 function Shell() {
+  const { id } = useParams();
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
     <>
       <header>
-        <strong>Jellymoon</strong>
+        <strong>{id ? `Pod ${id}` : 'Jellymoon'}</strong>
+        <span ref={setSlot} />
         <span> Not signed in </span>
         <button type="button">Sign in</button>
       </header>
       <main>
-        <Outlet />
+        <Outlet context={slot} />
       </main>
     </>
   );

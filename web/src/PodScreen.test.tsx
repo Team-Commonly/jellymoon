@@ -45,7 +45,7 @@ describe('the stream', () => {
   it('shows a card per message, oldest first and newest at the bottom, with author, headline and status', () => {
     mount([note(1, { summary: 'First', status: 'done' }), note(2, { summary: 'Second', status: 'in_progress' })]);
     const list = cards();
-    expect(list.map((c) => within(c).getByRole('heading').textContent)).toEqual(['First', 'Second']);
+    expect(list.map((c) => within(c).getByRole('heading', { level: 3 }).textContent)).toEqual(['First', 'Second']);
     expect(within(list[0]).getByText('Scout')).toBeTruthy();
     expect(within(list[0]).getByText('done')).toBeTruthy();
     expect(within(list[1]).getByText('in_progress')).toBeTruthy();
@@ -255,7 +255,7 @@ describe('the needs-you filter', () => {
     expect(toggle().textContent).toBe('Needs you · 1');
     fireEvent.click(toggle());
     expect(toggle().getAttribute('aria-pressed')).toBe('true');
-    expect(cards().map((c) => within(c).getByRole('heading').textContent)).toEqual(['Ask 1']);
+    expect(cards().map((c) => within(c).getByRole('heading', { level: 3 }).textContent)).toEqual(['Ask 1']);
     m.push(ask(4));
     expect(toggle().textContent).toBe('Needs you · 2');
     expect(cards()).toHaveLength(2);
@@ -275,7 +275,7 @@ describe('the needs-you filter', () => {
     mount([ask(1, { needs: { to: { role: 'owner' }, action: 'approve' } }), ask(2, { needs: { to: { role: 'member' }, action: 'approve' } })]);
     expect(toggle().textContent).toBe('Needs you · 1');
     fireEvent.click(toggle());
-    expect(cards().map((c) => within(c).getByRole('heading').textContent)).toEqual(['Ask 1']);
+    expect(cards().map((c) => within(c).getByRole('heading', { level: 3 }).textContent)).toEqual(['Ask 1']);
   });
 
   it('starts filtered from ?filter=needs-you', () => {
@@ -289,7 +289,7 @@ describe('the needs-you filter', () => {
     fireEvent.click(toggle());
     m.remount();
     expect(toggle().getAttribute('aria-pressed')).toBe('true');
-    expect(cards().map((c) => within(c).getByRole('heading').textContent)).toEqual(['Ask 1']);
+    expect(cards().map((c) => within(c).getByRole('heading', { level: 3 }).textContent)).toEqual(['Ask 1']);
   });
 
   it('g n toggles the filter on and off', () => {

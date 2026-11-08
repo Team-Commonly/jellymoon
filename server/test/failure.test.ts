@@ -98,7 +98,7 @@ describe('a replay that fails', () => {
     const made = await w.rt.exec({ type: 'task_create', caller: { kind: 'user', userId: w.olivia.user.id }, taskId: 'tsk_00000000000000000000000002', title: 'live', kind: 'chore', wakeId: 'wak_00000000000000000000000002' });
     expect(made?.ok).toBe(true);
     gate.read?.();
-    expect(await pending).toContain('db down');
+    expect((await pending).includes('db down')).toBe(true);
     expect([frames.length, conn.subscribed, conn.buf.length]).toEqual([0, false, 0]);
     gate.failReads = false;
     await w.rt.subscribe(conn, 0);

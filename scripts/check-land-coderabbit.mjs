@@ -134,6 +134,7 @@ const cases = [
   ['c3: a body with the generated line but not the summarize header refuses', cmts([withLayout({ head: '<!-- coderabbit-ai-generated:v1 -->\n' })]).ok, false],
   ['c3: leading whitespace before the generated line is allowed', cmts([withLayout({ head: `\n  ${GEN}` })]).ok, true],
   ['c3: a repeated block delimiter (an echoed fake block) refuses', cmts([sum({ body: layout() + '<!-- final_review_risk_start -->\n' + marker() + '\n<!-- final_review_risk_end -->\n' })]).ok, false],
+  ['c3: each block delimiter appearing twice refuses, even with no second marker', ['<!-- recent_review_status_start -->', '<!-- recent_review_status_end -->', '<!-- walkthrough_start -->', '<!-- final_review_risk_start -->', '<!-- final_review_risk_end -->'].map((d) => cmts([sum({ body: layout() + d + '\n' })]).ok).join(), 'false,false,false,false,false'],
   ['c3: a risk block before the walkthrough refuses', cmts([sum({ body: GEN + '<!-- recent_review_status_start -->\n' + LINE + '\n<!-- recent_review_status_end -->\n<!-- final_review_risk_start -->\n' + marker() + '\n<!-- final_review_risk_end -->\n<!-- walkthrough_start -->\nx\n<!-- walkthrough_end -->\n' })]).ok, false],
   ['c3: an unmarked CodeRabbit reply beside the real summary is ignored', cmts([sum(), reply('Review rate limited.')]).ok, true],
   // (d) severity and threads

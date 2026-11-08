@@ -178,9 +178,11 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
   (`summary_required`), an ask's `needs`/`options`/`context` (required then, refused otherwise), unique option ids, and a
   recommendation that names an option. A post that names a pod-set field is `invalid_input`. The adapter supplies the facts
   the core cannot know: `decisionId` and `messageId`, and `harness` (what the daemon registered the agent with, never the
-  post). The run supplies `wakeReason` (from its wake) and the call count. `tool_call` is the MCP adapter telling the pod it
-  answered one; a receipt's `toolCalls` counts those tools/call requests on the run's token, refused ones included, and
-  excludes the call stamping the receipt, which has not been answered yet. Plain HTTP calls with the token are not MCP calls.
+  post). The run supplies `wakeReason` and `wakeTaskId` (from its wake: a receipt's `taskId` is the task that woke the run, never
+  the post's own `taskId`; a run saved before this was kept has none, and its receipts carry none) and the call count.
+  `tool_call` is the MCP adapter telling the pod about one tools/call before it dispatches it; a call the pod cannot count is
+  refused before it takes effect. A receipt's `toolCalls` counts those requests on the run's token, refused ones included, and
+  includes the call stamping the receipt, which was counted before it ran. Plain HTTP calls with the token are not MCP calls.
 - A run's `task_update` on a task another live run holds is `already_claimed` naming the holder (one claim per task,
   `operations.json`); a person may still update.
 

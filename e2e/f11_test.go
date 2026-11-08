@@ -22,7 +22,8 @@ type f11 struct {
 	rec    agentRec
 }
 
-// askAt is where the one valid ask sits in the script: the pod has seen that many MCP calls (refused ones too) before it.
+// askAt is where the one valid ask sits in the script: the pod saw that many MCP calls (refused ones too) before it. It counts the ask's own
+// call too, before it runs, so the ask's receipt says askAt+1.
 const askAt = 6
 
 var (
@@ -289,8 +290,8 @@ func (f *f11) receipt() error {
 	if m.ID != a.Out.MessageID || m.Seq != a.Out.Seq || m.RunID != f.run.RunID || r == nil {
 		return fmt.Errorf("stored message %+v does not match the post's answer %+v or carries no receipt", m, a.Out)
 	}
-	if r.RunID != f.run.RunID || r.AgentID != f.agentID || r.ComputerID != f.comp.ComputerID || r.Harness != "fake" || r.WakeReason != "task_assigned" || r.ToolCalls != askAt {
-		return fmt.Errorf("receipt %+v, want run %s agent %s computer %s harness fake wakeReason task_assigned toolCalls %d", *r, f.run.RunID, f.agentID, f.comp.ComputerID, askAt)
+	if r.RunID != f.run.RunID || r.AgentID != f.agentID || r.ComputerID != f.comp.ComputerID || r.Harness != "fake" || r.WakeReason != "task_assigned" || r.ToolCalls != askAt+1 {
+		return fmt.Errorf("receipt %+v, want run %s agent %s computer %s harness fake wakeReason task_assigned toolCalls %d", *r, f.run.RunID, f.agentID, f.comp.ComputerID, askAt+1)
 	}
 	if !stamp.MatchString(r.StartedAt) || !stamp.MatchString(r.PostedAt) || r.PostedAt < r.StartedAt {
 		return fmt.Errorf("receipt times startedAt %q postedAt %q, want RFC 3339 with postedAt not before startedAt", r.StartedAt, r.PostedAt)
@@ -307,7 +308,7 @@ func (f *f11) receipt() error {
 
 // agentCannotSteer: an agent that lies in headers changes nothing, and plain HTTP calls are not MCP calls, so the count stays.
 func (f *f11) agentCannotSteer(before int, woke string) error {
-	// The ask itself was an MCP call by now, so the next post sees before+1; the plain HTTP calls in between add nothing.
+	// The ask itself was counted before it ran, so the next post sees the same count; the plain HTTP calls in between add nothing.
 	lies := map[string]string{"X-Jm-Tool-Calls": "99", "X-Jm-Harness": "codex", "X-Jm-Wake-Reason": "mention", "X-Jm-Run": "run_01JCZK7Q8XG4M2B9V5T3W6RH01"}
 	st, raw := f.httpAs(f.run.RunToken, validAsk("The same ask over plain HTTP"), lies)
 	if st != 200 {
@@ -317,8 +318,8 @@ func (f *f11) agentCannotSteer(before int, woke string) error {
 	if err != nil || m.Receipt == nil {
 		return fmt.Errorf("the plain HTTP ask is not stored with a receipt: %+v %v", m, err)
 	}
-	if r := *m.Receipt; r.ToolCalls != before+1 || r.Harness != "fake" || r.WakeReason != "task_assigned" || r.RunID != f.run.RunID {
-		return fmt.Errorf("after headers claiming 99 calls, harness codex, wake mention: receipt %+v, want toolCalls %d (the MCP calls made, the ask itself now included) harness fake wakeReason task_assigned", r, before+1)
+	if r := *m.Receipt; r.ToolCalls != before || r.Harness != "fake" || r.WakeReason != "task_assigned" || r.RunID != f.run.RunID {
+		return fmt.Errorf("after headers claiming 99 calls, harness codex, wake mention: receipt %+v, want toolCalls %d (the MCP calls made, the ask itself included) harness fake wakeReason task_assigned", r, before)
 	}
 	// The receipt is the pod's record, not the post's: a post that names another task, or one that does not exist, is stamped with the task that woke the run.
 	for name, named := range map[string]string{"another task": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH99", "a task that does not exist": "tsk_00000000000000000000000000"} {

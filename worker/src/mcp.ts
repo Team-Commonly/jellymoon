@@ -1,15 +1,16 @@
 // The MCP adapter at POST /mcp (docs/protocol.md): stateless Streamable HTTP, answered as JSON. It adds no behaviour. Each tool
 // is one operation (gen/ts/tools.json), and a call is that operation's own HTTP route, sent through the same front door with the
 // caller's own token, so authentication, the pod's rules and the errors are exactly the HTTP ones. The one thing it adds is a
-// count: when a run's tool call has been answered, `seen` tells the pod, which is where a receipt's toolCalls comes from.
+// count: before a run's tool call is dispatched, `seen` tells the pod, which is where a receipt's toolCalls comes from. A call the
+// pod could not count is refused before it takes effect, so the agent is never told of an error for something that happened.
 import tools from '../../gen/ts/tools.json';
 import { OPERATIONS, TOOL_PREFIX } from '../../gen/ts/protocol';
 import type { Who } from './wire';
 
 type Id = string | number | null;
 type Dispatch = (req: Request) => Promise<Response>;
-/** Called after a run's tools/call has been answered, refused or not. */
-type Seen = (runId: string, podId: string) => Promise<unknown>;
+/** Called before a run's tools/call is dispatched, refused or not; true when the pod counted it. */
+type Seen = (runId: string, podId: string) => Promise<boolean>;
 type Args = Record<string, unknown>;
 const PROTOCOL = '2025-03-26';
 const ops = OPERATIONS as Record<string, { method: string; path: string }>;
@@ -37,19 +38,22 @@ function operation(name: string, who: Who, args: Args, origin: string, authoriza
   return new Request(origin + path + query, { method: op.method, headers, body: get ? undefined : JSON.stringify(rest) });
 }
 
+/** True when the pod counted the call: a throw, or an answer that is not a count, is a call that was not counted. */
+async function tally(seen: Seen, who: Who): Promise<boolean> {
+  if (who.kind !== 'run') return true;
+  try { return (await seen(who.runId, who.podId)) === true; } catch { return false; }
+}
+
 async function callTool(id: Id, who: Who, params: Args, origin: string, authorization: string, dispatch: Dispatch, seen: Seen): Promise<Response> {
+  if (!(await tally(seen, who))) return refuse(id, -32603, 'The call was not made: the pod could not count it. Try again.');
   const args = (typeof params.arguments === 'object' && params.arguments !== null ? params.arguments : {}) as Args;
   const req = operation(String(params.name), who, args, origin, authorization);
-  const counted = async (r: Response): Promise<Response> => {
-    if (who.kind === 'run') await seen(who.runId, who.podId);
-    return r;
-  };
-  if (typeof req === 'string') return counted(refuse(id, -32602, req));
+  if (typeof req === 'string') return refuse(id, -32602, req);
   const res = await dispatch(req);
   const text = await res.text();
   let structured: unknown;
   try { structured = JSON.parse(text); } catch { structured = undefined; }
-  return counted(ok(id, { content: [{ type: 'text', text }], structuredContent: structured, isError: !res.ok }));
+  return ok(id, { content: [{ type: 'text', text }], structuredContent: structured, isError: !res.ok });
 }
 
 /** One JSON-RPC message from an authenticated caller. */

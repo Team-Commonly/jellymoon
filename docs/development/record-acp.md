@@ -31,7 +31,9 @@ The script scrubs the raw log before anything is kept (`scripts/acp-scrub.mjs`):
 numbered placeholders, tool-use and session ids become numbered placeholders, home and working paths and ports are replaced, any URL
 becomes `[url]`, tokens become `[token]`, and the adapter's sign-in status and the machine's skill list are dropped. Then it refuses
 the file if anything token-, home-path-, email- or non-loopback-host-shaped is left. A refused scrub leaves the raw log in its scratch
-directory (the script says where); fix the rule and run `bun scripts/record-acp.mjs --scrub <raw.jsonl>` instead of recording again.
+directory (the script says where); fix the rule and run `bun scripts/record-acp.mjs --scrub <raw.jsonl>` instead of recording again. On success the scratch directory is removed; on a failure it is kept.
+
+Streamed model text (`agent_message_chunk` and the like) is replaced by `[text]` with the line kept, because an id can be split across chunks and the replay never reads it. After the replacements the scrub allowlists what is left: every `word_xxxxxxxx` name must be a numbered placeholder or one of a short list of vocabulary names in the script, every absolute path must sit under a placeholder root, and no host except loopback may remain. The planted-line test is `bun run test:scrub`.
 
 Before committing a recording, read it once for model-written text that quotes something it should not (the model sees this machine's
 own Claude Code settings), and run `make private secrets`.

@@ -6,7 +6,7 @@
 // The raw log is scrubbed by scripts/acp-scrub.mjs and only the scrubbed file is kept. Needs `make acp-tools` first, and this
 // machine's normal Claude Code sign-in (the adapter reads it; nothing here does).
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { scrub } from './acp-scrub.mjs';
@@ -100,6 +100,8 @@ async function main() {
   keep(raw);
 }
 
-try { await main(); } finally {
+let done = false;
+try { await main(); done = true; } finally {
   for (const p of procs) { try { process.kill(-p.pid, 'SIGKILL'); } catch { /* already gone */ } }
 }
+if (done) rmSync(tmp, { recursive: true, force: true }); // the scratch dir mkdtemp made; kept when the run or the scrub failed, for --scrub

@@ -169,18 +169,28 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    captured and printed with control characters stripped and every line prefixed `preflight| `, and its whole
    process group is killed when it returns. Cleanup never turns a pass into a refusal: the tree is made writable
    first, and a failed cleanup only warns naming the directory.
-   **Reading CI instead of the preflight.** The preflight is about ten minutes of heavy load per land and CI runs the same gates, so land
-   skips it when ALL of these hold, and otherwise runs it exactly as above (the reason is printed to stderr as `no CI proof (...)`):
-   - the tree of GitHub's merge ref for the PR (`merge_commit_sha` of `GET pulls/<n>`, its tree from `GET git/commits/<sha>`) equals the
-     merge-result tree the decision computed (`git merge-tree --write-tree` of main's tip and the head). Trees are compared, not SHAs. A merge
-     ref built on an older main has a different tree, so the skip is refused;
-   - every check the branch rules require (`GET rules/branches/main`, then classic protection when the rules name none; never the PR) has a
-     run on that ref that is `completed` with conclusion `success` (skipped, neutral, pending, failed and missing all refuse), and every run
-     of a required name was made by the GitHub Actions app (slug `github-actions`), so a same-named check from a user or another app refuses;
-   - every one of those reads worked: a rule list that cannot be read, or is empty, is no proof. The bootstrap land never skips.
-   The LANDED row and the run's output name the path: `CI proved merge tree <8>` or `local preflight`, so the two are countable.
-   `--preflight-only` (verifiers) is unchanged and always runs the preflight. The skip changes nothing else: the ledger, the head's CI veto,
-   the range scan, the CodeRabbit path and the pod verdict all run first, and the merge is still `--match-head-commit`.
+   **Reading CI instead of the preflight.** The preflight is about ten minutes of heavy load per land, and GitHub's runner runs the same gates in
+   about two and a half. CI attaches its check runs to the commit it ran for (the PR head, or a pushed branch tip), so no run ever proves the merge
+   result of a PR. Land therefore asks CI to prove the exact merge commit, and runs the preflight only when that does not come back green:
+   - after the decision, land reads the required checks from the branch rules (`GET rules/branches/main`, then classic protection when the rules
+     name none; never the PR). If they cannot be read, or none is named, nothing is pushed and the preflight runs;
+   - it builds the merge commit locally, `git commit-tree <merge-result tree> -p <main tip> -p <head>`, authored by the checkout's configured git
+     identity, and refuses if that commit's tree is not the tree the decision computed (nothing is pushed);
+   - it pushes that commit to `refs/heads/land/<n>` (`ci.yml` runs on pushes to `land/**`; its `dco` job checks the commits between the commit's two
+     parents on such a push). The push is create-only (`--force-with-lease=<ref>:`); a leftover `land/<n>` is reused if its tree is the merge result,
+     else overwritten under a lease on exactly that commit. `--dry-run` builds the commit, pushes nothing, says what it would do, and runs the
+     preflight as before;
+   - it polls every 20 seconds, for at most 15 minutes, until every required check has a run on THAT commit that is `completed` with conclusion
+     `success`. Only runs by the GitHub Actions app (slug `github-actions`) count: a same-named run from another app or a user is ignored. A required
+     check that completed without success (failure, cancelled, skipped, neutral, timed out), the cap, an unreadable run list or a failed push means
+     no proof: the reason is printed to stderr as `no CI proof (...)` and the preflight runs exactly as above. GitHub's tree for the land commit
+     not being the merge result refuses outright;
+   - then the merge goes through the API as before, and the merged tree is compared with the tested one (the LANDED note shows a mismatch);
+   - `refs/heads/land/<n>` is deleted after the land, whether it landed, fell back or refused. Land only ever pushes or deletes a ref it builds with
+     `landRef` (`refs/heads/land/<digits>`), never the PR branch or any other. A failed delete is said and the land continues.
+   The bootstrap land never uses CI, and `--preflight-only` (verifiers) always runs the preflight. The LANDED row and the run's output name the
+   path: `CI proved merge tree <8>` or `local preflight (<why>)`, so the two are countable. The skip changes nothing else: the ledger, the head's CI
+   veto, the range scan, the CodeRabbit path and the pod verdict all run first, and the merge is still `--match-head-commit`.
 6. The ledger, CI, the range secret scan (run again) and the pod are read again and decided again, and the PR is re-read: the trust gate runs again, its base
    must still be `main` and its head the decided one, and main's tip is fetched once more and must equal the one tested. Then `gh pr merge --merge
    --match-head-commit <head>` (a merge commit; never squash, never `--delete-branch`) and a `LANDED` row. `gh` cannot

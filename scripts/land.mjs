@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, scanEnv, takePage, requiredChecks, ciProof,
+  scrub, scanEnv, takePage, requiredChecks, ciProof, landRef,
 } from './land-decide.mjs';
 import { scanRange } from './land-scan.mjs';
 import { checkCodeRabbit, checkEarlierReview, checkReviews, threadPage } from './land-coderabbit.mjs';
@@ -225,19 +225,68 @@ async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
 }
 // The tree `merge-tree --write-tree` gives for main's tip plus the head: what the decision judged and the preflight must reproduce.
 const treeOf = (mainTip, head) => mergeTree((a) => out('git', a, { maxBuffer: 1 << 28 }), mainTip, head);
-// Reads CI instead of the preflight: the branch rules' required checks, the tree of GitHub's merge ref for the PR, and that ref's check runs. Any failed
-// read is no proof (ciProof refuses), never an error. GET only.
-function ciProved(n, tree) {
+// Reads CI instead of the preflight. CI attaches its check runs to the commit it ran for, so no run ever proves a PR's merge result. Land builds that
+// merge commit itself (the decision's tree; main's tip and the head as parents), pushes it to refs/heads/land/<n> (ci.yml runs on `land/**`) and waits
+// for every required check on THAT commit. Short of a green proof it falls back to the local preflight; a land commit whose tree is not the merge
+// result refuses. The only refs land ever pushes or deletes are land/<n>.
+const [POLL_MS, CAP_MS] = [20 * 1000, 15 * 60 * 1000];
+const oneLine = (m) => String(m).replace(/\s+/g, ' ').trim();
+let MADE = null; // { remote, ref }: the land ref this run created or reused, deleted on every exit
+const requiredNow = () => {
   try {
     const rules = jsonLines(gh('api', '--paginate', `repos/${REPO}/rules/branches/main?per_page=100`, '--jq', '.[]'));
-    let protection = null;
-    if (!requiredChecks({ rules })) { try { protection = JSON.parse(gh('api', `repos/${REPO}/branches/main/protection/required_status_checks`)); } catch { /* none or unreadable: no list */ } }
-    const sha = String(JSON.parse(gh('api', `repos/${REPO}/pulls/${n}`, '--jq', '{sha: .merge_commit_sha}')).sha);
-    if (!/^[0-9a-f]{40}$/.test(sha)) return { ok: false, reason: 'GitHub has no merge ref for the PR yet' };
+    const classic = () => { try { return JSON.parse(gh('api', `repos/${REPO}/branches/main/protection/required_status_checks`)); } catch { return null; } }; // none or unreadable: no list
+    return requiredChecks({ rules, protection: requiredChecks({ rules }) ? null : classic() });
+  } catch { return null; }
+};
+// One read of the land commit: its tree as GitHub has it and its check runs. GET only. A failed read is no proof, not an error.
+function ciRead(sha) {
+  try {
     const ciTree = gh('api', `repos/${REPO}/git/commits/${sha}`, '--jq', '.tree.sha');
     const r = JSON.parse(gh('api', `repos/${REPO}/commits/${sha}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, status, conclusion, app: .app.slug}]}'));
-    return ciProof({ required: requiredChecks({ rules, protection }), tree, ciTree, runs: r.runs, total: r.total });
-  } catch (e) { return { ok: false, reason: `CI could not be read: ${why(e)}` }; }
+    return { ciTree, runs: r.runs, total: r.total };
+  } catch (e) { return { error: `CI could not be read: ${why(e)}` }; }
+}
+// Polls every POLL_MS up to CAP_MS (counted in sleeps, not by the clock). A failure, a cancel, a bad tree or the cap ends it.
+async function ciWait(sha, tree, required) {
+  const [poll, cap] = [IO.pollMs ?? POLL_MS, IO.capMs ?? CAP_MS];
+  for (let waited = 0; ; waited += poll) {
+    const got = ciRead(sha); const p = got.error ? { ok: false, kind: 'unread', reason: got.error } : ciProof({ required, tree, ciTree: got.ciTree, runs: got.runs, total: got.total });
+    if (p.ok || p.kind !== 'wait') return p;
+    if (waited >= cap) return { ok: false, kind: 'cap', reason: `CI did not finish in ${Math.round(cap / 60000)} minutes (${p.reason})` };
+    await IO.sleep(poll);
+  }
+}
+// The CI path: { ok, note } or { ok: false, reason } (then the caller runs the preflight). Throws a Refusal if the land commit is not the merge result.
+async function ciLand(n, mainTip, head, tree) {
+  const required = requiredNow();
+  if (!required) return { ok: false, reason: 'the required checks could not be read from the branch rules' };
+  const ref = landRef(n);
+  let sha; try { sha = out('git', ['commit-tree', tree, '-p', mainTip, '-p', head, '-m', `land #${n}`]); } catch (e) { return { ok: false, reason: `could not build the land commit: ${why(e)}` }; }
+  if (!/^[0-9a-f]{40}$/.test(sha) || out('git', ['rev-parse', `${sha}^{tree}`]) !== tree) refuse(`#${n}: the land commit is not the merge result (tree ${tree.slice(0, 8)}); nothing merged`);
+  if (DRY) { say(`dry run: would push ${sha.slice(0, 8)} (tree ${tree.slice(0, 8)}) to ${ref} and wait up to ${Math.round((IO.capMs ?? CAP_MS) / 60000)} minutes for ${required.length} required checks`); return { ok: false, reason: 'dry run: nothing is pushed' }; }
+  try {
+    const remote = remoteFor(out('git', ['remote', '-v']), REPO).remote;
+    const there = out('git', ['ls-remote', remote, ref]).split(/\s+/)[0];
+    if (there && !/^[0-9a-f]{40}$/.test(there)) return { ok: false, reason: `${ref} could not be read` };
+    // a leftover is reused when its tree is the merge result, else overwritten under a lease on exactly that commit
+    const reuse = !!there && gh('api', `repos/${REPO}/git/commits/${there}`, '--jq', '.tree.sha') === tree;
+    if (reuse) sha = there; else out('git', ['push', '--quiet', `--force-with-lease=${ref}:${there}`, remote, `${sha}:${ref}`]);
+    MADE = { remote, ref };
+  } catch (e) { return { ok: false, reason: `could not push ${ref}: ${why(e)}` }; }
+  say(`#${n}: pushed ${sha.slice(0, 8)} to ${ref}; waiting for ${required.length} required checks`);
+  const p = await ciWait(sha, tree, required);
+  if (p.kind === 'tree') refuse(`#${n}: ${p.reason} (nothing merged)`);
+  return p;
+}
+// Deletes the land ref this run made, and only that: a ref under refs/heads/land/. A failure is said and does not stop the land.
+function ciClean() {
+  const made = MADE;
+  MADE = null; if (!made) return;
+  try {
+    if (!/^refs\/heads\/land\/\d+$/.test(made.ref)) throw new Error('not a land ref');
+    out('git', ['push', '--quiet', made.remote, '--delete', made.ref]);
+  } catch (e) { console.error(`land: could not delete ${made.ref}: ${why(e)}`); }
 }
 const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
 const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only [--bootstrap]';
@@ -268,6 +317,7 @@ export async function main(deps) {
   IO = deps;
   REPO = IO.env.JM_REPO;
   SECRET = '';
+  MADE = null;
   const args = IO.argv;
   DRY = args.includes('--dry-run');
   let release = () => {};
@@ -305,29 +355,31 @@ async function run(args, hold) {
   const head = pr.headRefOid.toLowerCase();
   const d = await decide(pr, mainTip);
   if (!d.ok) refuse(`#${n}: ${d.reason} (nothing merged)`);
-  const proof = opts.bootstrap ? { ok: false, reason: 'the bootstrap land is judged by people' } : ciProved(n, d.tree); // the bootstrap land never skips
-  if (!proof.ok) console.error(`land: no CI proof (${proof.reason}); running the local preflight`);
-  const pf = proof.ok ? { ok: true, tree: d.tree } : await preflight(mainTip, head, opts.bootstrap, d.tree);
-  if (!pf.ok) refuse(`#${n}: ${pf.reason} (nothing merged)`);
-  const route = proof.ok ? proof.note : 'local preflight';
-  say(`#${n}: ok, ${[...d.notes, proof.ok ? route : `${route}: merge result preflight green`].join('; ')}`);
-  if (mergeAction({ dryRun: DRY }) === 'stop') return say(`dry run: would land #${n} (merge commit, main ${mainTip.slice(0, 8)}); merged nothing`);
-  const again = await decide(pr, mainTip);
-  if (!again.ok) refuse(`#${n}: ${again.reason} (changed before the merge; nothing merged)`);
-  const fresh = viewPr(n); // --match-head-commit pins only the head: the trust gate, base and state are re-read too
-  trustGate(fresh);
-  const now = checkHead(fresh, head);
-  if (!now.ok) refuse(`${now.reason} (changed before the merge; nothing merged)`);
-  const moved = checkMain(mainTip, fetchRef(MAIN_REF)); // last look at main, right before the merge
-  if (!moved.ok) refuse(moved.reason);
-  gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
-  const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
-  const merged = sha === 'unknown' ? 'unknown' : (() => { try { fetchRef(sha); return out('git', ['rev-parse', `${sha}^{tree}`]); } catch { return 'unreadable'; } })();
-  const note = landedNote(sha, pf.tree, merged, `${d.via}; ${route}`);
-  if (pf.tree !== merged) console.error(`land: WARNING: #${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the base or main moved in the last window. It cannot be undone; look at it now.`);
-  appendLedger(n, head, 'LANDED', 'land', note);
-  if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
-  say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);
+  try { // the land ref (if any) is deleted on every exit below
+    const proof = opts.bootstrap ? { ok: false, reason: 'the bootstrap land is judged by people' } : await ciLand(n, mainTip, head, d.tree); // the bootstrap land never uses CI
+    if (!proof.ok) console.error(`land: no CI proof (${oneLine(proof.reason)}); running the local preflight`);
+    const pf = proof.ok ? { ok: true, tree: d.tree } : await preflight(mainTip, head, opts.bootstrap, d.tree);
+    if (!pf.ok) refuse(`#${n}: ${pf.reason} (nothing merged)`);
+    const route = proof.ok ? proof.note : `local preflight (${oneLine(proof.reason)})`;
+    say(`#${n}: ok, ${[...d.notes, proof.ok ? route : `${route}: merge result preflight green`].join('; ')}`);
+    if (mergeAction({ dryRun: DRY }) === 'stop') return say(`dry run: would land #${n} (merge commit, main ${mainTip.slice(0, 8)}); merged nothing`);
+    const again = await decide(pr, mainTip);
+    if (!again.ok) refuse(`#${n}: ${again.reason} (changed before the merge; nothing merged)`);
+    const fresh = viewPr(n); // --match-head-commit pins only the head: the trust gate, base and state are re-read too
+    trustGate(fresh);
+    const now = checkHead(fresh, head);
+    if (!now.ok) refuse(`${now.reason} (changed before the merge; nothing merged)`);
+    const moved = checkMain(mainTip, fetchRef(MAIN_REF)); // last look at main, right before the merge
+    if (!moved.ok) refuse(moved.reason);
+    gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
+    const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
+    const merged = sha === 'unknown' ? 'unknown' : (() => { try { fetchRef(sha); return out('git', ['rev-parse', `${sha}^{tree}`]); } catch { return 'unreadable'; } })();
+    const note = landedNote(sha, pf.tree, merged, `${d.via}; ${route}`);
+    if (pf.tree !== merged) console.error(`land: WARNING: #${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the base or main moved in the last window. It cannot be undone; look at it now.`);
+    appendLedger(n, head, 'LANDED', 'land', note);
+    if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
+    say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);
+  } finally { ciClean(); }
 }
 // The real run seam: status, stdout and stderr of a finished command, on success as well as failure. status is null when the command was killed
 // by a signal or never started. The range scan is read from this stderr, so it must not be dropped on a zero exit.
@@ -341,6 +393,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   process.on('SIGTERM', () => process.exit(143));
   process.on('SIGHUP', () => process.exit(129));
   const exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
-  main({ exec, run: realRun, fetch, spawn, kill: process.kill, env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
+  main({ exec, run: realRun, fetch, spawn, kill: process.kill, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), env: process.env, argv: process.argv.slice(2), nodeVersion: process.versions.node, cwd: '.' })
     .catch((e) => { console.error(`land: refused: ${e.message}`); process.exit(1); });
 }

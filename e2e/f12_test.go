@@ -15,6 +15,7 @@ type f12 struct {
 	messageID, decision string
 	ruleMark            map[*sock]int
 	wakeMark            int
+	sentinel            string // the id of the latest ordering post
 }
 
 // ruledData is a message.updated frame: only the decision changes after a message is created.
@@ -92,9 +93,33 @@ func (f *f12) refused() error {
 			return fmt.Errorf("%s: no %s error on the sender's socket", c.what, c.code)
 		}
 	}
+	if err := f.settled(); err != nil {
+		return err
+	}
 	for _, s := range f.socks() {
-		if !s.none(f.ruleMark[s], isUpdated(f.messageID), 300*time.Millisecond) {
-			return fmt.Errorf("%s heard of a ruling after only refused ones", s.name)
+		if n := s.count(f.ruleMark[s], isUpdated(f.messageID)); n != 0 {
+			return fmt.Errorf("%s heard of a ruling (%d message.updated) after only refused ones", s.name, n)
+		}
+	}
+	return nil
+}
+
+// settled posts a progress message from the asking run and waits until every member's socket has delivered it. The
+// members log is ordered, so any message.updated the pod emitted before the post is already on the socket by then:
+// a count taken afterwards is final, with no sleep standing in for "nothing else is coming".
+func (f *f12) settled() error {
+	var out struct{ MessageID string }
+	if rs := f.runCall(f.first, "POST", f.podPath("messages"), map[string]any{"summary": "Waiting on the ruling", "kind": "progress", "status": "in_progress"}, &out); !rs.ok() {
+		return fmt.Errorf("the ordering post: HTTP %d", rs.Status)
+	}
+	f.sentinel = out.MessageID
+	for _, s := range f.socks() {
+		if _, ok := s.waitAfter(f.ruleMark[s], func(fr Frame) bool {
+			var m struct{ ID string }
+			fr.dec(&m)
+			return fr.Type == "message.created" && m.ID == out.MessageID
+		}, 5*time.Second); !ok {
+			return fmt.Errorf("%s never got the ordering post %s", s.name, out.MessageID)
 		}
 	}
 	return nil
@@ -130,7 +155,9 @@ func (f *f12) rulesOnce() error {
 			return fmt.Errorf("a second ruling (%s, option %s) got no already_ruled error", c.s.name, c.opt)
 		}
 	}
-	time.Sleep(200 * time.Millisecond)
+	if err := f.settled(); err != nil {
+		return err
+	}
 	for _, s := range f.socks() {
 		if n := s.count(f.ruleMark[s], isUpdated(f.messageID)); n != 1 {
 			return fmt.Errorf("%s saw %d message.updated for the ask, want exactly the first ruling", s.name, n)
@@ -138,7 +165,13 @@ func (f *f12) rulesOnce() error {
 	}
 	replay := f.openSince(f.cara.tok, "cara-replay", 0)
 	fr, ok := replay.waitAfter(0, isUpdated(f.messageID), 5*time.Second)
-	time.Sleep(200 * time.Millisecond)
+	if _, last := replay.waitAfter(0, func(fr Frame) bool {
+		var m struct{ ID string }
+		fr.dec(&m)
+		return fr.Type == "message.created" && m.ID == f.sentinel
+	}, 5*time.Second); !last {
+		return fmt.Errorf("the replay never reached the ordering post")
+	}
 	var u ruledData
 	fr.dec(&u)
 	if !ok || replay.count(0, isUpdated(f.messageID)) != 1 || u.Decision.Ruling == nil || u.Decision.Ruling.OptionID != "b" || u.Decision.Ruling.By.ID != f.owner.actor.ID {
@@ -208,6 +241,8 @@ func (f *f12) finishes(r *run) error {
 // TestF12: a member rules on an ask once, the agent is woken with the ruling and finishes the task.
 func TestF12(t *testing.T) {
 	needFake(t)
+	par(t)
+	track(t)
 	f := newF12(t)
 	p := &stepper{out: os.Stdout, events: func() []Frame { return f.sO.snapshot(0) }}
 	defer p.count(t)

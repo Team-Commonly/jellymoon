@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, jest, test } from 'bun:test';
 import type { Actor } from '../../gen/ts/protocol';
 import { buildApp } from '../src/app';
 import { openDb } from '../src/db';
@@ -9,11 +9,6 @@ import { caller, fakeConn, flaky, setup, world } from './world';
 
 const TASK = 'tsk_00000000000000000000000001';
 
-async function until(check: () => Promise<boolean>, ms = 3000): Promise<boolean> {
-  for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 25))) if (await check()) return true;
-  return false;
-}
-
 async function claimed() {
   const f = flaky(await openDb({}));
   const w = await world(f.db);
@@ -23,16 +18,6 @@ async function claimed() {
 }
 
 describe('a database that fails', () => {
-  test('a failed tick leaves the timer armed, so the next deadline still fires and releases the claim', async () => {
-    const w = await claimed();
-    const t0 = Date.now();
-    w.hub.now = () => w.lease - 150 + (Date.now() - t0);
-    w.f.ctl.fail = true;
-    w.hub.rearm();
-    const released = await until(async () => (await eventsAfter(w.db, w.pod.id, 0, 100)).some((e) => e.type === 'claim.released'));
-    expect(released).toBe(true);
-  });
-
   test('a write that fails means no fan-out and the pod in memory is unchanged', async () => {
     const f = flaky(await openDb({}));
     const w = await world(f.db);
@@ -73,6 +58,38 @@ describe('a database that fails', () => {
     expect(again.pods.get(w.pod.id)?.state.claims[TASK] === undefined).toBe(true);
   });
 
+});
+
+describe('a tick that fails', () => {
+  test('a failed tick leaves the timer armed, so the next deadline still fires and releases the claim', async () => {
+    const w = await claimed();
+    // The clock and the timers are the test's, so host load cannot reorder anything: it waits on the hub's next rearm, never on the time.
+    jest.useFakeTimers();
+    try {
+      let clock = w.lease - 150;
+      w.hub.now = () => clock;
+      const retries: number[] = [];
+      let seen = 0;
+      let wake = () => {};
+      const arm = w.hub.rearm.bind(w.hub);
+      w.hub.rearm = (least = 0) => { arm(least); if (least > 0) retries.push(least); seen += 1; wake(); };
+      const released = async () => (await eventsAfter(w.db, w.pod.id, 0, 100)).some((e) => e.type === 'claim.released');
+      const settle = async (done: () => boolean | Promise<boolean>) => {
+        for (let n = seen; !(await done()); n = seen) if (seen === n) await new Promise<void>((r) => { wake = r; });
+      };
+      w.f.ctl.fail = true;
+      w.hub.rearm();
+      clock = w.lease;
+      jest.advanceTimersByTime(150);
+      await settle(() => retries.length > 0);
+      expect(await released()).toBe(false);
+      jest.advanceTimersByTime(1000);
+      await settle(released);
+      expect(await released()).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('a database that fails mid-write', () => {

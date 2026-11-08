@@ -16,13 +16,31 @@ export function checkEarlierReview(rows, { pr, head, range }) {
   const hit = rows.filter((r) => r.pr === String(pr) && r.head !== head && ['PASS', 'FAIL'].includes(r.verdict) && isVerifier(r.by) && mine.has(r.head)).at(-1);
   return hit ? { ok: true, earlier: hit.head } : no(`#${pr} has no earlier verifier verdict at a head in this PR's history, so the one local review is missing`);
 }
-// (c) A submitted CodeRabbit review whose commit_id is this exact head. COMMENTED and APPROVED count; CHANGES_REQUESTED at the head refuses;
-// DISMISSED and PENDING are ignored.
-export function checkReviews(reviews, head) {
+// (c) CodeRabbit reviewed this exact head, in one of two ways. Either a submitted CodeRabbit review whose commit_id is the head (COMMENTED and
+// APPROVED count; DISMISSED and PENDING are ignored), or, because an incremental review that finds nothing files no review and only edits
+// the summary comment, that comment's hidden coverage marker plus its status line (checkSummary). CHANGES_REQUESTED at the head refuses either way.
+const CLEAN_LINE = 'No actionable comments were generated in the recent review.';
+const MARKER = /<!--\s*final_review_risk_coverage:([\s\S]*?)-->/g;
+const HEX40 = /^[0-9a-f]{40}$/;
+function checkSummary(comments, head) {
+  if (!Array.isArray(comments) || comments.some((c) => !c || typeof c !== 'object' || typeof c.body !== 'string')) return no(`CodeRabbit has not reviewed ${h8(head)}, and its summary comment could not be read (the comments reply is not a list of comments)`);
+  // Only comments by CodeRabbit count; a person quoting the marker is ignored.
+  const marked = comments.filter((c) => isCodeRabbit(c.user)).map((c) => ({ c, found: [...c.body.matchAll(MARKER)].map((m) => m[1]) })).filter((x) => x.found.length);
+  if (marked.length !== 1 || marked[0].found.length !== 1) return no(`CodeRabbit has not reviewed ${h8(head)}, and ${marked.length} CodeRabbit comment(s) carry a coverage marker (exactly one is needed)`);
+  let m;
+  try { m = JSON.parse(marked[0].found[0]); } catch { return no('the CodeRabbit summary comment has a coverage marker that is not valid JSON'); }
+  const ids = [m?.sourceCommitId, m?.coveredCommitId].map((x) => (typeof x === 'string' ? x.toLowerCase() : ''));
+  if (!ids.every((x) => HEX40.test(x) && x === head) || m.kind !== 'reviewed') return no(`the CodeRabbit summary comment's coverage marker is not a review of ${h8(head)} (source, covered and kind must be that head, that head and "reviewed")`);
+  const visible = marked[0].c.body.replace(/<!--[\s\S]*?-->/g, '');
+  return visible.split('\n').some((l) => l.trim() === CLEAN_LINE) ? { ok: true } : no(`the CodeRabbit summary comment has no status line "${CLEAN_LINE}" outside HTML comments`);
+}
+export function checkReviews(reviews, head, comments) {
   if (!Array.isArray(reviews) || reviews.some((r) => !r || typeof r !== 'object' || typeof r.commit_id !== 'string' || typeof r.state !== 'string')) return no('CodeRabbit reviews: the reply is not a list of reviews');
   const mine = reviews.filter((r) => isCodeRabbit(r.user) && r.commit_id.toLowerCase() === head);
   if (mine.some((r) => r.state === 'CHANGES_REQUESTED')) return no(`CodeRabbit requested changes at ${h8(head)}`);
-  return mine.some((r) => ['COMMENTED', 'APPROVED'].includes(r.state)) ? { ok: true } : no(`CodeRabbit has not reviewed ${h8(head)}`);
+  if (mine.some((r) => ['COMMENTED', 'APPROVED'].includes(r.state))) return { ok: true, via: 'review' };
+  const s = checkSummary(comments, head);
+  return s.ok ? { ok: true, via: 'summary' } : s;
 }
 // Severity from the first non-empty line of a thread's first comment, where CodeRabbit writes it (`_⚠️ Potential issue_ | _🟠 Major_`).
 // Low only when that line holds nothing but known label words and every severity word in it is Minor, Trivial or Nitpick; anything else
@@ -60,11 +78,12 @@ export function checkCommits(range, infos, trusted) {
   return { ok: true };
 }
 // All of (a), (c), (d), (e). (b), no FAIL at this head from anyone, is checkLedger's, which runs first.
-export function checkCodeRabbit({ rows, pr, head, range, reviews, threads, infos, trusted }) {
+export function checkCodeRabbit({ rows, pr, head, range, reviews, comments, threads, infos, trusted }) {
   const earlier = checkEarlierReview(rows, { pr, head, range });
   if (!earlier.ok) return earlier;
-  const bad = [checkReviews(reviews, head), checkThreads(threads, trusted), checkCommits(range, infos, trusted)].find((c) => !c.ok);
-  return bad ?? { ok: true, note: `coderabbit at ${h8(head)}, after the review at ${h8(earlier.earlier)}` };
+  const c = checkReviews(reviews, head, comments);
+  const bad = [c, checkThreads(threads, trusted), checkCommits(range, infos, trusted)].find((x) => !x.ok);
+  return bad ?? { ok: true, note: `coderabbit at ${h8(head)}${c.via === 'summary' ? ' (summary comment)' : ''}, after the review at ${h8(earlier.earlier)}` };
 }
 // One page of the reviewThreads GraphQL reply: its nodes and the next cursor (null on the last page). A reply with errors, no data or no
 // pagination info throws, and land refuses.

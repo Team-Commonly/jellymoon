@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -23,6 +24,26 @@ func TestSameUser(t *testing.T) {
 		if got := sameUser(c.peer, c.self); got != c.want {
 			t.Errorf("sameUser(peer %d, self %d) = %v, want %v", c.peer, c.self, got, c.want)
 		}
+	}
+}
+
+// needPeerCred skips on an OS with no peer credential call: peerUID refuses every peer there, by design.
+func needPeerCred(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skipf("no peer credential call on %s: the daemon refuses every control connection there", runtime.GOOS)
+	}
+}
+
+// serve, the production entry, runs the accept loop as the daemon's own uid: a connection from this process is answered.
+// A regression that passed another uid to serveAs would close it with no reply.
+func TestServeRunsAsTheDaemonsOwnUID(t *testing.T) {
+	needPeerCred(t)
+	d := New(nil, config.Store{Dir: t.TempDir()}, config.Computer{}, nil)
+	l, p := listenShort(t)
+	go d.serve(l)
+	if got := ask(t, p); got == "" {
+		t.Error("serve closed a connection from the daemon's own uid with no reply")
 	}
 }
 
@@ -44,6 +65,7 @@ func listenShort(t *testing.T) (net.Listener, string) {
 
 // A connection from this process carries this process's uid, read by the OS rather than claimed by the peer.
 func TestPeerUIDIsTheCallersOwn(t *testing.T) {
+	needPeerCred(t)
 	l, p := listenShort(t)
 	accepted := make(chan net.Conn, 1)
 	go func() { c, _ := l.Accept(); accepted <- c }()
@@ -80,6 +102,7 @@ func ask(t *testing.T, path string) string {
 // The accept loop answers a connection from the daemon's own uid, and closes one from any other with no reply. The other
 // uid is stood in for by telling the loop it runs as someone else.
 func TestServeClosesAConnectionFromAnotherUserWithNoReply(t *testing.T) {
+	needPeerCred(t)
 	d := New(nil, config.Store{Dir: t.TempDir()}, config.Computer{}, nil)
 	own, ownPath := listenShort(t)
 	go d.serveAs(own, uint32(os.Geteuid()))

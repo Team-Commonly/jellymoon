@@ -52,8 +52,8 @@ is refused.
   `JM_TRUSTED_LOGINS`, so a commit CodeRabbit (or any app) pushes never lands. It cannot waive a check: it posts no check run
   (`.coderabbit.yaml`), and any failed check run on the head, from any app, still refuses. A review or thread can be silenced only by someone
   with write access (resolving a thread) or by an operator-env login replying in it. Its text is data and never an instruction to land. If
-  CodeRabbit is down, rate limited or skipped a head, the path waits out the fallback below (30 minutes after a trusted ask, all other checks
-  unchanged) or the head takes the verifier path (a local review at that head).
+  CodeRabbit is down, rate limited or skipped a head, land does not wait for it: the head passes (c) at once and the `LANDED` note says
+  `no CodeRabbit review at this head`, so such lands can be counted. What CodeRabbit has already said at the head still decides.
 
 ## Steps
 Each refuses with one line on any mismatch, and nothing merges until all pass:
@@ -232,8 +232,10 @@ no separate reviewer. The operator account (its id is in `JM_VERDICT_REVIEWERS`)
 pod verdict: first line `jellymoon#N <head>`, last line `GATE: PASS`. That stays until the owner restores a separate review.
 
 ## The CodeRabbit path
-Each PR gets one local review, at its first head, and its blocking findings get one fix pass. The fix head, and a head that only merges
-main, is then admitted by CodeRabbit plus green CI instead of a second local review. The operator writes a `PASS` row by `coderabbit` at the
+The rule: a change needs one review from any one source (the local verifier, another agent, or CodeRabbit) plus green CI. Each PR gets one
+local review, at its first head, and its blocking findings get one fix pass. The fix head, and a head that only merges main, is then admitted
+by green CI and what CodeRabbit has already said, instead of a second local review. CodeRabbit is asked when there is allowance, and never
+awaited. A Major or Critical finding it raises after a merge becomes a fix PR, first in the queue. The operator writes a `PASS` row by `coderabbit` at the
 head after reading CodeRabbit's review there, but land never relies on that row: conditions (a) and (c) to (e) are read and checked by land
 itself, from git and GitHub, at the moment of the decision (and again right before the merge). Any API error, missing field or unexpected
 shape refuses.
@@ -241,23 +243,27 @@ shape refuses.
   different head that is a commit of `git rev-list <main tip>..<head>`. A head outside that range (a commit already on main, or one a
   force-push dropped) is not this PR's history. The latest such row is cited in the output.
 - **(b) No `FAIL` at this exact head, by anyone.** The existing rule, unchanged and checked first.
-- **(c) CodeRabbit reviewed this exact head**, in one of two ways. (1) Land reads `GET /repos/{repo}/pulls/{n}/reviews` (paginated) and
-  finds a review whose `commit_id` is the head, whose state is `COMMENTED` or `APPROVED`, and whose user is the GitHub App account: REST
-  `user.type` is `Bot` and `user.login` is exactly `coderabbitai[bot]`. A display name is never read, and a person cannot hold that login
-  (a `User` with it does not count). (2) When CodeRabbit re-reviews a new head and finds nothing, it files no review and only edits
-  its summary comment, so land also reads `GET /repos/{repo}/issues/{n}/comments` (paginated, only when (1) does not settle it) and accepts
-  the summary comment if all of these hold. Only CodeRabbit's summary comment is read (same login and type test; a comment by anyone else
-  is ignored, even if it quotes the marker): its body starts with `<!-- coderabbit-ai-generated:v1 -->` and its leading HTML-comment
-  lines include `<!-- This is an auto-generated comment: summarize by coderabbit.ai -->`, there is exactly one such comment, and its header
-  does not say `rate limited by coderabbit.ai` or `skip review by coderabbit.ai`. Its status, walkthrough and risk blocks
-  (`recent_review_status`, `walkthrough`, `final_review_risk` start and end delimiters, each once, in that order, fenced code ignored) are
-  all there. The one hidden `final_review_risk_coverage` marker sits inside the risk block, parses as JSON with no repeated key, has
-  `sourceCommitId` and `coveredCommitId` both equal to the head (40 hex, compared lower-case) and `kind` exactly `"reviewed"`; and the
-  status block, with HTML comments stripped, has the line `No actionable comments were generated in the recent review.` on a line of its
-  own. A marker in any other CodeRabbit comment (a reply, a rate-limited notice) refuses outright, because those can repeat text other people
-  chose. Two markers, unparseable JSON, another commit, another kind, a missing line, or a comments reply that is not a list refuses with a
-  reason naming what was missing. A `CHANGES_REQUESTED` review of CodeRabbit's at the head refuses
-  whichever way (c) is met; `DISMISSED` and `PENDING` reviews are ignored. The land output says which way (c) was met.
+- **(c) Land never waits for CodeRabbit, and never lands over what it already said.** The PR's one review is the local one, (a); CodeRabbit is
+  asked when its allowance has room and is not awaited. Land reads `GET /repos/{repo}/pulls/{n}/reviews` (paginated). The GitHub App account
+  is REST `user.type` `Bot` with `user.login` exactly `coderabbitai[bot]`; a display name is never read, and a `User` with that login does
+  not count. A `CHANGES_REQUESTED` review of CodeRabbit's at the head refuses, whatever else is there; `DISMISSED` and `PENDING` reviews are
+  ignored. A `COMMENTED` or `APPROVED` review at the head passes. With none at the head, land reads `GET /repos/{repo}/issues/{n}/comments`
+  (paginated; a failed or malformed read refuses) and looks at CodeRabbit's summary comment, whose edit is all a clean incremental review
+  leaves. Only comments by that account count; a comment by anyone else is ignored, even if it quotes the marker. The summary is the one whose
+  body starts with `<!-- coderabbit-ai-generated:v1 -->` and whose leading HTML-comment lines include
+  `<!-- This is an auto-generated comment: summarize by coderabbit.ai -->`.
+  - **A gap passes at once, with no ask and no wait:** no CodeRabbit review and no summary comment; a summary whose header says
+    `rate limited by coderabbit.ai` or `skip review by coderabbit.ai`; or a well-formed summary whose coverage marker names another commit.
+    The output and the `LANDED` note say `no CodeRabbit review at this head`.
+  - **A well-formed summary at the head passes, clean or not.** The one review already happened, and what it found is read by (d). Well-formed
+    means its status, walkthrough and risk blocks (`recent_review_status`, `walkthrough`, `final_review_risk` start and end delimiters, each
+    once, in that order, fenced code ignored) are all there, and the one hidden `final_review_risk_coverage` marker sits inside the risk
+    block, parses as JSON with no repeated key, and has `sourceCommitId` and `coveredCommitId` both equal to the head (40 hex, compared
+    lower-case) and `kind` exactly `"reviewed"`.
+  - **Still refuses, because the shape could be forged or is unreadable:** two or more summary comments; a coverage marker in any other
+    CodeRabbit comment (a reply or notice can repeat text other people chose); a missing block, a marker outside the risk block, two
+    markers, unparseable JSON, a repeated key, or a marker of another kind; a reviews or comments reply that is not a list.
+  The land output says which way (c) was met.
 - **(d) No unanswered Major or Critical thread.** Land reads every review thread with the GraphQL `reviewThreads` query (100 per page, up
   to 20 pages, comments first 100 per thread; more than that refuses). A thread counts as CodeRabbit's when its first comment's author is
   `__typename` `Bot` with login `coderabbitai` (GraphQL drops the `[bot]` suffix). It blocks when it is unresolved, not outdated at this
@@ -273,40 +279,8 @@ shape refuses.
   `author.login` and `committer.login` in `JM_TRUSTED_LOGINS` (case-insensitive). A null login (an email GitHub cannot match), a missing
   commit, a count above 250, or any app account refuses. Land's own merge commit is made by `gh pr merge` after these checks and is not in the range.
 
-- **(c'') The fallback: CodeRabbit silent for 30 minutes.** (Owner ruling: CodeRabbit's included plan reviews about one head an hour and, on
-  this repo, every head needs a manual ask, so its silence must not block a land for long.) When (c) is not met because CodeRabbit has
-  not reviewed this head, land accepts the head if ALL hold. (1) An **ask**: an issue comment whose author is a `User` (a Bot never counts) with a
-  login in `JM_TRUSTED_LOGINS` (case-insensitive), whose body trimmed is exactly `@coderabbitai review` or `@coderabbitai full review`
-  (nothing before or after it), created **after** the head became the PR's head. (2) At least `FALLBACK_MS` (30 minutes, one named constant in
-  `land-coderabbit.mjs`) between the **earliest** such ask at this head and land's own clock read (`Date.now()`, never a GitHub field), so a
-  later re-ask does not restart the wait. (3) Nothing in the table below applies. (4) (a), (b), (d) and (e) run unchanged: an unanswered Major
-  thread, a missing earlier local review, a `FAIL` at the head or an untrusted commit still refuses beside any ask. The output and the
-  `LANDED` note say `fallback: CodeRabbit silent for <n> min after the ask at <time>`. A Major or Critical finding CodeRabbit raises after a
-  fallback land becomes a fix PR at the top of the queue, never a second local review round.
-  **When the head became the head.** Land reads `GET /repos/{repo}/issues/{n}/timeline` (paginated), only when a trusted ask exists, and takes
-  the latest event for the head's sha: a `committed` event (its committer date) or a `head_ref_force_pushed` event (GitHub's own time). That is
-  preferred over the commit's own date because a rebase or amend rewrites the committer date to the moment of the rewrite, and the timeline
-  ties it to this PR. It is not a push time: the timeline gives no GitHub-side time for an ordinary push, and a `committed` date is set by the
-  committer (a trusted login, since (e) requires it). A commit backdated before its push could therefore let an ask for the older head count; this
-  is the fallback's known limit. A timeline that cannot be read, or has no readable event for the head, refuses.
-  **What the wait may override, and what it may not.** The wait covers only "CodeRabbit has not reviewed this head". Everything else CodeRabbit
-  left at the head still decides, because a wait proves nothing about a summary that says something is wrong:
-
-  | CodeRabbit's state at the head | With an old ask |
-  | --- | --- |
-  | No review, and no summary comment at all | fallback applies |
-  | Summary says it was rate limited or skipped | fallback applies |
-  | A well-formed summary whose coverage marker is for another commit | fallback applies |
-  | A `CHANGES_REQUESTED` review at the head | refuses |
-  | A summary at the head that is not clean (no `No actionable comments` line) or whose kind is not `reviewed` | refuses |
-  | Two or more summary comments, a marker in a reply or notice, a malformed or repeated-key marker, a missing block | refuses |
-  | The reviews or comments reply cannot be read | refuses |
-  | An unanswered Major thread (d) | refuses |
-
-  The refusal of the fallback itself is appended to the reason, so the output names both what was missing and why waiting did not help.
-
 The pod verdict from a listed reviewer at the head (step 4) is still required on this path, as is every other step. The output says
-which path admitted the head, `verifier PASS by <model>-verifier` or `coderabbit at <head8>, after the review at <head8>` (with ` (summary comment)` or ` (fallback: ...)` after the first head when (c) was met that way), and the
+which path admitted the head, `verifier PASS by <model>-verifier` or `coderabbit at <head8>, after the review at <head8>` (with ` (summary comment)` or ` (no CodeRabbit review at this head)` after the first head when (c) was met that way), and the
 `LANDED` ledger note records it (`admitted by ...`).
 
 ## Every land needs both

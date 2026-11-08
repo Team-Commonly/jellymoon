@@ -262,7 +262,6 @@ const CR_LEDGER = HDR + rowOf('PASS', 'opus-verifier', EARLY) + rowOf('PASS', 'c
 const cr = (o = {}) => ({ ledger: CR_LEDGER, on: [
   [/^gh api .*pulls\/5\/reviews/, o.reviews ?? BOT_REVIEW()], [/^gh api graphql/, o.threads ?? GQL()],
   [/^gh api .*issues\/5\/comments/, () => { if (o.comments === undefined) throw new Error('comments read failed'); return o.comments; }],
-  [/^gh api .*issues\/5\/timeline/, () => { if (o.timeline === undefined) throw new Error('timeline read failed'); return o.timeline; }],
   [/^gh api repos\/\S+\/commits\/c\d+ /, (a) => { const sha = a.find((x) => x.includes('/commits/')).split('/').pop(); return JSON.stringify({ sha, author: { login: o.author ?? 'alice' }, committer: { login: o.committer ?? 'alice' } }); }],
 ], ...o.over });
 await t('coderabbit path: lands, says so, and the LANDED note records the path and both heads', cr(), (r) => r.merge && r.said.includes(`coderabbit at ${HEAD.slice(0, 8)}, after the review at ${EARLY.slice(0, 8)}`) && r.ledgerNow.includes(`admitted by coderabbit at ${HEAD.slice(0, 8)}, after the review at ${EARLY.slice(0, 8)}`));
@@ -285,7 +284,7 @@ await t('coderabbit summary way: a failed comments read refuses, nothing merged'
 await t('coderabbit summary way: the marker in another bot\'s comment is no summary: a gap, lands with the note', cr({ reviews: '', comments: CMT('github-actions[bot]', 'Bot', SUMMARY()) }), (r) => r.merge && r.ledgerNow.includes('no CodeRabbit review at this head'));
 // LCR3R: a gap lands at once, with no ask, no clock and no timeline read; what CodeRabbit already said at the head still decides.
 const NOTCLEAN = SUMMARY().replace('No actionable comments were generated in the recent review.', 'Actionable comments posted: 2');
-const LIMITED = SUMMARY().replace('summarize by coderabbit.ai', 'rate limited by coderabbit.ai');
+const LIMITED = SUMMARY().replace('<!-- recent_review_status_start -->', '<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->\n<!-- recent_review_status_start -->');
 await t('coderabbit gap: no review and no summary lands at once with no ask, and says so', cr({ reviews: '', comments: CMT('alice', 'User', 'looks fine') }), (r) => r.merge && r.said.includes(`coderabbit at ${HEAD.slice(0, 8)} (no CodeRabbit review at this head), after the review at ${EARLY.slice(0, 8)}`));
 await t('coderabbit gap: the LANDED note records "no CodeRabbit review at this head"', cr({ reviews: '', comments: '' }), (r) => r.merge && r.ledgerNow.includes(`admitted by coderabbit at ${HEAD.slice(0, 8)} (no CodeRabbit review at this head), after the review at`));
 await t('coderabbit gap: a rate limited summary lands at once', cr({ reviews: '', comments: CMT('coderabbitai[bot]', 'Bot', LIMITED) }), (r) => r.merge && r.ledgerNow.includes('no CodeRabbit review at this head'));
@@ -296,22 +295,6 @@ await t('coderabbit gap: CHANGES_REQUESTED at the head refuses', cr({ reviews: B
 await t('coderabbit gap: an unanswered Major thread refuses beside a gap', cr({ reviews: '', comments: '', threads: GQL([MAJOR_THREAD]) }), (r) => no(r, /unresolved and unanswered/) && !r.ledgerNow.includes('LANDED'));
 await t('coderabbit gap: a failed comments read is no gap and refuses', cr({ reviews: '' }), (r) => no(r, /could not be read/) && !r.ledgerNow.includes('LANDED'));
 await t('coderabbit summary way: a review at the head settles (c) without reading the comments', cr(), (r) => r.merge && argv(r, 'gh', 'issues/5/comments').length === 0);
-// The fallback: an ask by a trusted User, CodeRabbit silent for 30 minutes at this head. The clock is fixed so the ages are exact.
-const NOW = Date.parse('2026-11-08T21:00:00Z');
-const minAgo = (m) => new Date(NOW - m * 60000).toISOString();
-const ASKED = (m) => JSON.stringify({ user: { login: 'alice', type: 'User' }, body: '@coderabbitai review', created_at: minAgo(m) });
-const HEAD_EVENT = JSON.stringify({ event: 'committed', sha: HEAD, committer: { date: '2026-11-08T19:00:00Z' } });
-await t('coderabbit fallback: an ask 31 minutes old and no review at the head lands, and says so', cr({ reviews: '', comments: ASKED(31), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => r.merge && r.said.includes('fallback: CodeRabbit silent for 31 min after the ask at'));
-await t('coderabbit fallback: the ask 29 minutes old refuses, nothing merged, naming the wait', cr({ reviews: '', comments: ASKED(29), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => no(r, /29 min old; the fallback waits 30 min/) && !r.ledgerNow.includes('LANDED'));
-await t('coderabbit fallback: the LANDED note records the path', cr({ reviews: '', comments: ASKED(45), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => r.merge && r.ledgerNow.includes('admitted by coderabbit at') && r.ledgerNow.includes('(fallback: CodeRabbit silent for 45 min after the ask at'));
-await t('coderabbit fallback: the reads are the paginated issues timeline and comments with created_at', cr({ reviews: '', comments: ASKED(31), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => argv(r, 'gh', 'issues/5/timeline')[0]?.includes('--paginate') && argv(r, 'gh', 'issues/5/comments')[0]?.includes('created_at'));
-await t('coderabbit fallback: a failed timeline read refuses, nothing merged', cr({ reviews: '', comments: ASKED(31), over: { now: NOW } }), (r) => no(r, /timeline could not be read/) && !r.ledgerNow.includes('LANDED'));
-await t('coderabbit fallback: an ask before the head became the head refuses', cr({ reviews: '', comments: ASKED(300), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => no(r, /predates/));
-await t('coderabbit fallback: an ask by an untrusted login refuses and reads no timeline', cr({ reviews: '', comments: JSON.stringify({ user: { login: 'mallory', type: 'User' }, body: '@coderabbitai review', created_at: minAgo(60) }), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => no(r, /no ask/) && argv(r, 'gh', 'issues/5/timeline').length === 0);
-await t('coderabbit fallback: no ask at all refuses and reads no timeline', cr({ reviews: '', comments: CMT('alice', 'User', 'looks fine'), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => no(r, /no ask/) && argv(r, 'gh', 'issues/5/timeline').length === 0);
-await t('coderabbit fallback: a CHANGES_REQUESTED review at the head refuses beside an old ask', cr({ reviews: BOT_REVIEW(HEAD, 'CHANGES_REQUESTED'), comments: ASKED(60), timeline: HEAD_EVENT, over: { now: NOW } }), (r) => no(r, /requested changes/));
-await t('coderabbit fallback: an unanswered Major thread refuses beside an old ask', cr({ reviews: '', comments: ASKED(60), timeline: HEAD_EVENT, threads: GQL([MAJOR_THREAD]), over: { now: NOW } }), (r) => no(r, /unresolved and unanswered/));
-await t('coderabbit fallback: a review at the head reads neither the comments nor the timeline', cr({ timeline: HEAD_EVENT, over: { now: NOW } }), (r) => r.merge && argv(r, 'gh', 'issues/5/timeline').length === 0);
 await t('verifier path: unchanged, says so, reads nothing from CodeRabbit', {}, (r) => r.merge && r.said.includes('verifier PASS by opus-verifier') && r.ledgerNow.includes('admitted by verifier PASS by opus-verifier') && argv(r, 'gh', 'api graphql').length === 0 && argv(r, 'gh', 'pulls/5/reviews').length === 0);
 cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`)) || (c.args[1] === 'graphql' && c.args.includes('owner=Team-Commonly') && c.args.includes('name=jellymoon'))), true]);
 const bad = cases.filter(([, got, want]) => got !== want);

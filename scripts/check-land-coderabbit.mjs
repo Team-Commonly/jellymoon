@@ -3,7 +3,7 @@
 // commit fixtures have the shape of GitHub's GraphQL and REST replies. Land-level cases are in check-land-e2e.mjs.
 import { checkLedger, parseLedger } from './land-decide.mjs';
 import {
-  checkCodeRabbit, checkCommits, checkEarlierReview, checkFallback, checkReviews, checkThreads, FALLBACK_MS, hasAsk, headTime, isCodeRabbit, isCodeRabbitAuthor, severityOf, threadPage,
+  checkCodeRabbit, checkCommits, checkEarlierReview, checkReviews, checkThreads, isCodeRabbit, isCodeRabbitAuthor, severityOf, threadPage,
 } from './land-coderabbit.mjs';
 
 const [HEAD, OLD, FIX, MAIN_C] = ['a', 'b', 'c', 'd'].map((c) => c.repeat(40));
@@ -27,14 +27,7 @@ const MINOR = '_⚠️ Potential issue_ | _🟡 Minor_\n\nA wording problem.';
 const thr = (list) => checkThreads(list, TRUSTED);
 const info = (sha, author = 'maintainer-a', committer = 'maintainer-a') => ({ sha, author: { login: author }, committer: { login: committer } });
 const cmt = (infos, range = RANGE) => checkCommits(range, infos, TRUSTED);
-// The fallback's clock and the PR timeline: the head became the head at HEAD_AT (a `committed` event), and land reads the clock at NOW.
-const NOW = Date.parse('2026-11-08T21:00:00Z');
-const HEAD_AT = '2026-11-08T19:00:00Z';
-const TL = [{ event: 'committed', sha: OLD, committer: { date: '2026-11-08T18:00:00Z' } }, { event: 'committed', sha: HEAD, committer: { date: HEAD_AT } }];
-const minAgo = (m) => new Date(NOW - m * 60000).toISOString();
-const ASK = '@coderabbitai review';
-const ask = (m, o = {}) => ({ user: { login: 'maintainer-a', type: 'User' }, body: ASK, created_at: minAgo(m), ...o });
-const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], comments: [], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED, timeline: TL, now: NOW };
+const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], comments: [], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED };
 const all = (o = {}) => checkCodeRabbit({ ...good, ...o });
 const gql = (nodes, next = null) => ({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: !!next, endCursor: next }, nodes } } } } });
 // Trimmed copy of CodeRabbit's summary comment on PR 13 (issue comment 6725328362) at its head: the two header lines, the status block, the
@@ -202,52 +195,8 @@ const cases = [
   ['r: a gap does not excuse (a) or (e): a missing earlier review and an untrusted commit still refuse', [all({ reviews: [], comments: [], rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }).ok, all({ reviews: [], comments: [], infos: [info(OLD), info(HEAD, 'mallory')] }).ok].join(), 'false,false'],
   // all together
   ['all: a clean head passes and the note names the path and both heads', all().note, `coderabbit at ${HEAD.slice(0, 8)}, after the review at ${OLD.slice(0, 8)}`],
-  ['all: each of a, c, d, e failing alone refuses', [all({ rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }), all({ reviews: [review({ commit_id: OLD })] }), all({ threads: [thread([comment(BOT, MAJOR)])] }), all({ infos: [info(OLD), info(HEAD, 'mallory')] })].map((c) => c.ok).join(), 'false,false,false,false'],
+  ['all: each of a, c, d, e failing alone refuses', [all({ rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }), all({ reviews: [review({ state: 'CHANGES_REQUESTED' })] }), all({ threads: [thread([comment(BOT, MAJOR)])] }), all({ infos: [info(OLD), info(HEAD, 'mallory')] })].map((c) => c.ok).join(), 'false,false,false,false'],
   ['all: a commit from main (not in main..head) is never read', all({ range: [OLD, HEAD], infos: [info(OLD), info(HEAD), info(MAIN_C, 'mallory')] }).ok, true],
-  // (c'') the fallback: an ask 30 minutes old, CodeRabbit silent
-  ['fallback: an ask 31 minutes old and no review at the head passes', all({ reviews: [], comments: [ask(31)] }).ok, true],
-  ['fallback: an ask 31 minutes old beside a summary of an older head passes', all({ reviews: [review({ commit_id: OLD })], comments: [ask(31), sum({ body: layout({ risk: marker({ sourceCommitId: OLD, coveredCommitId: OLD }) }) })] }).ok, true],
-  ['fallback: the wait is 30 minutes, named once', FALLBACK_MS, 30 * 60 * 1000],
-  ['fallback: an ask exactly 30 minutes old passes, 29 minutes refuses', [all({ reviews: [], comments: [ask(30)] }).ok, all({ reviews: [], comments: [ask(29)] }).ok].join(), 'true,false'],
-  ['fallback: the 29-minute refusal names the wait and the plain reason stays', /29 min old/.test(all({ reviews: [], comments: [ask(29)] }).reason) && /has not reviewed/.test(all({ reviews: [], comments: [ask(29)] }).reason), true],
-  ['fallback: the note names the path, the minutes and the ask time', all({ reviews: [], comments: [ask(31)] }).note, `coderabbit at ${HEAD.slice(0, 8)} (fallback: CodeRabbit silent for 31 min after the ask at ${minAgo(31)}), after the review at ${OLD.slice(0, 8)}`],
-  ['fallback: the earliest ask after the head starts the clock (a recent re-ask does not reset it)', all({ reviews: [], comments: [ask(31), ask(5)] }).ok, true],
-  ['fallback: the full-review ask and a padded body count', [all({ reviews: [], comments: [ask(31, { body: '@coderabbitai full review' })] }).ok, all({ reviews: [], comments: [ask(31, { body: '  @coderabbitai review\n' })] }).ok].join(), 'true,true'],
-  ['fallback: a trusted login compares case-insensitively', all({ reviews: [], comments: [ask(31, { user: { login: 'Maintainer-A', type: 'User' } })] }).ok, true],
-  ['fallback: an ask by an untrusted User refuses', all({ reviews: [], comments: [ask(31, { user: { login: 'mallory', type: 'User' } })] }).ok, false],
-  ['fallback: an ask by a Bot refuses, even with a trusted login', all({ reviews: [], comments: [ask(31, { user: { login: 'maintainer-a', type: 'Bot' } })] }).ok, false],
-  ['fallback: an ask with extra text refuses (before, after, a mention)', ['please @coderabbitai review', '@coderabbitai review now', '@coderabbitai review\nthanks', '@CodeRabbitAI review', '@coderabbitai  review'].map((body) => all({ reviews: [], comments: [ask(31, { body })] }).ok).join(), 'false,false,false,false,false'],
-  ['fallback: an ask before the head became the head refuses (an ask for an older head)', all({ reviews: [], comments: [ask(150)] }).ok, false],
-  ['fallback: an ask at the very moment of the head is not after it', all({ reviews: [], comments: [ask(120)] }).ok, false],
-  ['fallback: an old ask beside a fresh one at this head: the fresh one starts the clock and is too recent', all({ reviews: [], comments: [ask(150), ask(5)] }).ok, false],
-  ['fallback: no ask refuses', all({ reviews: [], comments: [] }).ok, false],
-  ['fallback: no ask refuses, naming it', /no ask/.test(all({ reviews: [], comments: [sum({ body: layout({ risk: marker({ sourceCommitId: OLD, coveredCommitId: OLD }) }) })] }).reason), true],
-  ['fallback: a timeline read that failed refuses', [null, undefined, { message: 'x' }].map((timeline) => all({ reviews: [], comments: [ask(31)], timeline }).ok).join(), 'false,false,false'],
-  ['fallback: a timeline with no event for the head refuses', all({ reviews: [], comments: [ask(31)], timeline: [TL[0]] }).ok, false],
-  ['fallback: a head event with no readable time refuses', [{ event: 'committed', sha: HEAD, committer: {} }, { event: 'committed', sha: HEAD, committer: { date: 'soon' } }].map((e) => all({ reviews: [], comments: [ask(31)], timeline: [e] }).ok).join(), 'false,false'],
-  ['fallback: an unreadable clock refuses', [NaN, undefined, null].map((now) => all({ reviews: [], comments: [ask(31)], now }).ok).join(), 'false,false,false'],
-  ['fallback: an ask with no readable time refuses', [undefined, 'later'].map((created_at) => all({ reviews: [], comments: [ask(31, { created_at })] }).ok).join(), 'false,false'],
-  ['fallback: an ask dated in the future refuses', all({ reviews: [], comments: [ask(-10)] }).ok, false],
-  ['fallback: head time: the latest event for the head wins (a push after a force-push)', headTime([{ event: 'head_ref_force_pushed', commit_id: HEAD, created_at: '2026-11-08T19:30:00Z' }, ...TL], HEAD).at, Date.parse('2026-11-08T19:30:00Z')],
-  ['fallback: head time: a force-push event uses GitHub\'s time, and another sha\'s events are ignored', [headTime([{ event: 'head_ref_force_pushed', commit_id: HEAD.toUpperCase(), created_at: HEAD_AT }], HEAD).ok, headTime([{ event: 'head_ref_force_pushed', commit_id: OLD, created_at: HEAD_AT }], HEAD).ok].join(), 'true,false'],
-  ['fallback: head time: events that are not objects refuse the whole read', headTime([TL[1], null], HEAD).ok, false],
-  ['fallback: hasAsk sees only trusted User asks', [hasAsk([ask(1)], TRUSTED), hasAsk([ask(1, { user: { login: 'mallory', type: 'User' } })], TRUSTED), hasAsk(null, TRUSTED)].join(), 'true,false,false'],
-  ['fallback: checkFallback alone: a bad ask is not a reason, it just starts no clock', checkFallback({ comments: [ask(31, { body: 'hi' })], timeline: TL, head: HEAD, trusted: TRUSTED, now: NOW }).ok, false],
-  // what the wait may override: only "CodeRabbit has not reviewed this head"
-  ['override: a rate limited summary beside an old ask passes (the PR 16 shape)', all({ reviews: [], comments: [ask(31), sum({ body: layout({ head: `${GEN}<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->\n` }) })] }).ok, true],
-  ['override: a skipped summary beside an old ask passes', all({ reviews: [], comments: [ask(31), sum({ body: layout({ head: `${GEN}<!-- This is an auto-generated comment: skip review by coderabbit.ai -->\n` }) })] }).ok, true],
-  ['override: a summary at the head that is not clean (actionable comments) refuses beside an old ask', all({ reviews: [], comments: [ask(31), withLayout({ status: 'Actionable comments posted: 2' })] }).ok, false],
-  ['override: a summary at the head of another kind refuses beside an old ask', all({ reviews: [], comments: [ask(31), withLayout({ risk: marker({ kind: 'skipped' }) })] }).ok, false],
-  ['override: two summaries refuse beside an old ask', all({ reviews: [], comments: [ask(31), sum(), sum({ id: 2 })] }).ok, false],
-  ['override: a coverage marker in a CodeRabbit reply refuses beside an old ask', all({ reviews: [], comments: [ask(31), reply(marker())] }).ok, false],
-  ['override: a malformed marker, a duplicate key and a missing block refuse beside an old ask', [withLayout({ risk: '<!-- final_review_risk_coverage:{"sourceCommitId": -->' }), withLayout({ risk: `${marker()}\n${marker()}` }), sum({ body: GEN + 'some text' })].map((c) => all({ reviews: [], comments: [ask(31), c] }).ok).join(), 'false,false,false'],
-  ['override: a CHANGES_REQUESTED review at the head refuses beside an old ask', all({ reviews: [review({ state: 'CHANGES_REQUESTED' })], comments: [ask(31)] }).ok, false],
-  ['override: a review at the head still decides (c) alone, the ask is not read', all({ reviews: [review()], comments: [ask(1)] }).note, `coderabbit at ${HEAD.slice(0, 8)}, after the review at ${OLD.slice(0, 8)}`],
-  ['override: a comments reply that is not a list refuses beside nothing', all({ reviews: [], comments: null }).ok, false],
-  ['override: an unresolved Major thread (d) refuses beside an old ask', all({ reviews: [], comments: [ask(31)], threads: [thread([comment(BOT, MAJOR)])] }).ok, false],
-  ['override: an untrusted commit (e) refuses beside an old ask', all({ reviews: [], comments: [ask(31)], infos: [info(OLD), info(HEAD, 'mallory')] }).ok, false],
-  ['override: the earlier local review (a) is still required beside an old ask', all({ reviews: [], comments: [ask(31)], rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }).ok, false],
-  ['override: the gap kinds carry the flag, the others do not', [cmts([]).gap, cmts([sum({ body: layout({ risk: marker({ sourceCommitId: OLD, coveredCommitId: OLD }) }) })]).gap, cmts([withLayout({ status: 'x' })]).gap, cmts({ message: 'x' }).gap, cmts([sum(), sum({ id: 2 })]).gap].join(), 'true,true,,,'],
 ];
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (bad.length) { console.error(`check-land-coderabbit: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }

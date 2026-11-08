@@ -3,8 +3,8 @@
 import { isVerifier } from './land-decide.mjs';
 
 const no = (reason, extra) => ({ ok: false, reason, ...extra });
-// A refusal that only says CodeRabbit has not reviewed THIS head (no summary, a rate limited or skipped one, or one of an older head): the one
-// kind the fallback's wait may override. Every other refusal (unreadable, ambiguous, steered or not clean) carries no `gap`.
+// A result that only says CodeRabbit has not reviewed THIS head (no summary, a rate limited or skipped one, or one of an older head). It passes at
+// once, with no ask and no wait, and the land note says so. Every other refusal (unreadable, ambiguous or steered) carries no `gap`.
 const gap = (reason) => no(reason, { gap: true });
 const h8 = (s) => String(s).slice(0, 8);
 // The App's user as the REST API gives it (reviews: login `coderabbitai[bot]`, type Bot) and as GraphQL gives it (author __typename Bot, login
@@ -19,12 +19,11 @@ export function checkEarlierReview(rows, { pr, head, range }) {
   const hit = rows.filter((r) => r.pr === String(pr) && r.head !== head && ['PASS', 'FAIL'].includes(r.verdict) && isVerifier(r.by) && mine.has(r.head)).at(-1);
   return hit ? { ok: true, earlier: hit.head } : no(`#${pr} has no earlier verifier verdict at a head in this PR's history, so the one local review is missing`);
 }
-// (c) CodeRabbit reviewed this exact head, in one of two ways. Either a submitted CodeRabbit review whose commit_id is the head (COMMENTED and
-// APPROVED count; DISMISSED and PENDING are ignored), or, because an incremental review that finds nothing files no review and only edits
-// the summary comment, that comment's hidden coverage marker plus its status line (checkSummary). CHANGES_REQUESTED at the head refuses either way.
+// (c) The one review need not come from CodeRabbit, and land never waits for it. A submitted CodeRabbit review whose commit_id is the head
+// (COMMENTED and APPROVED count; DISMISSED and PENDING are ignored) passes; so does a well-formed summary comment at the head (its hidden coverage
+// marker, whatever its status line says); so does a gap, CodeRabbit having reviewed nothing at this head. CHANGES_REQUESTED at the head refuses.
 // Only CodeRabbit's SUMMARY comment is read, and only its own blocks: CodeRabbit also writes replies and rate-limited notices that repeat text
 // other people chose, so a marker anywhere else refuses outright.
-const CLEAN_LINE = 'No actionable comments were generated in the recent review.';
 const GENERATED = '<!-- coderabbit-ai-generated:v1 -->';
 const SUMMARIZE = '<!-- This is an auto-generated comment: summarize by coderabbit.ai -->';
 const NOT_A_REVIEW = ['rate limited by coderabbit.ai', 'skip review by coderabbit.ai']; // header lines of a summary that reviewed nothing
@@ -47,7 +46,7 @@ function summaryParts(body) {
   const at = Object.fromEntries(Object.entries(D).map(([k, d]) => [k, text.split(d).length === 2 ? text.indexOf(d) : -1]));
   const order = [at.statusStart, at.statusEnd, at.walk, at.riskStart, at.riskEnd];
   if (order.some((x) => x < 0) || order.some((x, i) => i && x <= order[i - 1])) return null;
-  return { status: text.slice(at.statusStart + D.statusStart.length, at.statusEnd), risk: text.slice(at.riskStart + D.riskStart.length, at.riskEnd) };
+  return { risk: text.slice(at.riskStart + D.riskStart.length, at.riskEnd) };
 }
 function checkSummary(comments, head) {
   if (!Array.isArray(comments) || comments.some((c) => !c || typeof c !== 'object' || typeof c.body !== 'string')) return no(`CodeRabbit has not reviewed ${h8(head)}, and its summary comment could not be read (the comments reply is not a list of comments)`);
@@ -71,8 +70,7 @@ function checkSummary(comments, head) {
   const ids = [m?.sourceCommitId, m?.coveredCommitId].map((x) => (typeof x === 'string' ? x.toLowerCase() : ''));
   if (HEX40.test(head) && ids.every((x) => HEX40.test(x)) && ids.some((x) => x !== head)) return gap(`the CodeRabbit summary comment's coverage marker is not a review of ${h8(head)} (it covers another commit)`); // a well-formed summary of an older head: no review of this one
   if (!ids.every((x) => HEX40.test(x) && x === head) || m.kind !== 'reviewed') return no(`the CodeRabbit summary comment's coverage marker is not a review of ${h8(head)} (source, covered and kind must be that head, that head and "reviewed")`);
-  const visible = parts.status.replace(/<!--[\s\S]*?-->/g, '');
-  return visible.split('\n').some((l) => l.trim() === CLEAN_LINE) ? { ok: true } : no(`the CodeRabbit summary comment has no status line "${CLEAN_LINE}" in its status block`);
+  return { ok: true };
 }
 export function checkReviews(reviews, head, comments) {
   if (!Array.isArray(reviews) || reviews.some((r) => !r || typeof r !== 'object' || typeof r.commit_id !== 'string' || typeof r.state !== 'string')) return no('CodeRabbit reviews: the reply is not a list of reviews');
@@ -80,42 +78,7 @@ export function checkReviews(reviews, head, comments) {
   if (mine.some((r) => r.state === 'CHANGES_REQUESTED')) return no(`CodeRabbit requested changes at ${h8(head)}`);
   if (mine.some((r) => ['COMMENTED', 'APPROVED'].includes(r.state))) return { ok: true, via: 'review' };
   const s = checkSummary(comments, head);
-  return s.ok ? { ok: true, via: 'summary' } : s;
-}
-// (c'') The fallback, for a head CodeRabbit has not reviewed (a `gap` refusal above, nothing else). A trusted person asked for a review with a
-// comment of its own, and CodeRabbit stayed silent for FALLBACK_MS since. The ask must be a comment by a `User` (never a Bot) whose login is
-// in JM_TRUSTED_LOGINS, whose body trimmed is exactly an ask, created after the head became the PR's head; the earliest such ask starts the clock.
-export const FALLBACK_MS = 30 * 60 * 1000;
-const ASKS = ['@coderabbitai review', '@coderabbitai full review'];
-const asksOf = (comments, trusted) => (Array.isArray(comments) ? comments : []).filter((c) => c && typeof c === 'object' && c.user?.type === 'User'
-  && typeof c.user.login === 'string' && trusted.includes(c.user.login.toLowerCase()) && typeof c.body === 'string' && ASKS.includes(c.body.trim()));
-export const hasAsk = (comments, trusted) => asksOf(comments, trusted).length > 0;
-// When the head became the PR's head: the latest PR timeline event for that sha, a `committed` event (its committer date) or a
-// `head_ref_force_pushed` event (GitHub's own time). `timeline` is the issues timeline, all pages. Anything missing or unparseable is no answer.
-export function headTime(timeline, head) {
-  if (!Array.isArray(timeline) || timeline.some((e) => !e || typeof e !== 'object')) return no('the PR timeline could not be read, so land cannot tell when the head became the head');
-  const times = timeline.flatMap((e) => {
-    if (e.event === 'committed' && String(e.sha).toLowerCase() === head) return [Date.parse(e.committer?.date)];
-    if (e.event === 'head_ref_force_pushed' && String(e.commit_id).toLowerCase() === head) return [Date.parse(e.created_at)];
-    return [];
-  });
-  if (!times.length || times.some((t) => !Number.isFinite(t))) return no(`the PR timeline has no readable event for ${h8(head)}, so land cannot tell when it became the head`);
-  return { ok: true, at: Math.max(...times) };
-}
-export function checkFallback({ comments, timeline, head, trusted, now }) {
-  const asks = asksOf(comments, trusted);
-  if (!asks.length) return no('no ask: no comment by a trusted login that is exactly `@coderabbitai review`');
-  if (!Number.isFinite(now)) return no('land\'s clock could not be read');
-  const t = headTime(timeline, head);
-  if (!t.ok) return t;
-  const times = asks.map((c) => Date.parse(c.created_at));
-  if (times.some((x) => !Number.isFinite(x))) return no('an ask has no readable creation time');
-  const after = times.filter((x) => x > t.at);
-  if (!after.length) return no(`every ask predates ${h8(head)} becoming the head (an ask for an older head)`);
-  const first = Math.min(...after);
-  const waited = now - first;
-  if (waited < FALLBACK_MS) return no(`the ask at ${new Date(first).toISOString()} is ${Math.max(0, Math.floor(waited / 60000))} min old; the fallback waits ${FALLBACK_MS / 60000} min`);
-  return { ok: true, via: 'fallback', minutes: Math.floor(waited / 60000), asked: new Date(first).toISOString() };
+  return s.gap ? { ok: true, via: 'gap' } : s.ok ? { ok: true, via: 'summary' } : s;
 }
 // Severity from the first non-empty line of a thread's first comment, where CodeRabbit writes it (`_⚠️ Potential issue_ | _🟠 Major_`).
 // Low only when that line holds nothing but known label words and every severity word in it is Minor, Trivial or Nitpick; anything else
@@ -153,16 +116,12 @@ export function checkCommits(range, infos, trusted) {
   return { ok: true };
 }
 // All of (a), (c), (d), (e). (b), no FAIL at this head from anyone, is checkLedger's, which runs first.
-export function checkCodeRabbit({ rows, pr, head, range, reviews, comments, threads, infos, trusted, timeline, now }) {
+export function checkCodeRabbit({ rows, pr, head, range, reviews, comments, threads, infos, trusted }) {
   const earlier = checkEarlierReview(rows, { pr, head, range });
   if (!earlier.ok) return earlier;
-  let c = checkReviews(reviews, head, comments);
-  if (!c.ok && c.gap) { // only "not reviewed" may be waited out; the fallback's own refusal is added to the reason
-    const f = checkFallback({ comments, timeline, head, trusted, now });
-    c = f.ok ? f : no(`${c.reason}; fallback: ${f.reason}`);
-  }
+  const c = checkReviews(reviews, head, comments);
   const bad = [c, checkThreads(threads, trusted), checkCommits(range, infos, trusted)].find((x) => !x.ok);
-  const way = c.via === 'summary' ? ' (summary comment)' : c.via === 'fallback' ? ` (fallback: CodeRabbit silent for ${c.minutes} min after the ask at ${c.asked})` : '';
+  const way = c.via === 'summary' ? ' (summary comment)' : c.via === 'gap' ? ' (no CodeRabbit review at this head)' : '';
   return bad ?? { ok: true, note: `coderabbit at ${h8(head)}${way}, after the review at ${h8(earlier.earlier)}` };
 }
 // One page of the reviewThreads GraphQL reply: its nodes and the next cursor (null on the last page). A reply with errors, no data or no

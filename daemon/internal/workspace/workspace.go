@@ -2,7 +2,8 @@
 // empty directory; with one it is a git worktree of that repo on a branch named for the run. The root is the daemon's own 0700
 // directory, never a repo, and nothing here removes anything that is not a run's directory directly under it.
 //
-// A completed run's directory is removed. A failed run's is kept for inspection, marked by an empty <run>.kept file beside it,
+// A worktree run's repo path lives in a <run>.repo sidecar beside its directory; cleanup reads that and never the directory,
+// which the agent can write. A completed run's directory is removed. A failed run's is kept for inspection, marked by an empty <run>.kept file beside it,
 // and only the newest KeepFailed of them stay. A daemon killed mid-run leaves unmarked directories; Sweep removes those at start.
 package workspace
 
@@ -24,6 +25,7 @@ const KeepFailed = 5
 const (
 	branchPrefix = "jellymoon/run-"
 	keptSuffix   = ".kept"
+	repoSuffix   = ".repo" // <run id>.repo beside the run dir holds the repo path of a worktree run; cleanup reads only this
 )
 
 // A run id is a directory name, so it can hold no path.
@@ -66,7 +68,11 @@ func (m *Manager) Prepare(runID, repo string) (string, error) {
 	if !filepath.IsAbs(repo) {
 		return "", fmt.Errorf("repo %q is not an absolute path", repo)
 	}
-	if out, err := gitOut(repo, "worktree", "add", "-q", "-b", branchPrefix+runID, dir, "HEAD"); err != nil {
+	// The sidecar is written first, so even a half-made worktree is cleaned from the real repo.
+	if err := os.WriteFile(dir+repoSuffix, []byte(repo), 0o600); err != nil {
+		return "", err
+	}
+	if out, err := runGit(repo, true, "worktree", "add", "-q", "-b", branchPrefix+runID, dir, "HEAD"); err != nil {
 		_ = m.remove(dir) // a half-made worktree
 		return "", fmt.Errorf("worktree of %s: %v: %s", repo, err, out)
 	}
@@ -110,7 +116,14 @@ func (m *Manager) Sweep() error {
 		case e.Type().IsDir() && !exists(filepath.Join(root, name+keptSuffix)):
 			errs = append(errs, m.remove(filepath.Join(root, name)))
 		case strings.HasSuffix(name, keptSuffix) && !exists(filepath.Join(root, strings.TrimSuffix(name, keptSuffix))):
-			errs = append(errs, os.Remove(filepath.Join(root, name)))
+			// the directory was lost: still drop its record and branch from the repo, then the marker
+			if err := m.remove(filepath.Join(root, strings.TrimSuffix(name, keptSuffix))); err != nil {
+				errs = append(errs, err)
+			} else {
+				errs = append(errs, os.Remove(filepath.Join(root, name)))
+			}
+		case strings.HasSuffix(name, repoSuffix) && !exists(filepath.Join(root, strings.TrimSuffix(name, repoSuffix))) && !exists(filepath.Join(root, strings.TrimSuffix(name, repoSuffix)+keptSuffix)):
+			errs = append(errs, m.remove(filepath.Join(root, strings.TrimSuffix(name, repoSuffix))))
 		}
 	}
 	return errors.Join(append(errs, m.prune(root))...)
@@ -135,7 +148,12 @@ func (m *Manager) prune(root string) error {
 	})
 	var errs []error
 	for i := m.keep; i < len(marks); i++ {
-		errs = append(errs, m.remove(strings.TrimSuffix(marks[i], keptSuffix)), os.Remove(marks[i]))
+		// A marker goes only with its directory: when cleanup refused the directory, the run is still on the books.
+		if err := m.remove(strings.TrimSuffix(marks[i], keptSuffix)); err != nil {
+			errs = append(errs, err)
+		} else {
+			errs = append(errs, os.Remove(marks[i]))
+		}
 	}
 	return errors.Join(errs...)
 }
@@ -157,45 +175,43 @@ func (m *Manager) remove(path string) error {
 	}
 	dir := filepath.Join(root, name)
 	fi, err := os.Lstat(dir)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if !fi.IsDir() {
+	if err == nil && !fi.IsDir() {
 		return fmt.Errorf("refusing to remove %q: not a real directory", dir)
 	}
-	common, branch := worktreeOf(dir)
 	err = os.RemoveAll(dir)
-	if common != "" {
-		_, _ = gitOut("", "--git-dir="+common, "worktree", "prune")
-		if branch == branchPrefix+name {
-			_, _ = gitOut("", "--git-dir="+common, "branch", "-D", branch)
-		}
-	}
-	return err
+	return errors.Join(err, m.forget(root, name))
 }
 
-// worktreeOf returns the repo's git dir and the branch checked out, when dir is a linked worktree ("" otherwise).
-func worktreeOf(dir string) (common, branch string) {
-	if fi, err := os.Lstat(filepath.Join(dir, ".git")); err != nil || !fi.Mode().IsRegular() {
-		return "", ""
+// forget drops a worktree run's record and branch from the repo it was made from, and the sidecar. The repo comes from the
+// sidecar only: the run directory is the agent's to write, so nothing in it (its .git file included) is read or run. No sidecar
+// means no worktree run, and no git runs at all.
+func (m *Manager) forget(root, name string) error {
+	side := filepath.Join(root, name+repoSuffix)
+	fi, err := os.Lstat(side)
+	if err != nil || !fi.Mode().IsRegular() {
+		return nil
 	}
-	common, err := gitOut(dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return "", ""
+	raw, err := os.ReadFile(side)
+	if repo := string(raw); err == nil && filepath.IsAbs(repo) {
+		_, _ = runGit(repo, false, "worktree", "prune")
+		_, _ = runGit(repo, false, "branch", "-D", branchPrefix+name)
 	}
-	branch, _ = gitOut(dir, "symbolic-ref", "--short", "-q", "HEAD")
-	return common, branch
+	return os.Remove(side)
 }
 
-// gitOut runs git with a small environment (the daemon's own may hold a token), in dir when it is not empty.
-func gitOut(dir string, args ...string) (string, error) {
-	if dir != "" {
-		args = append([]string{"-C", dir}, args...)
+// runGit runs git in repo with a small environment (the daemon's own may hold a token). With trusted false (every cleanup call)
+// hooks and fsmonitor are off, so no program from the repo runs: core.hooksPath=/dev/null stops reference-transaction and every
+// other hook, core.fsmonitor=false stops the fsmonitor command a repo's config can name. Prepare passes true: the user's own repo
+// runs its own post-checkout hook there, as a normal checkout would.
+func runGit(repo string, trusted bool, args ...string) (string, error) {
+	pre := []string{"-C", repo}
+	if !trusted {
+		pre = append(pre, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false")
 	}
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", append(pre, args...)...)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "GIT_TERMINAL_PROMPT=0"}
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err

@@ -45,6 +45,16 @@ the run ends. Code: `daemon/internal/workspace`, called from `daemon/internal/da
   directory there. A `..`, a path elsewhere and a symlink (even one inside the root) are refused. It deletes only the branch
   named for that run. The run is over when cleanup happens, so what the directory holds, uncommitted work included, is
   disposable; that is why it needs no `--force` decision.
+- **Cleanup never reads the run directory.** The agent can rewrite its worktree's `.git` file, so cleanup asks git nothing about it.
+  A worktree run has a sidecar `<run id>.repo` beside its directory (0600, written before the worktree) holding the repo path.
+  Cleanup reads only that: `worktree prune` and `branch -D jellymoon/run-<run id>` in that repo, then the directory goes. No
+  sidecar means a plain directory and no git runs. This also cleans the repo when the directory was lost or its `.git` broken.
+  Every cleanup git call runs with `-c core.hooksPath=/dev/null` (no hook runs, `reference-transaction` included) and
+  `-c core.fsmonitor=false` (a repo's config can name an fsmonitor program). Cleanup executes nothing from any repo.
+- **Prepare runs the user's own hooks.** `git worktree add` runs the repo's `post-checkout` hook, as a normal checkout would.
+  The repo named by `--repo` is the user's, so it is trusted for that one call.
+- **A kept marker goes with its directory.** Trimming deletes `<run id>.kept` only after the directory was removed; a directory
+  cleanup refused keeps its marker.
 - **Not covered.** A worktree shares its repo's object store and config, so an agent with write access to the worktree can
   change that repo's git config; the allow-listed environment and the run token are the boundary, not the checkout. Two agents
   on one repo run in separate worktrees but can still push the same remote branch.

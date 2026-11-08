@@ -101,6 +101,33 @@ func TestLostWorktreeDirStillCleansTheRepo(t *testing.T) {
 	}
 }
 
+// Cleanup runs git with hooks off even in the real repo: a hook there (a reference-transaction one fires on the branch delete)
+// does not run, though Prepare's own checkout is allowed to run the repo's hooks.
+func TestCleanupRunsNoHooksInTheRealRepo(t *testing.T) {
+	m, repo := newManager(t), newRepo(t)
+	marker := filepath.Join(t.TempDir(), "hook-ran")
+	hook := filepath.Join(repo, ".git", "hooks", "reference-transaction")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\ntouch '"+marker+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Prepare("run_h", repo); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(marker) {
+		t.Fatalf("setup: Prepare did not run the repo's own hook")
+	}
+	_ = os.Remove(marker)
+	if err := m.Finish("run_h", true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(marker) {
+		t.Errorf("cleanup ran a hook of the repo")
+	}
+	if git(t, repo, "branch", "--list", "jellymoon/*") != "" {
+		t.Errorf("the run's branch is still there")
+	}
+}
+
 // When the cleanup refuses a directory (here, one swapped for a symlink), the kept marker stays: the run is still on the books.
 func TestPruneKeepsTheMarkerOfARefusedDir(t *testing.T) {
 	m := newManager(t)

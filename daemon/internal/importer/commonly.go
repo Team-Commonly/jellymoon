@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Team-Commonly/jellymoon/daemon/internal/api"
 )
@@ -59,6 +60,10 @@ func NewCommonly(rawURL, token string) (*Commonly, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A pasted token with a space or a line break in it can never be right; say so before any request, without echoing it.
+	if strings.IndexFunc(token, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+		return nil, errors.New("COMMONLY_TOKEN has spaces or line breaks in it; paste the token alone")
+	}
 	hc := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return &Commonly{base: base, token: token, hc: hc, sleep: time.Sleep, gap: 260 * time.Millisecond, jitter: rand.Float64}, nil
 }
@@ -72,6 +77,21 @@ func (c *Commonly) SetPace(d time.Duration) { c.gap = d }
 
 // Host names the instance in the state file, so a state from one instance is never applied to another.
 func (c *Commonly) Host() string { return c.base.Host }
+
+// explainIdentity turns a refusal of the identity check into what the person can act on. The token is never in the text.
+func (c *Commonly) explainIdentity(err error) error {
+	var se *StatusError
+	if !errors.As(err, &se) {
+		return err
+	}
+	switch se.Status {
+	case 401, 403:
+		return fmt.Errorf("Commonly refused this token (%d): check COMMONLY_TOKEN", se.Status)
+	case 404:
+		return fmt.Errorf("%s doesn't look like a Commonly instance (no /api/auth/user)", c.base.String())
+	}
+	return fmt.Errorf("%s answered the identity check with HTTP %d", c.base.Host, se.Status)
+}
 
 // Get is one read. It retries a 429, a 5xx and a transport failure with jittered exponential backoff (Retry-After wins when
 // longer), and after five failures in a row returns ErrStopped. Any other status is a *StatusError and is never retried.

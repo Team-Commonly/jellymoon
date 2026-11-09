@@ -196,7 +196,7 @@ deployed-boot:
 	port=$$($(BUN) -e 'const s = Bun.serve({ port: 0, fetch() { return new Response(); } }); console.log(s.port); s.stop(true);'); \
 	code() { curl -s -o /dev/null -w '%{http_code}' "$$@"; }; \
 	want() { [ "$$2" = "$$3" ] || { echo "deployed-boot: $$1: got $$2, want $$3"; tail -20 "$$log"; exit 1; }; echo "deployed-boot: ok $$1 -> $$2"; }; \
-	trap 'kill $$pid 2>/dev/null; wait $$pid 2>/dev/null' EXIT; \
+	trap 'if [ "$$pid" -gt 0 ]; then kill $$pid 2>/dev/null; wait $$pid 2>/dev/null; fi; tmp="$${TMPDIR:-/tmp}"; tmp="$${tmp%/}"; case "$$dir" in "$$tmp"/?*|/tmp/?*) [ -d "$$dir" ] && rm -rf -- "$$dir";; esac' EXIT; \
 	out=$$(env -u ENV -u DATABASE_URL PORT=$$port "$$bun" "$$bundle" 2>&1); rc=$$?; \
 	if [ $$rc -eq 0 ] || ! echo "$$out" | grep -q 'DATABASE_URL is required'; then echo "deployed-boot: with no ENV and no DATABASE_URL the server must refuse to start (rc=$$rc)"; exit 1; fi; \
 	echo "deployed-boot: ok the server refuses to start with no database (rc=$$rc)"; \

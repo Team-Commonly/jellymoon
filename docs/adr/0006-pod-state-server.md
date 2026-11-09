@@ -2,6 +2,7 @@
 
 Status: Accepted, by the owner, 2026-11-08. It adds `server/` and two runtime dependencies (`hono`, `@electric-sql/pglite`),
 so it needs this note. It chooses between two adapters of the pure pod core (ADR 0003) and leaves two questions open (below).
+Amended 2026-11-09: the server serves evidence (below); the Consequences line that listed what it did not serve was corrected.
 
 ## Decision
 
@@ -66,8 +67,9 @@ because there is no object to throw away. The three tests that need them are ski
 - The server is capped at 1,800 lines including tests (ADR 0001, `entropy.json`).
 - The core exports no read model, so the adapter derives `taskView` and `hello` itself (about 30 lines in `views.ts`). The Worker
   does the same.
-- Not served by the server: the device flow, evidence, decisions and `ask` posts (stored as plain messages). The Worker does
-  not serve them either. Both adapters serve `POST /mcp`.
+- Both adapters serve the device flow (`server/src/auth.ts:109`, `worker/src/auth.ts:248`), asks and their decisions (an ask post
+  carries a decision, `podcore/src/post.ts:67`; a ruling is the core's `rule` command, `server/src/ws.ts:30`, `worker/src/frames.ts:21`)
+  and `POST /mcp`. Evidence is served by the server only (see "Evidence (amended 2026-11-09)").
 
 ## Deployed form (2026-11-08)
 
@@ -90,3 +92,25 @@ left out because it is the local fallback only), and CI's `e2e-deployed` job run
 - **Behind TLS.** The bundle serves plain http, so a hosted deploy sits behind a TLS proxy and sets `TRUST_PROXY` to the number
   of proxies in front (1 for one); with an https `PUBLIC_URL` and no `TRUST_PROXY` the server refuses to start (ADR 0008,
   "Hardening" item 2).
+
+## Evidence (amended 2026-11-09)
+
+The server serves the `evidence` operation (`GET /v1/pods/{podId}/runs/{runId}/tool-calls`, `schema/operations.json`). Until now
+this note said it did not, while the operation list promised it; a claim in an ask that cites a tool call is worth nothing unless
+something checks the citation, so the pod that holds the run keeps the records.
+
+- **Stamped by the pod, never written by an agent.** The server makes a record for each MCP `tools/call` a run's token makes (the
+  call the core already counts as `tool_call`), with `source: pod`; the id and the times are the server's own. No
+  operation, body field or header writes a record, and a body field such as `toolCalls` or `actor` sent by an agent is ignored.
+  Records the daemon reports (`source: daemon`) are a later unit and are not served yet.
+- **Who may read.** The run's own token, or a user who is a member of the pod. A non-member gets `forbidden`, and so does a run
+  token of another run or another pod. A run that has ended gets `unauthorized` (ADR 0002, ADR 0003 "Who may call").
+- **Bounded.** A run keeps at most 500 records, the first 500 in order; the count the receipt shows (`toolCalls`) keeps counting
+  past that. The records live in the server's own table, not in the core's state (the core keeps no text, ADR 0003). A record is
+  saved when its call has an answer, under the count the core gave the call, so the table never holds more records than the
+  receipt counts; a crash in the middle of a call leaves a count with no record, never the reverse. A record's `digest` is the
+  start of the call's input and output as the pod saw them, cut to 600 characters, as `schema/message.json` fixes.
+- **The Worker does not serve evidence.** It answers `not_found` for the route and lists the test as skipped
+  (`docs/development/e2e-contract.md`).
+
+This changes no other clause of this note.

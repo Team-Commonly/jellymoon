@@ -25,14 +25,14 @@ export interface Deps { db: Db; now(): number; rearm(): void }
 
 /**
  * `pre` runs first inside the FIFO and may answer instead; `meta`, `extra` and `after` run only when the command succeeded.
- * `extra` runs inside the command's transaction; `after` runs once it has committed, still inside the FIFO and before any
+ * `extra` runs inside the command's transaction, given the state the command produced; `after` runs once it has committed, still inside the FIFO and before any
  * event fans out. It must not wait on anything slow: a released connector write only starts its upstream call there, and the
  * call's answer comes back through `serial` (ADR 0009).
  */
 export interface Opts {
   pre?: (s: PodState) => Promise<Reply | null>;
   meta?: (m: PodMeta) => void;
-  extra?: (t: Tx) => Promise<void>;
+  extra?: (t: Tx, state: PodState) => Promise<void>;
   after?: () => Promise<void>;
 }
 
@@ -104,7 +104,7 @@ export class PodRuntime {
     if (events.length > 0 || changed || meta !== this.meta || (good && o.extra)) {
       await this.deps.db.tx(async (t) => {
         await savePod(t, { id: this.id, state, meta }, events);
-        if (good) await o.extra?.(t);
+        if (good) await o.extra?.(t, state);
       });
     }
     this.state = state;

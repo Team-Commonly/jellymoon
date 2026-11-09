@@ -17,6 +17,9 @@ func (f *f11) toolCallRoutes() error {
 	}
 	for _, p := range paths {
 		for _, method := range []string{"POST", "GET"} {
+			if method == "GET" && p == pod+"/runs/"+run+"/tool-calls" {
+				continue // the evidence read (F21): it returns records and counts nothing; TestF21 holds it
+			}
 			for who, tok := range map[string]string{"run": f.run.RunToken, "owner": f.owner.tok} {
 				req, _ := http.NewRequest(method, f.srv.base()+p, bytes.NewReader([]byte(`{"runId":"`+run+`"}`)))
 				req.Header.Set("Authorization", "Bearer "+tok)

@@ -1,10 +1,10 @@
 // The pod operations of schema/operations.json over HTTP. Rules live in the core; this file maps requests to commands.
-// Not served here: evidence (404).
 import type { Hono } from 'hono';
 import { TaskStatusValues } from '../../gen/ts/protocol';
 import type { Harness, Message, PostInput, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
 import { overlayDecisions } from '../../podcore/src/index';
 import type { Hub } from './hub';
+import { readCalls } from './evidence';
 import { newId, newWakeSeed } from './ids';
 import { bad, fail, memberRoute, pick, respond } from './kit';
 import type { Call } from './kit';
@@ -81,6 +81,20 @@ const post = async (k: Call): Promise<Response> => {
 };
 
 /**
+ * The stamped calls of a run (ADR 0006, "Evidence"). The caller check comes first, as everywhere (ADR 0003): a run that has ended is
+ * `unauthorized`, a non-member `forbidden`. A run token reads only its own run's calls, so another run's, named however, is `forbidden`
+ * before any lookup; a member naming a run the pod does not have (a prototype key included) gets `not_found`.
+ */
+const evidence = (hub: Hub) => async (k: Call): Promise<Response> => {
+  const blocked = await gate(k);
+  if (blocked) return blocked;
+  const runId = k.c.req.param('run') ?? '';
+  if (k.caller.kind === 'run' && k.caller.runId !== runId) return fail(k.c, 'forbidden', 'A run reads only its own tool calls.');
+  if (!Object.hasOwn(k.pod.state.runs, runId)) return fail(k.c, 'not_found', 'No such run in this pod.');
+  return k.c.json({ toolCalls: await readCalls(hub, k.pod.id, runId) });
+};
+
+/**
  * Every route names the request definition in gen/ its body is checked against (and the fields the URL supplies instead), or
  * null for a read, whose input is the query string. memberRoute checks before the handler runs, so a handler sees only a valid
  * body and a new write route cannot skip the check without writing `null` here.
@@ -94,5 +108,5 @@ export function opRoutes(app: Hono, hub: Hub): void {
   app.post('/v1/pods/:pod/tasks/:task/release', memberRoute(hub, 'TaskReleaseInput', ['taskId'], release));
   app.post('/v1/pods/:pod/runs/:run/stop', memberRoute(hub, 'RunStopInput', ['runId'], stop));
   app.post('/v1/pods/:pod/messages', memberRoute(hub, 'PostInput', [], post, ['summary']));
-  app.get('/v1/pods/:pod/runs/:run/tool-calls', (c) => fail(c, 'not_found', 'Evidence is not served by this server.'));
+  app.get('/v1/pods/:pod/runs/:run/tool-calls', memberRoute(hub, null, [], evidence(hub)));
 }

@@ -1,7 +1,7 @@
 // Every SQL statement the server runs. Tables: pods (core state as text), events (the sinceSeq log), tokens (hashes only),
 // users, computers, invites (code hashes only), sign-in: device codes and OAuth states (hashes only), GitHub ids, and the
 // connector layer's connections (credentials as envelopes only), grants, approvers and connector_calls (the receipts; a parked
-// write is a row with outcome parked, ADR 0009). A command's state and events are written in one transaction by `savePod`.
+// write is a row with outcome parked, ADR 0009) and tool_calls (the evidence records, ADR 0006). A command's state and events are written in one transaction by `savePod`.
 // State is text, not jsonb: jsonb reorders object keys, and creation order is the order of the state's keys.
 import type { AnyEvent } from '../../gen/ts/protocol';
 import type { PodState } from '../../podcore/src/index';
@@ -33,6 +33,8 @@ create table if not exists connector_calls (id text primary key, pod text not nu
   run_id text not null, agent_id text not null, outcome text not null, upstream_status integer, decision_id text unique, approver text, result text,
   created_at double precision not null, settled_at double precision, expires_at double precision);
 alter table connector_calls add column if not exists reason text;
+create table if not exists tool_calls (id text primary key, pod text not null, run text not null, n integer not null, name text not null, status text not null,
+  started_at double precision not null, ended_at double precision not null, digest text not null, unique (run, n));
 create table if not exists approvers (connection text not null, user_id text not null, position integer not null, primary key (connection, user_id));`;
 
 export const migrate = (db: Db): Promise<void> => db.exec(SCHEMA);
@@ -200,3 +202,14 @@ export const approversOf = async (db: Db, connection: string): Promise<string[]>
 export const callsOf = (db: Db, pod: string, decisionId: string | undefined, limit: number): Promise<CallRow[]> => (decisionId === undefined
   ? db.rows<CallRow>(`select ${CALL} from connector_calls where pod = $1 order by created_at desc, id desc limit $2`, [pod, limit])
   : db.rows<CallRow>(`select ${CALL} from connector_calls where pod = $1 and decision_id = $2 limit $3`, [pod, decisionId, limit]));
+
+/** One stamped MCP call (ADR 0006, "Evidence"). `n` is the run's count when the pod counted the call, so the table can hold no more than the receipt counts. */
+export interface ToolCallRow { id: string; pod: string; run: string; n: number; name: string; status: 'ok' | 'error'; startedAt: number; endedAt: number; digest: string }
+
+export const saveToolCall = (db: Db, r: ToolCallRow): Promise<unknown> =>
+  db.rows('insert into tool_calls (id, pod, run, n, name, status, started_at, ended_at, digest) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) on conflict do nothing',
+    [r.id, r.pod, r.run, r.n, r.name, r.status, r.startedAt, r.endedAt, r.digest]);
+
+/** A run's records in the order the pod counted them, at most `limit`. */
+export const toolCallsOf = (db: Db, pod: string, run: string, limit: number): Promise<ToolCallRow[]> =>
+  db.rows<ToolCallRow>('select id, pod, run, n, name, status, started_at as "startedAt", ended_at as "endedAt", digest from tool_calls where pod = $1 and run = $2 order by n limit $3', [pod, run, limit]);

@@ -41,6 +41,75 @@ func (w *world) strangerSock(u user) *sock {
 	return s
 }
 
+// runevWatch is the pod's three member sockets, each marked before the run starts.
+type runevWatch struct {
+	w       *world
+	members []*sock
+	marks   []int
+	r       *run
+}
+
+// eachGets waits for one `typ` frame for the run on every member socket and checks it with ok.
+func (v *runevWatch) eachGets(typ string, ok func(Frame, runEv) bool) error {
+	for i, s := range v.members {
+		f, got := s.waitAfter(v.marks[i], runEvent(typ, v.r.id), 5*time.Second)
+		if !got {
+			return fmt.Errorf("%s: no %s for %s within 5 s", s.name, typ, v.r.id)
+		}
+		var d runEv
+		f.dec(&d)
+		if d.Agent.ID != v.w.a1.id || d.Agent.Kind != "agent" || !ok(f, d) {
+			return fmt.Errorf("%s: %s %+v at seq %d is not what was asked for agent %s", s.name, typ, d, f.Seq, v.w.a1.id)
+		}
+	}
+	return nil
+}
+
+func (v *runevWatch) stop(body map[string]any) error {
+	if res := v.w.c.do("POST", "/v1/pods/"+v.w.pod+"/runs/"+v.r.id+"/stop", v.w.owner.tok, body, nil); !res.ok() {
+		return fmt.Errorf("stop: HTTP %d code=%q", res.Status, res.Err.Code)
+	}
+	return nil
+}
+
+// onceEach: after a second stop, every member still holds exactly one run.started and one run.ended for the run.
+func (v *runevWatch) onceEach() error {
+	if err := v.stop(map[string]any{}); err != nil {
+		return err
+	}
+	v.w.sO.none(v.w.sO.mark(), runEvent("run.ended", v.r.id), 500*time.Millisecond)
+	for i, s := range v.members {
+		if n, m := s.count(v.marks[i], runEvent("run.started", v.r.id)), s.count(v.marks[i], runEvent("run.ended", v.r.id)); n != 1 || m != 1 {
+			return fmt.Errorf("%s: %d run.started and %d run.ended for one run, want 1 and 1", s.name, n, m)
+		}
+	}
+	return nil
+}
+
+// replays: a member who subscribes from 0 gets run.started at startSeq, then run.ended.
+func (v *runevWatch) replays(startSeq int64) error {
+	s := v.w.openSince(v.w.ben.tok, "ben-replay", 0)
+	a, okA := s.waitAfter(0, runEvent("run.started", v.r.id), 5*time.Second)
+	b, okB := s.waitAfter(0, runEvent("run.ended", v.r.id), 5*time.Second)
+	if !okA || !okB || a.Seq != startSeq || b.Seq <= a.Seq {
+		return fmt.Errorf("replay: run.started %v (seq %d), run.ended %v (seq %d), want both with started at seq %d first", okA, a.Seq, okB, b.Seq, startSeq)
+	}
+	return nil
+}
+
+// strangerHearsNothing: the stranger's own socket got no run event, and the stranger cannot open the pod's socket.
+func (w *world) strangerHearsNothing(sX *sock, stranger user) error {
+	isRun := func(f Frame) bool { return f.Type == "run.started" || f.Type == "run.ended" }
+	if !sX.none(0, isRun, 500*time.Millisecond) {
+		return fmt.Errorf("the stranger's socket received a run event: %+v", sX.snapshot(0))
+	}
+	if conn, _, err := wsDial(fmt.Sprintf("127.0.0.1:%d", w.srv.port), "/v1/pods/"+w.pod+"/ws", stranger.tok); err == nil {
+		conn.Close()
+		return fmt.Errorf("a non-member opened the pod's socket")
+	}
+	return nil
+}
+
 // TestRUNEV: members hear run.started when a run begins and run.ended (cancelled) once when a person stops it, both seq'd and
 // replayed on subscribe; a non-member hears neither and cannot open the pod's socket.
 func TestRUNEV(t *testing.T) {
@@ -50,77 +119,24 @@ func TestRUNEV(t *testing.T) {
 	p := &stepper{out: os.Stdout, events: func() []Frame { return w.sO.snapshot(0) }}
 	stranger := w.session("stranger")
 	sX := w.strangerSock(stranger)
-	members := []*sock{w.sO, w.sBen, w.sCara}
-	marks := make([]int, len(members))
-	for i, s := range members {
-		marks[i] = s.mark()
+	v := &runevWatch{w: w, members: []*sock{w.sO, w.sBen, w.sCara}}
+	for _, s := range v.members {
+		v.marks = append(v.marks, s.mark())
 	}
-	r := w.startRun(w.a1, "runev")
+	v.r = w.startRun(w.a1, "runev")
 	var startSeq int64
 	p.step("every member's socket receives run.started with the run and its agent", func() error {
-		for i, s := range members {
-			f, ok := s.waitAfter(marks[i], runEvent("run.started", r.id), 5*time.Second)
-			if !ok {
-				return fmt.Errorf("%s: no run.started for %s within 5 s", s.name, r.id)
-			}
-			var d runEv
-			f.dec(&d)
-			if d.Agent.ID != w.a1.id || d.Agent.Kind != "agent" || f.Seq == 0 {
-				return fmt.Errorf("%s: run.started agent %+v seq %d, want agent %s and a seq", s.name, d.Agent, f.Seq, w.a1.id)
-			}
-			startSeq = f.Seq
-		}
-		return nil
+		return v.eachGets("run.started", func(f Frame, _ runEv) bool { startSeq = f.Seq; return f.Seq > 0 })
 	})
 	p.step("the owner stops the run; every member receives one run.ended, outcome cancelled, after run.started", func() error {
-		if res := w.c.do("POST", "/v1/pods/"+w.pod+"/runs/"+r.id+"/stop", w.owner.tok, map[string]any{"reason": "from the web"}, nil); !res.ok() {
-			return fmt.Errorf("stop: HTTP %d code=%q", res.Status, res.Err.Code)
+		if err := v.stop(map[string]any{"reason": "from the web"}); err != nil {
+			return err
 		}
-		for i, s := range members {
-			f, ok := s.waitAfter(marks[i], runEvent("run.ended", r.id), 5*time.Second)
-			if !ok {
-				return fmt.Errorf("%s: no run.ended for %s within 5 s", s.name, r.id)
-			}
-			var d runEv
-			f.dec(&d)
-			if d.Outcome != "cancelled" || d.Agent.ID != w.a1.id || f.Seq <= startSeq {
-				return fmt.Errorf("%s: run.ended %+v seq %d, want cancelled for %s after seq %d", s.name, d, f.Seq, w.a1.id, startSeq)
-			}
-		}
-		return nil
+		return v.eachGets("run.ended", func(f Frame, d runEv) bool { return d.Outcome == "cancelled" && f.Seq > startSeq })
 	})
-	p.step("stopping it again emits no second run.ended", func() error {
-		if res := w.c.do("POST", "/v1/pods/"+w.pod+"/runs/"+r.id+"/stop", w.owner.tok, map[string]any{}, nil); !res.ok() {
-			return fmt.Errorf("second stop: HTTP %d code=%q", res.Status, res.Err.Code)
-		}
-		w.sO.none(w.sO.mark(), runEvent("run.ended", r.id), 500*time.Millisecond)
-		for i, s := range members {
-			if n, m := s.count(marks[i], runEvent("run.started", r.id)), s.count(marks[i], runEvent("run.ended", r.id)); n != 1 || m != 1 {
-				return fmt.Errorf("%s: %d run.started and %d run.ended for one run, want 1 and 1", s.name, n, m)
-			}
-		}
-		return nil
-	})
-	p.step("a member who subscribes from 0 replays run.started then run.ended", func() error {
-		s := w.openSince(w.ben.tok, "ben-replay", 0)
-		a, okA := s.waitAfter(0, runEvent("run.started", r.id), 5*time.Second)
-		b, okB := s.waitAfter(0, runEvent("run.ended", r.id), 5*time.Second)
-		if !okA || !okB || a.Seq != startSeq || b.Seq <= a.Seq {
-			return fmt.Errorf("replay: run.started %v (seq %d), run.ended %v (seq %d), want both with started at seq %d first", okA, a.Seq, okB, b.Seq, startSeq)
-		}
-		return nil
-	})
-	p.step("a non-member receives neither event, and cannot open the pod's socket", func() error {
-		isRun := func(f Frame) bool { return f.Type == "run.started" || f.Type == "run.ended" }
-		if !sX.none(0, isRun, 500*time.Millisecond) {
-			return fmt.Errorf("the stranger's socket received a run event: %+v", sX.snapshot(0))
-		}
-		if conn, _, err := wsDial(fmt.Sprintf("127.0.0.1:%d", w.srv.port), "/v1/pods/"+w.pod+"/ws", stranger.tok); err == nil {
-			conn.Close()
-			return fmt.Errorf("a non-member opened the pod's socket")
-		}
-		return nil
-	})
+	p.step("stopping it again emits no second run.ended", v.onceEach)
+	p.step("a member who subscribes from 0 replays run.started then run.ended", func() error { return v.replays(startSeq) })
+	p.step("a non-member receives neither event, and cannot open the pod's socket", func() error { return w.strangerHearsNothing(sX, stranger) })
 	p.count(t)
 	if p.ok != p.run {
 		t.Fatalf("%d of %d steps passed", p.ok, p.run)

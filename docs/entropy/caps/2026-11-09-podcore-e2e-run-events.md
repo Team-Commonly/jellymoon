@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: podcore-e2e-run-events
+
+2026-11-09: podcore cap 2,780 -> 2,860 and e2e cap 9,070 -> 9,210; the pod now tells its members when a run starts and ends (`run.started`, `run.ended`). podcore adds the two emits and a test file covering the start, every ending path (the daemon's completed, failed and cancelled, run_stop, the 2 h cap), a lease expiry that ends no run, and once only. e2e adds TestRUNEV, which proves on both adapters that members receive both events, replay them on subscribe, and that a non-member receives neither. The tree printed `LOC budget: podcore 2859 > 2780` and `LOC budget: e2e 9209 > 9070` (after TestRUNEV was split to keep each function under 60 lines); each cap is the count rounded up to ten. No other cap changes.

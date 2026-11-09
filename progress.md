@@ -254,6 +254,19 @@ goes in the PR.
   a fixture token that tripped gitleaks became an obviously fake one, and the Go module is
   `github.com/Team-Commonly/jellymoon`.
 
+## 2026-11-08 · F13 token scope (builder session)
+- **Changed:** `e2e/f13_test.go` (TestF13, five steps). Steps 1 (a run token on another pod), 2 (an ended run), 3 (`actor` in
+  MCP arguments) and 5 (the owner's stop, also with the computer offline) already held on both adapters, so their test is the
+  deliverable. Two things were red: a dead run token still got 200 on `initialize`, `tools/list`, `ping` and notifications over
+  `/mcp`, and step 4 had only a source-level check. Fixed in both adapters the same way (the pod answers whether the run is live,
+  from the core's `runLive`); step 4 now starts a server without `ENV=local` and the Worker's production entry and probes `/__test`.
+- **Evidence:** `go test ./e2e -run TestF13` green against the server and the Worker. `appOptions` moved out of main.ts so the
+  gate on `ENV` is testable.
+- **Surprising:** a tool call on a dead run token answers HTTP 200 with the tool's `unauthorized` error (the adapter forwards the
+  route's answer); only the other methods answer a transport 401. `TEST_BEARER` set in production opens bearer-gated test routes
+  by design (server/src/app.ts), so "no /__test handler" holds when neither is set.
+- **Next:** F12.
+
 ## Server stack tripwires (watched from day one)
 - any claim.released{expired} earlier than last renewal + 60 s, in any environment
 - more than 10 min of unplanned downtime in a month

@@ -1,7 +1,7 @@
 // Routes only the Worker calls, under /_in/ on the pod object (a public request never reaches them: the Worker has no such path).
 // They exist because some steps start outside the pod (a run is claimed by a wake id that names no pod; an invite is found by code).
 import { RunOutcomeValues } from '../../gen/ts/protocol';
-import { isoOf } from '../../podcore/src/index';
+import { isoOf, runLive } from '../../podcore/src/index';
 import type { RunClaimed } from '../../podcore/src/index';
 import { bad, fail, intIn, parse, pick, respond, str } from './wire';
 import type { Body, PodPort } from './wire';
@@ -79,8 +79,20 @@ function runEnd(pod: PodPort, b: Body): Response {
   return respond(pod.exec({ type: 'run_end', runId, computerId, outcome }));
 }
 
+/** The MCP adapter answered a tool call on a run's token; the pod counts it for the receipt. */
+function toolCall(pod: PodPort, b: Body): Response {
+  const runId = str(b.runId, 1, 64);
+  return runId === undefined ? bad('runId is required.') : respond(pod.exec({ type: 'tool_call', runId }));
+}
+
+/** The MCP adapter asks whether a run token's run is still active before it answers any method. */
+function live(pod: PodPort, b: Body): Response {
+  const runId = str(b.runId, 1, 64);
+  return runId === undefined ? bad('runId is required.') : Response.json({ live: runLive(pod.state, runId) });
+}
+
 const TABLE: Record<string, (pod: Starter, b: Body) => Response> = {
-  create, invite, accept, 'has-wake': hasWake, 'run-claim': runClaim, 'run-end': runEnd, ping: () => Response.json({}),
+  create, invite, accept, 'has-wake': hasWake, 'run-claim': runClaim, 'run-end': runEnd, 'tool-call': toolCall, 'run-live': live, ping: () => Response.json({}),
 };
 
 export async function internalRoute(pod: Starter, req: Request): Promise<Response | null> {

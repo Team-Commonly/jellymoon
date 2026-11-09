@@ -1,6 +1,6 @@
 // The pod core's data: plain JSON state, tagged commands, and the ordered output list (ADR 0003).
 import type {
-  Actor, ActorId, AgentId, AnyEvent, ClaimRunResponse, ComputerId, ErrorBody, EventOf, Message, MessageId, PodId, RunId, RunOutcome,
+  Actor, ActorId, AgentId, AnyEvent, ClaimRunResponse, ComputerId, Decision, DecisionId, ErrorBody, EventOf, Harness, Message, MessageId, OptionId, PodId, PostInput, RunId, RunOutcome,
   RunStopOutput, RunWake, Task, TaskClaimOutput, TaskId, TaskKind, TaskUpdateStatus, WakeId, WakeReason, WakeRefs,
 } from '../../gen/ts/protocol';
 
@@ -15,6 +15,12 @@ export interface Run {
   startedAt: number;
   status: 'active' | 'ended';
   outcome?: RunOutcome;
+  /** Why the wake that started this run was sent. Absent on a run recorded before receipts. */
+  wakeReason?: WakeReason;
+  /** The task the wake was about, if it was about one: the task a receipt names. Absent on a run recorded before this was kept, and then the receipt names none. */
+  wakeTaskId?: TaskId;
+  /** MCP calls the pod saw on this run's token (`tool_call`). Absent reads as 0. */
+  toolCalls?: number;
   /** Set when a person stopped the run; cleared when the daemon reports it ended. Re-sent on each heartbeat until then. */
   stop?: { reason?: string };
 }
@@ -24,6 +30,12 @@ export interface Agent { actor: Actor; owner: Actor; computerId: ComputerId }
 
 /** A pending wake. Keyed by agent in PodState, so a second pending wake for one agent cannot exist. */
 export interface Wake { id: WakeId; agentId: AgentId; reason: WakeReason; refs: WakeRefs; sentAt: number }
+
+/**
+ * What the pod keeps of an ask so it can be ruled once (the adapter owns the messages, the core keeps no text). One per ask, a
+ * fixed size: a ruled record drops `options`, so ruling it again, or rereading it, grows nothing.
+ */
+interface DecisionRec { messageId: MessageId; askedBy: ActorId; options: OptionId[]; decision: Decision }
 
 export interface PodState {
   podId: PodId;
@@ -43,6 +55,8 @@ export interface PodState {
   wakes: Record<AgentId, Wake>;
   /** Computers that are online, by the time of their last sign of life (ms). Absent in a pod saved before presence; read as empty. */
   online?: Record<ComputerId, number>;
+  /** The decision of each ask posted since asks were recorded. Absent in a pod saved before; read as empty, and an older ask has no record to rule. */
+  decisions?: Record<DecisionId, DecisionRec>;
 }
 
 /** Already authenticated and stamped by the adapter; the core decides what each may do. */
@@ -59,7 +73,13 @@ export type Cmd =
   | { type: 'member_add'; userId: ActorId; name: string }
   | { type: 'task_create'; caller: Caller; taskId: TaskId; title: string; kind: TaskKind; assignee?: ActorId; body?: string; wakeId: WakeId }
   | { type: 'task_update'; caller: Caller; taskId: TaskId; status?: TaskUpdateStatus; assignee?: ActorId; wakeId: WakeId }
-  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; summary?: string; threadOf?: MessageId; wakeId: WakeId }
+  | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; threadOf?: MessageId; wakeId: WakeId }
+  /** `harness` is the adapter's record of where the caller's agent runs; `decisionId` is the id an ask's decision takes; `viaMcp` is the
+   *  adapter saying this post rides on an MCP call already counted, which the receipt leaves out. */
+  | { type: 'post'; caller: Caller; messageId: MessageId; decisionId: DecisionId; input: PostInput; harness?: Harness; viaMcp?: boolean; wakeId: WakeId }
+  | { type: 'tool_call'; runId: RunId }
+  /** A member rules on an ask: `option` is an option id of that ask (a plain string here, so a bad one is refused, never looked up as a key). */
+  | { type: 'rule'; caller: Caller; decisionId: DecisionId; option: string; wakeId: WakeId }
   | { type: 'boot'; staleMs: number }
   | { type: 'change'; kind: 'ruling'; agentId: AgentId; refs: WakeRefs; wakeId: WakeId }
   | { type: 'wake_ack'; wakeId: WakeId; computerId: ComputerId }

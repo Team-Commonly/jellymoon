@@ -91,13 +91,14 @@ function walk(raw: Schema, v: unknown, at: string): string | null {
 /**
  * Checks `value` against the named definition of the generated bundle. `fromPath` names fields the URL supplies (`taskId` in
  * `/tasks/{taskId}`): they are not repeated in the body, so one present is refused like any unknown field. Returns the first
- * problem as a sentence, or null when the value is valid.
+ * problem as a sentence, or null when the value is valid. `optional` names fields that are required by the schema but whose
+ * absence the pod answers with a code of its own (a post's summary: summary_required); they are still checked when present.
  */
-export function check(def: string, value: unknown, fromPath: readonly string[] = []): string | null {
+export function check(def: string, value: unknown, fromPath: readonly string[] = [], optional: readonly string[] = []): string | null {
   const s = resolve({ $ref: `#/$defs/${def}` });
   const own: Schema = {
     ...s,
-    required: (s.required ?? []).filter((r) => !fromPath.includes(r)),
+    required: (s.required ?? []).filter((r) => !fromPath.includes(r) && !optional.includes(r)),
     properties: Object.fromEntries(Object.entries(s.properties ?? {}).filter(([k]) => !fromPath.includes(k))),
   };
   return walk(own, value, 'body');

@@ -15,6 +15,8 @@ None of them ships in a runtime artifact.
 | dependency-cruiser 18.6.0 | TS module boundaries and cycles | Hand-written import greps |
 | staticcheck v0.8.2 (`go run`) | Go unused code and correctness lints | golangci-lint: one more binary to pin, more config |
 | gitleaks v8.30.1 (`go run`) | Secret scan of the full history on every preflight, and of a PR's commit range on land with `--ignore-gitleaks-allow`. It can only refuse, never waive: it skips binaries, images, the paths in the pinned version's built-in allowlist, lockfiles and `go.sum`, never reads commit messages in git mode, and reads files in 100,000-byte chunks with no match across a cut, so a scanner cannot prove a secret absent. Every land therefore needs the ledger PASS and the review's pod verdict, and a scan hit or a failed scan refuses (2026-10-30, land review round 16, #10, after four scanner blind spots each became a way to land without the review) | Hand-written regexes miss token formats |
+| hono 4.13.14 | HTTP routing and the pod WebSocket of the pod-state server (`server/`, ADR 0006); one small dependency with no transitive packages | Hand-rolled routing and upgrade handling |
+| @electric-sql/pglite 0.5.13 | In-process Postgres for `make e2e` and a clean shell, when `DATABASE_URL` is unset and `ENV=local`; production uses a real Postgres through Bun's built-in `Bun.SQL`, so there is no driver package (ADR 0006) | Requiring a Postgres install for every checkout and every preflight |
 | wrangler 4.151.0 | Runs the Cloudflare adapter (`worker/`) locally under `wrangler dev --local` for `make worker-dev` and `make e2e-a`; loopback only, no Cloudflare account or credentials. Its miniflare 5.20261012.0-beta is patched (`worker/patches/`) to import `undici/index.js` under Bun | Hand-rolled Durable Object and D1 fakes drift from the real runtime |
 | @cloudflare/workers-types 5.20261014.1 | Types for the Worker, Durable Object and D1 APIs in `tsc` | Hand-written ambient declarations |
 | Node 20 or newer (land's runtime, not pinned) | `scripts/land.mjs` runs under `node`, never bun, so bun does not auto-load a `.env` from the checkout; land refuses to start on an older Node | bun: loads `.env` and `bunfig.toml` from the cwd into the environment |
@@ -32,12 +34,13 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | Area | Cap |
 |---|---|
 | core (`schema/`, `scripts/`) | 3,720 |
-| podcore | 2,500 |
+| podcore | 3,000 |
 | worker | 1,790 |
+| server | 1,800 |
 | daemon | 3,000 |
-| e2e | 3,930 |
+| e2e | 4,650 |
 
-The caps add up to 14,940 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 17,960 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -59,11 +62,15 @@ The caps add up to 14,940 lines. Agent-written comparables grew without bounds: 
 2026-10-30: core cap 2,450 → 2,950, land runs gitleaks itself (`scripts/land-scan.mjs`) instead of through make, refuses paths gitleaks cannot parse, and the cases that prove both (the shape table, the steering fixtures, the env and argv cases), on top of the merge with main; the gate printed `LOC core 2569 / 2450` before this raise and the cap is that count plus about 15%; the total is 12,210. No other cap changes. P08F round 2.
 2026-10-30: core cap 2,950 → 3,000, land refuses a tracked symbolic link whose target leaves the checkout or leads into its `.git` or `.tools` (read lexically in every tree land checks, and resolved on disk for the links main tracks) and a `.tools` at any depth in those trees, with the real-scan cases that prove both; the gate printed `LOC core 2973 / 2950` before this raise; the total is 12,260. No other cap changes. P08F round 5.
 2026-10-30: core cap 3,000 → 3,720, land admits a head CodeRabbit reviewed clean after the PR's one local review (`scripts/land-coderabbit.mjs`, its wiring in `land.mjs` and `land-decide.mjs`, and the cases that prove each condition and refusal, `scripts/check-land-coderabbit.mjs` plus new end-to-end cases); the gate printed `LOC core 3235 / 3000` before this raise and the cap is that count plus about 15%; the total is 12,980. No other cap changes. LCR.
-2026-10-30: e2e cap 2,660 → 3,130, the F08 test (a built daemon run as a black box: registration, presence online and offline, a hung daemon, a crashed server) takes the suite to 2,714 lines (the gate printed `LOC e2e 2700 / 2660` before this raise; the cap is the final count plus about 15%); the total is 12,630. No other cap changes. F08.
+2026-10-30: e2e cap 2,660 → 3,130, the F08 test (a built daemon run as a black box: registration, presence online and offline, a hung daemon, a crashed server) takes the suite to 2,714 lines (the gate measures `LOC e2e 2714 / 2660` on the tree before this raise, 2,700 being an earlier print from before the argv check was added; the cap is that count plus about 15%); the total is 12,630. No other cap changes. F08.
 2026-10-30: podcore cap 2,050 → 2,500, presence (which computers are online, the 45 s staleness bound, the presence events) and its tests take the core to 2,162 lines (the gate printed `LOC podcore 2162 / 2050` before this raise; the cap is that count plus about 15%); the total is 12,600. No other cap changes. F08.
 2026-10-31: the merge with main keeps main's core cap (3,000) and this branch's podcore (2,500) and e2e (3,130) caps, all as they stand in entropy.json; no cap changes; the total is 13,180. F08.
 2026-10-30: e2e cap 3,130 → 3,930, the F09 test (a recording proxy between the daemon and the server, the wake claimed over it, a built fake ACP agent that records argv, env and what it was told, a stubborn-agent case) takes the suite to 3,430 lines (the gate measures `LOC e2e 3430 / 3130` on the tree before this raise; the cap is that count plus about 15%); the total is 13,430. F09.
 2026-10-30: worker cap 1,550 → 1,790, the MCP adapter at POST /mcp (initialize, tools/list and tools/call as the operation's own HTTP route) and its tests take the Worker to 1,552 lines (the gate printed `LOC worker 1552 / 1550` before this raise; the cap is that count plus about 15%); the total is 13,670. F09.
 2026-10-31: the merge with main keeps main's core cap (3,000) and this branch's worker (1,790) and e2e (3,930) caps, all as they stand in entropy.json; no cap changes; the total is 14,220. F09.
+2026-11-08: e2e cap 3,930 → 4,650, the F11 fix pass (every stored post read back field by field, the receipt task checked from outside, a forged identity header, and the count of MCP calls shown unreachable by any public path) takes the suite to 4,051 lines (the gate printed `LOC e2e 4051 / 3930` before this raise; the cap is that count plus about 15%); the total is 14,940. No other cap changes. F11.
 2026-11-08: the merge with main keeps this branch's core cap (3,720) and main's podcore (2,500) and e2e (3,130) caps, all as they stand in entropy.json; no cap changes; the total is 13,900. LCR.
 2026-11-08: the merge with main keeps main's core cap (3,720) and this branch's podcore (2,500), worker (1,790) and e2e (3,930) caps, all as they stand in entropy.json; no cap changes; the total is 14,940. F09.
+2026-11-08: server cap (new) 1,800, the pod-state server and its tests (ADR 0006) are 1,267 lines at the first green contract run; the cap is that count plus room for the tests the port still needs (the brief allows at most 3,000); the total is 15,700. No other cap changes. CPORT.
+2026-11-08: the merge of main (F09) into the pod-state server branch keeps main's worker (1,790) and e2e (3,930) caps and this branch's server (1,800) cap, all as they stand in entropy.json; no cap changes; the total is 16,740. CPORT.
+2026-11-08: podcore cap 2,500 → 3,000, rulings on an ask (the `rule` command, the decision record an ask now keeps, and the tests that pin each refusal and the old-saved-state load) take the core to 2,585 lines (the gate printed `LOC podcore 2534 / 2500` with the tests alone, before this raise; the cap is that final count plus about 15%); the total is 17,960. No other cap changes. F12.

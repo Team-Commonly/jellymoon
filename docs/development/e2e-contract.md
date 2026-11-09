@@ -5,14 +5,17 @@ contract below. It is black box: HTTP and the pod WebSocket only, real `jmu_`, `
 import of server code. It writes no server. `daemon/internal/protocol` is Go-internal and cannot be imported
 from `e2e/`, so the suite keeps its own small wire structs.
 
-Run it: `JM_E2E_SERVER='<shell command>' make e2e`. With `JM_E2E_SERVER` unset every test skips, so
-`make test` stays green. `make e2e` ends with `E2E_MS=<n> STEPS=<k>/<k>`.
+Run it against the pod-state server (ADR 0006) with `make e2e` (the same as `make e2e-c`), against the Cloudflare adapter
+with `make e2e-a`, or against any other server with `JM_E2E_SERVER='<shell command>' make e2e-any`. With `JM_E2E_SERVER` unset
+every test skips, so `make test` stays green. `make e2e`, `make e2e-c` and `make e2e-a` end with `E2E_MS=<n> STEPS=<k>/<k>`.
+`make e2e-deployed` (CI's `e2e-deployed` job) runs the same suite with the server's release bundle as the server under test, after
+`make deployed-boot` has started that bundle as its own process and checked it by URL (ADR 0006, "Deployed form").
 
 ## How the suite starts the server
 
 The suite owns the process. It runs `JM_E2E_SERVER` with `sh -c`, from the repo root, with env `PORT`,
 `ENV=local` and `JM_DATA_DIR=<fresh dir>`, in its own process group, and waits for `GET /healthz` = 200.
-Each test gets a fresh server and data dir. A restart is `kill -9` of the process group plus the same
+Each test gets a fresh server and data dir, on its own ports, so the tests run in parallel (below). A restart is `kill -9` of the process group plus the same
 command again, on the same port and the same data dir. The server must bind with `SO_REUSEADDR` (Bun, Node
 and wrangler do by default).
 
@@ -29,6 +32,11 @@ and wrangler do by default).
 | `GET /__test/instance/:pod` | 200 `{instance, requests}`: an id minted when the object was built, and how many requests it has served (this one excluded). A discard changes the id. |
 | `GET /__test/stored-alarm/:pod` | 200 `{at}`: the alarm time the object itself has stored (`ctx.storage.getAlarm()`), unix ms or `null`. Under a fixed clock the object stores its own deadline, a far-future time that never fires by itself. Not counted as a request. |
 | `GET /__test/woke/:pod` | 200 `{instance, requests, was}` recorded by the object's alarm handler when it last ran (read without waking the object), or `null`; `was` is the stored alarm time a discard moved, which is the alarm that ran. |
+
+A deployed build (no `ENV=local`) opens these routes only behind `Authorization: Bearer <TEST_BEARER>`, has no `/__test/clock`, and
+a build with no bearer has no `/__test` handler at all. The pod-state server serves `session`, `clock` and `evict`; its `evict`
+drops the pod's in-memory state and restores it from Postgres, with the sockets attached, which is the whole of what `TestF04`
+asks. It has no object to discard, so it does not serve `discard`, `instance`, `stored-alarm` or `woke`.
 
 Clock rules, which every server under test must meet:
 
@@ -107,7 +115,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 
 | Test | What it proves |
 |---|---|
-| `TestF02` | F02: the server's own command line (read from the process table) carries `--persist-to <the run's data dir>/state` and that dir holds state, `/healthz` answers 200 within 10 s, and a failing step names itself and prints the last 20 events. The closing line is judged by `make e2e-a`, not by a test. `TestStepPrinter` checks the printer alone, with a fake failing step. |
+| `TestF02` | F02: the server's own command line (read from the process table) carries `--persist-to <the run's data dir>/state` and that dir holds state, `/healthz` answers 200 within 10 s, and a failing step names itself and prints the last 20 events. The closing line is judged by `make e2e-c` and `make e2e-a`, not by a test. `TestStepPrinter` checks the printer alone, with a fake failing step. |
 | `TestF03` | F03: a user seeded through `POST /__test/session` (the contract's seed route) creates a pod, and the first frame on its pod WebSocket is `hello` with `headSeq` 0 and that user as the one owner. |
 | `TestF04` | F04: two members subscribe and both get the same `message.created` seq; one disconnects, three posts happen, and `subscribe{sinceSeq}` replays exactly those three in order; after `POST /__test/evict/:pod` a socket that stayed connected keeps receiving with no gap and a reconnect replays exactly the missed events; the same again after a full kill -9 restart. |
 | `TestF05` | F05: an invite is accepted and the new member's `hello` lists them; the same single-use invite returns 410 the second time; an invite accepted after its `ttlSeconds` (the suite moves the clock past it) returns 410; a non-member creating an invite gets 403. After each refusal the owner's `hello` still lists exactly the members it had. |
@@ -127,19 +135,89 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestEvictPastDeadline` | The object is discarded with the clock stored five seconds past a claim's deadline; the first thing to reach the new instance is a socket reconnect, which runs no command, and it already carries the `claim.released{expired}`, exactly once. It needs the restore to settle (`boot`). |
 | `TestF08` | F08: builds the repo's `daemon/cmd/jellymoon` and runs it as a black box (own process group, output captured, config dir `JELLYMOON_HOME`, server `JELLYMOON_SERVER`, first-registration jmu_ token in `JELLYMOON_USER_TOKEN`, never argv). It registers the computer and stores `computer.json` at 0600 in a 0700 dir; `agent add fake --pod` registers an agent; members get `presence.changed` online within 5 s; a daemon stopped with SIGSTOP (socket open, no heartbeat) goes offline when the fake clock is exactly 45 s past its last sign of life and not 1 ms before; a second start reuses the stored computer; `kill -9` gives offline within 45 s; no token appears in any output or in any process's argv; plain http to a non-local host is refused; and after a server crash with the daemon gone, hello lists the agent offline. |
 | `TestF09` | F09: behind a recording proxy, a task assigned to the agent makes the built daemon claim the wake with `POST /v1/runs` and its computer token; the response carries a `run_` id, a 47-character `jmr_` token, a brief and the `/mcp` URL; the fake ACP agent starts with that MCP server (HTTP, `Authorization: Bearer <the run's jmr_>`) in `session/new` and the brief as its first prompt; its `jm_whoami` call over MCP answers with the agent, pod and run; no `jmc_` or `jmu_` token and no token-shaped string is in its argv or environment; a finished agent ends the run `completed`; a daemon restarted with a user token in its environment and none of the allowed names still hands the agent only allow-listed names; a daemon stopped while an agent that ignores SIGTERM runs takes its process group with it and ends that run (matched by its own id) `failed`; and no token reaches any daemon output. |
-| `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. It judges the run so far, so it is last; it fails if a suite test failed and skips on a partial run. |
+| `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. The suite tests run in parallel, so this one is parallel too and waits for every one of them before it judges the run. It fails if a suite test failed, if one never reported in a whole-suite run, or if the run took 60 s or more; it skips only when `-run` narrowed the run. `TestBudgetVerdict` checks that judgment with made-up outcomes and needs no server. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X
 (renewed by a heartbeat; its deadline falls after the restart), then crashes. For each it asserts: not
 released before its recorded deadline; released no later than `max(restart, deadline) + 6 s`
 once the clock passes it; one `claim.released` over live delivery and over a replay from seq 0.
 
+## Where the suite's time goes (measured before the parallel run)
+
+Every test but `TestStepPrinter`, `TestPortRetry` and `TestF14Budget` boots its own server, and they ran one after another, so
+the suite's wall time was the sum of the tests. Per-test seconds, serial: one pod-state run and one Worker run on a dev machine
+at load below 4, and the latest CI run of each on `main` after #8. PR 13 failed only `TestF14Budget`, at 61.1 s and then 64.9 s
+on the Worker.
+
+| Test | Pod-state, local | Worker, local | Worker, CI | What it waits on |
+|---|---|---|---|---|
+| `TestRunTokenOtherPod` | 0.4 | 5.8 (first boot) | 2.3 | one server start; the first Worker start of a run is cold |
+| `TestEvictMidClaim` / `TestEvictAlarmWake` / `TestEvictPastDeadline` | skipped | 2.0 / 2.2 / 0.8 | 2.6 / 3.1 / 1.9 | a start each, 300 to 500 ms of real sleep |
+| `TestF02` | 0.4 | 0.6 | 1.6 | a start |
+| `TestF03` | 0.5 | 0.5 | 1.4 | a start |
+| `TestF04` | 1.8 | 2.4 | 4.2 | a start, two 400 ms quiet windows, a kill and restart |
+| `TestF05` | 0.4 | 0.7 | 1.6 | a start |
+| `TestF06` | 0.4 | 1.2 | 1.6 | a start |
+| `TestF07` | 2.3 | 3.0 | 3.4 | a start, a 200 ms sleep |
+| `TestF08` | 2.1 | 3.1 | 4.6 | `go build` of the daemon, a start, daemon registration and presence, a 300 ms sleep |
+| `TestF09` | 4.0 | 4.6 | 4.7 | the same, then an agent process and a stop that waits for its process group |
+| `TestF10` / `TestOneReleasePerCause` | 1.7 / 1.6 | 1.9 / 2.2 | 3.1 / 2.9 | a start, a 300 ms sleep in `TestF10` |
+| `TestF11` | 2.7 | 1.8 | 2.8 | a start, a daemon |
+| `TestFakeAgentHoldStaysUp` | 1.0 | 1.1 | 0.9 | `go build` of the fake agent, a 500 ms hold |
+| `TestInputValidation` | 0.5 | 0.6 | 1.8 | a start |
+| `TestExpiryZeroTraffic` / `TestRenewRace` | 1.0 / 0.5 | 1.3 / 0.8 | 2.2 / 2.0 | a start, a 300 ms sleep in `TestExpiryZeroTraffic` |
+| `TestKillMidLease` | 2.2 | 2.9 | 4.4 | a start, a kill and restart, a 300 and a 500 ms sleep |
+| `TestRestartPastDeadline` / `TestReplayAcrossRestart` | 0.6 / 1.4 | 1.2 / 1.8 | 2.9 / 3.5 | a start, a kill and restart, two 200 ms sleeps in the replay test |
+| **Suite (`E2E_MS`)** | **26.0** (CI 19.1) | **43.2** | **59.7** | |
+
+The cost is serial server starts, not sleeps: the real sleeps in the whole suite add up to about 4 s, a Worker start takes 1.4 to
+2 s on a CI runner, and no two tests overlapped. The fake clock already replaces the long waits. The 60 s budget did not change;
+the Worker suite on the CI runner sat 0.3 s under it before PR 13 added one test and tipped it over.
+
+After the parallel run (same machine, same STEPS counts: 58/58 on the pod-state server, 61/61 on the Worker): pod-state 26.0 s to
+about 11 s (10.4 to 13.8 s over four runs, some under load 9 to 16), Worker 43.2 s to 10.0 s (10.0 to 15.2 s over four runs). With
+`GOMAXPROCS=4`, the slot count of a four-core CI runner, the Worker suite took 14.4 s at load 9. The cut is the overlap of server
+starts; no sleep, wait or assertion changed.
+
+## Running in parallel
+
+The suite tests call `par(t)` right after `need`/`needFake`, so they run at the same time, up to `go test`'s `-parallel` (the CPU
+count by default). That is safe because each of them builds its own world: its own server process group, ports, data dir, pod,
+users and sockets. Two tests that shared a pod, a data dir or a port would see each other's events, so a new test must not.
+`TestStepPrinter` and `TestPortRetry` (which starts a child test process) stay serial. The only state the tests share is the harness's
+bookkeeping (`outcomes`, the step counters), which is a `sync.Map` and atomics.
+
+`TestF14Budget` is parallel as well and waits on `suiteWG`, which every `par` test joins before it pauses and leaves in its last
+cleanup, so it judges after the outcomes and the server kills. It needs `-parallel` 2 or more and says so if given 1. A server
+start is CPU-bound (a Worker start is `wrangler dev` plus `workerd`), so a runner with few cores overlaps fewer of them; with
+four slots (`GOMAXPROCS=4`) the Worker suite took 14 s on a dev machine against 10 s with ten, far under the budget.
+
+## Skipped on the server
+
+`JM_E2E_SKIP` is a comma-separated list of test names. `make e2e-c` sets it to the three tests below; each one skips, says so,
+and still counts as passed for `TestF14Budget`. A skip needs a reason here. Nothing else is skipped, and no assertion differs
+between servers.
+
+| Test | Reason |
+|---|---|
+| `TestEvictMidClaim` | Needs `/__test/discard`, `/__test/instance` and `/__test/stored-alarm`: the runtime throwing away a Durable Object and the alarm that object stored. The server is one process with one timer and no object to discard. Its restore path is covered by `TestF04` (evict), `TestKillMidLease` and `TestRestartPastDeadline` (kill -9 and restart). |
+| `TestEvictAlarmWake` | Needs `/__test/discard` with `alarmMs` and `/__test/woke`: the runtime firing an object's own stored alarm on a new instance. The server's single timer is covered by `TestExpiryZeroTraffic` (fake clock) and, in real-clock mode, by `TestKillMidLease`. |
+| `TestEvictPastDeadline` | Needs `/__test/discard` with `now`: an object thrown away with a deadline already past, then woken by a reconnect. `TestRestartPastDeadline` proves the same rule (the restore settles an expired claim before the first frame) for a restart. |
+
+One step is skipped, not a whole test. On a real Postgres (`DATABASE_URL` set, which is how CI runs `make e2e-c`) the state lives
+in the database, so the `--persist-to` directory holds no files. `TestF02` still checks that the server was started with
+`--persist-to <dir>/state` and prints `STEP PARTLY SKIPPED` for the one check that the directory is not empty (`make e2e-c` sets
+`JM_E2E_STATE_IN_DB=1`). That the state persisted is proved against the same database by `TestReplayAcrossRestart` and
+`TestRestartPastDeadline`, which kill -9 the server and read back events and a lease. The server writes no marker file: a file
+made only to satisfy the check would prove nothing. Against PGlite (no `DATABASE_URL`) the directory holds the database files
+and the check runs in full.
+
 ## Output lines
 
 - `E2E_MS=<n> STEPS=<k>/<n>`: the closing line, printed once after every test has ended. `n` is the suite wall clock after `go test`
   finishes its tests. The steps are every named step of the tests that name them (`TestF02`) plus one step for each other test that
   ran; a skipped test counts nothing. `k` is the steps that passed, so a red run prints `k < n`. A failing named step prints its
-  name and the last 20 events the suite saw before it. A test cannot see the run's last line, so `make e2e-a` judges it: the
+  name and the last 20 events the suite saw before it. A test cannot see the run's last line, so `make e2e-c` and `make e2e-a` judge it: the
   last line before `go test`'s own `ok`/`FAIL` must be this line, with `k = n` on a green run and `k < n` on a red one.
 - `LATENESS_MS <kind> <ms>`: observed expiry minus the ledger's deadline, real-clock mode only. `kind` is
   `steady` (zero-traffic expiry), `after_restart_ahead` (deadline after the restart) or

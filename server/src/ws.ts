@@ -1,0 +1,56 @@
+// GET /v1/pods/:pod/ws. The token rides in Authorization on the upgrade; hello is sent at once; the client then subscribes.
+// Frames are handled one at a time per socket, in arrival order, and only after hello has gone out.
+import type { Hono } from 'hono';
+import { upgradeWebSocket } from 'hono/bun';
+import type { ErrorBody } from '../../gen/ts/protocol';
+import { isoOf } from '../../podcore/src/index';
+import { parseFrame } from './frames';
+import type { Hub } from './hub';
+import { fail } from './kit';
+import type { Conn, PodRuntime, Who } from './pod';
+import { hello } from './views';
+
+interface Session { pod: PodRuntime; who: Who }
+const sessions = new WeakMap<Request, Session>();
+
+const frame = (hub: Hub, pod: PodRuntime, type: string, data: unknown): string =>
+  JSON.stringify({ v: 1, type, podId: pod.id, ts: isoOf(hub.now()), data });
+
+async function onFrame(hub: Hub, s: Session, conn: Conn, text: string): Promise<void> {
+  const refuse = (e: ErrorBody): void => conn.send(frame(hub, s.pod, 'error', { code: e.code, message: e.message, ...(e.ref === undefined ? {} : { ref: e.ref }) } satisfies ErrorBody));
+  const p = parseFrame(s.pod.id, s.who, text);
+  if ('subscribe' in p) return s.pod.subscribe(conn, p.subscribe);
+  if ('code' in p) return refuse(p);
+  const reply = await s.pod.exec(p.cmd);
+  if (reply && !reply.ok) refuse(reply.error);
+}
+
+export function wsRoute(app: Hono, hub: Hub): void {
+  app.get('/v1/pods/:pod/ws', async (c, next) => {
+    if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') return next();
+    const p = await hub.authenticate(c.req.header('Authorization'));
+    if (p === null) return fail(c, 'unauthorized', 'Send a valid bearer token.');
+    if (p.kind === 'run') return fail(c, 'forbidden', 'A run token does not open the pod socket.');
+    const pod = hub.pods.get(c.req.param('pod') ?? '');
+    if (pod === undefined) return fail(c, 'not_found', 'No such pod.');
+    const who: Who = p.kind === 'user' ? p : { kind: 'computer', computerId: p.computer.id, owner: p.owner };
+    if (!pod.isMember(who.kind === 'user' ? who.actor.id : who.owner.id)) return fail(c, 'forbidden', 'Only members of this pod may connect.');
+    sessions.set(c.req.raw, { pod, who });
+    return next();
+  }, upgradeWebSocket((c) => {
+    const s = sessions.get(c.req.raw) as Session;
+    const conn: Conn = { who: s.who, send: () => undefined, subscribed: false, replaying: false, buf: [], sent: 0 };
+    const crash = (err: unknown): void => { console.error('frame failed', err); conn.send(frame(hub, s.pod, 'error', { code: 'internal', message: 'The pod failed on that frame.' })); };
+    let chain: Promise<void> = Promise.resolve();
+    return {
+      onOpen(_e, ws) {
+        conn.send = (t) => { try { ws.send(t); } catch { /* the socket closed under us */ } };
+        const you = s.who.kind === 'user' ? s.who.actor : s.who.owner;
+        // The computer is marked online before hello, so hello shows the presence this socket just made.
+        chain = s.pod.attach(conn).then(() => conn.send(frame(hub, s.pod, 'hello', hello(s.pod.state, s.pod.meta, you)))).catch(crash);
+      },
+      onMessage(e) { chain = chain.then(() => onFrame(hub, s, conn, String(e.data))).catch(crash); },
+      onClose() { chain = chain.then(() => s.pod.detach(conn)).then(() => undefined).catch(crash); },
+    };
+  }));
+}

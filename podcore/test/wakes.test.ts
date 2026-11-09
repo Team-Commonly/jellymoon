@@ -7,7 +7,7 @@ const [T1] = TASKS;
 const call = { kind: 'user' as const, userId: U_OWNER.id };
 /** Task 10+n, assigned to an agent: the core writes the task_assigned wake itself. */
 const assign = (n: number, assignee = AG1, wakeId = wak(n)): Cmd => ({ type: 'task_create', caller: call, taskId: id('tsk', 10 + n), title: `T${n}`, kind: 'chore', assignee, wakeId });
-const say = (n: number, text: string, caller: Cmd extends infer _ ? { kind: 'user'; userId: string } | { kind: 'run'; runId: string } : never = call): Cmd => ({ type: 'message_post', caller, messageId: id('msg', n), text, summary: 's', wakeId: wak(n) });
+const say = (n: number, text: string, caller: Cmd extends infer _ ? { kind: 'user'; userId: string } | { kind: 'run'; runId: string } : never = call): Cmd => ({ type: 'message_post', caller, messageId: id('msg', n), text, wakeId: wak(n) });
 const ruling = (n: number): Cmd => ({ type: 'change', kind: 'ruling', agentId: AG1, refs: { decisionId: id('dec', 1) }, wakeId: wak(n) });
 const hb = (computerId: string): Cmd => ({ type: 'heartbeat', computerId });
 const claimWake = (n: number, computerId = CMP_1, r = 1): Cmd => ({ type: 'run_claim', wakeId: wak(n), computerId, runId: runN(r) });
@@ -210,6 +210,12 @@ describe('run_claim', () => {
     expect(events(r.out).length).toBe(1);
   });
 
+  test('the run records the task that woke it, and none when the wake was about something else', () => {
+    expect(play([[assign(1), 0], [claimWake(1), 5000]]).state.runs[runN(1)].wakeTaskId).toBe(id('tsk', 11));
+    const other = play([[ruling(2), 0], [claimWake(2), 5000]]).state.runs[runN(1)];
+    expect([other.wakeReason, other.wakeTaskId]).toEqual(['decision_ruled', undefined]);
+  });
+
   test('the new run is live: it can claim a task', () => {
     const r = play([[assign(1), 0], [claimWake(1), 1], [{ type: 'claim', runId: runN(1), taskId: T1 }, 2]]);
     expect(r.state.claims[T1].runId).toBe(runN(1));
@@ -288,7 +294,7 @@ describe('agent_register', () => {
   });
 
   test('a seed whose later ids (k > 0) collide with a pending wake is refused too', () => {
-    const three = { type: 'message_post', caller: call, messageId: id('msg', 5), text: '@agent-1 @agent-3', summary: 's', wakeId: wak(10) } as Cmd;
+    const three = { type: 'message_post', caller: call, messageId: id('msg', 5), text: '@agent-1 @agent-3', wakeId: wak(10) } as Cmd;
     const pending = play([[assign(1, AG3, wak(11)), 0]]).state;
     expect(errCode(play([[three, 1]], pending).out)).toBe('invalid_input');
     expect(errCode(play([[three, 1]], play([[assign(1, AG3, wak(30)), 0]]).state).out)).toBeNull();

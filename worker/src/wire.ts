@@ -14,6 +14,8 @@ export type Body = Record<string, unknown>;
 
 /** Set by the Worker after it has authenticated; any incoming copy is deleted first. */
 export const WHO_HEADER = 'x-jm-who';
+/** Set by the Worker on a request the MCP adapter made; any incoming copy is deleted first. The pod has already counted that call. */
+export const MCP_HEADER = 'x-jm-mcp';
 
 export const encodeWho = (who: Who): string => encodeURIComponent(JSON.stringify(who));
 export function decodeWho(v: string | null): Who | null {

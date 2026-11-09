@@ -7,12 +7,23 @@ const user: Who = { kind: 'user', actor: { kind: 'human', id: 'usr_1', displayNa
 const rpc = (body: unknown): Request => new Request('https://x/mcp', { method: 'POST', headers: { Authorization: 'Bearer jmr_t' }, body: JSON.stringify(body) });
 const seen: Request[] = [];
 const dispatch = async (r: Request): Promise<Response> => { seen.push(r); return Response.json({ podId: 'pod_1' }); };
-const ask = async (who: Who, body: unknown) => (await mcp(rpc(body), 'https://x', who, dispatch)).json() as Promise<Record<string, any>>;
+const counted: string[] = [];
+const count = async (runId: string, podId: string): Promise<boolean> => { counted.push(`${runId}@${podId}`); return true; };
+const alive = async (): Promise<boolean> => true;
+const ask = async (who: Who, body: unknown) => (await mcp(rpc(body), 'https://x', who, dispatch, count, alive)).json() as Promise<Record<string, any>>;
 
 test('initialize answers, and a notification gets 202 with no body', async () => {
   expect((await ask(run, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } })).result.serverInfo.name).toBe('jellymoon');
-  const note = await mcp(rpc({ jsonrpc: '2.0', method: 'notifications/initialized' }), 'https://x', run, dispatch);
+  const note = await mcp(rpc({ jsonrpc: '2.0', method: 'notifications/initialized' }), 'https://x', run, dispatch, count, alive);
   expect([note.status, await note.text()]).toEqual([202, '']);
+});
+
+test('a run token whose run has ended is unauthorized on every method but a tool call, which the route answers', async () => {
+  for (const msg of [{ id: 1, method: 'initialize' }, { id: 2, method: 'tools/list' }, { id: 3, method: 'ping' }, { method: 'notifications/initialized' }]) {
+    const res = await mcp(rpc({ jsonrpc: '2.0', ...msg }), 'https://x', run, dispatch, count, async () => false);
+    expect([res.status, ((await res.json()) as { code: string }).code]).toEqual([401, 'unauthorized']);
+  }
+  expect((await mcp(rpc({ jsonrpc: '2.0', id: 4, method: 'initialize' }), 'https://x', { kind: 'user', actor: user.actor }, dispatch, count, async () => false)).status).toBe(200);
 });
 
 test('tools/list is the generated list, one tool per operation', async () => {
@@ -41,9 +52,44 @@ test('an unknown tool, an unknown method and a user token with no pod are refuse
   expect((await ask(run, [1])).error.code).toBe(-32600);
 });
 
+test('the pod is told of each tool call a run makes, refused or not, and of nothing else', async () => {
+  counted.length = 0;
+  await ask(run, { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+  await ask(run, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  await ask(user, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'jm_whoami', arguments: { podId: 'pod_1' } } });
+  expect(counted).toEqual([]);
+  await ask(run, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'jm_whoami', arguments: {} } });
+  await ask(run, { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'jm_nothing' } });
+  expect(counted).toEqual(['run_1@pod_1', 'run_1@pod_1']);
+});
+
 test('a tool name that is an inherited object property is no such tool, not a server error', async () => {
   for (const name of ['jm_constructor', 'jm___proto__', 'jm_toString', 'jm_hasOwnProperty']) {
     const r = await ask(run, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name, arguments: {} } });
     expect([name, r.error]).toEqual([name, { code: -32602, message: `No such tool: ${name}` }]);
   }
+});
+
+const call = { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'jm_whoami', arguments: {} } };
+
+test('the pod is told before the call is dispatched, so a dispatch that throws is still counted', async () => {
+  counted.length = 0;
+  const boom = async (): Promise<Response> => { throw new Error('dispatch failed'); };
+  const outcome = await mcp(rpc(call), 'https://x', run, boom, count, alive).then(() => 'answered', (e: Error) => e.message);
+  expect([outcome, counted]).toEqual(['dispatch failed', ['run_1@pod_1']]);
+});
+
+test('a call the pod could not count is refused before it takes effect: the operation is never dispatched', async () => {
+  const failures: Array<[string, (r: string, p: string) => Promise<boolean>]> = [
+    ['the count throws', async () => { throw new Error('pod unreachable'); }],
+    ['the pod answers that it did not count', async () => false],
+  ];
+  for (const [what, failing] of failures) {
+    seen.length = 0;
+    const r = await (await mcp(rpc(call), 'https://x', run, dispatch, failing, alive)).json() as Record<string, any>;
+    expect([what, r.error?.code, r.result, seen.length]).toEqual([what, -32603, undefined, 0]);
+  }
+  seen.length = 0;
+  const refused = await (await mcp(rpc({ ...call, params: { name: 'jm_nothing' } }), 'https://x', run, dispatch, async () => false, alive)).json() as Record<string, any>;
+  expect([refused.error.code, seen.length]).toEqual([-32603, 0]);
 });

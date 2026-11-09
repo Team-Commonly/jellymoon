@@ -25,6 +25,22 @@ describe('shell', () => {
     expect(queryByText('Not signed in')).toBeNull();
   });
 
+  it('names the pod from hello, and shows its id only until hello arrives', () => {
+    const net = fakeNet();
+    const { getByRole } = render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} me={you} /></MemoryRouter>);
+    expect(getByRole('banner').textContent).toContain('Pod pod_1');
+    act(() => { net.open(); net.deliver(frame('hello', undefined, hello({ podName: 'Launch room' }))); });
+    expect(getByRole('banner').textContent).toContain('Launch room');
+    expect(getByRole('banner').textContent).not.toContain('pod_1');
+  });
+
+  it('renders a not-found line for an unknown path', () => {
+    const { getByText } = at('/nowhere');
+    expect(getByText('Nothing here.')).toBeTruthy();
+  });
+});
+
+describe('who is signed in, in the bar', () => {
   it('signed in, the bar names the person, offers Sign out and no sign-in', () => {
     const { getByRole, queryByRole } = at('/device', you);
     const name = getByRole('banner').querySelector('[title]');
@@ -64,19 +80,5 @@ describe('shell', () => {
     expect(getByRole('banner').querySelector('[title]')?.textContent).toBe('Ada');
     expect((getByRole('button', { name: 'Sign out' }) as HTMLButtonElement).disabled).toBe(false);
     expect(getByRole('banner').textContent).toContain('pod_7');
-  });
-
-  it('names the pod from hello, and shows its id only until hello arrives', () => {
-    const net = fakeNet();
-    const { getByRole } = render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} me={you} /></MemoryRouter>);
-    expect(getByRole('banner').textContent).toContain('Pod pod_1');
-    act(() => { net.open(); net.deliver(frame('hello', undefined, hello({ podName: 'Launch room' }))); });
-    expect(getByRole('banner').textContent).toContain('Launch room');
-    expect(getByRole('banner').textContent).not.toContain('pod_1');
-  });
-
-  it('renders a not-found line for an unknown path', () => {
-    const { getByText } = at('/nowhere');
-    expect(getByText('Nothing here.')).toBeTruthy();
   });
 });

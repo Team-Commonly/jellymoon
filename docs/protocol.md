@@ -93,7 +93,7 @@ One of: `claude-code`, `codex`, `fake`.
 | `rate_limited` | 429 | Too many requests. Wait the seconds the Retry-After header gives, then retry. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `connector_drift` | 409 | The upstream lists no operations, or a pinned operation is missing or its arguments changed upstream. The error names it; re-pin the catalogue. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `upstream` | 502 | A service the server depends on, such as GitHub, failed or answered something unexpected. Retry later. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations), [Operations: connector_list](#op-connector_list), [Operations: connector_call](#op-connector_call) |
-| `upstream_failed` | 502 | The upstream refused or failed the call. The message carries its status and error, with any credential removed in every encoding. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
+| `upstream_failed` | 502 | The upstream refused or failed the call. The message carries its status and error, with any credential removed in every encoding. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
 | `upstream_too_large` | 502 | The upstream answered with more than 1 MiB. None of the answer is kept; ask for less, for example with a smaller limit. | — |
 | `vault_unconfigured` | 501 | The server has no vault key (JM_VAULT_KEY), so it cannot store or use a connection credential. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `internal` | 500 | The server failed. The request may be fine; retry later. | — |
@@ -179,6 +179,8 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 - The url is https and carries no credentials. Its host, and every address its name resolves to, must be outside the loopback, private, link-local and reserved ranges; this is checked again before every upstream request, and each request is pinned to the checked address. ENV=local allows only a literal loopback address, over http or https.
 - The token is stored only as an AES-256-GCM envelope under the server's vault key and is never returned. Without JM_VAULT_KEY a connect or a connector call gets vault_unconfigured.
 - A grant names an agent registered in the pod (otherwise not_found) and an access. A second grant to the same agent on the same connection replaces the first.
+- Only a pod owner sets a connection's approver set (a member gets forbidden). Each userId must be a pod member (otherwise not_found). The set replaces the last one; an empty list clears it.
+- A ruling on a connector write's ask is allowed for a pod owner or a member on that connection's approver set at the time of the ruling, and refused forbidden for anyone else, a removed approver included.
 
 ### Routes
 
@@ -201,6 +203,7 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 | POST | `/v1/runs/:run/end` | `computer`: computer token (`jmc_`) | [EndRunRequest](#def-EndRunRequest) | — |
 | POST | `/v1/pods/:pod/connections` | `user`: user token (`jmu_`) | [ConnectRequest](#def-ConnectRequest) | [Connection](#def-Connection) |
 | POST | `/v1/pods/:pod/grants` | `user`: user token (`jmu_`) | [GrantRequest](#def-GrantRequest) | [Grant](#def-Grant) |
+| POST | `/v1/pods/:pod/approvers` | `user`: user token (`jmu_`) | [ApproversRequest](#def-ApproversRequest) | [Approvers](#def-Approvers) |
 | POST | `/mcp` | `run`: run token (`jmr_`) or `user`: user token (`jmu_`) | — | mcp-streamable-http, stateless; the MCP adapter over operations.json |
 
 <a id="def-DeviceStartResponse"></a>
@@ -432,6 +435,26 @@ A stored grant: which agent may use which connection, how, and since when.
 | `agentId` | [AgentId](#def-AgentId) | yes | The id of an agent: a registered agent identity run by one harness on one computer. |
 | `access` | [ConnectorAccess](#def-ConnectorAccess) | yes | What a grant lets an agent do on a connection: read only, or also writes that each need a member's approval. |
 | `createdAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+
+<a id="def-ApproversRequest"></a>
+### ApproversRequest
+
+A pod owner names the members, besides the pod owners, who may approve this connection's writes. An empty list clears the set.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `connectionId` | [ConnectionId](#def-ConnectionId) | yes | The id of a pod connection: one upstream service and the credential the pod holds for it. |
+| `userIds` | list of [UserId](#def-UserId) | yes | The approvers, each a member of the pod. A repeat is refused with invalid_input. Limit: up to 50 items |
+
+<a id="def-Approvers"></a>
+### Approvers
+
+A connection's approver set as stored: the members who may approve its writes besides the pod owners.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `connectionId` | [ConnectionId](#def-ConnectionId) | yes | The id of a pod connection: one upstream service and the credential the pod holds for it. |
+| `userIds` | list of [UserId](#def-UserId) | yes | The approvers, in the order they were named. Limit: up to 50 items |
 
 <a id="def-RunOutcome"></a>
 ### RunOutcome
@@ -1080,7 +1103,10 @@ What an agent or person can do in a pod, as plain HTTP/JSON operations. This lis
 - connector_call names exactly one of connectionId or vendor; vendor names the pod's one connection to that vendor. Neither, both, or a vendor with several connections gets invalid_input.
 - connector_call is decided by the grant of the run's agent on the connection and by the operation's class in the pinned catalogue. An operation not in the pin gets not_found. No grant, or a write with only a read grant, gets forbidden.
 - A read with a read or write-with-confirm grant calls the upstream once and returns its result (state done). A write with write-with-confirm calls nothing: it is parked, the agent posts an ask (options a approve, b reject) whose body holds the exact arguments, and the call returns state parked with the decisionId.
-- Only a pod owner rules on that ask; another member's ruling is refused forbidden and leaves it open. A ruling of a releases exactly one upstream call with the parked arguments; the parked call is marked consumed in the transaction that records the ruling, so no second ruling, retry or race can release another. A ruling of b releases nothing.
+- Only a pod owner, or a member on the connection's approver set, rules on that ask; another member's ruling is refused forbidden and leaves it open. A ruling of a releases exactly one upstream call with the parked arguments; the parked call is marked consumed in the transaction that records the ruling, so no second ruling, retry or race can release another. A ruling of b releases nothing.
+- A released write's upstream call runs after the ruling is recorded and announced, outside the pod's command order: until its answer is recorded its receipt reads released with no upstreamStatus.
+- A released write whose answer was never recorded within 60 seconds of its ruling (the server stopped mid-call) settles as unknown: it was sent at most once, maybe not at all, and is never sent again.
+- A read whose upstream call fails in any way, an unexpected error included, writes a failed receipt with a reason and answers upstream_failed.
 - A parked write expires 24 hours after it was parked: its decision becomes expired, a later ruling gets gone, and nothing is released.
 - Every connector call that names an existing connection writes a ConnectorReceipt, stamped by the server. An agent can read receipts and never write one.
 - The connection's credential never appears in any operation's output, any error, any receipt or any ask: an upstream error that echoes it has it removed.
@@ -1215,7 +1241,7 @@ The pod's connections and the operations you may call on each: the pinned catalo
 <a id="op-connector_call"></a>
 #### `connector_call`
 
-Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a pod owner approves.
+Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a pod owner or one of the connection's approvers approves.
 
 - HTTP: POST `/v1/pods/{podId}/connectors/call`
 - Who may call: `run`: run token (`jmr_`)
@@ -1466,7 +1492,7 @@ One of: `done`, `parked`.
 <a id="def-ConnectorCallOutput"></a>
 ### ConnectorCallOutput
 
-A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.
+A done call carries the upstream's result; a parked one carries the decision a pod owner or a connection approver rules on.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -1478,9 +1504,9 @@ A done call carries the upstream's result; a parked one carries the decision a p
 <a id="def-ConnectorOutcome"></a>
 ### ConnectorOutcome
 
-ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask.
+ok: a read answered. failed: the call failed. refused: the grant did not allow it. parked, released, rejected, expired: a write's way. unknown: released, its answer never recorded.
 
-One of: `ok`, `failed`, `refused`, `parked`, `released`, `rejected`, `expired`.
+One of: `ok`, `failed`, `refused`, `parked`, `released`, `rejected`, `expired`, `unknown`.
 
 <a id="def-ConnectorReceipt"></a>
 ### ConnectorReceipt
@@ -1496,11 +1522,12 @@ The server's record of one connector call. Stamped by the server from its own re
 | `argsHash` | string | yes | SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex. Limit: matches `^[0-9a-f]{64}$` |
 | `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
 | `agentId` | [AgentId](#def-AgentId) | yes | The id of an agent: a registered agent identity run by one harness on one computer. |
-| `outcome` | [ConnectorOutcome](#def-ConnectorOutcome) | yes | ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask. |
+| `outcome` | [ConnectorOutcome](#def-ConnectorOutcome) | yes | ok: a read answered. failed: the call failed. refused: the grant did not allow it. parked, released, rejected, expired: a write's way. unknown: released, its answer never recorded. |
 | `upstreamStatus` | integer | no | The HTTP status the upstream answered with, when it was called. Limit: 100 to 599 |
 | `decisionId` | [DecisionId](#def-DecisionId) | no | A write: the decision of its ask. |
 | `approver` | [Actor](#def-Actor) | no | A released write: the member whose ruling released it. |
 | `result` | object | no | A released write: the upstream's result. |
+| `reason` | string | no | Outcome failed, refused or unknown: why, with any credential removed. Limit: up to 400 characters |
 | `createdAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 | `settledAt` | [Timestamp](#def-Timestamp) | no | When the call reached its outcome: at once for a read, at the ruling or expiry for a write. |
 | `expiresAt` | [Timestamp](#def-Timestamp) | no | A parked write: when it expires unruled. |

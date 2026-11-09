@@ -28,8 +28,8 @@ function repo() {
   return dir;
 }
 
-function run(dir) {
-  const r = Bun.spawnSync([process.execPath, script], { cwd: dir, env: { ...process.env, JM_ENTROPY_BASE: 'main' } });
+function run(dir, env = { JM_ENTROPY_BASE: 'main' }) {
+  const r = Bun.spawnSync([process.execPath, script], { cwd: dir, env: { ...process.env, CI: '', JM_ENTROPY_BASE: '', ...env } });
   return { code: r.exitCode, out: `${r.stdout}${r.stderr}` };
 }
 
@@ -68,4 +68,30 @@ test('an edited old note does not count as a new one', () => {
   writeFileSync(join(dir, 'entropy.json'), cfg(150));
   writeFileSync(join(dir, 'docs', 'entropy', 'caps', 'old.md'), 'old, edited\n');
   expect(run(dir).code).toBe(1);
+});
+
+test('a lowered cap with no note fails', () => {
+  const dir = repo();
+  writeFileSync(join(dir, 'entropy.json'), cfg(50));
+  expect(run(dir).code).toBe(1);
+});
+
+test('a new area with no note fails', () => {
+  const dir = repo();
+  const c = JSON.parse(cfg(100));
+  c.locBudget.extra = { paths: ['extra/'], max: 10 };
+  writeFileSync(join(dir, 'entropy.json'), JSON.stringify(c));
+  const r = run(dir);
+  expect(r.code).toBe(1);
+  expect(r.out).toContain('extra');
+});
+
+test('an unreadable base fails in CI and only skips locally', () => {
+  const dir = repo(); // no origin/main here, and JM_ENTROPY_BASE is not named
+  const local = run(dir, {});
+  expect(local.code).toBe(0);
+  expect(local.out).toContain('cap-note check skipped');
+  const ci = run(dir, { CI: 'true' });
+  expect(ci.code).toBe(1);
+  expect(ci.out).toContain('cannot read the base');
 });

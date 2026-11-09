@@ -94,7 +94,7 @@ if (named !== 'none') try {
 
 // A cap changes only with a new note in docs/entropy/caps/ in the same diff (ADR 0001). The base is the merge-base of HEAD and
 // the named base (JM_ENTROPY_BASE, else origin/main). A shallow clone, or a base that cannot be read, skips only this check
-// and says so; the ratchet above already fails loudly for a named base it cannot read. CI checks out with fetch-depth 0.
+// and says so (but fails when CI is set); the ratchet above already fails loudly for a named base it cannot read. CI checks out with fetch-depth 0.
 function git(...args) { return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); }
 if (named !== 'none') try {
   if (git('rev-parse', '--is-shallow-repository').trim() === 'true') throw new Error('shallow clone');
@@ -110,7 +110,11 @@ if (named !== 'none') try {
   if (changed.length && !added.length) {
     errors.push(`cap changed for ${changed.join(', ')} without a new note: add a file under ${noteDir} in this diff (ADR 0001)`);
   }
-} catch (e) { console.log(`cap-note check skipped: cannot read the base of this diff (${e.message.split('\n')[0]})`); }
+} catch (e) {
+  const why = `cannot read the base of this diff (${e.message.split('\n')[0]})`;
+  if (process.env.CI) errors.push(`cap-note check: ${why}; CI must check out full history (fetch-depth: 0)`);
+  else console.log(`cap-note check skipped: ${why}`);
+}
 
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 console.log(`entropy ok: ${files.length} files`);

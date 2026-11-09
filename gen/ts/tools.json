@@ -2310,7 +2310,7 @@
     },
     {
       "name": "jm_connector_call",
-      "description": "Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a pod owner approves.",
+      "description": "Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a pod owner or one of the connection's approvers approves.",
       "inputSchema": {
         "description": "One call: which connection (by id or by vendor), which pinned operation, and its arguments.",
         "type": "object",
@@ -2345,7 +2345,7 @@
         }
       },
       "outputSchema": {
-        "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.",
+        "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner or a connection approver rules on.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -2463,7 +2463,7 @@
                   "pattern": "^agt_[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "outcome": {
-                  "description": "ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask.",
+                  "description": "ok: a read answered. failed: the call failed. refused: the grant did not allow it. parked, released, rejected, expired: a write's way. unknown: released, its answer never recorded.",
                   "type": "string",
                   "enum": [
                     "ok",
@@ -2472,7 +2472,8 @@
                     "parked",
                     "released",
                     "rejected",
-                    "expired"
+                    "expired",
+                    "unknown"
                   ]
                 },
                 "upstreamStatus": {
@@ -2521,6 +2522,11 @@
                 "result": {
                   "description": "A released write: the upstream's result.",
                   "type": "object"
+                },
+                "reason": {
+                  "description": "Outcome failed, refused or unknown: why, with any credential removed.",
+                  "type": "string",
+                  "maxLength": 400
                 },
                 "createdAt": {
                   "description": "RFC 3339 in UTC. Set by the server only.",

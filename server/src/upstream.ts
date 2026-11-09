@@ -5,4 +5,4 @@ import * as mcpHttp from './upstream-mcp';
 
 export type Adapter = typeof mcpHttp;
 const ADAPTERS: Record<Pin['protocol'], Adapter> = { 'mcp-http': mcpHttp };
-export const adapterOf = (pin: Pin): Adapter => ADAPTERS[pin.protocol];
+export const adapterOf = (pin: Pin, override?: Adapter): Adapter => override ?? ADAPTERS[pin.protocol];

@@ -121,19 +121,20 @@ func (f *f19) writes(n int) error {
 // Step 5: a member who is not an owner cannot approve; the owner's approval releases one write with the exact arguments;
 // a second ruling, a rejection and an expiry release none.
 func (f *f19) releasesOnce() error {
+	w0 := len(f.linear.seen("create_issue")) // the writes the approver-set step released
 	if err := f.rule(f.sBen, f.parked, "a", "forbidden"); err != nil {
 		return fmt.Errorf("a plain member's approval: %w", err)
 	}
-	if err := f.writes(0); err != nil {
+	if err := f.writes(w0); err != nil {
 		return err
 	}
 	if err := f.rule(f.sO, f.parked, "a", "ruled"); err != nil {
 		return err
 	}
-	if err := f.writes(1); err != nil {
+	if err := f.writesSoon(w0 + 1); err != nil {
 		return err
 	}
-	if w := f.linear.seen("create_issue")[0]; !reflect.DeepEqual(w.Args, f.args) || w.Bearer != "Bearer "+stubToken {
+	if w := f.linear.seen("create_issue")[w0]; !reflect.DeepEqual(w.Args, f.args) || w.Bearer != "Bearer "+stubToken {
 		return fmt.Errorf("the released write: args %v bearer ok %v, want exactly %v with the stub bearer", w.Args, w.Bearer == "Bearer "+stubToken, f.args)
 	}
 	if err := f.rule(f.sO, f.parked, "a", "already_ruled"); err != nil {
@@ -163,7 +164,7 @@ func (f *f19) releasesOnce() error {
 		return err
 	}
 	f.rejected, f.expired = rejected, expired
-	return f.writes(1)
+	return f.writes(w0 + 1)
 }
 
 func (f *f19) receiptOf(dec string) (connReceipt, string, error) {
@@ -177,7 +178,7 @@ func (f *f19) receiptOf(dec string) (connReceipt, string, error) {
 
 // Step 6: the released write's receipt is the server's: it names the decision, the approver and the upstream's result.
 func (f *f19) receipt() error {
-	r, b, err := f.receiptOf(f.parked)
+	r, b, err := f.receiptSoon(f.parked)
 	if err != nil {
 		return err
 	}

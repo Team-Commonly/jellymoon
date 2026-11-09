@@ -89,7 +89,7 @@ describe('the catalogue pin', () => {
 describe('the write gate', () => {
   const parked = (id: string, expiresAt: number): CallRow => ({
     id, pod: 'pod_1', connection: 'con_1', operation: 'create_issue', args: '{}', argsHash: '0'.repeat(64), runId: 'run_1', agentId: 'agt_1', outcome: 'parked',
-    upstreamStatus: null, decisionId: `dec_${id}`, approver: null, result: null, createdAt: 1, settledAt: null, expiresAt,
+    upstreamStatus: null, decisionId: `dec_${id}`, approver: null, result: null, createdAt: 1, settledAt: null, expiresAt, reason: null,
   });
 
   test('a parked write is claimed once: a second claim, a retry or a race finds nothing to release', async () => {

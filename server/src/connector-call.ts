@@ -1,6 +1,7 @@
 // The agent's connector_call and the write gate (ADR 0009). The run's agent's grant and the pinned class of the operation
 // decide: a read is called at once; a write is parked as the agent's own ask, with its exact arguments, and released at most
-// once by a member's ruling of approve. Every call that names a connection leaves a server-stamped receipt row.
+// once by the ruling of approve of a pod owner or one of the connection's approvers. Every call that names a connection leaves
+// a server-stamped receipt row, whatever the upstream, the vault or the adapter does.
 import type { Actor, ConnectorCallInput, ConnectorReceipt, ConnectorVendor, Harness, PostInput } from '../../gen/ts/protocol';
 import { isoOf } from '../../podcore/src/index';
 import type { Cmd } from '../../podcore/src/index';
@@ -14,9 +15,10 @@ import type { Call } from './kit';
 import { viaMcp } from './mcp';
 import type { Opts, PodRuntime } from './pod';
 import { gate } from './routes-ops';
-import { callsOf, claimParked, connectionsOf, findConnection, findGrant, finishCall, saveCall } from './store';
+import { approversOf, callsOf, claimParked, connectionsOf, findConnection, findGrant, finishCall, saveCall } from './store';
 import type { CallRow, ConnRow } from './store';
 import { adapterOf } from './upstream';
+import type { Called } from './upstream-mcp';
 
 /** A parked write expires 24 hours after it was parked: its decision becomes expired and nothing is released. */
 const PARK_MS = 24 * 60 * 60 * 1000;
@@ -53,15 +55,30 @@ function cardOf(vendor: string, op: string, args: Record<string, unknown>, hash:
   };
 }
 
-async function read(kit: Kit, k: Call, conn: ConnRow, op: PinOp, row: CallRow, args: Record<string, unknown>): Promise<Response> {
-  const dest = await destFor(kit, conn);
-  if (typeof dest === 'string') {
-    await saveCall(kit.hub.db, { ...row, outcome: 'failed', settledAt: kit.hub.now() });
-    return fail(k.c, 'upstream_failed', `${conn.vendor} ${op.name} was not called: ${dest}`, row.id);
+/** Why a call has no upstream answer, and whether its request may have left (an adapter that threw part way). */
+interface NoAnswer { why: string; maybeSent: boolean }
+
+/**
+ * The upstream's answer to one call, scrubbed of the credential, or why there is none. It never throws: the egress check, the
+ * vault and the adapter are each caught, and the reason it gives holds none of what they threw.
+ */
+async function answerOf(kit: Kit, conn: ConnRow, operation: string, args: Record<string, unknown>): Promise<Called | NoAnswer> {
+  const dest = await destFor(kit, conn).catch(() => 'the egress check failed.');
+  if (typeof dest === 'string') return { why: `was not called: ${dest}`, maybeSent: false };
+  let token: string;
+  try { token = await kit.vault!.open(conn, aadOf(conn)); } catch { return { why: 'was not called: the pod could not open the connection\'s credential.', maybeSent: false }; }
+  try { return scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor), kit.adapter).call(dest, token, operation, args), token); } catch {
+    return { why: 'failed with an unexpected error in the connector adapter; none of it was kept.', maybeSent: true };
   }
-  const token = await kit.vault!.open(conn, aadOf(conn));
-  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(dest, token, op.name, args), token);
-  await saveCall(kit.hub.db, { ...row, outcome: res.ok ? 'ok' : 'failed', upstreamStatus: res.status, settledAt: kit.hub.now() });
+}
+
+const reasonOf = (res: Called | NoAnswer): string | null => ('why' in res ? res.why : res.ok ? null : `upstream status ${res.status}: ${res.error ?? ''}`.slice(0, 400));
+
+async function read(kit: Kit, k: Call, conn: ConnRow, op: PinOp, row: CallRow, args: Record<string, unknown>): Promise<Response> {
+  const res = await answerOf(kit, conn, op.name, args);
+  const status = 'status' in res ? res.status : null;
+  await saveCall(kit.hub.db, { ...row, outcome: 'status' in res && res.ok ? 'ok' : 'failed', upstreamStatus: status, reason: reasonOf(res), settledAt: kit.hub.now() });
+  if ('why' in res) return fail(k.c, 'upstream_failed', `${conn.vendor} ${op.name} ${res.why}`.slice(0, 400), row.id);
   if (!res.ok) return fail(k.c, res.code ?? 'upstream_failed', `${conn.vendor} ${op.name} failed (upstream status ${res.status}): ${res.error ?? ''}`.slice(0, 400), row.id);
   return k.c.json({ state: 'done', receiptId: row.id, result: res.result ?? {} });
 }
@@ -91,10 +108,10 @@ export const connectorCall = (kit: Kit) => async (k: Call): Promise<Response> =>
   const args = b.args as Record<string, unknown>;
   const row: CallRow = {
     id: newId('crc_'), pod: k.pod.id, connection: conn.id, operation: b.operation, args: JSON.stringify(args), argsHash: argsHash(args), runId: (k.caller as { runId: string }).runId,
-    agentId, outcome: 'refused', upstreamStatus: null, decisionId: null, approver: null, result: null, createdAt: kit.hub.now(), settledAt: null, expiresAt: null,
+    agentId, outcome: 'refused', upstreamStatus: null, decisionId: null, approver: null, result: null, createdAt: kit.hub.now(), settledAt: null, expiresAt: null, reason: null,
   };
   const refuse = async (code: 'not_found' | 'forbidden', why: string): Promise<Response> => {
-    await saveCall(kit.hub.db, { ...row, settledAt: kit.hub.now() });
+    await saveCall(kit.hub.db, { ...row, reason: why, settledAt: kit.hub.now() });
     return fail(k.c, code, why, row.id);
   };
   const op = opOf(pinOf(conn.vendor as ConnectorVendor), b.operation);
@@ -106,21 +123,27 @@ export const connectorCall = (kit: Kit) => async (k: Call): Promise<Response> =>
   return park(kit, k, conn, op, row, args);
 };
 
-/** The one upstream call a ruling of approve released. Its answer is recorded; it never throws. */
-async function release(kit: Kit, row: CallRow): Promise<void> {
-  const conn = await findConnection(kit.hub.db, row.pod, row.connection);
-  const dest = conn === undefined ? 'gone' : await destFor(kit, conn);
-  if (conn === undefined || kit.vault === undefined || typeof dest === 'string') return void (await finishCall(kit.hub.db, row.id, 'failed', null, null));
-  const token = await kit.vault.open(conn, aadOf(conn));
-  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(dest, token, row.operation, JSON.parse(row.args) as Record<string, unknown>), token);
-  await finishCall(kit.hub.db, row.id, res.ok ? 'released' : 'failed', res.status, res.ok ? JSON.stringify(res.result ?? {}) : null);
+/**
+ * The one upstream call a ruling of approve released. It starts after the ruling committed and runs outside the pod's command
+ * order, so a slow upstream holds neither the pod nor the socket that sent the ruling; its answer is recorded back in that
+ * order. It never throws. An answer that is never recorded (the process stopped) is settled as unknown later (store.ts).
+ */
+function release(kit: Kit, pod: PodRuntime, row: CallRow): void {
+  void (async () => {
+    const conn = await findConnection(kit.hub.db, row.pod, row.connection);
+    const res: Called | NoAnswer = conn === undefined || kit.vault === undefined ? { why: 'was not called: the connection is gone.', maybeSent: false }
+      : await answerOf(kit, conn, row.operation, JSON.parse(row.args) as Record<string, unknown>);
+    const outcome = 'why' in res ? (res.maybeSent ? 'unknown' : 'failed') : res.ok ? 'released' : 'failed';
+    const result = 'status' in res && res.ok ? JSON.stringify(res.result ?? {}) : null;
+    await pod.serial(() => finishCall(kit.hub.db, row.id, outcome, 'status' in res ? res.status : null, result, reasonOf(res)));
+  })().catch(() => console.error('a released connector write\'s answer was not recorded', row.id));
 }
 
 /**
- * What a ruling does to a parked write (ws.ts passes these with every `rule`). Only a pod owner, the role that connects and
- * grants, rules on a connector write's ask; anyone else is refused forbidden before the core sees the ruling. In the ruling's
- * own transaction the parked row is claimed, released (option a) or rejected (option b); after it commits and before members
- * hear of the ruling, a released row makes its one call. A decision with no connector row claims nothing.
+ * What a ruling does to a parked write (ws.ts passes these with every `rule`). A pod owner, the role that connects and grants,
+ * or a member on the connection's approver set rules on a connector write's ask; anyone else is refused forbidden before the
+ * core sees the ruling. In the ruling's own transaction the parked row is claimed, released (option a) or rejected (option b);
+ * after it commits, a released row starts its one call (release). A decision with no connector row claims nothing.
  */
 export function rulingOpts(kit: Kit, pod: PodRuntime, cmd: Extract<Cmd, { type: 'rule' }>): Opts {
   const caller = cmd.caller;
@@ -130,11 +153,13 @@ export function rulingOpts(kit: Kit, pod: PodRuntime, cmd: Extract<Cmd, { type: 
   let claimed: CallRow | undefined;
   return {
     pre: async (s) => {
-      if (s.owners.some((o) => o.id === caller.userId) || (await callsOf(kit.hub.db, pod.id, cmd.decisionId, 1)).length === 0) return null;
-      return { ok: false, error: { code: 'forbidden', message: 'Only a pod owner rules on a connector write.' } };
+      if (s.owners.some((o) => o.id === caller.userId)) return null;
+      const [row] = await callsOf(kit.hub.db, pod.id, cmd.decisionId, 1);
+      if (row === undefined || (by !== undefined && (await approversOf(kit.hub.db, row.connection)).includes(caller.userId))) return null;
+      return { ok: false, error: { code: 'forbidden', message: 'Only a pod owner or one of this connection\'s approvers rules on a connector write.' } };
     },
     extra: async (t) => { claimed = await claimParked(t, cmd.decisionId, approve ? 'released' : 'rejected', approve && by ? JSON.stringify(by) : null, kit.hub.now()); },
-    after: async () => { if (claimed !== undefined && approve) await release(kit, claimed); },
+    after: async () => { if (claimed !== undefined && approve) release(kit, pod, claimed); },
   };
 }
 
@@ -149,6 +174,7 @@ export function receiptView(r: CallRow, now: number): ConnectorReceipt {
   if (r.decisionId !== null) out.decisionId = r.decisionId;
   if (r.approver !== null) out.approver = JSON.parse(r.approver) as Actor;
   if (r.result !== null) out.result = JSON.parse(r.result) as Record<string, unknown>;
+  if (r.reason !== null) out.reason = r.reason;
   const settled = expired ? r.expiresAt : r.settledAt;
   if (settled !== null) out.settledAt = isoOf(Number(settled));
   if (r.expiresAt !== null) out.expiresAt = isoOf(Number(r.expiresAt));

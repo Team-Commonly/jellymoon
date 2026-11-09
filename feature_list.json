@@ -269,7 +269,7 @@
         "the replay test passes"
       ],
       "test": "go test ./daemon/... -run TestReplayCodex",
-      "passes": false
+      "passes": true
     }
   ]
 }

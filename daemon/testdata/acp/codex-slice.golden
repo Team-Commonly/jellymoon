@@ -1,0 +1,10 @@
+POST /v1/runs wakeId=wak_replay
+POST /mcp initialize
+POST /mcp notifications/initialized
+POST /mcp tools/list
+POST /mcp tools/call jm_whoami {}
+POST /mcp tools/call jm_task_list {}
+POST /mcp tools/call jm_task_claim {"taskId":"tsk_00000000000000000000000002"}
+POST /mcp tools/call jm_post {"body":"Checked my identity, listed the board, and claimed “Say hello to the pod.” Hello, everyone!","kind":"result","status":"done","summary":"Hello, slice! I’m codex-one, ready to help.","taskId":"tsk_00000000000000000000000002"}
+POST /mcp tools/call jm_task_update {"status":"done","taskId":"tsk_00000000000000000000000002"}
+POST /v1/runs/run_00000000000000000000000004/end outcome=completed

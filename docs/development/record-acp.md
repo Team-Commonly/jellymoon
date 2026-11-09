@@ -25,6 +25,13 @@ proxy, so the agent's calls to the pod are logged in the same order. One run tak
 
 Keep it short: one task, one reply. A run that goes wrong is not worth fixing by hand-editing the file; record again.
 
+## Codex
+
+`make record-acp-codex` (`bun scripts/record-acp.mjs --harness codex`) does the same with a real Codex run through the pinned
+`@agentclientprotocol/codex-acp` adapter and writes `daemon/testdata/acp/codex-slice.jsonl`; `TestReplayCodex` replays it against
+`codex-slice.golden`. It needs this machine's normal Codex sign-in (the adapter's bundled Codex reads it; nothing here does). `make acp-tools`
+installs both adapters. The scrub also drops Codex's own account line and names its Guardian Review step in the vocabulary.
+
 ## Scrub
 
 The script scrubs the raw log before anything is kept (`scripts/acp-scrub.mjs`): pod, user, agent, run, task and message ids become

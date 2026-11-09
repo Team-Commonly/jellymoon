@@ -152,8 +152,16 @@ async function newComputer(env: Env, who: Who, body: Body): Promise<Response> {
   return Response.json(await createComputer(env.DB, userOf(who).id, body.name as string, body.os as string, body.arch as string));
 }
 
-/** Every public route. The test entry wraps this; the production entry is this alone. */
+/** Every public route. The test entry wraps this; the production entry is this alone. Every reply says `Referrer-Policy: no-referrer`, so the one-time code in a /device or /invite URL never leaves in a Referer header (twin of server/src/app.ts). */
 export async function handle(req: Request, env: Env, viaMcp = false): Promise<Response> {
+  const res = await route(req, env, viaMcp);
+  if (res.status === 101) return res; // a socket upgrade carries a webSocket, which a copy would drop
+  const out = new Response(res.body, res);
+  out.headers.set('Referrer-Policy', 'no-referrer');
+  return out;
+}
+
+async function route(req: Request, env: Env, viaMcp: boolean): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
   const m = req.method;

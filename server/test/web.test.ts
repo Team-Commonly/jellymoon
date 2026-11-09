@@ -113,3 +113,10 @@ test('with no JM_WEB_DIR the server serves no client', async () => {
   expect(appOptions({ JM_WEB_DIR: '' }).webDir).toBe(undefined);
   expect(appOptions({}).webDir).toBe(undefined);
 });
+
+test('every reply says no-referrer, so the one-time code in a /device or /invite URL is never sent on', async () => {
+  for (const path of ['/device?code=ABCD-EFGH', '/invite/tok_secret', '/assets/app.css', '/v1/nope', '/healthz']) {
+    const r = await get(dir, path);
+    expect(`${path} ${r.headers.get('referrer-policy')}`).toBe(`${path} no-referrer`);
+  }
+});

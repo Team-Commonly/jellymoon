@@ -31,7 +31,7 @@
     { "name": "task_claim", "method": "POST", "path": "/v1/pods/{podId}/tasks/{taskId}/claim", "auth": "run", "input": "TaskClaimInput", "output": "TaskClaimOutput",
       "description": "Claim a task before working on it. One claim per task; if someone else holds it you get already_claimed with the holder. The claim renews while its run is alive (any operation on the run token, or the hosting daemon's heartbeat); see ADR 0002." },
     { "name": "task_update", "method": "PATCH", "path": "/v1/pods/{podId}/tasks/{taskId}", "auth": "run|user", "input": "TaskUpdateInput", "output": "task.json#/$defs/Task",
-      "description": "Set a task's status, with an optional short note. Use done only when the task's work is finished." },
+      "description": "Set a task's status. Use done only when the task's work is finished." },
     { "name": "evidence", "method": "GET", "path": "/v1/pods/{podId}/runs/{runId}/tool-calls", "auth": "run|user", "input": "EvidenceInput", "output": "EvidenceOutput",
       "description": "The stamped tool calls on a run: what the pod and the daemon saw it do. Cite their ids in an ask's context; you can read these but never write them." },
     { "name": "task_release", "method": "POST", "path": "/v1/pods/{podId}/tasks/{taskId}/release", "auth": "run|user", "input": "TaskReleaseInput", "output": "task.json#/$defs/Task",
@@ -124,14 +124,13 @@
     },
     "TaskUpdateStatus": { "description": "The statuses task_update can set: every task status except open.", "type": "string", "enum": ["in_progress", "blocked", "done", "failed"] },
     "TaskUpdateInput": {
-      "description": "The new status for a task, with an optional note.",
+      "description": "The new status for a task.",
       "type": "object",
       "additionalProperties": false,
       "required": ["taskId", "status"],
       "properties": {
         "taskId": { "$ref": "common.json#/$defs/TaskId" },
-        "status": { "$ref": "#/$defs/TaskUpdateStatus" },
-        "note": { "description": "A short note on the change.", "type": "string", "maxLength": 500 }
+        "status": { "$ref": "#/$defs/TaskUpdateStatus" }
       }
     },
     "TaskReleaseInput": {

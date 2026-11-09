@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a e2e-c e2e-any e2e-deployed deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-goentropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: acp-tools record-acp e2e e2e-a e2e-c e2e-any e2e-deployed deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -18,6 +18,15 @@ tools-cache:
 node_modules: package.json bun.lock
 	$(BUN) install --frozen-lockfile
 	@touch node_modules
+
+# The real Claude Code adapter for scripts/record-acp.mjs, pinned exactly, in this clone's own ignored prefix. Never global.
+ACP_ADAPTER := @agentclientprotocol/claude-agent-acp@0.99.1
+acp-tools:
+	npm install --prefix .tools/acp --ignore-scripts --save-exact --no-audit --no-fund $(ACP_ADAPTER)
+
+# Records a fresh daemon/testdata/acp/claude-slice.jsonl with a real Claude Code run (docs/development/record-acp.md).
+record-acp: acp-tools
+	$(BUN) scripts/record-acp.mjs
 
 # Regenerate every contract from schema/. Never hand-edit gen/, protocol/gen.go or docs/protocol.md.
 gen: node_modules
@@ -38,6 +47,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
 	$(BUN) test podcore worker server
+	$(BUN) run test:scrub
 	$(BUN) run test:web
 
 # The Cloudflare adapter's unit tests alone (CI's `worker` job). bun test exits 1 when it finds no test, so an empty run is red.
@@ -144,7 +154,7 @@ define judge_e2e
 	exit $$rc
 endef
 
-# The contract suite against the pod-state server. It persists every command, heartbeats included (staleMs is 0). The tests that
+# The contract suite against the pod-state server. JM_E2E_SKIP is set from E2E_C_SKIP below, so an inherited value never applies. It persists every command, heartbeats included (staleMs is 0). The tests that
 # need the Cloudflare adapter's object routes are skipped, each with its reason (docs/development/e2e-contract.md, "Skipped on the server").
 E2E_C_SKIP := TestEvictMidClaim,TestEvictAlarmWake,TestEvictPastDeadline
 e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
@@ -153,8 +163,10 @@ e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
 # `make e2e` is the contract suite against the server that ships.
 e2e: e2e-c
 
-# The contract suite against the Cloudflare adapter (worker/), which stays in the tree as a second adapter. The tests of features
-# built on the pod-state server only (ADR 0006) are skipped, each with its reason (docs/development/e2e-contract.md, "Skipped on the Worker").
+# The contract suite against the Cloudflare adapter (worker/), which stays in the tree as a second adapter.
+# JM_E2E_SKIP is cleared here, so an inherited skip list never drops tests without a word. The skips below are
+# deliberate: features built on the pod-state server only (ADR 0006), each with its reason in
+# docs/development/e2e-contract.md, "Skipped on the Worker". Override with `make e2e-a E2E_A_SKIP=<names>`.
 E2E_A_SKIP := TestF19
 e2e-a: node_modules
 	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' JM_E2E_SKIP='$(E2E_A_SKIP)')
@@ -188,7 +200,7 @@ deployed-boot:
 	port=$$($(BUN) -e 'const s = Bun.serve({ port: 0, fetch() { return new Response(); } }); console.log(s.port); s.stop(true);'); \
 	code() { curl -s -o /dev/null -w '%{http_code}' "$$@"; }; \
 	want() { [ "$$2" = "$$3" ] || { echo "deployed-boot: $$1: got $$2, want $$3"; tail -20 "$$log"; exit 1; }; echo "deployed-boot: ok $$1 -> $$2"; }; \
-	trap 'kill $$pid 2>/dev/null; wait $$pid 2>/dev/null' EXIT; \
+	trap 'if [ "$$pid" -gt 0 ]; then kill $$pid 2>/dev/null; wait $$pid 2>/dev/null; fi; tmp="$${TMPDIR:-/tmp}"; tmp="$${tmp%/}"; case "$$dir" in "$$tmp"/?*|/tmp/?*) [ -d "$$dir" ] && rm -rf -- "$$dir";; esac' EXIT; \
 	out=$$(env -u ENV -u DATABASE_URL PORT=$$port "$$bun" "$$bundle" 2>&1); rc=$$?; \
 	if [ $$rc -eq 0 ] || ! echo "$$out" | grep -q 'DATABASE_URL is required'; then echo "deployed-boot: with no ENV and no DATABASE_URL the server must refuse to start (rc=$$rc)"; exit 1; fi; \
 	echo "deployed-boot: ok the server refuses to start with no database (rc=$$rc)"; \

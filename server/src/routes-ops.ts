@@ -1,6 +1,5 @@
 // The pod operations of schema/operations.json over HTTP. Rules live in the core; this file maps requests to commands.
-// Not served here: evidence (404). A request field the core has no place for is refused with invalid_input, never dropped: a
-// task update's note.
+// Not served here: evidence (404).
 import type { Hono } from 'hono';
 import { TaskStatusValues } from '../../gen/ts/protocol';
 import type { Harness, Message, PostInput, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
@@ -61,16 +60,7 @@ const claim = async (k: Call): Promise<Response> => {
   return respond(k.c, await k.pod.exec({ type: 'claim', runId: k.caller.runId, taskId: k.c.req.param('task') ?? '' }));
 };
 
-/** Schema fields the core command has no place for. A request carrying one is refused, never silently dropped. */
-const refuse = (k: Call, fields: readonly string[]): Response | null => {
-  const hit = fields.find((f) => k.body[f] !== undefined);
-  return hit === undefined ? null : bad(k.c, `body.${hit}: this server does not store ${hit} yet`);
-};
-
 const update = async (k: Call): Promise<Response> => {
-  // The core's task_update takes a status and an assignee; the schema's note has nowhere to go.
-  const refused = refuse(k, ['note']);
-  if (refused) return refused;
   return respond(k.c, await k.pod.exec({ type: 'task_update', caller: k.caller, taskId: k.c.req.param('task') ?? '', status: k.body.status as TaskUpdateStatus, wakeId: newWakeSeed() }));
 };
 

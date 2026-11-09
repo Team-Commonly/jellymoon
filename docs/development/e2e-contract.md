@@ -76,9 +76,8 @@ schema refuses (a wrong type, a value over a limit such as a 16,385-character `b
 dropped or truncated: a body the schema allows is stored whole.
 
 A field the schema allows but the pod core has no place for is also `400 invalid_input`, never silently dropped. Today
-that is, on `POST /v1/pods/:pod/messages`: `kind` other than `fyi`, `status` other than `done`, `needs`, `options`,
-`context`, `taskId`, `links` and `caveat`; on `PATCH /v1/pods/:pod/tasks/:task`: `note`; on `POST /v1/runs/:run/end`:
-`harnessVersion`. A run's post needs its `summary` (the core stores it as the headline).
+that is, on `POST /v1/runs/:run/end`: `harnessVersion`. A task update has no `note`: the schema does not offer one, so it is refused as an unknown field. A post stores
+every field its definition allows (every `kind`, `status`, `needs`, `options`, `context`, `taskId`, `links` and `caveat`). A run's post needs its `summary` (the core stores it as the headline).
 
 ## Invites
 
@@ -135,6 +134,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestEvictPastDeadline` | The object is discarded with the clock stored five seconds past a claim's deadline; the first thing to reach the new instance is a socket reconnect, which runs no command, and it already carries the `claim.released{expired}`, exactly once. It needs the restore to settle (`boot`). |
 | `TestF08` | F08: builds the repo's `daemon/cmd/jellymoon` and runs it as a black box (own process group, output captured, config dir `JELLYMOON_HOME`, server `JELLYMOON_SERVER`, first-registration jmu_ token in `JELLYMOON_USER_TOKEN`, never argv). It registers the computer and stores `computer.json` at 0600 in a 0700 dir; `agent add fake --pod` registers an agent; members get `presence.changed` online within 5 s; a daemon stopped with SIGSTOP (socket open, no heartbeat) goes offline when the fake clock is exactly 45 s past its last sign of life and not 1 ms before; a second start reuses the stored computer; `kill -9` gives offline within 45 s; no token appears in any output or in any process's argv; plain http to a non-local host is refused; and after a server crash with the daemon gone, hello lists the agent offline. |
 | `TestF09` | F09: behind a recording proxy, a task assigned to the agent makes the built daemon claim the wake with `POST /v1/runs` and its computer token; the response carries a `run_` id, a 47-character `jmr_` token, a brief and the `/mcp` URL; the fake ACP agent starts with that MCP server (HTTP, `Authorization: Bearer <the run's jmr_>`) in `session/new` and the brief as its first prompt; its `jm_whoami` call over MCP answers with the agent, pod and run; no `jmc_` or `jmu_` token and no token-shaped string is in its argv or environment; a finished agent ends the run `completed`; a daemon restarted with a user token in its environment and none of the allowed names still hands the agent only allow-listed names; a daemon stopped while an agent that ignores SIGTERM runs takes its process group with it and ends that run (matched by its own id) `failed`; and no token reaches any daemon output. |
+| `TestF14` | F14: the whole slice as one walk, on F09's world (built daemon, fake ACP agent, recording proxy) with nobody signed in. Two people sign in (through the test session route, until F15), one creates the pod and invites, the other joins, and ben's hello lists both with their roles. The daemon registers and the fake agent is added; both see it online. A task assigned to the agent makes the daemon claim the wake (`POST /v1/runs` with its computer token, a brief naming the task and `task_assigned`); both see `task.claimed` with the run, the agent and a lease 60 s past the fake clock; the agent's ask reaches both as `blocked` with an open decision and a receipt (run, agent, computer, harness `fake`, `task_assigned`, the task, and `toolCalls` equal to the two MCP calls the agent made before it). A member rules, both see the decision ruled with the option and who chose it, the daemon claims a second wake whose brief names `decision_ruled` and the decision, the woken run's result carries a `decision_ruled` receipt for the new run, both see `task.updated` done, and both runs end `completed`. The walk, `go build` of the daemon included, takes under 60 s. The fake agent runs a script file read at each prompt, so the test swaps the script between the two runs; `{{taskId}}` in a script argument is the first `tsk_` id in the agent's brief. The ruling's wake names the decision and the ask, not the task, so the second script carries the id as a literal. |
 | `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. The suite tests run in parallel, so this one is parallel too and waits for every one of them before it judges the run. It fails if a suite test failed, if one never reported in a whole-suite run, or if the run took 60 s or more; it skips only when `-run` narrowed the run. `TestBudgetVerdict` checks that judgment with made-up outcomes and needs no server. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X
@@ -195,7 +195,7 @@ four slots (`GOMAXPROCS=4`) the Worker suite took 14 s on a dev machine against 
 ## Skipped on the server
 
 `JM_E2E_SKIP` is a comma-separated list of test names. `make e2e-c` sets it to the three tests below; each one skips, says so,
-and still counts as passed for `TestF14Budget`. A skip needs a reason here. Nothing else is skipped, and no assertion differs
+and still counts as passed for `TestF14Budget`. The make targets set the variable themselves, so an inherited `JM_E2E_SKIP` never applies: `make e2e-a` clears it (a deliberate skip there is `make e2e-a E2E_A_SKIP=<names>`) and `make e2e-c` takes its list from `E2E_C_SKIP`. A skip needs a reason here. Nothing else is skipped, and no assertion differs
 between servers.
 
 | Test | Reason |
@@ -234,7 +234,7 @@ and the check runs in full.
   finishes its tests. The steps are every named step of the tests that name them (`TestF02`) plus one step for each other test that
   ran; a skipped test counts nothing. `k` is the steps that passed, so a red run prints `k < n`. A failing named step prints its
   name and the last 20 events the suite saw before it. A test cannot see the run's last line, so `make e2e-c` and `make e2e-a` judge it: the
-  last line before `go test`'s own `ok`/`FAIL` must be this line, with `k = n` on a green run and `k < n` on a red one.
+  last line before `go test`'s own `ok`/`FAIL`/`PASS` lines (blank lines ignored) must match `^E2E_MS=[0-9]+ STEPS=[0-9]+/[0-9]+$`, with `k = n` on a green run and `k < n` on a red one.
 - `LATENESS_MS <kind> <ms>`: observed expiry minus the ledger's deadline, real-clock mode only. `kind` is
   `steady` (zero-traffic expiry), `after_restart_ahead` (deadline after the restart) or
   `after_restart_inside` (deadline inside the outage).

@@ -2042,12 +2042,10 @@ func (x TaskUpdateStatus) Valid() bool {
 	return false
 }
 
-// The new status for a task, with an optional note.
+// The new status for a task.
 type TaskUpdateInput struct {
 	TaskID TaskID           `json:"taskId"`
 	Status TaskUpdateStatus `json:"status"`
-	// A short note on the change.
-	Note *string `json:"note,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.

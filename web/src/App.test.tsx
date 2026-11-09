@@ -2,16 +2,16 @@ import { cleanup, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
+import { fakeHttp, fakeNet } from './testkit';
 
 afterEach(cleanup);
-const at = (path: string) => render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
+const at = (path: string) => render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} http={fakeHttp().http} signedIn={false} /></MemoryRouter>);
 
 describe('shell', () => {
-  it('renders the top bar and a placeholder for /pod/:id', () => {
+  it('renders the top bar with the pod id and a sign-in button on /pod/:id', () => {
     const { getByText, getByRole } = at('/pod/pod_7');
     expect(getByRole('banner').textContent).toContain('pod_7');
     expect(getByText('Sign in')).toBeTruthy();
-    expect(getByText('Pod pod_7 will show here.')).toBeTruthy();
   });
 
   it('renders a not-found line for an unknown path', () => {

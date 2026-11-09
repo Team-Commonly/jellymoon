@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Team-Commonly/jellymoon/daemon/internal/config"
@@ -26,6 +27,9 @@ type AddRequest struct {
 	PodID       protocol.PodID   `json:"podId"`
 	Harness     protocol.Harness `json:"harness"`
 	DisplayName string           `json:"displayName"`
+	Repo        string           `json:"repo,omitempty"` // absolute path of a git repo the agent's runs get a worktree of
+	// AllowPermissions is the agent's allow setting (config.Agent).
+	AllowPermissions bool `json:"allowPermissions,omitempty"`
 }
 
 type addReply struct {
@@ -93,13 +97,18 @@ func (d *Daemon) handle(c net.Conn) {
 
 // add registers the agent with the pod, remembers it so a restart reconnects, and opens the pod socket.
 func (d *Daemon) add(req AddRequest) (protocol.AgentID, error) {
+	if req.Repo != "" {
+		if fi, err := os.Stat(req.Repo); !filepath.IsAbs(req.Repo) || err != nil || !fi.IsDir() {
+			return "", fmt.Errorf("--repo %q must be the absolute path of a directory", req.Repo)
+		}
+	}
 	id, err := d.api.RegisterAgent(d.comp.Token, req.PodID, req.Harness, req.DisplayName)
 	if err != nil {
 		return "", err
 	}
 	// AddAgent reads, changes and rewrites agents.json, so one add at a time; watch takes d.mu again only after this.
 	d.mu.Lock()
-	err = d.store.AddAgent(config.Agent{PodID: req.PodID, AgentID: id, Harness: req.Harness, DisplayName: req.DisplayName})
+	err = d.store.AddAgent(config.Agent{PodID: req.PodID, AgentID: id, Harness: req.Harness, DisplayName: req.DisplayName, Repo: req.Repo, AllowPermissions: req.AllowPermissions})
 	d.mu.Unlock()
 	if err != nil {
 		return "", err

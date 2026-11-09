@@ -119,8 +119,12 @@ type f09 struct {
 	run   claimed
 }
 
-func newF09(t *testing.T) *f09 {
-	f := &f09{f08: newF08(t)}
+func newF09(t *testing.T) *f09 { return newF09On(newF08(t)) }
+
+// newF09On is F09's world on a given F08 world, which may not have its people yet.
+func newF09On(base *f08) *f09 {
+	t := base.t
+	f := &f09{f08: base}
 	root, _ := filepath.Abs("..")
 	f.agent = filepath.Join(t.TempDir(), "fakeagent")
 	cmd := exec.Command("go", "build", "-o", f.agent, "./e2e/testdata/fakeagent")
@@ -342,6 +346,7 @@ func TestF09(t *testing.T) {
 	p.step("jm_whoami over MCP returns the agent, pod and run", func() error { return f.whoami(record) })
 	p.step("the agent's argv and env never hold jmc_ or jmu_, and the jmr_ reaches it only in its MCP server config", func() error { return f.tokens(record) })
 	p.step("when the agent finishes the daemon ends the run as completed", f.ends)
+	p.step("the agent ran in its own directory under the workspace root, removed once the run completed", func() error { return f.workspaceDir(record) })
 	p.step("a daemon restarted with a user token and none of the allowed names still gives the agent only allowed names", func() error { return f.scrubbedEnv(scrubbed) })
 	p.step("a stopped daemon takes an agent that will not leave with it", func() error { return f.stops(held) })
 	p.step("no token reaches the daemon's output, its config dir beyond computer.json, or the agent's env", func() error { return f.leaksNothing(record, held, scrubbed) })

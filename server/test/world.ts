@@ -8,10 +8,11 @@ import type { Conn } from '../src/pod';
 
 export type Json = Record<string, any>;
 
-/** A Db whose next transaction rejects once when `ctl.fail` is set: a Postgres blip. */
-export function flaky(db: Db): { db: Db; ctl: { fail: boolean } } {
-  const ctl = { fail: false };
+/** A Db whose next transaction rejects once when `ctl.fail` is set: a Postgres blip. While `ctl.down` is set every transaction rejects, and `ctl.refused` counts them. */
+export function flaky(db: Db): { db: Db; ctl: { fail: boolean; down: boolean; refused: number } } {
+  const ctl = { fail: false, down: false, refused: 0 };
   const tx: Db['tx'] = (fn) => {
+    if (ctl.down) { ctl.refused++; return Promise.reject(new Error('db down')); }
     if (!ctl.fail) return db.tx(fn);
     ctl.fail = false;
     return Promise.reject(new Error('db down'));

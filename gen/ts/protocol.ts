@@ -728,12 +728,10 @@ export interface TaskClaimOutput {
 export type TaskUpdateStatus = "in_progress" | "blocked" | "done" | "failed";
 export const TaskUpdateStatusValues = ["in_progress","blocked","done","failed"] as const;
 
-/** The new status for a task, with an optional note. */
+/** The new status for a task. */
 export interface TaskUpdateInput {
   taskId: TaskId;
   status: TaskUpdateStatus;
-  /** A short note on the change. */
-  note?: string;
 }
 
 /** Which task to release, and an optional reason. */

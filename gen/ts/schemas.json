@@ -2034,7 +2034,7 @@
       ]
     },
     "TaskUpdateInput": {
-      "description": "The new status for a task, with an optional note.",
+      "description": "The new status for a task.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -2047,11 +2047,6 @@
         },
         "status": {
           "$ref": "#/$defs/TaskUpdateStatus"
-        },
-        "note": {
-          "description": "A short note on the change.",
-          "type": "string",
-          "maxLength": 500
         }
       }
     },

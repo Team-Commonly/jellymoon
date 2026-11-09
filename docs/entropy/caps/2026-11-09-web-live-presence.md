@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: web-live-presence
+
+2026-11-09: web cap 2,050 -> 2,100. The pod sends `presence.changed` as a live event with no seq (`podcore/src/presence.ts`), and the web store dropped every frame without a seq, so the web client never saw an agent working. `web/src/store.ts` now applies live events apart from the seq'd ones and leaves `lastSeq` alone, and the pod screen says "<agent> is working." while it is. The rest is two tests in `web/src/store.test.ts` and one in `web/src/PodScreen.test.tsx`. Merged with main at 76252bc (whose own cap note took web to 2,050), the tree printed `LOC budget: web 2095 > 2050`; the cap is the count rounded up to ten. No other cap changes.

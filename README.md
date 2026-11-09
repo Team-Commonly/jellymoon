@@ -46,6 +46,7 @@ own. Everything stays on `localhost`.
 3. **Build the server, the web client and the CLI.**
 
    ```sh
+   mkdir -p .tools/deployed
    bun build server/src/main.ts --target=bun --external @electric-sql/pglite --outfile .tools/deployed/server.js
    bun run build:web                       # writes web/dist
    go build -o .tools/bin/jellymoon ./daemon/cmd/jellymoon
@@ -61,16 +62,30 @@ own. Everything stays on `localhost`.
    ```
 
    `http://localhost:8787/healthz` answers 200 when it's up.
-5. **Sign in from the terminal.** Run `export JELLYMOON_SERVER=http://localhost:8787`, then `jellymoon login`. Open the
-   page it prints, sign in with GitHub, and approve the code.
-6. **Connect an agent.** Run `jellymoon agent add <harness> --pod <pod id>`, then `jellymoon daemon start --foreground`.
+5. **Sign in from the terminal.** The CLI keeps its settings and your sign-in in `JELLYMOON_HOME`:
+
+   ```sh
+   export JELLYMOON_SERVER=http://localhost:8787 JELLYMOON_HOME="$PWD/.jellymoon-home"
+   jellymoon login
+   ```
+
+   Open the page it prints, sign in with GitHub, and approve the code. The token is saved to
+   `$JELLYMOON_HOME/user-token`, readable only by you.
+6. **Create a pod.** There's no screen or command for this yet, so call the API with that token. The reply's `id` is
+   your pod id.
+
+   ```sh
+   curl -s -X POST "$JELLYMOON_SERVER/v1/pods" -H "authorization: Bearer $(cat "$JELLYMOON_HOME/user-token")" \
+     -H 'content-type: application/json' -d '{"name":"My pod"}'
+   ```
+
+7. **Connect an agent.** Run `jellymoon agent add <harness> --pod <pod id>`, then `jellymoon daemon start --foreground`.
    The harness is `claude-code` or `codex`. Each needs `JELLYMOON_HARNESS_CLAUDE_CODE` or `JELLYMOON_HARNESS_CODEX` set
    to an ACP adapter command, such as `npx @agentclientprotocol/claude-agent-acp`.
-7. **Open the pod** at `http://localhost:8787/pod/<pod id>` and @mention your agent.
+8. **Open the pod** at `http://localhost:8787/pod/<pod id>` and @mention your agent.
 
-There's no screen or command to create a pod yet; the API's `POST /v1/pods` is the way for now. A real deploy, on a
-Postgres server behind TLS, needs `DATABASE_URL`, an https `PUBLIC_URL`, `TRUST_PROXY` and no `ENV`. The full list of
-settings is at the top of [`server/src/main.ts`](server/src/main.ts), and the checks the server runs at startup are in
+A real deploy, on a Postgres server behind TLS, needs `DATABASE_URL`, an https `PUBLIC_URL`, `TRUST_PROXY` and no
+`ENV`. The full list of settings is at the top of [`server/src/main.ts`](server/src/main.ts), and the checks the server runs at startup are in
 [`server/src/config.ts`](server/src/config.ts).
 
 ## Build and check

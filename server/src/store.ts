@@ -61,6 +61,9 @@ export async function eventsAfter(db: Db, pod: string, since: number, limit: num
 export const saveToken = (t: Tx, hash: string, kind: string, subject: string, pod?: string): Promise<unknown> =>
   t.rows('insert into tokens (hash, kind, subject, pod) values ($1, $2, $3, $4)', [hash, kind, subject, pod ?? null]);
 
+/** Logout: the token stops authenticating at once. */
+export const revokeToken = (db: Db, hash: string, now: number): Promise<unknown> => db.rows('update tokens set revoked_at = $2 where hash = $1 and revoked_at is null', [hash, now]);
+
 export async function findToken(db: Db, hash: string): Promise<TokenRow | undefined> {
   const [r] = await db.rows<TokenRow>('select kind, subject, pod from tokens where hash = $1 and revoked_at is null', [hash]);
   return r;

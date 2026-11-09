@@ -1428,6 +1428,16 @@ func (x *DeviceApproveRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A logout carries no data: the token it presented no longer authenticates, and the session cookie is cleared.
+type LogoutResponse struct {
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *LogoutResponse) UnmarshalJSON(b []byte) error {
+	type plain LogoutResponse
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // An approval carries no data: the device that polls gets the token.
 type DeviceApproveResponse struct {
 }
@@ -2521,6 +2531,7 @@ var Registry = map[string]func() any{
 	"DeviceStartResponse":      func() any { return new(DeviceStartResponse) },
 	"DeviceTokenRequest":       func() any { return new(DeviceTokenRequest) },
 	"DeviceApproveRequest":     func() any { return new(DeviceApproveRequest) },
+	"LogoutResponse":           func() any { return new(LogoutResponse) },
 	"DeviceApproveResponse":    func() any { return new(DeviceApproveResponse) },
 	"DeviceTokenResponse":      func() any { return new(DeviceTokenResponse) },
 	"CreatePodRequest":         func() any { return new(CreatePodRequest) },

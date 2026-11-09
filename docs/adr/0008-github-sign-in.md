@@ -1,7 +1,7 @@
 # 0008 · Sign-in: Jellymoon's own device code, approved in a browser that GitHub signs in
 
 Status: Accepted, by the owner's ruling, 2026-11-08 (the contract wins over F15's first wording). It adds no dependency. Open
-below: the session cookie on the other user routes, token expiry, and the `/device` page itself.
+below: token expiry and the `/device` page itself. The browser session on every user route was added on 2026-11-08 (below).
 
 ## Decision
 
@@ -48,15 +48,41 @@ GitHub's own device flow would put a GitHub token on the person's machine and ma
 approval is Jellymoon's, so the web client (F18) and the CLI share one sign-in, and the only GitHub credential is a
 short-lived one inside the server.
 
+## Browser session
+
+A browser that signed in through step 3 uses the pod with its session cookie alone, so the web client's pod and invite
+screens work against the real server. One authentication function per adapter (`authOf` in `server/src/kit.ts` and
+`worker/src/auth.ts`) decides the caller of every route:
+
+1. A request with an `Authorization` header uses it as a Bearer and ignores any cookie; Bearer requests have no Origin or
+   content-type rule. Else, on a route whose auth includes `user`, the `jm_session` cookie is the token.
+2. The cookie must hold a `jmu_`. Any other token in it (`jmr_`, `jmc_`) is no caller: `unauthorized`. A cookie session is the
+   same `jmu_` as a Bearer, with the same membership checks and the same errors.
+3. CSRF. A cookie request that changes state (any method but GET, HEAD and OPTIONS) needs `Content-Type: application/json`
+   and an `Origin` equal to the server's own origin: the origin of the base the Decision's item 1 computes (`ownBase` in each
+   adapter's `auth.ts`, the one function approve and the verification URL also use). A missing Origin is refused too: browsers send it on
+   every cross-origin request and on same-origin POST, PATCH and DELETE. Both refusals are `forbidden`.
+4. The pod WebSocket (`GET /v1/pods/:pod/ws`) takes the cookie only when the upgrade's Origin equals the server's own origin,
+   against cross-site WebSocket hijacking: SameSite=Lax keeps the cookie off a socket opened from another site, but not off
+   one opened from a sibling origin of the same site, and a socket has no CORS. A token never rides in the query string. A computer's `jmc_` Bearer is unchanged.
+5. Routes the cookie reaches: `POST /v1/pods`, `POST /v1/pods/:pod/invites`, `POST /v1/invites/:code/accept`,
+   `POST /v1/computers`, the pod socket, `GET /v1/me`, `POST /v1/auth/logout`, and every operation whose auth includes `user`
+   (`whoami`, `read`, `task_list`, `task_update`, `task_release`, `run_stop`, `post`; `task_claim` is run-only, and `evidence`
+   is not served). Bearer-only: `POST /v1/pods/:pod/agents`, `POST /v1/runs` and `/v1/runs/:run/end` (computer), and
+   `POST /mcp`. MCP is for agents and their harnesses, not a page: no browser screen calls it, and it re-sends the caller's
+   `Authorization` on every tool call, so a cookie there would add a CSRF surface and nothing a person needs.
+6. `POST /v1/auth/device/approve` keeps the Decision's item 4 rule (JSON; Origin checked when sent). It already stood before this section,
+   and the CLI's own sign-in depends on it.
+7. `POST /v1/auth/logout` (cookie or Bearer `jmu_`) sets `revoked_at` on the token the request presented, so it stops
+   authenticating at once as cookie and as Bearer, and clears the cookie. Other tokens of the same person stay live.
+
 ## Not in this unit
 
-- The session cookie on `/v1/pods/:pod/ws` (with an Origin check) and on the other user routes (BSESS). Only `/v1/me` and
-  `/device/approve` accept it here.
 - Expiry of user tokens. `DeviceTokenResponse.expiresAt` says 30 days, as `tokens.json` does, but no user token expires yet.
 - The `/device` page the verification URL names belongs to the web client (F18).
 - A limit on how fast device codes can be started.
 
 ## Tested by
 
-`e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
+`e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
 loop) and `daemon/internal/config/save_test.go` (the 0600 write).

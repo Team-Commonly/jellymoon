@@ -1,7 +1,7 @@
 // The Worker: authenticates against D1, checks the token kind and the pod, and hands the request to the pod's Durable Object
 // with the caller in an internal header (any incoming copy is deleted first). It holds no pod state.
-import { authRoute } from './auth';
-import { addAgentPod, addInvite, addPod, authenticate, createComputer, dropInvite, dropPod, dropRunToken, mintRunToken, podExists, podOfInvite, podOfRun, podsOfComputer } from './directory';
+import { authOf, authRoute } from './auth';
+import { addAgentPod, addInvite, addPod, createComputer, dropInvite, dropPod, dropRunToken, mintRunToken, podExists, podOfInvite, podOfRun, podsOfComputer } from './directory';
 import type { Env } from './env';
 import { hashToken, newId, newInviteCode } from './ids';
 import { mcp } from './mcp';
@@ -39,8 +39,10 @@ function forward(env: Env, req: Request, podId: string, who: Who, viaMcp = false
 }
 
 type Guarded = { who: Who } | Response;
-async function guard(env: Env, req: Request, kinds: readonly Kind[]): Promise<Guarded> {
-  const who = await authenticate(env.DB, req.headers.get('Authorization'));
+/** Only a route a person may call reads the session cookie; /mcp passes `cookie` false and stays Bearer-only. */
+async function guard(env: Env, req: Request, kinds: readonly Kind[], cookie = kinds.includes('user')): Promise<Guarded> {
+  const who = await authOf(env, req, cookie);
+  if (who instanceof Response) return who;
   if (who === null) return fail('unauthorized', 'Send a valid bearer token.');
   return kinds.includes(who.kind) ? { who } : fail('forbidden', 'This kind of token may not call this route.');
 }
@@ -139,7 +141,7 @@ export async function handle(req: Request, env: Env, viaMcp = false): Promise<Re
   if (m === 'POST' && path === '/v1/computers') return setup(env, req, ['user'], 'RegisterComputerRequest', (w, b) => newComputer(env, w, b));
   if (m === 'POST' && path === '/v1/runs') return setup(env, req, ['computer'], 'ClaimRunRequest', (w, b) => startRun(env, w, b, url.origin));
   if (m === 'POST' && path === '/mcp') {
-    const g = await guard(env, req, ['run', 'user']);
+    const g = await guard(env, req, ['run', 'user'], false);
     if (g instanceof Response) return g;
     return mcp(req, url.origin, g.who, (r) => handle(r, env, true), async (runId, podId) => (await internal(env, podId, 'tool-call', { runId })).ok, async (runId, podId) => ((await (await internal(env, podId, 'run-live', { runId })).json()) as { live?: boolean }).live === true);
   }

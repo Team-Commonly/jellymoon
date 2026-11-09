@@ -11,7 +11,7 @@ export function startupRefusal(env: Record<string, string | undefined>): string 
     : undefined;
 }
 
-/** What buildApp is given, from the environment. Test routes open only for ENV=local or a configured TEST_BEARER; kept apart from main.ts so a test can start the app as production does. */
-export function appOptions(env: Record<string, string | undefined>): { publicUrl: string | undefined; local: boolean; testBearer: string | undefined } {
-  return { publicUrl: env.PUBLIC_URL, local: env.ENV === 'local', testBearer: env.TEST_BEARER };
+/** What buildApp is given, from the environment. Test routes open only for ENV=local or a configured TEST_BEARER; JM_WEB_DIR is the built web client to serve. Kept apart from main.ts so a test can start the app as production does. */
+export function appOptions(env: Record<string, string | undefined>): { publicUrl: string | undefined; local: boolean; testBearer: string | undefined; webDir: string | undefined } {
+  return { publicUrl: env.PUBLIC_URL, local: env.ENV === 'local', testBearer: env.TEST_BEARER, webDir: env.JM_WEB_DIR || undefined };
 }

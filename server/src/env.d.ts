@@ -9,6 +9,7 @@ interface BunSql {
 declare const Bun: {
   serve(opts: { port: number; hostname?: string; fetch: (req: Request, server: unknown) => Response | Promise<Response>; websocket: unknown }): { port: number; stop(close?: boolean): void };
   SQL: new (url: string) => BunSql;
+  file(path: string): Blob;
 };
 
 declare module 'node:crypto' {
@@ -22,4 +23,11 @@ declare module 'node:fs' {
   export function readFileSync(path: string): Uint8Array<ArrayBuffer>;
   export function writeFileSync(path: string, data: Uint8Array): void;
   export function renameSync(from: string, to: string): void;
+  export function statSync(path: string, opts: { throwIfNoEntry: false }): { isFile(): boolean } | undefined;
+}
+
+declare module 'node:path' {
+  export const sep: string;
+  export function join(...parts: string[]): string;
+  export function resolve(...parts: string[]): string;
 }

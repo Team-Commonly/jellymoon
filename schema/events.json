@@ -10,6 +10,9 @@
     "run.wake is sent only to the computer that hosts the agent. Wakes for one agent coalesce: one pending wake means one turn. An un-acked wake is re-sent on the next heartbeat after 60 s.",
     "Every claim that ends emits exactly one claim.released, sent to every pod member, whatever the cause. task.updated still fires as before; claim.released is the who and why.",
     "claim.released carries by (the Actor who released or stopped the claim) when cause is released or stopped, and no by otherwise. reason is present only when the caller gave one.",
+    "run.started and run.ended go to every pod member and carry a seq, like claim.released: a client that subscribes with sinceSeq learns of a run that started or ended while it was away. Only a member's socket receives them.",
+    "Every run that starts emits exactly one run.started, when its computer claims the wake (POST /v1/runs), and exactly one run.ended, whatever the cause. A run that never started emits neither, and stopping a run that already ended emits nothing.",
+    "run.ended's outcome: completed or failed as the hosting daemon reports it (POST /v1/runs/:run/end), cancelled when a person stops the run (run_stop) or the daemon reports it cancelled, and expired when the run token's 2 h cap ends it. A lease that expires ends a claim, not a run.",
     "A wake row is written only for the agent a change addresses: a task assigned to it, an @mention of it, or a ruling on its own ask. Ambient messages write none."
   ],
   "x-variants": {
@@ -23,6 +26,8 @@
     "presence.changed": { "dir": "s2c", "data": "PresenceChanged" },
     "run.wake": { "dir": "s2c", "data": "RunWake" },
     "run.stop": { "dir": "s2c", "data": "RunStop" },
+    "run.started": { "dir": "s2c", "data": "RunStarted" },
+    "run.ended": { "dir": "s2c", "data": "RunEnded" },
     "error": { "dir": "s2c", "data": "common.json#/$defs/ErrorBody" },
     "subscribe": { "dir": "c2s", "data": "Subscribe" },
     "message.post": { "dir": "c2s", "data": "MessagePost" },
@@ -62,6 +67,8 @@
         "presence.changed",
         "run.wake",
         "run.stop",
+        "run.started",
+        "run.ended",
         "error",
         "subscribe",
         "message.post",
@@ -196,6 +203,29 @@
       "properties": {
         "runId": { "$ref": "common.json#/$defs/RunId" },
         "reason": { "description": "Why the run was stopped, at most 160 characters.", "type": "string", "maxLength": 160 }
+      }
+    },
+    "RunStarted": {
+      "description": "A run started: its computer claimed a wake for the agent. Sent to every pod member.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "agent"],
+      "properties": { "runId": { "$ref": "common.json#/$defs/RunId" }, "agent": { "$ref": "common.json#/$defs/Actor" } }
+    },
+    "RunEndOutcome": {
+      "description": "How a run ended, as members are told: completed, cancelled (a person stopped it, or the daemon cancelled it), failed, or expired (its token's 2 h cap ran out).",
+      "type": "string",
+      "enum": ["completed", "cancelled", "failed", "expired"]
+    },
+    "RunEnded": {
+      "description": "A run ended: which run, its agent and how. Sent to every pod member exactly once per run that started.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "agent", "outcome"],
+      "properties": {
+        "runId": { "$ref": "common.json#/$defs/RunId" },
+        "agent": { "$ref": "common.json#/$defs/Actor" },
+        "outcome": { "$ref": "#/$defs/RunEndOutcome" }
       }
     },
     "Subscribe": {

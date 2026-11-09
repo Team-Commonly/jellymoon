@@ -1,14 +1,15 @@
 // Fixtures and a fake socket for the unit tests. No browser, no network.
-import type { AcceptInviteResponse, Actor, Envelope, EventType, Hello, Message, Option, OptionId } from '../../gen/ts/protocol';
+import type { AcceptInviteResponse, Actor, Envelope, EventType, Hello, Message, Option, OptionId, Pod } from '../../gen/ts/protocol';
 import type { Http } from './http';
 import type { Connect, SocketHandlers } from './store';
 
 /** A fake HTTP client: records accept calls and answers from the given function. */
-export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}) {
+export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}, create: (name: string) => Promise<Pod> = async (name) => ({ id: 'pod_new', name, createdAt: '2026-11-08T10:00:00Z' })) {
   const calls: string[] = [];
   const approved: string[] = [];
-  const http: Http = { acceptInvite: (code) => (calls.push(code), answer(code)), me: async () => you, approveDevice: (c) => (approved.push(c), approve(c)) };
-  return { http, calls, approved };
+  const created: string[] = [];
+  const http: Http = { acceptInvite: (code) => (calls.push(code), answer(code)), me: async () => you, approveDevice: (c) => (approved.push(c), approve(c)), createPod: (n) => (created.push(n), create(n)) };
+  return { http, calls, approved, created };
 }
 
 export const POD = 'pod_1';

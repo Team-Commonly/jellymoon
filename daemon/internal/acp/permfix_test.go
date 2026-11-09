@@ -84,3 +84,15 @@ func TestAgentThatLeavesWithNoStopFails(t *testing.T) {
 		t.Error("Run = nil, want the agent's own failure")
 	}
 }
+
+// A stop in flight decides the ending: an agent that answers session/cancel with a refusal or a token limit instead of "cancelled"
+// still ends the run for the stop's cause, so the daemon reports it cancelled, not failed. A deadline's cause stays its own.
+func TestStopReasonDoesNotOutrankAStopInFlight(t *testing.T) {
+	for _, reason := range []string{"refusal", "max_tokens", "max_turn_requests"} {
+		for _, cause := range []error{errStopped, errDeadline} {
+			if _, err := stop(t, "cancel:"+reason, cause); !errors.Is(err, cause) {
+				t.Errorf("stopReason %s after a stop (%v): Run = %v, want %v", reason, cause, err, cause)
+			}
+		}
+	}
+}

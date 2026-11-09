@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AgentPresence } from '../../gen/ts/protocol';
 import { App } from './App';
 import { ApiError } from './http';
 import { fakeHttp, fakeNet, frame, hello, other, you } from './testkit';
@@ -158,7 +159,7 @@ describe('one line per agent', () => {
     const net = fakeNet();
     const h = fakeHttp();
     render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={h.http} signedIn /></MemoryRouter>);
-    const agents = [{ agent: scout, harness: 'fake', computerId: 'cmp_1', state: 'online' }, { agent: sage, harness: 'fake', computerId: 'cmp_1', state: 'online' }];
+    const agents: AgentPresence[] = [{ agent: scout, harness: 'fake', computerId: 'cmp_1', state: 'online' }, { agent: sage, harness: 'fake', computerId: 'cmp_1', state: 'online' }];
     act(() => { net.open(); net.deliver(frame('hello', undefined, hello({ members: [{ actor: you, role: 'owner' }], agents }))); });
     act(() => net.deliver(frame('presence.changed', undefined, { actor: scout, state: 'working', computerId: 'cmp_1' })));
     act(() => net.deliver(frame('presence.changed', undefined, { actor: sage, state: 'working', computerId: 'cmp_1' })));

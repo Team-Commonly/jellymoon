@@ -1,7 +1,7 @@
 // /invite/:token. Never joins on load: a person presses Join. The invite code is never logged or put in another URL.
 import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ApiError } from './http';
+import { ApiError, signInHref } from './http';
 import type { Http } from './http';
 
 const GONE = 'This invite has been used or has expired. Ask whoever sent it for a new one.';
@@ -19,11 +19,10 @@ export function InvitePage({ http, signedIn }: { http: Http; signedIn: boolean }
   const [error, setError] = useState<string | null>(null);
 
   if (!signedIn) {
-    const back = encodeURIComponent(`/invite/${token}`);
     return (
       <section>
         <h2>You have been invited to a pod</h2>
-        <a href={`/sign-in?return=${back}`}>Sign in with GitHub to join</a>
+        <a href={signInHref(`/invite/${token}`)}>Sign in with GitHub to join</a>
       </section>
     );
   }

@@ -65,6 +65,12 @@ class Bridge {
   }
 }
 
+/** Signs the page in the way GitHub's callback does: the session cookie holds the person's user token (BSESS). */
+export async function signIn(page: Page, who: Person): Promise<void> {
+  const url = process.env.JM_WEB_E2E_BASE ?? '';
+  await page.context().addCookies([{ name: 'jm_session', value: who.token, url, httpOnly: true, sameSite: 'Lax' }]);
+}
+
 export interface Pod { id: string; you: Person; other: Person; agent: FakeAgent; bridge: Bridge }
 
 /** Opens the pod page (or runs `go`, a reload) and waits until the page's new socket has had hello and has subscribed. */

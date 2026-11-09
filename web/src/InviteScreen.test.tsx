@@ -15,7 +15,7 @@ describe('/invite/:token', () => {
     const { http, calls } = fakeHttp();
     const { getByRole, queryByText } = open(http, false);
     const link = getByRole('link', { name: 'Sign in with GitHub to join' });
-    expect(link.getAttribute('href')).toBe('/sign-in?return=%2Finvite%2Fabc123');
+    expect(link.getAttribute('href')).toBe('/v1/auth/github/start?next=%2Finvite%2Fabc123');
     expect(queryByText('Join')).toBeNull();
     expect(calls).toEqual([]);
   });

@@ -4,10 +4,11 @@ import type { Http } from './http';
 import type { Connect, SocketHandlers } from './store';
 
 /** A fake HTTP client: records accept calls and answers from the given function. */
-export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } })) {
+export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}) {
   const calls: string[] = [];
-  const http: Http = { acceptInvite: (code) => (calls.push(code), answer(code)) };
-  return { http, calls };
+  const approved: string[] = [];
+  const http: Http = { acceptInvite: (code) => (calls.push(code), answer(code)), me: async () => you, approveDevice: (c) => (approved.push(c), approve(c)) };
+  return { http, calls, approved };
 }
 
 export const POD = 'pod_1';

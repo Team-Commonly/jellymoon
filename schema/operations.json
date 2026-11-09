@@ -16,7 +16,10 @@
     "connector_call names exactly one of connectionId or vendor; vendor names the pod's one connection to that vendor. Neither, both, or a vendor with several connections gets invalid_input.",
     "connector_call is decided by the grant of the run's agent on the connection and by the operation's class in the pinned catalogue. An operation not in the pin gets not_found. No grant, or a write with only a read grant, gets forbidden.",
     "A read with a read or write-with-confirm grant calls the upstream once and returns its result (state done). A write with write-with-confirm calls nothing: it is parked, the agent posts an ask (options a approve, b reject) whose body holds the exact arguments, and the call returns state parked with the decisionId.",
-    "Only a pod owner rules on that ask; another member's ruling is refused forbidden and leaves it open. A ruling of a releases exactly one upstream call with the parked arguments; the parked call is marked consumed in the transaction that records the ruling, so no second ruling, retry or race can release another. A ruling of b releases nothing.",
+    "Only a pod owner, or a member on the connection's approver set, rules on that ask; another member's ruling is refused forbidden and leaves it open. A ruling of a releases exactly one upstream call with the parked arguments; the parked call is marked consumed in the transaction that records the ruling, so no second ruling, retry or race can release another. A ruling of b releases nothing.",
+    "A released write's upstream call runs after the ruling is recorded and announced, outside the pod's command order: until its answer is recorded its receipt reads released with no upstreamStatus.",
+    "A released write whose answer was never recorded within 60 seconds of its ruling (the server stopped mid-call) settles as unknown: it was sent at most once, maybe not at all, and is never sent again.",
+    "A read whose upstream call fails in any way, an unexpected error included, writes a failed receipt with a reason and answers upstream_failed.",
     "A parked write expires 24 hours after it was parked: its decision becomes expired, a later ruling gets gone, and nothing is released.",
     "Every connector call that names an existing connection writes a ConnectorReceipt, stamped by the server. An agent can read receipts and never write one.",
     "The connection's credential never appears in any operation's output, any error, any receipt or any ask: an upstream error that echoes it has it removed."
@@ -43,7 +46,7 @@
     { "name": "connector_list", "method": "GET", "path": "/v1/pods/{podId}/connectors", "auth": "run|user", "input": "ConnectorListInput", "output": "ConnectorListOutput",
       "description": "The pod's connections and the operations you may call on each: the pinned catalogue filtered by your agent's grant, never the live upstream list. No credential is ever shown." },
     { "name": "connector_call", "method": "POST", "path": "/v1/pods/{podId}/connectors/call", "auth": "run", "input": "ConnectorCallInput", "output": "ConnectorCallOutput",
-      "description": "Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a pod owner approves." },
+      "description": "Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a pod owner or one of the connection's approvers approves." },
     { "name": "connector_receipts", "method": "GET", "path": "/v1/pods/{podId}/connectors/receipts", "auth": "run|user", "input": "ConnectorReceiptsInput", "output": "ConnectorReceiptsOutput",
       "description": "The server-stamped receipts of this pod's connector calls, newest first. Pass decisionId to read what became of a parked write after its ruling." }
   ],
@@ -209,7 +212,7 @@
     },
     "ConnectorCallState": { "description": "What became of a call: done (the upstream answered) or parked (a write waiting on a ruling).", "type": "string", "enum": ["done", "parked"] },
     "ConnectorCallOutput": {
-      "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.",
+      "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner or a connection approver rules on.",
       "type": "object",
       "additionalProperties": false,
       "required": ["state", "receiptId"],
@@ -221,9 +224,9 @@
       }
     },
     "ConnectorOutcome": {
-      "description": "ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask.",
+      "description": "ok: a read answered. failed: the call failed. refused: the grant did not allow it. parked, released, rejected, expired: a write's way. unknown: released, its answer never recorded.",
       "type": "string",
-      "enum": ["ok", "failed", "refused", "parked", "released", "rejected", "expired"]
+      "enum": ["ok", "failed", "refused", "parked", "released", "rejected", "expired", "unknown"]
     },
     "ConnectorReceipt": {
       "description": "The server's record of one connector call. Stamped by the server from its own records; an agent can read it and never write it.",
@@ -243,6 +246,7 @@
         "decisionId": { "description": "A write: the decision of its ask.", "$ref": "common.json#/$defs/DecisionId" },
         "approver": { "description": "A released write: the member whose ruling released it.", "$ref": "common.json#/$defs/Actor" },
         "result": { "description": "A released write: the upstream's result.", "type": "object" },
+        "reason": { "description": "Outcome failed, refused or unknown: why, with any credential removed.", "type": "string", "maxLength": 400 },
         "createdAt": { "$ref": "common.json#/$defs/Timestamp" },
         "settledAt": { "description": "When the call reached its outcome: at once for a read, at the ruling or expiry for a write.", "$ref": "common.json#/$defs/Timestamp" },
         "expiresAt": { "description": "A parked write: when it expires unruled.", "$ref": "common.json#/$defs/Timestamp" }

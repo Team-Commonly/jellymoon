@@ -7,7 +7,7 @@ import type { DbEnv } from './db';
 import { hashToken, newId, newToken } from './ids';
 import { PodRuntime } from './pod';
 import type { Reply } from './pod';
-import { allComputers, allUsers, claimGithubUser, findToken, githubUserId, loadPods, migrate, saveComputer, saveToken, saveUser, sweepSignIn } from './store';
+import { allComputers, allUsers, claimGithubUser, findToken, githubUserId, loadPods, migrate, saveComputer, saveToken, saveUser, settleUnrecorded, sweepSignIn } from './store';
 import type { ComputerRow, UserRow } from './store';
 
 export type Principal =
@@ -44,10 +44,14 @@ export class Hub {
     return Hub.restore(await openDb(env));
   }
 
-  /** A restart over storage that already exists; tests call it twice on one Db to prove state survives. */
+  /**
+   * A restart over storage that already exists; tests call it twice on one Db to prove state survives. A connector write the
+   * last process released and never heard back on is settled as unknown here, and never sent again (ADR 0009).
+   */
   static async restore(db: Db): Promise<Hub> {
     await migrate(db);
     const hub = new Hub(db);
+    await settleUnrecorded(db, hub.now());
     await sweepSignIn(db, hub.now());
     for (const u of await allUsers(db)) hub.users.set(u.id, u);
     for (const c of await allComputers(db)) hub.computers.set(c.id, c);

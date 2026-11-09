@@ -26,7 +26,8 @@ export interface Deps { db: Db; now(): number; rearm(): void }
 /**
  * `pre` runs first inside the FIFO and may answer instead; `meta`, `extra` and `after` run only when the command succeeded.
  * `extra` runs inside the command's transaction; `after` runs once it has committed, still inside the FIFO and before any
- * event fans out (a released connector write, ADR 0009: members hear of the ruling only once its call has been made).
+ * event fans out. It must not wait on anything slow: a released connector write only starts its upstream call there, and the
+ * call's answer comes back through `serial` (ADR 0009).
  */
 export interface Opts {
   pre?: (s: PodState) => Promise<Reply | null>;
@@ -69,7 +70,12 @@ export class PodRuntime {
   isMember(userId: string): boolean { return this.state.members.some((m) => m.id === userId); }
 
   exec(cmd: Cmd, o: Opts = {}): Promise<Reply | undefined> {
-    const run = this.tail.then(() => this.step(cmd, o));
+    return this.serial(() => this.step(cmd, o));
+  }
+
+  /** Runs `fn` in the pod's command order, after everything queued before it. */
+  serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(fn);
     this.tail = run.catch(() => undefined);
     return run;
   }
@@ -112,7 +118,7 @@ export class PodRuntime {
 
   /** Test route (/__test/evict): forgets everything held in memory and restores from storage, as a woken hibernated object does. Sockets stay attached. */
   evict(): Promise<void> {
-    const run = this.tail.then(async () => {
+    return this.serial(async () => {
       const row = await loadPod(this.deps.db, this.id);
       if (row === undefined) return;
       this.state = row.state;
@@ -121,8 +127,6 @@ export class PodRuntime {
       this.deadline = nextDeadline(row.state);
       await this.step({ type: 'boot', staleMs: 0 }, {});
     });
-    this.tail = run.catch(() => undefined);
-    return run;
   }
 
   private fanOut(out: Out[]): void {

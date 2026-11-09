@@ -19,14 +19,14 @@ describe('the address classifier', () => {
       '::', '::1', '0:0:0:0:0:0:0:1', 'fc00::1', 'fdff:ffff::1', 'fe80::1', 'febf::1', 'ff02::1', 'ff00::',
       '::ffff:127.0.0.1', '::ffff:7f00:1', '::ffff:10.0.0.1', '::ffff:a9fe:a9fe', '64:ff9b::a9fe:a9fe', '64:ff9b::10.0.0.1', '64:ff9b::7f00:1',
       '::127.0.0.1', '::7f00:1', '::8.8.8.8', '192.0.2.1', '198.51.100.7', '203.0.113.9', '192.88.99.1', '64:ff9b:1::808:808', '64:ff9b:1:ffff::1',
-      '2002:7f00:1::', '2002:a9fe:a9fe::1', '2002:c0a8:101::', '2001::1', '2001:0:4136:e378:8000:63bf:3fff:fdd2', '::ffff:0:7f00:1', '::ffff:0:a00:1', 'not-an-address', '1.2.3', '256.1.1.1', '1.2.3.4.5', '01.2.3.4', ':::1', '1::2::3', 'fe80::1%en0'];
+      '2002:7f00:1::', '2002:a9fe:a9fe::1', '2002:c0a8:101::', '2001::1', '2001:0:4136:e378:8000:63bf:3fff:fdd2', '::ffff:0:7f00:1', '::ffff:0:a00:1', '2001:db8::1', '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff', '2001:0db8:85a3::8a2e:370:7334', 'not-an-address', '1.2.3', '256.1.1.1', '1.2.3.4.5', '01.2.3.4', ':::1', '1::2::3', 'fe80::1%en0'];
     expect(inside.filter((a) => !internalAddress(a))).toEqual([]);
   });
   test('public addresses pass, including the edges of each range', () => {
     const outside = ['8.8.8.8', '1.1.1.1', '93.184.216.34', '9.255.255.255', '11.0.0.0', '100.63.255.255', '100.128.0.0', '126.255.255.255', '128.0.0.0',
       '169.253.255.255', '169.255.0.0', '172.15.255.255', '172.32.0.0', '192.0.1.0', '191.255.255.255', '192.167.255.255', '192.169.0.0',
       '198.17.255.255', '198.20.0.0', '223.255.255.255', '2606:4700::1111', '2001:4860:4860::8888', '::ffff:8.8.8.8', '64:ff9b::808:808', 'fbff::1', 'fec0::1',
-      '192.0.3.1', '198.51.99.1', '198.51.101.1', '203.0.112.1', '203.0.114.1', '192.88.98.1', '192.88.100.1', '2002:808:808::1', '::ffff:0:808:808', '2001:1::1', '64:ff9b:2::1'];
+      '192.0.3.1', '198.51.99.1', '198.51.101.1', '203.0.112.1', '203.0.114.1', '192.88.98.1', '192.88.100.1', '2002:808:808::1', '::ffff:0:808:808', '2001:1::1', '64:ff9b:2::1', '2001:db7:ffff:ffff:ffff:ffff:ffff:ffff', '2001:db9::'];
     expect(outside.filter((a) => internalAddress(a))).toEqual([]);
   });
 });
@@ -109,7 +109,12 @@ describe('the re-check before every upstream call', () => {
       const approve = async (decisionId: string, n: number) => {
         const cmd = { type: 'rule' as const, caller: { kind: 'user' as const, userId: A.olivia.user.id }, decisionId, option: 'a', wakeId: `wak_0000000000000000000000000${n}` };
         expect((await A.rt.exec(cmd, rulingOpts(kit, A.rt, cmd)))?.ok).toBe(true);
-        return (await s.call('GET', `/v1/pods/${A.pod.id}/connectors/receipts?decisionId=${decisionId}`, A.olivia.token)).json.receipts[0].outcome as string;
+        // The release's call runs after the ruling is recorded: wait for its answer (a status, or another outcome).
+        for (let i = 0; ; i += 1) {
+          const r = (await s.call('GET', `/v1/pods/${A.pod.id}/connectors/receipts?decisionId=${decisionId}`, A.olivia.token)).json.receipts[0];
+          if (i === 80 || r.outcome !== 'released' || r.upstreamStatus !== undefined) return r.outcome as string;
+          await new Promise((res) => setTimeout(res, 25));
+        }
       };
       expect((await op('list_issues', {})).json.state).toBe('done');
       const [early, late] = [(await op('create_issue', { title: 't', teamId: 'T' })).json, (await op('create_issue', { title: 'u', teamId: 'T' })).json];

@@ -124,11 +124,43 @@ func (l *logBuf) Write(p []byte) (int, error) {
 	return l.b.Write(p)
 }
 
+// lineCap bounds each line of a tail; a Worker's `stack:` line alone runs past 1 KB.
+const lineCap = 500
+
+var (
+	failLine = regexp.MustCompile(`ERROR|Fatal|failed to start`) // a line that names a failure
+	ansiCode = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+)
+
+// logLines is the output as lines, without colour codes, empty lines or `stack:` dumps, each cut at lineCap.
+func logLines(b []byte) []string {
+	var out []string
+	for _, ln := range strings.Split(ansiCode.ReplaceAllString(string(b), ""), "\n") {
+		ln = strings.TrimRight(ln, "\r")
+		if strings.TrimSpace(ln) == "" || strings.HasPrefix(strings.TrimSpace(ln), "stack:") {
+			continue
+		}
+		if len(ln) > lineCap {
+			ln = ln[:lineCap] + "..."
+		}
+		out = append(out, ln)
+	}
+	return out
+}
+
+// tail is at most n lines: those that name a failure, from anywhere in the log, then the last of the rest. A cause printed
+// at second 2 still shows after a minute of other output.
 func (l *logBuf) tail(n int) string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	b := l.b.Bytes()
-	return string(b[max(0, len(b)-n*100):])
+	var fail, rest []string
+	for _, ln := range logLines(l.bytes()) {
+		if failLine.MatchString(ln) {
+			fail = append(fail, ln)
+		} else {
+			rest = append(rest, ln)
+		}
+	}
+	fail = fail[:min(n, len(fail))]
+	return strings.Join(append(fail, rest[max(0, len(rest)-(n-len(fail))):]...), "\n")
 }
 
 func (l *logBuf) bytes() []byte {
@@ -168,11 +200,32 @@ func freePort(t *testing.T, not ...int) int {
 }
 
 // portTries bounds the first start of a server. freePort closes its listener before the server binds, so
-// another process can take the port in between; only that failure is retried, on fresh ports.
+// another process can take the port in between. That failure, and a Workers runtime that failed to start, are retried on fresh ports.
 const portTries = 3
 
 // portTaken matches the output of a start that exited because its port was taken.
 var portTaken = regexp.MustCompile(`(?i)address already in use|EADDRINUSE`)
+
+// runtimeFailed matches a Worker start whose runtime (workerd) died before serving. The cause is not known yet; the
+// retry line carries the first line that names a failure, so the next one that happens says what it was.
+var runtimeFailed = regexp.MustCompile(`Workers runtime failed to start`)
+
+// startRetry says whether a failed start on `port` is tried again on fresh ports, and the line to print for try `try`.
+func startRetry(name string, port, try int, out []byte) (string, bool) {
+	at := fmt.Sprintf("test=%s port=%d try=%d", name, port, try)
+	if portTaken.Match(out) {
+		return "PORT_RETRY " + at, true
+	}
+	if !runtimeFailed.Match(out) {
+		return "", false
+	}
+	for _, ln := range logLines(out) {
+		if failLine.MatchString(ln) {
+			return "START_RETRY " + at + " cause=" + strings.TrimSpace(ln), true
+		}
+	}
+	return "START_RETRY " + at, true
+}
 
 func startServer(t *testing.T, env ...string) *server {
 	port := freePort(t)
@@ -184,11 +237,12 @@ func startServer(t *testing.T, env ...string) *server {
 		}
 	})
 	for try := 1; !s.start(); try++ {
-		if try == portTries || !portTaken.Match(s.log.bytes()) {
+		line, retry := startRetry(t.Name(), s.port, try+1, s.log.bytes())
+		if try == portTries || !retry {
 			s.t.Fatalf("server exited before /healthz answered 200; log tail:\n%s", s.log.tail(20))
 		}
 		s.kill()
-		fmt.Printf("PORT_RETRY test=%s port=%d try=%d\n", t.Name(), s.port, try+1)
+		fmt.Println(line)
 		s.port = freePort(t, s.port, s.inspector)
 		s.inspector = freePort(t, s.port)
 		s.dir, s.log = t.TempDir(), &logBuf{}

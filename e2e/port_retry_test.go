@@ -18,6 +18,7 @@ mode=$(sed -n "$((n+1))p" "$JM_FAKE_DIR/plan"); [ -n "$mode" ] || mode=$(tail -1
 case "$mode" in
 inuse) echo "ERROR Address already in use. Please check that you are not already running a server on this address"; exit 1 ;;
 other) echo "ERROR could not read the config"; exit 1 ;;
+crash) echo "*** Fatal uncaught kj::Exception: boom"; echo "[ERROR] The Workers runtime failed to start"; exit 1 ;;
 ok) exec "$JM_FAKE_BUN" -e 'Bun.serve({ hostname: "127.0.0.1", port: Number(process.env.PORT), fetch: () => new Response("ok") }); setInterval(() => {}, 1e6)' ;;
 esac`
 
@@ -38,8 +39,9 @@ func TestPortRetry(t *testing.T) {
 		{"taken every time: three tries, never a fourth", "inuse\n", false, 3, 2},
 		{"another failure is not retried", "other\n", false, 1, 0},
 		{"another failure after a taken port is not retried", "inuse\nother\n", false, 2, 1},
+		{"the Workers runtime failed to start, then it starts", "crash\ninuse\nok\n", true, 3, 2},
 	}
-	retryLine := regexp.MustCompile(`(?m)^PORT_RETRY test=TestPortRetryChild port=(\d+) try=(\d+)$`)
+	retryLine := regexp.MustCompile(`(?m)^(?:PORT_RETRY|START_RETRY) test=TestPortRetryChild port=(\d+) try=(\d+)(?: cause=\*\*\* Fatal uncaught kj::Exception: boom)?$`)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			dir := t.TempDir()

@@ -190,21 +190,32 @@ type f08 struct {
 }
 
 func newF08(t *testing.T) *f08 {
+	f := newF08Bare(t)
+	f.owner, f.ben = mustUser(t, f.c, "olivia"), mustUser(t, f.c, "ben")
+	f.joinPod()
+	return f
+}
+
+// newF08Bare is the server, the daemon build and the config dir, with nobody signed in and no pod.
+func newF08Bare(t *testing.T) *f08 {
 	f := &f08{t: t, bin: buildDaemon(t), srv: startServer(t), clock: fakeBase, procs: map[string]*dproc{}}
 	f.c = newClient(t, f.srv.base())
 	f.cfg = filepath.Join(t.TempDir(), "jm") // the daemon creates it
 	f.env = []string{"JELLYMOON_HOME=" + f.cfg, "JELLYMOON_SERVER=" + f.srv.base()}
 	f.setClock(f.clock)
-	f.owner, f.ben = mustUser(t, f.c, "olivia"), mustUser(t, f.c, "ben")
+	return f
+}
+
+// joinPod has the owner create the pod, invite ben, ben accept, and both open the pod's WebSocket.
+func (f *f08) joinPod() {
 	var pod, inv struct{ ID, Code string }
 	if r := f.c.do("POST", "/v1/pods", f.owner.tok, map[string]any{"name": "presence"}, &pod); !r.ok() {
-		t.Fatalf("POST /v1/pods: HTTP %d", r.Status)
+		f.t.Fatalf("POST /v1/pods: HTTP %d", r.Status)
 	}
 	f.pod = pod.ID
 	f.c.do("POST", "/v1/pods/"+f.pod+"/invites", f.owner.tok, map[string]any{"maxUses": 1}, &inv)
 	f.c.do("POST", "/v1/invites/"+inv.Code+"/accept", f.ben.tok, nil, nil)
-	f.obs = []*sock{openAs(t, f.srv, f.pod, f.owner), openAs(t, f.srv, f.pod, f.ben)}
-	return f
+	f.obs = []*sock{openAs(f.t, f.srv, f.pod, f.owner), openAs(f.t, f.srv, f.pod, f.ben)}
 }
 
 func (f *f08) setClock(now int64) {

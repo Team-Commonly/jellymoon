@@ -19,6 +19,10 @@ None of them ships in a runtime artifact.
 | @electric-sql/pglite 0.5.13 | In-process Postgres for `make e2e` and a clean shell, when `DATABASE_URL` is unset and `ENV=local`; production uses a real Postgres through Bun's built-in `Bun.SQL`, so there is no driver package (ADR 0006) | Requiring a Postgres install for every checkout and every preflight |
 | wrangler 4.151.0 | Runs the Cloudflare adapter (`worker/`) locally under `wrangler dev --local` for `make worker-dev` and `make e2e-a`; loopback only, no Cloudflare account or credentials. Its miniflare 5.20261012.0-beta is patched (`worker/patches/`) to import `undici/index.js` under Bun | Hand-rolled Durable Object and D1 fakes drift from the real runtime |
 | @cloudflare/workers-types 5.20261014.1 | Types for the Worker, Durable Object and D1 APIs in `tsc` | Hand-written ambient declarations |
+| react 19.3.1, react-dom 19.3.1, react-router-dom 7.18.5 | The web client (`web/`): the shell, its router and the screens that follow. Bundled by Vite for the browser; none runs in the server or the daemon | Preact or a hand-rolled DOM layer: fewer testing and routing tools to lean on |
+| vite 8.3.5, @vitejs/plugin-react 6.1.2 | Dev server and bundle of `web/`; the plugin only turns on the JSX transform and fast refresh | A custom esbuild script |
+| vitest 5.0.5, jsdom 30.1.3, @testing-library/react 16.3.3, @testing-library/dom 10.4.2 | Unit tests of the web store, card model, key map and shell with no browser (`bun run test:web`). Testing Library's dom package is its peer | bun:test with a hand-made DOM: the React render tests need a document |
+| @types/react 19.3.0, @types/react-dom 19.3.0 | Types for `tsc -p web/tsconfig.json` | Untyped JSX |
 | Node 20 or newer (land's runtime, not pinned) | `scripts/land.mjs` runs under `node`, never bun, so bun does not auto-load a `.env` from the checkout; land refuses to start on an older Node | bun: loads `.env` and `bunfig.toml` from the cwd into the environment |
 | deadcode, x/tools v0.51.0 (`go run`) | Unreachable Go functions from `main`; starts enforcing when a main package exists | — |
 
@@ -39,8 +43,9 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | server | 2,100 |
 | daemon | 5,000 |
 | e2e | 6,000 |
+| web | 1,580 |
 
-The caps add up to 22,200 lines. Agent-written comparables grew without bounds: herdr reached
+The caps add up to 23,780 lines (restated 2026-11-08 against the merged entropy.json: core 4,200, worker 1,900, server 2,100, podcore 3,000, daemon 5,000, web 1,580, e2e 6,000). Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -73,4 +78,8 @@ The caps add up to 22,200 lines. Agent-written comparables grew without bounds: 
 2026-11-08: the merge with main keeps main's core cap (3,720) and this branch's podcore (2,500), worker (1,790) and e2e (3,930) caps, all as they stand in entropy.json; no cap changes; the total is 14,940. F09.
 2026-11-08: server cap (new) 1,800, the pod-state server and its tests (ADR 0006) are 1,267 lines at the first green contract run; the cap is that count plus room for the tests the port still needs (the brief allows at most 3,000); the total is 15,700. No other cap changes. CPORT.
 2026-11-08: the merge of main (F09) into the pod-state server branch keeps main's worker (1,790) and e2e (3,930) caps and this branch's server (1,800) cap, all as they stand in entropy.json; no cap changes; the total is 16,740. CPORT.
+2026-11-08: web cap (new) 840, the web client package (shell, generated-type socket store, card model, key map and their tests, F18 PR 1) is 730 lines at the first green run; the cap is that count plus about 15%; the total is 17,580. No other cap changes. F18.
+2026-11-08: web cap 840 → 1,580, the pod stream (cards, ask cards with the confirm row, composer, needs-you filter, keyboard glue) and its 30 component tests take the package to 1,373 lines (the gate printed `LOC web 1362 / 1250` before this raise; the cap is that count plus about 15%); the total is 18,320. No other cap changes. F18 PR 2.
 2026-11-08: podcore cap 2,500 → 3,000, rulings on an ask (the `rule` command, the decision record an ask now keeps, and the tests that pin each refusal and the old-saved-state load) take the core to 2,585 lines (the gate printed `LOC podcore 2534 / 2500` with the tests alone, before this raise; the cap is that final count plus about 15%); the total is 17,960. No other cap changes. F12.
+2026-11-08: the merge with main keeps this branch's web (840) cap and main's podcore (3,000) cap, with the core (3,720), worker (1,790), server (1,800) and e2e (4,650) caps, all as they stand in entropy.json; no cap changes; the total is 18,800. F18.
+2026-11-08: the merge of main (daemon permissions, #18) into the run-workspace branch changes no cap; the caps stand as they are in entropy.json (core 4,200, worker 1,900, server 2,100, podcore 3,000, daemon 5,000, web 840, e2e 6,000) and the total is 23,040. WSP.

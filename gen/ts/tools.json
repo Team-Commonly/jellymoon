@@ -1282,9 +1282,9 @@
     },
     {
       "name": "jm_task_update",
-      "description": "Set a task's status, with an optional short note. Use done only when the task's work is finished.",
+      "description": "Set a task's status. Use done only when the task's work is finished.",
       "inputSchema": {
-        "description": "The new status for a task, with an optional note.",
+        "description": "The new status for a task.",
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -1306,11 +1306,6 @@
               "done",
               "failed"
             ]
-          },
-          "note": {
-            "description": "A short note on the change.",
-            "type": "string",
-            "maxLength": 500
           }
         }
       },

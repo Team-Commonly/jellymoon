@@ -3,7 +3,12 @@
 // calls jm_whoami through the MCP server session/new gave it, records the answer, and exits. After the record path, the
 // arguments are: "hold" (record, then stay up, ignoring a closed stdin and SIGTERM, to stand for an agent that will not leave by
 // itself and has to be killed) and "script=<file>" (a JSON list of {"tool", "arguments"}: the agent makes those MCP calls in order
-// instead of jm_whoami, and records each reply under Calls. It never decides anything from a reply: a script is the whole of its behaviour).
+// instead of jm_whoami, and records each reply under Calls. It never decides anything from a reply: a script is the whole of its behaviour),
+// "permission=<kind,kind>" (before the calls, ask the client's permission offering one option per kind, an option's id being its kind,
+// and record the answer under Permission), "cancel" (after the calls, wait for session/cancel, end the turn with stopReason cancelled and
+// exit) and "deaf" (after the calls, never end the turn and ignore session/cancel). In cancel and deaf modes a SIGTERM is recorded under Signalled and ends the agent.
+// The one thing a script can borrow is the task id: an argument that is exactly "{{taskId}}" becomes the first tsk_ id in the brief the
+// agent was prompted with, because a script is written before the task it works on exists.
 package main
 
 import (
@@ -14,7 +19,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -39,6 +46,9 @@ type record struct {
 	Whoami      json.RawMessage
 	WhoamiError string
 	Calls       []callRec
+	Permission  json.RawMessage
+	Cancelled   bool
+	Signalled   bool // SIGTERM arrived (cancel and deaf modes)
 }
 
 // callRec is one scripted MCP call and the server's whole answer to it.
@@ -64,7 +74,11 @@ var (
 	path string
 )
 
+var saving sync.Mutex // the SIGTERM handler saves too
+
 func save() {
+	saving.Lock()
+	defer saving.Unlock()
 	raw, _ := json.Marshal(rec)
 	tmp := path + ".tmp"
 	if os.WriteFile(tmp, raw, 0o600) == nil {
@@ -118,6 +132,8 @@ func whoami(params json.RawMessage) {
 	rec.Whoami = out
 }
 
+var taskIDPattern = regexp.MustCompile(`tsk_[0-9A-Z]{26}`)
+
 // script makes the scripted calls, one per tools/call, after one initialize.
 func script(params json.RawMessage, file string) {
 	var p struct{ McpServers []server }
@@ -136,7 +152,13 @@ func script(params json.RawMessage, file string) {
 		rec.WhoamiError = err.Error()
 		return
 	}
+	taskID := taskIDPattern.FindString(string(rec.Prompt))
 	for i, st := range steps {
+		for k, v := range st.Arguments {
+			if v == "{{taskId}}" {
+				st.Arguments[k] = taskID
+			}
+		}
 		out, err := call(s, map[string]any{"jsonrpc": "2.0", "id": i + 2, "method": "tools/call", "params": map[string]any{"name": st.Tool, "arguments": st.Arguments}})
 		c := callRec{Tool: st.Tool, Reply: out}
 		if err != nil {
@@ -147,27 +169,84 @@ func script(params json.RawMessage, file string) {
 	}
 }
 
+// flags are the arguments after the record path.
+type flags struct {
+	hold, cancel, deaf bool
+	script, permission string
+}
+
+func parse(args []string) (f flags) {
+	for _, a := range args {
+		f.hold, f.cancel, f.deaf = f.hold || a == "hold", f.cancel || a == "cancel", f.deaf || a == "deaf"
+		if v, ok := strings.CutPrefix(a, "script="); ok {
+			f.script = v
+		}
+		if v, ok := strings.CutPrefix(a, "permission="); ok {
+			f.permission = v
+		}
+	}
+	return f
+}
+
+// askPermission sends session/request_permission with one option per kind and records the client's answer.
+func askPermission(sc *bufio.Scanner, kinds string) {
+	var opts []map[string]any
+	for _, k := range strings.Split(kinds, ",") {
+		opts = append(opts, map[string]any{"optionId": k, "name": k, "kind": k})
+	}
+	b, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 900, "method": "session/request_permission", "params": map[string]any{
+		"sessionId": "sess_fake", "toolCall": map[string]any{"toolCallId": "call_fake", "kind": "execute", "title": "a tool call title"}, "options": opts}})
+	os.Stdout.Write(append(b, '\n'))
+	if sc.Scan() {
+		var r struct{ Result json.RawMessage }
+		_ = json.Unmarshal(sc.Bytes(), &r)
+		rec.Permission = r.Result
+	}
+}
+
+// doCalls is the agent's work in a turn: the permission request, then the scripted MCP calls or jm_whoami.
+func doCalls(sc *bufio.Scanner, f flags, prompt json.RawMessage) {
+	rec.Prompt = prompt
+	if f.permission != "" {
+		askPermission(sc, f.permission)
+	}
+	if f.script != "" {
+		script(rec.SessionNew, f.script)
+	} else {
+		whoami(rec.SessionNew)
+	}
+	save()
+}
+
+// onTerm records a SIGTERM and exits, so a test can tell an agent that was signalled from one that left on its own.
+func onTerm() {
+	term := make(chan os.Signal, 1)
+	signal.Notify(term, syscall.SIGTERM)
+	go func() {
+		<-term
+		rec.Signalled = true
+		save()
+		os.Exit(143)
+	}()
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		os.Exit(2)
 	}
 	path = os.Args[1]
-	hold, scripted := false, ""
-	for _, a := range os.Args[2:] {
-		if a == "hold" {
-			hold = true
-		}
-		if f, ok := strings.CutPrefix(a, "script="); ok {
-			scripted = f
-		}
-	}
-	if hold {
+	f := parse(os.Args[2:])
+	if f.hold {
 		signal.Ignore(syscall.SIGTERM)
+	}
+	if f.deaf || f.cancel {
+		onTerm()
 	}
 	rec.PID, rec.Argv, rec.Env = os.Getpid(), os.Args, os.Environ()
 	save()
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
+	var pending json.RawMessage // the session/prompt this agent has not answered yet
 	for sc.Scan() {
 		var r request
 		if json.Unmarshal(sc.Bytes(), &r) != nil {
@@ -181,22 +260,28 @@ func main() {
 			rec.SessionNew = r.Params
 			reply(r.ID, map[string]any{"sessionId": "sess_fake"})
 		case "session/prompt":
-			rec.Prompt = r.Params
-			if scripted != "" {
-				script(rec.SessionNew, scripted)
-			} else {
-				whoami(rec.SessionNew)
-			}
-			save()
-			if hold {
+			doCalls(sc, f, r.Params)
+			if f.hold {
 				stayUp()
+			}
+			if f.cancel || f.deaf {
+				pending = r.ID // the turn goes on until the client cancels it, or never ends
+				continue
 			}
 			reply(r.ID, map[string]any{"stopReason": "end_turn"})
 			return
+		case "session/cancel":
+			rec.Cancelled = true
+			save()
+			if f.cancel && pending != nil {
+				time.Sleep(300 * time.Millisecond) // winding a turn down takes a moment, so a client that signals at once is caught
+				reply(pending, map[string]any{"stopReason": "cancelled"})
+				return
+			}
 		}
 		save()
 	}
-	if hold {
+	if f.hold || f.deaf {
 		stayUp()
 	}
 }

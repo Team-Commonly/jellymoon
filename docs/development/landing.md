@@ -71,7 +71,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    `startup_failure`, `action_required`), land refuses. Each check NAME is judged by its latest run: the one with the latest `started_at`, ties broken
    by the higher run id (ids only grow; `started_at` alone can be equal or missing on a cancelled run). A cancelled or failed run followed by a later run
    of the same name that finished is superseded, because a re-run is how a cancelled suite is retried (#29 and #32, 11-08). A cancelled run with no later
-   run of that name still refuses, and so does a later failure after an earlier success. Runs of one name that tie on both are all judged. No check runs at all is fine: land does not wait for CI. The
+   run of that name still refuses, and so does a later failure after an earlier success. Runs of one name that tie on both are all judged, and so is every run with no usable `started_at` (it cannot be placed in time, so it neither hides nor is hidden by another run). A judged run that is still running (not `completed`, or no conclusion) refuses as `<name> still running`. No check runs at all is fine: land does not wait for CI. The
    ruleset on `main` makes GitHub refuse the merge until CI's required checks pass; land still does not wait, so a land
    run while required checks are pending fails at the merge step.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
@@ -391,8 +391,8 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   `git remote -v`, which shows the rewrite). It does not look at `credential.helper`, and it lets a non-http URL carry a
   plain user (`ssh://git@host`); only a user:password pair is refused there.
 - **The base can be retargeted between the last re-read and the merge.** `--match-head-commit` pins the head only.
-- **The CI veto reads completed check runs only.** In-progress runs and legacy commit statuses are ignored, so land never
-  waits for CI; a failed completed run vetoes.
+- **The CI veto judges each check name's latest run.** A failed or cancelled latest run vetoes, and so does one still running
+  (`<name> still running`: land refuses rather than wait, and is run again once CI has finished). Legacy commit statuses are ignored.
 - **The checkout check** also refuses `assume-unchanged` or `skip-worktree` files, a diff from HEAD, and untracked files
   (all shown).
 - **A message's author, or the pod creator, can change its `created_at`** (Commonly's `PATCH /api/messages/:id/created-at`). A reviewer could reorder their own verdicts, and the creator anyone's; a backdated FAIL could also slip past the paging bound. Same trust class as the deletion below.

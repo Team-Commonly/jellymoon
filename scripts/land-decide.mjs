@@ -274,24 +274,27 @@ export const scanEnv = (env) => ({ ...Object.fromEntries(SCAN_ENV_KEEP.filter((k
 // Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
 // A check NAME is judged by its latest run(s): a re-run (the same name started later, ties broken by the higher run id) supersedes an
 // earlier cancelled or failed one, because a re-run is how a cancelled suite is retried (#29 and #32, 11-08). Runs that tie on both
-// are all latest, so a bad one among them refuses. A name's latest run being bad, or only run, still refuses.
+// are all latest, so a bad one among them refuses. A run with no usable started_at (a cancelled run can lack one) cannot be placed in time,
+// so it is ALWAYS judged and never hidden by, or hiding, another run. A judged run still running (not completed, or no conclusion) refuses.
 const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
-const startedAt = (r) => { const t = Date.parse(r.started_at); return Number.isNaN(t) ? 0 : t; };
-const order = (r) => [startedAt(r), Number(r.id) || 0];
-const newer = (a, b) => { const [x, y] = [order(a), order(b)]; return x[0] - y[0] || x[1] - y[1]; };
+const startedAt = (r) => Date.parse(r.started_at);
+const newer = (a, b) => startedAt(a) - startedAt(b) || (Number(a.id) || 0) - (Number(b.id) || 0);
 function latestPerName(runs) {
   const best = new Map();
-  for (const r of runs) {
+  for (const r of runs.filter((x) => !Number.isNaN(startedAt(x)))) {
     const key = String(r.name), cur = best.get(key);
     if (!cur || newer(r, cur[0]) > 0) best.set(key, [r]);
     else if (newer(r, cur[0]) === 0) cur.push(r);
   }
-  return [...best.values()].flat();
+  return [...best.values()].flat().concat(runs.filter((x) => Number.isNaN(startedAt(x))));
 }
+const running = (r) => r.conclusion == null || (r.status !== undefined && r.status !== 'completed');
 export function checkRuns(runs, total = runs.length) {
   if (total > runs.length) return { ok: false, reason: `${total} check runs on the head; cannot read them all` };
-  const bad = latestPerName(runs).filter((r) => BAD_CONCLUSION.includes(r.conclusion));
-  return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${stripControls(String(r.name))} (${r.conclusion})`).join(', ')}` } : { ok: true };
+  const judged = latestPerName(runs), bad = judged.filter((r) => BAD_CONCLUSION.includes(r.conclusion)), wait = judged.filter(running);
+  const nm = (r) => stripControls(String(r.name));
+  if (wait.length) return { ok: false, reason: `check run still running on the head: ${wait.map((r) => `${nm(r)} still running`).join(', ')}` };
+  return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${nm(r)} (${r.conclusion})`).join(', ')}` } : { ok: true };
 }
 // The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere, and then only at the PR head), because
 // the scripts in this tree run before the trust gate decides. mainTip null: before the fetch, HEAD is compared later. Credentials in the

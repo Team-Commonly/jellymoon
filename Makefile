@@ -164,9 +164,10 @@ e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
 e2e: e2e-c
 
 # The contract suite against the Cloudflare adapter (worker/), which stays in the tree as a second adapter.
-# JM_E2E_SKIP is cleared here: the Worker runs the whole suite, and an inherited skip list would drop tests without a word.
-# A deliberate skip goes through `make e2e-a E2E_A_SKIP=<names>`.
-E2E_A_SKIP :=
+# JM_E2E_SKIP is cleared here, so an inherited skip list never drops tests without a word. The skips below are
+# deliberate: features built on the pod-state server only (ADR 0006), each with its reason in
+# docs/development/e2e-contract.md, "Skipped on the Worker". Override with `make e2e-a E2E_A_SKIP=<names>`.
+E2E_A_SKIP := TestF19
 e2e-a: node_modules
 	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' JM_E2E_SKIP='$(E2E_A_SKIP)')
 

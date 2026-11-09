@@ -58,6 +58,16 @@
       "type": "string",
       "pattern": "^wak_[0-9A-HJKMNP-TV-Z]{26}$"
     },
+    "ConnectionId": {
+      "description": "The id of a pod connection: one upstream service and the credential the pod holds for it.",
+      "type": "string",
+      "pattern": "^con_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "ConnectorReceiptId": {
+      "description": "The id of a connector receipt: the server's record of one connector call.",
+      "type": "string",
+      "pattern": "^crc_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
     "Seq": {
       "description": "Monotonic per pod, assigned by the pod. Starts at 1.",
       "type": "integer",
@@ -128,7 +138,11 @@
         "invalid_grant",
         "ungrounded",
         "rate_limited",
+        "connector_drift",
         "upstream",
+        "upstream_failed",
+        "upstream_too_large",
+        "vault_unconfigured",
         "internal"
       ]
     },
@@ -1730,6 +1744,115 @@
         }
       }
     },
+    "ConnectRequest": {
+      "description": "A pod owner connects an upstream: the vendor, where its operations are served, and the credential the pod will hold.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vendor",
+        "url",
+        "token"
+      ],
+      "properties": {
+        "vendor": {
+          "$ref": "#/$defs/ConnectorVendor"
+        },
+        "url": {
+          "description": "The upstream's endpoint, e.g. its remote MCP URL. https only (http on loopback when ENV is local).",
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^https?://"
+        },
+        "token": {
+          "description": "The upstream credential. Stored encrypted and never shown again, to anyone.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      }
+    },
+    "Connection": {
+      "description": "A stored connection, without its credential: the vendor, the url and the pinned operations the upstream was checked against.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "vendor",
+        "url",
+        "createdAt",
+        "operations"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ConnectionId"
+        },
+        "vendor": {
+          "$ref": "#/$defs/ConnectorVendor"
+        },
+        "url": {
+          "description": "The upstream's endpoint.",
+          "type": "string",
+          "maxLength": 2048
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "operations": {
+          "description": "The pinned catalogue the upstream matched.",
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/PinnedOperation"
+          }
+        }
+      }
+    },
+    "GrantRequest": {
+      "description": "A pod owner lets one agent use one connection, read only or with writes that each need approval.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectionId",
+        "agentId",
+        "access"
+      ],
+      "properties": {
+        "connectionId": {
+          "$ref": "#/$defs/ConnectionId"
+        },
+        "agentId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "access": {
+          "$ref": "#/$defs/ConnectorAccess"
+        }
+      }
+    },
+    "Grant": {
+      "description": "A stored grant: which agent may use which connection, how, and since when.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectionId",
+        "agentId",
+        "access",
+        "createdAt"
+      ],
+      "properties": {
+        "connectionId": {
+          "$ref": "#/$defs/ConnectionId"
+        },
+        "agentId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "access": {
+          "$ref": "#/$defs/ConnectorAccess"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
     "RunOutcome": {
       "description": "How a run ended: completed, failed or cancelled.",
       "type": "string",
@@ -2005,6 +2128,295 @@
         },
         "outcome": {
           "$ref": "#/$defs/RunOutcome"
+        }
+      }
+    },
+    "ConnectorVendor": {
+      "description": "An upstream service the pod can connect, each with a pinned catalogue in the repo.",
+      "type": "string",
+      "enum": [
+        "linear"
+      ]
+    },
+    "ConnectorAccess": {
+      "description": "What a grant lets an agent do on a connection: read only, or also writes that each need a member's approval.",
+      "type": "string",
+      "enum": [
+        "read",
+        "write-with-confirm"
+      ]
+    },
+    "OperationClass": {
+      "description": "Whether a pinned operation only reads the upstream (read) or changes it (write).",
+      "type": "string",
+      "enum": [
+        "read",
+        "write"
+      ]
+    },
+    "ConnectorOperationName": {
+      "description": "An operation's name in the vendor's pinned catalogue, e.g. list_issues.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.]{0,63}$"
+    },
+    "PinnedOperation": {
+      "description": "One operation of a pinned catalogue: its name, its class and the names of its arguments.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "class",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ConnectorOperationName"
+        },
+        "class": {
+          "$ref": "#/$defs/OperationClass"
+        },
+        "args": {
+          "description": "The argument names the pin records, in order.",
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "description": "An argument name.",
+            "maxLength": 64
+          }
+        }
+      }
+    },
+    "ConnectorView": {
+      "description": "A connection as a caller sees it: its id, vendor and the pinned operations the caller may use. A run sees only what its agent's grant allows.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectionId",
+        "vendor",
+        "operations"
+      ],
+      "properties": {
+        "connectionId": {
+          "$ref": "#/$defs/ConnectionId"
+        },
+        "vendor": {
+          "$ref": "#/$defs/ConnectorVendor"
+        },
+        "access": {
+          "description": "For a run token: its agent's grant on this connection.",
+          "$ref": "#/$defs/ConnectorAccess"
+        },
+        "operations": {
+          "description": "The pinned operations the caller may call.",
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/PinnedOperation"
+          }
+        }
+      }
+    },
+    "ConnectorListInput": {
+      "description": "Takes no fields.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "ConnectorListOutput": {
+      "description": "The pod's connections. A run token sees only the connections its agent holds a grant on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connections"
+      ],
+      "properties": {
+        "connections": {
+          "description": "The connections, oldest first.",
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/ConnectorView"
+          }
+        }
+      }
+    },
+    "ConnectorCallInput": {
+      "description": "One call: which connection (by id or by vendor), which pinned operation, and its arguments.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "args"
+      ],
+      "properties": {
+        "connectionId": {
+          "$ref": "#/$defs/ConnectionId"
+        },
+        "vendor": {
+          "$ref": "#/$defs/ConnectorVendor"
+        },
+        "operation": {
+          "$ref": "#/$defs/ConnectorOperationName"
+        },
+        "args": {
+          "description": "The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given.",
+          "type": "object",
+          "maxProperties": 64
+        }
+      }
+    },
+    "ConnectorCallState": {
+      "description": "What became of a call: done (the upstream answered) or parked (a write waiting on a ruling).",
+      "type": "string",
+      "enum": [
+        "done",
+        "parked"
+      ]
+    },
+    "ConnectorCallOutput": {
+      "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "receiptId"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/ConnectorCallState"
+        },
+        "receiptId": {
+          "$ref": "#/$defs/ConnectorReceiptId"
+        },
+        "result": {
+          "description": "State done: the upstream's result.",
+          "type": "object"
+        },
+        "decisionId": {
+          "description": "State parked: the decision of the ask that holds the write.",
+          "$ref": "#/$defs/DecisionId"
+        }
+      }
+    },
+    "ConnectorOutcome": {
+      "description": "ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask.",
+      "type": "string",
+      "enum": [
+        "ok",
+        "failed",
+        "refused",
+        "parked",
+        "released",
+        "rejected",
+        "expired"
+      ]
+    },
+    "ConnectorReceipt": {
+      "description": "The server's record of one connector call. Stamped by the server from its own records; an agent can read it and never write it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "podId",
+        "connectionId",
+        "operation",
+        "argsHash",
+        "runId",
+        "agentId",
+        "outcome",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ConnectorReceiptId"
+        },
+        "podId": {
+          "$ref": "#/$defs/PodId"
+        },
+        "connectionId": {
+          "$ref": "#/$defs/ConnectionId"
+        },
+        "operation": {
+          "$ref": "#/$defs/ConnectorOperationName"
+        },
+        "argsHash": {
+          "description": "SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        },
+        "agentId": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ConnectorOutcome"
+        },
+        "upstreamStatus": {
+          "description": "The HTTP status the upstream answered with, when it was called.",
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "decisionId": {
+          "description": "A write: the decision of its ask.",
+          "$ref": "#/$defs/DecisionId"
+        },
+        "approver": {
+          "description": "A released write: the member whose ruling released it.",
+          "$ref": "#/$defs/Actor"
+        },
+        "result": {
+          "description": "A released write: the upstream's result.",
+          "type": "object"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "settledAt": {
+          "description": "When the call reached its outcome: at once for a read, at the ruling or expiry for a write.",
+          "$ref": "#/$defs/Timestamp"
+        },
+        "expiresAt": {
+          "description": "A parked write: when it expires unruled.",
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "ConnectorReceiptsInput": {
+      "description": "Which receipts to read.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decisionId": {
+          "description": "Only the receipt of the write this decision holds.",
+          "$ref": "#/$defs/DecisionId"
+        },
+        "limit": {
+          "description": "Defaults to 20.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "ConnectorReceiptsOutput": {
+      "description": "Receipts, newest first.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipts"
+      ],
+      "properties": {
+        "receipts": {
+          "description": "The receipts, at most limit.",
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/ConnectorReceipt"
+          }
         }
       }
     },

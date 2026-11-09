@@ -63,26 +63,42 @@ export function endRun(c: Ctx, run: Run, outcome: RunOutcome, cause: ClaimReleas
  */
 export function settle(c: Ctx): void {
   const real = c.now;
-  const due: Array<[number, number, string]> = []; // [deadline, 0 cap | 1 lease | 2 stale computer, run, task or computer id]
+  const due: Array<[number, number, string]> = []; // [deadline, 0 cap | 1 lease | 2 stale computer | 3 decision expiry, run, task, computer or decision id]
   for (const [t, k] of Object.entries(c.s.claims)) if (k.leaseUntil <= real) due.push([k.leaseUntil, 1, t]);
   for (const r of Object.values(c.s.runs)) if (r.status === 'active' && r.startedAt + RUN_CAP_MS <= real) due.push([r.startedAt + RUN_CAP_MS, 0, r.id]);
   for (const [id, at] of staleAt(c.s)) if (at <= real) due.push([at, 2, id]);
+  for (const [id, at] of expiring(c.s)) if (at <= real) due.push([at, 3, id]);
   due.sort((a, b) => a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : 1));
   for (const [at, rank, id] of due) {
     c.now = at;
     if (rank === 0) endRun(c, c.s.runs[id], 'failed', 'run_ended');
     else if (rank === 2) computerGone(c, id);
+    else if (rank === 3) expireDecision(c, id);
     else if (own(c.s.claims, id) !== undefined) endClaim(c, id, 'expired');
   }
   c.now = real;
 }
 
+/** Open decisions with an expiry, as [decision id, expiresAt]. */
+const expiring = (s: Pick<PodState, 'decisions'>): Array<[string, number]> =>
+  Object.entries(s.decisions ?? {}).flatMap(([id, d]) => (d.decision.state === 'open' && d.expiresAt !== undefined ? [[id, d.expiresAt] as [string, number]] : []));
+
+/** An open decision past its expiry: it can no longer be ruled, and members are told. */
+function expireDecision(c: Ctx, id: string): void {
+  const rec = (c.s.decisions ?? {})[id];
+  rec.decision = { id: rec.decision.id, state: 'expired' };
+  rec.options = [];
+  delete rec.expiresAt;
+  emit(c, 'message.updated', { id: rec.messageId, decision: rec.decision });
+}
+
 /** The earliest moment `apply(state, {type:'tick'}, t)` has work to do, or null. */
-export function nextDeadline(s: { runs: Record<RunId, Run>; claims: Record<TaskId, { leaseUntil: number }>; online?: Record<string, number> }): number | null {
+export function nextDeadline(s: { runs: Record<RunId, Run>; claims: Record<TaskId, { leaseUntil: number }>; online?: Record<string, number>; decisions?: PodState['decisions'] }): number | null {
   const times = [
     ...Object.values(s.claims).map((k) => k.leaseUntil),
     ...Object.values(s.runs).filter((r) => r.status === 'active').map((r) => r.startedAt + RUN_CAP_MS),
     ...staleAt(s).map(([, at]) => at),
+    ...expiring(s).map(([, at]) => at),
   ];
   return times.length === 0 ? null : Math.min(...times);
 }

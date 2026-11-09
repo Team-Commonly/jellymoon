@@ -40,6 +40,12 @@ type DecisionID = string
 // The id of a wake: a push telling a computer to start a run for an agent.
 type WakeID = string
 
+// The id of a pod connection: one upstream service and the credential the pod holds for it.
+type ConnectionID = string
+
+// The id of a connector receipt: the server's record of one connector call.
+type ConnectorReceiptID = string
+
 // Monotonic per pod, assigned by the pod. Starts at 1.
 type Seq = int64
 
@@ -123,14 +129,18 @@ const (
 	ErrorCodeInvalidGrant         ErrorCode = "invalid_grant"
 	ErrorCodeUngrounded           ErrorCode = "ungrounded"
 	ErrorCodeRateLimited          ErrorCode = "rate_limited"
+	ErrorCodeConnectorDrift       ErrorCode = "connector_drift"
 	ErrorCodeUpstream             ErrorCode = "upstream"
+	ErrorCodeUpstreamFailed       ErrorCode = "upstream_failed"
+	ErrorCodeUpstreamTooLarge     ErrorCode = "upstream_too_large"
+	ErrorCodeVaultUnconfigured    ErrorCode = "vault_unconfigured"
 	ErrorCodeInternal             ErrorCode = "internal"
 )
 
 // Valid reports whether x is one of the schema's values.
 func (x ErrorCode) Valid() bool {
 	switch x {
-	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeUpstream, ErrorCodeInternal:
+	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeConnectorDrift, ErrorCodeUpstream, ErrorCodeUpstreamFailed, ErrorCodeUpstreamTooLarge, ErrorCodeVaultUnconfigured, ErrorCodeInternal:
 		return true
 	}
 	return false
@@ -1730,6 +1740,101 @@ func (x *ClaimRunResponse) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A pod owner connects an upstream: the vendor, where its operations are served, and the credential the pod will hold.
+type ConnectRequest struct {
+	Vendor ConnectorVendor `json:"vendor"`
+	// The upstream's endpoint, e.g. its remote MCP URL. https only (http on loopback when ENV is local).
+	URL string `json:"url"`
+	// The upstream credential. Stored encrypted and never shown again, to anyone.
+	Token string `json:"token"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectRequest) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"vendor", "url", "token"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ConnectRequest: missing required field %q", k)
+		}
+	}
+	type plain ConnectRequest
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// A stored connection, without its credential: the vendor, the url and the pinned operations the upstream was checked against.
+type Connection struct {
+	ID     ConnectionID    `json:"id"`
+	Vendor ConnectorVendor `json:"vendor"`
+	// The upstream's endpoint.
+	URL       string    `json:"url"`
+	CreatedAt Timestamp `json:"createdAt"`
+	// The pinned catalogue the upstream matched.
+	Operations []PinnedOperation `json:"operations"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *Connection) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"id", "vendor", "url", "createdAt", "operations"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("Connection: missing required field %q", k)
+		}
+	}
+	type plain Connection
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// A pod owner lets one agent use one connection, read only or with writes that each need approval.
+type GrantRequest struct {
+	ConnectionID ConnectionID    `json:"connectionId"`
+	AgentID      AgentID         `json:"agentId"`
+	Access       ConnectorAccess `json:"access"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *GrantRequest) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"connectionId", "agentId", "access"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("GrantRequest: missing required field %q", k)
+		}
+	}
+	type plain GrantRequest
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// A stored grant: which agent may use which connection, how, and since when.
+type Grant struct {
+	ConnectionID ConnectionID    `json:"connectionId"`
+	AgentID      AgentID         `json:"agentId"`
+	Access       ConnectorAccess `json:"access"`
+	CreatedAt    Timestamp       `json:"createdAt"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *Grant) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"connectionId", "agentId", "access", "createdAt"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("Grant: missing required field %q", k)
+		}
+	}
+	type plain Grant
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // How a run ended: completed, failed or cancelled.
 type RunOutcome string
 
@@ -2065,6 +2170,302 @@ func (x *RunStopOutput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// An upstream service the pod can connect, each with a pinned catalogue in the repo.
+type ConnectorVendor string
+
+const (
+	ConnectorVendorLinear ConnectorVendor = "linear"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x ConnectorVendor) Valid() bool {
+	switch x {
+	case ConnectorVendorLinear:
+		return true
+	}
+	return false
+}
+
+// What a grant lets an agent do on a connection: read only, or also writes that each need a member's approval.
+type ConnectorAccess string
+
+const (
+	ConnectorAccessRead             ConnectorAccess = "read"
+	ConnectorAccessWriteWithConfirm ConnectorAccess = "write-with-confirm"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x ConnectorAccess) Valid() bool {
+	switch x {
+	case ConnectorAccessRead, ConnectorAccessWriteWithConfirm:
+		return true
+	}
+	return false
+}
+
+// Whether a pinned operation only reads the upstream (read) or changes it (write).
+type OperationClass string
+
+const (
+	OperationClassRead  OperationClass = "read"
+	OperationClassWrite OperationClass = "write"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x OperationClass) Valid() bool {
+	switch x {
+	case OperationClassRead, OperationClassWrite:
+		return true
+	}
+	return false
+}
+
+// An operation's name in the vendor's pinned catalogue, e.g. list_issues.
+type ConnectorOperationName = string
+
+// One operation of a pinned catalogue: its name, its class and the names of its arguments.
+type PinnedOperation struct {
+	Name  ConnectorOperationName `json:"name"`
+	Class OperationClass         `json:"class"`
+	// The argument names the pin records, in order.
+	Args []string `json:"args"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *PinnedOperation) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"name", "class", "args"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("PinnedOperation: missing required field %q", k)
+		}
+	}
+	type plain PinnedOperation
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// A connection as a caller sees it: its id, vendor and the pinned operations the caller may use. A run sees only what its agent's grant allows.
+type ConnectorView struct {
+	ConnectionID ConnectionID    `json:"connectionId"`
+	Vendor       ConnectorVendor `json:"vendor"`
+	// For a run token: its agent's grant on this connection.
+	Access *ConnectorAccess `json:"access,omitempty"`
+	// The pinned operations the caller may call.
+	Operations []PinnedOperation `json:"operations"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectorView) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"connectionId", "vendor", "operations"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ConnectorView: missing required field %q", k)
+		}
+	}
+	type plain ConnectorView
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// Takes no fields.
+type ConnectorListInput struct {
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectorListInput) UnmarshalJSON(b []byte) error {
+	type plain ConnectorListInput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// The pod's connections. A run token sees only the connections its agent holds a grant on.
+type ConnectorListOutput struct {
+	// The connections, oldest first.
+	Connections []ConnectorView `json:"connections"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectorListOutput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"connections"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ConnectorListOutput: missing required field %q", k)
+		}
+	}
+	type plain ConnectorListOutput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// One call: which connection (by id or by vendor), which pinned operation, and its arguments.
+type ConnectorCallInput struct {
+	ConnectionID *ConnectionID          `json:"connectionId,omitempty"`
+	Vendor       *ConnectorVendor       `json:"vendor,omitempty"`
+	Operation    ConnectorOperationName `json:"operation"`
+	// The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given.
+	Args json.RawMessage `json:"args"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectorCallInput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"operation", "args"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ConnectorCallInput: missing required field %q", k)
+		}
+	}
+	type plain ConnectorCallInput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// What became of a call: done (the upstream answered) or parked (a write waiting on a ruling).
+type ConnectorCallState string
+
+const (
+	ConnectorCallStateDone   ConnectorCallState = "done"
+	ConnectorCallStateParked ConnectorCallState = "parked"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x ConnectorCallState) Valid() bool {
+	switch x {
+	case ConnectorCallStateDone, ConnectorCallStateParked:
+		return true
+	}
+	return false
+}
+
+// A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.
+type ConnectorCallOutput struct {
+	State     ConnectorCallState `json:"state"`
+	ReceiptID ConnectorReceiptID `json:"receiptId"`
+	// State done: the upstream's result.
+	Result json.RawMessage `json:"result,omitempty"`
+	// State parked: the decision of the ask that holds the write.
+	DecisionID *DecisionID `json:"decisionId,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectorCallOutput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"state", "receiptId"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ConnectorCallOutput: missing required field %q", k)
+		}
+	}
+	type plain ConnectorCallOutput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask.
+type ConnectorOutcome string
+
+const (
+	ConnectorOutcomeOk       ConnectorOutcome = "ok"
+	ConnectorOutcomeFailed   ConnectorOutcome = "failed"
+	ConnectorOutcomeRefused  ConnectorOutcome = "refused"
+	ConnectorOutcomeParked   ConnectorOutcome = "parked"
+	ConnectorOutcomeReleased ConnectorOutcome = "released"
+	ConnectorOutcomeRejected ConnectorOutcome = "rejected"
+	ConnectorOutcomeExpired  ConnectorOutcome = "expired"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x ConnectorOutcome) Valid() bool {
+	switch x {
+	case ConnectorOutcomeOk, ConnectorOutcomeFailed, ConnectorOutcomeRefused, ConnectorOutcomeParked, ConnectorOutcomeReleased, ConnectorOutcomeRejected, ConnectorOutcomeExpired:
+		return true
+	}
+	return false
+}
+
+// The server's record of one connector call. Stamped by the server from its own records; an agent can read it and never write it.
+type ConnectorReceipt struct {
+	ID           ConnectorReceiptID     `json:"id"`
+	PodID        PodID                  `json:"podId"`
+	ConnectionID ConnectionID           `json:"connectionId"`
+	Operation    ConnectorOperationName `json:"operation"`
+	// SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex.
+	ArgsHash string           `json:"argsHash"`
+	RunID    RunID            `json:"runId"`
+	AgentID  AgentID          `json:"agentId"`
+	Outcome  ConnectorOutcome `json:"outcome"`
+	// The HTTP status the upstream answered with, when it was called.
+	UpstreamStatus *int64 `json:"upstreamStatus,omitempty"`
+	// A write: the decision of its ask.
+	DecisionID *DecisionID `json:"decisionId,omitempty"`
+	// A released write: the member whose ruling released it.
+	Approver *Actor `json:"approver,omitempty"`
+	// A released write: the upstream's result.
+	Result    json.RawMessage `json:"result,omitempty"`
+	CreatedAt Timestamp       `json:"createdAt"`
+	// When the call reached its outcome: at once for a read, at the ruling or expiry for a write.
+	SettledAt *Timestamp `json:"settledAt,omitempty"`
+	// A parked write: when it expires unruled.
+	ExpiresAt *Timestamp `json:"expiresAt,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectorReceipt) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"id", "podId", "connectionId", "operation", "argsHash", "runId", "agentId", "outcome", "createdAt"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ConnectorReceipt: missing required field %q", k)
+		}
+	}
+	type plain ConnectorReceipt
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// Which receipts to read.
+type ConnectorReceiptsInput struct {
+	// Only the receipt of the write this decision holds.
+	DecisionID *DecisionID `json:"decisionId,omitempty"`
+	// Defaults to 20.
+	Limit *int64 `json:"limit,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectorReceiptsInput) UnmarshalJSON(b []byte) error {
+	type plain ConnectorReceiptsInput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// Receipts, newest first.
+type ConnectorReceiptsOutput struct {
+	// The receipts, at most limit.
+	Receipts []ConnectorReceipt `json:"receipts"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ConnectorReceiptsOutput) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"receipts"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ConnectorReceiptsOutput: missing required field %q", k)
+		}
+	}
+	type plain ConnectorReceiptsOutput
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // The stored message's id and sequence number, and the decision id when the post is an ask.
 type PostOutput struct {
 	MessageID  MessageID   `json:"messageId"`
@@ -2144,6 +2545,10 @@ var Registry = map[string]func() any{
 	"RegisterAgentResponse":    func() any { return new(RegisterAgentResponse) },
 	"ClaimRunRequest":          func() any { return new(ClaimRunRequest) },
 	"ClaimRunResponse":         func() any { return new(ClaimRunResponse) },
+	"ConnectRequest":           func() any { return new(ConnectRequest) },
+	"Connection":               func() any { return new(Connection) },
+	"GrantRequest":             func() any { return new(GrantRequest) },
+	"Grant":                    func() any { return new(Grant) },
 	"EndRunRequest":            func() any { return new(EndRunRequest) },
 	"EvidenceInput":            func() any { return new(EvidenceInput) },
 	"EvidenceOutput":           func() any { return new(EvidenceOutput) },
@@ -2159,6 +2564,15 @@ var Registry = map[string]func() any{
 	"TaskReleaseInput":         func() any { return new(TaskReleaseInput) },
 	"RunStopInput":             func() any { return new(RunStopInput) },
 	"RunStopOutput":            func() any { return new(RunStopOutput) },
+	"PinnedOperation":          func() any { return new(PinnedOperation) },
+	"ConnectorView":            func() any { return new(ConnectorView) },
+	"ConnectorListInput":       func() any { return new(ConnectorListInput) },
+	"ConnectorListOutput":      func() any { return new(ConnectorListOutput) },
+	"ConnectorCallInput":       func() any { return new(ConnectorCallInput) },
+	"ConnectorCallOutput":      func() any { return new(ConnectorCallOutput) },
+	"ConnectorReceipt":         func() any { return new(ConnectorReceipt) },
+	"ConnectorReceiptsInput":   func() any { return new(ConnectorReceiptsInput) },
+	"ConnectorReceiptsOutput":  func() any { return new(ConnectorReceiptsOutput) },
 	"PostOutput":               func() any { return new(PostOutput) },
 }
 
@@ -2322,6 +2736,9 @@ var Operations = []Operation{
 	{"task_release", "POST", "/v1/pods/{podId}/tasks/{taskId}/release", "run|user"},
 	{"run_stop", "POST", "/v1/pods/{podId}/runs/{runId}/stop", "user"},
 	{"post", "POST", "/v1/pods/{podId}/messages", "run|user"},
+	{"connector_list", "GET", "/v1/pods/{podId}/connectors", "run|user"},
+	{"connector_call", "POST", "/v1/pods/{podId}/connectors/call", "run"},
+	{"connector_receipts", "GET", "/v1/pods/{podId}/connectors/receipts", "run|user"},
 }
 
 // ErrorStatus is the HTTP status each error code is sent with (common.json ErrorCode x-errors).
@@ -2340,7 +2757,11 @@ var ErrorStatus = map[ErrorCode]int{
 	ErrorCodeInvalidGrant:         400,
 	ErrorCodeUngrounded:           422,
 	ErrorCodeRateLimited:          429,
+	ErrorCodeConnectorDrift:       409,
 	ErrorCodeUpstream:             502,
+	ErrorCodeUpstreamFailed:       502,
+	ErrorCodeUpstreamTooLarge:     502,
+	ErrorCodeVaultUnconfigured:    501,
 	ErrorCodeInternal:             500,
 }
 
@@ -2348,4 +2769,4 @@ var ErrorStatus = map[ErrorCode]int{
 const ToolPrefix = "jm_"
 
 // ToolNames lists the MCP tools in schema order.
-var ToolNames = []string{"jm_whoami", "jm_read", "jm_task_list", "jm_task_claim", "jm_task_update", "jm_evidence", "jm_task_release", "jm_run_stop", "jm_post"}
+var ToolNames = []string{"jm_whoami", "jm_read", "jm_task_list", "jm_task_claim", "jm_task_update", "jm_evidence", "jm_task_release", "jm_run_stop", "jm_post", "jm_connector_list", "jm_connector_call", "jm_connector_receipts"}

@@ -258,7 +258,7 @@
         "the receipt is stamped by the server and links the card, the approver and the result"
       ],
       "test": "go test ./e2e -run TestF19 (against a stub Linear)",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F20",

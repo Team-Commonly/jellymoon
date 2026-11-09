@@ -35,7 +35,11 @@ export interface Wake { id: WakeId; agentId: AgentId; reason: WakeReason; refs: 
  * What the pod keeps of an ask so it can be ruled once (the adapter owns the messages, the core keeps no text). One per ask, a
  * fixed size: a ruled record drops `options`, so ruling it again, or rereading it, grows nothing.
  */
-interface DecisionRec { messageId: MessageId; askedBy: ActorId; options: OptionId[]; decision: Decision }
+interface DecisionRec {
+  messageId: MessageId; askedBy: ActorId; options: OptionId[]; decision: Decision;
+  /** Milliseconds; set only when the adapter gave the ask an expiry (a connector write's ask, ADR 0009). Open until then. */
+  expiresAt?: number;
+}
 
 export interface PodState {
   podId: PodId;
@@ -75,8 +79,8 @@ export type Cmd =
   | { type: 'task_update'; caller: Caller; taskId: TaskId; status?: TaskUpdateStatus; assignee?: ActorId; wakeId: WakeId }
   | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; threadOf?: MessageId; wakeId: WakeId }
   /** `harness` is the adapter's record of where the caller's agent runs; `decisionId` is the id an ask's decision takes; `viaMcp` is the
-   *  adapter saying this post rides on an MCP call already counted, which the receipt leaves out. */
-  | { type: 'post'; caller: Caller; messageId: MessageId; decisionId: DecisionId; input: PostInput; harness?: Harness; viaMcp?: boolean; wakeId: WakeId }
+   *  adapter saying this post rides on an MCP call already counted, which the receipt leaves out. `expiresAt` (ms, adapter-set) makes an ask's decision expire unruled at that time. */
+  | { type: 'post'; caller: Caller; messageId: MessageId; decisionId: DecisionId; input: PostInput; harness?: Harness; viaMcp?: boolean; expiresAt?: number; wakeId: WakeId }
   | { type: 'tool_call'; runId: RunId }
   /** A member rules on an ask: `option` is an option id of that ask (a plain string here, so a bad one is refused, never looked up as a key). */
   | { type: 'rule'; caller: Caller; decisionId: DecisionId; option: string; wakeId: WakeId }

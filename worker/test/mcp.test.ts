@@ -28,7 +28,7 @@ test('a run token whose run has ended is unauthorized on every method but a tool
 
 test('tools/list is the generated list, one tool per operation', async () => {
   const names = (await ask(run, { jsonrpc: '2.0', id: 1, method: 'tools/list' })).result.tools.map((t: { name: string }) => t.name);
-  expect(names.length).toBe(9);
+  expect(names.length).toBe(12);
   expect(names[0]).toBe('jm_whoami');
 });
 

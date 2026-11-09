@@ -7,25 +7,28 @@ import { isoOf } from '../../podcore/src/index';
 import { parseFrame } from './frames';
 import type { Hub } from './hub';
 import { authOf, fail } from './kit';
-import type { Conn, PodRuntime, Who } from './pod';
+import type { Conn, Opts, PodRuntime, Who } from './pod';
+import type { Cmd } from '../../podcore/src/index';
 import { hello } from './views';
 
 interface Session { pod: PodRuntime; who: Who }
+/** What a ruling carries into the pod besides the core command: the connector gate's claim and release (ADR 0009). */
+type OnRule = (pod: PodRuntime, cmd: Extract<Cmd, { type: 'rule' }>) => Opts;
 const sessions = new WeakMap<Request, Session>();
 
 const frame = (hub: Hub, pod: PodRuntime, type: string, data: unknown): string =>
   JSON.stringify({ v: 1, type, podId: pod.id, ts: isoOf(hub.now()), data });
 
-async function onFrame(hub: Hub, s: Session, conn: Conn, text: string): Promise<void> {
+async function onFrame(hub: Hub, s: Session, conn: Conn, text: string, onRule: OnRule): Promise<void> {
   const refuse = (e: ErrorBody): void => conn.send(frame(hub, s.pod, 'error', { code: e.code, message: e.message, ...(e.ref === undefined ? {} : { ref: e.ref }) } satisfies ErrorBody));
   const p = parseFrame(s.pod.id, s.who, text);
   if ('subscribe' in p) return s.pod.subscribe(conn, p.subscribe);
   if ('code' in p) return refuse(p);
-  const reply = await s.pod.exec(p.cmd);
+  const reply = await s.pod.exec(p.cmd, p.cmd.type === 'rule' ? onRule(s.pod, p.cmd) : {});
   if (reply && !reply.ok) refuse(reply.error);
 }
 
-export function wsRoute(app: Hono, hub: Hub): void {
+export function wsRoute(app: Hono, hub: Hub, onRule: OnRule): void {
   app.get('/v1/pods/:pod/ws', async (c, next) => {
     if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') return next();
     const p = await authOf(hub, c, true); // a browser's cookie only from this server's own Origin (cross-site socket hijacking)
@@ -50,7 +53,7 @@ export function wsRoute(app: Hono, hub: Hub): void {
         // The computer is marked online before hello, so hello shows the presence this socket just made.
         chain = s.pod.attach(conn).then(() => conn.send(frame(hub, s.pod, 'hello', hello(s.pod.state, s.pod.meta, you)))).catch(crash);
       },
-      onMessage(e) { chain = chain.then(() => onFrame(hub, s, conn, String(e.data))).catch(crash); },
+      onMessage(e) { chain = chain.then(() => onFrame(hub, s, conn, String(e.data), onRule)).catch(crash); },
       onClose() { chain = chain.then(() => s.pod.detach(conn)).then(() => undefined).catch(crash); },
     };
   }));

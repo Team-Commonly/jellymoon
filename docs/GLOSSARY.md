@@ -34,3 +34,8 @@ review may rename terms, and a rename lands here and in `schema/` together.
 | **settle** | What the pod core does before every command: end everything due, in deadline order, each stamped with its own deadline | a command |
 | **adapter** | The thin shell around the pod core for one server shape: persists state, delivers output, owns the one timer | an MCP adapter, which wraps operations |
 | **feature** | One entry of `feature_list.json`: an end-to-end test that defines done | an issue |
+| **connection** | An upstream service a pod owner connected, with the credential the pod holds for it, stored only as an envelope (ADR 0009) | a grant |
+| **grant** | What one agent may do on one connection: `read`, or `write-with-confirm` (writes park as an ask) | membership |
+| **pin** | A vendor's pinned catalogue in the repo: each operation's name, class (read or write) and argument names. An upstream that differs from it is **drift** | the upstream's live list |
+| **parked call** | A write held behind its ask until a ruling: approve releases it once, reject or expiry releases nothing | a task |
+| **connector receipt** | The server's record of one connector call: operation, args hash, run, outcome, and for a write its decision and approver | a post's receipt |

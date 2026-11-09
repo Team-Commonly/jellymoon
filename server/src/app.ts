@@ -11,6 +11,11 @@ import { opRoutes } from './routes-ops';
 import { setupAll } from './routes-setup';
 import { webRoutes } from './web';
 import { wsRoute } from './ws';
+import { connectorRoutes } from './connectors';
+import { rulingOpts } from './connector-call';
+import type { Vault } from './vault';
+import { systemResolve } from './egress';
+import type { Resolve } from './egress';
 
 /**
  * `publicUrl` is the base of an invite's join link and a run's mcpUrl; a request's own origin stands in when unset.
@@ -18,8 +23,9 @@ import { wsRoute } from './ws';
  * bearer is configured, each needs `Authorization: Bearer <bearer>`, and there is no clock route. With neither, the build has
  * no /__test handler at all.
  * `webDir` is the built web client (`web/dist`); unset, the server serves no client.
+ * `resolve` is the connector egress resolver (egress.ts); tests inject one, the server uses the system's.
  */
-export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string; github?: GitHub | null; webDir?: string }
+export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string; github?: GitHub | null; vault?: Vault; resolve?: Resolve; webDir?: string }
 
 function testRoutes(app: Hono, hub: Hub, local: boolean, bearer: string | undefined): void {
   if (!local) {
@@ -52,7 +58,9 @@ export function buildApp(hub: Hub, opts: AppOpts): Hono {
   setupAll(app, hub, opts.publicUrl);
   authRoutes(app, hub, opts.github ?? null, opts.publicUrl, opts.local);
   opRoutes(app, hub);
-  wsRoute(app, hub);
+  const kit = { hub, vault: opts.vault, local: opts.local, resolve: opts.resolve ?? systemResolve };
+  connectorRoutes(app, kit); // ADR 0009
+  wsRoute(app, hub, (pod, cmd) => rulingOpts(kit, pod, cmd));
   mcpRoute(app, hub); // twin of the Worker's POST /mcp (worker/src/mcp.ts)
   if (opts.local || (opts.testBearer !== undefined && opts.testBearer !== '')) testRoutes(app, hub, opts.local, opts.testBearer);
   if (opts.webDir !== undefined) webRoutes(app, opts.webDir);

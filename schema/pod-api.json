@@ -33,7 +33,7 @@
     "cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome.",
     "Only a pod owner connects a vendor or grants an agent access; a member gets forbidden.",
     "A connect lists the upstream's operations and compares them with the vendor's pinned catalogue. An empty list, or a pinned operation missing upstream or with other argument names, refuses the connect with connector_drift; an upstream that fails the listing gets upstream_failed with its error.",
-    "The url is https; a loopback, private or link-local host is refused unless ENV is local. A url carrying credentials is refused.",
+    "The url is https and carries no credentials. Its host, and every address its name resolves to, must be outside the loopback, private, link-local and reserved ranges; this is checked again before every upstream request, and each request is pinned to the checked address. ENV=local allows only a literal loopback address, over http or https.",
     "The token is stored only as an AES-256-GCM envelope under the server's vault key and is never returned. Without JM_VAULT_KEY a connect or a connector call gets vault_unconfigured.",
     "A grant names an agent registered in the pod (otherwise not_found) and an access. A second grant to the same agent on the same connection replaces the first."
   ],

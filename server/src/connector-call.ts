@@ -6,7 +6,7 @@ import { isoOf } from '../../podcore/src/index';
 import type { Cmd } from '../../podcore/src/index';
 import { argsHash, opOf, pinOf, scrub } from './catalogue';
 import type { PinOp } from './catalogue';
-import { aadOf, agentOf, noVault } from './connector-kit';
+import { aadOf, agentOf, destFor, noVault } from './connector-kit';
 import type { Kit } from './connector-kit';
 import { newId, newWakeSeed } from './ids';
 import { bad, fail, respond } from './kit';
@@ -54,8 +54,13 @@ function cardOf(vendor: string, op: string, args: Record<string, unknown>, hash:
 }
 
 async function read(kit: Kit, k: Call, conn: ConnRow, op: PinOp, row: CallRow, args: Record<string, unknown>): Promise<Response> {
+  const dest = await destFor(kit, conn);
+  if (typeof dest === 'string') {
+    await saveCall(kit.hub.db, { ...row, outcome: 'failed', settledAt: kit.hub.now() });
+    return fail(k.c, 'upstream_failed', `${conn.vendor} ${op.name} was not called: ${dest}`, row.id);
+  }
   const token = await kit.vault!.open(conn, aadOf(conn));
-  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(conn.url, token, op.name, args), token);
+  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(dest, token, op.name, args), token);
   await saveCall(kit.hub.db, { ...row, outcome: res.ok ? 'ok' : 'failed', upstreamStatus: res.status, settledAt: kit.hub.now() });
   if (!res.ok) return fail(k.c, res.code ?? 'upstream_failed', `${conn.vendor} ${op.name} failed (upstream status ${res.status}): ${res.error ?? ''}`.slice(0, 400), row.id);
   return k.c.json({ state: 'done', receiptId: row.id, result: res.result ?? {} });
@@ -104,9 +109,10 @@ export const connectorCall = (kit: Kit) => async (k: Call): Promise<Response> =>
 /** The one upstream call a ruling of approve released. Its answer is recorded; it never throws. */
 async function release(kit: Kit, row: CallRow): Promise<void> {
   const conn = await findConnection(kit.hub.db, row.pod, row.connection);
-  if (conn === undefined || kit.vault === undefined) return void (await finishCall(kit.hub.db, row.id, 'failed', null, null));
+  const dest = conn === undefined ? 'gone' : await destFor(kit, conn);
+  if (conn === undefined || kit.vault === undefined || typeof dest === 'string') return void (await finishCall(kit.hub.db, row.id, 'failed', null, null));
   const token = await kit.vault.open(conn, aadOf(conn));
-  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(conn.url, token, row.operation, JSON.parse(row.args) as Record<string, unknown>), token);
+  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(dest, token, row.operation, JSON.parse(row.args) as Record<string, unknown>), token);
   await finishCall(kit.hub.db, row.id, res.ok ? 'released' : 'failed', res.status, res.ok ? JSON.stringify(res.result ?? {}) : null);
 }
 

@@ -5,7 +5,7 @@ import type { Connection, ConnectorAccess, ConnectorVendor, ConnectorView, Grant
 import { isoOf } from '../../podcore/src/index';
 import { driftOf, pinOf, scrub, view } from './catalogue';
 import { connectorCall, receiptView } from './connector-call';
-import { aadOf, agentOf, noVault } from './connector-kit';
+import { aadOf, agentOf, destFor, noVault } from './connector-kit';
 import type { Kit } from './connector-kit';
 import { newId } from './ids';
 import { bad, fail, intIn, memberRoute, podRoute } from './kit';
@@ -13,7 +13,7 @@ import type { Call } from './kit';
 import { gate } from './routes-ops';
 import { callsOf, connectionsOf, findConnection, findGrant, saveConnection, saveGrant } from './store';
 import type { ConnRow } from './store';
-import { adapterOf, urlProblem } from './upstream';
+import { adapterOf } from './upstream';
 
 const isOwner = (k: Call): boolean => k.caller.kind === 'user' && k.pod.state.owners.some((o) => o.id === (k.caller as { userId: string }).userId);
 const notOwner = (k: Call): Response => fail(k.c, 'forbidden', 'Only a pod owner connects a vendor or grants access.');
@@ -26,10 +26,10 @@ const connect = (kit: Kit) => async (k: Call): Promise<Response> => {
   if (!isOwner(k)) return notOwner(k);
   if (kit.vault === undefined) return noVault(k);
   const { vendor, url, token } = k.body as { vendor: ConnectorVendor; url: string; token: string };
-  const problem = urlProblem(url, kit.local);
-  if (problem !== null) return bad(k.c, problem);
+  const dest = await destFor(kit, { url });
+  if (typeof dest === 'string') return bad(k.c, dest);
   const pin = pinOf(vendor);
-  const listed = await adapterOf(pin).list(url, token);
+  const listed = await adapterOf(pin).list(dest, token);
   if (!listed.ok) return fail(k.c, listed.code ?? 'upstream_failed', `Listing the upstream's operations failed (upstream status ${listed.status}): ${scrub(listed.error, token)}`.slice(0, 400));
   const drift = driftOf(pin, listed.ops);
   if (drift !== null) return fail(k.c, 'connector_drift', scrub(drift, token).slice(0, 400));

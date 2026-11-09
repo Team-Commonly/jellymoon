@@ -50,9 +50,9 @@ describe('a connector call is keyed on its pod and its connection', () => {
 describe('an upstream answer is bounded', () => {
   test('a body over 1 MiB is refused with upstream_too_large and none of it is kept; one under it is read', async () => {
     const [over, under] = [stubMcp(1100 * 1024), stubMcp(900 * 1024)];
-    const big = await call(over.url, 't', 'list_issues', {});
+    const big = await call({ url: over.url }, 't', 'list_issues', {});
     expect([big.ok, big.code, big.result, JSON.stringify(big).length < 400]).toEqual([false, 'upstream_too_large', undefined, true]);
-    const fine = await call(under.url, 't', 'list_issues', {});
+    const fine = await call({ url: under.url }, 't', 'list_issues', {});
     expect([fine.ok, String(fine.result?.pad).length]).toEqual([true, 900 * 1024]);
     over.stop();
     under.stop();

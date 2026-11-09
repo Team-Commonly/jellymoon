@@ -49,8 +49,7 @@ An upstream answer is read no further than 1 MiB (a declared or streamed length 
 ## Connect, drift and grants
 
 Only a pod owner connects (`POST /v1/pods/:pod/connections {vendor, url, token}`) or grants
-(`POST /v1/pods/:pod/grants {connectionId, agentId, access}`). The url is https, carries no credentials, and names no loopback,
-private or link-local host unless `ENV=local` (the e2e stub runs on 127.0.0.1). A connect lists the upstream's operations and
+(`POST /v1/pods/:pod/grants {connectionId, agentId, access}`). The url must pass the egress check below. A connect lists the upstream's operations and
 compares them with the pin: an empty list, a pinned operation missing upstream, or one whose argument names or required
 arguments changed refuses the connect with `connector_drift`, naming the operation. An upstream that fails the listing gets
 `upstream_failed` with its own error, scrubbed. A grant names an agent registered in the pod and an access, `read` or
@@ -58,6 +57,33 @@ arguments changed refuses the connect with `connector_drift`, naming the operati
 
 OAuth (with dynamic client registration, as Linear's remote MCP offers) is out of this slice: the owner pastes a token. The
 vault stores whatever credential the connect hands it, so an OAuth flow later changes the connect route, not the vault.
+
+## Egress
+
+The credential goes only where `server/src/egress.ts` allows, and the check runs before every upstream request, not only at
+connect: connect's listing, each read, and each released write all check the stored url again. A connection that passed at
+connect and whose name later resolves inside is refused (`upstream_failed`, "was not called", a `failed` receipt) and nothing
+is sent.
+
+- **The url.** https, no credentials in it. The host is lowercased and its trailing dots are stripped, so `localhost.` is
+  `localhost`. `localhost` and `*.localhost` are refused by name. WHATWG URL parsing has already turned odd IPv4 spellings
+  (`2130706433`, `0x7f.1`, `127.1`, `0177.0.0.1`) into dotted decimal and `[::127.0.0.1]` into `[::7f00:1]`; the tests
+  assert it.
+- **One classifier, `internalAddress`.** It parses the address rather than matching prefixes, and anything that does not parse
+  counts as internal. IPv4: 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.0.0/24, 192.168/16, 198.18/15, and 224/4
+  and up (so 240/4 and 255.255.255.255). IPv6: ::/96 (`::`, `::1` and every v4-compatible `::a.b.c.d`), fc00::/7, fe80::/10,
+  ff00::/8, and ::ffff:0:0/96 and 64:ff9b::/96 by the IPv4 they embed.
+- **Resolve, then pin.** A name is resolved with `lookup(host, { all: true, verbatim: true })`. It is refused if it does not
+  resolve, resolves to nothing, or if any address it resolves to is internal. The request is then pinned to the first checked
+  address: it is sent to that IP, with the name as the `Host` header and as the TLS server name (Bun's `fetch` `tls.serverName`),
+  so the certificate is still verified against the name and a second lookup cannot move the request. Verified on Bun 1.4.4
+  against a local TLS server: a matching name connects, while a wrong name, no name and an untrusted certificate are each refused.
+  A literal public address is sent as is; its certificate must name that address.
+- **ENV=local.** Only in local mode, and only for a literal loopback address (127/8 or ::1), is http allowed and the
+  classifier skipped: that is the e2e stub on 127.0.0.1. Every other host gets the full check in local mode too. Local mode is
+  the process environment `ENV=local`, read once at startup (`server/src/config.ts`). No request can set it, and a production
+  server cannot run with it: startup refuses `ENV=local` alongside `DATABASE_URL` unless the server is confined to a
+  throwaway schema (`JM_PG_SCHEMA`, which the e2e suite sets per server).
 
 ## The gate
 
@@ -93,9 +119,12 @@ approver who released it and the upstream's result. No route writes one. Members
 
 - **A per-connection approver set.** Any pod owner may approve any connection's writes; naming approvers per connection is
   a later decision.
-- **DNS and other address forms.** The url check reads literals only; a name that resolves to a private address is not
-  caught, nor are `localhost.` with a trailing dot, the `::/96` and `64:ff9b::/96` ranges, 198.18.0.0/15, or internal names.
-  Refusing those forms, then resolving the name and pinning the address for the call, is the fix.
+- **Names that resolve publicly but mean something internal.** The egress check classifies addresses, so a name that a
+  split-horizon resolver answers with a public address it routes internally is not caught. An egress proxy or a network policy
+  around the server is the layer for that.
+- **One check per call.** A call is up to three requests (initialize, the notification, the
+  call), and each is pinned to the address checked once for the whole call. Pinning closes the rebinding window inside a call;
+  a name that moves between calls is checked again on the next one.
 - **A crash between the claim and the call.** The row is then `released` with no upstream status: never called twice, maybe
   never called. At most once is the chosen side; a `releasing` state that the call's answer settles would make it visible.
 - **A read that throws.** A read whose vault open fails (for example a retired key no longer in the ring) answers 500

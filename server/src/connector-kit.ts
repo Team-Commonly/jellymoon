@@ -1,12 +1,17 @@
 // What the connector routes (connectors.ts) and the agent's call (connector-call.ts) share (ADR 0009).
+import { destOf } from './egress';
+import type { Dest, Resolve } from './egress';
 import type { Hub } from './hub';
 import { fail } from './kit';
 import type { Call } from './kit';
 import type { ConnRow } from './store';
 import type { Vault } from './vault';
 
-/** What every connector handler needs: the hub, the vault (undefined without JM_VAULT_KEY) and whether this is ENV=local. */
-export interface Kit { hub: Hub; vault: Vault | undefined; local: boolean }
+/** What every connector handler needs: the hub, the vault (undefined without JM_VAULT_KEY), whether this is ENV=local, and the resolver. */
+export interface Kit { hub: Hub; vault: Vault | undefined; local: boolean; resolve: Resolve }
+
+/** The checked, pinned destination of a stored connection, checked again for this one request; or why nothing may be sent. */
+export const destFor = (kit: Kit, c: Pick<ConnRow, 'url'>): Promise<Dest | string> => destOf(c.url, kit.local, kit.resolve);
 
 /** The additional data a connection's envelope is bound to: its pod and its own id. */
 export const aadOf = (c: Pick<ConnRow, 'pod' | 'id'>): string => `${c.pod}/${c.id}`;

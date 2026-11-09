@@ -4,7 +4,6 @@ import { startupRefusal } from '../src/config';
 import { openDb } from '../src/db';
 import { claimParked, migrate, saveCall } from '../src/store';
 import type { CallRow } from '../src/store';
-import { urlProblem } from '../src/upstream';
 import { keyRing, makeVault } from '../src/vault';
 import { world } from './world';
 
@@ -84,20 +83,6 @@ describe('the catalogue pin', () => {
       expect([s, scrub({ e: s }, t)]).toEqual([s, { e: '[credential removed]' }]);
     }
     expect(scrub({ e: `HTTP 401 ${btoa('unrelated words here')}` }, t)).toEqual({ e: `HTTP 401 ${btoa('unrelated words here')}` });
-  });
-});
-
-describe('the upstream url', () => {
-  test('outside ENV=local: https only, no credentials, no loopback, private or link-local host', () => {
-    for (const bad of ['http://mcp.example.com/mcp', 'https://u:p@example.com/', 'https://127.0.0.1/', 'https://10.1.2.3/', 'https://169.254.169.254/',
-      'https://192.168.1.1/', 'https://172.20.0.1/', 'https://localhost/', 'https://[::1]/', 'https://[fe80::1]/', 'https://[fd00::1]/', 'nope']) {
-      expect([bad, urlProblem(bad, false) !== null]).toEqual([bad, true]);
-    }
-    expect(urlProblem('https://mcp.linear.app/mcp', false)).toBeNull();
-  });
-  test('ENV=local allows the loopback stub over http, never credentials in the url', () => {
-    expect(urlProblem('http://127.0.0.1:4000/mcp', true)).toBeNull();
-    expect(urlProblem('http://u:p@127.0.0.1:4000/', true) !== null).toBe(true);
   });
 });
 

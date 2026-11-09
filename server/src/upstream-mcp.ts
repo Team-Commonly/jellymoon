@@ -2,8 +2,10 @@
 // functions, list and call. JSON-RPC initialize, then tools/list or tools/call, with the credential as a bearer. An answer may
 // be JSON or an event stream. Redirects are refused (one could lead to a private address) and every request has a timeout.
 // Errors carry the upstream's status and its own text, uncut: the caller scrubs the credential out first and only then
-// shortens it. An answer over MAX_BYTES is refused (upstream_too_large) and none of it is kept.
+// shortens it. An answer over MAX_BYTES is refused (upstream_too_large) and none of it is kept. Every request goes to a Dest
+// that egress.ts checked just before: a pinned one is sent to its checked address, with the name as Host and TLS server name.
 import type { ListedOp } from './catalogue';
+import type { Dest } from './egress';
 
 type TooLarge = 'upstream_too_large';
 export type Listed = { ok: true; ops: ListedOp[] } | { ok: false; status: number; error: string; code?: TooLarge };
@@ -42,13 +44,16 @@ function messageOf(type: string, text: string): Record<string, unknown> | undefi
   } catch { return undefined; }
 }
 
-async function rpc(url: string, token: string, session: string | null, method: string, params: unknown, id?: number): Promise<Rpc> {
+async function rpc(dest: Dest, token: string, session: string | null, method: string, params: unknown, id?: number): Promise<Rpc> {
   const headers: Record<string, string> = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
   if (session !== null) headers['Mcp-Session-Id'] = session;
-  const res = await fetch(url, {
+  if (dest.host !== undefined) headers.Host = dest.host;
+  const init = {
     method: 'POST', headers, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS),
     body: JSON.stringify(id === undefined ? { jsonrpc: '2.0', method, params } : { jsonrpc: '2.0', id, method, params }),
-  });
+    ...(dest.serverName === undefined ? {} : { tls: { serverName: dest.serverName } }), // Bun: verify the certificate against the name
+  };
+  const res = await fetch(dest.url, init as RequestInit);
   const text = await bounded(res);
   return { status: res.status, body: messageOf(res.headers.get('content-type') ?? '', text), text, session: res.headers.get('mcp-session-id') ?? session };
 }
@@ -65,9 +70,9 @@ function errorOf(r: Rpc): string | null {
 }
 
 /** initialize plus the initialized notification; the session id, if the upstream gave one, rides on every later request. */
-async function open(url: string, token: string): Promise<Rpc> {
-  const init = await rpc(url, token, null, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'jellymoon', version: '0' } }, 1);
-  if (errorOf(init) === null) await rpc(url, token, init.session, 'notifications/initialized', {});
+async function open(dest: Dest, token: string): Promise<Rpc> {
+  const init = await rpc(dest, token, null, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'jellymoon', version: '0' } }, 1);
+  if (errorOf(init) === null) await rpc(dest, token, init.session, 'notifications/initialized', {});
   return init;
 }
 
@@ -76,10 +81,10 @@ function failure(e: unknown): { status: number; error: string; code?: TooLarge }
   return { status: 502, error: e instanceof Error && e.name === 'TimeoutError' ? 'The upstream did not answer in time.' : 'The upstream could not be reached.' };
 }
 
-export async function list(url: string, token: string): Promise<Listed> {
+export async function list(dest: Dest, token: string): Promise<Listed> {
   try {
-    const init = await open(url, token);
-    const r = errorOf(init) === null ? await rpc(url, token, init.session, 'tools/list', {}, 2) : init;
+    const init = await open(dest, token);
+    const r = errorOf(init) === null ? await rpc(dest, token, init.session, 'tools/list', {}, 2) : init;
     const err = errorOf(r);
     if (err !== null) return { ok: false, status: r.status, error: err };
     const tools = ((r.body?.result as { tools?: unknown[] } | undefined)?.tools ?? []) as Array<{ name?: unknown; inputSchema?: { properties?: object; required?: unknown[] } }>;
@@ -87,10 +92,10 @@ export async function list(url: string, token: string): Promise<Listed> {
   } catch (e) { return { ok: false, ...failure(e) }; }
 }
 
-export async function call(url: string, token: string, name: string, args: Record<string, unknown>): Promise<Called> {
+export async function call(dest: Dest, token: string, name: string, args: Record<string, unknown>): Promise<Called> {
   try {
-    const init = await open(url, token);
-    const r = errorOf(init) === null ? await rpc(url, token, init.session, 'tools/call', { name, arguments: args }, 2) : init;
+    const init = await open(dest, token);
+    const r = errorOf(init) === null ? await rpc(dest, token, init.session, 'tools/call', { name, arguments: args }, 2) : init;
     const err = errorOf(r);
     if (err !== null) return { ok: false, status: r.status, error: err };
     const res = (r.body?.result ?? {}) as { content?: unknown; structuredContent?: unknown; isError?: unknown };

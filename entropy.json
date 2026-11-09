@@ -30,7 +30,7 @@
       "paths": [
         "server/"
       ],
-      "max": 3030
+      "max": 3200
     },
     "podcore": {
       "paths": [

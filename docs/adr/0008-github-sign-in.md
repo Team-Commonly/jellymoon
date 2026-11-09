@@ -2,7 +2,9 @@
 
 Status: Accepted, by the owner's ruling, 2026-11-08 (the contract wins over F15's first wording). It adds no dependency. Open
 below: the `/device` page itself. The browser session on every user route was added on 2026-11-08, and the hardening (token
-expiry, the start limit, the sweep, timeouts, logout with both and its sockets) on 2026-11-09 (both below).
+expiry, the start limit, the sweep, timeouts, logout with both and its sockets) on 2026-11-09 (both below), with its follow-ups
+the same day (TRUST_PROXY behind TLS, user tokens with no expiry, the D1 migrations and three fixes around logout's sockets:
+Hardening items 2, 1, 7 and 6).
 
 ## Decision
 
@@ -87,14 +89,24 @@ Added 2026-11-09 (AUTHH), in both adapters.
 
 1. **User token expiry.** A `jmu_` is stored with `expires_at`, 30 days after it was minted (the `expiresAt` the device
    exchange returns and the cookie's Max-Age). Past it the token is no caller on every route and on the socket upgrade, as a
-   Bearer and as the cookie: `unauthorized`. Computer and run tokens keep a null expiry. A socket already open when its token
-   expires stays open until it closes.
+   Bearer and as the cookie: `unauthorized`. Computer and run tokens keep a null expiry, which never expires. A user token
+   with a null expiry is expired: every `jmu_` is minted with one, so a null one was minted before this, and its holder signs
+   in again. That was chosen over a backfill (now + 30 days at migration) because it fails closed for any row that ever lacks
+   one, needs no clock in a migration, and costs nothing real: no instance had been deployed, so only dev databases held such
+   tokens. A socket already open when its token expires stays open until it closes.
 2. **The start limit.** `POST /v1/auth/device` and `GET /v1/auth/github/start`, the two routes anyone can call, each take 30
    requests per client address per fixed minute (`AUTH_START_LIMIT` changes it). Past it they answer `rate_limited` (429)
-   with `Retry-After`, the whole seconds left in the minute. The server keys on the socket's address, and on the last
-   `X-Forwarded-For` entry only with `TRUST_PROXY=1` (off by default: a client can write that header). It counts in memory,
-   which fits one process (ADR 0006). The Worker keys on `CF-Connecting-IP` and counts in the D1 table `rate_limits`, one row
-   per route and address, dropping older minutes as it goes; an isolate's memory would not be shared.
+   with `Retry-After`, the whole seconds left in the minute. The server keys on the socket's address by default; a client can
+   write `X-Forwarded-For`, so it is read only with `TRUST_PROXY=<n>`, the number of proxies in front, each appending the
+   address it saw: the client is then the n-th entry from the right (the last one for `1`, one TLS proxy), and anything left
+   of it is the caller's own writing. Fewer entries than n, or `0`, is the socket's address. Bun serves no TLS, so an https
+   `PUBLIC_URL` outside ENV=local means a proxy in front, and with the default every client would share its address: one
+   client's 31 starts would block every sign-in. There the server refuses to start until `TRUST_PROXY` is set (a hop count,
+   or `0` to keep the socket's address on purpose). A refusal, not a boot warning: a warning scrolls past in a deploy log,
+   and the failure it warns of is an outage nobody connects to it. It counts in memory, which fits one process (ADR 0006).
+   The Worker keys on `CF-Connecting-IP`, which Cloudflare's edge sets, never on `X-Forwarded-For`, and counts in the D1
+   table `rate_limits`, one row per route and address, dropping older minutes as it goes; an isolate's memory would not be
+   shared.
 3. **The sweep.** Device codes and OAuth states are deleted an hour after they expire, so a poll just after expiry still
    reads `expired_token`; a swept code is `invalid_grant`. The server sweeps at boot, on its timer's tick and on each start;
    the Worker on each start, in the start limit's batch.
@@ -104,20 +116,31 @@ Added 2026-11-09 (AUTHH), in both adapters.
 5. **A concurrent first sign-in.** Two callbacks for one new GitHub account make one user. The server inserts the
    `github_users` row with `on conflict do nothing` and writes the user only if it won, else reads the winner's; the Worker
    writes the user only while no row holds the GitHub id, in one D1 batch (one transaction).
-6. **Sockets of a revoked token.** The server keeps a close for each open socket by its token's hash. The Worker tags each
-   socket in the pod object with `t:<token hash>` and records the pod in the D1 table `token_pods`; logout reads those pods
-   and asks each to close the tagged sockets.
+6. **Sockets of a revoked token.** The server keeps a close for each open socket by its token's hash, and drops a hash
+   when its last socket closes, so the map holds only tokens with an open socket. The Worker tags each socket in the pod
+   object with `t:<token hash>` and records the pod in the D1 table `token_pods` before it hands the upgrade to the pod, so
+   a logout that lands while the socket opens still finds it; if the pod does not open the socket, the row is deleted,
+   unless another socket of the same token in that pod wrote it first. Logout reads those pods and asks each to close the
+   tagged sockets, with `Promise.allSettled`: the revoke is what signs out, so a pod that fails to close answers nothing to
+   the person, and the cookie is cleared all the same.
+7. **D1 migrations.** A real D1 is created and changed only by `wrangler d1 migrations apply` on `worker/migrations`
+   (`migrations_dir` in both wrangler configs): `0000_initial.sql` is the schema before this hardening, `0001_auth_hardening.sql`
+   adds `tokens.expires_at` (no backfill, item 1) and the tables `rate_limits` and `token_pods`. A D1 created from the old
+   `schema.sql` takes 0000 as a no-op and then 0001. `schema.sql` stays the test entry's fresh shape under ENV=local, and a
+   unit test holds it equal to the migrations applied in order. The server migrates its own database at boot.
 
 ## Not in this unit
 
 - The `/device` page the verification URL names belongs to the web client (F18).
-- A `jmu_` minted before 2026-11-09 has no `expires_at` and so never expires; it ends at logout. An existing D1 needs
-  `alter table tokens add column expires_at real` and the two new tables before this Worker runs (schema.sql creates them on
-  a fresh one); the server adds the column itself.
 - A refresh of a user token: after 30 days a person signs in again.
+- A socket already open stays open after its token expires; `token_pods` rows of expired tokens are not deleted; `jmc_`
+  tokens never expire and logout does not revoke them (this predates the hardening).
 
 ## Tested by
 
-`e2e/authh_test.go` (the hardening, both adapters), `server/test/auth.test.ts` and `worker/test/auth.test.ts` (the
-timeouts, PUBLIC_URL, the boot sweep, six concurrent first sign-ins); `e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
+`e2e/authh_test.go` (the hardening, both adapters; its start-limit step varies `X-Forwarded-For` on every request),
+`server/test/auth.test.ts` and `worker/test/auth.test.ts` (the timeouts, PUBLIC_URL, the boot sweep, six concurrent first
+sign-ins); `server/test/signin-hardening.test.ts` and `worker/test/signin.test.ts` (TRUST_PROXY, null expiry, hub.sockets,
+the limiter key, the token_pods order, logout with a failing pod); `worker/test/migrations.test.ts` and
+`make e2e-a-migrated` (a D1 from the old schema, migrated, serves TestF15, TestBSESS and TestAUTHH); `e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
 loop) and `daemon/internal/config/save_test.go` (the 0600 write).

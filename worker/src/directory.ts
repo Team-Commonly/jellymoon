@@ -10,13 +10,16 @@ const human = (id: string, displayName: string): Actor => ({ kind: 'human', id, 
 /** A user token lives 30 days (ADR 0008); computer and run tokens have no expiry. */
 export const USER_TOKEN_MS = 30 * 86_400_000;
 
-/** The caller a Bearer names: a live token, not revoked and not past its expiry at `now`. */
+/**
+ * The caller a Bearer names: a live token, not revoked and not past its expiry at `now`. No expiry never expires for computer
+ * and run tokens, and is expired for a user token: every jmu_ is minted with one, so a null one predates expiry (ADR 0008).
+ */
 export async function authenticate(db: D1Database, header: string | null, now: number): Promise<Who | null> {
   const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
   const kind = KIND[token.slice(0, 4)];
   if (kind === undefined) return null;
   const hash = await hashToken(token);
-  const live = 'where t.hash = ? and t.kind = ? and t.revoked_at is null and (t.expires_at is null or t.expires_at > ?)';
+  const live = "where t.hash = ? and t.kind = ? and t.revoked_at is null and (t.expires_at > ? or (t.expires_at is null and t.kind <> 'user'))";
   if (kind === 'user') {
     const r = await db.prepare(`select u.id, u.name from tokens t join users u on u.id = t.subject ${live}`).bind(hash, kind, now).first<{ id: string; name: string }>();
     return r === null ? null : { kind, actor: human(r.id, r.name) };

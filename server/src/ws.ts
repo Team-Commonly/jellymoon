@@ -53,14 +53,14 @@ export function wsRoute(app: Hono, hub: Hub, onRule: OnRule): void {
       onOpen(_e, ws) {
         conn.send = (t) => { try { ws.send(t); } catch { /* the socket closed under us */ } };
         close = () => ws.close(1008, 'signed out');
-        hub.sockets.set(s.token, (hub.sockets.get(s.token) ?? new Set()).add(close));
+        hub.addSocket(s.token, close);
         const you = s.who.kind === 'user' ? s.who.actor : s.who.owner;
         // The computer is marked online before hello, so hello shows the presence this socket just made.
         chain = s.pod.attach(conn).then(() => conn.send(frame(hub, s.pod, 'hello', hello(s.pod.state, s.pod.meta, you)))).catch(crash);
       },
       onMessage(e) { chain = chain.then(() => onFrame(hub, s, conn, String(e.data), onRule)).catch(crash); },
       onClose() {
-        hub.sockets.get(s.token)?.delete(close);
+        hub.dropSocket(s.token, close);
         chain = chain.then(() => s.pod.detach(conn)).then(() => undefined).catch(crash);
       },
     };

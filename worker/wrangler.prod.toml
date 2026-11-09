@@ -16,3 +16,5 @@ new_sqlite_classes = ["PodDO"]
 binding = "DB"
 database_name = "jellymoon"
 database_id = "00000000-0000-0000-0000-000000000000"
+# A real D1 is created and changed only by `wrangler d1 migrations apply` (worker/README.md, "D1 migrations").
+migrations_dir = "migrations"

@@ -113,6 +113,17 @@ export class Hub {
     return { token: await this.db.tx((t) => this.mint(t, 'jmu_', 'user', userId, expiresAt)), expiresAt };
   }
 
+  /** Registers an open pod socket's close under its token's hash. */
+  addSocket(hash: string, close: () => void): void {
+    this.sockets.set(hash, (this.sockets.get(hash) ?? new Set()).add(close));
+  }
+
+  /** A pod socket closed; a hash whose last socket closed leaves the map, so it holds only tokens with an open socket. */
+  dropSocket(hash: string, close: () => void): void {
+    const set = this.sockets.get(hash);
+    if (set?.delete(close) && set.size === 0) this.sockets.delete(hash);
+  }
+
   /** Closes every pod socket opened with the token whose hash this is. */
   closeSockets(hash: string): void {
     for (const close of this.sockets.get(hash) ?? []) close();

@@ -67,9 +67,12 @@ export const saveToken = (t: Tx, hash: string, kind: string, subject: string, po
 export const revokeToken = (db: Db, hash: string, now: number): Promise<unknown> =>
   db.rows("update tokens set revoked_at = $2 where hash = $1 and kind = 'user' and revoked_at is null", [hash, now]);
 
-/** A live token: not revoked, and not past its expiry at `now`. */
+/**
+ * A live token: not revoked, and not past its expiry at `now`. No expiry is never expiring for computer and run tokens, and
+ * expired for a user token: every jmu_ is minted with one, so a null one predates expiry (ADR 0008).
+ */
 export async function findToken(db: Db, hash: string, now: number): Promise<TokenRow | undefined> {
-  const [r] = await db.rows<TokenRow>('select kind, subject, pod from tokens where hash = $1 and revoked_at is null and (expires_at is null or expires_at > $2)', [hash, now]);
+  const [r] = await db.rows<TokenRow>("select kind, subject, pod from tokens where hash = $1 and revoked_at is null and (expires_at > $2 or (expires_at is null and kind <> 'user'))", [hash, now]);
   return r;
 }
 

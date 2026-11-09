@@ -29,7 +29,7 @@ const (
 	userTokenEnv = "JELLYMOON_USER_TOKEN"
 )
 
-const usage = "usage:\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>] [--repo <path>] [--allow-permissions]\n  jellymoon import commonly --instance <url> [--apply] [--include-dm <pod id>] [--anonymize]\n"
+const usage = "usage:\n  jellymoon login\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>] [--repo <path>] [--allow-permissions]\n  jellymoon import commonly --instance <url> [--apply] [--include-dm <pod id>] [--anonymize]\n"
 
 var podIDShape = regexp.MustCompile(`^pod_[0-9A-Z]{26}$`)
 
@@ -38,6 +38,10 @@ func Main(args []string, stdout, stderr io.Writer) int {
 	// The only two outputs of the process, and the log and the flag set are built on stderr, so this is every write site:
 	// nothing the CLI or the daemon prints reaches a stream except through redact.
 	stdout, stderr = redact.Writer(stdout), redact.Writer(stderr)
+	if wantsHelp(args) {
+		fmt.Fprint(stdout, usage)
+		return 0
+	}
 	var err error
 	switch {
 	case len(args) >= 2 && args[0] == "daemon" && args[1] == "start":
@@ -57,6 +61,20 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// wantsHelp is a bare `help`, or -h, -help or --help anywhere: asking for help is not an error, so it prints the usage and exits 0
+// before any command parses its flags (a positional argument such as agent add's harness would read -h as a value).
+func wantsHelp(args []string) bool {
+	if len(args) == 1 && args[0] == "help" {
+		return true
+	}
+	for _, a := range args {
+		if a == "-h" || a == "-help" || a == "--help" {
+			return true
+		}
+	}
+	return false
 }
 
 // computerFor returns the stored computer, registering one first when the dir has none.

@@ -64,3 +64,28 @@ func TestComputerForDropsTheUserTokenWhenItRefuses(t *testing.T) {
 		t.Errorf("%s is still set after a refused start", userTokenEnv)
 	}
 }
+
+// Asking for help is not an error: every command's --help and -h, and the bare help forms, print and exit 0. The usage names
+// every command, login included, and a wrong command still exits 2.
+func TestHelpExitsZeroAndTheUsageNamesEveryCommand(t *testing.T) {
+	for _, args := range [][]string{
+		{"--help"}, {"-h"}, {"help"},
+		{"login", "--help"}, {"login", "-h"},
+		{"daemon", "start", "--help"}, {"agent", "add", "-h"}, {"import", "commonly", "--help"},
+	} {
+		var out, errOut bytes.Buffer
+		if code := Main(args, &out, &errOut); code != 0 {
+			t.Errorf("%v: exit code %d, want 0; stderr %q", args, code, errOut.String())
+		}
+		if strings.Contains(errOut.String(), "help requested") {
+			t.Errorf("%v: printed flag's error %q", args, errOut.String())
+		}
+	}
+	var out, errOut bytes.Buffer
+	if code := Main([]string{"--help"}, &out, &errOut); code != 0 || !strings.Contains(out.String(), "jellymoon login\n") {
+		t.Errorf("the usage on stdout does not name login: %q", out.String())
+	}
+	if code := Main([]string{"nope"}, &out, &errOut); code != 2 {
+		t.Errorf("an unknown command exits %d, want 2", code)
+	}
+}

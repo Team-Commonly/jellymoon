@@ -69,3 +69,13 @@ func TestCheckMCP(t *testing.T) {
 		}
 	}
 }
+
+// A URL with no scheme is refused with the forms that work, not as "not https": http on localhost is allowed too.
+func TestCheckServerWithNoSchemeNamesBothForms(t *testing.T) {
+	for _, raw := range []string{"localhost:8787", "commonly.example"} {
+		_, err := CheckServer(raw)
+		if err == nil || !strings.Contains(err.Error(), "http://localhost") || strings.Contains(err.Error(), "plain https") {
+			t.Errorf("%q: got %v, want an error naming https:// and http://localhost", raw, err)
+		}
+	}
+}

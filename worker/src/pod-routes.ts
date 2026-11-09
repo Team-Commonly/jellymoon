@@ -1,7 +1,6 @@
 // The pod operations of schema/operations.json over HTTP, as the pod object serves them. Rules live in the core;
 // this file maps requests to commands. The Worker has already authenticated and checked the token kind and pod.
-// Not served: evidence (the Worker answers 404). A request field the core has no place for is refused with invalid_input, never
-// dropped: a task update's note.
+// Not served: evidence (the Worker answers 404).
 import { TaskStatusValues } from '../../gen/ts/protocol';
 import type { Harness, Message, PostInput, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
 import type { Caller } from '../../podcore/src/index';
@@ -62,16 +61,7 @@ const feed: Handler = (k) => {
 const claim: Handler = (k) => (k.caller.kind !== 'run' ? fail('forbidden', 'Only a run claims a task.')
   : respond(k.pod.exec({ type: 'claim', runId: k.caller.runId, taskId: k.params[1] })));
 
-/** Schema fields the core command has no place for. A request carrying one is refused, never silently dropped. */
-const refuse = (k: Call, fields: readonly string[]): Response | null => {
-  const hit = fields.find((f) => k.body[f] !== undefined);
-  return hit === undefined ? null : bad(`body.${hit}: this server does not store ${hit} yet`);
-};
-
 const update: Handler = (k) => {
-  // The core's task_update takes a status and an assignee; the schema's note has nowhere to go.
-  const refused = refuse(k, ['note']);
-  if (refused) return refused;
   return respond(k.pod.exec({ type: 'task_update', caller: k.caller, taskId: k.params[1], status: k.body.status as TaskUpdateStatus, wakeId: newWakeSeed() }));
 };
 

@@ -1041,12 +1041,12 @@ Claim a task before working on it. One claim per task; if someone else holds it 
 <a id="op-task_update"></a>
 #### `task_update`
 
-Set a task's status, with an optional short note. Use done only when the task's work is finished.
+Set a task's status. Use done only when the task's work is finished.
 
 - HTTP: PATCH `/v1/pods/{podId}/tasks/{taskId}`
 - Who may call: `run`: run token (`jmr_`) or `user`: user token (`jmu_`)
 - MCP tool: `jm_task_update`
-- Input: [TaskUpdateInput](#def-TaskUpdateInput). Fields: `taskId` (required), `status` (required), `note`.
+- Input: [TaskUpdateInput](#def-TaskUpdateInput). Fields: `taskId` (required), `status` (required).
 - Output: [Task](#def-Task). Fields: `id` (required), `podId` (required), `title` (required), `kind` (required), `body`, `status` (required), `assignee`, `createdBy` (required), `claim`, `createdAt` (required), `updatedAt` (required).
 
 <a id="op-evidence"></a>
@@ -1199,13 +1199,12 @@ One of: `in_progress`, `blocked`, `done`, `failed`.
 <a id="def-TaskUpdateInput"></a>
 ### TaskUpdateInput
 
-The new status for a task, with an optional note.
+The new status for a task.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `taskId` | [TaskId](#def-TaskId) | yes | The id of a task on a pod's board. |
 | `status` | [TaskUpdateStatus](#def-TaskUpdateStatus) | yes | The statuses task_update can set: every task status except open. |
-| `note` | string | no | A short note on the change. Limit: up to 500 characters |
 
 <a id="def-TaskReleaseInput"></a>
 ### TaskReleaseInput

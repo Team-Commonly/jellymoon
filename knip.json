@@ -15,9 +15,13 @@
     "worker/test/**/*.test.ts",
     "server/src/main.ts",
     "server/src/pglite-template.ts",
-    "server/test/**/*.test.ts"
+    "server/test/**/*.test.ts",
+    "web/src/main.tsx",
+    "web/vite.config.ts",
+    "web/src/**/*.test.{ts,tsx}"
   ],
   "project": [
+    "web/**/*.{ts,tsx}",
     "scripts/**/*.mjs",
     "worker/**/*.ts",
     "server/**/*.ts",

@@ -6,26 +6,39 @@
   "scripts": {
     "gen": "bun scripts/gen.mjs",
     "check:fixtures": "bun scripts/check-fixtures.mjs",
-    "check:types": "tsc -p tsconfig.json && tsc -p server/tsconfig.json",
+    "check:types": "tsc -p tsconfig.json && tsc -p server/tsconfig.json && tsc -p web/tsconfig.json",
     "check:entropy": "bun scripts/check-entropy.mjs",
     "check:dead": "knip",
-    "check:boundaries": "depcruise scripts gen podcore worker server --config .dependency-cruiser.cjs",
+    "check:boundaries": "depcruise scripts gen podcore worker server web --config .dependency-cruiser.cjs",
     "record:acp": "bun scripts/record-acp.mjs",
-    "test:scrub": "bun test scripts/acp-scrub.test.mjs",
+    "test:scrub": "bun test scripts/acp-scrub.test.mjs scripts/record-acp.test.mjs",
     "check:private": "bun scripts/check-private.mjs",
-    "check:boundary-rule": "bun scripts/check-boundary-rule.mjs"
+    "check:boundary-rule": "bun scripts/check-boundary-rule.mjs",
+    "test:web": "vitest run --root web",
+    "web": "vite web"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261014.1",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
     "ajv": "8.17.1",
     "dependency-cruiser": "18.6.0",
+    "jsdom": "30.1.3",
     "knip": "6.41.0",
     "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
     "wrangler": "4.151.0"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.13",
-    "hono": "4.13.14"
+    "hono": "4.13.14",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-router-dom": "7.18.5"
   },
   "patchedDependencies": {
     "miniflare@5.20261012.0-beta": "worker/patches/miniflare@5.20261012.0-beta.patch"

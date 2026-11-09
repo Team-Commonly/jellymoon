@@ -103,7 +103,7 @@ func (w *world) storedPosts(r *run) {
 }
 
 func (w *world) taskUpdates(r *run) {
-	// A task update: the status is validated, and the schema's note, which the core has no place for, is refused rather than dropped.
+	// A task update: the status is validated, and a note, which the schema no longer has (progress goes in a post with a taskId), is refused at the edge.
 	tk := w.newTask("update me", "")
 	w.mustClaim(r, tk.ID)
 	path := w.podPath("tasks", tk.ID)

@@ -18,9 +18,11 @@ describe('buildCard status', () => {
 });
 
 describe('shortTime', () => {
+  // The joiner between date and time ("Nov 9, 10:43 AM" or "Nov 9 at 10:43 AM") differs by ICU version, so check the parts.
   it('reads as a short local time in the given zone and locale', () => {
-    expect(shortTime('2026-11-09T10:43:10.623Z', 'en-US', 'UTC')).toBe('Nov 9, 10:43 AM');
-    expect(shortTime('2026-11-09T10:43:10.623Z', 'en-US', 'America/Los_Angeles')).toBe('Nov 9, 2:43 AM');
+    expect(shortTime('2026-11-09T10:43:10.623Z', 'en-US', 'UTC')).toMatch(/^Nov 9\D+10:43\sAM$/);
+    expect(shortTime('2026-11-09T10:43:10.623Z', 'en-US', 'America/Los_Angeles')).toMatch(/^Nov 9\D+2:43\sAM$/);
+    expect(shortTime('2026-11-09T10:43:10.623Z', 'en-US', 'UTC')).not.toContain('2026-11-09T');
   });
 
   it('falls back to the raw text when it is not a time', () => {

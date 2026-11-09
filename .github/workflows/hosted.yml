@@ -20,6 +20,7 @@ on:
       - package.json
       - bun.lock
       - .dockerignore
+      - worker/patches/**
       - .github/workflows/hosted.yml
   workflow_dispatch:
   # A deploy waits for CI (ci.yml) to finish on the main push, so it ships only a commit whose checks passed.

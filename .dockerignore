@@ -8,6 +8,7 @@
 !podcore/
 !server/
 !web/
+!worker/patches/
 **/node_modules
 web/dist
 **/test

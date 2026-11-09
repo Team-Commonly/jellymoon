@@ -23,6 +23,8 @@ None of them ships in a runtime artifact.
 | vite 8.3.5, @vitejs/plugin-react 6.1.2 | Dev server and bundle of `web/`; the plugin only turns on the JSX transform and fast refresh | A custom esbuild script |
 | vitest 5.0.5, jsdom 30.1.3, @testing-library/react 16.3.3, @testing-library/dom 10.4.2 | Unit tests of the web store, card model, key map and shell with no browser (`bun run test:web`). Testing Library's dom package is its peer | bun:test with a hand-made DOM: the React render tests need a document |
 | @types/react 19.3.0, @types/react-dom 19.3.0 | Types for `tsc -p web/tsconfig.json` | Untyped JSX |
+| @playwright/test 1.64.1 | The browser specs in `web-e2e/` (`make e2e-web`, CI's `browser` job): real keyboard input and a real socket in Chromium, at 390 and 1440 px. Its Chromium is installed only inside the CI job, at the version this package pins; `bun install` downloads no browser | Testing Library alone: jsdom has no layout, no focus model of a real browser and no WebSocket to the server |
+| ws 8.21.0 | The Node-side pod socket of the browser specs: a browser cannot put a token in `Authorization` on the upgrade, so the spec bridge opens it from Node with the token (`web-e2e/fixtures.ts`). Already in the lockfile under wrangler; now named | Node's built-in WebSocket: whether it sends custom upgrade headers depends on the Node release |
 | Node 20 or newer (land's runtime, not pinned) | `scripts/land.mjs` runs under `node`, never bun, so bun does not auto-load a `.env` from the checkout; land refuses to start on an older Node | bun: loads `.env` and `bunfig.toml` from the cwd into the environment |
 | deadcode, x/tools v0.51.0 (`go run`) | Unreachable Go functions from `main`; starts enforcing when a main package exists | — |
 
@@ -40,12 +42,12 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
 | worker | 2,040 |
-| server | 2,230 |
+| server | 2,420 |
 | daemon | 5,000 |
 | e2e | 6,790 |
 | web | 1,580 |
 
-The caps add up to 24,840 lines (restated 2026-11-09 against the merged entropy.json: core 4,200, podcore 3,000, worker 2,040, server 2,230, daemon 5,000, web 1,580, e2e 6,790). Agent-written comparables grew without bounds: herdr reached
+The caps add up to 25,030 lines (restated 2026-11-09 against the merged entropy.json: core 4,200, podcore 3,000, worker 2,040, server 2,420, daemon 5,000, web 1,580, e2e 6,790). Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -93,3 +95,7 @@ The caps add up to 24,840 lines (restated 2026-11-09 against the merged entropy.
 2026-11-09: server 2,110 -> 2,180; merged tree measures 2,176; #16's server follow-ups meet F15's sign-in. Feature growth, not a refactor; the cap is the count rounded up to ten; no other cap changes; the total is 24,340. F15.
 2026-11-09: e2e cap 6,380 -> 6,520; merged tree measures 6,518; #10's replay test meets F15's. The cap is the count rounded up to ten; no other cap changes; the total is 24,480. F15.
 2026-11-09: worker 2,000 -> 2,040, server 2,180 -> 2,230, e2e 6,520 -> 6,790; merged tree measures 2,034 / 2,225 / 6,788; the browser session (#33) meets F14, F15 and the replay test. The caption total is restated once above, against the merged entropy.json. No other cap changes.
+2026-11-08: no cap changes. The browser specs and their harness live in `web-e2e/`, which no LOC budget counts: web measures 1,535 of 1,580 and, on the tree merged with main (F15), e2e 6,518 of 6,520, so neither has room, and the specs are test code of the browser surface, not of the web package or the contract suite. The file and function limits still apply there. F18 PR 5a.
+2026-11-09: server cap 2,180 → 2,260, serving the built web client from the pod-state server when JM_WEB_DIR is set (ADR 0006) and its three tests, on the merge of main (F15) into the F18 PR 5a branch: the merged tree printed `LOC budget: server 2260 > 2180`; the cap is the count rounded up to ten; no other cap changes; the total is 24,560. F18 PR 5a.
+2026-11-09: server cap 2,260 → 2,370, the review fixes to serving the built web client (a JM_WEB_DIR with no index.html refused at startup, a missing file answered with the JSON 404, NUL bytes and symlinks out of the build refused, cache and nosniff headers) and their five tests: the tree printed `LOC budget: server 2365 > 2260`; the cap is the count rounded up to ten; no other cap changes; the total is 24,670. F18 PR 5a review.
+2026-11-09: server cap 2,230 -> 2,420 on the merge of main (the browser session, #33) into the F18 PR 5a branch: main measures 2,225 and serving the built web client adds the rest; the merged tree printed `LOC budget: server 2414 > 2230`; the cap is the count rounded up to ten; every other budget keeps main's value; the total is 25,030. F18 PR 5a.

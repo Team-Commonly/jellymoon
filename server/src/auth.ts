@@ -104,7 +104,7 @@ export async function fromGitHub(gh: GitHub, code: string, redirect: string, tim
   } catch { return 'upstream'; }
 }
 
-/** The device flow (the CLI's side and the approval) and GET /v1/me. */
+/** The device flow (the CLI's side and the approval), GET /v1/me and GET /v1/session. */
 function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person: (c: Context) => Promise<Actor | null>, gate: (c: Context) => Promise<Response | null>): void {
   app.post('/v1/auth/device', async (c) => {
     const refused = await gate(c);
@@ -154,6 +154,11 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
   app.get('/v1/me', async (c) => {
     const me = await person(c);
     return me === null ? fail(c, 'unauthorized', 'Sign in first.') : c.json(me);
+  });
+  // /v1/me that never refuses, so a signed-out page load logs no failed request.
+  app.get('/v1/session', async (c) => {
+    const me = await person(c);
+    return c.json(me === null ? {} : { user: me });
   });
 }
 

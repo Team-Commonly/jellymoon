@@ -15,6 +15,8 @@ export interface RunLine { runId: string; agent: Actor; state: 'going' | 'ended'
 interface PodState {
   status: 'connecting' | 'open' | 'reconnecting' | 'stopped';
   you?: Actor;
+  /** The pod's name, from hello; undefined until the first hello. */
+  podName?: string;
   members: Member[];
   agents: AgentPresence[];
   presence: Record<string, PresenceState>;
@@ -45,7 +47,7 @@ const fresh = (): PodState => ({
 type Apply = (s: PodState, data: never) => PodState;
 const on = <T>(f: (s: PodState, d: T) => PodState) => f as unknown as Apply;
 
-const applyHello = on<Hello>((s, d) => ({ ...s, you: d.you, members: d.members, agents: d.agents, headSeq: d.headSeq }));
+const applyHello = on<Hello>((s, d) => ({ ...s, you: d.you, podName: d.podName, members: d.members, agents: d.agents, headSeq: d.headSeq }));
 const applyCreated = on<Message>((s, m) => {
   if (s.messages.some((x) => x.id === m.id)) return s;
   return { ...s, messages: [...s.messages, m].sort((a, b) => a.seq - b.seq) };

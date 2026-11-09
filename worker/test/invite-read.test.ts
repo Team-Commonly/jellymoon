@@ -1,9 +1,12 @@
+import { Database } from 'bun:sqlite';
 import { expect, test } from 'bun:test';
+import { emptyPod } from '../../podcore/src/index';
 import { authRoute } from '../src/auth';
 import type { Env } from '../src/env';
 import { handle } from '../src/front';
 import { hashToken } from '../src/ids';
 import { internalRoute } from '../src/internal';
+import { PodDO } from '../src/pod-do';
 import type { Starter } from '../src/internal';
 import { hello } from '../src/views';
 
@@ -50,8 +53,7 @@ const call = async (env: Env, method: string, path: string, body?: object) => {
 };
 
 test('hello carries the pod\'s name', () => {
-  const h = harness();
-  expect(hello(h.pod.state as never, { name: 'Launch room', createdAt: '', harness: {} }, OWNER).podName).toBe('Launch room');
+  expect(hello(emptyPod('pod_1'), { name: 'Launch room', createdAt: '', harness: {} }, OWNER).podName).toBe('Launch room');
 });
 
 test('an invite read needs no token and returns exactly the pod name, the inviter\'s name and the expiry, spending nothing', async () => {
@@ -87,4 +89,13 @@ test('GET /v1/session is 200 with the user signed in and 200 with none signed ou
   expect(await session()).toEqual({ status: 200, json: {} });
   expect(await session(TOKEN)).toEqual({ status: 200, json: { user: OWNER } });
   expect(await session('nope')).toEqual({ status: 200, json: {} });
+});
+
+test('a pod object whose invites table predates the inviter column gets it on restore, and keeps its rows', () => {
+  const db = new Database(':memory:');
+  db.exec("create table invites (hash text primary key, uses_left integer not null, expires_at real not null); insert into invites values ('h', 1, 9)");
+  const sql = { exec: (q: string, ...a: unknown[]) => { const rows = db.prepare(q).all(...a); return { toArray: () => rows, rowsWritten: 0 }; } };
+  const ctx = { storage: { sql }, blockConcurrencyWhile: (f: () => void) => f(), getWebSockets: () => [] };
+  void new PodDO(ctx as unknown as DurableObjectState, {} as Env);
+  expect(db.prepare('select hash, uses_left, inviter from invites').all()).toEqual([{ hash: 'h', uses_left: 1, inviter: null }]);
 });

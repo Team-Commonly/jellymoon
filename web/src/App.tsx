@@ -1,6 +1,7 @@
-// The shell: one layout with a top bar and a router. The pod screen puts its needs-you toggle into the bar's slot.
+// The shell: one layout with a top bar and a router. The pod screen puts its needs-you toggle into the bar's slot and its name in the title.
 import { useState } from 'react';
 import { Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import type { BarContext } from './bar';
 import { DevicePage } from './DeviceScreen';
 import { signInHref } from './http';
 import type { Http } from './http';
@@ -14,15 +15,16 @@ function Shell({ signedIn }: { signedIn: boolean }) {
   const { id } = useParams();
   const here = useLocation();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [title, setTitle] = useState<string>();
   return (
     <>
       <header>
-        <strong>{id ? `Pod ${id}` : 'Jellymoon'}</strong>
+        <strong>{id ? (title ?? `Pod ${id}`) : 'Jellymoon'}</strong>
         <span ref={setSlot} />
         {signedIn ? <span>Signed in</span> : <a href={signInHref(here.pathname + here.search)}>Sign in</a>}
       </header>
       <main>
-        <Outlet context={slot} />
+        <Outlet context={{ slot, setTitle } satisfies BarContext} />
       </main>
     </>
   );

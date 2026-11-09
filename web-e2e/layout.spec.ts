@@ -110,6 +110,20 @@ test('the top bar keeps its layout under a pod id as long as an address can make
   await holdsLayout(page, 'the bar with a very long pod id, signed in');
 });
 
+test('the top bar keeps its layout under the longest pod name the schema allows, and the invite page under it too', async ({ page }) => {
+  const NAME = UNBROKEN.slice(0, 80); // schema/pod-api.json: a pod name is at most 80 characters
+  const ada = await person(NAME); // a display name is at most 80 characters too
+  const { id } = await api<{ id: string }>('POST', '/v1/pods', ada.token, { name: NAME });
+  const { code } = await api<{ code: string }>('POST', `/v1/pods/${id}/invites`, ada.token, { maxUses: 1 });
+  await page.goto(`/invite/${code}`);
+  await expect(page.getByRole('heading', { name: `${NAME} invited you to ${NAME}` })).toBeVisible();
+  await holdsLayout(page, '/invite/:token naming a long pod and inviter');
+  await signIn(page, ada);
+  await page.goto(`/pod/${id}`);
+  await expect(page.getByRole('banner')).toContainText(NAME);
+  await holdsLayout(page, 'the bar with the longest pod name');
+});
+
 test('/device keeps its layout signed out, signed in, with an error showing, and approved', async ({ page }) => {
   const start = await api<{ userCode: string }>('POST', '/v1/auth/device', null);
   const path = `/device?code=${start.userCode}`;

@@ -20,30 +20,6 @@ describe('/invite/:token', () => {
     expect(calls).toEqual([]);
   });
 
-  it('names the pod and who sent the invite, signed out and signed in', async () => {
-    for (const signedIn of [false, true]) {
-      const { findByRole, unmount } = open(fakeHttp().http, signedIn);
-      expect((await findByRole('heading', { name: `${PREVIEW.inviterName} invited you to ${PREVIEW.podName}` }))).toBeTruthy();
-      unmount();
-    }
-  });
-
-  it('when the invite read 404s the page keeps its plain line, and Join still joins', async () => {
-    const { http, calls } = fakeHttp(undefined, undefined, undefined, undefined, async () => null);
-    const { getByRole } = open(http, true);
-    await act(async () => {}); // the read has answered
-    expect(getByRole('heading').textContent).toBe('You have been invited to a pod');
-    fireEvent.click(getByRole('button', { name: 'Join' }));
-    await waitFor(() => expect(calls).toEqual(['abc123']));
-  });
-
-  it('a failed invite read is the plain line too', async () => {
-    const { http } = fakeHttp(undefined, undefined, undefined, undefined, async () => { throw new Error('offline'); });
-    const { getByRole } = open(http, false);
-    await act(async () => {});
-    expect(getByRole('heading').textContent).toBe('You have been invited to a pod');
-  });
-
   it('signed in: loading the page calls accept zero times and offers Join', async () => {
     const { http, calls } = fakeHttp();
     const { getByRole } = open(http, true);
@@ -91,5 +67,31 @@ describe('/invite/:token', () => {
     const { getByRole, findByText } = open(http, true);
     fireEvent.click(getByRole('button', { name: 'Join' }));
     expect(await findByText('Could not join: the server could not be reached. Try again.')).toBeTruthy();
+  });
+});
+
+describe('/invite/:token, the invite read', () => {
+  it('names the pod and who sent the invite, signed out and signed in', async () => {
+    for (const signedIn of [false, true]) {
+      const { findByRole, unmount } = open(fakeHttp().http, signedIn);
+      expect((await findByRole('heading', { name: `${PREVIEW.inviterName} invited you to ${PREVIEW.podName}` }))).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it('when the invite read 404s the page keeps its plain line, and Join still joins', async () => {
+    const { http, calls } = fakeHttp(undefined, undefined, undefined, undefined, async () => null);
+    const { getByRole } = open(http, true);
+    await act(async () => {}); // the read has answered
+    expect(getByRole('heading').textContent).toBe('You have been invited to a pod');
+    fireEvent.click(getByRole('button', { name: 'Join' }));
+    await waitFor(() => expect(calls).toEqual(['abc123']));
+  });
+
+  it('a failed invite read is the plain line too', async () => {
+    const { http } = fakeHttp(undefined, undefined, undefined, undefined, async () => { throw new Error('offline'); });
+    const { getByRole } = open(http, false);
+    await act(async () => {});
+    expect(getByRole('heading').textContent).toBe('You have been invited to a pod');
   });
 });

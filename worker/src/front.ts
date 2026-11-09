@@ -89,6 +89,13 @@ async function createInvite(env: Env, podId: string, who: Who, body: Body, origi
   return res;
 }
 
+/** No sign-in: the invite page reads this before anyone signs in. A code D1 does not know gets the pod's own 404 body. */
+async function readInvite(env: Env, code: string): Promise<Response> {
+  const hash = await hashToken(code);
+  const podId = await podOfInvite(env.DB, hash);
+  return podId === null ? fail('not_found', 'No such invite.') : internal(env, podId, 'invite-read', { hash });
+}
+
 async function acceptInvite(env: Env, code: string, who: Who): Promise<Response> {
   const hash = await hashToken(code);
   const podId = await podOfInvite(env.DB, hash);
@@ -177,6 +184,8 @@ async function route(req: Request, env: Env, viaMcp: boolean): Promise<Response>
   }
   const run = /^\/v1\/runs\/([^/]+)\/end$/.exec(path);
   if (m === 'POST' && run) return setup(env, req, ['computer'], 'EndRunRequest', (w, b) => endRun(env, w, b, run[1]));
+  const read = /^\/v1\/invites\/([^/]+)$/.exec(path);
+  if (m === 'GET' && read) return readInvite(env, read[1]);
   const inv = /^\/v1\/invites\/([^/]+)\/accept$/.exec(path);
   if (m === 'POST' && inv) return setup(env, req, ['user'], null, (w) => acceptInvite(env, inv[1], w));
   const create = new RegExp(`${POD}/invites$`).exec(path);

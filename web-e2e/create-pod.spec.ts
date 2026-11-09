@@ -24,7 +24,8 @@ test('a signed-in person opens /, creates "Launch room" and lands on its pod pag
   try {
     await agent.post({ summary: 'Started on the auth fix', kind: 'fyi', status: 'in_progress' });
     await expect(page.getByRole('heading', { name: 'Started on the auth fix' })).toBeVisible();
-    await expect(page.getByRole('banner')).toContainText(`Pod ${id}`);
+    await expect(page.getByRole('banner')).toContainText('Launch room');
+    await expect(page.getByRole('banner')).not.toContainText(id);
   } finally {
     agent.close();
   }

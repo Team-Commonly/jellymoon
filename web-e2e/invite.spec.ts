@@ -16,6 +16,7 @@ test('a teammate with no install opens /invite/:token, signs in and joins the po
 
     // Signed out: the page offers GitHub, to come back to this invite. It does not join.
     await page.goto(path);
+    await expect(page.getByRole('heading', { name: 'Ada invited you to Launch room' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Sign in with GitHub to join' })).toHaveAttribute('href', `/v1/auth/github/start?next=${encodeURIComponent(path)}`);
     await expect(page.getByRole('button', { name: 'Join' })).toHaveCount(0);
 

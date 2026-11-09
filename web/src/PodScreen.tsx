@@ -1,8 +1,9 @@
 // /pod/:id: the stream of cards, the composer and the needs-you filter, over one pod store.
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useOutletContext, useParams, useSearchParams } from 'react-router-dom';
+import type { BarContext } from './bar';
 import { CardView } from './CardView';
 import { buildCard, needsYou } from './cards';
 import type { Card } from './cards';
@@ -76,8 +77,13 @@ function useNeedsYouFilter() {
 
 export function PodPage({ connect, http }: { connect: (podId: string) => Connect; http: Http }) {
   const { id = '' } = useParams();
-  const slot = useOutletContext<HTMLElement | null>();
+  const { slot, setTitle } = useOutletContext<BarContext>();
   const { store, state } = usePod(id, connect);
+  // The bar names the pod once hello has; until then it shows the id from the address.
+  useEffect(() => {
+    setTitle(state.podName);
+    return () => setTitle(undefined);
+  }, [setTitle, state.podName]);
   const filter = useNeedsYouFilter();
   const composer = useRef<HTMLTextAreaElement>(null);
   const mine = useMemo(() => (state.you ? needsYou(state.messages, state.you, state.members) : []), [state.messages, state.you, state.members]);

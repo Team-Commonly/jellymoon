@@ -1107,11 +1107,13 @@ func (x *PresenceChanged) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// Ids of what the wake is about: a task, a message or a decision.
+// What the wake is about: a task, a message or a decision, and for a ruling the option that won.
 type WakeRefs struct {
 	TaskID     *TaskID     `json:"taskId,omitempty"`
 	MessageID  *MessageID  `json:"messageId,omitempty"`
 	DecisionID *DecisionID `json:"decisionId,omitempty"`
+	// Only on a decision_ruled wake: the option the member chose.
+	OptionID *OptionID `json:"optionId,omitempty"`
 }
 
 // UnmarshalJSON rejects input that lacks a required key.

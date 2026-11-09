@@ -227,7 +227,7 @@
     },
     {
       "name": "jm_read",
-      "description": "Read the pod: message headlines and tasks since a sequence number. Bodies are left out unless withBody is true.",
+      "description": "Read the pod: message headlines and tasks since a sequence number. Bodies are left out unless withBody is true. An ask in the feed carries its decision as it stands now: open, ruled with the chosen option, or expired.",
       "inputSchema": {
         "description": "Which part of the pod to read.",
         "type": "object",

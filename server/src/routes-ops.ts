@@ -3,6 +3,7 @@
 import type { Hono } from 'hono';
 import { TaskStatusValues } from '../../gen/ts/protocol';
 import type { Harness, Message, PostInput, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
+import { overlayDecisions } from '../../podcore/src/index';
 import type { Hub } from './hub';
 import { newId, newWakeSeed } from './ids';
 import { bad, fail, memberRoute, pick, respond } from './kit';
@@ -48,7 +49,7 @@ const feed = (hub: Hub) => async (k: Call): Promise<Response> => {
   if (blocked) return blocked;
   const withBody = k.c.req.query('withBody') === 'true';
   const events = await eventsAfter(hub.db, k.pod.id, since, 500);
-  const messages = events.flatMap((e) => (e.type === 'message.created' ? [e.data as Message] : [])).slice(0, limit)
+  const messages = overlayDecisions(k.pod.state, events.flatMap((e) => (e.type === 'message.created' ? [e.data as Message] : [])).slice(0, limit))
     .map(({ body, ...rest }) => (withBody && body !== undefined ? { ...rest, body } : rest));
   const ids = new Set(events.flatMap((e) => (e.type === 'task.created' || e.type === 'task.updated' ? [e.data.id] : [])));
   const out: ReadOutput = { messages, tasks: [...ids].map((id) => taskView(k.pod.state, id)), headSeq: k.pod.state.seq };

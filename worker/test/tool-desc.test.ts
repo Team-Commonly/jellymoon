@@ -57,3 +57,14 @@ test('a task_update carrying a note is refused at the edge', async () => {
   const res = await podRoute(pod(), new Request(`http://x/v1/pods/p/tasks/${TASK}`, { method: 'PATCH', body: JSON.stringify({ status: 'in_progress', note: 'halfway' }) }), who);
   expect([res?.status, ((await res?.json()) as { code: string }).code]).toEqual([400, 'invalid_input']);
 });
+
+test('after a ruling the pod feed shows the ask ruled and the wake names the decision, the option and the task (twin of the server test)', async () => {
+  const p = pod();
+  const posted = (await (await send(p, { ...ASK, taskId: TASK }))?.json()) as { messageId: string; decisionId: string };
+  const ruled = p.exec({ type: 'rule', caller: { kind: 'user', userId: owner.id }, decisionId: posted.decisionId, option: 'b', wakeId: id('wak', 9) });
+  expect(ruled?.ok).toBe(true);
+  expect(p.state.wakes[agent.id].refs).toEqual({ decisionId: posted.decisionId, messageId: posted.messageId, optionId: 'b', taskId: TASK });
+  const res = await podRoute(p, new Request(`http://x/v1/pods/${p.id}/feed`), who);
+  const messages = ((await res?.json()) as { messages: Array<{ id: string; decision?: unknown }> }).messages;
+  expect(messages.find((m) => m.id === posted.messageId)?.decision).toEqual({ id: posted.decisionId, state: 'ruled', ruling: { optionId: 'b', by: owner, at: new Date(5000).toISOString() } });
+});

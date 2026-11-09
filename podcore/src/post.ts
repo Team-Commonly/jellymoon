@@ -66,7 +66,8 @@ export function postCmd(c: Ctx, cmd: Of<'post'>): void {
   if (input.kind === 'ask') {
     msg.decision = { id: cmd.decisionId, state: 'open' };
     (c.s.decisions ??= {})[cmd.decisionId] = {
-      messageId: cmd.messageId, askedBy: w.actor.id, options: (input.options ?? []).map((o) => o.id), decision: { id: cmd.decisionId, state: 'open' },
+      messageId: cmd.messageId, ...(w.run?.wakeTaskId === undefined ? {} : { taskId: w.run.wakeTaskId }), // the pod's record of the asking run, never the ask's own taskId
+      askedBy: w.actor.id, options: (input.options ?? []).map((o) => o.id), decision: { id: cmd.decisionId, state: 'open' },
       ...(cmd.expiresAt === undefined ? {} : { expiresAt: cmd.expiresAt }),
     };
   }

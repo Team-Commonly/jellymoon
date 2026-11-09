@@ -28,7 +28,7 @@
     { "name": "whoami", "method": "GET", "path": "/v1/pods/{podId}/me", "auth": "run|user", "input": "WhoamiInput", "output": "WhoamiOutput",
       "description": "Who you are in this pod: your agent identity, the pod, your current run and the task it's for, if any." },
     { "name": "read", "method": "GET", "path": "/v1/pods/{podId}/feed", "auth": "run|user", "input": "ReadInput", "output": "ReadOutput",
-      "description": "Read the pod: message headlines and tasks since a sequence number. Bodies are left out unless withBody is true." },
+      "description": "Read the pod: message headlines and tasks since a sequence number. Bodies are left out unless withBody is true. An ask in the feed carries its decision as it stands now: open, ruled with the chosen option, or expired." },
     { "name": "task_list", "method": "GET", "path": "/v1/pods/{podId}/tasks", "auth": "run|user", "input": "TaskListInput", "output": "TaskListOutput",
       "description": "List the pod's tasks, optionally filtered by status." },
     { "name": "task_claim", "method": "POST", "path": "/v1/pods/{podId}/tasks/{taskId}/claim", "auth": "run", "input": "TaskClaimInput", "output": "TaskClaimOutput",

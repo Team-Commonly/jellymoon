@@ -408,11 +408,13 @@ export interface PresenceChanged {
   computerId?: ComputerId;
 }
 
-/** Ids of what the wake is about: a task, a message or a decision. */
+/** What the wake is about: a task, a message or a decision, and for a ruling the option that won. */
 export interface WakeRefs {
   taskId?: TaskId;
   messageId?: MessageId;
   decisionId?: DecisionId;
+  /** Only on a decision_ruled wake: the option the member chose. */
+  optionId?: OptionId;
 }
 
 /** A push telling a computer to start a run for an agent, with the reason and what it is about. */

@@ -1,0 +1,15 @@
+# The build context of hosted/Dockerfile (the only image in the repo) is the repo root. Only what the image builds from is sent.
+# wrangler pipes the Dockerfile on stdin, so a hosted/Dockerfile.dockerignore would not be read; this file is.
+*
+!package.json
+!bun.lock
+!tsconfig.json
+!gen/
+!podcore/
+!server/
+!web/
+**/node_modules
+web/dist
+**/test
+**/*.test.ts
+**/*.test.tsx

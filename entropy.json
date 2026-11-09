@@ -55,6 +55,12 @@
         "e2e/"
       ],
       "max": 9960
+    },
+    "hosted": {
+      "paths": [
+        "hosted/"
+      ],
+      "max": 60
     }
   },
   "goImports": {

@@ -74,3 +74,16 @@ describe('browserHttp stopRun', () => {
     await expect(browserHttp.stopRun('p', 'r')).rejects.toMatchObject({ status: 502, message: 'request failed' });
   });
 });
+
+describe('browserHttp logout', () => {
+  it('POSTs /v1/auth/logout over the cookie as JSON, which the server asks of every cookie write', async () => {
+    const m = stub({});
+    await browserHttp.logout();
+    expect(sent(m)).toEqual({ url: '/v1/auth/logout', method: 'POST', type: 'application/json', body: '{}', credentials: 'same-origin' });
+  });
+
+  it('throws on a refusal, so the page stays signed in', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 'forbidden', message: 'A browser session sends JSON.' }), { status: 403 })));
+    await expect(browserHttp.logout()).rejects.toMatchObject({ status: 403 });
+  });
+});

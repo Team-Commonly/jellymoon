@@ -12,6 +12,8 @@ export interface Http {
   stopRun(podId: string, runId: string): Promise<void>;
   /** Makes a pod owned by the signed-in person. A refusal throws an ApiError carrying the server's own message. */
   createPod(name: string): Promise<Pod>;
+  /** Signs this browser out: the server revokes the session cookie's token and clears the cookie. A refusal or no answer throws. */
+  logout(): Promise<void>;
 }
 
 /** The GitHub sign-in, which brings the person back to `path` (a same-origin path) with the session cookie set. */
@@ -51,6 +53,10 @@ export const browserHttp: Http = {
     }
     return (await res.json()) as Pod;
   },
+  async logout() {
+    const res = await fetch('/v1/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+    if (!res.ok) throw new ApiError(res.status, 'request failed');
+  },
 };
 
 /** The refusal's error code ({code, message}), or undefined when the body is not one. */
@@ -74,18 +80,18 @@ async function refusalMessage(res: Response): Promise<string> {
 const BOOT_ME_TIMEOUT_MS = 5000;
 
 /**
- * The boot decision: is the session cookie a signed-in person? Nobody, an unreachable server and a server that has not answered
- * within `timeoutMs` all count as signed out. The request is aborted at the timeout, and the answer is also raced against it,
+ * The boot decision: the person the session cookie belongs to, or null. Nobody, an unreachable server and a server that has not
+ * answered within `timeoutMs` all count as signed out. The request is aborted at the timeout, and the answer is also raced against it,
  * so a client that ignores the signal still lets the page render.
  */
-export async function bootSignedIn(http: Http, timeoutMs: number = BOOT_ME_TIMEOUT_MS): Promise<boolean> {
+export async function bootSession(http: Http, timeoutMs: number = BOOT_ME_TIMEOUT_MS): Promise<Actor | null> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   const timedOut = new Promise<null>((resolve) => ctl.signal.addEventListener('abort', () => resolve(null)));
   try {
-    return (await Promise.race([http.session(ctl.signal), timedOut])) !== null;
+    return await Promise.race([http.session(ctl.signal), timedOut]);
   } catch {
-    return false;
+    return null;
   } finally {
     clearTimeout(timer);
   }

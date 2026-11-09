@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { ApiError } from './http';
 import { InvitePage } from './InviteScreen';
-import { fakeHttp, fakeNet, PREVIEW } from './testkit';
+import { fakeHttp, fakeNet, PREVIEW, you } from './testkit';
 
 afterEach(cleanup);
 const GONE = 'This invite has been used or has expired. Ask whoever sent it for a new one.';
 const open = (http: ReturnType<typeof fakeHttp>['http'], signedIn: boolean, path = '/invite/abc123') =>
-  render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} http={http} signedIn={signedIn} /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} http={http} me={signedIn ? you : null} /></MemoryRouter>);
 
 describe('/invite/:token', () => {
   it('signed out: shows the sign-in line linking to sign-in with a return path, and no Join', () => {

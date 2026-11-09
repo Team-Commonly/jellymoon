@@ -6,17 +6,19 @@ import type { Connect, SocketHandlers } from './store';
 /** What the fake reads for any invite code. */
 export const PREVIEW: InvitePreview = { podName: 'Launch room', inviterName: 'Ada', expiresAt: '2026-11-15T10:00:00Z' };
 
-/** A fake HTTP client: records accept calls and answers from the given function. `preview` answers the signed-out invite read. */
-export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}, create: (name: string) => Promise<Pod> = async (name) => ({ id: 'pod_new', name, createdAt: '2026-11-08T10:00:00Z' }), stop: (podId: string, runId: string) => Promise<void> = async () => {}, preview: (code: string) => Promise<InvitePreview | null> = async () => PREVIEW) {
+/** A fake HTTP client: records accept calls and answers from the given function. `preview` answers the signed-out invite read; `out` answers a sign-out, and `loggedOut` counts them. */
+export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}, create: (name: string) => Promise<Pod> = async (name) => ({ id: 'pod_new', name, createdAt: '2026-11-08T10:00:00Z' }), stop: (podId: string, runId: string) => Promise<void> = async () => {}, preview: (code: string) => Promise<InvitePreview | null> = async () => PREVIEW, out: () => Promise<void> = async () => {}) {
   const calls: string[] = [];
   const approved: string[] = [];
   const created: string[] = [];
   const stopped: string[] = [];
+  const loggedOut = { count: 0 };
   const http: Http = {
     acceptInvite: (code) => (calls.push(code), answer(code)), readInvite: preview, session: async () => you, approveDevice: (c) => (approved.push(c), approve(c)),
     createPod: (n) => (created.push(n), create(n)), stopRun: (podId, runId) => (stopped.push(`${podId}/${runId}`), stop(podId, runId)),
+    logout: () => (loggedOut.count++, out()),
   };
-  return { http, calls, approved, created, stopped };
+  return { http, calls, approved, created, stopped, loggedOut };
 }
 
 export const POD = 'pod_1';

@@ -66,6 +66,18 @@ describe('an empty pod', () => {
     open(3).hello();
     expect(screen.queryByText(/Nothing has been posted yet/)).toBeNull();
   });
+
+  // A pod with a task and a run but no message has a headSeq above 0; once the replay catches up, it is still empty.
+  it('shows once the replay has caught up, when the history holds no message', () => {
+    const p = open(3);
+    p.hello();
+    const scout = { kind: 'agent', id: 'agt_1', displayName: 'Scout' };
+    act(() => p.net.deliver(frame('task.created', 1, { id: 'tsk_1', title: 'Look at it', kind: 'chore', status: 'open', createdBy: you, assignee: scout, createdAt: '2026-11-09T10:00:00Z' })));
+    expect(screen.queryByText(/Nothing has been posted yet/)).toBeNull();
+    act(() => p.net.deliver(frame('run.started', 2, { runId: 'run_1', agent: scout })));
+    act(() => p.net.deliver(JSON.stringify({ v: 1, type: 'some.future_event', podId: 'pod_1', seq: 3, data: {} })));
+    expect(screen.getByText('Nothing has been posted yet. @mention an agent in the box below to start a run.')).toBeTruthy();
+  });
 });
 
 describe('the stream', () => {

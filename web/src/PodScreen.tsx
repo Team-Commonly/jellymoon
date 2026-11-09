@@ -97,8 +97,9 @@ export function PodPage({ connect, http }: { connect: (podId: string) => Connect
   // One line per agent: an agent with a going run shows as its run line (with Stop), so the presence line leaves it out.
   const going = new Set(runs.filter((r) => r.state === 'going').map((r) => r.agent.id));
   const working = state.agents.filter((a) => a.state === 'working' && !going.has(a.agent.id)).map((a) => a.agent.displayName);
-  // headSeq is 0 only for a pod that is empty (the hello says so); until the hello, `you` is unknown and nothing shows.
-  const empty = state.you !== undefined && state.headSeq === 0 && state.messages.length === 0 && !filter.on;
+  // Empty once the replay has caught up to the hello's headSeq with no message in it (tasks and runs are not posts); until the
+  // hello, `you` is unknown and nothing shows.
+  const empty = state.you !== undefined && state.lastSeq >= state.headSeq && state.messages.length === 0 && !filter.on;
   const pending = k.keys.confirm ? cards[k.keys.focus]?.ask?.options.find((o) => o.id === k.keys.confirm)?.label : undefined;
   return (
     <>

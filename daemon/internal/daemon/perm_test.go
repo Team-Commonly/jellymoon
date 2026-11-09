@@ -23,7 +23,7 @@ import (
 var fakeAgent string // the e2e suite's fake ACP agent, built once for these tests
 
 func TestMain(m *testing.M) {
-	// TestReplayClaude starts this test binary as its replaying agent, in the run's workspace with a scrubbed environment: that
+	// TestReplayClaude or TestReplayCodex starts this test binary as its replaying agent, in the run's workspace with a scrubbed environment: that
 	// copy needs no fake agent, and its relative build dir would not resolve from there.
 	for _, a := range os.Args[1:] {
 		if strings.HasPrefix(a, "-replay.agent=") {

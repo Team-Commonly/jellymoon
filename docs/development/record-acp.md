@@ -1,12 +1,12 @@
-# Recording a real Claude Code session
+# Recording a real Claude Code or Codex session
 
-`daemon/testdata/acp/claude-slice.jsonl` is one real Claude Code run through the `claude-agent-acp` adapter. `TestReplayClaude`
-replays it through the daemon on every `go test`, with no model, no network and no sign-in. You only need this page to make a new
+`daemon/testdata/acp/claude-slice.jsonl` and `codex-slice.jsonl` are each one real run through the `claude-agent-acp` or `codex-acp` adapter. `TestReplayClaude` and `TestReplayCodex`
+replay them through the daemon on every `go test`, with no model, no network and no sign-in. You only need this page to make a new
 recording: when the adapter version moves, when the slice's calls change, or when a second machine wants to confirm it.
 
 ## What you need
 
-- A normal Claude Code sign-in on this machine. The adapter reads it; the scripts here never touch it and no API key goes in any file.
+- A normal sign-in for the harness you record (Claude Code or Codex) on this machine. The adapter reads it; the scripts here never touch it and no API key goes in any file.
 - Node and npm on PATH (for the adapter only), and the repo's pinned Go and Bun (`make tools`).
 - Nothing global: the adapter is installed into `.tools/acp/` (ignored), at an exact version.
 
@@ -30,7 +30,15 @@ Keep it short: one task, one reply. A run that goes wrong is not worth fixing by
 `make record-acp-codex` (`bun scripts/record-acp.mjs --harness codex`) does the same with a real Codex run through the pinned
 `@agentclientprotocol/codex-acp` adapter and writes `daemon/testdata/acp/codex-slice.jsonl`; `TestReplayCodex` replays it against
 `codex-slice.golden`. It needs this machine's normal Codex sign-in (the adapter's bundled Codex reads it; nothing here does). `make acp-tools`
-installs both adapters. The scrub also drops Codex's own account line and names its Guardian Review step in the vocabulary.
+installs both adapters. The scrub's existing account-line filter covers Codex's own account line too, its vocabulary names the Guardian Review step, and it replaces the model, sandbox and build settings in Codex's turn metadata with placeholders.
+
+## Isolation
+
+A recording must not carry this machine's own configuration. `scripts/record-acp-env.mjs` makes a fresh config directory for each recording inside the run's scratch directory and points the agent at it: `CODEX_HOME` for Codex, `CLAUDE_CONFIG_DIR` for Claude Code. So the model sees no personal settings and no global instructions file. The one thing carried over is the sign-in file (`auth.json` for Codex, `.credentials.json` for Claude Code), copied from the real config directory (or the one `CODEX_HOME` / `CLAUDE_CONFIG_DIR` already names) when it exists; nothing else is copied. The sign-in must be a file. A recording stops before it starts, naming the harness, when that file is missing: an unauthenticated run would record a failure and could overwrite a committed recording. This matters most for Claude Code on macOS: it keys its keychain entry on a hash of `CLAUDE_CONFIG_DIR`, so a fresh directory per run never finds a keychain sign-in. To record Claude Code there, point `CLAUDE_CONFIG_DIR` at a directory that holds a file `.credentials.json`. `--no-isolate` (or `RECORD_ACP_NO_ISOLATE=1`) skips all of this and records with the real configuration; that leaks this machine's settings and global instructions into the recording, so use it only when you will read the result closely.
+
+The copied sign-in file is written with mode 0600, and its folder (`home-<harness>/`) is deleted whenever the script exits, whether the run succeeded, failed or had its scrub refused. The rest of the scratch directory is kept after a failure, for `--scrub`.
+
+Sign-in tokens can rotate during a run: if the harness refreshes its token, the new one is written only to the temporary copy and is lost when the folder goes. That can leave the real sign-in holding a used refresh token. Nothing is copied back. If the harness reports an expired session after a re-record, sign in to it again.
 
 ## Scrub
 
@@ -42,13 +50,12 @@ directory (the script says where); fix the rule and run `bun scripts/record-acp.
 
 Streamed model text (`agent_message_chunk` and the like) is replaced by `[text]` with the line kept, because an id can be split across chunks and the replay never reads it. After the replacements the scrub allowlists what is left: every `word_xxxxxxxx` name must be a numbered placeholder or one of a short list of vocabulary names in the script, every absolute path must sit under a placeholder root, and no host except loopback may remain. The planted-line test is `bun run test:scrub`.
 
-Before committing a recording, read it once for model-written text that quotes something it should not (the model sees this machine's
-own Claude Code settings), and run `make private secrets`.
+Before committing a recording, read it once for model-written text that quotes something it should not (the agent gets a fresh config directory, see Isolation, but the working machine and the prompt are still real), and run `make private secrets`.
 
 ## After a new recording
 
-1. The first line names the adapter and the date. If you changed the pin, change `ACP_ADAPTER` in the Makefile and `ADAPTER` in the
-   script together.
-2. Run `go test ./daemon/internal/daemon -run TestReplayClaude`. It fails if the calls differ from `claude-slice.golden`. Read the
+1. The first line names the adapter and the date. If you changed a pin, change `ACP_ADAPTERS` in the Makefile and the matching entry in
+   `HARNESSES` in the script together.
+2. Run `go test ./daemon/internal/daemon -run 'TestReplay(Claude|Codex)'`. It fails if the calls differ from `claude-slice.golden` or `codex-slice.golden`. Read the
    printed list against the recording's `"t":"mcp"` lines, and only then update the golden file by hand.
 3. Note in `progress.md` what the run showed.

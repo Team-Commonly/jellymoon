@@ -73,7 +73,7 @@ async function userToken(db: D1Database, userId: string): Promise<string> {
 
 /** The server's own base URL: PUBLIC_URL or the request's origin, upgraded to https except under ENV=local. A browser session's Origin must be its origin. */
 function ownBase(env: Env, req: Request): string {
-  const b = (env.PUBLIC_URL ?? new URL(req.url).origin).replace(/\/+$/, '');
+  const b = (env.PUBLIC_URL?.trim() || new URL(req.url).origin).replace(/\/+$/, '');
   return env.ENV === 'local' ? b : b.replace(/^http:/, 'https:');
 }
 

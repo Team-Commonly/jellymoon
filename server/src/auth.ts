@@ -22,7 +22,7 @@ export interface GitHub { web: string; api: string; id: string; secret: string }
 
 /** The server's own base URL: PUBLIC_URL or the request's origin, upgraded to https except under ENV=local. Its origin is the one a browser session's Origin must equal. */
 export function ownBase(c: Context, publicUrl: string | undefined, local: boolean): string {
-  const b = (publicUrl ?? new URL(c.req.url).origin).replace(/\/+$/, '');
+  const b = (publicUrl?.trim() || new URL(c.req.url).origin).replace(/\/+$/, '');
   return local ? b : b.replace(/^http:/, 'https:');
 }
 

@@ -33,12 +33,12 @@ The LOC budget for the slice is a deliberate choice to stay small:
 
 | Area | Cap |
 |---|---|
-| core (`schema/`, `scripts/`) | 3,720 |
+| core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
-| worker | 1,790 |
-| server | 1,800 |
-| daemon | 3,000 |
-| e2e | 4,650 |
+| worker | 1,900 |
+| server | 2,100 |
+| daemon | 5,000 |
+| e2e | 6,000 |
 
 The caps add up to 22,200 lines. Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.

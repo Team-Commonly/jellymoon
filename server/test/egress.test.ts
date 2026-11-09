@@ -18,13 +18,15 @@ describe('the address classifier', () => {
       '198.19.255.255', '224.0.0.1', '239.255.255.255', '240.0.0.1', '255.255.255.254', '255.255.255.255',
       '::', '::1', '0:0:0:0:0:0:0:1', 'fc00::1', 'fdff:ffff::1', 'fe80::1', 'febf::1', 'ff02::1', 'ff00::',
       '::ffff:127.0.0.1', '::ffff:7f00:1', '::ffff:10.0.0.1', '::ffff:a9fe:a9fe', '64:ff9b::a9fe:a9fe', '64:ff9b::10.0.0.1', '64:ff9b::7f00:1',
-      '::127.0.0.1', '::7f00:1', '::8.8.8.8', 'not-an-address', '1.2.3', '256.1.1.1', '1.2.3.4.5', '01.2.3.4', ':::1', '1::2::3', 'fe80::1%en0'];
+      '::127.0.0.1', '::7f00:1', '::8.8.8.8', '192.0.2.1', '198.51.100.7', '203.0.113.9', '192.88.99.1', '64:ff9b:1::808:808', '64:ff9b:1:ffff::1',
+      '2002:7f00:1::', '2002:a9fe:a9fe::1', '2002:c0a8:101::', '2001::1', '2001:0:4136:e378:8000:63bf:3fff:fdd2', '::ffff:0:7f00:1', '::ffff:0:a00:1', 'not-an-address', '1.2.3', '256.1.1.1', '1.2.3.4.5', '01.2.3.4', ':::1', '1::2::3', 'fe80::1%en0'];
     expect(inside.filter((a) => !internalAddress(a))).toEqual([]);
   });
   test('public addresses pass, including the edges of each range', () => {
     const outside = ['8.8.8.8', '1.1.1.1', '93.184.216.34', '9.255.255.255', '11.0.0.0', '100.63.255.255', '100.128.0.0', '126.255.255.255', '128.0.0.0',
       '169.253.255.255', '169.255.0.0', '172.15.255.255', '172.32.0.0', '192.0.1.0', '191.255.255.255', '192.167.255.255', '192.169.0.0',
-      '198.17.255.255', '198.20.0.0', '223.255.255.255', '2606:4700::1111', '2001:4860:4860::8888', '::ffff:8.8.8.8', '64:ff9b::808:808', 'fbff::1', 'fec0::1'];
+      '198.17.255.255', '198.20.0.0', '223.255.255.255', '2606:4700::1111', '2001:4860:4860::8888', '::ffff:8.8.8.8', '64:ff9b::808:808', 'fbff::1', 'fec0::1',
+      '192.0.3.1', '198.51.99.1', '198.51.101.1', '203.0.112.1', '203.0.114.1', '192.88.98.1', '192.88.100.1', '2002:808:808::1', '::ffff:0:808:808', '2001:1::1', '64:ff9b:2::1'];
     expect(outside.filter((a) => internalAddress(a))).toEqual([]);
   });
 });
@@ -50,14 +52,25 @@ describe('the url and its host', () => {
 
 describe('the resolve step', () => {
   const dns: Record<string, string[]> = { 'private.test': ['10.0.0.5'], 'mixed.test': ['93.184.216.34', '169.254.169.254'], 'v6.test': ['2606:4700::1111', 'fe80::1'],
-    'public.test': ['2606:2800:220:1::1', '93.184.216.34'], 'empty.test': [] };
-  const resolve: Resolve = async (h) => { const a = dns[h]; if (a === undefined) throw new Error('ENOTFOUND'); return a; };
+    'public.test': ['2606:2800:220:1::1', '93.184.216.34'], 'v6only.test': ['2606:2800:220:1::1'], 'empty.test': [] };
+  const resolve: Resolve = async (h) => {
+    if (h === 'slow.test') return new Promise<string[]>(() => {});
+    const a = dns[h];
+    if (a === undefined) throw new Error('ENOTFOUND');
+    return a;
+  };
   test('a name resolving to an internal address, to public plus internal, to nothing, or failing to resolve, is refused', async () => {
     for (const h of ['private.test', 'mixed.test', 'v6.test', 'empty.test', 'fails.test']) expect([h, await refused(`https://${h}/mcp`, false, resolve)]).toEqual([h, true]);
     expect(String(await destOf('https://fails.test/mcp', false, resolve)).includes('could not be resolved')).toBe(true);
   });
-  test('a name resolving only to public addresses passes, pinned to the first: the Host header and TLS name stay the name', async () => {
-    expect(await destOf('https://public.test:8443/mcp?x=1', false, resolve)).toEqual({ url: 'https://[2606:2800:220:1::1]:8443/mcp?x=1', host: 'public.test:8443', serverName: 'public.test' });
+  test('a name resolving only to public addresses passes, pinned to its first IPv4 (else its first address); Host and TLS name stay the name', async () => {
+    expect(await destOf('https://public.test:8443/mcp?x=1', false, resolve)).toEqual({ url: 'https://93.184.216.34:8443/mcp?x=1', host: 'public.test:8443', serverName: 'public.test' });
+    expect(await destOf('https://v6only.test/mcp', false, resolve)).toEqual({ url: 'https://[2606:2800:220:1::1]/mcp', host: 'v6only.test', serverName: 'v6only.test' });
+  });
+  test('a lookup that does not answer within its 2 s budget is refused', async () => {
+    const t0 = Date.now();
+    expect(String(await destOf('https://slow.test/mcp', false, resolve)).includes('could not be resolved')).toBe(true);
+    expect(Date.now() - t0 < 4000).toBe(true);
   });
   test('ENV=local allows literal loopback over http or https, and nothing else that the rules refuse', async () => {
     expect(await destOf('http://127.0.0.1:4000/mcp', true, noDns)).toEqual({ url: 'http://127.0.0.1:4000/mcp' });
@@ -89,22 +102,27 @@ describe('the re-check before every upstream call', () => {
       const s = await setup(undefined, { local: true, vault, resolve });
       const A = await podIn(s);
       const con = (await s.call('POST', `/v1/pods/${A.pod.id}/connections`, A.olivia.token, { vendor: 'linear', url: 'https://up.test/mcp', token: 'pod-held-credential' })).json;
-      expect(sent.map((x) => [x.url, x.host, x.serverName])[0]).toEqual(['https://93.184.216.34/mcp', 'up.test', 'up.test']);
       await s.call('POST', `/v1/pods/${A.pod.id}/grants`, A.olivia.token, { connectionId: con.id, agentId: A.agent.agentId, access: 'write-with-confirm' });
       const run = (await s.call('POST', '/v1/runs', A.comp.token, { wakeId: A.wake.wakeId })).json.runToken as string;
       const op = (operation: string, args: Json) => s.call('POST', `/v1/pods/${A.pod.id}/connectors/call`, run, { connectionId: con.id, operation, args });
+      const kit = { hub: s.hub, vault, local: true, resolve };
+      const approve = async (decisionId: string, n: number) => {
+        const cmd = { type: 'rule' as const, caller: { kind: 'user' as const, userId: A.olivia.user.id }, decisionId, option: 'a', wakeId: `wak_0000000000000000000000000${n}` };
+        expect((await A.rt.exec(cmd, rulingOpts(kit, A.rt, cmd)))?.ok).toBe(true);
+        return (await s.call('GET', `/v1/pods/${A.pod.id}/connectors/receipts?decisionId=${decisionId}`, A.olivia.token)).json.receipts[0].outcome as string;
+      };
       expect((await op('list_issues', {})).json.state).toBe('done');
-      const parked = (await op('create_issue', { title: 't', teamId: 'T' })).json;
-      expect(parked.state).toBe('parked');
+      const [early, late] = [(await op('create_issue', { title: 't', teamId: 'T' })).json, (await op('create_issue', { title: 'u', teamId: 'T' })).json];
+      expect([early.state, late.state]).toEqual(['parked', 'parked']);
+      expect(await approve(early.decisionId, 8)).toBe('released');
+      // While the name resolves public: connect's three requests, the read's, and the release's, each pinned to the checked IP.
+      expect(sent.map((x) => x.method)).toEqual(['initialize', 'notifications/initialized', 'tools/list', ...Array(2).fill(['initialize', 'notifications/initialized', 'tools/call']).flat()]);
+      expect(sent.filter((x) => x.url !== 'https://93.184.216.34/mcp' || x.host !== 'up.test' || x.serverName !== 'up.test')).toEqual([]);
       inside = true;
       const before = sent.length;
       const read = await op('list_issues', {});
       expect([read.status, read.json.code, String(read.json.message).includes('internal address')]).toEqual([502, 'upstream_failed', true]);
-      const cmd = { type: 'rule' as const, caller: { kind: 'user' as const, userId: A.olivia.user.id }, decisionId: parked.decisionId, option: 'a', wakeId: 'wak_00000000000000000000000009' };
-      const kit = { hub: s.hub, vault, local: true, resolve };
-      expect((await A.rt.exec(cmd, rulingOpts(kit, A.rt, cmd)))?.ok).toBe(true);
-      const [receipt] = (await s.call('GET', `/v1/pods/${A.pod.id}/connectors/receipts?decisionId=${parked.decisionId}`, A.olivia.token)).json.receipts;
-      expect([receipt.outcome, sent.length - before]).toEqual(['failed', 0]);
+      expect([await approve(late.decisionId, 9), sent.length - before]).toEqual(['failed', 0]);
     } finally { globalThis.fetch = real; }
   });
 });

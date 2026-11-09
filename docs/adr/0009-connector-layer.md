@@ -71,14 +71,20 @@ is sent.
   assert it.
 - **One classifier, `internalAddress`.** It parses the address rather than matching prefixes, and anything that does not parse
   counts as internal. IPv4: 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.0.0/24, 192.168/16, 198.18/15, and 224/4
-  and up (so 240/4 and 255.255.255.255). IPv6: ::/96 (`::`, `::1` and every v4-compatible `::a.b.c.d`), fc00::/7, fe80::/10,
-  ff00::/8, and ::ffff:0:0/96 and 64:ff9b::/96 by the IPv4 they embed.
-- **Resolve, then pin.** A name is resolved with `lookup(host, { all: true, verbatim: true })`. It is refused if it does not
-  resolve, resolves to nothing, or if any address it resolves to is internal. The request is then pinned to the first checked
-  address: it is sent to that IP, with the name as the `Host` header and as the TLS server name (Bun's `fetch` `tls.serverName`),
+  and up (so 240/4 and 255.255.255.255), plus the documentation ranges 192.0.2/24, 198.51.100/24 and 203.0.113/24 and the
+  old 6to4 relay 192.88.99/24. IPv6: ::/96 (`::`, `::1` and every v4-compatible `::a.b.c.d`), fc00::/7, fe80::/10, ff00::/8,
+  64:ff9b:1::/48 (local-use NAT64) and 2001::/32 (Teredo) are refused. v4-mapped ::ffff:0:0/96, v4-translated
+  ::ffff:0:0:0/96, NAT64 64:ff9b::/96 and 6to4 2002::/16 are judged by the IPv4 address they embed.
+- **Resolve, then pin.** A name is resolved with `lookup(host, { all: true, verbatim: true })`, given 2 s (well inside the
+  request's 10 s); a lookup that has not answered by then counts as unresolved. It is refused if it does not resolve, resolves
+  to nothing, or if any address it resolves to is internal. The request is then pinned to one checked address: the first IPv4
+  if there is one, else the first address. There is no fallback to the other checked addresses if that one cannot be reached.
+  The request is sent to that IP, with the name as the `Host` header and as the TLS server name (Bun's `fetch` `tls.serverName`),
   so the certificate is still verified against the name and a second lookup cannot move the request. Verified on Bun 1.4.4
   against a local TLS server: a matching name connects, while a wrong name, no name and an untrusted certificate are each refused.
-  A literal public address is sent as is; its certificate must name that address.
+  A literal public address is sent as is; its certificate must name that address. If `HTTPS_PROXY` is set in the server's
+  environment, Bun's `fetch` sends the request through the proxy, and the pinned IP (not the name) is the proxy's CONNECT
+  target, so the proxy cannot resolve the name again; TLS is still end to end, against the name.
 - **ENV=local.** Only in local mode, and only for a literal loopback address (127/8 or ::1), is http allowed and the
   classifier skipped: that is the e2e stub on 127.0.0.1. Every other host gets the full check in local mode too. Local mode is
   the process environment `ENV=local`, read once at startup (`server/src/config.ts`). No request can set it, and a production

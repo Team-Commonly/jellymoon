@@ -40,12 +40,12 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
 | worker | 2,000 |
-| server | 3,200 |
+| server | 3,240 |
 | daemon | 5,000 |
 | e2e | 7,160 |
 | web | 1,580 |
 
-The caps add up to 26,140 lines (restated 2026-11-09 against entropy.json: core 4,200, podcore 3,000, worker 2,000, server 3,200, daemon 5,000, web 1,580, e2e 7,160). Agent-written comparables grew without bounds: herdr reached
+The caps add up to 26,180 lines (restated 2026-11-09 against entropy.json: core 4,200, podcore 3,000, worker 2,000, server 3,240, daemon 5,000, web 1,580, e2e 7,160). Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -96,3 +96,4 @@ The caps add up to 26,140 lines (restated 2026-11-09 against entropy.json: core 
 2026-11-08: e2e cap 6,000 → 6,700. Main's own suite measures 5,936 lines and TestF19 (the stub Linear, the six steps and their encoding probes) adds the rest: the merge result printed `LOC budget: e2e 6565 > 6000`. The cap is that count plus about 2%; the total is 25,180. No other cap changes. F19.
 2026-11-09: the merge of main (F15's sign-in, #30) into the F19 branch: server cap 2,800 -> 3,030 and e2e cap 6,700 -> 7,160. Main measures server 2,176 and e2e 6,518; the connector layer adds 839 and TestF19 629, and the merged tree printed `LOC budget: server 3015 > 2800` and `LOC budget: e2e 7147 > 6700`. Each cap is the count rounded up to ten, as main's F15 notes do; the higher of the two sides is kept for every other budget; no other cap changes; the total is 25,970. F19.
 2026-11-09: server cap 3,030 → 3,200, the connector egress check (ADR 0009, "Egress": one address classifier, a resolve-and-pin step before every upstream request, and its unit tests with an injected resolver) takes the server to 3,192 lines (the gate printed `LOC budget: server 3192 > 3030` before this raise; the cap is that count rounded up to ten); no other cap changes; the total is 26,140. F19.
+2026-11-09: server cap 3,200 → 3,240, the egress review follow-ups (the documentation, 6to4, Teredo, local NAT64 and v4-translated ranges in the classifier, the IPv4-first pin, the 2 s lookup budget, and the tests that every request of a read and a release goes to the pinned address) take the server to 3,233 lines (the gate printed `LOC budget: server 3233 > 3200` before this raise; the cap is that count rounded up to ten); no other cap changes; the total is 26,180. F19.

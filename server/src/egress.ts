@@ -36,18 +36,30 @@ function v6(s: string): number[] | null {
   return groups.length === 8 && groups.every((g) => /^[0-9a-f]{1,4}$/i.test(g)) ? groups.map((g) => parseInt(g, 16)) : null;
 }
 
-/** 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.0.0/24, 192.168/16, 198.18/15, and 224/4 and up. */
+/**
+ * 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.0.0/24, 192.168/16, 198.18/15, and 224/4 and up; also the
+ * documentation ranges 192.0.2/24, 198.51.100/24, 203.0.113/24 and the old 6to4 relay 192.88.99/24.
+ */
 function internalV4([a, b, c]: number[]): boolean {
   return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254)
-    || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 0 && c === 0) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19));
+    || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 0 && (c === 0 || c === 2)) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19))
+    || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113) || (a === 192 && b === 88 && c === 99);
 }
 
-/** ::/96 (::, ::1 and v4-compatible), fc00::/7, fe80::/10, ff00::/8; v4-mapped and NAT64 64:ff9b::/96 by their embedded IPv4. */
+const zero = (g: number[], from: number, to: number): boolean => g.slice(from, to).every((x) => x === 0);
+
+/**
+ * ::/96 (::, ::1, v4-compatible), fc00::/7, fe80::/10, ff00::/8, 64:ff9b:1::/48 (local NAT64) and 2001::/32 (Teredo) are
+ * refused. v4-mapped ::ffff:0:0/96, v4-translated ::ffff:0:0:0/96 and NAT64 64:ff9b::/96 are judged by their last 32 bits, and
+ * 6to4 2002::/16 by bits 16 to 48, as the IPv4 address they embed.
+ */
 function internalV6(g: number[]): boolean {
-  const embedded = [g[6] >> 8, g[6] & 255, g[7] >> 8, g[7] & 255];
-  if (g.slice(0, 6).every((x) => x === 0)) return true;
-  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) return internalV4(embedded);
-  if (g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0)) return internalV4(embedded);
+  const v4At = (i: number): number[] => [g[i] >> 8, g[i] & 255, g[i + 1] >> 8, g[i + 1] & 255];
+  if (zero(g, 0, 6)) return true;
+  if ((zero(g, 0, 5) && g[5] === 0xffff) || (zero(g, 0, 4) && g[4] === 0xffff && g[5] === 0)) return internalV4(v4At(6));
+  if (g[0] === 0x64 && g[1] === 0xff9b) return g[2] === 1 || (zero(g, 2, 6) ? internalV4(v4At(6)) : false);
+  if (g[0] === 0x2002) return internalV4(v4At(1));
+  if (g[0] === 0x2001 && g[1] === 0) return true;
   return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00;
 }
 
@@ -59,7 +71,15 @@ export function internalAddress(addr: string): boolean {
   return g === null ? true : internalV6(g);
 }
 
-const loopbackLiteral = (h: string): boolean => v4(h)?.[0] === 127 || v6(h)?.every((x, i) => x === (i === 7 ? 1 : 0)) === true;
+/** A lookup gets 2 s, well inside the upstream request's 10 s; one that has not answered by then counts as unresolved. */
+const LOOKUP_MS = 2000;
+function withinBudget<T>(p: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('lookup timed out')), LOOKUP_MS); });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
+
+const loopbackLiteral =(h: string): boolean => v4(h)?.[0] === 127 || v6(h)?.every((x, i) => x === (i === 7 ? 1 : 0)) === true;
 
 /**
  * The checked, pinned destination for `raw`, or why the credential may not be sent there. ENV=local alone allows a literal
@@ -75,11 +95,13 @@ export async function destOf(raw: string, local: boolean, resolve: Resolve): Pro
   if (host === 'localhost' || host.endsWith('.localhost')) return 'url must not name localhost.';
   const literal = v4(host) !== null || v6(host) !== null;
   let addrs: string[];
-  try { addrs = literal ? [host] : await resolve(host); } catch { addrs = []; }
+  try { addrs = literal ? [host] : await withinBudget(resolve(host)); } catch { addrs = []; }
   if (addrs.length === 0) return `url's host ${host} could not be resolved.`;
   if (addrs.some(internalAddress)) return `url's host ${host} is or resolves to an internal address (loopback, private, link-local or reserved).`;
   if (literal) return { url: u.href };
+  // One address is pinned, with no fallback to the others: the first IPv4 (most hosts route it), else the first address.
+  const at = addrs.find((a) => !a.includes(':')) ?? addrs[0];
   const pinned = new URL(u.href);
-  pinned.hostname = addrs[0].includes(':') ? `[${addrs[0]}]` : addrs[0];
+  pinned.hostname = at.includes(':') ? `[${at}]` : at;
   return { url: pinned.href, host: u.port === '' ? host : `${host}:${u.port}`, serverName: host };
 }

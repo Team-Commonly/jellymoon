@@ -60,7 +60,8 @@ func NewCommonly(rawURL, token string) (*Commonly, error) {
 	if err != nil {
 		return nil, err
 	}
-	// A pasted token with a space or a line break in it can never be right; say so before any request, without echoing it.
+	// A token with a space or a line break inside it can never be right; say so before any request, without echoing it. The CLI's
+	// readSecret has already trimmed whitespace around it (a trailing newline from a file), as it does for every credential.
 	if strings.IndexFunc(token, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
 		return nil, errors.New("COMMONLY_TOKEN has spaces or line breaks in it; paste the token alone")
 	}

@@ -223,7 +223,7 @@ deployed-boot:
 	@set -u; \
 	bun="$(BUN)"; bundle="$(DEPLOYED_BUNDLE)"; dir=$$(mktemp -d); log="$$dir/server.log"; pid=0; \
 	port=$$($(BUN) -e 'const s = Bun.serve({ port: 0, fetch() { return new Response(); } }); console.log(s.port); s.stop(true);'); \
-	code() { curl -s -o /dev/null -w '%{http_code}' "$$@"; }; \
+	code() { curl -q -s -o /dev/null -w '%{http_code}' "$$@"; }; \
 	want() { [ "$$2" = "$$3" ] || { echo "deployed-boot: $$1: got $$2, want $$3"; tail -20 "$$log"; exit 1; }; echo "deployed-boot: ok $$1 -> $$2"; }; \
 	trap 'if [ "$$pid" -gt 0 ]; then kill $$pid 2>/dev/null; wait $$pid 2>/dev/null; fi; tmp="$${TMPDIR:-/tmp}"; tmp="$${tmp%/}"; case "$$dir" in "$$tmp"/?*|/tmp/?*) [ -d "$$dir" ] && rm -rf -- "$$dir";; esac' EXIT; \
 	out=$$(env -u ENV -u DATABASE_URL PORT=$$port "$$bun" "$$bundle" 2>&1); rc=$$?; \
@@ -233,7 +233,7 @@ deployed-boot:
 	  start() { env -u ENV -u JM_PG_SCHEMA PORT=$$port TEST_BEARER=$$bearer JM_WEB_DIR="$(CURDIR)/server/test/web-fixture" "$$bun" "$$bundle" >> "$$log" 2>&1 & pid=$$!; }; \
 	else mode=local; bearer=""; auth="x-smoke: local"; \
 	  start() { env ENV=local PORT=$$port "$$bun" "$$bundle" --persist-to "$$dir/state" >> "$$log" 2>&1 & pid=$$!; }; fi; \
-	up() { i=0; until curl -fsS -o /dev/null "http://127.0.0.1:$$port/healthz" 2>/dev/null; do i=$$((i+1)); \
+	up() { i=0; until curl -q -fsS -o /dev/null "http://127.0.0.1:$$port/healthz" 2>/dev/null; do i=$$((i+1)); \
 	  if ! kill -0 $$pid 2>/dev/null; then echo "deployed-boot: the server exited before /healthz answered; log tail:"; tail -20 "$$log"; exit 1; fi; \
 	  if [ $$i -gt 600 ]; then echo "deployed-boot: no /healthz 200 within 60 s; log tail:"; tail -20 "$$log"; exit 1; fi; sleep 0.1; done; }; \
 	base="http://127.0.0.1:$$port"; json='content-type: application/json'; \
@@ -245,9 +245,9 @@ deployed-boot:
 	else \
 	  want "GET /__test/clock (local shape)" "$$(code $$base/__test/clock)" 200; \
 	fi; \
-	tok=$$(curl -s -X POST -H "$$auth" -H "$$json" -d '{"name":"smoke"}' $$base/__test/session | sed -n 's/.*"token":"\(jmu_[^"]*\)".*/\1/p'); \
+	tok=$$(curl -q -s -X POST -H "$$auth" -H "$$json" -d '{"name":"smoke"}' $$base/__test/session | sed -n 's/.*"token":"\(jmu_[^"]*\)".*/\1/p'); \
 	if [ -z "$$tok" ]; then echo "deployed-boot: /__test/session gave no jmu_ token"; tail -20 "$$log"; exit 1; fi; \
-	podid=$$(curl -s -X POST -H "authorization: Bearer $$tok" -H "$$json" -d '{"name":"deployed-smoke"}' $$base/v1/pods | sed -n 's/.*"id":"\(pod_[^"]*\)".*/\1/p'); \
+	podid=$$(curl -q -s -X POST -H "authorization: Bearer $$tok" -H "$$json" -d '{"name":"deployed-smoke"}' $$base/v1/pods | sed -n 's/.*"id":"\(pod_[^"]*\)".*/\1/p'); \
 	if [ -z "$$podid" ]; then echo "deployed-boot: POST /v1/pods gave no pod id"; tail -20 "$$log"; exit 1; fi; \
 	want "GET /v1/pods/<pod>/me as its owner" "$$(code -H "authorization: Bearer $$tok" $$base/v1/pods/$$podid/me)" 200; \
 	want "GET /v1/pods/<pod>/me with no token" "$$(code $$base/v1/pods/$$podid/me)" 401; \
@@ -276,7 +276,7 @@ deployed-check:
 	base="$(DEPLOYED_URL)"; base="$${base%/}"; \
 	echo "$$base" | grep -E -q '^https?://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])(:[0-9]+)?$$' || { echo "deployed-check: DEPLOYED_URL must be http(s)://host[:port] with no path, query or credentials: $$base"; exit 1; }; \
 	hdr=$$(mktemp) || exit 1; body=$$(mktemp) || exit 1; trap 'rm -f -- "$$hdr" "$$body"' EXIT; \
-	get() { curl -s --proto '=http,https' --max-time 15 -D "$$hdr" -o "$$body" -w '%{http_code}' "$$@"; }; \
+	get() { curl -q -s --proto '=http,https' --max-time 15 -D "$$hdr" -o "$$body" -w '%{http_code}' "$$@"; }; \
 	has() { grep -i -q "^$$1:[[:space:]]*$$2" "$$hdr"; }; \
 	fail() { echo "deployed-check: $$1"; exit 1; }; \
 	want() { [ "$$2" = "$$3" ] || fail "$$1: got $$2, want $$3"; echo "deployed-check: ok $$1 -> $$2"; }; \

@@ -54,7 +54,10 @@ const IDLE_MS = 30000;
  */
 async function takeBootLock(sql: BunSql, schema: string | undefined, lost: (why: string) => void): Promise<string | undefined> {
   const conn = await sql.reserve();
-  const key = schema ?? 'public';
+  // Without PG_SCHEMA, unqualified queries resolve through the role's search_path, so the key is the schema they land in,
+  // not "public": a server with PG_SCHEMA=app and one whose search_path puts app first must meet on the same lock.
+  const [cur] = schema === undefined ? await conn.unsafe('select current_schema() as s') : [{ s: schema }];
+  const key = String(cur?.s ?? '');
   // Postgres 14 and later; an older one keeps the lock until its own TCP keepalive notices a vanished owner.
   await conn.unsafe(`set idle_session_timeout = ${IDLE_MS}`).catch(() => undefined);
   const until = Date.now() + LOCK_GRACE_MS;

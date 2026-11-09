@@ -215,7 +215,7 @@
         "one operator walks the slice by hand with real Claude Code and the result is noted in progress.md"
       ],
       "test": "go test ./daemon/... -run TestReplayClaude",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F17",

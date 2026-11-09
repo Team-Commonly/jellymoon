@@ -221,6 +221,7 @@ func TestF19(t *testing.T) {
 		{"the Linear token is absent from every agent-visible payload: tool lists, results, errors and the run's env", f.tokenAbsent},
 		{"a write call from the agent parks as a decision card with the exact arguments, and the stub Linear sees no write while it is parked", f.parks},
 		{"one approval releases exactly one upstream call; a rejection or expiry releases none", f.releasesOnce},
+		{"a connection's approver set: a listed member approves, an unlisted member is refused, and a removed approver is refused", f.approverSet},
 		{"the receipt is stamped by the server and links the card, the approver and the result", f.receipt},
 	}
 	for _, s := range steps {

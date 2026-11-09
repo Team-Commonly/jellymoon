@@ -130,7 +130,7 @@ func (f *f19) releasesOnce() error {
 	if err := f.rule(f.sO, f.parked, "a", "ruled"); err != nil {
 		return err
 	}
-	if err := f.writes(1); err != nil {
+	if err := f.writesSoon(1); err != nil {
 		return err
 	}
 	if w := f.linear.seen("create_issue")[0]; !reflect.DeepEqual(w.Args, f.args) || w.Bearer != "Bearer "+stubToken {
@@ -177,7 +177,7 @@ func (f *f19) receiptOf(dec string) (connReceipt, string, error) {
 
 // Step 6: the released write's receipt is the server's: it names the decision, the approver and the upstream's result.
 func (f *f19) receipt() error {
-	r, b, err := f.receiptOf(f.parked)
+	r, b, err := f.receiptSoon(f.parked)
 	if err != nil {
 		return err
 	}

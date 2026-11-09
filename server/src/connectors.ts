@@ -29,7 +29,7 @@ const connect = (kit: Kit) => async (k: Call): Promise<Response> => {
   const dest = await destFor(kit, { url });
   if (typeof dest === 'string') return bad(k.c, dest);
   const pin = pinOf(vendor);
-  const listed = await adapterOf(pin).list(dest, token);
+  const listed = await adapterOf(pin, kit.adapter).list(dest, token);
   if (!listed.ok) return fail(k.c, listed.code ?? 'upstream_failed', `Listing the upstream's operations failed (upstream status ${listed.status}): ${scrub(listed.error, token)}`.slice(0, 400));
   const drift = driftOf(pin, listed.ops);
   if (drift !== null) return fail(k.c, 'connector_drift', scrub(drift, token).slice(0, 400));

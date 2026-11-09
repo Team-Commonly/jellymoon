@@ -5,10 +5,14 @@ import type { Hub } from './hub';
 import { fail } from './kit';
 import type { Call } from './kit';
 import type { ConnRow } from './store';
+import type { Adapter } from './upstream';
 import type { Vault } from './vault';
 
-/** What every connector handler needs: the hub, the vault (undefined without JM_VAULT_KEY), whether this is ENV=local, and the resolver. */
-export interface Kit { hub: Hub; vault: Vault | undefined; local: boolean; resolve: Resolve }
+/**
+ * What every connector handler needs: the hub, the vault (undefined without JM_VAULT_KEY), whether this is ENV=local, and the
+ * resolver. `adapter` replaces the pin's protocol adapter in tests; the server never sets it.
+ */
+export interface Kit { hub: Hub; vault: Vault | undefined; local: boolean; resolve: Resolve; adapter?: Adapter }
 
 /** The checked, pinned destination of a stored connection, checked again for this one request; or why nothing may be sent. */
 export const destFor = (kit: Kit, c: Pick<ConnRow, 'url'>): Promise<Dest | string> => destOf(c.url, kit.local, kit.resolve);

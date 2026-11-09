@@ -60,7 +60,7 @@ async function read(kit: Kit, k: Call, conn: ConnRow, op: PinOp, row: CallRow, a
     return fail(k.c, 'upstream_failed', `${conn.vendor} ${op.name} was not called: ${dest}`, row.id);
   }
   const token = await kit.vault!.open(conn, aadOf(conn));
-  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(dest, token, op.name, args), token);
+  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor), kit.adapter).call(dest, token, op.name, args), token);
   await saveCall(kit.hub.db, { ...row, outcome: res.ok ? 'ok' : 'failed', upstreamStatus: res.status, settledAt: kit.hub.now() });
   if (!res.ok) return fail(k.c, res.code ?? 'upstream_failed', `${conn.vendor} ${op.name} failed (upstream status ${res.status}): ${res.error ?? ''}`.slice(0, 400), row.id);
   return k.c.json({ state: 'done', receiptId: row.id, result: res.result ?? {} });
@@ -112,7 +112,7 @@ async function release(kit: Kit, row: CallRow): Promise<void> {
   const dest = conn === undefined ? 'gone' : await destFor(kit, conn);
   if (conn === undefined || kit.vault === undefined || typeof dest === 'string') return void (await finishCall(kit.hub.db, row.id, 'failed', null, null));
   const token = await kit.vault.open(conn, aadOf(conn));
-  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(dest, token, row.operation, JSON.parse(row.args) as Record<string, unknown>), token);
+  const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor), kit.adapter).call(dest, token, row.operation, JSON.parse(row.args) as Record<string, unknown>), token);
   await finishCall(kit.hub.db, row.id, res.ok ? 'released' : 'failed', res.status, res.ok ? JSON.stringify(res.result ?? {}) : null);
 }
 

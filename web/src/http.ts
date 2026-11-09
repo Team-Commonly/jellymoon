@@ -4,7 +4,7 @@ import type { AcceptInviteResponse, Actor } from '../../gen/ts/protocol';
 export interface Http {
   acceptInvite(code: string): Promise<AcceptInviteResponse>;
   /** The person the session cookie belongs to, or null when nobody is signed in. */
-  me(): Promise<Actor | null>;
+  me(signal?: AbortSignal): Promise<Actor | null>;
   approveDevice(userCode: string): Promise<void>;
 }
 
@@ -18,8 +18,8 @@ export const browserHttp: Http = {
     if (!res.ok) throw new ApiError(res.status, 'request failed');
     return (await res.json()) as AcceptInviteResponse;
   },
-  async me() {
-    const res = await fetch('/v1/me', { credentials: 'same-origin' });
+  async me(signal) {
+    const res = await fetch('/v1/me', { credentials: 'same-origin', signal });
     if (res.status === 401) return null;
     if (!res.ok) throw new ApiError(res.status, 'request failed');
     return (await res.json()) as Actor;
@@ -29,6 +29,27 @@ export const browserHttp: Http = {
     if (!res.ok) throw new ApiError(res.status, 'request failed');
   },
 };
+
+/** How long the page waits for GET /v1/me before it renders as signed out. A server that takes the connection and never answers must not leave the page blank. */
+const BOOT_ME_TIMEOUT_MS = 5000;
+
+/**
+ * The boot decision: is the session cookie a signed-in person? Nobody, an unreachable server and a server that has not answered
+ * within `timeoutMs` all count as signed out. The request is aborted at the timeout, and the answer is also raced against it,
+ * so a client that ignores the signal still lets the page render.
+ */
+export async function bootSignedIn(http: Http, timeoutMs: number = BOOT_ME_TIMEOUT_MS): Promise<boolean> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  const timedOut = new Promise<null>((resolve) => ctl.signal.addEventListener('abort', () => resolve(null)));
+  try {
+    return (await Promise.race([http.me(ctl.signal), timedOut])) !== null;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** A non-2xx answer. The status is what screens branch on. */
 export class ApiError extends Error {

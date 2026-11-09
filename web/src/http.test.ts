@@ -34,4 +34,11 @@ describe('browserHttp cookie writes', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })));
     expect(await browserHttp.me()).toBeNull();
   });
+
+  it('me: hands the caller\'s abort signal to fetch', async () => {
+    const m = stub({ kind: 'human', id: 'usr_1', displayName: 'Ada' });
+    const ctl = new AbortController();
+    await browserHttp.me(ctl.signal);
+    expect((m.mock.calls[0] as unknown as [string, RequestInit])[1].signal).toBe(ctl.signal);
+  });
 });

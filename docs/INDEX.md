@@ -15,7 +15,8 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `adr/0009-connector-layer.md` | The connector layer in the pod-state server: the vault, the catalogue pin and drift check, the write gate, receipts; Worker not built, OAuth deferred |
 | `adr/0006-pod-state-server.md` | The decision that the server is one Bun process with Hono and Postgres, the five adapter duties, storage, test routes, and the two open questions |
 | `../worker/README.md` | The Cloudflare adapter in `worker/`: what it is, `make worker-dev`, `make e2e-a` |
-| `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the slice LOC caps |
+| `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the rule for raising a LOC cap |
+| `entropy/caps/` | One dated note per LOC cap change (area, old and new cap, measured count, why); `entropy.json` holds the numbers |
 | `adr/0002-claims-and-leases.md` | When a task claim's lease renews, expires and is released; the unknowns left open |
 | `adr/0003-pure-pod-core.md` | Why claims, leases and recourse are a pure module, and what an adapter must do around it |
 | `adr/0004-open-core-boundary.md` | Proposed: the Apache-2.0 core and the commercial `ee/`, the one-way import rule and the entitlement interface core calls |

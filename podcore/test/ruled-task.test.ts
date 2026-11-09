@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import type { PostInput } from '../../gen/ts/protocol';
 import { apply } from '../src';
 import type { Cmd } from '../src';
-import { AG1, CMP_1, RUN_A, U_OWNER, id, play, toComputer, wak, world } from './helpers';
+import { AG1, CITED, CMP_1, EVIDENCE, RUN_A, U_OWNER, id, play, toComputer, wak, world } from './helpers';
 
 // A receipt's taskId is the pod's own record of the task that woke the run. An ask's own taskId is the agent's word and never reaches it.
-const claim = { text: 'x', toolCalls: [id('tc', 1)] };
+const claim = { text: 'x', messages: [CITED] };
 const BOGUS = id('tsk', 99);
 const REAL = id('tsk', 1);
 const ask = (taskId?: string): PostInput => ({
@@ -14,7 +14,7 @@ const ask = (taskId?: string): PostInput => ({
   options: [{ id: 'a', label: 'A', consequence: 'c' }, { id: 'b', label: 'B', consequence: 'c' }],
 } as unknown as PostInput);
 const post = (input: PostInput, n: number, runId: string = RUN_A): Cmd => (
-  { type: 'post', caller: { kind: 'run', runId }, messageId: id('msg', n), decisionId: id('dec', n), wakeId: wak(n), harness: 'fake', input } as unknown as Cmd);
+  { type: 'post', caller: { kind: 'run', runId }, messageId: id('msg', n), decisionId: id('dec', n), wakeId: wak(n), harness: 'fake', input, evidence: EVIDENCE } as unknown as Cmd);
 const rule = { type: 'rule', caller: { kind: 'user', userId: U_OWNER.id }, decisionId: id('dec', 1), option: 'a', wakeId: wak(2) } as unknown as Cmd;
 const refsOf = (out: ReturnType<typeof play>['out']) => toComputer(out).flatMap((o) => (o.event.type === 'run.wake' ? [o.event.data.refs] : []));
 

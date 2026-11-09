@@ -5,17 +5,21 @@ import type { Json } from './world';
 // After a ruling the agent has to be able to act on it over HTTP and MCP alone: the wake names the decision, the option that won and
 // the task, and the feed shows the ask's decision ruled (the socket already gets this as message.updated).
 const TASK = 'tsk_00000000000000000000000001';
-const claim = { text: 'The tests passed.', toolCalls: [] as string[] };
-const ask = {
+/** An ask whose claims cite a message the pod holds (F25: every claim cites a record). */
+const askCiting = (messageId: string) => {
+  const claim = { text: 'The tests passed.', messages: [messageId] };
+  return {
   summary: 'Merge or wait?', kind: 'ask', status: 'blocked', needs: { to: { role: 'owner' }, action: 'approve' }, taskId: TASK,
   options: [{ id: 'a', label: 'Merge', consequence: 'It merges.' }, { id: 'b', label: 'Wait', consequence: 'It waits.' }],
   context: { happened: [claim], checked: [], stakes: claim, recommendation: { option: 'a', why: claim } },
+  };
 };
 
 test('a ruling wakes the asker with the decision, the chosen option and the task, and the feed (HTTP and MCP) shows it ruled', async () => {
   const w = await world();
   const run = (await w.call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json;
-  const posted = (await w.call('POST', `/v1/pods/${w.pod.id}/messages`, run.runToken, ask)).json;
+  const cited = (await w.call('POST', `/v1/pods/${w.pod.id}/messages`, run.runToken, { summary: 'The tests passed', kind: 'progress', status: 'done' })).json.messageId;
+  const posted = (await w.call('POST', `/v1/pods/${w.pod.id}/messages`, run.runToken, askCiting(cited))).json;
   const ruled = await w.rt.exec({ type: 'rule', caller: { kind: 'user', userId: w.olivia.user.id }, decisionId: posted.decisionId, option: 'b', wakeId: 'wak_00000000000000000000000009' });
   expect(ruled?.ok).toBe(true);
   expect(w.rt.state.wakes[w.agent.agentId].refs).toEqual({ decisionId: posted.decisionId, messageId: posted.messageId, optionId: 'b', taskId: TASK });

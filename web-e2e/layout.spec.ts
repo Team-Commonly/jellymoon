@@ -139,7 +139,7 @@ test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, 
   const body = `${UNBROKEN}\n${'A long line of body text that has to wrap and never push the page wider than the screen. '.repeat(4)}`;
   await pod.agent.post({ summary: UNBROKEN, kind: 'fyi', status: 'in_progress', body });
   await pod.agent.post({ summary: 'Tests green on the fix branch', kind: 'fyi', status: 'done' });
-  await pod.agent.post({ ...askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }), body: 'The diff touches only the session middleware.' });
+  await pod.agent.post({ ...askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }, pod.agent.cited), body: 'The diff touches only the session middleware.' });
   await openPod(page, pod);
   await expect(page.getByRole('article')).toHaveCount(3);
   await holdsLayout(page, '/pod/:id folded');
@@ -171,8 +171,8 @@ test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, 
 });
 
 test('the needs-you filter keeps its layout, with an ask, and when nothing needs you', async ({ page, pod }) => {
-  await pod.agent.post(askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }));
-  await pod.agent.post(askInput('Rename the billing table?', { userIds: [pod.other.user.id] }));
+  await pod.agent.post(askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }, pod.agent.cited));
+  await pod.agent.post(askInput('Rename the billing table?', { userIds: [pod.other.user.id] }, pod.agent.cited));
   await openPod(page, pod);
   const toggle = page.getByRole('button', { name: /^Needs you · / });
   await expect(toggle).toHaveText('Needs you · 1');
@@ -188,6 +188,25 @@ test('the needs-you filter keeps its layout, with an ask, and when nothing needs
   await page.keyboard.press('Enter');
   await expect(page.getByText('Nothing needs you')).toBeVisible();
   await holdsLayout(page, '/pod/:id?filter=needs-you with nothing left');
+});
+
+test('/ keeps its layout signed out, signed in, and with a failure showing', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: 'Sign in with GitHub to start a pod' })).toBeVisible();
+  await holdsLayout(page, '/ signed out');
+
+  await signIn(page, await person('Ada'));
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Create' })).toBeVisible();
+  await holdsLayout(page, '/ signed in');
+
+  // The longest name the schema allows, unbroken, in the field; then a refusal from the server shows inline.
+  await page.getByLabel('Pod name').fill(UNBROKEN.slice(0, 80));
+  await holdsLayout(page, '/ with a long name');
+  await page.route('**/v1/pods', (route) => route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ code: 'invalid_input', message: `That name does not work: ${UNBROKEN}` }) }));
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await holdsLayout(page, '/ with a failure');
 });
 
 test('/invite/:token keeps its layout signed out, signed in, and when the link is spent', async ({ page }) => {

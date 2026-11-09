@@ -54,6 +54,7 @@ export function PodPage({ connect }: { connect: (podId: string) => Connect }) {
     toggleFilter: filter.toggle,
     focusComposer: () => composer.current?.focus(),
   });
+  const working = state.agents.filter((a) => a.state === 'working').map((a) => a.agent.displayName);
   const pending = k.keys.confirm ? cards[k.keys.focus]?.ask?.options.find((o) => o.id === k.keys.confirm)?.label : undefined;
   return (
     <>
@@ -76,6 +77,7 @@ export function PodPage({ connect }: { connect: (podId: string) => Connect }) {
           />
         ))}
       </section>
+      <p aria-live="polite">{working.length === 0 ? '' : `${working.join(', ')} ${working.length === 1 ? 'is' : 'are'} working.`}</p>
       <div role="status" aria-live="polite">{pending ? `Rule ${pending}? Press Enter to rule, Escape to cancel.` : ''}</div>
       <Composer inputRef={composer} onPost={(t) => store.post(t)} error={state.postError} />
     </>

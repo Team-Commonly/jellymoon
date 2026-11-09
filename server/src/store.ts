@@ -213,3 +213,17 @@ export const saveToolCall = (db: Db, r: ToolCallRow): Promise<unknown> =>
 /** A run's records in the order the pod counted them, at most `limit`. */
 export const toolCallsOf = (db: Db, pod: string, run: string, limit: number): Promise<ToolCallRow[]> =>
   db.rows<ToolCallRow>('select id, pod, run, n, name, status, started_at as "startedAt", ended_at as "endedAt", digest from tool_calls where pod = $1 and run = $2 order by n limit $3', [pod, run, limit]);
+
+const marks = (n: number, from: number): string => Array.from({ length: n }, (_, i) => `$${i + from}`).join(', ');
+
+/** The cited records among `ids` that are this pod's: the run each is on and its digest (F25, grounding). */
+export const toolCallsById = (db: Db, pod: string, ids: string[]): Promise<{ id: string; run: string; digest: string }[]> => (ids.length === 0 ? Promise.resolve([])
+  : db.rows('select id, run, digest from tool_calls where pod = $1 and id in (' + marks(ids.length, 2) + ')', [pod, ...ids]));
+
+/** The messages among `ids` that this pod's log holds, as stored (F25, grounding). The log is the only place a message lives. */
+export async function messagesById(db: Db, pod: string, ids: string[]): Promise<{ id: string; summary: string; body?: string }[]> {
+  if (ids.length === 0) return [];
+  const rows = await db.rows<{ envelope: unknown }>(`select envelope from events where pod = $1 and (envelope::jsonb ->> 'type') = 'message.created'
+    and (envelope::jsonb -> 'data' ->> 'id') in (${marks(ids.length, 2)})`, [pod, ...ids]);
+  return rows.map((r) => json<{ data: { id: string; summary: string; body?: string } }>(r.envelope).data);
+}

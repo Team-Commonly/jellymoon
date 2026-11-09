@@ -40,6 +40,29 @@ func TestRefusalNamesNoCredentials(t *testing.T) {
 	}
 }
 
+// An error names the method and the route, never the query string: a query value can come from argv, and argv can hold a
+// pasted credential. Covered: a refused connection, a status with no error body, and a server refusal.
+func TestErrorsNameNoQueryValue(t *testing.T) {
+	secret := "lin" + "_api_" + "EXAMPLE" + "0123456789abcdef"
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }))
+	defer plain.Close()
+	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`{"code":"invalid_request","message":"bad decision id"}`))
+	}))
+	defer refusing.Close()
+	for _, server := range []string{"http://127.0.0.1:1", plain.URL, refusing.URL} {
+		c, err := New(server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = c.ConnectorReceipts("jmu_test", "pod_01ARZ3NDEKTSV4RRFFQ69G5FAV", &secret, 5)
+		if err == nil || strings.Contains(err.Error(), "EXAMPLE") || strings.Contains(err.Error(), "?") || !strings.Contains(err.Error(), "GET /v1/pods/") {
+			t.Errorf("%s: error %v; want the method and route, with no query string", server, err)
+		}
+	}
+}
+
 // A redirect is never followed, so a token cannot be sent on to the host a server points at.
 func TestNoRedirects(t *testing.T) {
 	var hit bool

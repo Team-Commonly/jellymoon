@@ -70,8 +70,11 @@ const applyPresence = on<PresenceChanged>((s, p) => ({
 
 const SEQ_EVENTS: Record<string, Apply> = {
   'message.created': applyCreated, 'message.updated': applyUpdated, 'task.created': applyTask, 'task.updated': applyTask,
-  'task.claimed': applyClaimed, 'claim.released': applyReleased, 'presence.changed': applyPresence,
+  'task.claimed': applyClaimed, 'claim.released': applyReleased,
 };
+// Live events carry no seq and are never replayed on subscribe (podcore/src/presence.ts), so they apply as they come and
+// leave lastSeq alone.
+const LIVE_EVENTS: Record<string, Apply> = { 'presence.changed': applyPresence };
 
 function applyError(s: PodState, e: ErrorBody): PodState {
   // ref = the ruling's decision id; no ref (an older server) means the most recent waiting ruling; a stale ref changes nothing.
@@ -105,8 +108,9 @@ export function createPodStore(opts: { podId: string; connect: Connect; schedule
       if (typeof env.type !== 'string' || typeof env.data !== 'object' || env.data === null) throw new Error('bad frame');
       if (env.type === 'hello') return set(applyHello(state, env.data as never));
       if (env.type === 'error') return set(applyError(state, env.data as unknown as ErrorBody));
+      if (env.seq === undefined) return LIVE_EVENTS[env.type] ? set(LIVE_EVENTS[env.type](state, env.data as never)) : undefined;
       const apply = SEQ_EVENTS[env.type];
-      if (!apply || env.seq === undefined || env.seq <= state.lastSeq) return;
+      if (!apply || env.seq <= state.lastSeq) return;
       set({ ...apply(state, env.data as never), lastSeq: env.seq });
     } catch { set({ ...state, droppedFrames: state.droppedFrames + 1 }); }
   }

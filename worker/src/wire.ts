@@ -65,6 +65,8 @@ export interface PodPort {
   readonly meta: PodMeta;
   exec(cmd: Cmd, o?: Opts): Reply | undefined;
   eventsAfter(since: number, limit: number): AnyEvent[];
+  /** The messages among `ids` that this pod's log holds, as stored: what an ask's claims may cite (F25). */
+  messagesById(ids: string[]): Array<{ id: string; summary: string; body?: string }>;
   now(): number;
   sql: SqlStorage;
 }

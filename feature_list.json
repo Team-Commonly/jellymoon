@@ -283,6 +283,34 @@
       ],
       "test": "go test ./e2e -run TestF21 (server; the Worker adds TestF21 to E2E_A_SKIP, docs/development/e2e-contract.md)",
       "passes": true
+    },
+    {
+      "id": "F22",
+      "category": "connector",
+      "description": "A pod owner connects a connector, grants it to an agent and names approvers from the CLI, not hand-built HTTP",
+      "steps": [
+        "jellymoon connector connect reads the token from JELLYMOON_CONNECTOR_TOKEN or a hidden prompt, never argv, and the token is never printed, logged or written to the config dir",
+        "connector grant takes --access read or write-with-confirm, and --access write is refused client-side",
+        "connector approvers replaces the set and an empty list clears it",
+        "connector list shows pinned operations by access level and never a credential; connector receipts shows the server's receipts",
+        "a drift refusal prints connector_drift naming the operation; a non-owner gets forbidden and a non-zero exit"
+      ],
+      "test": "go test ./e2e -run TestF22 (server; against the stub Linear F19 uses; Worker skip listed in E2E_A_SKIP and docs/development/e2e-contract.md)",
+      "passes": true
+    },
+    {
+      "id": "F25",
+      "category": "evidence",
+      "description": "An ask whose claims cite nothing, or whose numbers are not in the cited call, is refused ungrounded",
+      "steps": [
+        "an ask with a claim citing nothing gets 422 ungrounded",
+        "a cite of an id that is not a record in this pod, or a tool call from another agent's run, gets ungrounded",
+        "a number in a claim's text that is in neither the cited call's digest nor a cited message gets ungrounded",
+        "a fully cited ask is accepted and F11, F12 and F14 still pass",
+        "the refusal names the claim index and never echoes the digest"
+      ],
+      "test": "go test ./e2e -run TestF25 (server; the Worker adds TestF25 to E2E_A_SKIP, docs/development/e2e-contract.md)",
+      "passes": true
     }
   ]
 }

@@ -9,7 +9,10 @@ Run it against the pod-state server (ADR 0006) with `make e2e` (the same as `mak
 with `make e2e-a`, or against any other server with `JM_E2E_SERVER='<shell command>' make e2e-any`. With `JM_E2E_SERVER` unset
 every test skips, so `make test` stays green. `make e2e`, `make e2e-c` and `make e2e-a` end with `E2E_MS=<n> STEPS=<k>/<k>`.
 `make e2e-deployed` (CI's `e2e-deployed` job) runs the same suite with the server's release bundle as the server under test, after
-`make deployed-boot` has started that bundle as its own process and checked it by URL (ADR 0006, "Deployed form").
+`make deployed-boot` has started that bundle as its own process and checked it by URL (ADR 0006, "Deployed form"). In the hosted
+shape that run ends with the read-only checks, which also run alone against any running instance with
+`make deployed-boot DEPLOYED_URL=<base>`: they only read, send no credential, and start, stop and sign in nothing, so they are
+safe against an instance with real users (ADR 0010, "CI deploy"; the Makefile comment above `deployed-check` lists each check).
 
 ## How the suite starts the server
 
@@ -222,11 +225,19 @@ the adapter Jellymoon runs and supersedes the Durable Object for new features, s
 |---|---|
 | `TestF19` | The connector layer (vault, catalogue pin, write gate, receipts) lives in the pod-state server (ADR 0006, ADR 0009). The Worker has no connector routes or operations. |
 | `TestF21` | Evidence (the tool-call records and the `evidence` read) is served by the pod-state server only (ADR 0006, "Evidence"). The Worker still counts MCP calls for the receipt but keeps no records, and answers `not_found` for the read. |
+| `TestF22` | `jellymoon connector connect\|grant\|approvers\|list\|receipts` call the connector routes of the pod-state server (ADR 0009), which the Worker does not serve. |
+| `TestF25` | Grounding cites tool-call records, which the Worker does not keep. It runs the same core check with the messages its log holds and no tool calls, so an ask citing a tool call is `ungrounded` there and one citing only messages is checked as on the server (`worker/test/tool-desc.test.ts`). The asks of `TestF11`, `TestF12` and `TestF14` cite a person's message, so they run on both. |
 
 `TestF19` starts its server with `JM_VAULT_KEY` (the harness's per-server environment, `startServer(t, env...)`) and a stub
 Linear inside the test: an MCP-over-HTTP JSON-RPC server on 127.0.0.1 that requires the stub bearer and records every
 `tools/call`. The agent's environment it scans is the run claim answer (`POST /v1/runs`), which is everything the daemon builds
 the agent's environment from.
+
+`TestF22` builds the CLI (`jellymoon connector ...`) and runs it as the pod owner and as a member, against the same kind of world
+and stub Linear, behind a recording proxy. The CLI has no controlling terminal (`Setsid`), so the hidden token prompt cannot open
+and a missing credential must fail. The step that scans for the stub's credential covers every command line, stdout and stderr,
+the config dir, the server log and every recorded request and answer; the credential may appear only in the bodies of the three
+connects that reached the server.
 
 ## The server's partly skipped step
 
@@ -237,6 +248,21 @@ in the database, so the `--persist-to` directory holds no files. `TestF02` still
 `TestRestartPastDeadline`, which kill -9 the server and read back events and a lease. The server writes no marker file: a file
 made only to satisfy the check would prove nothing. Against PGlite (no `DATABASE_URL`) the directory holds the database files
 and the check runs in full.
+
+## Runs on a real Postgres only
+
+`TestBootLock` starts two servers on one database and needs that database to be shared, so it runs only when state lives in a
+real Postgres (`JM_E2E_STATE_IN_DB=1`, which is how CI runs `make e2e-c`); anywhere else it skips and says so. The first server
+holds the boot lock (ADR 0010, "A rollout's overlap"), a session-level advisory lock keyed to its schema. The second, given the
+same data dir and so the same schema, must exit before `/healthz` answers, name the lock, and accept no write. After the first is
+killed with `kill -9`, the same start succeeds and serves the first server's pod. On PGlite the data dir is one process's own
+database files and on the Worker each process keeps its own state, so there is no second process to meet. Without a local
+Postgres the order of the boot (the lock before the first statement, nothing restored when it is refused) is pinned by
+`server/test/boot-lock.test.ts`.
+
+The lock behaviour: a refused start retries for 2 s (a just-killed owner's session can take a moment to close), then exits 1.
+The holder re-checks its lock every 5 s and exits if it is gone, and its session carries `idle_session_timeout` (30 s), so an
+owner whose host vanished frees the lock within about that long instead of waiting on TCP keepalive.
 
 ## Output lines
 

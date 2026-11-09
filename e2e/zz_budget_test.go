@@ -59,6 +59,25 @@ func TestBudgetVerdict(t *testing.T) {
 	}
 }
 
+// TestSuiteParallel checks the slot count TestMain gives the run; it needs no server.
+func TestSuiteParallel(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		given, procs int
+		set          bool
+		want         int
+	}{
+		{"unset: one slot per CPU plus the budget test's", 4, 4, false, 5},
+		{"unset on one CPU: two, so the budget test cannot deadlock", 1, 1, false, 2},
+		{"set by hand: kept as given", 3, 4, true, 3},
+		{"set to 1 by hand: kept, and the budget test says so", 1, 4, true, 1},
+	} {
+		if got := suiteParallel(c.set, c.given, c.procs); got != c.want {
+			t.Errorf("%s: %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
 // TestF14Budget: the whole suite, run in one invocation against a fake clock, finishes in under 60 s.
 // The suite tests run in parallel (par), so this one is parallel too and waits for all of them to finish before it
 // judges the run. It fails if a suite test failed or never reported, and skips on a run narrowed with -run.

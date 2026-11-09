@@ -18,6 +18,7 @@ import (
 // changes nothing, the production builds have no /__test handler, and a pod owner's stop ends a live run at once.
 func TestF13(t *testing.T) {
 	needFake(t)
+	par(t)
 	w := newWorld(t)
 	keep := w.f13CrossPod()
 	w.f13EndedRun(keep)

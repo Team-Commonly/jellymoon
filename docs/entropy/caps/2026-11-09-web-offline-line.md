@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: web-offline-line
+
+2026-11-09: web cap 2,710 -> 2,860. A person who @mentions an agent whose computer is offline now sees "<agent> is offline. It will pick this up when its computer reconnects.", one line per agent, while its wake waits in the pod. `web/src/store.ts` keeps the agents a person's message mentioned after the page's first hello, read with the pod core's own mention rule, and drops one on its run.started; the pod screen shows the line while that agent's presence is offline and it has no going run. The rest is ten tests in `web/src/WaitingLines.test.tsx`. The tree printed `LOC budget: web 2851 > 2710`; the cap is the count rounded up to ten. No other cap changes.

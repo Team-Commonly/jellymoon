@@ -67,7 +67,8 @@ async function sockets(between?: (s: Awaited<ReturnType<typeof setup>>, token: s
   return { s, srv, hash: hashToken(token), dial };
 }
 
-const settle = async (until: () => boolean): Promise<void> => { for (let i = 0; i < 100 && !until(); i++) await Bun.sleep(10); };
+const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
+const settle = async (until: () => boolean): Promise<void> => { for (let i = 0; i < 100 && !until(); i++) await sleep(10); };
 
 test('a token hash leaves hub.sockets when its last real socket closes', async () => {
   const { s, srv, hash, dial } = await sockets();
@@ -87,7 +88,7 @@ test('a logout between the upgrade\'s authentication and the socket opening leav
   const logout = (x: Awaited<ReturnType<typeof setup>>, token: string) => x.call('POST', '/v1/auth/logout', token);
   const { s, srv, hash, dial } = await sockets(logout);
   const a = dial();
-  expect(await Promise.race([a.first, Bun.sleep(1000).then(() => 'still open')])).toBe('close 1008');
+  expect(await Promise.race([a.first, sleep(1000).then(() => 'still open')])).toBe('close 1008');
   await settle(() => !s.hub.sockets.has(hash));
   expect(s.hub.sockets.has(hash)).toBe(false);
   srv.stop(true);

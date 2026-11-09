@@ -12,7 +12,15 @@ export interface Http {
   stopRun(podId: string, runId: string): Promise<void>;
   /** Makes a pod owned by the signed-in person. A refusal throws an ApiError carrying the server's own message. */
   createPod(name: string): Promise<Pod>;
+  /**
+   * May the signed-in person open this pod? GET /v1/pods/:pod/me: 404 (no such pod) and 403 (not a member) are `refused`, 401
+   * is `signed-out`. Any other status throws an ApiError, and a network failure throws too: neither is an answer.
+   */
+  podAccess(podId: string): Promise<PodAccess>;
 }
+
+/** What GET /v1/pods/:pod/me says about the caller and a pod. */
+export type PodAccess = 'member' | 'refused' | 'signed-out';
 
 /** The GitHub sign-in, which brings the person back to `path` (a same-origin path) with the session cookie set. */
 export const signInHref = (path: string): string => `/v1/auth/github/start?next=${encodeURIComponent(path)}`;
@@ -50,6 +58,13 @@ export const browserHttp: Http = {
       throw new ApiError(res.status, typeof body?.message === 'string' && body.message !== '' ? body.message : `the server returned an error (${res.status}). Try again.`);
     }
     return (await res.json()) as Pod;
+  },
+  async podAccess(podId) {
+    const res = await fetch(`/v1/pods/${encodeURIComponent(podId)}/me`, { credentials: 'same-origin' });
+    if (res.ok) return 'member';
+    if (res.status === 404 || res.status === 403) return 'refused';
+    if (res.status === 401) return 'signed-out';
+    throw new ApiError(res.status, 'request failed');
   },
 };
 

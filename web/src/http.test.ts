@@ -60,6 +60,28 @@ describe('browserHttp readInvite', () => {
   });
 });
 
+describe('browserHttp podAccess', () => {
+  const answering = (status: number) => vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status })));
+
+  it('GETs the pod\'s whoami over the cookie, the id escaped in the path', async () => {
+    const m = stub({ podId: 'pod 1' });
+    expect(await browserHttp.podAccess('pod 1')).toBe('member');
+    const [url, init] = m.mock.calls[0] as unknown as [string, RequestInit];
+    expect({ url, method: init.method ?? 'GET', credentials: init.credentials }).toEqual({ url: '/v1/pods/pod%201/me', method: 'GET', credentials: 'same-origin' });
+  });
+
+  it('reads 404 and 403 as refused and 401 as signed out, and throws on anything else', async () => {
+    answering(404);
+    expect(await browserHttp.podAccess('p')).toBe('refused');
+    answering(403);
+    expect(await browserHttp.podAccess('p')).toBe('refused');
+    answering(401);
+    expect(await browserHttp.podAccess('p')).toBe('signed-out');
+    answering(502);
+    await expect(browserHttp.podAccess('p')).rejects.toMatchObject({ status: 502 });
+  });
+});
+
 describe('browserHttp stopRun', () => {
   it('POSTs the run\'s stop route over the cookie as JSON, ids escaped in the path', async () => {
     const m = stub({ runId: 'run_1', outcome: 'cancelled' });

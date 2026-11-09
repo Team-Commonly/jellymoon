@@ -12,11 +12,22 @@ import { podNamespace, sqliteD1, workerFile } from './d1';
 const names = readdirSync(new URL('../migrations', import.meta.url)).sort();
 const migration = (n: string): string => workerFile(`migrations/${n}`);
 
-/** Every table's columns and every index, as SQLite reports them. */
+/**
+ * Every table's columns, indexes (UNIQUE and primary-key ones included, with their columns) and foreign keys, as SQLite
+ * reports them through its pragmas.
+ */
 function shape(db: Database): unknown {
   const tables = db.prepare("select name from sqlite_master where type = 'table' and name not like 'sqlite_%' order by name").all() as { name: string }[];
   const indexes = db.prepare("select name, tbl_name from sqlite_master where type = 'index' and sql is not null order by name").all();
-  return { indexes, tables: tables.map((t) => [t.name, db.prepare(`select name, type, "notnull", dflt_value, pk from pragma_table_info('${t.name}')`).all()]) };
+  const of = (t: string) => {
+    const idx = db.prepare(`select name, "unique", origin, partial from pragma_index_list('${t}') order by name`).all() as { name: string }[];
+    return {
+      columns: db.prepare(`select name, type, "notnull", dflt_value, pk from pragma_table_info('${t}')`).all(),
+      indexes: idx.map((i) => [i, db.prepare(`select seqno, name from pragma_index_info('${i.name}') order by seqno`).all()]),
+      foreignKeys: db.prepare(`select "table", "from", "to", on_update, on_delete from pragma_foreign_key_list('${t}') order by id, seq`).all(),
+    };
+  };
+  return { indexes, tables: tables.map((t) => [t.name, of(t.name)]) };
 }
 
 test('the migrations are numbered the way wrangler applies them, and together make what schema.sql makes', () => {

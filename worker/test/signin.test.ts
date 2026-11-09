@@ -4,6 +4,7 @@ import { addPod, authenticate, createComputer, createUser, mint } from '../src/d
 import type { Env } from '../src/env';
 import { handle } from '../src/front';
 import { hashToken } from '../src/ids';
+import { TOKEN_HEADER } from '../src/wire';
 import { podNamespace, sqliteD1, workerFile } from './d1';
 
 // The sign-in hardening follow-ups (ADR 0008, "Hardening"), on a real SQLite behind the D1 calls and a fake pod namespace.
@@ -64,4 +65,45 @@ test('the socket\'s token_pods row is written before the pod opens it, and dropp
   expect(await dial('throw')).toEqual({ during: 1, after: 0, status: undefined });
   // A row another socket of the same token already needs stays when this one fails.
   expect(await dial('refuse', true)).toEqual({ during: 1, after: 1, status: 403 });
+});
+
+/**
+ * A logout racing the socket's dial. The pod keeps open sockets by token hash, as PodDO tags them, and close-token closes them.
+ * `when` is where the logout lands: after the Worker authenticated but before it wrote token_pods ('before-row'), or while the
+ * pod is opening the socket, so its close-token arrives before the socket is there ('in-pod').
+ */
+async function raceLogout(when: 'before-row' | 'in-pod'): Promise<{ open: number; rows: number; status?: number }> {
+  const raw = fresh();
+  const { token } = await createUser(raw, 'ana', 0);
+  await addPod(raw, 'pod_1');
+  const sockets = new Map<string, number>();
+  let env = {} as Env;
+  const logout = (): Promise<unknown> => authRoute(new Request('https://w.example/v1/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }), env, 1);
+  const POD = podNamespace(async (_pod, req) => {
+    if (new URL(req.url).pathname === '/_in/close-token') { sockets.delete(((await req.json()) as { hash: string }).hash); return Response.json({}); }
+    if (when === 'in-pod') await logout();
+    const hash = req.headers.get(TOKEN_HEADER) ?? '';
+    sockets.set(hash, (sockets.get(hash) ?? 0) + 1);
+    return { status: 101 } as Response;
+  });
+  let fired = when !== 'before-row';
+  const db = { ...(raw as unknown as Record<string, unknown>), prepare: (q: string) => {
+    const s = raw.prepare(q);
+    if (fired || !q.startsWith('insert or ignore into token_pods')) return s;
+    fired = true;
+    return { bind: (...a: unknown[]) => { const b = s.bind(...a); return { first: async () => { await logout(); return b.first(); } }; } };
+  } } as unknown as D1Database;
+  env = { DB: db, POD, CLOCK_MS: 0 } as unknown as Env;
+  const req = new Request('https://w.example/v1/pods/pod_1/ws', { headers: { Authorization: `Bearer ${token}`, Upgrade: 'websocket' } });
+  const status = await handle(req, env).then((r) => r.status, () => undefined);
+  const rows = (await raw.prepare('select count(*) as n from token_pods').first<{ n: number }>())?.n ?? -1;
+  return { open: [...sockets.values()].reduce((a, b) => a + b, 0), rows, status };
+}
+
+test('a logout between the Worker\'s authentication and its token_pods row leaves no socket open', async () => {
+  expect(await raceLogout('before-row')).toEqual({ open: 0, rows: 0, status: 401 });
+});
+
+test('a logout whose close reaches the pod before the socket is accepted leaves no socket open', async () => {
+  expect(await raceLogout('in-pod')).toEqual({ open: 0, rows: 0, status: 401 });
 });

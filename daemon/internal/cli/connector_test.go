@@ -57,6 +57,31 @@ func TestConnectorConnectNeverEchoesAnArgument(t *testing.T) {
 	}
 }
 
+// A credential pasted where the flag parser looks, as a flag name, a flag value it rejects or a malformed flag, is refused in
+// general terms with the usage, and the parser never prints it.
+func TestConnectorFlagErrorsNeverEchoTheArgument(t *testing.T) {
+	secret := "lin" + "_api_" + "EXAMPLE" + "0123456789abcdef"
+	base := map[string][]string{
+		"connect":   {"connector", "connect", "linear", "--pod", testPod, "--url", "https://x.example/mcp"},
+		"grant":     {"connector", "grant", "--pod", testPod, "--connection", "con_x", "--agent", "agt_x", "--access", "read"},
+		"approvers": {"connector", "approvers", "--pod", testPod, "--connection", "con_x", "--users", ""},
+		"list":      {"connector", "list", "--pod", testPod},
+		"receipts":  {"connector", "receipts", "--pod", testPod},
+	}
+	for name, args := range base {
+		for _, stray := range []string{"--" + secret, "-" + secret + "=x", "---" + secret, secret, "--limit=" + secret} {
+			code, out := runMain(t, append(append([]string{}, args...), stray)...)
+			if code == 0 || strings.Contains(out, "EXAMPLE") {
+				t.Errorf("%s with a stray argument: exit %d, output %q; want a refusal that does not echo it", name, code, out)
+				continue
+			}
+			if strings.HasPrefix(stray, "-") && (!strings.Contains(out, "unknown flag") || !strings.Contains(out, "jellymoon connector "+name+" ")) {
+				t.Errorf("%s with a stray flag: output %q; want it to say unknown flag and show the usage", name, out)
+			}
+		}
+	}
+}
+
 // Leaving --users out is an error, so a typo cannot clear a connection's approvers; --users "" is how to clear them.
 func TestConnectorApproversNeedsUsersFlag(t *testing.T) {
 	code, out := runMain(t, "connector", "approvers", "--pod", testPod, "--connection", "con_x")

@@ -40,14 +40,16 @@ func connectorCmd(args []string, stdout, stderr io.Writer) error {
 }
 
 // parse reads the flags of one subcommand. A stray argument is refused without being printed: it may be a pasted credential.
-func parse(name string, args []string, stderr io.Writer, set func(*flag.FlagSet)) (*flag.FlagSet, *string, error) {
+// The flag package's own output and errors quote the argument (a flag name, a value it rejects), so neither is shown: a parse
+// error becomes a fixed message and the subcommand's usage.
+func parse(name string, args []string, set func(*flag.FlagSet)) (*flag.FlagSet, *string, error) {
 	fs := flag.NewFlagSet("connector "+name, flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	pod := fs.String("pod", "", "the pod")
 	set(fs)
 	if err := fs.Parse(args); err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("unknown flag or bad flag value (not repeated here; it may be a credential)\nusage:\n%s", usageOf("jellymoon connector "+name+" "))
 	}
 	if fs.NArg() > 0 {
 		return nil, nil, errors.New("unexpected extra argument (a credential is never an argument)")
@@ -91,6 +93,17 @@ func refusal(err error) error {
 	return err
 }
 
+// usageOf returns the usage lines that start with prefix, so a refusal shows one command's usage, not the whole list.
+func usageOf(prefix string) string {
+	var b strings.Builder
+	for _, l := range strings.Split(usage, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(l), prefix) {
+			b.WriteString(l + "\n")
+		}
+	}
+	return strings.TrimSuffix(b.String(), "\n")
+}
+
 func connectorConnect(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return errors.New("connect needs a vendor first, such as linear")
@@ -100,7 +113,7 @@ func connectorConnect(args []string, stdout, stderr io.Writer) error {
 		return errors.New("unknown vendor; the supported one is linear")
 	}
 	var upstream *string
-	fs, pod, err := parse("connect", args[1:], stderr, func(fs *flag.FlagSet) {
+	fs, pod, err := parse("connect", args[1:], func(fs *flag.FlagSet) {
 		upstream = fs.String("url", "", "the upstream's endpoint, https")
 	})
 	if err != nil {
@@ -132,7 +145,7 @@ func connectorConnect(args []string, stdout, stderr io.Writer) error {
 
 func connectorGrant(args []string, stdout, stderr io.Writer) error {
 	var conn, agent, access *string
-	_, pod, err := parse("grant", args, stderr, func(fs *flag.FlagSet) {
+	_, pod, err := parse("grant", args, func(fs *flag.FlagSet) {
 		conn = fs.String("connection", "", "the connection id")
 		agent = fs.String("agent", "", "the agent id")
 		access = fs.String("access", "", "read or write-with-confirm")
@@ -165,7 +178,7 @@ func connectorGrant(args []string, stdout, stderr io.Writer) error {
 
 func connectorApprovers(args []string, stdout, stderr io.Writer) error {
 	var conn, users *string
-	fs, pod, err := parse("approvers", args, stderr, func(fs *flag.FlagSet) {
+	fs, pod, err := parse("approvers", args, func(fs *flag.FlagSet) {
 		conn = fs.String("connection", "", "the connection id")
 		users = fs.String("users", "", "the pod members who may approve its writes, comma separated; \"\" clears the set")
 	})

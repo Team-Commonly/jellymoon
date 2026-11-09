@@ -14,7 +14,7 @@ import (
 // person the pin and no grants, so this is what a grant would allow, not who holds one. It never shows a credential: the
 // server has none to give.
 func connectorList(args []string, stdout, stderr io.Writer) error {
-	_, pod, err := parse("list", args, stderr, func(*flag.FlagSet) {})
+	_, pod, err := parse("list", args, func(*flag.FlagSet) {})
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func orNone(names []string) string {
 func connectorReceipts(args []string, stdout, stderr io.Writer) error {
 	var decision *string
 	var limit *int
-	_, pod, err := parse("receipts", args, stderr, func(fs *flag.FlagSet) {
+	_, pod, err := parse("receipts", args, func(fs *flag.FlagSet) {
 		decision = fs.String("decision", "", "only the receipt of the write this decision holds")
 		limit = fs.Int("limit", 0, "at most this many, 1 to 100 (default: the server's 20)")
 	})

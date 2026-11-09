@@ -273,8 +273,8 @@ func (f *f22) noToken() error {
 	}
 	carried := 0
 	for _, h := range f.rec.hitsAll() {
-		if leakIn(h.Out) != "" || strings.Contains(h.Auth, stubToken) || strings.Contains(h.Path, stubToken) {
-			return fmt.Errorf("the credential is in the answer to, or the path or header of, %s %s", h.Method, h.Path)
+		if leakIn(h.Out) != "" || leakIn([]byte(h.Path+"?"+h.Query+" "+fmt.Sprint(h.Head))) != "" {
+			return fmt.Errorf("the credential is in the answer to, or the path, query or a header of, %s %s", h.Method, h.Path)
 		}
 		if leakIn(h.In) != "" {
 			if h.Method != "POST" || h.Path != f.podPath("connections") {

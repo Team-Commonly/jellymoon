@@ -70,9 +70,16 @@ func (s Store) write(name string, v any) error {
 	return s.writeFile(name, raw)
 }
 
-// writeFile writes raw to a 0600 temp file in the dir and renames it over name.
-func (s Store) writeFile(name string, raw []byte) error {
-	tmp, err := os.CreateTemp(s.Dir, name+".tmp") // created 0600
+// writeFile writes raw to name in the dir: see WriteFile.
+func (s Store) writeFile(name string, raw []byte) error { return WriteFile(s.Path(name), raw) }
+
+// WriteFile writes raw to a 0600 temp file beside path (creating the dir 0700) and renames it over path, so a reader never sees half a file.
+func WriteFile(path string, raw []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp") // created 0600
 	if err != nil {
 		return err
 	}
@@ -81,7 +88,7 @@ func (s Store) writeFile(name string, raw []byte) error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(tmp.Name(), s.Path(name))
+		err = os.Rename(tmp.Name(), path)
 	}
 	if err != nil {
 		_ = os.Remove(tmp.Name())

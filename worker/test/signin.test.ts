@@ -121,6 +121,17 @@ test('logout with a dead session cookie clears it and revokes nothing; a dead Be
   expect((await authenticate(db, `Bearer ${live}`, 1)) !== null).toBe(true);
 });
 
+test('logout with a dead Bearer beside a live session cookie answers 401 and revokes nothing: the cookie\'s token stays live', async () => {
+  const db = fresh();
+  const live = (await createUser(db, 'ana', 0)).token;
+  const dead = (await createUser(db, 'ben', 0)).token;
+  const env = { DB: db, POD: noPods, CLOCK_MS: 1 } as unknown as Env;
+  const out = (headers: Record<string, string>): Promise<Response | null> => authRoute(new Request('https://w.example/v1/auth/logout', { method: 'POST', headers: { Origin: 'https://w.example', 'Content-Type': 'application/json', ...headers } }), env, 1);
+  expect((await out({ Authorization: `Bearer ${dead}` }))?.status).toBe(200);
+  expect((await out({ Authorization: `Bearer ${dead}`, Cookie: `jm_session=${live}` }))?.status).toBe(401);
+  expect((await authenticate(db, `Bearer ${live}`, 1)) !== null).toBe(true);
+});
+
 test('two sockets of one token dialling one pod at once: the one that fails cannot take the row the open one needs', async () => {
   const db = fresh();
   const { token } = await createUser(db, 'ana', 0);
@@ -154,4 +165,16 @@ test('token_pods rows go with their token: the sweep drops those of an expired o
   await db.prepare('update tokens set expires_at = 5 where hash = ?').bind(await hashToken(old)).run();
   await authRoute(new Request('https://w.example/v1/auth/device', { method: 'POST' }), { DB: db, POD: noPods } as unknown as Env, 10);
   expect((await db.prepare('select hash from token_pods').all<{ hash: string }>()).results.map((r) => r.hash)).toEqual([await hashToken(live)]);
+});
+
+test('the sweep keeps the rows of a live token and of a jmc_ computer token', async () => {
+  const db = fresh();
+  const user = await createUser(db, 'ana', 0);
+  const { token: jmc } = await createComputer(db, user.user.id, 'mac', 'darwin', 'arm64');
+  const gone = await createUser(db, 'gone', 0);
+  await db.prepare('update tokens set revoked_at = 5 where hash = ?').bind(await hashToken(gone.token)).run();
+  for (const t of [user.token, jmc, gone.token]) await db.prepare('insert into token_pods (hash, pod_id) values (?, ?)').bind(await hashToken(t), 'pod_1').run();
+  await authRoute(new Request('https://w.example/v1/auth/device', { method: 'POST' }), { DB: db, POD: noPods } as unknown as Env, 10);
+  const left = (await db.prepare('select hash from token_pods').all<{ hash: string }>()).results.map((r) => r.hash).sort();
+  expect(left).toEqual([await hashToken(user.token), await hashToken(jmc)].sort());
 });

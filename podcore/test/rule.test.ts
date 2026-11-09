@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { AskContext, Message, PostInput } from '../../gen/ts/protocol';
-import { apply, isoOf } from '../src';
+import { apply, isoOf, overlayDecisions } from '../src';
 import type { Cmd, PodState } from '../src';
 import { AG1, CMP_1, RUN_A, RUN_B, U_AGENT_OWNER, U_OWNER, U_STRANGER, errCode, events, id, play, runN, toComputer, wak, world } from './helpers';
 
@@ -36,7 +36,27 @@ describe('a member rules on an ask', () => {
     expect(updates(r.out)).toEqual([{ id: MSG, decision: { id: DEC, state: 'ruled', ruling: { optionId: 'b', by: U_OWNER, at: isoOf(3000) } } }]);
     expect(events(r.out).map((e) => e.type)).toEqual(['message.updated']);
     expect(wakes(r.out).map((o) => [o.computerId, o.event.type === 'run.wake' && o.event.data])).toEqual([
-      [CMP_1, { wakeId: wak(2), agentId: AG1, reason: 'decision_ruled', refs: { decisionId: DEC, messageId: MSG } }]]);
+      [CMP_1, { wakeId: wak(2), agentId: AG1, reason: 'decision_ruled', refs: { decisionId: DEC, messageId: MSG, optionId: 'b' } }]]);
+  });
+
+  test('the wake also names the task when the ask was attached to one, and the option that won', () => {
+    const s = world();
+    Object.assign(s.runs[RUN_A], { startedAt: 1000, wakeReason: 'task_assigned' });
+    const withTask = { ...ask, taskId: id('tsk', 1) } as PostInput;
+    const r = play([[post(withTask), 2000], [rule('a'), 3000]], s);
+    expect(wakes(r.out).map((o) => o.event.type === 'run.wake' && o.event.data.refs)).toEqual([{ decisionId: DEC, messageId: MSG, optionId: 'a', taskId: id('tsk', 1) }]);
+  });
+
+  test('overlayDecisions shows the ruling on the ask a feed built from message.created still holds open, and leaves other messages alone', () => {
+    const { state, now } = asked();
+    const created = { id: MSG, decision: { id: DEC, state: 'open' } } as unknown as Message;
+    const other = { id: id('msg', 2) } as unknown as Message;
+    expect(overlayDecisions(state, [created, other])).toEqual([created, other]);
+    const after = ruledOut().state;
+    const [m, o] = overlayDecisions(after, [created, other]);
+    expect(m.decision).toEqual({ id: DEC, state: 'ruled', ruling: { optionId: 'b', by: U_OWNER, at: isoOf(now) } });
+    expect(o).toBe(other);
+    expect(created.decision?.state).toBe('open');
   });
 
   test('any member may rule, the agent\'s owner included', () => {
@@ -124,7 +144,7 @@ describe('a ruling and its wake', () => {
     expect(pending.state.wakes[AG1].reason).toBe('decision_ruled');
     const r = apply(pending.state, rule('a'), 3000);
     expect([errCode(r.out), wakes(r.out).length, r.state.wakes[AG1].id]).toEqual([null, 0, wak(7)]);
-    expect(r.state.wakes[AG1].refs).toEqual({ taskId: id('tsk', 1), decisionId: DEC, messageId: MSG });
+    expect(r.state.wakes[AG1].refs).toEqual({ taskId: id('tsk', 1), decisionId: DEC, messageId: MSG, optionId: 'a' });
   });
 
   test('a bad wakeId seed is invalid_input and the decision stays open', () => {

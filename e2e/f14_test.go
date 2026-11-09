@@ -37,13 +37,19 @@ func writeScript(path string, steps ...map[string]any) error {
 	return os.Rename(tmp, path)
 }
 
+// withTask attaches the ask to the task its wake named, the way an agent working a task would.
+func withTask(ask map[string]any) map[string]any {
+	ask["taskId"] = "{{taskId}}"
+	return ask
+}
+
 func newF14(t *testing.T) *f14 {
 	f := &f14{f09: newF09On(newF08Bare(t)), begin: time.Now()}
 	f.script, f.record = filepath.Join(t.TempDir(), "script.json"), filepath.Join(t.TempDir(), "agent.json")
 	if err := writeScript(f.script,
 		step11("jm_task_list", map[string]any{}),
 		step11("jm_task_claim", map[string]any{"taskId": "{{taskId}}"}),
-		step11("jm_post", validAsk("Merge the auth fix now or wait for review?")),
+		step11("jm_post", withTask(validAsk("Merge the auth fix now or wait for review?"))),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -264,11 +270,11 @@ func (f *f14) rules() error {
 	if !ok || h.Status != 200 || !strings.Contains(string(h.In), `"completed"`) {
 		return fmt.Errorf("the first run was not ended completed: found=%v HTTP %d body %s", ok, h.Status, h.In)
 	}
-	// The agent has read its script by now, so the second run gets the finishing script. The task id is written in: the ruling's
-	// wake names the decision and the ask, not the task, so the brief of the second run has no tsk_ id to borrow.
+	// The agent has read its script by now, so the second run gets the finishing script. No task id is written in: the ruling's wake
+	// names the task the ask was attached to, so the brief of the second run carries a tsk_ id for the script to borrow.
 	if err := writeScript(f.script,
 		step11("jm_post", map[string]any{"summary": "Merged the auth fix", "kind": "result", "status": "done"}),
-		step11("jm_task_update", map[string]any{"taskId": f.taskID, "status": "done"}),
+		step11("jm_task_update", map[string]any{"taskId": "{{taskId}}", "status": "done"}),
 	); err != nil {
 		return err
 	}
@@ -293,8 +299,9 @@ func (f *f14) secondWake() error {
 		return fmt.Errorf("the daemon never claimed a second wake (found=%v HTTP %d)\ndaemon output:\n%s", ok, h.Status, f.daemon.text())
 	}
 	_ = json.Unmarshal(h.Out, &f.secondW)
-	if f.secondW.RunID == "" || f.secondW.RunID == f.first.RunID || !strings.Contains(f.secondW.Brief, "decision_ruled") || !strings.Contains(f.secondW.Brief, f.decide) {
-		return fmt.Errorf("second claim: run %q (first %q), brief %q; want a new run whose brief names decision_ruled and %s", f.secondW.RunID, f.first.RunID, f.secondW.Brief, f.decide)
+	if f.secondW.RunID == "" || f.secondW.RunID == f.first.RunID || !strings.Contains(f.secondW.Brief, "decision_ruled") || !strings.Contains(f.secondW.Brief, f.decide) ||
+		!strings.Contains(f.secondW.Brief, "taskId "+f.taskID) || !strings.Contains(f.secondW.Brief, "optionId a") {
+		return fmt.Errorf("second claim: run %q (first %q), brief %q; want a new run whose brief names decision_ruled, %s, taskId %s and optionId a", f.secondW.RunID, f.first.RunID, f.secondW.Brief, f.decide, f.taskID)
 	}
 	return nil
 }

@@ -36,7 +36,7 @@ export interface Wake { id: WakeId; agentId: AgentId; reason: WakeReason; refs: 
  * fixed size: a ruled record drops `options`, so ruling it again, or rereading it, grows nothing.
  */
 interface DecisionRec {
-  messageId: MessageId; askedBy: ActorId; options: OptionId[]; decision: Decision;
+  messageId: MessageId; taskId?: TaskId; askedBy: ActorId; options: OptionId[]; decision: Decision;
   /** Milliseconds; set only when the adapter gave the ask an expiry (a connector write's ask, ADR 0009). Open until then. */
   expiresAt?: number;
 }

@@ -33,7 +33,7 @@ type ruledData struct {
 
 type ruleWake struct {
 	WakeID, AgentID, Reason string
-	Refs                    struct{ TaskID, MessageID, DecisionID string }
+	Refs                    struct{ TaskID, MessageID, DecisionID, OptionID string }
 }
 
 func newF12(t *testing.T) *f12 {
@@ -188,8 +188,8 @@ func (f *f12) woken() (*run, error) {
 	}
 	var wk ruleWake
 	fr.dec(&wk)
-	if wk.Reason != "decision_ruled" || wk.Refs.DecisionID != f.decision || wk.Refs.MessageID != f.messageID {
-		return nil, fmt.Errorf("run.wake %+v, want reason decision_ruled with the decision %s and message %s", wk, f.decision, f.messageID)
+	if wk.Reason != "decision_ruled" || wk.Refs.DecisionID != f.decision || wk.Refs.MessageID != f.messageID || wk.Refs.OptionID != "b" {
+		return nil, fmt.Errorf("run.wake %+v, want reason decision_ruled with the decision %s, message %s and optionId b", wk, f.decision, f.messageID)
 	}
 	if n := f.compA.sock.count(f.wakeMark, wakeFor(f.a1.id)); n != 1 {
 		return nil, fmt.Errorf("the agent's computer got %d wakes for one ruling", n)
@@ -203,6 +203,21 @@ func (f *f12) woken() (*run, error) {
 	f.mu.Lock()
 	f.runs = append(f.runs, r)
 	f.mu.Unlock()
+	var feed struct {
+		Messages []struct {
+			ID       string
+			Decision *struct {
+				State  string
+				Ruling *struct{ OptionID string }
+			}
+		}
+	}
+	f.must(f.runCall(r, "GET", f.podPath("feed"), nil, &feed), "the woken run reads the feed")
+	for _, m := range feed.Messages {
+		if m.ID == f.messageID && (m.Decision == nil || m.Decision.State != "ruled" || m.Decision.Ruling == nil || m.Decision.Ruling.OptionID != "b") {
+			return nil, fmt.Errorf("the feed shows the ask with decision %+v, want it ruled with option b", m.Decision)
+		}
+	}
 	mk := f.sO.mark()
 	f.must(f.runCall(r, "POST", f.podPath("messages"), map[string]any{"summary": "Merging the auth fix", "kind": "progress", "status": "in_progress"}, nil), "the woken run posts")
 	fr, ok = f.sO.waitAfter(mk, isType("message.created"), 5*time.Second)

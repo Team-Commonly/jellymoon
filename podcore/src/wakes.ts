@@ -12,11 +12,11 @@ type Of<T extends Cmd['type']> = Extract<Cmd, { type: T }>;
 /** A wake with no run_claim is re-sent on a heartbeat once its last send is this old (>=, not >). */
 export const WAKE_RESEND_MS = 60_000;
 
-const REF_KEYS = ['taskId', 'messageId', 'decisionId'] as const;
+const REF_KEYS = ['taskId', 'messageId', 'decisionId', 'optionId'] as const;
 
 /** The schema holds one id per kind of ref, so on a clash the earlier ref stays. */
 function mergeRefs(into: WakeRefs, from: WakeRefs): void {
-  for (const k of REF_KEYS) if (into[k] === undefined && from[k] !== undefined) into[k] = from[k];
+  for (const k of REF_KEYS) if (into[k] === undefined && from[k] !== undefined) Object.assign(into, { [k]: from[k] });
 }
 
 function send(c: Ctx, computerId: ComputerId, w: Wake): void {

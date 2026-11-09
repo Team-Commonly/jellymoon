@@ -66,7 +66,7 @@ export function postCmd(c: Ctx, cmd: Of<'post'>): void {
   if (input.kind === 'ask') {
     msg.decision = { id: cmd.decisionId, state: 'open' };
     (c.s.decisions ??= {})[cmd.decisionId] = {
-      messageId: cmd.messageId, askedBy: w.actor.id, options: (input.options ?? []).map((o) => o.id), decision: { id: cmd.decisionId, state: 'open' },
+      messageId: cmd.messageId, ...(input.taskId === undefined ? {} : { taskId: input.taskId }), askedBy: w.actor.id, options: (input.options ?? []).map((o) => o.id), decision: { id: cmd.decisionId, state: 'open' },
       ...(cmd.expiresAt === undefined ? {} : { expiresAt: cmd.expiresAt }),
     };
   }

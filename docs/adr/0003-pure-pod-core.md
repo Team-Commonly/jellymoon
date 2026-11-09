@@ -145,7 +145,7 @@ command the socket's `decision.rule` becomes; the adapter parses the frame and p
   is not on the ask. A decision id is a key and goes through `own()`.
 - A ruling sets the decision `ruled` with `{optionId, by, at}`, drops the record's option list, emits `message.updated` carrying only the
   decision, and writes the `decision_ruled` wake for the asking agent through the same writer `change` uses, with refs `{decisionId,
-  messageId}`: a pending wake absorbs it, an unregistered asker (a person) gets none. The run that wake starts stamps its posts with
+  messageId, optionId}` and the ask's `taskId` when the ask was attached to a task: a pending wake absorbs it, an unregistered asker (a person) gets none. The run that wake starts stamps its posts with
   `wakeReason: decision_ruled`.
 - State: one record per ask, of fixed size once ruled; `decisions` is absent in a pod saved before it existed and reads as empty.
   An ask posted before records were kept has none, so ruling on it is `not_found`.
@@ -229,3 +229,4 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
 - ADR 0002 (NB4): a restart stretch (`staleMs` > 0) can hold a lease past "last renewal plus 60 s" (ADR 0002, Decision), so the core refuses it (item 5). ADR 0002 needs a restart clause before any stretch or save coalescing can return.
 - ADR 0002 (NB13): expiry is inclusive at `leaseUntil`, so with an exact 15 s heartbeat cadence a claim drops after 3 missed heartbeats, not the "four missed heartbeats" in ADR 0002's Decision. A wording point.
 - 2026-11-08: `task_update` carries no `note`. The product-owner-delegated lead ruled it out (the contract had nowhere to keep one); a progress update is a `post` with kind progress and the `taskId`.
+- 2026-11-09: a `decision_ruled` wake names what the agent needs to act: the decision, its message, the chosen `optionId` and the ask's `taskId` when it had one (`WakeRefs` gains `optionId`). The feed overlays each ask's current decision from the pod's record (`overlayDecisions`), so a reader over HTTP or MCP sees the ruling the socket gets as `message.updated`. As with any wake, a ruling that folds into a pending wake keeps that wake's earlier ref of a kind, so a pending `task_assigned` wake can name its own task beside the ruled decision.

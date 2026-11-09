@@ -24,19 +24,19 @@
       "paths": [
         "worker/"
       ],
-      "max": 2470
+      "max": 2480
     },
     "server": {
       "paths": [
         "server/"
       ],
-      "max": 4120
+      "max": 4150
     },
     "podcore": {
       "paths": [
         "podcore/"
       ],
-      "max": 2690
+      "max": 2720
     },
     "daemon": {
       "paths": [
@@ -54,7 +54,7 @@
       "paths": [
         "e2e/"
       ],
-      "max": 7880
+      "max": 7900
     }
   },
   "goImports": {

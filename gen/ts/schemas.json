@@ -1158,7 +1158,7 @@
       }
     },
     "WakeRefs": {
-      "description": "Ids of what the wake is about: a task, a message or a decision.",
+      "description": "What the wake is about: a task, a message or a decision, and for a ruling the option that won.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -1170,6 +1170,10 @@
         },
         "decisionId": {
           "$ref": "#/$defs/DecisionId"
+        },
+        "optionId": {
+          "description": "Only on a decision_ruled wake: the option the member chose.",
+          "$ref": "#/$defs/OptionId"
         }
       }
     },

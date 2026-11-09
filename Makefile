@@ -173,7 +173,7 @@ e2e: e2e-c
 # JM_E2E_SKIP is cleared here, so an inherited skip list never drops tests without a word. The skips below are
 # deliberate: features built on the pod-state server only (ADR 0006), each with its reason in
 # docs/development/e2e-contract.md, "Skipped on the Worker". Override with `make e2e-a E2E_A_SKIP=<names>`.
-E2E_A_SKIP := TestF19
+E2E_A_SKIP := TestF19,TestF21
 e2e-a: node_modules
 	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' JM_E2E_SKIP='$(E2E_A_SKIP)')
 

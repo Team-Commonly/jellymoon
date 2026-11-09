@@ -1,4 +1,5 @@
-// Twin of worker/src/mcp.ts: a change to one is a change to the other (the boundary rules keep them from importing each other).
+// Twin of worker/src/mcp.ts: a change to one is a change to the other (the boundary rules keep them from importing each other),
+// except for the tool-call records this one also makes (ADR 0006, "Evidence"); the Worker does not serve evidence.
 // The MCP adapter at POST /mcp (docs/protocol.md): stateless Streamable HTTP, answered as JSON. It adds no behaviour. Each tool
 // is one operation (gen/ts/tools.json), and a call is that operation's own HTTP route, sent through the same front door with the
 // caller's own token, so authentication, the pod's rules and the errors are exactly the HTTP ones. The one thing it adds is a
@@ -10,11 +11,11 @@ import type { Hono } from 'hono';
 import { runLive } from '../../podcore/src/index';
 import type { Hub, Principal as Who } from './hub';
 import { fail } from './kit';
+import { stampCalls } from './evidence';
+import type { Finish, Seen } from './evidence';
 
 type Id = string | number | null;
 type Dispatch = (req: Request) => Promise<Response>;
-/** Called before a run's tools/call is dispatched, refused or not; true when the pod counted it. */
-type Seen = (runId: string, podId: string) => Promise<boolean>;
 /** Asked before any method but tools/call of a run's token is answered: false when the run has ended or was stopped, so its token is dead here too. */
 type Live = (runId: string, podId: string) => Promise<boolean>;
 type Args = Record<string, unknown>;
@@ -44,19 +45,26 @@ function operation(name: string, who: Who, args: Args, origin: string, authoriza
   return new Request(origin + path + query, { method: op.method, headers, body: get ? undefined : JSON.stringify(rest) });
 }
 
-/** True when the pod counted the call: a throw, or an answer that is not a count, is a call that was not counted. */
-async function tally(seen: Seen, who: Who): Promise<boolean> {
-  if (who.kind !== 'run') return true;
-  try { return (await seen(who.runId, who.podId)) === true; } catch { return false; }
+const nothing: Finish = () => Promise.resolve();
+
+/** How to finish the call's record, or null when the pod did not count the call: a throw, or an answer that is not a count, is a call that was not counted. A user's call is not counted. */
+async function tally(seen: Seen, who: Who, name: unknown): Promise<Finish | null> {
+  if (who.kind !== 'run') return nothing;
+  try { return await seen(who.runId, who.podId, name); } catch { return null; }
 }
 
 async function callTool(id: Id, who: Who, params: Args, origin: string, authorization: string, dispatch: Dispatch, seen: Seen): Promise<Response> {
-  if (!(await tally(seen, who))) return refuse(id, -32603, 'The call was not made: the pod could not count it. Try again.');
+  const finish = await tally(seen, who, params.name);
+  if (finish === null) return refuse(id, -32603, 'The call was not made: the pod could not count it. Try again.');
   const args = (typeof params.arguments === 'object' && params.arguments !== null ? params.arguments : {}) as Args;
   const req = operation(String(params.name), who, args, origin, authorization);
-  if (typeof req === 'string') return refuse(id, -32602, req);
+  if (typeof req === 'string') {
+    await finish('error', args, req);
+    return refuse(id, -32602, req);
+  }
   const res = await dispatch(req);
   const text = await res.text();
+  await finish(res.ok ? 'ok' : 'error', args, text);
   let structured: unknown;
   try { structured = JSON.parse(text); } catch { structured = undefined; }
   return ok(id, { content: [{ type: 'text', text }], structuredContent: structured, isError: !res.ok });
@@ -87,7 +95,7 @@ export const viaMcp = (req: Request): boolean => carried.has(req);
 /** POST /mcp behind the same front door as every route: a run or user token (401 without a valid one, 403 for a computer's); each tool call re-enters `app`. */
 export function mcpRoute(app: Hono, hub: Hub): void {
   const dispatch = (r: Request): Promise<Response> => { carried.add(r); return Promise.resolve(app.fetch(r)); };
-  const seen = async (runId: string, podId: string): Promise<boolean> => (await hub.pods.get(podId)?.exec({ type: 'tool_call', runId }))?.ok === true;
+  const seen = stampCalls(hub);
   const live = async (runId: string, podId: string): Promise<boolean> => { const pod = hub.pods.get(podId); return pod !== undefined && runLive(pod.state, runId); };
   app.post('/mcp', async (c) => {
     const who = await hub.authenticate(c.req.header('Authorization'));

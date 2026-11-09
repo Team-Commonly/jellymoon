@@ -1,15 +1,20 @@
 // /device?code=WDJB-MJHT: the page the daemon's verification URL names. Never approves on load: a person presses Approve.
 import { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { $defs } from '../../gen/ts/schemas.json';
 import { ApiError, signInHref } from './http';
 import type { Http } from './http';
 
 const SESSION_ENDED = 'Your session ended.';
+const NOT_A_CODE = "That isn't a valid code; check it against your terminal.";
+// The shape the server enforces (case and hyphen forgiven, as it does), read from the generated schema so it is not copied here.
+const CODE_SHAPE = new RegExp($defs.DeviceApproveRequest.properties.userCode.pattern);
 
 function failure(e: unknown): string {
   if (!(e instanceof ApiError)) return 'Could not approve: the server could not be reached. Try again.';
   if (e.status === 404) return 'No device is waiting for that code. Check it against your terminal.';
   if (e.status === 410) return 'This code was already approved.';
+  if (e.status === 400 && e.code === 'invalid_input') return NOT_A_CODE;
   if (e.status === 400) return 'This code expired or is not a device code. Start the sign-in again in your terminal.';
   if (e.status === 401) return SESSION_ENDED;
   if (e.status === 403) return 'The server refused this approval. Open the link your terminal printed, on the address it shows.';
@@ -39,6 +44,7 @@ export function DevicePage({ http, signedIn }: { http: Http; signedIn: boolean }
 
   const approve = async () => {
     if (sending.current || !code.trim()) return;
+    if (!CODE_SHAPE.test(code.trim())) return setError(NOT_A_CODE);
     sending.current = true;
     setBusy(true);
     setError(null);

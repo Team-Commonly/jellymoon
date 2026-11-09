@@ -30,7 +30,7 @@ export const browserHttp: Http = {
   },
   async approveDevice(userCode) {
     const res = await fetch('/v1/auth/device/approve', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userCode }) });
-    if (!res.ok) throw new ApiError(res.status, 'request failed');
+    if (!res.ok) throw new ApiError(res.status, 'request failed', await errorCode(res));
   },
   async stopRun(podId, runId) {
     const res = await fetch(`/v1/pods/${encodeURIComponent(podId)}/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
@@ -45,6 +45,14 @@ export const browserHttp: Http = {
     return (await res.json()) as Pod;
   },
 };
+
+/** The refusal's error code ({code, message}), or undefined when the body is not one. */
+async function errorCode(res: Response): Promise<string | undefined> {
+  try {
+    const body = (await res.json()) as { code?: unknown };
+    return typeof body.code === 'string' ? body.code : undefined;
+  } catch { return undefined; }
+}
 
 /** The server's own words from a refusal ({code, message}), or a plain line when the body is not one. */
 async function refusalMessage(res: Response): Promise<string> {
@@ -76,9 +84,9 @@ export async function bootSignedIn(http: Http, timeoutMs: number = BOOT_ME_TIMEO
   }
 }
 
-/** A non-2xx answer. The status is what screens branch on. */
+/** A non-2xx answer. The status is what screens branch on; `code` is the server's error code when it sent one (several codes share a status, e.g. invalid_input and expired_token are both 400). */
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code?: string) {
     super(message);
   }
 }

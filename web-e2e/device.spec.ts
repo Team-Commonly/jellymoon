@@ -52,3 +52,11 @@ test('a code that is not waiting says so and leaves the page usable', async ({ p
   await expect(page.getByRole('alert')).toHaveText('No device is waiting for that code. Check it against your terminal.');
   await expect(page.getByRole('button', { name: 'Approve' })).toBeEnabled();
 });
+
+test('a typo outside the code alphabet is called a typo, not an expired code', async ({ page }) => {
+  await signIn(page, await person('Ada'));
+  await page.goto('/device?code=ABCD-EFGH'); // A and E are not in the alphabet
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByRole('alert')).toHaveText("That isn't a valid code; check it against your terminal.");
+  await expect(page.getByRole('button', { name: 'Approve' })).toBeEnabled();
+});

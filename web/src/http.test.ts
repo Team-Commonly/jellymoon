@@ -27,6 +27,13 @@ describe('browserHttp cookie writes', () => {
     expect(sent(m)).toEqual({ url: '/v1/auth/device/approve', method: 'POST', type: 'application/json', body: '{"userCode":"WDJB-MJHT"}', credentials: 'same-origin' });
   });
 
+  it('approveDevice: a refusal carries the status and the server\'s error code', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 'invalid_input', message: 'does not match the required pattern' }), { status: 400 })));
+    await expect(browserHttp.approveDevice('ABCD-EFGH')).rejects.toMatchObject({ status: 400, code: 'invalid_input' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>', { status: 502 })));
+    await expect(browserHttp.approveDevice('WDJB-MJHT')).rejects.toMatchObject({ status: 502, code: undefined });
+  });
+
   it('me: a read with the cookie; 401 is nobody', async () => {
     const m = stub({ kind: 'human', id: 'usr_1', displayName: 'Ada' });
     expect(await browserHttp.me()).toMatchObject({ id: 'usr_1' });

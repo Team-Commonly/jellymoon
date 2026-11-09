@@ -8,7 +8,9 @@ import { fakeHttp, fakeNet } from './testkit';
 afterEach(cleanup);
 const open = (http: ReturnType<typeof fakeHttp>['http'], signedIn: boolean, path = '/device?code=WDJB-MJHT') =>
   render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} http={http} signedIn={signedIn} /></MemoryRouter>);
-const reject = (status: number) => () => Promise.reject(new ApiError(status, 'x'));
+const reject = (status: number, code?: string) => () => Promise.reject(new ApiError(status, 'x', code));
+const INVALID = "That isn't a valid code; check it against your terminal.";
+const EXPIRED = 'This code expired or is not a device code. Start the sign-in again in your terminal.';
 const LINK = 'Sign in with GitHub to continue';
 
 describe('/device', () => {
@@ -57,6 +59,27 @@ describe('/device', () => {
 
 });
 
+describe('/device, a code typed by hand', () => {
+  it.each(['ABCD-EFGH','WDJB-MJH', 'WDJB-MJHTT', 'WDJBMJHT-', 'WDJB MJHT', '1234-5678'])('%s is not the shape of a code: says so and sends nothing', async (typed) => {
+    const { http, approved } = fakeHttp();
+    const { getByRole, getByLabelText, findByText } = open(http, true, '/device');
+    fireEvent.change(getByLabelText('Device code'), { target: { value: typed } });
+    fireEvent.click(getByRole('button', { name: 'Approve' }));
+    expect(await findByText(INVALID)).toBeTruthy();
+    expect(approved).toEqual([]);
+    expect((getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it.each(['wdjbmjht', 'WDJB-mjht'])('%s, lowercase or no hyphen, is sent as typed: the server normalizes it', async (typed) => {
+    const { http, approved } = fakeHttp();
+    const { getByRole, getByLabelText, findByText } = open(http, true, '/device');
+    fireEvent.change(getByLabelText('Device code'), { target: { value: typed } });
+    fireEvent.click(getByRole('button', { name: 'Approve' }));
+    await findByText('Device approved');
+    expect(approved).toEqual([typed]);
+  });
+});
+
 describe('/device, pressing Approve', () => {
   it('a double click approves once', async () => {
     let release!: () => void;
@@ -83,6 +106,16 @@ describe('/device, pressing Approve', () => {
     fireEvent.click(getByRole('button', { name: 'Approve' }));
     expect(await findByText(line)).toBeTruthy();
     await waitFor(() => expect((getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it.each([
+    ['invalid_input', INVALID],
+    ['expired_token', EXPIRED],
+  ])('a 400 with code %s is told apart by its code', async (code, line) => {
+    const { http } = fakeHttp(undefined, reject(400, code));
+    const { getByRole, findByText } = open(http, true);
+    fireEvent.click(getByRole('button', { name: 'Approve' }));
+    expect(await findByText(line)).toBeTruthy();
   });
 
   it('401 offers the sign-in link, back to /device with the code kept', async () => {

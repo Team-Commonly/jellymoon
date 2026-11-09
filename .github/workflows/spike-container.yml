@@ -88,6 +88,11 @@ jobs:
           else
             echo "SPIKE pg: fail HTTP $code $(head -c 400 "$RUNNER_TEMP/pg.json")"; rc=1
           fi
+          # TLS to an outside Postgres with throwaway credentials: an auth or tenant error from the server comes after TLS.
+          code=$(curl -s -o "$RUNNER_TEMP/pgtls.json" -w '%{http_code}' --max-time 60 "$URL/pgtls" || true)
+          echo "/pgtls HTTP $code"; cat "$RUNNER_TEMP/pgtls.json"; echo
+          detail=$(node -e 'try{const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(`${j.tls} host=${j.host} code=${j.code} errno=${j.errno??""} ms=${j.ms} message=${j.message}`)}catch{console.log("fail unparseable response")}' "$RUNNER_TEMP/pgtls.json")
+          if [ "$code" = "200" ] && [ "${detail%% *}" = "ok" ]; then echo "SPIKE pgtls: $detail"; else echo "SPIKE pgtls: fail HTTP $code ${detail#* }"; rc=1; fi
           node ws-check.mjs "${URL/https:/wss:}/ws" || rc=1
           exit $rc
 

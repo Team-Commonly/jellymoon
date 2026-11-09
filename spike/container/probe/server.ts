@@ -49,6 +49,41 @@ async function probePg(): Promise<Response> {
   return Response.json({ ...plain, tlsRequired }, { status: plain.ok ? 200 : 502 });
 }
 
+// TLS to an outside Postgres without credentials. Supabase's shared pooler (Supavisor) offers TLS on 5432; its host pattern
+// is documented at https://supabase.com/docs/guides/database/connecting-to-postgres ("aws-[INDEX]-[REGION].pooler.supabase.com").
+// Throwaway credentials: the handshake completes, then the server refuses the user or tenant. An auth or tenant error from
+// the server comes after TLS, so it proves TLS; no TLS, a TLS error, a timeout or a refused connection does not.
+const TLS_HOST = process.env.SPIKE_PGTLS_HOST ?? ["aws-0-us-east-1", "pooler", "supabase", "com"].join(".");
+
+async function probePgTls(): Promise<Response> {
+  const u = new URL("postgres://placeholder");
+  u.hostname = TLS_HOST;
+  u.port = "5432";
+  u.pathname = "/postgres";
+  u.username = "probe";
+  u.password = crypto.randomUUID();
+  u.searchParams.set("sslmode", "require");
+  const t0 = performance.now();
+  const sql = new Bun.SQL({ url: u.toString(), tls: true, max: 1, connectionTimeout: 15, idleTimeout: 1 });
+  try {
+    await sql`select 1`;
+    return Response.json({ tls: "ok", host: TLS_HOST, detail: "query succeeded (unexpected)", ms: Math.round(performance.now() - t0) });
+  } catch (e) {
+    const err = e as { code?: string; errno?: string; message?: string };
+    const code = String(err.code ?? "error");
+    const message = String(err.message ?? e);
+    const ms = Math.round(performance.now() - t0);
+    // Bun.SQL surfaces a server ErrorResponse as ERR_POSTGRES_SERVER_ERROR (with the SQLSTATE in errno), and auth failures as
+    // ERR_POSTGRES_*AUTH* / *PASSWORD*. Anything about TLS, a timeout or the socket is a failure.
+    const notTls = /TLS|SSL|CERT|TIMEOUT|CONNECTION_CLOSED|ECONNREFUSED|ENOTFOUND|ECONNRESET/i;
+    const afterTls = /SERVER_ERROR|AUTH|PASSWORD|tenant|user/i;
+    const ok = !notTls.test(code) && (afterTls.test(code) || afterTls.test(message));
+    return Response.json({ tls: ok ? "ok" : "fail", host: TLS_HOST, code, errno: err.errno, message, ms }, { status: ok ? 200 : 502 });
+  } finally {
+    await sql.close().catch(() => {});
+  }
+}
+
 const port = Number(process.env.PORT ?? 8080);
 const hostname = process.env.HOST ?? "0.0.0.0";
 
@@ -59,6 +94,7 @@ const server = Bun.serve({
     const { pathname } = new URL(req.url);
     if (pathname === "/healthz") return new Response("ok\n");
     if (pathname === "/pg") return probePg();
+    if (pathname === "/pgtls") return probePgTls();
     if (pathname === "/ws") {
       if (srv.upgrade(req)) return undefined;
       return new Response("expected a websocket upgrade\n", { status: 426 });

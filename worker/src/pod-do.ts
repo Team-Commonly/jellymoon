@@ -189,7 +189,7 @@ export class PodDO implements Starter {
     const p = parseFrame(this.id, att.who, typeof message === 'string' ? message : new TextDecoder().decode(message));
     if ('subscribe' in p) { this.subscribe(ws, att, p.subscribe); return; }
     const refusal = 'cmd' in p ? runFrame(this, p.cmd) : p;
-    if (refusal) this.send(ws, this.frame('error', { code: refusal.code, message: refusal.message } satisfies ErrorBody));
+    if (refusal) this.send(ws, this.frame('error', { code: refusal.code, message: refusal.message, ...(refusal.ref === undefined ? {} : { ref: refusal.ref }) } satisfies ErrorBody));
   }
 
   /** Replays the log after `since`, then marks the socket live. No await in between, so no event can land in the gap. */

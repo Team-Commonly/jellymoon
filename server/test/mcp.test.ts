@@ -20,6 +20,18 @@ describe('server /mcp', () => {
     expect([res.status, await res.text()]).toEqual([202, '']);
   });
 
+  test('a run that has ended is unauthorized on every method, a notification included', async () => {
+    const w = await world();
+    const run = (await w.call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json;
+    expect((await rpc(w, run.runToken, { jsonrpc: '2.0', id: 1, method: 'ping' })).status).toBe(200);
+    expect((await w.call('POST', `/v1/runs/${run.runId}/end`, w.comp.token, { outcome: 'completed' })).status).toBe(200);
+    for (const msg of [{ id: 2, method: 'initialize' }, { id: 3, method: 'tools/list' }, { id: 4, method: 'ping' }, { method: 'notifications/initialized' }]) {
+      const r = await rpc(w, run.runToken, { jsonrpc: '2.0', ...msg });
+      expect([r.status, r.json.code]).toEqual([401, 'unauthorized']);
+    }
+    expect((await rpc(w, w.olivia.token, { jsonrpc: '2.0', id: 5, method: 'ping' })).status).toBe(200);
+  });
+
   test('jm_whoami with a run token is the HTTP answer: the agent, the pod and the run', async () => {
     const w = await world();
     const run = (await w.call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json;

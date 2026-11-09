@@ -377,26 +377,26 @@ describe('who is working', () => {
   });
 });
 
+const scout: Actor = { kind: 'agent', id: 'agt_1', displayName: 'Scout' };
+const rex: Actor = { kind: 'agent', id: 'agt_2', displayName: 'Rex' };
+const line = (name: string) => `${name} is offline. It will pick this up when its computer reconnects.`;
+const presence = (agent: Actor, state: PresenceState): AgentPresence => ({ agent, harness: 'fake', computerId: 'cmp_1', state });
+const said = (seq: number, body: string, author: Actor = you) => note(seq, { author, body, summary: body.slice(0, 120) });
+const lines = () => Array.from(screen.queryByRole('list', { name: 'Waiting for a computer' })?.querySelectorAll('li') ?? [], (li) => li.textContent);
+
+/** The pod page after a hello whose head is seq 2, so what arrives at seq 3 and on was posted while it was open. */
+function open(agents: AgentPresence[]) {
+  const net = fakeNet();
+  render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>);
+  act(() => {
+    net.open();
+    net.deliver(frame('hello', undefined, hello({ headSeq: 2, agents })));
+  });
+  const deliver = (type: EventType, seq: number | undefined, data: unknown) => act(() => net.deliver(frame(type, seq, data)));
+  return { net, deliver };
+}
+
 describe('an agent whose computer is offline', () => {
-  const scout = { kind: 'agent' as const, id: 'agt_1', displayName: 'Scout' };
-  const rex = { kind: 'agent' as const, id: 'agt_2', displayName: 'Rex' };
-  const line = (name: string) => `${name} is offline. It will pick this up when its computer reconnects.`;
-  const presence = (agent: Actor, state: PresenceState): AgentPresence => ({ agent, harness: 'fake', computerId: 'cmp_1', state });
-  const said = (seq: number, body: string, author: Actor = you) => note(seq, { author, body, summary: body.slice(0, 120) });
-  const lines = () => Array.from(screen.queryByRole('list', { name: 'Waiting for a computer' })?.querySelectorAll('li') ?? [], (li) => li.textContent);
-
-  /** The page after a hello whose head is seq 2, so what arrives at seq 3 and on was posted while it was open. */
-  function open(agents: AgentPresence[]) {
-    const net = fakeNet();
-    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>);
-    act(() => {
-      net.open();
-      net.deliver(frame('hello', undefined, hello({ headSeq: 2, agents })));
-    });
-    const deliver = (type: EventType, seq: number | undefined, data: unknown) => act(() => net.deliver(frame(type, seq, data)));
-    return { net, deliver };
-  }
-
   it('says so when a person @mentions an agent that is offline', () => {
     const p = open([presence(scout, 'offline')]);
     expect(screen.queryByText(line('Scout'))).toBeNull();
@@ -443,6 +443,9 @@ describe('an agent whose computer is offline', () => {
     expect(lines()).toEqual([line('Scout'), line('Rex')]);
   });
 
+});
+
+describe('which mentions give an offline line', () => {
   it('reads mentions by the pod\'s own rule: exact names, none inside code', () => {
     const p = open([presence(scout, 'offline'), presence(rex, 'offline')]);
     p.deliver('message.created', 3, said(3, 'ask `@Scout` later; @scout is not the name, and @Scouts is another'));

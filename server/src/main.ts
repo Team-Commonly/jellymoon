@@ -1,5 +1,5 @@
 // The pod-state server: one Bun process serving every pod (ADR 0006).
-// Env: PORT, ENV, DATABASE_URL, PUBLIC_URL, TEST_BEARER, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_URL (an override, ADR 0008), JM_VAULT_KEY and JM_VAULT_OLD_KEYS (the connector vault, ADR 0009); for local runs JM_PGLITE_TEMPLATE and JM_PG_SCHEMA (see db.ts). Flag: --persist-to <dir> keeps the in-process Postgres (PGlite) there.
+// Env: PORT, ENV, DATABASE_URL, PUBLIC_URL, TEST_BEARER, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_URL (an override, ADR 0008), JM_VAULT_KEY and JM_VAULT_OLD_KEYS (the connector vault, ADR 0009), JM_WEB_DIR (the built web client); for local runs JM_PGLITE_TEMPLATE and JM_PG_SCHEMA (see db.ts). Flag: --persist-to <dir> keeps the in-process Postgres (PGlite) there.
 // Production runs against a real Postgres (DATABASE_URL). PGlite is for `make e2e` and a clean shell, so it needs ENV=local.
 import { websocket } from 'hono/bun';
 import { buildApp } from './app';

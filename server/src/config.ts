@@ -1,9 +1,15 @@
+import { webDirProblem } from './web';
+
 // What the process must refuse at startup, kept apart from main.ts so a test can pin it.
 import { keyRing, makeVault } from './vault';
 import type { Vault } from './vault';
 
 export function startupRefusal(env: Record<string, string | undefined>): string | undefined {
   const local = env.ENV === 'local';
+  if (env.JM_WEB_DIR) {
+    const web = webDirProblem(env.JM_WEB_DIR);
+    if (web !== undefined) return web;
+  }
   if (env.GITHUB_URL && !local && !env.GITHUB_URL.startsWith('https://')) return 'GITHUB_URL must be https; an http override is for ENV=local only.';
   // JM_VAULT_KEY is optional (without it the connector routes answer vault_unconfigured), but a malformed one is refused.
   const ring = keyRing(env);
@@ -18,9 +24,9 @@ export function startupRefusal(env: Record<string, string | undefined>): string 
     : undefined;
 }
 
-/** What buildApp is given, from the environment. Test routes open only for ENV=local or a configured TEST_BEARER; kept apart from main.ts so a test can start the app as production does. */
-export function appOptions(env: Record<string, string | undefined>): { publicUrl: string | undefined; local: boolean; testBearer: string | undefined } {
-  return { publicUrl: env.PUBLIC_URL, local: env.ENV === 'local', testBearer: env.TEST_BEARER };
+/** What buildApp is given, from the environment. Test routes open only for ENV=local or a configured TEST_BEARER; JM_WEB_DIR is the built web client to serve. Kept apart from main.ts so a test can start the app as production does. */
+export function appOptions(env: Record<string, string | undefined>): { publicUrl: string | undefined; local: boolean; testBearer: string | undefined; webDir: string | undefined } {
+  return { publicUrl: env.PUBLIC_URL, local: env.ENV === 'local', testBearer: env.TEST_BEARER, webDir: env.JM_WEB_DIR || undefined };
 }
 
 /** The connector vault from JM_VAULT_KEY (and JM_VAULT_OLD_KEYS), or undefined when no key is set. Call after startupRefusal. */

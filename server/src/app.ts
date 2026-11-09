@@ -9,6 +9,7 @@ import { bad, fail, ownOrigin, parse, str } from './kit';
 import { mcpRoute } from './mcp';
 import { opRoutes } from './routes-ops';
 import { setupAll } from './routes-setup';
+import { webRoutes } from './web';
 import { wsRoute } from './ws';
 import { connectorRoutes } from './connectors';
 import { rulingOpts } from './connector-call';
@@ -21,9 +22,10 @@ import type { Resolve } from './egress';
  * Test routes (the Worker's rule, kept): ENV=local opens them all, including the clock. Otherwise they exist only when a
  * bearer is configured, each needs `Authorization: Bearer <bearer>`, and there is no clock route. With neither, the build has
  * no /__test handler at all.
+ * `webDir` is the built web client (`web/dist`); unset, the server serves no client.
+ * `resolve` is the connector egress resolver (egress.ts); tests inject one, the server uses the system's.
  */
-/** `resolve` is the connector egress resolver (egress.ts); tests inject one, the server uses the system's. */
-export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string; github?: GitHub | null; vault?: Vault; resolve?: Resolve }
+export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string; github?: GitHub | null; vault?: Vault; resolve?: Resolve; webDir?: string }
 
 function testRoutes(app: Hono, hub: Hub, local: boolean, bearer: string | undefined): void {
   if (!local) {
@@ -61,6 +63,7 @@ export function buildApp(hub: Hub, opts: AppOpts): Hono {
   wsRoute(app, hub, (pod, cmd) => rulingOpts(kit, pod, cmd));
   mcpRoute(app, hub); // twin of the Worker's POST /mcp (worker/src/mcp.ts)
   if (opts.local || (opts.testBearer !== undefined && opts.testBearer !== '')) testRoutes(app, hub, opts.local, opts.testBearer);
+  if (opts.webDir !== undefined) webRoutes(app, opts.webDir);
   app.notFound((c) => fail(c, 'not_found', 'No such route.'));
   app.onError((e, c) => { console.error('request failed', e); return fail(c, 'internal', 'The server failed.'); });
   return app;

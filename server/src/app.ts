@@ -57,7 +57,7 @@ export function buildApp(hub: Hub, opts: AppOpts): Hono {
   const app = new Hono();
   app.use('*', async (c, next) => { ownOrigin.set(c.req.raw, new URL(ownBase(c, opts.publicUrl, opts.local)).origin); await next(); });
   // Every reply says `Referrer-Policy: no-referrer`, so the one-time code in a /device or /invite URL never leaves in a Referer header (twin of worker/src/front.ts).
-  app.use('*', async (c, next) => { await next(); if (c.res.status !== 101) c.res.headers.set('Referrer-Policy', 'no-referrer'); });
+  app.use('*', async (c, next) => { await next(); c.res.headers.set('Referrer-Policy', 'no-referrer'); });
   app.get('/healthz', (c) => c.text('ok'));
   setupAll(app, hub, opts.publicUrl);
   authRoutes(app, hub, opts.github ?? null, opts);

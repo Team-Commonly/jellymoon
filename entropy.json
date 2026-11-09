@@ -30,7 +30,7 @@
       "paths": [
         "server/"
       ],
-      "max": 4120
+      "max": 4130
     },
     "podcore": {
       "paths": [
@@ -48,7 +48,7 @@
       "paths": [
         "web/"
       ],
-      "max": 1890
+      "max": 1900
     },
     "e2e": {
       "paths": [

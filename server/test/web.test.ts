@@ -120,3 +120,17 @@ test('every reply says no-referrer, so the one-time code in a /device or /invite
     expect(`${path} ${r.headers.get('referrer-policy')}`).toBe(`${path} no-referrer`);
   }
 });
+
+test('a route that throws still says no-referrer on the onError reply', async () => {
+  const app = buildApp(await Hub.restore(await openDb({})), { local: true });
+  app.get('/boom', () => { throw new Error('boom'); }); // registered on the test's own instance, after the middleware
+  const errors = console.error;
+  console.error = () => undefined; // onError logs the throw
+  try {
+    const res = await app.fetch(new Request('http://x/boom'));
+    expect(`${res.status} ${res.headers.get('referrer-policy')}`).toBe('500 no-referrer');
+    expect(code(await res.text())).toBe('internal');
+  } finally {
+    console.error = errors;
+  }
+});

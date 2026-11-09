@@ -18,7 +18,8 @@ export interface InviteRow { hash: string; pod: string; usesLeft: number; expire
 const SCHEMA = `
 create table if not exists pods (id text primary key, state text not null, meta text not null);
 create table if not exists events (pod text not null, seq integer not null, envelope text not null, primary key (pod, seq));
-create table if not exists tokens (hash text primary key, kind text not null, subject text not null, pod text, revoked_at double precision);
+create table if not exists tokens (hash text primary key, kind text not null, subject text not null, pod text, revoked_at double precision, expires_at double precision);
+alter table tokens add column if not exists expires_at double precision;
 create table if not exists users (id text primary key, name text not null);
 create table if not exists computers (id text primary key, user_id text not null, name text not null, os text not null, arch text not null);
 create table if not exists invites (hash text primary key, pod text not null, uses_left integer not null, expires_at double precision not null);
@@ -60,14 +61,17 @@ export async function eventsAfter(db: Db, pod: string, since: number, limit: num
   return rows.map((r) => json<AnyEvent>(r.envelope));
 }
 
-export const saveToken = (t: Tx, hash: string, kind: string, subject: string, pod?: string): Promise<unknown> =>
-  t.rows('insert into tokens (hash, kind, subject, pod) values ($1, $2, $3, $4)', [hash, kind, subject, pod ?? null]);
+/** No `expiresAt` is a token that never expires (computer and run tokens). */
+export const saveToken = (t: Tx, hash: string, kind: string, subject: string, pod?: string, expiresAt?: number): Promise<unknown> =>
+  t.rows('insert into tokens (hash, kind, subject, pod, expires_at) values ($1, $2, $3, $4, $5)', [hash, kind, subject, pod ?? null, expiresAt ?? null]);
 
-/** Logout: the token stops authenticating at once. */
-export const revokeToken = (db: Db, hash: string, now: number): Promise<unknown> => db.rows('update tokens set revoked_at = $2 where hash = $1 and revoked_at is null', [hash, now]);
+/** Logout: the user token stops authenticating at once. */
+export const revokeToken = (db: Db, hash: string, now: number): Promise<unknown> =>
+  db.rows("update tokens set revoked_at = $2 where hash = $1 and kind = 'user' and revoked_at is null", [hash, now]);
 
-export async function findToken(db: Db, hash: string): Promise<TokenRow | undefined> {
-  const [r] = await db.rows<TokenRow>('select kind, subject, pod from tokens where hash = $1 and revoked_at is null', [hash]);
+/** A live token: not revoked, and not past its expiry at `now`. */
+export async function findToken(db: Db, hash: string, now: number): Promise<TokenRow | undefined> {
+  const [r] = await db.rows<TokenRow>('select kind, subject, pod from tokens where hash = $1 and revoked_at is null and (expires_at is null or expires_at > $2)', [hash, now]);
   return r;
 }
 
@@ -109,10 +113,20 @@ export const newState = (db: Db, hash: string, next: string, expiresAt: number):
 export const takeState = async (db: Db, hash: string, now: number): Promise<string | undefined> =>
   (await db.rows<{ next: string }>('delete from oauth_states where hash = $1 and expires_at > $2 returning next', [hash, now]))[0]?.next;
 
+/** Sign-in rows (device codes, OAuth states) an hour past their expiry, so a late poll still reads expired_token first. */
+export async function sweepSignIn(db: Db, now: number): Promise<void> {
+  for (const table of ['device_codes', 'oauth_states']) await db.rows(`delete from ${table} where expires_at <= $1`, [now - SWEEP_GRACE_MS]);
+}
+const SWEEP_GRACE_MS = 3_600_000;
+
 export const githubUserId = async (db: Db, githubId: string): Promise<string | undefined> =>
   (await db.rows<{ userId: string }>('select user_id as "userId" from github_users where github_id = $1', [githubId]))[0]?.userId;
-export const saveGithubUser = (t: Tx, githubId: string, userId: string): Promise<unknown> =>
-  t.rows('insert into github_users (github_id, user_id) values ($1, $2)', [githubId, userId]);
+/** The first sign-in of a GitHub id saves `u`; one that lost a race to another reads the winner's user instead of failing. */
+export async function claimGithubUser(t: Tx, githubId: string, u: UserRow): Promise<UserRow> {
+  const won = await t.rows('insert into github_users (github_id, user_id) values ($1, $2) on conflict (github_id) do nothing returning user_id', [githubId, u.id]);
+  if (won.length === 1) { await saveUser(t, u); return u; }
+  return (await t.rows<UserRow>('select u.id, u.name from github_users g join users u on u.id = g.user_id where g.github_id = $1', [githubId]))[0];
+}
 
 // ---- the connector layer (ADR 0009) ----
 export interface ConnRow { id: string; pod: string; vendor: string; url: string; kid: string; wrapped: string; sealed: string; createdAt: number }

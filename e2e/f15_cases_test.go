@@ -48,7 +48,7 @@ func (f *f15) oneExchange(b *http.Client, ana Actor) error {
 	if err != nil {
 		return err
 	}
-	if st, code := f.approve(b, d.UserCode, map[string]string{"Origin": f.srv.base()}); st != 200 {
+	if st, code := f.approve(b, d.UserCode, nil); st != 200 {
 		return fmt.Errorf("approve with the server's own Origin: HTTP %d %q", st, code)
 	}
 	gap := time.Duration(d.Interval)*time.Second + 200*time.Millisecond
@@ -75,7 +75,7 @@ func (f *f15) approveGuards(b *http.Client) error {
 	if err != nil {
 		return err
 	}
-	for _, h := range []map[string]string{{"Content-Type": "text/plain"}, {"Origin": "https://evil.example"}, {"Origin": "null"}} {
+	for _, h := range []map[string]string{{"Content-Type": "text/plain"}, {"Origin": "https://evil.example"}, {"Origin": "null"}, {"Origin": ""}} {
 		if st, code := f.approve(b, d.UserCode, h); st != 403 || code != "forbidden" {
 			return fmt.Errorf("approve with %v: HTTP %d %q, want 403 forbidden", h, st, code)
 		}

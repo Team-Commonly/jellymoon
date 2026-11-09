@@ -12,6 +12,8 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   GITHUB_URL?: string;
+  /** Sign-in starts per client address per minute, each of POST /v1/auth/device and GET /v1/auth/github/start (default 30). */
+  AUTH_START_LIMIT?: string;
   /** The sign-in routes' clock, set by the test entry from /__test/clock; production reads Date.now(). */
   CLOCK_MS?: number;
 }

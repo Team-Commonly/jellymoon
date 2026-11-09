@@ -1,6 +1,14 @@
 // Fixtures and a fake socket for the unit tests. No browser, no network.
-import type { Actor, Envelope, EventType, Hello, Message, Option, OptionId } from '../../gen/ts/protocol';
+import type { AcceptInviteResponse, Actor, Envelope, EventType, Hello, Message, Option, OptionId } from '../../gen/ts/protocol';
+import type { Http } from './http';
 import type { Connect, SocketHandlers } from './store';
+
+/** A fake HTTP client: records accept calls and answers from the given function. */
+export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } })) {
+  const calls: string[] = [];
+  const http: Http = { acceptInvite: (code) => (calls.push(code), answer(code)) };
+  return { http, calls };
+}
 
 export const POD = 'pod_1';
 export const you: Actor = { kind: 'human', id: 'usr_you', displayName: 'Ada' };

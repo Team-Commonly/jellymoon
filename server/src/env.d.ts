@@ -4,6 +4,8 @@ declare const process: { env: Record<string, string | undefined>; argv: string[]
 interface BunSql {
   unsafe(text: string, params?: unknown[]): Promise<Array<Record<string, unknown>>>;
   begin<R>(fn: (tx: BunSql) => Promise<R>): Promise<R>;
+  /** One connection of the pool, kept until released: a session-level lock lives on it. */
+  reserve(): Promise<BunSql & { release(): void }>;
 }
 
 declare const Bun: {

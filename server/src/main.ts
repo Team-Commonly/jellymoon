@@ -5,7 +5,7 @@ import { websocket } from 'hono/bun';
 import { buildApp } from './app';
 import { githubOf } from './auth';
 import { appOptions, startupRefusal, vaultOf } from './config';
-import { Hub } from './hub';
+import { BootRefused, Hub } from './hub';
 
 const port = Number(process.env.PORT ?? 8787);
 const at = process.argv.indexOf('--persist-to');
@@ -15,7 +15,10 @@ if (refusal !== undefined) {
   console.error(refusal);
   process.exit(1);
 }
-const hub = await Hub.open({ DATABASE_URL: process.env.DATABASE_URL, PGLITE_DIR: dir, PGLITE_TEMPLATE: process.env.JM_PGLITE_TEMPLATE, PG_SCHEMA: process.env.JM_PG_SCHEMA });
+const stop = (why: string): never => { console.error(why); process.exit(1); };
+// The boot lock (ADR 0010): a second server on this database exits here, before it restores a pod or listens.
+const hub = await Hub.open({ DATABASE_URL: process.env.DATABASE_URL, PGLITE_DIR: dir, PGLITE_TEMPLATE: process.env.JM_PGLITE_TEMPLATE, PG_SCHEMA: process.env.JM_PG_SCHEMA }, stop)
+  .catch((e: unknown) => { if (e instanceof BootRefused) return stop(e.message); throw e; });
 const app = buildApp(hub, { ...appOptions(process.env), github: githubOf(process.env), vault: await vaultOf(process.env) });
 Bun.serve({ port, fetch: app.fetch, websocket });
 console.log(`jellymoon server on :${port}, ${hub.pods.size} pods restored`);

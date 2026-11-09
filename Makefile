@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: acp-tools record-acp record-acp-codex e2e e2e-a e2e-a-migrated e2e-c e2e-any e2e-deployed e2e-web deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: acp-tools record-acp record-acp-codex e2e e2e-a e2e-a-migrated e2e-c e2e-any e2e-deployed e2e-web deployed-boot deployed-check server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -193,6 +193,9 @@ worker-dev: node_modules
 # the bundle: it is the local fallback only, and its wasm files are not part of a bundle.
 DEPLOYED := $(CURDIR)/.tools/deployed
 DEPLOYED_BUNDLE := $(DEPLOYED)/server.js
+# deployed-boot calls deployed-check through this name, not $(MAKE) itself: make runs any line naming $(MAKE) even under -n, and
+# that line is the whole deployed-boot recipe, so a dry run would start a server.
+SUBMAKE := $(MAKE)
 SERVER_DEPLOYED := if [ -n "$$DATABASE_URL" ]; then export JM_PG_SCHEMA="e2e_$$(printf %s "$$JM_DATA_DIR" | cksum | tr -d -c 0-9)"; fi; exec $(BUN) $(DEPLOYED_BUNDLE) --persist-to "$$JM_DATA_DIR/state"
 
 e2e-deployed: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
@@ -211,22 +214,26 @@ e2e-web: node_modules $(PGLITE_TPL)
 # Boots the bundle as its own process and drives it by URL only: it must refuse to start with no database, answer /healthz, keep the
 # test routes closed in the hosted shape (no bearer is 401, no clock route), serve a user's pod through the real routes, and keep that
 # pod across kill -9 and a second start. Any failed check, or a server that never answers, fails the target; nothing skips.
-# A failing Postgres (a wrong DATABASE_URL) makes the server exit at boot, and that fails this target too.
+# A failing Postgres (a wrong DATABASE_URL) makes the server exit at boot, and that fails this target too. In the hosted shape it also
+# runs the read-only checks (deployed-check) against the bundle it started. With DEPLOYED_URL set it starts nothing and runs only those.
+ifneq ($(DEPLOYED_URL),)
+deployed-boot: deployed-check
+else
 deployed-boot:
 	@set -u; \
 	bun="$(BUN)"; bundle="$(DEPLOYED_BUNDLE)"; dir=$$(mktemp -d); log="$$dir/server.log"; pid=0; \
 	port=$$($(BUN) -e 'const s = Bun.serve({ port: 0, fetch() { return new Response(); } }); console.log(s.port); s.stop(true);'); \
-	code() { curl -s -o /dev/null -w '%{http_code}' "$$@"; }; \
+	code() { curl -q -s -o /dev/null -w '%{http_code}' "$$@"; }; \
 	want() { [ "$$2" = "$$3" ] || { echo "deployed-boot: $$1: got $$2, want $$3"; tail -20 "$$log"; exit 1; }; echo "deployed-boot: ok $$1 -> $$2"; }; \
 	trap 'if [ "$$pid" -gt 0 ]; then kill $$pid 2>/dev/null; wait $$pid 2>/dev/null; fi; tmp="$${TMPDIR:-/tmp}"; tmp="$${tmp%/}"; case "$$dir" in "$$tmp"/?*|/tmp/?*) [ -d "$$dir" ] && rm -rf -- "$$dir";; esac' EXIT; \
 	out=$$(env -u ENV -u DATABASE_URL PORT=$$port "$$bun" "$$bundle" 2>&1); rc=$$?; \
 	if [ $$rc -eq 0 ] || ! echo "$$out" | grep -q 'DATABASE_URL is required'; then echo "deployed-boot: with no ENV and no DATABASE_URL the server must refuse to start (rc=$$rc)"; exit 1; fi; \
 	echo "deployed-boot: ok the server refuses to start with no database (rc=$$rc)"; \
 	if [ -n "$${DATABASE_URL:-}" ]; then mode=hosted; bearer=$$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n'); auth="authorization: Bearer $$bearer"; \
-	  start() { env -u ENV -u JM_PG_SCHEMA PORT=$$port TEST_BEARER=$$bearer "$$bun" "$$bundle" >> "$$log" 2>&1 & pid=$$!; }; \
+	  start() { env -u ENV -u JM_PG_SCHEMA PORT=$$port TEST_BEARER=$$bearer JM_WEB_DIR="$(CURDIR)/server/test/web-fixture" "$$bun" "$$bundle" >> "$$log" 2>&1 & pid=$$!; }; \
 	else mode=local; bearer=""; auth="x-smoke: local"; \
 	  start() { env ENV=local PORT=$$port "$$bun" "$$bundle" --persist-to "$$dir/state" >> "$$log" 2>&1 & pid=$$!; }; fi; \
-	up() { i=0; until curl -fsS -o /dev/null "http://127.0.0.1:$$port/healthz" 2>/dev/null; do i=$$((i+1)); \
+	up() { i=0; until curl -q -fsS -o /dev/null "http://127.0.0.1:$$port/healthz" 2>/dev/null; do i=$$((i+1)); \
 	  if ! kill -0 $$pid 2>/dev/null; then echo "deployed-boot: the server exited before /healthz answered; log tail:"; tail -20 "$$log"; exit 1; fi; \
 	  if [ $$i -gt 600 ]; then echo "deployed-boot: no /healthz 200 within 60 s; log tail:"; tail -20 "$$log"; exit 1; fi; sleep 0.1; done; }; \
 	base="http://127.0.0.1:$$port"; json='content-type: application/json'; \
@@ -238,14 +245,59 @@ deployed-boot:
 	else \
 	  want "GET /__test/clock (local shape)" "$$(code $$base/__test/clock)" 200; \
 	fi; \
-	tok=$$(curl -s -X POST -H "$$auth" -H "$$json" -d '{"name":"smoke"}' $$base/__test/session | sed -n 's/.*"token":"\(jmu_[^"]*\)".*/\1/p'); \
+	tok=$$(curl -q -s -X POST -H "$$auth" -H "$$json" -d '{"name":"smoke"}' $$base/__test/session | sed -n 's/.*"token":"\(jmu_[^"]*\)".*/\1/p'); \
 	if [ -z "$$tok" ]; then echo "deployed-boot: /__test/session gave no jmu_ token"; tail -20 "$$log"; exit 1; fi; \
-	podid=$$(curl -s -X POST -H "authorization: Bearer $$tok" -H "$$json" -d '{"name":"deployed-smoke"}' $$base/v1/pods | sed -n 's/.*"id":"\(pod_[^"]*\)".*/\1/p'); \
+	podid=$$(curl -q -s -X POST -H "authorization: Bearer $$tok" -H "$$json" -d '{"name":"deployed-smoke"}' $$base/v1/pods | sed -n 's/.*"id":"\(pod_[^"]*\)".*/\1/p'); \
 	if [ -z "$$podid" ]; then echo "deployed-boot: POST /v1/pods gave no pod id"; tail -20 "$$log"; exit 1; fi; \
 	want "GET /v1/pods/<pod>/me as its owner" "$$(code -H "authorization: Bearer $$tok" $$base/v1/pods/$$podid/me)" 200; \
 	want "GET /v1/pods/<pod>/me with no token" "$$(code $$base/v1/pods/$$podid/me)" 401; \
 	kill -9 $$pid; wait $$pid 2>/dev/null; start; up; echo "deployed-boot: restarted after kill -9: pid=$$pid port=$$port"; \
 	want "GET /v1/pods/<pod>/me after the restart" "$$(code -H "authorization: Bearer $$tok" $$base/v1/pods/$$podid/me)" 200; \
+	if [ $$mode = hosted ]; then $(SUBMAKE) --no-print-directory deployed-check DEPLOYED_URL=$$base || exit 1; \
+	else echo "deployed-boot: the read-only checks need the hosted shape (ENV=local opens the test routes); run with DATABASE_URL set"; fi; \
 	echo "deployed-boot: all checks passed"
+endif
+
+# deployed-boot's read-only mode: `make deployed-boot DEPLOYED_URL=<base>` (or `make deployed-check DEPLOYED_URL=<base>`) checks a
+# running instance by URL and nothing else, so it is safe to point at any instance, one with real users included. It sends no
+# credential and no cookie, follows no redirect, signs nobody in and restarts nothing. Every request is a GET, or a write sent with
+# no token that must be refused (401) before it runs; each write's body is also one the route would refuse, so even a request that got
+# past the gate would change nothing. What it checks:
+#   - GET /healthz is 200 "ok" and carries Referrer-Policy: no-referrer;
+#   - the web client shell: GET / and a client route (/pods) are HTML, sent no-cache and nosniff;
+#   - an unknown /v1 path is the JSON 404, never the shell;
+#   - the test routes are not served: GET /__test/clock is 404 (no handler) or 401 (a test bearer is configured), never 200;
+#   - reads need a person: GET /v1/me and GET /v1/pods/<id>/me with no token are 401;
+#   - writes need a token: POST /v1/pods, POST /v1/runs, POST /v1/pods/<id>/messages and POST /mcp with no token are 401.
+# Left out on purpose, because they write without a token by design: GET /v1/auth/github/start (stores a sign-in state and spends a
+# start-limit slot) and POST /v1/auth/device (stores a device code).
+deployed-check:
+	@set -u; \
+	base="$(DEPLOYED_URL)"; base="$${base%/}"; \
+	echo "$$base" | grep -E -q '^https?://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])(:[0-9]+)?$$' || { echo "deployed-check: DEPLOYED_URL must be http(s)://host[:port] with no path, query or credentials: $$base"; exit 1; }; \
+	hdr=$$(mktemp) || exit 1; body=$$(mktemp) || exit 1; trap 'rm -f -- "$$hdr" "$$body"' EXIT; \
+	get() { curl -q -s --proto '=http,https' --max-time 15 -D "$$hdr" -o "$$body" -w '%{http_code}' "$$@"; }; \
+	has() { grep -i -q "^$$1:[[:space:]]*$$2" "$$hdr"; }; \
+	fail() { echo "deployed-check: $$1"; exit 1; }; \
+	want() { [ "$$2" = "$$3" ] || fail "$$1: got $$2, want $$3"; echo "deployed-check: ok $$1 -> $$2"; }; \
+	want "GET /healthz" "$$(get $$base/healthz)" 200; \
+	[ "$$(cat "$$body")" = ok ] || fail "GET /healthz: the body is not ok"; \
+	has referrer-policy no-referrer || fail "GET /healthz: no Referrer-Policy: no-referrer"; \
+	for path in / /pods; do \
+	  want "GET $$path (the web client shell)" "$$(get $$base$$path)" 200; \
+	  { has content-type text/html && has cache-control no-cache && has x-content-type-options nosniff; } || fail "GET $$path: not the client's index.html (want text/html, no-cache, nosniff)"; \
+	  head -c 200 "$$body" | grep -i -q '<!doctype html' || fail "GET $$path: the body is not an HTML document"; \
+	done; \
+	want "GET /v1/no-such-route (the API never falls through to the shell)" "$$(get $$base/v1/no-such-route)" 404; \
+	has content-type application/json || fail "GET /v1/no-such-route: not the JSON 404"; \
+	c=$$(get $$base/__test/clock); case "$$c" in 401|404) echo "deployed-check: ok GET /__test/clock is not served -> $$c";; *) fail "GET /__test/clock: got $$c, want 404 or 401 (the test routes must be closed)";; esac; \
+	want "GET /v1/me with no token" "$$(get $$base/v1/me)" 401; \
+	want "GET /v1/pods/<id>/me with no token" "$$(get $$base/v1/pods/pod_deployedcheck/me)" 401; \
+	json='content-type: application/json'; \
+	want "POST /v1/pods with no token" "$$(get -X POST -H "$$json" -d '{}' $$base/v1/pods)" 401; \
+	want "POST /v1/runs with no token" "$$(get -X POST -H "$$json" -d '{}' $$base/v1/runs)" 401; \
+	want "POST /v1/pods/<id>/messages with no token" "$$(get -X POST -H "$$json" -d '{}' $$base/v1/pods/pod_deployedcheck/messages)" 401; \
+	want "POST /mcp with no token" "$$(get -X POST -H "$$json" -d '{}' $$base/mcp)" 401; \
+	echo "deployed-check: all read-only checks passed against $$base"
 
 preflight: portable tools-cache check-gen test entropy secrets private e2e-c

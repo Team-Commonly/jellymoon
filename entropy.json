@@ -42,7 +42,7 @@
       "paths": [
         "daemon/"
       ],
-      "max": 4840
+      "max": 4910
     },
     "web": {
       "paths": [

@@ -43,7 +43,8 @@ func send(v map[string]any) {
 //	cancel           on the prompt, wait for session/cancel, then end the turn cancelled and exit
 //	deaf             on the prompt, ignore everything; a SIGTERM is recorded and ends it
 //	stubborn         like deaf, but it ignores SIGTERM, so only SIGKILL ends it before its 20 s are up
-//	exit-on-prompt   on the prompt, exit without answering and with no stop asked
+//	stop:<reason>    on the prompt, end the turn with that stopReason ("none" sends a result with no stopReason)
+//	exit-on-prompt  on the prompt, exit without answering and with no stop asked
 //	exit-on-cancel   on session/cancel, exit without answering the prompt
 //	error-on-cancel  on session/cancel, answer the prompt with a JSON-RPC error
 func agentMain(mode, rec string) {
@@ -89,15 +90,13 @@ func agentMain(mode, rec string) {
 				ask(sc, strings.Split(strings.TrimPrefix(mode, "ask:"), ","), rec)
 				send(map[string]any{"id": m.ID, "result": map[string]any{"stopReason": "end_turn"}})
 				return
+			case strings.HasPrefix(mode, "stop:"):
+				stopWith(m.ID, strings.TrimPrefix(mode, "stop:"))
+				return
 			case mode == "exit-on-prompt":
 				return
 			case mode == "ask-other":
-				send(map[string]any{"id": 77, "method": "fs/read_text_file", "params": map[string]any{}})
-				sc.Scan()
-				var r struct{ Error *struct{ Code int } }
-				_ = json.Unmarshal(sc.Bytes(), &r)
-				note(rec, fmt.Sprintf("other-error:%d", r.Error.Code))
-				send(map[string]any{"id": m.ID, "result": map[string]any{"stopReason": "end_turn"}})
+				askOther(sc, m.ID, rec)
 				return
 			}
 		}
@@ -126,4 +125,23 @@ func ask(sc *bufio.Scanner, kinds []string, rec string) {
 		a = r.Result.Outcome.OptionId
 	}
 	note(rec, "answer:"+a)
+}
+
+// stopWith answers the prompt with a result carrying stopReason reason, or none at all when reason is "none".
+func stopWith(id json.RawMessage, reason string) {
+	res := map[string]any{}
+	if reason != "none" {
+		res["stopReason"] = reason
+	}
+	send(map[string]any{"id": id, "result": res})
+}
+
+// askOther makes a request the client does not serve, records the error code it gets, and ends the turn.
+func askOther(sc *bufio.Scanner, id json.RawMessage, rec string) {
+	send(map[string]any{"id": 77, "method": "fs/read_text_file", "params": map[string]any{}})
+	sc.Scan()
+	var r struct{ Error *struct{ Code int } }
+	_ = json.Unmarshal(sc.Bytes(), &r)
+	note(rec, fmt.Sprintf("other-error:%d", r.Error.Code))
+	send(map[string]any{"id": id, "result": map[string]any{"stopReason": "end_turn"}})
 }

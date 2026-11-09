@@ -4,6 +4,8 @@
 // arguments are: "hold" (record, then stay up, ignoring a closed stdin and SIGTERM, to stand for an agent that will not leave by
 // itself and has to be killed) and "script=<file>" (a JSON list of {"tool", "arguments"}: the agent makes those MCP calls in order
 // instead of jm_whoami, and records each reply under Calls. It never decides anything from a reply: a script is the whole of its behaviour).
+// The one thing a script can borrow is the task id: an argument that is exactly "{{taskId}}" becomes the first tsk_ id in the brief the
+// agent was prompted with, because a script is written before the task it works on exists.
 package main
 
 import (
@@ -14,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -118,6 +121,8 @@ func whoami(params json.RawMessage) {
 	rec.Whoami = out
 }
 
+var taskIDPattern = regexp.MustCompile(`tsk_[0-9A-Z]{26}`)
+
 // script makes the scripted calls, one per tools/call, after one initialize.
 func script(params json.RawMessage, file string) {
 	var p struct{ McpServers []server }
@@ -136,7 +141,13 @@ func script(params json.RawMessage, file string) {
 		rec.WhoamiError = err.Error()
 		return
 	}
+	taskID := taskIDPattern.FindString(string(rec.Prompt))
 	for i, st := range steps {
+		for k, v := range st.Arguments {
+			if v == "{{taskId}}" {
+				st.Arguments[k] = taskID
+			}
+		}
 		out, err := call(s, map[string]any{"jsonrpc": "2.0", "id": i + 2, "method": "tools/call", "params": map[string]any{"name": st.Tool, "arguments": st.Arguments}})
 		c := callRec{Tool: st.Tool, Reply: out}
 		if err != nil {

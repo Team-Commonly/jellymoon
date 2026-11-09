@@ -119,8 +119,12 @@ type f09 struct {
 	run   claimed
 }
 
-func newF09(t *testing.T) *f09 {
-	f := &f09{f08: newF08(t)}
+func newF09(t *testing.T) *f09 { return newF09On(newF08(t)) }
+
+// newF09On is F09's world on a given F08 world, which may not have its people yet.
+func newF09On(base *f08) *f09 {
+	t := base.t
+	f := &f09{f08: base}
 	root, _ := filepath.Abs("..")
 	f.agent = filepath.Join(t.TempDir(), "fakeagent")
 	cmd := exec.Command("go", "build", "-o", f.agent, "./e2e/testdata/fakeagent")

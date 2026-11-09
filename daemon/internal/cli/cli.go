@@ -33,6 +33,9 @@ const usage = "usage:\n  jellymoon daemon start --foreground\n  jellymoon agent 
 
 var podIDShape = regexp.MustCompile(`^pod_[0-9A-Z]{26}$`)
 
+// decisionIDShape is the schema's DecisionId: dec_ and a 26-character ULID.
+var decisionIDShape = regexp.MustCompile(`^dec_[0-9A-HJKMNP-TV-Z]{26}$`)
+
 // Main runs one command and returns the exit code.
 func Main(args []string, stdout, stderr io.Writer) int {
 	// The only two outputs of the process, and the log and the flag set are built on stderr, so this is every write site:

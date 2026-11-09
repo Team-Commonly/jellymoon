@@ -67,6 +67,9 @@ func connectorReceipts(args []string, stdout, stderr io.Writer) error {
 	}
 	var dec *protocol.DecisionID
 	if *decision != "" {
+		if !decisionIDShape.MatchString(*decision) {
+			return errors.New("--decision must be a decision id (dec_ and 26 characters)")
+		}
 		dec = decision
 	}
 	s, err := open(*pod)

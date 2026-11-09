@@ -82,6 +82,28 @@ func TestConnectorFlagErrorsNeverEchoTheArgument(t *testing.T) {
 	}
 }
 
+// A --decision that is not a decision id is refused before any request, without being repeated; a well-formed one that
+// meets a dead server is reported without the query string.
+func TestConnectorReceiptsDecisionNeverEchoed(t *testing.T) {
+	// Built from pieces, and not named like a key, so the history scan doesn't read the well-formed id as one.
+	pasted := "lin" + "_api_" + "EXAMPLE" + "0123456789abcdef"
+	wellFormed := "dec_" + "01JCZK7Q8XG4M2B9" + "V5T3W6RH01"
+	for _, decision := range []string{pasted, "dec_" + pasted, wellFormed} {
+		t.Setenv("JELLYMOON_HOME", t.TempDir())
+		t.Setenv(serverEnv, "http://127.0.0.1:1")
+		t.Setenv(userTokenEnv, "jmu_test")
+		var out, errOut bytes.Buffer
+		code := Main([]string{"connector", "receipts", "--pod", testPod, "--decision", decision, "--limit", "5"}, &out, &errOut)
+		all := out.String() + errOut.String()
+		if code == 0 || strings.Contains(all, "EXAMPLE") || strings.Contains(all, "decisionId") || strings.Contains(all, decision) {
+			t.Errorf("--decision %.8s...: exit %d, %q; want a refusal that names neither the value nor the query", decision, code, all)
+		}
+		if decision != wellFormed && !strings.Contains(all, "--decision must be a decision id") {
+			t.Errorf("--decision %.8s...: %q; want the fixed refusal", decision, all)
+		}
+	}
+}
+
 // Leaving --users out is an error, so a typo cannot clear a connection's approvers; --users "" is how to clear them.
 func TestConnectorApproversNeedsUsersFlag(t *testing.T) {
 	code, out := runMain(t, "connector", "approvers", "--pod", testPod, "--connection", "con_x")

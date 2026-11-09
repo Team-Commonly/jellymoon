@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/Team-Commonly/jellymoon/daemon/internal/protocol"
@@ -62,8 +63,10 @@ func (c *Client) post(path, token string, in, out any) error {
 	return c.call(http.MethodPost, path, token, in, out)
 }
 
-// call is one request. A nil `in` sends no body.
+// call is one request. A nil `in` sends no body. Its errors name the method and the route, never the query string: a query
+// value can come from argv, and argv can hold a pasted credential.
 func (c *Client) call(method, path, token string, in, out any) error {
+	route, _, _ := strings.Cut(path, "?")
 	var body io.Reader
 	if in != nil {
 		raw, err := json.Marshal(in)
@@ -74,7 +77,7 @@ func (c *Client) call(method, path, token string, in, out any) error {
 	}
 	req, err := http.NewRequest(method, c.Base.String()+path, body)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s %s: the request could not be built", method, route)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
@@ -82,27 +85,27 @@ func (c *Client) call(method, path, token string, in, out any) error {
 	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("%s %s: %w", method, path, redact(err))
+		return fmt.Errorf("%s %s: %w", method, route, redact(err))
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		// Checked before the status or the body is looked at: a body that broke mid-read is not an empty success, and not a
 		// status error with the real cause missing.
-		return fmt.Errorf("%s %s: reading the response (HTTP %d): %w", method, path, resp.StatusCode, redact(err))
+		return fmt.Errorf("%s %s: reading the response (HTTP %d): %w", method, route, resp.StatusCode, redact(err))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var e protocol.ErrorBody
 		if json.Unmarshal(raw, &e) == nil {
-			return &Error{Method: method, Path: path, Status: resp.StatusCode, Body: e}
+			return &Error{Method: method, Path: route, Status: resp.StatusCode, Body: e}
 		}
-		return fmt.Errorf("%s %s: HTTP %d", method, path, resp.StatusCode)
+		return fmt.Errorf("%s %s: HTTP %d", method, route, resp.StatusCode)
 	}
 	if out == nil {
 		return nil
 	}
 	if len(raw) == 0 {
-		return fmt.Errorf("%s %s: HTTP %d with an empty body, but a result is needed", method, path, resp.StatusCode)
+		return fmt.Errorf("%s %s: HTTP %d with an empty body, but a result is needed", method, route, resp.StatusCode)
 	}
 	return json.Unmarshal(raw, out)
 }

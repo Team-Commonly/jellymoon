@@ -5,7 +5,7 @@ import { bootSignedIn, browserHttp, type Http } from './http';
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-const withMe = (me: Http['me']): Http => ({ me, acceptInvite: async () => { throw new Error('unused'); }, approveDevice: async () => {} });
+const withMe = (me: Http['me']): Http => ({ me, acceptInvite: async () => { throw new Error('unused'); }, approveDevice: async () => {}, stopRun: async () => {} });
 const person = { id: 'usr_1' } as unknown as Actor;
 
 describe('bootSignedIn', () => {

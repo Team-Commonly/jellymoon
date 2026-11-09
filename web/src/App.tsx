@@ -31,7 +31,7 @@ export function App({ connect, http, signedIn }: { connect: (podId: string) => C
   return (
     <Routes>
       <Route element={<Shell signedIn={signedIn} />}>
-        <Route path="/pod/:id" element={<PodPage connect={connect} />} />
+        <Route path="/pod/:id" element={<PodPage connect={connect} http={http} />} />
         <Route path="/device" element={<DevicePage http={http} signedIn={signedIn} />} />
         <Route path="/invite/:token" element={<InvitePage http={http} signedIn={signedIn} />} />
         <Route path="*" element={<p>Nothing here.</p>} />

@@ -16,3 +16,9 @@ button[data-recommended='true'] { font-weight: 600; }
 textarea { width: 100%; box-sizing: border-box; font: inherit; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 :focus-visible { outline: 3px solid #36c; outline-offset: 2px; }
+/* A run line is as quiet as a quiet card; long agent names and the server's refusal wrap whole. */
+ul[aria-label='Runs'] { list-style: none; margin: 8px 0; padding: 0; }
+ul[aria-label='Runs'] li { overflow-wrap: anywhere; padding: 4px 0; }
+ul[aria-label='Runs'] li[data-state='ended'] { opacity: 0.7; font-size: 0.9em; }
+ul[aria-label='Runs'] li > button { margin-left: 8px; }
+ul[aria-label='Runs'] p { margin: 4px 0 0; color: #c33; }

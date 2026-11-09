@@ -6,7 +6,9 @@ import { useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { CardView } from './CardView';
 import { buildCard, needsYou } from './cards';
 import type { Card } from './cards';
-import type { Connect } from './store';
+import { ApiError } from './http';
+import type { Http } from './http';
+import type { Connect, RunLine } from './store';
 import { usePod } from './usePod';
 import { usePodKeys } from './usePodKeys';
 
@@ -31,13 +33,48 @@ function Composer(p: { onPost(text: string): void; error?: string; inputRef: Rea
   );
 }
 
+const ENDED_WORD = { cancelled: 'stopped', completed: 'finished', failed: 'failed', expired: 'timed out' } as const;
+
+/**
+ * One line per run: a going run says so and, for someone the stop route would allow, carries Stop; an ended run is one quiet line.
+ * Pressing Stop changes nothing on the line. It only disables the button; the line changes when the pod's run.ended arrives.
+ */
+function RunItem({ run, canStop, stop }: { run: RunLine; canStop: boolean; stop(runId: string): Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string>();
+  const name = run.agent.displayName;
+  const press = async () => {
+    setBusy(true);
+    setNote(undefined);
+    try {
+      await stop(run.runId); // stays disabled: the server accepted it and run.ended is on its way
+    } catch (e) {
+      setBusy(false);
+      setNote(e instanceof ApiError ? e.message : 'Could not reach the server. Try again.');
+    }
+  };
+  if (run.state === 'ended') return <li data-state="ended">{`${name}'s run ${ENDED_WORD[run.outcome ?? 'completed']}.`}</li>;
+  return (
+    <li data-state="going">
+      {`${name} is working on a run.`}
+      {canStop && <button type="button" aria-label={`Stop ${name}'s run`} disabled={busy} onClick={press}>Stop</button>}
+      {note && <p role="alert">{note}</p>}
+    </li>
+  );
+}
+
+function RunLines({ runs, canStop, stop }: { runs: RunLine[]; canStop: boolean; stop(runId: string): Promise<void> }) {
+  if (runs.length === 0) return null;
+  return <ul aria-label="Runs" aria-live="polite">{runs.map((r) => <RunItem key={r.runId} run={r} canStop={canStop} stop={stop} />)}</ul>;
+}
+
 function useNeedsYouFilter() {
   const [params, setParams] = useSearchParams();
   const on = params.get('filter') === 'needs-you';
   return { on, toggle: () => setParams(on ? {} : { filter: 'needs-you' }, { replace: true }) };
 }
 
-export function PodPage({ connect }: { connect: (podId: string) => Connect }) {
+export function PodPage({ connect, http }: { connect: (podId: string) => Connect; http: Http }) {
   const { id = '' } = useParams();
   const slot = useOutletContext<HTMLElement | null>();
   const { store, state } = usePod(id, connect);
@@ -54,6 +91,9 @@ export function PodPage({ connect }: { connect: (podId: string) => Connect }) {
     toggleFilter: filter.toggle,
     focusComposer: () => composer.current?.focus(),
   });
+  // The hello names members and their roles but not who owns an agent, so Stop shows to pod owners only; the route also lets an agent's owner stop it.
+  const canStop = state.members.some((m) => m.actor.id === state.you?.id && m.role === 'owner');
+  const runs = useMemo(() => Object.values(state.runs), [state.runs]);
   const pending = k.keys.confirm ? cards[k.keys.focus]?.ask?.options.find((o) => o.id === k.keys.confirm)?.label : undefined;
   return (
     <>
@@ -77,6 +117,7 @@ export function PodPage({ connect }: { connect: (podId: string) => Connect }) {
         ))}
       </section>
       <div role="status" aria-live="polite">{pending ? `Rule ${pending}? Press Enter to rule, Escape to cancel.` : ''}</div>
+      <RunLines runs={runs} canStop={canStop} stop={(runId) => http.stopRun(id, runId)} />
       <Composer inputRef={composer} onPost={(t) => store.post(t)} error={state.postError} />
     </>
   );

@@ -170,6 +170,37 @@ test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, 
   await holdsLayout(page, '/pod/:id with a long draft in the composer');
 });
 
+test('/pod/:id keeps its layout with run lines: a going run under a name that cannot break, a refused Stop, and the stopped line', async ({ page, pod }) => {
+  const NAME = UNBROKEN.slice(0, 80); // the schema's longest display name
+  const long = await fakeAgent(pod.id, pod.you, NAME);
+  try {
+    await signIn(page, pod.you);
+    await openPod(page, pod);
+    const runs = page.getByRole('list', { name: 'Runs' });
+    await expect(runs.getByRole('listitem')).toHaveCount(2);
+    await expect(runs).toContainText(`${NAME} is working on a run.`);
+    await holdsLayout(page, '/pod/:id with two going runs');
+
+    // A refusal: the server's whole message, long and unbroken, shows under the line.
+    const refusal = `Refused: ${UNBROKEN} ${UNBROKEN}`;
+    await page.route('**/v1/pods/*/runs/*/stop', (route) => route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ code: 'forbidden', message: refusal }) }));
+    await page.getByRole('button', { name: `Stop ${NAME}'s run` }).click();
+    await expect(runs.getByRole('alert')).toHaveText(refusal);
+    await holdsLayout(page, '/pod/:id with a refused Stop');
+
+    // Both stopped for real: two quiet lines, the long name among them.
+    await page.unroute('**/v1/pods/*/runs/*/stop');
+    await page.getByRole('button', { name: `Stop ${NAME}'s run` }).click();
+    await page.getByRole('button', { name: "Stop Scout's run" }).click();
+    await expect(runs).toContainText(`${NAME}'s run stopped.`);
+    await expect(runs).toContainText("Scout's run stopped.");
+    await expect(page.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
+    await holdsLayout(page, '/pod/:id with two stopped runs');
+  } finally {
+    long.close();
+  }
+});
+
 test('the needs-you filter keeps its layout, with an ask, and when nothing needs you', async ({ page, pod }) => {
   await pod.agent.post(askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }));
   await pod.agent.post(askInput('Rename the billing table?', { userIds: [pod.other.user.id] }));

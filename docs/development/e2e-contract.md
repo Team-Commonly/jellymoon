@@ -193,8 +193,9 @@ starts; no sleep, wait or assertion changed.
 
 ## Running in parallel
 
-The suite tests call `par(t)` right after `need`/`needFake`, so they run at the same time, up to `go test`'s `-parallel` (the CPU
-count by default). That is safe because each of them builds its own world: its own server process group, ports, data dir, pod,
+The suite tests call `par(t)` right after `need`/`needFake`, so they run at the same time, up to `go test`'s `-parallel`. Unless
+`-parallel` is given, `TestMain` sets it to the CPU count plus one: the extra slot is the one `TestF14Budget` holds while it waits
+(below), so the tests that work still get one slot per CPU. That is safe because each of them builds its own world: its own server process group, ports, data dir, pod,
 users and sockets. Two tests that shared a pod, a data dir or a port would see each other's events, so a new test must not.
 `TestStepPrinter` and `TestPortRetry` (which starts a child test process) stay serial. The only state the tests share is the harness's
 bookkeeping (`outcomes`, the step counters), which is a `sync.Map` and atomics.
@@ -203,6 +204,16 @@ bookkeeping (`outcomes`, the step counters), which is a `sync.Map` and atomics.
 cleanup, so it judges after the outcomes and the server kills. It needs `-parallel` 2 or more and says so if given 1. A server
 start is CPU-bound (a Worker start is `wrangler dev` plus `workerd`), so a runner with few cores overlaps fewer of them; with
 four slots (`GOMAXPROCS=4`) the Worker suite took 14 s on a dev machine against 10 s with ten, far under the budget.
+
+The suite grew, and by November the Worker leg on the CI runner was at or over the budget (61.8 s, then 64.8 s). Three things made
+the run longer than its work. `TestF14Budget` held one of the runner's four slots from the moment it resumed, so most of the run
+had three. `TestF13` did not call `par` and ran alone before any parallel test started (6.7 s on CI). And `TestIMP` ran its nine
+importer steps one after another, 25 s of mostly sleeping (an importer run waits at least 250 ms between two reads), and it often
+resumed late, so it was the run's tail. Now the budget test's slot is an extra one, `TestF13` and `TestF08Redaction` are parallel,
+and `TestIMP`'s steps run at the same time: each has its own fixture, config dir, work dir and recorder in front of the one shared
+server, and they are plain subtests started from goroutines, so together they hold `TestIMP`'s one slot. No wait, deadline or
+assertion changed. With `GOMAXPROCS=4` on a dev machine the Worker leg went from 30.6 s to 17.5 to 19.6 s (three runs), and
+`TestIMP` from 23.2 s to 5.2 s.
 
 ## Skipped on the server
 

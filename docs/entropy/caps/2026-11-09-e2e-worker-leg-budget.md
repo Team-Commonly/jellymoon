@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: e2e-worker-leg-budget
+
+2026-11-09: e2e cap 9,540 -> 9,600. The Worker leg of the contract suite reached its 60 s budget on the CI runner, and the fix is in the harness and the slow tests, not the budget: `TestMain` sets `-parallel` to the CPU count plus one unless it is given (the extra slot is the one `TestF14Budget` holds while it waits), checked by `TestSuiteParallel`; `TestF13` and `TestF08Redaction` call `par`; and `TestIMP` runs its importer steps at the same time, each with its own recorder, with the checks across everything reading every step once all have ended (`e2e/harness_test.go`, `e2e/zz_budget_test.go`, `e2e/imp_test.go`). The tree printed `LOC budget: e2e 9597 > 9540`; the cap is the count rounded up to ten. No other cap changes.

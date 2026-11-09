@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,7 +12,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -33,7 +36,7 @@ var (
 	// stateInDatabase is set by `make e2e-c` when the server keeps its state in a real database (DATABASE_URL): the --persist-to
 	// directory then holds no files by design. TestF02 says so aloud and skips only its directory-content check.
 	stateInDatabase = os.Getenv("JM_E2E_STATE_IN_DB") == "1"
-	suiteTests      = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF09", "TestF10", "TestF11", "TestF12", "TestF14", "TestExpiryZeroTraffic", "TestRenewRace",
+	suiteTests      = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF09", "TestF10", "TestF11", "TestF12", "TestF13", "TestF14", "TestExpiryZeroTraffic", "TestRenewRace",
 		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline", "TestRunTokenOtherPod", "TestEvictMidClaim", "TestEvictAlarmWake", "TestEvictPastDeadline", "TestF15", "TestBSESS", "TestAUTHH"}
 	outcomes sync.Map // test name -> failed bool
 )
@@ -59,11 +62,28 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "JM_E2E_STALE_MS is no longer a setting: staleMs must be 0 (docs/adr/0003-pure-pod-core.md, item 5)")
 		os.Exit(2)
 	}
+	flag.Parse()
+	set := false
+	flag.Visit(func(f *flag.Flag) { set = set || f.Name == "test.parallel" })
+	if p := flag.Lookup("test.parallel"); p != nil {
+		given, _ := strconv.Atoi(p.Value.String())
+		_ = p.Value.Set(strconv.Itoa(suiteParallel(set, given, runtime.GOMAXPROCS(0))))
+	}
 	code := m.Run()
 	if serverCmd != "" {
 		fmt.Println(summaryLine(time.Since(suiteStart).Milliseconds(), stepsOK.Load(), stepsRun.Load()))
 	}
 	os.Exit(code)
+}
+
+// suiteParallel is the -parallel the suite runs with. TestF14Budget is parallel and only waits, but it holds a slot from the
+// moment it resumes to the end of the run, so a run with one slot per CPU (go test's default) works one slot short for most
+// of its length. Unset, the suite gets one slot per CPU plus that one. Set by hand (-parallel n), n is kept as given.
+func suiteParallel(set bool, given, procs int) int {
+	if set {
+		return given
+	}
+	return procs + 1
 }
 
 func need(t *testing.T) {

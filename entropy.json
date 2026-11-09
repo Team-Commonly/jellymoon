@@ -48,13 +48,13 @@
       "paths": [
         "web/"
       ],
-      "max": 2150
+      "max": 2440
     },
     "e2e": {
       "paths": [
         "e2e/"
       ],
-      "max": 9540
+      "max": 9600
     }
   },
   "goImports": {

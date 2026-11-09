@@ -13,6 +13,7 @@ import (
 // daemon is the repo's own binary, run as a black box.
 func TestF08Redaction(t *testing.T) {
 	need(t)
+	par(t)
 	track(t)
 	const planted = "jmu_PlantedByTheServer0123"
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

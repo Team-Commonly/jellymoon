@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -17,16 +18,21 @@ import (
 )
 
 // TestIMP: `jellymoon import commonly` against a fixture Commonly and a real local Jellymoon server (backlog unit IMP). Each step
-// has its own fixture instance and config dir, on one shared Jellymoon server behind a recorder.
+// has its own fixture instance, config dir, work dir and recorder, on one shared Jellymoon server, so the steps run at the same
+// time: an importer run is paced (at least 250 ms between two reads), so one after another they took over 20 s. The steps are
+// plain subtests started from their own goroutines, not t.Parallel, so together they hold this test's one slot. The checks
+// across everything still read every step's fixture, outputs, files and recorder once all of them have ended.
 func TestIMP(t *testing.T) {
 	need(t)
 	par(t)
 	track(t)
-	env := &impEnv{t: t, bin: buildDaemon(t), jm: startServer(t)}
-	env.jmURL = env.jm.base()
-	env.jmTok = mustUser(t, newClient(t, env.jmURL), "importer").tok
-	env.rec = newRecorder(t, env.jmURL)
-	env.jmURL = env.rec.URL
+	bin, jm := buildDaemon(t), startServer(t)
+	tok := mustUser(t, newClient(t, jm.base()), "importer").tok
+	var (
+		mu    sync.Mutex
+		steps []*impEnv
+		wg    sync.WaitGroup
+	)
 	for _, s := range []struct {
 		name string
 		fn   func(*testing.T, *impEnv)
@@ -41,14 +47,20 @@ func TestIMP(t *testing.T) {
 		{"--include-dm opts one DM in, and --anonymize hides people", impOptIns},
 		{"grants and integrations never leak a token, a bot token or a webhook url", impNoLeaks},
 	} {
-		t.Run(s.name, func(t *testing.T) {
-			env.t = t
-			s.fn(t, env)
-			env.scanFiles()
-		})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			t.Run(s.name, func(t *testing.T) {
+				e := &impEnv{t: t, bin: bin, jm: jm, jmTok: tok, rec: newRecorder(t, jm.base())}
+				e.jmURL = e.rec.URL
+				defer func() { mu.Lock(); steps = append(steps, e); mu.Unlock() }() // kept even when the step stops on a Fatal
+				s.fn(t, e)
+				e.scanFiles()
+			})
+		}()
 	}
-	env.t = t
-	env.acrossEverything()
+	wg.Wait()
+	impAcrossEverything(t, steps)
 }
 
 func impDryRun(t *testing.T, e *impEnv) {
@@ -232,11 +244,17 @@ func impNoLeaks(t *testing.T, e *impEnv) {
 	}
 }
 
-// acrossEverything judges every fixture instance and everything recorded: no scope parameter, no forbidden route, only GETs
-// with the run's token, and no secret in any output, file or request to Jellymoon.
-func (e *impEnv) acrossEverything() {
-	t := e.t
-	for i, c := range e.cmys {
+// impAcrossEverything judges every step's fixture instances and everything recorded: no scope parameter, no forbidden route,
+// only GETs with the run's token, and no secret in any output, file or request to Jellymoon.
+func impAcrossEverything(t *testing.T, steps []*impEnv) {
+	var cmys []*cmyfake.Server
+	var all []string
+	for _, e := range steps {
+		cmys = append(cmys, e.cmys...)
+		all = append(all, e.all...)
+		all = append(all, e.rec.dump())
+	}
+	for i, c := range cmys {
 		for _, bad := range []string{"scope", "/api/users/", "/api/credentials", "/api/agents/runtime", "ingest-tokens"} {
 			if n := c.Seen(bad); n != 0 {
 				t.Errorf("fixture %d saw %d requests with %q", i, n, bad)
@@ -248,7 +266,7 @@ func (e *impEnv) acrossEverything() {
 			}
 		}
 	}
-	scan := strings.Join(e.all, "\n") + e.rec.dump()
+	scan := strings.Join(all, "\n")
 	for _, bad := range []string{impSentinel, "SECRETGRANTVALUE", "SECRETBOTVALUE", "SECRETHOOKVALUE", "bob@example.com", "me@example.com"} {
 		if strings.Contains(scan, bad) {
 			t.Errorf("%q appears in an output, a file or a request to Jellymoon", bad)

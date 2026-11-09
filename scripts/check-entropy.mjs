@@ -62,6 +62,9 @@ for (const [area, b] of Object.entries(cfg.locBudget)) {
   if (loc[area] > b.max) errors.push(`LOC budget: ${area} ${loc[area]} > ${b.max}`);
 }
 
+// entropy.json is the only place the caps are written; print their total here so nobody restates it by hand.
+console.log(`caps total: ${Object.values(cfg.locBudget).reduce((sum, b) => sum + b.max, 0)}`);
+
 if (files.some((f) => f.endsWith('.go'))) {
   const mod = execFileSync('go', ['list', '-m'], { encoding: 'utf8' }).trim();
   const pkgs = execFileSync('go', ['list', '-f', '{{.ImportPath}} {{join .Imports " "}}', './...'], { encoding: 'utf8' });
@@ -88,6 +91,26 @@ if (named !== 'none') try {
     }
   }
 } catch { if (named) errors.push(`ratchet: cannot read entropy.json at JM_ENTROPY_BASE=${named}; the ratchet would switch off`); }
+
+// A cap changes only with a new note in docs/entropy/caps/ in the same diff (ADR 0001). The base is the merge-base of HEAD and
+// the named base (JM_ENTROPY_BASE, else origin/main). A shallow clone, or a base that cannot be read, skips only this check
+// and says so; the ratchet above already fails loudly for a named base it cannot read. CI checks out with fetch-depth 0.
+function git(...args) { return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); }
+if (named !== 'none') try {
+  if (git('rev-parse', '--is-shallow-repository').trim() === 'true') throw new Error('shallow clone');
+  const mergeBase = git('merge-base', 'HEAD', named ?? 'origin/main').trim();
+  const baseCaps = JSON.parse(git('show', `${mergeBase}:entropy.json`)).locBudget;
+  const changed = [...new Set([...Object.keys(baseCaps), ...Object.keys(cfg.locBudget)])]
+    .filter((area) => baseCaps[area]?.max !== cfg.locBudget[area]?.max);
+  const noteDir = 'docs/entropy/caps/';
+  const added = [
+    ...git('diff', '--name-status', '--diff-filter=A', mergeBase).split('\n').map((l) => l.split('\t')[1]),
+    ...git('ls-files', '--others', '--exclude-standard', noteDir).split('\n'),
+  ].filter((f) => f?.startsWith(noteDir));
+  if (changed.length && !added.length) {
+    errors.push(`cap changed for ${changed.join(', ')} without a new note: add a file under ${noteDir} in this diff (ADR 0001)`);
+  }
+} catch (e) { console.log(`cap-note check skipped: cannot read the base of this diff (${e.message.split('\n')[0]})`); }
 
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
 console.log(`entropy ok: ${files.length} files`);

@@ -74,12 +74,22 @@ func (f *f19) parks() error {
 	if n := len(f.linear.seen("create_issue")); n != 0 {
 		return fmt.Errorf("the stub got %d writes while the call was parked", n)
 	}
-	for what, b := range f.seen {
-		if strings.Contains(string(b), stubToken) {
-			return fmt.Errorf("the Linear token is in %s", what)
-		}
+	if err := f.reclassified(); err != nil {
+		return err
 	}
-	return nil
+	return f.noLeak()
+}
+
+// reclassified: a pinned write whose arguments claim it is a read (and whose upstream annotates it read-only) still parks.
+func (f *f19) reclassified() error {
+	dec, _, err := f.park(map[string]any{"title": "Claims to be a read", "teamId": "TEAM-1", "class": "read", "_class": "read", "readOnlyHint": true})
+	if err != nil {
+		return fmt.Errorf("a write claiming to be a read: %w", err)
+	}
+	if n := len(f.linear.seen("create_issue")); n != 0 {
+		return fmt.Errorf("a write claiming to be a read reached the stub (%d writes)", n)
+	}
+	return f.rule(f.sO, dec, "b", "ruled")
 }
 
 // rule sends a ruling from s and waits for the decision to reach `state` (or for the error `code` on s).
@@ -91,7 +101,7 @@ func (f *f19) rule(s *sock, dec, option, want string) error {
 		fr.dec(&u)
 		return fr.Type == "message.updated" && u.Decision.ID == dec && u.Decision.State == want
 	}
-	if want == "already_ruled" || want == "gone" {
+	if want == "already_ruled" || want == "gone" || want == "forbidden" {
 		match = errorWith(want)
 	}
 	if _, ok := s.waitAfter(mk, match, 5*time.Second); !ok {
@@ -108,8 +118,15 @@ func (f *f19) writes(n int) error {
 	return nil
 }
 
-// Step 5: approve releases one write with the exact arguments; a second ruling, a rejection and an expiry release none.
+// Step 5: a member who is not an owner cannot approve; the owner's approval releases one write with the exact arguments;
+// a second ruling, a rejection and an expiry release none.
 func (f *f19) releasesOnce() error {
+	if err := f.rule(f.sBen, f.parked, "a", "forbidden"); err != nil {
+		return fmt.Errorf("a plain member's approval: %w", err)
+	}
+	if err := f.writes(0); err != nil {
+		return err
+	}
 	if err := f.rule(f.sO, f.parked, "a", "ruled"); err != nil {
 		return err
 	}
@@ -119,7 +136,7 @@ func (f *f19) releasesOnce() error {
 	if w := f.linear.seen("create_issue")[0]; !reflect.DeepEqual(w.Args, f.args) || w.Bearer != "Bearer "+stubToken {
 		return fmt.Errorf("the released write: args %v bearer ok %v, want exactly %v with the stub bearer", w.Args, w.Bearer == "Bearer "+stubToken, f.args)
 	}
-	if err := f.rule(f.sBen, f.parked, "a", "already_ruled"); err != nil {
+	if err := f.rule(f.sO, f.parked, "a", "already_ruled"); err != nil {
 		return err
 	}
 	rejected, _, err := f.park(map[string]any{"title": "A second issue", "teamId": "TEAM-1"})
@@ -180,8 +197,8 @@ func (f *f19) receipt() error {
 	if st, _ := f.raw("POST", f.podPath("connectors", "receipts"), f.r.tok, map[string]any{"outcome": "released"}); st != 404 {
 		return fmt.Errorf("a POST of a receipt: HTTP %d, want 404 (no route writes a receipt)", st)
 	}
-	if strings.Contains(b, stubToken) {
-		return fmt.Errorf("the Linear token is in the receipt")
+	if form := leakIn([]byte(b)); form != "" {
+		return fmt.Errorf("the Linear token (%s) is in the receipt", form)
 	}
 	return nil
 }

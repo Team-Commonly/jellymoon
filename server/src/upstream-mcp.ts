@@ -1,13 +1,36 @@
 // The one file that knows MCP (ADR 0009, "Operations, not MCP"): an upstream that speaks MCP over Streamable HTTP, as two
 // functions, list and call. JSON-RPC initialize, then tools/list or tools/call, with the credential as a bearer. An answer may
 // be JSON or an event stream. Redirects are refused (one could lead to a private address) and every request has a timeout.
-// Errors carry the upstream's own text, uncut: the caller scrubs the credential out first and only then shortens it.
+// Errors carry the upstream's status and its own text, uncut: the caller scrubs the credential out first and only then
+// shortens it. An answer over MAX_BYTES is refused (upstream_too_large) and none of it is kept.
 import type { ListedOp } from './catalogue';
 
-export type Listed = { ok: true; ops: ListedOp[] } | { ok: false; status: number; error: string };
-export interface Called { ok: boolean; status: number; result?: Record<string, unknown>; error?: string }
+type TooLarge = 'upstream_too_large';
+export type Listed = { ok: true; ops: ListedOp[] } | { ok: false; status: number; error: string; code?: TooLarge };
+export interface Called { ok: boolean; status: number; result?: Record<string, unknown>; error?: string; code?: TooLarge }
 
 const TIMEOUT_MS = 10_000;
+const MAX_BYTES = 1024 * 1024;
+
+class TooLargeError extends Error { override name = 'TooLargeError'; }
+
+/** The body as text, read no further than MAX_BYTES: a longer one (or a longer declared length) throws TooLargeError. */
+async function bounded(res: Response): Promise<string> {
+  if (Number(res.headers.get('content-length') ?? 0) > MAX_BYTES) throw new TooLargeError();
+  const reader = res.body?.getReader();
+  const parts: Uint8Array[] = [];
+  let n = 0;
+  for (;;) {
+    const chunk = reader === undefined ? { done: true as const } : await reader.read();
+    if (chunk.done) break;
+    n += chunk.value.length;
+    if (n > MAX_BYTES) { await reader!.cancel(); throw new TooLargeError(); }
+    parts.push(chunk.value);
+  }
+  const all = new Uint8Array(n);
+  parts.reduce((at, p) => { all.set(p, at); return at + p.length; }, 0);
+  return new TextDecoder().decode(all);
+}
 type Rpc = { status: number; body?: Record<string, unknown>; text: string; session: string | null };
 
 /** The JSON-RPC message of an answer: the body itself, or the last `data:` line of an event stream. */
@@ -26,15 +49,18 @@ async function rpc(url: string, token: string, session: string | null, method: s
     method: 'POST', headers, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS),
     body: JSON.stringify(id === undefined ? { jsonrpc: '2.0', method, params } : { jsonrpc: '2.0', id, method, params }),
   });
-  const text = await res.text();
+  const text = await bounded(res);
   return { status: res.status, body: messageOf(res.headers.get('content-type') ?? '', text), text, session: res.headers.get('mcp-session-id') ?? session };
 }
 
-/** The upstream's own words for a failed answer: its JSON-RPC error message, else the start of its body. */
+/**
+ * The upstream's own words for a failed answer: its JSON-RPC error message, else its HTTP status and body. A JSON body is
+ * re-serialized from its parsed form, so escapes such as \u sequences are decoded before the caller scrubs it.
+ */
 function errorOf(r: Rpc): string | null {
   const e = r.body?.error as { message?: unknown } | undefined;
   if (e !== undefined) return String(e.message ?? 'error');
-  if (r.status < 200 || r.status > 299) return `HTTP ${r.status}: ${r.text}`;
+  if (r.status < 200 || r.status > 299) return `HTTP ${r.status}: ${r.body === undefined ? r.text : JSON.stringify(r.body)}`;
   return r.body === undefined ? 'The upstream answered with no JSON-RPC message.' : null;
 }
 
@@ -45,7 +71,10 @@ async function open(url: string, token: string): Promise<Rpc> {
   return init;
 }
 
-const failure = (e: unknown): { status: number; error: string } => ({ status: 502, error: e instanceof Error && e.name === 'TimeoutError' ? 'The upstream did not answer in time.' : 'The upstream could not be reached.' });
+function failure(e: unknown): { status: number; error: string; code?: TooLarge } {
+  if (e instanceof TooLargeError) return { status: 502, error: `The upstream answered with more than ${MAX_BYTES} bytes; none of it was kept.`, code: 'upstream_too_large' };
+  return { status: 502, error: e instanceof Error && e.name === 'TimeoutError' ? 'The upstream did not answer in time.' : 'The upstream could not be reached.' };
+}
 
 export async function list(url: string, token: string): Promise<Listed> {
   try {

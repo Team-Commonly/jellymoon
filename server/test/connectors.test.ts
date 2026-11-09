@@ -36,6 +36,19 @@ describe('the vault', () => {
     expect(gone).toBe('refused');
   });
 
+  test('each seal draws a fresh IV for both layers, and a tampered tag does not open', async () => {
+    const v = await makeVault(ring({ JM_VAULT_KEY: key('a') }));
+    const one = await v.seal('same', 'x');
+    const two = await v.seal('same', 'x');
+    const iv = (s: string) => atob(s).slice(0, 12);
+    expect([iv(one.sealed) === iv(two.sealed), iv(one.wrapped) === iv(two.wrapped), one.sealed === two.sealed]).toEqual([false, false, false]);
+    const raw = atob(one.sealed);
+    const tampered = btoa(raw.slice(0, -1) + String.fromCharCode(raw.charCodeAt(raw.length - 1) ^ 1));
+    let opened = 'opened';
+    await v.open({ ...one, sealed: tampered }, 'x').catch(() => { opened = 'refused'; });
+    expect(opened).toBe('refused');
+  });
+
   test('a malformed key refuses the start without echoing it; no key at all is allowed', () => {
     const why = startupRefusal({ ENV: 'local', JM_VAULT_KEY: 'not-a-key-value' });
     expect(why?.includes('JM_VAULT_KEY')).toBe(true);
@@ -62,6 +75,15 @@ describe('the catalogue pin', () => {
   test('scrub removes a credential in raw and in JSON-escaped form', () => {
     expect(scrub({ e: 'Bearer s3cr"et and s3cr"et' }, 's3cr"et')).toEqual({ e: 'Bearer [credential removed] and [credential removed]' });
     expect(scrub('plain', 'other')).toBe('plain');
+  });
+  test('scrub also removes the token \\u-escaped, URL-encoded and base64-encoded at any alignment, by dropping the text', () => {
+    const t = 'tok/en+value-0123';
+    const u = [...t].map((c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`).join('');
+    const url64 = (s: string) => btoa(s).replace(/\+/g, '-').replace(/\//g, '_');
+    for (const s of [`x ${u} y`, `x ${encodeURIComponent(t)} y`, `x=${btoa(t)} y`, `x ${btoa(`Bearer ${t}`)} y`, `x ${url64(`ab${t}`)}`, `zz${btoa(`a${t}`)}`]) {
+      expect([s, scrub({ e: s }, t)]).toEqual([s, { e: '[credential removed]' }]);
+    }
+    expect(scrub({ e: `HTTP 401 ${btoa('unrelated words here')}` }, t)).toEqual({ e: `HTTP 401 ${btoa('unrelated words here')}` });
   });
 });
 

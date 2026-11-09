@@ -45,14 +45,40 @@ export const argsHash = (args: unknown): string => createHash('sha256').update(c
 
 const REMOVED = '[credential removed]';
 
+const hexChar = (_: string, h: string): string => String.fromCharCode(parseInt(h, 16));
+
+/** Whether `s` holds `secret` once decoded: \u escapes, percent-encoding (with + as a space or not), or base64 (std or url). */
+function encodes(s: string, secret: string): boolean {
+  const views = [s.replace(/\\u([0-9a-fA-F]{4})/g, hexChar).replace(/\\(["\\/])/g, '$1'), s.replace(/%([0-9a-fA-F]{2})/g, hexChar), s.replace(/\+/g, ' ').replace(/%([0-9a-fA-F]{2})/g, hexChar)];
+  if (views.some((x) => x.includes(secret))) return true;
+  for (const run of s.match(/[A-Za-z0-9+/_-]{12,}/g) ?? []) {
+    const std = run.replace(/-/g, '+').replace(/_/g, '/');
+    for (let at = 0; at < 4; at++) {
+      const tail = std.slice(at);
+      const part = tail.length % 4 === 1 ? tail.slice(0, -1) : tail + '='.repeat((4 - (tail.length % 4)) % 4);
+      try { if (atob(part).includes(secret)) return true; } catch { /* not base64 at this offset */ }
+    }
+  }
+  return false;
+}
+
+/** Each string (and key) of a JSON value that holds `secret` in an encoded form becomes REMOVED, whole. */
+function dropEncoded(v: unknown, secret: string): unknown {
+  if (typeof v === 'string') return encodes(v, secret) ? REMOVED : v;
+  if (Array.isArray(v)) return v.map((x) => dropEncoded(x, secret));
+  if (v === null || typeof v !== 'object') return v;
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => [encodes(k, secret) ? REMOVED : k, dropEncoded(x, secret)]));
+}
+
 /**
- * `v` with every occurrence of `secret` replaced, in raw and in JSON-escaped form: the one choke point every upstream answer
- * and error passes through before an agent, a person, a receipt or a log sees it.
+ * `v` with `secret` removed: every raw or JSON-escaped occurrence replaced, then any string that still holds it \u-escaped,
+ * percent-encoded or base64-encoded dropped whole. The one choke point every upstream answer and error passes through before
+ * an agent, a person, a receipt or a log sees it.
  */
 export function scrub<T>(v: T, secret: string): T {
   const text = JSON.stringify(v);
   if (text === undefined || secret === '') return v;
   const escaped = JSON.stringify(secret).slice(1, -1);
   // A secret made of JSON punctuation could straddle the structure; then nothing of the value is kept.
-  try { return JSON.parse(text.split(secret).join(REMOVED).split(escaped).join(REMOVED)) as T; } catch { return REMOVED as T; }
+  try { return dropEncoded(JSON.parse(text.split(secret).join(REMOVED).split(escaped).join(REMOVED)), secret) as T; } catch { return REMOVED as T; }
 }

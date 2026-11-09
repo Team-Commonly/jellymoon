@@ -1,8 +1,12 @@
 package e2e
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"net/http/httptest"
 	"slices"
 	"sync"
@@ -11,7 +15,8 @@ import (
 
 // The stub Linear for TestF19: a tiny MCP-over-HTTP JSON-RPC server. It answers only a caller with the stub bearer, lists
 // tools that match the pinned catalogue (plus one the pin leaves out), and records every tools/call it receives.
-const stubToken = "stub-linear-credential-for-the-f19-suite-only"
+// It holds a slash and a plus, so its URL-encoded and base64 forms differ from it.
+const stubToken = "stub-linear/credential+for-the-f19-suite-only"
 
 type stubCall struct {
 	Name, Bearer string
@@ -33,7 +38,8 @@ func pinnedTools() []map[string]any {
 		for _, k := range props {
 			p[k] = map[string]any{"type": "string"}
 		}
-		return map[string]any{"name": name, "inputSchema": map[string]any{"type": "object", "properties": p, "required": required}}
+		// Every tool claims to be read-only, as an upstream annotation might; the pod must take the class from its pin.
+		return map[string]any{"name": name, "annotations": map[string]any{"readOnlyHint": true}, "inputSchema": map[string]any{"type": "object", "properties": p, "required": required}}
 	}
 	return []map[string]any{
 		tool("list_issues", []string{}, "query", "teamId", "limit"),
@@ -74,6 +80,9 @@ func (s *stubLinear) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
+	if msg.Method == "tools/call" && s.echoRaw(w, r.Header.Get("Authorization"), msg.Params) {
+		return
+	}
 	reply := map[string]any{"jsonrpc": "2.0", "id": msg.ID}
 	switch msg.Method {
 	case "initialize":
@@ -108,6 +117,59 @@ func (s *stubLinear) call(reply map[string]any, auth string, p map[string]any) m
 		reply["result"] = map[string]any{"content": []any{map[string]any{"type": "text", "text": "ok"}}}
 	}
 	return reply
+}
+
+// echoRaw answers get_issue with an id of echo-u, echo-url or echo-b64 the way a careless upstream might fail: an HTTP
+// error whose body echoes the bearer \u-escaped in JSON, URL-encoded, or base64-encoded. It records the call.
+func (s *stubLinear) echoRaw(w http.ResponseWriter, auth string, p map[string]any) bool {
+	args, _ := p["arguments"].(map[string]any)
+	id, _ := args["id"].(string)
+	if p["name"] != "get_issue" || !strings.HasPrefix(id, "echo-") {
+		return false
+	}
+	s.mu.Lock()
+	s.calls = append(s.calls, stubCall{Name: "get_issue", Bearer: auth, Args: args})
+	s.mu.Unlock()
+	switch id {
+	case "echo-u":
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"detail":"credential rejected: %s"}`, uEscaped(auth))
+	case "echo-url":
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "credential rejected: %s", url.QueryEscape(auth))
+	default:
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintf(w, "credential rejected: %s", base64.StdEncoding.EncodeToString([]byte(auth)))
+	}
+	return true
+}
+
+// uEscaped writes every character of s as a JSON \u escape.
+func uEscaped(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		fmt.Fprintf(&b, `\u%04x`, r)
+	}
+	return b.String()
+}
+
+// leakIn names the form of the token found in b (raw, \u-escaped, URL-encoded or base64, alone or after "Bearer "), or "".
+func leakIn(b []byte) string {
+	s := string(b)
+	forms := map[string]string{"raw": stubToken, "u-escaped": uEscaped(stubToken), "query-escaped": url.QueryEscape(stubToken), "path-escaped": url.PathEscape(stubToken)}
+	for _, v := range []string{stubToken, "Bearer " + stubToken} {
+		forms["base64 of "+v[:6]] = base64.StdEncoding.EncodeToString([]byte(v))
+		forms["base64url of "+v[:6]] = base64.URLEncoding.EncodeToString([]byte(v))
+	}
+	for name, f := range forms {
+		if strings.Contains(s, f) || strings.Contains(s, strings.ReplaceAll(f, `\`, `\\`)) {
+			return name
+		}
+	}
+	return ""
 }
 
 // seen returns the recorded tools/call requests for one tool name.

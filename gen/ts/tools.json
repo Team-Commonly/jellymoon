@@ -2315,7 +2315,7 @@
     },
     {
       "name": "jm_connector_call",
-      "description": "Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a member approves.",
+      "description": "Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a pod owner approves.",
       "inputSchema": {
         "description": "One call: which connection (by id or by vendor), which pinned operation, and its arguments.",
         "type": "object",
@@ -2350,7 +2350,7 @@
         }
       },
       "outputSchema": {
-        "description": "A done call carries the upstream's result; a parked one carries the decision a member rules on.",
+        "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.",
         "type": "object",
         "additionalProperties": false,
         "required": [

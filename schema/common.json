@@ -56,6 +56,7 @@
         "rate_limited",
         "connector_drift",
         "upstream_failed",
+        "upstream_too_large",
         "vault_unconfigured",
         "internal"
       ],
@@ -75,7 +76,8 @@
         "ungrounded": { "status": 422, "meaning": "A claim cites nothing, cites an id that is not a record here, or has a number its evidence lacks. Fix the citations and post again." },
         "rate_limited": { "status": 429, "meaning": "Too many requests. Wait before retrying." },
         "connector_drift": { "status": 409, "meaning": "The upstream lists no operations, or a pinned operation is missing or its arguments changed upstream. The error names it; re-pin the catalogue." },
-        "upstream_failed": { "status": 502, "meaning": "The upstream refused or failed the call. The message carries its error, with any credential removed." },
+        "upstream_failed": { "status": 502, "meaning": "The upstream refused or failed the call. The message carries its status and error, with any credential removed in every encoding." },
+        "upstream_too_large": { "status": 502, "meaning": "The upstream answered with more than 1 MiB. None of the answer is kept; ask for less, for example with a smaller limit." },
         "vault_unconfigured": { "status": 501, "meaning": "The server has no vault key (JM_VAULT_KEY), so it cannot store or use a connection credential." },
         "internal": { "status": 500, "meaning": "The server failed. The request may be fine; retry later." }
       }

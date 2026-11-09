@@ -92,7 +92,8 @@ One of: `claude-code`, `codex`, `fake`.
 | `ungrounded` | 422 | A claim cites nothing, cites an id that is not a record here, or has a number its evidence lacks. Fix the citations and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
 | `rate_limited` | 429 | Too many requests. Wait before retrying. | — |
 | `connector_drift` | 409 | The upstream lists no operations, or a pinned operation is missing or its arguments changed upstream. The error names it; re-pin the catalogue. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
-| `upstream_failed` | 502 | The upstream refused or failed the call. The message carries its error, with any credential removed. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
+| `upstream_failed` | 502 | The upstream refused or failed the call. The message carries its status and error, with any credential removed in every encoding. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
+| `upstream_too_large` | 502 | The upstream answered with more than 1 MiB. None of the answer is kept; ask for less, for example with a smaller limit. | — |
 | `vault_unconfigured` | 501 | The server has no vault key (JM_VAULT_KEY), so it cannot store or use a connection credential. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `internal` | 500 | The server failed. The request may be fine; retry later. | — |
 
@@ -101,7 +102,7 @@ One of: `claude-code`, `codex`, `fake`.
 
 Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event.
 
-One of: `invalid_input`, `summary_required`, `unauthorized`, `forbidden`, `not_found`, `gone`, `already_claimed`, `already_ruled`, `authorization_pending`, `slow_down`, `expired_token`, `invalid_grant`, `ungrounded`, `rate_limited`, `connector_drift`, `upstream_failed`, `vault_unconfigured`, `internal`.
+One of: `invalid_input`, `summary_required`, `unauthorized`, `forbidden`, `not_found`, `gone`, `already_claimed`, `already_ruled`, `authorization_pending`, `slow_down`, `expired_token`, `invalid_grant`, `ungrounded`, `rate_limited`, `connector_drift`, `upstream_failed`, `upstream_too_large`, `vault_unconfigured`, `internal`.
 
 <a id="def-ErrorBody"></a>
 ### ErrorBody
@@ -1041,7 +1042,7 @@ What an agent or person can do in a pod, as plain HTTP/JSON operations. This lis
 - connector_call names exactly one of connectionId or vendor; vendor names the pod's one connection to that vendor. Neither, both, or a vendor with several connections gets invalid_input.
 - connector_call is decided by the grant of the run's agent on the connection and by the operation's class in the pinned catalogue. An operation not in the pin gets not_found. No grant, or a write with only a read grant, gets forbidden.
 - A read with a read or write-with-confirm grant calls the upstream once and returns its result (state done). A write with write-with-confirm calls nothing: it is parked, the agent posts an ask (options a approve, b reject) whose body holds the exact arguments, and the call returns state parked with the decisionId.
-- A ruling of a on that ask releases exactly one upstream call with the parked arguments; the parked call is marked consumed in the transaction that records the ruling, so no second ruling, retry or race can release another. A ruling of b releases nothing.
+- Only a pod owner rules on that ask; another member's ruling is refused forbidden and leaves it open. A ruling of a releases exactly one upstream call with the parked arguments; the parked call is marked consumed in the transaction that records the ruling, so no second ruling, retry or race can release another. A ruling of b releases nothing.
 - A parked write expires 24 hours after it was parked: its decision becomes expired, a later ruling gets gone, and nothing is released.
 - Every connector call that names an existing connection writes a ConnectorReceipt, stamped by the server. An agent can read receipts and never write one.
 - The connection's credential never appears in any operation's output, any error, any receipt or any ask: an upstream error that echoes it has it removed.
@@ -1176,7 +1177,7 @@ The pod's connections and the operations you may call on each: the pinned catalo
 <a id="op-connector_call"></a>
 #### `connector_call`
 
-Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a member approves.
+Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a pod owner approves.
 
 - HTTP: POST `/v1/pods/{podId}/connectors/call`
 - Who may call: `run`: run token (`jmr_`)
@@ -1428,7 +1429,7 @@ One of: `done`, `parked`.
 <a id="def-ConnectorCallOutput"></a>
 ### ConnectorCallOutput
 
-A done call carries the upstream's result; a parked one carries the decision a member rules on.
+A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|

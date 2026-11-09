@@ -144,6 +144,9 @@ func (f *f19) refusals() error {
 		args           map[string]any
 	}{
 		{"an upstream error that echoes the token", "get_issue", "upstream_failed", map[string]any{"id": "echo"}},
+		{"an upstream HTTP error that echoes the token \\u-escaped in JSON", "get_issue", "upstream_failed", map[string]any{"id": "echo-u"}},
+		{"an upstream HTTP error that echoes the token URL-encoded", "get_issue", "upstream_failed", map[string]any{"id": "echo-url"}},
+		{"an upstream HTTP error that echoes the bearer base64-encoded", "get_issue", "upstream_failed", map[string]any{"id": "echo-b64"}},
 		{"an operation the pin does not name", "delete_issue", "not_found", map[string]any{"id": "ISS-1"}},
 		{"a write on a read grant", "create_issue", "forbidden", map[string]any{"title": "x", "teamId": "T"}},
 	}
@@ -188,9 +191,14 @@ func (f *f19) tokenAbsent() error {
 	f.keep("the receipts", b)
 	f.keep("the run claim answer (the agent's env)", f.envOfNewRun())
 	f.keep("the server log", f.srv.log.bytes())
+	return f.noLeak()
+}
+
+// noLeak checks every agent-visible payload kept so far for the token in any of its encoded forms.
+func (f *f19) noLeak() error {
 	for what, b := range f.seen {
-		if bytes.Contains(b, []byte(stubToken)) {
-			return fmt.Errorf("the Linear token is in %s: %.300s", what, b)
+		if form := leakIn(b); form != "" {
+			return fmt.Errorf("the Linear token (%s) is in %s: %.300s", form, what, b)
 		}
 	}
 	return nil

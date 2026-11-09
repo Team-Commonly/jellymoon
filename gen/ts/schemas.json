@@ -140,6 +140,7 @@
         "rate_limited",
         "connector_drift",
         "upstream_failed",
+        "upstream_too_large",
         "vault_unconfigured",
         "internal"
       ]
@@ -2251,7 +2252,7 @@
       ]
     },
     "ConnectorCallOutput": {
-      "description": "A done call carries the upstream's result; a parked one carries the decision a member rules on.",
+      "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.",
       "type": "object",
       "additionalProperties": false,
       "required": [

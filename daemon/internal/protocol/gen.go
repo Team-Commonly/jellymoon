@@ -131,6 +131,7 @@ const (
 	ErrorCodeRateLimited          ErrorCode = "rate_limited"
 	ErrorCodeConnectorDrift       ErrorCode = "connector_drift"
 	ErrorCodeUpstreamFailed       ErrorCode = "upstream_failed"
+	ErrorCodeUpstreamTooLarge     ErrorCode = "upstream_too_large"
 	ErrorCodeVaultUnconfigured    ErrorCode = "vault_unconfigured"
 	ErrorCodeInternal             ErrorCode = "internal"
 )
@@ -138,7 +139,7 @@ const (
 // Valid reports whether x is one of the schema's values.
 func (x ErrorCode) Valid() bool {
 	switch x {
-	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeConnectorDrift, ErrorCodeUpstreamFailed, ErrorCodeVaultUnconfigured, ErrorCodeInternal:
+	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeConnectorDrift, ErrorCodeUpstreamFailed, ErrorCodeUpstreamTooLarge, ErrorCodeVaultUnconfigured, ErrorCodeInternal:
 		return true
 	}
 	return false
@@ -2302,7 +2303,7 @@ func (x ConnectorCallState) Valid() bool {
 	return false
 }
 
-// A done call carries the upstream's result; a parked one carries the decision a member rules on.
+// A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.
 type ConnectorCallOutput struct {
 	State     ConnectorCallState `json:"state"`
 	ReceiptID ConnectorReceiptID `json:"receiptId"`
@@ -2715,6 +2716,7 @@ var ErrorStatus = map[ErrorCode]int{
 	ErrorCodeRateLimited:          429,
 	ErrorCodeConnectorDrift:       409,
 	ErrorCodeUpstreamFailed:       502,
+	ErrorCodeUpstreamTooLarge:     502,
 	ErrorCodeVaultUnconfigured:    501,
 	ErrorCodeInternal:             500,
 }

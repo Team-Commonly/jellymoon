@@ -63,8 +63,8 @@ export type Harness = "claude-code" | "codex" | "fake";
 export const HarnessValues = ["claude-code","codex","fake"] as const;
 
 /** Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event. */
-export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "connector_drift" | "upstream_failed" | "vault_unconfigured" | "internal";
-export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","connector_drift","upstream_failed","vault_unconfigured","internal"] as const;
+export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "connector_drift" | "upstream_failed" | "upstream_too_large" | "vault_unconfigured" | "internal";
+export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","connector_drift","upstream_failed","upstream_too_large","vault_unconfigured","internal"] as const;
 
 /** The body of every error response, and the data of the error socket event. */
 export interface ErrorBody {
@@ -812,7 +812,7 @@ export interface ConnectorCallInput {
 export type ConnectorCallState = "done" | "parked";
 export const ConnectorCallStateValues = ["done","parked"] as const;
 
-/** A done call carries the upstream's result; a parked one carries the decision a member rules on. */
+/** A done call carries the upstream's result; a parked one carries the decision a pod owner rules on. */
 export interface ConnectorCallOutput {
   state: ConnectorCallState;
   receiptId: ConnectorReceiptId;
@@ -991,6 +991,7 @@ export const ERROR_STATUS = {
   "rate_limited": 429,
   "connector_drift": 409,
   "upstream_failed": 502,
+  "upstream_too_large": 502,
   "vault_unconfigured": 501,
   "internal": 500,
 } as const;

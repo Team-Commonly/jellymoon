@@ -1,5 +1,6 @@
 import { expect } from 'bun:test';
 import { buildApp } from '../src/app';
+import type { AppOpts } from '../src/app';
 import type { Db } from '../src/db';
 import { openDb } from '../src/db';
 import { Hub } from '../src/hub';
@@ -26,7 +27,7 @@ export function caller(app: ReturnType<typeof buildApp>) {
   };
 }
 
-export async function setup(db?: Db, opts: { local: boolean; testBearer?: string } = { local: true }) {
+export async function setup(db?: Db, opts: AppOpts = { local: true }) {
   const use = db ?? (await openDb({}));
   const hub = await Hub.restore(use);
   const app = buildApp(hub, opts);
@@ -38,9 +39,14 @@ export const fakeConn = (who: Conn['who'], frames: string[]): Conn => ({ who, se
 
 /** olivia owns a pod; ben (a member via invite) owns a computer with one agent; a task assigned to the agent has woken it. */
 export async function world(db?: Db) {
-  const s = await setup(db);
-  const olivia = (await s.call('POST', '/__test/session', undefined, { name: 'olivia' })).json;
-  const ben = (await s.call('POST', '/__test/session', undefined, { name: 'ben' })).json;
+  return podIn(await setup(db));
+}
+
+/** The world's pod in an app already set up; `tag` keeps the people of a second pod apart from the first's. */
+export async function podIn(s: Awaited<ReturnType<typeof setup>>, tag = '') {
+  const n = tag === '' ? '00000000000000000000000001' : '00000000000000000000000002';
+  const olivia = (await s.call('POST', '/__test/session', undefined, { name: `olivia${tag}` })).json;
+  const ben = (await s.call('POST', '/__test/session', undefined, { name: `ben${tag}` })).json;
   const pod = (await s.call('POST', '/v1/pods', olivia.token, { name: 'p' })).json;
   const inv = (await s.call('POST', `/v1/pods/${pod.id}/invites`, olivia.token, {})).json;
   await s.call('POST', `/v1/invites/${inv.code}/accept`, ben.token);
@@ -49,7 +55,7 @@ export async function world(db?: Db) {
   const frames: string[] = [];
   const rt = s.hub.pods.get(pod.id)!;
   rt.conns.add(fakeConn({ kind: 'computer', computerId: comp.computerId, owner: ben.user }, frames));
-  const made = await rt.exec({ type: 'task_create', caller: { kind: 'user', userId: olivia.user.id }, taskId: 'tsk_00000000000000000000000001', title: 't', kind: 'chore', assignee: agent.agentId, wakeId: 'wak_00000000000000000000000001' });
+  const made = await rt.exec({ type: 'task_create', caller: { kind: 'user', userId: olivia.user.id }, taskId: `tsk_${n}`, title: 't', kind: 'chore', assignee: agent.agentId, wakeId: `wak_${n}` });
   expect(made?.ok).toBe(true);
   const wake = JSON.parse(frames.find((f) => f.includes('"run.wake"')) as string).data;
   return { ...s, olivia, ben, pod, comp, agent, wake, rt };

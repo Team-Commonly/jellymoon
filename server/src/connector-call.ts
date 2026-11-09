@@ -14,7 +14,7 @@ import type { Call } from './kit';
 import { viaMcp } from './mcp';
 import type { Opts, PodRuntime } from './pod';
 import { gate } from './routes-ops';
-import { claimParked, connectionsOf, findConnection, findGrant, finishCall, saveCall } from './store';
+import { callsOf, claimParked, connectionsOf, findConnection, findGrant, finishCall, saveCall } from './store';
 import type { CallRow, ConnRow } from './store';
 import { adapterOf } from './upstream';
 
@@ -57,7 +57,7 @@ async function read(kit: Kit, k: Call, conn: ConnRow, op: PinOp, row: CallRow, a
   const token = await kit.vault!.open(conn, aadOf(conn));
   const res = scrub(await adapterOf(pinOf(conn.vendor as ConnectorVendor)).call(conn.url, token, op.name, args), token);
   await saveCall(kit.hub.db, { ...row, outcome: res.ok ? 'ok' : 'failed', upstreamStatus: res.status, settledAt: kit.hub.now() });
-  if (!res.ok) return fail(k.c, 'upstream_failed', `${conn.vendor} ${op.name} failed: ${res.error ?? ''}`.slice(0, 400), row.id);
+  if (!res.ok) return fail(k.c, res.code ?? 'upstream_failed', `${conn.vendor} ${op.name} failed (upstream status ${res.status}): ${res.error ?? ''}`.slice(0, 400), row.id);
   return k.c.json({ state: 'done', receiptId: row.id, result: res.result ?? {} });
 }
 
@@ -111,9 +111,10 @@ async function release(kit: Kit, row: CallRow): Promise<void> {
 }
 
 /**
- * What a ruling does to a parked write (ws.ts passes these with every `rule`). In the ruling's own transaction the parked
- * row is claimed, released (option a) or rejected (option b); after it commits and before members hear of the ruling, a
- * released row makes its one call. A decision with no parked row claims nothing.
+ * What a ruling does to a parked write (ws.ts passes these with every `rule`). Only a pod owner, the role that connects and
+ * grants, rules on a connector write's ask; anyone else is refused forbidden before the core sees the ruling. In the ruling's
+ * own transaction the parked row is claimed, released (option a) or rejected (option b); after it commits and before members
+ * hear of the ruling, a released row makes its one call. A decision with no connector row claims nothing.
  */
 export function rulingOpts(kit: Kit, pod: PodRuntime, cmd: Extract<Cmd, { type: 'rule' }>): Opts {
   const caller = cmd.caller;
@@ -122,6 +123,10 @@ export function rulingOpts(kit: Kit, pod: PodRuntime, cmd: Extract<Cmd, { type: 
   const by: Actor | undefined = pod.state.members.find((m) => m.id === caller.userId);
   let claimed: CallRow | undefined;
   return {
+    pre: async (s) => {
+      if (s.owners.some((o) => o.id === caller.userId) || (await callsOf(kit.hub.db, pod.id, cmd.decisionId, 1)).length === 0) return null;
+      return { ok: false, error: { code: 'forbidden', message: 'Only a pod owner rules on a connector write.' } };
+    },
     extra: async (t) => { claimed = await claimParked(t, cmd.decisionId, approve ? 'released' : 'rejected', approve && by ? JSON.stringify(by) : null, kit.hub.now()); },
     after: async () => { if (claimed !== undefined && approve) await release(kit, claimed); },
   };

@@ -48,11 +48,12 @@ export async function batch(c, nums, hold) {
   for (const x of plan.dropped) say(`#${x.n} dropped from the batch: ${oneLine(x.reason)}`);
   if (plan.mode === 'none') refuse('no PR in the batch passed its gates; nothing merged');
   const chain = [];
+  let lost = plan.dropped.length; // PRs of the request that will not land: the run exits non-zero when any
   let tip = mainTip;
   try {
     for (const g of gated.filter((x) => x.ok)) {
       let tree;
-      try { tree = c.treeOf(tip, g.head); } catch (e) { say(`#${g.n} dropped from the batch: ${e.message}`); continue; }
+      try { tree = c.treeOf(tip, g.head); } catch (e) { say(`#${g.n} dropped from the batch: ${e.message}`); lost += 1; continue; }
       chain.push({ ...g, tree, parent: tip });
       tip = c.landCommit(chain.map((x) => x.n).join('-'), tree, tip, g.head);
     }
@@ -67,16 +68,17 @@ export async function batch(c, nums, hold) {
       if (refused) throw refused.reason;
       const proof = batchProof(got.map((g) => g.value));
       if (c.dry) return say(`dry run: would merge ${rest.map((n) => `#${n}`).join(', ')} in that order once CI proves each prefix of land commit ${tip.slice(0, 8)} (land/${steps.at(-1).id}); merged nothing`);
-      if (proof.ok) rest = await mergeBatch(c, chain, mainTip, got.at(-1).value.note);
+      if (proof.ok) rest = await mergeBatch(c, chain, mainTip, got.map((g) => g.value.note));
       else { console.error(`land: no CI proof (${oneLine(proof.reason)})`); say('batch red; landing one at a time'); }
     } finally { c.ciClean(); }
   }
-  return singles(c, rest);
+  lost += await singles(c, rest);
+  if (lost) refuse(`${lost} of ${nums.length} PRs did not land`);
 }
 // Merges the chain's PRs in order, each as the single path does. Before each one: decided again, re-read, and main exactly where the last merge left it. GitHub's
 // merge of PR k onto the merge commit of PR k-1 has the tree CI proved for L(k); the tree read back after each merge must equal it, or the batch stops and refuses.
 // Returns the PRs not merged.
-async function mergeBatch(c, chain, mainTip, proofNote) {
+async function mergeBatch(c, chain, mainTip, notes) {
   const { say, refuse, Refusal, oneLine } = c;
   let expect = mainTip;
   for (const [i, p] of chain.entries()) {
@@ -94,14 +96,14 @@ async function mergeBatch(c, chain, mainTip, proofNote) {
       }
     } catch (e) { if (!(e instanceof Refusal)) throw e; stop = e.message; }
     if (stop) { say(`batch: stopped before #${p.n} (${oneLine(stop)}); the rest land one at a time`); return chain.slice(i).map((x) => x.n); }
-    const { sha, merged } = c.doMerge(p.n, p.head, p.tree, `${p.via}; batch ${proofNote}`);
-    say(`#${p.n} landed as ${sha} (batch)`);
+    const { sha, merged } = c.doMerge(p.n, p.head, p.tree, `${p.via}; batch ${notes[i]}`);
     if (merged !== p.tree) refuse(`#${p.n} merged as ${sha} but its tree is not the tested batch tree (${p.tree} tested, ${merged} merged); the LANDED row carries TREE-MISMATCH. Nothing else was merged; look at it now`);
+    say(`#${p.n} landed as ${sha} (batch)`);
     expect = sha;
   }
   return [];
 }
-// The single path, PR by PR in order. This checkout moves to main's new tip between them (fast-forward only), as the operator would, since land demands a checkout at main's tip.
+// The single path, PR by PR in order; returns how many were refused. This checkout moves to main's new tip between them (fast-forward only), as the operator would, since land demands a checkout at main's tip.
 async function singles(c, list) {
   let bad = 0;
   for (const n of list) {
@@ -111,5 +113,5 @@ async function singles(c, list) {
       await c.landOne(n, { bootstrap: false });
     } catch (e) { if (!(e instanceof c.Refusal)) throw e; console.error(`land: refused: ${e.message}`); bad += 1; }
   }
-  if (bad) c.refuse(`${bad} of ${list.length} PRs did not land`);
+  return bad;
 }

@@ -75,7 +75,7 @@ export interface ErrorBody {
 export type TokenKind = "user" | "computer" | "run";
 export const TokenKindValues = ["user","computer","run"] as const;
 
-/** Bound to one user. 30 days, refreshable. */
+/** Bound to one user. Valid for 30 days from issue (its expiresAt); after that, sign in again. */
 export type UserToken = string;
 
 /** Bound to one user and one computer. Valid until revoked. */
@@ -512,7 +512,7 @@ export interface DeviceTokenRequest {
 
 /** A signed-in person approves the device code they were shown, binding it to themselves. */
 export interface DeviceApproveRequest {
-  /** The code the sign-in page shows, e.g. WDJB-MJHT. */
+  /** The code the sign-in page shows, e.g. WDJB-MJHT, in either case and with or without the hyphen. */
   userCode: string;
 }
 

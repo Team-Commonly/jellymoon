@@ -77,7 +77,7 @@ One of: `claude-code`, `codex`, `fake`.
 |---|---|---|---|
 | `invalid_input` | 400 | The input is malformed or breaks a limit in the schema. Fix the field the error names, when it names one, and send it again. | — |
 | `summary_required` | 400 | A post has no summary. The summary is never derived; write the headline and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
-| `unauthorized` | 401 | No valid bearer token came with the request. Send a valid user, computer or run token. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
+| `unauthorized` | 401 | No valid bearer token came with the request, or the user token expired. Send a valid user, computer or run token, or sign in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
 | `forbidden` | 403 | The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may. | [Rules for Tasks](#rules-for-tasks), [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
 | `not_found` | 404 | The id or route in the request matches nothing. Check the id. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `gone` | 410 | An invite is used or expired, or a device code was already approved. Ask for a new invite, or start the sign-in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
@@ -88,7 +88,7 @@ One of: `claude-code`, `codex`, `fake`.
 | `expired_token` | 400 | The device code expired before it was exchanged. Start the sign-in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `invalid_grant` | 400 | The device code was already exchanged. Start the sign-in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `ungrounded` | 422 | A claim cites nothing, cites an id that is not a record here, or has a number its evidence lacks. Fix the citations and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
-| `rate_limited` | 429 | Too many requests. Wait before retrying. | — |
+| `rate_limited` | 429 | Too many requests. Wait the seconds the Retry-After header gives, then retry. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `upstream` | 502 | A service the server depends on, such as GitHub, failed or answered something unexpected. Retry later. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `internal` | 500 | The server failed. The request may be fine; retry later. | — |
 
@@ -131,7 +131,7 @@ One of: `user`, `computer`, `run`.
 <a id="def-UserToken"></a>
 ### UserToken
 
-Bound to one user. 30 days, refreshable.
+Bound to one user. Valid for 30 days from issue (its expiresAt); after that, sign in again.
 
 A string, starts with `jmu_` then 43 letters or digits.
 
@@ -160,9 +160,12 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 - Jellymoon mints the device code itself; GitHub only proves who the person is, through its OAuth web flow at /v1/auth/github/*. The GitHub token is dropped after GET /user: never stored, logged or returned. A GitHub 401 there gets unauthorized; any other GitHub failure gets upstream.
 - The callback is refused (forbidden) when its state is missing, differs from the state cookie, or was already used: a state is good for one callback, and the next path it carries is the one bound at start. A next that is not a same-origin path (one leading /, not // or /\, no scheme) becomes /.
 - The session cookie (httpOnly, SameSite=Lax, Secure except ENV=local) is accepted, besides a Bearer jmu_, by every route whose auth includes user, the pod WebSocket included, and by every user operation. A request with a Bearer uses it and ignores the cookie. The cookie must hold a jmu_: any other token in it is no caller (unauthorized). Routes and operations whose auth is only run or computer, and POST /mcp, read the Bearer alone.
-- A cookie-authenticated request that changes state (any method but GET, HEAD and OPTIONS) needs Content-Type application/json and an Origin header equal to the server's own origin (PUBLIC_URL, or the request's origin, https except ENV=local); a missing Origin is refused too (forbidden). The pod WebSocket opened by the cookie needs the same Origin. A token never rides in the query string. Bearer requests need neither. POST /v1/auth/device/approve keeps its own rule below.
-- POST /v1/auth/logout (cookie or Bearer jmu_) revokes the token the request presented, at once, and clears the session cookie.
-- POST /v1/auth/device/approve needs Content-Type application/json and, when an Origin header is sent, the server's own origin (forbidden otherwise). An unknown user code gets not_found, an expired one expired_token, an approved one gone. It is the only route that approves a device code.
+- A cookie-authenticated request that changes state (any method but GET, HEAD and OPTIONS) needs Content-Type application/json and an Origin header equal to the server's own origin (PUBLIC_URL, or the request's origin, https except ENV=local); a missing Origin is refused too (forbidden). The pod WebSocket opened by the cookie needs the same Origin. A token never rides in the query string. Bearer requests need neither. POST /v1/auth/device/approve is a cookie write like any other.
+- POST /v1/auth/logout (cookie or Bearer jmu_) revokes the token the request presented, at once, and clears the session cookie. A request with both a Bearer jmu_ and the session cookie revokes both tokens. Every pod WebSocket opened with a revoked token is closed.
+- A user token (jmu_) stops authenticating at its expiresAt, 30 days after it was issued: unauthorized on every route and on the pod WebSocket, as a Bearer and as the session cookie.
+- POST /v1/auth/device and GET /v1/auth/github/start each take a fixed number of requests per client address per minute. Past it they get rate_limited (HTTP 429) with a Retry-After header: the whole seconds until the minute ends.
+- An expired device code or OAuth state is deleted an hour after it expires; a deleted device code gets invalid_grant. A call to GitHub that takes over 10 seconds gets upstream.
+- POST /v1/auth/device/approve needs Content-Type application/json, and by the session cookie the server's own Origin, which a missing Origin is not (forbidden). The user code matches in either case, with or without its hyphen. An unknown user code gets not_found, an expired one expired_token, an approved one gone. It is the only route that approves a device code.
 - A used or expired invite gets gone (HTTP 410). Only a member can create an invite.
 - cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome.
 
@@ -216,7 +219,7 @@ A signed-in person approves the device code they were shown, binding it to thems
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `userCode` | string | yes | The code the sign-in page shows, e.g. WDJB-MJHT. Limit: matches `^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$` |
+| `userCode` | string | yes | The code the sign-in page shows, e.g. WDJB-MJHT, in either case and with or without the hyphen. Limit: matches `^[BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz]{4}-?[BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz]{4}$` |
 
 <a id="def-LogoutResponse"></a>
 ### LogoutResponse
@@ -239,7 +242,7 @@ A user token and the user it belongs to.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `token` | [UserToken](#def-UserToken) | yes | Bound to one user. 30 days, refreshable. |
+| `token` | [UserToken](#def-UserToken) | yes | Bound to one user. Valid for 30 days from issue (its expiresAt); after that, sign in again. |
 | `user` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
 | `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 

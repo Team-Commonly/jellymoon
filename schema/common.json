@@ -58,7 +58,7 @@
       "x-errors": {
         "invalid_input": { "status": 400, "meaning": "The input is malformed or breaks a limit in the schema. Fix the field the error names, when it names one, and send it again." },
         "summary_required": { "status": 400, "meaning": "A post has no summary. The summary is never derived; write the headline and post again." },
-        "unauthorized": { "status": 401, "meaning": "No valid bearer token came with the request. Send a valid user, computer or run token." },
+        "unauthorized": { "status": 401, "meaning": "No valid bearer token came with the request, or the user token expired. Send a valid user, computer or run token, or sign in again." },
         "forbidden": { "status": 403, "meaning": "The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may." },
         "not_found": { "status": 404, "meaning": "The id or route in the request matches nothing. Check the id." },
         "gone": { "status": 410, "meaning": "An invite is used or expired, or a device code was already approved. Ask for a new invite, or start the sign-in again." },
@@ -69,7 +69,7 @@
         "expired_token": { "status": 400, "meaning": "The device code expired before it was exchanged. Start the sign-in again." },
         "invalid_grant": { "status": 400, "meaning": "The device code was already exchanged. Start the sign-in again." },
         "ungrounded": { "status": 422, "meaning": "A claim cites nothing, cites an id that is not a record here, or has a number its evidence lacks. Fix the citations and post again." },
-        "rate_limited": { "status": 429, "meaning": "Too many requests. Wait before retrying." },
+        "rate_limited": { "status": 429, "meaning": "Too many requests. Wait the seconds the Retry-After header gives, then retry." },
         "upstream": { "status": 502, "meaning": "A service the server depends on, such as GitHub, failed or answered something unexpected. Retry later." },
         "internal": { "status": 500, "meaning": "The server failed. The request may be fine; retry later." }
       }

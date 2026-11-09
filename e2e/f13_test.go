@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -240,28 +241,7 @@ func (w *world) f13Production() {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		w.t.Errorf("the server's production check failed: %v\n%s", err, out)
 	}
-	dir, port := w.t.TempDir(), freePort(w.t)
-	wr := exec.Command("bun", filepath.Join(root, "node_modules/wrangler/bin/wrangler.js"), "dev", "-c", "wrangler.prod.toml", "--local", "--ip", "127.0.0.1", "--port", fmt.Sprint(port),
-		"--inspector-port", fmt.Sprint(freePort(w.t, port)), "--persist-to", filepath.Join(dir, "state"), "--show-interactive-dev-session=false")
-	wr.Dir = filepath.Join(root, "worker")
-	wr.Env = append(os.Environ(), "WRANGLER_SEND_METRICS=false", "NO_UPDATE_NOTIFIER=1", "CI=1", "XDG_CONFIG_HOME="+filepath.Join(dir, "cfg"), "WRANGLER_LOG_PATH="+filepath.Join(dir, "logs"),
-		"CLOUDFLARE_API_TOKEN=", "CLOUDFLARE_ACCOUNT_ID=", "CLOUDFLARE_API_KEY=", "CLOUDFLARE_EMAIL=")
-	wr.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := wr.Start(); err != nil {
-		w.t.Fatalf("cannot start the production Worker: %v", err)
-	}
-	w.t.Cleanup(func() { _ = syscall.Kill(-wr.Process.Pid, syscall.SIGKILL); _ = wr.Wait() })
-	base, hc := fmt.Sprintf("http://127.0.0.1:%d", port), &http.Client{Timeout: 2 * time.Second}
-	up := false
-	for end := time.Now().Add(60 * time.Second); !up && time.Now().Before(end); time.Sleep(100 * time.Millisecond) {
-		if r, err := hc.Get(base + "/healthz"); err == nil {
-			up = r.StatusCode == 200
-			r.Body.Close()
-		}
-	}
-	if !up {
-		w.t.Fatalf("the production Worker did not answer /healthz within 60 s")
-	}
+	base, hc := w.f13Worker(root), &http.Client{Timeout: 2 * time.Second}
 	for _, path := range []string{"/__test", "/__test/", "/__test/session", "/__test/clock", "/__test/evict/pod_1", "/__test/discard/pod_1", "/__test/instance/pod_1", "/__test/woke/pod_1",
 		"/__test/stored-alarm/pod_1", "//__test/session", "/%5F%5Ftest/session", "/_in/evict", "/_in/discard"} {
 		for _, method := range []string{"GET", "POST"} {
@@ -278,6 +258,67 @@ func (w *world) f13Production() {
 			}
 		}
 	}
+}
+
+// f13Worker starts the Worker's production entry under wrangler and returns its base URL once /healthz answers 200. A start
+// that fails the way startServer retries is tried once more on fresh ports; a failure names its cause from wrangler's output.
+func (w *world) f13Worker(root string) string {
+	for try := 1; ; try++ {
+		port := freePort(w.t)
+		out, why := w.f13WorkerStart(root, port)
+		if why == "" {
+			return fmt.Sprintf("http://127.0.0.1:%d", port)
+		}
+		line, retry := startRetry(w.t.Name(), port, try+1, out.bytes())
+		if try == 2 || !retry {
+			w.t.Fatalf("the production Worker %s; log tail:\n%s", why, out.tail(20))
+		}
+		fmt.Println(line)
+	}
+}
+
+// f13WorkerStart runs wrangler once and waits for /healthz. It returns wrangler's output and, on failure, what went wrong:
+// the process exiting ends the wait at once, so a crash at second 2 is not reported as a 60 s timeout.
+func (w *world) f13WorkerStart(root string, port int) (*logBuf, string) {
+	dir, out := w.t.TempDir(), &logBuf{}
+	wr := exec.Command("bun", filepath.Join(root, "node_modules/wrangler/bin/wrangler.js"), "dev", "-c", "wrangler.prod.toml", "--local", "--ip", "127.0.0.1", "--port", fmt.Sprint(port),
+		"--inspector-port", fmt.Sprint(freePort(w.t, port)), "--persist-to", filepath.Join(dir, "state"), "--show-interactive-dev-session=false")
+	wr.Dir = filepath.Join(root, "worker")
+	wr.Env = append(os.Environ(), "WRANGLER_SEND_METRICS=false", "NO_UPDATE_NOTIFIER=1", "CI=1", "XDG_CONFIG_HOME="+filepath.Join(dir, "cfg"), "WRANGLER_LOG_PATH="+filepath.Join(dir, "logs"),
+		"CLOUDFLARE_API_TOKEN=", "CLOUDFLARE_ACCOUNT_ID=", "CLOUDFLARE_API_KEY=", "CLOUDFLARE_EMAIL=")
+	wr.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	wr.Stdout, wr.Stderr, wr.WaitDelay = out, out, 2*time.Second // a child still holding the pipe does not hold Wait
+	if err := wr.Start(); err != nil {
+		w.t.Fatalf("cannot start the production Worker: %v", err)
+	}
+	exited := make(chan struct{})
+	go func() { _ = wr.Wait(); close(exited) }()
+	var once sync.Once
+	up := false // a start that never came up has its tail in the Fatalf already
+	stop := func() { once.Do(func() { _ = syscall.Kill(-wr.Process.Pid, syscall.SIGKILL); <-exited }) }
+	w.t.Cleanup(func() {
+		stop()
+		if up && w.t.Failed() {
+			w.t.Logf("production Worker log tail:\n%s", out.tail(40))
+		}
+	})
+	hc := &http.Client{Timeout: 2 * time.Second}
+	for end := time.Now().Add(60 * time.Second); time.Now().Before(end); time.Sleep(100 * time.Millisecond) {
+		select {
+		case <-exited:
+			stop()
+			return out, "exited before /healthz answered 200"
+		default:
+		}
+		if r, err := hc.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port)); err == nil {
+			r.Body.Close()
+			if up = r.StatusCode == 200; up {
+				return out, ""
+			}
+		}
+	}
+	stop()
+	return out, "did not answer /healthz within 60 s"
 }
 
 // Step 5: a pod owner's stop of a live run: at once the token is dead, the run is cancelled, the claim is released with cause

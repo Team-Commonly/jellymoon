@@ -3,6 +3,25 @@ import { webDirProblem } from './web';
 // What the process must refuse at startup, kept apart from main.ts so a test can pin it.
 import { keyRing, makeVault } from './vault';
 import type { Vault } from './vault';
+import type { DbTls } from './db';
+
+const DB_TLS = ['JM_DB_CLIENT_CERT', 'JM_DB_CLIENT_KEY', 'JM_DB_SERVER_CA'] as const;
+
+/**
+ * The database client certificate: JM_DB_CLIENT_CERT, JM_DB_CLIENT_KEY and JM_DB_SERVER_CA (PEM), all three or none, and
+ * JM_DB_TLS_SERVERNAME when the server's certificate names a host other than DATABASE_URL's. None set is a plain connection,
+ * whose TLS comes from the URL's sslmode. A partial or non-PEM set is a string, which startupRefusal returns.
+ */
+export function dbTlsOf(env: Record<string, string | undefined>): DbTls | string | undefined {
+  const set = DB_TLS.filter((k) => env[k]);
+  if (set.length === 0) return undefined;
+  if (set.length < DB_TLS.length) return `The database client certificate needs all of ${DB_TLS.join(', ')}; missing ${DB_TLS.filter((k) => !env[k]).join(', ')}.`;
+  const bad = DB_TLS.filter((k) => !/^-----BEGIN ([A-Z ]+)-----\r?\n[A-Za-z0-9+/=\r\n]+\r?\n-----END \1-----$/.test(env[k]!.trim()));
+  if (bad.length) return `${bad.join(', ')} must be PEM (a -----BEGIN X----- line, base64, then the matching -----END X----- line).`;
+  const [cert, key, ca] = DB_TLS.map((k) => env[k]!);
+  const servername = env.JM_DB_TLS_SERVERNAME?.trim();
+  return { cert: cert!, key: key!, ca: ca!, ...(servername ? { servername } : {}) };
+}
 
 export function startupRefusal(env: Record<string, string | undefined>): string | undefined {
   const local = env.ENV === 'local';
@@ -27,6 +46,8 @@ export function startupRefusal(env: Record<string, string | undefined>): string 
   // JM_VAULT_KEY is optional (without it the connector routes answer vault_unconfigured), but a malformed one is refused.
   const ring = keyRing(env);
   if (typeof ring === 'string') return ring;
+  const tls = dbTlsOf(env);
+  if (typeof tls === 'string') return tls;
   if (env.DATABASE_URL === undefined || env.DATABASE_URL === '') {
     return local ? undefined : 'DATABASE_URL is required. The in-process Postgres is for local runs only (ENV=local).';
   }

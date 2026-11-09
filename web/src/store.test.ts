@@ -114,6 +114,7 @@ describe('writes are never optimistic', () => {
 
   it('sends message.post and does not add the message itself', () => {
     const s = setup();
+    s.net.deliver(frame('hello', undefined, hello()));
     s.store.post('hello team', 'msg_9');
     expect(s.net.sent().at(-1)).toMatchObject({ type: 'message.post', data: { text: 'hello team', threadOf: 'msg_9' } });
     expect(s.store.getState().messages.length).toBe(0);
@@ -256,5 +257,82 @@ describe('live presence', () => {
     const s = setup();
     s.net.deliver(frame('message.created', undefined, note(1)));
     expect(ids(s)).toEqual([]);
+  });
+});
+
+// A browser can't read the status of a refused upgrade, so a socket that closes before any hello asks `check` why.
+function checked(answer: () => Promise<'refused' | 'signed-out' | null>) {
+  const net = fakeNet();
+  const timers: (() => void)[] = [];
+  const checks: number[] = [];
+  const store = createPodStore({ podId: POD, connect: net.connect, schedule: (fn) => void timers.push(fn), check: () => (checks.push(1), answer()) });
+  store.start();
+  return { net, store, timers, checks };
+}
+const settle = () => new Promise((r) => setTimeout(r, 0));
+const posts = (net: ReturnType<typeof fakeNet>) => net.sent().filter((f) => f.type === 'message.post').map((f) => f.data);
+
+describe('a pod the server refuses', () => {
+  it('stops for good when the socket closes before hello and the server says no such pod or not a member', async () => {
+    const s = checked(async () => 'refused');
+    s.net.drop();
+    await settle();
+    expect(s.checks.length).toBe(1);
+    expect(s.store.getState()).toMatchObject({ status: 'refused', refusal: 'refused' });
+    expect(s.timers.length).toBe(0);
+    expect(s.net.live.length).toBe(1);
+  });
+
+  it('stops for good, as signed out, when the server says nobody is signed in', async () => {
+    const s = checked(async () => 'signed-out');
+    s.net.drop();
+    await settle();
+    expect(s.store.getState()).toMatchObject({ status: 'refused', refusal: 'signed-out' });
+    expect(s.timers.length).toBe(0);
+  });
+
+  it('keeps retrying when the check finds the pod open to the caller or cannot reach the server', async () => {
+    const s = checked(async () => null);
+    s.net.drop();
+    await settle();
+    expect(s.store.getState().status).toBe('reconnecting');
+    expect(s.timers.length).toBe(1);
+    s.timers[0]();
+    expect(s.net.live.length).toBe(2);
+  });
+
+  it('does not retry when stopped while the check is out', async () => {
+    let answer: (v: null) => void = () => undefined;
+    const s = checked(() => new Promise((r) => { answer = r; }));
+    s.net.drop();
+    s.store.stop();
+    answer(null);
+    await settle();
+    expect(s.store.getState().status).toBe('stopped');
+    expect(s.timers.length).toBe(0);
+  });
+});
+
+describe('a dropped socket', () => {
+  it('does not ask when a socket that had its hello drops; it is down until the next hello, and a post meanwhile sends nothing', async () => {
+    const s = checked(async () => 'refused');
+    s.net.open();
+    s.store.post('too early');
+    expect(posts(s.net)).toEqual([]);
+    s.net.deliver(frame('hello', undefined, hello()));
+    expect(s.store.getState().status).toBe('open');
+    s.net.drop();
+    await settle();
+    expect(s.checks.length).toBe(0);
+    expect(s.store.getState().status).toBe('reconnecting');
+    s.timers[0]();
+    s.net.open();
+    expect(s.store.getState().status).toBe('reconnecting');
+    s.store.post('lost?');
+    expect(posts(s.net)).toEqual([]);
+    s.net.deliver(frame('hello', undefined, hello()));
+    expect(s.store.getState().status).toBe('open');
+    s.store.post('back');
+    expect(posts(s.net)).toEqual([{ text: 'back' }]);
   });
 });

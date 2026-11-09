@@ -1,22 +1,24 @@
 // Fixtures and a fake socket for the unit tests. No browser, no network.
 import type { AcceptInviteResponse, Actor, Envelope, EventType, Hello, InvitePreview, Message, Option, OptionId, Pod } from '../../gen/ts/protocol';
-import type { Http } from './http';
+import type { Http, PodAccess } from './http';
 import type { Connect, SocketHandlers } from './store';
 
 /** What the fake reads for any invite code. */
 export const PREVIEW: InvitePreview = { podName: 'Launch room', inviterName: 'Ada', expiresAt: '2026-11-15T10:00:00Z' };
 
-/** A fake HTTP client: records accept calls and answers from the given function. `preview` answers the signed-out invite read. */
-export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}, create: (name: string) => Promise<Pod> = async (name) => ({ id: 'pod_new', name, createdAt: '2026-11-08T10:00:00Z' }), stop: (podId: string, runId: string) => Promise<void> = async () => {}, preview: (code: string) => Promise<InvitePreview | null> = async () => PREVIEW) {
+/** A fake HTTP client: records accept calls and answers from the given function. `preview` answers the signed-out invite read; `access` answers whether the caller may open a pod (each pod asked about is recorded). */
+export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}, create: (name: string) => Promise<Pod> = async (name) => ({ id: 'pod_new', name, createdAt: '2026-11-08T10:00:00Z' }), stop: (podId: string, runId: string) => Promise<void> = async () => {}, preview: (code: string) => Promise<InvitePreview | null> = async () => PREVIEW, access: (podId: string) => Promise<PodAccess> = async () => 'member') {
   const calls: string[] = [];
   const approved: string[] = [];
   const created: string[] = [];
   const stopped: string[] = [];
+  const asked: string[] = [];
   const http: Http = {
     acceptInvite: (code) => (calls.push(code), answer(code)), readInvite: preview, session: async () => you, approveDevice: (c) => (approved.push(c), approve(c)),
     createPod: (n) => (created.push(n), create(n)), stopRun: (podId, runId) => (stopped.push(`${podId}/${runId}`), stop(podId, runId)),
+    podAccess: (podId) => (asked.push(podId), access(podId)),
   };
-  return { http, calls, approved, created, stopped };
+  return { http, calls, approved, created, stopped, asked };
 }
 
 export const POD = 'pod_1';

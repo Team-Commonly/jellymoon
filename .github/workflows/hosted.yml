@@ -155,7 +155,9 @@ jobs:
     env:
       SHA: ${{ needs.gate.outputs.sha }}
       PREV: ${{ needs.gate.outputs.prev }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.JM_CF_DEPLOY_TOKEN }}
+      # The repository's existing Cloudflare token (first made for the retired preview job; nothing else reads it now), with
+      # Containers edit and Account Settings read added to it. Editing a token's permissions keeps its value.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.JM_CF_PREVIEW_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.JM_CF_ACCOUNT_ID }}
       WRANGLER_SEND_METRICS: "false"
     steps:

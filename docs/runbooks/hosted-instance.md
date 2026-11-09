@@ -34,7 +34,7 @@ Set these as GitHub Actions secrets on the repository, by name. Values never go 
 
 | Secret | What it holds |
 |---|---|
-| `JM_CF_DEPLOY_TOKEN` | A Cloudflare API token for this job only, scoped to the one account, with Workers Scripts and Containers edit. If a permission is missing, `wrangler deploy` names it in the run log |
+| `JM_CF_PREVIEW_TOKEN` | The repository's existing Cloudflare API token, scoped to the one account. It was made for the retired preview job and nothing else reads it now. It needs Workers Scripts edit, Containers edit and Account Settings read. Editing a token's permissions in Cloudflare keeps its value, so the secret isn't pasted again. If a permission is missing, `wrangler deploy` names it in the run log |
 | `JM_CF_ACCOUNT_ID` | The Cloudflare account id |
 | `JM_HOSTED_DATABASE_URL` | The Postgres connection string (below) |
 | `JM_HOSTED_GITHUB_CLIENT_ID` | The hosted sign-in OAuth app's client id (ADR 0010, "The sign-in OAuth app") |

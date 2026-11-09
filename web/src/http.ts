@@ -8,6 +8,8 @@ export interface Http {
   /** The person the session cookie belongs to, or null when nobody is signed in. GET /v1/session answers 200 either way. */
   session(signal?: AbortSignal): Promise<Actor | null>;
   approveDevice(userCode: string): Promise<void>;
+  /** Refuses a device code the person did not start: its terminal's poll then gets access_denied. A refusal throws an ApiError with the server's code. */
+  denyDevice(userCode: string): Promise<void>;
   /** Stops a run now (the agent's owner or a pod owner may). Resolves when the server accepted it; the run's end arrives as run.ended on the pod socket. A refusal throws an ApiError carrying the server's message. */
   stopRun(podId: string, runId: string): Promise<void>;
   /** Makes a pod owned by the signed-in person. A refusal throws an ApiError carrying the server's own message. */
@@ -45,10 +47,8 @@ export const browserHttp: Http = {
     if (!res.ok) throw new ApiError(res.status, 'request failed');
     return ((await res.json()) as SessionResponse).user ?? null;
   },
-  async approveDevice(userCode) {
-    const res = await fetch('/v1/auth/device/approve', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userCode }) });
-    if (!res.ok) throw new ApiError(res.status, 'request failed', await errorCode(res));
-  },
+  approveDevice: (userCode) => deviceWrite('approve', userCode),
+  denyDevice: (userCode) => deviceWrite('deny', userCode),
   async stopRun(podId, runId) {
     const res = await fetch(`/v1/pods/${encodeURIComponent(podId)}/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
     if (!res.ok) throw new ApiError(res.status, await refusalMessage(res));
@@ -73,6 +73,12 @@ export const browserHttp: Http = {
     throw new ApiError(res.status, 'request failed');
   },
 };
+
+/** Approve or deny a device code: a cookie POST with the user code as JSON; a refusal throws with the server's error code. */
+async function deviceWrite(route: 'approve' | 'deny', userCode: string): Promise<void> {
+  const res = await fetch(`/v1/auth/device/${route}`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userCode }) });
+  if (!res.ok) throw new ApiError(res.status, 'request failed', await errorCode(res));
+}
 
 /** The refusal's error code ({code, message}), or undefined when the body is not one. */
 async function errorCode(res: Response): Promise<string | undefined> {

@@ -53,7 +53,8 @@ func login(stdout io.Writer) error {
 // slowDown is what a slow_down adds to the wait between polls (RFC 8628, 3.5).
 const slowDown = 5 * time.Second
 
-// waitToken polls at the code's interval until the code is approved, and stops on any answer that cannot turn into a token.
+// waitToken polls at the code's interval until the code is approved, and stops on any answer that cannot turn into a token,
+// access_denied (the code refused in the browser) among them.
 func waitToken(p poller, d protocol.DeviceStartResponse, sleep func(time.Duration)) (protocol.DeviceTokenResponse, error) {
 	every := time.Duration(max(d.Interval, 1)) * time.Second
 	for waited := time.Duration(0); waited <= time.Duration(d.ExpiresIn)*time.Second; waited += every {
@@ -75,6 +76,8 @@ func waitToken(p poller, d protocol.DeviceStartResponse, sleep func(time.Duratio
 			every += slowDown
 		case protocol.ErrorCodeExpiredToken:
 			return out, errors.New("the sign-in code expired before it was approved; run jellymoon login again")
+		case protocol.ErrorCodeAccessDenied: // a person pressed "This wasn't me" on the page (RFC 8628, 3.5): never retried
+			return out, errors.New("the sign-in was refused in the browser")
 		case protocol.ErrorCodeInvalidGrant:
 			return out, errors.New("the sign-in code was already used; run jellymoon login again")
 		case protocol.ErrorCodeUnauthorized:

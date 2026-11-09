@@ -124,6 +124,7 @@ const (
 	ErrorCodeAlreadyClaimed       ErrorCode = "already_claimed"
 	ErrorCodeAlreadyRuled         ErrorCode = "already_ruled"
 	ErrorCodeAuthorizationPending ErrorCode = "authorization_pending"
+	ErrorCodeAccessDenied         ErrorCode = "access_denied"
 	ErrorCodeSlowDown             ErrorCode = "slow_down"
 	ErrorCodeExpiredToken         ErrorCode = "expired_token"
 	ErrorCodeInvalidGrant         ErrorCode = "invalid_grant"
@@ -140,7 +141,7 @@ const (
 // Valid reports whether x is one of the schema's values.
 func (x ErrorCode) Valid() bool {
 	switch x {
-	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeConnectorDrift, ErrorCodeUpstream, ErrorCodeUpstreamFailed, ErrorCodeUpstreamTooLarge, ErrorCodeVaultUnconfigured, ErrorCodeInternal:
+	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeAccessDenied, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeConnectorDrift, ErrorCodeUpstream, ErrorCodeUpstreamFailed, ErrorCodeUpstreamTooLarge, ErrorCodeVaultUnconfigured, ErrorCodeInternal:
 		return true
 	}
 	return false
@@ -1496,6 +1497,37 @@ func (x *DeviceApproveRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A signed-in person refuses a device code they did not start, so the device polling it gets access_denied.
+type DeviceDenyRequest struct {
+	// The code the sign-in page shows, e.g. WDJB-MJHT, in either case and with or without the hyphen.
+	UserCode string `json:"userCode"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *DeviceDenyRequest) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"userCode"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("DeviceDenyRequest: missing required field %q", k)
+		}
+	}
+	type plain DeviceDenyRequest
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// A refusal carries no data: the device that polls gets access_denied.
+type DeviceDenyResponse struct {
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *DeviceDenyResponse) UnmarshalJSON(b []byte) error {
+	type plain DeviceDenyResponse
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // A logout carries no data: the token it presented no longer authenticates, and the session cookie is cleared.
 type LogoutResponse struct {
 }
@@ -2683,6 +2715,8 @@ var Registry = map[string]func() any{
 	"DeviceStartResponse":      func() any { return new(DeviceStartResponse) },
 	"DeviceTokenRequest":       func() any { return new(DeviceTokenRequest) },
 	"DeviceApproveRequest":     func() any { return new(DeviceApproveRequest) },
+	"DeviceDenyRequest":        func() any { return new(DeviceDenyRequest) },
+	"DeviceDenyResponse":       func() any { return new(DeviceDenyResponse) },
 	"LogoutResponse":           func() any { return new(LogoutResponse) },
 	"DeviceApproveResponse":    func() any { return new(DeviceApproveResponse) },
 	"DeviceTokenResponse":      func() any { return new(DeviceTokenResponse) },
@@ -2922,6 +2956,7 @@ var ErrorStatus = map[ErrorCode]int{
 	ErrorCodeAlreadyClaimed:       409,
 	ErrorCodeAlreadyRuled:         409,
 	ErrorCodeAuthorizationPending: 400,
+	ErrorCodeAccessDenied:         400,
 	ErrorCodeSlowDown:             400,
 	ErrorCodeExpiredToken:         400,
 	ErrorCodeInvalidGrant:         400,

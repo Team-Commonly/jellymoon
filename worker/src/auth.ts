@@ -1,6 +1,6 @@
 // Sign-in (ADR 0008), twin of server/src/auth.ts: the server's own device code, approved from a browser session that GitHub's
 // OAuth web flow proves. The GitHub token lives in fromGitHub's locals only: never stored, logged or returned.
-// D1 tables (schema.sql): device_codes and oauth_states (hashes only), github_users, rate_limits (the start limit) and
+// D1 tables (schema.sql): device_codes (a refused one is marked denied) and oauth_states (hashes only), github_users, rate_limits (the start limit) and
 // token_pods (which pods a token has sockets in, for logout).
 import type { Actor, ErrorCode } from '../../gen/ts/protocol';
 import { authenticate, mint, USER_TOKEN_MS } from './directory';
@@ -23,7 +23,7 @@ const START_LIMIT = 30;
 const SWEEP_GRACE_MS = 3_600_000;
 
 interface GitHub { web: string; api: string; id: string; secret: string }
-interface Device { expires_at: number; user_id: string | null; exchanged: number }
+interface Device { expires_at: number; user_id: string | null; exchanged: number; denied: number }
 
 /** The OAuth client and GitHub's endpoints; null when no client is set, or an http override outside ENV=local. */
 function githubOf(env: Env): GitHub | null {
@@ -169,9 +169,10 @@ async function deviceToken(env: Env, req: Request, now: number): Promise<Respons
   const problem = body === null ? 'The body must be a JSON object.' : check('DeviceTokenRequest', body);
   if (problem !== null || body === null) return bad(problem ?? '');
   const hash = await hashToken(body.deviceCode as string);
-  const row = await env.DB.prepare('select expires_at, user_id, exchanged from device_codes where hash = ?').bind(hash).first<Device>();
+  const row = await env.DB.prepare('select expires_at, user_id, exchanged, denied from device_codes where hash = ?').bind(hash).first<Device>();
   if (row === null || row.exchanged) return fail('invalid_grant', 'This device code is unknown or was already exchanged.');
   if (row.expires_at <= now) return fail('expired_token', 'This device code expired.');
+  if (row.denied) return fail('access_denied', 'The sign-in was refused in the browser.');
   const polled = await env.DB.prepare('update device_codes set last_poll = ? where hash = ? and last_poll <= ? returning user_id').bind(now, hash, now - INTERVAL_S * 1000).first<Device>();
   if (polled === null) return fail('slow_down', `Poll at most every ${INTERVAL_S} seconds.`);
   if (polled.user_id === null) return fail('authorization_pending', 'Not approved yet.');
@@ -182,21 +183,26 @@ async function deviceToken(env: Env, req: Request, now: number): Promise<Respons
   return Response.json({ token, user: { kind: 'human', id: user.id, displayName: user.name }, expiresAt: new Date(now + USER_TOKEN_MS).toISOString() });
 }
 
-/** The approval: JSON, and by cookie the server's own Origin (authOf), like every cookie write. */
-async function approve(env: Env, req: Request, now: number): Promise<Response> {
-  if (!JSON_TYPE.test(req.headers.get('Content-Type') ?? '')) return fail('forbidden', 'Approve with a JSON body.');
+/**
+ * Approve binds a pending code to the caller; deny refuses it, and refusing a refused code is a success again. JSON, and by
+ * cookie the server's own Origin (authOf), like every cookie write. Each refusal is the same answer from both routes.
+ */
+async function decide(env: Env, req: Request, now: number, route: 'approve' | 'deny'): Promise<Response> {
+  if (!JSON_TYPE.test(req.headers.get('Content-Type') ?? '')) return fail('forbidden', `${route === 'approve' ? 'Approve' : 'Deny'} with a JSON body.`);
   const who = await authOf(env, req, true);
   if (who instanceof Response) return who;
   if (who?.kind !== 'user') return fail('unauthorized', 'Sign in first.');
   const body = await parse(req);
-  const problem = body === null ? 'The body must be a JSON object.' : check('DeviceApproveRequest', body);
+  const problem = body === null ? 'The body must be a JSON object.' : check(route === 'approve' ? 'DeviceApproveRequest' : 'DeviceDenyRequest', body);
   if (problem !== null || body === null) return bad(problem ?? '');
   const hash = await hashToken(canonCode(body.userCode as string));
-  const won = await env.DB.prepare('update device_codes set user_id = ? where user_hash = ? and user_id is null and expires_at > ? returning hash').bind(who.actor.id, hash, now).first();
+  const won = route === 'approve'
+    ? await env.DB.prepare('update device_codes set user_id = ? where user_hash = ? and user_id is null and denied = 0 and expires_at > ? returning hash').bind(who.actor.id, hash, now).first()
+    : await env.DB.prepare('update device_codes set denied = 1 where user_hash = ? and user_id is null and expires_at > ? returning hash').bind(hash, now).first();
   if (won !== null) return Response.json({});
   const row = await env.DB.prepare('select expires_at from device_codes where user_hash = ?').bind(hash).first<Device>();
   if (row === null) return fail('not_found', 'No such code.');
-  return row.expires_at <= now ? fail('expired_token', 'This code expired.') : fail('gone', 'This code was already approved.');
+  return row.expires_at <= now ? fail('expired_token', 'This code expired.') : fail('gone', 'This code was already used.');
 }
 
 async function callback(env: Env, req: Request, gh: GitHub, base: string, now: number): Promise<Response> {
@@ -247,7 +253,8 @@ export async function authRoute(req: Request, env: Env, now: number): Promise<Re
   if (route === 'POST /v1/auth/logout') return logout(env, req, now);
   if (route === 'POST /v1/auth/device') return deviceStart(env, req, base, now);
   if (route === 'POST /v1/auth/device/token') return deviceToken(env, req, now);
-  if (route === 'POST /v1/auth/device/approve') return approve(env, req, now);
+  if (route === 'POST /v1/auth/device/approve') return decide(env, req, now, 'approve');
+  if (route === 'POST /v1/auth/device/deny') return decide(env, req, now, 'deny');
   if (route === 'GET /v1/me' || route === 'GET /v1/session') {
     // /v1/session is /v1/me that never refuses, so a signed-out page load logs no failed request.
     const me = await person(env, req);

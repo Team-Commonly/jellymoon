@@ -133,6 +133,7 @@
         "already_claimed",
         "already_ruled",
         "authorization_pending",
+        "access_denied",
         "slow_down",
         "expired_token",
         "invalid_grant",
@@ -1531,6 +1532,27 @@
           "pattern": "^[BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz]{4}-?[BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz]{4}$"
         }
       }
+    },
+    "DeviceDenyRequest": {
+      "description": "A signed-in person refuses a device code they did not start, so the device polling it gets access_denied.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userCode"
+      ],
+      "properties": {
+        "userCode": {
+          "description": "The code the sign-in page shows, e.g. WDJB-MJHT, in either case and with or without the hyphen.",
+          "type": "string",
+          "pattern": "^[BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz]{4}-?[BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz]{4}$"
+        }
+      }
+    },
+    "DeviceDenyResponse": {
+      "description": "A refusal carries no data: the device that polls gets access_denied.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
     },
     "LogoutResponse": {
       "description": "A logout carries no data: the token it presented no longer authenticates, and the session cookie is cleared.",

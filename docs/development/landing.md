@@ -185,7 +185,10 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
      (tree, main tip, head) is the same SHA on every attempt. `dco` is unaffected: on a `land/**` push it reads only the commits between the parents;
    - before pushing, when no `land/<n>` exists, it reads the check runs GitHub already holds for that exact SHA (GET only; the commit is still there
      after its ref was deleted, until GitHub collects it). The same proof rules apply: if every required check is green there, for example after a
-     failed job was re-run on a flake, that is the proof and nothing is pushed or deleted. Any other answer, or no such commit, goes on to push;
+     failed job was re-run on a flake, that is the proof and nothing is pushed or deleted. Any other answer, or no such commit, goes on to push.
+     Because anyone can compute the SHA in advance, here and in the poll below only runs of a check suite that a `push` to `refs/heads/land/<n>` started
+     count (`GET actions/runs?head_sha=<sha>&event=push&branch=land/<n>`, then the runs read with `filter=latest` and kept by `check_suite_id`
+     via `landSuiteRuns`): a fork PR whose head is that SHA gets green runs too, without secrets and on the `refs/pull` merge tree, and they prove nothing;
    - it pushes that commit to `refs/heads/land/<n>` (`ci.yml` runs on pushes to `land/**`; its `dco` job checks the commits between the commit's two
      parents on such a push). The push is create-only (`--force-with-lease=<ref>:`); a leftover `land/<n>` is reused only when it is the land commit (its tree and its parents, [main tip, head], exactly),
      otherwise overwritten under a lease on exactly that commit. `--dry-run` builds the commit, pushes nothing, says what it would do, and runs the

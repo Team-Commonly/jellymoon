@@ -357,6 +357,14 @@ export function landCommitEnv(ctLines) {
   const date = `@${Math.max(...lines.map(Number))} +0000`;
   return { GIT_AUTHOR_NAME: 'land', GIT_AUTHOR_EMAIL: 'land@localhost', GIT_AUTHOR_DATE: date, GIT_COMMITTER_NAME: 'land', GIT_COMMITTER_EMAIL: 'land@localhost', GIT_COMMITTER_DATE: date };
 }
+// Only runs of a check suite that a push to land/<n> started count as proof on the land commit. Its SHA is computable in advance, so a fork PR whose head
+// is that SHA gets green github-actions runs too (no secrets, and the refs/pull merge tree rather than this commit): those suites are not in `suites`.
+// runs carry `suite`; a list cut short by paging keeps its total above its length, which ciProof reads as unread.
+export const landSuiteRuns = ({ runs, total, suites }) => {
+  if (!Array.isArray(runs) || !Array.isArray(suites) || total > runs.length) return { runs, total };
+  const mine = runs.filter((r) => suites.includes(r.suite));
+  return { runs: mine, total: mine.length };
+};
 // Land's own ref for a PR: refs/heads/land/<n>, n digits only. Every push land makes (create, overwrite, delete) names a ref built here.
 export const landRef = (n) => {
   if (!/^\d+$/.test(String(n))) throw new Error(`not a PR number: ${n}`);

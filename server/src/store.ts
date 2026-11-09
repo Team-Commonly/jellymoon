@@ -1,5 +1,6 @@
 // Every SQL statement the server runs. Tables: pods (core state as text), events (the sinceSeq log), tokens (hashes only),
-// users, computers, invites (code hashes only). A command's state and events are written in one transaction by `savePod`.
+// users, computers, invites (code hashes only), and the connector layer's connections (credentials as envelopes only), grants
+// and connector_calls (the receipts; a parked write is a row with outcome parked, ADR 0009). A command's state and events are written in one transaction by `savePod`.
 // State is text, not jsonb: jsonb reorders object keys, and creation order is the order of the state's keys.
 import type { AnyEvent } from '../../gen/ts/protocol';
 import type { PodState } from '../../podcore/src/index';
@@ -19,7 +20,12 @@ create table if not exists events (pod text not null, seq integer not null, enve
 create table if not exists tokens (hash text primary key, kind text not null, subject text not null, pod text, revoked_at double precision);
 create table if not exists users (id text primary key, name text not null);
 create table if not exists computers (id text primary key, user_id text not null, name text not null, os text not null, arch text not null);
-create table if not exists invites (hash text primary key, pod text not null, uses_left integer not null, expires_at double precision not null);`;
+create table if not exists invites (hash text primary key, pod text not null, uses_left integer not null, expires_at double precision not null);
+create table if not exists connections (id text primary key, pod text not null, vendor text not null, url text not null, kid text not null, wrapped text not null, sealed text not null, created_at double precision not null);
+create table if not exists grants (connection text not null, agent text not null, access text not null, created_at double precision not null, primary key (connection, agent));
+create table if not exists connector_calls (id text primary key, pod text not null, connection text not null, operation text not null, args text not null, args_hash text not null,
+  run_id text not null, agent_id text not null, outcome text not null, upstream_status integer, decision_id text unique, approver text, result text,
+  created_at double precision not null, settled_at double precision, expires_at double precision);`;
 
 export const migrate = (db: Db): Promise<void> => db.exec(SCHEMA);
 
@@ -70,3 +76,52 @@ export async function findInvite(db: Db, hash: string): Promise<InviteRow | unde
   return r;
 }
 export const useInvite = (t: Tx, hash: string): Promise<unknown> => t.rows('update invites set uses_left = uses_left - 1 where hash = $1', [hash]);
+
+// ---- the connector layer (ADR 0009) ----
+export interface ConnRow { id: string; pod: string; vendor: string; url: string; kid: string; wrapped: string; sealed: string; createdAt: number }
+export interface GrantRow { connection: string; agent: string; access: string; createdAt: number }
+export interface CallRow {
+  id: string; pod: string; connection: string; operation: string; args: string; argsHash: string; runId: string; agentId: string; outcome: string;
+  upstreamStatus: number | null; decisionId: string | null; approver: string | null; result: string | null; createdAt: number; settledAt: number | null; expiresAt: number | null;
+}
+const CONN = 'id, pod, vendor, url, kid, wrapped, sealed, created_at as "createdAt"';
+const CALL = `id, pod, connection, operation, args, args_hash as "argsHash", run_id as "runId", agent_id as "agentId", outcome, upstream_status as "upstreamStatus",
+  decision_id as "decisionId", approver, result, created_at as "createdAt", settled_at as "settledAt", expires_at as "expiresAt"`;
+
+export const saveConnection = (db: Db, r: ConnRow): Promise<unknown> =>
+  db.rows('insert into connections (id, pod, vendor, url, kid, wrapped, sealed, created_at) values ($1, $2, $3, $4, $5, $6, $7, $8)', [r.id, r.pod, r.vendor, r.url, r.kid, r.wrapped, r.sealed, r.createdAt]);
+export async function findConnection(db: Db, pod: string, id: string): Promise<ConnRow | undefined> {
+  const [r] = await db.rows<ConnRow>(`select ${CONN} from connections where pod = $1 and id = $2`, [pod, id]);
+  return r;
+}
+export const connectionsOf = (db: Db, pod: string): Promise<ConnRow[]> => db.rows<ConnRow>(`select ${CONN} from connections where pod = $1 order by created_at, id`, [pod]);
+
+/** A second grant to the same agent on the same connection replaces the first. */
+export const saveGrant = (db: Db, g: GrantRow): Promise<unknown> =>
+  db.rows('insert into grants (connection, agent, access, created_at) values ($1, $2, $3, $4) on conflict (connection, agent) do update set access = excluded.access, created_at = excluded.created_at', [g.connection, g.agent, g.access, g.createdAt]);
+export async function findGrant(db: Db, connection: string, agent: string): Promise<GrantRow | undefined> {
+  const [r] = await db.rows<GrantRow>('select connection, agent, access, created_at as "createdAt" from grants where connection = $1 and agent = $2', [connection, agent]);
+  return r;
+}
+
+export const saveCall = (t: Tx, r: CallRow): Promise<unknown> =>
+  t.rows(`insert into connector_calls (id, pod, connection, operation, args, args_hash, run_id, agent_id, outcome, upstream_status, decision_id, approver, result, created_at, settled_at, expires_at)
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+  [r.id, r.pod, r.connection, r.operation, r.args, r.argsHash, r.runId, r.agentId, r.outcome, r.upstreamStatus, r.decisionId, r.approver, r.result, r.createdAt, r.settledAt, r.expiresAt]);
+
+/**
+ * The one place a parked write is consumed: it moves from parked to `outcome` in the caller's transaction, and only a row
+ * still parked and unexpired at `now` moves. The row comes back exactly once; every later claim of it finds nothing.
+ */
+export async function claimParked(t: Tx, decisionId: string, outcome: 'released' | 'rejected', approver: string | null, now: number): Promise<CallRow | undefined> {
+  const [r] = await t.rows<CallRow>(`update connector_calls set outcome = $2, approver = $3, settled_at = $4 where decision_id = $1 and outcome = 'parked' and expires_at > $4 returning ${CALL}`, [decisionId, outcome, approver, now]);
+  return r;
+}
+
+/** What the upstream answered to a released write. */
+export const finishCall = (db: Db, id: string, outcome: string, status: number | null, result: string | null): Promise<unknown> =>
+  db.rows('update connector_calls set outcome = $2, upstream_status = $3, result = $4 where id = $1', [id, outcome, status, result]);
+
+export const callsOf = (db: Db, pod: string, decisionId: string | undefined, limit: number): Promise<CallRow[]> => (decisionId === undefined
+  ? db.rows<CallRow>(`select ${CALL} from connector_calls where pod = $1 order by created_at desc, id desc limit $2`, [pod, limit])
+  : db.rows<CallRow>(`select ${CALL} from connector_calls where pod = $1 and decision_id = $2 limit $3`, [pod, decisionId, limit]));

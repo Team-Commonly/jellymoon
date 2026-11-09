@@ -8,6 +8,9 @@ import { mcpRoute } from './mcp';
 import { opRoutes } from './routes-ops';
 import { setupAll } from './routes-setup';
 import { wsRoute } from './ws';
+import { connectorRoutes } from './connectors';
+import { rulingOpts } from './connector-call';
+import type { Vault } from './vault';
 
 /**
  * `publicUrl` is the base of an invite's join link and a run's mcpUrl; a request's own origin stands in when unset.
@@ -15,7 +18,7 @@ import { wsRoute } from './ws';
  * bearer is configured, each needs `Authorization: Bearer <bearer>`, and there is no clock route. With neither, the build has
  * no /__test handler at all.
  */
-export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string }
+export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string; vault?: Vault }
 
 function testRoutes(app: Hono, hub: Hub, local: boolean, bearer: string | undefined): void {
   if (!local) {
@@ -46,7 +49,9 @@ export function buildApp(hub: Hub, opts: AppOpts): Hono {
   app.get('/healthz', (c) => c.text('ok'));
   setupAll(app, hub, opts.publicUrl);
   opRoutes(app, hub);
-  wsRoute(app, hub);
+  const kit = { hub, vault: opts.vault, local: opts.local };
+  connectorRoutes(app, kit); // ADR 0009
+  wsRoute(app, hub, (pod, cmd) => rulingOpts(kit, pod, cmd));
   mcpRoute(app, hub); // twin of the Worker's POST /mcp (worker/src/mcp.ts)
   if (opts.local || (opts.testBearer !== undefined && opts.testBearer !== '')) testRoutes(app, hub, opts.local, opts.testBearer);
   app.notFound((c) => fail(c, 'not_found', 'No such route.'));

@@ -1360,8 +1360,8 @@ Whether a pinned operation only reads the upstream (read) or changes it (write).
 
 One of: `read`, `write`.
 
-<a id="def-OperationName"></a>
-### OperationName
+<a id="def-ConnectorOperationName"></a>
+### ConnectorOperationName
 
 An operation's name in the vendor's pinned catalogue, e.g. list_issues.
 
@@ -1374,7 +1374,7 @@ One operation of a pinned catalogue: its name, its class and the names of its ar
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `name` | [OperationName](#def-OperationName) | yes | An operation's name in the vendor's pinned catalogue, e.g. list_issues. |
+| `name` | [ConnectorOperationName](#def-ConnectorOperationName) | yes | An operation's name in the vendor's pinned catalogue, e.g. list_issues. |
 | `class` | [OperationClass](#def-OperationClass) | yes | Whether a pinned operation only reads the upstream (read) or changes it (write). |
 | `args` | list of string | yes | The argument names the pin records, in order. Limit: up to 64 items, up to 64 characters |
 
@@ -1415,7 +1415,7 @@ One call: which connection (by id or by vendor), which pinned operation, and its
 |---|---|---|---|
 | `connectionId` | [ConnectionId](#def-ConnectionId) | no | The id of a pod connection: one upstream service and the credential the pod holds for it. |
 | `vendor` | [ConnectorVendor](#def-ConnectorVendor) | no | An upstream service the pod can connect, each with a pinned catalogue in the repo. |
-| `operation` | [OperationName](#def-OperationName) | yes | An operation's name in the vendor's pinned catalogue, e.g. list_issues. |
+| `operation` | [ConnectorOperationName](#def-ConnectorOperationName) | yes | An operation's name in the vendor's pinned catalogue, e.g. list_issues. |
 | `args` | object | yes | The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given. |
 
 <a id="def-ConnectorCallState"></a>
@@ -1454,7 +1454,7 @@ The server's record of one connector call. Stamped by the server from its own re
 | `id` | [ConnectorReceiptId](#def-ConnectorReceiptId) | yes | The id of a connector receipt: the server's record of one connector call. |
 | `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
 | `connectionId` | [ConnectionId](#def-ConnectionId) | yes | The id of a pod connection: one upstream service and the credential the pod holds for it. |
-| `operation` | [OperationName](#def-OperationName) | yes | An operation's name in the vendor's pinned catalogue, e.g. list_issues. |
+| `operation` | [ConnectorOperationName](#def-ConnectorOperationName) | yes | An operation's name in the vendor's pinned catalogue, e.g. list_issues. |
 | `argsHash` | string | yes | SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex. Limit: matches `^[0-9a-f]{64}$` |
 | `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
 | `agentId` | [AgentId](#def-AgentId) | yes | The id of an agent: a registered agent identity run by one harness on one computer. |

@@ -1,0 +1,72 @@
+// The one file that knows MCP (ADR 0009, "Operations, not MCP"): an upstream that speaks MCP over Streamable HTTP, as two
+// functions, list and call. JSON-RPC initialize, then tools/list or tools/call, with the credential as a bearer. An answer may
+// be JSON or an event stream. Redirects are refused (one could lead to a private address) and every request has a timeout.
+// Errors carry the upstream's own text, uncut: the caller scrubs the credential out first and only then shortens it.
+import type { ListedOp } from './catalogue';
+
+export type Listed = { ok: true; ops: ListedOp[] } | { ok: false; status: number; error: string };
+export interface Called { ok: boolean; status: number; result?: Record<string, unknown>; error?: string }
+
+const TIMEOUT_MS = 10_000;
+type Rpc = { status: number; body?: Record<string, unknown>; text: string; session: string | null };
+
+/** The JSON-RPC message of an answer: the body itself, or the last `data:` line of an event stream. */
+function messageOf(type: string, text: string): Record<string, unknown> | undefined {
+  const raw = type.includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).pop() : text;
+  try {
+    const v: unknown = JSON.parse(raw ?? '');
+    return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+  } catch { return undefined; }
+}
+
+async function rpc(url: string, token: string, session: string | null, method: string, params: unknown, id?: number): Promise<Rpc> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+  if (session !== null) headers['Mcp-Session-Id'] = session;
+  const res = await fetch(url, {
+    method: 'POST', headers, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS),
+    body: JSON.stringify(id === undefined ? { jsonrpc: '2.0', method, params } : { jsonrpc: '2.0', id, method, params }),
+  });
+  const text = await res.text();
+  return { status: res.status, body: messageOf(res.headers.get('content-type') ?? '', text), text, session: res.headers.get('mcp-session-id') ?? session };
+}
+
+/** The upstream's own words for a failed answer: its JSON-RPC error message, else the start of its body. */
+function errorOf(r: Rpc): string | null {
+  const e = r.body?.error as { message?: unknown } | undefined;
+  if (e !== undefined) return String(e.message ?? 'error');
+  if (r.status < 200 || r.status > 299) return `HTTP ${r.status}: ${r.text}`;
+  return r.body === undefined ? 'The upstream answered with no JSON-RPC message.' : null;
+}
+
+/** initialize plus the initialized notification; the session id, if the upstream gave one, rides on every later request. */
+async function open(url: string, token: string): Promise<Rpc> {
+  const init = await rpc(url, token, null, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'jellymoon', version: '0' } }, 1);
+  if (errorOf(init) === null) await rpc(url, token, init.session, 'notifications/initialized', {});
+  return init;
+}
+
+const failure = (e: unknown): { status: number; error: string } => ({ status: 502, error: e instanceof Error && e.name === 'TimeoutError' ? 'The upstream did not answer in time.' : 'The upstream could not be reached.' });
+
+export async function list(url: string, token: string): Promise<Listed> {
+  try {
+    const init = await open(url, token);
+    const r = errorOf(init) === null ? await rpc(url, token, init.session, 'tools/list', {}, 2) : init;
+    const err = errorOf(r);
+    if (err !== null) return { ok: false, status: r.status, error: err };
+    const tools = ((r.body?.result as { tools?: unknown[] } | undefined)?.tools ?? []) as Array<{ name?: unknown; inputSchema?: { properties?: object; required?: unknown[] } }>;
+    return { ok: true, ops: tools.map((t) => ({ name: String(t.name), args: Object.keys(t.inputSchema?.properties ?? {}), required: (t.inputSchema?.required ?? []).map(String) })) };
+  } catch (e) { return { ok: false, ...failure(e) }; }
+}
+
+export async function call(url: string, token: string, name: string, args: Record<string, unknown>): Promise<Called> {
+  try {
+    const init = await open(url, token);
+    const r = errorOf(init) === null ? await rpc(url, token, init.session, 'tools/call', { name, arguments: args }, 2) : init;
+    const err = errorOf(r);
+    if (err !== null) return { ok: false, status: r.status, error: err };
+    const res = (r.body?.result ?? {}) as { content?: unknown; structuredContent?: unknown; isError?: unknown };
+    const result = res.structuredContent !== undefined && typeof res.structuredContent === 'object' ? (res.structuredContent as Record<string, unknown>) : { content: res.content ?? [] };
+    if (res.isError === true) return { ok: false, status: r.status, error: JSON.stringify(res.content ?? '') };
+    return { ok: true, status: r.status, result };
+  } catch (e) { return { ok: false, ...failure(e) }; }
+}

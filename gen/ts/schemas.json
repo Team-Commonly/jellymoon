@@ -2130,7 +2130,7 @@
         "write"
       ]
     },
-    "OperationName": {
+    "ConnectorOperationName": {
       "description": "An operation's name in the vendor's pinned catalogue, e.g. list_issues.",
       "type": "string",
       "pattern": "^[a-z][a-z0-9_.]{0,63}$"
@@ -2146,7 +2146,7 @@
       ],
       "properties": {
         "name": {
-          "$ref": "#/$defs/OperationName"
+          "$ref": "#/$defs/ConnectorOperationName"
         },
         "class": {
           "$ref": "#/$defs/OperationClass"
@@ -2233,7 +2233,7 @@
           "$ref": "#/$defs/ConnectorVendor"
         },
         "operation": {
-          "$ref": "#/$defs/OperationName"
+          "$ref": "#/$defs/ConnectorOperationName"
         },
         "args": {
           "description": "The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given.",
@@ -2314,7 +2314,7 @@
           "$ref": "#/$defs/ConnectionId"
         },
         "operation": {
-          "$ref": "#/$defs/OperationName"
+          "$ref": "#/$defs/ConnectorOperationName"
         },
         "argsHash": {
           "description": "SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex.",

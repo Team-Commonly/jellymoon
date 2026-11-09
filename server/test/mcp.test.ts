@@ -15,7 +15,7 @@ describe('server /mcp', () => {
     expect([init.status, init.json.result.serverInfo.name]).toEqual([200, 'jellymoon']);
     const list = await rpc(w, run.runToken, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     expect(list.json.result.tools[0].name).toBe('jm_whoami');
-    expect(list.json.result.tools.length).toBe(9);
+    expect(list.json.result.tools.length).toBe(12);
     const res = await w.app.fetch(new Request('http://x/mcp', { method: 'POST', headers: { Authorization: `Bearer ${run.runToken}` }, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) }));
     expect([res.status, await res.text()]).toEqual([202, '']);
   });

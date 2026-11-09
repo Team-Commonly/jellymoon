@@ -23,11 +23,16 @@ export interface Conn {
 
 export interface Deps { db: Db; now(): number; rearm(): void }
 
-/** `pre` runs first inside the FIFO and may answer instead; `meta` and `extra` run only when the command succeeded. */
+/**
+ * `pre` runs first inside the FIFO and may answer instead; `meta`, `extra` and `after` run only when the command succeeded.
+ * `extra` runs inside the command's transaction; `after` runs once it has committed, still inside the FIFO and before any
+ * event fans out (a released connector write, ADR 0009: members hear of the ruling only once its call has been made).
+ */
 export interface Opts {
   pre?: (s: PodState) => Promise<Reply | null>;
   meta?: (m: PodMeta) => void;
   extra?: (t: Tx) => Promise<void>;
+  after?: () => Promise<void>;
 }
 
 const REPLAY_BATCH = 500;
@@ -100,6 +105,7 @@ export class PodRuntime {
     this.meta = meta;
     this.saved = text;
     this.deadline = nextDeadline(state);
+    if (good && o.after) await o.after().catch(() => console.error('a command\'s after-commit step failed', this.id));
     this.fanOut(out);
     return reply;
   }

@@ -769,11 +769,11 @@ export type OperationClass = "read" | "write";
 export const OperationClassValues = ["read","write"] as const;
 
 /** An operation's name in the vendor's pinned catalogue, e.g. list_issues. */
-export type OperationName = string;
+export type ConnectorOperationName = string;
 
 /** One operation of a pinned catalogue: its name, its class and the names of its arguments. */
 export interface PinnedOperation {
-  name: OperationName;
+  name: ConnectorOperationName;
   class: OperationClass;
   /** The argument names the pin records, in order. */
   args: string[];
@@ -803,7 +803,7 @@ export interface ConnectorListOutput {
 export interface ConnectorCallInput {
   connectionId?: ConnectionId;
   vendor?: ConnectorVendor;
-  operation: OperationName;
+  operation: ConnectorOperationName;
   /** The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given. */
   args: Record<string, unknown>;
 }
@@ -831,7 +831,7 @@ export interface ConnectorReceipt {
   id: ConnectorReceiptId;
   podId: PodId;
   connectionId: ConnectionId;
-  operation: OperationName;
+  operation: ConnectorOperationName;
   /** SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex. */
   argsHash: string;
   runId: RunId;

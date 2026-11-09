@@ -2180,12 +2180,12 @@ func (x OperationClass) Valid() bool {
 }
 
 // An operation's name in the vendor's pinned catalogue, e.g. list_issues.
-type OperationName = string
+type ConnectorOperationName = string
 
 // One operation of a pinned catalogue: its name, its class and the names of its arguments.
 type PinnedOperation struct {
-	Name  OperationName  `json:"name"`
-	Class OperationClass `json:"class"`
+	Name  ConnectorOperationName `json:"name"`
+	Class OperationClass         `json:"class"`
 	// The argument names the pin records, in order.
 	Args []string `json:"args"`
 }
@@ -2263,9 +2263,9 @@ func (x *ConnectorListOutput) UnmarshalJSON(b []byte) error {
 
 // One call: which connection (by id or by vendor), which pinned operation, and its arguments.
 type ConnectorCallInput struct {
-	ConnectionID *ConnectionID    `json:"connectionId,omitempty"`
-	Vendor       *ConnectorVendor `json:"vendor,omitempty"`
-	Operation    OperationName    `json:"operation"`
+	ConnectionID *ConnectionID          `json:"connectionId,omitempty"`
+	Vendor       *ConnectorVendor       `json:"vendor,omitempty"`
+	Operation    ConnectorOperationName `json:"operation"`
 	// The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given.
 	Args json.RawMessage `json:"args"`
 }
@@ -2351,10 +2351,10 @@ func (x ConnectorOutcome) Valid() bool {
 
 // The server's record of one connector call. Stamped by the server from its own records; an agent can read it and never write it.
 type ConnectorReceipt struct {
-	ID           ConnectorReceiptID `json:"id"`
-	PodID        PodID              `json:"podId"`
-	ConnectionID ConnectionID       `json:"connectionId"`
-	Operation    OperationName      `json:"operation"`
+	ID           ConnectorReceiptID     `json:"id"`
+	PodID        PodID                  `json:"podId"`
+	ConnectionID ConnectionID           `json:"connectionId"`
+	Operation    ConnectorOperationName `json:"operation"`
 	// SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex.
 	ArgsHash string           `json:"argsHash"`
 	RunID    RunID            `json:"runId"`

@@ -164,14 +164,14 @@
     "ConnectorVendor": { "description": "An upstream service the pod can connect, each with a pinned catalogue in the repo.", "type": "string", "enum": ["linear"] },
     "ConnectorAccess": { "description": "What a grant lets an agent do on a connection: read only, or also writes that each need a member's approval.", "type": "string", "enum": ["read", "write-with-confirm"] },
     "OperationClass": { "description": "Whether a pinned operation only reads the upstream (read) or changes it (write).", "type": "string", "enum": ["read", "write"] },
-    "OperationName": { "description": "An operation's name in the vendor's pinned catalogue, e.g. list_issues.", "type": "string", "pattern": "^[a-z][a-z0-9_.]{0,63}$" },
+    "ConnectorOperationName": { "description": "An operation's name in the vendor's pinned catalogue, e.g. list_issues.", "type": "string", "pattern": "^[a-z][a-z0-9_.]{0,63}$" },
     "PinnedOperation": {
       "description": "One operation of a pinned catalogue: its name, its class and the names of its arguments.",
       "type": "object",
       "additionalProperties": false,
       "required": ["name", "class", "args"],
       "properties": {
-        "name": { "$ref": "#/$defs/OperationName" },
+        "name": { "$ref": "#/$defs/ConnectorOperationName" },
         "class": { "$ref": "#/$defs/OperationClass" },
         "args": { "description": "The argument names the pin records, in order.", "type": "array", "maxItems": 64, "items": { "type": "string", "description": "An argument name.", "maxLength": 64 } }
       }
@@ -204,7 +204,7 @@
       "properties": {
         "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
         "vendor": { "$ref": "#/$defs/ConnectorVendor" },
-        "operation": { "$ref": "#/$defs/OperationName" },
+        "operation": { "$ref": "#/$defs/ConnectorOperationName" },
         "args": { "description": "The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given.", "type": "object", "maxProperties": 64 }
       }
     },
@@ -235,7 +235,7 @@
         "id": { "$ref": "common.json#/$defs/ConnectorReceiptId" },
         "podId": { "$ref": "common.json#/$defs/PodId" },
         "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
-        "operation": { "$ref": "#/$defs/OperationName" },
+        "operation": { "$ref": "#/$defs/ConnectorOperationName" },
         "argsHash": { "description": "SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex.", "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "runId": { "$ref": "common.json#/$defs/RunId" },
         "agentId": { "$ref": "common.json#/$defs/AgentId" },

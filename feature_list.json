@@ -198,12 +198,12 @@
       "description": "jellymoon login signs in with GitHub's device flow and stores a user token safely",
       "steps": [
         "against a stub GitHub, jellymoon login prints the user code and verification URL",
-        "after the stub approves, the CLI exchanges the GitHub token at POST /v1/auth/github for a jmu_",
+        "the person signs in through the server's GitHub OAuth web flow (the stub) and approves the code at POST /v1/auth/device/approve; POST /v1/auth/device/token then returns a jmu_ exactly once",
         "the token file is mode 0600 and the token is never printed",
         "a revoked or invalid GitHub token gets unauthorized"
       ],
       "test": "go test ./e2e -run TestF15",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F16",

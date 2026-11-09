@@ -1,5 +1,6 @@
 // The Worker: authenticates against D1, checks the token kind and the pod, and hands the request to the pod's Durable Object
 // with the caller in an internal header (any incoming copy is deleted first). It holds no pod state.
+import { authRoute } from './auth';
 import { addAgentPod, addInvite, addPod, authenticate, createComputer, dropInvite, dropPod, dropRunToken, mintRunToken, podExists, podOfInvite, podOfRun, podsOfComputer } from './directory';
 import type { Env } from './env';
 import { hashToken, newId, newInviteCode } from './ids';
@@ -132,6 +133,8 @@ export async function handle(req: Request, env: Env, viaMcp = false): Promise<Re
   const path = url.pathname;
   const m = req.method;
   if (path === '/healthz') return new Response('ok');
+  const signIn = await authRoute(req, env, env.CLOCK_MS ?? Date.now());
+  if (signIn !== null) return signIn;
   if (m === 'POST' && path === '/v1/pods') return setup(env, req, ['user'], 'CreatePodRequest', (w, b) => createPod(env, w, b));
   if (m === 'POST' && path === '/v1/computers') return setup(env, req, ['user'], 'RegisterComputerRequest', (w, b) => newComputer(env, w, b));
   if (m === 'POST' && path === '/v1/runs') return setup(env, req, ['computer'], 'ClaimRunRequest', (w, b) => startRun(env, w, b, url.origin));

@@ -63,10 +63,15 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    explicit `--bootstrap`, the first land of the gate, is the only exception, and only for HEAD: with `--bootstrap`, `HEAD` must be the PR head), no git remote URL
    carries userinfo, no git config carries an `http.*extraheader`, and no `.env*` or `bunfig.toml` exists in the
    checkout (the filesystem is checked, ignored files included: bun would load them as configuration).
-1. The PR is open, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`.
+1. The PR is open, not a draft, based on `main`, and its head on GitHub equals the local fetch of `pull/<n>/head`. A draft is refused as `#<n> is a draft (nothing merged)`
+   right after the trust gate, before any land ref is pushed (it used to reach `gh pr merge` and fail with a bare "Command failed", #20, 11-08). A PR whose draft
+   state is not reported counts as a draft, and the state is read again right before the merge.
 2. The ledger at the exact head (below). It admits the head by one of two paths: a `<model>-verifier` PASS, or a `coderabbit` PASS, which land accepts only after its own checks ("The CodeRabbit path", below).
-3. CI as a veto: if check runs exist on the head and any concluded in failure (`failure`, `timed_out`, `cancelled`,
-   `startup_failure`, `action_required`), land refuses. No check runs at all is fine: land does not wait for CI. The
+3. CI as a veto: if check runs exist on the head and the latest run of any check name concluded in failure (`failure`, `timed_out`, `cancelled`,
+   `startup_failure`, `action_required`), land refuses. Each check NAME is judged by its latest run: the one with the latest `started_at`, ties broken
+   by the higher run id (ids only grow; `started_at` alone can be equal or missing on a cancelled run). A cancelled or failed run followed by a later run
+   of the same name that finished is superseded, because a re-run is how a cancelled suite is retried (#29 and #32, 11-08). A cancelled run with no later
+   run of that name still refuses, and so does a later failure after an earlier success. Runs of one name that tie on both are all judged, and so is every run with no usable `started_at` (it cannot be placed in time, so it neither hides nor is hidden by another run). A judged run that is still running (not `completed`, or no conclusion) refuses as `<name> still running`. No check runs at all is fine: land does not wait for CI. The
    ruleset on `main` makes GitHub refuse the merge until CI's required checks pass; land still does not wait, so a land
    run while required checks are pending fails at the merge step.
 4. The range secret scan, which can only refuse, then the reviewer's pod verdict, which every land needs (below).
@@ -177,16 +182,16 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    - it builds the merge commit locally, `git commit-tree <merge-result tree> -p <main tip> -p <head>`, authored by the checkout's configured git
      identity, and refuses if that commit's tree is not the tree the decision computed (nothing is pushed);
    - it pushes that commit to `refs/heads/land/<n>` (`ci.yml` runs on pushes to `land/**`; its `dco` job checks the commits between the commit's two
-     parents on such a push). The push is create-only (`--force-with-lease=<ref>:`); a leftover `land/<n>` is reused if its tree is the merge result,
-     else overwritten under a lease on exactly that commit. `--dry-run` builds the commit, pushes nothing, says what it would do, and runs the
+     parents on such a push). The push is create-only (`--force-with-lease=<ref>:`); a leftover `land/<n>` is reused only when it is the land commit (its tree and its parents, [main tip, head], exactly),
+     otherwise overwritten under a lease on exactly that commit. `--dry-run` builds the commit, pushes nothing, says what it would do, and runs the
      preflight as before;
    - it polls every 20 seconds, for at most 15 minutes, until every required check has a run on THAT commit that is `completed` with conclusion
      `success`. Only runs by the GitHub Actions app (slug `github-actions`) count: a same-named run from another app or a user is ignored. A required
      check that completed without success (failure, cancelled, skipped, neutral, timed out), the cap, an unreadable run list or a failed push means
      no proof: the reason is printed to stderr as `no CI proof (...)` and the preflight runs exactly as above. GitHub's tree for the land commit
      not being the merge result refuses outright;
-   - then the merge goes through the API as before, and the merged tree is compared with the tested one (the LANDED note shows a mismatch);
-   - `refs/heads/land/<n>` is deleted after the land, whether it landed, fell back or refused. Land only ever pushes or deletes a ref it builds with
+   - then the merge goes through the API as before, and the merged tree is compared with the tested one (a mismatch is written on the LANDED row and refuses, below);
+   - `refs/heads/land/<n>` is deleted after the land, whether it landed, fell back or refused, and when land is interrupted (SIGINT, SIGTERM or SIGHUP run an exit handler that deletes it). Land only ever pushes or deletes a ref it builds with
      `landRef` (`refs/heads/land/<digits>`), never the PR branch or any other. A failed delete is said and the land continues.
    The bootstrap land never uses CI, and `--preflight-only` (verifiers) always runs the preflight. The LANDED row and the run's output name the
    path: `CI proved merge tree <8>` or `local preflight (<why>)`, so the two are countable. The skip changes nothing else: the ledger, the head's CI
@@ -195,7 +200,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    must still be `main` and its head the decided one, and main's tip is fetched once more and must equal the one tested. Then `gh pr merge --merge
    --match-head-commit <head>` (a merge commit; never squash, never `--delete-branch`) and a `LANDED` row. `gh` cannot
    pin the base, so main can still move in the seconds between the check and the merge; that window is accepted. The
-   run says which branch is now safe to delete.
+   run says which branch is now safe to delete, unless the merged tree is not the tested one (see "The merge commit's tree", below).
 
 Re-running is safe: a merged PR with a `LANDED` row at its head exits 0 saying so; merged without one is recorded
 with a warning as `MERGED-UNVERIFIED` (see the ledger format). `--dry-run` runs every check and the preflight, merges nothing and writes no ledger row (git's own
@@ -372,7 +377,8 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
 - **Every fetch of main names `refs/heads/main`**, never bare `main`: a tag named `main` wins git's DWIM.
 - **The merge commit's tree is compared with the tested one.** After `gh pr merge`, land fetches the merge commit and checks its tree
   against the preflight's merge result. A mismatch (the base or main moved in the last window) is written on the LANDED row as
-  `TREE-MISMATCH` and warned loudly. It is detected, not undone.
+  `TREE-MISMATCH` (the ledger row is kept), and land then refuses: it exits non-zero with a message naming both trees and does not
+  say the branch is safe to delete. It is detected, not undone.
 - **A hand `make preflight` with `JM_ENTROPY_BASE=none` switches the entropy ratchet off.** Land sets that only for the bootstrap
   land of a main with no `entropy.json`; nothing stops a person setting it by hand.
 - **A signal during `gh pr merge` can leave a merged PR with no LANDED row.** Recovery is record-only: the next run sees the PR
@@ -385,8 +391,8 @@ PR it refuses before fetching anything, and the verifier reads the code (`git sh
   `git remote -v`, which shows the rewrite). It does not look at `credential.helper`, and it lets a non-http URL carry a
   plain user (`ssh://git@host`); only a user:password pair is refused there.
 - **The base can be retargeted between the last re-read and the merge.** `--match-head-commit` pins the head only.
-- **The CI veto reads completed check runs only.** In-progress runs and legacy commit statuses are ignored, so land never
-  waits for CI; a failed completed run vetoes.
+- **The CI veto judges each check name's latest run.** A failed or cancelled latest run vetoes, and so does one still running
+  (`<name> still running`: land refuses rather than wait, and is run again once CI has finished). Legacy commit statuses are ignored.
 - **The checkout check** also refuses `assume-unchanged` or `skip-worktree` files, a diff from HEAD, and untracked files
   (all shown).
 - **A message's author, or the pod creator, can change its `created_at`** (Commonly's `PATCH /api/messages/:id/created-at`). A reviewer could reorder their own verdicts, and the creator anyone's; a backdated FAIL could also slip past the paging bound. Same trust class as the deletion below.

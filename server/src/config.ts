@@ -1,6 +1,7 @@
 // What the process must refuse at startup, kept apart from main.ts so a test can pin it.
 export function startupRefusal(env: Record<string, string | undefined>): string | undefined {
   const local = env.ENV === 'local';
+  if (env.GITHUB_URL && !local && !env.GITHUB_URL.startsWith('https://')) return 'GITHUB_URL must be https; an http override is for ENV=local only.';
   if (env.DATABASE_URL === undefined || env.DATABASE_URL === '') {
     return local ? undefined : 'DATABASE_URL is required. The in-process Postgres is for local runs only (ENV=local).';
   }

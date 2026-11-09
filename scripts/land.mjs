@@ -33,7 +33,7 @@ const refuse = (m) => { throw new Refusal(stripControls(scrub(m, SECRET))); };
 const readLedger = () => parseLedger(fs.existsSync(IO.env.JM_LEDGER) ? fs.readFileSync(IO.env.JM_LEDGER, 'utf8') : '');
 const appendLedger = (pr, head, verdict, by, note) => writeLedger(IO.env.JM_LEDGER, [pr, head, verdict, by, new Date().toISOString(), note], { dry: DRY });
 function viewPr(n) {
-  const pr = JSON.parse(gh('pr', 'view', String(n), '--repo', REPO, '--json', 'url,number,state,baseRefName,headRefName,headRefOid,createdAt,isCrossRepository,author'));
+  const pr = JSON.parse(gh('pr', 'view', String(n), '--repo', REPO, '--json', 'url,number,state,baseRefName,headRefName,headRefOid,createdAt,isCrossRepository,isDraft,author'));
   if (pr.url !== `https://github.com/${REPO}/pull/${n}`) refuse(`#${n} resolved to ${pr.url}, not ${REPO}`);
   return pr;
 }
@@ -145,6 +145,7 @@ function bootstrapGate(mainTip, bootstrap) {
 }
 // Trust gate: runs before anything of the PR is fetched or executed. Trust is GitHub identity: not cross-repository, the
 // author and every account with push access are in JM_TRUSTED_LOGINS (an operator env var; a PR cannot widen it).
+const draftGate = (pr, n, tail) => { if (pr.isDraft !== false) refuse(`#${n} is a draft${tail}`); }; // `gh pr merge` fails bare on a draft; unknown counts as a draft
 function trustGate(pr) {
   const pushers = pushersOf(gh('api', '--paginate', `repos/${REPO}/collaborators?affiliation=all&per_page=100`, '--jq', '.[] | {login, push: .permissions.push}'));
   const t = checkTrust({ pr: { isCrossRepository: pr.isCrossRepository, author: pr.author?.login }, pushers, trusted: parseLogins(IO.env.JM_TRUSTED_LOGINS) });
@@ -207,7 +208,7 @@ async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
   const led = checkLedger(rows, { pr: n, head });
   if (!led.ok) return led;
   let via = `verifier PASS by ${led.primary.by}`;
-  const runs = JSON.parse(gh('api', `repos/${REPO}/commits/${head}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, conclusion}]}'));
+  const runs = JSON.parse(gh('api', `repos/${REPO}/commits/${head}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {id, name, status, conclusion, started_at}]}'));
   const ci = checkRuns(runs.runs, runs.total);
   if (!ci.ok) return ci;
   // The secret scan can only REFUSE; a clean scan waives nothing. Every land needs the ledger PASS above and the reviewer's verdict below.
@@ -346,7 +347,7 @@ async function run(args, hold) {
     console.error(`land: warning: #${n} was merged without a LANDED row; ${DRY ? 'dry run, not recording it' : 'recording it as MERGED-UNVERIFIED'}`);
     return appendLedger(n, pr.headRefOid.toLowerCase(), 'MERGED-UNVERIFIED', 'land', 'merged out of band; recorded without any check');
   }
-  trustGate(pr);
+  trustGate(pr); draftGate(pr, n, ' (nothing merged)'); // refused before any land ref is pushed
   const mainTip = fetchRef(MAIN_REF);
   checkoutGate(mainTip, opts.bootstrap, pr.headRefOid);
   const h = checkHead(pr, fetchRef(`pull/${n}/head`));
@@ -366,7 +367,7 @@ async function run(args, hold) {
     const again = await decide(pr, mainTip);
     if (!again.ok) refuse(`#${n}: ${again.reason} (changed before the merge; nothing merged)`);
     const fresh = viewPr(n); // --match-head-commit pins only the head: the trust gate, base and state are re-read too
-    trustGate(fresh);
+    trustGate(fresh); draftGate(fresh, n, ' (changed before the merge; nothing merged)');
     const now = checkHead(fresh, head);
     if (!now.ok) refuse(`${now.reason} (changed before the merge; nothing merged)`);
     const moved = checkMain(mainTip, fetchRef(MAIN_REF)); // last look at main, right before the merge
@@ -375,9 +376,9 @@ async function run(args, hold) {
     const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
     const merged = sha === 'unknown' ? 'unknown' : (() => { try { fetchRef(sha); return out('git', ['rev-parse', `${sha}^{tree}`]); } catch { return 'unreadable'; } })();
     const note = landedNote(sha, pf.tree, merged, `${d.via}; ${route}`);
-    if (pf.tree !== merged) console.error(`land: WARNING: #${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the base or main moved in the last window. It cannot be undone; look at it now.`);
     appendLedger(n, head, 'LANDED', 'land', note);
     if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
+    if (pf.tree !== merged) refuse(`#${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the LANDED row carries TREE-MISMATCH. It cannot be undone; look at it now`);
     say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);
   } finally { ciClean(); }
 }

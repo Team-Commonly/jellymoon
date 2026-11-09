@@ -14,13 +14,20 @@
     { "method": "GET", "path": "/v1/pods/:pod/ws", "auth": "user|computer", "upgrade": "websocket" },
     { "method": "POST", "path": "/v1/runs", "auth": "computer", "request": "ClaimRunRequest", "response": "ClaimRunResponse" },
     { "method": "POST", "path": "/v1/runs/:run/end", "auth": "computer", "request": "EndRunRequest" },
+    { "method": "POST", "path": "/v1/pods/:pod/connections", "auth": "user", "request": "ConnectRequest", "response": "Connection" },
+    { "method": "POST", "path": "/v1/pods/:pod/grants", "auth": "user", "request": "GrantRequest", "response": "Grant" },
     { "method": "POST", "path": "/mcp", "auth": "run|user", "protocol": "mcp-streamable-http, stateless; the MCP adapter over operations.json" }
   ],
   "x-rules": [
     "/__test/* routes exist only when ENV is local or preview, and are absent from the production bundle.",
     "A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token.",
     "A used or expired invite gets gone (HTTP 410). Only a member can create an invite.",
-    "cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome."
+    "cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome.",
+    "Only a pod owner connects a vendor or grants an agent access; a member gets forbidden.",
+    "A connect lists the upstream's operations and compares them with the vendor's pinned catalogue. An empty list, or a pinned operation missing upstream or with other argument names, refuses the connect with connector_drift; an upstream that fails the listing gets upstream_failed with its error.",
+    "The url is https; a loopback, private or link-local host is refused unless ENV is local. A url carrying credentials is refused.",
+    "The token is stored only as an AES-256-GCM envelope under the server's vault key and is never returned. Without JM_VAULT_KEY a connect or a connector call gets vault_unconfigured.",
+    "A grant names an agent registered in the pod (otherwise not_found) and an access. A second grant to the same agent on the same connection replaces the first."
   ],
   "$defs": {
     "DeviceStartResponse": {
@@ -155,6 +162,53 @@
         "brief": { "description": "The agent's first prompt, built by the server.", "type": "string", "minLength": 1, "maxLength": 32768 },
         "mcpUrl": { "description": "Where the agent reaches the pod's MCP server. https, or http on localhost or 127.0.0.1. The daemon must check scheme and host itself before sending the run token: Go does not enforce patterns.", "type": "string", "pattern": "^(https://|http://(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?(/|$))" },
         "expiresAt": { "$ref": "common.json#/$defs/Timestamp" }
+      }
+    },
+    "ConnectRequest": {
+      "description": "A pod owner connects an upstream: the vendor, where its operations are served, and the credential the pod will hold.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vendor", "url", "token"],
+      "properties": {
+        "vendor": { "$ref": "operations.json#/$defs/ConnectorVendor" },
+        "url": { "description": "The upstream's endpoint, e.g. its remote MCP URL. https only (http on loopback when ENV is local).", "type": "string", "maxLength": 2048, "pattern": "^https?://" },
+        "token": { "description": "The upstream credential. Stored encrypted and never shown again, to anyone.", "type": "string", "minLength": 1, "maxLength": 4096 }
+      }
+    },
+    "Connection": {
+      "description": "A stored connection, without its credential: the vendor, the url and the pinned operations the upstream was checked against.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "vendor", "url", "createdAt", "operations"],
+      "properties": {
+        "id": { "$ref": "common.json#/$defs/ConnectionId" },
+        "vendor": { "$ref": "operations.json#/$defs/ConnectorVendor" },
+        "url": { "description": "The upstream's endpoint.", "type": "string", "maxLength": 2048 },
+        "createdAt": { "$ref": "common.json#/$defs/Timestamp" },
+        "operations": { "description": "The pinned catalogue the upstream matched.", "type": "array", "maxItems": 200, "items": { "$ref": "operations.json#/$defs/PinnedOperation" } }
+      }
+    },
+    "GrantRequest": {
+      "description": "A pod owner lets one agent use one connection, read only or with writes that each need approval.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connectionId", "agentId", "access"],
+      "properties": {
+        "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
+        "agentId": { "$ref": "common.json#/$defs/AgentId" },
+        "access": { "$ref": "operations.json#/$defs/ConnectorAccess" }
+      }
+    },
+    "Grant": {
+      "description": "A stored grant: which agent may use which connection, how, and since when.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connectionId", "agentId", "access", "createdAt"],
+      "properties": {
+        "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
+        "agentId": { "$ref": "common.json#/$defs/AgentId" },
+        "access": { "$ref": "operations.json#/$defs/ConnectorAccess" },
+        "createdAt": { "$ref": "common.json#/$defs/Timestamp" }
       }
     },
     "RunOutcome": { "description": "How a run ended: completed, failed or cancelled.", "type": "string", "enum": ["completed", "failed", "cancelled"] },

@@ -19,6 +19,8 @@
     "ToolCallId": { "description": "A tool call the pod or the daemon saw on a run, stamped by the pod. Asks cite these.", "type": "string", "pattern": "^tc_[0-9A-HJKMNP-TV-Z]{26}$" },
     "DecisionId": { "description": "The id of a decision, the open choice an ask carries.", "type": "string", "pattern": "^dec_[0-9A-HJKMNP-TV-Z]{26}$" },
     "WakeId": { "description": "The id of a wake: a push telling a computer to start a run for an agent.", "type": "string", "pattern": "^wak_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "ConnectionId": { "description": "The id of a pod connection: one upstream service and the credential the pod holds for it.", "type": "string", "pattern": "^con_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "ConnectorReceiptId": { "description": "The id of a connector receipt: the server's record of one connector call.", "type": "string", "pattern": "^crc_[0-9A-HJKMNP-TV-Z]{26}$" },
     "Seq": { "description": "Monotonic per pod, assigned by the pod. Starts at 1.", "type": "integer", "minimum": 1 },
     "Timestamp": { "description": "RFC 3339 in UTC. Set by the server only.", "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$" },
     "ActorKind": { "description": "Whether an actor is a person (human), an agent or the system.", "type": "string", "enum": ["human", "agent", "system"] },
@@ -52,6 +54,9 @@
         "invalid_grant",
         "ungrounded",
         "rate_limited",
+        "connector_drift",
+        "upstream_failed",
+        "vault_unconfigured",
         "internal"
       ],
       "x-errors": {
@@ -60,7 +65,7 @@
         "unauthorized": { "status": 401, "meaning": "No valid bearer token came with the request. Send a valid user, computer or run token." },
         "forbidden": { "status": 403, "meaning": "The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may." },
         "not_found": { "status": 404, "meaning": "The id or route in the request matches nothing. Check the id." },
-        "gone": { "status": 410, "meaning": "An invite is used or expired. Ask for a new invite." },
+        "gone": { "status": 410, "meaning": "An invite is used or expired, or a decision expired before it was ruled. Ask for a new invite or a new decision." },
         "already_claimed": { "status": 409, "meaning": "Someone else holds the task's claim. The error names the holder; leave the task or wait." },
         "already_ruled": { "status": 409, "meaning": "The decision was already ruled and the first ruling stays. Read the decision instead of ruling again." },
         "authorization_pending": { "status": 400, "meaning": "The person has not approved the device code yet. Poll again after the interval." },
@@ -69,6 +74,9 @@
         "invalid_grant": { "status": 400, "meaning": "The device code was already exchanged. Start the sign-in again." },
         "ungrounded": { "status": 422, "meaning": "A claim cites nothing, cites an id that is not a record here, or has a number its evidence lacks. Fix the citations and post again." },
         "rate_limited": { "status": 429, "meaning": "Too many requests. Wait before retrying." },
+        "connector_drift": { "status": 409, "meaning": "The upstream lists no operations, or a pinned operation is missing or its arguments changed upstream. The error names it; re-pin the catalogue." },
+        "upstream_failed": { "status": 502, "meaning": "The upstream refused or failed the call. The message carries its error, with any credential removed." },
+        "vault_unconfigured": { "status": 501, "meaning": "The server has no vault key (JM_VAULT_KEY), so it cannot store or use a connection credential." },
         "internal": { "status": 500, "meaning": "The server failed. The request may be fine; retry later." }
       }
     },

@@ -12,7 +12,14 @@
     "task_release may be called by the run that holds the claim, by the owner of the claiming agent (the user whose computer registered it), or by a pod owner; anyone else gets forbidden. Releasing an unclaimed task changes nothing and returns the task.",
     "A claim released by a person is not restored: if that run later operates on the task it gets forbidden. The restore rule in ADR 0002 applies only to lease expiry.",
     "run_stop may be called only by a person: the owner of the run's agent or a pod owner; anyone else gets forbidden. A run token cannot stop a run. Stopping a run that already ended returns its outcome unchanged.",
-    "run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated and claim.released with cause stopped for each released claim; no separate audit store exists."
+    "run_stop acts at once and does not wait for the daemon: it revokes the run token (the run's next call gets unauthorized), releases the run's claims without restore, ends the run as cancelled and sends the run.stop event to the hosting computer. It works while that computer is offline. The pod emits task.updated and claim.released with cause stopped for each released claim; no separate audit store exists.",
+    "connector_call names exactly one of connectionId or vendor; vendor names the pod's one connection to that vendor. Neither, both, or a vendor with several connections gets invalid_input.",
+    "connector_call is decided by the grant of the run's agent on the connection and by the operation's class in the pinned catalogue. An operation not in the pin gets not_found. No grant, or a write with only a read grant, gets forbidden.",
+    "A read with a read or write-with-confirm grant calls the upstream once and returns its result (state done). A write with write-with-confirm calls nothing: it is parked, the agent posts an ask (options a approve, b reject) whose body holds the exact arguments, and the call returns state parked with the decisionId.",
+    "A ruling of a on that ask releases exactly one upstream call with the parked arguments; the parked call is marked consumed in the transaction that records the ruling, so no second ruling, retry or race can release another. A ruling of b releases nothing.",
+    "A parked write expires 24 hours after it was parked: its decision becomes expired, a later ruling gets gone, and nothing is released.",
+    "Every connector call that names an existing connection writes a ConnectorReceipt, stamped by the server. An agent can read receipts and never write one.",
+    "The connection's credential never appears in any operation's output, any error, any receipt or any ask: an upstream error that echoes it has it removed."
   ],
   "x-operations": [
     { "name": "whoami", "method": "GET", "path": "/v1/pods/{podId}/me", "auth": "run|user", "input": "WhoamiInput", "output": "WhoamiOutput",
@@ -32,7 +39,13 @@
     { "name": "run_stop", "method": "POST", "path": "/v1/pods/{podId}/runs/{runId}/stop", "auth": "user", "input": "RunStopInput", "output": "RunStopOutput",
       "description": "Stop a run now: revoke its token, release its claims and end it as cancelled. The agent's owner or a pod owner may call it; it works when the computer is offline. See ADR 0002 Recourse." },
     { "name": "post", "method": "POST", "path": "/v1/pods/{podId}/messages", "auth": "run|user", "input": "message.json#/$defs/PostInput", "output": "PostOutput",
-      "description": "Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one." }
+      "description": "Post to the pod. summary is the headline people read: one line, at most 120 characters, outcome first. Use kind ask with needs, 2 to 5 options and a context when a person must decide: every claim in the context cites the tool calls or messages it comes from (see evidence). progress and fyi posts never notify anyone. The receipt is added by the pod; don't write one." },
+    { "name": "connector_list", "method": "GET", "path": "/v1/pods/{podId}/connectors", "auth": "run|user", "input": "ConnectorListInput", "output": "ConnectorListOutput",
+      "description": "The pod's connections and the operations you may call on each: the pinned catalogue filtered by your agent's grant, never the live upstream list. No credential is ever shown." },
+    { "name": "connector_call", "method": "POST", "path": "/v1/pods/{podId}/connectors/call", "auth": "run", "input": "ConnectorCallInput", "output": "ConnectorCallOutput",
+      "description": "Call one pinned operation on a pod connection; the pod holds the credential. A read returns the upstream's result. A write parks as an ask showing its exact arguments, and runs once only if a member approves." },
+    { "name": "connector_receipts", "method": "GET", "path": "/v1/pods/{podId}/connectors/receipts", "auth": "run|user", "input": "ConnectorReceiptsInput", "output": "ConnectorReceiptsOutput",
+      "description": "The server-stamped receipts of this pod's connector calls, newest first. Pass decisionId to read what became of a parked write after its ruling." }
   ],
   "$defs": {
     "EvidenceInput": {
@@ -147,6 +160,110 @@
       "additionalProperties": false,
       "required": ["runId", "outcome"],
       "properties": { "runId": { "$ref": "common.json#/$defs/RunId" }, "outcome": { "$ref": "pod-api.json#/$defs/RunOutcome" } }
+    },
+    "ConnectorVendor": { "description": "An upstream service the pod can connect, each with a pinned catalogue in the repo.", "type": "string", "enum": ["linear"] },
+    "ConnectorAccess": { "description": "What a grant lets an agent do on a connection: read only, or also writes that each need a member's approval.", "type": "string", "enum": ["read", "write-with-confirm"] },
+    "OperationClass": { "description": "Whether a pinned operation only reads the upstream (read) or changes it (write).", "type": "string", "enum": ["read", "write"] },
+    "OperationName": { "description": "An operation's name in the vendor's pinned catalogue, e.g. list_issues.", "type": "string", "pattern": "^[a-z][a-z0-9_.]{0,63}$" },
+    "PinnedOperation": {
+      "description": "One operation of a pinned catalogue: its name, its class and the names of its arguments.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "class", "args"],
+      "properties": {
+        "name": { "$ref": "#/$defs/OperationName" },
+        "class": { "$ref": "#/$defs/OperationClass" },
+        "args": { "description": "The argument names the pin records, in order.", "type": "array", "maxItems": 64, "items": { "type": "string", "description": "An argument name.", "maxLength": 64 } }
+      }
+    },
+    "ConnectorView": {
+      "description": "A connection as a caller sees it: its id, vendor and the pinned operations the caller may use. A run sees only what its agent's grant allows.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connectionId", "vendor", "operations"],
+      "properties": {
+        "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
+        "vendor": { "$ref": "#/$defs/ConnectorVendor" },
+        "access": { "description": "For a run token: its agent's grant on this connection.", "$ref": "#/$defs/ConnectorAccess" },
+        "operations": { "description": "The pinned operations the caller may call.", "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/PinnedOperation" } }
+      }
+    },
+    "ConnectorListInput": { "description": "Takes no fields.", "type": "object", "additionalProperties": false, "properties": {} },
+    "ConnectorListOutput": {
+      "description": "The pod's connections. A run token sees only the connections its agent holds a grant on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connections"],
+      "properties": { "connections": { "description": "The connections, oldest first.", "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/ConnectorView" } } }
+    },
+    "ConnectorCallInput": {
+      "description": "One call: which connection (by id or by vendor), which pinned operation, and its arguments.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "args"],
+      "properties": {
+        "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
+        "vendor": { "$ref": "#/$defs/ConnectorVendor" },
+        "operation": { "$ref": "#/$defs/OperationName" },
+        "args": { "description": "The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given.", "type": "object", "maxProperties": 64 }
+      }
+    },
+    "ConnectorCallState": { "description": "What became of a call: done (the upstream answered) or parked (a write waiting on a ruling).", "type": "string", "enum": ["done", "parked"] },
+    "ConnectorCallOutput": {
+      "description": "A done call carries the upstream's result; a parked one carries the decision a member rules on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "receiptId"],
+      "properties": {
+        "state": { "$ref": "#/$defs/ConnectorCallState" },
+        "receiptId": { "$ref": "common.json#/$defs/ConnectorReceiptId" },
+        "result": { "description": "State done: the upstream's result.", "type": "object" },
+        "decisionId": { "description": "State parked: the decision of the ask that holds the write.", "$ref": "common.json#/$defs/DecisionId" }
+      }
+    },
+    "ConnectorOutcome": {
+      "description": "ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask.",
+      "type": "string",
+      "enum": ["ok", "failed", "refused", "parked", "released", "rejected", "expired"]
+    },
+    "ConnectorReceipt": {
+      "description": "The server's record of one connector call. Stamped by the server from its own records; an agent can read it and never write it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "podId", "connectionId", "operation", "argsHash", "runId", "agentId", "outcome", "createdAt"],
+      "properties": {
+        "id": { "$ref": "common.json#/$defs/ConnectorReceiptId" },
+        "podId": { "$ref": "common.json#/$defs/PodId" },
+        "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
+        "operation": { "$ref": "#/$defs/OperationName" },
+        "argsHash": { "description": "SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex.", "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "runId": { "$ref": "common.json#/$defs/RunId" },
+        "agentId": { "$ref": "common.json#/$defs/AgentId" },
+        "outcome": { "$ref": "#/$defs/ConnectorOutcome" },
+        "upstreamStatus": { "description": "The HTTP status the upstream answered with, when it was called.", "type": "integer", "minimum": 100, "maximum": 599 },
+        "decisionId": { "description": "A write: the decision of its ask.", "$ref": "common.json#/$defs/DecisionId" },
+        "approver": { "description": "A released write: the member whose ruling released it.", "$ref": "common.json#/$defs/Actor" },
+        "result": { "description": "A released write: the upstream's result.", "type": "object" },
+        "createdAt": { "$ref": "common.json#/$defs/Timestamp" },
+        "settledAt": { "description": "When the call reached its outcome: at once for a read, at the ruling or expiry for a write.", "$ref": "common.json#/$defs/Timestamp" },
+        "expiresAt": { "description": "A parked write: when it expires unruled.", "$ref": "common.json#/$defs/Timestamp" }
+      }
+    },
+    "ConnectorReceiptsInput": {
+      "description": "Which receipts to read.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decisionId": { "description": "Only the receipt of the write this decision holds.", "$ref": "common.json#/$defs/DecisionId" },
+        "limit": { "description": "Defaults to 20.", "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    },
+    "ConnectorReceiptsOutput": {
+      "description": "Receipts, newest first.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipts"],
+      "properties": { "receipts": { "description": "The receipts, at most limit.", "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/ConnectorReceipt" } } }
     },
     "PostOutput": {
       "description": "The stored message's id and sequence number, and the decision id when the post is an ask.",

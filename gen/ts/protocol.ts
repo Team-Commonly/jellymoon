@@ -34,6 +34,12 @@ export type DecisionId = string;
 /** The id of a wake: a push telling a computer to start a run for an agent. */
 export type WakeId = string;
 
+/** The id of a pod connection: one upstream service and the credential the pod holds for it. */
+export type ConnectionId = string;
+
+/** The id of a connector receipt: the server's record of one connector call. */
+export type ConnectorReceiptId = string;
+
 /** Monotonic per pod, assigned by the pod. Starts at 1. */
 export type Seq = number;
 
@@ -57,8 +63,8 @@ export type Harness = "claude-code" | "codex" | "fake";
 export const HarnessValues = ["claude-code","codex","fake"] as const;
 
 /** Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event. */
-export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "internal";
-export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","internal"] as const;
+export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "connector_drift" | "upstream_failed" | "vault_unconfigured" | "internal";
+export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","connector_drift","upstream_failed","vault_unconfigured","internal"] as const;
 
 /** The body of every error response, and the data of the error socket event. */
 export interface ErrorBody {
@@ -605,6 +611,41 @@ export interface ClaimRunResponse {
   expiresAt: Timestamp;
 }
 
+/** A pod owner connects an upstream: the vendor, where its operations are served, and the credential the pod will hold. */
+export interface ConnectRequest {
+  vendor: ConnectorVendor;
+  /** The upstream's endpoint, e.g. its remote MCP URL. https only (http on loopback when ENV is local). */
+  url: string;
+  /** The upstream credential. Stored encrypted and never shown again, to anyone. */
+  token: string;
+}
+
+/** A stored connection, without its credential: the vendor, the url and the pinned operations the upstream was checked against. */
+export interface Connection {
+  id: ConnectionId;
+  vendor: ConnectorVendor;
+  /** The upstream's endpoint. */
+  url: string;
+  createdAt: Timestamp;
+  /** The pinned catalogue the upstream matched. */
+  operations: PinnedOperation[];
+}
+
+/** A pod owner lets one agent use one connection, read only or with writes that each need approval. */
+export interface GrantRequest {
+  connectionId: ConnectionId;
+  agentId: AgentId;
+  access: ConnectorAccess;
+}
+
+/** A stored grant: which agent may use which connection, how, and since when. */
+export interface Grant {
+  connectionId: ConnectionId;
+  agentId: AgentId;
+  access: ConnectorAccess;
+  createdAt: Timestamp;
+}
+
 /** How a run ended: completed, failed or cancelled. */
 export type RunOutcome = "completed" | "failed" | "cancelled";
 export const RunOutcomeValues = ["completed","failed","cancelled"] as const;
@@ -715,6 +756,116 @@ export interface RunStopOutput {
   outcome: RunOutcome;
 }
 
+/** An upstream service the pod can connect, each with a pinned catalogue in the repo. */
+export type ConnectorVendor = "linear";
+export const ConnectorVendorValues = ["linear"] as const;
+
+/** What a grant lets an agent do on a connection: read only, or also writes that each need a member's approval. */
+export type ConnectorAccess = "read" | "write-with-confirm";
+export const ConnectorAccessValues = ["read","write-with-confirm"] as const;
+
+/** Whether a pinned operation only reads the upstream (read) or changes it (write). */
+export type OperationClass = "read" | "write";
+export const OperationClassValues = ["read","write"] as const;
+
+/** An operation's name in the vendor's pinned catalogue, e.g. list_issues. */
+export type OperationName = string;
+
+/** One operation of a pinned catalogue: its name, its class and the names of its arguments. */
+export interface PinnedOperation {
+  name: OperationName;
+  class: OperationClass;
+  /** The argument names the pin records, in order. */
+  args: string[];
+}
+
+/** A connection as a caller sees it: its id, vendor and the pinned operations the caller may use. A run sees only what its agent's grant allows. */
+export interface ConnectorView {
+  connectionId: ConnectionId;
+  vendor: ConnectorVendor;
+  /** For a run token: its agent's grant on this connection. */
+  access?: ConnectorAccess;
+  /** The pinned operations the caller may call. */
+  operations: PinnedOperation[];
+}
+
+/** Takes no fields. */
+export interface ConnectorListInput {
+}
+
+/** The pod's connections. A run token sees only the connections its agent holds a grant on. */
+export interface ConnectorListOutput {
+  /** The connections, oldest first. */
+  connections: ConnectorView[];
+}
+
+/** One call: which connection (by id or by vendor), which pinned operation, and its arguments. */
+export interface ConnectorCallInput {
+  connectionId?: ConnectionId;
+  vendor?: ConnectorVendor;
+  operation: OperationName;
+  /** The operation's arguments, as the upstream takes them. A write's are shown on its ask exactly as given. */
+  args: Record<string, unknown>;
+}
+
+/** What became of a call: done (the upstream answered) or parked (a write waiting on a ruling). */
+export type ConnectorCallState = "done" | "parked";
+export const ConnectorCallStateValues = ["done","parked"] as const;
+
+/** A done call carries the upstream's result; a parked one carries the decision a member rules on. */
+export interface ConnectorCallOutput {
+  state: ConnectorCallState;
+  receiptId: ConnectorReceiptId;
+  /** State done: the upstream's result. */
+  result?: Record<string, unknown>;
+  /** State parked: the decision of the ask that holds the write. */
+  decisionId?: DecisionId;
+}
+
+/** ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask. */
+export type ConnectorOutcome = "ok" | "failed" | "refused" | "parked" | "released" | "rejected" | "expired";
+export const ConnectorOutcomeValues = ["ok","failed","refused","parked","released","rejected","expired"] as const;
+
+/** The server's record of one connector call. Stamped by the server from its own records; an agent can read it and never write it. */
+export interface ConnectorReceipt {
+  id: ConnectorReceiptId;
+  podId: PodId;
+  connectionId: ConnectionId;
+  operation: OperationName;
+  /** SHA-256 of the arguments as canonical JSON (keys sorted), lower-case hex. */
+  argsHash: string;
+  runId: RunId;
+  agentId: AgentId;
+  outcome: ConnectorOutcome;
+  /** The HTTP status the upstream answered with, when it was called. */
+  upstreamStatus?: number;
+  /** A write: the decision of its ask. */
+  decisionId?: DecisionId;
+  /** A released write: the member whose ruling released it. */
+  approver?: Actor;
+  /** A released write: the upstream's result. */
+  result?: Record<string, unknown>;
+  createdAt: Timestamp;
+  /** When the call reached its outcome: at once for a read, at the ruling or expiry for a write. */
+  settledAt?: Timestamp;
+  /** A parked write: when it expires unruled. */
+  expiresAt?: Timestamp;
+}
+
+/** Which receipts to read. */
+export interface ConnectorReceiptsInput {
+  /** Only the receipt of the write this decision holds. */
+  decisionId?: DecisionId;
+  /** Defaults to 20. */
+  limit?: number;
+}
+
+/** Receipts, newest first. */
+export interface ConnectorReceiptsOutput {
+  /** The receipts, at most limit. */
+  receipts: ConnectorReceipt[];
+}
+
 /** The stored message's id and sequence number, and the decision id when the post is an ask. */
 export interface PostOutput {
   messageId: MessageId;
@@ -802,6 +953,9 @@ export interface ToolIO {
   jm_task_release: { input: TaskReleaseInput; output: Task };
   jm_run_stop: { input: RunStopInput; output: RunStopOutput };
   jm_post: { input: PostInput; output: PostOutput };
+  jm_connector_list: { input: ConnectorListInput; output: ConnectorListOutput };
+  jm_connector_call: { input: ConnectorCallInput; output: ConnectorCallOutput };
+  jm_connector_receipts: { input: ConnectorReceiptsInput; output: ConnectorReceiptsOutput };
 }
 /** Every pod operation's HTTP form (operations.json x-operations). MCP and the CLI are adapters over these. */
 export const OPERATIONS = {
@@ -814,6 +968,9 @@ export const OPERATIONS = {
   task_release: { method: "POST", path: "/v1/pods/{podId}/tasks/{taskId}/release", auth: "run|user" },
   run_stop: { method: "POST", path: "/v1/pods/{podId}/runs/{runId}/stop", auth: "user" },
   post: { method: "POST", path: "/v1/pods/{podId}/messages", auth: "run|user" },
+  connector_list: { method: "GET", path: "/v1/pods/{podId}/connectors", auth: "run|user" },
+  connector_call: { method: "POST", path: "/v1/pods/{podId}/connectors/call", auth: "run" },
+  connector_receipts: { method: "GET", path: "/v1/pods/{podId}/connectors/receipts", auth: "run|user" },
 } as const;
 export type OperationName = keyof typeof OPERATIONS;
 /** The HTTP status each error code is sent with (common.json ErrorCode x-errors). */
@@ -832,8 +989,11 @@ export const ERROR_STATUS = {
   "invalid_grant": 400,
   "ungrounded": 422,
   "rate_limited": 429,
+  "connector_drift": 409,
+  "upstream_failed": 502,
+  "vault_unconfigured": 501,
   "internal": 500,
 } as const;
 export const TOOL_PREFIX = "jm_";
 export type ToolName = keyof ToolIO;
-export const TOOL_NAMES = ["jm_whoami","jm_read","jm_task_list","jm_task_claim","jm_task_update","jm_evidence","jm_task_release","jm_run_stop","jm_post"] as const;
+export const TOOL_NAMES = ["jm_whoami","jm_read","jm_task_list","jm_task_claim","jm_task_update","jm_evidence","jm_task_release","jm_run_stop","jm_post","jm_connector_list","jm_connector_call","jm_connector_receipts"] as const;

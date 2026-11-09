@@ -17,7 +17,7 @@ const frame = (hub: Hub, pod: PodRuntime, type: string, data: unknown): string =
   JSON.stringify({ v: 1, type, podId: pod.id, ts: isoOf(hub.now()), data });
 
 async function onFrame(hub: Hub, s: Session, conn: Conn, text: string): Promise<void> {
-  const refuse = (e: ErrorBody): void => conn.send(frame(hub, s.pod, 'error', { code: e.code, message: e.message } satisfies ErrorBody));
+  const refuse = (e: ErrorBody): void => conn.send(frame(hub, s.pod, 'error', { code: e.code, message: e.message, ...(e.ref === undefined ? {} : { ref: e.ref }) } satisfies ErrorBody));
   const p = parseFrame(s.pod.id, s.who, text);
   if ('subscribe' in p) return s.pod.subscribe(conn, p.subscribe);
   if ('code' in p) return refuse(p);

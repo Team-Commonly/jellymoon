@@ -6,19 +6,28 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 
 	"github.com/Team-Commonly/jellymoon/daemon/internal/api"
 )
 
-// ErrStopped is five consecutive failures in a row. The run saves its state and stops; it does not retry on its own.
-var ErrStopped = errors.New("stopped after 5 consecutive failures; the state is saved, run the command again later")
+// ErrStopped is five consecutive failures in a row. The run stops and does not retry on its own. The text says nothing about saved
+// state: the command adds that only when a state file exists.
+var ErrStopped = errors.New("stopped after 5 consecutive failures; run the command again later")
+
+// UnreachableError is a host that refused the connection or does not resolve, before it has answered anything. Only the host and the
+// class are kept, never the raw error text, which could carry the URL.
+type UnreachableError struct{ Host, Reason string }
+
+func (e *UnreachableError) Error() string { return fmt.Sprintf("can't reach %s: %s", e.Host, e.Reason) }
 
 const (
 	maxConsecutiveFailures = 5
@@ -51,6 +60,8 @@ type Commonly struct {
 	gap    time.Duration
 	jitter func() float64
 	last   time.Time
+	// answered is true once the instance has replied with any HTTP status.
+	answered bool
 }
 
 // NewCommonly checks the instance URL the way the daemon checks its server: https, or http on localhost or 127.0.0.1. Redirects
@@ -108,6 +119,11 @@ func (c *Commonly) Get(path string, q url.Values, out any) error {
 	for {
 		c.pace()
 		status, retryAfter, body, err := c.once(target)
+		if err == nil {
+			c.answered = true
+		} else if reason := unreachableReason(err); reason != "" && !c.answered {
+			return &UnreachableError{Host: c.base.Host, Reason: reason}
+		}
 		switch {
 		case err == nil && status >= 200 && status < 300:
 			c.fails = 0
@@ -167,7 +183,7 @@ func (c *Commonly) once(target string) (status int, retryAfter time.Duration, bo
 	req.Header.Set("User-Agent", "jellymoon-import/1")
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return 0, 0, nil, errors.New("the request failed")
+		return 0, 0, nil, &transportError{reason: transportClass(err)}
 	}
 	defer resp.Body.Close()
 	body, err = io.ReadAll(io.LimitReader(resp.Body, maxBody))
@@ -175,6 +191,31 @@ func (c *Commonly) once(target string) (status int, retryAfter time.Duration, bo
 		return 0, 0, nil, errors.New("the answer broke off")
 	}
 	return resp.StatusCode, parseRetryAfter(resp.Header.Get("Retry-After")), body, nil
+}
+
+// transportError is a failed request reduced to its class; the raw error is dropped because it can name the URL.
+type transportError struct{ reason string }
+
+func (e *transportError) Error() string { return "the request failed" }
+
+// transportClass names the class of a transport error. Only a refusal and a missing name are ever called unreachable.
+func transportClass(err error) string {
+	var dns *net.DNSError
+	switch {
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return "connection refused"
+	case errors.As(err, &dns) && !dns.IsTimeout && !dns.IsTemporary:
+		return "the name doesn't resolve"
+	}
+	return ""
+}
+
+func unreachableReason(err error) string {
+	var te *transportError
+	if errors.As(err, &te) {
+		return te.reason
+	}
+	return ""
 }
 
 // parseRetryAfter reads both forms, seconds and an HTTP date, and caps the wait.

@@ -251,6 +251,35 @@ test('the needs-you filter keeps its layout, with an ask, and when nothing needs
   await holdsLayout(page, '/pod/:id?filter=needs-you with nothing left');
 });
 
+test('/pod/:id keeps its layout when the server refuses the pod: no such pod, not a member, signed out; the socket is not retried', async ({ page }) => {
+  const sockets: string[] = [];
+  page.on('websocket', (ws) => void sockets.push(ws.url()));
+  await page.clock.install(); // the store's retry is a timer: fast-forwarding it shows none is pending
+  const refused = async (where: string) => {
+    await expect(page.getByRole('alert')).toHaveText("No such pod, or you're not a member.");
+    await expect(page.getByRole('textbox', { name: 'Message' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Needs you/ })).toHaveCount(0);
+    await holdsLayout(page, where);
+  };
+
+  await page.goto('/pod/pod_01M6ZYCMY1F27TYDSDH7B3JYQ0');
+  await expect(page.getByRole('alert')).toHaveText('Sign in to open this pod.');
+  await holdsLayout(page, '/pod/:id signed out');
+
+  const ada = await person('Ada');
+  await signIn(page, ada);
+  await page.goto('/pod/pod_01M6ZYCMY1F27TYDSDH7B3JYQ0');
+  await refused('/pod/:id with no such pod');
+  const before = sockets.length;
+  await page.clock.fastForward(60_000);
+  expect(sockets.length, 'no socket retried after the refusal').toBe(before);
+
+  const bo = await person('Bo');
+  const { id } = await api<{ id: string }>('POST', '/v1/pods', bo.token, { name: 'Not yours' });
+  await page.goto(`/pod/${id}`);
+  await refused('/pod/:id of a pod you are not in');
+});
+
 test('/ keeps its layout signed out, signed in, and with a failure showing', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('link', { name: 'Sign in with GitHub to start a pod' })).toBeVisible();

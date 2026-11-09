@@ -57,7 +57,7 @@ describe('who is signed in, in the bar', () => {
 
   it('Sign out posts the logout once, then shows the signed-out page at /', async () => {
     let release = () => {};
-    const h = fakeHttp(undefined, undefined, undefined, undefined, undefined, () => new Promise<void>((r) => { release = r; }));
+    const h = fakeHttp(undefined, undefined, undefined, undefined, undefined, undefined, () => new Promise<void>((r) => { release = r; }));
     const { getByRole, findByRole, queryByRole } = at('/pod/pod_7', you, h.http);
     const out = getByRole('button', { name: 'Sign out' });
     fireEvent.click(out);
@@ -73,7 +73,7 @@ describe('who is signed in, in the bar', () => {
   });
 
   it('a failed sign-out says so and stays signed in', async () => {
-    const h = fakeHttp(undefined, undefined, undefined, undefined, undefined, () => Promise.reject(new ApiError(500, 'request failed')));
+    const h = fakeHttp(undefined, undefined, undefined, undefined, undefined, undefined, () => Promise.reject(new ApiError(500, 'request failed')));
     const { getByRole, findByRole } = at('/pod/pod_7', you, h.http);
     fireEvent.click(getByRole('button', { name: 'Sign out' }));
     expect((await findByRole('alert')).textContent).toBe('Could not sign out. Try again.');

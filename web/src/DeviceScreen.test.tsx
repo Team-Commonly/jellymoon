@@ -74,7 +74,8 @@ describe('/device, pressing Approve', () => {
     [404, 'No device is waiting for that code. Check it against your terminal.'],
     [410, 'This code was already approved.'],
     [400, 'This code expired or is not a device code. Start the sign-in again in your terminal.'],
-    [401, 'Your session ended. Sign in again.'],
+    [401, 'Your session ended.'],
+    [403, 'The server refused this approval. Open the link your terminal printed, on the address it shows.'],
     [500, 'Could not approve: the server returned an error (500). Try again.'],
   ])('%i says what failed and leaves Approve available', async (status, line) => {
     const { http } = fakeHttp(undefined, reject(status));
@@ -82,6 +83,13 @@ describe('/device, pressing Approve', () => {
     fireEvent.click(getByRole('button', { name: 'Approve' }));
     expect(await findByText(line)).toBeTruthy();
     await waitFor(() => expect((getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it('401 offers the sign-in link, back to /device with the code kept', async () => {
+    const { http } = fakeHttp(undefined, reject(401));
+    const { getByRole, findByRole } = open(http, true);
+    fireEvent.click(getByRole('button', { name: 'Approve' }));
+    expect((await findByRole('link', { name: 'Sign in again' })).getAttribute('href')).toBe('/v1/auth/github/start?next=%2Fdevice%3Fcode%3DWDJB-MJHT');
   });
 
   it('a network failure also says so', async () => {

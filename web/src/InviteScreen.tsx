@@ -1,4 +1,4 @@
-// /invite/:token. Never joins on load: a person presses Join. The invite code is never logged or put in another URL.
+// /invite/:token. Never joins on load: a person presses Join. The invite code is never logged; it appears only in same-origin URLs.
 import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, signInHref } from './http';

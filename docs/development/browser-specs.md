@@ -23,7 +23,7 @@ Each spec runs twice, as the projects `phone-390` (390x844) and `desktop-1440` (
 - **Browsers are installed in CI only.** CI's `browser` job runs `playwright install --with-deps chromium` inside the job, then
   `make e2e-web`, and uploads `web-e2e/report/` and `web-e2e/test-results/` (traces of failed tests) when it fails. On a shared
   or small machine, don't download a browser to run these: run `bun x playwright test -c web-e2e --list` to check that the config
-  and specs load (4 spec files x 2 projects = 10 tests), type-check them with `bun run check:types`, and let CI run them.
+  and specs load (5 tests x 2 projects = 10), type-check them with `bun run check:types`, and let CI run them.
 - On a machine that already has the pinned Chromium, `make e2e-web` runs them as CI does.
 
 ## The harness

@@ -11,10 +11,10 @@ export interface Http {
 /** The GitHub sign-in, which brings the person back to `path` (a same-origin path) with the session cookie set. */
 export const signInHref = (path: string): string => `/v1/auth/github/start?next=${encodeURIComponent(path)}`;
 
-/** The browser client. Cookie sign-in; the code goes in the path of one request and nowhere else. */
+/** The browser client. Cookie sign-in, and every write sends JSON (the server refuses a cookie write that is not). An invite code goes in the path of one request and in a same-origin `next`, nowhere else. */
 export const browserHttp: Http = {
   async acceptInvite(code) {
-    const res = await fetch(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: 'POST', credentials: 'same-origin' });
+    const res = await fetch(`/v1/invites/${encodeURIComponent(code)}/accept`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
     if (!res.ok) throw new ApiError(res.status, 'request failed');
     return (await res.json()) as AcceptInviteResponse;
   },

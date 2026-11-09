@@ -25,7 +25,7 @@ describe('/', () => {
     const { getByRole, getByLabelText } = open(http, true);
     fireEvent.change(getByLabelText('Pod name'), { target: { value: 'Launch room' } });
     fireEvent.click(getByRole('button', { name: 'Create' }));
-    await waitFor(() => expect(getByRole('banner').textContent).toContain('pod_new'));
+    await waitFor(() => expect(getByRole('banner').textContent).toContain('Launch room'));
     expect(created).toEqual(['Launch room']);
   });
 
@@ -75,7 +75,7 @@ describe('/ when creating goes wrong or twice', () => {
     fireEvent.click(create);
     expect((create as HTMLButtonElement).disabled).toBe(true);
     release();
-    await waitFor(() => expect(getByRole('banner').textContent).toContain('pod_new'));
+    await waitFor(() => expect(getByRole('banner').textContent).toContain('Launch room'));
     expect(created).toHaveLength(1);
   });
 });

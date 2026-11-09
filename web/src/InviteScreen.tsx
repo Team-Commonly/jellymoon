@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, signInHref } from './http';
 import type { Http } from './http';
+import { rememberPod } from './podNames';
 
 const GONE = 'This invite has been used or has expired. Ask whoever sent it for a new one.';
 
@@ -34,6 +35,7 @@ export function InvitePage({ http, signedIn }: { http: Http; signedIn: boolean }
     setError(null);
     try {
       const { pod } = await http.acceptInvite(token);
+      rememberPod(pod);
       navigate(`/pod/${encodeURIComponent(pod.id)}`);
     } catch (e) {
       setError(failure(e));

@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, signInHref } from './http';
 import type { Http } from './http';
+import { rememberPod } from './podNames';
 
 /** CreatePodRequest.name: 1 to 80 characters (schema/pod-api.json). */
 const NAME_MAX = 80;
@@ -39,6 +40,7 @@ export function HomePage({ http, signedIn }: { http: Http; signedIn: boolean }) 
     setError(null);
     try {
       const pod = await http.createPod(trimmed);
+      rememberPod(pod);
       navigate(`/pod/${encodeURIComponent(pod.id)}`);
     } catch (err) {
       setError(failure(err));

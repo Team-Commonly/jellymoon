@@ -41,6 +41,33 @@ const rules = (net: ReturnType<typeof fakeNet>) => net.sent().filter((f) => f.ty
 const composer = () => screen.getByRole('textbox', { name: 'Message' });
 const toggle = () => screen.getByRole('button', { name: /Needs you/ });
 
+describe('an empty pod', () => {
+  const open = (headSeq: number) => {
+    const net = fakeNet();
+    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>);
+    return { net, hello: () => act(() => { net.open(); net.deliver(frame('hello', undefined, hello({ headSeq }))); }) };
+  };
+
+  it('says nothing has been posted and how to start a run, once the pod has said it is empty', () => {
+    const p = open(0);
+    expect(screen.queryByText(/Nothing has been posted yet/)).toBeNull();
+    p.hello();
+    expect(screen.getByText('Nothing has been posted yet. @mention an agent in the box below to start a run.')).toBeTruthy();
+  });
+
+  it('goes away with the first card', () => {
+    const p = open(0);
+    p.hello();
+    act(() => p.net.deliver(frame('message.created', 1, note(1))));
+    expect(screen.queryByText(/Nothing has been posted yet/)).toBeNull();
+  });
+
+  it('never shows over a pod that has history still on its way', () => {
+    open(3).hello();
+    expect(screen.queryByText(/Nothing has been posted yet/)).toBeNull();
+  });
+});
+
 describe('the stream', () => {
   it('shows a card per message, oldest first and newest at the bottom, with author, headline and status', () => {
     mount([note(1, { summary: 'First', status: 'done' }), note(2, { summary: 'Second', status: 'in_progress' })]);

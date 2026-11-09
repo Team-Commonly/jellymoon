@@ -2,6 +2,7 @@ import { cleanup, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
+import { rememberPod } from './podNames';
 import { fakeHttp, fakeNet } from './testkit';
 
 afterEach(cleanup);
@@ -12,6 +13,13 @@ describe('shell', () => {
     const { getByText, getByRole } = at('/pod/pod_7');
     expect(getByRole('banner').textContent).toContain('pod_7');
     expect(getByText('Sign in').closest('a')).toBeTruthy();
+  });
+
+  it('names the pod in the bar when the client knows it, and falls back to the id only until then', () => {
+    rememberPod({ id: 'pod_8', name: 'Walk pod', createdAt: '2026-11-08T10:00:00Z' });
+    const named = at('/pod/pod_8');
+    expect(named.getByRole('banner').textContent).toContain('Walk pod');
+    expect(named.getByRole('banner').textContent).not.toContain('pod_8');
   });
 
   it('signed out, the bar links to the real sign-in and comes back to this page', () => {

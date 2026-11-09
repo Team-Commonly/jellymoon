@@ -268,3 +268,24 @@ test('/invite/:token keeps its layout signed out, signed in, and when the link i
     agent.close();
   }
 });
+
+test('a pod with nothing posted keeps its layout: the empty line shows, and goes with the first card', async ({ page, pod }) => {
+  await openPod(page, pod);
+  await expect(page.getByText('Nothing has been posted yet. @mention an agent in the box below to start a run.')).toBeVisible();
+  await expect(page.getByRole('banner')).toContainText('Launch room');
+  await holdsLayout(page, '/pod/:id empty');
+
+  await pod.agent.post({ summary: 'First note', kind: 'fyi', status: 'done' });
+  await expect(page.getByRole('heading', { name: 'First note' })).toBeVisible();
+  await expect(page.getByText(/Nothing has been posted yet/)).toHaveCount(0);
+});
+
+test('the top bar keeps its layout under the longest pod name the schema allows', async ({ page }) => {
+  await signIn(page, await person('Ada'));
+  await page.goto('/');
+  await page.getByLabel('Pod name').fill(UNBROKEN.slice(0, 80));
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page).toHaveURL(/\/pod\/[^/]+$/);
+  await expect(page.getByRole('banner')).toContainText(UNBROKEN.slice(0, 80));
+  await holdsLayout(page, 'the bar with the longest pod name');
+});

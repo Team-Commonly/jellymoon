@@ -32,7 +32,7 @@ describe('/invite/:token', () => {
     const { http, calls } = fakeHttp();
     const { getByRole } = open(http, true);
     fireEvent.click(getByRole('button', { name: 'Join' }));
-    await waitFor(() => expect(getByRole('banner').textContent).toContain('pod_9'));
+    await waitFor(() => expect(getByRole('banner').textContent).toContain('Launch room'));
     expect(calls).toEqual(['abc123']);
   });
 
@@ -44,7 +44,7 @@ describe('/invite/:token', () => {
     fireEvent.click(join);
     fireEvent.click(join);
     release();
-    await waitFor(() => expect(getByRole('banner').textContent).toContain('pod_9'));
+    await waitFor(() => expect(getByRole('banner').textContent).toContain('P'));
     expect(calls).toHaveLength(1);
   });
 

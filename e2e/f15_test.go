@@ -82,10 +82,14 @@ func want(what string, st int, code string, wst int, wcode string) error {
 	return nil
 }
 
+// approve sends the server's own Origin unless hdr says otherwise; an empty value drops the header.
 func (f *f15) approve(hc *http.Client, userCode string, hdr map[string]string) (int, string) {
-	h := map[string]string{"Content-Type": "application/json"}
+	h := map[string]string{"Content-Type": "application/json", "Origin": f.srv.base()}
 	for k, v := range hdr {
 		h[k] = v
+		if v == "" {
+			delete(h, k)
+		}
 	}
 	st, code, _ := f.raw(hc, "POST", "/v1/auth/device/approve", fmt.Sprintf(`{"userCode":%q}`, userCode), h)
 	return st, code
@@ -228,7 +232,7 @@ func (f *f15) steps(p *stepper) {
 	p.step("after approval exactly one exchange returns a new jmu_ for that user, the next invalid_grant; approving again is gone", func() error {
 		return f.oneExchange(b, ana)
 	})
-	p.step("an unknown user code is not_found; approve without a JSON content type or with a foreign Origin is refused", func() error {
+	p.step("an unknown user code is not_found; approve by cookie without a JSON content type, with a foreign Origin or with none is refused", func() error {
 		return f.approveGuards(b)
 	})
 	p.step("the callback refuses a missing state, another browser's state and a reused state", func() error { return f.badStates() })

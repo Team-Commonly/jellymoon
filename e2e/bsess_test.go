@@ -28,20 +28,28 @@ type bsess struct {
 // hop is played here, with this test's own identity, so the parallel TestF15 steering the stub's next login cannot touch it.
 func (b *bsess) signedIn(login string, id int64) (*http.Client, error) {
 	hc := browser()
+	cb, err := b.stubCallback(hc, login, id)
+	if err != nil {
+		return nil, err
+	}
+	if st, _, ec := b.callback(hc, cb); st != 302 || b.session(hc) == "" {
+		return nil, fmt.Errorf("callback as %s: HTTP %d %q, session %t", login, st, ec, b.session(hc) != "")
+	}
+	return hc, nil
+}
+
+// stubCallback runs start in hc and returns the callback URL the stub would send it back to, signed in as login.
+func (b *bsess) stubCallback(hc *http.Client, login string, id int64) (string, error) {
 	resp, err := hc.Get(b.own + "/v1/auth/github/start?next=/")
 	if err != nil || resp.StatusCode != 302 {
-		return nil, fmt.Errorf("start: %v %v", err, resp)
+		return "", fmt.Errorf("start: %v %v", err, resp)
 	}
 	q, _ := url.Parse(resp.Header.Get("Location"))
 	code, tok := randHex(10), "gho_stub"+randHex(18)
 	gh.mu.Lock()
 	gh.codes[code], gh.tokens[tok], gh.users[tok] = tok, true, ghUser{ID: id, Login: login}
 	gh.mu.Unlock()
-	cb := q.Query().Get("redirect_uri") + "?" + url.Values{"code": {code}, "state": {q.Query().Get("state")}}.Encode()
-	if st, _, ec := b.callback(hc, cb); st != 302 || b.session(hc) == "" {
-		return nil, fmt.Errorf("callback as %s: HTTP %d %q, session %t", login, st, ec, b.session(hc) != "")
-	}
-	return hc, nil
+	return q.Query().Get("redirect_uri") + "?" + url.Values{"code": {code}, "state": {q.Query().Get("state")}}.Encode(), nil
 }
 
 // send is one request with the browser's cookies, a JSON content type and the server's own Origin unless hdr says otherwise

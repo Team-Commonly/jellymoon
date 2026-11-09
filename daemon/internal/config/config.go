@@ -29,6 +29,8 @@ type Agent struct {
 	AgentID     protocol.AgentID `json:"agentId"`
 	Harness     protocol.Harness `json:"harness"`
 	DisplayName string           `json:"displayName"`
+	// AllowPermissions makes the daemon answer the agent's permission requests with allow_once. Unset, they are rejected.
+	AllowPermissions bool `json:"allowPermissions,omitempty"`
 }
 
 // Store is one config dir.

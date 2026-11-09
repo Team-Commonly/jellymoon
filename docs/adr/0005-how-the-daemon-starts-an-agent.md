@@ -36,3 +36,4 @@ On `run.wake` the daemon acks the wake, calls `POST /v1/runs` with its computer 
 - A daemon killed with SIGKILL cannot signal its agent. A well-behaved agent exits when its stdin closes; one that ignores that stays.
 - The agent's working directory is the daemon's. Per-run workspaces belong with the real harness adapters.
 - `run.stop` is not handled yet, and neither are a second wake for an agent that is mid-run or a tool call report (`run.toolcall`).
+- 2026-11-08: `run.stop` is handled now; a stop, the run deadline or a daemon stop cancels the session before any signal; the daemon answers `session/request_permission` by policy; see ADR 0007. A second wake for an agent that is mid-run and `run.toolcall` are still not handled.

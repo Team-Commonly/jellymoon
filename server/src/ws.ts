@@ -64,7 +64,12 @@ export function wsRoute(app: Hono, hub: Hub, onRule: OnRule): void {
           if (row === undefined) { live = false; return close(); }
           await s.pod.attach(conn);
           conn.send(frame(hub, s.pod, 'hello', hello(s.pod.state, s.pod.meta, you)));
-        }).catch(crash);
+        }).catch((err) => {
+          // A check that could not be made fails closed: the socket never runs a frame unless its token was read live.
+          live = false;
+          crash(err);
+          ws.close(1011, 'internal error');
+        });
       },
       onMessage(e) { chain = chain.then(() => (live ? onFrame(hub, s, conn, String(e.data), onRule) : undefined)).catch(crash); },
       onClose() {

@@ -84,6 +84,25 @@ test('a token hash leaves hub.sockets when its last real socket closes', async (
   srv.stop(true);
 });
 
+test('a token check that fails when the socket opens closes the socket rather than leaving it live', async () => {
+  const fail = async (x: Awaited<ReturnType<typeof setup>>) => {
+    const rows = x.hub.db.rows.bind(x.hub.db);
+    let once = true;
+    x.hub.db.rows = (async (sql: string, args?: unknown[]) => {
+      if (once && sql.includes('from tokens where hash')) { once = false; throw new Error('db down'); }
+      return rows(sql, args);
+    }) as typeof x.hub.db.rows;
+  };
+  const { srv, dial } = await sockets(fail);
+  const a = dial();
+  const seen: string[] = [];
+  a.ws.onmessage = (e) => seen.push(JSON.parse(String(e.data)).type);
+  const closed = new Promise<number>((done) => { a.ws.onclose = (e) => done(e.code); });
+  expect(await Promise.race([closed, sleep(1000).then(() => -1)])).toBe(1011);
+  expect(seen).not.toContain('hello');
+  srv.stop(true);
+});
+
 test('a logout between the upgrade\'s authentication and the socket opening leaves no socket open', async () => {
   const logout = (x: Awaited<ReturnType<typeof setup>>, token: string) => x.call('POST', '/v1/auth/logout', token);
   const { s, srv, hash, dial } = await sockets(logout);

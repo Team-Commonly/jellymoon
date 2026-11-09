@@ -4,7 +4,8 @@ Status: Accepted, by the owner's ruling, 2026-11-08 (the contract wins over F15'
 below: the `/device` page itself. The browser session on every user route was added on 2026-11-08, and the hardening (token
 expiry, the start limit, the sweep, timeouts, logout with both and its sockets) on 2026-11-09 (both below), with its follow-ups
 the same day (TRUST_PROXY behind TLS, user tokens with no expiry, the D1 migrations and three fixes around logout's sockets:
-Hardening items 2, 1, 7 and 6). Refusing a code (`POST /v1/auth/device/deny`, step 4) was added on 2026-11-09.
+Hardening items 2, 1, 7 and 6). Refusing a code (`POST /v1/auth/device/deny`, step 4) was added on 2026-11-09, and the
+guess limit on approve and deny (step 4) the same day.
 
 ## Decision
 
@@ -41,8 +42,20 @@ and drops it.
    - **Refusals.** Every one is approve's answer for the same code, byte for byte, from one code path in each adapter:
      unknown `not_found`, expired `expired_token`, approved or exchanged `gone`. So deny tells a code-guesser nothing approve
      does not. A refused code cannot be approved (`gone`, the same body), and an approved one cannot be refused.
-   - **Rate limit.** Approve's, which is none: neither counts as a sign-in start (Hardening, item 2). Each guess needs a
-     signed-in person, and there are 20^8 codes, each live 15 minutes.
+   - **Guess limit.** Approve and deny share one (RFC 8628 section 5.1 asks for it), so a signed-in guesser can neither
+     refuse other people's pending codes nor attach their own account to someone else's CLI by trying codes.
+     - A person gets 10 failed lookups per fixed ten minutes across both routes. A failed lookup is an unknown, expired or
+       used code. Past that, every approve and deny from the person, a valid code included, answers `rate_limited` (429)
+       with `Retry-After`, the whole seconds left in the ten minutes. The limit is checked before the code is looked up, so
+       a caller past it learns nothing, not even that a code is good. A success does not count.
+     - Each failed lookup also counts in `POST /v1/auth/device`'s limit for the client address (Hardening, item 2), so
+       many accounts from one address share it. Past it, approve and deny answer `rate_limited` with that minute's
+       `Retry-After`, and so does the start.
+     - A request takes one from both counts before its lookup and gives them back when the lookup succeeds, so concurrent
+       guesses cannot pass the limit together.
+     - Storage. The server counts in memory, one process (ADR 0006), so a restart clears it. The Worker counts in the D1
+       table `rate_limits`, so the limit is global across isolates, not per instance. A person's row holds the last minute
+       of its ten-minute window, so the start limit's sweep of older minutes keeps it until the window ends.
    - **The poll.** Step 5 answers `access_denied` (RFC 8628) for a refused code on every poll until the sweep deletes it.
    - **Storage.** `device_codes.denied`: a column added in place on the server's Postgres, and the D1 migration
      `0002_device_deny.sql` on the Worker (Hardening, item 7).
@@ -112,7 +125,7 @@ Added 2026-11-09 (AUTHH), in both adapters.
    tokens. A socket already open when its token expires stays open until it closes.
 2. **The start limit.** `POST /v1/auth/device` and `GET /v1/auth/github/start`, the two routes anyone can call, each take 30
    requests per client address per fixed minute (`AUTH_START_LIMIT` changes it). Past it they answer `rate_limited` (429)
-   with `Retry-After`, the whole seconds left in the minute. The server keys on the socket's address by default; a client can
+   with `Retry-After`, the whole seconds left in the minute. Failed user-code lookups on approve and deny count in the device route's limit too (step 4, "Guess limit"). The server keys on the socket's address by default; a client can
    write `X-Forwarded-For`, so it is read only with `TRUST_PROXY=<n>`, the number of proxies in front, each appending the
    address it saw: the client is then the n-th entry from the right (the last one for `1`, one TLS proxy), and anything left
    of it is the caller's own writing. Fewer entries than n, or `0`, is the socket's address. Bun serves no TLS, so an https
@@ -180,5 +193,5 @@ null expiry, hub.sockets through real sockets, the limiter key, the token_pods o
 logout racing a socket's open: on the server between the upgrade and `onOpen`, on the Worker before the row and before the
 pod accepts); `worker/test/migrations.test.ts` (columns, indexes with UNIQUE and primary keys, foreign keys) and
 `make e2e-a-migrated` (a D1 from the old schema, migrated, serves TestF15, TestBSESS, TestAUTHH and TestDENY); `e2e/deny_test.go`
-(refusing a code, both adapters, with `server/test/device-deny.test.ts` and `worker/test/device-deny.test.ts`); `e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
+(refusing a code and the guess limit, both adapters, with `server/test/device-deny.test.ts` and `worker/test/device-deny.test.ts`); `e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
 loop) and `daemon/internal/config/save_test.go` (the 0600 write).

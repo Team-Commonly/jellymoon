@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,7 +14,8 @@ import (
 
 // TestDENY: a signed-in person refuses a sign-in code they did not start (POST /v1/auth/device/deny, ADR 0008 step 4). The
 // daemon's poll then gets access_denied and `jellymoon login` stops. A refusal of deny is approve's refusal for the same code,
-// byte for byte. The last step moves the clock, so the steps run in order.
+// byte for byte. Approve and deny share one guess limit, per person and in the address's start limit. The steps move the
+// clock forward only, so they run in order.
 func TestDENY(t *testing.T) {
 	needFake(t)
 	par(t)
@@ -50,9 +52,8 @@ func (b *bsess) denySteps(p *stepper) {
 	p.step("deny of an unknown or an exchanged code answers approve's body for the same code, byte for byte", func() error {
 		return b.denyRefusals(hc)
 	})
-	p.step("deny has approve's rate limit: the start limit spent from this address stops neither", func() error {
-		return b.denyLimit(hc)
-	})
+	p.step("a person's 11th failed code lookup in ten minutes is rate_limited with Retry-After, on approve and on deny; successes do not count; past it even a valid code is refused, another person approves it, and the window resets", b.guessLimit)
+	p.step("failed lookups count in the address's start limit: three accounts' 30 failures in one minute stop a fourth account and a start, until the minute ends", b.guessAddress)
 	p.step("deny with no session, a bad Bearer, no JSON content type, a foreign Origin or none is refused, and the code stays pending", func() error {
 		return b.denyGuards(hc)
 	})
@@ -185,34 +186,111 @@ func (b *bsess) denyRefusals(hc *http.Client) error {
 	return b.sameRefusal(hc, "an exchanged code", d.UserCode, 410, "gone")
 }
 
-func (b *bsess) denyLimit(hc *http.Client) (err error) {
-	window := b.now() + 60000 // a minute no request has touched
+// guess is approve or deny of userCode with the server's own Origin: the status, the error code and the Retry-After.
+func (b *bsess) guess(hc *http.Client, route, userCode string) (int, string, string) {
+	req, _ := http.NewRequest("POST", b.own+"/v1/auth/device/"+route, strings.NewReader(fmt.Sprintf(`{"userCode":%q}`, userCode)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", b.own)
+	resp, err := hc.Do(req)
+	if err != nil {
+		return -1, err.Error(), ""
+	}
+	defer resp.Body.Close()
+	var e ErrorBody
+	_ = json.NewDecoder(resp.Body).Decode(&e)
+	return resp.StatusCode, e.Code, resp.Header.Get("Retry-After")
+}
+
+// unknownCode is a code in the alphabet that no start minted (BBBB-BBBB is one too, for the steps before).
+const unknownCode = "CCCC-CCCC"
+
+func (b *bsess) guessLimit() error {
+	g, err := b.signedIn("octo-guess", 4400002)
+	if err != nil {
+		return err
+	}
+	o, err := b.signedIn("octo-owner", 4400003)
+	if err != nil {
+		return err
+	}
+	window := (b.now()/600000 + 1) * 600000 // the start of a ten-minute window no request has touched
 	if err := b.clock(window); err != nil {
 		return err
 	}
-	defer func() {
-		if e := b.clock(window + 60000); err == nil {
-			err = e
-		}
-	}() // the next minute, so the later steps can start codes
 	x, err := b.start()
 	if err != nil {
 		return err
 	}
-	y, err := b.start()
+	d, err := b.start()
 	if err != nil {
 		return err
 	}
-	if got, err := b.limited("POST", "/v1/auth/device"); err != nil || got.status != 429 {
-		return fmt.Errorf("spend the start limit: %+v %v, want 429", got, err)
-	}
-	for i := 0; i < 40; i++ {
-		if st, code, _ := b.deny(hc, x.UserCode, nil); st != 200 {
-			return fmt.Errorf("deny %d with the start limit spent: HTTP %d %q, want 200 like approve", i+1, st, code)
+	for i := 0; i < 12; i++ {
+		if st, code, _ := b.guess(g, "deny", x.UserCode); st != 200 {
+			return fmt.Errorf("deny %d of a pending code: HTTP %d %q, want 200 (a success does not count)", i+1, st, code)
 		}
 	}
-	if st, code := b.approve(hc, y.UserCode, nil); st != 200 {
-		return fmt.Errorf("approve with the start limit spent: HTTP %d %q", st, code)
+	for i, route := range []string{"approve", "deny", "approve", "deny", "approve", "deny", "approve", "deny", "approve", "deny"} {
+		if st, code, _ := b.guess(g, route, unknownCode); st != 404 {
+			return fmt.Errorf("failed lookup %d (%s): HTTP %d %q, want 404 not_found", i+1, route, st, code)
+		}
+	}
+	for _, route := range []string{"approve", "deny"} {
+		if st, code, retry := b.guess(g, route, unknownCode); st != 429 || code != "rate_limited" || retry != "600" {
+			return fmt.Errorf("the 11th failed lookup by %s: HTTP %d %q Retry-After %q, want 429 rate_limited 600", route, st, code, retry)
+		}
+	}
+	if st, code, _ := b.guess(g, "approve", d.UserCode); st != 429 || code != "rate_limited" {
+		return fmt.Errorf("approve of a valid code past the limit: HTTP %d %q, want 429 rate_limited", st, code)
+	}
+	if st, code, _ := b.poll(d.DeviceCode); st != 400 || code != "authorization_pending" {
+		return fmt.Errorf("the code a limited person tried: HTTP %d %q, want authorization_pending", st, code)
+	}
+	if st, code, _ := b.guess(o, "approve", d.UserCode); st != 200 {
+		return fmt.Errorf("another person approves the code: HTTP %d %q, want 200", st, code)
+	}
+	if err := b.clock(window + 599000); err != nil {
+		return err
+	}
+	if st, code, retry := b.guess(g, "deny", unknownCode); st != 429 || retry != "1" {
+		return fmt.Errorf("the window's last second: HTTP %d %q Retry-After %q, want 429 with 1", st, code, retry)
+	}
+	if err := b.clock(window + 600000); err != nil {
+		return err
+	}
+	st, code, _ := b.guess(g, "deny", unknownCode)
+	return want("a failed lookup in the next window", st, code, 404, "not_found")
+}
+
+func (b *bsess) guessAddress() (err error) {
+	var hcs []*http.Client
+	for i := int64(0); i < 4; i++ {
+		hc, err := b.signedIn(fmt.Sprintf("octo-addr-%d", i), 4400010+i)
+		if err != nil {
+			return err
+		}
+		hcs = append(hcs, hc)
+	}
+	minute := (b.now()/60000 + 1) * 60000 // a minute no request has touched
+	if err := b.clock(minute); err != nil {
+		return err
+	}
+	defer func() {
+		if e := b.clock(minute + 60000); err == nil {
+			err = e
+		}
+	}() // the next minute, so the later steps can start codes
+	for i := 0; i < 31; i++ {
+		st, code, retry := b.guess(hcs[i/10], "deny", unknownCode)
+		if i < 30 && st != 404 {
+			return fmt.Errorf("failed lookup %d, account %d: HTTP %d %q, want 404", i+1, i/10, st, code)
+		}
+		if i == 30 && (st != 429 || code != "rate_limited" || retry != "60") {
+			return fmt.Errorf("the fourth account's first lookup after 30 from this address: HTTP %d %q Retry-After %q, want 429 rate_limited 60", st, code, retry)
+		}
+	}
+	if st, code, _ := b.raw(browser(), "POST", "/v1/auth/device", "", nil); st != 429 || code != "rate_limited" {
+		return fmt.Errorf("a start after 30 failed lookups from this address: HTTP %d %q, want 429 rate_limited", st, code)
 	}
 	return nil
 }

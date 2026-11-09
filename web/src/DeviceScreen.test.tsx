@@ -16,6 +16,7 @@ const USED = 'This code was already used.';
 const UNKNOWN = 'No device is waiting for that code. Check it against your terminal.';
 const DENY = "This wasn't me";
 const REFUSED = 'The code WDJB-MJHT will not sign anyone in, and the terminal that asked for it will stop waiting. You can close this page.';
+const TOO_MANY = 'Too many tries. Wait a few minutes, then try again.';
 
 describe('/device', () => {
   it('signed out: shows the code and links to sign-in, coming back to /device with the code kept; approves nothing', () => {
@@ -103,6 +104,7 @@ describe('/device, pressing Approve', () => {
     [400, 'This code expired or is not a device code. Start the sign-in again in your terminal.'],
     [401, 'Your session ended.'],
     [403, 'The server refused this approval. Open the link your terminal printed, on the address it shows.'],
+    [429, TOO_MANY],
     [500, 'Could not approve: the server returned an error (500). Try again.'],
   ])('%i says what failed and leaves Approve available', async (status, line) => {
     const { http } = fakeHttp(undefined, reject(status));
@@ -174,6 +176,15 @@ describe("/device, pressing This wasn't me", () => {
     const { getByRole, findByText } = open(http, true);
     fireEvent.click(getByRole('button', { name: DENY }));
     expect(await findByText(UNKNOWN)).toBeTruthy();
+    await waitFor(() => expect((getByRole('button', { name: DENY }) as HTMLButtonElement).disabled).toBe(false));
+    expect((getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('429 says to wait, and leaves both buttons', async () => {
+    const { http } = denyWith(reject(429, 'rate_limited'));
+    const { getByRole, findByText } = open(http, true);
+    fireEvent.click(getByRole('button', { name: DENY }));
+    expect(await findByText(TOO_MANY)).toBeTruthy();
     await waitFor(() => expect((getByRole('button', { name: DENY }) as HTMLButtonElement).disabled).toBe(false));
     expect((getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(false);
   });

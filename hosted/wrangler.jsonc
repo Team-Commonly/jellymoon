@@ -8,6 +8,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
+  // Workers Logs, billed by volume: the front's per-request logs are sampled at 5%.
+  "observability": { "enabled": true, "head_sampling_rate": 0.05 },
   "containers": [
     {
       "class_name": "JellymoonServer",
@@ -15,7 +17,9 @@
       "image_build_context": "..",
       // One process owns every pod and its timer (ADR 0006); basic is 1/4 vCPU and 1 GiB.
       "max_instances": 1,
-      "instance_type": "basic"
+      "instance_type": "basic",
+      // The container's own output (boot, exit, the server's log) is kept whole: this overrides the sampled top-level setting.
+      "observability": { "enabled": true }
     }
   ],
   "durable_objects": {

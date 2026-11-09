@@ -129,7 +129,7 @@ Added 2026-11-09 (AUTHH), in both adapters.
    pod in the D1 table `token_pods` before it hands the upgrade to the pod. A pod that does not open the socket leaves the
    row, since a failing dial deleting it could take the row of a socket of the same token that opened meanwhile, and the
    open socket would outlive a logout; a stale row costs logout one close to a pod with no sockets for that tag. Rows go
-   with their token: logout deletes them, and the start-limit sweep deletes those of an expired or revoked token. A logout can still slip in twice: its revoke
+   with their token: logout deletes them, and the start-limit sweep deletes those of an expired or revoked token. That sweep runs only on a sign-in start, and it never prunes the rows of `jmc_` computer tokens, which never expire or get revoked. A logout can still slip in twice: its revoke
    and its `token_pods` read between the Worker's authentication and the row, or its close reaching the pod before the pod
    accepts the socket. So once the pod answers 101 the Worker authenticates the token again; if it is now revoked or
    expired it asks the pod to close the token's sockets, deletes the row and answers `unauthorized` instead of the 101.

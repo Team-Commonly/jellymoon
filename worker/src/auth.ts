@@ -156,7 +156,7 @@ async function startGate(env: Env, req: Request, route: string, now: number): Pr
     env.DB.prepare('delete from rate_limits where win < ?').bind(win),
     env.DB.prepare('delete from device_codes where expires_at <= ?').bind(now - SWEEP_GRACE_MS),
     env.DB.prepare('delete from oauth_states where expires_at <= ?').bind(now - SWEEP_GRACE_MS),
-    env.DB.prepare('delete from token_pods where hash in (select hash from tokens where revoked_at is not null or (expires_at is not null and expires_at <= ?))').bind(now),
+    env.DB.prepare('delete from token_pods where not exists (select 1 from tokens where tokens.hash = token_pods.hash and revoked_at is null and (expires_at is null or expires_at > ?))').bind(now),
   ]);
   if (((hit.results[0] as { n: number } | undefined)?.n ?? 0) <= (Number(env.AUTH_START_LIMIT) || START_LIMIT)) return null;
   const res = fail('rate_limited', 'Too many sign-in starts from this address; wait for Retry-After.');

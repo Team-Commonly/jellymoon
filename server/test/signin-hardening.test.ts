@@ -142,3 +142,13 @@ test('logout with a dead session cookie clears it and revokes nothing; a dead Be
   expect((await out({ Authorization: `Bearer ${dead}` })).status).toBe(401);
   expect((await s.call('GET', '/v1/me', live)).status).toBe(200);
 });
+
+test('logout with a dead Bearer beside a live session cookie answers 401 and revokes nothing: the cookie\'s token stays live', async () => {
+  const s = await setup();
+  const live = (await s.call('POST', '/__test/session', undefined, { name: 'olivia' })).json.token as string;
+  const dead = (await s.call('POST', '/__test/session', undefined, { name: 'ben' })).json.token as string;
+  expect((await s.call('POST', '/v1/auth/logout', dead)).status).toBe(200);
+  const res = await s.app.fetch(new Request('http://x/v1/auth/logout', { method: 'POST', headers: { Origin: 'http://x', 'Content-Type': 'application/json', Authorization: `Bearer ${dead}`, Cookie: `jm_session=${live}` } }));
+  expect(res.status).toBe(401);
+  expect((await s.call('GET', '/v1/me', live)).status).toBe(200);
+});

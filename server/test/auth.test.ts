@@ -48,7 +48,7 @@ test('a GitHub client outside ENV=local needs PUBLIC_URL', () => {
   const gh = { DATABASE_URL: 'postgres://x', GITHUB_CLIENT_ID: 'i', GITHUB_CLIENT_SECRET: 's' };
   expect(startupRefusal(gh)?.includes('PUBLIC_URL')).toBe(true);
   expect(startupRefusal({ ...gh, PUBLIC_URL: ' ' })?.includes('PUBLIC_URL')).toBe(true);
-  expect(startupRefusal({ ...gh, PUBLIC_URL: 'https://jm.example' })).toBe(undefined);
+  expect(startupRefusal({ ...gh, PUBLIC_URL: 'https://jm.example', TRUST_PROXY: '1' })).toBe(undefined);
   expect(startupRefusal({ ENV: 'local', GITHUB_CLIENT_ID: 'i', GITHUB_CLIENT_SECRET: 's' })).toBe(undefined);
 });
 

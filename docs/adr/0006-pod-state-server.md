@@ -87,3 +87,6 @@ left out because it is the local fallback only), and CI's `e2e-deployed` job run
   (`JM_PG_SCHEMA`), the one combination `startupRefusal` allows with a database, and the hosted shape is checked by `deployed-boot`
   alone. The two checks together cover the deployed form; neither stands in for the other.
 - **Not covered.** A real hosted deploy needs a hosting target and spend, and is undecided (see "Hosting" above).
+- **Behind TLS.** The bundle serves plain http, so a hosted deploy sits behind a TLS proxy and sets `TRUST_PROXY` to the number
+  of proxies in front (1 for one); with an https `PUBLIC_URL` and no `TRUST_PROXY` the server refuses to start (ADR 0008,
+  "Hardening" item 2).

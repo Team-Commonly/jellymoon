@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: acp-tools record-acp e2e e2e-a e2e-c e2e-any e2e-deployed e2e-web deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: acp-tools record-acp e2e e2e-a e2e-a-migrated e2e-c e2e-any e2e-deployed e2e-web deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -170,6 +170,11 @@ e2e: e2e-c
 E2E_A_SKIP := TestF19
 e2e-a: node_modules
 	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' JM_E2E_SKIP='$(E2E_A_SKIP)')
+
+# The sign-in suites against a Worker whose D1 was created from the schema before the sign-in hardening and then migrated
+# (worker/migrations, `wrangler d1 migrations apply --local` on the suite's own state dirs). Loopback only.
+e2e-a-migrated: node_modules
+	JM_E2E_SERVER='JM_D1_SEED=migrations/0000_initial.sql $(CURDIR)/worker/dev.sh' JM_E2E_SKIP= $(GO) test ./e2e -count=1 -v -run '^(TestF15|TestBSESS|TestAUTHH)$$'
 
 # The Cloudflare adapter (worker/) under `wrangler dev --local`. Loopback only.
 worker-dev: node_modules

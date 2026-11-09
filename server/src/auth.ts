@@ -25,13 +25,13 @@ const START_LIMIT = 30;
 
 export interface GitHub { web: string; api: string; id: string; secret: string }
 /** Sign-in settings from the environment (config.ts appOptions). */
-export interface SignInOpts { publicUrl?: string; local: boolean; startLimit?: number; trustProxy?: boolean }
+export interface SignInOpts { publicUrl?: string; local: boolean; startLimit?: number; trustProxy?: number }
 
 /**
  * The start limit: a fixed one-minute window per route and client address, counted in memory (one process, ADR 0006). Past
  * `limit`, rate_limited with Retry-After, the seconds left in the window. Under it, the expired sign-in rows are swept.
  */
-function startGate(hub: Hub, limit: number, trustProxy: boolean): (c: Context) => Promise<Response | null> {
+function startGate(hub: Hub, limit: number, trustProxy: number): (c: Context) => Promise<Response | null> {
   let win = -1;
   const seen = new Map<string, number>();
   return async (c) => {
@@ -47,9 +47,18 @@ function startGate(hub: Hub, limit: number, trustProxy: boolean): (c: Context) =
   };
 }
 
-/** The client's address: the socket's, or behind a trusted proxy the last X-Forwarded-For entry (the one the proxy added). */
-function clientIp(c: Context, trustProxy: boolean): string {
-  const fwd = trustProxy ? c.req.header('X-Forwarded-For')?.split(',').pop()?.trim() : undefined;
+/**
+ * Behind `hops` trusted proxies, each appending the address it saw, the client is the hops-th X-Forwarded-For entry from the
+ * right: entries left of it are the caller's own writing. Undefined for 0 hops or fewer entries than hops.
+ */
+export function forwardedFor(header: string | undefined, hops: number): string | undefined {
+  const all = hops > 0 ? (header ?? '').split(',').map((s) => s.trim()) : [];
+  return all.length >= hops ? all[all.length - hops] || undefined : undefined;
+}
+
+/** The client's address: the socket's, or behind `hops` trusted proxies the X-Forwarded-For entry the outermost one wrote. */
+function clientIp(c: Context, hops: number): string {
+  const fwd = forwardedFor(c.req.header('X-Forwarded-For'), hops);
   if (fwd) return fwd;
   try { return getConnInfo(c).remote.address ?? 'unknown'; } catch { return 'unknown'; }
 }
@@ -152,7 +161,7 @@ export function authRoutes(app: Hono, hub: Hub, gh: GitHub | null, opts: SignInO
   const { publicUrl, local } = opts;
   const base = (c: Context): string => ownBase(c, publicUrl, local);
   const cookie = { httpOnly: true, secure: !local, sameSite: 'Lax' } as const;
-  const gate = startGate(hub, opts.startLimit ?? START_LIMIT, opts.trustProxy === true);
+  const gate = startGate(hub, opts.startLimit ?? START_LIMIT, opts.trustProxy ?? 0);
   /** The person behind a Bearer jmu_ or the session cookie, for GET /v1/me (a read). */
   const person = async (c: Context): Promise<Actor | null> => {
     const p = presented(c, true);

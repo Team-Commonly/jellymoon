@@ -96,12 +96,25 @@ async function acceptInvite(env: Env, code: string, who: Who): Promise<Response>
   return internal(env, podId, 'accept', { hash, userId: userOf(who).id, name: userOf(who).displayName });
 }
 
-/** The pod socket, tagged in the pod with the presented token's hash; D1 records the pod so logout can close it (ADR 0008). */
+/**
+ * The pod socket, tagged in the pod with the presented token's hash; D1 records the pod so logout can close it (ADR 0008). The
+ * row is written before the pod opens the socket, so a logout after the write finds it, and dropped if the pod does not open
+ * it, unless another socket of the token in this pod wrote it first. Once the pod has opened it the token is authenticated
+ * again: a logout that revoked it before the row was written, or whose close reached the pod before the socket was there,
+ * found nothing to close, so this call closes the token's sockets in the pod, drops the row and refuses the upgrade.
+ */
 async function openSocket(env: Env, req: Request, podId: string, who: Who): Promise<Response> {
   const hash = await presentedHash(req);
-  const res = await forward(env, req, podId, who, false, hash);
-  if (res.status === 101 && hash !== null) await env.DB.prepare('insert or ignore into token_pods (hash, pod_id) values (?, ?)').bind(hash, podId).run();
-  return res;
+  const mine = hash !== null && (await env.DB.prepare('insert or ignore into token_pods (hash, pod_id) values (?, ?) returning hash').bind(hash, podId).first()) !== null;
+  const drop = async (): Promise<void> => { if (mine) await env.DB.prepare('delete from token_pods where hash = ? and pod_id = ?').bind(hash, podId).run(); };
+  const res = await forward(env, req, podId, who, false, hash).catch(async (e: unknown) => { await drop(); throw e; });
+  if (res.status !== 101) await drop();
+  if (res.status !== 101 || hash === null) return res;
+  const again = await authOf(env, req, true);
+  if (again !== null && !(again instanceof Response)) return res;
+  await internal(env, podId, 'close-token', { hash }).catch((e: unknown) => console.error('socket: a pod failed to close a signed-out socket', e));
+  await env.DB.prepare('delete from token_pods where hash = ? and pod_id = ?').bind(hash, podId).run();
+  return fail('unauthorized', 'This token was signed out while the socket opened.');
 }
 
 async function registerAgent(env: Env, req: Request, podId: string, who: Who): Promise<Response> {

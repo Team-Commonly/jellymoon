@@ -123,7 +123,10 @@ async function person(env: Env, req: Request): Promise<Actor | null> {
   return who?.kind === 'user' ? who.actor : null;
 }
 
-/** POST /v1/auth/logout: revokes the presented token, and the cookie's too when a Bearer came beside it; closes their pod sockets; clears the cookie. */
+/**
+ * POST /v1/auth/logout: revokes the presented token, and the cookie's too when a Bearer came beside it; closes their pod sockets;
+ * clears the cookie. The revoke is what signs out, so a pod that fails to close its sockets does not keep the cookie (allSettled).
+ */
 async function logout(env: Env, req: Request, now: number): Promise<Response> {
   const who = await authOf(env, req, true);
   if (who instanceof Response) return who;
@@ -133,7 +136,8 @@ async function logout(env: Env, req: Request, now: number): Promise<Response> {
   for (const hash of new Set(await Promise.all([p.token, cookieOf(req, SESSION) ?? p.token].map(hashToken)))) {
     await env.DB.prepare("update tokens set revoked_at = ? where hash = ? and kind = 'user' and revoked_at is null").bind(now, hash).run();
     const pods = (await env.DB.prepare('delete from token_pods where hash = ? returning pod_id').bind(hash).all<{ pod_id: string }>()).results;
-    await Promise.all(pods.map((r) => env.POD.get(env.POD.idFromName(r.pod_id)).fetch('https://pod/_in/close-token', { method: 'POST', body: JSON.stringify({ hash }) })));
+    const closed = await Promise.allSettled(pods.map((r) => env.POD.get(env.POD.idFromName(r.pod_id)).fetch('https://pod/_in/close-token', { method: 'POST', body: JSON.stringify({ hash }) })));
+    for (const c of closed) if (c.status === 'rejected') console.error('logout: a pod failed to close its sockets', c.reason);
   }
   return Response.json({}, { headers: { 'Set-Cookie': setCookie(env, SESSION, '', '/', 0) } });
 }

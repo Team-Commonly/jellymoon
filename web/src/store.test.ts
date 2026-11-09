@@ -160,6 +160,82 @@ describe('errors, bad frames and reconnects', () => {
   });
 });
 
+describe('runs', () => {
+  const scout = { kind: 'agent', id: 'agt_1', displayName: 'Scout' };
+  const started = (s: ReturnType<typeof setup>, seq: number, runId: string, agent = scout) => s.net.deliver(frame('run.started', seq, { runId, agent }));
+  const ended = (s: ReturnType<typeof setup>, seq: number, runId: string, outcome: string, agent = scout) => s.net.deliver(frame('run.ended', seq, { runId, agent, outcome }));
+  const runs = (s: ReturnType<typeof setup>) => s.store.getState().runs;
+
+  it('keeps a started run as going', () => {
+    const s = setup();
+    started(s, 1, 'run_1');
+    expect(runs(s)).toEqual({ run_1: { runId: 'run_1', agent: scout, state: 'going' } });
+  });
+
+  it('sets the outcome when the run ends, for each outcome', () => {
+    for (const outcome of ['completed', 'cancelled', 'failed', 'expired']) {
+      const s = setup();
+      started(s, 1, 'run_1');
+      ended(s, 2, 'run_1', outcome);
+      expect(runs(s).run_1).toEqual({ runId: 'run_1', agent: scout, state: 'ended', outcome });
+    }
+  });
+
+  it('shows a run that ended with no start in the kept log as ended', () => {
+    const s = setup();
+    ended(s, 4, 'run_9', 'failed');
+    expect(runs(s).run_9).toMatchObject({ state: 'ended', outcome: 'failed' });
+  });
+});
+
+describe('runs across agents, seqs and reconnects', () => {
+  const scout = { kind: 'agent', id: 'agt_1', displayName: 'Scout' };
+  const sage = { kind: 'agent', id: 'agt_2', displayName: 'Sage' };
+  const started = (s: ReturnType<typeof setup>, seq: number, runId: string, agent = scout) => s.net.deliver(frame('run.started', seq, { runId, agent }));
+  const ended = (s: ReturnType<typeof setup>, seq: number, runId: string, outcome: string, agent = scout) => s.net.deliver(frame('run.ended', seq, { runId, agent, outcome }));
+  const runs = (s: ReturnType<typeof setup>) => s.store.getState().runs;
+
+  it('keeps only the last ended run per agent, and drops it when that agent starts another', () => {
+    const s = setup();
+    started(s, 1, 'run_1'); ended(s, 2, 'run_1', 'completed');
+    started(s, 3, 'run_2', sage); ended(s, 4, 'run_2', 'cancelled', sage);
+    started(s, 5, 'run_3'); ended(s, 6, 'run_3', 'failed');
+    expect(Object.keys(runs(s)).sort()).toEqual(['run_2', 'run_3']);
+    started(s, 7, 'run_4');
+    expect(Object.keys(runs(s)).sort()).toEqual(['run_2', 'run_4']);
+  });
+
+  it('applies run events by seq: a duplicate or older one changes nothing', () => {
+    const s = setup();
+    started(s, 2, 'run_1');
+    ended(s, 3, 'run_1', 'completed');
+    started(s, 3, 'run_5');
+    ended(s, 1, 'run_1', 'failed');
+    expect(Object.keys(runs(s))).toEqual(['run_1']);
+    expect(runs(s).run_1.outcome).toBe('completed');
+  });
+
+  it('keeps the runs across a reconnect and rebuilds them from the replay', () => {
+    const s = setup();
+    started(s, 1, 'run_1');
+    s.net.drop();
+    expect(runs(s).run_1.state).toBe('going');
+    s.timers[0](); s.net.open();
+    expect(s.net.sent()[0]).toMatchObject({ type: 'subscribe', data: { sinceSeq: 1 } });
+    started(s, 1, 'run_1');
+    ended(s, 2, 'run_1', 'cancelled');
+    expect(runs(s).run_1).toMatchObject({ state: 'ended', outcome: 'cancelled' });
+  });
+
+  it('drops and counts a run event with no body or a wrong one', () => {
+    const s = setup();
+    s.net.deliver(JSON.stringify({ v: 1, type: 'run.started', podId: POD, seq: 1, data: {} }));
+    s.net.deliver(JSON.stringify({ v: 1, type: 'run.ended', podId: POD, seq: 2, data: { runId: 'r' } }));
+    expect(runs(s)).toEqual({});
+    expect(s.store.getState().droppedFrames).toBe(2);
+  });
+});
+
 describe('live presence', () => {
   // presence.changed is a live event (podcore/src/presence.ts): it has no seq, and it is never replayed on subscribe.
   it('applies a presence.changed with no seq, at any lastSeq, and leaves lastSeq alone', () => {

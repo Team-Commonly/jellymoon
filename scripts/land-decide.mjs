@@ -335,7 +335,7 @@ export function ciProof({ required, tree, ciTree, runs, total = runs?.length }) 
   const no = (kind, reason) => ({ ok: false, kind, reason: stripControls(reason) });
   if (!Array.isArray(required) || !required.length) return no('unread', 'the required checks could not be read from the branch rules');
   if (!/^[0-9a-f]{40}$/.test(String(ciTree)) || ciTree !== tree) return no('tree', `CI's land commit (tree ${String(ciTree).slice(0, 8)}) is not the merge result (tree ${String(tree).slice(0, 8)})`);
-  if (!Array.isArray(runs) || total > runs.length) return no('unread', 'the check runs on the land commit could not all be read');
+  if (!Array.isArray(runs) || !Number.isInteger(total) || total < 0 || total > runs.length) return no('unread', 'the check runs on the land commit could not all be read');
   let waiting = null;
   for (const name of required) {
     const mine = runs.filter((r) => r.name === name && r.app === 'github-actions');
@@ -357,13 +357,13 @@ export function landCommitEnv(ctLines) {
   const date = `@${Math.max(...lines.map(Number))} +0000`;
   return { GIT_AUTHOR_NAME: 'land', GIT_AUTHOR_EMAIL: 'land@localhost', GIT_AUTHOR_DATE: date, GIT_COMMITTER_NAME: 'land', GIT_COMMITTER_EMAIL: 'land@localhost', GIT_COMMITTER_DATE: date };
 }
-// Only runs of a check suite that a push to land/<n> started count as proof on the land commit. Its SHA is computable in advance, so a fork PR whose head
-// is that SHA gets green github-actions runs too (no secrets, and the refs/pull merge tree rather than this commit): those suites are not in `suites`.
-// runs carry `suite`; a list cut short by paging keeps its total above its length, which ciProof reads as unread. A suite list that is not an array of ids, or a run with no numeric suite, counts for nothing.
+// Only runs of a check suite that a push to land/<n> started count as proof on the land commit (a fork PR whose head is that SHA gets green github-actions runs from other suites, which are
+// not in `suites`). A paging-cut list keeps its total above its length (unread). Runs not a list, a total not a non-negative integer, or suites not an array of integers is an `error`: no proof, at once.
 export const landSuiteRuns = ({ runs, total, suites }) => {
-  if (!Array.isArray(runs) || total > runs.length) return { runs, total };
-  if (!Array.isArray(suites) || !suites.every(Number.isInteger)) return { runs: [], total: 0 }; // an unreadable suite list leaves nothing standing: fail closed
-  const mine = runs.filter((r) => Number.isInteger(r?.suite) && suites.includes(r.suite));
+  if (!Array.isArray(runs) || !Number.isInteger(total) || total < 0) return { error: 'the check runs on the land commit could not all be read' };
+  if (total > runs.length) return { runs, total }; // paging cut it short
+  if (!Array.isArray(suites) || !suites.every(Number.isInteger)) return { error: 'the land push suites could not be read' };
+  const mine = runs.filter((r) => suites.includes(r?.suite)); // suites hold integers only, so a run with no integer suite is out
   return { runs: mine, total: mine.length };
 };
 // Land's own ref: land/<n> for a PR, land/<a>-<b>-... for a batch (digits, single dashes). Every land push names one built here.

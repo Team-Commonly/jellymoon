@@ -215,7 +215,8 @@ function ciRead(sha, n) {
     const ciTree = gh('api', `repos/${REPO}/git/commits/${sha}`, '--jq', '.tree.sha');
     const r = JSON.parse(gh('api', `repos/${REPO}/commits/${sha}/check-runs?per_page=100&filter=latest`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, status, conclusion, app: .app.slug, suite: .check_suite.id}]}'));
     const s = JSON.parse(gh('api', `repos/${REPO}/actions/runs?head_sha=${sha}&event=push&branch=${landRef(n).slice(11)}&per_page=100`, '--jq', '{total: .total_count, count: (.workflow_runs | length), ids: [.workflow_runs[].check_suite_id]}')); if (s.total > s.count) throw new Error('the land push runs could not all be read');
-    return { ciTree, ...landSuiteRuns({ runs: r.runs, total: r.total, suites: s.ids }) };
+    const l = landSuiteRuns({ runs: r.runs, total: r.total, suites: s.ids }); if (l.error) throw new Error(l.error);
+    return { ciTree, ...l };
   } catch (e) { return { error: `CI could not be read: ${why(e)}` }; }
 }
 // Polls every POLL_MS up to CAP_MS (counted in sleeps, not by the clock). A failure, a cancel, a bad tree or the cap ends it.

@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: core-land-nits
+
+2026-11-09: core cap 4,570 -> 4,580; the review nits on the four land-tool changes. About 7 lines of code: `make land ARGS="--batch ..."` now exits non-zero when any requested PR did not land, each batch PR's LANDED note quotes its own prefix's proof, "landed as" prints after the tree check, and `landSuiteRuns` and `ciProof` end the poll at once with no proof on a malformed suite list or total (`scripts/land-batch.mjs`, `scripts/land-decide.mjs`, `scripts/land.mjs`); the rest is tests. The tree printed `LOC budget: core 4577 > 4570`; the cap is the count rounded up to ten. No other cap changes.

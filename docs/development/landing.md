@@ -242,12 +242,12 @@ functions and decides nothing new.
    main's tip to be exactly where the previous merge left it (main's tip for the first, the previous merge commit after that) and the PR's head to be the tested one.
    Then the merge is the single path's `gh pr merge <n> --merge --match-head-commit <head>` (`doMerge`): GitHub makes its own merge commit, so main does not end at the
    land commit's SHA. It ends at its tree: GitHub's merge of head k onto the merge commit of PR k-1 is the merge of head k onto L(k-1), whose tree is the tree CI proved,
-   and the tree of every merge commit is read back and compared with the tested tree of that step. A difference is written on that PR's LANDED row (`TREE-MISMATCH`),
+   and the tree of every merge commit is read back and compared with the tested tree of that step. Each PR's LANDED row quotes the CI proof of its own prefix, and `#k landed as ...` prints only once that tree check has passed, as on the single path. A difference is written on that PR's LANDED row (`TREE-MISMATCH`),
    stops the batch and refuses. If anything moved (main, a head, a verdict), the batch stops before that PR and the PRs not yet merged go the single path.
 6. **Red or no proof on any prefix, a middle one included: nothing from the batch lands.** A required check that fails, the 15 minute cap, an unreadable run list or a failed push prints
    `batch red; landing one at a time`, and each PR in the original order then takes the existing single path, unchanged (its own ref, its own CI cycle). Between
    them this checkout moves to main's new tip by `git merge --ff-only`, which a single land needs anyway (it demands a checkout at main's tip). A PR the single path
-   refuses is said and skipped; the exit status is non-zero if any did not land. The fallback is also how to find the culprit of a red batch.
+   refuses is said and skipped; the exit status is non-zero if any requested PR did not land, one dropped at its gate or for a chain conflict included (`k of n PRs did not land`). The fallback is also how to find the culprit of a red batch.
 7. **`--dry-run`** runs every gate, builds the chain and says what it would merge; it pushes nothing, merges nothing and writes no ledger row.
 
 Two PRs can each be green alone and red together: on 11-09 two PRs that each raised the same entropy cap against their own tree were both green, and red on the

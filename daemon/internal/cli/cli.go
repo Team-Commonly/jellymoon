@@ -166,6 +166,9 @@ func agentAdd(args []string, stdout io.Writer) error {
 	if !harness.Valid() {
 		return fmt.Errorf("unknown harness %q", harness)
 	}
+	if err := daemon.CheckDisplayName(*name); err != nil {
+		return fmt.Errorf("--name: %w", err)
+	}
 	if !podIDShape.MatchString(*pod) {
 		return errors.New("--pod must be a pod id (pod_ and 26 characters)")
 	}

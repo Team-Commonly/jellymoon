@@ -89,3 +89,24 @@ func TestHelpExitsZeroAndTheUsageNamesEveryCommand(t *testing.T) {
 		t.Errorf("an unknown command exits %d, want 2", code)
 	}
 }
+
+// A name no mention can address is refused in the CLI itself, before any daemon is looked for.
+func TestAgentAddRefusesANameNoMentionCanAddress(t *testing.T) {
+	t.Setenv(config.HomeEnv, t.TempDir())
+	const pod = "pod_01234567890123456789ABCDEF"
+	for _, name := range []string{"Walk Bot", "bot!"} {
+		err := agentAdd([]string{"fake", "--pod", pod, "--name", name}, &bytes.Buffer{})
+		if err == nil || !strings.Contains(err.Error(), "letters, digits") || strings.Contains(err.Error(), "no daemon") {
+			t.Errorf("name %q: err = %v; want the allowed characters named", name, err)
+		}
+	}
+	err := agentAdd([]string{"fake", "--pod", pod, "--name", "Walk Bot"}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), `"Walk-Bot"`) {
+		t.Errorf("err = %v; want a suggestion", err)
+	}
+	// A good name gets past the check and only then fails, for want of a daemon.
+	err = agentAdd([]string{"fake", "--pod", pod, "--name", "Walk-Bot"}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "no daemon") {
+		t.Errorf("good name: err = %v; want it to reach the daemon lookup", err)
+	}
+}

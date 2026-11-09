@@ -282,3 +282,13 @@ test('/invite/:token keeps its layout signed out, signed in, and when the link i
     agent.close();
   }
 });
+
+test('a pod with nothing posted keeps its layout: the empty line shows, and goes with the first card', async ({ page, pod }) => {
+  await openPod(page, pod);
+  await expect(page.getByText('Nothing has been posted yet. @mention an agent in the box below to start a run.')).toBeVisible();
+  await holdsLayout(page, '/pod/:id empty');
+
+  await pod.agent.post({ summary: 'First note', kind: 'fyi', status: 'done' });
+  await expect(page.getByRole('heading', { name: 'First note' })).toBeVisible();
+  await expect(page.getByText(/Nothing has been posted yet/)).toHaveCount(0);
+});

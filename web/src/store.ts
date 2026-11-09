@@ -130,9 +130,10 @@ export function createPodStore(opts: { podId: string; connect: Connect; schedule
       if (env.type === 'hello') return set(applyHello(state, env.data as never));
       if (env.type === 'error') return set(applyError(state, env.data as unknown as ErrorBody));
       if (env.seq === undefined) return LIVE_EVENTS[env.type] ? set(LIVE_EVENTS[env.type](state, env.data as never)) : undefined;
+      if (env.seq <= state.lastSeq) return;
+      // A seq'd event this client doesn't know still moves lastSeq, so "caught up with the replay" can't stall on it.
       const apply = SEQ_EVENTS[env.type];
-      if (!apply || env.seq <= state.lastSeq) return;
-      set({ ...apply(state, env.data as never), lastSeq: env.seq });
+      set({ ...(apply ? apply(state, env.data as never) : state), lastSeq: env.seq });
     } catch { set({ ...state, droppedFrames: state.droppedFrames + 1 }); }
   }
 

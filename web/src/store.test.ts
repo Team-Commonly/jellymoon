@@ -186,6 +186,14 @@ describe('runs', () => {
     ended(s, 4, 'run_9', 'failed');
     expect(runs(s).run_9).toMatchObject({ state: 'ended', outcome: 'failed' });
   });
+});
+
+describe('runs across agents, seqs and reconnects', () => {
+  const scout = { kind: 'agent', id: 'agt_1', displayName: 'Scout' };
+  const sage = { kind: 'agent', id: 'agt_2', displayName: 'Sage' };
+  const started = (s: ReturnType<typeof setup>, seq: number, runId: string, agent = scout) => s.net.deliver(frame('run.started', seq, { runId, agent }));
+  const ended = (s: ReturnType<typeof setup>, seq: number, runId: string, outcome: string, agent = scout) => s.net.deliver(frame('run.ended', seq, { runId, agent, outcome }));
+  const runs = (s: ReturnType<typeof setup>) => s.store.getState().runs;
 
   it('keeps only the last ended run per agent, and drops it when that agent starts another', () => {
     const s = setup();

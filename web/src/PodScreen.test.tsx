@@ -309,3 +309,20 @@ describe('the needs-you filter', () => {
     expect(screen.getByText('Nothing needs you')).toBeTruthy();
   });
 });
+
+describe('who is working', () => {
+  const scout = { kind: 'agent' as const, id: 'agt_1', displayName: 'Scout' };
+  it('says an agent is working while its presence is working, and stops saying it when it goes back online', () => {
+    const net = fakeNet();
+    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>);
+    act(() => {
+      net.open();
+      net.deliver(frame('hello', undefined, hello({ agents: [{ agent: scout, harness: 'fake', computerId: 'cmp_1', state: 'online' }] })));
+    });
+    expect(screen.queryByText('Scout is working.')).toBeNull();
+    act(() => net.deliver(frame('presence.changed', undefined, { actor: scout, state: 'working', computerId: 'cmp_1' })));
+    expect(screen.getByText('Scout is working.')).toBeTruthy();
+    act(() => net.deliver(frame('presence.changed', undefined, { actor: scout, state: 'online', computerId: 'cmp_1' })));
+    expect(screen.queryByText('Scout is working.')).toBeNull();
+  });
+});

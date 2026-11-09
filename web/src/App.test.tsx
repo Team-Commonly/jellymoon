@@ -1,8 +1,8 @@
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
-import { fakeHttp, fakeNet } from './testkit';
+import { fakeHttp, fakeNet, frame, hello } from './testkit';
 
 afterEach(cleanup);
 const at = (path: string, signedIn = false) => render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} http={fakeHttp().http} signedIn={signedIn} /></MemoryRouter>);
@@ -26,6 +26,15 @@ describe('shell', () => {
     expect(getByText('Signed in')).toBeTruthy();
     expect(queryByRole('link', { name: 'Sign in' })).toBeNull();
     expect(queryByText('Sign in')).toBeNull();
+  });
+
+  it('names the pod from hello, and shows its id only until hello arrives', () => {
+    const net = fakeNet();
+    const { getByRole } = render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>);
+    expect(getByRole('banner').textContent).toContain('Pod pod_1');
+    act(() => { net.open(); net.deliver(frame('hello', undefined, hello({ podName: 'Launch room' }))); });
+    expect(getByRole('banner').textContent).toContain('Launch room');
+    expect(getByRole('banner').textContent).not.toContain('pod_1');
   });
 
   it('renders a not-found line for an unknown path', () => {

@@ -3,11 +3,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { ApiError } from './http';
-import { fakeHttp, fakeNet } from './testkit';
+import { fakeHttp, fakeNet, you } from './testkit';
 
 afterEach(cleanup);
 const open = (http: ReturnType<typeof fakeHttp>['http'], signedIn: boolean, path = '/device?code=WDJB-MJHT') =>
-  render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} http={http} signedIn={signedIn} /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} http={http} me={signedIn ? you : null} /></MemoryRouter>);
 const reject = (status: number, code?: string) => () => Promise.reject(new ApiError(status, 'x', code));
 const INVALID = "That isn't a valid code; check it against your terminal.";
 const EXPIRED = 'This code expired or is not a device code. Start the sign-in again in your terminal.';
@@ -138,7 +138,7 @@ describe('/device, pressing Approve', () => {
 });
 
 describe("/device, pressing This wasn't me", () => {
-  const denyWith = (deny?: (c: string) => Promise<void>) => fakeHttp(undefined, undefined, undefined, undefined, undefined, undefined, deny);
+  const denyWith = (deny?: (c: string) => Promise<void>) => fakeHttp(undefined, undefined, undefined, undefined, undefined, undefined, undefined, deny);
 
   it('sits next to Approve when signed in, and not signed out', () => {
     expect(open(fakeHttp().http, true).getByRole('button', { name: DENY })).toBeTruthy();

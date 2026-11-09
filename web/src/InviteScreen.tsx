@@ -17,6 +17,7 @@ function usePreview(http: Http, token: string): InvitePreview | null {
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   useEffect(() => {
     let live = true;
+    setPreview(null); // another code's names never stay on screen while this one is read, or after its read fails
     http.readInvite(token).then((p) => { if (live) setPreview(p); }, () => {});
     return () => { live = false; };
   }, [http, token]);

@@ -1,8 +1,9 @@
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { ApiError } from './http';
+import { InvitePage } from './InviteScreen';
 import { fakeHttp, fakeNet, PREVIEW } from './testkit';
 
 afterEach(cleanup);
@@ -86,6 +87,26 @@ describe('/invite/:token, the invite read', () => {
     expect(getByRole('heading').textContent).toBe('You have been invited to a pod');
     fireEvent.click(getByRole('button', { name: 'Join' }));
     await waitFor(() => expect(calls).toEqual(['abc123']));
+  });
+
+  it('moving to another invite whose read fails drops the first invite\'s names', async () => {
+    const { http } = fakeHttp(undefined, undefined, undefined, undefined, async (code: string) => {
+      if (code === 'abc123') return PREVIEW;
+      throw new Error('offline');
+    });
+    const go: { to?: (path: string) => void } = {};
+    function Nav() {
+      go.to = useNavigate();
+      return null;
+    }
+    const { findByRole, getByRole } = render(
+      <MemoryRouter initialEntries={['/invite/abc123']}>
+        <Routes><Route path="/invite/:token" element={<><Nav /><InvitePage http={http} signedIn /></>} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await findByRole('heading', { name: `${PREVIEW.inviterName} invited you to ${PREVIEW.podName}` })).toBeTruthy();
+    await act(async () => go.to!('/invite/def456'));
+    expect(getByRole('heading').textContent).toBe('You have been invited to a pod');
   });
 
   it('a failed invite read is the plain line too', async () => {

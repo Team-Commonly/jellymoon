@@ -1,8 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { buildCard, needsYou } from './cards';
+import { buildCard, needsYou, shortTime } from './cards';
 import { ask, hello, note, other, you } from './testkit';
 
 const noView = {};
+
+describe('buildCard status', () => {
+  it('gives a person\'s message no status', () => {
+    expect(buildCard(note(1, { author: you, status: 'done' }), noView).status).toBeUndefined();
+  });
+
+  it('shows a ruled ask as ruled, not blocked, and an open one as blocked', () => {
+    expect(buildCard(ask(1), noView).status).toBe('blocked');
+    const ruled = ask(2);
+    ruled.decision = { ...ruled.decision!, state: 'ruled', ruling: { optionId: 'b', by: you, at: '2026-11-09T10:43:10.623Z' } };
+    expect(buildCard(ruled, noView).status).toBe('ruled');
+  });
+});
+
+describe('shortTime', () => {
+  // The joiner between date and time ("Nov 9, 10:43 AM" or "Nov 9 at 10:43 AM") differs by ICU version, so check the parts.
+  it('reads as a short local time in the given zone and locale', () => {
+    expect(shortTime('2026-11-09T10:43:10.623Z', 'en-US', 'UTC')).toMatch(/^Nov 9\D+10:43\sAM$/);
+    expect(shortTime('2026-11-09T10:43:10.623Z', 'en-US', 'America/Los_Angeles')).toMatch(/^Nov 9\D+2:43\sAM$/);
+    expect(shortTime('2026-11-09T10:43:10.623Z', 'en-US', 'UTC')).not.toContain('2026-11-09T');
+  });
+
+  it('falls back to the raw text when it is not a time', () => {
+    expect(shortTime('soon', 'en-US', 'UTC')).toBe('soon');
+  });
+});
 
 describe('buildCard', () => {
   it('quiets progress and fyi, and shows headline and status', () => {
@@ -16,6 +42,8 @@ describe('buildCard', () => {
     const c = buildCard(note(1, { body: '## detail', receipt }), noView);
     expect(c.body).toBe('## detail');
     expect(c.receipt).toBe('codex · 7 tool calls');
+    expect(buildCard(note(3, { receipt: { ...receipt, toolCalls: 1 } }), noView).receipt).toBe('codex · 1 tool call');
+    expect(buildCard(note(4, { receipt: { ...receipt, toolCalls: 0 } }), noView).receipt).toBe('codex · 0 tool calls');
     expect(buildCard(note(2), noView).receipt).toBeUndefined();
   });
 

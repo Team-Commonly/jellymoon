@@ -147,7 +147,7 @@ test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, 
   // The card's parts the paper names are all on screen: summary line, status chip, the pod-stamped receipt chip, and a folded body.
   const first = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Tests green on the fix branch' }) });
   await expect(first.locator('[data-chip="status"]')).toBeVisible();
-  await expect(first.locator('[data-chip="receipt"]')).toHaveText(/^fake · \d+ tool calls$/);
+  await expect(first.locator('[data-chip="receipt"]')).toHaveText(/^fake · \d+ tool calls?$/);
   await expect(page.getByText('A long line of body text')).toHaveCount(0);
 
   // Unfold the long card (its header is the click target).

@@ -46,7 +46,7 @@ export const browserHttp: Http = {
   },
 };
 
-/** The server's own words from a refusal ({code, message}), or a plain line when the body is not one. */
+/** The refusal's error code ({code, message}), or undefined when the body is not one. */
 async function errorCode(res: Response): Promise<string | undefined> {
   try {
     const body = (await res.json()) as { code?: unknown };
@@ -54,6 +54,7 @@ async function errorCode(res: Response): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
+/** The server's own words from a refusal ({code, message}), or a plain line when the body is not one. */
 async function refusalMessage(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { message?: unknown };

@@ -32,8 +32,13 @@ function stripSpans(text: string): string {
   return out;
 }
 
+/** The names a text @mentions, in text order, repeats kept: `@name` tokens in its prose, any trailing dots or dashes cut. An agent's display name is its handle. */
+export function mentionNames(text: string): string[] {
+  return Array.from(prose(text).matchAll(/(?<![\w@])@([\w.-]+)/g), (m) => m[1].replace(/[.-]+$/, ''));
+}
+
 /** The text a mention may live in: fenced blocks and code spans removed. An unclosed fence runs to the end; an unclosed backtick is literal. */
-export function prose(text: string): string {
+function prose(text: string): string {
   const parts: string[] = [];
   let para: string[] = [];
   let open: string | null = null;

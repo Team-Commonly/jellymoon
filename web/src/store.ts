@@ -5,6 +5,7 @@
 import type {
   Actor, AgentPresence, Envelope, ErrorBody, Hello, Member, Message, MessageUpdated, OptionId, PresenceChanged, PresenceState, RunEndOutcome, RunEnded, RunStarted, Task, TaskClaimed, ClaimReleased,
 } from '../../gen/ts/protocol';
+import { mentionNames } from '../../podcore/src/mentions';
 
 export interface SocketHandlers { open(): void; message(raw: string): void; close(): void }
 interface SocketLink { send(text: string): void; close(): void }
@@ -27,6 +28,13 @@ interface PodState {
   agents: AgentPresence[];
   presence: Record<string, PresenceState>;
   runs: Record<string, RunLine>;
+  /**
+   * Agents a person @mentioned on this page that have not started a run since, in the order first mentioned. Their wake waits in
+   * the pod (ADR 0003: one pending wake per agent, re-sent when its computer comes back), and only run.started says it was taken.
+   */
+  waking: string[];
+  /** The first hello's headSeq: only a message after it was posted while this page was open, so a reload never counts an old one. */
+  sinceSeq?: number;
   headSeq: number;
   lastSeq: number;
   messages: Message[];
@@ -47,16 +55,24 @@ export interface PodStore {
 }
 
 const fresh = (): PodState => ({
-  status: 'connecting', members: [], agents: [], presence: {}, runs: {}, headSeq: 0, lastSeq: 0, messages: [], tasks: {}, pending: {}, ruleErrors: {}, droppedFrames: 0,
+  status: 'connecting', members: [], agents: [], presence: {}, runs: {}, waking: [], headSeq: 0, lastSeq: 0, messages: [], tasks: {}, pending: {}, ruleErrors: {}, droppedFrames: 0,
 });
 
 type Apply = (s: PodState, data: never) => PodState;
 const on = <T>(f: (s: PodState, d: T) => PodState) => f as unknown as Apply;
 
-const applyHello = on<Hello>((s, d) => ({ ...s, you: d.you, podName: d.podName, members: d.members, agents: d.agents, headSeq: d.headSeq }));
+const applyHello = on<Hello>((s, d) => ({
+  ...s, you: d.you, podName: d.podName, members: d.members, agents: d.agents, headSeq: d.headSeq, sinceSeq: s.sinceSeq ?? d.headSeq,
+}));
+/** The agents a person's message posted on this page @mentions, by the pod's own rule (exact display names, none inside code). */
+function mentionedHere(s: PodState, m: Message): string[] {
+  if (m.author.kind !== 'human' || s.sinceSeq === undefined || m.seq <= s.sinceSeq || typeof m.body !== 'string') return [];
+  return mentionNames(m.body).flatMap((n) => s.agents.filter((a) => a.agent.displayName === n).map((a) => a.agent.id));
+}
 const applyCreated = on<Message>((s, m) => {
   if (s.messages.some((x) => x.id === m.id)) return s;
-  return { ...s, messages: [...s.messages, m].sort((a, b) => a.seq - b.seq) };
+  const waking = [...s.waking, ...mentionedHere(s, m)].filter((id, i, all) => all.indexOf(id) === i);
+  return { ...s, waking, messages: [...s.messages, m].sort((a, b) => a.seq - b.seq) };
 });
 const applyUpdated = on<MessageUpdated>((s, u) => {
   const { [u.decision.id]: _gone, ...pending } = s.pending;
@@ -86,7 +102,8 @@ const withoutEnded = (runs: Record<string, RunLine>, agentId: string) =>
   Object.fromEntries(Object.entries(runs).filter(([, r]) => !(r.state === 'ended' && r.agent.id === agentId)));
 const applyRunStarted = on<RunStarted>((s, r) => {
   if (typeof r.runId !== 'string' || typeof r.agent.id !== 'string') throw new Error('bad run.started');
-  return { ...s, runs: { ...withoutEnded(s.runs, r.agent.id), [r.runId]: { runId: r.runId, agent: r.agent, state: 'going' } } };
+  const waking = s.waking.filter((id) => id !== r.agent.id); // the agent took its wake
+  return { ...s, waking, runs: { ...withoutEnded(s.runs, r.agent.id), [r.runId]: { runId: r.runId, agent: r.agent, state: 'going' } } };
 });
 const applyRunEnded = on<RunEnded>((s, r) => {
   if (typeof r.runId !== 'string' || typeof r.agent.id !== 'string' || typeof r.outcome !== 'string') throw new Error('bad run.ended');

@@ -1,0 +1,131 @@
+name: Spike container
+# F32 spike (throwaway; this branch never merges). Deploys spike/container (a front Worker plus one Cloudflare Container
+# running a Bun probe), checks that the container reaches an outside Postgres and that a WebSocket passes the front, and
+# tears everything down in the same run. Docs: https://developers.cloudflare.com/containers/ and
+# https://developers.cloudflare.com/workers/wrangler/commands/containers/
+
+on:
+  push:
+    branches: [spike-container]
+  workflow_dispatch:
+
+concurrency:
+  group: spike-container
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: spike/container
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.JM_CF_PREVIEW_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.JM_CF_ACCOUNT_ID }}
+      WORKER: jellymoon-spike-container
+      # wrangler names the container application <worker>-<class name lowercased>, and pushes the image under that name.
+      APP: jellymoon-spike-container-probe
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version-file: .tool-versions
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Dependencies (pinned wrangler and @cloudflare/containers)
+        run: bun install --frozen-lockfile
+
+      - name: Type-check the front Worker
+        run: node_modules/.bin/tsc -p tsconfig.json
+
+      - name: Deploy (the runner's Docker builds the image)
+        id: deploy
+        run: |
+          set -o pipefail
+          node_modules/.bin/wrangler --version
+          # wrangler's own output, unfiltered: a missing token permission is named here.
+          node_modules/.bin/wrangler deploy 2>&1 | tee "$RUNNER_TEMP/deploy.log"
+          url=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.log" | head -n1)
+          if [ -z "$url" ]; then echo "::error::no workers.dev URL in the deploy output"; exit 1; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url"
+
+      - name: Wait for /healthz (10 minutes at most)
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          start=$(date +%s)
+          while :; do
+            code=$(curl -s -o "$RUNNER_TEMP/healthz.txt" -w '%{http_code}' --max-time 30 "$URL/healthz" || true)
+            elapsed=$(( $(date +%s) - start ))
+            if [ "$code" = "200" ]; then echo "healthz 200 after ${elapsed}s"; break; fi
+            if [ "$elapsed" -ge 600 ]; then
+              echo "::error::healthz not 200 after ${elapsed}s (last code $code)"; head -c 500 "$RUNNER_TEMP/healthz.txt"; echo
+              exit 1
+            fi
+            echo "healthz $code after ${elapsed}s; retrying"
+            sleep 10
+          done
+
+      - name: Probe /pg and /ws
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          rc=0
+          code=$(curl -s -o "$RUNNER_TEMP/pg.json" -w '%{http_code}' --max-time 90 "$URL/pg" || true)
+          echo "/pg HTTP $code"; cat "$RUNNER_TEMP/pg.json"; echo
+          if [ "$code" = "200" ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).ok===true?0:1)' "$RUNNER_TEMP/pg.json"; then
+            echo "SPIKE pg: ok $(node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(`tls=${j.tls} ms=${j.ms} tlsRequired=${j.tlsRequired.ok?"ok":j.tlsRequired.error} version=${j.version}`)' "$RUNNER_TEMP/pg.json")"
+          else
+            echo "SPIKE pg: fail HTTP $code $(head -c 400 "$RUNNER_TEMP/pg.json")"; rc=1
+          fi
+          node ws-check.mjs "${URL/https:/wss:}/ws" || rc=1
+          exit $rc
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          W=node_modules/.bin/wrangler
+          fail=0
+          # 1. The container application, by the id `containers list --json` gives for its name.
+          if $W containers list --json > "$RUNNER_TEMP/apps.json"; then
+            ids=$(node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));for(const x of a) if(x.name===process.argv[2]) console.log(x.id)' "$RUNNER_TEMP/apps.json" "$APP")
+            for id in $ids; do $W containers delete "$id" || fail=1; done
+          else
+            echo "containers list failed"; fail=1
+          fi
+          # 2. The front Worker (its Durable Object namespace goes with it; --force skips the prompt).
+          $W delete --name "$WORKER" --force || fail=1
+          # 3. Every tag wrangler pushed for the image, from the managed registry.
+          if $W containers images list --json > "$RUNNER_TEMP/images.json"; then
+            tags=$(node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));for(const r of a) if(r.name===process.argv[2]) for(const t of r.tags) console.log(`${r.name}:${t}`)' "$RUNNER_TEMP/images.json" "$APP")
+            for t in $tags; do $W containers images delete "$t" --skip-confirmation || fail=1; done
+          else
+            echo "images list failed"; fail=1
+          fi
+          # What is left, by name.
+          left=""
+          if $W containers list --json > "$RUNNER_TEMP/apps-after.json"; then
+            left="$left $(node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(a.filter(x=>x.name.startsWith("jellymoon-spike")).map(x=>"container:"+x.name).join(" "))' "$RUNNER_TEMP/apps-after.json")"
+          else fail=1; fi
+          if $W containers images list --json > "$RUNNER_TEMP/images-after.json"; then
+            left="$left $(node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(a.filter(r=>r.name.startsWith("jellymoon-spike")).flatMap(r=>r.tags.map(t=>"image:"+r.name+":"+t)).join(" "))' "$RUNNER_TEMP/images-after.json")"
+          else fail=1; fi
+          if $W deployments list --name "$WORKER" > /dev/null 2>&1; then left="$left worker:$WORKER"; fi
+          left=$(echo $left)
+          if [ "$fail" = "0" ] && [ -z "$left" ]; then
+            echo "SPIKE teardown: ok"
+          else
+            echo "SPIKE teardown: fail"
+          fi
+          echo "Left: ${left:-nothing}"
+          [ "$fail" = "0" ] && [ -z "$left" ]

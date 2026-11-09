@@ -1,0 +1,21 @@
+// F32 spike: front Worker + one Cloudflare Container. Keys per https://developers.cloudflare.com/containers/get-started/
+// and https://developers.cloudflare.com/workers/wrangler/configuration/#containers. The account comes from
+// CLOUDFLARE_ACCOUNT_ID in CI; nothing account-specific is in this file.
+{
+  "name": "jellymoon-spike-container",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "Probe",
+      "image": "./probe/Dockerfile",
+      "max_instances": 1,
+      "instance_type": "lite"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "PROBE", "class_name": "Probe" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Probe"] }]
+}

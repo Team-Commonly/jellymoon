@@ -63,7 +63,7 @@ test('the socket\'s token_pods row is written before the pod opens it, and kept 
   expect(await dial('open')).toEqual({ during: 1, after: 1, status: 101 });
   // A pod that does not open it leaves the row: another socket of the token may need it (logout and the sweep remove it).
   expect(await dial('refuse')).toEqual({ during: 1, after: 1, status: 403 });
-  expect(await dial('throw')).toEqual({ during: 1, after: 1, status: undefined });
+  expect(await dial('throw')).toEqual({ during: 1, after: 1, status: 500 }); // a pod that is down is the 500 reply, and the row stays
   expect(await dial('refuse', true)).toEqual({ during: 1, after: 1, status: 403 });
 });
 

@@ -129,6 +129,7 @@ type server struct {
 	log        *logBuf
 	restarting bool
 	bootTook   time.Duration // from first start to the first 200 from /healthz
+	env        []string      // extra NAME=value pairs for this server only (TestF19's vault key); every start gets them
 }
 
 // freePort returns a port nobody listens on, and never one in `not`.
@@ -153,9 +154,9 @@ const portTries = 3
 // portTaken matches the output of a start that exited because its port was taken.
 var portTaken = regexp.MustCompile(`(?i)address already in use|EADDRINUSE`)
 
-func startServer(t *testing.T) *server {
+func startServer(t *testing.T, env ...string) *server {
 	port := freePort(t)
-	s := &server{t: t, port: port, inspector: freePort(t, port), dir: t.TempDir(), log: &logBuf{}}
+	s := &server{t: t, port: port, inspector: freePort(t, port), dir: t.TempDir(), log: &logBuf{}, env: env}
 	t.Cleanup(func() {
 		s.kill()
 		if t.Failed() {
@@ -190,6 +191,7 @@ func (s *server) start() bool {
 	cmd := exec.Command("sh", "-c", serverCmd)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", s.port), fmt.Sprintf("INSPECTOR_PORT=%d", s.inspector), "ENV=local", "JM_DATA_DIR="+s.dir)
+	cmd.Env = append(cmd.Env, s.env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdout, cmd.Stderr = s.log, s.log
 	if err := cmd.Start(); err != nil {

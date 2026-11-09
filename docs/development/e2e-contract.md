@@ -204,6 +204,22 @@ between servers.
 | `TestEvictAlarmWake` | Needs `/__test/discard` with `alarmMs` and `/__test/woke`: the runtime firing an object's own stored alarm on a new instance. The server's single timer is covered by `TestExpiryZeroTraffic` (fake clock) and, in real-clock mode, by `TestKillMidLease`. |
 | `TestEvictPastDeadline` | Needs `/__test/discard` with `now`: an object thrown away with a deadline already past, then woken by a reconnect. `TestRestartPastDeadline` proves the same rule (the restore settles an expired claim before the first frame) for a restart. |
 
+## Skipped on the Worker
+
+`make e2e-a` sets `JM_E2E_SKIP` to the tests of features that are built on the pod-state server only. ADR 0006 made the server
+the adapter Jellymoon runs and supersedes the Durable Object for new features, so the Worker is not extended for them.
+
+| Test | Reason |
+|---|---|
+| `TestF19` | The connector layer (vault, catalogue pin, write gate, receipts) lives in the pod-state server (ADR 0006, ADR 0009). The Worker has no connector routes or operations. |
+
+`TestF19` starts its server with `JM_VAULT_KEY` (the harness's per-server environment, `startServer(t, env...)`) and a stub
+Linear inside the test: an MCP-over-HTTP JSON-RPC server on 127.0.0.1 that requires the stub bearer and records every
+`tools/call`. The agent's environment it scans is the run claim answer (`POST /v1/runs`), which is everything the daemon builds
+the agent's environment from.
+
+## The server's partly skipped step
+
 One step is skipped, not a whole test. On a real Postgres (`DATABASE_URL` set, which is how CI runs `make e2e-c`) the state lives
 in the database, so the `--persist-to` directory holds no files. `TestF02` still checks that the server was started with
 `--persist-to <dir>/state` and prints `STEP PARTLY SKIPPED` for the one check that the directory is not empty (`make e2e-c` sets

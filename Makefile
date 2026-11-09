@@ -153,9 +153,11 @@ e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
 # `make e2e` is the contract suite against the server that ships.
 e2e: e2e-c
 
-# The contract suite against the Cloudflare adapter (worker/), which stays in the tree as a second adapter.
+# The contract suite against the Cloudflare adapter (worker/), which stays in the tree as a second adapter. The tests of features
+# built on the pod-state server only (ADR 0006) are skipped, each with its reason (docs/development/e2e-contract.md, "Skipped on the Worker").
+E2E_A_SKIP := TestF19
 e2e-a: node_modules
-	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh')
+	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' JM_E2E_SKIP='$(E2E_A_SKIP)')
 
 # The Cloudflare adapter (worker/) under `wrangler dev --local`. Loopback only.
 worker-dev: node_modules

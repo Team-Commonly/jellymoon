@@ -39,6 +39,9 @@ Each spec runs twice, as the projects `phone-390` (390x844) and `desktop-1440` (
   records every frame and can hold the server's frames back: that is how `approve-keyboard` shows the card still waiting while
   the pod has already ruled. When the browser session reaches the socket, the fixture can sign the page in by cookie instead,
   and the bridge's holding becomes the only reason to keep it.
+- "No reload" is a mark set in the page (`window.__specDoc`) plus the bridge's socket count, never a count of `framenavigated`.
+  The client's router stamps its history entry with `replaceState` on mount, a same-document navigation that fires
+  `framenavigated` a second time for the same URL (the first CI run failed on exactly that).
 - No fixed ports and no sleeps: the specs wait on the server's readiness, on frames the bridge saw and on the DOM
   (Playwright's retrying `expect`). `retries` is 0, so a flaky spec fails rather than passing on a second try.
 - The selectors are the roles the components render: `article` per card, the `h3` headline, the `Options` and

@@ -30,11 +30,14 @@ async function composerRulesNothing(page: Page, pod: Pod, card: Locator, decisio
 }
 
 test('an ask that arrives live is ruled from the keyboard, and the card shows the ruling only once the pod has sent it', async ({ page, pod }) => {
-  const loads: string[] = [];
-  page.on('framenavigated', (f) => { if (f === page.mainFrame()) loads.push(f.url()); });
+  // "No reload" is judged by a mark in the document and by the socket count, never by framenavigated: the client's router stamps
+  // its history entry with replaceState on mount (react-router's getUrlBasedHistory), a same-document navigation that fires
+  // framenavigated a second time for the same URL.
+  const sameDocument = () => page.evaluate(() => (window as unknown as { __specDoc?: number }).__specDoc === 1);
   await pod.agent.post({ summary: 'Started on the auth fix', kind: 'fyi', status: 'in_progress' });
   await openPod(page, pod);
   await expect(page.getByRole('heading', { name: 'Started on the auth fix' })).toBeVisible();
+  await page.evaluate(() => { (window as unknown as { __specDoc?: number }).__specDoc = 1; });
 
   // The fake agent asks while the page is open: the card arrives over the socket, with no reload and no second socket.
   const asked = await pod.agent.post({ ...askInput(ASK, { userIds: [pod.you.user.id] }), body: BODY });
@@ -42,7 +45,7 @@ test('an ask that arrives live is ruled from the keyboard, and the card shows th
   const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: ASK }) });
   await expect(card).toBeVisible();
   await expect(card.getByRole('group', { name: 'Options' })).toBeVisible();
-  expect(loads).toHaveLength(1);
+  expect(await sameDocument()).toBe(true);
   expect(pod.bridge.connections).toBe(1);
 
   // j puts the ask under keyboard focus first (focus starts on card 0, the fyi), so a key that leaked out of the composer would
@@ -77,5 +80,6 @@ test('an ask that arrives live is ruled from the keyboard, and the card shows th
   await expect(card.getByText('Ruled: Merge now by Ada')).toBeVisible();
   await expect(card.getByRole('group', { name: 'Options' })).toHaveCount(0);
   await expect(card.getByText('Sending your ruling, waiting for the pod.')).toHaveCount(0);
-  expect(loads).toHaveLength(1);
+  expect(await sameDocument()).toBe(true);
+  expect(pod.bridge.connections).toBe(1);
 });

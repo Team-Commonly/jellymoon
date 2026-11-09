@@ -1,12 +1,12 @@
 // The Worker: authenticates against D1, checks the token kind and the pod, and hands the request to the pod's Durable Object
 // with the caller in an internal header (any incoming copy is deleted first). It holds no pod state.
-import { authOf, authRoute } from './auth';
+import { authOf, authRoute, presentedHash } from './auth';
 import { addAgentPod, addInvite, addPod, createComputer, dropInvite, dropPod, dropRunToken, mintRunToken, podExists, podOfInvite, podOfRun, podsOfComputer } from './directory';
 import type { Env } from './env';
 import { hashToken, newId, newInviteCode } from './ids';
 import { mcp } from './mcp';
 import { check } from './validate';
-import { bad, encodeWho, fail, MCP_HEADER, parse, WHO_HEADER } from './wire';
+import { bad, encodeWho, fail, MCP_HEADER, parse, TOKEN_HEADER, WHO_HEADER } from './wire';
 import type { Body, Who } from './wire';
 
 type Kind = Who['kind'];
@@ -29,12 +29,14 @@ export function internal(env: Env, podId: string, name: string, body: Body): Pro
   return stub(env, podId).fetch(`https://pod/_in/${name}`, { method: 'POST', body: JSON.stringify(body) });
 }
 
-function forward(env: Env, req: Request, podId: string, who: Who, viaMcp = false): Promise<Response> {
+function forward(env: Env, req: Request, podId: string, who: Who, viaMcp = false, token: string | null = null): Promise<Response> {
   const headers = new Headers(req.headers);
   headers.delete(WHO_HEADER);
   headers.set(WHO_HEADER, encodeWho(who));
   headers.delete(MCP_HEADER);
   if (viaMcp) headers.set(MCP_HEADER, '1');
+  headers.delete(TOKEN_HEADER);
+  if (token !== null) headers.set(TOKEN_HEADER, token);
   return stub(env, podId).fetch(new Request(req, { headers }));
 }
 
@@ -92,6 +94,14 @@ async function acceptInvite(env: Env, code: string, who: Who): Promise<Response>
   const podId = await podOfInvite(env.DB, hash);
   if (podId === null) return fail('not_found', 'No such invite.');
   return internal(env, podId, 'accept', { hash, userId: userOf(who).id, name: userOf(who).displayName });
+}
+
+/** The pod socket, tagged in the pod with the presented token's hash; D1 records the pod so logout can close it (ADR 0008). */
+async function openSocket(env: Env, req: Request, podId: string, who: Who): Promise<Response> {
+  const hash = await presentedHash(req);
+  const res = await forward(env, req, podId, who, false, hash);
+  if (res.status === 101 && hash !== null) await env.DB.prepare('insert or ignore into token_pods (hash, pod_id) values (?, ?)').bind(hash, podId).run();
+  return res;
 }
 
 async function registerAgent(env: Env, req: Request, podId: string, who: Who): Promise<Response> {
@@ -163,6 +173,7 @@ export async function handle(req: Request, env: Env, viaMcp = false): Promise<Re
     if (hit === null) continue;
     const podId = hit[1];
     if (re.source.endsWith('/agents$')) return podCall(env, req, kinds, podId, (w) => registerAgent(env, req, podId, w));
+    if (re.source.endsWith('/ws$')) return podCall(env, req, kinds, podId, (w) => openSocket(env, req, podId, w));
     return podCall(env, req, kinds, podId, (w) => forward(env, req, podId, w, viaMcp));
   }
   return fail('not_found', 'No such route.');

@@ -190,7 +190,7 @@ func (x TokenKind) Valid() bool {
 	return false
 }
 
-// Bound to one user. 30 days, refreshable.
+// Bound to one user. Valid for 30 days from issue (its expiresAt); after that, sign in again.
 type UserToken = string
 
 // Bound to one user and one computer. Valid until revoked.
@@ -1409,7 +1409,7 @@ func (x *DeviceTokenRequest) UnmarshalJSON(b []byte) error {
 
 // A signed-in person approves the device code they were shown, binding it to themselves.
 type DeviceApproveRequest struct {
-	// The code the sign-in page shows, e.g. WDJB-MJHT.
+	// The code the sign-in page shows, e.g. WDJB-MJHT, in either case and with or without the hyphen.
 	UserCode string `json:"userCode"`
 }
 

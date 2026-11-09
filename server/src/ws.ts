@@ -6,12 +6,14 @@ import type { ErrorBody } from '../../gen/ts/protocol';
 import { isoOf } from '../../podcore/src/index';
 import { parseFrame } from './frames';
 import type { Hub } from './hub';
-import { authOf, fail } from './kit';
+import { hashToken } from './ids';
+import { authOf, fail, presented } from './kit';
 import type { Conn, Opts, PodRuntime, Who } from './pod';
 import type { Cmd } from '../../podcore/src/index';
 import { hello } from './views';
 
-interface Session { pod: PodRuntime; who: Who }
+/** `token` is the presented token's hash: logout closes the sockets it opened. */
+interface Session { pod: PodRuntime; who: Who; token: string }
 /** What a ruling carries into the pod besides the core command: the connector gate's claim and release (ADR 0009). */
 type OnRule = (pod: PodRuntime, cmd: Extract<Cmd, { type: 'rule' }>) => Opts;
 const sessions = new WeakMap<Request, Session>();
@@ -39,22 +41,28 @@ export function wsRoute(app: Hono, hub: Hub, onRule: OnRule): void {
     if (pod === undefined) return fail(c, 'not_found', 'No such pod.');
     const who: Who = p.kind === 'user' ? p : { kind: 'computer', computerId: p.computer.id, owner: p.owner };
     if (!pod.isMember(who.kind === 'user' ? who.actor.id : who.owner.id)) return fail(c, 'forbidden', 'Only members of this pod may connect.');
-    sessions.set(c.req.raw, { pod, who });
+    sessions.set(c.req.raw, { pod, who, token: hashToken(presented(c, true)?.token ?? '') });
     return next();
   }, upgradeWebSocket((c) => {
     const s = sessions.get(c.req.raw) as Session;
     const conn: Conn = { who: s.who, send: () => undefined, subscribed: false, replaying: false, buf: [], sent: 0 };
     const crash = (err: unknown): void => { console.error('frame failed', err); conn.send(frame(hub, s.pod, 'error', { code: 'internal', message: 'The pod failed on that frame.' })); };
     let chain: Promise<void> = Promise.resolve();
+    let close = (): void => undefined;
     return {
       onOpen(_e, ws) {
         conn.send = (t) => { try { ws.send(t); } catch { /* the socket closed under us */ } };
+        close = () => ws.close(1008, 'signed out');
+        hub.sockets.set(s.token, (hub.sockets.get(s.token) ?? new Set()).add(close));
         const you = s.who.kind === 'user' ? s.who.actor : s.who.owner;
         // The computer is marked online before hello, so hello shows the presence this socket just made.
         chain = s.pod.attach(conn).then(() => conn.send(frame(hub, s.pod, 'hello', hello(s.pod.state, s.pod.meta, you)))).catch(crash);
       },
       onMessage(e) { chain = chain.then(() => onFrame(hub, s, conn, String(e.data), onRule)).catch(crash); },
-      onClose() { chain = chain.then(() => s.pod.detach(conn)).then(() => undefined).catch(crash); },
+      onClose() {
+        hub.sockets.get(s.token)?.delete(close);
+        chain = chain.then(() => s.pod.detach(conn)).then(() => undefined).catch(crash);
+      },
     };
   }));
 }

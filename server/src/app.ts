@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { authRoutes, ownBase } from './auth';
-import type { GitHub } from './auth';
+import type { GitHub, SignInOpts } from './auth';
 import type { Hub } from './hub';
 import { sameSecret } from './ids';
 import { bad, fail, ownOrigin, parse, str } from './kit';
@@ -25,7 +25,7 @@ import type { Resolve } from './egress';
  * `webDir` is the built web client (`web/dist`); unset, the server serves no client.
  * `resolve` is the connector egress resolver (egress.ts); tests inject one, the server uses the system's.
  */
-export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string; github?: GitHub | null; vault?: Vault; resolve?: Resolve; webDir?: string }
+export interface AppOpts extends SignInOpts { testBearer?: string; github?: GitHub | null; vault?: Vault; resolve?: Resolve; webDir?: string }
 
 function testRoutes(app: Hono, hub: Hub, local: boolean, bearer: string | undefined): void {
   if (!local) {
@@ -56,7 +56,7 @@ export function buildApp(hub: Hub, opts: AppOpts): Hono {
   app.use('*', async (c, next) => { ownOrigin.set(c.req.raw, new URL(ownBase(c, opts.publicUrl, opts.local)).origin); await next(); });
   app.get('/healthz', (c) => c.text('ok'));
   setupAll(app, hub, opts.publicUrl);
-  authRoutes(app, hub, opts.github ?? null, opts.publicUrl, opts.local);
+  authRoutes(app, hub, opts.github ?? null, opts);
   opRoutes(app, hub);
   const kit = { hub, vault: opts.vault, local: opts.local, resolve: opts.resolve ?? systemResolve };
   connectorRoutes(app, kit); // ADR 0009

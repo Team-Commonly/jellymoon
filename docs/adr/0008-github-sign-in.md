@@ -1,7 +1,8 @@
 # 0008 · Sign-in: Jellymoon's own device code, approved in a browser that GitHub signs in
 
 Status: Accepted, by the owner's ruling, 2026-11-08 (the contract wins over F15's first wording). It adds no dependency. Open
-below: token expiry and the `/device` page itself. The browser session on every user route was added on 2026-11-08 (below).
+below: the `/device` page itself. The browser session on every user route was added on 2026-11-08, and the hardening (token
+expiry, the start limit, the sweep, timeouts, logout with both and its sockets) on 2026-11-09 (both below).
 
 ## Decision
 
@@ -21,12 +22,14 @@ and drops it.
    state already used: the stored row is deleted as it is read, and its `next` is the one bound at start. It exchanges the
    code for a GitHub token server-side, reads `GET /user`, and keys the Jellymoon user by GitHub's numeric id (a login can be
    renamed; the first login becomes the display name). Then the GitHub token goes out of scope. A 401 from `/user` answers
-   `unauthorized`; any other GitHub failure answers `upstream` (502) and echoes nothing GitHub sent. On success it mints a
+   `unauthorized`; any other GitHub failure answers `upstream` (502) and echoes nothing GitHub sent. Each of the two calls to
+   GitHub gives up after 10 seconds (`AbortSignal.timeout`), which is `upstream` too. On success it mints a
    `jmu_` session, sets it as an httpOnly, SameSite=Lax cookie (Secure except under ENV=local), and redirects to `next`.
 4. `POST /v1/auth/device/approve {userCode}` is the only approver; no page load approves. It takes the session cookie or a
-   Bearer `jmu_`, needs `Content-Type: application/json`, and, when an Origin header is sent, the server's own origin
-   (forbidden otherwise: a cross-site form cannot send JSON, and a cross-site fetch sends a foreign Origin). It binds the code
-   to the caller: unknown `not_found`, expired `expired_token`, already approved `gone`.
+   Bearer `jmu_` and needs `Content-Type: application/json`; by cookie it needs the server's own Origin, a missing one
+   included, like every cookie write (Browser session, item 3). The user code matches in either case, with or without its
+   hyphen: the server upper-cases it and puts the hyphen back before hashing. It binds the code to the caller: unknown
+   `not_found`, expired `expired_token`, already approved `gone`.
 5. `POST /v1/auth/device/token` keeps the contract: `invalid_grant` for an unknown or exchanged code, `expired_token` after
    the expiry, `slow_down` when polled sooner than `interval` (2 s) after the last poll, `authorization_pending` before
    approval, then exactly one exchange (a conditional update) returns a new `jmu_` for the approver, never the browser's
@@ -71,18 +74,50 @@ screens work against the real server. One authentication function per adapter (`
    is not served). Bearer-only: `POST /v1/pods/:pod/agents`, `POST /v1/runs` and `/v1/runs/:run/end` (computer), and
    `POST /mcp`. MCP is for agents and their harnesses, not a page: no browser screen calls it, and it re-sends the caller's
    `Authorization` on every tool call, so a cookie there would add a CSRF surface and nothing a person needs.
-6. `POST /v1/auth/device/approve` keeps the Decision's item 4 rule (JSON; Origin checked when sent). It already stood before this section,
-   and the CLI's own sign-in depends on it.
+6. `POST /v1/auth/device/approve` is a cookie write like any other (until 2026-11-09 it allowed a missing Origin; that
+   exception is gone, and TestF15 approves with the Origin a browser sends).
 7. `POST /v1/auth/logout` (cookie or Bearer `jmu_`) sets `revoked_at` on the token the request presented, so it stops
-   authenticating at once as cookie and as Bearer, and clears the cookie. Other tokens of the same person stay live.
+   authenticating at once as cookie and as Bearer, and clears the cookie. A request that carries a Bearer and the cookie
+   revokes both tokens. Every pod socket opened with a revoked token is closed (code 1008). Other tokens of the same person,
+   and their sockets, stay live.
+
+## Hardening
+
+Added 2026-11-09 (AUTHH), in both adapters.
+
+1. **User token expiry.** A `jmu_` is stored with `expires_at`, 30 days after it was minted (the `expiresAt` the device
+   exchange returns and the cookie's Max-Age). Past it the token is no caller on every route and on the socket upgrade, as a
+   Bearer and as the cookie: `unauthorized`. Computer and run tokens keep a null expiry. A socket already open when its token
+   expires stays open until it closes.
+2. **The start limit.** `POST /v1/auth/device` and `GET /v1/auth/github/start`, the two routes anyone can call, each take 30
+   requests per client address per fixed minute (`AUTH_START_LIMIT` changes it). Past it they answer `rate_limited` (429)
+   with `Retry-After`, the whole seconds left in the minute. The server keys on the socket's address, and on the last
+   `X-Forwarded-For` entry only with `TRUST_PROXY=1` (off by default: a client can write that header). It counts in memory,
+   which fits one process (ADR 0006). The Worker keys on `CF-Connecting-IP` and counts in the D1 table `rate_limits`, one row
+   per route and address, dropping older minutes as it goes; an isolate's memory would not be shared.
+3. **The sweep.** Device codes and OAuth states are deleted an hour after they expire, so a poll just after expiry still
+   reads `expired_token`; a swept code is `invalid_grant`. The server sweeps at boot, on its timer's tick and on each start;
+   the Worker on each start, in the start limit's batch.
+4. **PUBLIC_URL.** With `GITHUB_CLIENT_ID` set outside ENV=local, the server refuses to start without `PUBLIC_URL`: the
+   OAuth redirect URI and the session's own Origin must not come from a request's Host. The Worker has no startup hook, so
+   there both GitHub routes answer `internal` (500) with a message naming `PUBLIC_URL`.
+5. **A concurrent first sign-in.** Two callbacks for one new GitHub account make one user. The server inserts the
+   `github_users` row with `on conflict do nothing` and writes the user only if it won, else reads the winner's; the Worker
+   writes the user only while no row holds the GitHub id, in one D1 batch (one transaction).
+6. **Sockets of a revoked token.** The server keeps a close for each open socket by its token's hash. The Worker tags each
+   socket in the pod object with `t:<token hash>` and records the pod in the D1 table `token_pods`; logout reads those pods
+   and asks each to close the tagged sockets.
 
 ## Not in this unit
 
-- Expiry of user tokens. `DeviceTokenResponse.expiresAt` says 30 days, as `tokens.json` does, but no user token expires yet.
 - The `/device` page the verification URL names belongs to the web client (F18).
-- A limit on how fast device codes can be started.
+- A `jmu_` minted before 2026-11-09 has no `expires_at` and so never expires; it ends at logout. An existing D1 needs
+  `alter table tokens add column expires_at real` and the two new tables before this Worker runs (schema.sql creates them on
+  a fresh one); the server adds the column itself.
+- A refresh of a user token: after 30 days a person signs in again.
 
 ## Tested by
 
-`e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
+`e2e/authh_test.go` (the hardening, both adapters), `server/test/auth.test.ts` and `worker/test/auth.test.ts` (the
+timeouts, PUBLIC_URL, the boot sweep, six concurrent first sign-ins); `e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
 loop) and `daemon/internal/config/save_test.go` (the 0600 write).

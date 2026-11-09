@@ -7,7 +7,7 @@ import type { DbEnv } from './db';
 import { hashToken, newId, newToken } from './ids';
 import { PodRuntime } from './pod';
 import type { Reply } from './pod';
-import { allComputers, allUsers, findToken, githubUserId, loadPods, migrate, saveComputer, saveGithubUser, saveToken, saveUser } from './store';
+import { allComputers, allUsers, claimGithubUser, findToken, githubUserId, loadPods, migrate, saveComputer, saveToken, saveUser, sweepSignIn } from './store';
 import type { ComputerRow, UserRow } from './store';
 
 export type Principal =
@@ -17,6 +17,8 @@ export type Principal =
 
 const PREFIX: Record<string, 'user' | 'computer' | 'run'> = { jmu_: 'user', jmc_: 'computer', jmr_: 'run' };
 const MAX_TIMER = 2 ** 31 - 1;
+/** A user token's life (ADR 0008): DeviceTokenResponse.expiresAt and the session cookie's Max-Age say the same. */
+export const USER_TOKEN_MS = 30 * 86_400_000;
 /** The wait before a failed tick is tried again, so a database that is down is not hammered. */
 const RETRY_MS = 500;
 
@@ -29,6 +31,8 @@ export class Hub {
   /** run id -> pod id, and computer id -> the pods where it hosts an agent; both rebuilt from pod state at boot. */
   readonly runPod = new Map<string, string>();
   readonly computerPods = new Map<string, Set<string>>();
+  /** Token hash -> a close for each pod socket it opened; logout closes them. */
+  readonly sockets = new Map<string, Set<() => void>>();
   /** Set by /__test/clock: from then on the clock only moves by another call. */
   private fixed: number | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -44,6 +48,7 @@ export class Hub {
   static async restore(db: Db): Promise<Hub> {
     await migrate(db);
     const hub = new Hub(db);
+    await sweepSignIn(db, hub.now());
     for (const u of await allUsers(db)) hub.users.set(u.id, u);
     for (const c of await allComputers(db)) hub.computers.set(c.id, c);
     for (const row of await loadPods(db)) {
@@ -88,7 +93,7 @@ export class Hub {
 
   async createUser(name: string): Promise<{ token: string; user: Actor }> {
     const u: UserRow = { id: newId('usr_'), name };
-    const token = await this.db.tx(async (t) => { await saveUser(t, u); return this.mint(t, 'jmu_', 'user', u.id); });
+    const token = await this.db.tx(async (t) => { await saveUser(t, u); return this.mint(t, 'jmu_', 'user', u.id, this.now() + USER_TOKEN_MS); });
     this.users.set(u.id, u);
     return { token, user: actorOf(u) };
   }
@@ -97,13 +102,22 @@ export class Hub {
   async githubUser(githubId: string, login: string): Promise<Actor> {
     const known = this.users.get((await githubUserId(this.db, githubId)) ?? '');
     if (known !== undefined) return actorOf(known);
-    const u: UserRow = { id: newId('usr_'), name: login };
-    await this.db.tx(async (t) => { await saveUser(t, u); await saveGithubUser(t, githubId, u.id); });
+    const u = await this.db.tx((t) => claimGithubUser(t, githubId, { id: newId('usr_'), name: login }));
     this.users.set(u.id, u);
     return actorOf(u);
   }
 
-  userToken = (userId: string): Promise<string> => this.db.tx((t) => this.mint(t, 'jmu_', 'user', userId));
+  /** A new jmu_ for the user, and when it expires. */
+  async userToken(userId: string): Promise<{ token: string; expiresAt: number }> {
+    const expiresAt = this.now() + USER_TOKEN_MS;
+    return { token: await this.db.tx((t) => this.mint(t, 'jmu_', 'user', userId, expiresAt)), expiresAt };
+  }
+
+  /** Closes every pod socket opened with the token whose hash this is. */
+  closeSockets(hash: string): void {
+    for (const close of this.sockets.get(hash) ?? []) close();
+    this.sockets.delete(hash);
+  }
 
   async createComputer(userId: string, name: string, os: string, arch: string): Promise<{ computerId: string; token: string }> {
     const c: ComputerRow = { id: newId('cmp_'), userId, name, os, arch };
@@ -112,16 +126,16 @@ export class Hub {
     return { computerId: c.id, token };
   }
 
-  private async mint(t: Tx, prefix: string, kind: string, subject: string): Promise<string> {
+  private async mint(t: Tx, prefix: string, kind: string, subject: string, expiresAt?: number): Promise<string> {
     const token = newToken(prefix);
-    await saveToken(t, hashToken(token), kind, subject);
+    await saveToken(t, hashToken(token), kind, subject, undefined, expiresAt);
     return token;
   }
 
   async authenticate(header: string | undefined): Promise<Principal | null> {
     const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
     const kind = PREFIX[token.slice(0, 4)];
-    const row = kind === undefined ? undefined : await findToken(this.db, hashToken(token));
+    const row = kind === undefined ? undefined : await findToken(this.db, hashToken(token), this.now());
     if (row === undefined || row.kind !== kind) return null;
     if (kind === 'run') return row.pod === null ? null : { kind, runId: row.subject, podId: row.pod };
     if (kind === 'user') {
@@ -144,6 +158,7 @@ export class Hub {
     const due = [...this.pods.values()].filter((p) => p.deadline !== null && p.deadline <= now);
     let failed = false;
     try {
+      await sweepSignIn(this.db, now).catch((e) => console.error('sign-in sweep failed', e));
       const done = await Promise.allSettled(due.map((p) => p.exec({ type: 'tick' })));
       done.forEach((d, i) => {
         if (d.status === 'fulfilled') return;

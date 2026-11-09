@@ -16,8 +16,8 @@ export function dbTlsOf(env: Record<string, string | undefined>): DbTls | string
   const set = DB_TLS.filter((k) => env[k]);
   if (set.length === 0) return undefined;
   if (set.length < DB_TLS.length) return `The database client certificate needs all of ${DB_TLS.join(', ')}; missing ${DB_TLS.filter((k) => !env[k]).join(', ')}.`;
-  const bad = DB_TLS.filter((k) => !/^-----BEGIN [A-Z ]+-----/.test(env[k]!.trim()));
-  if (bad.length) return `${bad.join(', ')} must be PEM (starting -----BEGIN ...-----).`;
+  const bad = DB_TLS.filter((k) => !/^-----BEGIN ([A-Z ]+)-----\r?\n[A-Za-z0-9+/=\r\n]+\r?\n-----END \1-----$/.test(env[k]!.trim()));
+  if (bad.length) return `${bad.join(', ')} must be PEM (a -----BEGIN X----- line, base64, then the matching -----END X----- line).`;
   const [cert, key, ca] = DB_TLS.map((k) => env[k]!);
   const servername = env.JM_DB_TLS_SERVERNAME?.trim();
   return { cert: cert!, key: key!, ca: ca!, ...(servername ? { servername } : {}) };

@@ -19,7 +19,11 @@ export interface Db extends Tx {
  * made by pglite-template.ts; a fresh PGlite dir starts from it, which skips initdb (about 5 s of CPU, against about 1 s).
  * PG_SCHEMA: confine this server to one schema of a shared Postgres, so the e2e suite can give every server fresh state.
  */
-/** A client certificate for the wire connection (config.ts dbTlsOf): the server's CA is checked, and the client presents its own. */
+/**
+ * A client certificate for the wire connection (config.ts dbTlsOf), so a database that requires one admits only this client.
+ * It does not verify the server: under sslmode=require Bun accepts any server certificate, `ca` and `servername` included
+ * (measured 2026-11-09 against Cloud SQL, where verify-full also fails the hostname check on an IP host).
+ */
 export interface DbTls { cert: string; key: string; ca: string; servername?: string }
 export interface DbEnv { DATABASE_URL?: string; PGLITE_DIR?: string; PGLITE_TEMPLATE?: string; PG_SCHEMA?: string; TLS?: DbTls }
 

@@ -30,6 +30,10 @@ describe('guards', () => {
     expect(typeof partial === 'string' && partial.includes('missing JM_DB_CLIENT_KEY, JM_DB_SERVER_CA')).toBe(true);
     const notPem = dbTlsOf({ ...full, JM_DB_CLIENT_KEY: 'c2VjcmV0' });
     expect(typeof notPem === 'string' && notPem.startsWith('JM_DB_CLIENT_KEY must be PEM')).toBe(true);
+    for (const junk of ['-----BEGIN GARBAGE-----', `-----BEGIN CERTIFICATE-----\nAAAA\n-----END PRIVATE KEY-----`]) {
+      expect(dbTlsOf({ ...full, JM_DB_SERVER_CA: junk })).toBe('JM_DB_SERVER_CA must be PEM (a -----BEGIN X----- line, base64, then the matching -----END X----- line).');
+    }
+    expect(typeof dbTlsOf({ ...full, JM_DB_CLIENT_CERT: full.JM_DB_CLIENT_CERT.replaceAll('\n', '\r\n') })).toBe('object');
     expect(startupRefusal({ DATABASE_URL: 'postgres://h/db', JM_DB_SERVER_CA: full.JM_DB_SERVER_CA })?.includes('missing')).toBe(true);
     expect(startupRefusal({ DATABASE_URL: 'postgres://h/db', ...full })).toBe(undefined);
   });

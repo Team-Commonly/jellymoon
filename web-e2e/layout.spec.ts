@@ -106,8 +106,24 @@ test('the top bar keeps its layout under a pod id as long as an address can make
   await holdsLayout(page, 'the bar with a very long pod id');
   await signIn(page, await person('Ada'));
   await page.goto(`/pod/${UNBROKEN}${UNBROKEN}`);
-  await expect(page.getByRole('banner')).toContainText('Signed in');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await holdsLayout(page, 'the bar with a very long pod id, signed in');
+});
+
+test('signed in under the longest display name the schema allows, the bar names the person and keeps Sign out and the pod title on screen', async ({ page }) => {
+  const NAME = UNBROKEN.slice(0, 80); // schema/common.json: a display name is at most 80 characters, and so is a pod name
+  const ada = await person(NAME);
+  const { id } = await api<{ id: string }>('POST', '/v1/pods', ada.token, { name: NAME });
+  await signIn(page, ada);
+  const bar = page.getByRole('banner');
+  for (const [path, title] of [['/', 'Jellymoon'], [`/pod/${id}`, NAME]]) {
+    await page.goto(path);
+    await expect(bar.locator(`[title="${NAME}"]`)).toHaveText(NAME);
+    await expect(bar.locator('strong')).toHaveText(title);
+    await expect(bar.getByRole('button', { name: 'Sign out' })).toBeInViewport({ ratio: 1 });
+    await expect(bar.locator('strong')).toBeInViewport({ ratio: 1 });
+    await holdsLayout(page, `${path === '/' ? '/' : '/pod/:id'} signed in under the longest display name`);
+  }
 });
 
 test('the top bar keeps its layout under the longest pod name the schema allows, and the invite page under it too', async ({ page }) => {
@@ -247,6 +263,35 @@ test('the needs-you filter keeps its layout, with an ask, and when nothing needs
   await page.keyboard.press('Enter');
   await expect(page.getByText('Nothing needs you')).toBeVisible();
   await holdsLayout(page, '/pod/:id?filter=needs-you with nothing left');
+});
+
+test('/pod/:id keeps its layout when the server refuses the pod: no such pod, not a member, signed out; the socket is not retried', async ({ page }) => {
+  const sockets: string[] = [];
+  page.on('websocket', (ws) => void sockets.push(ws.url()));
+  await page.clock.install(); // the store's retry is a timer: fast-forwarding it shows none is pending
+  const refused = async (where: string) => {
+    await expect(page.getByRole('alert')).toHaveText("No such pod, or you're not a member.");
+    await expect(page.getByRole('textbox', { name: 'Message' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Needs you/ })).toHaveCount(0);
+    await holdsLayout(page, where);
+  };
+
+  await page.goto('/pod/pod_01M6ZYCMY1F27TYDSDH7B3JYQ0');
+  await expect(page.getByRole('alert')).toHaveText('Sign in to open this pod.');
+  await holdsLayout(page, '/pod/:id signed out');
+
+  const ada = await person('Ada');
+  await signIn(page, ada);
+  await page.goto('/pod/pod_01M6ZYCMY1F27TYDSDH7B3JYQ0');
+  await refused('/pod/:id with no such pod');
+  const before = sockets.length;
+  await page.clock.fastForward(60_000);
+  expect(sockets.length, 'no socket retried after the refusal').toBe(before);
+
+  const bo = await person('Bo');
+  const { id } = await api<{ id: string }>('POST', '/v1/pods', bo.token, { name: 'Not yours' });
+  await page.goto(`/pod/${id}`);
+  await refused('/pod/:id of a pod you are not in');
 });
 
 test('/ keeps its layout signed out, signed in, and with a failure showing', async ({ page }) => {

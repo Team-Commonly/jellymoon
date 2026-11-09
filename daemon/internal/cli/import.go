@@ -68,7 +68,7 @@ func importCommonly(args []string, stdout, stderr io.Writer) error {
 	}
 	rep, err := importer.Run(c, sink, importer.NewScrubber(token), o)
 	if err != nil {
-		return err
+		return explainStop(err, o.StatePath)
 	}
 	fmt.Fprint(stdout, rep)
 	return nil
@@ -97,3 +97,14 @@ func importSink(store config.Store, apply bool, o *importer.Options) (importer.S
 
 // commonlyToken reads the token from the environment (and drops it from there), else asks for it on the terminal with echo off.
 func commonlyToken() (string, error) { return readSecret(commonlyTokenEnv, "Commonly token") }
+
+// explainStop adds "the state is saved" to a stopped run only when a state file is there to be resumed from.
+func explainStop(err error, statePath string) error {
+	if !errors.Is(err, importer.ErrStopped) {
+		return err
+	}
+	if _, serr := os.Stat(statePath); serr != nil {
+		return err
+	}
+	return fmt.Errorf("%w; the state is saved in %s", err, statePath)
+}

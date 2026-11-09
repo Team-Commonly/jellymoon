@@ -3,11 +3,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
 import { ApiError } from './http';
-import { fakeHttp, fakeNet } from './testkit';
+import { fakeHttp, fakeNet, you } from './testkit';
 
 afterEach(cleanup);
 const open = (http: ReturnType<typeof fakeHttp>['http'], signedIn: boolean) =>
-  render(<MemoryRouter initialEntries={['/']}><App connect={() => fakeNet().connect} http={http} signedIn={signedIn} /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/']}><App connect={() => fakeNet().connect} http={http} me={signedIn ? you : null} /></MemoryRouter>);
 const made = (name: string) => ({ id: 'pod_new', name, createdAt: '2026-11-08T10:00:00Z' });
 
 describe('/', () => {

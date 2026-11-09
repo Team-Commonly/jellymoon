@@ -14,10 +14,11 @@ import type { Connect, RunLine } from './store';
 import { usePod } from './usePod';
 import { usePodKeys } from './usePodKeys';
 
-function Composer(p: { onPost(text: string): void; error?: string; inputRef: React.RefObject<HTMLTextAreaElement | null> }) {
+/** While the socket is down the composer is disabled and keeps its draft: a post then would be lost without a word. */
+function Composer(p: { onPost(text: string): void; error?: string; down: boolean; inputRef: React.RefObject<HTMLTextAreaElement | null> }) {
   const [text, setText] = useState('');
   const send = () => {
-    if (!text.trim()) return;
+    if (p.down || !text.trim()) return;
     p.onPost(text);
     setText('');
   };
@@ -28,12 +29,14 @@ function Composer(p: { onPost(text: string): void; error?: string; inputRef: Rea
   };
   return (
     <form onSubmit={(e) => { e.preventDefault(); send(); }}>
-      <textarea ref={p.inputRef} aria-label="Message" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown} rows={2} />
-      <button type="submit">Send</button>
+      <textarea ref={p.inputRef} aria-label="Message" value={text} disabled={p.down} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown} rows={2} />
+      <button type="submit" disabled={p.down}>Send</button>
       {p.error && <p role="alert">{p.error}</p>}
     </form>
   );
 }
+
+const REFUSED = { refused: "No such pod, or you're not a member.", 'signed-out': 'Sign in to open this pod.' } as const;
 
 const ENDED_WORD = { cancelled: 'stopped', completed: 'finished', failed: 'failed', expired: 'timed out' } as const;
 
@@ -101,7 +104,7 @@ function useBarTitle(setTitle: BarContext['setTitle'], name: string | undefined)
 export function PodPage({ connect, http }: { connect: (podId: string) => Connect; http: Http }) {
   const { id = '' } = useParams();
   const { slot, setTitle } = useOutletContext<BarContext>();
-  const { store, state } = usePod(id, connect);
+  const { store, state } = usePod(id, connect, (podId) => http.podAccess(podId));
   useBarTitle(setTitle, state.podName);
   const filter = useNeedsYouFilter();
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -126,6 +129,8 @@ export function PodPage({ connect, http }: { connect: (podId: string) => Connect
   // hello, `you` is unknown and nothing shows.
   const empty = state.you !== undefined && state.lastSeq >= state.headSeq && state.messages.length === 0 && !filter.on;
   const pending = k.keys.confirm ? cards[k.keys.focus]?.ask?.options.find((o) => o.id === k.keys.confirm)?.label : undefined;
+  // The server refused the socket for good: nothing below would work, so nothing below shows.
+  if (state.status === 'refused') return <p role="alert">{REFUSED[state.refusal ?? 'refused']}</p>;
   return (
     <>
       {slot && createPortal(
@@ -152,7 +157,8 @@ export function PodPage({ connect, http }: { connect: (podId: string) => Connect
       <div role="status" aria-live="polite">{pending ? `Rule ${pending}? Press Enter to rule, Escape to cancel.` : ''}</div>
       <WaitingLines waking={state.waking} agents={state.agents} going={going} />
       <RunLines runs={runs} canStop={canStop} stop={(runId) => http.stopRun(id, runId)} />
-      <Composer inputRef={composer} onPost={(t) => store.post(t)} error={state.postError} />
+      <p aria-live="polite">{state.status === 'reconnecting' ? 'Reconnecting…' : ''}</p>
+      <Composer inputRef={composer} onPost={(t) => store.post(t)} error={state.postError} down={state.status !== 'open'} />
     </>
   );
 }

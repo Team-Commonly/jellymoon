@@ -1,6 +1,7 @@
 // One store per pod, fed only by the socket. Events apply by seq; anything at or below the last applied seq is
 // ignored; a reconnect resubscribes from the last seq. Writes go out as frames and change nothing locally:
-// a ruling shows only after the pod's message.updated, and an error frame lands on the card that was waiting.
+// a ruling shows only after the pod's message.updated, and an error frame lands on the card that was waiting. A socket that
+// closes before its hello may have been refused for good; `check` says whether, and a refused pod is never retried.
 import type {
   Actor, AgentPresence, Envelope, ErrorBody, Hello, Member, Message, MessageUpdated, OptionId, PresenceChanged, PresenceState, RunEndOutcome, RunEnded, RunStarted, Task, TaskClaimed, ClaimReleased,
 } from '../../gen/ts/protocol';
@@ -13,8 +14,13 @@ export type Connect = (h: SocketHandlers) => SocketLink;
 /** A run as the pod's events tell it: going from run.started, ended with its outcome from run.ended. */
 export interface RunLine { runId: string; agent: Actor; state: 'going' | 'ended'; outcome?: RunEndOutcome }
 
+/** Why the server would not let this person open the pod: no such pod or not a member (`refused`), or nobody signed in. */
+export type Refusal = 'refused' | 'signed-out';
+
 interface PodState {
-  status: 'connecting' | 'open' | 'reconnecting' | 'stopped';
+  /** `open` from a socket's hello until it closes; only then can a write go out. `refused` is final: the socket is never retried. */
+  status: 'connecting' | 'open' | 'reconnecting' | 'stopped' | 'refused';
+  refusal?: Refusal;
   you?: Actor;
   /** The pod's name, from hello; undefined until the first hello. */
   podName?: string;
@@ -128,7 +134,11 @@ function markUnsent(s: PodState): PodState {
   return Object.keys(note).length === 0 ? s : { ...s, pending: {}, ruleErrors: { ...s.ruleErrors, ...note } };
 }
 
-export function createPodStore(opts: { podId: string; connect: Connect; schedule?: (fn: () => void) => void }): PodStore {
+/**
+ * `check` is asked when a socket closes before its hello: a browser can't read why an upgrade was refused, so the client asks an
+ * authorized GET instead. A Refusal is final; null (a member, or no answer) means retry as for any drop.
+ */
+export function createPodStore(opts: { podId: string; connect: Connect; schedule?: (fn: () => void) => void; check?: () => Promise<Refusal | null> }): PodStore {
   const schedule = opts.schedule ?? ((fn) => void setTimeout(fn, 1000));
   const listeners = new Set<() => void>();
   let state = fresh();
@@ -140,11 +150,11 @@ export function createPodStore(opts: { podId: string; connect: Connect; schedule
   };
   const send = (type: string, data: object) => link?.send(JSON.stringify({ v: 1, type, podId: opts.podId, data }));
 
-  function onFrame(raw: string) {
+  function onFrame(raw: string, greet: () => void) {
     try { // a frame that is not JSON, or has no body or a wrong one, is dropped and counted; nothing throws out of here
       const env = JSON.parse(raw) as Envelope;
       if (typeof env.type !== 'string' || typeof env.data !== 'object' || env.data === null) throw new Error('bad frame');
-      if (env.type === 'hello') return set(applyHello(state, env.data as never));
+      if (env.type === 'hello') return (greet(), set({ ...applyHello(state, env.data as never), status: state.status === 'stopped' ? 'stopped' : 'open' }));
       if (env.type === 'error') return set(applyError(state, env.data as unknown as ErrorBody));
       if (env.seq === undefined) return LIVE_EVENTS[env.type] ? set(LIVE_EVENTS[env.type](state, env.data as never)) : undefined;
       if (env.seq <= state.lastSeq) return;
@@ -153,18 +163,19 @@ export function createPodStore(opts: { podId: string; connect: Connect; schedule
       set({ ...(apply ? apply(state, env.data as never) : state), lastSeq: env.seq });
     } catch { set({ ...state, droppedFrames: state.droppedFrames + 1 }); }
   }
+  const retry = () => schedule(() => state.status === 'reconnecting' && connect());
 
   function connect() {
+    let greeted = false; // this socket has had its hello
     link = opts.connect({
-      open: () => {
-        set({ ...state, status: 'open' });
-        send('subscribe', { sinceSeq: state.lastSeq });
-      },
-      message: onFrame,
+      open: () => send('subscribe', { sinceSeq: state.lastSeq }),
+      message: (raw) => onFrame(raw, () => { greeted = true; }),
       close: () => {
-        if (state.status === 'stopped') return;
+        if (state.status === 'stopped' || state.status === 'refused') return;
         set({ ...markUnsent(state), status: 'reconnecting' });
-        schedule(() => state.status === 'reconnecting' && connect());
+        if (greeted || !opts.check) return retry();
+        // Closed before hello: refused for good, or only dropped. A check that throws is no answer, so it retries.
+        void opts.check().catch(() => null).then((why) => state.status === 'reconnecting' && (why === null ? retry() : set({ ...state, status: 'refused', refusal: why })));
       },
     });
   }
@@ -182,6 +193,7 @@ export function createPodStore(opts: { podId: string; connect: Connect; schedule
       set({ ...state, ruleErrors, pending: { ...state.pending, [decisionId]: optionId } });
       send('decision.rule', { decisionId, optionId });
     },
-    post: (text, threadOf) => send('message.post', { text, ...(threadOf && { threadOf }) }),
+    // Only on a socket that has had its hello: before it, or while down, a post would be lost without a word.
+    post: (text, threadOf) => { if (state.status === 'open') send('message.post', { text, ...(threadOf && { threadOf }) }); },
   };
 }

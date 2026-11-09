@@ -60,6 +60,28 @@ describe('browserHttp readInvite', () => {
   });
 });
 
+describe('browserHttp podAccess', () => {
+  const answering = (status: number) => vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status })));
+
+  it('GETs the pod\'s whoami over the cookie, the id escaped in the path', async () => {
+    const m = stub({ podId: 'pod 1' });
+    expect(await browserHttp.podAccess('pod 1')).toBe('member');
+    const [url, init] = m.mock.calls[0] as unknown as [string, RequestInit];
+    expect({ url, method: init.method ?? 'GET', credentials: init.credentials }).toEqual({ url: '/v1/pods/pod%201/me', method: 'GET', credentials: 'same-origin' });
+  });
+
+  it('reads 404 and 403 as refused and 401 as signed out, and throws on anything else', async () => {
+    answering(404);
+    expect(await browserHttp.podAccess('p')).toBe('refused');
+    answering(403);
+    expect(await browserHttp.podAccess('p')).toBe('refused');
+    answering(401);
+    expect(await browserHttp.podAccess('p')).toBe('signed-out');
+    answering(502);
+    await expect(browserHttp.podAccess('p')).rejects.toMatchObject({ status: 502 });
+  });
+});
+
 describe('browserHttp stopRun', () => {
   it('POSTs the run\'s stop route over the cookie as JSON, ids escaped in the path', async () => {
     const m = stub({ runId: 'run_1', outcome: 'cancelled' });
@@ -72,5 +94,18 @@ describe('browserHttp stopRun', () => {
     await expect(browserHttp.stopRun('p', 'r')).rejects.toMatchObject({ status: 403, message: 'Only the agent\'s owner or a pod owner may stop a run.' });
     vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>', { status: 502 })));
     await expect(browserHttp.stopRun('p', 'r')).rejects.toMatchObject({ status: 502, message: 'request failed' });
+  });
+});
+
+describe('browserHttp logout', () => {
+  it('POSTs /v1/auth/logout over the cookie as JSON, which the server asks of every cookie write', async () => {
+    const m = stub({});
+    await browserHttp.logout();
+    expect(sent(m)).toEqual({ url: '/v1/auth/logout', method: 'POST', type: 'application/json', body: '{}', credentials: 'same-origin' });
+  });
+
+  it('throws on a refusal, so the page stays signed in', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 'forbidden', message: 'A browser session sends JSON.' }), { status: 403 })));
+    await expect(browserHttp.logout()).rejects.toMatchObject({ status: 403 });
   });
 });

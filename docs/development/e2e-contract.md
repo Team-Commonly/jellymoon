@@ -8,6 +8,8 @@ from `e2e/`, so the suite keeps its own small wire structs.
 Run it against the pod-state server (ADR 0006) with `make e2e` (the same as `make e2e-c`), against the Cloudflare adapter
 with `make e2e-a`, or against any other server with `JM_E2E_SERVER='<shell command>' make e2e-any`. With `JM_E2E_SERVER` unset
 every test skips, so `make test` stays green. `make e2e`, `make e2e-c` and `make e2e-a` end with `E2E_MS=<n> STEPS=<k>/<k>`.
+`make e2e-deployed` (CI's `e2e-deployed` job) runs the same suite with the server's release bundle as the server under test, after
+`make deployed-boot` has started that bundle as its own process and checked it by URL (ADR 0006, "Deployed form").
 
 ## How the suite starts the server
 
@@ -80,9 +82,8 @@ schema refuses (a wrong type, a value over a limit such as a 16,385-character `b
 dropped or truncated: a body the schema allows is stored whole.
 
 A field the schema allows but the pod core has no place for is also `400 invalid_input`, never silently dropped. Today
-that is, on `POST /v1/pods/:pod/messages`: `kind` other than `fyi`, `status` other than `done`, `needs`, `options`,
-`context`, `taskId`, `links` and `caveat`; on `PATCH /v1/pods/:pod/tasks/:task`: `note`; on `POST /v1/runs/:run/end`:
-`harnessVersion`. A run's post needs its `summary` (the core stores it as the headline).
+that is, on `POST /v1/runs/:run/end`: `harnessVersion`. A task update has no `note`: the schema does not offer one, so it is refused as an unknown field. A post stores
+every field its definition allows (every `kind`, `status`, `needs`, `options`, `context`, `taskId`, `links` and `caveat`). A run's post needs its `summary` (the core stores it as the headline).
 
 ## Invites
 
@@ -142,6 +143,7 @@ early-expiry and lateness check reads it, so every server is measured identicall
 | `TestF15` | F15: `jellymoon login` (the built daemon) prints the user code and the verification URL; a device code is `authorization_pending` before approval and `slow_down` when polled again at once; a cookie-jar browser walks start, the stub GitHub and the callback, lands on `next` with a session cookie, and `GET /v1/me` returns the Actor; approving the CLI's code makes it write a 0600 `user-token` holding a new `jmu_` for that user and print `Signed in as <login>` and never the token; exactly one exchange, then `invalid_grant`; approving twice `gone`; an unknown code `not_found`; approve without a JSON content type or with a foreign Origin `forbidden`; the callback refuses a missing state, another browser's state and a reused one; an absolute, `//` or `/\` `next` lands on `/`; a stub `/user` 401 is `unauthorized`; one GitHub id is one user across sign-ins; no GitHub token is in the data dir or the server log; and, last because it moves the clock, an expired code is `expired_token` on approve and on token. |
 | `TestBSESS` | ADR 0008, "Browser session": two browsers sign in through the stub; with only the session cookie one creates a pod and an invite, the other accepts it, opens the pod WebSocket from the server's own Origin and gets `hello`, and a post by cookie fans out to it and reads back from the feed; a cookie POST without a JSON content type, from a foreign Origin, `null` or with no Origin is `forbidden` and adds nothing; the socket from a foreign Origin or with none is refused (403); a `jmr_` in the cookie is `unauthorized` while the same token as a Bearer works; a Bearer POST needs no Origin, and a Bearer beside a cookie wins; logout by cookie revokes the token (as cookie and as Bearer, both `unauthorized`) and clears the cookie, and a logout by Bearer revokes that token. |
 | `TestF14Budget` | The whole suite run (fake clock) passes in under 60 s. The suite tests run in parallel, so this one is parallel too and waits for every one of them before it judges the run. It fails if a suite test failed, if one never reported in a whole-suite run, or if the run took 60 s or more; it skips only when `-run` narrowed the run. `TestBudgetVerdict` checks that judgment with made-up outcomes and needs no server. |
+| `TestF14` | F14: the whole slice as one walk, on F09's world (built daemon, fake ACP agent, recording proxy) with nobody signed in. Two people sign in (through the test session route, until F15), one creates the pod and invites, the other joins, and ben's hello lists both with their roles. The daemon registers and the fake agent is added; both see it online. A task assigned to the agent makes the daemon claim the wake (`POST /v1/runs` with its computer token, a brief naming the task and `task_assigned`); both see `task.claimed` with the run, the agent and a lease 60 s past the fake clock; the agent's ask reaches both as `blocked` with an open decision and a receipt (run, agent, computer, harness `fake`, `task_assigned`, the task, and `toolCalls` equal to the two MCP calls the agent made before it). A member rules, both see the decision ruled with the option and who chose it, the daemon claims a second wake whose brief names `decision_ruled` and the decision, the woken run's result carries a `decision_ruled` receipt for the new run, both see `task.updated` done, and both runs end `completed`. The walk, `go build` of the daemon included, takes under 60 s. The fake agent runs a script file read at each prompt, so the test swaps the script between the two runs; `{{taskId}}` in a script argument is the first `tsk_` id in the agent's brief. The ruling's wake names the decision and the ask, not the task, so the second script carries the id as a literal. |
 
 `TestKillMidLease` claims Y (no renewal after the claim; its deadline falls inside the outage) and X
 (renewed by a heartbeat; its deadline falls after the restart), then crashes. For each it asserts: not
@@ -201,7 +203,7 @@ four slots (`GOMAXPROCS=4`) the Worker suite took 14 s on a dev machine against 
 ## Skipped on the server
 
 `JM_E2E_SKIP` is a comma-separated list of test names. `make e2e-c` sets it to the three tests below; each one skips, says so,
-and still counts as passed for `TestF14Budget`. A skip needs a reason here. Nothing else is skipped, and no assertion differs
+and still counts as passed for `TestF14Budget`. The make targets set the variable themselves, so an inherited `JM_E2E_SKIP` never applies: `make e2e-a` clears it (a deliberate skip there is `make e2e-a E2E_A_SKIP=<names>`) and `make e2e-c` takes its list from `E2E_C_SKIP`. A skip needs a reason here. Nothing else is skipped, and no assertion differs
 between servers.
 
 | Test | Reason |
@@ -224,7 +226,7 @@ and the check runs in full.
   finishes its tests. The steps are every named step of the tests that name them (`TestF02`) plus one step for each other test that
   ran; a skipped test counts nothing. `k` is the steps that passed, so a red run prints `k < n`. A failing named step prints its
   name and the last 20 events the suite saw before it. A test cannot see the run's last line, so `make e2e-c` and `make e2e-a` judge it: the
-  last line before `go test`'s own `ok`/`FAIL` must be this line, with `k = n` on a green run and `k < n` on a red one.
+  last line before `go test`'s own `ok`/`FAIL`/`PASS` lines (blank lines ignored) must match `^E2E_MS=[0-9]+ STEPS=[0-9]+/[0-9]+$`, with `k = n` on a green run and `k < n` on a red one.
 - `LATENESS_MS <kind> <ms>`: observed expiry minus the ledger's deadline, real-clock mode only. `kind` is
   `steady` (zero-traffic expiry), `after_restart_ahead` (deadline after the restart) or
   `after_restart_inside` (deadline inside the outage).

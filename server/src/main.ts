@@ -4,11 +4,10 @@
 import { websocket } from 'hono/bun';
 import { buildApp } from './app';
 import { githubOf } from './auth';
-import { startupRefusal } from './config';
+import { appOptions, startupRefusal } from './config';
 import { Hub } from './hub';
 
 const port = Number(process.env.PORT ?? 8787);
-const local = process.env.ENV === 'local';
 const at = process.argv.indexOf('--persist-to');
 const dir = at === -1 ? undefined : process.argv[at + 1];
 const refusal = startupRefusal(process.env);
@@ -17,6 +16,6 @@ if (refusal !== undefined) {
   process.exit(1);
 }
 const hub = await Hub.open({ DATABASE_URL: process.env.DATABASE_URL, PGLITE_DIR: dir, PGLITE_TEMPLATE: process.env.JM_PGLITE_TEMPLATE, PG_SCHEMA: process.env.JM_PG_SCHEMA });
-const app = buildApp(hub, { publicUrl: process.env.PUBLIC_URL, local, testBearer: process.env.TEST_BEARER, github: githubOf(process.env) });
+const app = buildApp(hub, { ...appOptions(process.env), github: githubOf(process.env) });
 Bun.serve({ port, fetch: app.fetch, websocket });
 console.log(`jellymoon server on :${port}, ${hub.pods.size} pods restored`);

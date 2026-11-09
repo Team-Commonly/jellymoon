@@ -33,7 +33,7 @@ var (
 	// stateInDatabase is set by `make e2e-c` when the server keeps its state in a real database (DATABASE_URL): the --persist-to
 	// directory then holds no files by design. TestF02 says so aloud and skips only its directory-content check.
 	stateInDatabase = os.Getenv("JM_E2E_STATE_IN_DB") == "1"
-	suiteTests = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF09", "TestF10", "TestF11", "TestExpiryZeroTraffic", "TestRenewRace",
+	suiteTests      = []string{"TestF02", "TestF03", "TestF04", "TestF05", "TestF06", "TestF07", "TestF08", "TestF09", "TestF10", "TestF11", "TestF12", "TestF14", "TestExpiryZeroTraffic", "TestRenewRace",
 		"TestKillMidLease", "TestReplayAcrossRestart", "TestOneReleasePerCause", "TestInputValidation", "TestRestartPastDeadline", "TestRunTokenOtherPod", "TestEvictMidClaim", "TestEvictAlarmWake", "TestEvictPastDeadline", "TestF15", "TestBSESS"}
 	outcomes sync.Map // test name -> failed bool
 )
@@ -48,6 +48,7 @@ func par(t *testing.T) {
 	t.Helper()
 	suiteWG.Add(1)
 	t.Cleanup(suiteWG.Done) // registered first, so it runs last: after track's outcome and the server's kill
+	noStrays(t)
 	t.Parallel()
 }
 

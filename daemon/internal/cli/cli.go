@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"syscall"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/Team-Commonly/jellymoon/daemon/internal/config"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/daemon"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/protocol"
+	"github.com/Team-Commonly/jellymoon/daemon/internal/redact"
 )
 
 // Environment: the server to talk to, and the jmu_ token for the first registration.
@@ -27,12 +29,15 @@ const (
 	userTokenEnv = "JELLYMOON_USER_TOKEN"
 )
 
-const usage = "usage:\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>]\n"
+const usage = "usage:\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>] [--repo <path>] [--allow-permissions]\n"
 
 var podIDShape = regexp.MustCompile(`^pod_[0-9A-Z]{26}$`)
 
 // Main runs one command and returns the exit code.
 func Main(args []string, stdout, stderr io.Writer) int {
+	// The only two outputs of the process, and the log and the flag set are built on stderr, so this is every write site:
+	// nothing the CLI or the daemon prints reaches a stream except through redact.
+	stdout, stderr = redact.Writer(stdout), redact.Writer(stderr)
 	var err error
 	switch {
 	case len(args) >= 2 && args[0] == "daemon" && args[1] == "start":
@@ -121,8 +126,17 @@ func agentAdd(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("agent add", flag.ContinueOnError)
 	pod := fs.String("pod", "", "the pod to register the agent in")
 	name := fs.String("name", string(harness), "the name shown to people")
+	repo := fs.String("repo", "", "a git repo: each run gets a worktree of it (default: a fresh empty directory)")
+	allow := fs.Bool("allow-permissions", false, "answer the agent's permission requests with allow once (default: reject them)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
+	}
+	if *repo != "" {
+		abs, err := filepath.Abs(*repo)
+		if err != nil {
+			return err
+		}
+		*repo = abs
 	}
 	if !harness.Valid() {
 		return fmt.Errorf("unknown harness %q", harness)
@@ -134,7 +148,7 @@ func agentAdd(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	id, err := daemon.Add(store, daemon.AddRequest{PodID: *pod, Harness: harness, DisplayName: *name})
+	id, err := daemon.Add(store, daemon.AddRequest{PodID: *pod, Harness: harness, DisplayName: *name, Repo: *repo, AllowPermissions: *allow})
 	if err != nil {
 		return err
 	}

@@ -18,37 +18,43 @@
         "schema/",
         "scripts/"
       ],
-      "max": 3720
+      "max": 4200
     },
     "worker": {
       "paths": [
         "worker/"
       ],
-      "max": 1960
+      "max": 2040
     },
     "server": {
       "paths": [
         "server/"
       ],
-      "max": 2030
+      "max": 2230
     },
     "podcore": {
       "paths": [
         "podcore/"
       ],
-      "max": 2500
+      "max": 3000
     },
     "daemon": {
       "paths": [
         "daemon/"
       ],
-      "max": 3240
+      "max": 5000
+    },
+    "web": {
+      "paths": [
+        "web/"
+      ],
+      "max": 1580
     },
     "e2e": {
       "paths": [
         "e2e/"
       ],
-      "max": 5230
+      "max": 6790
     }
   },
   "goImports": {

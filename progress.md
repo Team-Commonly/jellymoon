@@ -4,6 +4,18 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-11-08 · harness matrix: Claude Code and Codex measured over ACP (unit HMATRIX)
+- **Changed:** `docs/design/harness-matrix.md` only. Both installed harnesses run through the daemon on a local server; eight other candidates read from their own docs.
+- **Evidence:** four real turns (one full, one cancelled, per harness). Both completed the slice and stored a post with a receipt; neither sent a permission request; stopping the daemon mid-turn left no process behind (Codex gone in 0.17 s; Claude within the daemon log's one-second resolution).
+- **Next:** the daemon answers every agent request "not supported" and never sends `session/cancel`; permissions need a real answer before Gemini, Cursor or Cline can be added. Recommendation in the doc: Codex next, Gemini third.
+- **Surprising:** the Codex adapter moved to the `@agentclientprotocol` scope (the older `@zed-industries` one is deprecated). Both models failed `jm_post` twice on fields the server does not store yet.
+
+## 2026-11-08 · a real Claude Code session replays through the daemon (unit F16)
+- **Changed:** `daemon/testdata/acp/claude-slice.jsonl` (one real run through `@agentclientprotocol/claude-agent-acp` 0.99.1, scrubbed), `claude-slice.golden`, and `TestReplayClaude` in `daemon/internal/daemon`, which runs the test binary as the agent. `scripts/record-acp.mjs` (+ `acp-scrub.mjs`, `e2e/testdata/acprec`, `make acp-tools`, `make record-acp`) records and scrubs a new one; `docs/development/record-acp.md` and an ADR 0005 note say how. No daemon change was needed.
+- **Evidence:** `go test ./daemon/internal/daemon -run TestReplayClaude -count=3` green; red when the golden list loses or changes one call, when the daemon hands the agent the wrong bearer, and when it ends the run failed. The run: 3 `jm_post`, 2 `jm_task_update`, `jm_whoami`, `jm_task_list`, `jm_task_claim`, run ended `completed`.
+- **Next:** the hand walk (open): an operator runs `make acp-tools && make record-acp` on their own machine with their own Claude Code sign-in, reads `claude-slice.jsonl`'s `"t":"mcp"` lines against what they see in the pod, and notes the result here. F16 stays open on that one step.
+- **Surprising:** the real agent called `jm_post` with `kind: result` and `taskId`, and `jm_task_update` with `note`, all of which the tool descriptions allow and this server refuses ("does not store ... yet"); it retried until a bare `fyi` post worked. The unscoped npm name `claude-agent-acp` is a week-old personal-account package, not the adapter; the scoped one is. The adapter's session mode was `auto`, so it never asked permission.
+
 ## 2026-10-30 · pod creation, invites, replay and agent tasks proved (unit W1)
 - **Changed:** `TestF03`, `TestF05`, `TestF04` and `TestF06` in `e2e/`, each asserting every feature step by name through the step printer; F03 to F06 now pass. The Worker needed no fix. Review round: F06 checks both computer sockets; F04 asserts the eviction route's 200 and compares the poster's seqs with the replay; F05 checks the member list after each refusal and gains an expired-invite step (feature_list.json too); hello must carry `headSeq`; the bundle test pins the eviction to the test entry. `helloData`, `seedUser` and `firstHello` moved to `harness_test.go` (`world.session` calls `seedUser`). The e2e cap rose 1,900 to 2,660 (ADR 0001 note, entropy.json, stated total together).
 - **Evidence:** `make e2e-a` under a clean shell: the closing line reads `STEPS=33/33` at this head (it counts every step of every test; the number moves when a step is added); `make preflight` passes; mutants fail their tests: hello headSeq +1, invite uses not decremented, no membership check on invites, replay skipping one event, task.created to the sender only, task.created withheld from computers, eviction route renamed or removed, a spent invite adding the member, no expiry check, headSeq missing, poster's seq skewed after an eviction, eviction wired into the production entry.
@@ -242,6 +254,19 @@ goes in the PR.
   a fixture token that tripped gitleaks became an obviously fake one, and the Go module is
   `github.com/Team-Commonly/jellymoon`.
 
+## 2026-11-08 · F13 token scope (builder session)
+- **Changed:** `e2e/f13_test.go` (TestF13, five steps). Steps 1 (a run token on another pod), 2 (an ended run), 3 (`actor` in
+  MCP arguments) and 5 (the owner's stop, also with the computer offline) already held on both adapters, so their test is the
+  deliverable. Two things were red: a dead run token still got 200 on `initialize`, `tools/list`, `ping` and notifications over
+  `/mcp`, and step 4 had only a source-level check. Fixed in both adapters the same way (the pod answers whether the run is live,
+  from the core's `runLive`); step 4 now starts a server without `ENV=local` and the Worker's production entry and probes `/__test`.
+- **Evidence:** `go test ./e2e -run TestF13` green against the server and the Worker. `appOptions` moved out of main.ts so the
+  gate on `ENV` is testable.
+- **Surprising:** a tool call on a dead run token answers HTTP 200 with the tool's `unauthorized` error (the adapter forwards the
+  route's answer); only the other methods answer a transport 401. `TEST_BEARER` set in production opens bearer-gated test routes
+  by design (server/src/app.ts), so "no /__test handler" holds when neither is set.
+- **Next:** F12.
+
 ## Server stack tripwires (watched from day one)
 - any claim.released{expired} earlier than last renewal + 60 s, in any environment
 - more than 10 min of unplanned downtime in a month
@@ -251,3 +276,5 @@ goes in the PR.
 Record a hit here with its date and evidence, and raise it to the coordinator.
 
 Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (raised in an earlier pod-core review).
+
+2026-11-08: pod-state server review follow-ups. A failed replay now ends the subscription; PUBLIC_URL empty or slash-ended builds correct links; the failed-tick test bounds retries; the startup refusal message is true; make e2e-a clears JM_E2E_SKIP; three doc lines corrected.

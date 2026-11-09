@@ -64,5 +64,24 @@ because there is no object to throw away. The three tests that need them are ski
 - The server is capped at 1,800 lines including tests (ADR 0001, `entropy.json`).
 - The core exports no read model, so the adapter derives `taskView` and `hello` itself (about 30 lines in `views.ts`). The Worker
   does the same.
-- Not served by the server: MCP (`/mcp`), the device flow, evidence, decisions and `ask` posts (stored as plain messages). The
-  Worker does not serve them either.
+- Not served by the server: the device flow, evidence, decisions and `ask` posts (stored as plain messages). The Worker does
+  not serve them either. Both adapters serve `POST /mcp`.
+
+## Deployed form (2026-11-08)
+
+The Cloudflare preview that CI once planned (F17) tested the Worker, which is no longer what ships. What ships is `server/`, so the
+per-PR check runs that: `make e2e-deployed` builds the release bundle (`bun build server/src/main.ts --target=bun`, with `pglite`
+left out because it is the local fallback only), and CI's `e2e-deployed` job runs it against a Postgres service container.
+
+- **Boot, by URL.** `make deployed-boot` starts the bundle as its own process with env config only, waits for `GET /healthz` and
+  drives it over HTTP. It refuses to start with no database. In the hosted shape (`DATABASE_URL` and `TEST_BEARER` set, `ENV`
+  unset) `/__test/*` without the bearer is 401 and there is no clock route. A user's pod is created and read through the real
+  routes and survives `kill -9` and a second start. A server that exits at boot (a wrong `DATABASE_URL`) or never answers fails the
+  job; nothing in it skips. With `DATABASE_URL` unset (a laptop with no Postgres) the same checks run in the local shape on the
+  in-process Postgres.
+- **The suite.** It then runs with the bundle as the server under test, each test starting and killing its own bundle process. It
+  cannot run against one already-running URL: the tests kill and restart the server, want fresh state each, and set a fake clock,
+  and a hosted build must not serve a clock route. So the suite boots the bundle with `ENV=local` and a throwaway schema
+  (`JM_PG_SCHEMA`), the one combination `startupRefusal` allows with a database, and the hosted shape is checked by `deployed-boot`
+  alone. The two checks together cover the deployed form; neither stands in for the other.
+- **Not covered.** A real hosted deploy needs a hosting target and spend, and is undecided (see "Hosting" above).

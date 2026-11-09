@@ -272,11 +272,29 @@ const SCAN_ENV_PINS = {
 };
 export const scanEnv = (env) => ({ ...Object.fromEntries(SCAN_ENV_KEEP.filter((k) => env[k] !== undefined).map((k) => [k, env[k]])), ...SCAN_ENV_PINS });
 // Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
+// A check NAME is judged by its latest run(s): a re-run (the same name started later, ties broken by the higher run id) supersedes an
+// earlier cancelled or failed one, because a re-run is how a cancelled suite is retried (#29 and #32, 11-08). Runs that tie on both
+// are all latest, so a bad one among them refuses. A run with no usable started_at (a cancelled run can lack one) cannot be placed in time,
+// so it is ALWAYS judged and never hidden by, or hiding, another run. A judged run still running (not completed, or no conclusion) refuses.
 const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
+const startedAt = (r) => Date.parse(r.started_at);
+const newer = (a, b) => startedAt(a) - startedAt(b) || (Number(a.id) || 0) - (Number(b.id) || 0);
+function latestPerName(runs) {
+  const best = new Map();
+  for (const r of runs.filter((x) => !Number.isNaN(startedAt(x)))) {
+    const key = String(r.name), cur = best.get(key);
+    if (!cur || newer(r, cur[0]) > 0) best.set(key, [r]);
+    else if (newer(r, cur[0]) === 0) cur.push(r);
+  }
+  return [...best.values()].flat().concat(runs.filter((x) => Number.isNaN(startedAt(x))));
+}
+const running = (r) => r.conclusion == null || (r.status !== undefined && r.status !== 'completed');
 export function checkRuns(runs, total = runs.length) {
   if (total > runs.length) return { ok: false, reason: `${total} check runs on the head; cannot read them all` };
-  const bad = runs.filter((r) => BAD_CONCLUSION.includes(r.conclusion));
-  return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${stripControls(String(r.name))} (${r.conclusion})`).join(', ')}` } : { ok: true };
+  const judged = latestPerName(runs), bad = judged.filter((r) => BAD_CONCLUSION.includes(r.conclusion)), wait = judged.filter(running);
+  const nm = (r) => stripControls(String(r.name));
+  if (wait.length) return { ok: false, reason: `check run still running on the head: ${wait.map((r) => `${nm(r)} still running`).join(', ')}` };
+  return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${nm(r)} (${r.conclusion})`).join(', ')}` } : { ok: true };
 }
 // The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere, and then only at the PR head), because
 // the scripts in this tree run before the trust gate decides. mainTip null: before the fetch, HEAD is compared later. Credentials in the
@@ -298,6 +316,42 @@ export function checkCheckout({ head, mainTip, prHead = null, porcelain, remoteV
 export function mergeTree(run, mainTip, head) {
   try { return run(['merge-tree', '--write-tree', mainTip, head]).split('\n')[0].trim(); } catch { throw new Error(`${head.slice(0, 8)} does not merge cleanly into main ${mainTip.slice(0, 8)}`); }
 }
+// Skipping the local preflight (docs/development/landing.md, "Reading CI instead of the preflight"). Only when CI already ran the same gates on a ref whose tree
+// IS the merge result the decision computed, every check the branch rules require concluded success, and each such run was made by the Actions app. Anything
+// else, or anything unreadable, is no proof: the caller runs the preflight as before. requiredChecks takes the branch rules (an array of rule objects) and,
+// when they name none, classic protection ({ contexts, checks }); the list never comes from the PR.
+export function requiredChecks({ rules = [], protection = null }) {
+  const names = new Set();
+  for (const r of rules) if (r?.type === 'required_status_checks') for (const c of r.parameters?.required_status_checks ?? []) if (typeof c?.context === 'string') names.add(c.context);
+  if (!names.size && protection) for (const c of [...(protection.contexts ?? []), ...(protection.checks ?? []).map((k) => k?.context)]) if (typeof c === 'string') names.add(c);
+  return names.size ? [...names] : null;
+}
+// runs: [{ name, status, conclusion, app }] where app is the app slug, read from the check runs on the land commit. Only runs made by the GitHub
+// Actions app count; a same-named run from another app or a user is ignored (it can neither prove nor veto). The answer carries `kind` when it is
+// not ok: 'wait' (a required check has no run yet or is still running: poll again), 'red' (an Actions run of a required name completed without
+// success, a skipped one included: it will not turn green), 'tree' (the commit's tree is not the merge result: refuse), 'unread' (the list is
+// incomplete or unreadable: no proof). A red anywhere wins over a wait elsewhere, so a failure ends the poll at once.
+export function ciProof({ required, tree, ciTree, runs, total = runs?.length }) {
+  const no = (kind, reason) => ({ ok: false, kind, reason: stripControls(reason) });
+  if (!Array.isArray(required) || !required.length) return no('unread', 'the required checks could not be read from the branch rules');
+  if (!/^[0-9a-f]{40}$/.test(String(ciTree)) || ciTree !== tree) return no('tree', `CI's land commit (tree ${String(ciTree).slice(0, 8)}) is not the merge result (tree ${String(tree).slice(0, 8)})`);
+  if (!Array.isArray(runs) || total > runs.length) return no('unread', 'the check runs on the land commit could not all be read');
+  let waiting = null;
+  for (const name of required) {
+    const mine = runs.filter((r) => r.name === name && r.app === 'github-actions');
+    const bad = mine.find((r) => r.status === 'completed' && r.conclusion !== 'success');
+    if (bad) return no('red', `required check ${name} did not succeed on the land commit (${bad.conclusion ?? 'no conclusion'})`);
+    if (!mine.length) waiting ??= `required check ${name} has no run on the land commit yet`;
+    else if (mine.some((r) => r.status !== 'completed')) waiting ??= `required check ${name} is still running`;
+  }
+  if (waiting) return no('wait', waiting);
+  return { ok: true, note: `CI proved merge tree ${tree.slice(0, 8)}` };
+}
+// Land's own ref for a PR: refs/heads/land/<n>, n digits only. Every push land makes (create, overwrite, delete) names a ref built here.
+export const landRef = (n) => {
+  if (!/^\d+$/.test(String(n))) throw new Error(`not a PR number: ${n}`);
+  return `refs/heads/land/${Number(n)}`;
+};
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.
 export const stripControls = (text) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g, '');

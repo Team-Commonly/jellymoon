@@ -32,7 +32,7 @@ func spawn(t *testing.T, bin string, env []string, args ...string) *dproc {
 		t.Fatalf("cannot start %s %v: %v", bin, args, err)
 	}
 	go func() { _ = p.cmd.Wait(); close(p.done) }()
-	t.Cleanup(p.kill)
+	t.Cleanup(p.stop)
 	return p
 }
 
@@ -157,8 +157,6 @@ func waitComputer(cfg string) (sc storedComputer, fi os.FileInfo, err error) {
 	return
 }
 
-var secretShape = regexp.MustCompile(`jm[ucr]_[A-Za-z0-9]{10}`)
-
 // groupArgv is the command line of every process in the group, as `ps` reports it: what any user on the host can read.
 func groupArgv(pgid int) string {
 	out, _ := exec.Command("ps", "-ww", "-axo", "pgid=,args=").Output()
@@ -169,26 +167,6 @@ func groupArgv(pgid int) string {
 		}
 	}
 	return strings.Join(mine, "\n")
-}
-
-// leaks lists every place a token shows: the captured output of each process and the argv seen while the daemon ran.
-func leaks(procs map[string]*dproc, argv string, secrets ...string) []string {
-	var hits []string
-	check := func(where, text string) {
-		for _, s := range secrets {
-			if strings.Contains(text, s) {
-				hits = append(hits, where+" holds a full token")
-			}
-		}
-		if m := secretShape.FindString(text); m != "" {
-			hits = append(hits, where+" holds a token-shaped string "+m)
-		}
-	}
-	for name, p := range procs {
-		check(name+" output", p.text())
-	}
-	check("argv", argv)
-	return hits
 }
 
 // f08 is the test's state: one server, a pod with two members watching it, and the daemon's config dir.
@@ -212,21 +190,32 @@ type f08 struct {
 }
 
 func newF08(t *testing.T) *f08 {
+	f := newF08Bare(t)
+	f.owner, f.ben = mustUser(t, f.c, "olivia"), mustUser(t, f.c, "ben")
+	f.joinPod()
+	return f
+}
+
+// newF08Bare is the server, the daemon build and the config dir, with nobody signed in and no pod.
+func newF08Bare(t *testing.T) *f08 {
 	f := &f08{t: t, bin: buildDaemon(t), srv: startServer(t), clock: fakeBase, procs: map[string]*dproc{}}
 	f.c = newClient(t, f.srv.base())
 	f.cfg = filepath.Join(t.TempDir(), "jm") // the daemon creates it
 	f.env = []string{"JELLYMOON_HOME=" + f.cfg, "JELLYMOON_SERVER=" + f.srv.base()}
 	f.setClock(f.clock)
-	f.owner, f.ben = mustUser(t, f.c, "olivia"), mustUser(t, f.c, "ben")
+	return f
+}
+
+// joinPod has the owner create the pod, invite ben, ben accept, and both open the pod's WebSocket.
+func (f *f08) joinPod() {
 	var pod, inv struct{ ID, Code string }
 	if r := f.c.do("POST", "/v1/pods", f.owner.tok, map[string]any{"name": "presence"}, &pod); !r.ok() {
-		t.Fatalf("POST /v1/pods: HTTP %d", r.Status)
+		f.t.Fatalf("POST /v1/pods: HTTP %d", r.Status)
 	}
 	f.pod = pod.ID
 	f.c.do("POST", "/v1/pods/"+f.pod+"/invites", f.owner.tok, map[string]any{"maxUses": 1}, &inv)
 	f.c.do("POST", "/v1/invites/"+inv.Code+"/accept", f.ben.tok, nil, nil)
-	f.obs = []*sock{openAs(t, f.srv, f.pod, f.owner), openAs(t, f.srv, f.pod, f.ben)}
-	return f
+	f.obs = []*sock{openAs(f.t, f.srv, f.pod, f.owner), openAs(f.t, f.srv, f.pod, f.ben)}
 }
 
 func (f *f08) setClock(now int64) {
@@ -333,7 +322,8 @@ func (f *f08) goesOfflineWhenKilled() error {
 }
 
 func (f *f08) leaksNothing() error {
-	if hits := leaks(f.procs, f.argv, f.owner.tok, f.comp.Token); len(hits) > 0 {
+	hits := append(leaks(f.procs, f.argv, f.owner.tok, f.comp.Token), fileLeaks(f.cfg, "computer.json", f.owner.tok, f.comp.Token)...)
+	if len(hits) > 0 {
 		return fmt.Errorf("%s", strings.Join(hits, "; "))
 	}
 	return nil

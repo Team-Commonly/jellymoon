@@ -17,7 +17,7 @@ const early = (r, o = {}) => checkEarlierReview(r, { pr: 5, head: HEAD, range: R
 
 // REST review as the API gives it (the subset land reads), GraphQL thread as reviewThreads gives it.
 const review = (o = {}) => ({ user: { login: 'coderabbitai[bot]', type: 'Bot' }, commit_id: HEAD, state: 'COMMENTED', ...o });
-const rev = (list, head = HEAD) => checkReviews(list, head);
+const rev = (list, head = HEAD, comments) => checkReviews(list, head, comments);
 const BOT = { __typename: 'Bot', login: 'coderabbitai' };
 const user = (login) => ({ __typename: 'User', login });
 const comment = (author, body) => ({ author, body });
@@ -27,9 +27,43 @@ const MINOR = '_⚠️ Potential issue_ | _🟡 Minor_\n\nA wording problem.';
 const thr = (list) => checkThreads(list, TRUSTED);
 const info = (sha, author = 'maintainer-a', committer = 'maintainer-a') => ({ sha, author: { login: author }, committer: { login: committer } });
 const cmt = (infos, range = RANGE) => checkCommits(range, infos, TRUSTED);
-const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED };
+const good = { rows, pr: 5, head: HEAD, range: RANGE, reviews: [review()], comments: [], threads: [], infos: RANGE.map((s) => info(s)), trusted: TRUSTED };
 const all = (o = {}) => checkCodeRabbit({ ...good, ...o });
 const gql = (nodes, next = null) => ({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: !!next, endCursor: next }, nodes } } } } });
+// Trimmed copy of CodeRabbit's summary comment on PR 13 (issue comment 6725328362) at its head: the two header lines, the status block, the
+// walkthrough delimiters and the risk block, with the walkthrough, tips and checks cut out.
+const PR13_HEAD = 'd5ca009199e228676ad54fff308ad586814f0cce';
+const PR13_SUMMARY = "<!-- coderabbit-ai-generated:v1 -->\n\n<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n<!-- recent_review_status_start -->\n\nNo actionable comments were generated in the recent review.\n\n<!-- recent_review_status_end -->\n<!-- walkthrough_start -->\n<!-- change_assessment_commit:\"d5ca009199e228676ad54fff308ad586814f0cce\" -->\n<!-- walkthrough_end -->\n<!-- final_review_risk_start -->\n<!-- final_review_risk_label\n**Merge Risk:** **⚪ Minimal** · up to `d5ca0`\n-->\n<!-- final_review_risk_coverage:{\"sourceCommitId\":\"d5ca009199e228676ad54fff308ad586814f0cce\",\"coveredCommitId\":\"d5ca009199e228676ad54fff308ad586814f0cce\",\"kind\":\"reviewed\"} -->\n\nThe documented corrections appear in the reviewed change, and no actionable merge-blocking issue remains in the supplied evidence.\n<!-- final_review_risk_end -->\n";
+const LINE = 'No actionable comments were generated in the recent review.';
+const GEN = '<!-- coderabbit-ai-generated:v1 -->\n\n<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n';
+const marker = (o = {}) => `<!-- final_review_risk_coverage:${JSON.stringify({ sourceCommitId: HEAD, coveredCommitId: HEAD, kind: 'reviewed', ...o })} -->`;
+const BOTU = { login: 'coderabbitai[bot]', type: 'Bot' };
+const HUMAN = { login: 'maintainer-a', type: 'User' };
+// A summary body in CodeRabbit's layout: header, status block, walkthrough, risk block. Each part can be replaced.
+const layout = ({ head = GEN, status = LINE, walk = 'files changed', risk = marker(), order = 'normal' } = {}) => {
+  const st = `<!-- recent_review_status_start -->\n\n${status}\n\n<!-- recent_review_status_end -->\n`;
+  const wk = `<!-- walkthrough_start -->\n${walk}\n<!-- walkthrough_end -->\n`;
+  const rk = `<!-- final_review_risk_start -->\n${risk}\n\nsome text\n<!-- final_review_risk_end -->\n`;
+  return head + (order === 'status-late' ? wk + st + rk : st + wk + rk);
+};
+const sum = (o = {}) => ({ id: 1, user: BOTU, body: layout(), ...o });
+const withLayout = (l, o = {}) => sum({ body: layout(l), ...o });
+const reply = (text, o = {}) => ({ id: 9, user: BOTU, body: `<!-- coderabbit-ai-generated:v1 -->\n\n<!-- This is an auto-generated reply by CodeRabbit -->\n${text}\n`, ...o });
+const cmts = (list, reviews = [], head = HEAD) => checkReviews(reviews, head, list);
+// Trimmed copy of CodeRabbit's summary comment on PR 30 (issue comment 6727814247), in the format CodeRabbit moved to: no status block; the markers
+// run review_stack_entry, walkthrough (change_assessment inside), final_review_risk, pre_merge_checks_walkthrough, tips. Its text is cut to
+// placeholders. The marker covers an older head than the PR's (PR30_HEAD), the usual case once a PR is pushed again.
+const PR30_HEAD = '0439187fb040eb6bffd5c654fc0516d0e8459ff7';
+const PR30_COVERED = 'aa871e3a8301bd475d190dd74da2264c04beed80';
+const newShape = ({ risk = `<!-- final_review_risk_coverage:{"sourceCommitId":"${PR30_COVERED}","coveredCommitId":"${PR30_COVERED}","kind":"reviewed"} -->`, head = GEN } = {}) => head
+  + '<!-- review_stack_entry_start -->\n\n<a href="https://example.test/change-stack">Review stack</a>\n\n<!-- review_stack_entry_end -->\n'
+  + '<!-- walkthrough_start -->\n\n<details>\n<summary>Walkthrough</summary>\nplaceholder text\n'
+  + `<!-- change_assessment_start -->\n<!-- change_assessment_commit:"${PR30_COVERED}" -->\n<!-- change_assessment_priority:{"version":1,"urgency":"p1","manual":false} -->\nplaceholder\n<!-- change_assessment_end -->\n`
+  + '</details>\n<!-- walkthrough_end -->\n'
+  + `<!-- final_review_risk_start -->\n<!-- final_review_risk_label\n**Merge Risk:** **Low** · up to \`aa871\`\n-->\n${risk}\n\nplaceholder text\n<!-- final_review_risk_end -->\n`
+  + '<!-- pre_merge_checks_walkthrough_start -->\nplaceholder\n<!-- pre_merge_checks_walkthrough_end -->\n<!-- tips_start -->\nplaceholder\n<!-- tips_end -->\n';
+const PR30_SUMMARY = newShape();
+const pr30 = (list = [{ user: BOTU, body: PR30_SUMMARY }], reviews = [], head = PR30_HEAD) => checkReviews(reviews, head, list);
 const throws = (f) => { try { f(); return false; } catch { return true; } };
 
 const cases = [
@@ -67,6 +101,57 @@ const cases = [
   ['c: a review with no commit_id refuses the whole read', rev([review(), { user: { login: 'coderabbitai[bot]', type: 'Bot' }, state: 'COMMENTED' }]).ok, false],
   ['c: a reply that is not a list refuses', rev({ message: 'rate limited' }).ok, false],
   ['c: the head compares case-insensitively', rev([review({ commit_id: HEAD.toUpperCase() })]).ok, true],
+  // (c') a clean incremental review files no review; CodeRabbit's summary comment carries the proof
+  ['c2: the PR 13 summary comment (real shape) satisfies (c) with no review at the head', checkReviews([], PR13_HEAD, [{ user: BOTU, body: PR13_SUMMARY }]).ok, true],
+  ['c2: the result says which way (c) was met', [checkReviews([review()], HEAD, []).via, cmts([sum()]).via].join(), 'review,summary'],
+  ['c2: a good summary passes through checkCodeRabbit with no review, and the note names the way', all({ reviews: [], comments: [sum()] }).note, `coderabbit at ${HEAD.slice(0, 8)} (summary comment), after the review at ${OLD.slice(0, 8)}`],
+  ['c2: the marker covers another commit: a gap, passes with no wait', cmts([withLayout({ risk: marker({ sourceCommitId: OLD, coveredCommitId: OLD }) })]).via, 'gap'],
+  ['c2: source equals the head but covered is another commit: a gap', cmts([withLayout({ risk: marker({ coveredCommitId: OLD }) })]).via, 'gap'],
+  ['c2: covered equals the head but source is another commit: a gap', cmts([withLayout({ risk: marker({ sourceCommitId: OLD }) })]).via, 'gap'],
+  ['c2: kind other than reviewed is a gap: nothing was reviewed at this head', cmts([withLayout({ risk: marker({ kind: 'skipped' }) })]).via, 'gap'],
+  ['c2: the same comment by a User (a human quoting it) is no CodeRabbit comment: a gap, never a summary', cmts([sum({ user: HUMAN })]).via, 'gap'],
+  ['c2: a User with the bot login does not count as a summary', cmts([sum({ user: { login: 'coderabbitai[bot]', type: 'User' } })]).via, 'gap'],
+  ['c2: the same comment by another Bot (github-actions[bot]) does not count as a summary', cmts([sum({ user: { login: 'github-actions[bot]', type: 'Bot' } })]).via, 'gap'],
+  ['c2: another Bot\'s copy beside no CodeRabbit comment is a gap, and beside the real summary is ignored', [cmts([sum({ user: { login: 'github-actions[bot]', type: 'Bot' } })]).via, cmts([sum(), sum({ id: 2, user: { login: 'github-actions[bot]', type: 'Bot' } })]).via].join(), 'gap,summary'],
+  ['c2: a not-clean status line (comments posted) at the head passes: the one review already happened', cmts([withLayout({ status: 'Actionable comments posted: 2' })]).via, 'summary'],
+  ['c2: the status line only inside an HTML comment is not clean, and passes', cmts([withLayout({ status: `<!-- ${LINE} -->` })]).via, 'summary'],
+  ['c2: the status line inside a multi-line HTML comment is not clean, and passes', cmts([withLayout({ status: `<!--\n${LINE}\n-->` })]).via, 'summary'],
+  ['c2: a status line that is not a line of its own is not clean, and passes', cmts([withLayout({ status: `Note: ${LINE} (not really)` })]).via, 'summary'],
+  ['c2: two markers in the risk block name the marker count', [cmts([withLayout({ risk: `${marker()}\n${marker()}` })]).ok, /2 coverage markers/.test(cmts([withLayout({ risk: `${marker()}\n${marker()}` })]).reason)].join(), 'false,true'],
+  ['c2: malformed JSON in the marker', cmts([withLayout({ risk: '<!-- final_review_risk_coverage:{"sourceCommitId": -->' })]).ok, false],
+  ['c2: a marker that is JSON but not an object', cmts([withLayout({ risk: `<!-- final_review_risk_coverage:"${HEAD}" -->` })]).ok, false],
+  ['c2: a duplicate key in the marker refuses (the last key would win)', cmts([withLayout({ risk: `<!-- final_review_risk_coverage:{"sourceCommitId":"${HEAD}","coveredCommitId":"${HEAD}","kind":"skipped","kind":"reviewed"} -->` })]).ok, false],
+  ['c2: the comments reply is not an array', [cmts({ message: 'rate limited' }).ok, cmts(undefined).ok, cmts(null).ok].join(), 'false,false,false'],
+  ['c2: a comment that is not an object refuses', cmts([sum(), null]).ok, false],
+  ['c2: a CHANGES_REQUESTED review at the head refuses beside a good marker', cmts([sum()], [review({ state: 'CHANGES_REQUESTED' })]).ok, false],
+  ['c2: a CHANGES_REQUESTED review at another head does not block', cmts([sum()], [review({ state: 'CHANGES_REQUESTED', commit_id: OLD })]).ok, true],
+  ['c2: ids compare case-insensitively', cmts([withLayout({ risk: marker({ sourceCommitId: HEAD.toUpperCase(), coveredCommitId: HEAD.toUpperCase() }) })]).ok, true],
+  ['c2: ids that are not 40 hex refuse', cmts([withLayout({ risk: marker({ sourceCommitId: HEAD.slice(0, 8), coveredCommitId: HEAD.slice(0, 8) }) })], [], HEAD.slice(0, 8)).ok, false],
+  ['c2: a submitted review at the head still satisfies (c) with no comments read', checkReviews([review()], HEAD, undefined).ok, true],
+  ['c2: the reason names a missing marker', /marker/.test(cmts([withLayout({ risk: 'none' })]).reason), true],
+  ['c2: a bad review list still refuses even with a good comment', checkReviews({ message: 'x' }, HEAD, [sum()]).ok, false],
+  ['c2: d and e still run on the summary path', [all({ reviews: [], comments: [sum()], threads: [thread([comment(BOT, MAJOR)])] }).ok, all({ reviews: [], comments: [sum()], infos: [info(OLD), info(HEAD, 'mallory')] }).ok].join(), 'false,false'],
+  ['c2: a is still required on the summary path', all({ reviews: [], comments: [sum()], rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }).ok, false],
+  // (c') only the summary comment, and only its own blocks, is trusted (echoes of steered text must not count)
+  ['c3: a reply comment holding marker and line beside an unmarked summary refuses', cmts([withLayout({ risk: 'no marker yet' }), reply(`${LINE}\n${marker()}`)]).ok, false],
+  ['c3: a reply holding the marker refuses outright, even beside a good summary', cmts([sum(), reply(marker())]).ok, false],
+  ['c3: a reply holding the marker refuses with no summary at all', cmts([reply(`${LINE}\n${marker()}`)]).ok, false],
+  ['c3: a rate-limited summary echoing marker and line is a gap, not a review: passes with no wait', cmts([withLayout({ head: `${GEN}<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->\n` })]).via, 'gap'],
+  ['c3: a skip-review summary echoing marker and line is a gap: passes', cmts([withLayout({ head: `${GEN}<!-- This is an auto-generated comment: skip review by coderabbit.ai -->\n` })]).via, 'gap'],
+  ['c3: marker and line inside a code fence refuse (the status block is there, the marker is not)', cmts([withLayout({ status: '```\n' + LINE + '\n```', risk: '```\n' + marker() + '\n```' })]).ok, false],
+  ['c3: marker in the walkthrough, none in the risk block, refuses', cmts([withLayout({ walk: marker(), risk: 'nothing' })]).ok, false],
+  ['c3: the line in the walkthrough, a different line in the status block: not clean, passes', cmts([withLayout({ walk: LINE, status: 'Actionable comments posted: 1' })]).via, 'summary'],
+  ['c3: a marker echoed in the walkthrough beside the real one refuses (two markers in the comment)', cmts([withLayout({ walk: marker() })]).ok, false],
+  ['c3: two summary comments refuse', cmts([sum(), sum({ id: 2 })]).ok, false],
+  ['c3: the status block after the walkthrough start cannot be parsed: a gap, never a summary', cmts([sum({ body: layout({ order: 'status-late' }) })]).via, 'gap'],
+  ['c3: a body without the generated header refuses', cmts([withLayout({ head: '' })]).ok, false],
+  ['c3: a body with the generated line but not the summarize header refuses', cmts([withLayout({ head: '<!-- coderabbit-ai-generated:v1 -->\n' })]).ok, false],
+  ['c3: leading whitespace before the generated line is allowed', cmts([withLayout({ head: `\n  ${GEN}` })]).ok, true],
+  ['c3: a repeated block delimiter (an echoed fake block) refuses', cmts([sum({ body: layout() + '<!-- final_review_risk_start -->\n' + marker() + '\n<!-- final_review_risk_end -->\n' })]).ok, false],
+  ['c3: each walkthrough or risk delimiter appearing twice refuses, even with no second marker', ['<!-- walkthrough_start -->', '<!-- final_review_risk_start -->', '<!-- final_review_risk_end -->'].map((d) => cmts([sum({ body: layout() + d + '\n' })]).ok).join(), 'false,false,false'],
+  ['c3: a status delimiter appearing twice makes the status block unreadable: a gap, never a summary', ['<!-- recent_review_status_start -->', '<!-- recent_review_status_end -->'].map((d) => cmts([sum({ body: layout() + d + '\n' })]).via).join(), 'gap,gap'],
+  ['c3: a risk block before the walkthrough refuses', cmts([sum({ body: GEN + '<!-- recent_review_status_start -->\n' + LINE + '\n<!-- recent_review_status_end -->\n<!-- final_review_risk_start -->\n' + marker() + '\n<!-- final_review_risk_end -->\n<!-- walkthrough_start -->\nx\n<!-- walkthrough_end -->\n' })]).ok, false],
+  ['c3: an unmarked CodeRabbit reply beside the real summary is ignored', cmts([sum(), reply('Review rate limited.')]).ok, true],
   // (d) severity and threads
   ['d: severity: Major and Critical are major', [MAJOR, '_⚠️ Potential issue_ | _🔴 Critical_\n\nx'].map(severityOf).join(), 'major,major'],
   ['d: severity: Minor, Trivial and Nitpick are low', [MINOR, '_🧹 Nitpick_ | _🔵 Trivial_\n\nx', '_🛠️ Refactor suggestion_ | _🟡 Minor_'].map(severityOf).join(), 'low,low,low'],
@@ -102,9 +187,48 @@ const cases = [
   ['e: a commit read under another sha does not stand in for it', cmt([info(OLD), info(FIX)]).ok, false],
   ['e: logins compare case-insensitively', cmt(RANGE.map((s) => info(s, 'Maintainer-A', 'MAINTAINER-B'))).ok, true],
   ['e: an empty range or a non-list refuses', [cmt([], []).ok, cmt(null).ok].join(), 'false,false'],
+  // LCR3R: the gap shapes pass at once with no ask and no clock; the land note makes them countable
+  ['r: no review and no comments at all is a gap, passes with no ask', rev([], HEAD, []).via, 'gap'],
+  ['r: no review and no CodeRabbit comment among the comments is a gap', rev([], HEAD, [{ user: HUMAN, body: 'looks fine' }]).via, 'gap'],
+  ['r: a gap passes through checkCodeRabbit with no ask, and the note says no CodeRabbit review at this head', all({ reviews: [], comments: [] }).note, `coderabbit at ${HEAD.slice(0, 8)} (no CodeRabbit review at this head), after the review at ${OLD.slice(0, 8)}`],
+  ['r: a rate-limited summary passes through checkCodeRabbit with the same note', /no CodeRabbit review at this head/.test(all({ reviews: [], comments: [withLayout({ head: `${GEN}<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->\n` })] }).note), true],
+  ['r: a summary whose marker covers another commit passes with the same note', /no CodeRabbit review at this head/.test(all({ reviews: [], comments: [withLayout({ risk: marker({ sourceCommitId: OLD, coveredCommitId: OLD }) })] }).note), true],
+  ['r: a not-clean summary at the head with no unanswered Major lands, and the note is the summary way', all({ reviews: [], comments: [withLayout({ status: 'Actionable comments posted: 2' })] }).note, `coderabbit at ${HEAD.slice(0, 8)} (summary comment), after the review at ${OLD.slice(0, 8)}`],
+  ['r: a not-clean summary at the head beside an unanswered Major thread refuses', all({ reviews: [], comments: [withLayout({ status: 'Actionable comments posted: 1' })], threads: [thread([comment(BOT, MAJOR)])] }).ok, false],
+  ['r: a gap beside an unanswered Major thread refuses', all({ reviews: [], comments: [], threads: [thread([comment(BOT, MAJOR)])] }).ok, false],
+  ['r: a gap beside an unanswered Critical thread refuses', all({ reviews: [], comments: [], threads: [thread([comment(BOT, '_⚠️ Potential issue_ | _🔴 Critical_')])] }).ok, false],
+  ['r: a gap beside a Major thread a trusted login answered lands', all({ reviews: [], comments: [], threads: [thread([comment(BOT, MAJOR), comment(user('maintainer-a'), 'fixed in abc')])] }).ok, true],
+  ['r: CHANGES_REQUESTED at the head refuses with no comments, with a gap, and with a clean summary', [all({ reviews: [review({ state: 'CHANGES_REQUESTED' })], comments: [] }).ok, all({ reviews: [review({ state: 'CHANGES_REQUESTED' })], comments: undefined }).ok, all({ reviews: [review({ state: 'CHANGES_REQUESTED' })], comments: [sum()] }).ok].join(), 'false,false,false'],
+  ['r: CHANGES_REQUESTED at the head is not a gap', rev([review({ state: 'CHANGES_REQUESTED' })], HEAD, []).via, undefined],
+  ['r: a failed comments read (null, undefined, not a list) refuses', [all({ reviews: [], comments: null }).ok, all({ reviews: [], comments: undefined }).ok, all({ reviews: [], comments: { message: 'rate limited' } }).ok].join(), 'false,false,false'],
+  ['r: a failed comments read is not a gap', rev([], HEAD, null).via, undefined],
+  ['r: a reviews reply that is not a list refuses even with no comments', all({ reviews: { message: 'x' }, comments: [] }).ok, false],
+  ['r: two summaries still refuse', rev([], HEAD, [sum(), sum({ id: 2 })]).ok, false],
+  ['r: a marker in a reply still refuses beside a gap-shaped summary', rev([], HEAD, [withLayout({ head: `${GEN}<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->\n` }), reply(marker())]).ok, false],
+  ['r: a malformed marker still refuses', rev([], HEAD, [withLayout({ risk: '<!-- final_review_risk_coverage:{"sourceCommitId": -->' })]).ok, false],
+  ['r: a repeated-key marker still refuses', rev([], HEAD, [withLayout({ risk: `<!-- final_review_risk_coverage:{"sourceCommitId":"${HEAD}","coveredCommitId":"${HEAD}","kind":"skipped","kind":"reviewed"} -->` })]).ok, false],
+  ['r: a gap does not excuse (a) or (e): a missing earlier review and an untrusted commit still refuse', [all({ reviews: [], comments: [], rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }).ok, all({ reviews: [], comments: [], infos: [info(OLD), info(HEAD, 'mallory')] }).ok].join(), 'false,false'],
+  // LCR4: CodeRabbit's summary lost its status block (PR 30). A summary that cannot tell us about this head is a gap, not a refusal
+  ['n: the PR 30 summary shape (no status block, marker covers an older head) is a gap', pr30().via, 'gap'],
+  ['n: the PR 30 shape passes through checkCodeRabbit with the no-review note', all({ head: PR30_HEAD, range: [OLD, PR30_HEAD], infos: [info(OLD), info(PR30_HEAD)], reviews: [], comments: [{ user: BOTU, body: PR30_SUMMARY }] }).note, `coderabbit at ${PR30_HEAD.slice(0, 8)} (no CodeRabbit review at this head), after the review at ${OLD.slice(0, 8)}`],
+  ['n: the PR 30 shape, a review at the older head only, is still a gap at the new head', pr30(undefined, [review({ commit_id: PR30_COVERED })]).via, 'gap'],
+  ['n: the PR 30 shape plus CHANGES_REQUESTED at the head refuses', pr30(undefined, [review({ state: 'CHANGES_REQUESTED', commit_id: PR30_HEAD })]).ok, false],
+  ['n: the PR 30 shape plus an unanswered Major thread refuses', all({ reviews: [], comments: [{ user: BOTU, body: PR30_SUMMARY }], threads: [thread([comment(BOT, MAJOR)])] }).ok, false],
+  ['n: the PR 30 shape plus a Major thread a trusted login answered lands', all({ reviews: [], comments: [{ user: BOTU, body: PR30_SUMMARY }], threads: [thread([comment(BOT, MAJOR), comment(user('maintainer-a'), 'fixed in abc')])] }).ok, true],
+  ['n: the PR 30 shape with kind skipped is a gap', pr30([{ user: BOTU, body: newShape({ risk: `<!-- final_review_risk_coverage:{"sourceCommitId":"${PR30_HEAD}","coveredCommitId":"${PR30_HEAD}","kind":"skipped"} -->` }) }]).via, 'gap'],
+  ['n: the PR 30 shape whose marker covers the head itself is still a gap: with no status block there is nothing to read it against', pr30([{ user: BOTU, body: newShape({ risk: `<!-- final_review_risk_coverage:{"sourceCommitId":"${PR30_HEAD}","coveredCommitId":"${PR30_HEAD}","kind":"reviewed"} -->` }) }]).via, 'gap'],
+  ['n: a non-bot comment holding the PR 30 shape is ignored and can never make the head pass as a summary', [pr30([{ user: HUMAN, body: PR30_SUMMARY }]).via, pr30([{ user: { login: 'github-actions[bot]', type: 'Bot' }, body: PR30_SUMMARY }]).via].join(), 'gap,gap'],
+  ['n: two bot summaries in the PR 30 shape refuse', pr30([{ user: BOTU, body: PR30_SUMMARY }, { id: 2, user: BOTU, body: PR30_SUMMARY }]).ok, false],
+  ['n: a CodeRabbit reply holding the marker refuses beside the PR 30 shape', pr30([{ user: BOTU, body: PR30_SUMMARY }, reply(marker())]).ok, false],
+  ['n: the PR 30 shape with its walkthrough or risk block missing, and no status block, is a gap', [newShape().replace('<!-- walkthrough_start -->', ''), newShape().replace('<!-- final_review_risk_end -->', '')].map((b) => pr30([{ user: BOTU, body: b }]).via).join(), 'gap,gap'],
+  ['n: the PR 30 shape with two markers, or a bad marker, and no status block, is a gap (nothing to forge)', [newShape({ risk: marker() + marker() }), newShape({ risk: '<!-- final_review_risk_coverage:{"sourceCommitId": -->' })].map((b) => pr30([{ user: BOTU, body: b }]).via).join(), 'gap,gap'],
+  ['n: a status block that cannot be parsed (only its start delimiter) is a gap', cmts([sum({ body: layout().replace('<!-- recent_review_status_end -->\n', '') })]).via, 'gap'],
+  ['n: the old well-formed clean summary keeps passing as a summary', [cmts([sum()]).via, checkReviews([], PR13_HEAD, [{ user: BOTU, body: PR13_SUMMARY }]).via].join(), 'summary,summary'],
+  ['n: a well-formed status block with a marker that is not valid JSON still refuses', cmts([withLayout({ risk: '<!-- final_review_risk_coverage:{"sourceCommitId": -->' })]).ok, false],
+  ['n: a gap shape does not excuse a failed reviews read', checkReviews({ message: 'x' }, PR30_HEAD, [{ user: BOTU, body: PR30_SUMMARY }]).ok, false],
   // all together
   ['all: a clean head passes and the note names the path and both heads', all().note, `coderabbit at ${HEAD.slice(0, 8)}, after the review at ${OLD.slice(0, 8)}`],
-  ['all: each of a, c, d, e failing alone refuses', [all({ rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }), all({ reviews: [review({ commit_id: OLD })] }), all({ threads: [thread([comment(BOT, MAJOR)])] }), all({ infos: [info(OLD), info(HEAD, 'mallory')] })].map((c) => c.ok).join(), 'false,false,false,false'],
+  ['all: each of a, c, d, e failing alone refuses', [all({ rows: ledger(row(HEAD, 'PASS', 'coderabbit')) }), all({ reviews: [review({ state: 'CHANGES_REQUESTED' })] }), all({ threads: [thread([comment(BOT, MAJOR)])] }), all({ infos: [info(OLD), info(HEAD, 'mallory')] })].map((c) => c.ok).join(), 'false,false,false,false'],
   ['all: a commit from main (not in main..head) is never read', all({ range: [OLD, HEAD], infos: [info(OLD), info(HEAD), info(MAIN_C, 'mallory')] }).ok, true],
 ];
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);

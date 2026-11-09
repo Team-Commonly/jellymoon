@@ -161,7 +161,7 @@
         "the agent calls jm_task_update done and members receive task.updated done"
       ],
       "test": "go test ./e2e -run TestF12",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F13",
@@ -175,7 +175,7 @@
         "a pod owner stops a live run; the daemon receives run.stop, the run ends cancelled, and its jmr_ gets unauthorized at once"
       ],
       "test": "go test ./e2e -run TestF13",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F14",
@@ -215,36 +215,49 @@
         "one operator walks the slice by hand with real Claude Code and the result is noted in progress.md"
       ],
       "test": "go test ./daemon/... -run TestReplayClaude",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F17",
       "category": "preview",
-      "description": "Every PR deploys a Workers preview and F14 passes against it",
+      "description": "Every PR boots the server as a self-hoster runs it, from the PR's own build, and the contract suite passes against it",
       "steps": [
-        "the preview job deploys the PR to its own preview with its own DO namespace and the preview D1",
-        "COMMONLY_URL=<preview> go test ./e2e -run TestF14 passes"
+        "the e2e-deployed job builds the server bundle and boots it as its own process on a Postgres service container, with env config only (make deployed-boot)",
+        "deployed-boot refuses a server with no database, finds the test routes closed in the hosted shape, serves a pod through the real routes and keeps it across kill -9",
+        "the contract suite, TestF14Budget included, passes with that bundle as the server under test (make e2e-deployed); a server that fails to boot fails the job"
       ],
-      "test": "CI job e2e-preview",
-      "blockedBy": "CLOUDFLARE_API_TOKEN secret (owner action)",
+      "test": "CI job e2e-deployed",
       "passes": false
     },
     {
       "id": "F18",
       "category": "client",
       "description": "A person uses the slice from the client chosen in the client options review",
-      "steps": ["defined after docs/design/client-options.md is reviewed with the product owner"],
-      "test": "TBD by the review",
-      "blockedBy": "client options review (docs/design/client-options.md)",
+      "steps": [
+        "the four slice screens (/device, /pod/:id, the needs-you queue as a filter on the same stream, /invite/:token) render inside one layout shell",
+        "/device approves a daemon's device code after GitHub sign-in",
+        "/pod/:id shows each card with its summary line, status and receipt chip, folded body and composer",
+        "the needs-you filter lists the open asks of the same stream, and a, 1..n and j/k work with the keyboard only",
+        "pressing a on an open ask makes the ruled state appear live over the WebSocket, with no reload",
+        "/invite/:token joins a teammate who has no install to the pod",
+        "the same specs pass at 390 and 1440 px, with no horizontal page scroll and no clipped text on any route"
+      ],
+      "test": "Playwright specs at 390 and 1440 px: sign-in and /device approval; open pod, see card, press a, ruled state appears live; invite link join; layout invariants on each route; keyboard approve driven by key presses, not clicks",
       "passes": false
     },
     {
       "id": "F19",
       "category": "connector",
       "description": "An agent reads Linear through a pod grant without ever holding the Linear token",
-      "steps": ["defined after docs/design/connector-options.md is reviewed with the product owner"],
-      "test": "TBD by the review",
-      "blockedBy": "connector options review (docs/design/connector-options.md)",
+      "steps": [
+        "against a stub Linear, a pod admin connects Linear and grants an agent read access through the pod",
+        "the agent reads Linear through the pod grant, and the result comes back to it",
+        "the Linear token is absent from every agent-visible payload: tool lists, results, errors and the run's env",
+        "a write call from the agent parks as a decision card with the exact arguments, and the stub Linear sees no write while it is parked",
+        "one approval releases exactly one upstream call; a rejection or expiry releases none",
+        "the receipt is stamped by the server and links the card, the approver and the result"
+      ],
+      "test": "go test ./e2e -run TestF19 (against a stub Linear)",
       "passes": false
     },
     {

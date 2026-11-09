@@ -34,6 +34,9 @@ type Conn struct {
 	c   net.Conn
 	br  *bufio.Reader
 	wmu sync.Mutex
+
+	// ReadTimeout, when set, is how long Read waits for the next frame of any kind. Zero waits for ever.
+	ReadTimeout time.Duration
 }
 
 // Dial upgrades an http(s) URL with a bearer token in Authorization, as the pod socket requires.
@@ -115,6 +118,9 @@ func (c *Conn) frame(op byte, p []byte) error {
 	return err
 }
 
+// Ping writes a ping. The peer answers with a pong, which Read counts as a sign of life.
+func (c *Conn) Ping() error { return c.frame(opPing, nil) }
+
 // Send writes one text message.
 func (c *Conn) Send(p []byte) error { return c.frame(opText, p) }
 
@@ -150,10 +156,15 @@ func (c *Conn) readFrame() (fin bool, op byte, p []byte, err error) {
 	return
 }
 
-// Read returns the next text message. It answers pings itself, and returns an error once the socket is closed or fails.
+// Read returns the next text message. It answers pings itself, and returns an error once the socket is closed or fails. With a
+// ReadTimeout it also fails when no frame of any kind (a pong or a ping included) arrives in that time, because a connection
+// that was cut without a close frame or a FIN never fails a read on its own.
 func (c *Conn) Read() ([]byte, error) {
 	var msg []byte
 	for {
+		if c.ReadTimeout > 0 {
+			_ = c.c.SetReadDeadline(time.Now().Add(c.ReadTimeout))
+		}
 		fin, op, p, err := c.readFrame()
 		if err != nil {
 			return nil, err

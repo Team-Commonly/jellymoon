@@ -5,6 +5,7 @@ package api
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -58,11 +59,20 @@ func New(raw string) (*Client, error) {
 }
 
 func (c *Client) post(path, token string, in, out any) error {
-	body, err := json.Marshal(in)
-	if err != nil {
-		return err
+	return c.call(http.MethodPost, path, token, in, out)
+}
+
+// call is one request. A nil `in` sends no body.
+func (c *Client) call(method, path, token string, in, out any) error {
+	var body io.Reader
+	if in != nil {
+		raw, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequest(http.MethodPost, c.Base.String()+path, bytes.NewReader(body))
+	req, err := http.NewRequest(method, c.Base.String()+path, body)
 	if err != nil {
 		return err
 	}
@@ -72,40 +82,41 @@ func (c *Client) post(path, token string, in, out any) error {
 	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("POST %s: %w", path, redact(err))
+		return fmt.Errorf("%s %s: %w", method, path, redact(err))
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		// Checked before the status or the body is looked at: a body that broke mid-read is not an empty success, and not a
 		// status error with the real cause missing.
-		return fmt.Errorf("POST %s: reading the response (HTTP %d): %w", path, resp.StatusCode, redact(err))
+		return fmt.Errorf("%s %s: reading the response (HTTP %d): %w", method, path, resp.StatusCode, redact(err))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var e protocol.ErrorBody
 		if json.Unmarshal(raw, &e) == nil {
-			return &Error{Path: path, Status: resp.StatusCode, Body: e}
+			return &Error{Method: method, Path: path, Status: resp.StatusCode, Body: e}
 		}
-		return fmt.Errorf("POST %s: HTTP %d", path, resp.StatusCode)
+		return fmt.Errorf("%s %s: HTTP %d", method, path, resp.StatusCode)
 	}
 	if out == nil {
 		return nil
 	}
 	if len(raw) == 0 {
-		return fmt.Errorf("POST %s: HTTP %d with an empty body, but a result is needed", path, resp.StatusCode)
+		return fmt.Errorf("%s %s: HTTP %d with an empty body, but a result is needed", method, path, resp.StatusCode)
 	}
 	return json.Unmarshal(raw, out)
 }
 
 // Error is a refusal the server sent as an ErrorBody. Callers act on Body.Code.
 type Error struct {
+	Method string // empty means POST
 	Path   string
 	Status int
 	Body   protocol.ErrorBody
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("POST %s: HTTP %d %s: %s", e.Path, e.Status, e.Body.Code, e.Body.Message)
+	return fmt.Sprintf("%s %s: HTTP %d %s: %s", cmp.Or(e.Method, http.MethodPost), e.Path, e.Status, e.Body.Code, e.Body.Message)
 }
 
 // redact drops the request URL from a transport error; the error text of a failed request is the URL and the cause.

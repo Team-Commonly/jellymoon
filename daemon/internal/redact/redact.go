@@ -1,5 +1,5 @@
 // Package redact is the one place everything the daemon or the jellymoon CLI prints passes through. It shortens any
-// jmu_, jmc_ or jmr_ token to its prefix and an ellipsis, and drops control characters other than newline and tab, so a
+// jmu_, jmc_, jmr_ or Commonly cm_ token to its prefix and an ellipsis, and drops control characters other than newline and tab, so a
 // string a server supplied can neither leak a token nor move the cursor or rewrite the terminal.
 package redact
 
@@ -10,7 +10,7 @@ import (
 	"unicode"
 )
 
-var tokenShape = regexp.MustCompile(`(jm[ucr]_)[A-Za-z0-9_-]*`)
+var tokenShape = regexp.MustCompile(`(jm[ucr]_|\bcm_)[A-Za-z0-9_-]*`)
 
 // String strips control characters (all but newline and tab) and shortens every token to its prefix and an ellipsis. The
 // control characters go first, so one planted inside a token cannot hide the rest of it.

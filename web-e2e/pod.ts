@@ -92,7 +92,8 @@ export interface Person { token: string; user: Actor }
 export const person = (name: string): Promise<Person> => api<Person>('POST', '/__test/session', null, { name });
 
 /** The fake agent: one computer of the owner's, one agent on it, holding a live run token. */
-export interface FakeAgent { agentId: string; runId: string; post(input: PostInput): Promise<{ messageId: string; decisionId?: string; seq: number }>; close(): void }
+/** `cited` is a tool call the pod stamped on the agent's run (one MCP call at start), which its asks cite (F25: every claim cites a record). */
+export interface FakeAgent { agentId: string; runId: string; cited: string; post(input: PostInput): Promise<{ messageId: string; decisionId?: string; seq: number }>; close(): void }
 
 export async function fakeAgent(podId: string, owner: Person, name: string): Promise<FakeAgent> {
   const comp = await api<{ token: string }>('POST', '/v1/computers', owner.token, { name: 'browser-spec-box', os: 'linux', arch: 'amd64' });
@@ -107,9 +108,12 @@ export async function fakeAgent(podId: string, owner: Person, name: string): Pro
     const wakeId = (wake.data as { wakeId: string }).wakeId;
     computer.send('wake.ack', { wakeId });
     const { runId, runToken } = await api<{ runId: string; runToken: string }>('POST', '/v1/runs', comp.token, { wakeId });
+    await api('POST', '/mcp', runToken, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'jm_task_list', arguments: {} } });
+    const { toolCalls } = await api<{ toolCalls: Array<{ id: string }> }>('GET', `/v1/pods/${podId}/runs/${runId}/tool-calls`, runToken);
     return {
       agentId,
       runId,
+      cited: toolCalls[0].id,
       post: (input) => api('POST', `/v1/pods/${podId}/messages`, runToken, input),
       close: () => computer.close(),
     };
@@ -118,9 +122,9 @@ export async function fakeAgent(podId: string, owner: Person, name: string): Pro
   }
 }
 
-/** An ask as an agent writes it: two options, the first recommended, addressed by `to`. */
-export function askInput(summary: string, to: { userIds: string[] } | { role: string }): PostInput {
-  const claim = { text: 'The fix passed 212 of 212 tests.', toolCalls: ['tc_01JCZK7Q8XG4M2B9V5T3W6RH01'] };
+/** An ask as an agent writes it: two options, the first recommended, addressed by `to`, every claim citing the tool call `cited`. */
+export function askInput(summary: string, to: { userIds: string[] } | { role: string }, cited: string): PostInput {
+  const claim = { text: 'The fix passed every test.', toolCalls: [cited] };
   return {
     summary, kind: 'ask', status: 'blocked',
     needs: { to, action: 'approve' },

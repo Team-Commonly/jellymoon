@@ -24,7 +24,7 @@ import (
 func CheckServer(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || u.User != nil {
-		return nil, fmt.Errorf("the server URL is not a plain https URL with a host")
+		return nil, fmt.Errorf("the URL needs a scheme and a host, such as https://jellymoon.example, or http://localhost:8787 for a local server")
 	}
 	host := u.Hostname()
 	local := u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1")

@@ -4,6 +4,7 @@ import { Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { DevicePage } from './DeviceScreen';
 import { signInHref } from './http';
 import type { Http } from './http';
+import { HomePage } from './HomeScreen';
 import { InvitePage } from './InviteScreen';
 import { PodPage } from './PodScreen';
 import type { Connect } from './store';
@@ -31,6 +32,7 @@ export function App({ connect, http, signedIn }: { connect: (podId: string) => C
   return (
     <Routes>
       <Route element={<Shell signedIn={signedIn} />}>
+        <Route path="/" element={<HomePage http={http} signedIn={signedIn} />} />
         <Route path="/pod/:id" element={<PodPage connect={connect} http={http} />} />
         <Route path="/device" element={<DevicePage http={http} signedIn={signedIn} />} />
         <Route path="/invite/:token" element={<InvitePage http={http} signedIn={signedIn} />} />

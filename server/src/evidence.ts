@@ -2,10 +2,12 @@
 // A record is made here, from what the adapter itself saw of a call, and by no route: nothing an agent sends reaches it. The
 // core only counts (`tool_call`); the record is stored under the count it was given, so the table never holds more than the
 // receipt counts, and a call that did not finish (a crash mid-call) leaves a count without a record, never the reverse.
-import type { ToolCallRecord } from '../../gen/ts/protocol';
+import type { PostInput, ToolCallRecord } from '../../gen/ts/protocol';
+import { citedIds } from '../../podcore/src/index';
+import type { Evidence } from '../../podcore/src/index';
 import type { Hub } from './hub';
 import { newId } from './ids';
-import { saveToolCall, toolCallsOf } from './store';
+import { messagesById, saveToolCall, toolCallsById, toolCallsOf } from './store';
 import type { ToolCallRow } from './store';
 
 /** At most this many records are kept and returned per run (schema/operations.json: EvidenceOutput). */
@@ -64,4 +66,14 @@ const iso = (ms: number): string => new Date(ms).toISOString();
 export async function readCalls(hub: Hub, podId: string, runId: string): Promise<ToolCallRecord[]> {
   const rows = await toolCallsOf(hub.db, podId, runId, EVIDENCE_CAP);
   return rows.map((r) => ({ id: r.id, runId: r.run, source: 'pod', name: r.name, status: r.status, startedAt: iso(r.startedAt), endedAt: iso(r.endedAt), digest: r.digest }));
+}
+
+/** What this pod holds of the ids an ask cites (F25): the core decides from it whether the ask is grounded. Records never change once saved. */
+export async function evidenceFor(hub: Hub, podId: string, input: PostInput): Promise<Evidence> {
+  const ids = citedIds(input);
+  const [calls, msgs] = await Promise.all([toolCallsById(hub.db, podId, ids.toolCalls), messagesById(hub.db, podId, ids.messages)]);
+  return {
+    toolCalls: Object.fromEntries(calls.map((r) => [r.id, { runId: r.run, digest: r.digest }])),
+    messages: Object.fromEntries(msgs.map((m) => [m.id, { summary: m.summary, ...(typeof m.body === 'string' ? { body: m.body } : {}) }])),
+  };
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Actor } from '../../gen/ts/protocol';
 import { createPodStore } from './store';
 import { POD, ask, fakeNet, frame, hello, note, other, you } from './testkit';
 
@@ -54,7 +55,7 @@ describe('applying events by seq', () => {
     expect(s.store.getState().tasks.t1.claim).toBeUndefined();
     s.net.deliver(frame('task.updated', 4, { ...task, status: 'done' }));
     expect(s.store.getState().tasks.t1.status).toBe('done');
-    s.net.deliver(frame('presence.changed', 5, { actor: other, state: 'online' }));
+    s.net.deliver(frame('presence.changed', undefined, { actor: other, state: 'online' }));
     expect(s.store.getState().presence[other.id]).toBe('online');
   });
 });
@@ -232,5 +233,27 @@ describe('runs across agents, seqs and reconnects', () => {
     s.net.deliver(JSON.stringify({ v: 1, type: 'run.ended', podId: POD, seq: 2, data: { runId: 'r' } }));
     expect(runs(s)).toEqual({});
     expect(s.store.getState().droppedFrames).toBe(2);
+  });
+});
+
+describe('live presence', () => {
+  // presence.changed is a live event (podcore/src/presence.ts): it has no seq, and it is never replayed on subscribe.
+  it('applies a presence.changed with no seq, at any lastSeq, and leaves lastSeq alone', () => {
+    const s = setup();
+    const scout: Actor = { kind: 'agent', id: 'agt_1', displayName: 'Scout' };
+    s.net.deliver(frame('hello', undefined, hello({ agents: [{ agent: scout, harness: 'fake', computerId: 'cmp_1', state: 'online' }] })));
+    s.net.deliver(frame('message.created', 4, note(4)));
+    s.net.deliver(frame('presence.changed', undefined, { actor: scout, state: 'working', computerId: 'cmp_1' }));
+    expect(s.store.getState().presence[scout.id]).toBe('working');
+    expect(s.store.getState().agents[0].state).toBe('working');
+    expect(s.store.getState().lastSeq).toBe(4);
+    s.net.deliver(frame('presence.changed', undefined, { actor: scout, state: 'online', computerId: 'cmp_1' }));
+    expect(s.store.getState().agents[0].state).toBe('online');
+  });
+
+  it('still drops any other event that comes without a seq', () => {
+    const s = setup();
+    s.net.deliver(frame('message.created', undefined, note(1)));
+    expect(ids(s)).toEqual([]);
   });
 });

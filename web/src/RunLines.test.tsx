@@ -13,7 +13,7 @@ const sage = { kind: 'agent' as const, id: 'agt_2', displayName: 'Sage' };
 
 function mount(opts: { as?: typeof you; stop?: (podId: string, runId: string) => Promise<void> } = {}) {
   const net = fakeNet();
-  const h = fakeHttp(undefined, undefined, opts.stop);
+  const h = fakeHttp(undefined, undefined, undefined, opts.stop);
   const as = opts.as ?? you;
   const members = [{ actor: you, role: 'owner' }, { actor: other, role: 'member' }] as const;
   const join = () => act(() => {

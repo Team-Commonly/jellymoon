@@ -297,6 +297,20 @@
       ],
       "test": "go test ./e2e -run TestF22 (server; against the stub Linear F19 uses; Worker skip listed in E2E_A_SKIP and docs/development/e2e-contract.md)",
       "passes": true
+    },
+    {
+      "id": "F25",
+      "category": "evidence",
+      "description": "An ask whose claims cite nothing, or whose numbers are not in the cited call, is refused ungrounded",
+      "steps": [
+        "an ask with a claim citing nothing gets 422 ungrounded",
+        "a cite of an id that is not a record in this pod, or a tool call from another agent's run, gets ungrounded",
+        "a number in a claim's text that is in neither the cited call's digest nor a cited message gets ungrounded",
+        "a fully cited ask is accepted and F11, F12 and F14 still pass",
+        "the refusal names the claim index and never echoes the digest"
+      ],
+      "test": "go test ./e2e -run TestF25 (server; the Worker adds TestF25 to E2E_A_SKIP, docs/development/e2e-contract.md)",
+      "passes": true
     }
   ]
 }

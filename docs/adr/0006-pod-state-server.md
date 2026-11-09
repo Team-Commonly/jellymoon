@@ -111,6 +111,6 @@ something checks the citation, so the pod that holds the run keeps the records.
   receipt counts; a crash in the middle of a call leaves a count with no record, never the reverse. A record's `digest` is the
   start of the call's input and output as the pod saw them, cut to 600 characters, as `schema/message.json` fixes.
 - **The Worker does not serve evidence.** It answers `not_found` for the route and lists the test as skipped
-  (`docs/development/e2e-contract.md`).
+  (`docs/development/e2e-contract.md`). With no records, an ask there that cites a tool call is `ungrounded` (F25, ADR 0003 "Grounding").
 
 This changes no other clause of this note.

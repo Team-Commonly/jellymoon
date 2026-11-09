@@ -94,6 +94,9 @@ export function PodPage({ connect, http }: { connect: (podId: string) => Connect
   // The hello names members and their roles but not who owns an agent, so Stop shows to pod owners only; the route also lets an agent's owner stop it.
   const canStop = state.members.some((m) => m.actor.id === state.you?.id && m.role === 'owner');
   const runs = useMemo(() => Object.values(state.runs), [state.runs]);
+  // One line per agent: an agent with a going run shows as its run line (with Stop), so the presence line leaves it out.
+  const going = new Set(runs.filter((r) => r.state === 'going').map((r) => r.agent.id));
+  const working = state.agents.filter((a) => a.state === 'working' && !going.has(a.agent.id)).map((a) => a.agent.displayName);
   const pending = k.keys.confirm ? cards[k.keys.focus]?.ask?.options.find((o) => o.id === k.keys.confirm)?.label : undefined;
   return (
     <>
@@ -116,6 +119,7 @@ export function PodPage({ connect, http }: { connect: (podId: string) => Connect
           />
         ))}
       </section>
+      <p aria-live="polite">{working.length === 0 ? '' : `${working.join(', ')} ${working.length === 1 ? 'is' : 'are'} working.`}</p>
       <div role="status" aria-live="polite">{pending ? `Rule ${pending}? Press Enter to rule, Escape to cancel.` : ''}</div>
       <RunLines runs={runs} canStop={canStop} stop={(runId) => http.stopRun(id, runId)} />
       <Composer inputRef={composer} onPost={(t) => store.post(t)} error={state.postError} />

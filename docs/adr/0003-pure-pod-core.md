@@ -151,6 +151,22 @@ command the socket's `decision.rule` becomes; the adapter parses the frame and p
   An ask posted before records were kept has none, so ruling on it is `not_found`.
 - `change` stays as the raw wake write the tests drive; the adapters use `rule`. The `expired` decision state is not modelled.
 
+## Grounding (amended 2026-11-09, F25)
+
+The two Grounding rules of `schema/message.json` are the core's, in `podcore/src/ground.ts`, checked on `post` after the shape rules
+and before anything is stored. The core keeps no text, so the adapter looks up the ids an ask's claims cite (`citedIds`), in its own
+pod only, and passes what it found as `evidence`: each tool call with its run and digest, each message with its summary and body.
+An id it did not find is absent, and absent evidence grounds nothing: a post command with no `evidence` refuses every ask that cites
+anything. The core then decides: a claim that cites nothing, a cited id that is not in the evidence, a tool call on a run of another
+agent (or any tool call cited by a person, who has no agent), or a number in the claim's text that is in none of what it cites, is
+`ungrounded`. The answer names the claim by its place (`context.happened[0]`, `context.recommendation.why`) and a citation or number
+by its index, never the claim's text or the evidence. What counts as a number is written on `numbersIn`.
+
+- The connector write card (ADR 0009) is the one ask the pod composes itself, from its own records; its adapter passes
+  `evidence: 'pod'` and the check is skipped for it. No route lets a poster set that.
+- The Worker keeps no tool-call records (ADR 0006, "Evidence"), so it passes the messages its log holds and no tool calls: an ask
+  citing a tool call is `ungrounded` there.
+
 ## Presence
 In `podcore/src/presence.ts`, over the same state (F08). `online` maps each online computer to its last sign of life.
 - `computer_online` and `computer_offline` are the adapter's report of sockets; a `heartbeat` is also a sign of life, so a

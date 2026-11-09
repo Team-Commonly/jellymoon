@@ -17,6 +17,7 @@ import (
 // The agent is held up, so its run token stays live for the plain HTTP calls the test makes with it.
 type f11 struct {
 	*f09
+	cited  string // the CI report the asks cite
 	script []map[string]any
 	record string
 	rec    agentRec
@@ -51,9 +52,10 @@ func plus(m map[string]any, k string, v any) map[string]any {
 	return out
 }
 
-// validAsk is the card of schema/fixtures/Message/valid-ask-1.json, as the poster writes it.
-func validAsk(summary string) map[string]any {
-	claim := map[string]any{"text": "The fix passed 212 of 212 tests.", "toolCalls": []string{"tc_01JCZK7Q8XG4M2B9V5T3W6RH01"}}
+// validAsk is the card of schema/fixtures/Message/valid-ask-1.json, as the poster writes it, with every claim citing `cited`: a message
+// of the pod that holds the claim's numbers (F25: a claim cites a record of this pod, and its numbers appear in what it cites).
+func validAsk(summary, cited string) map[string]any {
+	claim := map[string]any{"text": "The fix passed 212 of 212 tests.", "messages": []string{cited}}
 	return map[string]any{
 		"summary": summary, "kind": "ask", "status": "blocked",
 		"needs": map[string]any{"to": map[string]any{"role": "owner"}, "action": "approve"},
@@ -64,24 +66,41 @@ func validAsk(summary string) map[string]any {
 		"context": map[string]any{
 			"happened":       []any{claim},
 			"checked":        []any{},
-			"stakes":         map[string]any{"text": "Waiting holds the release a day.", "messages": []string{"msg_01JCZK7Q8XG4M2B9V5T3W6RH01"}},
+			"stakes":         map[string]any{"text": "Waiting holds the release a day.", "messages": []string{cited}},
 			"recommendation": map[string]any{"option": "a", "why": claim},
 		},
 	}
 }
 
+// ciSummary is the headline of the CI report a person posts, which the asks cite.
+const ciSummary = "CI: the auth fix passed 212 of 212 tests"
+
+// ciReport has the person with `tok` post the CI report to the pod and returns its message id: the evidence validAsk cites.
+func ciReport(c *client, pod, tok string) (string, error) {
+	var out struct{ MessageID string }
+	if r := c.do("POST", "/v1/pods/"+pod+"/messages", tok, map[string]any{"summary": ciSummary, "kind": "fyi", "status": "done"}, &out); !r.ok() {
+		return "", fmt.Errorf("the CI report: HTTP %d %s", r.Status, r.Err.Code)
+	}
+	return out.MessageID, nil
+}
+
 func newF11(t *testing.T) *f11 {
 	f := &f11{f09: newF09(t)}
+	cited, err := ciReport(f.c, f.pod, f.owner.tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.cited = cited
 	fyi := map[string]any{"summary": "ok", "kind": "fyi", "status": "done"}
 	receipt := map[string]any{"runId": "run_01JCZK7Q8XG4M2B9V5T3W6RH01", "harness": "claude-code", "toolCalls": 0}
 	f.script = []map[string]any{
 		step11("jm_whoami", map[string]any{}),
 		step11("jm_post", plus(fyi, "summary", nil)),
 		step11("jm_post", plus(fyi, "summary", longHeadline)),
-		step11("jm_post", plus(validAsk("Merge now or wait?"), "options", nil)),
-		step11("jm_post", plus(fyi, "needs", validAsk("x")["needs"])),
+		step11("jm_post", plus(validAsk("Merge now or wait?", f.cited), "options", nil)),
+		step11("jm_post", plus(fyi, "needs", validAsk("x", f.cited)["needs"])),
 		step11("jm_post", plus(fyi, "receipt", receipt)),
-		step11("jm_post", validAsk("Merge the auth fix now or wait for review?")),
+		step11("jm_post", validAsk("Merge the auth fix now or wait for review?", f.cited)),
 	}
 	raw, _ := json.Marshal(f.script)
 	script := filepath.Join(t.TempDir(), "script.json")
@@ -241,10 +260,10 @@ func (f *f11) shapes() error {
 		}
 	}
 	for name, body := range map[string]map[string]any{
-		"an ask without needs":   plus(validAsk("a"), "needs", nil),
-		"an ask without context": plus(validAsk("b"), "context", nil),
-		"a fyi with options":     plus(map[string]any{"summary": "c", "kind": "fyi", "status": "done"}, "options", validAsk("x")["options"]),
-		"a result with context":  plus(map[string]any{"summary": "d", "kind": "result", "status": "done"}, "context", validAsk("x")["context"]),
+		"an ask without needs":   plus(validAsk("a", f.cited), "needs", nil),
+		"an ask without context": plus(validAsk("b", f.cited), "context", nil),
+		"a fyi with options":     plus(map[string]any{"summary": "c", "kind": "fyi", "status": "done"}, "options", validAsk("x", f.cited)["options"]),
+		"a result with context":  plus(map[string]any{"summary": "d", "kind": "result", "status": "done"}, "context", validAsk("x", f.cited)["context"]),
 	} {
 		if st, raw := f.httpAs(f.run.RunToken, body, nil); st != 400 || codeOf(raw) != "invalid_input" {
 			return fmt.Errorf("%s: HTTP %d %s, want 400 invalid_input", name, st, raw)
@@ -252,7 +271,7 @@ func (f *f11) shapes() error {
 	}
 	all, err := f.stored()
 	for _, m := range all {
-		if m.Summary != "Merge the auth fix now or wait for review?" && m.Summary != exactHeadline {
+		if m.Summary != "Merge the auth fix now or wait for review?" && m.Summary != exactHeadline && m.Summary != ciSummary {
 			return fmt.Errorf("a refused post was stored: %+v (err %v)", m, err)
 		}
 	}
@@ -264,7 +283,7 @@ func (f *f11) receiptRefused() error {
 	if err := f.refusedWith(5, "invalid_input"); err != nil {
 		return err
 	}
-	body := plus(validAsk("Receipt in the post"), "receipt", map[string]any{"runId": f.run.RunID, "harness": "codex", "toolCalls": 99})
+	body := plus(validAsk("Receipt in the post", f.cited), "receipt", map[string]any{"runId": f.run.RunID, "harness": "codex", "toolCalls": 99})
 	for who, tok := range map[string]string{"run": f.run.RunToken, "user": f.owner.tok} {
 		if st, raw := f.httpAs(tok, body, nil); st != 400 || codeOf(raw) != "invalid_input" {
 			return fmt.Errorf("plain HTTP post carrying receipt with a %s token: HTTP %d %s, want 400 invalid_input", who, st, raw)
@@ -310,7 +329,7 @@ func (f *f11) receipt() error {
 func (f *f11) agentCannotSteer(before int, woke string) error {
 	// The ask itself was an MCP call by now, so the next post sees before+1; the plain HTTP calls in between add nothing.
 	lies := map[string]string{"X-Jm-Tool-Calls": "99", "X-Jm-Harness": "codex", "X-Jm-Wake-Reason": "mention", "X-Jm-Run": "run_01JCZK7Q8XG4M2B9V5T3W6RH01", "X-Jm-Mcp": "1"}
-	st, raw := f.httpAs(f.run.RunToken, validAsk("The same ask over plain HTTP"), lies)
+	st, raw := f.httpAs(f.run.RunToken, validAsk("The same ask over plain HTTP", f.cited), lies)
 	if st != 200 {
 		return fmt.Errorf("plain HTTP ask: HTTP %d %s, want 200", st, raw)
 	}
@@ -324,7 +343,7 @@ func (f *f11) agentCannotSteer(before int, woke string) error {
 	// The receipt is the pod's record, not the post's: a post that names another task, or one that does not exist, is stamped with the task that woke the run.
 	for name, named := range map[string]string{"another task": "tsk_01JCZK7Q8XG4M2B9V5T3W6RH99", "a task that does not exist": "tsk_00000000000000000000000000"} {
 		summary := "Naming " + name
-		if st, raw := f.httpAs(f.run.RunToken, plus(validAsk(summary), "taskId", named), nil); st != 200 {
+		if st, raw := f.httpAs(f.run.RunToken, plus(validAsk(summary, f.cited), "taskId", named), nil); st != 200 {
 			return fmt.Errorf("plain HTTP ask naming %s: HTTP %d %s, want 200", name, st, raw)
 		}
 		m, err := f.storedWith(summary)

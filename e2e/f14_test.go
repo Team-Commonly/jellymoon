@@ -15,7 +15,8 @@ import (
 
 // f14 is the whole slice, walked the way a person would: F09's world (a built daemon, the fake ACP agent, a recording proxy) with
 // nobody signed in yet. The agent runs a script twice: once to claim the task and ask, once, after the ruling, to finish. The task id
-// is not known when the script is written, so the script says {{taskId}} and the fake agent reads it from its brief.
+// is not known when the script is written, so the script says {{taskId}} and the fake agent reads it from its brief. The first script is
+// written once the pod holds the CI report its ask cites (F25), before the task that wakes the agent.
 type f14 struct {
 	*f09
 	begin   time.Time
@@ -46,13 +47,6 @@ func withTask(ask map[string]any) map[string]any {
 func newF14(t *testing.T) *f14 {
 	f := &f14{f09: newF09On(newF08Bare(t)), begin: time.Now()}
 	f.script, f.record = filepath.Join(t.TempDir(), "script.json"), filepath.Join(t.TempDir(), "agent.json")
-	if err := writeScript(f.script,
-		step11("jm_task_list", map[string]any{}),
-		step11("jm_task_claim", map[string]any{"taskId": "{{taskId}}"}),
-		step11("jm_post", withTask(validAsk("Merge the auth fix now or wait for review?"))),
-	); err != nil {
-		t.Fatal(err)
-	}
 	f.harness(f.record, "script="+f.script)
 	return f
 }
@@ -164,8 +158,20 @@ func (f *f14) agentOnline() error {
 	return f.all("online", []int{0, 0}, 5*time.Second)
 }
 
-// Step 3: a person creates a task assigned to the agent, and both people see it open, with the agent as assignee.
+// Step 3: a person creates a task assigned to the agent, and both people see it open, with the agent as assignee. Before it, the person
+// posts the CI report the agent's ask will cite.
 func (f *f14) createsTask() error {
+	cited, err := ciReport(f.c, f.pod, f.owner.tok)
+	if err != nil {
+		return err
+	}
+	if err := writeScript(f.script,
+		step11("jm_task_list", map[string]any{}),
+		step11("jm_task_claim", map[string]any{"taskId": "{{taskId}}"}),
+		step11("jm_post", withTask(validAsk("Merge the auth fix now or wait for review?", cited))),
+	); err != nil {
+		return err
+	}
 	marks := f.marks()
 	f.assign("Ship the auth fix")
 	fr, err := f.both(marks, "task.created for the assigned task", func(fr Frame) bool {

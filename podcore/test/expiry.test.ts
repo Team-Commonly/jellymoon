@@ -13,7 +13,7 @@ const ask: PostInput = {
   summary: 'Approve linear create_issue?', kind: 'ask', status: 'blocked', needs: { to: { role: 'owner' }, action: 'approve' }, context: ctx,
   options: [{ id: 'a', label: 'Approve', consequence: 'One call is made.' }, { id: 'b', label: 'Reject', consequence: 'Nothing is sent.' }],
 };
-const post = (expiresAt: unknown): Cmd => ({ type: 'post', caller: { kind: 'run', runId: RUN_A }, messageId: MSG, decisionId: DEC, wakeId: wak(1), harness: 'fake', input: ask, expiresAt } as unknown as Cmd);
+const post = (expiresAt: unknown): Cmd => ({ type: 'post', caller: { kind: 'run', runId: RUN_A }, messageId: MSG, decisionId: DEC, wakeId: wak(1), harness: 'fake', input: ask, expiresAt, evidence: 'pod' } as unknown as Cmd); // the connector write card: the pod composes it
 const rule = (): Cmd => ({ type: 'rule', caller: { kind: 'user', userId: U_OWNER.id }, decisionId: DEC, option: 'a', wakeId: wak(2) } as unknown as Cmd);
 
 const parked = (expiresAt: unknown = 50_000): PodState => {

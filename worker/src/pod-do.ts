@@ -129,6 +129,12 @@ export class PodDO implements Starter {
     return this.sql.exec<{ envelope: string }>('select envelope from events where seq > ? order by seq limit ?', since, limit).toArray().map((r) => JSON.parse(r.envelope) as AnyEvent);
   }
 
+  messagesById(ids: string[]): Array<{ id: string; summary: string; body?: string }> {
+    if (ids.length === 0) return [];
+    const q = `select envelope from events where json_extract(envelope, '$.type') = 'message.created' and json_extract(envelope, '$.data.id') in (${ids.map(() => '?').join(', ')})`;
+    return this.sql.exec<{ envelope: string }>(q, ...ids).toArray().map((r) => (JSON.parse(r.envelope) as { data: { id: string; summary: string; body?: string } }).data);
+  }
+
   /** One alarm, at the core's next deadline, set only when it moved. */
   private arm(): void {
     const at = this.alarmAt();

@@ -516,6 +516,10 @@ export interface DeviceApproveRequest {
   userCode: string;
 }
 
+/** A logout carries no data: the token it presented no longer authenticates, and the session cookie is cleared. */
+export interface LogoutResponse {
+}
+
 /** An approval carries no data: the device that polls gets the token. */
 export interface DeviceApproveResponse {
 }

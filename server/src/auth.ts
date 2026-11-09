@@ -7,8 +7,8 @@ import type { Actor, ErrorCode } from '../../gen/ts/protocol';
 import { isoOf } from '../../podcore/src/index';
 import type { Hub } from './hub';
 import { base62, hashToken, sameSecret } from './ids';
-import { bad, fail, parse } from './kit';
-import { approveDevice, deviceByHash, deviceByUser, exchangeDevice, newDevice, pollDevice, newState, takeState } from './store';
+import { authOf, bad, fail, JSON_TYPE, parse, presented, SESSION } from './kit';
+import { approveDevice, deviceByHash, deviceByUser, exchangeDevice, newDevice, pollDevice, newState, revokeToken, takeState } from './store';
 import { check } from './validate';
 
 const DEVICE_S = 900;
@@ -16,10 +16,15 @@ const INTERVAL_S = 2;
 const STATE_S = 600;
 const SESSION_S = 30 * 86400;
 const USER_CODE = 'BCDFGHJKLMNPQRSTVWXZ';
-const SESSION = 'jm_session';
 const STATE = 'jm_oauth_state';
 
 export interface GitHub { web: string; api: string; id: string; secret: string }
+
+/** The server's own base URL: PUBLIC_URL or the request's origin, upgraded to https except under ENV=local. Its origin is the one a browser session's Origin must equal. */
+export function ownBase(c: Context, publicUrl: string | undefined, local: boolean): string {
+  const b = (publicUrl?.trim() || new URL(c.req.url).origin).replace(/\/+$/, '');
+  return local ? b : b.replace(/^http:/, 'https:');
+}
 
 /** GitHub's endpoints and the OAuth client, from the environment; null when no client is configured. An override base uses the GitHub Enterprise layout. */
 export function githubOf(env: Record<string, string | undefined>): GitHub | null {
@@ -82,7 +87,7 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
 
   app.post('/v1/auth/device/approve', async (c) => {
     const origin = c.req.header('Origin');
-    if (!/^application\/json\s*(;|$)/i.test(c.req.header('Content-Type') ?? '') || (origin !== undefined && origin !== new URL(base(c)).origin)) {
+    if (!JSON_TYPE.test(c.req.header('Content-Type') ?? '') || (origin !== undefined && origin !== new URL(base(c)).origin)) {
       return fail(c, 'forbidden', 'Approve from this server\'s own page, with a JSON body.');
     }
     const me = await person(c);
@@ -105,19 +110,27 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
 }
 
 export function authRoutes(app: Hono, hub: Hub, gh: GitHub | null, publicUrl: string | undefined, local: boolean): void {
-  const base = (c: Context): string => {
-    const b = (publicUrl ?? new URL(c.req.url).origin).replace(/\/+$/, '');
-    return local ? b : b.replace(/^http:/, 'https:');
-  };
+  const base = (c: Context): string => ownBase(c, publicUrl, local);
   const cookie = { httpOnly: true, secure: !local, sameSite: 'Lax' } as const;
-  /** The person behind a Bearer jmu_ or the session cookie. */
+  /** The person behind a Bearer jmu_ or the session cookie. Approve keeps its own F15 check (item 4); /v1/me is a read. */
   const person = async (c: Context): Promise<Actor | null> => {
-    const s = getCookie(c, SESSION);
-    const who = await hub.authenticate(c.req.header('Authorization') ?? (s ? `Bearer ${s}` : undefined));
+    const p = presented(c, true);
+    const who = p === null ? null : await hub.authenticate(`Bearer ${p.token}`);
     return who?.kind === 'user' ? who.actor : null;
   };
 
   deviceRoutes(app, hub, base, person);
+
+  app.post('/v1/auth/logout', async (c) => {
+    const who = await authOf(hub, c, true);
+    if (who instanceof Response) return who;
+    const p = presented(c, true);
+    if (who === null || p === null) return fail(c, 'unauthorized', 'Sign in first.');
+    if (who.kind !== 'user') return fail(c, 'forbidden', 'Only a person signs out.');
+    await revokeToken(hub.db, hashToken(p.token), hub.now());
+    deleteCookie(c, SESSION, { ...cookie, path: '/' });
+    return c.json({});
+  });
 
   app.get('/v1/auth/github/start', async (c) => {
     if (gh === null) return fail(c, 'not_found', 'GitHub sign-in is not configured on this server.');

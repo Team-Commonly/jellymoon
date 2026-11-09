@@ -1,6 +1,7 @@
 // Shared HTTP plumbing: error bodies, body parsing, tiny validators, and route wrappers. Every wrapper authenticates before
 // anything else, then checks the token kind, then (for a pod route) the pod, then the body against the schema.
 import type { Context } from 'hono';
+import { getCookie } from 'hono/cookie';
 import { ERROR_STATUS } from '../../gen/ts/protocol';
 import type { ErrorCode } from '../../gen/ts/protocol';
 import type { Caller } from '../../podcore/src/index';
@@ -40,9 +41,39 @@ export function respond(c: Context, reply: Reply | undefined, shape?: (r: unknow
 
 type Of<K extends Principal['kind']> = Extract<Principal, { kind: K }>;
 
-/** 401 for no valid token, 403 for a valid token of the wrong kind. */
+export const SESSION = 'jm_session';
+export const JSON_TYPE = /^application\/json\s*(;|$)/i;
+/** The server's own origin for each request, set before any route runs (buildApp); a request with none matches no Origin. */
+export const ownOrigin = new WeakMap<Request, string>();
+
+/** The token a request presents: its Bearer, else, where a person may call, the session cookie. */
+export function presented(c: Context, cookie: boolean): { token: string; byCookie: boolean } | null {
+  const h = c.req.header('Authorization');
+  if (h !== undefined) return { token: h.startsWith('Bearer ') ? h.slice(7).trim() : '', byCookie: false };
+  const s = cookie ? getCookie(c, SESSION) : undefined;
+  return s ? { token: s, byCookie: true } : null;
+}
+
+/**
+ * The one authentication function (ADR 0008, "Browser session"). Bearer first; else, when `cookie`, the session cookie, which
+ * must hold a jmu_. A cookie request that changes state, or opens the socket, must carry this server's own Origin, and a state
+ * change must be JSON (forbidden otherwise). Null is no valid caller.
+ */
+export async function authOf(hub: Hub, c: Context, cookie: boolean): Promise<Principal | null | Response> {
+  const p = presented(c, cookie);
+  if (p === null || !p.byCookie) return hub.authenticate(p === null ? undefined : `Bearer ${p.token}`);
+  const write = !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method);
+  const own = ownOrigin.get(c.req.raw);
+  if ((write || c.req.header('upgrade') !== undefined) && (own === undefined || c.req.header('Origin') !== own)) return fail(c, 'forbidden', 'A browser session works only from this server\'s own pages.');
+  if (write && !JSON_TYPE.test(c.req.header('Content-Type') ?? '')) return fail(c, 'forbidden', 'A browser session sends JSON.');
+  const who = await hub.authenticate(`Bearer ${p.token}`);
+  return who?.kind === 'user' ? who : null;
+}
+
+/** 401 for no valid token, 403 for a valid token of the wrong kind. Only a route a person may call reads the cookie. */
 async function guard<K extends Principal['kind']>(hub: Hub, c: Context, kinds: readonly K[]): Promise<Of<K> | Response> {
-  const who = await hub.authenticate(c.req.header('Authorization'));
+  const who = await authOf(hub, c, (kinds as readonly string[]).includes('user'));
+  if (who instanceof Response) return who;
   if (who === null) return fail(c, 'unauthorized', 'Send a valid bearer token.');
   return kinds.includes(who.kind as K) ? (who as Of<K>) : fail(c, 'forbidden', 'This kind of token may not call this route.');
 }

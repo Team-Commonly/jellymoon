@@ -127,3 +127,34 @@ describe('writes are never optimistic', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('errors, bad frames and reconnects', () => {
+  const two = (s = setup()) => ([1, 2].forEach((n) => { s.net.deliver(frame('message.created', n, ask(n))); s.store.rule(`dec_${n}`, n === 1 ? 'a' : 'b'); }), s);
+  const err = (s: ReturnType<typeof setup>, ref?: string) => s.net.deliver(frame('error', undefined, { code: 'already_ruled', message: 'No', ...(ref && { ref }) }));
+  const st = (s: ReturnType<typeof setup>) => s.store.getState();
+  it('lands an error on the ruling its ref names, ignores a ref naming nothing waiting, and falls back to the latest with no ref', () => {
+    const s = two();
+    ['dec_1', 'dec_9', 'constructor'].forEach((ref) => err(s, ref));
+    expect([st(s).ruleErrors, st(s).pending]).toEqual([{ dec_1: 'No' }, { dec_2: 'b' }]);
+    err(s);
+    expect(st(s).ruleErrors).toEqual({ dec_1: 'No', dec_2: 'No' });
+  });
+  it('drops and counts a frame that is not JSON, or an error, hello or event with no body or a wrong one', () => {
+    const s = setup();
+    expect(() => {
+      ['{not json', 'null'].forEach((raw) => s.net.deliver(raw));
+      [['error', 0, undefined], ['error', 0, null], ['hello', 0, null], ['message.updated', 1, null], ['message.updated', 2, {}], ['presence.changed', 3, 'x']]
+        .forEach(([type, seq, data]) => s.net.deliver(JSON.stringify({ v: 1, type, podId: POD, ...(seq ? { seq } : {}), data })));
+    }).not.toThrow();
+    expect([st(s).droppedFrames, st(s).postError]).toEqual([8, undefined]);
+  });
+  it('re-marks a pending ruling unsent on a drop, clears it if the ruling replays, and lets the person rule again', () => {
+    const s = two();
+    s.net.drop();
+    expect([st(s).pending, st(s).ruleErrors.dec_1]).toEqual([{}, expect.stringMatching(/try again/i)]);
+    s.timers[0](); s.net.open();
+    s.net.deliver(frame('message.updated', 3, { id: 'msg_1', decision: { id: 'dec_1', state: 'ruled', ruling: { optionId: 'a', by: you, at: 't' } } }));
+    s.store.rule('dec_2', 'b');
+    expect(st(s).ruleErrors).toEqual({});
+  });
+});

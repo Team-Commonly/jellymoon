@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, scanEnv, takePage, requiredChecks, ciProof, landRef,
+  scrub, scanEnv, takePage, requiredChecks, ciProof, landRef, landCommitEnv,
 } from './land-decide.mjs';
 import { scanRange } from './land-scan.mjs';
 import { checkCodeRabbit, checkEarlierReview, checkReviews, threadPage } from './land-coderabbit.mjs';
@@ -263,15 +263,15 @@ async function ciLand(n, mainTip, head, tree) {
   const required = requiredNow();
   if (!required) return { ok: false, reason: 'the required checks could not be read from the branch rules' };
   const ref = landRef(n);
-  let sha; try { sha = out('git', ['commit-tree', tree, '-p', mainTip, '-p', head, '-m', `land #${n}`]); } catch (e) { return { ok: false, reason: `could not build the land commit: ${why(e)}` }; }
+  let sha; try { sha = out('git', ['commit-tree', tree, '-p', mainTip, '-p', head, '-m', `land #${n}`], { env: { ...IO.env, ...landCommitEnv(out('git', ['show', '-s', '--format=%ct', mainTip, head])) } }); } catch (e) { return { ok: false, reason: `could not build the land commit: ${why(e)}` }; }
   if (!/^[0-9a-f]{40}$/.test(sha) || out('git', ['rev-parse', `${sha}^{tree}`]) !== tree) refuse(`#${n}: the land commit is not the merge result (tree ${tree.slice(0, 8)}); nothing merged`);
   if (DRY) { say(`dry run: would push ${sha.slice(0, 8)} (tree ${tree.slice(0, 8)}) to ${ref} and wait up to ${Math.round((IO.capMs ?? CAP_MS) / 60000)} minutes for ${required.length} required checks`); return { ok: false, reason: 'dry run: nothing is pushed' }; }
   try {
-    const remote = remoteFor(out('git', ['remote', '-v']), REPO).remote;
-    const there = out('git', ['ls-remote', remote, ref]).split(/\s+/)[0];
+    const remote = remoteFor(out('git', ['remote', '-v']), REPO).remote; const there = out('git', ['ls-remote', remote, ref]).split(/\s+/)[0];
     if (there && !/^[0-9a-f]{40}$/.test(there)) return { ok: false, reason: `${ref} could not be read` };
     // A leftover is reused only when it IS the land commit: the merge tree AND exactly main's tip then the head as parents (dco reads the parents); else overwritten under a lease on it
     const reuse = !!there && gh('api', `repos/${REPO}/git/commits/${there}`, '--jq', '([.tree.sha] + [.parents[].sha]) | join(" ")') === [tree, mainTip, head].join(' ');
+    if (!reuse && !there) { /* GitHub may still hold this exact commit's check runs from an earlier attempt (the ref is deleted on every exit): green there is the proof, anything else pushes */ const got = ciRead(sha); const prior = got.error ? null : ciProof({ required, tree, ciTree: got.ciTree, runs: got.runs, total: got.total }); if (prior?.ok) { say(`#${n}: ${sha.slice(0, 8)} already has green required checks on GitHub; no push`); return prior; } }
     if (reuse) sha = there; else out('git', ['push', '--quiet', `--force-with-lease=${ref}:${there}`, remote, `${sha}:${ref}`]);
     MADE = { remote, ref }; process.on('exit', ciClean); // Ctrl-C and kill end through process.exit (see the CLI), so the ref goes on signals too; a signal runs only after this block, so none lands between the push and MADE
   } catch (e) { return { ok: false, reason: `could not push ${ref}: ${why(e)}` }; }

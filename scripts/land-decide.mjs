@@ -347,6 +347,16 @@ export function ciProof({ required, tree, ciTree, runs, total = runs?.length }) 
   if (waiting) return no('wait', waiting);
   return { ok: true, note: `CI proved merge tree ${tree.slice(0, 8)}` };
 }
+// The git env that makes the land commit a pure function of (tree, main's tip, head): a fixed identity and a date taken from the parents, never the
+// clock or the caller's config. `ctLines` is `git show -s --format=%ct <main tip> <head>` (one epoch per parent); the later one is the date. The same
+// inputs then give the same SHA on every attempt, so check runs on a SHA outlive its deleted ref and a rerun of a flaked job can be found again.
+// dco is unaffected: on a land/** push it reads the commits between the parents, never this commit's own author.
+export function landCommitEnv(ctLines) {
+  const lines = String(ctLines).trim().split('\n').map((l) => l.trim());
+  if (lines.length !== 2 || !lines.every((l) => /^\d{1,12}$/.test(l))) throw new Error('the parents\' commit dates could not be read');
+  const date = `@${Math.max(...lines.map(Number))} +0000`;
+  return { GIT_AUTHOR_NAME: 'land', GIT_AUTHOR_EMAIL: 'land@localhost', GIT_AUTHOR_DATE: date, GIT_COMMITTER_NAME: 'land', GIT_COMMITTER_EMAIL: 'land@localhost', GIT_COMMITTER_DATE: date };
+}
 // Land's own ref for a PR: refs/heads/land/<n>, n digits only. Every push land makes (create, overwrite, delete) names a ref built here.
 export const landRef = (n) => {
   if (!/^\d+$/.test(String(n))) throw new Error(`not a PR number: ${n}`);

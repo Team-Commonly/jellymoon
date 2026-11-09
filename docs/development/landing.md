@@ -179,8 +179,13 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
    result of a PR. Land therefore asks CI to prove the exact merge commit, and runs the preflight only when that does not come back green:
    - after the decision, land reads the required checks from the branch rules (`GET rules/branches/main`, then classic protection when the rules
      name none; never the PR). If they cannot be read, or none is named, nothing is pushed and the preflight runs;
-   - it builds the merge commit locally, `git commit-tree <merge-result tree> -p <main tip> -p <head>`, authored by the checkout's configured git
-     identity, and refuses if that commit's tree is not the tree the decision computed (nothing is pushed);
+   - it builds the merge commit locally, `git commit-tree <merge-result tree> -p <main tip> -p <head>`, and refuses if that commit's tree is not the
+     tree the decision computed (nothing is pushed). The commit is deterministic (`landCommitEnv`): author and committer are `land <land@localhost>`
+     and both dates are the later of the two parents' committer dates (`@<epoch> +0000`), never the clock or the checkout's identity, so the same
+     (tree, main tip, head) is the same SHA on every attempt. `dco` is unaffected: on a `land/**` push it reads only the commits between the parents;
+   - before pushing, when no `land/<n>` exists, it reads the check runs GitHub already holds for that exact SHA (GET only; the commit is still there
+     after its ref was deleted, until GitHub collects it). The same proof rules apply: if every required check is green there, for example after a
+     failed job was re-run on a flake, that is the proof and nothing is pushed or deleted. Any other answer, or no such commit, goes on to push;
    - it pushes that commit to `refs/heads/land/<n>` (`ci.yml` runs on pushes to `land/**`; its `dco` job checks the commits between the commit's two
      parents on such a push). The push is create-only (`--force-with-lease=<ref>:`); a leftover `land/<n>` is reused only when it is the land commit (its tree and its parents, [main tip, head], exactly),
      otherwise overwritten under a lease on exactly that commit. `--dry-run` builds the commit, pushes nothing, says what it would do, and runs the

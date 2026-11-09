@@ -11,7 +11,7 @@ import { realRun } from './land.mjs';
 import {
   landedNote, mergeAction, mergeTree,
   acquireLock, appendLedger, checkApi, checkCheckout, checkHead, checkLedger, checkMain, checkNoBunConfig, checkPodVerdict, checkRuns, checkTrust, cursorOf,
-  checkNode, entropyBase, requiredChecks, ciProof, landRef, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
+  checkNode, entropyBase, requiredChecks, ciProof, landRef, landCommitEnv, pushersOf, trackThrowaway, landAction, parseLedger, parseLogins, quoteOutput, parseReviewers, readToken, remoteFor, removeTree, scrub, stripControls, takePage,
 } from './land-decide.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // the repo, wherever this is run from
@@ -369,6 +369,29 @@ cases.push(
     ['land ref: only refs/heads/land/<digits>', [landRef(21), landRef('7')].join(), 'refs/heads/land/21,refs/heads/land/7'],
     ['land ref: a branch name, a path or an empty value throws', ['main', '../x', '', '5/../../main', '5 6'].map((v) => { try { landRef(v); return 'ok'; } catch { return 'throws'; } }).join(), 'throws,throws,throws,throws,throws'],
   );
+}
+
+// LDET: the land commit is a pure function of (tree, main's tip, head): same inputs, same SHA, so a rerun of a flaked check stays attributable.
+{
+  const ldir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-ldet-'));
+  const base = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+  const g = (env, ...a) => execFileSync('git', a, { cwd: ldir, encoding: 'utf8', env }).trim();
+  const who = (n, d) => ({ ...base, GIT_AUTHOR_NAME: n, GIT_AUTHOR_EMAIL: `${n}@l`, GIT_AUTHOR_DATE: d, GIT_COMMITTER_NAME: n, GIT_COMMITTER_EMAIL: `${n}@l`, GIT_COMMITTER_DATE: d });
+  g(base, 'init', '-q', '-b', 'main');
+  const [one, two, three] = [['a', 0], ['b', 100], ['c', 200]].map(([n, k]) => { g(who(n, `@${1700000000 + k} +0000`), 'commit', '-q', '--allow-empty', '-m', n); return g(base, 'rev-parse', 'HEAD'); });
+  const tree = g(base, 'rev-parse', `${one}^{tree}`);
+  const build = (m, h, ident) => { // what land does: read the parents' dates, then commit-tree under the pure env; ident varies the calling clone's own identity and clock
+    const env = { ...ident, ...landCommitEnv(g(base, 'show', '-s', '--format=%ct', m, h)) };
+    return execFileSync('git', ['commit-tree', tree, '-p', m, '-p', h, '-m', 'land #5'], { cwd: ldir, encoding: 'utf8', env }).trim();
+  };
+  const [x, y] = [build(one, two, who('lily', '@1800000000 +0000')), build(one, two, who('sam', '@1900000000 +0000'))];
+  cases.push(
+    ['land commit: two builds of the same inputs give the same SHA, whoever builds and whenever', x, y],
+    ['land commit: a different main tip, or swapped parents, give a different SHA', [build(one, three, base) === build(two, three, base), build(one, two, base) === build(two, one, base)].join(), 'false,false'],
+    ['land commit: fixed identity, dated the later parent (not the clock)', g(base, 'log', '-1', '--format=%an <%ae> %ad|%cn <%ce> %cd', '--date=raw', x), 'land <land@localhost> 1700000100 +0000|land <land@localhost> 1700000100 +0000'],
+    ['land commit env: malformed or missing dates throw', ['', 'x\ny', '1700000000', '12\n34\n56', '-5\n7'].map((v) => { try { landCommitEnv(v); return 'ok'; } catch { return 'throws'; } }).join(), 'throws,throws,throws,throws,throws'],
+  );
+  fs.rmSync(ldir, { recursive: true, force: true });
 }
 
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);

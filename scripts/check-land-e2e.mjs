@@ -305,8 +305,9 @@ const RULES = '{"type":"pull_request","parameters":{}}\n{"type":"required_status
 const crun = (o = {}) => ({ name: 'ci', status: 'completed', conclusion: 'success', app: 'github-actions', ...o });
 const pending = crun({ status: 'in_progress', conclusion: null });
 // polls: the run lists CI shows on successive reads (the last repeats). there: a leftover land/5 on the remote, thereTree its tree.
+// prior: the runs GitHub already holds for the land commit before land pushes anything (without it GitHub does not have the commit yet and the read fails).
 const ci = (o = {}) => {
-  let k = 0;
+  let k = 0; let pushed = false;
   const polls = o.polls ?? [[crun()]];
   const reused = o.thereTree === TREE && sameArgs(o.thereParents ?? [MAIN, HEAD], [MAIN, HEAD]); // land reuses a leftover only for the merge tree AND parents main's tip, then the head
   return { on: [
@@ -315,10 +316,11 @@ const ci = (o = {}) => {
     [/^git commit-tree /, () => { if (o.noCommit) throw fail; return o.commit ?? LAND; }],
     [new RegExp(`^git rev-parse ${LAND}\\^\\{tree\\}`), o.landTree ?? TREE],
     [/^git ls-remote /, o.there ? `${o.there}\t${LREF}` : ''],
-    [/^git push /, (a) => { if (o.pushFails && !a.includes('--delete')) throw fail; if (o.deleteFails && a.includes('--delete')) throw fail; return ''; }],
+    [/^git show -s --format=%ct /, o.ct ?? `${o.mainCt ?? 1700000000}\n${o.headCt ?? 1700000100}`],
+    [/^git push /, (a) => { if (o.pushFails && !a.includes('--delete')) throw fail; if (o.deleteFails && a.includes('--delete')) throw fail; pushed = true; return ''; }],
     ...(o.there ? [[new RegExp(`/git/commits/${o.there}`), (a) => { if (o.thereUnreadable) throw fail; return a.some((x) => x.includes('.parents')) ? [o.thereTree ?? OTHER, ...(o.thereParents ?? [MAIN, HEAD])].join(' ') : (o.thereTree ?? OTHER); }]] : []),
-    [new RegExp(`/git/commits/${LAND}`), () => o.ciTree ?? TREE],
-    [new RegExp(`commits/${reused ? o.there : LAND}/check-runs`), () => { if (o.runsFail) throw fail; const runs = polls[Math.min(k, polls.length - 1)]; k += 1; return JSON.stringify({ total: runs.length, runs }); }],
+    [new RegExp(`/git/commits/${LAND}`), () => { if (!pushed && !o.prior) throw fail; return o.ciTree ?? TREE; }],
+    [new RegExp(`commits/${reused ? o.there : LAND}/check-runs`), () => { if (o.runsFail) throw fail; if (!pushed && !reused && o.prior) return JSON.stringify({ total: o.prior.length, runs: o.prior }); const runs = polls[Math.min(k, polls.length - 1)]; k += 1; return JSON.stringify({ total: runs.length, runs }); }],
   ], ...o.over };
 };
 const pushes = (r) => r.w.calls.filter((c) => c.cmd === 'git' && c.args[0] === 'push').map((c) => c.args);
@@ -333,6 +335,12 @@ const local = (r, re) => r.merge && r.w.spawns.length === 1 && r.ledgerNow.inclu
 // LPRE2: land builds the merge commit, pushes it to land/<n>, and waits for CI on THAT commit; anything short of green runs the preflight as before.
 await t('ci proof: green on the land commit lands without the preflight, the note says so, and the land ref is deleted after the merge', ci(), (r) => skipped(r) && sameArgs(pushes(r), [makeArgs(), DEL]) && delAt(r) > mergedAt(r) && mergedAt(r) > 0);
 await t('ci proof: the land commit is built from the decision tree with main\'s tip and the head as parents', ci(), (r) => sameArgs(argv(r, 'git', 'commit-tree'), [`commit-tree ${TREE} -p ${MAIN} -p ${HEAD} -m land #5`]));
+const ENV = (r) => argv(r, 'git', 'commit-tree').length === 1 && r.w.calls.find((c) => c.cmd === 'git' && c.args[0] === 'commit-tree').opts.env;
+await t('ci proof: the land commit is built under a fixed identity and the later parent\'s date, not the clock', ci({ mainCt: 1700000300, headCt: 1700000100 }), (r) => { const e = ENV(r); return e && e.GIT_AUTHOR_NAME === 'land' && e.GIT_COMMITTER_EMAIL === 'land@localhost' && e.GIT_AUTHOR_DATE === '@1700000300 +0000' && e.GIT_COMMITTER_DATE === '@1700000300 +0000'; });
+await t('ci proof: parent dates that cannot be read run the local preflight, pushing nothing', ci({ ct: 'x' }), (r) => local(r, /could not build the land commit/) && pushes(r).length === 0);
+await t('ci proof: green checks already on the deterministic land commit (its ref long deleted) are the proof: no push, no delete, merged', ci({ prior: [crun()] }), (r) => skipped(r) && pushes(r).length === 0 && r.w.sleeps.length === 0 && mergedAt(r) > 0);
+await t('ci proof: a red or unfinished prior run on the land commit is no proof: land pushes and waits as before', ci({ prior: [crun({ conclusion: 'failure' })] }), (r) => skipped(r) && sameArgs(pushes(r), [makeArgs(), DEL]));
+await t('ci proof: a prior proof is not looked for when a matching leftover ref is reused', ci({ prior: [crun({ conclusion: 'failure' })], there: 'd'.repeat(40), thereTree: TREE }), (r) => r.merge && pushes(r).length === 1 && lastIs(r, DEL));
 await t('ci proof: checks still running are polled every 20 s until green', ci({ polls: [[], [pending], [pending], [crun()]] }), (r) => skipped(r) && r.w.sleeps.length === 3 && r.w.sleeps.every((ms) => ms === 20000));
 await t('ci proof: a required check failing on the land commit runs the local preflight at once, and the ref is still deleted', ci({ polls: [[crun({ conclusion: 'failure' })]] }), (r) => local(r, /did not succeed on the land commit \(failure\)/) && r.w.sleeps.length === 0 && lastIs(r, DEL));
 await t('ci proof: a cancelled required check runs the local preflight', ci({ polls: [[crun({ conclusion: 'cancelled' })]] }), (r) => local(r, /cancelled/));

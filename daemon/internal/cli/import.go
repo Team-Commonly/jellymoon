@@ -1,13 +1,11 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -98,29 +96,4 @@ func importSink(store config.Store, apply bool, o *importer.Options) (importer.S
 }
 
 // commonlyToken reads the token from the environment (and drops it from there), else asks for it on the terminal with echo off.
-func commonlyToken() (string, error) {
-	if v := strings.TrimSpace(os.Getenv(commonlyTokenEnv)); v != "" {
-		_ = os.Unsetenv(commonlyTokenEnv)
-		return v, nil
-	}
-	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
-	if err != nil {
-		return "", fmt.Errorf("no terminal to ask on: set %s to your Commonly token", commonlyTokenEnv)
-	}
-	defer tty.Close()
-	fmt.Fprint(tty, "Commonly token (not shown): ")
-	off := exec.Command("stty", "-echo")
-	off.Stdin = tty
-	if off.Run() != nil {
-		return "", fmt.Errorf("cannot hide the input on this terminal: set %s instead", commonlyTokenEnv)
-	}
-	line, err := bufio.NewReader(tty).ReadString('\n')
-	on := exec.Command("stty", "echo")
-	on.Stdin = tty
-	_ = on.Run()
-	fmt.Fprintln(tty)
-	if v := strings.TrimSpace(line); err == nil && v != "" {
-		return v, nil
-	}
-	return "", errors.New("no token was entered")
-}
+func commonlyToken() (string, error) { return readSecret(commonlyTokenEnv, "Commonly token") }

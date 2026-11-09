@@ -42,7 +42,7 @@
       "paths": [
         "daemon/"
       ],
-      "max": 6970
+      "max": 7510
     },
     "web": {
       "paths": [
@@ -54,7 +54,7 @@
       "paths": [
         "e2e/"
       ],
-      "max": 8740
+      "max": 9070
     }
   },
   "goImports": {

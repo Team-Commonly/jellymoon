@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: header-who-and-sign-out
+
+2026-11-09: web cap 2,710 -> 2,810; the tree measures 2,809. The top bar names who is signed in (the display name from `GET /v1/session`, ellipsized with a title on a narrow screen) and offers Sign out, a cookie POST to `/v1/auth/logout` that lands on `/` signed out or says it failed and stays signed in. The boot check returns the person instead of a boolean. It adds `browserHttp.logout`, six unit tests for the bar and the logout call, a layout case for the longest display name on `/` and `/pod/:id`, and a browser spec for the real logout round trip. The tree printed `LOC budget: web 2809 > 2710`; the cap is the count rounded up to ten. No other cap changes.

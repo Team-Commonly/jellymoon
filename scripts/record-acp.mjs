@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { scrub } from './acp-scrub.mjs';
-import { harnessHome } from './record-acp-env.mjs';
+import { harnessHome, removeHarnessHome } from './record-acp-env.mjs';
 
 // The harnesses this records, each with its pinned adapter (the versions match ACP_ADAPTERS in the Makefile), the adapter's bin, and the
 // agent name given to `agent add`.
@@ -21,6 +21,9 @@ const HARNESSES = {
 };
 const root = resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2);
+const noIso = args.indexOf('--no-isolate');
+if (noIso >= 0) args.splice(noIso, 1);
+const isolate = noIso < 0 && process.env.RECORD_ACP_NO_ISOLATE !== '1'; // opting out records with this machine's own agent configuration
 const at = args.indexOf('--harness');
 const harness = at < 0 ? 'claude-code' : args.splice(at, 2)[1];
 if (!HARNESSES[harness]) throw new Error(`--harness must be one of: ${Object.keys(HARNESSES).join(', ')}`);
@@ -63,13 +66,13 @@ async function startServer() {
 }
 
 /** The daemon, with the adapter behind the tee as its claude-code program, and one agent. The daemon's directory is empty. */
-async function startDaemon(s, raw) {
+async function startDaemon(s, raw, home) {
   const bin = join(tmp, 'jellymoon'), tee = join(tmp, 'acprec'), work = join(tmp, 'work');
   execFileSync('go', ['build', '-o', bin, './daemon/cmd/jellymoon'], { cwd: root });
   execFileSync('go', ['build', '-o', tee, './e2e/testdata/acprec'], { cwd: root });
   mkdirSync(work);
   const adapter = join(root, `.tools/acp/node_modules/.bin/${H.bin}`);
-  const env = { PATH: process.env.PATH, HOME: process.env.HOME, ...harnessHome(harness, tmp, process.env), USER: process.env.USER, LANG: process.env.LANG ?? 'en_US.UTF-8', TMPDIR: tmp, JELLYMOON_HOME: join(tmp, 'jm'), JELLYMOON_SERVER: s.base,
+  const env = { PATH: process.env.PATH, HOME: process.env.HOME, ...home, USER: process.env.USER, LANG: process.env.LANG ?? 'en_US.UTF-8', TMPDIR: tmp, JELLYMOON_HOME: join(tmp, 'jm'), JELLYMOON_SERVER: s.base,
     [`JELLYMOON_HARNESS_${harness.toUpperCase().replace(/-/g, '_')}`]: `${tee} ${raw} ${adapter}` };
   const daemon = run(bin, ['daemon', 'start', '--foreground'], { cwd: work, env: { ...env, JELLYMOON_USER_TOKEN: s.token } });
   await until('the stored computer', 15000, () => existsSync(join(env.JELLYMOON_HOME, 'computer.json')));
@@ -102,9 +105,10 @@ function keep(raw) {
 async function main() {
   if (again) return keep(again);
   if (!existsSync(join(root, `.tools/acp/node_modules/.bin/${H.bin}`))) throw new Error('the adapter is not installed: run `make acp-tools`');
+  const home = harnessHome(harness, tmp, process.env, { isolate }); // before anything starts: a missing file sign-in fails here
   const raw = join(tmp, 'raw.jsonl');
   const s = await startServer();
-  const d = await startDaemon(s, raw);
+  const d = await startDaemon(s, raw, home);
   const ws = await assign(s, d.agentId);
   await until('the run to end', 240000, () => /run \S+ ended/.test(d.daemon.text));
   await sleep(1500);
@@ -116,5 +120,6 @@ async function main() {
 let done = false;
 try { await main(); done = true; } finally {
   for (const p of procs) { try { process.kill(-p.pid, 'SIGKILL'); } catch { /* already gone */ } }
+  if (made) removeHarnessHome(harness, made); // the copied sign-in goes on every exit path, even when the rest of the scratch dir is kept
 }
 if (done && made) rmSync(made, { recursive: true, force: true }); // only the scratch dir mkdtemp made, never a --scrub input's parent; kept when the run or the scrub failed, for --scrub

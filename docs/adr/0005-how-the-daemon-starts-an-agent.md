@@ -34,5 +34,38 @@ On `run.wake` the daemon acks the wake, calls `POST /v1/runs` with its computer 
 ## Open items
 
 - A daemon killed with SIGKILL cannot signal its agent. A well-behaved agent exits when its stdin closes; one that ignores that stays.
-- The agent's working directory is the daemon's. Per-run workspaces belong with the real harness adapters.
+- ~~The agent's working directory is the daemon's.~~ Closed 2026-11-08 by the update below.
 - `run.stop` is not handled yet, and neither are a second wake for an agent that is mid-run or a tool call report (`run.toolcall`).
+- 2026-11-08: `run.stop` is handled now; a stop, the run deadline or a daemon stop cancels the session before any signal; the daemon answers `session/request_permission` by policy; see ADR 0007. A second wake for an agent that is mid-run and `run.toolcall` are still not handled.
+
+## Update 2026-11-08: every run gets its own working directory
+
+The daemon makes a directory for each run before it starts the agent, passes it as `session/new`'s `cwd`, and removes it when
+the run ends. Code: `daemon/internal/workspace`, called from `daemon/internal/daemon/run.go`.
+
+- **Where.** `<config dir>-workspaces`, the config dir's sibling (0700), named for the run id: `<root>/<run id>`. Never the
+  agent's repo and never the daemon's own working directory. Run ids come from the pod and are checked as plain names.
+- **What.** An agent added without `--repo` gets a new empty directory. An agent added with `--repo <path>` gets a git worktree
+  of that repo's HEAD on the branch `jellymoon/run-<run id>`. A run id is used once, so the branch cannot collide.
+- **When it goes.** A `completed` run's directory is removed, with its worktree record and branch. A `failed` run's stays for
+  inspection, marked by an empty `<run id>.kept` file beside it, and only the newest K = 5 stay: enough to look at the last few
+  failures, few enough that an agent failing in a loop (each worktree is a full checkout) cannot fill the disk.
+- **After a crash.** A daemon killed mid-run leaves its run directories. On start, once the control socket is held (so no other
+  daemon runs on this config dir), the daemon removes every run directory not marked kept, and any marker whose directory is gone.
+- **The guard.** Cleanup removes a path only if, once cleaned, it is a valid run name directly inside the resolved root and a real
+  directory there. A `..`, a path elsewhere and a symlink (even one inside the root) are refused. It deletes only the branch
+  named for that run. The run is over when cleanup happens, so what the directory holds, uncommitted work included, is
+  disposable; that is why it needs no `--force` decision.
+- **Cleanup never reads the run directory.** The agent can rewrite its worktree's `.git` file, so cleanup asks git nothing about it.
+  A worktree run has a sidecar `<run id>.repo` beside its directory (0600, written before the worktree) holding the repo path.
+  Cleanup reads only that: `worktree prune` and `branch -D jellymoon/run-<run id>` in that repo, then the directory goes. No
+  sidecar means a plain directory and no git runs. This also cleans the repo when the directory was lost or its `.git` broken.
+  Every cleanup git call runs with `-c core.hooksPath=/dev/null` (no hook runs, `reference-transaction` included) and
+  `-c core.fsmonitor=false` (a repo's config can name an fsmonitor program). Cleanup executes nothing from any repo.
+- **Prepare runs the user's own hooks.** `git worktree add` runs the repo's `post-checkout` hook, as a normal checkout would.
+  The repo named by `--repo` is the user's, so it is trusted for that one call.
+- **A kept marker goes with its directory.** Trimming deletes `<run id>.kept` only after the directory was removed; a directory
+  cleanup refused keeps its marker.
+- **Not covered.** A worktree shares its repo's object store and config, so an agent with write access to the worktree can
+  change that repo's git config; the allow-listed environment and the run token are the boundary, not the checkout. Two agents
+  on one repo run in separate worktrees but can still push the same remote branch.

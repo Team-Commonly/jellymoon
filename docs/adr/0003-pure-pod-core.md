@@ -228,3 +228,4 @@ still throw is an invariant violation, i.e. a bug or a corrupt saved state: `str
   the expiry marker, so a later `op` restores a claim it asked to release. ADR 0002 should settle both.
 - ADR 0002 (NB4): a restart stretch (`staleMs` > 0) can hold a lease past "last renewal plus 60 s" (ADR 0002, Decision), so the core refuses it (item 5). ADR 0002 needs a restart clause before any stretch or save coalescing can return.
 - ADR 0002 (NB13): expiry is inclusive at `leaseUntil`, so with an exact 15 s heartbeat cadence a claim drops after 3 missed heartbeats, not the "four missed heartbeats" in ADR 0002's Decision. A wording point.
+- 2026-11-08: `task_update` carries no `note`. The product-owner-delegated lead ruled it out (the contract had nowhere to keep one); a progress update is a `post` with kind progress and the `taskId`.

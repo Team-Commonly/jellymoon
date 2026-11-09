@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: e2e e2e-a e2e-c e2e-any e2e-deployed deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-goentropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: e2e e2e-a e2e-c e2e-any e2e-deployed deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -38,6 +38,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
 	$(BUN) test podcore worker server
+	$(BUN) run test:web
 
 # The Cloudflare adapter's unit tests alone (CI's `worker` job). bun test exits 1 when it finds no test, so an empty run is red.
 test-worker: node_modules
@@ -185,7 +186,7 @@ deployed-boot:
 	port=$$($(BUN) -e 'const s = Bun.serve({ port: 0, fetch() { return new Response(); } }); console.log(s.port); s.stop(true);'); \
 	code() { curl -s -o /dev/null -w '%{http_code}' "$$@"; }; \
 	want() { [ "$$2" = "$$3" ] || { echo "deployed-boot: $$1: got $$2, want $$3"; tail -20 "$$log"; exit 1; }; echo "deployed-boot: ok $$1 -> $$2"; }; \
-	trap 'kill $$pid 2>/dev/null; wait $$pid 2>/dev/null' EXIT; \
+	trap 'if [ "$$pid" -gt 0 ]; then kill $$pid 2>/dev/null; wait $$pid 2>/dev/null; fi; tmp="$${TMPDIR:-/tmp}"; tmp="$${tmp%/}"; case "$$dir" in "$$tmp"/?*|/tmp/?*) [ -d "$$dir" ] && rm -rf -- "$$dir";; esac' EXIT; \
 	out=$$(env -u ENV -u DATABASE_URL PORT=$$port "$$bun" "$$bundle" 2>&1); rc=$$?; \
 	if [ $$rc -eq 0 ] || ! echo "$$out" | grep -q 'DATABASE_URL is required'; then echo "deployed-boot: with no ENV and no DATABASE_URL the server must refuse to start (rc=$$rc)"; exit 1; fi; \
 	echo "deployed-boot: ok the server refuses to start with no database (rc=$$rc)"; \

@@ -106,9 +106,10 @@ second callback or a new app then.
    that commit (tagged with its SHA), runs `wrangler deploy` for the front Worker and the container with an API token scoped
    to this one job, and sets secrets from Actions secrets.
 2. **Deployed-boot, read-only, against the live URL.** The existing `deployed-boot` kills and restarts its own process, which a
-   live instance cannot allow, so it gains a URL mode: `/healthz` is 200, `/__test/*` is 404 (no handler), an unauthenticated
-   user route is 401, `/v1/auth/github/start` redirects to GitHub with the hosted client id, and the web client's
-   `index.html` is served. It creates nothing.
+   live instance cannot allow, so it gains a URL mode: `/healthz` is 200, `/__test/*` is never 200 (404 with no handler,
+   401 when a test bearer is set), an unauthenticated user route is 401, and the web client's `index.html` is served. It
+   creates nothing, so it leaves out `/v1/auth/github/start` and `POST /v1/auth/device`, which each write a sign-in
+   state row and use a start-limit slot; the hosted client id is checked by the walk instead.
 3. **Rollback.** A failed live check redeploys the previous good SHA's image, which the job records. Schema changes are
    additive only (`create table if not exists`, new nullable columns), so the previous bundle still runs on a newer schema.
    A change that cannot be additive needs its own runbook before it merges.
@@ -143,7 +144,9 @@ The new front Worker is not `worker/`: it forwards requests and decides nothing.
   Durable Object. Proved in the same first unit; if it cannot, this ADR is revisited before any other work.
 - **A rollout's overlap.** If a rollout starts the new instance before the old one stops, two processes would own every pod
   at once. Until that is proved not to happen, the server takes a Postgres advisory lock at boot and refuses to serve without
-  it (a small server change that self-hosters also get, one code path).
+  it (a small server change that self-hosters also get, one code path). An owner whose host vanishes without closing its
+  connection would hold that lock until the database notices, so the lock's session sets `idle_session_timeout`, and the
+  provider must run Postgres 14 or later.
 - **The Postgres provider and region**, and the spend, are chosen in the deploy unit.
 - **Sharding.** Unchanged from ADR 0006: one process until a measured load says otherwise.
 

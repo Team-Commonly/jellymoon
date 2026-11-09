@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import './app.css';
 import { App } from './App';
+import { browserHttp } from './http';
 import type { Connect } from './store';
 
 // The pod socket. Cookie sign-in for the browser socket is a separate server unit; until it lands this connects
@@ -14,8 +15,9 @@ const connect = (podId: string): Connect => (h) => {
   return { send: (t) => ws.send(t), close: () => ws.close() };
 };
 
+// Whether the person is signed in comes from the cookie session, a separate server unit (F15); false until it lands.
 createRoot(document.getElementById('root')!).render(
   <BrowserRouter>
-    <App connect={connect} />
+    <App connect={connect} http={browserHttp} signedIn={false} />
   </BrowserRouter>,
 );

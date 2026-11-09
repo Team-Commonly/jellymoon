@@ -264,3 +264,5 @@ goes in the PR.
 Record a hit here with its date and evidence, and raise it to the coordinator.
 
 Follow-ups (not podcore): schema unit to reword the acked-wake text, since the core's `wake_ack` changes nothing (raised in an earlier pod-core review).
+
+2026-11-08: pod-state server review follow-ups. A failed replay now ends the subscription; PUBLIC_URL empty or slash-ended builds correct links; the failed-tick test bounds retries; the startup refusal message is true; make e2e-a clears JM_E2E_SKIP; three doc lines corrected.

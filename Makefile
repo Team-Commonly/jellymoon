@@ -144,7 +144,7 @@ define judge_e2e
 	exit $$rc
 endef
 
-# The contract suite against the pod-state server. It persists every command, heartbeats included (staleMs is 0). The tests that
+# The contract suite against the pod-state server. JM_E2E_SKIP is set from E2E_C_SKIP below, so an inherited value never applies. It persists every command, heartbeats included (staleMs is 0). The tests that
 # need the Cloudflare adapter's object routes are skipped, each with its reason (docs/development/e2e-contract.md, "Skipped on the server").
 E2E_C_SKIP := TestEvictMidClaim,TestEvictAlarmWake,TestEvictPastDeadline
 e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
@@ -154,8 +154,11 @@ e2e-c: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
 e2e: e2e-c
 
 # The contract suite against the Cloudflare adapter (worker/), which stays in the tree as a second adapter.
+# JM_E2E_SKIP is cleared here: the Worker runs the whole suite, and an inherited skip list would drop tests without a word.
+# A deliberate skip goes through `make e2e-a E2E_A_SKIP=<names>`.
+E2E_A_SKIP :=
 e2e-a: node_modules
-	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh')
+	$(call judge_e2e,e2e-a,JM_E2E_SERVER='$(CURDIR)/worker/dev.sh' JM_E2E_SKIP='$(E2E_A_SKIP)')
 
 # The Cloudflare adapter (worker/) under `wrangler dev --local`. Loopback only.
 worker-dev: node_modules

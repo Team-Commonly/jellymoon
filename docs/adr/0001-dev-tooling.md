@@ -40,12 +40,12 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
 | worker | 2,000 |
-| server | 2,110 |
+| server | 2,180 |
 | daemon | 5,000 |
 | e2e | 6,380 |
 | web | 1,580 |
 
-The caps add up to 24,270 lines (restated 2026-11-08 against the merged entropy.json: core 4,200, podcore 3,000, worker 2,000, server 2,110, daemon 5,000, web 1,580, e2e 6,380). Agent-written comparables grew without bounds: herdr reached
+The caps add up to 24,340 lines (restated 2026-11-09 against the merged entropy.json: core 4,200, podcore 3,000, worker 2,000, server 2,180, daemon 5,000, web 1,580, e2e 6,380). Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -88,3 +88,4 @@ The caps add up to 24,270 lines (restated 2026-11-08 against the merged entropy.
 2026-11-08: the merge with main keeps this branch's web (840) cap and main's podcore (3,000) cap, with the core (3,720), worker (1,790), server (1,800) and e2e (4,650) caps, all as they stand in entropy.json; no cap changes; the total is 18,800. F18.
 2026-11-08: the merge of main (daemon permissions, #18) into the run-workspace branch changes no cap; the caps stand as they are in entropy.json (core 4,200, worker 1,900, server 2,100, podcore 3,000, daemon 5,000, web 840, e2e 6,000) and the total is 23,040. WSP.
 2026-11-08: worker cap 1,950 → 2,000, server cap 2,100 → 2,110 and e2e cap 6,000 → 6,380, the merge of main into the F15 branch (the device login and main's e2e tests together): the gate printed `LOC worker 1990 / 1950`, `LOC server 2104 / 2100` and `LOC e2e 6376 / 6000` on the merged tree, before this raise; each cap is the count rounded up to ten; the table caption carries the moved total. No other cap changes. F15.
+2026-11-09: server 2,110 -> 2,180; merged tree measures 2,176; #16's server follow-ups meet F15's sign-in. Feature growth, not a refactor; the cap is the count rounded up to ten; no other cap changes; the total is 24,340. F15.

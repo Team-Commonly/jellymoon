@@ -2,10 +2,10 @@ import { cleanup, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
-import { fakeNet } from './testkit';
+import { fakeHttp, fakeNet } from './testkit';
 
 afterEach(cleanup);
-const at = (path: string) => render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} /></MemoryRouter>);
+const at = (path: string) => render(<MemoryRouter initialEntries={[path]}><App connect={() => fakeNet().connect} http={fakeHttp().http} signedIn={false} /></MemoryRouter>);
 
 describe('shell', () => {
   it('renders the top bar with the pod id and a sign-in button on /pod/:id', () => {

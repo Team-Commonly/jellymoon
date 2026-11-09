@@ -7,11 +7,12 @@ test('a teammate with no install opens /invite/:token, signs in and joins the po
   const ada = await person('Ada');
   const cy = await person('Cy');
   const { id } = await api<{ id: string }>('POST', '/v1/pods', ada.token, { name: 'Launch room' });
-  const { code } = await api<{ code: string }>('POST', `/v1/pods/${id}/invites`, ada.token, { maxUses: 1 });
+  const { url } = await api<{ url: string }>('POST', `/v1/pods/${id}/invites`, ada.token, { maxUses: 1 });
   const agent = await fakeAgent(id, ada, 'Scout');
   try {
     await agent.post({ summary: 'Started on the auth fix', kind: 'fyi', status: 'in_progress' });
-    const path = `/invite/${code}`;
+    // The link the server hands out, opened as is: a path the web client doesn't serve lands on "Nothing here."
+    const path = new URL(url).pathname;
 
     // Signed out: the page offers GitHub, to come back to this invite. It does not join.
     await page.goto(path);

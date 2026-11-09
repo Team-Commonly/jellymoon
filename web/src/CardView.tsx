@@ -2,7 +2,7 @@
 // owns the keyboard state, so a click and a key go through the same confirm row.
 import { useState } from 'react';
 import type { OptionId } from '../../gen/ts/protocol';
-import type { Card } from './cards';
+import { shortTime, type Card } from './cards';
 
 type Ask = NonNullable<Card['ask']>;
 
@@ -77,7 +77,7 @@ function AskBody(p: { ask: Ask; confirm: OptionId | null; act: CardActions }) {
       {ask.state === 'open' && <Options ask={ask} act={act} />}
       {ask.state === 'open' && confirm && <Confirm ask={ask} optionId={confirm} act={act} />}
       {ask.state === 'open' && ask.pending && !confirm && <p>Sending your ruling, waiting for the pod.</p>}
-      {ask.ruling && <p>{`Ruled: ${ask.ruling.label} by ${ask.ruling.by}`} <time dateTime={ask.ruling.at}>{ask.ruling.at}</time></p>}
+      {ask.ruling && <p>{`Ruled: ${ask.ruling.label} by ${ask.ruling.by}`} <time dateTime={ask.ruling.at}>{shortTime(ask.ruling.at)}</time></p>}
       {ask.state === 'expired' && <p>Expired without a ruling.</p>}
       {ask.error && <p role="alert">{ask.error}</p>}
     </>
@@ -100,7 +100,7 @@ export function CardView({ card, open, current, confirm, act, onFocus, elRef }: 
       <div onClick={act.toggleFold}>
         <span>{card.author}</span>
         <h3>{card.headline}</h3>
-        <span data-chip="status">{card.status}</span>
+        {card.status && <span data-chip="status">{card.status}</span>}
         {card.receipt && <span data-chip="receipt">{card.receipt}</span>}
       </div>
       {open && card.body && <pre>{card.body}</pre>}

@@ -51,6 +51,11 @@ describe('the stream', () => {
     expect(within(list[1]).getByText('in_progress')).toBeTruthy();
   });
 
+  it('shows no status chip on a person\'s message', () => {
+    mount([note(1, { author: you, status: 'done' })]);
+    expect(within(cards()[0]).queryByText('done')).toBeNull();
+  });
+
   it('shows the receipt chip only when the message has one', () => {
     const receipt = { runId: 'r', agentId: 'a', computerId: 'c', harness: 'codex' as const, startedAt: 's', postedAt: 'p', toolCalls: 7, wakeReason: 'mention' as const };
     mount([note(1, { receipt }), note(2)]);
@@ -152,6 +157,12 @@ describe('ruling from the keyboard', () => {
     const ruled = within(cards()[1]);
     expect(ruled.getByText(/Ruled: Option b by Ada/)).toBeTruthy();
     expect(ruled.queryByRole('button', { name: /Option/ })).toBeNull();
+    expect(ruled.queryByText('blocked')).toBeNull();
+    expect(ruled.getByText('ruled')).toBeTruthy();
+    const when = ruled.getByText(/Nov 8/);
+    expect(when.tagName).toBe('TIME');
+    expect(when.getAttribute('datetime')).toBe('2026-11-08T11:00:00Z');
+    expect(when.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
 
   it('1..n picks that option and opens the confirm row without ruling', () => {

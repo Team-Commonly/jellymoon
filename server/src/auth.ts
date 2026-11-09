@@ -22,28 +22,65 @@ const STATE = 'jm_oauth_state';
 export const GITHUB_TIMEOUT_MS = 10_000;
 /** Starts (device and GitHub, each) per client address per minute, unless AUTH_START_LIMIT says otherwise. */
 const START_LIMIT = 30;
+/** Failed user-code lookups (approve and deny together) per signed-in person per fixed ten minutes (RFC 8628 section 5.1). */
+const CODE_LIMIT = 10;
+const CODE_WINDOW_MS = 600_000;
 
 export interface GitHub { web: string; api: string; id: string; secret: string }
 /** Sign-in settings from the environment (config.ts appOptions). */
 export interface SignInOpts { publicUrl?: string; local: boolean; startLimit?: number; trustProxy?: number }
 
+/** Counts per key in a fixed window, in memory (one process, ADR 0006). A window's counts are dropped when it ends. */
+class Counts {
+  private win = -1;
+  private readonly seen = new Map<string, number>();
+  constructor(private readonly ms: number) {}
+  /** One more for `key` in the window holding `now` (or the newer one already counting): the new count, and the seconds it has left. */
+  take(key: string, now: number): { n: number; retry: number; win: number } {
+    const w = Math.max(Math.floor(now / this.ms), this.win);
+    if (w !== this.win) { this.win = w; this.seen.clear(); }
+    const n = (this.seen.get(key) ?? 0) + 1;
+    this.seen.set(key, n);
+    return { n, retry: Math.ceil(((w + 1) * this.ms - now) / 1000), win: w };
+  }
+  /** Takes back one that `take` counted in window `win` (what take returned), while that window is still the current one. */
+  give(key: string, win: number): void {
+    const n = this.seen.get(key);
+    if (win === this.win && n !== undefined && n > 0) this.seen.set(key, n - 1);
+  }
+}
+
+const limited = (c: Context, retry: number, message: string): Response => { c.header('Retry-After', String(retry)); return fail(c, 'rate_limited', message); };
+
 /**
- * The start limit: a fixed one-minute window per route and client address, counted in memory (one process, ADR 0006). Past
- * `limit`, rate_limited with Retry-After, the seconds left in the window. Under it, the expired sign-in rows are swept.
+ * The start limit: a fixed one-minute window per route and client address, in `starts`. Past `limit`, rate_limited with
+ * Retry-After, the seconds left in the window. Under it, the expired sign-in rows are swept.
  */
-function startGate(hub: Hub, limit: number, trustProxy: number): (c: Context) => Promise<Response | null> {
-  let win = -1;
-  const seen = new Map<string, number>();
+function startGate(hub: Hub, starts: Counts, limit: number, trustProxy: number): (c: Context) => Promise<Response | null> {
   return async (c) => {
     const now = hub.now();
-    const w = Math.floor(now / 60_000);
-    if (w !== win) { win = w; seen.clear(); }
-    const key = `${c.req.path} ${clientIp(c, trustProxy)}`;
-    const n = (seen.get(key) ?? 0) + 1;
-    seen.set(key, n);
-    if (n <= limit) { await sweepSignIn(hub.db, now); return null; }
-    c.header('Retry-After', String(Math.ceil(((w + 1) * 60_000 - now) / 1000)));
-    return fail(c, 'rate_limited', 'Too many sign-in starts from this address; wait for Retry-After.');
+    const got = starts.take(`${c.req.path} ${clientIp(c, trustProxy)}`, now);
+    if (got.n <= limit) { await sweepSignIn(hub.db, now); return null; }
+    return limited(c, got.retry, 'Too many sign-in starts from this address; wait for Retry-After.');
+  };
+}
+
+/**
+ * The guess limit on approve and deny (ADR 0008 step 4), checked before the lookup, so a caller past it learns nothing:
+ * CODE_LIMIT failed lookups per person per fixed ten minutes, and each failed lookup also counts in the address's device
+ * start limit, so many accounts from one address share that. A request takes one from both and gives them back when its
+ * lookup succeeds (the returned function): a success never counts, and concurrent guesses cannot pass the limit together.
+ */
+function guessGate(hub: Hub, starts: Counts, limit: number, trustProxy: number): (c: Context, userId: string) => Response | (() => void) {
+  const codes = new Counts(CODE_WINDOW_MS);
+  return (c, userId) => {
+    const now = hub.now();
+    const mine = codes.take(userId, now);
+    if (mine.n > CODE_LIMIT) return limited(c, mine.retry, 'Too many unknown, expired or used codes from this account; wait for Retry-After.');
+    const addr = `/v1/auth/device ${clientIp(c, trustProxy)}`;
+    const here = starts.take(addr, now);
+    if (here.n > limit) { codes.give(userId, mine.win); return limited(c, here.retry, 'Too many sign-in attempts from this address; wait for Retry-After.'); }
+    return () => { codes.give(userId, mine.win); starts.give(addr, here.win); };
   };
 }
 
@@ -104,8 +141,11 @@ export async function fromGitHub(gh: GitHub, code: string, redirect: string, tim
   } catch { return 'upstream'; }
 }
 
-/** The device flow (the CLI's side, the approval and the refusal), GET /v1/me and GET /v1/session. */
-function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person: (c: Context) => Promise<Actor | null>, gate: (c: Context) => Promise<Response | null>): void {
+/**
+ * The device flow (the CLI's side, the approval and the refusal), GET /v1/me and GET /v1/session. Approve binds a pending code
+ * to the caller; deny refuses it (idempotent). Each refusal is the same answer from both routes, and both share one guess limit.
+ */
+function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person: (c: Context) => Promise<Actor | null>, gate: (c: Context) => Promise<Response | null>, guess: ReturnType<typeof guessGate>): void {
   app.post('/v1/auth/device', async (c) => {
     const refused = await gate(c);
     if (refused !== null) return refused;
@@ -135,7 +175,6 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
     return c.json({ token: minted.token, user: { kind: 'human', id: user.id, displayName: user.name }, expiresAt: isoOf(minted.expiresAt) });
   });
 
-  // Approve binds a pending code to the caller; deny refuses it (idempotent). Each refusal is the same answer from both routes.
   for (const route of ['approve', 'deny'] as const) {
     app.post(`/v1/auth/device/${route}`, async (c) => {
       if (!JSON_TYPE.test(c.req.header('Content-Type') ?? '')) return fail(c, 'forbidden', `${route === 'approve' ? 'Approve' : 'Deny'} with a JSON body.`);
@@ -145,9 +184,11 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
       const body = await parse(c);
       const problem = body === null ? 'The body must be a JSON object.' : check(route === 'approve' ? 'DeviceApproveRequest' : 'DeviceDenyRequest', body);
       if (problem !== null || body === null) return bad(c, problem ?? '');
+      const held = guess(c, who.actor.id); // before the lookup
+      if (held instanceof Response) return held;
       const hash = hashToken(canonCode(body.userCode as string));
       const now = hub.now();
-      if (route === 'approve' ? await approveDevice(hub.db, hash, who.actor.id, now) : await denyDevice(hub.db, hash, now)) return c.json({});
+      if (route === 'approve' ? await approveDevice(hub.db, hash, who.actor.id, now) : await denyDevice(hub.db, hash, now)) { held(); return c.json({}); }
       const row = await deviceByUser(hub.db, hash);
       if (row === undefined) return fail(c, 'not_found', 'No such code.');
       return row.expiresAt <= now ? fail(c, 'expired_token', 'This code expired.') : fail(c, 'gone', 'This code was already used.');
@@ -169,7 +210,9 @@ export function authRoutes(app: Hono, hub: Hub, gh: GitHub | null, opts: SignInO
   const { publicUrl, local } = opts;
   const base = (c: Context): string => ownBase(c, publicUrl, local);
   const cookie = { httpOnly: true, secure: !local, sameSite: 'Lax' } as const;
-  const gate = startGate(hub, opts.startLimit ?? START_LIMIT, opts.trustProxy ?? 0);
+  const starts = new Counts(60_000);
+  const limit = opts.startLimit ?? START_LIMIT;
+  const gate = startGate(hub, starts, limit, opts.trustProxy ?? 0);
   /** The person behind a Bearer jmu_ or the session cookie, for GET /v1/me (a read). */
   const person = async (c: Context): Promise<Actor | null> => {
     const p = presented(c, true);
@@ -177,7 +220,7 @@ export function authRoutes(app: Hono, hub: Hub, gh: GitHub | null, opts: SignInO
     return who?.kind === 'user' ? who.actor : null;
   };
 
-  deviceRoutes(app, hub, base, person, gate);
+  deviceRoutes(app, hub, base, person, gate, guessGate(hub, starts, limit, opts.trustProxy ?? 0));
 
   /** Revokes the presented token, and the session cookie's too when a Bearer came beside it; closes their pod sockets. A dead session cookie alone is cleared and answers 200. */
   app.post('/v1/auth/logout', async (c) => {

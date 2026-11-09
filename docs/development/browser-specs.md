@@ -1,0 +1,45 @@
+# The browser specs
+
+`web-e2e/` holds the Playwright specs of the web client. They prove the browser surface only: the API-level contract suite
+(`make e2e`, [e2e-contract.md](e2e-contract.md)) stays the gate for the pod's rules. The card model, the store and the key map
+have their own unit tests in `web/src/` (vitest, no browser).
+
+| Spec | What it proves |
+|---|---|
+| `approve-keyboard.spec.ts` | An ask the fake agent posts while the page is open appears with no reload. Keys only: in the composer `a` and Enter are text and rule nothing; out of it, `j` focuses the ask, `a` opens the confirm row on the recommended option and Enter rules. The page shows the ruling only once the pod's `message.updated` reaches it, and the pod's log agrees |
+| `needs-you.spec.ts` | With one ask addressed to you and one to someone else, `g n` shows exactly yours; `Needs you · 1` drops to 0 when you rule and "Nothing needs you" shows; a reload of `?filter=needs-you` keeps the filter on |
+
+Each spec runs twice, as the projects `phone-390` (390x844) and `desktop-1440` (1440x900), in Chromium.
+`device.spec` and `invite.spec` wait for the browser session (sign-in and cookie routes), and `layout.spec` is its own unit.
+
+## Running them
+
+- `make e2e-web` builds the client into `web/dist` (`bun run build:web`), then runs `playwright test -c web-e2e`. It needs Node 20
+  or newer and the Chromium build the pinned `@playwright/test` expects.
+- **Browsers are installed in CI only.** CI's `browser` job runs `playwright install --with-deps chromium` inside the job, then
+  `make e2e-web`, and uploads `web-e2e/report/` and `web-e2e/test-results/` (traces of failed tests) when it fails. On a shared
+  or small machine, don't download a browser to run these: run `bun x playwright test -c web-e2e --list` to check that the config
+  and specs load (2 specs x 2 projects = 4 tests), type-check them with `bun run check:types`, and let CI run them.
+- On a machine that already has the pinned Chromium, `make e2e-web` runs them as CI does.
+
+## The harness
+
+- `global-setup.ts` starts one pod-state server (`bun server/src/main.ts`) with `ENV=local`, a fresh PGlite data dir under the
+  temp dir, `PORT` from a free port, no `DATABASE_URL`, and `JM_WEB_DIR=web/dist`, so the server itself serves the built client
+  as it does when deployed (ADR 0006). It waits on `GET /healthz` and fails at once if the server exits. Its teardown stops the
+  server and removes the data dir. The specs find it through `JM_WEB_E2E_BASE`.
+- `fixtures.ts` gives each test a fresh pod: an owner (`POST /__test/session`), a second member who joins by invite, and the fake
+  agent. Nothing is shared between tests or projects, so a ruling in one never shows in another.
+- `pod.ts` is the fake agent: a computer and an agent registered through the real routes. It gets a run token as the daemon
+  does (a task assigned to the agent wakes it, it acks the wake, `POST /v1/runs`) and posts asks with it. `replay()` reads the
+  pod's own log by subscribing from seq 0, which is how a spec checks what the API says, apart from what the page shows.
+- **The socket bridge.** On main the pod socket takes its token only in `Authorization` on the upgrade, and a browser cannot set
+  that header. So the fixture routes the page's socket (`page.routeWebSocket`) to a Node-side socket on the same URL with the
+  owner's token, and relays frames both ways unchanged. The page's store, frames and rendering are the real ones. The bridge
+  records every frame and can hold the server's frames back: that is how `approve-keyboard` shows the card still waiting while
+  the pod has already ruled. When the browser session reaches the socket, the fixture can sign the page in by cookie instead,
+  and the bridge's holding becomes the only reason to keep it.
+- No fixed ports and no sleeps: the specs wait on the server's readiness, on frames the bridge saw and on the DOM
+  (Playwright's retrying `expect`). `retries` is 0, so a flaky spec fails rather than passing on a second try.
+- The selectors are the roles the components render: `article` per card, the `h3` headline, the `Options` and
+  `Confirm ruling` groups, the `Message` textbox, the `Needs you · n` button and its `aria-pressed`, and the `status` region.

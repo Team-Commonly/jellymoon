@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: acp-tools record-acp e2e e2e-a e2e-c e2e-any e2e-deployed deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: acp-tools record-acp e2e e2e-a e2e-c e2e-any e2e-deployed e2e-web deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -188,6 +188,13 @@ e2e-deployed: node_modules $(if $(DATABASE_URL),,$(PGLITE_TPL))
 	$(BUN) build server/src/main.ts --target=bun --external @electric-sql/pglite --outfile $(DEPLOYED_BUNDLE)
 	@$(MAKE) --no-print-directory deployed-boot
 	$(call judge_e2e,e2e-deployed,JM_E2E_SERVER='$(SERVER_DEPLOYED)' JM_E2E_SKIP='$(E2E_C_SKIP)' $(if $(DATABASE_URL),JM_E2E_STATE_IN_DB=1,JM_PGLITE_TEMPLATE='$(PGLITE_TPL)'))
+
+# The browser specs (docs/development/browser-specs.md): builds the web client into web/dist, then runs web-e2e/ under Playwright.
+# Its global setup starts the pod-state server itself (ENV=local, a fresh PGlite dir, a free port), serving that build. It needs Node
+# and the pinned Chromium; CI's browser job installs the browser in the job. Never install a browser on a laptop for this.
+e2e-web: node_modules $(PGLITE_TPL)
+	$(BUN) run build:web
+	BUN=$(BUN) JM_PGLITE_TEMPLATE=$(PGLITE_TPL) node_modules/.bin/playwright test -c web-e2e
 
 # Boots the bundle as its own process and drives it by URL only: it must refuse to start with no database, answer /healthz, keep the
 # test routes closed in the hosted shape (no bearer is 401, no clock route), serve a user's pod through the real routes, and keep that

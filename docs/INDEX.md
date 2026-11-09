@@ -10,6 +10,7 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `development/workflow.md` | How Jellymoon is built: the long-running harness, stage skills, entropy gate, review and merge (local verification is the authority) |
 | `development/landing.md` | `make land`: the only merge path, its environment variables, the ledger format and the verdict message the operator posts |
 | `development/verifier.md` | The verifier protocol: what a fresh-context reviewer checks, and its verdict format |
+| `development/browser-specs.md` | The Playwright browser specs in `web-e2e/`: what they prove, how the harness starts the server and bridges the pod socket, `make e2e-web`, and that browsers are installed only in CI |
 | `development/e2e-contract.md` | The black-box e2e contract suite in `e2e/`: how it starts a server, the `/__test/*` routes, the clock and persistence rules, and what each test proves |
 | `adr/0006-pod-state-server.md` | The decision that the server is one Bun process with Hono and Postgres, the five adapter duties, storage, test routes, and the two open questions |
 | `../worker/README.md` | The Cloudflare adapter in `worker/`: what it is, `make worker-dev`, `make e2e-a` |

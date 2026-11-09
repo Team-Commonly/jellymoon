@@ -48,7 +48,7 @@ type Plan struct {
 func whoAmI(c *Commonly) (Me, error) {
 	var me Me
 	if err := c.Get("/api/auth/user", nil, &me); err != nil {
-		return me, err
+		return me, c.explainIdentity(err)
 	}
 	switch {
 	case me.ID == "":

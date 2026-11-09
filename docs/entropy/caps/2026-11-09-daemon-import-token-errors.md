@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: daemon-import-token-errors
+
+2026-11-09: daemon cap 7,670 -> 7,810; `jellymoon import commonly` now refuses a token with whitespace or control characters inside it before any request, and turns a 401, 403 or 404 on the identity check (and any other status) into a message that names the cause and the host, with tests that none of them holds the token. Two more tests run the command itself: a token with a space inside sends no request, and whitespace around the token is trimmed. The tree printed `LOC budget: daemon 7807 > 7670`; the cap is the count rounded up to ten. No other cap changes.

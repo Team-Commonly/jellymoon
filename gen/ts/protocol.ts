@@ -660,6 +660,20 @@ export interface Grant {
   createdAt: Timestamp;
 }
 
+/** A pod owner names the members, besides the pod owners, who may approve this connection's writes. An empty list clears the set. */
+export interface ApproversRequest {
+  connectionId: ConnectionId;
+  /** The approvers, each a member of the pod. A repeat is refused with invalid_input. */
+  userIds: UserId[];
+}
+
+/** A connection's approver set as stored: the members who may approve its writes besides the pod owners. */
+export interface Approvers {
+  connectionId: ConnectionId;
+  /** The approvers, in the order they were named. */
+  userIds: UserId[];
+}
+
 /** How a run ended: completed, failed or cancelled. */
 export type RunOutcome = "completed" | "failed" | "cancelled";
 export const RunOutcomeValues = ["completed","failed","cancelled"] as const;
@@ -824,7 +838,7 @@ export interface ConnectorCallInput {
 export type ConnectorCallState = "done" | "parked";
 export const ConnectorCallStateValues = ["done","parked"] as const;
 
-/** A done call carries the upstream's result; a parked one carries the decision a pod owner rules on. */
+/** A done call carries the upstream's result; a parked one carries the decision a pod owner or a connection approver rules on. */
 export interface ConnectorCallOutput {
   state: ConnectorCallState;
   receiptId: ConnectorReceiptId;
@@ -834,9 +848,9 @@ export interface ConnectorCallOutput {
   decisionId?: DecisionId;
 }
 
-/** ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask. */
-export type ConnectorOutcome = "ok" | "failed" | "refused" | "parked" | "released" | "rejected" | "expired";
-export const ConnectorOutcomeValues = ["ok","failed","refused","parked","released","rejected","expired"] as const;
+/** ok: a read answered. failed: the call failed. refused: the grant did not allow it. parked, released, rejected, expired: a write's way. unknown: released, its answer never recorded. */
+export type ConnectorOutcome = "ok" | "failed" | "refused" | "parked" | "released" | "rejected" | "expired" | "unknown";
+export const ConnectorOutcomeValues = ["ok","failed","refused","parked","released","rejected","expired","unknown"] as const;
 
 /** The server's record of one connector call. Stamped by the server from its own records; an agent can read it and never write it. */
 export interface ConnectorReceipt {
@@ -857,6 +871,8 @@ export interface ConnectorReceipt {
   approver?: Actor;
   /** A released write: the upstream's result. */
   result?: Record<string, unknown>;
+  /** Outcome failed, refused or unknown: why, with any credential removed. */
+  reason?: string;
   createdAt: Timestamp;
   /** When the call reached its outcome: at once for a read, at the ruling or expiry for a write. */
   settledAt?: Timestamp;

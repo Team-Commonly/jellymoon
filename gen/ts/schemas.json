@@ -1853,6 +1853,50 @@
         }
       }
     },
+    "ApproversRequest": {
+      "description": "A pod owner names the members, besides the pod owners, who may approve this connection's writes. An empty list clears the set.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectionId",
+        "userIds"
+      ],
+      "properties": {
+        "connectionId": {
+          "$ref": "#/$defs/ConnectionId"
+        },
+        "userIds": {
+          "description": "The approvers, each a member of the pod. A repeat is refused with invalid_input.",
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/UserId"
+          }
+        }
+      }
+    },
+    "Approvers": {
+      "description": "A connection's approver set as stored: the members who may approve its writes besides the pod owners.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectionId",
+        "userIds"
+      ],
+      "properties": {
+        "connectionId": {
+          "$ref": "#/$defs/ConnectionId"
+        },
+        "userIds": {
+          "description": "The approvers, in the order they were named.",
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/UserId"
+          }
+        }
+      }
+    },
     "RunOutcome": {
       "description": "How a run ended: completed, failed or cancelled.",
       "type": "string",
@@ -2275,7 +2319,7 @@
       ]
     },
     "ConnectorCallOutput": {
-      "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.",
+      "description": "A done call carries the upstream's result; a parked one carries the decision a pod owner or a connection approver rules on.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -2300,7 +2344,7 @@
       }
     },
     "ConnectorOutcome": {
-      "description": "ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask.",
+      "description": "ok: a read answered. failed: the call failed. refused: the grant did not allow it. parked, released, rejected, expired: a write's way. unknown: released, its answer never recorded.",
       "type": "string",
       "enum": [
         "ok",
@@ -2309,7 +2353,8 @@
         "parked",
         "released",
         "rejected",
-        "expired"
+        "expired",
+        "unknown"
       ]
     },
     "ConnectorReceipt": {
@@ -2371,6 +2416,11 @@
         "result": {
           "description": "A released write: the upstream's result.",
           "type": "object"
+        },
+        "reason": {
+          "description": "Outcome failed, refused or unknown: why, with any credential removed.",
+          "type": "string",
+          "maxLength": 400
         },
         "createdAt": {
           "$ref": "#/$defs/Timestamp"

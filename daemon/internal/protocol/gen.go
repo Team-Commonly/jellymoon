@@ -1835,6 +1835,50 @@ func (x *Grant) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A pod owner names the members, besides the pod owners, who may approve this connection's writes. An empty list clears the set.
+type ApproversRequest struct {
+	ConnectionID ConnectionID `json:"connectionId"`
+	// The approvers, each a member of the pod. A repeat is refused with invalid_input.
+	UserIds []UserID `json:"userIds"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ApproversRequest) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"connectionId", "userIds"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ApproversRequest: missing required field %q", k)
+		}
+	}
+	type plain ApproversRequest
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// A connection's approver set as stored: the members who may approve its writes besides the pod owners.
+type Approvers struct {
+	ConnectionID ConnectionID `json:"connectionId"`
+	// The approvers, in the order they were named.
+	UserIds []UserID `json:"userIds"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *Approvers) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"connectionId", "userIds"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("Approvers: missing required field %q", k)
+		}
+	}
+	type plain Approvers
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // How a run ended: completed, failed or cancelled.
 type RunOutcome string
 
@@ -2343,7 +2387,7 @@ func (x ConnectorCallState) Valid() bool {
 	return false
 }
 
-// A done call carries the upstream's result; a parked one carries the decision a pod owner rules on.
+// A done call carries the upstream's result; a parked one carries the decision a pod owner or a connection approver rules on.
 type ConnectorCallOutput struct {
 	State     ConnectorCallState `json:"state"`
 	ReceiptID ConnectorReceiptID `json:"receiptId"`
@@ -2368,7 +2412,7 @@ func (x *ConnectorCallOutput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// ok: a read answered. failed: the upstream failed the call. refused: the grant did not allow it. parked, released, rejected, expired: a write's way through its ask.
+// ok: a read answered. failed: the call failed. refused: the grant did not allow it. parked, released, rejected, expired: a write's way. unknown: released, its answer never recorded.
 type ConnectorOutcome string
 
 const (
@@ -2379,12 +2423,13 @@ const (
 	ConnectorOutcomeReleased ConnectorOutcome = "released"
 	ConnectorOutcomeRejected ConnectorOutcome = "rejected"
 	ConnectorOutcomeExpired  ConnectorOutcome = "expired"
+	ConnectorOutcomeUnknown  ConnectorOutcome = "unknown"
 )
 
 // Valid reports whether x is one of the schema's values.
 func (x ConnectorOutcome) Valid() bool {
 	switch x {
-	case ConnectorOutcomeOk, ConnectorOutcomeFailed, ConnectorOutcomeRefused, ConnectorOutcomeParked, ConnectorOutcomeReleased, ConnectorOutcomeRejected, ConnectorOutcomeExpired:
+	case ConnectorOutcomeOk, ConnectorOutcomeFailed, ConnectorOutcomeRefused, ConnectorOutcomeParked, ConnectorOutcomeReleased, ConnectorOutcomeRejected, ConnectorOutcomeExpired, ConnectorOutcomeUnknown:
 		return true
 	}
 	return false
@@ -2408,8 +2453,10 @@ type ConnectorReceipt struct {
 	// A released write: the member whose ruling released it.
 	Approver *Actor `json:"approver,omitempty"`
 	// A released write: the upstream's result.
-	Result    json.RawMessage `json:"result,omitempty"`
-	CreatedAt Timestamp       `json:"createdAt"`
+	Result json.RawMessage `json:"result,omitempty"`
+	// Outcome failed, refused or unknown: why, with any credential removed.
+	Reason    *string   `json:"reason,omitempty"`
+	CreatedAt Timestamp `json:"createdAt"`
 	// When the call reached its outcome: at once for a read, at the ruling or expiry for a write.
 	SettledAt *Timestamp `json:"settledAt,omitempty"`
 	// A parked write: when it expires unruled.
@@ -2549,6 +2596,8 @@ var Registry = map[string]func() any{
 	"Connection":               func() any { return new(Connection) },
 	"GrantRequest":             func() any { return new(GrantRequest) },
 	"Grant":                    func() any { return new(Grant) },
+	"ApproversRequest":         func() any { return new(ApproversRequest) },
+	"Approvers":                func() any { return new(Approvers) },
 	"EndRunRequest":            func() any { return new(EndRunRequest) },
 	"EvidenceInput":            func() any { return new(EvidenceInput) },
 	"EvidenceOutput":           func() any { return new(EvidenceOutput) },

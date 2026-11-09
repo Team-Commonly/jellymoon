@@ -21,6 +21,7 @@
     { "method": "POST", "path": "/v1/runs/:run/end", "auth": "computer", "request": "EndRunRequest" },
     { "method": "POST", "path": "/v1/pods/:pod/connections", "auth": "user", "request": "ConnectRequest", "response": "Connection" },
     { "method": "POST", "path": "/v1/pods/:pod/grants", "auth": "user", "request": "GrantRequest", "response": "Grant" },
+    { "method": "POST", "path": "/v1/pods/:pod/approvers", "auth": "user", "request": "ApproversRequest", "response": "Approvers" },
     { "method": "POST", "path": "/mcp", "auth": "run|user", "protocol": "mcp-streamable-http, stateless; the MCP adapter over operations.json" }
   ],
   "x-rules": [
@@ -38,7 +39,9 @@
     "A connect lists the upstream's operations and compares them with the vendor's pinned catalogue. An empty list, or a pinned operation missing upstream or with other argument names, refuses the connect with connector_drift; an upstream that fails the listing gets upstream_failed with its error.",
     "The url is https and carries no credentials. Its host, and every address its name resolves to, must be outside the loopback, private, link-local and reserved ranges; this is checked again before every upstream request, and each request is pinned to the checked address. ENV=local allows only a literal loopback address, over http or https.",
     "The token is stored only as an AES-256-GCM envelope under the server's vault key and is never returned. Without JM_VAULT_KEY a connect or a connector call gets vault_unconfigured.",
-    "A grant names an agent registered in the pod (otherwise not_found) and an access. A second grant to the same agent on the same connection replaces the first."
+    "A grant names an agent registered in the pod (otherwise not_found) and an access. A second grant to the same agent on the same connection replaces the first.",
+    "Only a pod owner sets a connection's approver set (a member gets forbidden). Each userId must be a pod member (otherwise not_found). The set replaces the last one; an empty list clears it.",
+    "A ruling on a connector write's ask is allowed for a pod owner or a member on that connection's approver set at the time of the ruling, and refused forbidden for anyone else, a removed approver included."
   ],
   "$defs": {
     "DeviceStartResponse": {
@@ -241,6 +244,26 @@
         "agentId": { "$ref": "common.json#/$defs/AgentId" },
         "access": { "$ref": "operations.json#/$defs/ConnectorAccess" },
         "createdAt": { "$ref": "common.json#/$defs/Timestamp" }
+      }
+    },
+    "ApproversRequest": {
+      "description": "A pod owner names the members, besides the pod owners, who may approve this connection's writes. An empty list clears the set.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connectionId", "userIds"],
+      "properties": {
+        "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
+        "userIds": { "description": "The approvers, each a member of the pod. A repeat is refused with invalid_input.", "type": "array", "maxItems": 50,"items": { "$ref": "common.json#/$defs/UserId" } }
+      }
+    },
+    "Approvers": {
+      "description": "A connection's approver set as stored: the members who may approve its writes besides the pod owners.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connectionId", "userIds"],
+      "properties": {
+        "connectionId": { "$ref": "common.json#/$defs/ConnectionId" },
+        "userIds": { "description": "The approvers, in the order they were named.", "type": "array", "maxItems": 50, "items": { "$ref": "common.json#/$defs/UserId" } }
       }
     },
     "RunOutcome": { "description": "How a run ended: completed, failed or cancelled.", "type": "string", "enum": ["completed", "failed", "cancelled"] },

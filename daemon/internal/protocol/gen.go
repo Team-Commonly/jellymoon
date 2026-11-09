@@ -970,9 +970,11 @@ func (x *AgentPresence) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
-// What the pod tells a client about itself and the client: head sequence, the client's actor, members and agents.
+// What the pod tells a client about itself and the client: its name, head sequence, the client's actor, members and agents.
 type Hello struct {
 	PodID PodID `json:"podId"`
+	// The pod's name, as it was created. A client shows it in place of the id.
+	PodName string `json:"podName"`
 	// 0 for an empty pod.
 	HeadSeq int64 `json:"headSeq"`
 	You     Actor `json:"you"`
@@ -988,7 +990,7 @@ func (x *Hello) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &keys); err != nil {
 		return err
 	}
-	for _, k := range []string{"podId", "headSeq", "you", "members", "agents"} {
+	for _, k := range []string{"podId", "podName", "headSeq", "you", "members", "agents"} {
 		if _, ok := keys[k]; !ok {
 			return fmt.Errorf("Hello: missing required field %q", k)
 		}
@@ -1617,6 +1619,41 @@ func (x *Invite) UnmarshalJSON(b []byte) error {
 		}
 	}
 	type plain Invite
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// What an invite page shows before anyone signs in: the pod's name, who invited you and when the invite expires. No ids, no email, no members.
+type InvitePreview struct {
+	// The pod's name.
+	PodName string `json:"podName"`
+	// The display name of the member who created the invite.
+	InviterName string    `json:"inviterName"`
+	ExpiresAt   Timestamp `json:"expiresAt"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *InvitePreview) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"podName", "inviterName", "expiresAt"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("InvitePreview: missing required field %q", k)
+		}
+	}
+	type plain InvitePreview
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// Who the request is signed in as. user is absent when nobody is: no token, or a dead one.
+type SessionResponse struct {
+	User *Actor `json:"user,omitempty"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *SessionResponse) UnmarshalJSON(b []byte) error {
+	type plain SessionResponse
 	return json.Unmarshal(b, (*plain)(x))
 }
 
@@ -2653,6 +2690,8 @@ var Registry = map[string]func() any{
 	"Pod":                      func() any { return new(Pod) },
 	"CreateInviteRequest":      func() any { return new(CreateInviteRequest) },
 	"Invite":                   func() any { return new(Invite) },
+	"InvitePreview":            func() any { return new(InvitePreview) },
+	"SessionResponse":          func() any { return new(SessionResponse) },
 	"AcceptInviteResponse":     func() any { return new(AcceptInviteResponse) },
 	"RegisterComputerRequest":  func() any { return new(RegisterComputerRequest) },
 	"RegisterComputerResponse": func() any { return new(RegisterComputerResponse) },

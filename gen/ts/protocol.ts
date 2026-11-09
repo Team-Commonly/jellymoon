@@ -359,9 +359,11 @@ export interface AgentPresence {
   state: PresenceState;
 }
 
-/** What the pod tells a client about itself and the client: head sequence, the client's actor, members and agents. */
+/** What the pod tells a client about itself and the client: its name, head sequence, the client's actor, members and agents. */
 export interface Hello {
   podId: PodId;
+  /** The pod's name, as it was created. A client shows it in place of the id. */
+  podName: string;
   /** 0 for an empty pod. */
   headSeq: number;
   you: Actor;
@@ -587,6 +589,20 @@ export interface Invite {
   expiresAt: Timestamp;
   /** How many more times the invite can be accepted. */
   usesLeft: number;
+}
+
+/** What an invite page shows before anyone signs in: the pod's name, who invited you and when the invite expires. No ids, no email, no members. */
+export interface InvitePreview {
+  /** The pod's name. */
+  podName: string;
+  /** The display name of the member who created the invite. */
+  inviterName: string;
+  expiresAt: Timestamp;
+}
+
+/** Who the request is signed in as. user is absent when nobody is: no token, or a dead one. */
+export interface SessionResponse {
+  user?: Actor;
 }
 
 /** The pod the person joined. */

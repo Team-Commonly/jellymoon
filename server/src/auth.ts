@@ -10,7 +10,7 @@ import { USER_TOKEN_MS } from './hub';
 import type { Hub } from './hub';
 import { base62, hashToken, sameSecret } from './ids';
 import { authOf, bad, fail, JSON_TYPE, parse, presented, SESSION } from './kit';
-import { approveDevice, deviceByHash, deviceByUser, exchangeDevice, newDevice, pollDevice, newState, revokeToken, sweepSignIn, takeState } from './store';
+import { approveDevice, denyDevice, deviceByHash, deviceByUser, exchangeDevice, newDevice, pollDevice, newState, revokeToken, sweepSignIn, takeState } from './store';
 import { check } from './validate';
 
 const DEVICE_S = 900;
@@ -104,7 +104,7 @@ export async function fromGitHub(gh: GitHub, code: string, redirect: string, tim
   } catch { return 'upstream'; }
 }
 
-/** The device flow (the CLI's side and the approval), GET /v1/me and GET /v1/session. */
+/** The device flow (the CLI's side, the approval and the refusal), GET /v1/me and GET /v1/session. */
 function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person: (c: Context) => Promise<Actor | null>, gate: (c: Context) => Promise<Response | null>): void {
   app.post('/v1/auth/device', async (c) => {
     const refused = await gate(c);
@@ -124,6 +124,7 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
     const row = await deviceByHash(hub.db, hash);
     if (row === undefined || row.exchanged) return fail(c, 'invalid_grant', 'This device code is unknown or was already exchanged.');
     if (row.expiresAt <= now) return fail(c, 'expired_token', 'This device code expired.');
+    if (row.denied) return fail(c, 'access_denied', 'The sign-in was refused in the browser.');
     const polled = await pollDevice(hub.db, hash, now, now - INTERVAL_S * 1000);
     if (polled === undefined) return fail(c, 'slow_down', `Poll at most every ${INTERVAL_S} seconds.`);
     if (polled.userId === null) return fail(c, 'authorization_pending', 'Not approved yet.');
@@ -134,22 +135,24 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
     return c.json({ token: minted.token, user: { kind: 'human', id: user.id, displayName: user.name }, expiresAt: isoOf(minted.expiresAt) });
   });
 
-  app.post('/v1/auth/device/approve', async (c) => {
-    if (!JSON_TYPE.test(c.req.header('Content-Type') ?? '')) return fail(c, 'forbidden', 'Approve with a JSON body.');
-    const who = await authOf(hub, c, true); // by cookie, the server's own Origin, like every cookie write
-    if (who instanceof Response) return who;
-    if (who?.kind !== 'user') return fail(c, 'unauthorized', 'Sign in first.');
-    const me = who.actor;
-    const body = await parse(c);
-    const problem = body === null ? 'The body must be a JSON object.' : check('DeviceApproveRequest', body);
-    if (problem !== null || body === null) return bad(c, problem ?? '');
-    const hash = hashToken(canonCode(body.userCode as string));
-    const now = hub.now();
-    if (await approveDevice(hub.db, hash, me.id, now)) return c.json({});
-    const row = await deviceByUser(hub.db, hash);
-    if (row === undefined) return fail(c, 'not_found', 'No such code.');
-    return row.expiresAt <= now ? fail(c, 'expired_token', 'This code expired.') : fail(c, 'gone', 'This code was already approved.');
-  });
+  // Approve binds a pending code to the caller; deny refuses it (idempotent). Each refusal is the same answer from both routes.
+  for (const route of ['approve', 'deny'] as const) {
+    app.post(`/v1/auth/device/${route}`, async (c) => {
+      if (!JSON_TYPE.test(c.req.header('Content-Type') ?? '')) return fail(c, 'forbidden', `${route === 'approve' ? 'Approve' : 'Deny'} with a JSON body.`);
+      const who = await authOf(hub, c, true); // by cookie, the server's own Origin, like every cookie write
+      if (who instanceof Response) return who;
+      if (who?.kind !== 'user') return fail(c, 'unauthorized', 'Sign in first.');
+      const body = await parse(c);
+      const problem = body === null ? 'The body must be a JSON object.' : check(route === 'approve' ? 'DeviceApproveRequest' : 'DeviceDenyRequest', body);
+      if (problem !== null || body === null) return bad(c, problem ?? '');
+      const hash = hashToken(canonCode(body.userCode as string));
+      const now = hub.now();
+      if (route === 'approve' ? await approveDevice(hub.db, hash, who.actor.id, now) : await denyDevice(hub.db, hash, now)) return c.json({});
+      const row = await deviceByUser(hub.db, hash);
+      if (row === undefined) return fail(c, 'not_found', 'No such code.');
+      return row.expiresAt <= now ? fail(c, 'expired_token', 'This code expired.') : fail(c, 'gone', 'This code was already used.');
+    });
+  }
 
   app.get('/v1/me', async (c) => {
     const me = await person(c);

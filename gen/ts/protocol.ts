@@ -63,8 +63,8 @@ export type Harness = "claude-code" | "codex" | "fake";
 export const HarnessValues = ["claude-code","codex","fake"] as const;
 
 /** Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event. */
-export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "connector_drift" | "upstream" | "upstream_failed" | "upstream_too_large" | "vault_unconfigured" | "internal";
-export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","connector_drift","upstream","upstream_failed","upstream_too_large","vault_unconfigured","internal"] as const;
+export type ErrorCode = "invalid_input" | "summary_required" | "unauthorized" | "forbidden" | "not_found" | "gone" | "already_claimed" | "already_ruled" | "authorization_pending" | "access_denied" | "slow_down" | "expired_token" | "invalid_grant" | "ungrounded" | "rate_limited" | "connector_drift" | "upstream" | "upstream_failed" | "upstream_too_large" | "vault_unconfigured" | "internal";
+export const ErrorCodeValues = ["invalid_input","summary_required","unauthorized","forbidden","not_found","gone","already_claimed","already_ruled","authorization_pending","access_denied","slow_down","expired_token","invalid_grant","ungrounded","rate_limited","connector_drift","upstream","upstream_failed","upstream_too_large","vault_unconfigured","internal"] as const;
 
 /** The body of every error response, and the data of the error socket event. */
 export interface ErrorBody {
@@ -541,6 +541,16 @@ export interface DeviceTokenRequest {
 export interface DeviceApproveRequest {
   /** The code the sign-in page shows, e.g. WDJB-MJHT, in either case and with or without the hyphen. */
   userCode: string;
+}
+
+/** A signed-in person refuses a device code they did not start, so the device polling it gets access_denied. */
+export interface DeviceDenyRequest {
+  /** The code the sign-in page shows, e.g. WDJB-MJHT, in either case and with or without the hyphen. */
+  userCode: string;
+}
+
+/** A refusal carries no data: the device that polls gets access_denied. */
+export interface DeviceDenyResponse {
 }
 
 /** A logout carries no data: the token it presented no longer authenticates, and the session cookie is cleared. */
@@ -1053,6 +1063,7 @@ export const ERROR_STATUS = {
   "already_claimed": 409,
   "already_ruled": 409,
   "authorization_pending": 400,
+  "access_denied": 400,
   "slow_down": 400,
   "expired_token": 400,
   "invalid_grant": 400,

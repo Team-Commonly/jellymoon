@@ -73,3 +73,11 @@ func TestWaitTokenStopsAtTheExpiryAndOnATransportError(t *testing.T) {
 		t.Fatalf("a transport error: %v", err)
 	}
 }
+
+func TestWaitTokenStopsPlainlyWhenTheCodeIsRefusedInTheBrowser(t *testing.T) {
+	const says = "the sign-in was refused in the browser"
+	s, _, err := run(protocol.ErrorCodeAuthorizationPending, protocol.ErrorCodeAccessDenied, "")
+	if err == nil || err.Error() != says || s.calls != 2 {
+		t.Fatalf("access_denied: err %v after %d polls; want exactly %q and no further poll", err, s.calls, says)
+	}
+}

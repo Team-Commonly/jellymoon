@@ -8,7 +8,7 @@ import { hashToken } from '../src/ids';
 import { podNamespace, sqliteD1, workerFile } from './d1';
 
 // A real D1 is made and changed only by worker/migrations (`wrangler d1 migrations apply`); schema.sql is the test entry's fresh
-// shape. 0000 is the schema before the sign-in hardening, so a D1 created from that schema.sql takes 0001 alone.
+// shape. 0000 is the schema before the sign-in hardening, so a D1 created from that schema.sql takes 0001 and 0002 (deny).
 const names = readdirSync(new URL('../migrations', import.meta.url)).sort();
 const migration = (n: string): string => workerFile(`migrations/${n}`);
 
@@ -31,7 +31,7 @@ function shape(db: Database): unknown {
 }
 
 test('the migrations are numbered the way wrangler applies them, and together make what schema.sql makes', () => {
-  expect(names).toEqual(['0000_initial.sql', '0001_auth_hardening.sql']);
+  expect(names).toEqual(['0000_initial.sql', '0001_auth_hardening.sql', '0002_device_deny.sql']);
   expect(shape(sqliteD1(...names.map(migration)).sqlite)).toEqual(shape(sqliteD1(workerFile('schema.sql')).sqlite));
 });
 

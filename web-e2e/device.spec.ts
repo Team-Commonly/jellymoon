@@ -45,6 +45,21 @@ test('a daemon\'s device code is approved at /device after sign-in, and the daem
   expect((await poll(start.deviceCode)).body.code).toBe('invalid_grant'); // exchanged once
 });
 
+test('"This wasn\'t me" refuses a daemon\'s code: the page says so, Approve is gone, and the daemon\'s poll gets access_denied', async ({ page }) => {
+  const start = await api<Start>('POST', '/v1/auth/device', null);
+  await signIn(page, await person('Ada'));
+  await page.goto(`/device?code=${start.userCode}`);
+  expect(await poll(start.deviceCode)).toMatchObject({ status: 400, body: { code: 'authorization_pending' } });
+
+  await page.getByRole('button', { name: "This wasn't me" }).click();
+  await expect(page.getByRole('heading', { name: 'Code refused' })).toBeVisible();
+  await expect(page.getByText(`The code ${start.userCode} will not sign anyone in, and the terminal that asked for it will stop waiting.`, { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+
+  // The daemon's next poll is refused for good (RFC 8628), however soon it comes: no slow_down, no token.
+  for (let i = 0; i < 2; i++) expect(await poll(start.deviceCode)).toMatchObject({ status: 400, body: { code: 'access_denied' } });
+});
+
 test('a code that is not waiting says so and leaves the page usable', async ({ page }) => {
   await signIn(page, await person('Ada'));
   await page.goto('/device?code=BCDF-GHJK');

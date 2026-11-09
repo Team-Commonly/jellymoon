@@ -1,0 +1,27 @@
+// The hosted instance (ADR 0010): a front Worker plus one Cloudflare Container running the server/ bundle. Keys per
+// https://developers.cloudflare.com/workers/wrangler/configuration/#containers (image_build_context defaults to the
+// Dockerfile's directory; here it is the repo root, which the image builds from) and
+// https://developers.cloudflare.com/containers/get-started/. Nothing account-specific is in this file: CI supplies
+// CLOUDFLARE_ACCOUNT_ID, and the secrets are set by the deploy job. Never deployed by hand (docs/runbooks/hosted-instance.md).
+{
+  "name": "jellymoon",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "JellymoonServer",
+      "image": "./Dockerfile",
+      "image_build_context": "..",
+      // One process owns every pod and its timer (ADR 0006); basic is 1/4 vCPU and 1 GiB.
+      "max_instances": 1,
+      "instance_type": "basic"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "JELLYMOON", "class_name": "JellymoonServer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["JellymoonServer"] }],
+  // Every minute the front calls /healthz on the one instance, so a stopped container starts again within a minute.
+  "triggers": { "crons": ["* * * * *"] }
+}

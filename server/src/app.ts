@@ -27,7 +27,7 @@ import type { Adapter } from './upstream';
  * `resolve` is the connector egress resolver (egress.ts); tests inject one, the server uses the system's. `adapter`, tests only,
  * replaces the connector protocol adapter (upstream.ts).
  */
-export interface AppOpts extends SignInOpts { testBearer?: string; github?: GitHub | null; vault?: Vault; resolve?: Resolve; adapter?: Adapter; webDir?: string }
+export interface AppOpts extends SignInOpts { testBearer?: string; github?: GitHub | null; vault?: Vault; resolve?: Resolve; adapter?: Adapter; webDir?: string; build?: string }
 
 function testRoutes(app: Hono, hub: Hub, local: boolean, bearer: string | undefined): void {
   if (!local) {
@@ -58,7 +58,9 @@ export function buildApp(hub: Hub, opts: AppOpts): Hono {
   app.use('*', async (c, next) => { ownOrigin.set(c.req.raw, new URL(ownBase(c, opts.publicUrl, opts.local)).origin); await next(); });
   // Every reply says `Referrer-Policy: no-referrer`, so the one-time code in a /device or /invite URL never leaves in a Referer header (twin of worker/src/front.ts).
   app.use('*', async (c, next) => { await next(); c.res.headers.set('Referrer-Policy', 'no-referrer'); });
-  app.get('/healthz', (c) => c.text('ok'));
+  // X-Jm-Build names the commit this process runs (JM_BUILD), so a deploy can tell its new container from the old one during
+  // a rollout (hosted/ship.sh); unset, the header is absent.
+  app.get('/healthz', (c) => { if (opts.build !== undefined) c.header('X-Jm-Build', opts.build); return c.text('ok'); });
   setupAll(app, hub, opts.publicUrl);
   authRoutes(app, hub, opts.github ?? null, opts);
   opRoutes(app, hub);

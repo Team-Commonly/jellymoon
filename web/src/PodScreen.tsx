@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useOutletContext, useParams, useSearchParams } from 'react-router-dom';
+import type { AgentPresence } from '../../gen/ts/protocol';
 import type { BarContext } from './bar';
 import { CardView } from './CardView';
 import { buildCard, needsYou } from './cards';
@@ -72,6 +73,20 @@ function RunLines({ runs, canStop, stop }: { runs: RunLine[]; canStop: boolean; 
   return <ul aria-label="Runs" aria-live="polite">{runs.map((r) => <RunItem key={r.runId} run={r} canStop={canStop} stop={stop} />)}</ul>;
 }
 
+/**
+ * One line per agent mentioned on this page whose wake still waits in the pod, while its presence is offline: never working and
+ * never with a going run, so it is never also the working line or a run line. Coming online hides it; run.started ends it.
+ */
+function WaitingLines({ waking, agents, going }: { waking: string[]; agents: AgentPresence[]; going: Set<string> }) {
+  const offline = waking.flatMap((id) => agents.filter((a) => a.agent.id === id && a.state === 'offline' && !going.has(id)));
+  if (offline.length === 0) return null;
+  return (
+    <ul aria-label="Waiting for a computer" aria-live="polite">
+      {offline.map((a) => <li key={a.agent.id}>{`${a.agent.displayName} is offline. It will pick this up when its computer reconnects.`}</li>)}
+    </ul>
+  );
+}
+
 function useNeedsYouFilter() {
   const [params, setParams] = useSearchParams();
   const on = params.get('filter') === 'needs-you';
@@ -110,8 +125,7 @@ export function PodPage({ connect, http }: { connect: (podId: string) => Connect
   // One line per agent: an agent with a going run shows as its run line (with Stop), so the presence line leaves it out.
   const going = new Set(runs.filter((r) => r.state === 'going').map((r) => r.agent.id));
   const working = state.agents.filter((a) => a.state === 'working' && !going.has(a.agent.id)).map((a) => a.agent.displayName);
-  // Empty once the replay has caught up to the hello's headSeq with no message in it (tasks and runs are not posts); until the
-  // hello, `you` is unknown and nothing shows.
+  // Empty once the replay reaches hello's headSeq with no message (tasks and runs are not posts); before hello nothing shows.
   const empty = state.you !== undefined && state.lastSeq >= state.headSeq && state.messages.length === 0 && !filter.on;
   const pending = k.keys.confirm ? cards[k.keys.focus]?.ask?.options.find((o) => o.id === k.keys.confirm)?.label : undefined;
   // The server refused the socket for good: nothing below would work, so nothing below shows.
@@ -140,6 +154,7 @@ export function PodPage({ connect, http }: { connect: (podId: string) => Connect
       </section>
       <p aria-live="polite">{working.length === 0 ? '' : `${working.join(', ')} ${working.length === 1 ? 'is' : 'are'} working.`}</p>
       <div role="status" aria-live="polite">{pending ? `Rule ${pending}? Press Enter to rule, Escape to cancel.` : ''}</div>
+      <WaitingLines waking={state.waking} agents={state.agents} going={going} />
       <RunLines runs={runs} canStop={canStop} stop={(runId) => http.stopRun(id, runId)} />
       <p aria-live="polite">{state.status === 'reconnecting' ? 'Reconnecting…' : ''}</p>
       <Composer inputRef={composer} onPost={(t) => store.post(t)} error={state.postError} down={state.status !== 'open'} />

@@ -238,6 +238,20 @@ test('/pod/:id keeps its layout with run lines: a going run under a name that ca
   }
 });
 
+test('/pod/:id keeps its layout with an offline line under the longest name the schema allows', async ({ page, pod }) => {
+  const NAME = UNBROKEN.slice(0, 80); // the schema's longest display name, and every character of it can sit in an @mention
+  // An agent whose computer never connects: it shows offline, and the wake a mention writes for it waits in the pod.
+  const comp = await api<{ token: string }>('POST', '/v1/computers', pod.you.token, { name: 'browser-spec-off', os: 'linux', arch: 'amd64' });
+  await api('POST', `/v1/pods/${pod.id}/agents`, comp.token, { harness: 'fake', displayName: NAME });
+  await signIn(page, pod.you);
+  await openPod(page, pod);
+  await page.getByRole('textbox', { name: 'Message' }).fill(`@${NAME} can you look at the auth fix?`);
+  await page.getByRole('button', { name: 'Send' }).click();
+  const waiting = page.getByRole('list', { name: 'Waiting for a computer' });
+  await expect(waiting.getByRole('listitem')).toHaveText([`${NAME} is offline. It will pick this up when its computer reconnects.`]);
+  await holdsLayout(page, '/pod/:id with an offline line');
+});
+
 test('the needs-you filter keeps its layout, with an ask, and when nothing needs you', async ({ page, pod }) => {
   await pod.agent.post(askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }, pod.agent.cited));
   await pod.agent.post(askInput('Rename the billing table?', { userIds: [pod.other.user.id] }, pod.agent.cited));

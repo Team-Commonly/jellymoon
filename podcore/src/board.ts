@@ -3,7 +3,7 @@ import type { Message, MessageId, Task } from '../../gen/ts/protocol';
 import { acquire, own, taskView, who } from './claims';
 import { emit, fail, ok } from './emit';
 import { isoOf } from './time';
-import { prose } from './mentions';
+import { mentionNames } from './mentions';
 import { seedFits, writeWake } from './wakes';
 import type { Cmd, Ctx } from './types';
 
@@ -63,8 +63,7 @@ export function taskUpdateCmd(c: Ctx, cmd: Of<'task_update'>): void {
 
 /** `@name` tokens outside code spans and fenced blocks, in text order, matched exactly against registered agent names. */
 export function mentioned(c: Ctx, text: string): string[] {
-  const names = Array.from(prose(text).matchAll(/(?<![\w@])@([\w.-]+)/g), (m) => m[1].replace(/[.-]+$/, ''));
-  const ids = names.flatMap((n) => Object.values(c.s.agents).filter((a) => a.actor.displayName === n).map((a) => a.actor.id));
+  const ids = mentionNames(text).flatMap((n) => Object.values(c.s.agents).filter((a) => a.actor.displayName === n).map((a) => a.actor.id));
   return ids.filter((id, i) => ids.indexOf(id) === i);
 }
 

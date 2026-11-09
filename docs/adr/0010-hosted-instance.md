@@ -102,6 +102,8 @@ second callback or a new app then.
 
 ## CI deploy (plan only)
 
+Built as `.github/workflows/hosted.yml` (jobs `dry-run`, `gate`, `deploy`; off until `JM_HOSTED_ENABLED` is `true`); how to run it is [the runbook](../runbooks/hosted-instance.md).
+
 1. A `deploy` job runs on pushes to `main` after `e2e-local`, `e2e-deployed` and `e2e-web` pass. It builds the image from
    that commit (tagged with its SHA), runs `wrangler deploy` for the front Worker and the container with an API token scoped
    to this one job, and sets secrets from Actions secrets.

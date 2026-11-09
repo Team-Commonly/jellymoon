@@ -39,13 +39,13 @@ The LOC budget for the slice is a deliberate choice to stay small:
 |---|---|
 | core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
-| worker | 1,900 |
-| server | 2,100 |
+| worker | 2,000 |
+| server | 2,180 |
 | daemon | 5,000 |
-| e2e | 6,000 |
+| e2e | 6,520 |
 | web | 1,580 |
 
-The caps add up to 23,780 lines (restated 2026-11-08 against the merged entropy.json: core 4,200, worker 1,900, server 2,100, podcore 3,000, daemon 5,000, web 1,580, e2e 6,000). Agent-written comparables grew without bounds: herdr reached
+The caps add up to 24,480 lines (restated 2026-11-09 against the merged entropy.json: core 4,200, podcore 3,000, worker 2,000, server 2,180, daemon 5,000, web 1,580, e2e 6,520). Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -81,5 +81,12 @@ The caps add up to 23,780 lines (restated 2026-11-08 against the merged entropy.
 2026-11-08: web cap (new) 840, the web client package (shell, generated-type socket store, card model, key map and their tests, F18 PR 1) is 730 lines at the first green run; the cap is that count plus about 15%; the total is 17,580. No other cap changes. F18.
 2026-11-08: web cap 840 → 1,580, the pod stream (cards, ask cards with the confirm row, composer, needs-you filter, keyboard glue) and its 30 component tests take the package to 1,373 lines (the gate printed `LOC web 1362 / 1250` before this raise; the cap is that count plus about 15%); the total is 18,320. No other cap changes. F18 PR 2.
 2026-11-08: podcore cap 2,500 → 3,000, rulings on an ask (the `rule` command, the decision record an ask now keeps, and the tests that pin each refusal and the old-saved-state load) take the core to 2,585 lines (the gate printed `LOC podcore 2534 / 2500` with the tests alone, before this raise; the cap is that final count plus about 15%); the total is 17,960. No other cap changes. F12.
+2026-11-08: e2e cap 4,650 → 4,950, the F15 sign-in test (a stub GitHub for the OAuth web flow and GET /user, a browser leg with a cookie jar, `jellymoon login` run as a black box, the state, next, CSRF, one-exchange and expiry refusals) takes the suite to 4,912 lines (the gate printed `LOC e2e 4912 / 4650` before this raise; the cap is that count plus a little for its fix pass, not 15%). The total was stated as 16,740 but the table added up to 17,460 (the server cap raise was never added to it); corrected, and with this raise the total is 17,760. No other cap changes. F15.
+2026-11-08: server cap 1,800 → 1,990, worker cap 1,790 → 1,930 and daemon cap 3,000 → 3,240, sign-in (ADR 0008) in both adapters (`server/src/auth.ts` and `worker/src/auth.ts`: the device code, the approval, GitHub's OAuth web flow, the session cookie, `GET /v1/me`) and `jellymoon login` with its poll-loop and 0600-write tests. The gate printed `LOC server 1959 / 1800` and `LOC worker 1902 / 1790` before this raise; the daemon measures 2060 on this branch, and the open daemon stack it lands on top of (#11, #18, #20) brings main's daemon to 2,996, so the daemon cap is 2,996 plus this unit's 233 lines plus a little. Each cap is the count plus a little for the fix pass, not 15%. The total is 18,330. No other cap changes. F15.
+2026-11-08: e2e cap 4,950 → 5,000. The merge of main into the F15 branch brings in main's newer e2e tests (the stray-agent check and the no-leak harness), and the merge result measures `LOC e2e 4966 / 4950`; the cap is that count plus a little, not 15%. The total is 18,380. No other cap changes. F15.
+2026-11-08: the merge of main into the F15 branch takes the higher cap for every area, all as they stand in entropy.json: core 4,200 (main), podcore 3,000 (main), worker 1,930 (this branch), server 2,100 (main), daemon 5,000 (main) and e2e 6,000 (main); the table above is restated once. One raise follows from the merge: worker cap 1,930 → 1,950, because main's worker changes (the MCP and hello-resync work) and this branch's sign-in together measure `LOC worker 1940 / 1930`; the cap is that count plus a little, not 15%. The total is 22,250. No other cap changes. F15.
 2026-11-08: the merge with main keeps this branch's web (840) cap and main's podcore (3,000) cap, with the core (3,720), worker (1,790), server (1,800) and e2e (4,650) caps, all as they stand in entropy.json; no cap changes; the total is 18,800. F18.
 2026-11-08: the merge of main (daemon permissions, #18) into the run-workspace branch changes no cap; the caps stand as they are in entropy.json (core 4,200, worker 1,900, server 2,100, podcore 3,000, daemon 5,000, web 840, e2e 6,000) and the total is 23,040. WSP.
+2026-11-08: worker cap 1,950 → 2,000, server cap 2,100 → 2,110 and e2e cap 6,000 → 6,380, the merge of main into the F15 branch (the device login and main's e2e tests together): the gate printed `LOC worker 1990 / 1950`, `LOC server 2104 / 2100` and `LOC e2e 6376 / 6000` on the merged tree, before this raise; each cap is the count rounded up to ten; the table caption carries the moved total. No other cap changes. F15.
+2026-11-09: server 2,110 -> 2,180; merged tree measures 2,176; #16's server follow-ups meet F15's sign-in. Feature growth, not a refactor; the cap is the count rounded up to ten; no other cap changes; the total is 24,340. F15.
+2026-11-09: e2e cap 6,380 -> 6,520; merged tree measures 6,518; #10's replay test meets F15's. The cap is the count rounded up to ten; no other cap changes; the total is 24,480. F15.

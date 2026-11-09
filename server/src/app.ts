@@ -1,6 +1,8 @@
 // The Hono app: HTTP routes plus the pod socket, and the /__test routes when the build asks for them.
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { authRoutes } from './auth';
+import type { GitHub } from './auth';
 import type { Hub } from './hub';
 import { sameSecret } from './ids';
 import { bad, fail, parse, str } from './kit';
@@ -15,7 +17,7 @@ import { wsRoute } from './ws';
  * bearer is configured, each needs `Authorization: Bearer <bearer>`, and there is no clock route. With neither, the build has
  * no /__test handler at all.
  */
-export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string }
+export interface AppOpts { publicUrl?: string; local: boolean; testBearer?: string; github?: GitHub | null }
 
 function testRoutes(app: Hono, hub: Hub, local: boolean, bearer: string | undefined): void {
   if (!local) {
@@ -45,6 +47,7 @@ export function buildApp(hub: Hub, opts: AppOpts): Hono {
   const app = new Hono();
   app.get('/healthz', (c) => c.text('ok'));
   setupAll(app, hub, opts.publicUrl);
+  authRoutes(app, hub, opts.github ?? null, opts.publicUrl, opts.local);
   opRoutes(app, hub);
   wsRoute(app, hub);
   mcpRoute(app, hub); // twin of the Worker's POST /mcp (worker/src/mcp.ts)

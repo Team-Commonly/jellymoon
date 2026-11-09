@@ -141,7 +141,10 @@ export async function fromGitHub(gh: GitHub, code: string, redirect: string, tim
   } catch { return 'upstream'; }
 }
 
-/** The device flow (the CLI's side, the approval and the refusal), GET /v1/me and GET /v1/session. */
+/**
+ * The device flow (the CLI's side, the approval and the refusal), GET /v1/me and GET /v1/session. Approve binds a pending code
+ * to the caller; deny refuses it (idempotent). Each refusal is the same answer from both routes, and both share one guess limit.
+ */
 function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person: (c: Context) => Promise<Actor | null>, gate: (c: Context) => Promise<Response | null>, guess: ReturnType<typeof guessGate>): void {
   app.post('/v1/auth/device', async (c) => {
     const refused = await gate(c);
@@ -172,8 +175,6 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
     return c.json({ token: minted.token, user: { kind: 'human', id: user.id, displayName: user.name }, expiresAt: isoOf(minted.expiresAt) });
   });
 
-  // Approve binds a pending code to the caller; deny refuses it (idempotent). Each refusal is the same answer from both routes,
-  // and both share one guess limit.
   for (const route of ['approve', 'deny'] as const) {
     app.post(`/v1/auth/device/${route}`, async (c) => {
       if (!JSON_TYPE.test(c.req.header('Content-Type') ?? '')) return fail(c, 'forbidden', `${route === 'approve' ? 'Approve' : 'Deny'} with a JSON body.`);
@@ -183,7 +184,7 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
       const body = await parse(c);
       const problem = body === null ? 'The body must be a JSON object.' : check(route === 'approve' ? 'DeviceApproveRequest' : 'DeviceDenyRequest', body);
       if (problem !== null || body === null) return bad(c, problem ?? '');
-      const held = guess(c, who.actor.id);
+      const held = guess(c, who.actor.id); // before the lookup
       if (held instanceof Response) return held;
       const hash = hashToken(canonCode(body.userCode as string));
       const now = hub.now();

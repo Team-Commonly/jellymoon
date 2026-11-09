@@ -366,10 +366,12 @@ export const landSuiteRuns = ({ runs, total, suites }) => {
   const mine = runs.filter((r) => Number.isInteger(r?.suite) && suites.includes(r.suite));
   return { runs: mine, total: mine.length };
 };
-// Land's own ref for a PR: refs/heads/land/<n>, n digits only. Every push land makes (create, overwrite, delete) names a ref built here.
-export const landRef = (n) => {
-  if (!/^\d+$/.test(String(n))) throw new Error(`not a PR number: ${n}`);
-  return `refs/heads/land/${Number(n)}`;
+// Land's own ref: land/<n> for a PR, land/<a>-<b>-... for a batch (digits, single dashes). Every land push names one built here.
+const LAND_REF = /^refs\/heads\/land\/\d+(-\d+)*$/;
+export const isLandRef = (ref) => LAND_REF.test(ref);
+export const landRef = (id) => {
+  if (!/^\d+(-\d+)*$/.test(String(id))) throw new Error(`not a PR number or a batch of them: ${id}`);
+  return `refs/heads/land/${String(id).split('-').map(Number).join('-')}`;
 };
 // PR code's output reaches the operator's terminal only through this: control characters (escape sequences, \r) are
 // stripped except \n and \t, and every line is marked, so nothing it prints can pass for land's own words.

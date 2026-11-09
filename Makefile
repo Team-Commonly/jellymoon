@@ -49,6 +49,8 @@ test-ts: node_modules
 	$(BUN) scripts/check-land.mjs
 	$(BUN) scripts/check-land-scan.mjs
 	$(BUN) scripts/check-land-e2e.mjs
+	$(BUN) scripts/check-land-batch.mjs
+	$(BUN) scripts/check-land-batch-e2e.mjs
 	$(BUN) run check:types
 	$(BUN) test podcore worker server
 	$(BUN) run test:scrub

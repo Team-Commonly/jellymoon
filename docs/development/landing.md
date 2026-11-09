@@ -200,7 +200,7 @@ Each refuses with one line on any mismatch, and nothing merges until all pass:
      not being the merge result refuses outright;
    - then the merge goes through the API as before, and the merged tree is compared with the tested one (a mismatch is written on the LANDED row and refuses, below);
    - `refs/heads/land/<n>` is deleted after the land, whether it landed, fell back or refused, and when land is interrupted (SIGINT, SIGTERM or SIGHUP run an exit handler that deletes it). Land only ever pushes or deletes a ref it builds with
-     `landRef` (`refs/heads/land/<digits>`), never the PR branch or any other. A failed delete is said and the land continues.
+     `landRef` (`refs/heads/land/<digits>`, or `refs/heads/land/<digits>-<digits>-...` for a batch), never the PR branch or any other. A failed delete is said and the land continues.
    The bootstrap land never uses CI, and `--preflight-only` (verifiers) always runs the preflight. The LANDED row and the run's output name the
    path: `CI proved merge tree <8>` or `local preflight (<why>)`, so the two are countable. The skip changes nothing else: the ledger, the head's CI
    veto, the range scan, the CodeRabbit path and the pod verdict all run first, and the merge is still `--match-head-commit`.
@@ -219,6 +219,40 @@ passes `none` (no base yet); every other unreadable base fails.
 
 The Makefile calls `node`, which an ignored `.tools/bin/node` could shadow under make 3.82 or later. The documented land
 command is `node scripts/land.mjs <n>` from the operator's shell.
+
+## Batch landing
+
+One land is one CI cycle of about ten minutes, which caps the queue near six an hour. `node scripts/land.mjs --batch <a> <b> <c> ... [--dry-run]` (two to eight PR
+numbers, in landing order; no `--bootstrap`, no `--preflight-only`; `make land ARGS="--batch 5 6 7"` with PR unset is the same) puts several PRs behind one cycle. The code is `scripts/land-batch.mjs`; it reuses the single path's
+functions and decides nothing new.
+
+1. **Every gate, per PR, first.** For each number, in order: the idempotency check, the trust gate, the draft check, the head check, and `decide()` (ledger verifier PASS at
+   the head, the PR's own CI, the range secret scan, the CodeRabbit path and the pod verdict). A PR that fails any of them is dropped, with its reason printed
+   (`#6 dropped from the batch: ...`), and the rest go on. Fewer than two left: the one that is left takes the single path; none left refuses.
+2. **A chain of land commits.** L1 is the land commit of main's tip and head a (the tree `merge-tree --write-tree` gives, parents exactly `[main tip, head]`), L2 is
+   L1 and head b, and so on, each built by the same deterministic `landCommit` as the single land commit (`landCommitEnv`). A head that does not merge cleanly into the
+   commit before it is dropped (`#6 dropped from the batch: ... does not merge cleanly ...`) and the chain goes on from the commit before it.
+3. **Every prefix, one wait.** GitHub merges one PR at a time, so main passes through every prefix L1, L2, ... of the chain, and each is proved: each Lk is pushed,
+   create-only under a lease, to its own ref (`land/<a>`, `land/<a>-<b>`, ...; the first is the single path's own land commit). CI runs on `land/**` as for a single
+   land, and the waits run side by side, so the wall clock is one CI cycle. Each is waited on exactly as for a single land, counting only runs of a check suite that a `push`
+   to that ref started (`landSuiteRuns`; the suites are read with `branch=<that ref>`), so a pull request whose head is that SHA proves nothing.
+4. **The ref shape.** `landRef` and the delete guard (`isLandRef`) accept exactly `refs/heads/land/<digits>` and `refs/heads/land/<digits>(-<digits>)*`, nothing
+   else: land still only ever pushes or deletes a ref of that shape, never a PR branch. Every batch ref is deleted on every exit, as `land/<n>` is (`ciClean`).
+5. **Every prefix green: merge in order.** Before each PR the ledger, CI, scan and pod are decided again, the PR is re-read (trust, draft, and the single path's base-is-main, open and head check), and `checkBatchStep` requires
+   main's tip to be exactly where the previous merge left it (main's tip for the first, the previous merge commit after that) and the PR's head to be the tested one.
+   Then the merge is the single path's `gh pr merge <n> --merge --match-head-commit <head>` (`doMerge`): GitHub makes its own merge commit, so main does not end at the
+   land commit's SHA. It ends at its tree: GitHub's merge of head k onto the merge commit of PR k-1 is the merge of head k onto L(k-1), whose tree is the tree CI proved,
+   and the tree of every merge commit is read back and compared with the tested tree of that step. A difference is written on that PR's LANDED row (`TREE-MISMATCH`),
+   stops the batch and refuses. If anything moved (main, a head, a verdict), the batch stops before that PR and the PRs not yet merged go the single path.
+6. **Red or no proof on any prefix, a middle one included: nothing from the batch lands.** A required check that fails, the 15 minute cap, an unreadable run list or a failed push prints
+   `batch red; landing one at a time`, and each PR in the original order then takes the existing single path, unchanged (its own ref, its own CI cycle). Between
+   them this checkout moves to main's new tip by `git merge --ff-only`, which a single land needs anyway (it demands a checkout at main's tip). A PR the single path
+   refuses is said and skipped; the exit status is non-zero if any did not land. The fallback is also how to find the culprit of a red batch.
+7. **`--dry-run`** runs every gate, builds the chain and says what it would merge; it pushes nothing, merges nothing and writes no ledger row.
+
+Two PRs can each be green alone and red together: on 11-09 two PRs that each raised the same entropy cap against their own tree were both green, and red on the
+merge. The batch commit holds both, so CI catches it, and the one-at-a-time fallback then shows which of the two breaks. The batch needs no special handling for it.
+`dco` on the batch ref reads only the commits between the last commit's two parents (the last PR's own commits); every PR's commits were checked on its own pull request.
 
 ## Environment (never committed)
 | Variable | Meaning |

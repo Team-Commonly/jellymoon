@@ -1,11 +1,13 @@
 // The HTTP client the screens use. Injected like the socket, so tests pass a fake and never touch a network.
-import type { AcceptInviteResponse, Actor } from '../../gen/ts/protocol';
+import type { AcceptInviteResponse, Actor, Pod } from '../../gen/ts/protocol';
 
 export interface Http {
   acceptInvite(code: string): Promise<AcceptInviteResponse>;
   /** The person the session cookie belongs to, or null when nobody is signed in. */
   me(signal?: AbortSignal): Promise<Actor | null>;
   approveDevice(userCode: string): Promise<void>;
+  /** Makes a pod owned by the signed-in person. A refusal throws an ApiError carrying the server's own message. */
+  createPod(name: string): Promise<Pod>;
 }
 
 /** The GitHub sign-in, which brings the person back to `path` (a same-origin path) with the session cookie set. */
@@ -27,6 +29,14 @@ export const browserHttp: Http = {
   async approveDevice(userCode) {
     const res = await fetch('/v1/auth/device/approve', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userCode }) });
     if (!res.ok) throw new ApiError(res.status, 'request failed');
+  },
+  async createPod(name) {
+    const res = await fetch('/v1/pods', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { message?: unknown } | null;
+      throw new ApiError(res.status, typeof body?.message === 'string' && body.message !== '' ? body.message : `the server returned an error (${res.status}). Try again.`);
+    }
+    return (await res.json()) as Pod;
   },
 };
 

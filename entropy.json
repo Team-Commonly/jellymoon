@@ -18,7 +18,7 @@
         "schema/",
         "scripts/"
       ],
-      "max": 4080
+      "max": 4090
     },
     "worker": {
       "paths": [
@@ -42,7 +42,7 @@
       "paths": [
         "daemon/"
       ],
-      "max": 4830
+      "max": 4840
     },
     "web": {
       "paths": [

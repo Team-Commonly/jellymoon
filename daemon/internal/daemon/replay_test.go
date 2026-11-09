@@ -19,8 +19,6 @@ import (
 )
 
 const (
-	recordingPath = "../../testdata/acp/claude-slice.jsonl"
-	goldenPath    = "../../testdata/acp/claude-slice.golden"
 	computerToken = "jmc_" + "0123456789012345678901234567890123456789012"
 	runToken      = "jmr_" + "9876543210987654321098765432109876543210987"
 )
@@ -153,6 +151,19 @@ func compact(raw json.RawMessage) string {
 // (testdata/acp/claude-slice.jsonl, made by scripts/record-acp.mjs against the pinned claude-agent-acp adapter). The daemon starts the
 // agent, speaks ACP to it, hands it the run token in session/new, and ends the run; the pod's list of calls must be the golden one.
 func TestReplayClaude(t *testing.T) {
+	replaySlice(t, protocol.HarnessClaudeCode, "claude-slice")
+}
+
+// TestReplayCodex is the same for a real Codex session recorded through the pinned codex-acp adapter (testdata/acp/codex-slice.jsonl).
+func TestReplayCodex(t *testing.T) {
+	replaySlice(t, protocol.HarnessCodex, "codex-slice")
+}
+
+// replaySlice replays testdata/acp/<slice>.jsonl as the agent of one run of the given harness and compares the pod's calls with
+// testdata/acp/<slice>.golden.
+func replaySlice(t *testing.T, harness protocol.Harness, slice string) {
+	recordingPath := "../../testdata/acp/" + slice + ".jsonl"
+	goldenPath := "../../testdata/acp/" + slice + ".golden"
 	ents, err := loadRecording(recordingPath)
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +175,7 @@ func TestReplayClaude(t *testing.T) {
 	}
 	report := filepath.Join(t.TempDir(), "report")
 	abs, _ := filepath.Abs(recordingPath)
-	t.Setenv("JELLYMOON_HARNESS_CLAUDE_CODE", strings.Join([]string{exe, "-test.run=^TestReplayAgent$", "-replay.agent=" + abs, "-replay.report=" + report}, " "))
+	t.Setenv(harnessEnvPrefix+strings.ToUpper(strings.ReplaceAll(string(harness), "-", "_")), strings.Join([]string{exe, "-test.run=^TestReplayAgent$", "-replay.agent=" + abs, "-replay.report=" + report}, " "))
 	c, err := api.New(pod.URL)
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +183,7 @@ func TestReplayClaude(t *testing.T) {
 	var logs bytes.Buffer
 	d := New(c, config.Store{Dir: t.TempDir()}, config.Computer{Token: computerToken}, log.New(&logs, "", 0))
 	d.ctx = context.Background()
-	d.claim(config.Agent{AgentID: "agt_00000000000000000000000003", Harness: protocol.HarnessClaudeCode}, protocol.RunWake{WakeID: "wak_replay"})
+	d.claim(config.Agent{AgentID: "agt_00000000000000000000000003", Harness: harness}, protocol.RunWake{WakeID: "wak_replay"})
 
 	if why, err := os.ReadFile(report); err == nil {
 		t.Errorf("the replaying agent stopped: %s", why)

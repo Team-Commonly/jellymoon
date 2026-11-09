@@ -63,7 +63,11 @@ func NewCommonly(rawURL, token string) (*Commonly, error) {
 	return &Commonly{base: base, token: token, hc: hc, sleep: time.Sleep, gap: 260 * time.Millisecond, jitter: rand.Float64}, nil
 }
 
-// SetPace sets the least time between two requests. The default stays under the instance's 240 reads a minute on messages.
+// MinPace is the floor for --pace-ms: below it a run could crawl a fragile instance at full speed. The default stays under the
+// instance's 240 reads a minute on messages.
+const MinPace = 250 * time.Millisecond
+
+// SetPace sets the least time between two requests.
 func (c *Commonly) SetPace(d time.Duration) { c.gap = d }
 
 // Host names the instance in the state file, so a state from one instance is never applied to another.
@@ -143,10 +147,18 @@ func (c *Commonly) once(target string) (status int, retryAfter time.Duration, bo
 	if err != nil {
 		return 0, 0, nil, errors.New("the answer broke off")
 	}
-	if secs, perr := strconv.Atoi(resp.Header.Get("Retry-After")); perr == nil && secs > 0 {
-		retryAfter = min(time.Duration(secs)*time.Second, retryAfterCap)
+	return resp.StatusCode, parseRetryAfter(resp.Header.Get("Retry-After")), body, nil
+}
+
+// parseRetryAfter reads both forms, seconds and an HTTP date, and caps the wait.
+func parseRetryAfter(v string) time.Duration {
+	var d time.Duration
+	if secs, err := strconv.Atoi(v); err == nil {
+		d = time.Duration(secs) * time.Second
+	} else if at, err := http.ParseTime(v); err == nil {
+		d = time.Until(at)
 	}
-	return resp.StatusCode, retryAfter, body, nil
+	return min(max(d, 0), retryAfterCap)
 }
 
 func (c *Commonly) backoff(retryAfter time.Duration) time.Duration {

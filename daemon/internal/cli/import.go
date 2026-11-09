@@ -16,7 +16,7 @@ import (
 	"github.com/Team-Commonly/jellymoon/daemon/internal/importer"
 )
 
-// commonlyTokenEnv carries the person's own Commonly token. It never comes from argv, and the importer never reads ~/.commonly.
+// commonlyTokenEnv carries the person's own Commonly token. It never comes from argv, and the importer never reads Commonly's own config files.
 const commonlyTokenEnv = "COMMONLY_TOKEN"
 
 // dmFlag collects every --include-dm.
@@ -40,6 +40,9 @@ func importCommonly(args []string, stdout, stderr io.Writer) error {
 	fs.Var(&dms, "include-dm", "a 1:1 DM pod id to import too (repeatable); DMs are skipped otherwise")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if time.Duration(*paceMS)*time.Millisecond < importer.MinPace {
+		return fmt.Errorf("--pace-ms must be at least %d: a faster crawl could hurt the instance", importer.MinPace.Milliseconds())
 	}
 	if *instance == "" {
 		return errors.New("--instance is required, such as --instance https://commonly.example")

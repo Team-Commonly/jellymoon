@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+const hex64 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 // Token shapes are assembled at runtime so no secret-shaped literal sits in source or history (gitleaks scans both).
 // Every shape of credential the importer might meet in a copied field fails the run.
 func TestScrubberFailsOnTokenShapes(t *testing.T) {
@@ -21,6 +23,12 @@ func TestScrubberFailsOnTokenShapes(t *testing.T) {
 		"private key":           "-----BEGIN RSA PRIVATE KEY-----",
 		"slack webhook":         "https://hooks.slack.com/services/T000/B000/XXXX",
 		"discord webhook":       "https://discord.com/api/webhooks/123/abc",
+		"glued user token":      "TOKEN_cm_" + hex64,
+		"glued agent token":     "x1cm_agent_" + hex64,
+		"daemon token":          "cm_daemon_" + hex64,
+		"bearer colon":          "Authorization:Bearer:abcdefgh12345678",
+		"bearer url-encoded":    "Authorization=bearer%20abcdefgh12345678",
+		"bearer tab":            "bearer\tabcdefgh12345678",
 	}
 	sc := NewScrubber("")
 	for name, v := range bad {
@@ -29,7 +37,7 @@ func TestScrubberFailsOnTokenShapes(t *testing.T) {
 			t.Errorf("%s: not refused", name)
 			continue
 		}
-		if strings.Contains(err.Error(), v) || strings.Contains(err.Error(), "0123456789abcdef") {
+		if strings.Contains(err.Error(), v) || strings.Contains(err.Error(), "0123456789abcdef") || strings.Contains(err.Error(), hex64) {
 			t.Errorf("%s: the error repeats the secret: %v", name, err)
 		}
 	}

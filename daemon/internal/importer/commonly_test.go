@@ -137,3 +137,22 @@ func TestErrorsNeverCarryTheTokenOrTheBody(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// Retry-After in HTTP-date form is honoured too, capped like the seconds form.
+func TestGetHonoursARetryAfterDate(t *testing.T) {
+	var n atomic.Int32
+	c, slept := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if n.Add(1) == 1 {
+			w.Header().Set("Retry-After", time.Now().Add(20*time.Second).UTC().Format(http.TimeFormat))
+			w.WriteHeader(429)
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	})
+	if err := c.Get("/api/pods", nil, &struct{}{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(*slept) != 1 || (*slept)[0] < 15*time.Second || (*slept)[0] > retryAfterCap {
+		t.Fatalf("waits %v", *slept)
+	}
+}

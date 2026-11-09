@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Team-Commonly/jellymoon/daemon/internal/config"
 )
 
 // Card is an agent's identity as the person can feed it to `jellymoon agent add`: a name and a look. It holds no memory, no
@@ -109,7 +111,7 @@ func (f *sideOut) write(dir string) error {
 	if err != nil {
 		return err
 	}
-	if err := writeOwnerOnly(filepath.Join(dir, "agent-cards.json"), append(raw, '\n')); err != nil {
+	if err := config.WriteFile(filepath.Join(dir, "agent-cards.json"), append(raw, '\n')); err != nil {
 		return err
 	}
 	var b strings.Builder
@@ -129,5 +131,5 @@ func (f *sideOut) write(dir string) error {
 	for _, cm := range ids {
 		fmt.Fprintf(&b, "- %q is %s in Jellymoon\n", f.podNames[cm], f.jm[cm])
 	}
-	return writeOwnerOnly(filepath.Join(dir, "grants-checklist.md"), []byte(b.String()))
+	return config.WriteFile(filepath.Join(dir, "grants-checklist.md"), []byte(b.String()))
 }

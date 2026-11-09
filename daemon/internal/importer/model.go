@@ -2,6 +2,7 @@ package importer
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"strings"
 )
@@ -11,10 +12,9 @@ import (
 
 // Me is the caller, from GET /api/auth/user. The email in that answer is not decoded.
 type Me struct {
-	ID      string `json:"_id"`
-	Role    string `json:"role"`
-	IsBot   bool   `json:"isBot"`
-	Pending bool   `json:"accountDeletionPending"`
+	ID    string `json:"_id"`
+	Role  string `json:"role"`
+	IsBot bool   `json:"isBot"`
 }
 
 // Member is one pod member as the pod routes populate it: an id, a name, an avatar and whether it is an agent.
@@ -80,30 +80,19 @@ func (p Pod) Has(id string) bool {
 	return false
 }
 
-// Message is one message as a pod's page carries it. Reactions, replies, receipts and payloads are not decoded, except the names of attachments.
+// Message is one message as listPodMessages answers it. Both stores give one shape, with camel and snake keys both present, so only
+// one spelling is decoded. Reactions, replies, receipts and payloads are not decoded, except the names of attachments.
 type Message struct {
-	ID        string          `json:"id"`
-	Mongo     string          `json:"_id"`
-	Content   string          `json:"content"`
-	Type      string          `json:"messageType"`
-	TypeSnake string          `json:"message_type"`
-	At        string          `json:"createdAt"`
-	AtSnake   string          `json:"created_at"`
-	Username  string          `json:"username"`
-	UserSnake string          `json:"user_id"`
-	IsBotSnk  *bool           `json:"is_bot"`
-	Author    json.RawMessage `json:"userId"`
-	Payload   json.RawMessage `json:"payload"`
-	Attach    json.RawMessage `json:"attachments"`
-}
-
-func first(vs ...string) string {
-	for _, v := range vs {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
+	ID       string          `json:"id"`
+	Content  string          `json:"content"`
+	Type     string          `json:"messageType"`
+	At       string          `json:"createdAt"`
+	Username string          `json:"username"`
+	UserID   string          `json:"user_id"`
+	IsBot    bool            `json:"is_bot"`
+	Author   json.RawMessage `json:"userId"`
+	Payload  json.RawMessage `json:"payload"`
+	Attach   json.RawMessage `json:"attachments"`
 }
 
 // Norm is a message with its fields settled: one id, one time, one author.
@@ -114,28 +103,24 @@ type Norm struct {
 	System                         bool
 }
 
-// Normalize settles the two spellings the real route answers with (a Mongo row and a Postgres row).
+// Normalize settles the author, which the route gives as user_id/username and again as userId (an object or a bare id).
 func (m Message) Normalize() Norm {
-	n := Norm{ID: first(m.ID, m.Mongo), Text: m.Content, At: canonTime(first(m.At, m.AtSnake)), Author: m.Username, AuthorID: m.UserSnake}
-	n.System = first(m.Type, m.TypeSnake) == "system"
-	if m.IsBotSnk != nil {
-		n.AuthorBot = *m.IsBotSnk
-	}
+	n := Norm{ID: m.ID, Text: m.Content, At: canonTime(m.At), Author: m.Username, AuthorID: m.UserID, AuthorBot: m.IsBot, System: m.Type == "system"}
 	var a struct {
 		ID       string `json:"_id"`
 		Username string `json:"username"`
 		IsBot    bool   `json:"isBot"`
 	}
 	if json.Unmarshal(m.Author, &a) == nil && a.ID != "" {
-		n.AuthorID, n.Author, n.AuthorBot = first(n.AuthorID, a.ID), first(n.Author, a.Username), n.AuthorBot || a.IsBot
+		n.AuthorID, n.Author, n.AuthorBot = cmp.Or(n.AuthorID, a.ID), cmp.Or(n.Author, a.Username), n.AuthorBot || a.IsBot
 	} else {
 		var s string
 		if json.Unmarshal(m.Author, &s) == nil {
-			n.AuthorID = first(n.AuthorID, s)
+			n.AuthorID = cmp.Or(n.AuthorID, s)
 		}
 	}
 	n.Files = append(fileNames(m.Attach), payloadFiles(m.Payload)...)
-	n.Author = strings.TrimSpace(first(n.Author, "unknown"))
+	n.Author = strings.TrimSpace(cmp.Or(n.Author, "unknown"))
 	return n
 }
 
@@ -152,7 +137,7 @@ func fileNames(raw json.RawMessage) []string {
 	}
 	var out []string
 	for _, f := range fs {
-		out = append(out, first(f.Original, f.FileName, f.Name, "file"))
+		out = append(out, cmp.Or(f.Original, f.FileName, f.Name, "file"))
 	}
 	return out
 }

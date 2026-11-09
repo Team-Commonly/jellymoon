@@ -9,7 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Team-Commonly/jellymoon/e2e/cmyfake"
 )
+
+const impSentinel = "cm_e2eSENTINELtoken0123456789"
 
 // impRun is one importer process: its output, exit code and the files it left.
 type impRun struct {
@@ -27,11 +31,11 @@ type impEnv struct {
 	all         []string // everything any run printed or wrote, for the token scan
 	instanceURL string
 	rec         *recorder
-	cmys        []*cmy // every fixture instance the steps used, for the checks across all of them
+	cmys        []*cmyfake.Server // every fixture instance the steps used, for the checks across all of them
 }
 
 func (e *impEnv) cmd(args ...string) *exec.Cmd {
-	cmd := exec.Command(e.bin, append([]string{"import", "commonly", "--instance", e.instanceURL, "--pace-ms", "0", "--out", filepath.Join(e.work, "out")}, args...)...)
+	cmd := exec.Command(e.bin, append([]string{"import", "commonly", "--instance", e.instanceURL, "--pace-ms", "250", "--out", filepath.Join(e.work, "out")}, args...)...)
 	cmd.Dir = e.work
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "JELLYMOON_HOME=" + e.home, "JELLYMOON_SERVER=" + e.jmURL, "JELLYMOON_USER_TOKEN=" + e.jmTok, "COMMONLY_TOKEN=" + impSentinel}
 	return cmd
@@ -59,9 +63,9 @@ func (e *impEnv) run(args ...string) impRun {
 }
 
 // fresh gives each step its own fixture instance, config dir and work dir, on the shared Jellymoon server.
-func (e *impEnv) fresh(c *cmy) {
+func (e *impEnv) fresh(c *cmyfake.Server) {
 	e.cmys = append(e.cmys, c)
-	e.instanceURL = c.serve(e.t).URL
+	e.instanceURL = c.Serve(e.t).URL
 	e.home, e.work = filepath.Join(e.t.TempDir(), "jm"), e.t.TempDir()
 }
 

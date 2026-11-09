@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
+
+	"github.com/Team-Commonly/jellymoon/e2e/cmyfake"
 )
 
 // TestIMP: `jellymoon import commonly` against a fixture Commonly and a real local Jellymoon server (backlog unit IMP). Each step
@@ -50,7 +52,7 @@ func TestIMP(t *testing.T) {
 }
 
 func impDryRun(t *testing.T, e *impEnv) {
-	e.fresh(newCmy())
+	e.fresh(cmyfake.New())
 	r := e.run()
 	if r.code != 0 || !strings.Contains(r.out, "dry run") || !strings.Contains(r.out, "pods: 2") {
 		t.Fatalf("dry run: exit %d\n%s\n%s", r.code, r.out, r.errOut)
@@ -64,14 +66,14 @@ func impDryRun(t *testing.T, e *impEnv) {
 }
 
 func impSkipsDMs(t *testing.T, e *impEnv) {
-	c := newCmy()
+	c := cmyfake.New()
 	e.fresh(c)
 	r := e.run("--apply")
 	if r.code != 0 {
 		t.Fatalf("exit %d\n%s\n%s", r.code, r.out, r.errOut)
 	}
 	for _, id := range []string{"p_dm", "p_foreign", "p_admin"} {
-		if n := c.seen("/api/messages/" + id); n != 0 {
+		if n := c.Seen("/api/messages/" + id); n != 0 {
 			t.Errorf("%s was read %d times", id, n)
 		}
 	}
@@ -82,27 +84,27 @@ func impSkipsDMs(t *testing.T, e *impEnv) {
 }
 
 func impRefusesAdmin(t *testing.T, e *impEnv) {
-	c := newCmy()
-	c.me["role"] = "admin"
+	c := cmyfake.New()
+	c.Me["role"] = "admin"
 	e.fresh(c)
 	before := e.writes()
 	r := e.run("--apply")
 	if r.code == 0 || !strings.Contains(r.errOut, "admin") {
 		t.Fatalf("exit %d\n%s\n%s", r.code, r.out, r.errOut)
 	}
-	if len(c.reqs) != 1 || c.seen("/api/pods") != 0 || e.writes() != before {
-		t.Errorf("requests %v, writes %d -> %d", c.reqs, before, e.writes())
+	if len(c.Requests()) != 1 || c.Seen("/api/pods") != 0 || e.writes() != before {
+		t.Errorf("requests %v, writes %d -> %d", c.Requests(), before, e.writes())
 	}
 	t.Logf("REFUSE outcome: exit %d\n%s", r.code, r.errOut)
 }
 
 func impFailsOnSecret(t *testing.T, e *impEnv) {
-	c := newCmy()
-	c.msgs["p_study"][1]["content"] = "my key is cm_0123456789abcdef0123456789"
+	c := cmyfake.New()
+	c.Msgs["p_study"][1]["content"] = "my key is cm_0123456789abcdef0123456789"
 	e.fresh(c)
 	before := e.writes()
 	r := e.run("--apply")
-	if r.code == 0 || !strings.Contains(r.errOut, "secret") || strings.Contains(r.out+r.errOut, "0123456789abcdef") {
+	if r.code == 0 || !strings.Contains(r.errOut, "secret") || !strings.Contains(r.errOut, "p_study") || !strings.Contains(r.errOut, "s2") || strings.Contains(r.out+r.errOut, "0123456789abcdef") {
 		t.Fatalf("exit %d\n%s\n%s", r.code, r.out, r.errOut)
 	}
 	if e.writes() != before {
@@ -115,7 +117,7 @@ func impFailsOnSecret(t *testing.T, e *impEnv) {
 }
 
 func impIdempotent(t *testing.T, e *impEnv) {
-	e.fresh(newCmy())
+	e.fresh(cmyfake.New())
 	if r := e.run("--apply"); r.code != 0 {
 		t.Fatalf("first: exit %d\n%s\n%s", r.code, r.out, r.errOut)
 	}
@@ -139,7 +141,7 @@ func impIdempotent(t *testing.T, e *impEnv) {
 
 // impKillResume kills the importer with SIGKILL the moment Jellymoon has answered its second message post, then runs it again.
 func impKillResume(t *testing.T, e *impEnv) {
-	e.fresh(newCmy())
+	e.fresh(cmyfake.New())
 	var proc atomic.Pointer[os.Process]
 	var posts atomic.Int32
 	target, _ := url.Parse(e.rec.URL)
@@ -181,8 +183,8 @@ func impKillResume(t *testing.T, e *impEnv) {
 }
 
 func impBackoff(t *testing.T, e *impEnv) {
-	c := newCmy()
-	c.failMsg = func(pod string, call int) (int, string) {
+	c := cmyfake.New()
+	c.FailMsg = func(pod string, call int) (int, string) {
 		switch {
 		case pod == "p_team" && call == 1:
 			return 429, "1"
@@ -192,17 +194,17 @@ func impBackoff(t *testing.T, e *impEnv) {
 		return 0, ""
 	}
 	e.fresh(c)
-	if r := e.run(); r.code != 0 || c.max.Load() != 1 {
-		t.Fatalf("exit %d, up to %d requests in flight\n%s\n%s", r.code, c.max.Load(), r.out, r.errOut)
+	if r := e.run(); r.code != 0 || c.MaxInFlight() != 1 {
+		t.Fatalf("exit %d, up to %d requests in flight\n%s\n%s", r.code, c.MaxInFlight(), r.out, r.errOut)
 	}
 }
 
 func impOptIns(t *testing.T, e *impEnv) {
-	c := newCmy()
+	c := cmyfake.New()
 	e.fresh(c)
 	r := e.run("--apply", "--include-dm", "p_dm", "--include-dm", "p_foreign", "--anonymize")
-	if r.code != 0 || c.seen("/api/messages/p_dm") == 0 || c.seen("/api/messages/p_foreign") != 0 {
-		t.Fatalf("exit %d, dm reads %d, foreign reads %d\n%s\n%s", r.code, c.seen("/api/messages/p_dm"), c.seen("/api/messages/p_foreign"), r.out, r.errOut)
+	if r.code != 0 || c.Seen("/api/messages/p_dm") == 0 || c.Seen("/api/messages/p_foreign") != 0 {
+		t.Fatalf("exit %d, dm reads %d, foreign reads %d\n%s\n%s", r.code, c.Seen("/api/messages/p_dm"), c.Seen("/api/messages/p_foreign"), r.out, r.errOut)
 	}
 	var all []string
 	for _, jm := range e.jmPods() {
@@ -215,12 +217,18 @@ func impOptIns(t *testing.T, e *impEnv) {
 }
 
 func impNoLeaks(t *testing.T, e *impEnv) {
-	c := newCmy()
-	c.grants = []obj{{"grantId": "g1", "connector": obj{"id": "linear"}, "writeMode": "read", "target": obj{"kind": "pod", "id": "p_team"}, "token": "SECRETGRANTVALUE"}}
-	c.integ["p_team"] = []obj{{"type": "discord", "status": "connected", "config": obj{"botToken": "SECRETBOTVALUE", "webhookUrl": "https://hooks.example/SECRETHOOKVALUE"}}}
+	c := cmyfake.New()
+	c.Grants = []cmyfake.Obj{{"grantId": "g1", "connector": cmyfake.Obj{"id": "linear"}, "writeMode": "read", "target": cmyfake.Obj{"kind": "pod", "id": "p_team"}, "token": "SECRETGRANTVALUE"}}
+	c.Integ["p_team"] = []cmyfake.Obj{{"type": "discord", "status": "connected", "config": cmyfake.Obj{"botToken": "SECRETBOTVALUE", "webhookUrl": "https://hooks.example/SECRETHOOKVALUE"}}}
 	e.fresh(c)
 	if r := e.run("--apply"); r.code != 0 {
 		t.Fatalf("exit %d\n%s\n%s", r.code, r.out, r.errOut)
+	}
+	list, _ := os.ReadFile(filepath.Join(e.work, "out", "grants-checklist.md"))
+	for _, want := range []string{"linear", "discord"} {
+		if !strings.Contains(string(list), want) {
+			t.Errorf("the checklist lacks %q:\n%s", want, list)
+		}
 	}
 }
 
@@ -230,18 +238,18 @@ func (e *impEnv) acrossEverything() {
 	t := e.t
 	for i, c := range e.cmys {
 		for _, bad := range []string{"scope", "/api/users/", "/api/credentials", "/api/agents/runtime", "ingest-tokens"} {
-			if n := c.seen(bad); n != 0 {
+			if n := c.Seen(bad); n != 0 {
 				t.Errorf("fixture %d saw %d requests with %q", i, n, bad)
 			}
 		}
-		for _, r := range c.reqs {
+		for _, r := range c.Requests() {
 			if !strings.HasPrefix(r, "GET ") || !strings.HasSuffix(r, "auth=Bearer "+impSentinel) {
 				t.Errorf("fixture %d: unexpected request %s", i, r)
 			}
 		}
 	}
 	scan := strings.Join(e.all, "\n") + e.rec.dump()
-	for _, bad := range []string{impSentinel, "SECRETGRANTVALUE", "SECRETBOTVALUE", "SECRETHOOKVALUE", "bob@example.test", "me@example.test"} {
+	for _, bad := range []string{impSentinel, "SECRETGRANTVALUE", "SECRETBOTVALUE", "SECRETHOOKVALUE", "bob@example.com", "me@example.com"} {
 		if strings.Contains(scan, bad) {
 			t.Errorf("%q appears in an output, a file or a request to Jellymoon", bad)
 		}

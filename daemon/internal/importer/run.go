@@ -1,6 +1,8 @@
 package importer
 
 import (
+	"cmp"
+	"crypto/sha256"
 	"fmt"
 	"sort"
 	"strings"
@@ -129,12 +131,12 @@ func prepare(plan *Plan, st *State, sc *Scrubber, o Options) ([]podWork, error) 
 		for _, n := range pp.Msgs {
 			name := oneLine(n.Author)
 			if o.Anonymize && !n.AuthorBot && !bots[n.AuthorID] {
-				name = anonName(st, first(n.AuthorID, n.Author))
+				name = anonName(st, cmp.Or(n.AuthorID, nameKey(n.Author)))
 			}
 			in := compose(n, name)
 			for field, v := range map[string]string{"a summary": in.Summary, "a body": *in.Body} {
 				if err := sc.Check(field, v); err != nil {
-					return nil, err
+					return nil, fmt.Errorf("%w (%s)", err, where(sc, pp.Pod.ID, n.ID))
 				}
 			}
 			w.posts = append(w.posts, post{n: n, in: in})
@@ -143,6 +145,9 @@ func prepare(plan *Plan, st *State, sc *Scrubber, o Options) ([]podWork, error) 
 	}
 	return out, nil
 }
+
+// nameKey stands in for an author id a message does not carry, so the state file keeps a hash and never a name.
+func nameKey(name string) string { return fmt.Sprintf("name:%x", sha256.Sum256([]byte(name)))[:17] }
 
 func anonName(st *State, key string) string {
 	if v, ok := st.Anon[key]; ok {

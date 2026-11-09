@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -21,6 +22,7 @@ const (
 	skipDM        = "dm-opt-in"
 	skipNotOneOne = "dm-not-1-to-1"
 	skipUnlisted  = "include-dm-not-listed"
+	skipDenied    = "unauthorized" // a 401 or 403 on the pod's messages
 )
 
 // PodPlan is one pod the run will import: its messages still to post, in order, and what the run read around it.
@@ -102,14 +104,14 @@ func readPlan(c *Commonly, sc *Scrubber, o Options, st *State) (*Plan, error) {
 			plan.Skipped[reason]++
 			continue
 		}
-		pp, err := readPod(c, sc, p, me, st)
-		if err != nil {
+		pp, reason, err := readPod(c, sc, p, me, st)
+		switch {
+		case err != nil:
 			return nil, err
-		}
-		if pp != nil {
+		case reason != "":
+			plan.Skipped[reason]++
+		default:
 			plan.Pods = append(plan.Pods, pp)
-		} else {
-			plan.Skipped[skipNotMember]++
 		}
 	}
 	if len(include) > 0 {
@@ -118,27 +120,33 @@ func readPlan(c *Commonly, sc *Scrubber, o Options, st *State) (*Plan, error) {
 	return plan, readSides(c, sc, plan)
 }
 
-// readPod confirms membership against the pod itself, then reads its messages. A pod whose own member list does not hold the person is dropped.
-func readPod(c *Commonly, sc *Scrubber, listed Pod, me Me, st *State) (*PodPlan, error) {
+// readPod confirms membership against the pod itself, then reads its messages. A pod whose own member list does not hold the person
+// is skipped, and so is one whose messages answer 401 or 403 (a membership revoked mid-run): the reason is returned. Agents come from
+// the listing, because GET /api/pods/:id does not populate botMetadata, which holds an agent's own name and instance.
+func readPod(c *Commonly, sc *Scrubber, listed Pod, me Me, st *State) (*PodPlan, string, error) {
 	var pod Pod
 	if err := c.Get("/api/pods/"+url.PathEscape(listed.ID), nil, &pod); err != nil {
 		var se *StatusError
 		if errors.As(err, &se) {
-			return nil, nil
+			return nil, skipNotMember, nil
 		}
-		return nil, err
+		return nil, "", err
 	}
 	pod.ID = listed.ID
 	if !pod.Has(me.ID) {
-		return nil, nil
+		return nil, skipNotMember, nil
 	}
 	if err := sc.Check("a pod name", pod.Name); err != nil {
-		return nil, err
+		return nil, "", fmt.Errorf("%w (pod %s)", err, pod.ID)
 	}
 	pp := &PodPlan{Pod: pod}
 	msgs, err := readMessages(c, pod.ID, st.Pods[pod.ID])
+	var se *StatusError
+	if errors.As(err, &se) && (se.Status == 401 || se.Status == 403) {
+		return nil, skipDenied, nil
+	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	for _, n := range msgs {
 		switch {
@@ -148,17 +156,29 @@ func readPod(c *Commonly, sc *Scrubber, listed Pod, me Me, st *State) (*PodPlan,
 			pp.Already++
 		default:
 			if err := checkMessage(sc, n); err != nil {
-				return nil, err
+				return nil, "", fmt.Errorf("%w (%s)", err, where(sc, pod.ID, n.ID))
 			}
 			pp.Msgs = append(pp.Msgs, n)
 		}
 	}
-	for _, m := range pod.Members {
+	for _, m := range listed.Members {
 		if m.IsBot {
 			pp.Agents = append(pp.Agents, m)
 		}
 	}
-	return pp, nil
+	return pp, "", nil
+}
+
+// where names a pod and a message so the person can find them. An id that is itself secret-shaped is left out: an error never repeats a match.
+func where(sc *Scrubber, podID, msgID string) string {
+	s := "pod " + podID
+	if sc.Check("id", podID) != nil {
+		s = "a pod"
+	}
+	if sc.Check("id", msgID) == nil {
+		s += ", message " + msgID
+	}
+	return s
 }
 
 func checkMessage(sc *Scrubber, n Norm) error {
@@ -177,7 +197,8 @@ func checkMessage(sc *Scrubber, n Norm) error {
 
 // readMessages pages a pod newest to oldest, 50 at a time, and returns every message oldest first. The route's cursor is strict
 // ("before"), so a page boundary inside a run of messages with one timestamp would drop the rest of the run: each next request asks
-// for one millisecond past the oldest row, and the overlap is deduplicated by id. The read stops early once a page reaches below
+// for one millisecond past the oldest row, and the overlap is deduplicated by id. One limit remains: more than a page (50)
+// of messages sharing a single millisecond cannot all be reached, and the rest of that run is dropped. The read stops early once a page reaches below
 // the saved cursor, because everything older was posted by an earlier run.
 func readMessages(c *Commonly, podID string, ps *PodState) ([]Norm, error) {
 	var all []Norm
@@ -256,16 +277,6 @@ func readSides(c *Commonly, sc *Scrubber, plan *Plan) error {
 			plan.Grants = append(plan.Grants, g)
 		}
 	}
-	slices.SortStableFunc(plan.Grants, func(a, b Grant) int { return compareStr(a.Target.ID+a.ConnectorID(), b.Target.ID+b.ConnectorID()) })
+	slices.SortStableFunc(plan.Grants, func(a, b Grant) int { return strings.Compare(a.Target.ID+a.ConnectorID(), b.Target.ID+b.ConnectorID()) })
 	return nil
-}
-
-func compareStr(a, b string) int {
-	switch {
-	case a < b:
-		return -1
-	case a > b:
-		return 1
-	}
-	return 0
 }

@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"github.com/Team-Commonly/jellymoon/daemon/internal/config"
 )
 
-// State is the local record of what was imported. It holds ids and timestamps only: never a token, a name or a message.
+// State is the local record of what was imported. It holds ids and timestamps only: never a token, a name or a message (a message with no author id is keyed by a hash of the name).
 //
 // Messages are posted oldest first, so "imported" is a watermark: everything older than Cursor is done, and AtCursor lists the
 // ids already posted at exactly the cursor's timestamp. Inflight is the one message being posted when the run last saved: if the
@@ -87,29 +88,5 @@ func (s *State) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return writeOwnerOnly(path, raw)
-}
-
-func writeOwnerOnly(path string, raw []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".import-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(raw); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	return config.WriteFile(path, raw)
 }

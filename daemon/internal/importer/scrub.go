@@ -15,8 +15,10 @@ var ErrSecret = errors.New("a secret-shaped string was found in text the import 
 // shapes are the credentials this importer refuses to carry: this project's own prefixes, a bearer header, and the common key
 // formats. A match fails the whole run; nothing is redacted and carried on.
 var shapes = map[string]*regexp.Regexp{
-	"a cm_ token":         regexp.MustCompile(`(?i)\b(?:cm|jmu|jmc|jmr)_[A-Za-z0-9_-]{6,}`),
-	"a bearer credential": regexp.MustCompile(`(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}`),
+	"a cm_ token": regexp.MustCompile(`(?i)\b(?:cm|jmu|jmc|jmr)_[A-Za-z0-9_-]{6,}`),
+	// Commonly's real shape (user, cm_agent_, cm_daemon_ and cm_int_ tokens are cm_ + hex). No leading \b, so a glued word does not hide it.
+	"a Commonly token":    regexp.MustCompile(`(?i)cm_(?:agent_|daemon_|int_)?[0-9a-f]{32,}`),
+	"a bearer credential": regexp.MustCompile(`(?i)\bbearer(?:[\s:]|%20)+[A-Za-z0-9._~+/=-]{8,}`),
 	"an sk- key":          regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{16,}`),
 	"a GitHub token":      regexp.MustCompile(`\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})`),
 	"a Slack token":       regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}`),

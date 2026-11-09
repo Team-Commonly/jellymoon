@@ -37,12 +37,12 @@ The LOC budget for the slice is a deliberate choice to stay small:
 
 | Area | Cap |
 |---|---|
-| core (`schema/`, `scripts/`) | 3,720 |
+| core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
-| worker | 1,790 |
-| server | 1,800 |
-| daemon | 3,000 |
-| e2e | 4,650 |
+| worker | 1,900 |
+| server | 2,100 |
+| daemon | 5,000 |
+| e2e | 6,000 |
 | web | 1,580 |
 
 The caps add up to 23,780 lines (restated 2026-11-08 against the merged entropy.json: core 4,200, worker 1,900, server 2,100, podcore 3,000, daemon 5,000, web 1,580, e2e 6,000). Agent-written comparables grew without bounds: herdr reached

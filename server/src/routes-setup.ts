@@ -11,8 +11,8 @@ import { findInvite, saveInvite, saveToken, useInvite } from './store';
 
 const podView = (p: PodRuntime) => ({ id: p.id, name: p.meta.name, createdAt: p.meta.createdAt });
 
-/** The public base URL: the run's mcpUrl and an invite's join link. A request's own origin stands in when none is configured. */
-const baseOf = (publicUrl: string | undefined, c: Context): string => publicUrl ?? new URL(c.req.url).origin;
+/** The public base URL: the run's mcpUrl and an invite's join link. An empty value counts as unset, and a trailing slash is dropped. A request's own origin stands in when none is configured. */
+const baseOf = (publicUrl: string | undefined, c: Context): string => (publicUrl === undefined || publicUrl === '' ? new URL(c.req.url).origin : publicUrl).replace(/\/+$/, '');
 
 function inviteRoutes(app: Hono, hub: Hub, publicUrl: string | undefined): void {
   const create = async (k: Call): Promise<Response> => {
@@ -24,7 +24,7 @@ function inviteRoutes(app: Hono, hub: Hub, publicUrl: string | undefined): void 
     const code = newInviteCode();
     const inv = { hash: hashToken(code), pod: k.pod.id, usesLeft: uses, expiresAt: hub.now() + ttl * 1000 };
     await saveInvite(hub.db, inv);
-    return k.c.json({ code, url: `${baseOf(publicUrl, k.c).replace(/\/+$/, '')}/join/${code}`, expiresAt: isoOf(inv.expiresAt), usesLeft: uses });
+    return k.c.json({ code, url: `${baseOf(publicUrl, k.c)}/join/${code}`, expiresAt: isoOf(inv.expiresAt), usesLeft: uses });
   };
   app.post('/v1/pods/:pod/invites', podRoute(hub, ['user'] as const, 'CreateInviteRequest', [], create));
   app.post('/v1/invites/:code/accept', setup(hub, ['user'] as const, null, async (c, who) => {

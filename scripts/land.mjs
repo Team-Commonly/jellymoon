@@ -207,7 +207,7 @@ async function decide(pr, mainTip) { // mainTip is the tip fetched for this land
   const led = checkLedger(rows, { pr: n, head });
   if (!led.ok) return led;
   let via = `verifier PASS by ${led.primary.by}`;
-  const runs = JSON.parse(gh('api', `repos/${REPO}/commits/${head}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, conclusion}]}'));
+  const runs = JSON.parse(gh('api', `repos/${REPO}/commits/${head}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {id, name, conclusion, started_at}]}'));
   const ci = checkRuns(runs.runs, runs.total);
   if (!ci.ok) return ci;
   // The secret scan can only REFUSE; a clean scan waives nothing. Every land needs the ledger PASS above and the reviewer's verdict below.

@@ -272,10 +272,25 @@ const SCAN_ENV_PINS = {
 };
 export const scanEnv = (env) => ({ ...Object.fromEntries(SCAN_ENV_KEEP.filter((k) => env[k] !== undefined).map((k) => [k, env[k]])), ...SCAN_ENV_PINS });
 // Check runs on the head are a second witness only when they exist: none at all is fine, a failed one refuses.
+// A check NAME is judged by its latest run(s): a re-run (the same name started later, ties broken by the higher run id) supersedes an
+// earlier cancelled or failed one, because a re-run is how a cancelled suite is retried (#29 and #32, 11-08). Runs that tie on both
+// are all latest, so a bad one among them refuses. A name's latest run being bad, or only run, still refuses.
 const BAD_CONCLUSION = ['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required'];
+const startedAt = (r) => { const t = Date.parse(r.started_at); return Number.isNaN(t) ? 0 : t; };
+const order = (r) => [startedAt(r), Number(r.id) || 0];
+const newer = (a, b) => { const [x, y] = [order(a), order(b)]; return x[0] - y[0] || x[1] - y[1]; };
+function latestPerName(runs) {
+  const best = new Map();
+  for (const r of runs) {
+    const key = String(r.name), cur = best.get(key);
+    if (!cur || newer(r, cur[0]) > 0) best.set(key, [r]);
+    else if (newer(r, cur[0]) === 0) cur.push(r);
+  }
+  return [...best.values()].flat();
+}
 export function checkRuns(runs, total = runs.length) {
   if (total > runs.length) return { ok: false, reason: `${total} check runs on the head; cannot read them all` };
-  const bad = runs.filter((r) => BAD_CONCLUSION.includes(r.conclusion));
+  const bad = latestPerName(runs).filter((r) => BAD_CONCLUSION.includes(r.conclusion));
   return bad.length ? { ok: false, reason: `check run failed on the head: ${bad.map((r) => `${stripControls(String(r.name))} (${r.conclusion})`).join(', ')}` } : { ok: true };
 }
 // The land and verify checkout: the tree is clean and HEAD is main's tip (only an explicit --bootstrap may sit elsewhere, and then only at the PR head), because

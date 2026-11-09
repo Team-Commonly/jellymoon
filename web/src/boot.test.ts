@@ -1,14 +1,19 @@
 // The boot check: signed in or not, decided once, and never stuck on a server that does not answer.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Actor } from '../../gen/ts/protocol';
-import { bootSignedIn, type Http } from './http';
+import { bootSignedIn, browserHttp, type Http } from './http';
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 const withMe = (me: Http['me']): Http => ({ me, acceptInvite: async () => { throw new Error('unused'); }, approveDevice: async () => {} });
 const person = { id: 'usr_1' } as unknown as Actor;
 
 describe('bootSignedIn', () => {
+  it('is signed out when fetch itself rejects with an AbortError', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new DOMException('The operation was aborted.', 'AbortError'); }));
+    expect(await bootSignedIn(browserHttp, 50)).toBe(false);
+  });
+
   it('is signed in when /v1/me names a person', async () => {
     expect(await bootSignedIn(withMe(async () => person), 50)).toBe(true);
   });

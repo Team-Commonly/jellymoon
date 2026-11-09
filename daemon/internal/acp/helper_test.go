@@ -41,6 +41,7 @@ func send(v map[string]any) {
 //	ask:<kind,kind>  on the prompt, ask permission offering one option per kind (its id is the kind), record the answer, end the turn
 //	ask-other        on the prompt, make a request the client does not serve, record the error code, end the turn
 //	cancel           on the prompt, wait for session/cancel, then end the turn cancelled and exit
+//	cancel:<reason>  like cancel, but the turn ends with that stopReason instead of "cancelled" (an agent that answers a stop with a refusal)
 //	deaf             on the prompt, ignore everything; a SIGTERM is recorded and ends it
 //	stubborn         like deaf, but it ignores SIGTERM, so only SIGKILL ends it before its 20 s are up
 //	stop:<reason>    on the prompt, end the turn with that stopReason ("none" sends a result with no stopReason)
@@ -72,15 +73,15 @@ func agentMain(mode, rec string) {
 			send(map[string]any{"id": m.ID, "result": map[string]any{"sessionId": "sess_t"}})
 		case "session/cancel":
 			note(rec, "cancel")
+			if strings.HasPrefix(mode, "cancel") {
+				cancelWith(mode)
+				return
+			}
 			switch mode {
 			case "error-on-cancel":
 				send(map[string]any{"id": 3, "error": map[string]any{"code": -32000, "message": "boom"}})
 				fallthrough
 			case "exit-on-cancel":
-				return
-			case "cancel":
-				time.Sleep(300 * time.Millisecond) // winding a turn down takes a moment, so a client that signals at once is caught
-				send(map[string]any{"id": 3, "result": map[string]any{"stopReason": "cancelled"}})
 				return
 			}
 		case "session/prompt":
@@ -125,6 +126,17 @@ func ask(sc *bufio.Scanner, kinds []string, rec string) {
 		a = r.Result.Outcome.OptionId
 	}
 	note(rec, "answer:"+a)
+}
+
+// cancelWith winds the turn down (that takes a moment, so a client that signals at once is caught), then answers the outstanding
+// prompt (id 3): mode "cancel" with stopReason cancelled, mode "cancel:<reason>" with that reason.
+func cancelWith(mode string) {
+	time.Sleep(300 * time.Millisecond)
+	reason := strings.TrimPrefix(mode, "cancel:")
+	if mode == "cancel" {
+		reason = "cancelled"
+	}
+	stopWith(json.RawMessage("3"), reason)
 }
 
 // stopWith answers the prompt with a result carrying stopReason reason, or none at all when reason is "none".

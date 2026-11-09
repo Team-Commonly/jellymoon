@@ -235,12 +235,15 @@ func turn(ctx context.Context, c *conn, s Spec) error {
 	if err != nil {
 		return err
 	}
+	if c.cancelling {
+		return nil // a stop is in flight, whatever the agent answered: Run ends the run for the stop's cause
+	}
 	return stopReasonErr(res)
 }
 
 // stopReasonErr turns the prompt's stopReason into the turn's ending. Only end_turn is a finished turn: a refusal, or a turn the
 // agent ran out of tokens or requests for, is an error, which the daemon reports as a failed run (the error text is logged).
-// "cancelled" is not judged here: when the client asked for the stop, Run reports the stop's cause. A missing, unreadable or
+// "cancelled" is not judged here, and neither is any reason once the client has asked for the stop (turn skips this): Run reports the stop's cause. A missing, unreadable or
 // unknown stopReason is deliberately not an error, so a harness that omits it or adds a value keeps ending completed.
 func stopReasonErr(res json.RawMessage) error {
 	var r struct {

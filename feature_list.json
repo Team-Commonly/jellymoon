@@ -227,7 +227,7 @@
         "the contract suite, TestF14Budget included, passes with that bundle as the server under test (make e2e-deployed); a server that fails to boot fails the job"
       ],
       "test": "CI job e2e-deployed",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F18",

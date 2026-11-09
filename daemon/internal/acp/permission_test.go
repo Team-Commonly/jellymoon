@@ -46,32 +46,31 @@ func answered(t *testing.T, s Spec, rec string) string {
 	return ""
 }
 
-// A permission request is rejected with the request's own reject option unless the agent was added with the allow setting.
-func TestPermissionIsRejectedByDefault(t *testing.T) {
-	for kinds, want := range map[string]string{
-		"allow_once,allow_always,reject_always,reject_once": "reject_once",
-		"allow_once,reject_always":                          "reject_always",
-		"allow_once,allow_always":                           "cancelled", // no reject option is offered
-	} {
+func answers(t *testing.T, allow bool, want map[string]string) {
+	for kinds, w := range want {
 		s, rec := spec(t, "ask:"+kinds)
-		if got := answered(t, s, rec); got != want {
-			t.Errorf("options %s: answered %s, want %s", kinds, got, want)
+		s.Allow = allow
+		if got := answered(t, s, rec); got != w {
+			t.Errorf("options %s: answered %s, want %s", kinds, got, w)
 		}
 	}
 }
 
+// A permission request is rejected with the request's own reject option unless the agent was added with the allow setting.
+func TestPermissionIsRejectedByDefault(t *testing.T) {
+	answers(t, false, map[string]string{
+		"allow_once,allow_always,reject_always,reject_once": "reject_once",
+		"allow_once,reject_always":                          "reject_always",
+		"allow_once,allow_always":                           "cancelled", // no reject option is offered
+	})
+}
+
 // With the allow setting the answer is allow_once, never allow_always, and a request with no allow_once is still rejected.
 func TestPermissionAllowSettingGetsAllowOnce(t *testing.T) {
-	for kinds, want := range map[string]string{
+	answers(t, true, map[string]string{
 		"allow_always,allow_once,reject_once": "allow_once",
 		"allow_always,reject_once":            "reject_once",
-	} {
-		s, rec := spec(t, "ask:"+kinds)
-		s.Allow = true
-		if got := answered(t, s, rec); got != want {
-			t.Errorf("options %s: answered %s, want %s", kinds, got, want)
-		}
-	}
+	})
 }
 
 // Each request and its answer is logged by the call's id and kind, never by its title or input.
@@ -92,7 +91,7 @@ func TestOtherAgentRequestsStayUnsupported(t *testing.T) {
 	if err := Run(context.Background(), s); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(events(rec), " "); !strings.Contains(got, "other-error:-32601") {
+	if !strings.Contains(strings.Join(events(rec), " "), "other-error:-32601") {
 		t.Errorf("record = %v, want the -32601 error", events(rec))
 	}
 }
@@ -101,19 +100,9 @@ var errStopped = errors.New("stopped")
 
 // A run stopped mid-turn gets session/cancel before any signal; an agent that ends its turn on it leaves without being signalled.
 func TestStopSendsCancelBeforeAnySignal(t *testing.T) {
-	s, rec := spec(t, "cancel")
-	ctx, cancel := context.WithCancelCause(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- Run(ctx, s) }()
-	waitFor(t, rec, "prompt")
-	cancel(errStopped)
-	select {
-	case err := <-done:
-		if !errors.Is(err, errStopped) {
-			t.Errorf("Run = %v, want the stop's cause", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("Run did not return after the stop")
+	rec, err := stop(t, "cancel", errStopped)
+	if !errors.Is(err, errStopped) {
+		t.Errorf("Run = %v, want the stop's cause", err)
 	}
 	if got := strings.Join(events(rec), " "); got != "prompt cancel" {
 		t.Errorf("agent events = %q, want \"prompt cancel\": cancelled, and never signalled", got)

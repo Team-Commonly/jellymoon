@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// The recording (testdata/acp/claude-slice.jsonl) is one real Claude Code run through the claude-agent-acp adapter, written by
+// A recording (testdata/acp/claude-slice.jsonl or codex-slice.jsonl) is one real Claude Code or Codex run through its ACP adapter, written by
 // scripts/record-acp.mjs. Its first line is a header; every other line is an ACP line the daemon sent ("in"), an ACP line the agent
 // sent ("out"), or one HTTP exchange the agent had with the pod's MCP server ("mcp").
 type entry struct {
@@ -54,8 +54,8 @@ func loadRecording(path string) ([]entry, error) {
 	return out, nil
 }
 
-// replayAgent and replayReport are how TestReplayClaude starts this test binary as the agent: the daemon runs the program
-// JELLYMOON_HARNESS_CLAUDE_CODE names, and that program is this binary running only TestReplayAgent. The report file is where a
+// replayAgent and replayReport are how TestReplayClaude and TestReplayCodex start this test binary as the agent: the daemon runs the program
+// the harness's JELLYMOON_HARNESS_* variable names, and that program is this binary running only TestReplayAgent. The report file is where a
 // failed agent says why, since the daemon gives its agent no stderr.
 var (
 	replayAgent  = flag.String("replay.agent", "", "(internal) play the recording at this path as the ACP agent")
@@ -64,7 +64,7 @@ var (
 
 func TestReplayAgent(t *testing.T) {
 	if *replayAgent == "" {
-		t.Skip("runs only as the agent TestReplayClaude starts")
+		t.Skip("runs only as the agent TestReplayClaude or TestReplayCodex starts")
 	}
 	ents, err := loadRecording(*replayAgent)
 	if err == nil {

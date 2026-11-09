@@ -4,12 +4,14 @@
 // It starts a LOCAL server (worker/dev.sh), a pod, the daemon and one claude-code agent, assigns the agent one task, and waits
 // for the run to end. The daemon starts the adapter through e2e/testdata/acprec, which logs the ACP lines and the agent's MCP calls.
 // The raw log is scrubbed by scripts/acp-scrub.mjs and only the scrubbed file is kept. Needs `make acp-tools` first, and this
-// machine's normal Claude Code sign-in (the adapter reads it; nothing here does).
+// machine's normal sign-in for the harness (the adapter reads it; nothing here does). The agent gets a fresh config directory per
+// recording (scripts/record-acp-env.mjs), so this machine's own settings and global instructions do not reach the model.
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { scrub } from './acp-scrub.mjs';
+import { harnessHome } from './record-acp-env.mjs';
 
 // The harnesses this records, each with its pinned adapter (the versions match ACP_ADAPTERS in the Makefile), the adapter's bin, and the
 // agent name given to `agent add`.
@@ -67,7 +69,7 @@ async function startDaemon(s, raw) {
   execFileSync('go', ['build', '-o', tee, './e2e/testdata/acprec'], { cwd: root });
   mkdirSync(work);
   const adapter = join(root, `.tools/acp/node_modules/.bin/${H.bin}`);
-  const env = { PATH: process.env.PATH, HOME: process.env.HOME, USER: process.env.USER, LANG: process.env.LANG ?? 'en_US.UTF-8', TMPDIR: tmp, JELLYMOON_HOME: join(tmp, 'jm'), JELLYMOON_SERVER: s.base,
+  const env = { PATH: process.env.PATH, HOME: process.env.HOME, ...harnessHome(harness, tmp, process.env), USER: process.env.USER, LANG: process.env.LANG ?? 'en_US.UTF-8', TMPDIR: tmp, JELLYMOON_HOME: join(tmp, 'jm'), JELLYMOON_SERVER: s.base,
     [`JELLYMOON_HARNESS_${harness.toUpperCase().replace(/-/g, '_')}`]: `${tee} ${raw} ${adapter}` };
   const daemon = run(bin, ['daemon', 'start', '--foreground'], { cwd: work, env: { ...env, JELLYMOON_USER_TOKEN: s.token } });
   await until('the stored computer', 15000, () => existsSync(join(env.JELLYMOON_HOME, 'computer.json')));

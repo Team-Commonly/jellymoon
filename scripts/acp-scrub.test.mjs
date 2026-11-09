@@ -49,6 +49,16 @@ test('streamed text is replaced and the line stays', () => {
   expect(out[1]).not.toContain('hello there');
 });
 
+test("Codex's turn metadata keeps its keys but not this machine's settings", () => {
+  const meta = { session_id: 'a', model: 'some-model', reasoning_effort: 'high', sandbox: 'seatbelt', auto_review_enabled: true, turn_started_at_unix_ms: 1794199983781, codex_version: '0.166.0' };
+  const line = JSON.stringify({ t: 'acp', dir: 'out', msg: { method: 'x', params: { _meta: { 'x-codex-turn-metadata': meta } } } });
+  const out = scrub(line, H, []);
+  for (const gone of ['some-model', 'seatbelt', '0.166.0', '1794199983781', 'high']) expect(out).not.toContain(gone);
+  const kept = JSON.parse(out.split('\n')[1]).msg.params._meta['x-codex-turn-metadata'];
+  expect(Object.keys(kept)).toEqual(Object.keys(meta));
+  expect(kept.model).toBe('[model]');
+});
+
 test('a placeholder id and an ordinary line pass', () => {
   const out = scrub(note('pod_00000000000000000000000002 at /work and 127.0.0.1:1 or application/json'), H, []);
   expect(out).toContain('pod_00000000000000000000000001');

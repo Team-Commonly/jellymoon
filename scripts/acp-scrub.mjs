@@ -13,8 +13,8 @@ const STREAMED = new Set(['agent_message_chunk', 'agent_thought_chunk', 'user_me
 // What may be left. Every word_Xxxxxxxx that is not one of our numbered placeholders must be a name from the ACP/MCP vocabulary below.
 const WORDISH = /(?<![A-Za-z0-9])[a-z]+_[A-Za-z0-9]{8,}/g;
 const PLACEHOLDER = /^[a-z]+_\d{24,26}$/;
-// The Codex adapter adds its own vocabulary (its Guardian Review step, the pod's tool schema words).
-const VOCABULARY = new Set(['in_progress', 'task_assigned', 'tool_reference', 'total_deferred', 'jm_evidence', 'jm_connector', 'guardian_assessment', 'review_required', 'repl_disabled', 'create_generative', 'update_generative']);
+// ACP/MCP and pod names the recordings carry; guardian_assessment, review_required and repl_disabled are Codex metadata words.
+const VOCABULARY = new Set(['in_progress', 'task_assigned', 'tool_reference', 'total_deferred', 'jm_evidence', 'jm_connector', 'guardian_assessment', 'review_required', 'repl_disabled']);
 const PATH = /(?<=["\s=(\[,])\/[A-Za-z0-9._~-]+(?:\/[^\s"\\,)\]]*)?/g;
 const PATH_OK = /^\/(usr|bin|work|repo|tmp\/rec|sandbox\/home|mcp|v1)(\/|$)/;
 const TLD = 'local|lan|internal|localdomain|corp|home|com|net|org|io|dev|app|me|ai|co|cloud|xyz|info|edu|gov|us|uk|cn|ru|de';
@@ -41,6 +41,28 @@ function flatten(line) {
   return JSON.stringify(obj);
 }
 
+// Codex tags a tool call with the machine's model, sandbox and build. The replay never reads it, so its settings become placeholders
+// (the session, thread and turn ids in it are numbered by the id pass). Only lines that carry the key are parsed again.
+const TURN_META = 'x-codex-turn-metadata';
+function neutralMeta(line) {
+  if (!line.includes(TURN_META)) return line;
+  let obj;
+  try { obj = JSON.parse(line); } catch { return line; }
+  const walk = (v) => {
+    if (!v || typeof v !== 'object') return;
+    const m = v[TURN_META];
+    if (m && typeof m === 'object') {
+      for (const k of Object.keys(m)) {
+        if (/(^|_)id$/.test(k)) continue;
+        if (typeof m[k] === 'string') m[k] = `[${k}]`; else if (typeof m[k] === 'boolean') m[k] = false; else if (typeof m[k] === 'number') m[k] = 0;
+      }
+    }
+    for (const c of Object.values(v)) walk(c);
+  };
+  walk(obj);
+  return JSON.stringify(obj);
+}
+
 function refuse(text, re, what, ok = () => false) {
   for (const m of text.matchAll(re)) {
     if (!ok(m[0])) throw new Error(`the scrubbed recording still holds ${what}: ...${text.slice(Math.max(0, m.index - 30), m.index + m[0].length + 30)}...`);
@@ -49,7 +71,7 @@ function refuse(text, re, what, ok = () => false) {
 
 /** swaps is a list of [from, to] path pairs, longest first; header is the recording's first line. */
 export function scrub(raw, header, swaps) {
-  let text = raw.split('\n').filter((l) => !/available_commands_update|_auth\/status_update/.test(l)).map(flatten).join('\n'); // skill list and sign-in account: noise to the daemon, private to us
+  let text = raw.split('\n').filter((l) => !/available_commands_update|_auth\/status_update/.test(l)).map(flatten).map(neutralMeta).join('\n'); // skill list and sign-in account: noise to the daemon, private to us
   for (const [from, to] of swaps) if (from) text = text.split(from).join(to);
   text = number(text, ID, (prefix, n) => `${prefix}_${String(n).padStart(26, '0')}`);
   text = text.replace(/https?:\/\/(?!127\.0\.0\.1:\d)[^\s"\\]+/g, '[url]').replace(TOKEN, '[token]').replace(/127\.0\.0\.1:\d+/g, '127.0.0.1:1');

@@ -13,6 +13,7 @@ per-wave unit compares this list with `ls docs/**` and fixes the drift.
 | `development/browser-specs.md` | The Playwright browser specs in `web-e2e/`: what they prove, how the harness starts the server and bridges the pod socket, `make e2e-web`, and that browsers are installed only in CI |
 | `development/e2e-contract.md` | The black-box e2e contract suite in `e2e/`: how it starts a server, the `/__test/*` routes, the clock and persistence rules, and what each test proves |
 | `adr/0010-hosted-instance.md` | The hosted instance: `server/` in one Cloudflare Container behind a thin front Worker, Postgres outside Cloudflare; the two shapes counted, user data, backups, the OAuth app, the CI deploy plan, and the order `worker/` retires in (Accepted; Postgres provider open) |
+| `runbooks/hosted-instance.md` | The hosted instance: what `hosted/` holds, the CI jobs, the secrets and the one variable by name, the Postgres URL, how to ship, roll back and stop it |
 | `adr/0009-connector-layer.md` | The connector layer in the pod-state server: the vault, the catalogue pin and drift check, the write gate, receipts; Worker not built, OAuth deferred |
 | `adr/0006-pod-state-server.md` | The decision that the server is one Bun process with Hono and Postgres, the five adapter duties, storage, test routes, and the two open questions |
 | `../worker/README.md` | The Cloudflare adapter in `worker/`: what it is, `make worker-dev`, `make e2e-a` |

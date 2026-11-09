@@ -5,7 +5,7 @@ import { bootSignedIn, browserHttp, type Http } from './http';
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-const withMe = (session: Http['session']): Http => ({ session, readInvite: async () => null, acceptInvite: async () => { throw new Error('unused'); }, approveDevice: async () => {}, createPod: async () => { throw new Error('unused'); }, stopRun: async () => {}, podAccess: async () => 'member' });
+const withMe = (session: Http['session']): Http => ({ session, readInvite: async () => null, acceptInvite: async () => { throw new Error('unused'); }, approveDevice: async () => {}, denyDevice: async () => {}, createPod: async () => { throw new Error('unused'); }, stopRun: async () => {}, podAccess: async () => 'member' });
 const person = { id: 'usr_1' } as unknown as Actor;
 
 describe('bootSignedIn', () => {

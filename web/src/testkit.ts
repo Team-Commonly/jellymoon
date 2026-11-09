@@ -7,18 +7,19 @@ import type { Connect, SocketHandlers } from './store';
 export const PREVIEW: InvitePreview = { podName: 'Launch room', inviterName: 'Ada', expiresAt: '2026-11-15T10:00:00Z' };
 
 /** A fake HTTP client: records accept calls and answers from the given function. `preview` answers the signed-out invite read; `access` answers whether the caller may open a pod (each pod asked about is recorded). */
-export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}, create: (name: string) => Promise<Pod> = async (name) => ({ id: 'pod_new', name, createdAt: '2026-11-08T10:00:00Z' }), stop: (podId: string, runId: string) => Promise<void> = async () => {}, preview: (code: string) => Promise<InvitePreview | null> = async () => PREVIEW, access: (podId: string) => Promise<PodAccess> = async () => 'member') {
+export function fakeHttp(answer: (code: string) => Promise<AcceptInviteResponse> = async () => ({ pod: { id: 'pod_9', name: 'Launch room', createdAt: '2026-11-08T10:00:00Z' } }), approve: (userCode: string) => Promise<void> = async () => {}, create: (name: string) => Promise<Pod> = async (name) => ({ id: 'pod_new', name, createdAt: '2026-11-08T10:00:00Z' }), stop: (podId: string, runId: string) => Promise<void> = async () => {}, preview: (code: string) => Promise<InvitePreview | null> = async () => PREVIEW, access: (podId: string) => Promise<PodAccess> = async () => 'member', deny: (userCode: string) => Promise<void> = async () => {}) {
   const calls: string[] = [];
   const approved: string[] = [];
+  const denied: string[] = [];
   const created: string[] = [];
   const stopped: string[] = [];
   const asked: string[] = [];
   const http: Http = {
-    acceptInvite: (code) => (calls.push(code), answer(code)), readInvite: preview, session: async () => you, approveDevice: (c) => (approved.push(c), approve(c)),
+    acceptInvite: (code) => (calls.push(code), answer(code)), readInvite: preview, session: async () => you, approveDevice: (c) => (approved.push(c), approve(c)), denyDevice: (c) => (denied.push(c), deny(c)),
     createPod: (n) => (created.push(n), create(n)), stopRun: (podId, runId) => (stopped.push(`${podId}/${runId}`), stop(podId, runId)),
     podAccess: (podId) => (asked.push(podId), access(podId)),
   };
-  return { http, calls, approved, created, stopped, asked };
+  return { http, calls, approved, denied, created, stopped, asked };
 }
 
 export const POD = 'pod_1';

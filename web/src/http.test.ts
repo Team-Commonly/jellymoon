@@ -34,6 +34,14 @@ describe('browserHttp cookie writes', () => {
     await expect(browserHttp.approveDevice('WDJB-MJHT')).rejects.toMatchObject({ status: 502, code: undefined });
   });
 
+  it('denyDevice: POST, same-origin cookie, the user code as a JSON body; a refusal carries the status and code', async () => {
+    const m = stub();
+    await browserHttp.denyDevice('WDJB-MJHT');
+    expect(sent(m)).toEqual({ url: '/v1/auth/device/deny', method: 'POST', type: 'application/json', body: '{"userCode":"WDJB-MJHT"}', credentials: 'same-origin' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 'gone', message: 'This code was already used.' }), { status: 410 })));
+    await expect(browserHttp.denyDevice('WDJB-MJHT')).rejects.toMatchObject({ status: 410, code: 'gone' });
+  });
+
   it('session: a read with the cookie; no user is nobody', async () => {
     const m = stub({ user: { kind: 'human', id: 'usr_1', displayName: 'Ada' } });
     expect(await browserHttp.session()).toMatchObject({ id: 'usr_1' });

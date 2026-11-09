@@ -12,6 +12,10 @@ const reject = (status: number, code?: string) => () => Promise.reject(new ApiEr
 const INVALID = "That isn't a valid code; check it against your terminal.";
 const EXPIRED = 'This code expired or is not a device code. Start the sign-in again in your terminal.';
 const LINK = 'Sign in with GitHub to continue';
+const USED = 'This code was already used.';
+const UNKNOWN = 'No device is waiting for that code. Check it against your terminal.';
+const DENY = "This wasn't me";
+const REFUSED = 'The code WDJB-MJHT will not sign anyone in, and the terminal that asked for it will stop waiting. You can close this page.';
 
 describe('/device', () => {
   it('signed out: shows the code and links to sign-in, coming back to /device with the code kept; approves nothing', () => {
@@ -95,7 +99,7 @@ describe('/device, pressing Approve', () => {
 
   it.each([
     [404, 'No device is waiting for that code. Check it against your terminal.'],
-    [410, 'This code was already approved.'],
+    [410, USED],
     [400, 'This code expired or is not a device code. Start the sign-in again in your terminal.'],
     [401, 'Your session ended.'],
     [403, 'The server refused this approval. Open the link your terminal printed, on the address it shows.'],
@@ -130,5 +134,54 @@ describe('/device, pressing Approve', () => {
     const { getByRole, findByText } = open(http, true);
     fireEvent.click(getByRole('button', { name: 'Approve' }));
     expect(await findByText('Could not approve: the server could not be reached. Try again.')).toBeTruthy();
+  });
+});
+
+describe("/device, pressing This wasn't me", () => {
+  const denyWith = (deny?: (c: string) => Promise<void>) => fakeHttp(undefined, undefined, undefined, undefined, undefined, undefined, deny);
+
+  it('sits next to Approve when signed in, and not signed out', () => {
+    expect(open(fakeHttp().http, true).getByRole('button', { name: DENY })).toBeTruthy();
+    cleanup();
+    expect(open(fakeHttp().http, false).queryByRole('button', { name: DENY })).toBeNull();
+  });
+
+  it('refuses the code once, approves nothing, and says the terminal will stop; Approve is gone', async () => {
+    const { http, approved, denied } = denyWith();
+    const { getByRole, findByText, queryByRole } = open(http, true);
+    const button = getByRole('button', { name: DENY });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(await findByText('Code refused')).toBeTruthy();
+    expect(await findByText(REFUSED)).toBeTruthy();
+    expect(denied).toEqual(['WDJB-MJHT']);
+    expect(approved).toEqual([]);
+    expect(queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(queryByRole('button', { name: DENY })).toBeNull();
+  });
+
+  it('a code not in the alphabet is called a typo and sends nothing', async () => {
+    const { http, denied } = denyWith();
+    const { getByRole, getByLabelText, findByText } = open(http, true, '/device');
+    fireEvent.change(getByLabelText('Device code'), { target: { value: 'ABCD-EFGH' } });
+    fireEvent.click(getByRole('button', { name: DENY }));
+    expect(await findByText(INVALID)).toBeTruthy();
+    expect(denied).toEqual([]);
+  });
+
+  it.each([[404, 'not_found'], [410, 'gone'], [400, 'expired_token']])('a refusal (%i %s) shows the unknown-code line and leaves both buttons', async (status, code) => {
+    const { http } = denyWith(reject(status, code));
+    const { getByRole, findByText } = open(http, true);
+    fireEvent.click(getByRole('button', { name: DENY }));
+    expect(await findByText(UNKNOWN)).toBeTruthy();
+    await waitFor(() => expect((getByRole('button', { name: DENY }) as HTMLButtonElement).disabled).toBe(false));
+    expect((getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('401 says the session ended and offers the sign-in link', async () => {
+    const { http } = denyWith(reject(401, 'unauthorized'));
+    const { getByRole, findByRole } = open(http, true);
+    fireEvent.click(getByRole('button', { name: DENY }));
+    expect((await findByRole('link', { name: 'Sign in again' })).getAttribute('href')).toBe('/v1/auth/github/start?next=%2Fdevice%3Fcode%3DWDJB-MJHT');
   });
 });

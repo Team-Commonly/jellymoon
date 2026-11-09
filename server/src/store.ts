@@ -27,6 +27,7 @@ create table if not exists invites (hash text primary key, pod text not null, us
 alter table invites add column if not exists inviter text;
 create table if not exists device_codes (hash text primary key, user_hash text not null unique, expires_at double precision not null,
   last_poll double precision not null default 0, user_id text, exchanged boolean not null default false);
+alter table device_codes add column if not exists denied boolean not null default false;
 create table if not exists oauth_states (hash text primary key, next text not null, expires_at double precision not null);
 create table if not exists github_users (github_id text primary key, user_id text not null);
 create table if not exists connections (id text primary key, pod text not null, vendor text not null, url text not null, kid text not null, wrapped text not null, sealed text not null, created_at double precision not null);
@@ -98,8 +99,8 @@ export async function findInvite(db: Db, hash: string): Promise<InviteRow | unde
 }
 export const useInvite = (t: Tx, hash: string): Promise<unknown> => t.rows('update invites set uses_left = uses_left - 1 where hash = $1', [hash]);
 
-export interface DeviceRow { expiresAt: number; userId: string | null; exchanged: boolean }
-const DEVICE = 'expires_at as "expiresAt", user_id as "userId", exchanged';
+export interface DeviceRow { expiresAt: number; userId: string | null; exchanged: boolean; denied: boolean }
+const DEVICE = 'expires_at as "expiresAt", user_id as "userId", exchanged, denied';
 export const newDevice = (db: Db, hash: string, userHash: string, expiresAt: number): Promise<unknown> =>
   db.rows('insert into device_codes (hash, user_hash, expires_at) values ($1, $2, $3)', [hash, userHash, expiresAt]);
 export const deviceByHash = async (db: Db, hash: string): Promise<DeviceRow | undefined> => (await db.rows<DeviceRow>(`select ${DEVICE} from device_codes where hash = $1`, [hash]))[0];
@@ -112,7 +113,10 @@ export const pollDevice = async (db: Db, hash: string, now: number, notAfter: nu
 export const exchangeDevice = async (db: Db, hash: string): Promise<string | undefined> =>
   (await db.rows<{ userId: string }>('update device_codes set exchanged = true where hash = $1 and not exchanged and user_id is not null returning user_id as "userId"', [hash]))[0]?.userId;
 export const approveDevice = async (db: Db, userHash: string, userId: string, now: number): Promise<boolean> =>
-  (await db.rows('update device_codes set user_id = $2 where user_hash = $1 and user_id is null and expires_at > $3 returning hash', [userHash, userId, now])).length === 1;
+  (await db.rows('update device_codes set user_id = $2 where user_hash = $1 and user_id is null and not denied and expires_at > $3 returning hash', [userHash, userId, now])).length === 1;
+/** Refuses a pending, unexpired code; a refused one again is true too (idempotent). False for anything approve would refuse. */
+export const denyDevice = async (db: Db, userHash: string, now: number): Promise<boolean> =>
+  (await db.rows('update device_codes set denied = true where user_hash = $1 and user_id is null and expires_at > $2 returning hash', [userHash, now])).length === 1;
 
 export const newState = (db: Db, hash: string, next: string, expiresAt: number): Promise<unknown> =>
   db.rows('insert into oauth_states (hash, next, expires_at) values ($1, $2, $3)', [hash, next, expiresAt]);

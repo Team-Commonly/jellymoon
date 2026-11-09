@@ -41,12 +41,13 @@ export function startupRefusal(env: Record<string, string | undefined>): string 
  * What buildApp is given, from the environment. Test routes open only for ENV=local or a configured TEST_BEARER; JM_WEB_DIR is
  * the built web client to serve. Kept apart from main.ts so a test can start the app as production does. AUTH_START_LIMIT is the
  * per-minute start limit; TRUST_PROXY=<n> reads the client address from X-Forwarded-For, n entries from the right (n proxies
- * in front, each appending one); unset or 0 is the socket's address.
+ * in front, each appending one); unset or 0 is the socket's address. JM_BUILD is the commit the process runs, reported on
+ * /healthz; anything but 7 to 40 lowercase hex digits is ignored.
  */
-export function appOptions(env: Record<string, string | undefined>): { publicUrl: string | undefined; local: boolean; testBearer: string | undefined; startLimit: number | undefined; trustProxy: number; webDir: string | undefined } {
+export function appOptions(env: Record<string, string | undefined>): { publicUrl: string | undefined; local: boolean; testBearer: string | undefined; startLimit: number | undefined; trustProxy: number; webDir: string | undefined; build: string | undefined } {
   const limit = Number(env.AUTH_START_LIMIT);
   const hops = /^\d+$/.test(env.TRUST_PROXY ?? '') ? Number(env.TRUST_PROXY) : 0;
-  return { publicUrl: env.PUBLIC_URL, local: env.ENV === 'local', testBearer: env.TEST_BEARER, startLimit: limit > 0 ? limit : undefined, trustProxy: hops, webDir: env.JM_WEB_DIR || undefined };
+  return { publicUrl: env.PUBLIC_URL, local: env.ENV === 'local', testBearer: env.TEST_BEARER, startLimit: limit > 0 ? limit : undefined, trustProxy: hops, webDir: env.JM_WEB_DIR || undefined, build: /^[0-9a-f]{7,40}$/.test(env.JM_BUILD ?? '') ? env.JM_BUILD : undefined };
 }
 
 /** The connector vault from JM_VAULT_KEY (and JM_VAULT_OLD_KEYS), or undefined when no key is set. Call after startupRefusal. */

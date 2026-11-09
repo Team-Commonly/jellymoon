@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { AnyEvent } from '../../gen/ts/protocol';
 import { buildApp } from '../src/app';
+import { appOptions } from '../src/config';
 import { openDb } from '../src/db';
 import { Hub } from '../src/hub';
 import { eventsAfter } from '../src/store';
@@ -57,6 +58,18 @@ describe('server', () => {
     const app = buildApp(await Hub.restore(db), { local: false });
     expect((await app.fetch(new Request('http://x/__test/session', { method: 'POST', body: '{"name":"a"}' }))).status).toBe(404);
     expect((await app.fetch(new Request('http://x/healthz'))).status).toBe(200);
+  });
+
+  test('/healthz names the build it runs, only when JM_BUILD is a commit id', async () => {
+    const hub = await Hub.restore(await openDb({}));
+    const sha = 'a3c42567865309d7e667a0aafbfd879b00bb537d';
+    const named = await buildApp(hub, { local: false, ...appOptions({ JM_BUILD: sha }) }).fetch(new Request('http://x/healthz'));
+    expect(named.headers.get('X-Jm-Build')).toBe(sha);
+    for (const junk of [undefined, '', 'main', 'A3C4256', 'a3c4256\nx', 'g'.repeat(40)]) {
+      const res = await buildApp(hub, { local: false, ...appOptions({ JM_BUILD: junk }) }).fetch(new Request('http://x/healthz'));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('X-Jm-Build')).toBe(null);
+    }
   });
 });
 

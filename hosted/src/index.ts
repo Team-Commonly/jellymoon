@@ -14,9 +14,11 @@ interface Env {
   GITHUB_CLIENT_SECRET?: string;
   JM_VAULT_KEY?: string;
   PUBLIC_URL?: string;
+  // The deployed commit, a plain var set by `wrangler deploy --var JM_BUILD:<sha>` (hosted/ship.sh).
+  JM_BUILD?: string;
 }
 
-const SECRETS = ["DATABASE_URL", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "JM_VAULT_KEY", "PUBLIC_URL"] as const;
+const SECRETS = ["DATABASE_URL", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "JM_VAULT_KEY", "PUBLIC_URL", "JM_BUILD"] as const;
 
 export class JellymoonServer extends Container<Env> {
   defaultPort = PORT;

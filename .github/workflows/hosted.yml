@@ -77,7 +77,7 @@ jobs:
       - name: Boot the image in the hosted shape and run the live check against it
         run: |
           # The hosted shape: ENV unset, no TEST_BEARER, an https PUBLIC_URL behind one proxy (the image sets TRUST_PROXY=1).
-          docker run -d --name jm --network host \
+          docker run -d --name jm --network host -e JM_BUILD="$GITHUB_SHA" \
             -e DATABASE_URL=postgres://postgres:ci@127.0.0.1:5432/postgres \
             -e PUBLIC_URL=https://jellymoon.invalid \
             jellymoon-hosted:ci
@@ -89,6 +89,9 @@ jobs:
             sleep 1
           done
           make deployed-check DEPLOYED_URL=http://127.0.0.1:8080 || { docker logs jm; exit 1; }
+          # The deploy accepts health only from the container that names its own commit (hosted/ship.sh).
+          build=$(curl -q -s -D - -o /dev/null http://127.0.0.1:8080/healthz | tr -d '\r' | awk -F': ' 'tolower($1)=="x-jm-build" {print $2}')
+          if [ "$build" != "$GITHUB_SHA" ]; then echo "::error::/healthz names build '${build}', want $GITHUB_SHA"; exit 1; fi
           # pglite is the local fallback only and must not be in the image (ADR 0006).
           if docker run --rm --entrypoint sh jellymoon-hosted:ci -c 'find / -path /proc -prune -o -name "pglite*" -print 2>/dev/null | grep -q .'; then
             echo "::error::pglite is in the image"; exit 1
@@ -111,7 +114,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-      deployments: read
     env:
       SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       REPO: ${{ github.repository }}
@@ -119,9 +121,8 @@ jobs:
     outputs:
       ship: ${{ steps.gate.outputs.ship }}
       sha: ${{ steps.gate.outputs.sha }}
-      prev: ${{ steps.gate.outputs.prev }}
     steps:
-      - name: CI passed on this commit, it is main's head, and the last good deploy
+      - name: CI passed on this commit, and it is main's head
         id: gate
         run: |
           ok=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&status=success&per_page=1" --jq '.total_count')
@@ -131,17 +132,8 @@ jobs:
             echo "::notice::$SHA is no longer main's head ($head); the newer commit deploys on its own run"
             echo "ship=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          # GitHub records each deploy job as a deployment of the hosted environment with its commit and outcome. The rollback
-          # target is the newest successful one that is not this commit.
-          prev=""
-          for row in $(gh api "repos/$REPO/deployments?environment=hosted&per_page=50" --jq '.[] | "\(.id):\(.sha)"'); do
-            id=${row%%:*} sha=${row#*:}
-            [ "$sha" = "$SHA" ] && continue
-            state=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0].state // ""')
-            if [ "$state" = success ]; then prev=$sha; break; fi
-          done
-          { echo "ship=true"; echo "sha=$SHA"; echo "prev=$prev"; } >> "$GITHUB_OUTPUT"
-          echo "Deploying $SHA; the last good deploy is ${prev:-none (first deploy)}"
+          { echo "ship=true"; echo "sha=$SHA"; } >> "$GITHUB_OUTPUT"
+          echo "Deploying $SHA"
 
   deploy:
     needs: gate
@@ -149,12 +141,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: hosted
+    permissions:
+      contents: read
+      deployments: read
     concurrency:
       group: hosted-deploy
       cancel-in-progress: false
     env:
       SHA: ${{ needs.gate.outputs.sha }}
-      PREV: ${{ needs.gate.outputs.prev }}
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
       # The repository's existing Cloudflare token (first made for the retired preview job; nothing else reads it now), with
       # Containers edit and Account Settings read added to it. Editing a token's permissions keeps its value.
       CLOUDFLARE_API_TOKEN: ${{ secrets.JM_CF_PREVIEW_TOKEN }}
@@ -172,6 +168,21 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
+
+      - name: The last good deploy (chosen here, under the deploy lock, so a deploy that finished while this one queued counts)
+        id: prev
+        run: |
+          # GitHub records each deploy job as a deployment of the hosted environment with its commit and outcome. The rollback
+          # target is the newest successful one that is not this commit.
+          prev=""
+          for row in $(gh api "repos/$REPO/deployments?environment=hosted&per_page=50" --jq '.[] | "\(.id):\(.sha)"'); do
+            id=${row%%:*} sha=${row#*:}
+            [ "$sha" = "$SHA" ] && continue
+            state=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0].state // ""')
+            if [ "$state" = success ]; then prev=$sha; break; fi
+          done
+          echo "prev=$prev" >> "$GITHUB_OUTPUT"
+          echo "Deploying $SHA; the last good deploy is ${prev:-none (first deploy)}"
 
       - name: The secrets file (mode 0600, values never printed)
         env:
@@ -202,6 +213,8 @@ jobs:
 
       - name: Roll back to the last good deploy
         if: failure() && steps.deploy.conclusion == 'failure'
+        env:
+          PREV: ${{ steps.prev.outputs.prev }}
         run: |
           if [ -z "$PREV" ]; then echo "::error::the deploy of $SHA failed and there is no earlier good deploy to roll back to"; exit 1; fi
           # A Worker version rollback (`wrangler rollback`) leaves the container image as it is

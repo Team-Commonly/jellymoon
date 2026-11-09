@@ -16,7 +16,8 @@ const root = resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2);
 const again = args[0] === '--scrub' ? resolve(args[1]) : null;
 const out = resolve(args[again ? 2 : 0] ?? join(root, 'daemon/testdata/acp/claude-slice.jsonl'));
-const tmp = again ? dirname(again) : mkdtempSync(join(tmpdir(), 'jmrec-'));
+const made = again ? null : mkdtempSync(join(tmpdir(), 'jmrec-')); // the only directory this script may remove
+const tmp = made ?? dirname(again);
 const procs = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -104,4 +105,4 @@ let done = false;
 try { await main(); done = true; } finally {
   for (const p of procs) { try { process.kill(-p.pid, 'SIGKILL'); } catch { /* already gone */ } }
 }
-if (done) rmSync(tmp, { recursive: true, force: true }); // the scratch dir mkdtemp made; kept when the run or the scrub failed, for --scrub
+if (done && made) rmSync(made, { recursive: true, force: true }); // only the scratch dir mkdtemp made, never a --scrub input's parent; kept when the run or the scrub failed, for --scrub

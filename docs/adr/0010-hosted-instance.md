@@ -31,7 +31,7 @@ on 2026-11-09:
 | New work to host | Port the connector layer and the web client to the Worker, keep both adapters in step forever | An image, a front Worker of roughly 40 lines that forwards every request to one named container, and a Postgres |
 
 Shape (a) is two code paths by construction: the hosted instance would run code no self-hoster runs and would lack the
-connector layer, which is a headline feature (F19). Shape (b) runs the exact bundle CI already boots and the suite already
+connector layer, which is a headline feature. Shape (b) runs the exact bundle CI already boots and the suite already
 passes against. Its Cloudflare-specific part is deploy glue (the image and the front), which decides no rule and holds no
 state.
 
@@ -62,8 +62,8 @@ state.
 
 ## Where user data lives, and what it is
 
-A user's data is everything in the instance's Postgres (`server/src/store.ts:19-36`): their account (`users`, `github_users`:
-the GitHub id and login, no GitHub token), tokens (`tokens`, `device_codes`, `oauth_states`, stored only as SHA-256), the pods
+A user's data is everything in the instance's Postgres (`server/src/store.ts:19-36`): their account (`users`: the display
+name; `github_users`: the GitHub id mapped to that user, no GitHub token), tokens (`tokens`, `device_codes`, `oauth_states`, stored only as SHA-256), the pods
 they belong to with every message, task and run event (`pods`, `events`), computers and invites, and connectors
 (`connections` holding the upstream credential as an AES-256-GCM envelope under `JM_VAULT_KEY`, `grants`, `connector_calls`
 receipts, `approvers`; ADR 0009). The container holds none of it between restarts.

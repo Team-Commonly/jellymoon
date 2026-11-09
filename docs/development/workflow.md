@@ -84,6 +84,12 @@ Maintainability is a gate in the loop, not a cleanup phase. `make preflight` run
   - `TODO` only with a row id, like `TODO(F07)`;
   - Go import boundaries;
   - exceptions only shrink, unless a new one cites a `docs/adr/` note.
+- **Raising a cap** adds one new file in `docs/entropy/caps/` in the same change as the `entropy.json` edit, named
+  `YYYY-MM-DD-<area>-<old>-to-<new>.md`, with the area, old and new cap, measured count, the PR or feature that grew it
+  and why (feature growth, never a refactor, never by deleting tests). Never edit an old note and never restate a total:
+  `entropy.json` is the only source of the numbers and `make entropy` prints the total. The gate fails a changed
+  `locBudget` max with no new note in the diff against the merge-base with main (it skips that one check, and says so,
+  in a shallow clone; CI fetches full history).
 - **Dead code:** knip (TS), staticcheck and deadcode (Go).
 - **Boundaries:** dependency-cruiser (TS).
 - **Every unit report** states its lines added and removed, and answers the subtract-before-you-add

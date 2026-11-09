@@ -33,7 +33,7 @@ Paste verbatim into every worker and verifier spawn.
 16. Maintainability and entropy control are part of the loop. `make preflight` includes `make entropy` and `make secrets`;
     budgets live in `entropy.json` and only ratchet down. Every unit report states lines added and removed and what it deleted
     (subtract before you add). A new dependency or module needs a `docs/adr` note. A budget grows only by a new feature's own
-    contract test in that feature's unit, or by a dated note in ADR 0001's table; never for refactors and never by deleting tests.
+    contract test in that feature's unit, or by a new file in `docs/entropy/caps/` next to the `entropy.json` edit; never for refactors and never by deleting tests.
 17. The product is Jellymoon, by Commonly; the company stays Commonly.
 18. The repository goes public on the owner's call, with a clean full-history secret scan first.
 19. Review: one fresh-context review subagent per PR head (`docs/development/verifier.md`), on a different model from the worker;

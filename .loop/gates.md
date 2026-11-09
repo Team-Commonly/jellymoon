@@ -13,8 +13,8 @@ only in the code.
   amended ADR is accepted first, and then the brief cites it.
 
 ## Brief checklist (coordinator, before any brief or ruling goes out)
-- Grep the Accepted ADRs for every subject a Decided rule touches (B-ADR). A cap number comes from ADR 0001's table, and
-  raising one takes a dated note in 0001 itself, not in the unit's own ADR.
+- Grep the Accepted ADRs for every subject a Decided rule touches (B-ADR). A cap number comes from `entropy.json`, and
+  raising one takes a new file in `docs/entropy/caps/` next to the `entropy.json` edit, not a note in the unit's own ADR.
 - A pure derivation (a wake id as seed + k) is checked against every minter that feeds it: monotonic ULIDs made
   seed + 1 the next command's seed.
 - Every early return in podcore is checked against EVERY outcome rule in ADR 0002, not one clause: renewal,

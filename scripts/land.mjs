@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, scanEnv, takePage, requiredChecks, ciProof, landRef,
+  scrub, scanEnv, takePage, requiredChecks, ciProof, landRef, landCommitEnv, landSuiteRuns,
 } from './land-decide.mjs';
 import { scanRange } from './land-scan.mjs';
 import { checkCodeRabbit, checkEarlierReview, checkReviews, threadPage } from './land-coderabbit.mjs';
@@ -241,18 +241,19 @@ const requiredNow = () => {
   } catch { return null; }
 };
 // One read of the land commit: its tree as GitHub has it and its check runs. GET only. A failed read is no proof, not an error.
-function ciRead(sha) {
+function ciRead(sha, n) {
   try {
     const ciTree = gh('api', `repos/${REPO}/git/commits/${sha}`, '--jq', '.tree.sha');
-    const r = JSON.parse(gh('api', `repos/${REPO}/commits/${sha}/check-runs?per_page=100`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, status, conclusion, app: .app.slug}]}'));
-    return { ciTree, runs: r.runs, total: r.total };
+    const r = JSON.parse(gh('api', `repos/${REPO}/commits/${sha}/check-runs?per_page=100&filter=latest`, '--jq', '{total: .total_count, runs: [.check_runs[] | {name, status, conclusion, app: .app.slug, suite: .check_suite.id}]}'));
+    const s = JSON.parse(gh('api', `repos/${REPO}/actions/runs?head_sha=${sha}&event=push&branch=${landRef(n).slice(11)}&per_page=100`, '--jq', '{total: .total_count, count: (.workflow_runs | length), ids: [.workflow_runs[].check_suite_id]}')); if (s.total > s.count) throw new Error('the land push runs could not all be read');
+    return { ciTree, ...landSuiteRuns({ runs: r.runs, total: r.total, suites: s.ids }) };
   } catch (e) { return { error: `CI could not be read: ${why(e)}` }; }
 }
 // Polls every POLL_MS up to CAP_MS (counted in sleeps, not by the clock). A failure, a cancel, a bad tree or the cap ends it.
-async function ciWait(sha, tree, required) {
+async function ciWait(sha, n, tree, required) {
   const [poll, cap] = [IO.pollMs ?? POLL_MS, IO.capMs ?? CAP_MS];
   for (let waited = 0; ; waited += poll) {
-    const got = ciRead(sha); const p = got.error ? { ok: false, kind: 'unread', reason: got.error } : ciProof({ required, tree, ciTree: got.ciTree, runs: got.runs, total: got.total });
+    const got = ciRead(sha, n); const p = got.error ? { ok: false, kind: 'unread', reason: got.error } : ciProof({ required, tree, ciTree: got.ciTree, runs: got.runs, total: got.total });
     if (p.ok || p.kind !== 'wait') return p;
     if (waited >= cap) return { ok: false, kind: 'cap', reason: `CI did not finish in ${Math.round(cap / 60000)} minutes (${p.reason})` };
     await IO.sleep(poll);
@@ -262,21 +263,20 @@ async function ciWait(sha, tree, required) {
 async function ciLand(n, mainTip, head, tree) {
   const required = requiredNow();
   if (!required) return { ok: false, reason: 'the required checks could not be read from the branch rules' };
-  const ref = landRef(n);
-  let sha; try { sha = out('git', ['commit-tree', tree, '-p', mainTip, '-p', head, '-m', `land #${n}`]); } catch (e) { return { ok: false, reason: `could not build the land commit: ${why(e)}` }; }
+  const ref = landRef(n); let sha; try { sha = out('git', ['-c', 'i18n.commitEncoding=UTF-8', 'commit-tree', '--no-gpg-sign', tree, '-p', mainTip, '-p', head, '-m', `land #${n}`], { env: { ...IO.env, ...landCommitEnv(out('git', ['show', '-s', '--format=%ct', mainTip, head])) } }); } catch (e) { return { ok: false, reason: `could not build the land commit: ${why(e)}` }; }
   if (!/^[0-9a-f]{40}$/.test(sha) || out('git', ['rev-parse', `${sha}^{tree}`]) !== tree) refuse(`#${n}: the land commit is not the merge result (tree ${tree.slice(0, 8)}); nothing merged`);
   if (DRY) { say(`dry run: would push ${sha.slice(0, 8)} (tree ${tree.slice(0, 8)}) to ${ref} and wait up to ${Math.round((IO.capMs ?? CAP_MS) / 60000)} minutes for ${required.length} required checks`); return { ok: false, reason: 'dry run: nothing is pushed' }; }
   try {
-    const remote = remoteFor(out('git', ['remote', '-v']), REPO).remote;
-    const there = out('git', ['ls-remote', remote, ref]).split(/\s+/)[0];
+    const remote = remoteFor(out('git', ['remote', '-v']), REPO).remote; const there = out('git', ['ls-remote', remote, ref]).split(/\s+/)[0];
     if (there && !/^[0-9a-f]{40}$/.test(there)) return { ok: false, reason: `${ref} could not be read` };
     // A leftover is reused only when it IS the land commit: the merge tree AND exactly main's tip then the head as parents (dco reads the parents); else overwritten under a lease on it
     const reuse = !!there && gh('api', `repos/${REPO}/git/commits/${there}`, '--jq', '([.tree.sha] + [.parents[].sha]) | join(" ")') === [tree, mainTip, head].join(' ');
+    if (!reuse && !there) { /* GitHub may still hold this exact commit's check runs from an earlier attempt (the ref is deleted on every exit): green there is the proof, anything else pushes */ const got = ciRead(sha, n); const prior = got.error ? null : ciProof({ required, tree, ciTree: got.ciTree, runs: got.runs, total: got.total }); if (prior?.ok) { say(`#${n}: ${sha.slice(0, 8)} already has green required checks on GitHub; no push`); return prior; } }
     if (reuse) sha = there; else out('git', ['push', '--quiet', `--force-with-lease=${ref}:${there}`, remote, `${sha}:${ref}`]);
     MADE = { remote, ref }; process.on('exit', ciClean); // Ctrl-C and kill end through process.exit (see the CLI), so the ref goes on signals too; a signal runs only after this block, so none lands between the push and MADE
   } catch (e) { return { ok: false, reason: `could not push ${ref}: ${why(e)}` }; }
   say(`#${n}: pushed ${sha.slice(0, 8)} to ${ref}; waiting for ${required.length} required checks`);
-  const p = await ciWait(sha, tree, required);
+  const p = await ciWait(sha, n, tree, required);
   if (p.kind === 'tree') refuse(`#${n}: ${p.reason} (nothing merged)`);
   return p;
 }

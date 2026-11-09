@@ -59,7 +59,9 @@ describe('server', () => {
     expect((await app.fetch(new Request('http://x/__test/session', { method: 'POST', body: '{"name":"a"}' }))).status).toBe(404);
     expect((await app.fetch(new Request('http://x/healthz'))).status).toBe(200);
   });
+});
 
+describe('healthz', () => {
   test('/healthz names the build it runs, only when JM_BUILD is a commit id', async () => {
     const hub = await Hub.restore(await openDb({}));
     const sha = 'a3c42567865309d7e667a0aafbfd879b00bb537d';

@@ -67,7 +67,9 @@ func (c *Client) post(path, token string, in, out any) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return fmt.Errorf("POST %s: %w", path, redact(err))
@@ -82,7 +84,7 @@ func (c *Client) post(path, token string, in, out any) error {
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var e protocol.ErrorBody
 		if json.Unmarshal(raw, &e) == nil {
-			return fmt.Errorf("POST %s: HTTP %d %s: %s", path, resp.StatusCode, e.Code, e.Message)
+			return &Error{Path: path, Status: resp.StatusCode, Body: e}
 		}
 		return fmt.Errorf("POST %s: HTTP %d", path, resp.StatusCode)
 	}
@@ -93,6 +95,17 @@ func (c *Client) post(path, token string, in, out any) error {
 		return fmt.Errorf("POST %s: HTTP %d with an empty body, but a result is needed", path, resp.StatusCode)
 	}
 	return json.Unmarshal(raw, out)
+}
+
+// Error is a refusal the server sent as an ErrorBody. Callers act on Body.Code.
+type Error struct {
+	Path   string
+	Status int
+	Body   protocol.ErrorBody
+}
+
+func (e *Error) Error() string {
+	return fmt.Sprintf("POST %s: HTTP %d %s: %s", e.Path, e.Status, e.Body.Code, e.Body.Message)
 }
 
 // redact drops the request URL from a transport error; the error text of a failed request is the URL and the cause.

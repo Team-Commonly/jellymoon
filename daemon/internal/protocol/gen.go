@@ -130,6 +130,7 @@ const (
 	ErrorCodeUngrounded           ErrorCode = "ungrounded"
 	ErrorCodeRateLimited          ErrorCode = "rate_limited"
 	ErrorCodeConnectorDrift       ErrorCode = "connector_drift"
+	ErrorCodeUpstream             ErrorCode = "upstream"
 	ErrorCodeUpstreamFailed       ErrorCode = "upstream_failed"
 	ErrorCodeUpstreamTooLarge     ErrorCode = "upstream_too_large"
 	ErrorCodeVaultUnconfigured    ErrorCode = "vault_unconfigured"
@@ -139,7 +140,7 @@ const (
 // Valid reports whether x is one of the schema's values.
 func (x ErrorCode) Valid() bool {
 	switch x {
-	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeConnectorDrift, ErrorCodeUpstreamFailed, ErrorCodeUpstreamTooLarge, ErrorCodeVaultUnconfigured, ErrorCodeInternal:
+	case ErrorCodeInvalidInput, ErrorCodeSummaryRequired, ErrorCodeUnauthorized, ErrorCodeForbidden, ErrorCodeNotFound, ErrorCodeGone, ErrorCodeAlreadyClaimed, ErrorCodeAlreadyRuled, ErrorCodeAuthorizationPending, ErrorCodeSlowDown, ErrorCodeExpiredToken, ErrorCodeInvalidGrant, ErrorCodeUngrounded, ErrorCodeRateLimited, ErrorCodeConnectorDrift, ErrorCodeUpstream, ErrorCodeUpstreamFailed, ErrorCodeUpstreamTooLarge, ErrorCodeVaultUnconfigured, ErrorCodeInternal:
 		return true
 	}
 	return false
@@ -1406,6 +1407,37 @@ func (x *DeviceTokenRequest) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// A signed-in person approves the device code they were shown, binding it to themselves.
+type DeviceApproveRequest struct {
+	// The code the sign-in page shows, e.g. WDJB-MJHT.
+	UserCode string `json:"userCode"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *DeviceApproveRequest) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"userCode"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("DeviceApproveRequest: missing required field %q", k)
+		}
+	}
+	type plain DeviceApproveRequest
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// An approval carries no data: the device that polls gets the token.
+type DeviceApproveResponse struct {
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *DeviceApproveResponse) UnmarshalJSON(b []byte) error {
+	type plain DeviceApproveResponse
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // A user token and the user it belongs to.
 type DeviceTokenResponse struct {
 	Token     UserToken `json:"token"`
@@ -2488,6 +2520,8 @@ var Registry = map[string]func() any{
 	"DaemonStatus":             func() any { return new(DaemonStatus) },
 	"DeviceStartResponse":      func() any { return new(DeviceStartResponse) },
 	"DeviceTokenRequest":       func() any { return new(DeviceTokenRequest) },
+	"DeviceApproveRequest":     func() any { return new(DeviceApproveRequest) },
+	"DeviceApproveResponse":    func() any { return new(DeviceApproveResponse) },
 	"DeviceTokenResponse":      func() any { return new(DeviceTokenResponse) },
 	"CreatePodRequest":         func() any { return new(CreatePodRequest) },
 	"Pod":                      func() any { return new(Pod) },
@@ -2713,6 +2747,7 @@ var ErrorStatus = map[ErrorCode]int{
 	ErrorCodeUngrounded:           422,
 	ErrorCodeRateLimited:          429,
 	ErrorCodeConnectorDrift:       409,
+	ErrorCodeUpstream:             502,
 	ErrorCodeUpstreamFailed:       502,
 	ErrorCodeUpstreamTooLarge:     502,
 	ErrorCodeVaultUnconfigured:    501,

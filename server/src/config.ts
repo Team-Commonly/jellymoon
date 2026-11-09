@@ -4,6 +4,7 @@ import type { Vault } from './vault';
 
 export function startupRefusal(env: Record<string, string | undefined>): string | undefined {
   const local = env.ENV === 'local';
+  if (env.GITHUB_URL && !local && !env.GITHUB_URL.startsWith('https://')) return 'GITHUB_URL must be https; an http override is for ENV=local only.';
   // JM_VAULT_KEY is optional (without it the connector routes answer vault_unconfigured), but a malformed one is refused.
   const ring = keyRing(env);
   if (typeof ring === 'string') return ring;

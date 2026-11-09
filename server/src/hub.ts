@@ -7,7 +7,7 @@ import type { DbEnv } from './db';
 import { hashToken, newId, newToken } from './ids';
 import { PodRuntime } from './pod';
 import type { Reply } from './pod';
-import { allComputers, allUsers, findToken, loadPods, migrate, saveComputer, saveToken, saveUser } from './store';
+import { allComputers, allUsers, findToken, githubUserId, loadPods, migrate, saveComputer, saveGithubUser, saveToken, saveUser } from './store';
 import type { ComputerRow, UserRow } from './store';
 
 export type Principal =
@@ -92,6 +92,18 @@ export class Hub {
     this.users.set(u.id, u);
     return { token, user: actorOf(u) };
   }
+
+  /** The user a GitHub account signs in as, keyed by GitHub's numeric id (a login can be renamed); created on first sign-in. */
+  async githubUser(githubId: string, login: string): Promise<Actor> {
+    const known = this.users.get((await githubUserId(this.db, githubId)) ?? '');
+    if (known !== undefined) return actorOf(known);
+    const u: UserRow = { id: newId('usr_'), name: login };
+    await this.db.tx(async (t) => { await saveUser(t, u); await saveGithubUser(t, githubId, u.id); });
+    this.users.set(u.id, u);
+    return actorOf(u);
+  }
+
+  userToken = (userId: string): Promise<string> => this.db.tx((t) => this.mint(t, 'jmu_', 'user', userId));
 
   async createComputer(userId: string, name: string, os: string, arch: string): Promise<{ computerId: string; token: string }> {
     const c: ComputerRow = { id: newId('cmp_'), userId, name, os, arch };

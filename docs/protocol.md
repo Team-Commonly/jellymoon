@@ -79,19 +79,20 @@ One of: `claude-code`, `codex`, `fake`.
 |---|---|---|---|
 | `invalid_input` | 400 | The input is malformed or breaks a limit in the schema. Fix the field the error names, when it names one, and send it again. | [Rules for Operations](#rules-for-operations) |
 | `summary_required` | 400 | A post has no summary. The summary is never derived; write the headline and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
-| `unauthorized` | 401 | No valid bearer token came with the request. Send a valid user, computer or run token. | [Rules for Operations](#rules-for-operations) |
+| `unauthorized` | 401 | No valid bearer token came with the request. Send a valid user, computer or run token. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
 | `forbidden` | 403 | The token is valid but may not do this, such as a run token used on a pod other than its run's. Use a token that may. | [Rules for Tasks](#rules-for-tasks), [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
 | `not_found` | 404 | The id or route in the request matches nothing. Check the id. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
-| `gone` | 410 | An invite is used or expired, or a decision expired before it was ruled. Ask for a new invite or a new decision. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
+| `gone` | 410 | An invite is used or expired, a device code was already approved, or a decision expired before it was ruled. Ask for a new invite or a new decision, or start the sign-in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations) |
 | `already_claimed` | 409 | Someone else holds the task's claim. The error names the holder; leave the task or wait. | [Rules for Tasks](#rules-for-tasks), [Operations: task_claim](#op-task_claim) |
 | `already_ruled` | 409 | The decision was already ruled and the first ruling stays. Read the decision instead of ruling again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
 | `authorization_pending` | 400 | The person has not approved the device code yet. Poll again after the interval. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
-| `slow_down` | 400 | The device code was polled faster than its interval. Wait longer between polls. | — |
+| `slow_down` | 400 | The device code was polled faster than its interval. Wait longer between polls. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `expired_token` | 400 | The device code expired before it was exchanged. Start the sign-in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `invalid_grant` | 400 | The device code was already exchanged. Start the sign-in again. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `ungrounded` | 422 | A claim cites nothing, cites an id that is not a record here, or has a number its evidence lacks. Fix the citations and post again. | [Rules for Messages and cards](#rules-for-messages-and-cards) |
 | `rate_limited` | 429 | Too many requests. Wait before retrying. | — |
 | `connector_drift` | 409 | The upstream lists no operations, or a pinned operation is missing or its arguments changed upstream. The error names it; re-pin the catalogue. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
+| `upstream` | 502 | A service the server depends on, such as GitHub, failed or answered something unexpected. Retry later. | [Rules for Worker HTTP API](#rules-for-worker-http-api), [Rules for Operations](#rules-for-operations), [Operations: connector_list](#op-connector_list), [Operations: connector_call](#op-connector_call) |
 | `upstream_failed` | 502 | The upstream refused or failed the call. The message carries its status and error, with any credential removed in every encoding. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
 | `upstream_too_large` | 502 | The upstream answered with more than 1 MiB. None of the answer is kept; ask for less, for example with a smaller limit. | — |
 | `vault_unconfigured` | 501 | The server has no vault key (JM_VAULT_KEY), so it cannot store or use a connection credential. | [Rules for Worker HTTP API](#rules-for-worker-http-api) |
@@ -102,7 +103,7 @@ One of: `claude-code`, `codex`, `fake`.
 
 Stable error codes, shared by HTTP responses, MCP tool errors and the socket error event.
 
-One of: `invalid_input`, `summary_required`, `unauthorized`, `forbidden`, `not_found`, `gone`, `already_claimed`, `already_ruled`, `authorization_pending`, `slow_down`, `expired_token`, `invalid_grant`, `ungrounded`, `rate_limited`, `connector_drift`, `upstream_failed`, `upstream_too_large`, `vault_unconfigured`, `internal`.
+One of: `invalid_input`, `summary_required`, `unauthorized`, `forbidden`, `not_found`, `gone`, `already_claimed`, `already_ruled`, `authorization_pending`, `slow_down`, `expired_token`, `invalid_grant`, `ungrounded`, `rate_limited`, `connector_drift`, `upstream`, `upstream_failed`, `upstream_too_large`, `vault_unconfigured`, `internal`.
 
 <a id="def-ErrorBody"></a>
 ### ErrorBody
@@ -161,7 +162,11 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 ### Rules for Worker HTTP API
 
 - /__test/* routes exist only when ENV is local or preview, and are absent from the production bundle.
-- A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token.
+- A device code polled before approval gets authorization_pending; after approval exactly one exchange succeeds and the next gets invalid_grant; an expired code gets expired_token; a poll sooner than interval after the last one gets slow_down.
+- Jellymoon mints the device code itself; GitHub only proves who the person is, through its OAuth web flow at /v1/auth/github/*. The GitHub token is dropped after GET /user: never stored, logged or returned. A GitHub 401 there gets unauthorized; any other GitHub failure gets upstream.
+- The callback is refused (forbidden) when its state is missing, differs from the state cookie, or was already used: a state is good for one callback, and the next path it carries is the one bound at start. A next that is not a same-origin path (one leading /, not // or /\, no scheme) becomes /.
+- The session cookie (httpOnly, SameSite=Lax, Secure except ENV=local) is accepted, besides a Bearer jmu_, only by GET /v1/me and POST /v1/auth/device/approve.
+- POST /v1/auth/device/approve needs Content-Type application/json and, when an Origin header is sent, the server's own origin (forbidden otherwise). An unknown user code gets not_found, an expired one expired_token, an approved one gone. It is the only route that approves a device code.
 - A used or expired invite gets gone (HTTP 410). Only a member can create an invite.
 - cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome.
 - Only a pod owner connects a vendor or grants an agent access; a member gets forbidden.
@@ -176,6 +181,10 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 |---|---|---|---|---|
 | POST | `/v1/auth/device` | `none`: no token | — | [DeviceStartResponse](#def-DeviceStartResponse) |
 | POST | `/v1/auth/device/token` | `none`: no token | [DeviceTokenRequest](#def-DeviceTokenRequest) | [DeviceTokenResponse](#def-DeviceTokenResponse) |
+| POST | `/v1/auth/device/approve` | `user`: user token (`jmu_`) | [DeviceApproveRequest](#def-DeviceApproveRequest) | [DeviceApproveResponse](#def-DeviceApproveResponse) |
+| GET | `/v1/auth/github/start` | `none`: no token | — | 302 to GitHub's authorize page, with a same-origin path in ?next; sets the one-use state cookie |
+| GET | `/v1/auth/github/callback` | `none`: no token | — | 302 to the next path bound to the state; sets the session cookie |
+| GET | `/v1/me` | `user`: user token (`jmu_`) | — | [Actor](#def-Actor) |
 | POST | `/v1/pods` | `user`: user token (`jmu_`) | [CreatePodRequest](#def-CreatePodRequest) | [Pod](#def-Pod) |
 | POST | `/v1/pods/:pod/invites` | `user`: user token (`jmu_`) | [CreateInviteRequest](#def-CreateInviteRequest) | [Invite](#def-Invite) |
 | POST | `/v1/invites/:code/accept` | `user`: user token (`jmu_`) | — | [AcceptInviteResponse](#def-AcceptInviteResponse) |
@@ -209,6 +218,22 @@ Exchanges a device code for a user token once the person has approved it.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `deviceCode` | string | yes | The deviceCode from the sign-in start. Limit: 32 to 128 characters |
+
+<a id="def-DeviceApproveRequest"></a>
+### DeviceApproveRequest
+
+A signed-in person approves the device code they were shown, binding it to themselves.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `userCode` | string | yes | The code the sign-in page shows, e.g. WDJB-MJHT. Limit: matches `^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$` |
+
+<a id="def-DeviceApproveResponse"></a>
+### DeviceApproveResponse
+
+An approval carries no data: the device that polls gets the token.
+
+No fields.
 
 <a id="def-DeviceTokenResponse"></a>
 ### DeviceTokenResponse

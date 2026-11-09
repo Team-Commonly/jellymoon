@@ -26,7 +26,19 @@ them is deployed:
 bun ../node_modules/wrangler/bin/wrangler.js d1 migrations apply DB -c wrangler.prod.toml --remote
 ```
 
-A D1 created earlier from `schema.sql` takes 0000 as a no-op and then 0001. A new change to the directory is a new numbered
+A D1 created from the `schema.sql` before the hardening takes 0000 as a no-op and then 0001. A D1 created from today's
+`schema.sql` already has everything 0001 adds, and 0001 fails there on a duplicate `expires_at` column. Mark both as applied
+instead, once (`migrations list` creates wrangler's `d1_migrations` table; `apply` then has nothing to do):
+
+```
+bun ../node_modules/wrangler/bin/wrangler.js d1 migrations list DB -c wrangler.prod.toml --remote
+bun ../node_modules/wrangler/bin/wrangler.js d1 execute DB -c wrangler.prod.toml --remote --command "insert into d1_migrations (name) values ('0000_initial.sql'), ('0001_auth_hardening.sql')"
+```
+
+A new change to the directory is a new numbered
 file here plus the same change in `schema.sql`, which the test entry applies to a fresh local state under ENV=local;
-`test/migrations.test.ts` fails when the two disagree. `make e2e-a-migrated` runs the sign-in suites against local states
-created from 0000 and then migrated (`JM_D1_SEED` in `dev.sh`).
+`test/migrations.test.ts` fails when the two disagree, on any table, column, index (UNIQUE and primary keys included) or
+foreign key. `make e2e-a-migrated` runs the sign-in suites against local states created from 0000 and then migrated
+(`JM_D1_SEED` in `dev.sh`). It proves 0001's column change serves sign-in, and not much more: the test entry still runs
+`schema.sql`'s `create table if not exists` at boot, which would make any table a migration forgot. The unit shape test is
+what covers the tables.

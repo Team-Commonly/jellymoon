@@ -16,7 +16,12 @@ export function startupRefusal(env: Record<string, string | undefined>): string 
   // Bun serves no TLS, so an https PUBLIC_URL means a proxy in front, and every client would share its address in the start limit.
   const hops = env.TRUST_PROXY;
   if (hops && !/^\d+$/.test(hops)) return 'TRUST_PROXY must be a hop count: the number of proxies in front, each appending one X-Forwarded-For entry (1 for one TLS proxy), or 0.';
-  if (!local && env.PUBLIC_URL?.trim().startsWith('https://') && !hops) {
+  // Outside ENV=local ownBase serves https whatever PUBLIC_URL says (auth.ts), so an http one names an origin no browser session
+  // could match, and the cookie is Secure. The scheme is the parsed one: `HTTPS://` is https too.
+  const pub = env.PUBLIC_URL?.trim();
+  const scheme = ((): string | undefined => { try { return pub ? new URL(pub).protocol : undefined; } catch { return 'invalid'; } })();
+  if (!local && pub && scheme !== 'https:') return 'PUBLIC_URL must be an https URL outside ENV=local: the server holds a browser session to its https origin. Put the TLS proxy\'s address here.';
+  if (!local && scheme === 'https:' && !hops) {
     return 'TRUST_PROXY is required behind TLS (PUBLIC_URL is https; this server serves http): set it to the number of proxies in front, each appending one X-Forwarded-For entry (1 for one TLS proxy), or 0 to key the start limit on the socket address.';
   }
   // JM_VAULT_KEY is optional (without it the connector routes answer vault_unconfigured), but a malformed one is refused.

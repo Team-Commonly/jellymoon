@@ -10,6 +10,7 @@ import { hashToken } from './ids';
 import { authOf, fail, presented } from './kit';
 import type { Conn, Opts, PodRuntime, Who } from './pod';
 import type { Cmd } from '../../podcore/src/index';
+import { findToken } from './store';
 import { hello } from './views';
 
 /** `token` is the presented token's hash: logout closes the sockets it opened. */
@@ -49,19 +50,26 @@ export function wsRoute(app: Hono, hub: Hub, onRule: OnRule): void {
     const crash = (err: unknown): void => { console.error('frame failed', err); conn.send(frame(hub, s.pod, 'error', { code: 'internal', message: 'The pod failed on that frame.' })); };
     let chain: Promise<void> = Promise.resolve();
     let close = (): void => undefined;
+    let live = true;
     return {
       onOpen(_e, ws) {
         conn.send = (t) => { try { ws.send(t); } catch { /* the socket closed under us */ } };
         close = () => ws.close(1008, 'signed out');
         hub.addSocket(s.token, close);
         const you = s.who.kind === 'user' ? s.who.actor : s.who.owner;
+        // A logout that revoked the token after the upgrade authenticated it closed nothing, since this socket was not yet
+        // registered: the token is checked again now that it is, and a dead one is closed before hello (ADR 0008).
         // The computer is marked online before hello, so hello shows the presence this socket just made.
-        chain = s.pod.attach(conn).then(() => conn.send(frame(hub, s.pod, 'hello', hello(s.pod.state, s.pod.meta, you)))).catch(crash);
+        chain = findToken(hub.db, s.token, hub.now()).then(async (row) => {
+          if (row === undefined) { live = false; return close(); }
+          await s.pod.attach(conn);
+          conn.send(frame(hub, s.pod, 'hello', hello(s.pod.state, s.pod.meta, you)));
+        }).catch(crash);
       },
-      onMessage(e) { chain = chain.then(() => onFrame(hub, s, conn, String(e.data), onRule)).catch(crash); },
+      onMessage(e) { chain = chain.then(() => (live ? onFrame(hub, s, conn, String(e.data), onRule) : undefined)).catch(crash); },
       onClose() {
         hub.dropSocket(s.token, close);
-        chain = chain.then(() => s.pod.detach(conn)).then(() => undefined).catch(crash);
+        chain = chain.then(() => (live ? s.pod.detach(conn) : undefined)).then(() => undefined).catch(crash);
       },
     };
   }));

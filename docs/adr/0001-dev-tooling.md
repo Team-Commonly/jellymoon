@@ -47,6 +47,6 @@ table of caps and no total, because a copy drifts and, as a shared row, conflict
 The rule: a cap grows only by adding one new file in `docs/entropy/caps/` in the same change as the
 `entropy.json` edit. The file is named `YYYY-MM-DD-<area>-<old>-to-<new>.md` and says the area, the old and new
 cap, the measured count, the PR or feature that grew it, and why. A cap grows for feature growth, never for a
-refactor and never by deleting tests. An old note is never edited. `scripts/check-entropy.mjs` fails a raised cap
+refactor and never by deleting tests. An old note is never edited. `scripts/check-entropy.mjs` fails a changed cap
 that has no new file there. The notes written before this rule (every dated line this ADR used to carry) were
-moved there unchanged.
+moved there with their words and numbers unchanged (four lost their list dash).

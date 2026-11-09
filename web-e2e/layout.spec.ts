@@ -190,6 +190,25 @@ test('the needs-you filter keeps its layout, with an ask, and when nothing needs
   await holdsLayout(page, '/pod/:id?filter=needs-you with nothing left');
 });
 
+test('/ keeps its layout signed out, signed in, and with a failure showing', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: 'Sign in with GitHub to start a pod' })).toBeVisible();
+  await holdsLayout(page, '/ signed out');
+
+  await signIn(page, await person('Ada'));
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Create' })).toBeVisible();
+  await holdsLayout(page, '/ signed in');
+
+  // The longest name the schema allows, unbroken, in the field; then a refusal from the server shows inline.
+  await page.getByLabel('Pod name').fill(UNBROKEN.slice(0, 80));
+  await holdsLayout(page, '/ with a long name');
+  await page.route('**/v1/pods', (route) => route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ code: 'invalid_input', message: `That name does not work: ${UNBROKEN}` }) }));
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await holdsLayout(page, '/ with a failure');
+});
+
 test('/invite/:token keeps its layout signed out, signed in, and when the link is spent', async ({ page }) => {
   const ada = await person('Ada');
   const { id } = await api<{ id: string }>('POST', '/v1/pods', ada.token, { name: 'Launch room' });

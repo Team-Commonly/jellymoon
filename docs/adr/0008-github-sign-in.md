@@ -72,8 +72,8 @@ screens work against the real server. One authentication function per adapter (`
    one opened from a sibling origin of the same site, and a socket has no CORS. A token never rides in the query string. A computer's `jmc_` Bearer is unchanged.
 5. Routes the cookie reaches: `POST /v1/pods`, `POST /v1/pods/:pod/invites`, `POST /v1/invites/:code/accept`,
    `POST /v1/computers`, the pod socket, `GET /v1/me`, `POST /v1/auth/logout`, and every operation whose auth includes `user`
-   (`whoami`, `read`, `task_list`, `task_update`, `task_release`, `run_stop`, `post`; `task_claim` is run-only, and `evidence`
-   is not served). Bearer-only: `POST /v1/pods/:pod/agents`, `POST /v1/runs` and `/v1/runs/:run/end` (computer), and
+   (`whoami`, `read`, `task_list`, `task_update`, `task_release`, `run_stop`, `post`, and, since 2026-11-09, `evidence`, which the
+   server serves and the Worker does not; `task_claim` is run-only). Bearer-only: `POST /v1/pods/:pod/agents`, `POST /v1/runs` and `/v1/runs/:run/end` (computer), and
    `POST /mcp`. MCP is for agents and their harnesses, not a page: no browser screen calls it, and it re-sends the caller's
    `Authorization` on every tool call, so a cookie there would add a CSRF surface and nothing a person needs.
 6. `POST /v1/auth/device/approve` is a cookie write like any other (until 2026-11-09 it allowed a missing Origin; that

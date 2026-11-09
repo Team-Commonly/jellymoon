@@ -270,6 +270,33 @@
       ],
       "test": "go test ./daemon/... -run TestReplayCodex",
       "passes": true
+    },
+    {
+      "id": "F21",
+      "category": "evidence",
+      "description": "Evidence is served: the pod stamps every run operation as a tool-call record, and the evidence read returns them",
+      "steps": [
+        "a run makes three MCP calls; its run token reads three tc_ records, source pod, in order, each with a digest, in the shape ToolCallRecord fixes",
+        "a member's user token reads the same records; a non-member, another run's token and another pod's token get forbidden",
+        "a toolCalls or actor field an agent sends is ignored, and no operation writes a record",
+        "the read returns at most 500 records, and the count matches the run receipt's toolCalls"
+      ],
+      "test": "go test ./e2e -run TestF21 (server; the Worker adds TestF21 to E2E_A_SKIP, docs/development/e2e-contract.md)",
+      "passes": true
+    },
+    {
+      "id": "F22",
+      "category": "connector",
+      "description": "A pod owner connects a connector, grants it to an agent and names approvers from the CLI, not hand-built HTTP",
+      "steps": [
+        "jellymoon connector connect reads the token from JELLYMOON_CONNECTOR_TOKEN or a hidden prompt, never argv, and the token is never printed, logged or written to the config dir",
+        "connector grant takes --access read or write-with-confirm, and --access write is refused client-side",
+        "connector approvers replaces the set and an empty list clears it",
+        "connector list shows pinned operations by access level and never a credential; connector receipts shows the server's receipts",
+        "a drift refusal prints connector_drift naming the operation; a non-owner gets forbidden and a non-zero exit"
+      ],
+      "test": "go test ./e2e -run TestF22 (server; against the stub Linear F19 uses; Worker skip listed in E2E_A_SKIP and docs/development/e2e-contract.md)",
+      "passes": true
     }
   ]
 }

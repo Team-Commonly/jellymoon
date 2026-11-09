@@ -33,7 +33,7 @@ function invite(pod: PodPort, b: Body): Response {
   if (!isMember(pod, userId)) return fail('forbidden', 'Only a member can invite.');
   const expiresAt = pod.now() + ttl * 1000;
   pod.sql.exec('insert into invites (hash, uses_left, expires_at) values (?, ?, ?)', hash, uses, expiresAt);
-  return Response.json({ code, url: `${base.replace(/\/+$/, '')}/join/${code}`, expiresAt: isoOf(expiresAt), usesLeft: uses });
+  return Response.json({ code, url: `${base.replace(/\/+$/, '')}/invite/${code}`, expiresAt: isoOf(expiresAt), usesLeft: uses });
 }
 
 function accept(pod: PodPort, b: Body): Response {

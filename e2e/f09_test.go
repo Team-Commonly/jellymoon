@@ -23,6 +23,8 @@ import (
 // hit is one plain HTTP request the daemon (or its agent) made to the server, seen by the recording proxy.
 type hit struct {
 	Method, Path, Auth string
+	Query              string      // the raw query string
+	Head               http.Header // every request header, Authorization included
 	In, Out            []byte
 	Status             int
 }
@@ -59,7 +61,7 @@ func newRecorder(t *testing.T, target string) *recorder {
 			in, _ = io.ReadAll(b)
 		}
 		r.mu.Lock()
-		r.hits = append(r.hits, hit{resp.Request.Method, resp.Request.URL.Path, resp.Request.Header.Get("Authorization"), in, out, resp.StatusCode})
+		r.hits = append(r.hits, hit{resp.Request.Method, resp.Request.URL.Path, resp.Request.Header.Get("Authorization"), resp.Request.URL.RawQuery, resp.Request.Header.Clone(), in, out, resp.StatusCode})
 		r.mu.Unlock()
 		return nil
 	}

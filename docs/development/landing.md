@@ -235,7 +235,7 @@ A missing variable refuses and names it. The tree holds no pod id, host or path.
 
 ## Ledger format
 Tab-separated with a header row: `pr head verdict by when note`. The operator transcribes each PASS or FAIL row from the verifier's report: the report's `GATE:` line becomes the `verdict` column, the verifier's model becomes `by` (`<model>-verifier`), and the `FINDINGS` line goes in `note`. The coordinator writes no verdict the report does not carry. The tool writes `LANDED`, `MERGED-UNVERIFIED` (a PR merged out of band, recorded with no check; it is not an endorsement, never counts as a PASS, and ends the PR's idempotent re-run) and `BOOTSTRAP`. `by` is `opus-verifier`,
-`sonnet-verifier`, `haiku-verifier` or `fable-verifier` (exactly), for verdicts; `land` for the tool's rows. `head`
+`sonnet-verifier`, `haiku-verifier`, `fable-verifier` or `sol-verifier` (exactly), for verdicts; `land` for the tool's rows. `head`
 is the full 40-character SHA. Values are trimmed and compared case-insensitively. At (pr, head):
 - an unrecognised verdict, or a `PASS` or `FAIL` by anything but a verifier label, refuses;
 - any `FAIL` at the head refuses, whoever wrote it and whatever its note; a later `PASS` does not clear it (no verdict

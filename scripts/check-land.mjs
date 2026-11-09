@@ -40,9 +40,9 @@ const cases = [
   ['a MERGED PR is refused', checkHead(open({ state: 'MERGED' }), H).ok, false],
   ['a PR not based on main is refused', checkHead(open({ baseRefName: 'p05' }), H).ok, false],
   // ledger
-  ['verifier PASS at the head accepted', led(ledger(row(5, H, 'PASS', 'opus-verifier'))).ok, true],
+  ['verifier PASS at the head accepted (opus-verifier and sol-verifier)', ['opus-verifier', 'sol-verifier'].map((by) => led(ledger(row(5, H, 'PASS', by))).ok).join(), 'true,true'],
   ['a PASS at another head does not count (a stale-head PASS never lands)', led(ledger(row(5, H2, 'PASS', 'opus-verifier'))).ok, false],
-  ['a PASS by a lookalike (prefix or suffix on the verifier name) is refused', [`x-opus-verifier`, `opus-verifier-2`].map((by) => led(ledger(row(5, H, 'PASS', by))).ok).join(), 'false,false'],
+  ['a PASS by a lookalike or another model family (prefix, suffix, codex, gpt, sol-verifierx) is refused', [`x-opus-verifier`, `opus-verifier-2`, `codex-verifier`, `gpt-verifier`, `sol-verifierx`].map((by) => led(ledger(row(5, H, 'PASS', by))).ok).join(), 'false,false,false,false,false'],
   ['an unknown verdict at the head blocks even beside a PASS', led(ledger(row(5, H, 'PASS', 'opus-verifier'), row(5, H, 'MAYBE', 'opus-verifier'))).ok, false],
   ['a PASS for another PR does not count', led(ledger(row(6, H, 'PASS', 'opus-verifier'))).ok, false],
   ['a PASS for #5 is not read as #50 or #15', led(ledger(row(50, H, 'PASS', 'opus-verifier'), row(15, H, 'PASS', 'opus-verifier'))).ok, false],

@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 const KNOWN = ['PASS', 'FAIL', 'LANDED', 'MERGED-UNVERIFIED', 'BOOTSTRAP'];
-const VERIFIER = /^(opus|sonnet|haiku|fable)-verifier$/;
+const VERIFIER = /^(opus|sonnet|haiku|fable|sol)-verifier$/;
 const ref = (v) => String(v).trim().replace(/^#/, '');
 // Rows are normalised (trim, case). The first line is dropped only if it IS the header; blank and `#` lines are skipped. Any
 // other line must have exactly 6 tab columns and a 40-hex head, or the whole ledger is unreadable: a row is never skipped silently.

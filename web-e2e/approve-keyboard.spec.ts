@@ -1,26 +1,14 @@
 // Paper row: "Open pod, see card, press a, ruled state appears (WS live)". Keys only: no click, no tap, no mouse.
 import { askInput, decisionOf } from './pod';
+import type { Locator, Page } from '@playwright/test';
 import { expect, openPod, test } from './fixtures';
+import type { Pod } from './fixtures';
 
 const ASK = 'Merge the auth fix now or wait for review?';
+const BODY = 'The diff touches only the session middleware.';
 
-test('an ask that arrives live is ruled from the keyboard, and the card shows the ruling only once the pod has sent it', async ({ page, pod }) => {
-  const loads: string[] = [];
-  page.on('framenavigated', (f) => { if (f === page.mainFrame()) loads.push(f.url()); });
-  await pod.agent.post({ summary: 'Started on the auth fix', kind: 'fyi', status: 'in_progress' });
-  await openPod(page, pod);
-  await expect(page.getByRole('heading', { name: 'Started on the auth fix' })).toBeVisible();
-
-  // The fake agent asks while the page is open: the card arrives over the socket, with no reload and no second socket.
-  const asked = await pod.agent.post(askInput(ASK, { userIds: [pod.you.user.id] }));
-  const decisionId = asked.decisionId ?? '';
-  const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: ASK }) });
-  await expect(card).toBeVisible();
-  await expect(card.getByRole('group', { name: 'Options' })).toBeVisible();
-  expect(loads).toHaveLength(1);
-  expect(pod.bridge.connections).toBe(1);
-
-  // In the composer, `a` and Enter are text: nothing is confirmed or ruled.
+/** In the composer, `a` and Enter are text: nothing is confirmed, unfolded or ruled. Expects the ask under keyboard focus. */
+async function composerRulesNothing(page: Page, pod: Pod, card: Locator, decisionId: string): Promise<void> {
   const composer = page.getByRole('textbox', { name: 'Message' });
   await page.keyboard.press('/');
   await expect(composer).toBeFocused();
@@ -30,6 +18,7 @@ test('an ask that arrives live is ruled from the keyboard, and the card shows th
   await expect(page.getByRole('status')).toHaveText('');
   await page.keyboard.press('Backspace');
   await page.keyboard.press('Enter'); // an empty composer sends nothing
+  await expect(card.getByText(BODY)).toHaveCount(0);
   await page.keyboard.type('Looking at it now');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Looking at it now' })).toBeVisible();
@@ -38,10 +27,36 @@ test('an ask that arrives live is ruled from the keyboard, and the card shows th
   expect(pod.bridge.fromPage.filter((f) => f.type === 'message.post').map((f) => f.data.text)).toEqual(['Looking at it now']);
   expect(await decisionOf(pod.id, pod.you.token, decisionId)).toEqual({ state: 'open' });
   await expect(card.getByRole('group', { name: 'Options' })).toBeVisible();
+}
 
-  // Out of the composer, j focuses the ask, a opens the confirm row on the recommended option, Enter rules.
+test('an ask that arrives live is ruled from the keyboard, and the card shows the ruling only once the pod has sent it', async ({ page, pod }) => {
+  const loads: string[] = [];
+  page.on('framenavigated', (f) => { if (f === page.mainFrame()) loads.push(f.url()); });
+  await pod.agent.post({ summary: 'Started on the auth fix', kind: 'fyi', status: 'in_progress' });
+  await openPod(page, pod);
+  await expect(page.getByRole('heading', { name: 'Started on the auth fix' })).toBeVisible();
+
+  // The fake agent asks while the page is open: the card arrives over the socket, with no reload and no second socket.
+  const asked = await pod.agent.post({ ...askInput(ASK, { userIds: [pod.you.user.id] }), body: BODY });
+  const decisionId = asked.decisionId ?? '';
+  const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: ASK }) });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('group', { name: 'Options' })).toBeVisible();
+  expect(loads).toHaveLength(1);
+  expect(pod.bridge.connections).toBe(1);
+
+  // j puts the ask under keyboard focus first (focus starts on card 0, the fyi), so a key that leaked out of the composer would
+  // act on an open ask: `a` would open its confirm row, a leaked Enter would unfold its body, and both would rule it.
+  await page.keyboard.press('j');
+  await expect(card).toBeFocused();
+
+  await composerRulesNothing(page, pod, card, decisionId);
+
+  // Out of the composer (Tab lands on Send, where Enter is the button's), k then j bring DOM focus back to the ask, a opens the
+  // confirm row on the recommended option, Enter rules.
   await page.keyboard.press('Tab');
-  await expect(composer).not.toBeFocused();
+  await expect(page.getByRole('textbox', { name: 'Message' })).not.toBeFocused();
+  await page.keyboard.press('k');
   await page.keyboard.press('j');
   await expect(card).toBeFocused();
   await page.keyboard.press('a');

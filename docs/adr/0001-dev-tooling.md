@@ -42,12 +42,12 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
 | worker | 2,000 |
-| server | 2,260 |
+| server | 2,370 |
 | daemon | 5,000 |
 | e2e | 6,520 |
 | web | 1,580 |
 
-The caps add up to 24,560 lines (restated 2026-11-09 against the merged entropy.json: core 4,200, podcore 3,000, worker 2,000, server 2,260, daemon 5,000, web 1,580, e2e 6,520). Agent-written comparables grew without bounds: herdr reached
+The caps add up to 24,670 lines (restated 2026-11-09 against the merged entropy.json: core 4,200, podcore 3,000, worker 2,000, server 2,370, daemon 5,000, web 1,580, e2e 6,520). Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -92,5 +92,6 @@ The caps add up to 24,560 lines (restated 2026-11-09 against the merged entropy.
 2026-11-08: worker cap 1,950 → 2,000, server cap 2,100 → 2,110 and e2e cap 6,000 → 6,380, the merge of main into the F15 branch (the device login and main's e2e tests together): the gate printed `LOC worker 1990 / 1950`, `LOC server 2104 / 2100` and `LOC e2e 6376 / 6000` on the merged tree, before this raise; each cap is the count rounded up to ten; the table caption carries the moved total. No other cap changes. F15.
 2026-11-09: server 2,110 -> 2,180; merged tree measures 2,176; #16's server follow-ups meet F15's sign-in. Feature growth, not a refactor; the cap is the count rounded up to ten; no other cap changes; the total is 24,340. F15.
 2026-11-09: e2e cap 6,380 -> 6,520; merged tree measures 6,518; #10's replay test meets F15's. The cap is the count rounded up to ten; no other cap changes; the total is 24,480. F15.
-2026-11-08: no cap changes. The browser specs and their harness live in `web-e2e/`, which no LOC budget counts: web measures 1,535 of 1,580 and e2e 5,936 of 6,000, so neither has room, and the specs are test code of the browser surface, not of the web package or the contract suite. The file and function limits still apply there. F18 PR 5a.
+2026-11-08: no cap changes. The browser specs and their harness live in `web-e2e/`, which no LOC budget counts: web measures 1,535 of 1,580 and, on the tree merged with main (F15), e2e 6,518 of 6,520, so neither has room, and the specs are test code of the browser surface, not of the web package or the contract suite. The file and function limits still apply there. F18 PR 5a.
 2026-11-09: server cap 2,180 → 2,260, serving the built web client from the pod-state server when JM_WEB_DIR is set (ADR 0006) and its three tests, on the merge of main (F15) into the F18 PR 5a branch: the merged tree printed `LOC budget: server 2260 > 2180`; the cap is the count rounded up to ten; no other cap changes; the total is 24,560. F18 PR 5a.
+2026-11-09: server cap 2,260 → 2,370, the review fixes to serving the built web client (a JM_WEB_DIR with no index.html refused at startup, a missing file answered with the JSON 404, NUL bytes and symlinks out of the build refused, cache and nosniff headers) and their five tests: the tree printed `LOC budget: server 2365 > 2260`; the cap is the count rounded up to ten; no other cap changes; the total is 24,670. F18 PR 5a review.

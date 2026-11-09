@@ -113,6 +113,11 @@ func (f *f19) connects() error {
 	if st, _ := f.raw("POST", f.podPath("grants"), f.owner.tok, map[string]any{"connectionId": f.conn, "agentId": f.a1.id}); st != 400 {
 		return fmt.Errorf("a grant with no access: HTTP %d, want 400", st)
 	}
+	out, isErr, b := f.connector("list_issues", map[string]any{})
+	f.keep("the read before any grant", b)
+	if !isErr || !strings.Contains(string(b), "forbidden") || out["state"] != nil || len(f.linear.seen("list_issues")) != 0 {
+		return fmt.Errorf("a read before any grant: %s, want forbidden and no upstream call", b)
+	}
 	return f.grant("read")
 }
 

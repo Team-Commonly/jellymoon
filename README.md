@@ -71,8 +71,9 @@ own. Everything stays on `localhost`.
 
    Open the page it prints, sign in with GitHub, and approve the code. The token is saved to
    `$JELLYMOON_HOME/user-token`, readable only by you.
-6. **Create a pod.** There's no screen or command for this yet, so call the API with that token. The reply's `id` is
-   your pod id.
+6. **Create a pod.** Open `http://localhost:8787/`, sign in with GitHub, and use the New pod form. It opens the new
+   pod, and the pod id is the last part of its address (`/pod/<pod id>`). From a terminal, the API does the same with
+   the token from step 5, and the reply's `id` is the pod id:
 
    ```sh
    curl -s -X POST "$JELLYMOON_SERVER/v1/pods" -H "authorization: Bearer $(cat "$JELLYMOON_HOME/user-token")" \

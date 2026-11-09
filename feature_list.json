@@ -190,7 +190,7 @@
         "E2E_MS under 60000"
       ],
       "test": "go test ./e2e -run TestF14",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F15",

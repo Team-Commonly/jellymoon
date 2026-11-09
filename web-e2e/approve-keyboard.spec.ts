@@ -40,7 +40,7 @@ test('an ask that arrives live is ruled from the keyboard, and the card shows th
   await page.evaluate(() => { (window as unknown as { __specDoc?: number }).__specDoc = 1; });
 
   // The fake agent asks while the page is open: the card arrives over the socket, with no reload and no second socket.
-  const asked = await pod.agent.post({ ...askInput(ASK, { userIds: [pod.you.user.id] }), body: BODY });
+  const asked = await pod.agent.post({ ...askInput(ASK, { userIds: [pod.you.user.id] }, pod.agent.cited), body: BODY });
   const decisionId = asked.decisionId ?? '';
   const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: ASK }) });
   await expect(card).toBeVisible();

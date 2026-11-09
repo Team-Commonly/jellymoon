@@ -139,7 +139,7 @@ test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, 
   const body = `${UNBROKEN}\n${'A long line of body text that has to wrap and never push the page wider than the screen. '.repeat(4)}`;
   await pod.agent.post({ summary: UNBROKEN, kind: 'fyi', status: 'in_progress', body });
   await pod.agent.post({ summary: 'Tests green on the fix branch', kind: 'fyi', status: 'done' });
-  await pod.agent.post({ ...askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }), body: 'The diff touches only the session middleware.' });
+  await pod.agent.post({ ...askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }, pod.agent.cited), body: 'The diff touches only the session middleware.' });
   await openPod(page, pod);
   await expect(page.getByRole('article')).toHaveCount(3);
   await holdsLayout(page, '/pod/:id folded');
@@ -171,8 +171,8 @@ test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, 
 });
 
 test('the needs-you filter keeps its layout, with an ask, and when nothing needs you', async ({ page, pod }) => {
-  await pod.agent.post(askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }));
-  await pod.agent.post(askInput('Rename the billing table?', { userIds: [pod.other.user.id] }));
+  await pod.agent.post(askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }, pod.agent.cited));
+  await pod.agent.post(askInput('Rename the billing table?', { userIds: [pod.other.user.id] }, pod.agent.cited));
   await openPod(page, pod);
   const toggle = page.getByRole('button', { name: /^Needs you · / });
   await expect(toggle).toHaveText('Needs you · 1');

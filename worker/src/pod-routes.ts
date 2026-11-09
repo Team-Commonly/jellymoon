@@ -1,9 +1,10 @@
 // The pod operations of schema/operations.json over HTTP, as the pod object serves them. Rules live in the core;
 // this file maps requests to commands. The Worker has already authenticated and checked the token kind and pod.
-// Not served: evidence (the Worker answers 404).
+// Not served: evidence (the Worker answers 404). It keeps no tool-call records, so an ask that cites a tool call is ungrounded here.
 import { TaskStatusValues } from '../../gen/ts/protocol';
 import type { Harness, Message, PostInput, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
-import { overlayDecisions } from '../../podcore/src/index';
+import { citedIds, overlayDecisions } from '../../podcore/src/index';
+import type { Evidence } from '../../podcore/src/index';
 import type { Caller } from '../../podcore/src/index';
 import { newId, newWakeSeed } from './ids';
 import { taskView, tasksOf } from './views';
@@ -74,11 +75,20 @@ const stop: Handler = (k) => respond(k.pod.exec({ type: 'run_stop', caller: k.ca
  * The poster's input goes to the core whole; the adapter adds only what the core cannot know: fresh ids, and the harness this
  * agent was registered with (the daemon said where it runs; the post never does).
  */
+/**
+ * What this pod's log holds of the messages an ask cites (F25). The Worker keeps no tool-call records (ADR 0006, "Evidence"), so it
+ * finds none: a claim that cites a tool call is ungrounded here, and one that cites only messages is checked as on the server.
+ */
+function evidenceOf(pod: PodPort, input: PostInput): Evidence {
+  const msgs = pod.messagesById(citedIds(input).messages);
+  return { toolCalls: {}, messages: Object.fromEntries(msgs.map((m) => [m.id, { summary: m.summary, ...(typeof m.body === 'string' ? { body: m.body } : {}) }])) };
+}
+
 const post: Handler = (k) => {
   const messageId = newId('msg_');
   const agentId = k.caller.kind === 'run' ? k.pod.state.runs[k.caller.runId]?.agent.id : undefined;
   const harness = agentId === undefined ? undefined : (k.pod.meta.harness[agentId] as Harness | undefined);
-  const reply = k.pod.exec({ type: 'post', caller: k.caller, messageId, decisionId: newId('dec_'), wakeId: newWakeSeed(), harness, viaMcp: k.req.headers.get(MCP_HEADER) === '1', input: k.body as unknown as PostInput });
+  const reply = k.pod.exec({ type: 'post', caller: k.caller, messageId, decisionId: newId('dec_'), wakeId: newWakeSeed(), harness, viaMcp: k.req.headers.get(MCP_HEADER) === '1', evidence: evidenceOf(k.pod, k.body as unknown as PostInput), input: k.body as unknown as PostInput });
   return respond(reply, (m) => ({ messageId, seq: (m as Message).seq, ...((m as Message).decision === undefined ? {} : { decisionId: (m as Message).decision?.id }) }));
 };
 

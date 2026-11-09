@@ -4,7 +4,7 @@ import { TaskStatusValues } from '../../gen/ts/protocol';
 import type { Harness, Message, PostInput, ReadOutput, TaskUpdateStatus, WhoamiOutput } from '../../gen/ts/protocol';
 import { overlayDecisions } from '../../podcore/src/index';
 import type { Hub } from './hub';
-import { readCalls } from './evidence';
+import { evidenceFor, readCalls } from './evidence';
 import { newId, newWakeSeed } from './ids';
 import { bad, fail, memberRoute, pick, respond } from './kit';
 import type { Call } from './kit';
@@ -71,12 +71,13 @@ const release = async (k: Call): Promise<Response> =>
 const stop = async (k: Call): Promise<Response> =>
   respond(k.c, await k.pod.exec({ type: 'run_stop', caller: k.caller, runId: k.c.req.param('run') ?? '', reason: k.body.reason as string | undefined }));
 
-/** A post is the core's `post` command (podcore/src/post.ts): the receipt, the ask and the decision are the core's. The harness is the adapter's record of where the agent runs; viaMcp says the post came in on /mcp, whose carrying call the receipt leaves out. */
-const post = async (k: Call): Promise<Response> => {
+/** A post is the core's `post` command (podcore/src/post.ts): the receipt, the ask, its grounding and the decision are the core's; the adapter hands it the cited records it holds. The harness is the adapter's record of where the agent runs; viaMcp says the post came in on /mcp, whose carrying call the receipt leaves out. */
+const post = (hub: Hub) => async (k: Call): Promise<Response> => {
+  const found = await evidenceFor(hub, k.pod.id, k.body as unknown as PostInput);
   const agentId = k.caller.kind === 'run' ? k.pod.state.runs[k.caller.runId]?.agent.id : undefined;
   const harness = agentId === undefined ? undefined : (k.pod.meta.harness[agentId] as Harness | undefined);
   const messageId = newId('msg_');
-  const reply = await k.pod.exec({ type: 'post', caller: k.caller, messageId, decisionId: newId('dec_'), wakeId: newWakeSeed(), harness, viaMcp: viaMcp(k.c.req.raw), input: k.body as unknown as PostInput });
+  const reply = await k.pod.exec({ type: 'post', caller: k.caller, messageId, decisionId: newId('dec_'), wakeId: newWakeSeed(), harness, viaMcp: viaMcp(k.c.req.raw), evidence: found, input: k.body as unknown as PostInput });
   return respond(k.c, reply, (m) => ({ messageId, seq: (m as Message).seq, ...((m as Message).decision === undefined ? {} : { decisionId: (m as Message).decision?.id }) }));
 };
 
@@ -107,6 +108,6 @@ export function opRoutes(app: Hono, hub: Hub): void {
   app.patch('/v1/pods/:pod/tasks/:task', memberRoute(hub, 'TaskUpdateInput', ['taskId'], update));
   app.post('/v1/pods/:pod/tasks/:task/release', memberRoute(hub, 'TaskReleaseInput', ['taskId'], release));
   app.post('/v1/pods/:pod/runs/:run/stop', memberRoute(hub, 'RunStopInput', ['runId'], stop));
-  app.post('/v1/pods/:pod/messages', memberRoute(hub, 'PostInput', [], post, ['summary']));
+  app.post('/v1/pods/:pod/messages', memberRoute(hub, 'PostInput', [], post(hub), ['summary']));
   app.get('/v1/pods/:pod/runs/:run/tool-calls', memberRoute(hub, null, [], evidence(hub)));
 }

@@ -223,6 +223,7 @@ the adapter Jellymoon runs and supersedes the Durable Object for new features, s
 | `TestF19` | The connector layer (vault, catalogue pin, write gate, receipts) lives in the pod-state server (ADR 0006, ADR 0009). The Worker has no connector routes or operations. |
 | `TestF21` | Evidence (the tool-call records and the `evidence` read) is served by the pod-state server only (ADR 0006, "Evidence"). The Worker still counts MCP calls for the receipt but keeps no records, and answers `not_found` for the read. |
 | `TestF22` | `jellymoon connector connect\|grant\|approvers\|list\|receipts` call the connector routes of the pod-state server (ADR 0009), which the Worker does not serve. |
+| `TestF25` | Grounding cites tool-call records, which the Worker does not keep. It runs the same core check with the messages its log holds and no tool calls, so an ask citing a tool call is `ungrounded` there and one citing only messages is checked as on the server (`worker/test/tool-desc.test.ts`). The asks of `TestF11`, `TestF12` and `TestF14` cite a person's message, so they run on both. |
 
 `TestF19` starts its server with `JM_VAULT_KEY` (the harness's per-server environment, `startServer(t, env...)`) and a stub
 Linear inside the test: an MCP-over-HTTP JSON-RPC server on 127.0.0.1 that requires the stub bearer and records every

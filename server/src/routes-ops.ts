@@ -12,7 +12,7 @@ import { eventsAfter } from './store';
 import { taskView, tasksOf } from './views';
 
 /** A run's read is an operation and renews its claims; a user's read needs only membership. Null means go on. */
-async function gate(k: Call): Promise<Response | null> {
+export async function gate(k: Call): Promise<Response | null> {
   if (k.caller.kind === 'run') {
     const r = await k.pod.exec({ type: 'op', runId: k.caller.runId });
     return r?.ok ? null : respond(k.c, r);

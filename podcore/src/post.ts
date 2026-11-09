@@ -50,6 +50,7 @@ export function postCmd(c: Ctx, cmd: Of<'post'>): void {
   if (w === null) return;
   const input = cmd.input;
   if (!isObj(input)) return fail(c, 'invalid_input', 'The post must be an object.');
+  if (cmd.expiresAt !== undefined && (!Number.isInteger(cmd.expiresAt) || cmd.expiresAt <= c.now)) return fail(c, 'invalid_input', 'expiresAt must be a later time in milliseconds.');
   if (typeof input.summary !== 'string' || input.summary.trim() === '') return fail(c, 'summary_required', 'A post needs a summary: the headline people read.');
   const problem = shapeProblem(input);
   if (problem !== null) return fail(c, 'invalid_input', problem);
@@ -64,7 +65,10 @@ export function postCmd(c: Ctx, cmd: Of<'post'>): void {
   if (receipt !== undefined) msg.receipt = receipt;
   if (input.kind === 'ask') {
     msg.decision = { id: cmd.decisionId, state: 'open' };
-    (c.s.decisions ??= {})[cmd.decisionId] = { messageId: cmd.messageId, askedBy: w.actor.id, options: (input.options ?? []).map((o) => o.id), decision: { id: cmd.decisionId, state: 'open' } };
+    (c.s.decisions ??= {})[cmd.decisionId] = {
+      messageId: cmd.messageId, askedBy: w.actor.id, options: (input.options ?? []).map((o) => o.id), decision: { id: cmd.decisionId, state: 'open' },
+      ...(cmd.expiresAt === undefined ? {} : { expiresAt: cmd.expiresAt }),
+    };
   }
   emit(c, 'message.created', msg);
   ids.forEach((id) => writeWake(c, id, 'mention', { messageId: cmd.messageId }, cmd.wakeId));

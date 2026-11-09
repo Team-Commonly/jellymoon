@@ -61,13 +61,14 @@ func wantID(t *testing.T, prefix, s string) {
 
 func newWorld(t *testing.T) *world { return newWorldAt(t, fakeBase) }
 
-// newWorldAt is newWorld with the clock set to `clock` (unix ms) before anything else; real-clock mode ignores it.
-func newWorldAt(t *testing.T, clock int64) *world {
+// newWorldAt is newWorld with the clock set to `clock` (unix ms) before anything else; real-clock mode ignores it. env is
+// extra NAME=value pairs for this world's server only.
+func newWorldAt(t *testing.T, clock int64, env ...string) *world {
 	t.Helper()
 	need(t)
 	track(t)
 	w := &world{t: t, renewed: map[string]int64{}}
-	w.srv = startServer(t)
+	w.srv = startServer(t, env...)
 	w.c = newClient(t, w.srv.base())
 	if !realClock {
 		w.setClock(clock)

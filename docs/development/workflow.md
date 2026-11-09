@@ -20,7 +20,8 @@ Jellymoon is built by one long-running builder session, using the harness from A
   `init.sh` makes the state visible before any edit.
 - **Verify at the API, not with unit tests.** The article saw agents mark features done on unit
   tests or a single curl. Here a feature passes only on its `test` command. For the slice, that is
-  the Go e2e that drives the real Worker and daemon. Browser checks join when the client lands (F18).
+  the Go e2e that drives the real Worker and daemon. Browser checks join it for the client (F18): the Playwright specs in
+  `web-e2e/` (`make e2e-web`, [browser-specs.md](browser-specs.md)), whose browsers are installed only in CI.
 - **Compact at feature boundaries.** `progress/` plus git carry the state, so a fresh context can
   resume without the transcript.
 - **One progress file per unit.** Units used to add their entry at the top of `progress.md`, so a

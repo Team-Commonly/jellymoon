@@ -18,17 +18,21 @@
     "server/test/**/*.test.ts",
     "web/src/main.tsx",
     "web/vite.config.ts",
-    "web/src/**/*.test.{ts,tsx}"
+    "web/src/**/*.test.{ts,tsx}",
+    "web-e2e/playwright.config.ts",
+    "web-e2e/global-setup.ts",
+    "web-e2e/*.spec.ts"
   ],
   "project": [
     "web/**/*.{ts,tsx}",
+    "web-e2e/**/*.ts",
     "scripts/**/*.mjs",
     "worker/**/*.ts",
     "server/**/*.ts",
     "e2e/**/*.ts",
     "podcore/**/*.ts"
   ],
-  "ignoreDependencies": ["wrangler"],
+  "ignoreDependencies": ["wrangler", "ws"],
   "ignoreBinaries": [
     "go",
     "gofmt",

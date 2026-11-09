@@ -17,6 +17,7 @@ export function ruleCmd(c: Ctx, cmd: Extract<Cmd, { type: 'rule' }>): void {
   if (w.run !== undefined) return fail(c, 'forbidden', 'A run cannot rule; only a member may.');
   const rec = own(c.s.decisions ?? {}, cmd.decisionId);
   if (rec === undefined) return fail(c, 'not_found', 'No such decision.', cmd.decisionId);
+  if (rec.decision.state === 'expired') return fail(c, 'gone', 'This decision expired before it was ruled; nothing it held was released.', cmd.decisionId);
   if (rec.decision.state !== 'open') return fail(c, 'already_ruled', 'This decision was already ruled; the first ruling stays.', cmd.decisionId);
   if (!rec.options.includes(cmd.option as OptionId)) return fail(c, 'invalid_input', 'That option is not one of this ask\'s options.');
   if (!seedFits(c, cmd.wakeId, 1)) return;

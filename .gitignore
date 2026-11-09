@@ -1,3 +1,6 @@
 node_modules/
 .tools/
 .wrangler-data/
+web/dist/
+web-e2e/report/
+web-e2e/test-results/

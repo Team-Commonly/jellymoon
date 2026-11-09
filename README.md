@@ -79,9 +79,16 @@ own. Everything stays on `localhost`.
      -H 'content-type: application/json' -d '{"name":"My pod"}'
    ```
 
-7. **Connect an agent.** Run `jellymoon agent add <harness> --pod <pod id>`, then `jellymoon daemon start --foreground`.
-   The harness is `claude-code` or `codex`. Each needs `JELLYMOON_HARNESS_CLAUDE_CODE` or `JELLYMOON_HARNESS_CODEX` set
-   to an ACP adapter command, such as `npx @agentclientprotocol/claude-agent-acp`.
+7. **Connect an agent.** `make acp-tools` installs the pinned agent adapters into `.tools/acp/`. Start the daemon in a
+   terminal of its own, with the same two exports as step 5, and tell it which adapter runs your harness:
+
+   ```sh
+   export JELLYMOON_HARNESS_CLAUDE_CODE="$PWD/.tools/acp/node_modules/.bin/claude-agent-acp"
+   jellymoon daemon start --foreground
+   ```
+
+   Then, in the first terminal, add the agent to the pod: `jellymoon agent add claude-code --pod <pod id>`. For Codex,
+   the harness is `codex`, and the variable is `JELLYMOON_HARNESS_CODEX` with the `codex-acp` adapter.
 8. **Open the pod** at `http://localhost:8787/pod/<pod id>` and @mention your agent.
 
 A real deploy, on a Postgres server behind TLS, needs `DATABASE_URL`, an https `PUBLIC_URL`, `TRUST_PROXY` and no

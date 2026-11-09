@@ -152,3 +152,20 @@ describe('after a reconnect', () => {
     }
   });
 });
+
+describe('one line per agent', () => {
+  it('shows a working agent with a going run as its run line only, and as the presence line once the run ends', () => {
+    const net = fakeNet();
+    const h = fakeHttp();
+    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={h.http} signedIn /></MemoryRouter>);
+    const agents = [{ agent: scout, harness: 'fake', computerId: 'cmp_1', state: 'online' }, { agent: sage, harness: 'fake', computerId: 'cmp_1', state: 'online' }];
+    act(() => { net.open(); net.deliver(frame('hello', undefined, hello({ members: [{ actor: you, role: 'owner' }], agents }))); });
+    act(() => net.deliver(frame('presence.changed', undefined, { actor: scout, state: 'working', computerId: 'cmp_1' })));
+    act(() => net.deliver(frame('presence.changed', undefined, { actor: sage, state: 'working', computerId: 'cmp_1' })));
+    act(() => net.deliver(frame('run.started', 1, { runId: 'run_1', agent: scout })));
+    expect(screen.getByText('Sage is working.')).toBeTruthy();
+    expect(lines().map((l) => l.textContent)).toEqual(['Scout is working on a run.Stop']);
+    act(() => net.deliver(frame('run.ended', 2, { runId: 'run_1', agent: scout, outcome: 'completed' })));
+    expect(screen.getByText('Scout, Sage are working.')).toBeTruthy();
+  });
+});

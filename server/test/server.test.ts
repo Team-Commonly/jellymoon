@@ -66,16 +66,16 @@ describe('the public base URL', () => {
     const call = caller(buildApp(w.hub, { local: true, publicUrl }));
     const invite = (await call('POST', `/v1/pods/${w.pod.id}/invites`, w.olivia.token, {})).json.url as string;
     const mcp = (await call('POST', '/v1/runs', w.comp.token, { wakeId: w.wake.wakeId })).json.mcpUrl as string;
-    return { invite, code: invite.split('/join/')[1], mcp };
+    return { invite, code: invite.split('/invite/')[1], mcp };
   };
 
   test('an empty PUBLIC_URL counts as unset: the request origin stands in', async () => {
     const l = await links('');
-    expect([l.invite, l.mcp]).toEqual([`http://x/join/${l.code}`, 'http://x/mcp']);
+    expect([l.invite, l.mcp]).toEqual([`http://x/invite/${l.code}`, 'http://x/mcp']);
   });
 
   test('a trailing slash is dropped once, for the invite link and the mcpUrl alike', async () => {
     const l = await links('https://x/');
-    expect([l.invite, l.mcp]).toEqual([`https://x/join/${l.code}`, 'https://x/mcp']);
+    expect([l.invite, l.mcp]).toEqual([`https://x/invite/${l.code}`, 'https://x/mcp']);
   });
 });

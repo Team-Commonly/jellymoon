@@ -8,7 +8,8 @@ messages and an event log.
 
 ## Status: pre-alpha
 
-Nothing here is ready to use. There's no hosted pod to sign in to, and no daemon to install yet.
+Nothing here is ready for a team yet. There's no hosted pod to sign in to. You can run the server and the daemon
+yourself, on one computer, by following [Run it yourself](#run-it-yourself) below.
 
 The first slice is being built test-first. Each step is a test in [`feature_list.json`](feature_list.json),
 most of them end to end, and `./init.sh` prints which ones pass.
@@ -28,13 +29,51 @@ the agent wakes with the ruling.
 Each agent message carries a receipt that the pod stamps itself: the run, the harness, why the agent woke
 and how many tool calls the pod saw it make.
 
-The pod server runs on Cloudflare Workers, one Durable Object per pod. The wire protocol is one schema in
+The pod server is one Bun process on Postgres, serving every pod ([ADR 0006](docs/adr/0006-pod-state-server.md),
+"Deployed form"). The wire protocol is one schema in
 [`schema/`](schema/), and the TypeScript and Go types are generated from it. Terms are defined in
 [`docs/GLOSSARY.md`](docs/GLOSSARY.md), and the rest of the docs start at [`docs/INDEX.md`](docs/INDEX.md).
 
-## Quickstart
+## Run it yourself
 
-There's no quickstart for users yet. It comes once the slice runs end to end.
+This runs a server on your own computer, on its in-process Postgres, with GitHub sign-in through an OAuth app of your
+own. Everything stays on `localhost`.
+
+1. **Tools and dependencies.** `./init.sh` installs Go and Bun into `.tools/` and runs the checks. Then put them on
+   your `PATH`: `export PATH="$PWD/.tools/bin:$PATH"`.
+2. **A GitHub OAuth app.** Create one under GitHub's Settings, Developer settings, OAuth Apps. Set its callback URL to
+   `http://localhost:8787/v1/auth/github/callback`.
+3. **Build the server, the web client and the CLI.**
+
+   ```sh
+   bun build server/src/main.ts --target=bun --external @electric-sql/pglite --outfile .tools/deployed/server.js
+   bun run build:web                       # writes web/dist
+   go build -o .tools/bin/jellymoon ./daemon/cmd/jellymoon
+   ```
+
+4. **Start the server.** `ENV=local` uses the in-process Postgres and keeps it in the `--persist-to` folder. It also
+   opens test routes, so keep the server on `localhost`.
+
+   ```sh
+   ENV=local PORT=8787 JM_WEB_DIR=web/dist \
+   GITHUB_CLIENT_ID=<your app's client id> GITHUB_CLIENT_SECRET=<its secret> \
+   bun .tools/deployed/server.js --persist-to .jellymoon-state
+   ```
+
+   `http://localhost:8787/healthz` answers 200 when it's up.
+5. **Sign in from the terminal.** Run `export JELLYMOON_SERVER=http://localhost:8787`, then `jellymoon login`. Open the
+   page it prints, sign in with GitHub, and approve the code.
+6. **Connect an agent.** Run `jellymoon agent add <harness> --pod <pod id>`, then `jellymoon daemon start --foreground`.
+   The harness is `claude-code` or `codex`. Each needs `JELLYMOON_HARNESS_CLAUDE_CODE` or `JELLYMOON_HARNESS_CODEX` set
+   to an ACP adapter command, such as `npx @agentclientprotocol/claude-agent-acp`.
+7. **Open the pod** at `http://localhost:8787/pod/<pod id>` and @mention your agent.
+
+There's no screen or command to create a pod yet; the API's `POST /v1/pods` is the way for now. A real deploy, on a
+Postgres server behind TLS, needs `DATABASE_URL`, an https `PUBLIC_URL`, `TRUST_PROXY` and no `ENV`. The full list of
+settings is at the top of [`server/src/main.ts`](server/src/main.ts), and the checks the server runs at startup are in
+[`server/src/config.ts`](server/src/config.ts).
+
+## Build and check
 
 To build it and run the checks:
 

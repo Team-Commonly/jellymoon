@@ -10,11 +10,11 @@ have their own unit tests in `web/src/` (vitest, no browser).
 | `needs-you.spec.ts` | With one ask addressed to you and one to someone else, `g n` shows exactly yours; `Needs you · 1` drops to 0 when you rule and "Nothing needs you" shows; a reload of `?filter=needs-you` keeps the filter on |
 | `device.spec.ts` | A daemon's device code at `/device`: signed out the page shows the code and a GitHub link that returns to `/device?code=...`; signed in, loading approves nothing, Approve does, and the daemon's poll then gets a token for the approver (once). An unknown code says so |
 | `invite.spec.ts` | A teammate with no install opens `/invite/:token` (signed out: a GitHub link, no Join), signs in, presses Join, lands on the pod and sees its history over the cookie socket; the one-use link then says it is spent for the next person |
+| `layout.spec.ts` | Two invariants on every route and in the states a person reaches on it (`/device` signed out, in, with an error, approved; `/pod/:id` with an unbroken headline, an open body, an ask, the confirm row and a long draft; the needs-you filter with an ask and with none; `/invite/:token` signed out, in and spent; the top bar under a very long pod id): the document is no wider than the viewport, and no text is clipped. Clipped means an element with text of its own, or an ancestor, hides overflow (hidden or clip) and the text runs past it; scrolling boxes do not clip, and a line that ellipsizes with a `title` is allowed. A first test plants a clipped box, a titled ellipsis and a 3000px element in a page, so the check is shown to catch what it should. The pod test also shows the card's status chip, receipt chip and folded body |
 
 Specs sign the page in with the session cookie GitHub's callback would set (`signIn` in `fixtures.ts`), because GitHub is not reachable from a spec.
 
 Each spec runs twice, as the projects `phone-390` (390x844) and `desktop-1440` (1440x900), in Chromium.
-`layout.spec` is its own unit.
 
 ## Running them
 
@@ -23,7 +23,7 @@ Each spec runs twice, as the projects `phone-390` (390x844) and `desktop-1440` (
 - **Browsers are installed in CI only.** CI's `browser` job runs `playwright install --with-deps chromium` inside the job, then
   `make e2e-web`, and uploads `web-e2e/report/` and `web-e2e/test-results/` (traces of failed tests) when it fails. On a shared
   or small machine, don't download a browser to run these: run `bun x playwright test -c web-e2e --list` to check that the config
-  and specs load (5 tests x 2 projects = 10), type-check them with `bun run check:types`, and let CI run them.
+  and specs load (11 tests x 2 projects = 22), type-check them with `bun run check:types`, and let CI run them.
 - On a machine that already has the pinned Chromium, `make e2e-web` runs them as CI does.
 
 ## The harness

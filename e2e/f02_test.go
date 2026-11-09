@@ -48,9 +48,20 @@ type stepper struct {
 	ok     int
 }
 
+// recovered runs one step, and a panic in it (a nil client or socket a failed earlier step left behind) comes back as that
+// step's error, so the steps after it still run and the test reports every failure.
+func recovered(fn func() error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+	return fn()
+}
+
 func (p *stepper) step(name string, fn func() error) bool {
 	p.run++
-	err := fn()
+	err := recovered(fn)
 	if err == nil {
 		p.ok++
 		return true

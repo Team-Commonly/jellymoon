@@ -115,6 +115,19 @@ test('a lookup whose clock reads an older window than the counter holds does not
   expect(limited(await send(s, 'deny', 'BBBB-BBBB', by(tok)))).toBe(true);
 });
 
+test('a success whose clock reads an older window gets its count back from the newer window it was counted in', async () => {
+  const s = await setup();
+  await s.hub.setClock(T0 + 600_000);
+  const tok = await person(s, 'guesser');
+  for (let i = 0; i < 9; i++) expect((await send(s, 'deny', 'BBBB-BBBB', by(tok))).status).toBe(404);
+  await s.hub.setClock(T0 + 599_000);
+  const d = await start(s);
+  expect((await send(s, 'deny', d.userCode, by(tok))).status).toBe(200);
+  await s.hub.setClock(T0 + 600_000);
+  expect((await send(s, 'deny', 'BBBB-BBBB', by(tok))).status).toBe(404);
+  expect(limited(await send(s, 'deny', 'BBBB-BBBB', by(tok)))).toBe(true);
+});
+
 test('failed lookups count in the address\'s start limit, so many accounts share it, and a start stops with it', async () => {
   const s = await setup(undefined, { local: true, startLimit: 5 });
   await s.hub.setClock(T0);

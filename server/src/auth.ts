@@ -36,17 +36,17 @@ class Counts {
   private readonly seen = new Map<string, number>();
   constructor(private readonly ms: number) {}
   /** One more for `key` in the window holding `now` (or the newer one already counting): the new count, and the seconds it has left. */
-  take(key: string, now: number): { n: number; retry: number } {
+  take(key: string, now: number): { n: number; retry: number; win: number } {
     const w = Math.max(Math.floor(now / this.ms), this.win);
     if (w !== this.win) { this.win = w; this.seen.clear(); }
     const n = (this.seen.get(key) ?? 0) + 1;
     this.seen.set(key, n);
-    return { n, retry: Math.ceil(((w + 1) * this.ms - now) / 1000) };
+    return { n, retry: Math.ceil(((w + 1) * this.ms - now) / 1000), win: w };
   }
-  /** Takes back one that `take(key, now)` counted, while its window is still the current one. */
-  give(key: string, now: number): void {
+  /** Takes back one that `take` counted in window `win` (what take returned), while that window is still the current one. */
+  give(key: string, win: number): void {
     const n = this.seen.get(key);
-    if (Math.floor(now / this.ms) === this.win && n !== undefined) this.seen.set(key, n - 1);
+    if (win === this.win && n !== undefined && n > 0) this.seen.set(key, n - 1);
   }
 }
 
@@ -79,8 +79,8 @@ function guessGate(hub: Hub, starts: Counts, limit: number, trustProxy: number):
     if (mine.n > CODE_LIMIT) return limited(c, mine.retry, 'Too many unknown, expired or used codes from this account; wait for Retry-After.');
     const addr = `/v1/auth/device ${clientIp(c, trustProxy)}`;
     const here = starts.take(addr, now);
-    if (here.n > limit) { codes.give(userId, now); return limited(c, here.retry, 'Too many sign-in attempts from this address; wait for Retry-After.'); }
-    return () => { codes.give(userId, now); starts.give(addr, now); };
+    if (here.n > limit) { codes.give(userId, mine.win); return limited(c, here.retry, 'Too many sign-in attempts from this address; wait for Retry-After.'); }
+    return () => { codes.give(userId, mine.win); starts.give(addr, here.win); };
   };
 }
 

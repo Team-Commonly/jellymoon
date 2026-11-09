@@ -1,5 +1,15 @@
 # v4 connector layer: options paper
 
+Status: ratified 2026-11-08 by the product owner: keep the BUILD path. Kept from section 1: under "### BUILD", all four
+items (the envelope-encrypted credential store, the catalogue pin and drift check, the write gate with its receipt, the grant
+model); under "### Operations, not MCP", the plain HTTP operations model; under "### ADOPT", the Linear remote MCP read
+endpoint, the MCP TypeScript SDK for our `/mcp` server, and the two deferred items (vercel/chat, Infisical Agent Vault);
+under "### CONTRIBUTE UPSTREAM", the vercel/chat and Agent Vault bullets.
+Dropped from section 1: the Cloudflare Agents SDK MCP client bullet and the Cloudflare Workflows `waitForApproval` bullet
+under "### ADOPT", and the `cloudflare/agents` bullet under "### CONTRIBUTE UPSTREAM". The Cloudflare Workers
+and Durable Object references are superseded by the pod-state server (ADR 0006). The durable pause behind a decision card
+becomes a podcore/Postgres row plus a wake.
+
 Research only, read 2026-10-29. Licenses were read from each repo's LICENSE file via the GitHub API or raw file (URLs in the appendix). Stars and last-push dates are from the same pass. "Unverified" means I could not confirm it from a primary source.
 
 ## 1. Recommendation

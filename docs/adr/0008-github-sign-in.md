@@ -126,16 +126,20 @@ Added 2026-11-09 (AUTHH), in both adapters.
    socket closes, so the map holds only tokens with an open socket. The upgrade authenticates, but the socket registers
    later (`onOpen`), so `onOpen` reads the token again after registering, and a revoked or expired one is closed (1008)
    before hello and before any frame. The Worker tags each socket in the pod object with `t:<token hash>` and records the
-   pod in the D1 table `token_pods` before it hands the upgrade to the pod; if the pod does not open the socket, the row is
-   deleted, unless another socket of the same token in that pod wrote it first. A logout can still slip in twice: its revoke
+   pod in the D1 table `token_pods` before it hands the upgrade to the pod. A pod that does not open the socket leaves the
+   row, since a failing dial deleting it could take the row of a socket of the same token that opened meanwhile, and the
+   open socket would outlive a logout; a stale row costs logout one close to a pod with no sockets for that tag. Rows go
+   with their token: logout deletes them, and the start-limit sweep deletes those of an expired or revoked token. A logout can still slip in twice: its revoke
    and its `token_pods` read between the Worker's authentication and the row, or its close reaching the pod before the pod
    accepts the socket. So once the pod answers 101 the Worker authenticates the token again; if it is now revoked or
    expired it asks the pod to close the token's sockets, deletes the row and answers `unauthorized` instead of the 101.
    The pod may have sent hello on that socket in between, to the person who just signed out. Logout reads `token_pods` and
    asks each pod to close the tagged sockets, with `Promise.allSettled`: the revoke is what signs out, so a pod that fails
-   to close answers nothing to the person, and the cookie is cleared all the same. One race is left, on the Worker: two
-   sockets of one token dialling one pod at once, where the one that wrote the row fails and deletes it after the other
-   opened. A later logout then finds no row, and that socket stays open until it closes.
+   to close answers nothing to the person, and the cookie is cleared all the same. On the server a socket that throws after
+   the pod attached it (hello failing to send, say) is closed 1011 and still detached when it closes: `attached` is tracked
+   apart from `live`. Logout whose only credential is a dead (expired or revoked) session cookie answers 200 `{}` and clears
+   the cookie: the sign-out already happened, so it reads as one, and the browser stops sending the dead cookie. It revokes
+   nothing, having authenticated nothing; a dead Bearer, with or without a cookie, stays 401.
 7. **D1 migrations.** A real D1 is created and changed only by `wrangler d1 migrations apply` on `worker/migrations`
    (`migrations_dir` in both wrangler configs): `0000_initial.sql` is the schema before this hardening, `0001_auth_hardening.sql`
    adds `tokens.expires_at` (no backfill, item 1) and the tables `rate_limits` and `token_pods`. A D1 created from the old
@@ -148,10 +152,9 @@ Added 2026-11-09 (AUTHH), in both adapters.
 
 - The `/device` page the verification URL names belongs to the web client (F18).
 - A refresh of a user token: after 30 days a person signs in again.
-- A socket already open stays open after its token expires; `token_pods` rows of expired tokens are not deleted; `jmc_`
+- A socket already open stays open after its token expires; `jmc_`
   tokens never expire and logout does not revoke them (this predates the hardening).
-- Logout with an expired or revoked cookie, or with a `jmc_` bearer, answers 401 or 403 and leaves the cookie set. The
-  cookie is already dead, so this is harmless (this predates the hardening).
+- Logout with a `jmc_` bearer, or with a dead Bearer, answers 403 or 401 (this predates the hardening).
 
 ## Tested by
 

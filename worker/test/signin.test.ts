@@ -59,11 +59,11 @@ async function dial(answer: 'open' | 'refuse' | 'throw', before = false): Promis
   return { during, after: await rows(), status };
 }
 
-test('the socket\'s token_pods row is written before the pod opens it, and dropped when the pod does not', async () => {
+test('the socket\'s token_pods row is written before the pod opens it, and kept when the pod does not', async () => {
   expect(await dial('open')).toEqual({ during: 1, after: 1, status: 101 });
-  expect(await dial('refuse')).toEqual({ during: 1, after: 0, status: 403 });
-  expect(await dial('throw')).toEqual({ during: 1, after: 0, status: undefined });
-  // A row another socket of the same token already needs stays when this one fails.
+  // A pod that does not open it leaves the row: another socket of the token may need it (logout and the sweep remove it).
+  expect(await dial('refuse')).toEqual({ during: 1, after: 1, status: 403 });
+  expect(await dial('throw')).toEqual({ during: 1, after: 1, status: undefined });
   expect(await dial('refuse', true)).toEqual({ during: 1, after: 1, status: 403 });
 });
 
@@ -106,4 +106,52 @@ test('a logout between the Worker\'s authentication and its token_pods row leave
 
 test('a logout whose close reaches the pod before the socket is accepted leaves no socket open', async () => {
   expect(await raceLogout('in-pod')).toEqual({ open: 0, rows: 0, status: 401 });
+});
+
+test('logout with a dead session cookie clears it and revokes nothing; a dead Bearer alone stays 401', async () => {
+  const db = fresh();
+  const live = (await createUser(db, 'ana', 0)).token;
+  const dead = (await createUser(db, 'ben', 0)).token;
+  const env = { DB: db, POD: noPods, CLOCK_MS: 1 } as unknown as Env;
+  const out = (headers: Record<string, string>): Promise<Response | null> => authRoute(new Request('https://w.example/v1/auth/logout', { method: 'POST', headers: { Origin: 'https://w.example', 'Content-Type': 'application/json', ...headers } }), env, 1);
+  expect((await out({ Authorization: `Bearer ${dead}` }))?.status).toBe(200);
+  const res = await out({ Cookie: `jm_session=${dead}` });
+  expect([res?.status, res?.headers.get('Set-Cookie')?.includes('Max-Age=0')]).toEqual([200, true]);
+  expect((await out({ Authorization: `Bearer ${dead}` }))?.status).toBe(401);
+  expect((await authenticate(db, `Bearer ${live}`, 1)) !== null).toBe(true);
+});
+
+test('two sockets of one token dialling one pod at once: the one that fails cannot take the row the open one needs', async () => {
+  const db = fresh();
+  const { token } = await createUser(db, 'ana', 0);
+  await addPod(db, 'pod_1');
+  const sockets = new Map<string, number>();
+  let n = 0;
+  let release = (): void => undefined;
+  const gate = new Promise<void>((done) => { release = done; });
+  const POD = podNamespace(async (_pod, req) => {
+    if (new URL(req.url).pathname === '/_in/close-token') { sockets.delete(((await req.json()) as { hash: string }).hash); return Response.json({}); }
+    const mine = ++n;
+    if (mine === 1) { await gate; return Response.json({ code: 'forbidden' }, { status: 403 }); } // the first dial fails last
+    const hash = req.headers.get(TOKEN_HEADER) ?? '';
+    sockets.set(hash, (sockets.get(hash) ?? 0) + 1);
+    release();
+    return { status: 101 } as Response;
+  });
+  const env = { DB: db, POD, CLOCK_MS: 0 } as unknown as Env;
+  const dial = (): Promise<number> => handle(new Request('https://w.example/v1/pods/pod_1/ws', { headers: { Authorization: `Bearer ${token}`, Upgrade: 'websocket' } }), env).then((r) => r.status);
+  expect((await Promise.all([dial(), dial()]).then((s) => s.sort()))).toEqual([101, 403]);
+  expect([...sockets.values()]).toEqual([1]);
+  await authRoute(new Request('https://w.example/v1/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }), env, 1);
+  expect([...sockets.values()]).toEqual([]);
+});
+
+test('token_pods rows go with their token: the sweep drops those of an expired or revoked token, not of a live one', async () => {
+  const db = fresh();
+  const old = (await createUser(db, 'old', 0)).token;
+  const live = (await createUser(db, 'live', 0)).token;
+  for (const t of [old, live]) await db.prepare('insert into token_pods (hash, pod_id) values (?, ?)').bind(await hashToken(t), 'pod_1').run();
+  await db.prepare('update tokens set expires_at = 5 where hash = ?').bind(await hashToken(old)).run();
+  await authRoute(new Request('https://w.example/v1/auth/device', { method: 'POST' }), { DB: db, POD: noPods } as unknown as Env, 10);
+  expect((await db.prepare('select hash from token_pods').all<{ hash: string }>()).results.map((r) => r.hash)).toEqual([await hashToken(live)]);
 });

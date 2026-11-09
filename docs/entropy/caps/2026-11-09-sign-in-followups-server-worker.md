@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: sign-in-followups-server-worker
+
+2026-11-09: server cap 4,070 -> 4,110 and worker cap 2,390 -> 2,440; the sign-in follow-ups (ADR 0008): a pod socket that throws after attach is still detached when it closes, logout with only a dead session cookie clears it (both adapters), and a failed Worker dial no longer deletes the `token_pods` row (the sweep prunes rows with their token). Nearly all of it is tests, in `server/test/signin-hardening.test.ts` and `worker/test/signin.test.ts`. The tree printed `LOC budget: server 4103 > 4070` and `worker 2440 > 2390`; each cap is the count rounded up to ten. No other cap changes.

@@ -171,11 +171,13 @@ export function authRoutes(app: Hono, hub: Hub, gh: GitHub | null, opts: SignInO
 
   deviceRoutes(app, hub, base, person, gate);
 
-  /** Revokes the presented token, and the session cookie's too when a Bearer came beside it; closes their pod sockets. */
+  /** Revokes the presented token, and the session cookie's too when a Bearer came beside it; closes their pod sockets. A dead session cookie alone is cleared and answers 200. */
   app.post('/v1/auth/logout', async (c) => {
     const who = await authOf(hub, c, true);
     if (who instanceof Response) return who;
     const p = presented(c, true);
+    // A dead session cookie with no Bearer is a sign-out that already happened: nothing to revoke, the dead cookie is cleared.
+    if (who === null && p?.byCookie === true) { deleteCookie(c, SESSION, { ...cookie, path: '/' }); return c.json({}); }
     if (who === null || p === null) return fail(c, 'unauthorized', 'Sign in first.');
     if (who.kind !== 'user') return fail(c, 'forbidden', 'Only a person signs out.');
     for (const hash of new Set([p.token, getCookie(c, SESSION) ?? p.token].map(hashToken))) {

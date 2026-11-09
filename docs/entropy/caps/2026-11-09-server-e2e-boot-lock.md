@@ -1,0 +1,3 @@
+# Cap note 2026-11-09: server-e2e-boot-lock
+
+2026-11-09: server cap 4,170 -> 4,280 and e2e cap 8,520 -> 8,580. The server takes a session-level Postgres advisory lock at boot, before any statement, and a second server on the same database exits instead of restoring pods or serving (ADR 0010, "A rollout's overlap"): `takeBootLock` in `server/src/db.ts`, `Hub.boot` in `server/src/hub.ts`, the exit in `main.ts`, and `server/test/boot-lock.test.ts`. The contract suite adds `TestBootLock` (`e2e/bootlock_test.go`), two servers on one Postgres. The tree printed `LOC budget: server 4280 > 4170` and `LOC budget: e2e 8579 > 8520`; each cap is the count rounded up to ten. No other cap changes.

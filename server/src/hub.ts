@@ -22,6 +22,9 @@ export const USER_TOKEN_MS = 30 * 86_400_000;
 /** The wait before a failed tick is tried again, so a database that is down is not hammered. */
 const RETRY_MS = 500;
 
+/** Another process holds the database's boot lock; main.ts exits with its message. */
+export class BootRefused extends Error {}
+
 const actorOf = (u: UserRow): Actor => ({ kind: 'human', id: u.id, displayName: u.name });
 
 export class Hub {
@@ -40,8 +43,18 @@ export class Hub {
   private constructor(readonly db: Db) {}
 
   /** Restores every pod, applies `boot {staleMs: 0}` (every command is persisted, heartbeats too) and arms the timer. */
-  static async open(env: DbEnv): Promise<Hub> {
-    return Hub.restore(await openDb(env));
+  static async open(env: DbEnv, lost: (why: string) => void): Promise<Hub> {
+    return Hub.boot(await openDb(env), lost);
+  }
+
+  /**
+   * Takes the database's boot lock before any statement (ADR 0010): while another process holds it this one restores nothing
+   * and throws BootRefused, so it never serves. `lost` is called if the lock goes later.
+   */
+  static async boot(db: Db, lost: (why: string) => void): Promise<Hub> {
+    const refusal = await db.bootLock?.(lost);
+    if (refusal !== undefined) throw new BootRefused(refusal);
+    return Hub.restore(db);
   }
 
   /**

@@ -246,6 +246,21 @@ in the database, so the `--persist-to` directory holds no files. `TestF02` still
 made only to satisfy the check would prove nothing. Against PGlite (no `DATABASE_URL`) the directory holds the database files
 and the check runs in full.
 
+## Runs on a real Postgres only
+
+`TestBootLock` starts two servers on one database and needs that database to be shared, so it runs only when state lives in a
+real Postgres (`JM_E2E_STATE_IN_DB=1`, which is how CI runs `make e2e-c`); anywhere else it skips and says so. The first server
+holds the boot lock (ADR 0010, "A rollout's overlap"), a session-level advisory lock keyed to its schema. The second, given the
+same data dir and so the same schema, must exit before `/healthz` answers, name the lock, and accept no write. After the first is
+killed with `kill -9`, the same start succeeds and serves the first server's pod. On PGlite the data dir is one process's own
+database files and on the Worker each process keeps its own state, so there is no second process to meet. Without a local
+Postgres the order of the boot (the lock before the first statement, nothing restored when it is refused) is pinned by
+`server/test/boot-lock.test.ts`.
+
+The lock behaviour: a refused start retries for 2 s (a just-killed owner's session can take a moment to close), then exits 1.
+The holder re-checks its lock every 5 s and exits if it is gone, and its session carries `idle_session_timeout` (30 s), so an
+owner whose host vanished frees the lock within about that long instead of waiting on TCP keepalive.
+
 ## Output lines
 
 - `E2E_MS=<n> STEPS=<k>/<n>`: the closing line, printed once after every test has ended. `n` is the suite wall clock after `go test`

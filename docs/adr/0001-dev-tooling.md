@@ -42,12 +42,12 @@ The LOC budget for the slice is a deliberate choice to stay small:
 | core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
 | worker | 2,040 |
-| server | 3,480 |
+| server | 3,710 |
 | daemon | 5,000 |
-| e2e | 7,420 |
+| e2e | 7,530 |
 | web | 1,580 |
 
-The caps add up to 26,720 lines (restated 2026-11-09 against the merged entropy.json: core 4,200, podcore 3,000, worker 2,040, server 3,480, daemon 5,000, web 1,580, e2e 7,420). Agent-written comparables grew without bounds: herdr reached
+The caps add up to 27,060 lines (restated 2026-11-09 against entropy.json after F19H: core 4,200, podcore 3,000, worker 2,040, server 3,710, daemon 5,000, web 1,580, e2e 7,530). Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -109,3 +109,4 @@ The caps add up to 26,720 lines (restated 2026-11-09 against the merged entropy.
 2026-11-09: the merge of main (#32, the browser session #33) into the F19 branch: server cap 3,240 -> 3,290 and e2e cap 7,160 -> 7,420. Main measures server 2,225 and e2e 6,788; the merged tree printed `LOC budget: server 3282 > 3240` and `LOC budget: e2e 7417 > 7160`. Each cap is the count rounded up to ten; every other budget keeps main's value (worker 2,040); the total is 26,530. F19.
 2026-11-09: the merge of main (F18 PR 5a, #44, serving the built web client) into the F19 branch: server cap 3,290 -> 3,480; main measures server 2,414 and the connector layer adds the rest; the merged tree printed `LOC budget: server 3471 > 3290`; the cap is the count rounded up to ten; e2e keeps 7,420 and every other budget keeps main's value; the total is 26,720. F19.
 2026-11-09: server cap 3,480 → 3,630 and e2e cap 7,420 → 7,530, the red tests of the connector hardening (the crash-window settle, a receipt for a read that throws, an upstream call outside the pod's command order, the 2001:db8::/32 range, and TestF19's approver-set step): the tree printed `LOC budget: server 3623 > 3480` and `LOC budget: e2e 7522 > 7420`; each cap is the count rounded up to ten; no other cap changes; the total is 26,940. F19H.
+2026-11-09: server cap 3,630 → 3,710, the connector hardening itself (the unknown outcome and its settle on start and on read, a receipt with a reason for every read, the approver set and its route, the release's call outside the pod's command queue, the 2001:db8::/32 range): the tree printed `LOC budget: server 3701 > 3630`; the cap is the count rounded up to ten. The note before this one stated its total as 26,940; it was 26,980. With this raise the total is 27,060, and the table above is restated once against entropy.json. No other cap changes. F19H.

@@ -2,7 +2,8 @@
 
 Status: Accepted for the F19 slice, 2026-11-08. It builds the BUILD path of `docs/design/connector-options.md` (ratified the
 same day) in the pod-state server (ADR 0006). Numbered 0009 because 0007 and 0008 are held by open changes. Known unknowns are
-listed at the end.
+listed at the end. Amended 2026-11-09 (F19H): the approver set, the crash-window settle, a receipt for every read, and the
+release's call outside the pod's command queue.
 
 ## Decision
 
@@ -73,10 +74,11 @@ is sent.
   counts as internal. IPv4: 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.0.0/24, 192.168/16, 198.18/15, and 224/4
   and up (so 240/4 and 255.255.255.255), plus the documentation ranges 192.0.2/24, 198.51.100/24 and 203.0.113/24 and the
   old 6to4 relay 192.88.99/24. IPv6: ::/96 (`::`, `::1` and every v4-compatible `::a.b.c.d`), fc00::/7, fe80::/10, ff00::/8,
-  64:ff9b:1::/48 (local-use NAT64) and 2001::/32 (Teredo) are refused. v4-mapped ::ffff:0:0/96, v4-translated
+  64:ff9b:1::/48 (local-use NAT64), 2001::/32 (Teredo) and 2001:db8::/32 (documentation) are refused. v4-mapped ::ffff:0:0/96, v4-translated
   ::ffff:0:0:0/96, NAT64 64:ff9b::/96 and 6to4 2002::/16 are judged by the IPv4 address they embed.
 - **Resolve, then pin.** A name is resolved with `lookup(host, { all: true, verbatim: true })`, given 2 s (well inside the
-  request's 10 s); a lookup that has not answered by then counts as unresolved. It is refused if it does not resolve, resolves
+  request's 10 s); a lookup that has not answered by then counts as unresolved. A timed-out lookup is abandoned, not
+  cancelled: `lookup` takes no signal, so it may still finish in the background, and its answer is ignored. It is refused if it does not resolve, resolves
   to nothing, or if any address it resolves to is internal. The request is then pinned to one checked address: the first IPv4
   if there is one, else the first address. There is no fallback to the other checked addresses if that one cannot be reached.
   The request is sent to that IP, with the name as the `Host` header and as the TLS server name (Bun's `fetch` `tls.serverName`),
@@ -99,15 +101,20 @@ the upstream once and returns its result. A write calls nothing: in one transact
 `a` approve and `b` reject, the exact arguments in a fenced JSON block in its body, the args hash beside them) and stores the
 parked call `{run, connection, operation, args, argsHash, decision}`. The agent gets `{state: parked, decisionId}`.
 
-Only a pod owner rules on a connector write's ask, the same role that connects and grants, and what the card's
-`needs.to.role: owner` says. A ruling from any other member is refused `forbidden` before the pod core sees it, so nothing is
-claimed and the decision stays open for an owner. (Asks that are not connector writes keep the core's rule: any member rules.)
+A pod owner rules on a connector write's ask, the same role that connects and grants, and what the card's
+`needs.to.role: owner` says. So does a member on that connection's approver set: a pod owner names it with
+`POST /v1/pods/:pod/approvers {connectionId, userIds}`, members only, each once, replacing the last set (an empty list clears
+it; stored in the `approvers` table). The set is read at the ruling, so a member taken off it is refused from then on. A
+ruling from anyone else is refused `forbidden` before the pod core sees it, so nothing is claimed and the decision stays open.
+(Asks that are not connector writes keep the core's rule: any member rules.)
 
 A ruling on that ask, through the existing `decision.rule` path, claims the parked row in the ruling's own transaction: one
 `update ... where outcome = 'parked' and expires_at > now returning`, so the row is consumed exactly once whatever the ruling,
 a retry or a race does (the core already refuses a second ruling; the claim is once-only on its own). After the transaction
-commits and before members hear of the ruling, a row released by approve makes its one upstream call with the parked
-arguments, and the answer is recorded. Reject releases nothing. The asking agent is woken with `decision_ruled`, as for any ask,
+commits, a row released by approve starts its one upstream call with the parked arguments. The call runs outside the
+pod's command queue and the socket's frame chain: members hear of the ruling at once, other frames and rulings go on while
+the upstream is slow, and the answer is written back to the receipt through the pod's queue (`PodRuntime.serial`). Until
+then the receipt reads `released` with no upstream status. Reject releases nothing. The asking agent is woken with `decision_ruled`, as for any ask,
 and reads the outcome with `connector_receipts {decisionId}`.
 
 A parked write expires after 24 hours. The pod core now takes an `expiresAt` on an ask (adapter-set, like the decision id):
@@ -118,25 +125,31 @@ the decision is a deadline like a lease, a tick expires it and tells members wit
 
 Every call that names an existing connection writes a `connector_calls` row, stamped by the server from its own records: id,
 pod, connection, operation, argsHash (SHA-256 of the arguments as JSON with sorted keys), run, agent, outcome (`ok`, `failed`,
-`refused`, `parked`, `released`, `rejected`, `expired`), upstream status, timestamps, and for a write its decision, the
-approver who released it and the upstream's result. No route writes one. Members and runs read them.
+`refused`, `parked`, `released`, `rejected`, `expired`, `unknown`), upstream status, a reason for `failed`, `refused` and
+`unknown`, timestamps, and for a write its decision, the approver who released it and the upstream's result. No route writes
+one. Members and runs read them.
+
+No path skips the receipt. A read catches the egress check, the vault (a key no longer in the ring) and the adapter (any
+throw: a non-HTTP error, a parse failure); each becomes a `failed` receipt with a fixed reason that holds nothing of what was
+thrown, and the agent gets `upstream_failed`. A release does the same; an adapter that threw part way records `unknown`,
+since the request may have left.
+
+**The crash window.** A server that stops between claiming a parked write and storing the upstream's answer leaves the row
+`released` with no upstream status. On start (`Hub.restore`) and before each receipts read, a released row with no status
+whose ruling is older than the answer budget (60 s: three requests at 10 s and a 2 s lookup, with room) settles as `unknown`,
+with the reason "sent at most once, outcome not recorded". It is never sent again: writes are at most once. An answer that
+arrives late still replaces `unknown`.
 
 ## Still open
 
-- **A per-connection approver set.** Any pod owner may approve any connection's writes; naming approvers per connection is
-  a later decision.
 - **Names that resolve publicly but mean something internal.** The egress check classifies addresses, so a name that a
   split-horizon resolver answers with a public address it routes internally is not caught. An egress proxy or a network policy
   around the server is the layer for that.
 - **One check per call.** A call is up to three requests (initialize, the notification, the
   call), and each is pinned to the address checked once for the whole call. Pinning closes the rebinding window inside a call;
   a name that moves between calls is checked again on the next one.
-- **A crash between the claim and the call.** The row is then `released` with no upstream status: never called twice, maybe
-  never called. At most once is the chosen side; a `releasing` state that the call's answer settles would make it visible.
-- **A read that throws.** A read whose vault open fails (for example a retired key no longer in the ring) answers 500
-  `internal` and writes no receipt, because the receipt is saved after the call.
-- **A slow upstream holds the pod.** A release runs inside the pod's command queue, so one upstream at its timeouts (three
-  10 s requests) delays that pod's next commands by up to about 30 s.
+- **An unknown write is the person's to check.** `unknown` says the write may or may not have reached the upstream; nothing
+  reconciles it against the upstream's own records.
 - **The pin is the slice's.** Linear's real catalogue is large; the pin holds `list_issues`, `get_issue` and `create_issue`
   with the argument names the slice uses. Re-pin against the live catalogue before connecting a real workspace.
 - **Tool-call count.** A `connector_call` over MCP counts in the run's `toolCalls` like any tool call; one made over plain

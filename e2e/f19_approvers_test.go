@@ -35,8 +35,9 @@ func (f *f19) approvers(as user, ids ...string) (int, []string, string) {
 }
 
 // approverSet: only an owner sets it, only members may be on it; a listed member approves, an unlisted member is refused, and
-// an approver taken off the set is refused.
+// an approver taken off the set is refused. It leaves the set empty, so step 5 sees an owner-only connection again.
 func (f *f19) approverSet() error {
+	w0 := len(f.linear.seen("create_issue"))
 	if st, _, b := f.approvers(f.ben, f.ben.actor.ID); st != 403 || !strings.Contains(b, `"forbidden"`) {
 		return fmt.Errorf("a member setting approvers: HTTP %d %s, want 403 forbidden", st, b)
 	}
@@ -56,13 +57,13 @@ func (f *f19) approverSet() error {
 	if err := f.rule(f.sCara, listed, "a", "forbidden"); err != nil {
 		return fmt.Errorf("an unlisted member's approval: %w", err)
 	}
-	if err := f.writes(1); err != nil {
+	if err := f.writes(w0); err != nil {
 		return fmt.Errorf("after an unlisted member's approval: %w", err)
 	}
 	if err := f.rule(f.sBen, listed, "a", "ruled"); err != nil {
 		return fmt.Errorf("a listed member's approval: %w", err)
 	}
-	if err := f.writesSoon(2); err != nil {
+	if err := f.writesSoon(w0 + 1); err != nil {
 		return fmt.Errorf("after a listed member's approval: %w", err)
 	}
 	if r, b, err := f.receiptSoon(listed); err != nil || r.Approver == nil || r.Approver.ID != f.ben.actor.ID {
@@ -81,7 +82,7 @@ func (f *f19) approverSet() error {
 	if err := f.rule(f.sO, removed, "b", "ruled"); err != nil {
 		return err
 	}
-	return f.writes(2)
+	return f.writes(w0 + 1)
 }
 
 // receiptSoon reads the receipt of a released write once its upstream answer is recorded.

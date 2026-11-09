@@ -1,7 +1,7 @@
-// The connector routes (ADR 0009): a pod owner connects a vendor and grants an agent access; members and runs list the
-// connections and read the receipts. The agent's call and the write gate are in connector-call.ts.
+// The connector routes (ADR 0009): a pod owner connects a vendor, grants an agent access and names a connection's approvers;
+// members and runs list the connections and read the receipts. The agent's call and the write gate are in connector-call.ts.
 import type { Hono } from 'hono';
-import type { Connection, ConnectorAccess, ConnectorVendor, ConnectorView, Grant } from '../../gen/ts/protocol';
+import type { Approvers, Connection, ConnectorAccess, ConnectorVendor, ConnectorView, Grant } from '../../gen/ts/protocol';
 import { isoOf } from '../../podcore/src/index';
 import { driftOf, pinOf, scrub, view } from './catalogue';
 import { connectorCall, receiptView } from './connector-call';
@@ -11,12 +11,12 @@ import { newId } from './ids';
 import { bad, fail, intIn, memberRoute, podRoute } from './kit';
 import type { Call } from './kit';
 import { gate } from './routes-ops';
-import { callsOf, connectionsOf, findConnection, findGrant, saveConnection, saveGrant } from './store';
+import { callsOf, connectionsOf, findConnection, findGrant, saveApprovers, saveConnection, saveGrant, settleUnrecorded } from './store';
 import type { ConnRow } from './store';
 import { adapterOf } from './upstream';
 
 const isOwner = (k: Call): boolean => k.caller.kind === 'user' && k.pod.state.owners.some((o) => o.id === (k.caller as { userId: string }).userId);
-const notOwner = (k: Call): Response => fail(k.c, 'forbidden', 'Only a pod owner connects a vendor or grants access.');
+const notOwner = (k: Call): Response => fail(k.c, 'forbidden', 'Only a pod owner connects a vendor, grants access or names approvers.');
 
 const connectionView = (r: ConnRow): Connection => ({
   id: r.id, vendor: r.vendor as ConnectorVendor, url: r.url, createdAt: isoOf(r.createdAt), operations: pinOf(r.vendor as ConnectorVendor).operations.map(view),
@@ -50,6 +50,19 @@ const grant = (kit: Kit) => async (k: Call): Promise<Response> => {
   return k.c.json(out);
 };
 
+/** A connection's approver set, replaced whole: pod members only, each named once; an empty list clears it. */
+const approvers = (kit: Kit) => async (k: Call): Promise<Response> => {
+  if (!isOwner(k)) return notOwner(k);
+  const { connectionId, userIds } = k.body as unknown as Approvers;
+  if (new Set(userIds).size !== userIds.length) return bad(k.c, 'userIds names someone more than once.');
+  if ((await findConnection(kit.hub.db, k.pod.id, connectionId)) === undefined) return fail(k.c, 'not_found', 'No such connection in this pod.', connectionId);
+  const stranger = userIds.find((u) => !k.pod.isMember(u));
+  if (stranger !== undefined) return fail(k.c, 'not_found', 'No such member in this pod.', stranger);
+  await saveApprovers(kit.hub.db, connectionId, userIds);
+  const out: Approvers = { connectionId, userIds };
+  return k.c.json(out);
+};
+
 /** The pinned catalogue filtered by the caller's grant: a run sees only granted connections, and only reads on a read grant. */
 const list = (kit: Kit) => async (k: Call): Promise<Response> => {
   const blocked = await gate(k);
@@ -76,6 +89,7 @@ const receipts = (kit: Kit) => async (k: Call): Promise<Response> => {
   if ((dec !== undefined && !DECISION.test(dec)) || limit === null) return bad(k.c, 'decisionId must be a decision id and limit an integer from 1 to 100.');
   const blocked = await gate(k);
   if (blocked) return blocked;
+  await settleUnrecorded(kit.hub.db, kit.hub.now(), k.pod.id);
   const rows = await callsOf(kit.hub.db, k.pod.id, dec, limit);
   return k.c.json({ receipts: rows.map((r) => receiptView(r, kit.hub.now())) });
 };
@@ -84,6 +98,7 @@ export function connectorRoutes(app: Hono, kit: Kit): void {
   const { hub } = kit;
   app.post('/v1/pods/:pod/connections', podRoute(hub, ['user'] as const, 'ConnectRequest', [], connect(kit)));
   app.post('/v1/pods/:pod/grants', podRoute(hub, ['user'] as const, 'GrantRequest', [], grant(kit)));
+  app.post('/v1/pods/:pod/approvers', podRoute(hub, ['user'] as const, 'ApproversRequest', [], approvers(kit)));
   app.get('/v1/pods/:pod/connectors', memberRoute(hub, null, [], list(kit)));
   app.get('/v1/pods/:pod/connectors/receipts', memberRoute(hub, null, [], receipts(kit)));
   app.post('/v1/pods/:pod/connectors/call', podRoute(hub, ['run'] as const, 'ConnectorCallInput', [], connectorCall(kit)));

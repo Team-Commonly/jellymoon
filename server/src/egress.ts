@@ -49,8 +49,8 @@ function internalV4([a, b, c]: number[]): boolean {
 const zero = (g: number[], from: number, to: number): boolean => g.slice(from, to).every((x) => x === 0);
 
 /**
- * ::/96 (::, ::1, v4-compatible), fc00::/7, fe80::/10, ff00::/8, 64:ff9b:1::/48 (local NAT64) and 2001::/32 (Teredo) are
- * refused. v4-mapped ::ffff:0:0/96, v4-translated ::ffff:0:0:0/96 and NAT64 64:ff9b::/96 are judged by their last 32 bits, and
+ * ::/96 (::, ::1, v4-compatible), fc00::/7, fe80::/10, ff00::/8, 64:ff9b:1::/48 (local NAT64), 2001::/32 (Teredo) and
+ * 2001:db8::/32 (documentation) are refused. v4-mapped ::ffff:0:0/96, v4-translated ::ffff:0:0:0/96 and NAT64 64:ff9b::/96 are judged by their last 32 bits, and
  * 6to4 2002::/16 by bits 16 to 48, as the IPv4 address they embed.
  */
 function internalV6(g: number[]): boolean {
@@ -59,7 +59,7 @@ function internalV6(g: number[]): boolean {
   if ((zero(g, 0, 5) && g[5] === 0xffff) || (zero(g, 0, 4) && g[4] === 0xffff && g[5] === 0)) return internalV4(v4At(6));
   if (g[0] === 0x64 && g[1] === 0xff9b) return g[2] === 1 || (zero(g, 2, 6) ? internalV4(v4At(6)) : false);
   if (g[0] === 0x2002) return internalV4(v4At(1));
-  if (g[0] === 0x2001 && g[1] === 0) return true;
+  if (g[0] === 0x2001 && (g[1] === 0 || g[1] === 0xdb8)) return true;
   return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00;
 }
 
@@ -79,7 +79,7 @@ function withinBudget<T>(p: Promise<T>): Promise<T> {
   return Promise.race([p, late]).finally(() => clearTimeout(timer));
 }
 
-const loopbackLiteral =(h: string): boolean => v4(h)?.[0] === 127 || v6(h)?.every((x, i) => x === (i === 7 ? 1 : 0)) === true;
+const loopbackLiteral = (h: string): boolean => v4(h)?.[0] === 127 || v6(h)?.every((x, i) => x === (i === 7 ? 1 : 0)) === true;
 
 /**
  * The checked, pinned destination for `raw`, or why the credential may not be sent there. ENV=local alone allows a literal

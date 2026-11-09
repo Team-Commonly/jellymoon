@@ -16,6 +16,7 @@ import { podIn, setup } from './world';
 // The connector layer's hardening (ADR 0009): the crash window between a release's claim and its answer, a receipt for a
 // read that throws, and an upstream call that runs outside the pod's command order. The approver set is TestF19's.
 const CRED = 'pod-held-credential';
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const noDns: Resolve = async (h) => { throw new Error(`resolved ${h}`); };
 const vaultOf = async (ch: string): Promise<Vault> => makeVault(keyRing({ JM_VAULT_KEY: btoa(ch.repeat(32)) }) as Uint8Array<ArrayBuffer>[]);
 const listed = pinOf('linear').operations.map((o) => ({ name: o.name, args: [...o.args], required: [...o.required] }));
@@ -45,7 +46,7 @@ async function connected(call: Adapter['call'], db?: Db, vault?: Vault) {
 
 const released = (id: string, pod: string, connection: string, settledAt: number, upstreamStatus: number | null = null): CallRow => ({
   id, pod, connection, operation: 'create_issue', args: '{"title":"t","teamId":"T"}', argsHash: '0'.repeat(64), runId: 'run_1', agentId: 'agt_1', outcome: 'released',
-  upstreamStatus, decisionId: `dec_${id.slice(4)}`, approver: null, result: null, createdAt: settledAt - 1000, settledAt, expiresAt: settledAt + 86_400_000,
+  upstreamStatus, decisionId: `dec_${id.slice(4)}`, approver: null, result: null, createdAt: settledAt - 1000, settledAt, expiresAt: settledAt + 86_400_000, reason: null,
 });
 const ULID = (c: string): string => c.repeat(26);
 
@@ -60,7 +61,7 @@ describe('the crash window between a release and its answer', () => {
     await Hub.restore(db);
     const rows = await db.rows<{ id: string; outcome: string; reason: string | null }>('select id, outcome, reason from connector_calls order by id');
     expect(rows.map((r) => r.outcome)).toEqual(['unknown', 'released', 'released']);
-    expect(String(rows[0].reason)).toContain('outcome not recorded');
+    expect(String(rows[0].reason).includes('outcome not recorded')).toBe(true);
     expect([rows[1].reason, rows[2].reason]).toEqual([null, null]);
   });
 
@@ -113,7 +114,7 @@ describe('a read whose adapter throws', () => {
     const rt = other.hub.pods.get(w.pod.id)!;
     expect((await rt.exec(cmd, rulingOpts(kit, rt, cmd)))?.ok).toBe(true);
     const settled = async () => (await w.receipts('', w.olivia.token, other)).map((x) => [x.operation, x.outcome, typeof x.reason]);
-    for (let i = 0; i < 40 && (await settled()).some(([, o]) => o === 'released'); i += 1) await Bun.sleep(25);
+    for (let i = 0; i < 40 && (await settled()).some(([, o]) => o === 'released'); i += 1) await sleep(25);
     expect(await settled()).toEqual([['list_issues', 'failed', 'string'], ['create_issue', 'failed', 'string']]);
     expect(calls).toBe(0);
   });
@@ -122,7 +123,7 @@ describe('a read whose adapter throws', () => {
 describe('a slow upstream', () => {
   test('a released write and a read in flight for 2 s hold neither the pod\'s command order nor the next ruling', async () => {
     let started = 0;
-    const w = await connected(async () => { started += 1; await Bun.sleep(2000); return { ok: true, status: 200, result: { done: true } }; });
+    const w = await connected(async () => { started += 1; await sleep(2000); return { ok: true, status: 200, result: { done: true } }; });
     const one = (await w.op('create_issue', { title: 'one', teamId: 'T' })).json;
     const two = (await w.op('create_issue', { title: 'two', teamId: 'T' })).json;
     const t0 = Date.now();
@@ -132,13 +133,13 @@ describe('a slow upstream', () => {
     const inFlight = (await w.receipts(`?decisionId=${one.decisionId}`))[0];
     expect([inFlight.outcome, inFlight.upstreamStatus]).toEqual(['released', undefined]);
     const read = w.op('list_issues', {});
-    for (let i = 0; i < 40 && started < 2; i += 1) await Bun.sleep(25);
+    for (let i = 0; i < 40 && started < 2; i += 1) await sleep(25);
     const t1 = Date.now();
     const three = (await w.op('create_issue', { title: 'three', teamId: 'T' })).json;
     expect((await w.rule(three.decisionId, 'b'))?.ok).toBe(true);
     expect([started, Date.now() - t1 < 1000]).toEqual([2, true]);
     expect((await read).json.state).toBe('done');
-    for (let i = 0; i < 80 && (await w.receipts(`?decisionId=${one.decisionId}`))[0].upstreamStatus === undefined; i += 1) await Bun.sleep(50);
+    for (let i = 0; i < 80 && (await w.receipts(`?decisionId=${one.decisionId}`))[0].upstreamStatus === undefined; i += 1) await sleep(50);
     const done = (await w.receipts(`?decisionId=${one.decisionId}`))[0];
     expect([done.outcome, done.upstreamStatus, done.result]).toEqual(['released', 200, { done: true }]);
   }, 15_000);

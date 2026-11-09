@@ -109,7 +109,12 @@ describe('the re-check before every upstream call', () => {
       const approve = async (decisionId: string, n: number) => {
         const cmd = { type: 'rule' as const, caller: { kind: 'user' as const, userId: A.olivia.user.id }, decisionId, option: 'a', wakeId: `wak_0000000000000000000000000${n}` };
         expect((await A.rt.exec(cmd, rulingOpts(kit, A.rt, cmd)))?.ok).toBe(true);
-        return (await s.call('GET', `/v1/pods/${A.pod.id}/connectors/receipts?decisionId=${decisionId}`, A.olivia.token)).json.receipts[0].outcome as string;
+        // The release's call runs after the ruling is recorded: wait for its answer (a status, or another outcome).
+        for (let i = 0; ; i += 1) {
+          const r = (await s.call('GET', `/v1/pods/${A.pod.id}/connectors/receipts?decisionId=${decisionId}`, A.olivia.token)).json.receipts[0];
+          if (i === 80 || r.outcome !== 'released' || r.upstreamStatus !== undefined) return r.outcome as string;
+          await new Promise((res) => setTimeout(res, 25));
+        }
       };
       expect((await op('list_issues', {})).json.state).toBe('done');
       const [early, late] = [(await op('create_issue', { title: 't', teamId: 'T' })).json, (await op('create_issue', { title: 'u', teamId: 'T' })).json];

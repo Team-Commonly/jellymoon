@@ -71,6 +71,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.serve(ctl)
 	<-ctx.Done()
 	d.wg.Wait()
+	d.log.Printf("stopped")
 	return nil
 }
 
@@ -95,6 +96,9 @@ func (d *Daemon) keep(podID protocol.PodID) {
 	for d.ctx.Err() == nil {
 		began := time.Now()
 		err := d.session(podID)
+		if d.ctx.Err() != nil {
+			return // a stop closed the socket: that is not a failure to report or retry
+		}
 		sleep, next := backoff(wait, time.Since(began), d.readTimeoutOrDefault())
 		d.log.Printf("pod %s: socket ended (%v); reconnecting in %v", podID, err, sleep)
 		select {

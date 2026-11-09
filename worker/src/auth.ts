@@ -1,6 +1,6 @@
 // Sign-in (ADR 0008), twin of server/src/auth.ts: the server's own device code, approved from a browser session that GitHub's
 // OAuth web flow proves. The GitHub token lives in fromGitHub's locals only: never stored, logged or returned.
-// D1 tables (schema.sql): device_codes (a refused one is marked denied) and oauth_states (hashes only), github_users, rate_limits (the start limit) and
+// D1 tables (schema.sql): device_codes (a refused one is marked denied) and oauth_states (hashes only), github_users, rate_limits (the start and guess limits) and
 // token_pods (which pods a token has sockets in, for logout).
 import type { Actor, ErrorCode } from '../../gen/ts/protocol';
 import { authenticate, mint, USER_TOKEN_MS } from './directory';
@@ -19,6 +19,9 @@ const STATE = 'jm_oauth_state';
 const JSON_TYPE = /^application\/json\s*(;|$)/i;
 export const GITHUB_TIMEOUT_MS = 10_000;
 const START_LIMIT = 30;
+/** Failed user-code lookups (approve and deny together) per signed-in person per fixed ten minutes (RFC 8628 section 5.1). */
+const CODE_LIMIT = 10;
+const CODE_WINDOW_MIN = 10;
 /** Expired device codes and states stay an hour, so a late poll still reads expired_token; then a start deletes them. */
 const SWEEP_GRACE_MS = 3_600_000;
 
@@ -145,23 +148,60 @@ async function logout(env: Env, req: Request, now: number): Promise<Response> {
 }
 
 /**
+ * One more for `key` in window `win` of the D1 table rate_limits: a row per key, whose count restarts at 1 when the window
+ * changes. `win` is a minute number, the last minute of the window, so the start limit's sweep of older minutes keeps a row
+ * until its window ends.
+ */
+const take = (env: Env, key: string, win: number): D1PreparedStatement =>
+  env.DB.prepare('insert into rate_limits (k, win, n) values (?, ?, 1) on conflict (k) do update set n = case when win = excluded.win then n + 1 else 1 end, win = excluded.win returning n').bind(key, win);
+const counted = (r: D1Result): number => (r.results[0] as { n: number } | undefined)?.n ?? 0;
+const startLimit = (env: Env): number => Number(env.AUTH_START_LIMIT) || START_LIMIT;
+const deviceKey = (req: Request): string => `device ${req.headers.get('CF-Connecting-IP') ?? 'unknown'}`;
+const limited = (retryS: number, message: string): Response => {
+  const res = fail('rate_limited', message);
+  res.headers.set('Retry-After', String(retryS));
+  return res;
+};
+
+/**
  * The start limit: a fixed one-minute window per route and client address (CF-Connecting-IP), counted in D1; null is under it.
- * The same batch drops the rate rows of older minutes and the sign-in rows an hour past their expiry.
+ * The same batch drops the rate rows of ended windows and the sign-in rows an hour past their expiry.
  */
 async function startGate(env: Env, req: Request, route: string, now: number): Promise<Response | null> {
   const win = Math.floor(now / 60_000);
-  const key = `${route} ${req.headers.get('CF-Connecting-IP') ?? 'unknown'}`;
+  const key = route === 'device' ? deviceKey(req) : `${route} ${req.headers.get('CF-Connecting-IP') ?? 'unknown'}`;
   const [hit] = await env.DB.batch([
-    env.DB.prepare('insert into rate_limits (k, win, n) values (?, ?, 1) on conflict (k) do update set n = case when win = excluded.win then n + 1 else 1 end, win = excluded.win returning n').bind(key, win),
+    take(env, key, win),
     env.DB.prepare('delete from rate_limits where win < ?').bind(win),
     env.DB.prepare('delete from device_codes where expires_at <= ?').bind(now - SWEEP_GRACE_MS),
     env.DB.prepare('delete from oauth_states where expires_at <= ?').bind(now - SWEEP_GRACE_MS),
     env.DB.prepare('delete from token_pods where not exists (select 1 from tokens where tokens.hash = token_pods.hash and revoked_at is null and (expires_at is null or expires_at > ?))').bind(now),
   ]);
-  if (((hit.results[0] as { n: number } | undefined)?.n ?? 0) <= (Number(env.AUTH_START_LIMIT) || START_LIMIT)) return null;
-  const res = fail('rate_limited', 'Too many sign-in starts from this address; wait for Retry-After.');
-  res.headers.set('Retry-After', String(Math.ceil(((win + 1) * 60_000 - now) / 1000)));
-  return res;
+  if (counted(hit) <= startLimit(env)) return null;
+  return limited(Math.ceil(((win + 1) * 60_000 - now) / 1000), 'Too many sign-in starts from this address; wait for Retry-After.');
+}
+
+/**
+ * The guess limit on approve and deny (ADR 0008 step 4), checked before the lookup, so a caller past it learns nothing:
+ * CODE_LIMIT failed lookups per person per fixed ten minutes, in D1 like the start limit (one count for every isolate), and
+ * each failed lookup also counts in the address's device start limit, so many accounts from one address share that. A request
+ * takes one from both and gives them back when its lookup succeeds (the returned function): a success never counts, and
+ * concurrent guesses cannot pass the limit together.
+ */
+async function guessGate(env: Env, req: Request, userId: string, now: number): Promise<Response | (() => Promise<void>)> {
+  const minute = Math.floor(now / 60_000);
+  const last = (Math.floor(minute / CODE_WINDOW_MIN) + 1) * CODE_WINDOW_MIN - 1;
+  const mine = `code ${userId}`;
+  if (((await take(env, mine, last).first<{ n: number }>())?.n ?? 0) > CODE_LIMIT) {
+    return limited(Math.ceil(((last + 1) * 60_000 - now) / 1000), 'Too many unknown, expired or used codes from this account; wait for Retry-After.');
+  }
+  const give = (key: string, win: number): D1PreparedStatement => env.DB.prepare('update rate_limits set n = n - 1 where k = ? and win = ? and n > 0').bind(key, win);
+  const addr = deviceKey(req);
+  if (((await take(env, addr, minute).first<{ n: number }>())?.n ?? 0) > startLimit(env)) {
+    await give(mine, last).run();
+    return limited(Math.ceil(((minute + 1) * 60_000 - now) / 1000), 'Too many sign-in attempts from this address; wait for Retry-After.');
+  }
+  return async () => { await env.DB.batch([give(mine, last), give(addr, minute)]); };
 }
 
 async function deviceToken(env: Env, req: Request, now: number): Promise<Response> {
@@ -185,7 +225,8 @@ async function deviceToken(env: Env, req: Request, now: number): Promise<Respons
 
 /**
  * Approve binds a pending code to the caller; deny refuses it, and refusing a refused code is a success again. JSON, and by
- * cookie the server's own Origin (authOf), like every cookie write. Each refusal is the same answer from both routes.
+ * cookie the server's own Origin (authOf), like every cookie write. Each refusal is the same answer from both routes, and both
+ * share one guess limit.
  */
 async function decide(env: Env, req: Request, now: number, route: 'approve' | 'deny'): Promise<Response> {
   if (!JSON_TYPE.test(req.headers.get('Content-Type') ?? '')) return fail('forbidden', `${route === 'approve' ? 'Approve' : 'Deny'} with a JSON body.`);
@@ -195,11 +236,13 @@ async function decide(env: Env, req: Request, now: number, route: 'approve' | 'd
   const body = await parse(req);
   const problem = body === null ? 'The body must be a JSON object.' : check(route === 'approve' ? 'DeviceApproveRequest' : 'DeviceDenyRequest', body);
   if (problem !== null || body === null) return bad(problem ?? '');
+  const held = await guessGate(env, req, who.actor.id, now);
+  if (held instanceof Response) return held;
   const hash = await hashToken(canonCode(body.userCode as string));
   const won = route === 'approve'
     ? await env.DB.prepare('update device_codes set user_id = ? where user_hash = ? and user_id is null and denied = 0 and expires_at > ? returning hash').bind(who.actor.id, hash, now).first()
     : await env.DB.prepare('update device_codes set denied = 1 where user_hash = ? and user_id is null and expires_at > ? returning hash').bind(hash, now).first();
-  if (won !== null) return Response.json({});
+  if (won !== null) { await held(); return Response.json({}); }
   const row = await env.DB.prepare('select expires_at from device_codes where user_hash = ?').bind(hash).first<Device>();
   if (row === null) return fail('not_found', 'No such code.');
   return row.expires_at <= now ? fail('expired_token', 'This code expired.') : fail('gone', 'This code was already used.');

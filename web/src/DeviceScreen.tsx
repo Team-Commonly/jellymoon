@@ -23,6 +23,8 @@ function failure(e: unknown, route: Route): string {
   if (e.status === 404 || (route === 'deny' && (e.status === 400 || e.status === 410))) return UNKNOWN;
   if (e.status === 410) return 'This code was already used.';
   if (e.status === 400) return 'This code expired or is not a device code. Start the sign-in again in your terminal.';
+  // The server's guess limit (ADR 0008 step 4): too many unknown, expired or used codes from this account or address.
+  if (e.status === 429) return 'Too many tries. Wait a few minutes, then try again.';
   if (e.status === 403) return `The server refused this ${route === 'approve' ? 'approval' : 'request'}. Open the link your terminal printed, on the address it shows.`;
   return `Could not ${verb}: the server returned an error (${e.status}). Try again.`;
 }

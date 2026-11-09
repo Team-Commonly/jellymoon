@@ -66,11 +66,61 @@ test('deny of an unknown, exchanged or expired code answers what approve answers
   expect((await poll(env, expired.deviceCode, later)).code).toBe('expired_token');
 });
 
-test('deny has approve\'s rate limit, none: with the start limit at 1 it still answers every time', async () => {
-  const { env, tok } = await world('1');
-  const d = await start(env);
-  expect((await send(env, '/v1/auth/device', undefined, {})).status).toBe(429);
-  for (let i = 0; i < 40; i++) expect((await route(env, 'deny', d.userCode, by(tok))).status).toBe(200);
+// A time at the start of a ten-minute window, so a test's requests share one window and one minute.
+const T0 = 1_800_000_000_000;
+
+/** A signed-in person by name, whose token is live at T0. */
+const person = async (env: Env, name: string): Promise<string> => (await createUser(env.DB, name, T0)).token;
+const limited = (r: { status: number; body: string }) => r.status === 429 && JSON.parse(r.body).code === 'rate_limited';
+/** One device route at T0 + `after`, with its Retry-After. */
+async function retried(env: Env, r: 'approve' | 'deny', tok: string, after = 0): Promise<{ status: number; code: string; retry: string | null }> {
+  const res = await authRoute(new Request(`${ORIGIN}/v1/auth/device/${r}`, { method: 'POST', headers: by(tok), body: JSON.stringify({ userCode: 'BBBB-BBBB' }) }), env, T0 + after);
+  return { status: res?.status ?? -1, code: ((await res?.json()) as { code: string }).code, retry: res?.headers.get('Retry-After') ?? null };
+}
+const startAt = async (env: Env, now: number): Promise<{ deviceCode: string; userCode: string }> => JSON.parse((await send(env, '/v1/auth/device', undefined, {}, now)).body);
+
+test('a person\'s 11th failed code lookup in ten minutes is rate_limited, on approve and on deny alike, and a success does not count', async () => {
+  const { env } = await world();
+  const tok = await person(env, 'guesser');
+  const d = await startAt(env, T0);
+  for (let i = 0; i < 12; i++) expect((await route(env, 'deny', d.userCode, by(tok), T0)).status).toBe(200);
+  for (let i = 0; i < 10; i++) expect((await route(env, i % 2 === 0 ? 'approve' : 'deny', 'BBBB-BBBB', by(tok), T0)).status).toBe(404);
+  for (const r of ['approve', 'deny'] as const) expect(await retried(env, r, tok)).toEqual({ status: 429, code: 'rate_limited', retry: '600' });
+});
+
+test('over the limit even a valid code is refused, and the code stays pending; another person approves it; the window resets', async () => {
+  const { env } = await world();
+  const tok = await person(env, 'guesser');
+  const other = await person(env, 'owner');
+  const d = await startAt(env, T0);
+  for (let i = 0; i < 10; i++) await route(env, 'approve', 'BBBB-BBBB', by(tok), T0);
+  expect(limited(await route(env, 'approve', d.userCode, by(tok), T0))).toBe(true);
+  expect(limited(await route(env, 'deny', d.userCode, by(tok), T0))).toBe(true);
+  expect((await poll(env, d.deviceCode, T0)).code).toBe('authorization_pending');
+  expect(await route(env, 'approve', d.userCode, by(other), T0)).toEqual({ status: 200, body: '{}' });
+  expect((await retried(env, 'deny', tok, 599_000)).status).toBe(429);
+  expect((await retried(env, 'deny', tok, 600_000)).status).toBe(404);
+});
+
+test('failed lookups count in the address\'s start limit, so many accounts share it, and a start stops with it', async () => {
+  const { env } = await world('5');
+  const [a, b] = [await person(env, 'a'), await person(env, 'b')];
+  const d = await startAt(env, T0);
+  for (let i = 0; i < 4; i++) expect((await route(env, 'deny', 'BBBB-BBBB', by(a), T0)).status).toBe(404);
+  expect(await retried(env, 'approve', b)).toEqual({ status: 429, code: 'rate_limited', retry: '60' });
+  expect((await send(env, '/v1/auth/device', undefined, {}, T0)).status).toBe(429);
+  expect(limited(await route(env, 'approve', d.userCode, by(b), T0))).toBe(true);
+  expect(await route(env, 'approve', d.userCode, by(b), T0 + 60_000)).toEqual({ status: 200, body: '{}' });
+});
+
+test('a person\'s count outlives the start limit\'s sweep of older minutes until its ten minutes end', async () => {
+  const { env } = await world();
+  const tok = await person(env, 'guesser');
+  for (let i = 0; i < 10; i++) await route(env, 'deny', 'BBBB-BBBB', by(tok), T0);
+  await startAt(env, T0 + 300_000);
+  expect((await retried(env, 'deny', tok, 300_000)).status).toBe(429);
+  await startAt(env, T0 + 600_000);
+  expect((await retried(env, 'deny', tok, 600_000)).status).toBe(404);
 });
 
 test('deny needs a person: no token, a bad Bearer, or a cookie write without JSON or the server\'s Origin is refused, and the code stays pending', async () => {

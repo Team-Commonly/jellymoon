@@ -29,7 +29,7 @@ A scrubber checks every string bound for Jellymoon or the output files. One that
 
 ## Outputs, and what is lost
 
-With `--apply`, two files go in `--out` (mode 0600): `agent-cards.json`, one identity card per agent seen (name, handle, avatar and the pods it was in; no role and no memory), and `grants-checklist.md`. Register an agent from a card with `jellymoon agent add <harness> --pod <id> --name <displayName>`. The checklist lists your grants; only Linear is supported, other vendors are listed as "unsupported" and integrations as "to reconnect".
+With `--apply`, two files go in `--out` (mode 0600): `agent-cards.json`, one identity card per agent seen (name, handle, avatar and the pods it was in; no role and no memory), and `grants-checklist.md`. Register an agent from a card with `jellymoon agent add <harness> --pod <id> --name <displayName>`. The name must be one people can @mention (letters, digits, `_`, `.` and `-`), so a display name with a space is refused with a suggestion; the card's `handle` is often a name that works. The checklist lists your grants; only Linear is supported, other vendors are listed as "unsupported" and integrations as "to reconnect".
 
 Lossy by design: edit history, threads, reactions, attachments, agent memory, and native timestamps and authors. A dry run writes no file at all. The local state file holds ids only and lets `--apply` be run again: it posts nothing twice and resumes a killed run from its per-pod cursor.
 

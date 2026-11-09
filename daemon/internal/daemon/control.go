@@ -8,6 +8,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Team-Commonly/jellymoon/daemon/internal/config"
@@ -35,6 +37,27 @@ type AddRequest struct {
 type addReply struct {
 	AgentID protocol.AgentID `json:"agentId,omitempty"`
 	Error   string           `json:"error,omitempty"`
+}
+
+// A person addresses an agent with @name, and the pod core reads a mention as `@([\w.-]+)` with trailing dots and dashes dropped
+// (podcore/src/board.ts, mentioned), matching it exactly against the display name. So a display name that can be mentioned is
+// ASCII letters, digits, _ . and -, and does not end in . or -. Any other name is registered but can never wake its agent.
+var (
+	mentionable   = regexp.MustCompile(`^[A-Za-z0-9_.-]*[A-Za-z0-9_]$`)
+	notMentionRun = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
+)
+
+// CheckDisplayName refuses a display name no @mention can address, naming the allowed characters and suggesting one.
+func CheckDisplayName(name string) error {
+	if mentionable.MatchString(name) {
+		return nil
+	}
+	const rule = "an agent's name must be letters, digits, _ . and -, ending in a letter, digit or _, so that @name can reach it"
+	fix := strings.Trim(notMentionRun.ReplaceAllString(strings.TrimSpace(name), "-"), ".-")
+	if fix == "" {
+		return fmt.Errorf("%q is not a name people can mention: %s", name, rule)
+	}
+	return fmt.Errorf("%q is not a name people can mention: %s; try %q", name, rule, fix)
 }
 
 func socketPath(s config.Store) (string, error) {
@@ -97,6 +120,16 @@ func (d *Daemon) handle(c net.Conn) {
 
 // add registers the agent with the pod, remembers it so a restart reconnects, and opens the pod socket.
 func (d *Daemon) add(req AddRequest) (protocol.AgentID, error) {
+	if err := CheckDisplayName(req.DisplayName); err != nil {
+		return "", err
+	}
+	// The fake harness is the test agent and takes its program when it wakes; any other harness needs its program set now, in the
+	// daemon's environment, or every wake of the agent would fail. Refuse before registering, so no agent row exists.
+	if req.Harness != protocol.HarnessFake {
+		if _, err := harnessCommand(req.Harness); err != nil {
+			return "", err
+		}
+	}
 	if req.Repo != "" {
 		if fi, err := os.Stat(req.Repo); !filepath.IsAbs(req.Repo) || err != nil || !fi.IsDir() {
 			return "", fmt.Errorf("--repo %q must be the absolute path of a directory", req.Repo)

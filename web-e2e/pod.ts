@@ -89,7 +89,7 @@ export const person = (name: string): Promise<Person> => api<Person>('POST', '/_
 export interface FakeAgent { agentId: string; post(input: PostInput): Promise<{ messageId: string; decisionId?: string; seq: number }>; close(): void }
 
 export async function fakeAgent(podId: string, owner: Person, name: string): Promise<FakeAgent> {
-  const comp = await api<{ token: string }>('POST', '/v1/computers', owner.token, { name: 'browser-spec-box', os: 'linux', arch: 'x64' });
+  const comp = await api<{ token: string }>('POST', '/v1/computers', owner.token, { name: 'browser-spec-box', os: 'linux', arch: 'amd64' });
   const { agentId } = await api<{ agentId: string }>('POST', `/v1/pods/${podId}/agents`, comp.token, { harness: 'fake', displayName: name });
   const computer = await PodSocket.open(podId, comp.token);
   const board = await PodSocket.open(podId, owner.token);

@@ -14,7 +14,7 @@ const connect = (podId: string): Connect => (h) => {
   return { send: (t) => ws.send(t), close: () => ws.close() };
 };
 
-// Signed in or not is what GET /v1/me says for the session cookie; an unreachable or silent server counts as signed out.
+// Signed in or not is what GET /v1/session says for the session cookie; an unreachable or silent server counts as signed out.
 void bootSignedIn(browserHttp).then((signedIn) => {
   createRoot(document.getElementById('root')!).render(
     <BrowserRouter>

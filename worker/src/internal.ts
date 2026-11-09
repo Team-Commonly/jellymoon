@@ -32,7 +32,7 @@ function invite(pod: PodPort, b: Body): Response {
   if (code === undefined || hash === undefined || userId === undefined || base === undefined || uses === null || ttl === null) return bad('code, hash, userId and base are required.');
   if (!isMember(pod, userId)) return fail('forbidden', 'Only a member can invite.');
   const expiresAt = pod.now() + ttl * 1000;
-  pod.sql.exec('insert into invites (hash, uses_left, expires_at) values (?, ?, ?)', hash, uses, expiresAt);
+  pod.sql.exec('insert into invites (hash, uses_left, expires_at, inviter) values (?, ?, ?, ?)', hash, uses, expiresAt, userId);
   return Response.json({ code, url: `${base.replace(/\/+$/, '')}/invite/${code}`, expiresAt: isoOf(expiresAt), usesLeft: uses });
 }
 
@@ -50,6 +50,15 @@ function accept(pod: PodPort, b: Body): Response {
     extra: () => { pod.sql.exec('update invites set uses_left = uses_left - 1 where hash = ?', hash); },
   });
   return respond(reply, () => ({ pod: podView(pod) }));
+}
+
+/** GET /v1/invites/:code: the pod's name, the inviter's name and the expiry; nothing is written. Unknown, used, expired and inviter-less are one 404. */
+function readInvite(pod: PodPort, b: Body): Response {
+  const hash = str(b.hash, 64, 64);
+  const [inv] = hash === undefined ? [] : pod.sql.exec<{ uses_left: number; expires_at: number; inviter: string | null }>('select uses_left, expires_at, inviter from invites where hash = ?', hash).toArray();
+  const by = pod.state.members.find((m) => m.id === inv?.inviter);
+  if (inv === undefined || by === undefined || inv.uses_left <= 0 || inv.expires_at <= pod.now()) return fail('not_found', 'No such invite.');
+  return Response.json({ podName: pod.meta.name, inviterName: by.displayName, expiresAt: isoOf(inv.expires_at) });
 }
 
 /** Wake ids are per pod, so the Worker asks every pod where the computer hosts an agent whether the wake is its own. */
@@ -92,7 +101,7 @@ function live(pod: PodPort, b: Body): Response {
 }
 
 const TABLE: Record<string, (pod: Starter, b: Body) => Response> = {
-  create, invite, accept, 'has-wake': hasWake, 'run-claim': runClaim, 'run-end': runEnd, 'tool-call': toolCall, 'run-live': live, ping: () => Response.json({}),
+  create, invite, accept, 'invite-read': readInvite, 'has-wake': hasWake, 'run-claim': runClaim, 'run-end': runEnd, 'tool-call': toolCall, 'run-live': live, ping: () => Response.json({}),
 };
 
 export async function internalRoute(pod: Starter, req: Request): Promise<Response | null> {

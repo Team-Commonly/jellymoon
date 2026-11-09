@@ -34,19 +34,29 @@ describe('browserHttp cookie writes', () => {
     await expect(browserHttp.approveDevice('WDJB-MJHT')).rejects.toMatchObject({ status: 502, code: undefined });
   });
 
-  it('me: a read with the cookie; 401 is nobody', async () => {
-    const m = stub({ kind: 'human', id: 'usr_1', displayName: 'Ada' });
-    expect(await browserHttp.me()).toMatchObject({ id: 'usr_1' });
-    expect(sent(m)).toMatchObject({ url: '/v1/me', method: undefined, credentials: 'same-origin' });
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })));
-    expect(await browserHttp.me()).toBeNull();
+  it('session: a read with the cookie; no user is nobody', async () => {
+    const m = stub({ user: { kind: 'human', id: 'usr_1', displayName: 'Ada' } });
+    expect(await browserHttp.session()).toMatchObject({ id: 'usr_1' });
+    expect(sent(m)).toMatchObject({ url: '/v1/session', method: undefined, credentials: 'same-origin' });
+    stub({});
+    expect(await browserHttp.session()).toBeNull();
   });
 
-  it('me: hands the caller\'s abort signal to fetch', async () => {
-    const m = stub({ kind: 'human', id: 'usr_1', displayName: 'Ada' });
+  it('session: hands the caller\'s abort signal to fetch', async () => {
+    const m = stub({ user: { kind: 'human', id: 'usr_1', displayName: 'Ada' } });
     const ctl = new AbortController();
-    await browserHttp.me(ctl.signal);
+    await browserHttp.session(ctl.signal);
     expect((m.mock.calls[0] as unknown as [string, RequestInit])[1].signal).toBe(ctl.signal);
+  });
+});
+
+describe('browserHttp readInvite', () => {
+  it('GETs the invite with no body, the code escaped in the path; a 404 is no invite', async () => {
+    const m = stub({ podName: 'Launch room', inviterName: 'Ada', expiresAt: '2026-11-15T10:00:00Z' });
+    expect(await browserHttp.readInvite('a b/c')).toEqual({ podName: 'Launch room', inviterName: 'Ada', expiresAt: '2026-11-15T10:00:00Z' });
+    expect(sent(m)).toMatchObject({ url: '/v1/invites/a%20b%2Fc', method: undefined, body: undefined });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"code":"not_found","message":"No such invite."}', { status: 404 })));
+    expect(await browserHttp.readInvite('x')).toBeNull();
   });
 });
 

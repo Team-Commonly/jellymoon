@@ -17,7 +17,7 @@ import type { Opts, PodMeta, Reply, Who } from './wire';
 const SCHEMA = [
   'create table if not exists kv (k text primary key, v text not null)',
   'create table if not exists events (seq integer primary key, envelope text not null)',
-  'create table if not exists invites (hash text primary key, uses_left integer not null, expires_at real not null)',
+  'create table if not exists invites (hash text primary key, uses_left integer not null, expires_at real not null, inviter text)',
 ];
 const REPLAY_BATCH = 500;
 
@@ -57,6 +57,8 @@ export class PodDO implements Starter {
   /** Loads state, then applies `boot {staleMs: 0}`: every command is persisted, heartbeats too, so nothing is stale. */
   private restore(): void {
     for (const q of SCHEMA) this.sql.exec(q);
+    // An object whose invites table predates the inviter column gets it; its old invites keep a null inviter.
+    if (this.sql.exec("select name from pragma_table_info('invites') where name = 'inviter'").toArray().length === 0) this.sql.exec('alter table invites add column inviter text');
     const rows = this.sql.exec<{ k: string; v: string }>("select k, v from kv where k in ('state', 'meta')").toArray();
     const state = rows.find((r) => r.k === 'state');
     if (state === undefined) return;

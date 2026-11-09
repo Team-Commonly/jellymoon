@@ -22,6 +22,7 @@ describe('subscribe and hello', () => {
     expect(s.you).toEqual(you);
     expect(s.members.length).toBe(2);
     expect(s.headSeq).toBe(2);
+    expect(s.podName).toBe('Launch room');
     expect(s.status).toBe('open');
   });
 });

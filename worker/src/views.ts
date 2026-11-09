@@ -18,6 +18,7 @@ export const tasksOf = (s: PodState, status?: string): Task[] =>
 export function hello(s: PodState, meta: PodMeta, you: Actor): Hello {
   return {
     podId: s.podId,
+    podName: meta.name,
     headSeq: s.seq,
     you,
     members: s.members.map((actor) => ({ actor, role: s.owners.some((o) => o.id === actor.id) ? 'owner' : 'member' })),

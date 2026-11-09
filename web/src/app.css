@@ -16,7 +16,7 @@ button[data-recommended='true'] { font-weight: 600; }
 textarea { width: 100%; box-sizing: border-box; font: inherit; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A server's message can carry an unbroken name (the New pod form's failure line): paragraphs and labels wrap it whole. */
-p, label { overflow-wrap: anywhere; }
+p, label, h2 { overflow-wrap: anywhere; }
 input { max-width: 100%; box-sizing: border-box; font: inherit; }
 :focus-visible { outline: 3px solid #36c; outline-offset: 2px; }
 /* A run line is as quiet as a quiet card; long agent names and the server's refusal wrap whole. */

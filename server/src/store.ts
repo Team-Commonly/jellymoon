@@ -13,7 +13,8 @@ export interface PodRow { id: string; state: PodState; meta: PodMeta }
 export interface UserRow { id: string; name: string }
 export interface ComputerRow { id: string; userId: string; name: string; os: string; arch: string }
 export interface TokenRow { kind: string; subject: string; pod: string | null }
-export interface InviteRow { hash: string; pod: string; usesLeft: number; expiresAt: number }
+/** `inviter` is the member who made it; null for an invite made before inviters were kept. */
+export interface InviteRow { hash: string; pod: string; usesLeft: number; expiresAt: number; inviter: string | null }
 
 const SCHEMA = `
 create table if not exists pods (id text primary key, state text not null, meta text not null);
@@ -23,6 +24,7 @@ alter table tokens add column if not exists expires_at double precision;
 create table if not exists users (id text primary key, name text not null);
 create table if not exists computers (id text primary key, user_id text not null, name text not null, os text not null, arch text not null);
 create table if not exists invites (hash text primary key, pod text not null, uses_left integer not null, expires_at double precision not null);
+alter table invites add column if not exists inviter text;
 create table if not exists device_codes (hash text primary key, user_hash text not null unique, expires_at double precision not null,
   last_poll double precision not null default 0, user_id text, exchanged boolean not null default false);
 create table if not exists oauth_states (hash text primary key, next text not null, expires_at double precision not null);
@@ -89,9 +91,9 @@ export const allComputers = (db: Db): Promise<ComputerRow[]> =>
   db.rows<ComputerRow>('select id, user_id as "userId", name, os, arch from computers');
 
 export const saveInvite = (db: Db, i: InviteRow): Promise<unknown> =>
-  db.rows('insert into invites (hash, pod, uses_left, expires_at) values ($1, $2, $3, $4)', [i.hash, i.pod, i.usesLeft, i.expiresAt]);
+  db.rows('insert into invites (hash, pod, uses_left, expires_at, inviter) values ($1, $2, $3, $4, $5)', [i.hash, i.pod, i.usesLeft, i.expiresAt, i.inviter]);
 export async function findInvite(db: Db, hash: string): Promise<InviteRow | undefined> {
-  const [r] = await db.rows<InviteRow>('select hash, pod, uses_left as "usesLeft", expires_at as "expiresAt" from invites where hash = $1', [hash]);
+  const [r] = await db.rows<InviteRow>('select hash, pod, uses_left as "usesLeft", expires_at as "expiresAt", inviter from invites where hash = $1', [hash]);
   return r;
 }
 export const useInvite = (t: Tx, hash: string): Promise<unknown> => t.rows('update invites set uses_left = uses_left - 1 where hash = $1', [hash]);

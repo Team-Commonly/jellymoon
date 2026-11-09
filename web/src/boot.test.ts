@@ -5,7 +5,7 @@ import { bootSignedIn, browserHttp, type Http } from './http';
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-const withMe = (me: Http['me']): Http => ({ me, acceptInvite: async () => { throw new Error('unused'); }, approveDevice: async () => {}, createPod: async () => { throw new Error('unused'); }, stopRun: async () => {} });
+const withMe = (session: Http['session']): Http => ({ session, readInvite: async () => null, acceptInvite: async () => { throw new Error('unused'); }, approveDevice: async () => {}, createPod: async () => { throw new Error('unused'); }, stopRun: async () => {} });
 const person = { id: 'usr_1' } as unknown as Actor;
 
 describe('bootSignedIn', () => {
@@ -14,7 +14,16 @@ describe('bootSignedIn', () => {
     expect(await bootSignedIn(browserHttp, 50)).toBe(false);
   });
 
-  it('is signed in when /v1/me names a person', async () => {
+  it('asks GET /v1/session, which answers 200 signed out, so a signed-out load logs no failed request', async () => {
+    const m = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', m);
+    expect(await bootSignedIn(browserHttp, 50)).toBe(false);
+    expect((m.mock.calls[0] as unknown as [string])[0]).toBe('/v1/session');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ user: person }), { status: 200 })));
+    expect(await bootSignedIn(browserHttp, 50)).toBe(true);
+  });
+
+  it('is signed in when /v1/session names a person', async () => {
     expect(await bootSignedIn(withMe(async () => person), 50)).toBe(true);
   });
 

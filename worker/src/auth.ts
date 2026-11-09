@@ -116,7 +116,7 @@ export async function authOf(env: Env, req: Request, cookie: boolean): Promise<W
   return who?.kind === 'user' ? who : null;
 }
 
-/** The person behind a Bearer jmu_ or the session cookie, for GET /v1/me (a read). */
+/** The person behind a Bearer jmu_ or the session cookie, for GET /v1/me and GET /v1/session (reads). */
 async function person(env: Env, req: Request): Promise<Actor | null> {
   const p = presented(req, true);
   const who = p === null ? null : await authenticate(env.DB, `Bearer ${p.token}`, nowOf(env));
@@ -248,8 +248,10 @@ export async function authRoute(req: Request, env: Env, now: number): Promise<Re
   if (route === 'POST /v1/auth/device') return deviceStart(env, req, base, now);
   if (route === 'POST /v1/auth/device/token') return deviceToken(env, req, now);
   if (route === 'POST /v1/auth/device/approve') return approve(env, req, now);
-  if (route === 'GET /v1/me') {
+  if (route === 'GET /v1/me' || route === 'GET /v1/session') {
+    // /v1/session is /v1/me that never refuses, so a signed-out page load logs no failed request.
     const me = await person(env, req);
+    if (route === 'GET /v1/session') return Response.json(me === null ? {} : { user: me });
     return me === null ? fail('unauthorized', 'Sign in first.') : Response.json(me);
   }
   if (route === 'GET /v1/auth/github/start' || route === 'GET /v1/auth/github/callback') return githubRoute(env, req, route, base, now);

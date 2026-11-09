@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import './app.css';
 import { App } from './App';
-import { browserHttp } from './http';
+import { bootSignedIn, browserHttp } from './http';
 import type { Connect } from './store';
 
 // The pod socket. The browser sends its session cookie on the upgrade.
@@ -14,8 +14,8 @@ const connect = (podId: string): Connect => (h) => {
   return { send: (t) => ws.send(t), close: () => ws.close() };
 };
 
-// Signed in or not is what GET /v1/me says for the session cookie; an unreachable server counts as signed out.
-void browserHttp.me().then((me) => me !== null, () => false).then((signedIn) => {
+// Signed in or not is what GET /v1/me says for the session cookie; an unreachable or silent server counts as signed out.
+void bootSignedIn(browserHttp).then((signedIn) => {
   createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <App connect={connect} http={browserHttp} signedIn={signedIn} />

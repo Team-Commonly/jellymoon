@@ -225,7 +225,7 @@ cases.push(
 );
 
 // Comments are stripped, so a disconnected line (`// x();`) does not satisfy a source check. Everything else about land.mjs is in check-land-e2e.mjs.
-const landSrc = fs.readFileSync(new URL('./land.mjs', import.meta.url), 'utf8').split('\n').map((l) => l.replace(/(^|\s)\/\/.*$/, '')).join('\n');
+const landSrc = ['./land.mjs', './land-init.mjs'].map((f) => fs.readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n').split('\n').map((l) => l.replace(/(^|\s)\/\/.*$/, '')).join('\n');
 
 // Pod paging: dedupe by id across pages, and fail closed where a boundary could hide a message.
 const at1 = (id, ts) => ({ id, createdAt: ts });

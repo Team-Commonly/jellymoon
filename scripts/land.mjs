@@ -4,6 +4,7 @@
 // --dry-run writes no ledger row. PR code runs here only after the trust gate (checkTrust); the preflight is a
 // correctness check, not a security boundary.
 //   land.mjs <pr> [--dry-run] [--bootstrap]
+//   land.mjs --batch <pr> <pr> ... [--dry-run]   (2 to 8 PRs behind one CI cycle; docs/development/landing.md, "Batch landing")
 //   land.mjs <pr> --preflight-only [--bootstrap]   (verifiers: the trust gate and the merge-result preflight only; needs JM_REPO and JM_TRUSTED_LOGINS)
 // Run it from a clean checkout of main: the accepted reviewers come from operator env, never from the repo.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
@@ -14,9 +15,11 @@ import path from 'node:path';
 import {
   acquireLock, appendLedger as writeLedger, checkApi, checkCheckout, checkNode, checkNoBunConfig, checkHead, checkLedger, checkMain, checkPodVerdict, checkRuns, landedNote, mergeAction,
   checkTrust, cursorOf, entropyBase, landAction, parseLedger, parseLogins, pushersOf, trackThrowaway, mergeTree, quoteOutput, stripControls, parseReviewers, readToken, remoteFor,
-  scrub, scanEnv, takePage, requiredChecks, ciProof, landRef, landCommitEnv, landSuiteRuns,
+  scrub, scanEnv, takePage, requiredChecks, ciProof, landRef, isLandRef, landCommitEnv, landSuiteRuns,
 } from './land-decide.mjs';
 import { scanRange } from './land-scan.mjs';
+import { batch, parseBatch } from './land-batch.mjs';
+import { runInit } from './land-init.mjs';
 import { checkCodeRabbit, checkEarlierReview, checkReviews, threadPage } from './land-coderabbit.mjs';
 const REQUIRED = ['JM_REPO', 'JM_TRUSTED_LOGINS', 'JM_LEDGER', 'JM_COMMONLY_API', 'JM_COMMONLY_TOKEN_FILE', 'JM_VERDICT_POD', 'JM_VERDICT_REVIEWERS'];
 // All I/O goes through one seam, `deps`, so check-land-e2e.mjs can run main() against a scripted fake: exec(cmd, args, opts) for every
@@ -56,40 +59,6 @@ function fetchRef(ref) {
 }
 const why = (e) => scrub(String(e.stderr || e.message).split('\n').find(Boolean) || 'unknown', SECRET);
 const BASE = ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=land', '-c', 'user.email=land@localhost'];
-// Runs ./init.sh (which runs make preflight) in the throwaway worktree: env -i, stdin /dev/null, a NEW session (no
-// controlling tty), output captured and quoted, a wall-clock limit, and the whole process group killed when it returns.
-const LIMIT_MS = 30 * 60 * 1000;
-function runInit(wt, env) {
-  return new Promise((done) => {
-    let text = '';
-    let over = false;
-    let ended = false;
-    const child = IO.spawn('env', ['-i', ...Object.entries(env).map(([k, v]) => `${k}=${v}`), 'bash', '-c', './init.sh'], { cwd: wt, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    const take = (b) => { if (text.length < 2e6) text += b.toString('utf8'); };
-    child.stdout.on('data', take);
-    child.stderr.on('data', take);
-    const kill = () => { try { IO.kill(-child.pid, 'SIGKILL'); } catch { /* the group is already gone */ } };
-    const grace = IO.graceMs ?? 5000;
-    let late;
-    process.prependListener('exit', kill); // a crash or Ctrl-C of land must not leave the group running, and it dies before its dir is removed
-    const timer = setTimeout(() => { over = true; kill(); late = setTimeout(() => end(-1), grace); }, IO.limitMs ?? LIMIT_MS); // an escapee holding the pipes cannot stall us
-    const end = (code) => {
-      if (ended) return;
-      ended = true;
-      clearTimeout(timer);
-      clearTimeout(late);
-      kill();
-      process.off('exit', kill);
-      if (text) console.error(scrub(quoteOutput(text), SECRET));
-      if (over) return done({ ok: false, reason: `./init.sh did not finish in ${LIMIT_MS / 60000} minutes; killed` });
-      return done(code === 0 ? { ok: true } : { ok: false, reason: 'clean-shell ./init.sh (baseline preflight) failed on the merge result' });
-    };
-    child.on('error', () => end(-1));
-    // 'exit' is the child itself; 'close' waits for every holder of its pipes. Kill the group at exit so a descendant holding a pipe cannot stall land.
-    child.on('exit', (code) => { kill(); late = setTimeout(() => end(code ?? -1), grace); });
-    child.on('close', end);
-  });
-}
 // Throwaway worktree at main's tip, the PR head merged in as GitHub would (no repo hooks), then ./init.sh under env -i with
 // HOME and TMPDIR inside the throwaway dir and system dirs only on PATH. Hygiene, not isolation.
 async function preflight(mainTip, head, bootstrap, expectTree) {
@@ -107,7 +76,7 @@ async function preflight(mainTip, head, bootstrap, expectTree) {
     }
     if (result.ok) tree = out('git', ['-C', wt, 'rev-parse', 'HEAD^{tree}']);
     if (result.ok && expectTree && tree !== expectTree) result = { ok: false, reason: `the preflight's merge (tree ${tree.slice(0, 8)}) is not the merge result the decision used (${expectTree.slice(0, 8)})` };
-    if (result.ok) result = await runInit(wt, env);
+    if (result.ok) result = await runInit(IO, SECRET, wt, env);
   } catch (e) { result = { ok: false, reason: `preflight failed: ${why(e)}` }; }
   release();
   return { ...result, tree };
@@ -229,7 +198,7 @@ const treeOf = (mainTip, head) => mergeTree((a) => out('git', a, { maxBuffer: 1 
 // Reads CI instead of the preflight. CI attaches its check runs to the commit it ran for, so no run ever proves a PR's merge result. Land builds that
 // merge commit itself (the decision's tree; main's tip and the head as parents), pushes it to refs/heads/land/<n> (ci.yml runs on `land/**`) and waits
 // for every required check on THAT commit. Short of a green proof it falls back to the local preflight; a land commit whose tree is not the merge
-// result refuses. The only refs land ever pushes or deletes are land/<n>.
+// result refuses. The only refs land ever pushes or deletes are land/<n> and, for a batch, land/<a>-<b>-... (landRef, isLandRef).
 const [POLL_MS, CAP_MS] = [20 * 1000, 15 * 60 * 1000];
 const oneLine = (m) => String(m).replace(/\s+/g, ' ').trim();
 let MADE = null; // { remote, ref }: the land ref this run created or reused, deleted on every exit
@@ -260,10 +229,11 @@ async function ciWait(sha, n, tree, required) {
   }
 }
 // The CI path: { ok, note } or { ok: false, reason } (then the caller runs the preflight). Throws a Refusal if the land commit is not the merge result.
-async function ciLand(n, mainTip, head, tree) {
+const landCommit = (id, tree, parent, head) => out('git', ['-c', 'i18n.commitEncoding=UTF-8', 'commit-tree', '--no-gpg-sign', tree, '-p', parent, '-p', head, '-m', `land #${id}`], { env: { ...IO.env, ...landCommitEnv(out('git', ['show', '-s', '--format=%ct', parent, head])) } });
+async function ciLand(n, mainTip, head, tree) { // n: a PR number, or a batch id (then head is the last PR's and mainTip the land commit before it)
   const required = requiredNow();
   if (!required) return { ok: false, reason: 'the required checks could not be read from the branch rules' };
-  const ref = landRef(n); let sha; try { sha = out('git', ['-c', 'i18n.commitEncoding=UTF-8', 'commit-tree', '--no-gpg-sign', tree, '-p', mainTip, '-p', head, '-m', `land #${n}`], { env: { ...IO.env, ...landCommitEnv(out('git', ['show', '-s', '--format=%ct', mainTip, head])) } }); } catch (e) { return { ok: false, reason: `could not build the land commit: ${why(e)}` }; }
+  const ref = landRef(n); let sha; try { sha = landCommit(n, tree, mainTip, head); } catch (e) { return { ok: false, reason: `could not build the land commit: ${why(e)}` }; }
   if (!/^[0-9a-f]{40}$/.test(sha) || out('git', ['rev-parse', `${sha}^{tree}`]) !== tree) refuse(`#${n}: the land commit is not the merge result (tree ${tree.slice(0, 8)}); nothing merged`);
   if (DRY) { say(`dry run: would push ${sha.slice(0, 8)} (tree ${tree.slice(0, 8)}) to ${ref} and wait up to ${Math.round((IO.capMs ?? CAP_MS) / 60000)} minutes for ${required.length} required checks`); return { ok: false, reason: 'dry run: nothing is pushed' }; }
   try {
@@ -285,7 +255,7 @@ function ciClean() {
   process.off('exit', ciClean); const made = MADE;
   MADE = null; if (!made) return;
   try {
-    if (!/^refs\/heads\/land\/\d+$/.test(made.ref)) throw new Error('not a land ref');
+    if (!isLandRef(made.ref)) throw new Error('not a land ref');
     out('git', ['push', '--quiet', made.remote, '--delete', made.ref]);
   } catch (e) { console.error(`land: could not delete ${made.ref}: ${why(e)}`); }
 }
@@ -333,6 +303,8 @@ async function run(args, hold) {
   if (!only) reviewers();
   const api = only ? { ok: true } : checkApi(IO.env.JM_COMMONLY_API, IO.env.JM_ALLOW_API_ORIGIN);
   if (!api.ok) refuse(api.reason);
+  const b = parseBatch(args);
+  if (b) { if (!b.ok) refuse(b.reason); checkoutGate(null, false); return batch({ out, say, refuse, Refusal, oneLine, why, lock, fetchRef, MAIN_REF, checkoutGate, viewPr, readLedger, trustGate, draftGate, decide, treeOf, landCommit, ciLand, ciClean, doMerge, landOne, dry: DRY }, b.nums, hold); }
   const nums = args.filter((a) => /^\d+$/.test(a));
   if (nums.length !== 1 || args.some((a) => !/^\d+$/.test(a) && !FLAGS.includes(a)) || (only && args.some((a) => a === '--dry-run'))) refuse(USAGE);
   checkoutGate(null, args.includes('--bootstrap'));
@@ -340,6 +312,9 @@ async function run(args, hold) {
   const n = nums[0];
   const opts = { bootstrap: args.includes('--bootstrap') };
   hold(lock());
+  return landOne(n, opts);
+}
+async function landOne(n, opts) {
   const pr = viewPr(n);
   const action = landAction(pr, readLedger());
   if (action === 'already-landed') return say(`#${n} already landed`);
@@ -372,15 +347,19 @@ async function run(args, hold) {
     if (!now.ok) refuse(`${now.reason} (changed before the merge; nothing merged)`);
     const moved = checkMain(mainTip, fetchRef(MAIN_REF)); // last look at main, right before the merge
     if (!moved.ok) refuse(moved.reason);
-    gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
-    const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
-    const merged = sha === 'unknown' ? 'unknown' : (() => { try { fetchRef(sha); return out('git', ['rev-parse', `${sha}^{tree}`]); } catch { return 'unreadable'; } })();
-    const note = landedNote(sha, pf.tree, merged, `${d.via}; ${route}`);
-    appendLedger(n, head, 'LANDED', 'land', note);
+    const { sha, merged } = doMerge(n, head, pf.tree, `${d.via}; ${route}`);
     if (opts.bootstrap) appendLedger(n, head, 'BOOTSTRAP', 'land', 'first land of the gate, judged by people');
     if (pf.tree !== merged) refuse(`#${n} merged as ${sha} but its tree is not the tested merge result (${pf.tree} tested, ${merged} merged); the LANDED row carries TREE-MISMATCH. It cannot be undone; look at it now`);
     say(`#${n} landed as ${sha}; branch ${stripControls(pr.headRefName)} is now safe to delete (not deleted)`);
   } finally { ciClean(); }
+}
+// The one merge every land makes: a merge commit pinned to the decided head, GitHub's merge tree read back, the LANDED row written (carrying TREE-MISMATCH if it differs).
+function doMerge(n, head, tested, via) {
+  gh('pr', 'merge', n, '--repo', REPO, '--merge', '--match-head-commit', head);
+  const sha = JSON.parse(gh('pr', 'view', n, '--repo', REPO, '--json', 'mergeCommit')).mergeCommit?.oid ?? 'unknown';
+  const merged = sha === 'unknown' ? 'unknown' : (() => { try { fetchRef(sha); return out('git', ['rev-parse', `${sha}^{tree}`]); } catch { return 'unreadable'; } })();
+  appendLedger(n, head, 'LANDED', 'land', landedNote(sha, tested, merged, via));
+  return { sha, merged };
 }
 // The real run seam: status, stdout and stderr of a finished command, on success as well as failure. status is null when the command was killed
 // by a signal or never started. The range scan is read from this stderr, so it must not be dropped on a zero exit.

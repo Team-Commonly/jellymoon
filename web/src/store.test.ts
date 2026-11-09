@@ -161,7 +161,6 @@ describe('errors, bad frames and reconnects', () => {
 
 describe('runs', () => {
   const scout = { kind: 'agent', id: 'agt_1', displayName: 'Scout' };
-  const sage = { kind: 'agent', id: 'agt_2', displayName: 'Sage' };
   const started = (s: ReturnType<typeof setup>, seq: number, runId: string, agent = scout) => s.net.deliver(frame('run.started', seq, { runId, agent }));
   const ended = (s: ReturnType<typeof setup>, seq: number, runId: string, outcome: string, agent = scout) => s.net.deliver(frame('run.ended', seq, { runId, agent, outcome }));
   const runs = (s: ReturnType<typeof setup>) => s.store.getState().runs;

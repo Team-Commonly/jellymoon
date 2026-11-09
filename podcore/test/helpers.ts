@@ -21,6 +21,9 @@ export const wak = (n: number): string => id('wak', n);
 export const runN = (n: number): string => id('run', 100 + n);
 export const POD_ID = POD;
 export const TASKS = [id('tsk', 1), id('tsk', 2), id('tsk', 3)];
+/** A message the pod holds, which the tests' ask claims cite (F25: every claim cites a record), and the evidence an adapter hands over for it. */
+export const CITED = id('msg', 90);
+export const EVIDENCE = { toolCalls: {}, messages: { [CITED]: { summary: 'Tests passed.' } } };
 
 /** Three runs: A and B on computer 1 (owned by the agent owner), C on computer 2. Three open tasks. */
 export function world(): PodState {

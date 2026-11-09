@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { AskContext, Message, PostInput } from '../../gen/ts/protocol';
 import { isoOf } from '../src';
 import type { Cmd } from '../src';
-import { RUN_A, RUN_B, TASKS, U_OWNER, U_STRANGER, errCode, events, id, play, world } from './helpers';
+import { CITED, EVIDENCE, RUN_A, RUN_B, TASKS, U_OWNER, U_STRANGER, errCode, events, id, play, world } from './helpers';
 
 /** The test world's runs are hand-built, so give run A the facts a woken run carries; `wakeTaskId` is the task that woke it. */
 const woken = (wakeTaskId: string | null = TASKS[0]) => {
@@ -12,12 +12,12 @@ const woken = (wakeTaskId: string | null = TASKS[0]) => {
 };
 const DEC = id('dec', 1);
 const OPTS = [{ id: 'a', label: 'Merge', consequence: 'It merges.' }, { id: 'b', label: 'Wait', consequence: 'It waits.' }] as const;
-const claim = { text: 'Tests passed.', toolCalls: [id('tc', 1)] };
+const claim = { text: 'Tests passed.', messages: [CITED] };
 const ctx: AskContext = { happened: [claim], checked: [], stakes: claim, recommendation: { option: 'a', why: claim } };
 const fyi: PostInput = { summary: 'Done', kind: 'fyi', status: 'done' };
 const ask: PostInput = { summary: 'Merge or wait?', kind: 'ask', status: 'blocked', needs: { to: { role: 'owner' }, action: 'approve' }, options: [...OPTS], context: ctx };
 const post = (input: unknown, caller: { kind: 'run'; runId: string } | { kind: 'user'; userId: string } = { kind: 'run', runId: RUN_A }, harness = 'fake'): Cmd => (
-  { type: 'post', caller, messageId: id('msg', 1), decisionId: DEC, wakeId: id('wak', 1), harness, input } as unknown as Cmd);
+  { type: 'post', caller, messageId: id('msg', 1), decisionId: DEC, wakeId: id('wak', 1), harness, input, evidence: EVIDENCE } as unknown as Cmd);
 const stored = (out: ReturnType<typeof play>['out']) => events(out).map((e) => e.data as Message)[0];
 
 describe('the headline contract', () => {

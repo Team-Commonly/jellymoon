@@ -9,11 +9,13 @@ import { ruleCmd } from './rule';
 import { agentRegisterCmd, changeCmd, runClaimCmd, wakeAckCmd } from './wakes';
 import type { Cmd, Ctx, Out, PodState } from './types';
 
-export type { Agent, Caller, Cmd, Out, PodState, Result, Run, RunClaimed, Wake } from './types';
+export type { Agent, Caller, Cmd, Evidence, Out, PodState, Result, Run, RunClaimed, Wake } from './types';
 export { isoOf } from './time';
 export { LEASE_MS, RUN_CAP_MS, nextDeadline, runLive } from './claims';
 export { WAKE_RESEND_MS } from './wakes';
 export { overlayDecisions } from './rule';
+export { citedIds, numbersIn, ungrounded } from './ground';
+export type { Num } from './ground';
 export { PRESENCE_STALE_MS, agentPresence } from './presence';
 export { nthWakeId } from './wakeid';
 

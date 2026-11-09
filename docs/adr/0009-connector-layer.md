@@ -99,7 +99,9 @@ is sent.
 class decide. An operation not in the pin is `not_found`; no grant, or a write on a read grant, is `forbidden`. A read calls
 the upstream once and returns its result. A write calls nothing: in one transaction the pod posts the agent's own ask (options
 `a` approve and `b` reject, the exact arguments in a fenced JSON block in its body, the args hash beside them) and stores the
-parked call `{run, connection, operation, args, argsHash, decision}`. The agent gets `{state: parked, decisionId}`.
+parked call `{run, connection, operation, args, argsHash, decision}`. The agent gets `{state: parked, decisionId}`. The card's
+claims state what the pod itself did and cite nothing, so the core's grounding check (ADR 0003, "Grounding") is skipped for it
+alone (amended 2026-11-09, F25).
 
 A pod owner rules on a connector write's ask, the same role that connects and grants, and what the card's
 `needs.to.role: owner` says. So does a member on that connection's approver set: a pod owner names it with

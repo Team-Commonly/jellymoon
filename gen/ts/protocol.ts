@@ -323,8 +323,8 @@ export interface RunToolCall {
 }
 
 /** Every kind of socket frame. x-variants gives each one its direction and its data. */
-export type EventType = "hello" | "message.created" | "message.updated" | "task.created" | "task.updated" | "task.claimed" | "claim.released" | "presence.changed" | "run.wake" | "run.stop" | "error" | "subscribe" | "message.post" | "task.create" | "decision.rule" | "presence.heartbeat" | "wake.ack" | "run.toolcall" | "daemon.status";
-export const EventTypeValues = ["hello","message.created","message.updated","task.created","task.updated","task.claimed","claim.released","presence.changed","run.wake","run.stop","error","subscribe","message.post","task.create","decision.rule","presence.heartbeat","wake.ack","run.toolcall","daemon.status"] as const;
+export type EventType = "hello" | "message.created" | "message.updated" | "task.created" | "task.updated" | "task.claimed" | "claim.released" | "presence.changed" | "run.wake" | "run.stop" | "run.started" | "run.ended" | "error" | "subscribe" | "message.post" | "task.create" | "decision.rule" | "presence.heartbeat" | "wake.ack" | "run.toolcall" | "daemon.status";
+export const EventTypeValues = ["hello","message.created","message.updated","task.created","task.updated","task.claimed","claim.released","presence.changed","run.wake","run.stop","run.started","run.ended","error","subscribe","message.post","task.create","decision.rule","presence.heartbeat","wake.ack","run.toolcall","daemon.status"] as const;
 
 /** The frame every socket message is sent in. */
 export interface Envelope {
@@ -430,6 +430,23 @@ export interface RunStop {
   runId: RunId;
   /** Why the run was stopped, at most 160 characters. */
   reason?: string;
+}
+
+/** A run started: its computer claimed a wake for the agent. Sent to every pod member. */
+export interface RunStarted {
+  runId: RunId;
+  agent: Actor;
+}
+
+/** How a run ended, as members are told: completed, cancelled (a person stopped it, or the daemon cancelled it), failed, or expired (its token's 2 h cap ran out). */
+export type RunEndOutcome = "completed" | "cancelled" | "failed" | "expired";
+export const RunEndOutcomeValues = ["completed","cancelled","failed","expired"] as const;
+
+/** A run ended: which run, its agent and how. Sent to every pod member exactly once per run that started. */
+export interface RunEnded {
+  runId: RunId;
+  agent: Actor;
+  outcome: RunEndOutcome;
 }
 
 /** A client asks to receive the events after a sequence number. */
@@ -915,6 +932,8 @@ export interface EventDataMap {
   "presence.changed": PresenceChanged;
   "run.wake": RunWake;
   "run.stop": RunStop;
+  "run.started": RunStarted;
+  "run.ended": RunEnded;
   "error": ErrorBody;
   "subscribe": Subscribe;
   "message.post": MessagePost;
@@ -940,6 +959,8 @@ export const EVENT_DIRECTION = {
   "presence.changed": "s2c",
   "run.wake": "s2c",
   "run.stop": "s2c",
+  "run.started": "s2c",
+  "run.ended": "s2c",
   "error": "s2c",
   "subscribe": "c2s",
   "message.post": "c2s",
@@ -962,6 +983,8 @@ export const EVENT_DATA_DEF = {
   "presence.changed": "PresenceChanged",
   "run.wake": "RunWake",
   "run.stop": "RunStop",
+  "run.started": "RunStarted",
+  "run.ended": "RunEnded",
   "error": "ErrorBody",
   "subscribe": "Subscribe",
   "message.post": "MessagePost",

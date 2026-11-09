@@ -914,6 +914,8 @@
         "presence.changed",
         "run.wake",
         "run.stop",
+        "run.started",
+        "run.ended",
         "error",
         "subscribe",
         "message.post",
@@ -1217,6 +1219,54 @@
           "description": "Why the run was stopped, at most 160 characters.",
           "type": "string",
           "maxLength": 160
+        }
+      }
+    },
+    "RunStarted": {
+      "description": "A run started: its computer claimed a wake for the agent. Sent to every pod member.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "agent"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        },
+        "agent": {
+          "$ref": "#/$defs/Actor"
+        }
+      }
+    },
+    "RunEndOutcome": {
+      "description": "How a run ended, as members are told: completed, cancelled (a person stopped it, or the daemon cancelled it), failed, or expired (its token's 2 h cap ran out).",
+      "type": "string",
+      "enum": [
+        "completed",
+        "cancelled",
+        "failed",
+        "expired"
+      ]
+    },
+    "RunEnded": {
+      "description": "A run ended: which run, its agent and how. Sent to every pod member exactly once per run that started.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "agent",
+        "outcome"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/RunId"
+        },
+        "agent": {
+          "$ref": "#/$defs/Actor"
+        },
+        "outcome": {
+          "$ref": "#/$defs/RunEndOutcome"
         }
       }
     },

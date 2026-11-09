@@ -856,6 +856,8 @@ const (
 	EventTypePresenceChanged   EventType = "presence.changed"
 	EventTypeRunWake           EventType = "run.wake"
 	EventTypeRunStop           EventType = "run.stop"
+	EventTypeRunStarted        EventType = "run.started"
+	EventTypeRunEnded          EventType = "run.ended"
 	EventTypeError             EventType = "error"
 	EventTypeSubscribe         EventType = "subscribe"
 	EventTypeMessagePost       EventType = "message.post"
@@ -870,7 +872,7 @@ const (
 // Valid reports whether x is one of the schema's values.
 func (x EventType) Valid() bool {
 	switch x {
-	case EventTypeHello, EventTypeMessageCreated, EventTypeMessageUpdated, EventTypeTaskCreated, EventTypeTaskUpdated, EventTypeTaskClaimed, EventTypeClaimReleased, EventTypePresenceChanged, EventTypeRunWake, EventTypeRunStop, EventTypeError, EventTypeSubscribe, EventTypeMessagePost, EventTypeTaskCreate, EventTypeDecisionRule, EventTypePresenceHeartbeat, EventTypeWakeAck, EventTypeRunToolcall, EventTypeDaemonStatus:
+	case EventTypeHello, EventTypeMessageCreated, EventTypeMessageUpdated, EventTypeTaskCreated, EventTypeTaskUpdated, EventTypeTaskClaimed, EventTypeClaimReleased, EventTypePresenceChanged, EventTypeRunWake, EventTypeRunStop, EventTypeRunStarted, EventTypeRunEnded, EventTypeError, EventTypeSubscribe, EventTypeMessagePost, EventTypeTaskCreate, EventTypeDecisionRule, EventTypePresenceHeartbeat, EventTypeWakeAck, EventTypeRunToolcall, EventTypeDaemonStatus:
 		return true
 	}
 	return false
@@ -1164,6 +1166,68 @@ func (x *RunStop) UnmarshalJSON(b []byte) error {
 		}
 	}
 	type plain RunStop
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// A run started: its computer claimed a wake for the agent. Sent to every pod member.
+type RunStarted struct {
+	RunID RunID `json:"runId"`
+	Agent Actor `json:"agent"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *RunStarted) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"runId", "agent"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("RunStarted: missing required field %q", k)
+		}
+	}
+	type plain RunStarted
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// How a run ended, as members are told: completed, cancelled (a person stopped it, or the daemon cancelled it), failed, or expired (its token's 2 h cap ran out).
+type RunEndOutcome string
+
+const (
+	RunEndOutcomeCompleted RunEndOutcome = "completed"
+	RunEndOutcomeCancelled RunEndOutcome = "cancelled"
+	RunEndOutcomeFailed    RunEndOutcome = "failed"
+	RunEndOutcomeExpired   RunEndOutcome = "expired"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x RunEndOutcome) Valid() bool {
+	switch x {
+	case RunEndOutcomeCompleted, RunEndOutcomeCancelled, RunEndOutcomeFailed, RunEndOutcomeExpired:
+		return true
+	}
+	return false
+}
+
+// A run ended: which run, its agent and how. Sent to every pod member exactly once per run that started.
+type RunEnded struct {
+	RunID   RunID         `json:"runId"`
+	Agent   Actor         `json:"agent"`
+	Outcome RunEndOutcome `json:"outcome"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *RunEnded) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"runId", "agent", "outcome"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("RunEnded: missing required field %q", k)
+		}
+	}
+	type plain RunEnded
 	return json.Unmarshal(b, (*plain)(x))
 }
 
@@ -2568,6 +2632,8 @@ var Registry = map[string]func() any{
 	"WakeRefs":                 func() any { return new(WakeRefs) },
 	"RunWake":                  func() any { return new(RunWake) },
 	"RunStop":                  func() any { return new(RunStop) },
+	"RunStarted":               func() any { return new(RunStarted) },
+	"RunEnded":                 func() any { return new(RunEnded) },
 	"Subscribe":                func() any { return new(Subscribe) },
 	"MessagePost":              func() any { return new(MessagePost) },
 	"TaskCreate":               func() any { return new(TaskCreate) },
@@ -2639,6 +2705,8 @@ var EventDirection = map[EventType]string{
 	EventTypePresenceChanged:   "s2c",
 	EventTypeRunWake:           "s2c",
 	EventTypeRunStop:           "s2c",
+	EventTypeRunStarted:        "s2c",
+	EventTypeRunEnded:          "s2c",
 	EventTypeError:             "s2c",
 	EventTypeSubscribe:         "c2s",
 	EventTypeMessagePost:       "c2s",
@@ -2709,6 +2777,18 @@ func DecodeEventData(t EventType, raw json.RawMessage) (any, error) {
 		return &v, nil
 	case EventTypeRunStop:
 		var v RunStop
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s: %w", t, err)
+		}
+		return &v, nil
+	case EventTypeRunStarted:
+		var v RunStarted
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, fmt.Errorf("%s: %w", t, err)
+		}
+		return &v, nil
+	case EventTypeRunEnded:
+		var v RunEnded
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return nil, fmt.Errorf("%s: %w", t, err)
 		}

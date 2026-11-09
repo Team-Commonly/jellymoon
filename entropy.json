@@ -36,7 +36,7 @@
       "paths": [
         "podcore/"
       ],
-      "max": 3020
+      "max": 3110
     },
     "daemon": {
       "paths": [
@@ -54,7 +54,7 @@
       "paths": [
         "e2e/"
       ],
-      "max": 9400
+      "max": 9540
     }
   },
   "goImports": {

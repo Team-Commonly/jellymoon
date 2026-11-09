@@ -1,5 +1,5 @@
 // Claim and run state transitions, plus who may call. Commands in commands.ts decide what a caller is told.
-import type { Actor, ClaimReleased, ClaimReleaseCause, RunId, RunOutcome, Task, TaskId } from '../../gen/ts/protocol';
+import type { Actor, ClaimReleased, ClaimReleaseCause, RunEndOutcome, RunId, Task, TaskId } from '../../gen/ts/protocol';
 import { emit, fail } from './emit';
 import { computerGone, staleAt } from './presence';
 import { isoOf } from './time';
@@ -50,11 +50,16 @@ export function renewRun(c: Ctx, runId: RunId): void {
   for (const t of heldBy(c, runId)) c.s.claims[t].leaseUntil = c.now + LEASE_MS;
 }
 
-export function endRun(c: Ctx, run: Run, outcome: RunOutcome, cause: ClaimReleaseCause, by?: Actor, reason?: string): void {
+/**
+ * The one place a run ends, so members hear run.ended exactly once: every caller checks the run is active first. An expired run
+ * keeps outcome failed in state (the operations' RunOutcome has no expired); members are told expired.
+ */
+export function endRun(c: Ctx, run: Run, outcome: RunEndOutcome, cause: ClaimReleaseCause, by?: Actor, reason?: string): void {
   run.status = 'ended';
-  run.outcome = outcome;
+  run.outcome = outcome === 'expired' ? 'failed' : outcome;
   for (const t of heldBy(c, run.id)) endClaim(c, t, cause, by, reason);
   delete c.s.lost[run.id];
+  emit(c, 'run.ended', { runId: run.id, agent: run.agent, outcome });
 }
 
 /**
@@ -71,7 +76,7 @@ export function settle(c: Ctx): void {
   due.sort((a, b) => a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : 1));
   for (const [at, rank, id] of due) {
     c.now = at;
-    if (rank === 0) endRun(c, c.s.runs[id], 'failed', 'run_ended');
+    if (rank === 0) endRun(c, c.s.runs[id], 'expired', 'run_ended');
     else if (rank === 2) computerGone(c, id);
     else if (rank === 3) expireDecision(c, id);
     else if (own(c.s.claims, id) !== undefined) endClaim(c, id, 'expired');

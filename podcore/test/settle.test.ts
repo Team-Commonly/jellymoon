@@ -12,14 +12,15 @@ describe('settle walks one timeline', () => {
   test('cap before leaseUntil, late tick: run_ended, stamped with the cap', () => {
     const r = play([[claim(), CAP - 50_000], [{ type: 'tick' }, CAP + 100_000]]);
     expect(released(r.out)).toEqual([{ taskId: T1, runId: RUN_A, cause: 'run_ended' }]);
-    expect(events(r.out).slice(1).map((e) => e.ts)).toEqual([isoOf(CAP), isoOf(CAP)]);
+    // task.updated and claim.released, then run.ended for each of the three runs the cap ends.
+    expect(events(r.out).slice(1).map((e) => e.ts)).toEqual(Array(5).fill(isoOf(CAP)));
   });
 
   test('leaseUntil before the cap, late tick: expired, stamped with leaseUntil, and not ended again by the cap', () => {
     const r = play([[claim(), 0], [{ type: 'tick' }, CAP + 5]]);
     expect(released(r.out)).toEqual([{ taskId: T1, runId: RUN_A, cause: 'expired' }]);
     expect(r.state.tasks[T1].updatedAt).toBe(isoOf(60_000));
-    expect(events(r.out).slice(1).map((e) => e.ts)).toEqual([isoOf(60_000), isoOf(60_000)]);
+    expect(events(r.out).slice(1).map((e) => e.ts)).toEqual([isoOf(60_000), isoOf(60_000), isoOf(CAP), isoOf(CAP), isoOf(CAP)]);
     expect(r.state.runs[RUN_A].status).toBe('ended');
   });
 

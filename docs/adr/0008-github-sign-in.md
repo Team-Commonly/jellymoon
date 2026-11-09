@@ -150,6 +150,8 @@ Added 2026-11-09 (AUTHH), in both adapters.
 - A refresh of a user token: after 30 days a person signs in again.
 - A socket already open stays open after its token expires; `token_pods` rows of expired tokens are not deleted; `jmc_`
   tokens never expire and logout does not revoke them (this predates the hardening).
+- Logout with an expired or revoked cookie, or with a `jmc_` bearer, answers 401 or 403 and leaves the cookie set. The
+  cookie is already dead, so this is harmless (this predates the hardening).
 
 ## Tested by
 

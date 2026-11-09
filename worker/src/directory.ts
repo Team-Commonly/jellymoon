@@ -7,35 +7,39 @@ import type { Who } from './wire';
 const KIND: Record<string, 'user' | 'computer' | 'run'> = { jmu_: 'user', jmc_: 'computer', jmr_: 'run' };
 const human = (id: string, displayName: string): Actor => ({ kind: 'human', id, displayName });
 
-export async function authenticate(db: D1Database, header: string | null): Promise<Who | null> {
+/** A user token lives 30 days (ADR 0008); computer and run tokens have no expiry. */
+export const USER_TOKEN_MS = 30 * 86_400_000;
+
+/** The caller a Bearer names: a live token, not revoked and not past its expiry at `now`. */
+export async function authenticate(db: D1Database, header: string | null, now: number): Promise<Who | null> {
   const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
   const kind = KIND[token.slice(0, 4)];
   if (kind === undefined) return null;
   const hash = await hashToken(token);
-  const live = 'where t.hash = ? and t.kind = ? and t.revoked_at is null';
+  const live = 'where t.hash = ? and t.kind = ? and t.revoked_at is null and (t.expires_at is null or t.expires_at > ?)';
   if (kind === 'user') {
-    const r = await db.prepare(`select u.id, u.name from tokens t join users u on u.id = t.subject ${live}`).bind(hash, kind).first<{ id: string; name: string }>();
+    const r = await db.prepare(`select u.id, u.name from tokens t join users u on u.id = t.subject ${live}`).bind(hash, kind, now).first<{ id: string; name: string }>();
     return r === null ? null : { kind, actor: human(r.id, r.name) };
   }
   if (kind === 'computer') {
     const r = await db.prepare(`select c.id as cid, o.id as uid, o.name as uname from tokens t join computers c on c.id = t.subject join users o on o.id = c.user_id ${live}`)
-      .bind(hash, kind).first<{ cid: string; uid: string; uname: string }>();
+      .bind(hash, kind, now).first<{ cid: string; uid: string; uname: string }>();
     return r === null ? null : { kind, computerId: r.cid, owner: human(r.uid, r.uname) };
   }
-  const r = await db.prepare(`select t.subject, t.pod from tokens t ${live}`).bind(hash, kind).first<{ subject: string; pod: string | null }>();
+  const r = await db.prepare(`select t.subject, t.pod from tokens t ${live}`).bind(hash, kind, now).first<{ subject: string; pod: string | null }>();
   return r === null || r.pod === null ? null : { kind, runId: r.subject, podId: r.pod };
 }
 
-async function mint(db: D1Database, prefix: string, kind: string, subject: string, pod: string | null): Promise<string> {
+export async function mint(db: D1Database, prefix: string, kind: string, subject: string, pod: string | null, expiresAt: number | null = null): Promise<string> {
   const token = newToken(prefix);
-  await db.prepare('insert into tokens (hash, kind, subject, pod) values (?, ?, ?, ?)').bind(await hashToken(token), kind, subject, pod).run();
+  await db.prepare('insert into tokens (hash, kind, subject, pod, expires_at) values (?, ?, ?, ?, ?)').bind(await hashToken(token), kind, subject, pod, expiresAt).run();
   return token;
 }
 
-export async function createUser(db: D1Database, name: string): Promise<{ token: string; user: Actor }> {
+export async function createUser(db: D1Database, name: string, now: number): Promise<{ token: string; user: Actor }> {
   const id = newId('usr_');
   await db.prepare('insert into users (id, name) values (?, ?)').bind(id, name).run();
-  return { token: await mint(db, 'jmu_', 'user', id, null), user: human(id, name) };
+  return { token: await mint(db, 'jmu_', 'user', id, null, now + USER_TOKEN_MS), user: human(id, name) };
 }
 
 export async function createComputer(db: D1Database, userId: string, name: string, os: string, arch: string): Promise<{ computerId: string; token: string }> {

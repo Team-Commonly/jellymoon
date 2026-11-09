@@ -11,7 +11,7 @@ import { internalRoute } from './internal';
 import type { Starter } from './internal';
 import { podRoute } from './pod-routes';
 import { hello } from './views';
-import { decodeWho, fail, WHO_HEADER } from './wire';
+import { decodeWho, fail, parse, str, TOKEN_HEADER, WHO_HEADER } from './wire';
 import type { Opts, PodMeta, Reply, Who } from './wire';
 
 const SCHEMA = [
@@ -160,10 +160,11 @@ export class PodDO implements Starter {
   async fetch(req: Request): Promise<Response> {
     try {
       const path = new URL(req.url).pathname;
+      if (path === '/_in/close-token') return await this.closeToken(req);
       if (path.startsWith('/_in/')) return (await internalRoute(this, req)) ?? fail('not_found', 'No such route.');
       const who = decodeWho(req.headers.get(WHO_HEADER));
       if (who === null) return fail('unauthorized', 'Send a valid bearer token.');
-      if (path.endsWith('/ws') && req.headers.get('upgrade')?.toLowerCase() === 'websocket') return this.upgrade(who);
+      if (path.endsWith('/ws') && req.headers.get('upgrade')?.toLowerCase() === 'websocket') return this.upgrade(who, req.headers.get(TOKEN_HEADER));
       return (await podRoute(this, req, who)) ?? fail('not_found', 'No such route.');
     } catch (e) {
       console.error('pod request failed', e);
@@ -171,12 +172,21 @@ export class PodDO implements Starter {
     }
   }
 
-  private upgrade(who: Who): Response {
+  /** Logout: every socket opened with the token whose hash the Worker sends is closed. */
+  private async closeToken(req: Request): Promise<Response> {
+    const hash = str((await parse(req))?.hash, 64, 64);
+    for (const ws of hash === undefined ? [] : this.ctx.getWebSockets(`t:${hash}`)) {
+      try { ws.close(1008, 'signed out'); } catch { /* already closed */ }
+    }
+    return Response.json({});
+  }
+
+  private upgrade(who: Who, token: string | null): Response {
     if (who.kind === 'run') return fail('forbidden', 'A run token does not open the pod socket.');
     const member = who.kind === 'user' ? who.actor : who.owner;
     if (!this.state.members.some((m) => m.id === member.id)) return fail('forbidden', 'Only members of this pod may connect.');
     const [client, server] = Object.values(new WebSocketPair());
-    this.ctx.acceptWebSocket(server, [who.kind === 'user' ? `u:${who.actor.id}` : `c:${who.computerId}`]);
+    this.ctx.acceptWebSocket(server, [who.kind === 'user' ? `u:${who.actor.id}` : `c:${who.computerId}`, ...(token === null ? [] : [`t:${token}`])]);
     server.serializeAttachment({ who, subscribed: false } satisfies Att);
     if (who.kind === 'computer') this.exec({ type: 'computer_online', computerId: who.computerId });
     this.send(server, this.frame('hello', hello(this.state, this.meta, member)));

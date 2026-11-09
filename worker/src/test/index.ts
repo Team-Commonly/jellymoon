@@ -22,6 +22,12 @@ async function prepare(env: Env): Promise<void> {
   if (env.BOOT_SWEEP === '1') await Promise.all((await allPodIds(env.DB)).map((id) => internal(env, id, 'ping', {})));
 }
 
+/** The test clock (kv 'clock'), else the real one. */
+async function clockOf(env: Env): Promise<number> {
+  const row = await env.DB.prepare("select v from kv where k = 'clock'").first<{ v: string }>();
+  return row === null ? Date.now() : Number(row.v);
+}
+
 async function fanOut(env: Env, name: string, body: Body): Promise<Response[]> {
   return Promise.all((await allPodIds(env.DB)).map((id) => internal(env, id, name, body)));
 }
@@ -56,7 +62,7 @@ async function testRoute(req: Request, env: Env, path: string): Promise<Response
   }
   if (path === '/__test/session' && req.method === 'POST') {
     const name = str((await parse(req))?.name, 1, 80);
-    return name === undefined ? bad('name is required.') : Response.json(await createUser(env.DB, name));
+    return name === undefined ? bad('name is required.') : Response.json(await createUser(env.DB, name, await clockOf(env)));
   }
   if (path === '/__test/clock' && local) return clockRoute(req, env);
   const fired = /^\/__test\/alarm\/([^/]+)$/.exec(path);
@@ -82,8 +88,7 @@ export default {
     await ready;
     const path = new URL(req.url).pathname;
     if (path.startsWith('/__test/')) return testRoute(req, env, path);
-    // The sign-in routes run in the Worker, not a pod, so they read the test clock here (a device code's expiry).
-    const clock = env.ENV === 'local' && path.startsWith('/v1/auth/') ? await env.DB.prepare("select v from kv where k = 'clock'").first<{ v: string }>() : null;
-    return handle(req, clock === null ? env : { ...env, CLOCK_MS: Number(clock.v) });
+    // Authentication and the sign-in routes run in the Worker, not a pod, so they read the test clock here (a user token's and a device code's expiry).
+    return handle(req, env.ENV === 'local' ? { ...env, CLOCK_MS: await clockOf(env) } : env);
   },
 };

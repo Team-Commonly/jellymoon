@@ -39,13 +39,13 @@ The LOC budget for the slice is a deliberate choice to stay small:
 |---|---|
 | core (`schema/`, `scripts/`) | 4,200 |
 | podcore | 3,000 |
-| worker | 2,070 |
-| server | 2,280 |
+| worker | 2,160 |
+| server | 2,370 |
 | daemon | 5,000 |
 | e2e | 7,100 |
 | web | 1,580 |
 
-The caps add up to 25,230 lines (restated 2026-11-09 against this unit's entropy.json: core 4,200, podcore 3,000, worker 2,070, server 2,280, daemon 5,000, web 1,580, e2e 7,100). Agent-written comparables grew without bounds: herdr reached
+The caps add up to 25,410 lines (restated 2026-11-09 against this unit's entropy.json: core 4,200, podcore 3,000, worker 2,160, server 2,370, daemon 5,000, web 1,580, e2e 7,100). Agent-written comparables grew without bounds: herdr reached
 291k lines in seven months, and Tutti 1.6M (owner's figures). Raising a cap takes a note here.
 
 - 10-30: podcore 1,000 → 1,750 (rules plus refusal-path tests, pod core review rounds 1–3, #12). This PR also lowered worker 4,000 → 3,000 and daemon 3,500 → 3,000 in this table and in entropy.json
@@ -93,4 +93,4 @@ The caps add up to 25,230 lines (restated 2026-11-09 against this unit's entropy
 2026-11-09: server 2,110 -> 2,180; merged tree measures 2,176; #16's server follow-ups meet F15's sign-in. Feature growth, not a refactor; the cap is the count rounded up to ten; no other cap changes; the total is 24,340. F15.
 2026-11-09: e2e cap 6,380 -> 6,520; merged tree measures 6,518; #10's replay test meets F15's. The cap is the count rounded up to ten; no other cap changes; the total is 24,480. F15.
 2026-11-09: worker 2,000 -> 2,040, server 2,180 -> 2,230, e2e 6,520 -> 6,790; merged tree measures 2,034 / 2,225 / 6,788; the browser session (#33) meets F14, F15 and the replay test. The caption total is restated once above, against the merged entropy.json. No other cap changes.
-2026-11-09: worker 2,040 -> 2,070, server 2,230 -> 2,280, e2e 6,790 -> 7,100; the sign-in hardening tests, committed red ahead of their fix (TestAUTHH, the F15 approve-Origin case, and the timeout, PUBLIC_URL, sweep and concurrent-first-sign-in unit tests in both adapters). The gate printed `LOC worker  2069 / 2040`, `LOC server  2275 / 2230` and `LOC e2e     7094 / 6790` before this raise; each cap is the count rounded up to ten. The table and the caption total are restated once above. No other cap changes. AUTHH.
+2026-11-09: worker 2,040 -> 2,160, server 2,230 -> 2,370, e2e 6,790 -> 7,100; the sign-in hardening (ADR 0008, "Hardening") in both adapters with its tests: user token expiry, the start limit with Retry-After, the expiry sweep, GitHub timeouts, PUBLIC_URL, a race-safe first sign-in, approve by cookie needing the Origin, and logout revoking both tokens and closing their sockets; TestAUTHH and the unit tests in server/ and worker/. The e2e cap rose with the red tests, ahead of the fix, because the hook's entropy gate runs on every commit. The gate printed `LOC worker  2156 / 2070` and `LOC server  2366 / 2280` (e2e measures 7,094, under the 7,100 its red tests needed) before this raise; each cap is the count rounded up to ten. The table and the caption total are restated once above. No other cap changes. AUTHH.

@@ -16,6 +16,8 @@ export type Body = Record<string, unknown>;
 export const WHO_HEADER = 'x-jm-who';
 /** Set by the Worker on a request the MCP adapter made; any incoming copy is deleted first. The pod has already counted that call. */
 export const MCP_HEADER = 'x-jm-mcp';
+/** Set by the Worker on a socket upgrade: the presented token's SHA-256, so logout can close the sockets it opened. */
+export const TOKEN_HEADER = 'x-jm-token';
 
 export const encodeWho = (who: Who): string => encodeURIComponent(JSON.stringify(who));
 export function decodeWho(v: string | null): Who | null {

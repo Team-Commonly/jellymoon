@@ -2,23 +2,60 @@
 // flow only proves who that person is. The GitHub token lives in one function's locals and is dropped there: never stored,
 // logged or returned. Twin of the Worker's worker/src/auth.ts.
 import type { Context, Hono } from 'hono';
+import { getConnInfo } from 'hono/bun';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Actor, ErrorCode } from '../../gen/ts/protocol';
 import { isoOf } from '../../podcore/src/index';
+import { USER_TOKEN_MS } from './hub';
 import type { Hub } from './hub';
 import { base62, hashToken, sameSecret } from './ids';
 import { authOf, bad, fail, JSON_TYPE, parse, presented, SESSION } from './kit';
-import { approveDevice, deviceByHash, deviceByUser, exchangeDevice, newDevice, pollDevice, newState, revokeToken, takeState } from './store';
+import { approveDevice, deviceByHash, deviceByUser, exchangeDevice, newDevice, pollDevice, newState, revokeToken, sweepSignIn, takeState } from './store';
 import { check } from './validate';
 
 const DEVICE_S = 900;
 const INTERVAL_S = 2;
 const STATE_S = 600;
-const SESSION_S = 30 * 86400;
+const SESSION_S = USER_TOKEN_MS / 1000;
 const USER_CODE = 'BCDFGHJKLMNPQRSTVWXZ';
 const STATE = 'jm_oauth_state';
+export const GITHUB_TIMEOUT_MS = 10_000;
+/** Starts (device and GitHub, each) per client address per minute, unless AUTH_START_LIMIT says otherwise. */
+const START_LIMIT = 30;
 
 export interface GitHub { web: string; api: string; id: string; secret: string }
+/** Sign-in settings from the environment (config.ts appOptions). */
+export interface SignInOpts { publicUrl?: string; local: boolean; startLimit?: number; trustProxy?: boolean }
+
+/**
+ * The start limit: a fixed one-minute window per route and client address, counted in memory (one process, ADR 0006). Past
+ * `limit`, rate_limited with Retry-After, the seconds left in the window. Under it, the expired sign-in rows are swept.
+ */
+function startGate(hub: Hub, limit: number, trustProxy: boolean): (c: Context) => Promise<Response | null> {
+  let win = -1;
+  const seen = new Map<string, number>();
+  return async (c) => {
+    const now = hub.now();
+    const w = Math.floor(now / 60_000);
+    if (w !== win) { win = w; seen.clear(); }
+    const key = `${c.req.path} ${clientIp(c, trustProxy)}`;
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    if (n <= limit) { await sweepSignIn(hub.db, now); return null; }
+    c.header('Retry-After', String(Math.ceil(((w + 1) * 60_000 - now) / 1000)));
+    return fail(c, 'rate_limited', 'Too many sign-in starts from this address; wait for Retry-After.');
+  };
+}
+
+/** The client's address: the socket's, or behind a trusted proxy the last X-Forwarded-For entry (the one the proxy added). */
+function clientIp(c: Context, trustProxy: boolean): string {
+  const fwd = trustProxy ? c.req.header('X-Forwarded-For')?.split(',').pop()?.trim() : undefined;
+  if (fwd) return fwd;
+  try { return getConnInfo(c).remote.address ?? 'unknown'; } catch { return 'unknown'; }
+}
+
+/** WDJB-MJHT however it was typed: either case, with or without the hyphen (the schema has already checked the letters). */
+const canonCode = (s: string): string => `${s.toUpperCase().replace('-', '').slice(0, 4)}-${s.toUpperCase().replace('-', '').slice(4)}`;
 
 /** The server's own base URL: PUBLIC_URL or the request's origin, upgraded to https except under ENV=local. Its origin is the one a browser session's Origin must equal. */
 export function ownBase(c: Context, publicUrl: string | undefined, local: boolean): string {
@@ -44,14 +81,14 @@ function userCode(): string {
   return `${pick()}-${pick()}`; // 256 % 20 != 0 leaves a slight bias; 20^8 codes, valid 15 minutes, each needs a signed-in approver
 }
 
-/** GitHub's numeric id and login for an OAuth code, or the error code to answer with. */
-async function fromGitHub(gh: GitHub, code: string, redirect: string): Promise<{ id: number; login: string } | ErrorCode> {
+/** GitHub's numeric id and login for an OAuth code, or the error code to answer with. Each call to GitHub gives up after `timeoutMs`. */
+export async function fromGitHub(gh: GitHub, code: string, redirect: string, timeoutMs = GITHUB_TIMEOUT_MS): Promise<{ id: number; login: string } | ErrorCode> {
   try {
     const body = new URLSearchParams({ client_id: gh.id, client_secret: gh.secret, code, redirect_uri: redirect });
-    const t = await fetch(`${gh.web}/login/oauth/access_token`, { method: 'POST', body, headers: { Accept: 'application/json' }, redirect: 'manual' });
+    const t = await fetch(`${gh.web}/login/oauth/access_token`, { method: 'POST', body, headers: { Accept: 'application/json' }, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
     const token: unknown = t.ok ? ((await t.json()) as { access_token?: unknown }).access_token : undefined;
     if (typeof token !== 'string' || token === '') return 'upstream';
-    const u = await fetch(`${gh.api}/user`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'jellymoon' }, redirect: 'manual' });
+    const u = await fetch(`${gh.api}/user`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'jellymoon' }, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
     if (u.status === 401) return 'unauthorized';
     const j = (u.ok ? await u.json() : null) as { id?: unknown; login?: unknown } | null;
     return Number.isSafeInteger(j?.id) && typeof j?.login === 'string' && j.login.length > 0 && j.login.length <= 80 ? { id: j.id as number, login: j.login } : 'upstream';
@@ -59,8 +96,10 @@ async function fromGitHub(gh: GitHub, code: string, redirect: string): Promise<{
 }
 
 /** The device flow (the CLI's side and the approval) and GET /v1/me. */
-function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person: (c: Context) => Promise<Actor | null>): void {
+function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person: (c: Context) => Promise<Actor | null>, gate: (c: Context) => Promise<Response | null>): void {
   app.post('/v1/auth/device', async (c) => {
+    const refused = await gate(c);
+    if (refused !== null) return refused;
     const deviceCode = base62(43);
     const code = userCode();
     await newDevice(hub.db, hashToken(deviceCode), hashToken(code), hub.now() + DEVICE_S * 1000);
@@ -82,20 +121,20 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
     const userId = await exchangeDevice(hub.db, hash);
     const user = userId === undefined ? undefined : hub.users.get(userId);
     if (user === undefined) return fail(c, 'invalid_grant', 'This device code was already exchanged.');
-    return c.json({ token: await hub.userToken(user.id), user: { kind: 'human', id: user.id, displayName: user.name }, expiresAt: isoOf(now + SESSION_S * 1000) });
+    const minted = await hub.userToken(user.id);
+    return c.json({ token: minted.token, user: { kind: 'human', id: user.id, displayName: user.name }, expiresAt: isoOf(minted.expiresAt) });
   });
 
   app.post('/v1/auth/device/approve', async (c) => {
-    const origin = c.req.header('Origin');
-    if (!JSON_TYPE.test(c.req.header('Content-Type') ?? '') || (origin !== undefined && origin !== new URL(base(c)).origin)) {
-      return fail(c, 'forbidden', 'Approve from this server\'s own page, with a JSON body.');
-    }
-    const me = await person(c);
-    if (me === null) return fail(c, 'unauthorized', 'Sign in first.');
+    if (!JSON_TYPE.test(c.req.header('Content-Type') ?? '')) return fail(c, 'forbidden', 'Approve with a JSON body.');
+    const who = await authOf(hub, c, true); // by cookie, the server's own Origin, like every cookie write
+    if (who instanceof Response) return who;
+    if (who?.kind !== 'user') return fail(c, 'unauthorized', 'Sign in first.');
+    const me = who.actor;
     const body = await parse(c);
     const problem = body === null ? 'The body must be a JSON object.' : check('DeviceApproveRequest', body);
     if (problem !== null || body === null) return bad(c, problem ?? '');
-    const hash = hashToken(body.userCode as string);
+    const hash = hashToken(canonCode(body.userCode as string));
     const now = hub.now();
     if (await approveDevice(hub.db, hash, me.id, now)) return c.json({});
     const row = await deviceByUser(hub.db, hash);
@@ -109,31 +148,39 @@ function deviceRoutes(app: Hono, hub: Hub, base: (c: Context) => string, person:
   });
 }
 
-export function authRoutes(app: Hono, hub: Hub, gh: GitHub | null, publicUrl: string | undefined, local: boolean): void {
+export function authRoutes(app: Hono, hub: Hub, gh: GitHub | null, opts: SignInOpts): void {
+  const { publicUrl, local } = opts;
   const base = (c: Context): string => ownBase(c, publicUrl, local);
   const cookie = { httpOnly: true, secure: !local, sameSite: 'Lax' } as const;
-  /** The person behind a Bearer jmu_ or the session cookie. Approve keeps its own F15 check (item 4); /v1/me is a read. */
+  const gate = startGate(hub, opts.startLimit ?? START_LIMIT, opts.trustProxy === true);
+  /** The person behind a Bearer jmu_ or the session cookie, for GET /v1/me (a read). */
   const person = async (c: Context): Promise<Actor | null> => {
     const p = presented(c, true);
     const who = p === null ? null : await hub.authenticate(`Bearer ${p.token}`);
     return who?.kind === 'user' ? who.actor : null;
   };
 
-  deviceRoutes(app, hub, base, person);
+  deviceRoutes(app, hub, base, person, gate);
 
+  /** Revokes the presented token, and the session cookie's too when a Bearer came beside it; closes their pod sockets. */
   app.post('/v1/auth/logout', async (c) => {
     const who = await authOf(hub, c, true);
     if (who instanceof Response) return who;
     const p = presented(c, true);
     if (who === null || p === null) return fail(c, 'unauthorized', 'Sign in first.');
     if (who.kind !== 'user') return fail(c, 'forbidden', 'Only a person signs out.');
-    await revokeToken(hub.db, hashToken(p.token), hub.now());
+    for (const hash of new Set([p.token, getCookie(c, SESSION) ?? p.token].map(hashToken))) {
+      await revokeToken(hub.db, hash, hub.now());
+      hub.closeSockets(hash);
+    }
     deleteCookie(c, SESSION, { ...cookie, path: '/' });
     return c.json({});
   });
 
   app.get('/v1/auth/github/start', async (c) => {
     if (gh === null) return fail(c, 'not_found', 'GitHub sign-in is not configured on this server.');
+    const refused = await gate(c);
+    if (refused !== null) return refused;
     const state = base62(32);
     await newState(hub.db, hashToken(state), safeNext(c.req.query('next')), hub.now() + STATE_S * 1000);
     setCookie(c, STATE, state, { ...cookie, path: '/v1/auth/github', maxAge: STATE_S });
@@ -152,7 +199,7 @@ export function authRoutes(app: Hono, hub: Hub, gh: GitHub | null, publicUrl: st
     const got = await fromGitHub(gh, c.req.query('code') ?? '', `${base(c)}/v1/auth/github/callback`);
     if (typeof got === 'string') return fail(c, got, got === 'unauthorized' ? 'GitHub refused the sign-in.' : 'GitHub failed; try again.');
     const user = await hub.githubUser(String(got.id), got.login);
-    setCookie(c, SESSION, await hub.userToken(user.id), { ...cookie, path: '/', maxAge: SESSION_S });
+    setCookie(c, SESSION, (await hub.userToken(user.id)).token, { ...cookie, path: '/', maxAge: SESSION_S });
     return c.redirect(next, 302);
   });
 }

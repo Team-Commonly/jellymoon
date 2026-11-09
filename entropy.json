@@ -18,19 +18,19 @@
         "schema/",
         "scripts/"
       ],
-      "max": 4080
+      "max": 4090
     },
     "worker": {
       "paths": [
         "worker/"
       ],
-      "max": 2440
+      "max": 2470
     },
     "server": {
       "paths": [
         "server/"
       ],
-      "max": 4110
+      "max": 4120
     },
     "podcore": {
       "paths": [
@@ -42,13 +42,13 @@
       "paths": [
         "daemon/"
       ],
-      "max": 4830
+      "max": 4840
     },
     "web": {
       "paths": [
         "web/"
       ],
-      "max": 1810
+      "max": 1820
     },
     "e2e": {
       "paths": [

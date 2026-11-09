@@ -1,5 +1,5 @@
-// Records one real Claude Code run through the claude-agent-acp adapter (docs/development/record-acp.md).
-//   bun scripts/record-acp.mjs [out.jsonl]                    (default daemon/testdata/acp/claude-slice.jsonl)
+// Records one real Claude Code (or, with --harness codex, Codex) run through its pinned ACP adapter (docs/development/record-acp.md).
+//   bun scripts/record-acp.mjs [--harness claude-code|codex] [out.jsonl]   (default daemon/testdata/acp/<harness>-slice.jsonl)
 //   bun scripts/record-acp.mjs --scrub <raw.jsonl> [out.jsonl]  scrubs a raw log a refused scrub left behind; no new run
 // It starts a LOCAL server (worker/dev.sh), a pod, the daemon and one claude-code agent, assigns the agent one task, and waits
 // for the run to end. The daemon starts the adapter through e2e/testdata/acprec, which logs the ACP lines and the agent's MCP calls.
@@ -11,11 +11,21 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { scrub } from './acp-scrub.mjs';
 
-const ADAPTER = { adapter: '@agentclientprotocol/claude-agent-acp', version: '0.99.1' };
+// The harnesses this records, each with its pinned adapter (the versions match ACP_ADAPTERS in the Makefile), the adapter's bin, and the
+// agent name given to `agent add`.
+const HARNESSES = {
+  'claude-code': { adapter: '@agentclientprotocol/claude-agent-acp', version: '0.99.1', bin: 'claude-agent-acp', slice: 'claude-slice', agent: 'claude-one' },
+  codex: { adapter: '@agentclientprotocol/codex-acp', version: '2.6.0', bin: 'codex-acp', slice: 'codex-slice', agent: 'codex-one' },
+};
 const root = resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2);
+const at = args.indexOf('--harness');
+const harness = at < 0 ? 'claude-code' : args.splice(at, 2)[1];
+if (!HARNESSES[harness]) throw new Error(`--harness must be one of: ${Object.keys(HARNESSES).join(', ')}`);
+const H = HARNESSES[harness];
+const ADAPTER = { adapter: H.adapter, version: H.version };
 const again = args[0] === '--scrub' ? resolve(args[1]) : null;
-const out = resolve(args[again ? 2 : 0] ?? join(root, 'daemon/testdata/acp/claude-slice.jsonl'));
+const out = resolve(args[again ? 2 : 0] ?? join(root, `daemon/testdata/acp/${H.slice}.jsonl`));
 const made = again ? null : mkdtempSync(join(tmpdir(), 'jmrec-')); // the only directory this script may remove
 const tmp = made ?? dirname(again);
 const procs = [];
@@ -56,12 +66,12 @@ async function startDaemon(s, raw) {
   execFileSync('go', ['build', '-o', bin, './daemon/cmd/jellymoon'], { cwd: root });
   execFileSync('go', ['build', '-o', tee, './e2e/testdata/acprec'], { cwd: root });
   mkdirSync(work);
-  const adapter = join(root, '.tools/acp/node_modules/.bin/claude-agent-acp');
+  const adapter = join(root, `.tools/acp/node_modules/.bin/${H.bin}`);
   const env = { PATH: process.env.PATH, HOME: process.env.HOME, USER: process.env.USER, LANG: process.env.LANG ?? 'en_US.UTF-8', TMPDIR: tmp, JELLYMOON_HOME: join(tmp, 'jm'), JELLYMOON_SERVER: s.base,
-    JELLYMOON_HARNESS_CLAUDE_CODE: `${tee} ${raw} ${adapter}` };
+    [`JELLYMOON_HARNESS_${harness.toUpperCase().replace(/-/g, '_')}`]: `${tee} ${raw} ${adapter}` };
   const daemon = run(bin, ['daemon', 'start', '--foreground'], { cwd: work, env: { ...env, JELLYMOON_USER_TOKEN: s.token } });
   await until('the stored computer', 15000, () => existsSync(join(env.JELLYMOON_HOME, 'computer.json')));
-  const added = execFileSync(bin, ['agent', 'add', 'claude-code', '--pod', s.podId, '--name', 'claude-one'], { env, encoding: 'utf8' });
+  const added = execFileSync(bin, ['agent', 'add', harness, '--pod', s.podId, '--name', H.agent], { env, encoding: 'utf8' });
   return { daemon, work, agentId: /agt_[0-9A-Z]{26}/.exec(added)[0] };
 }
 
@@ -89,7 +99,7 @@ function keep(raw) {
 
 async function main() {
   if (again) return keep(again);
-  if (!existsSync(join(root, '.tools/acp/node_modules/.bin/claude-agent-acp'))) throw new Error('the adapter is not installed: run `make acp-tools`');
+  if (!existsSync(join(root, `.tools/acp/node_modules/.bin/${H.bin}`))) throw new Error('the adapter is not installed: run `make acp-tools`');
   const raw = join(tmp, 'raw.jsonl');
   const s = await startServer();
   const d = await startDaemon(s, raw);

@@ -6,7 +6,7 @@ export PATH := $(CURDIR)/.tools/bin:$(PATH)
 BUN := $(or $(wildcard $(CURDIR)/.tools/bin/bun),bun)
 GO := $(or $(wildcard $(CURDIR)/.tools/bin/go),go)
 
-.PHONY: acp-tools record-acp e2e e2e-a e2e-a-migrated e2e-c e2e-any e2e-deployed e2e-web deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
+.PHONY: acp-tools record-acp record-acp-codex e2e e2e-a e2e-a-migrated e2e-c e2e-any e2e-deployed e2e-web deployed-boot server worker-dev land verify-preflight tools tools-cache gen check-gen test test-ts test-worker test-go entropy portable secrets secrets-range hooks preflight private secrets-all
 
 tools:
 	scripts/tools.sh
@@ -19,14 +19,18 @@ node_modules: package.json bun.lock
 	$(BUN) install --frozen-lockfile
 	@touch node_modules
 
-# The real Claude Code adapter for scripts/record-acp.mjs, pinned exactly, in this clone's own ignored prefix. Never global.
-ACP_ADAPTER := @agentclientprotocol/claude-agent-acp@0.99.1
+# The real Claude Code and Codex adapters for scripts/record-acp.mjs, pinned exactly, in this clone's own ignored prefix. Never global.
+ACP_ADAPTERS := @agentclientprotocol/claude-agent-acp@0.99.1 @agentclientprotocol/codex-acp@2.6.0
 acp-tools:
-	npm install --prefix .tools/acp --ignore-scripts --save-exact --no-audit --no-fund $(ACP_ADAPTER)
+	npm install --prefix .tools/acp --ignore-scripts --save-exact --no-audit --no-fund $(ACP_ADAPTERS)
 
 # Records a fresh daemon/testdata/acp/claude-slice.jsonl with a real Claude Code run (docs/development/record-acp.md).
 record-acp: acp-tools
 	$(BUN) scripts/record-acp.mjs
+
+# The same for daemon/testdata/acp/codex-slice.jsonl, with a real Codex run.
+record-acp-codex: acp-tools
+	$(BUN) scripts/record-acp.mjs --harness codex
 
 # Regenerate every contract from schema/. Never hand-edit gen/, protocol/gen.go or docs/protocol.md.
 gen: node_modules

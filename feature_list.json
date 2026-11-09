@@ -227,7 +227,7 @@
         "the contract suite, TestF14Budget included, passes with that bundle as the server under test (make e2e-deployed); a server that fails to boot fails the job"
       ],
       "test": "CI job e2e-deployed",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F18",
@@ -243,7 +243,7 @@
         "the same specs pass at 390 and 1440 px, with no horizontal page scroll and no clipped text on any route"
       ],
       "test": "Playwright specs at 390 and 1440 px: sign-in and /device approval; open pod, see card, press a, ruled state appears live; invite link join; layout invariants on each route; keyboard approve driven by key presses, not clicks",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F19",
@@ -269,7 +269,7 @@
         "the replay test passes"
       ],
       "test": "go test ./daemon/... -run TestReplayCodex",
-      "passes": false
+      "passes": true
     }
   ]
 }

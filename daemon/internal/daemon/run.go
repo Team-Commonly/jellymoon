@@ -155,8 +155,9 @@ func (d *Daemon) runContext(c protocol.ClaimRunResponse) (context.Context, func(
 	}
 }
 
-// execute runs the agent for a claimed run. The MCP URL is checked before the run token goes anywhere near the agent.
-func (d *Daemon) execute(ctx context.Context, a config.Agent, c protocol.ClaimRunResponse) error {
+// execute runs the agent for a claimed run, in a working directory of its own. The MCP URL is checked before the run token goes
+// anywhere near the agent. The directory goes when the run completed and stays when it failed (package workspace).
+func (d *Daemon) execute(ctx context.Context, a config.Agent, c protocol.ClaimRunResponse) (err error) {
 	mcpURL, err := api.CheckMCP(c.MCPURL)
 	if err != nil {
 		return err
@@ -165,10 +166,15 @@ func (d *Daemon) execute(ctx context.Context, a config.Agent, c protocol.ClaimRu
 	if err != nil {
 		return err
 	}
-	dir, err := os.Getwd()
+	dir, err := d.ws.Prepare(c.RunID, a.Repo)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if ferr := d.ws.Finish(c.RunID, err == nil); ferr != nil {
+			d.log.Printf("run %s: workspace: %v", c.RunID, ferr)
+		}
+	}()
 	// The run token stops working at expiresAt, so the agent stops with it: a hung agent cannot outlive its credential. A
 	// timestamp that cannot be read means the token cannot be bounded, so the run is refused before the agent starts.
 	expires, err := time.Parse(time.RFC3339Nano, c.ExpiresAt)

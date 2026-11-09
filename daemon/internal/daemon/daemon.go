@@ -12,6 +12,7 @@ import (
 	"github.com/Team-Commonly/jellymoon/daemon/internal/api"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/config"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/protocol"
+	"github.com/Team-Commonly/jellymoon/daemon/internal/workspace"
 	"github.com/Team-Commonly/jellymoon/daemon/internal/ws"
 )
 
@@ -29,6 +30,7 @@ type Daemon struct {
 	store config.Store
 	comp  config.Computer
 	log   *log.Logger
+	ws    *workspace.Manager // each run's working directory
 
 	mu     sync.Mutex
 	pods   map[protocol.PodID]bool
@@ -44,7 +46,7 @@ type Daemon struct {
 
 // New makes a daemon for a stored computer.
 func New(a *api.Client, s config.Store, c config.Computer, l *log.Logger) *Daemon {
-	return &Daemon{api: a, store: s, comp: c, log: l, pods: map[protocol.PodID]bool{}, waking: map[protocol.WakeID]bool{}, runs: map[protocol.RunID]context.CancelCauseFunc{}}
+	return &Daemon{api: a, store: s, comp: c, log: l, ws: workspace.New(s.WorkspaceRoot()), pods: map[protocol.PodID]bool{}, waking: map[protocol.WakeID]bool{}, runs: map[protocol.RunID]context.CancelCauseFunc{}}
 }
 
 // Run keeps a socket open to every pod in the stored agent list until ctx ends, and serves `agent add` on the control socket.
@@ -55,6 +57,10 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 	defer ctl.Close()
+	// The control socket is held, so no other daemon runs on this config dir: every unkept run directory is from a dead one.
+	if err := d.ws.Sweep(); err != nil {
+		d.log.Printf("workspace sweep: %v", err)
+	}
 	agents, err := d.store.Agents()
 	if err != nil {
 		return err

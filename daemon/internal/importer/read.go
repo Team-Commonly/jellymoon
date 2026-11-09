@@ -137,7 +137,7 @@ func readPod(c *Commonly, sc *Scrubber, listed Pod, me Me, st *State) (*PodPlan,
 		return nil, skipNotMember, nil
 	}
 	if err := sc.Check("a pod name", pod.Name); err != nil {
-		return nil, "", fmt.Errorf("%w (pod %s)", err, pod.ID)
+		return nil, "", fmt.Errorf("%w (%s)", err, where(sc, pod.ID, ""))
 	}
 	pp := &PodPlan{Pod: pod}
 	msgs, err := readMessages(c, pod.ID, st.Pods[pod.ID])
@@ -175,7 +175,7 @@ func where(sc *Scrubber, podID, msgID string) string {
 	if sc.Check("id", podID) != nil {
 		s = "a pod"
 	}
-	if sc.Check("id", msgID) == nil {
+	if msgID != "" && sc.Check("id", msgID) == nil {
 		s += ", message " + msgID
 	}
 	return s

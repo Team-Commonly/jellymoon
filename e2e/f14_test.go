@@ -3,6 +3,8 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -80,9 +82,50 @@ func (f *f14) both(marks []int, what string, pred func(Frame) bool) (Frame, erro
 	return last, nil
 }
 
+// signsIn is how a person gets a token (F15): the browser leg through the sign-in provider, which approves a device code, and the
+// token the device flow exchanges for it. The stub's authorize hop is played here with this person's own identity, so the parallel
+// TestF15 steering the stub's next login cannot touch it (as TestBSess does).
+func (f *f14) signsIn(login string, id int64) (user, error) {
+	hc, base := browser(), f.srv.base()
+	resp, err := hc.Get(base + "/v1/auth/github/start?next=/")
+	if err != nil || resp.StatusCode != 302 {
+		return user{}, fmt.Errorf("%s: GET /v1/auth/github/start: %v %v, want 302", login, err, resp)
+	}
+	q, _ := url.Parse(resp.Header.Get("Location"))
+	code, tok := randHex(10), "gho_stub"+randHex(18)
+	gh.mu.Lock()
+	gh.codes[code], gh.tokens[tok], gh.users[tok] = tok, true, ghUser{ID: id, Login: login}
+	gh.mu.Unlock()
+	cb := q.Query().Get("redirect_uri") + "?" + url.Values{"code": {code}, "state": {q.Query().Get("state")}}.Encode()
+	if resp, err = hc.Get(cb); err != nil || resp.StatusCode != 302 {
+		return user{}, fmt.Errorf("%s: the sign-in callback: %v %v, want 302 with a session", login, err, resp)
+	}
+	var d deviceStart
+	if r := f.c.do("POST", "/v1/auth/device", "", nil, &d); !r.ok() {
+		return user{}, fmt.Errorf("%s: POST /v1/auth/device: HTTP %d %s", login, r.Status, r.Err.Code)
+	}
+	req, _ := http.NewRequest("POST", base+"/v1/auth/device/approve", strings.NewReader(fmt.Sprintf(`{"userCode":%q}`, d.UserCode)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", base)
+	if resp, err = hc.Do(req); err != nil || resp.StatusCode != 200 {
+		return user{}, fmt.Errorf("%s: approve the device code: %v %v, want 200", login, err, resp)
+	}
+	var out deviceToken
+	if r := f.c.do("POST", "/v1/auth/device/token", "", map[string]any{"deviceCode": d.DeviceCode}, &out); !r.ok() || !strings.HasPrefix(out.Token, "jmu_") || out.User.DisplayName != login {
+		return user{}, fmt.Errorf("%s: the device token: HTTP %d %q user %+v, want a jmu_ token for %s", login, r.Status, r.Err.Code, out.User, login)
+	}
+	return user{tok: out.Token, actor: out.User}, nil
+}
+
 // Step 1: two people sign in, one creates the pod and invites, the other joins; each is a member, as hello says.
 func (f *f14) joins() error {
-	f.owner, f.ben = mustUser(f.t, f.c, "olivia"), mustUser(f.t, f.c, "ben") // TODO(F15): sign in with the device flow instead of the test session route
+	var err error
+	if f.owner, err = f.signsIn("olivia", 4200001); err != nil {
+		return err
+	}
+	if f.ben, err = f.signsIn("ben", 4200002); err != nil {
+		return err
+	}
 	f.joinPod()
 	conn, br, err := wsDial(fmt.Sprintf("127.0.0.1:%d", f.srv.port), "/v1/pods/"+f.pod+"/ws", f.ben.tok)
 	if err != nil {

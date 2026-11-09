@@ -6,6 +6,8 @@ export interface Http {
   /** The person the session cookie belongs to, or null when nobody is signed in. */
   me(signal?: AbortSignal): Promise<Actor | null>;
   approveDevice(userCode: string): Promise<void>;
+  /** Stops a run now (the agent's owner or a pod owner may). Resolves when the server accepted it; the run's end arrives as run.ended on the pod socket. A refusal throws an ApiError carrying the server's message. */
+  stopRun(podId: string, runId: string): Promise<void>;
   /** Makes a pod owned by the signed-in person. A refusal throws an ApiError carrying the server's own message. */
   createPod(name: string): Promise<Pod>;
 }
@@ -30,6 +32,10 @@ export const browserHttp: Http = {
     const res = await fetch('/v1/auth/device/approve', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userCode }) });
     if (!res.ok) throw new ApiError(res.status, 'request failed');
   },
+  async stopRun(podId, runId) {
+    const res = await fetch(`/v1/pods/${encodeURIComponent(podId)}/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+    if (!res.ok) throw new ApiError(res.status, await refusalMessage(res));
+  },
   async createPod(name) {
     const res = await fetch('/v1/pods', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
     if (!res.ok) {
@@ -39,6 +45,15 @@ export const browserHttp: Http = {
     return (await res.json()) as Pod;
   },
 };
+
+/** The server's own words from a refusal ({code, message}), or a plain line when the body is not one. */
+async function refusalMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { message?: unknown };
+    if (typeof body.message === 'string' && body.message.trim() !== '') return body.message;
+  } catch { /* not JSON: fall through */ }
+  return 'request failed';
+}
 
 /** How long the page waits for GET /v1/me before it renders as signed out. A server that takes the connection and never answers must not leave the page blank. */
 const BOOT_ME_TIMEOUT_MS = 5000;

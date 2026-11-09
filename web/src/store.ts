@@ -2,12 +2,15 @@
 // ignored; a reconnect resubscribes from the last seq. Writes go out as frames and change nothing locally:
 // a ruling shows only after the pod's message.updated, and an error frame lands on the card that was waiting.
 import type {
-  Actor, AgentPresence, Envelope, ErrorBody, Hello, Member, Message, MessageUpdated, OptionId, PresenceChanged, PresenceState, Task, TaskClaimed, ClaimReleased,
+  Actor, AgentPresence, Envelope, ErrorBody, Hello, Member, Message, MessageUpdated, OptionId, PresenceChanged, PresenceState, RunEndOutcome, RunEnded, RunStarted, Task, TaskClaimed, ClaimReleased,
 } from '../../gen/ts/protocol';
 
 export interface SocketHandlers { open(): void; message(raw: string): void; close(): void }
 interface SocketLink { send(text: string): void; close(): void }
 export type Connect = (h: SocketHandlers) => SocketLink;
+
+/** A run as the pod's events tell it: going from run.started, ended with its outcome from run.ended. */
+export interface RunLine { runId: string; agent: Actor; state: 'going' | 'ended'; outcome?: RunEndOutcome }
 
 interface PodState {
   status: 'connecting' | 'open' | 'reconnecting' | 'stopped';
@@ -15,6 +18,7 @@ interface PodState {
   members: Member[];
   agents: AgentPresence[];
   presence: Record<string, PresenceState>;
+  runs: Record<string, RunLine>;
   headSeq: number;
   lastSeq: number;
   messages: Message[];
@@ -35,7 +39,7 @@ export interface PodStore {
 }
 
 const fresh = (): PodState => ({
-  status: 'connecting', members: [], agents: [], presence: {}, headSeq: 0, lastSeq: 0, messages: [], tasks: {}, pending: {}, ruleErrors: {}, droppedFrames: 0,
+  status: 'connecting', members: [], agents: [], presence: {}, runs: {}, headSeq: 0, lastSeq: 0, messages: [], tasks: {}, pending: {}, ruleErrors: {}, droppedFrames: 0,
 });
 
 type Apply = (s: PodState, data: never) => PodState;
@@ -68,9 +72,24 @@ const applyPresence = on<PresenceChanged>((s, p) => ({
   agents: s.agents.map((a) => (a.agent.id === p.actor.id ? { ...a, state: p.state } : a)),
 }));
 
+// One line per going run, and at most one ended line per agent: the agent's latest. A new run for an agent replaces its ended line,
+// so an agent is never shown as working and finished at once. Nothing here is timed, so a replay rebuilds exactly the same lines.
+const withoutEnded = (runs: Record<string, RunLine>, agentId: string) =>
+  Object.fromEntries(Object.entries(runs).filter(([, r]) => !(r.state === 'ended' && r.agent.id === agentId)));
+const applyRunStarted = on<RunStarted>((s, r) => {
+  if (typeof r.runId !== 'string' || typeof r.agent.id !== 'string') throw new Error('bad run.started');
+  return { ...s, runs: { ...withoutEnded(s.runs, r.agent.id), [r.runId]: { runId: r.runId, agent: r.agent, state: 'going' } } };
+});
+const applyRunEnded = on<RunEnded>((s, r) => {
+  if (typeof r.runId !== 'string' || typeof r.agent.id !== 'string' || typeof r.outcome !== 'string') throw new Error('bad run.ended');
+  const { [r.runId]: _gone, ...rest } = s.runs;
+  return { ...s, runs: { ...withoutEnded(rest, r.agent.id), [r.runId]: { runId: r.runId, agent: r.agent, state: 'ended', outcome: r.outcome } } };
+});
+
 const SEQ_EVENTS: Record<string, Apply> = {
   'message.created': applyCreated, 'message.updated': applyUpdated, 'task.created': applyTask, 'task.updated': applyTask,
   'task.claimed': applyClaimed, 'claim.released': applyReleased,
+  'run.started': applyRunStarted, 'run.ended': applyRunEnded,
 };
 // Live events carry no seq and are never replayed on subscribe (podcore/src/presence.ts), so they apply as they come and
 // leave lastSeq alone.

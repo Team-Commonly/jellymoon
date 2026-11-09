@@ -2,7 +2,7 @@
 import type { AgentId, ComputerId, WakeId, WakeReason, WakeRefs } from '../../gen/ts/protocol';
 import { RUN_CAP_MS, own } from './claims';
 import { nthWakeId } from './wakeid';
-import { fail, ok, push } from './emit';
+import { emit, fail, ok, push } from './emit';
 import { announceAgent } from './presence';
 import { isoOf } from './time';
 import type { Cmd, Ctx, Wake } from './types';
@@ -83,6 +83,7 @@ export function runClaimCmd(c: Ctx, cmd: Of<'run_claim'>): void {
   c.s.runs[cmd.runId] = { id: cmd.runId, agent: agent.actor, owner: agent.owner, computerId: cmd.computerId, startedAt: c.now, status: 'active', wakeReason: w.reason, toolCalls: 0 };
   if (w.refs.taskId !== undefined) c.s.runs[cmd.runId].wakeTaskId = w.refs.taskId;
   delete c.s.wakes[w.agentId];
+  emit(c, 'run.started', { runId: cmd.runId, agent: agent.actor });
   ok(c, { runId: cmd.runId, expiresAt: isoOf(c.now + RUN_CAP_MS), reason: w.reason, refs: w.refs });
 }
 

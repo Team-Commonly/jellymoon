@@ -485,6 +485,9 @@ Every WebSocket frame, in both directions, is an Envelope. x-variants maps each 
 - run.wake is sent only to the computer that hosts the agent. Wakes for one agent coalesce: one pending wake means one turn. An un-acked wake is re-sent on the next heartbeat after 60 s.
 - Every claim that ends emits exactly one claim.released, sent to every pod member, whatever the cause. task.updated still fires as before; claim.released is the who and why.
 - claim.released carries by (the Actor who released or stopped the claim) when cause is released or stopped, and no by otherwise. reason is present only when the caller gave one.
+- run.started and run.ended go to every pod member and carry a seq, like claim.released: a client that subscribes with sinceSeq learns of a run that started or ended while it was away. Only a member's socket receives them.
+- Every run that starts emits exactly one run.started, when its computer claims the wake (POST /v1/runs), and exactly one run.ended, whatever the cause. A run that never started emits neither, and stopping a run that already ended emits nothing.
+- run.ended's outcome: completed or failed as the hosting daemon reports it (POST /v1/runs/:run/end), cancelled when a person stops the run (run_stop) or the daemon reports it cancelled, and expired when the run token's 2 h cap ends it. A lease that expires ends a claim, not a run.
 - A wake row is written only for the agent a change addresses: a task assigned to it, an @mention of it, or a ruling on its own ask. Ambient messages write none.
 
 ### Event list
@@ -501,6 +504,8 @@ Every WebSocket frame, in both directions, is an Envelope. x-variants maps each 
 | `presence.changed` | s2c: pod to client | [PresenceChanged](#def-PresenceChanged) |
 | `run.wake` | s2c: pod to client | [RunWake](#def-RunWake) |
 | `run.stop` | s2c: pod to client | [RunStop](#def-RunStop) |
+| `run.started` | s2c: pod to client | [RunStarted](#def-RunStarted) |
+| `run.ended` | s2c: pod to client | [RunEnded](#def-RunEnded) |
 | `error` | s2c: pod to client | [ErrorBody](#def-ErrorBody) |
 | `subscribe` | c2s: client to pod | [Subscribe](#def-Subscribe) |
 | `message.post` | c2s: client to pod | [MessagePost](#def-MessagePost) |
@@ -530,7 +535,7 @@ The daemon reports one harness tool call it saw on a run it hosts (computer toke
 
 Every kind of socket frame. x-variants gives each one its direction and its data.
 
-One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `claim.released`, `presence.changed`, `run.wake`, `run.stop`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `run.toolcall`, `daemon.status`.
+One of: `hello`, `message.created`, `message.updated`, `task.created`, `task.updated`, `task.claimed`, `claim.released`, `presence.changed`, `run.wake`, `run.stop`, `run.started`, `run.ended`, `error`, `subscribe`, `message.post`, `task.create`, `decision.rule`, `presence.heartbeat`, `wake.ack`, `run.toolcall`, `daemon.status`.
 
 <a id="def-Envelope"></a>
 ### Envelope
@@ -675,6 +680,34 @@ A person stopped a run. The hosting computer's daemon cancels the harness sessio
 |---|---|---|---|
 | `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
 | `reason` | string | no | Why the run was stopped, at most 160 characters. Limit: up to 160 characters |
+
+<a id="def-RunStarted"></a>
+### RunStarted
+
+A run started: its computer claimed a wake for the agent. Sent to every pod member.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `agent` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+
+<a id="def-RunEndOutcome"></a>
+### RunEndOutcome
+
+How a run ended, as members are told: completed, cancelled (a person stopped it, or the daemon cancelled it), failed, or expired (its token's 2 h cap ran out).
+
+One of: `completed`, `cancelled`, `failed`, `expired`.
+
+<a id="def-RunEnded"></a>
+### RunEnded
+
+A run ended: which run, its agent and how. Sent to every pod member exactly once per run that started.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `runId` | [RunId](#def-RunId) | yes | The id of a run: one agent session started by a wake. |
+| `agent` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
+| `outcome` | [RunEndOutcome](#def-RunEndOutcome) | yes | How a run ended, as members are told: completed, cancelled (a person stopped it, or the daemon cancelled it), failed, or expired (its token's 2 h cap ran out). |
 
 <a id="def-Subscribe"></a>
 ### Subscribe

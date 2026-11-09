@@ -82,12 +82,18 @@ export async function decisionOf(podId: string, token: string, decisionId: strin
   return last ? { state: last.decision.state, optionId: last.decision.ruling?.optionId, by: last.decision.ruling?.by.id } : { state: 'open' };
 }
 
+/** How the pod's own log says the run ended (its run.ended outcome), or null while the run is going. */
+export async function runOutcomeOf(podId: string, token: string, runId: string): Promise<string | null> {
+  const ends = (await replay(podId, token)).filter((f) => f.type === 'run.ended' && (f.data as { runId: string }).runId === runId);
+  return ends.length === 0 ? null : (ends.at(-1)!.data as { outcome: string }).outcome;
+}
+
 export interface Person { token: string; user: Actor }
 export const person = (name: string): Promise<Person> => api<Person>('POST', '/__test/session', null, { name });
 
 /** The fake agent: one computer of the owner's, one agent on it, holding a live run token. */
 /** `cited` is a tool call the pod stamped on the agent's run (one MCP call at start), which its asks cite (F25: every claim cites a record). */
-export interface FakeAgent { agentId: string; cited: string; post(input: PostInput): Promise<{ messageId: string; decisionId?: string; seq: number }>; close(): void }
+export interface FakeAgent { agentId: string; runId: string; cited: string; post(input: PostInput): Promise<{ messageId: string; decisionId?: string; seq: number }>; close(): void }
 
 export async function fakeAgent(podId: string, owner: Person, name: string): Promise<FakeAgent> {
   const comp = await api<{ token: string }>('POST', '/v1/computers', owner.token, { name: 'browser-spec-box', os: 'linux', arch: 'amd64' });
@@ -106,6 +112,7 @@ export async function fakeAgent(podId: string, owner: Person, name: string): Pro
     const { toolCalls } = await api<{ toolCalls: Array<{ id: string }> }>('GET', `/v1/pods/${podId}/runs/${runId}/tool-calls`, runToken);
     return {
       agentId,
+      runId,
       cited: toolCalls[0].id,
       post: (input) => api('POST', `/v1/pods/${podId}/messages`, runToken, input),
       close: () => computer.close(),

@@ -231,6 +231,25 @@ func turn(ctx context.Context, c *conn, s Spec) error {
 		return errors.New("session/new: the agent returned no sessionId")
 	}
 	c.sessionID = ses.SessionID
-	_, err = c.call(ctx, "session/prompt", map[string]any{"sessionId": ses.SessionID, "prompt": []map[string]any{{"type": "text", "text": s.Prompt}}})
-	return err
+	res, err = c.call(ctx, "session/prompt", map[string]any{"sessionId": ses.SessionID, "prompt": []map[string]any{{"type": "text", "text": s.Prompt}}})
+	if err != nil {
+		return err
+	}
+	return stopReasonErr(res)
+}
+
+// stopReasonErr turns the prompt's stopReason into the turn's ending. Only end_turn is a finished turn: a refusal, or a turn the
+// agent ran out of tokens or requests for, is an error, which the daemon reports as a failed run (the error text is logged).
+// "cancelled" is not judged here: when the client asked for the stop, Run reports the stop's cause. A missing, unreadable or
+// unknown stopReason is deliberately not an error, so a harness that omits it or adds a value keeps ending completed.
+func stopReasonErr(res json.RawMessage) error {
+	var r struct {
+		StopReason string `json:"stopReason"`
+	}
+	_ = json.Unmarshal(res, &r)
+	switch r.StopReason {
+	case "refusal", "max_tokens", "max_turn_requests":
+		return fmt.Errorf("session/prompt: the agent stopped the turn with %s", r.StopReason)
+	}
+	return nil
 }

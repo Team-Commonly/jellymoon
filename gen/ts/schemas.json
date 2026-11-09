@@ -1457,6 +1457,12 @@
         }
       }
     },
+    "LogoutResponse": {
+      "description": "A logout carries no data: the token it presented no longer authenticates, and the session cookie is cleared.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
     "DeviceApproveResponse": {
       "description": "An approval carries no data: the device that polls gets the token.",
       "type": "object",

@@ -1,11 +1,11 @@
 // The Hono app: HTTP routes plus the pod socket, and the /__test routes when the build asks for them.
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { authRoutes } from './auth';
+import { authRoutes, ownBase } from './auth';
 import type { GitHub } from './auth';
 import type { Hub } from './hub';
 import { sameSecret } from './ids';
-import { bad, fail, parse, str } from './kit';
+import { bad, fail, ownOrigin, parse, str } from './kit';
 import { mcpRoute } from './mcp';
 import { opRoutes } from './routes-ops';
 import { setupAll } from './routes-setup';
@@ -45,6 +45,7 @@ function testRoutes(app: Hono, hub: Hub, local: boolean, bearer: string | undefi
 
 export function buildApp(hub: Hub, opts: AppOpts): Hono {
   const app = new Hono();
+  app.use('*', async (c, next) => { ownOrigin.set(c.req.raw, new URL(ownBase(c, opts.publicUrl, opts.local)).origin); await next(); });
   app.get('/healthz', (c) => c.text('ok'));
   setupAll(app, hub, opts.publicUrl);
   authRoutes(app, hub, opts.github ?? null, opts.publicUrl, opts.local);

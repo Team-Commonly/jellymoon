@@ -18,7 +18,7 @@ import type { Cmd, Ctx, PodState } from './types';
 export function overlayDecisions(s: PodState, messages: Message[]): Message[] {
   return messages.map((m) => {
     const rec = m.decision === undefined ? undefined : own(s.decisions ?? {}, m.decision.id);
-    return rec === undefined ? m : { ...m, decision: rec.decision };
+    return rec === undefined || rec.messageId !== m.id ? m : { ...m, decision: rec.decision };
   });
 }
 

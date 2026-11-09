@@ -39,11 +39,10 @@ describe('a member rules on an ask', () => {
       [CMP_1, { wakeId: wak(2), agentId: AG1, reason: 'decision_ruled', refs: { decisionId: DEC, messageId: MSG, optionId: 'b' } }]]);
   });
 
-  test('the wake also names the task when the ask was attached to one, and the option that won', () => {
+  test('the wake also names the task that woke the asking run, and the option that won', () => {
     const s = world();
-    Object.assign(s.runs[RUN_A], { startedAt: 1000, wakeReason: 'task_assigned' });
-    const withTask = { ...ask, taskId: id('tsk', 1) } as PostInput;
-    const r = play([[post(withTask), 2000], [rule('a'), 3000]], s);
+    Object.assign(s.runs[RUN_A], { startedAt: 1000, wakeReason: 'task_assigned', wakeTaskId: id('tsk', 1) });
+    const r = play([[post(ask), 2000], [rule('a'), 3000]], s);
     expect(wakes(r.out).map((o) => o.event.type === 'run.wake' && o.event.data.refs)).toEqual([{ decisionId: DEC, messageId: MSG, optionId: 'a', taskId: id('tsk', 1) }]);
   });
 
@@ -57,6 +56,8 @@ describe('a member rules on an ask', () => {
     expect(m.decision).toEqual({ id: DEC, state: 'ruled', ruling: { optionId: 'b', by: U_OWNER, at: isoOf(now) } });
     expect(o).toBe(other);
     expect(created.decision?.state).toBe('open');
+    const stray = { id: id('msg', 7), decision: { id: DEC, state: 'open' } } as unknown as Message; // same decision id, not the ask's message
+    expect(overlayDecisions(after, [stray])[0]).toBe(stray);
   });
 
   test('any member may rule, the agent\'s owner included', () => {

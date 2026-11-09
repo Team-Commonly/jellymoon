@@ -6,7 +6,6 @@ import { signInHref } from './http';
 import type { Http } from './http';
 import { HomePage } from './HomeScreen';
 import { InvitePage } from './InviteScreen';
-import { podHeading } from './podNames';
 import { PodPage } from './PodScreen';
 import type { Connect } from './store';
 
@@ -18,7 +17,7 @@ function Shell({ signedIn }: { signedIn: boolean }) {
   return (
     <>
       <header>
-        <strong>{id ? podHeading(id) : 'Jellymoon'}</strong>
+        <strong>{id ? `Pod ${id}` : 'Jellymoon'}</strong>
         <span ref={setSlot} />
         {signedIn ? <span>Signed in</span> : <a href={signInHref(here.pathname + here.search)}>Sign in</a>}
       </header>

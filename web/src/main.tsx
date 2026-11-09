@@ -5,8 +5,7 @@ import { App } from './App';
 import { browserHttp } from './http';
 import type { Connect } from './store';
 
-// The pod socket. Cookie sign-in for the browser socket is a separate server unit; until it lands this connects
-// without credentials and the pod refuses it.
+// The pod socket. The browser sends its session cookie on the upgrade.
 const connect = (podId: string): Connect => (h) => {
   const ws = new WebSocket(`${location.origin.replace(/^http/, 'ws')}/v1/pods/${encodeURIComponent(podId)}/ws`);
   ws.onopen = () => h.open();
@@ -15,9 +14,11 @@ const connect = (podId: string): Connect => (h) => {
   return { send: (t) => ws.send(t), close: () => ws.close() };
 };
 
-// Whether the person is signed in comes from the cookie session, a separate server unit (F15); false until it lands.
-createRoot(document.getElementById('root')!).render(
-  <BrowserRouter>
-    <App connect={connect} http={browserHttp} signedIn={false} />
-  </BrowserRouter>,
-);
+// Signed in or not is what GET /v1/me says for the session cookie; an unreachable server counts as signed out.
+void browserHttp.me().then((me) => me !== null, () => false).then((signedIn) => {
+  createRoot(document.getElementById('root')!).render(
+    <BrowserRouter>
+      <App connect={connect} http={browserHttp} signedIn={signedIn} />
+    </BrowserRouter>,
+  );
+});

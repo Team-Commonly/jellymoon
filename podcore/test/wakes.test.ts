@@ -207,7 +207,7 @@ describe('run_claim', () => {
     expect(r.state.wakes).toEqual({});
     const reply = lastReply(r.out);
     expect(reply?.kind === 'reply' && reply.ok && reply.result).toMatchObject({ runId: runN(1), expiresAt: '1970-01-01T02:00:05.000Z', reason: 'task_assigned' });
-    expect(events(r.out).length).toBe(1);
+    expect(events(r.out).map((e) => e.type)).toEqual(['task.created', 'run.started']);
   });
 
   test('the run records the task that woke it, and none when the wake was about something else', () => {

@@ -4,6 +4,12 @@ Newest entry first. Each entry has four parts: what changed, the evidence (a tes
 result, or the PR), what's next, and anything surprising. Keep each entry under 15 lines; the detail
 goes in the PR.
 
+## 2026-11-08 · harness matrix: Claude Code and Codex measured over ACP (unit HMATRIX)
+- **Changed:** `docs/design/harness-matrix.md` only. Both installed harnesses run through the daemon on a local server; eight other candidates read from their own docs.
+- **Evidence:** four real turns (one full, one cancelled, per harness). Both completed the slice and stored a post with a receipt; neither sent a permission request; stopping the daemon mid-turn left no process behind (Codex gone in 0.17 s; Claude within the daemon log's one-second resolution).
+- **Next:** the daemon answers every agent request "not supported" and never sends `session/cancel`; permissions need a real answer before Gemini, Cursor or Cline can be added. Recommendation in the doc: Codex next, Gemini third.
+- **Surprising:** the Codex adapter moved to the `@agentclientprotocol` scope (the older `@zed-industries` one is deprecated). Both models failed `jm_post` twice on fields the server does not store yet.
+
 ## 2026-11-08 · a real Claude Code session replays through the daemon (unit F16)
 - **Changed:** `daemon/testdata/acp/claude-slice.jsonl` (one real run through `@agentclientprotocol/claude-agent-acp` 0.99.1, scrubbed), `claude-slice.golden`, and `TestReplayClaude` in `daemon/internal/daemon`, which runs the test binary as the agent. `scripts/record-acp.mjs` (+ `acp-scrub.mjs`, `e2e/testdata/acprec`, `make acp-tools`, `make record-acp`) records and scrubs a new one; `docs/development/record-acp.md` and an ADR 0005 note say how. No daemon change was needed.
 - **Evidence:** `go test ./daemon/internal/daemon -run TestReplayClaude -count=3` green; red when the golden list loses or changes one call, when the daemon hands the agent the wrong bearer, and when it ends the run failed. The run: 3 `jm_post`, 2 `jm_task_update`, `jm_whoami`, `jm_task_list`, `jm_task_claim`, run ended `completed`.

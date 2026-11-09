@@ -1,9 +1,9 @@
 # 0010 · The hosted instance runs `server/` in a Cloudflare Container, on a Postgres outside Cloudflare
 
-Status: Proposed, 2026-11-09. It adds no code and no dependency; it decides where a standing instance runs so the deploy units
-that follow have one shape to build. Acknowledged unknowns are named under "Still open": three Cloudflare behaviours this ADR
-read in the docs but has not run (outbound Postgres from a container, a WebSocket through the container's front, a rollout's
-overlap), and the Postgres provider.
+Status: Accepted, by the owner's ruling, 2026-11-09. Postgres provider: open, the owner's spend decision. It adds no code and
+no dependency; it decides where a standing instance runs so the deploy units that follow have one shape to build. Acknowledged
+unknowns are named under "Still open": three Cloudflare behaviours this ADR read in the docs but has not run (outbound Postgres
+from a container, a WebSocket through the container's front, a rollout's overlap), and the Postgres provider.
 
 ## Decision
 

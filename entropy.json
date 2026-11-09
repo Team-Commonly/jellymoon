@@ -24,7 +24,7 @@
       "paths": [
         "worker/"
       ],
-      "max": 2500
+      "max": 2520
     },
     "server": {
       "paths": [

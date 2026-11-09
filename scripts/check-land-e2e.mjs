@@ -39,7 +39,7 @@ async function land(over = {}) {
   (over.topFiles || []).forEach((f) => fs.writeFileSync(path.join(top, f), '')); if (!over.noGo) seedGo(top);
   (over.cwdFiles || []).forEach((f) => fs.writeFileSync(path.join(cwd, f), ''));
   const w = { calls: [], sleeps: [], fetches: [], pod: [], spawns: [], views: 0, ledger, lockAtMerge: null, kills: [], seen: [], top, go: over.noGo ? null : fs.realpathSync.native(path.join(top, '.tools', 'bin', 'go')) }; // go: what land runs, the checkout's go resolved
-  const base = { url: `https://github.com/${REPO}/pull/5`, number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'feat', headRefOid: HEAD, createdAt: '2026-10-29T09:00:00Z', isCrossRepository: false, author: { login: 'alice' }, mergeCommit: { oid: MERGED }, ...over.pr };
+  const base = { url: `https://github.com/${REPO}/pull/5`, number: 5, state: 'OPEN', baseRefName: 'main', headRefName: 'feat', headRefOid: HEAD, createdAt: '2026-10-29T09:00:00Z', isCrossRepository: false, isDraft: false, author: { login: 'alice' }, mergeCommit: { oid: MERGED }, ...over.pr };
   const wt = /^git -C \S+ /;
   const defaults = [
     [/^git rev-parse --git-common-dir/, common], [/^git rev-parse --show-toplevel/, top], [/^git rev-parse HEAD$/, over.checkoutHead ?? MAIN],
@@ -221,12 +221,14 @@ await t('the ledger changes during the preflight: the second decide refuses', { 
 await t('the head moves on GitHub before the merge: refused', { fresh: { headRefOid: OTHER } }, (r) => no(r, /changed before the merge/));
 await t('the PR is retargeted between the first read and the re-read: refused', { fresh: { baseRefName: 'release' } }, (r) => no(r, /based on release, not main.*changed before the merge/));
 await t('the PR is closed between the first read and the re-read: refused', { fresh: { state: 'CLOSED' } }, (r) => no(r, /is CLOSED.*changed before the merge/));
+await t('a PR whose draft state is unknown is refused as a draft', { omit: ['isDraft'] }, (r) => no(r, /#5 is a draft/));
+await t('a PR turned draft between the first read and the re-read: refused', { fresh: { isDraft: true } }, (r) => no(r, /#5 is a draft.*changed before the merge/));
 await t('the author changes before the merge: the trust gate runs again', { fresh: { author: { login: 'mallory' } } }, (r) => no(r, /not trusted/));
 await t('main moves during the run: refused', { mainTips: [MAIN, OTHER] }, (r) => no(r, /main moved/));
 await t('dry run: no merge, ledger byte-identical, preflight still run', { argv: ['5', '--dry-run'] }, (r) => !r.merge && r.ledgerNow === r.ledgerWas && r.error === null && r.w.spawns.length === 1);
 await t('dry run on a PR merged out of band: nothing written', { argv: ['5', '--dry-run'], pr: { state: 'MERGED' }, ledger: HDR }, (r) => !r.merge && r.ledgerNow === r.ledgerWas && r.said.includes('dry run'));
 await t('a PR merged out of band is recorded MERGED-UNVERIFIED, nothing merged', { pr: { state: 'MERGED' }, ledger: HDR }, (r) => !r.merge && r.ledgerNow.includes('MERGED-UNVERIFIED'));
-await t('the merged commit\'s tree differs from the tested one: TREE-MISMATCH on the LANDED row', { mergedTree: OTHER }, (r) => r.ledgerNow.includes('TREE-MISMATCH'));
+await t('the merged commit\'s tree differs from the tested one: TREE-MISMATCH on the LANDED row, a non-zero refusal naming both trees, no "safe to delete"', { mergedTree: OTHER }, (r) => r.merge && r.ledgerNow.includes('TREE-MISMATCH') && r.ledgerNow.includes('LANDED') && /not the tested merge result/.test(r.error ?? '') && (r.error ?? '').includes(TREE) && (r.error ?? '').includes(OTHER) && !r.said.includes('safe to delete'));
 await t('checkout gate: a dirty tree refuses before any fetch', { on: dirty }, (r) => no(r, /uncommitted/) && !fetched(r));
 await t('checkout gate: a tree that turns dirty only after the fetch is refused', { on: [[/status --porcelain/, (a, w) => (w.fetches.length ? ' M x' : '')]] }, (r) => no(r, /uncommitted/));
 await t('checkout gate: HEAD that is not main\'s tip is refused', { checkoutHead: OTHER }, (r) => no(r, /not main's tip/));
@@ -354,7 +356,7 @@ await t('ci proof: a leftover land ref whose commit cannot be read pushes nothin
 await t('ci proof: an interrupt (SIGINT or SIGTERM exit) while waiting deletes the land ref at once, once, and leaves no listener behind', { ...ci({ polls: [[pending]] }), onSleep: (w) => { if (w.sleeps.length === 1) { process.emit('exit', 143); w.atInterrupt = w.calls.filter((c) => c.cmd === 'git' && sameArgs(c.args, DEL)).length; } } }, (r) => r.w.atInterrupt === 1 && r.w.sleeps.length > 1 && pushes(r).filter((a) => sameArgs(a, DEL)).length === 1 && r.w.exitListenersLeft === 0);
 await t('ci proof: an interrupt deletes only a refs/heads/land/<n> ref', { ...ci({ polls: [[pending]] }), onSleep: (w) => { if (w.sleeps.length === 1) { process.emit('exit', 130); w.atInterrupt = w.calls.filter((c) => c.cmd === 'git' && sameArgs(c.args, DEL)).length; } } }, (r) => r.w.atInterrupt === 1 && pushes(r).every((a) => !a.includes('--delete') || sameArgs(a, DEL)));
 await t('ci proof: no listener is left on exit after a normal land, a dry run or a refusal', ci(), (r) => r.w.exitListenersLeft === 0);
-await t('ci proof: the merged tree not the proven one (main moved under the merge) is recorded TREE-MISMATCH on the CI path, with the warning', { ...ci(), mergedTree: OTHER }, (r) => r.merge && r.w.spawns.length === 0 && r.ledgerNow.includes(`TREE-MISMATCH tested ${TREE} merged ${OTHER}`) && r.said.includes('is not the tested merge result'));
+await t('ci proof: the merged tree not the proven one (main moved under the merge) is recorded TREE-MISMATCH on the CI path, and refused naming it', { ...ci(), mergedTree: OTHER }, (r) => r.merge && r.w.spawns.length === 0 && r.ledgerNow.includes(`TREE-MISMATCH tested ${TREE} merged ${OTHER}`) && (r.error ?? '').includes('is not the tested merge result'));
 await t('ci proof: the merged tree equal to the proven one carries no TREE-MISMATCH and no warning', ci(), (r) => r.merge && !r.ledgerNow.includes('TREE-MISMATCH') && !r.said.includes('is not the tested merge result'));
 await t('ci proof: a push that fails runs the local preflight and deletes nothing', ci({ pushFails: true }), (r) => local(r, /could not push/) && pushes(r).length === 1);
 await t('ci proof: unreadable check runs run the local preflight', ci({ runsFail: true }), (r) => local(r, /CI could not be read/) && lastIs(r, DEL));
@@ -369,6 +371,7 @@ await t('ci proof: a failing local preflight still refuses after a CI read that 
 cases.push(['ci proof: across every scenario, every git push is a create-with-lease or a delete of refs/heads/land/5, nothing else', ALL.filter((c) => c.cmd === 'git' && c.args[0] === 'push').every((c) => { const a = c.args; return (a.length === 5 && a[2].startsWith(`--force-with-lease=${LREF}:`) && a[3] === 'origin' && a[4] === `${LAND}:${LREF}`) || sameArgs(a, DEL); }), true]);
 cases.push(['ci proof: across every scenario, every CI read is GET only', ALL.filter((c) => c.cmd === 'gh' && /rules\/branches|git\/commits|check-runs/.test(c.args.join(' '))).every((c) => !c.args.some((a) => ['-X', '--method', '-f', '-F', '--input'].includes(a))), true]);
 cases.push(['every gh call across all scenarios names the repo', ALL.filter((c) => c.cmd === 'gh').every((c) => c.args.includes(REPO) || c.args.some((a) => a.startsWith(`repos/${REPO}/`)) || (c.args[1] === 'graphql' && c.args.includes('owner=Team-Commonly') && c.args.includes('name=jellymoon'))), true]);
+await t('a draft PR is refused before any push of a land ref, nothing merged', { ...ci(), pr: { isDraft: true } }, (r) => no(r, /#5 is a draft \(nothing merged\)/) && pushes(r).length === 0);
 const bad = cases.filter(([, got, want]) => got !== want);
 for (const [n] of bad) console.error(`  ${n}`);
 if (bad.length) { console.error(`check-land-e2e: ${bad.length} of ${cases.length} wrong`); process.exit(1); }

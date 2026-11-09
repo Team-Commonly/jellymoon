@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Downloads the Go pinned in .tool-versions from dl.google.com into <dest>/go, after checking its sha256
-# against go.dev's release index (a different host from the archive). Installs nothing outside <dest>.
+# against go.dev's release index (a different host from the archive, run by the same operator). Installs nothing outside <dest>.
 # Prints the bin directory on the last line. Any failure exits non-zero.
 #
 #   fallback.sh <dest-dir> [tool-versions-file]
@@ -21,11 +21,11 @@ mkdir -p "$dest"
 work=$(mktemp -d "$dest/.dl.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 
-want=$(curl -fsSL --retry 3 'https://go.dev/dl/?mode=json&include=all' \
+want=$(curl -fsSL --retry 3 --retry-all-errors 'https://go.dev/dl/?mode=json&include=all' \
   | jq -r --arg f "$file" '[.[].files[] | select(.filename == $f) | .sha256][0] // empty') || die "cannot read go.dev release index"
 [[ "$want" =~ ^[0-9a-f]{64}$ ]] || die "go.dev lists no sha256 for $file"
 
-curl -fsSL --retry 3 "https://dl.google.com/go/$file" -o "$work/$file" || die "download of $file failed"
+curl -fsSL --retry 3 --retry-all-errors "https://dl.google.com/go/$file" -o "$work/$file" || die "download of $file failed"
 got=$(sha "$work/$file")
 [ "$got" = "$want" ] || die "checksum mismatch for $file: got $got, go.dev says $want"
 

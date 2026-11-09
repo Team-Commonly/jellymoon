@@ -130,14 +130,14 @@ func readPod(c *Commonly, sc *Scrubber, listed Pod, me Me, st *State) (*PodPlan,
 		if errors.As(err, &se) {
 			return nil, skipNotMember, nil
 		}
-		return nil, "", err
+		return nil, "", fmt.Errorf("%w (%s)", err, where(sc, listed.ID, ""))
 	}
 	pod.ID = listed.ID
 	if !pod.Has(me.ID) {
 		return nil, skipNotMember, nil
 	}
 	if err := sc.Check("a pod name", pod.Name); err != nil {
-		return nil, "", fmt.Errorf("%w (pod %s)", err, pod.ID)
+		return nil, "", fmt.Errorf("%w (%s)", err, where(sc, pod.ID, ""))
 	}
 	pp := &PodPlan{Pod: pod}
 	msgs, err := readMessages(c, pod.ID, st.Pods[pod.ID])
@@ -146,7 +146,7 @@ func readPod(c *Commonly, sc *Scrubber, listed Pod, me Me, st *State) (*PodPlan,
 		return nil, skipDenied, nil
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("%w (%s)", err, where(sc, pod.ID, ""))
 	}
 	for _, n := range msgs {
 		switch {
@@ -175,7 +175,7 @@ func where(sc *Scrubber, podID, msgID string) string {
 	if sc.Check("id", podID) != nil {
 		s = "a pod"
 	}
-	if sc.Check("id", msgID) == nil {
+	if msgID != "" && sc.Check("id", msgID) == nil {
 		s += ", message " + msgID
 	}
 	return s
@@ -255,7 +255,7 @@ func readSides(c *Commonly, sc *Scrubber, plan *Plan) error {
 		err := c.Get("/api/integrations/"+url.PathEscape(pp.Pod.ID), nil, &rows)
 		var se *StatusError
 		if err != nil && !errors.As(err, &se) {
-			return err
+			return fmt.Errorf("%w (%s)", err, where(sc, pp.Pod.ID, ""))
 		}
 		pp.Integ = rows
 	}

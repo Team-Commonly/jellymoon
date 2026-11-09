@@ -134,6 +134,35 @@ func TestAnUnauthorizedPodIsSkippedAndCounted(t *testing.T) {
 	}
 }
 
+// A 401 on a LATER page drops the whole pod too: the rows of the pages already read are discarded, not half imported.
+func TestAnUnauthorizedLaterPageSkipsTheWholePod(t *testing.T) {
+	f, pages := cmyfake.New(), 0
+	for i := 0; i < 60; i++ {
+		f.Msgs["p_study"] = append(f.Msgs["p_study"], cmyfake.Msg(fmt.Sprintf("t%02d", i), "u_bob", "Bob", "msg", fmt.Sprintf("2026-02-01T00:00:%02d.000Z", i)))
+	}
+	f.FailMsg = func(pod string, _ int) (int, string) {
+		if pod == "p_study" {
+			if pages++; pages >= 2 {
+				return 401, ""
+			}
+		}
+		return 0, ""
+	}
+	rep, err := runWith(t, f, newSink(), opts(t, true))
+	if err != nil || pages < 2 || rep.PodsImported != 1 || rep.PodsSkipped["unauthorized"] != 1 || rep.MessagesPosted != 3 {
+		t.Errorf("pages %d: %v %+v", pages, err, rep)
+	}
+}
+
+// A secret in a pod name goes through the same where() as every other scrub error, so a secret-shaped pod id is not echoed.
+func TestPodNameSecretErrorDoesNotEchoASecretShapedPodID(t *testing.T) {
+	f, secret := cmyfake.New(), "cm_"+"0123456789"+"abcdef0123456789"
+	f.Pods[4]["_id"], f.Pods[4]["name"], f.Msgs[secret] = secret, "Study "+secret, f.Msgs["p_study"]
+	if _, err := runWith(t, f, newSink(), opts(t, true)); !errors.Is(err, ErrSecret) || !strings.Contains(err.Error(), "a pod name") || strings.Contains(err.Error(), "0123456789") {
+		t.Fatalf("err %v", err)
+	}
+}
+
 // A secret fails the run and the error names where to look (pod id, message id), never the match; an id that is itself the secret is not echoed.
 func TestSecretErrorNamesThePodAndMessage(t *testing.T) {
 	f := cmyfake.New()
@@ -147,6 +176,26 @@ func TestSecretErrorNamesThePodAndMessage(t *testing.T) {
 	_, err = runWith(t, f, newSink(), opts(t, true))
 	if !errors.Is(err, ErrSecret) || strings.Contains(err.Error(), "0123456789abcdef") {
 		t.Fatalf("err %v", err)
+	}
+}
+
+// A failed read names the route shape and the pod through where(), never the raw path: a GitHub- or cm_-shaped pod id (a clean name, a 404 or 400) is not echoed.
+func TestFailedReadsNeverEchoASecretShapedPodID(t *testing.T) {
+	for _, secret := range []string{"ghp_" + "0123456789" + "ABCDEFGHIJabcdefghij", "cm_" + "0123456789" + "abcdef0123456789"} {
+		for _, code := range []int{404, 400} {
+			f := cmyfake.New()
+			f.Pods[4]["_id"], f.Msgs[secret] = secret, f.Msgs["p_study"]
+			f.FailMsg = func(pod string, _ int) (int, string) {
+				if pod == secret {
+					return code, ""
+				}
+				return 0, ""
+			}
+			_, err := runWith(t, f, newSink(), opts(t, true))
+			if err == nil || strings.Contains(err.Error(), "0123456789") || !strings.Contains(err.Error(), "/api/messages/:podId") {
+				t.Errorf("%.4s %d: %v", secret, code, err)
+			}
+		}
 	}
 }
 

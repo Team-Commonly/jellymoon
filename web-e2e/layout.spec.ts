@@ -60,6 +60,13 @@ async function holdsLayout(page: Page, where: string): Promise<void> {
 
 // A name no browser can break at a space: the worst case for a narrow screen.
 const UNBROKEN = 'Refactor_the_session_middleware_and_every_downstream_consumer_of_the_token_refresh_path_before_friday';
+// A summary is one line of at most 120 characters (schema/message.json); the server refuses a longer one with a 400.
+const ASK_SUMMARY = `Ship ${UNBROKEN}?`;
+
+test('the seeded summaries fit the schema\'s 120 characters', () => {
+  expect(UNBROKEN.length).toBeLessThanOrEqual(120);
+  expect(ASK_SUMMARY.length).toBeLessThanOrEqual(120);
+});
 
 test('the layout check sees what it should: clipped text and a wide page are caught, a titled ellipsis is not', async ({ page }) => {
   await page.goto('/device');
@@ -132,7 +139,7 @@ test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, 
   const body = `${UNBROKEN}\n${'A long line of body text that has to wrap and never push the page wider than the screen. '.repeat(4)}`;
   await pod.agent.post({ summary: UNBROKEN, kind: 'fyi', status: 'in_progress', body });
   await pod.agent.post({ summary: 'Tests green on the fix branch', kind: 'fyi', status: 'done' });
-  await pod.agent.post({ ...askInput(`Ship ${UNBROKEN} tonight or wait for review?`, { userIds: [pod.you.user.id] }), body: 'The diff touches only the session middleware.' });
+  await pod.agent.post({ ...askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }), body: 'The diff touches only the session middleware.' });
   await openPod(page, pod);
   await expect(page.getByRole('article')).toHaveCount(3);
   await holdsLayout(page, '/pod/:id folded');
@@ -164,7 +171,7 @@ test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, 
 });
 
 test('the needs-you filter keeps its layout, with an ask, and when nothing needs you', async ({ page, pod }) => {
-  await pod.agent.post(askInput(`Ship ${UNBROKEN} tonight?`, { userIds: [pod.you.user.id] }));
+  await pod.agent.post(askInput(ASK_SUMMARY, { userIds: [pod.you.user.id] }));
   await pod.agent.post(askInput('Rename the billing table?', { userIds: [pod.other.user.id] }));
   await openPod(page, pod);
   const toggle = page.getByRole('button', { name: /^Needs you · / });

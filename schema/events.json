@@ -116,12 +116,13 @@
       }
     },
     "Hello": {
-      "description": "What the pod tells a client about itself and the client: head sequence, the client's actor, members and agents.",
+      "description": "What the pod tells a client about itself and the client: its name, head sequence, the client's actor, members and agents.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["podId", "headSeq", "you", "members", "agents"],
+      "required": ["podId", "podName", "headSeq", "you", "members", "agents"],
       "properties": {
         "podId": { "$ref": "common.json#/$defs/PodId" },
+        "podName": { "description": "The pod's name, as it was created. A client shows it in place of the id.", "type": "string", "minLength": 1, "maxLength": 80 },
         "headSeq": { "description": "0 for an empty pod.", "type": "integer", "minimum": 0 },
         "you": { "$ref": "common.json#/$defs/Actor" },
         "members": { "description": "The pod's members.", "type": "array", "items": { "$ref": "#/$defs/Member" } },

@@ -1,10 +1,12 @@
 // The HTTP client the screens use. Injected like the socket, so tests pass a fake and never touch a network.
-import type { AcceptInviteResponse, Actor, Pod } from '../../gen/ts/protocol';
+import type { AcceptInviteResponse, Actor, InvitePreview, Pod, SessionResponse } from '../../gen/ts/protocol';
 
 export interface Http {
   acceptInvite(code: string): Promise<AcceptInviteResponse>;
-  /** The person the session cookie belongs to, or null when nobody is signed in. */
-  me(signal?: AbortSignal): Promise<Actor | null>;
+  /** What an invite page shows before sign-in: the pod's name, the inviter's name and the expiry. Null when the server knows no such live invite. */
+  readInvite(code: string): Promise<InvitePreview | null>;
+  /** The person the session cookie belongs to, or null when nobody is signed in. GET /v1/session answers 200 either way. */
+  session(signal?: AbortSignal): Promise<Actor | null>;
   approveDevice(userCode: string): Promise<void>;
   /** Stops a run now (the agent's owner or a pod owner may). Resolves when the server accepted it; the run's end arrives as run.ended on the pod socket. A refusal throws an ApiError carrying the server's message. */
   stopRun(podId: string, runId: string): Promise<void>;
@@ -22,11 +24,16 @@ export const browserHttp: Http = {
     if (!res.ok) throw new ApiError(res.status, 'request failed');
     return (await res.json()) as AcceptInviteResponse;
   },
-  async me(signal) {
-    const res = await fetch('/v1/me', { credentials: 'same-origin', signal });
-    if (res.status === 401) return null;
+  async readInvite(code) {
+    const res = await fetch(`/v1/invites/${encodeURIComponent(code)}`, { credentials: 'same-origin' });
+    if (res.status === 404) return null;
     if (!res.ok) throw new ApiError(res.status, 'request failed');
-    return (await res.json()) as Actor;
+    return (await res.json()) as InvitePreview;
+  },
+  async session(signal) {
+    const res = await fetch('/v1/session', { credentials: 'same-origin', signal });
+    if (!res.ok) throw new ApiError(res.status, 'request failed');
+    return ((await res.json()) as SessionResponse).user ?? null;
   },
   async approveDevice(userCode) {
     const res = await fetch('/v1/auth/device/approve', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userCode }) });
@@ -63,7 +70,7 @@ async function refusalMessage(res: Response): Promise<string> {
   return 'request failed';
 }
 
-/** How long the page waits for GET /v1/me before it renders as signed out. A server that takes the connection and never answers must not leave the page blank. */
+/** How long the page waits for GET /v1/session before it renders as signed out. A server that takes the connection and never answers must not leave the page blank. */
 const BOOT_ME_TIMEOUT_MS = 5000;
 
 /**
@@ -76,7 +83,7 @@ export async function bootSignedIn(http: Http, timeoutMs: number = BOOT_ME_TIMEO
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   const timedOut = new Promise<null>((resolve) => ctl.signal.addEventListener('abort', () => resolve(null)));
   try {
-    return (await Promise.race([http.me(ctl.signal), timedOut])) !== null;
+    return (await Promise.race([http.session(ctl.signal), timedOut])) !== null;
   } catch {
     return false;
   } finally {

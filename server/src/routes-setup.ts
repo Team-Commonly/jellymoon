@@ -22,11 +22,19 @@ function inviteRoutes(app: Hono, hub: Hub, publicUrl: string | undefined): void 
     if (uses === null || ttl === null) return bad(k.c, 'maxUses is 1 to 100 and ttlSeconds is 60 to 2592000.');
     // The code is shown once, in this reply. Only its SHA-256 is stored, as with a token.
     const code = newInviteCode();
-    const inv = { hash: hashToken(code), pod: k.pod.id, usesLeft: uses, expiresAt: hub.now() + ttl * 1000 };
+    const inv = { hash: hashToken(code), pod: k.pod.id, usesLeft: uses, expiresAt: hub.now() + ttl * 1000, inviter: k.caller.kind === 'user' ? k.caller.userId : null };
     await saveInvite(hub.db, inv);
     return k.c.json({ code, url: `${baseOf(publicUrl, k.c)}/invite/${code}`, expiresAt: isoOf(inv.expiresAt), usesLeft: uses });
   };
   app.post('/v1/pods/:pod/invites', podRoute(hub, ['user'] as const, 'CreateInviteRequest', [], create));
+  // No sign-in and no write: the invite page shows this before anyone signs in. Unknown, used, expired and inviter-less are one 404.
+  app.get('/v1/invites/:code', async (c) => {
+    const found = await findInvite(hub.db, hashToken(c.req.param('code') ?? ''));
+    const pod = found === undefined ? undefined : hub.pods.get(found.pod);
+    const by = pod?.state.members.find((m) => m.id === found?.inviter);
+    if (found === undefined || pod === undefined || by === undefined || found.usesLeft <= 0 || found.expiresAt <= hub.now()) return fail(c, 'not_found', 'No such invite.');
+    return c.json({ podName: pod.meta.name, inviterName: by.displayName, expiresAt: isoOf(found.expiresAt) });
+  });
   app.post('/v1/invites/:code/accept', setup(hub, ['user'] as const, null, async (c, who) => {
     const hash = hashToken(c.req.param('code') ?? '');
     const found = await findInvite(hub.db, hash);

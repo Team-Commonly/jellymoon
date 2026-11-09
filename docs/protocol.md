@@ -173,6 +173,9 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 - An expired device code or OAuth state is deleted an hour after it expires; a deleted device code gets invalid_grant. A call to GitHub that takes over 10 seconds gets upstream.
 - POST /v1/auth/device/approve needs Content-Type application/json, and by the session cookie the server's own Origin, which a missing Origin is not (forbidden). The user code matches in either case, with or without its hyphen. An unknown user code gets not_found, an expired one expired_token, an approved one gone. It is the only route that approves a device code.
 - A used or expired invite gets gone (HTTP 410). Only a member can create an invite.
+- GET /v1/invites/:code needs no sign-in and changes nothing: it never uses or extends the invite. An unknown, used or expired code gets the same not_found body, so a guesser learns nothing more.
+- GET /v1/invites/:code, like the accept, has no rate limit: a code is inv_ and 22 base62 characters, too many to guess.
+- GET /v1/session is GET /v1/me that never refuses: 200 with the user for a live Bearer jmu_ or session cookie, and 200 with no user otherwise. GET /v1/me still answers unauthorized to nobody.
 - cancelled is final. A later POST /v1/runs/:run/end for a run a person stopped is accepted and does not change the outcome.
 - Only a pod owner connects a vendor or grants an agent access; a member gets forbidden.
 - A connect lists the upstream's operations and compares them with the vendor's pinned catalogue. An empty list, or a pinned operation missing upstream or with other argument names, refuses the connect with connector_drift; an upstream that fails the listing gets upstream_failed with its error.
@@ -192,9 +195,11 @@ Request and response bodies for the Worker's HTTP routes. Every error response b
 | GET | `/v1/auth/github/start` | `none`: no token | — | 302 to GitHub's authorize page, with a same-origin path in ?next; sets the one-use state cookie |
 | GET | `/v1/auth/github/callback` | `none`: no token | — | 302 to the next path bound to the state; sets the session cookie |
 | GET | `/v1/me` | `user`: user token (`jmu_`) | — | [Actor](#def-Actor) |
+| GET | `/v1/session` | `none`: no token | — | [SessionResponse](#def-SessionResponse) |
 | POST | `/v1/auth/logout` | `user`: user token (`jmu_`) | — | [LogoutResponse](#def-LogoutResponse) |
 | POST | `/v1/pods` | `user`: user token (`jmu_`) | [CreatePodRequest](#def-CreatePodRequest) | [Pod](#def-Pod) |
 | POST | `/v1/pods/:pod/invites` | `user`: user token (`jmu_`) | [CreateInviteRequest](#def-CreateInviteRequest) | [Invite](#def-Invite) |
+| GET | `/v1/invites/:code` | `none`: no token | — | [InvitePreview](#def-InvitePreview) |
 | POST | `/v1/invites/:code/accept` | `user`: user token (`jmu_`) | — | [AcceptInviteResponse](#def-AcceptInviteResponse) |
 | POST | `/v1/computers` | `user`: user token (`jmu_`) | [RegisterComputerRequest](#def-RegisterComputerRequest) | [RegisterComputerResponse](#def-RegisterComputerResponse) |
 | POST | `/v1/pods/:pod/agents` | `computer`: computer token (`jmc_`) | [RegisterAgentRequest](#def-RegisterAgentRequest) | [RegisterAgentResponse](#def-RegisterAgentResponse) |
@@ -303,6 +308,26 @@ An invite to a pod: its code and link, when it expires and how many uses are lef
 | `url` | string | yes | The link to share. https only. Limit: matches `^https://` |
 | `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
 | `usesLeft` | integer | yes | How many more times the invite can be accepted. Limit: at least 0 |
+
+<a id="def-InvitePreview"></a>
+### InvitePreview
+
+What an invite page shows before anyone signs in: the pod's name, who invited you and when the invite expires. No ids, no email, no members.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `podName` | string | yes | The pod's name. Limit: 1 to 80 characters |
+| `inviterName` | string | yes | The display name of the member who created the invite. Limit: 1 to 80 characters |
+| `expiresAt` | [Timestamp](#def-Timestamp) | yes | RFC 3339 in UTC. Set by the server only. |
+
+<a id="def-SessionResponse"></a>
+### SessionResponse
+
+Who the request is signed in as. user is absent when nobody is: no token, or a dead one.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `user` | [Actor](#def-Actor) | no | A member of a pod, or the system: its kind, its id and the name shown to people. |
 
 <a id="def-AcceptInviteResponse"></a>
 ### AcceptInviteResponse
@@ -584,11 +609,12 @@ An agent's presence: its harness, the computer it runs on and its state.
 <a id="def-Hello"></a>
 ### Hello
 
-What the pod tells a client about itself and the client: head sequence, the client's actor, members and agents.
+What the pod tells a client about itself and the client: its name, head sequence, the client's actor, members and agents.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `podId` | [PodId](#def-PodId) | yes | The id of a pod. |
+| `podName` | string | yes | The pod's name, as it was created. A client shows it in place of the id. Limit: 1 to 80 characters |
 | `headSeq` | integer | yes | 0 for an empty pod. Limit: at least 0 |
 | `you` | [Actor](#def-Actor) | yes | A member of a pod, or the system: its kind, its id and the name shown to people. |
 | `members` | list of [Member](#def-Member) | yes | The pod's members. |

@@ -4,7 +4,7 @@ Status: Accepted, by the owner's ruling, 2026-11-08 (the contract wins over F15'
 below: the `/device` page itself. The browser session on every user route was added on 2026-11-08, and the hardening (token
 expiry, the start limit, the sweep, timeouts, logout with both and its sockets) on 2026-11-09 (both below), with its follow-ups
 the same day (TRUST_PROXY behind TLS, user tokens with no expiry, the D1 migrations and three fixes around logout's sockets:
-Hardening items 2, 1, 7 and 6).
+Hardening items 2, 1, 7 and 6). Refusing a code (`POST /v1/auth/device/deny`, step 4) was added on 2026-11-09.
 
 ## Decision
 
@@ -31,13 +31,28 @@ and drops it.
    Bearer `jmu_` and needs `Content-Type: application/json`; by cookie it needs the server's own Origin, a missing one
    included, like every cookie write (Browser session, item 3). The user code matches in either case, with or without its
    hyphen: the server upper-cases it and puts the hyphen back before hashing. It binds the code to the caller: unknown
-   `not_found`, expired `expired_token`, already approved `gone`.
+   `not_found`, expired `expired_token`, already approved, refused or exchanged `gone` ("This code was already used.").
+
+   `POST /v1/auth/device/deny {userCode}` refuses a code the caller did not start: the /device page's "This wasn't me".
+   - **Caller.** A signed-in person, with approve's auth: the cookie or a Bearer `jmu_`, `Content-Type: application/json`,
+     and by cookie the server's own Origin. The user code matches as approve's does.
+   - **Scope.** It acts only on a pending, unexpired code (no approver yet), and marks it `denied`. It is idempotent:
+     refusing a refused code is 200 `{}` again.
+   - **Refusals.** Every one is approve's answer for the same code, byte for byte, from one code path in each adapter:
+     unknown `not_found`, expired `expired_token`, approved or exchanged `gone`. So deny tells a code-guesser nothing approve
+     does not. A refused code cannot be approved (`gone`, the same body), and an approved one cannot be refused.
+   - **Rate limit.** Approve's, which is none: neither counts as a sign-in start (Hardening, item 2). Each guess needs a
+     signed-in person, and there are 20^8 codes, each live 15 minutes.
+   - **The poll.** Step 5 answers `access_denied` (RFC 8628) for a refused code on every poll until the sweep deletes it.
+   - **Storage.** `device_codes.denied`: a column added in place on the server's Postgres, and the D1 migration
+     `0002_device_deny.sql` on the Worker (Hardening, item 7).
 5. `POST /v1/auth/device/token` keeps the contract: `invalid_grant` for an unknown or exchanged code, `expired_token` after
-   the expiry, `slow_down` when polled sooner than `interval` (2 s) after the last poll, `authorization_pending` before
+   the expiry, `access_denied` for a refused code (checked before `slow_down`, so it is the answer however soon the poll comes), `slow_down` when polled sooner than `interval` (2 s) after the last poll, `authorization_pending` before
    approval, then exactly one exchange (a conditional update) returns a new `jmu_` for the approver, never the browser's
    session token.
 6. `jellymoon login` prints the code and the page, polls at `interval` (+5 s on `slow_down`, RFC 8628), stops with a plain
-   message on `expired_token`, `invalid_grant` or `unauthorized`, and gives up at `expiresIn` on its own. It writes the token
+   message on `expired_token`, `invalid_grant` or `unauthorized`, and on `access_denied` with `the sign-in was refused in the
+   browser` and a non-zero exit, never polling again, and gives up at `expiresIn` on its own. It writes the token
    to the config dir's `user-token` (what registering a computer reads) through a 0600 temp file renamed into place, and prints
    only `Signed in as <login>`. The token never reaches argv, stdout, stderr or a log.
 
@@ -164,5 +179,6 @@ sign-ins); `server/test/signin-hardening.test.ts` and `worker/test/signin.test.t
 null expiry, hub.sockets through real sockets, the limiter key, the token_pods order, logout with a failing pod, and a
 logout racing a socket's open: on the server between the upgrade and `onOpen`, on the Worker before the row and before the
 pod accepts); `worker/test/migrations.test.ts` (columns, indexes with UNIQUE and primary keys, foreign keys) and
-`make e2e-a-migrated` (a D1 from the old schema, migrated, serves TestF15, TestBSESS and TestAUTHH); `e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
+`make e2e-a-migrated` (a D1 from the old schema, migrated, serves TestF15, TestBSESS, TestAUTHH and TestDENY); `e2e/deny_test.go`
+(refusing a code, both adapters, with `server/test/device-deny.test.ts` and `worker/test/device-deny.test.ts`); `e2e/bsess_test.go` (the browser session, both adapters); `e2e/f15_test.go` against a stub GitHub (`e2e/f15_stub_test.go`), both adapters; `daemon/internal/cli/login_test.go` (the poll
 loop) and `daemon/internal/config/save_test.go` (the 0600 write).

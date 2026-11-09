@@ -140,7 +140,7 @@ test('the top bar keeps its layout under the longest pod name the schema allows,
   await holdsLayout(page, 'the bar with the longest pod name');
 });
 
-test('/device keeps its layout signed out, signed in, with an error showing, and approved', async ({ page }) => {
+test('/device keeps its layout signed out, signed in, with an error showing, approved and refused', async ({ page }) => {
   const start = await api<{ userCode: string }>('POST', '/v1/auth/device', null);
   const path = `/device?code=${start.userCode}`;
 
@@ -163,6 +163,13 @@ test('/device keeps its layout signed out, signed in, with an error showing, and
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByText('Your terminal is signed in. You can close this page.')).toBeVisible();
   await holdsLayout(page, '/device approved');
+
+  // Refused with "This wasn't me": the line names the code, so it must wrap at 390px.
+  const refused = await api<{ userCode: string }>('POST', '/v1/auth/device', null);
+  await page.goto(`/device?code=${refused.userCode}`);
+  await page.getByRole('button', { name: "This wasn't me" }).click();
+  await expect(page.getByRole('heading', { name: 'Code refused' })).toBeVisible();
+  await holdsLayout(page, '/device refused');
 });
 
 test('/pod/:id keeps its layout with cards: an unbroken headline, an open body, an ask, a confirm row and the composer', async ({ page, pod }) => {

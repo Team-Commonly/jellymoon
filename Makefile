@@ -180,7 +180,7 @@ e2e-a: node_modules
 # The sign-in suites against a Worker whose D1 was created from the schema before the sign-in hardening and then migrated
 # (worker/migrations, `wrangler d1 migrations apply --local` on the suite's own state dirs). Loopback only.
 e2e-a-migrated: node_modules
-	JM_E2E_SERVER='JM_D1_SEED=migrations/0000_initial.sql $(CURDIR)/worker/dev.sh' JM_E2E_SKIP= $(GO) test ./e2e -count=1 -v -run '^(TestF15|TestBSESS|TestAUTHH)$$'
+	JM_E2E_SERVER='JM_D1_SEED=migrations/0000_initial.sql $(CURDIR)/worker/dev.sh' JM_E2E_SKIP= $(GO) test ./e2e -count=1 -v -run '^(TestF15|TestBSESS|TestAUTHH|TestDENY)$$'
 
 # The Cloudflare adapter (worker/) under `wrangler dev --local`. Loopback only.
 worker-dev: node_modules

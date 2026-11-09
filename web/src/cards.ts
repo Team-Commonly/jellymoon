@@ -22,7 +22,8 @@ export interface Card {
   quiet: boolean;
   author: string;
   headline: string;
-  status: MessageStatus;
+  /** Absent on a person's message, which has none. A ruled ask shows `ruled` in place of its `blocked`. */
+  status?: MessageStatus | 'ruled';
   receipt?: string;
   body?: string;
   ask?: AskCard;
@@ -50,6 +51,15 @@ function askCard(m: Message, ctx: AskContext, view: CardView): AskCard {
   };
 }
 
+/** A short time a person can read, in the viewer's locale and zone. Text that isn't a time comes back unchanged. */
+export function shortTime(iso: string, locale?: string, timeZone?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone }).format(d);
+}
+
+const toolCalls = (n: number) => `${n} tool call${n === 1 ? '' : 's'}`;
+
 export function buildCard(m: Message, view: CardView): Card {
   const r = m.receipt;
   return {
@@ -58,8 +68,8 @@ export function buildCard(m: Message, view: CardView): Card {
     quiet: m.kind === 'progress' || m.kind === 'fyi',
     author: m.author.displayName,
     headline: m.summary,
-    status: m.status,
-    ...(r && { receipt: `${r.harness} · ${r.toolCalls} tool calls` }),
+    ...(m.author.kind !== 'human' && { status: m.kind === 'ask' && m.decision?.state === 'ruled' ? ('ruled' as const) : m.status }),
+    ...(r && { receipt: `${r.harness} · ${toolCalls(r.toolCalls)}` }),
     ...(m.body && { body: m.body }),
     ...(m.kind === 'ask' && m.context && { ask: askCard(m, m.context, view) }),
   };

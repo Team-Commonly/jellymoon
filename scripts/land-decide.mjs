@@ -359,10 +359,11 @@ export function landCommitEnv(ctLines) {
 }
 // Only runs of a check suite that a push to land/<n> started count as proof on the land commit. Its SHA is computable in advance, so a fork PR whose head
 // is that SHA gets green github-actions runs too (no secrets, and the refs/pull merge tree rather than this commit): those suites are not in `suites`.
-// runs carry `suite`; a list cut short by paging keeps its total above its length, which ciProof reads as unread.
+// runs carry `suite`; a list cut short by paging keeps its total above its length, which ciProof reads as unread. A suite list that is not an array of ids, or a run with no numeric suite, counts for nothing.
 export const landSuiteRuns = ({ runs, total, suites }) => {
-  if (!Array.isArray(runs) || !Array.isArray(suites) || total > runs.length) return { runs, total };
-  const mine = runs.filter((r) => suites.includes(r.suite));
+  if (!Array.isArray(runs) || total > runs.length) return { runs, total };
+  if (!Array.isArray(suites) || !suites.every(Number.isInteger)) return { runs: [], total: 0 }; // an unreadable suite list leaves nothing standing: fail closed
+  const mine = runs.filter((r) => Number.isInteger(r?.suite) && suites.includes(r.suite));
   return { runs: mine, total: mine.length };
 };
 // Land's own ref for a PR: refs/heads/land/<n>, n digits only. Every push land makes (create, overwrite, delete) names a ref built here.

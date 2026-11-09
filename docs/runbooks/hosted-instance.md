@@ -47,12 +47,24 @@ The one variable is `JM_HOSTED_ENABLED`. Unset, or anything but `true`, and noth
 `deploy` runs in the GitHub environment `hosted`. GitHub records each run there with its commit and outcome; the rollback reads
 that record. The secrets can move to that environment later, with a required reviewer, without changing the workflow.
 
+Create the environment before the first deploy. GitHub did not create it when the job first named it: the `deploy` job failed
+at once with no steps and no message. `gh api -X PUT repos/Team-Commonly/jellymoon/environments/hosted` with
+`{"deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false}}` creates it, deployable from `main` only.
+
 ## The database
 
 Any managed Postgres works (Neon, Aiven or another): Postgres 14 or later, disk encryption at rest, point-in-time recovery of at
 least 7 days. The server needs one `DATABASE_URL` with `sslmode=require`, or `sslmode=verify-full` when the provider gives a CA.
 Create the database empty. The server creates its own tables at boot (`create table if not exists`); there is no migration step.
-Write the provider and region here when they are chosen.
+The provider is Google Cloud SQL, with a public IP and TLS-only connections.
+
+A Cloudflare Container does not connect out from the ranges at cloudflare.com/ips-v4, and Cloudflare publishes no egress range
+for Containers. An authorized-networks list of those ranges blocked the first deploy: the server could not reach Postgres, exited
+at boot, and the front answered `/healthz` with 500 "Failed to start container: The container just exited". Cloud SQL logged
+nothing, because nothing got through. The container was then seen connecting from inside 104.28.0.0/16, a part of Cloudflare's
+104.16.0.0/12 that the published list leaves out, and the list was pinned to that /16. Read a container's address from
+`pg_stat_activity.client_addr` while it is connected: Cloud SQL's connection log records every client as 127.0.0.1. If a deploy
+boots from outside the list, the same 500 comes back.
 
 ## How to ship
 
@@ -73,6 +85,12 @@ The first deploy has nothing to roll back to. If it fails, the run fails and the
 To go back by hand, revert the commit on `main`; the revert deploys like any other commit. Schema changes are additive only, so
 an older bundle runs on a newer schema (ADR 0010, "CI deploy" item 3).
 
+## Logs
+
+Workers Logs is on (`observability` in `hosted/wrangler.jsonc`), billed by volume. The front's request logs are sampled at 5%;
+the container's own output is kept whole, so the line a server prints before it exits is always there. Read them in the
+Cloudflare dashboard under Workers & Pages, `jellymoon`, Logs. Without them, a boot failure shows only as the 500 above.
+
 ## How to stop it
 
 - Stop deploying: `gh variable delete JM_HOSTED_ENABLED -R Team-Commonly/jellymoon`. The running instance keeps running.
@@ -86,6 +104,4 @@ an older bundle runs on a newer schema (ADR 0010, "CI deploy" item 3).
 - A run of a rollout's overlap. The boot lock exists (`server/src/db.ts`): a second server on the same database refuses to start
   while the first holds it. Whether a Cloudflare rollout stops the old instance before the new one starts is still open (ADR
   0010, "Still open"). The first deploy shows it: a new instance that keeps refusing on the boot lock means the old one wasn't
-  stopped.
-- A way for the live check to tell the new image from the old one. A deploy starts the container rollout and does not wait for
-  it, so `/healthz` can answer from the old instance for a while.
+  stopped. The first deploys did not settle it: the one that passed found an instance of the same commit already running.

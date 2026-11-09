@@ -1,20 +1,22 @@
 import { describe, expect, test } from 'bun:test';
 import { pinOf } from '../src/catalogue';
 import { rulingOpts } from '../src/connector-call';
-import type { Db } from '../src/db';
+import type { Db, Tx } from '../src/db';
 import { openDb } from '../src/db';
 import type { Resolve } from '../src/egress';
 import { Hub } from '../src/hub';
 import { migrate, saveCall } from '../src/store';
 import type { CallRow } from '../src/store';
 import type { Adapter } from '../src/upstream';
+import type { Called } from '../src/upstream-mcp';
 import { keyRing, makeVault } from '../src/vault';
 import type { Vault } from '../src/vault';
 import type { Json } from './world';
 import { podIn, setup } from './world';
 
 // The connector layer's hardening (ADR 0009): the crash window between a release's claim and its answer, a receipt for a
-// read that throws, and an upstream call that runs outside the pod's command order. The approver set is TestF19's.
+// read that throws, an upstream call that runs outside the pod's command order, the claim inside the ruling's transaction, and
+// a late answer to a write settled as unknown. The approver set is TestF19's.
 const CRED = 'pod-held-credential';
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const noDns: Resolve = async (h) => { throw new Error(`resolved ${h}`); };
@@ -143,4 +145,65 @@ describe('a slow upstream', () => {
     const done = (await w.receipts(`?decisionId=${one.decisionId}`))[0];
     expect([done.outcome, done.upstreamStatus, done.result]).toEqual(['released', 200, { done: true }]);
   }, 15_000);
+});
+
+/** A Db whose next claim of a parked row throws (`claimFails`), or whose next transaction rolls back after its work (`rollback`). */
+function breakable(db: Db): { db: Db; ctl: { claimFails: boolean; rollback: boolean } } {
+  const ctl = { claimFails: false, rollback: false };
+  const guard = (t: Tx): Tx => ({
+    rows: async <T>(sql: string, params?: unknown[]): Promise<T[]> => {
+      if (ctl.claimFails && sql.includes("and outcome = 'parked'")) { ctl.claimFails = false; throw new Error('the claim failed'); }
+      return t.rows<T>(sql, params);
+    },
+  });
+  const tx: Db['tx'] = (fn) => db.tx(async (t) => {
+    const r = await fn(guard(t));
+    if (ctl.rollback) { ctl.rollback = false; throw new Error('rolled back'); }
+    return r;
+  });
+  return { db: { ...db, ...guard(db), tx }, ctl };
+}
+
+describe('the claim is part of the ruling', () => {
+  const breaks = [['the claim fails', 'claimFails'], ['the ruling\'s transaction rolls back after the claim', 'rollback']] as const;
+  for (const [what, arm] of breaks) {
+    test(`${what}: no ruling is recorded, the write stays parked and nothing is sent; the next ruling sends it exactly once`, async () => {
+      let calls = 0;
+      const b = breakable(await openDb({}));
+      const w = await connected(async () => { calls += 1; return { ok: true, status: 200, result: { id: 'ISS-1' } }; }, b.db);
+      const p = (await w.op('create_issue', { title: 't', teamId: 'T' })).json;
+      b.ctl[arm] = true;
+      const refused = await w.rule(p.decisionId, 'a').then(() => false, () => true);
+      await sleep(100);
+      const state = () => w.rt.state.decisions?.[p.decisionId]?.decision.state;
+      const receipt = async () => (await w.receipts(`?decisionId=${p.decisionId}`))[0];
+      expect([refused, state(), (await receipt()).outcome, calls]).toEqual([true, 'open', 'parked', 0]);
+      const raced = await Promise.all([w.rule(p.decisionId, 'a'), w.rule(p.decisionId, 'a')]);
+      expect(raced.map((r) => r?.ok)).toEqual([true, false]);
+      for (let i = 0; i < 40 && (await receipt()).upstreamStatus === undefined; i += 1) await sleep(25);
+      const r = await receipt();
+      expect([state(), r.outcome, r.upstreamStatus, r.result, calls]).toEqual(['ruled', 'released', 200, { id: 'ISS-1' }, 1]);
+    });
+  }
+});
+
+describe('a late answer to a write settled as unknown', () => {
+  test('replaces unknown with the upstream\'s answer, and the write is sent once', async () => {
+    let calls = 0;
+    let answer: (v: Called) => void = () => undefined;
+    const w = await connected(() => { calls += 1; return new Promise<Called>((r) => { answer = r; }); });
+    const p = (await w.op('create_issue', { title: 'late', teamId: 'T' })).json;
+    expect((await w.rule(p.decisionId, 'a'))?.ok).toBe(true);
+    for (let i = 0; i < 40 && calls === 0; i += 1) await sleep(25);
+    const receipt = async () => (await w.receipts(`?decisionId=${p.decisionId}`))[0];
+    await w.s.hub.setClock(w.s.hub.now() + 61_000);
+    const unknown = await receipt();
+    expect([unknown.outcome, String(unknown.reason).includes('sent at most once'), calls]).toEqual(['unknown', true, 1]);
+    answer({ ok: true, status: 201, result: { id: 'ISS-9' } });
+    for (let i = 0; i < 40 && (await receipt()).outcome === 'unknown'; i += 1) await sleep(25);
+    await Hub.restore(w.s.db);
+    await sleep(100);
+    const r = await receipt();
+    expect([r.outcome, r.upstreamStatus, r.result, r.reason, calls]).toEqual(['released', 201, { id: 'ISS-9' }, undefined, 1]);
+  });
 });

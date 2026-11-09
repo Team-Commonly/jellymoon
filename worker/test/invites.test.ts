@@ -61,7 +61,7 @@ test('an invite code is stored only as its SHA-256, in D1 and in the pod, and ac
   expect(made.status).toBe(200);
   const invite = (await made.json()) as { code: string; url: string };
   expect(/^inv_[0-9A-Za-z]{22}$/.test(invite.code)).toBe(true);
-  expect(invite.url).toBe(`https://jellymoon.example/join/${invite.code}`);
+  expect(invite.url).toBe(`https://jellymoon.example/invite/${invite.code}`);
 
   const hash = await hashToken(invite.code);
   expect([...h.d1.keys()]).toEqual([hash]);
@@ -73,7 +73,7 @@ test('an invite code is stored only as its SHA-256, in D1 and in the pod, and ac
   expect((await send(h.env, `/v1/invites/${hash}/accept`, {})).status).toBe(404);
 });
 
-test('without PUBLIC_URL the join link uses the request origin, not a fixed host', async () => {
+test('without PUBLIC_URL the invite link uses the request origin, not a fixed host', async () => {
   const made = await send(harness().env, '/v1/pods/pod_1/invites', {});
-  expect(((await made.json()) as { url: string }).url.startsWith('http://127.0.0.1:8787/join/inv_')).toBe(true);
+  expect(((await made.json()) as { url: string }).url.startsWith('http://127.0.0.1:8787/invite/inv_')).toBe(true);
 });

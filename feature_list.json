@@ -270,6 +270,19 @@
       ],
       "test": "go test ./daemon/... -run TestReplayCodex",
       "passes": true
+    },
+    {
+      "id": "F21",
+      "category": "evidence",
+      "description": "Evidence is served: the pod stamps every run operation as a tool-call record, and the evidence read returns them",
+      "steps": [
+        "a run makes three MCP calls; its run token reads three tc_ records, source pod, in order, each with a digest, in the shape ToolCallRecord fixes",
+        "a member's user token reads the same records; a non-member, another run's token and another pod's token get forbidden",
+        "a toolCalls or actor field an agent sends is ignored, and no operation writes a record",
+        "the read returns at most 500 records, and the count matches the run receipt's toolCalls"
+      ],
+      "test": "go test ./e2e -run TestF21 (server; the Worker adds TestF21 to E2E_A_SKIP, docs/development/e2e-contract.md)",
+      "passes": true
     }
   ]
 }

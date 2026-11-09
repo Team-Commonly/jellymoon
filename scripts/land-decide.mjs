@@ -363,7 +363,7 @@ export const landSuiteRuns = ({ runs, total, suites }) => {
   if (!Array.isArray(runs) || !Number.isInteger(total) || total < 0) return { error: 'the check runs on the land commit could not all be read' };
   if (total > runs.length) return { runs, total }; // paging cut it short
   if (!Array.isArray(suites) || !suites.every(Number.isInteger)) return { error: 'the land push suites could not be read' };
-  const mine = runs.filter((r) => suites.includes(r?.suite)); // suites hold integers only, so a run with no integer suite is out
+  const mine = runs.filter((r) => Number.isInteger(r?.suite) && suites.includes(r.suite)); // `every` skips holes in a sparse suites, so the run's own suite must be an integer too
   return { runs: mine, total: mine.length };
 };
 // Land's own ref: land/<n> for a PR, land/<a>-<b>-... for a batch (digits, single dashes). Every land push names one built here.

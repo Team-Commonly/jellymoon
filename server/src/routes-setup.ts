@@ -24,7 +24,7 @@ function inviteRoutes(app: Hono, hub: Hub, publicUrl: string | undefined): void 
     const code = newInviteCode();
     const inv = { hash: hashToken(code), pod: k.pod.id, usesLeft: uses, expiresAt: hub.now() + ttl * 1000 };
     await saveInvite(hub.db, inv);
-    return k.c.json({ code, url: `${baseOf(publicUrl, k.c)}/join/${code}`, expiresAt: isoOf(inv.expiresAt), usesLeft: uses });
+    return k.c.json({ code, url: `${baseOf(publicUrl, k.c)}/invite/${code}`, expiresAt: isoOf(inv.expiresAt), usesLeft: uses });
   };
   app.post('/v1/pods/:pod/invites', podRoute(hub, ['user'] as const, 'CreateInviteRequest', [], create));
   app.post('/v1/invites/:code/accept', setup(hub, ['user'] as const, null, async (c, who) => {

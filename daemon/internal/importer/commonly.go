@@ -83,6 +83,7 @@ func (c *Commonly) Get(path string, q url.Values, out any) error {
 	if len(q) > 0 {
 		target += "?" + q.Encode()
 	}
+	route := routeOf(path)
 	for {
 		c.pace()
 		status, retryAfter, body, err := c.once(target)
@@ -93,12 +94,12 @@ func (c *Commonly) Get(path string, q url.Values, out any) error {
 				return nil
 			}
 			if err := json.Unmarshal(body, out); err != nil {
-				return fmt.Errorf("GET %s: the answer is not the JSON the importer expects", path)
+				return fmt.Errorf("GET %s: the answer is not the JSON the importer expects", route)
 			}
 			return nil
 		case err == nil && status != 429 && status < 500:
 			c.fails = 0
-			return &StatusError{Path: path, Status: status}
+			return &StatusError{Path: route, Status: status}
 		}
 		if c.fails++; c.fails >= maxConsecutiveFailures {
 			return ErrStopped
@@ -106,6 +107,11 @@ func (c *Commonly) Get(path string, q url.Values, out any) error {
 		c.sleep(c.backoff(retryAfter))
 	}
 }
+
+var idRoute = regexp.MustCompile(`^(/api/(?:pods|messages|integrations))/[^/]+$`)
+
+// routeOf is the route shape of a path, with the pod id left out: an error names "/api/messages/:podId", never an id that could be secret-shaped.
+func routeOf(path string) string { return idRoute.ReplaceAllString(path, "$1/:podId") }
 
 // allowed is the client's own gate: a listed route, and never a scope parameter, in any letter case.
 func allowed(path string, q url.Values) error {
@@ -119,7 +125,7 @@ func allowed(path string, q url.Values) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("internal error: %s is not a route the importer reads", path)
+	return fmt.Errorf("internal error: %s is not a route the importer reads", routeOf(path))
 }
 
 func (c *Commonly) pace() {
@@ -167,7 +173,7 @@ func (c *Commonly) backoff(retryAfter time.Duration) time.Duration {
 	return max(d, retryAfter)
 }
 
-// StatusError is a refusal the importer does not retry: 401, 403, 404 and the like.
+// StatusError (its Path is the route shape, never a raw path) is a refusal the importer does not retry: 401, 403, 404 and the like.
 type StatusError struct {
 	Path   string
 	Status int

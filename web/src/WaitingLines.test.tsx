@@ -18,7 +18,7 @@ const lines = () => Array.from(screen.queryByRole('list', { name: 'Waiting for a
 /** The pod page after a hello whose head is seq 2, so what arrives at seq 3 and on was posted while it was open. */
 function open(agents: AgentPresence[]) {
   const net = fakeNet();
-  render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} me={you} /></MemoryRouter>);
   act(() => {
     net.open();
     net.deliver(frame('hello', undefined, hello({ headSeq: 2, agents })));

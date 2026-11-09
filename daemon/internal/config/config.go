@@ -30,6 +30,8 @@ type Agent struct {
 	Harness     protocol.Harness `json:"harness"`
 	DisplayName string           `json:"displayName"`
 	Repo        string           `json:"repo,omitempty"` // an absolute path: runs get a worktree of it. Empty: a fresh empty dir.
+	// AllowPermissions makes the daemon answer the agent's permission requests with allow_once. Unset, they are rejected.
+	AllowPermissions bool `json:"allowPermissions,omitempty"`
 }
 
 // Store is one config dir.

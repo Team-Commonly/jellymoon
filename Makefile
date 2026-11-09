@@ -38,6 +38,7 @@ test-ts: node_modules
 	$(BUN) scripts/check-land-e2e.mjs
 	$(BUN) run check:types
 	$(BUN) test podcore worker server
+	$(BUN) run test:web
 
 # The Cloudflare adapter's unit tests alone (CI's `worker` job). bun test exits 1 when it finds no test, so an empty run is red.
 test-worker: node_modules

@@ -28,6 +28,8 @@ type AddRequest struct {
 	Harness     protocol.Harness `json:"harness"`
 	DisplayName string           `json:"displayName"`
 	Repo        string           `json:"repo,omitempty"` // absolute path of a git repo the agent's runs get a worktree of
+	// AllowPermissions is the agent's allow setting (config.Agent).
+	AllowPermissions bool `json:"allowPermissions,omitempty"`
 }
 
 type addReply struct {
@@ -106,7 +108,7 @@ func (d *Daemon) add(req AddRequest) (protocol.AgentID, error) {
 	}
 	// AddAgent reads, changes and rewrites agents.json, so one add at a time; watch takes d.mu again only after this.
 	d.mu.Lock()
-	err = d.store.AddAgent(config.Agent{PodID: req.PodID, AgentID: id, Harness: req.Harness, DisplayName: req.DisplayName, Repo: req.Repo})
+	err = d.store.AddAgent(config.Agent{PodID: req.PodID, AgentID: id, Harness: req.Harness, DisplayName: req.DisplayName, Repo: req.Repo, AllowPermissions: req.AllowPermissions})
 	d.mu.Unlock()
 	if err != nil {
 		return "", err

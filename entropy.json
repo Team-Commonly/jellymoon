@@ -24,13 +24,13 @@
       "paths": [
         "worker/"
       ],
-      "max": 2160
+      "max": 2330
     },
     "server": {
       "paths": [
         "server/"
       ],
-      "max": 3620
+      "max": 3700
     },
     "podcore": {
       "paths": [

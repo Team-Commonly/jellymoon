@@ -192,9 +192,13 @@ type refusal struct {
 	code, retry string
 }
 
+// limited sends each request with a different X-Forwarded-For (and X-Real-IP), as a client may: the limit must not key on a
+// header the caller writes, so it still refuses.
 func (b *bsess) limited(method, path string) (refusal, error) {
 	for n := 0; n < 200; n++ {
 		req, _ := http.NewRequest(method, b.own+path, nil)
+		req.Header.Set("X-Forwarded-For", fmt.Sprintf("203.0.113.%d", n%250+1))
+		req.Header.Set("X-Real-IP", fmt.Sprintf("198.51.100.%d", n%250+1))
 		resp, err := browser().Do(req)
 		if err != nil {
 			return refusal{n: n}, err

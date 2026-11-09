@@ -1,8 +1,10 @@
 name: Set up Go
 description: >-
-  actions/setup-go with one retry. A failed download of the Go archive (HTTP 403 from the release
-  mirror) fails the job before any test ran; a second attempt after a pause passes. The version is
-  still go.mod's, and the job still fails if Go is not installed after the retry.
+  actions/setup-go, with a fallback download when it fails. setup-go v5.5.0 retries the GitHub-hosted
+  release asset, then falls back to storage.googleapis.com/golang, which now answers 403 even for real
+  releases, so every 504 from the asset host fails the job. The fallback fetches the Go pinned in
+  .tool-versions from dl.google.com, verifies its sha256 against go.dev's release index, and puts it on
+  PATH. The module cache (setup-go's cache input) is not restored on the fallback path.
 runs:
   using: composite
   steps:
@@ -11,22 +13,32 @@ runs:
       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
         go-version-file: go.mod
-    - name: Pause before the retry
+    # No continue-on-error: any download or checksum failure fails the job here.
+    - name: Fallback download of the pinned Go
       if: steps.first.outcome == 'failure'
       shell: bash
       run: |
-        echo "::warning::setup-go failed once; retrying in 20s"
-        sleep 20
-    # No continue-on-error: if the retry fails too, the job fails here.
-    - id: second
-      if: steps.first.outcome == 'failure'
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-      with:
-        go-version-file: go.mod
-    # Whichever attempt ran, Go must be on PATH at go.mod's version, or the job fails.
-    - name: Go is installed at go.mod's version
+        echo "::warning::actions/setup-go failed; installing the Go pinned in .tool-versions from dl.google.com (no module cache on this path)"
+        bin=$("$GITHUB_WORKSPACE/.github/actions/setup-go/fallback.sh" "$RUNNER_TEMP/go-fallback" "$GITHUB_WORKSPACE/.tool-versions" | tail -n 1)
+        [ -x "$bin/go" ] || { echo "::error::fallback produced no go at '$bin'"; exit 1; }
+        echo "$bin" >> "$GITHUB_PATH"
+        # Never let go fetch some other toolchain behind the check below.
+        echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+    # Whichever path ran, Go must be on PATH at the right version, or the job fails. setup-go resolves
+    # go.mod's "1.27" to the newest 1.27.x, so that path is checked against go.mod; the fallback is
+    # checked against the exact version in .tool-versions (which must itself sit inside go.mod's).
+    - name: Go is installed at the pinned version
       shell: bash
+      env:
+        FELL_BACK: ${{ steps.first.outcome == 'failure' }}
       run: |
         want=$(awk '$1=="go"{print $2; exit}' go.mod)
         got=$(go env GOVERSION)
-        case "$got" in go"$want"|go"$want".*) echo "$got" ;; *) echo "::error::wanted Go $want (go.mod), have '$got'"; exit 1 ;; esac
+        if [ "$FELL_BACK" = true ]; then
+          pin=$(awk '$1=="go"{print $2; exit}' .tool-versions)
+          case "$pin" in "$want".*) ;; *) echo "::error::.tool-versions go '$pin' is outside go.mod's $want"; exit 1 ;; esac
+          [ "$got" = "go$pin" ] || { echo "::error::wanted go$pin (.tool-versions), have '$got'"; exit 1; }
+        else
+          case "$got" in go"$want"|go"$want".*) ;; *) echo "::error::wanted Go $want (go.mod), have '$got'"; exit 1 ;; esac
+        fi
+        echo "$got"

@@ -66,7 +66,8 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    # 5, was 4: same fallback headroom as the go job.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -121,7 +122,8 @@ jobs:
 
   go:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # 5, was 3: when setup-go fails, its three 504 retries plus the dl.google.com fallback download come before any test.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

@@ -104,6 +104,17 @@ test('over the limit even a valid code is refused, and the code stays pending; a
   expect((await send(s, 'deny', 'BBBB-BBBB', by(tok))).status).toBe(404);
 });
 
+test('a lookup whose clock reads an older window than the counter holds does not restart the newer count', async () => {
+  const s = await setup();
+  await s.hub.setClock(T0 + 600_000);
+  const tok = await person(s, 'guesser');
+  for (let i = 0; i < 10; i++) expect((await send(s, 'deny', 'BBBB-BBBB', by(tok))).status).toBe(404);
+  await s.hub.setClock(T0 + 599_000);
+  expect(limited(await send(s, 'deny', 'BBBB-BBBB', by(tok)))).toBe(true);
+  await s.hub.setClock(T0 + 600_000);
+  expect(limited(await send(s, 'deny', 'BBBB-BBBB', by(tok)))).toBe(true);
+});
+
 test('failed lookups count in the address\'s start limit, so many accounts share it, and a start stops with it', async () => {
   const s = await setup(undefined, { local: true, startLimit: 5 });
   await s.hub.setClock(T0);

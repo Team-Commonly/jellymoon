@@ -148,12 +148,12 @@ async function logout(env: Env, req: Request, now: number): Promise<Response> {
 }
 
 /**
- * One more for `key` in window `win` of the D1 table rate_limits: a row per key, whose count restarts at 1 when the window
- * changes. `win` is a minute number, the last minute of the window, so the start limit's sweep of older minutes keeps a row
- * until its window ends.
+ * One more for `key` in window `win` of the D1 table rate_limits: a row per key, whose count restarts at 1 when a later window
+ * begins. A request stamped in an older window counts in the row's newer one rather than taking the row back. `win` is a minute
+ * number, the last minute of the window, so the start limit's sweep of older minutes keeps a row until its window ends.
  */
 const take = (env: Env, key: string, win: number): D1PreparedStatement =>
-  env.DB.prepare('insert into rate_limits (k, win, n) values (?, ?, 1) on conflict (k) do update set n = case when win = excluded.win then n + 1 else 1 end, win = excluded.win returning n').bind(key, win);
+  env.DB.prepare('insert into rate_limits (k, win, n) values (?, ?, 1) on conflict (k) do update set n = case when excluded.win > win then 1 else n + 1 end, win = max(win, excluded.win) returning n, win').bind(key, win);
 const counted = (r: D1Result): number => (r.results[0] as { n: number } | undefined)?.n ?? 0;
 const startLimit = (env: Env): number => Number(env.AUTH_START_LIMIT) || START_LIMIT;
 const deviceKey = (req: Request): string => `device ${req.headers.get('CF-Connecting-IP') ?? 'unknown'}`;
@@ -192,16 +192,17 @@ async function guessGate(env: Env, req: Request, userId: string, now: number): P
   const minute = Math.floor(now / 60_000);
   const last = (Math.floor(minute / CODE_WINDOW_MIN) + 1) * CODE_WINDOW_MIN - 1;
   const mine = `code ${userId}`;
-  if (((await take(env, mine, last).first<{ n: number }>())?.n ?? 0) > CODE_LIMIT) {
-    return limited(Math.ceil(((last + 1) * 60_000 - now) / 1000), 'Too many unknown, expired or used codes from this account; wait for Retry-After.');
-  }
+  // Each give names the window its take counted in, which the row reports (a newer one than ours if another request moved it).
+  const a = (await take(env, mine, last).first<{ n: number; win: number }>()) ?? { n: 0, win: last };
+  if (a.n > CODE_LIMIT) return limited(Math.ceil(((a.win + 1) * 60_000 - now) / 1000), 'Too many unknown, expired or used codes from this account; wait for Retry-After.');
   const give = (key: string, win: number): D1PreparedStatement => env.DB.prepare('update rate_limits set n = n - 1 where k = ? and win = ? and n > 0').bind(key, win);
   const addr = deviceKey(req);
-  if (((await take(env, addr, minute).first<{ n: number }>())?.n ?? 0) > startLimit(env)) {
-    await give(mine, last).run();
-    return limited(Math.ceil(((minute + 1) * 60_000 - now) / 1000), 'Too many sign-in attempts from this address; wait for Retry-After.');
+  const b = (await take(env, addr, minute).first<{ n: number; win: number }>()) ?? { n: 0, win: minute };
+  if (b.n > startLimit(env)) {
+    await give(mine, a.win).run();
+    return limited(Math.ceil(((b.win + 1) * 60_000 - now) / 1000), 'Too many sign-in attempts from this address; wait for Retry-After.');
   }
-  return async () => { await env.DB.batch([give(mine, last), give(addr, minute)]); };
+  return async () => { await env.DB.batch([give(mine, a.win), give(addr, b.win)]); };
 }
 
 async function deviceToken(env: Env, req: Request, now: number): Promise<Response> {

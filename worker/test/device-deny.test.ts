@@ -113,6 +113,14 @@ test('failed lookups count in the address\'s start limit, so many accounts share
   expect(await route(env, 'approve', d.userCode, by(b), T0 + 60_000)).toEqual({ status: 200, body: '{}' });
 });
 
+test('a request stamped in an older window that writes after a newer one has counted does not restart the newer count', async () => {
+  const { env } = await world();
+  const tok = await person(env, 'guesser');
+  for (let i = 0; i < 10; i++) expect((await route(env, 'deny', 'BBBB-BBBB', by(tok), T0 + 600_000)).status).toBe(404);
+  expect(limited(await route(env, 'deny', 'BBBB-BBBB', by(tok), T0 + 599_000))).toBe(true);
+  expect((await retried(env, 'deny', tok, 600_000)).status).toBe(429);
+});
+
 test('a person\'s count outlives the start limit\'s sweep of older minutes until its ten minutes end', async () => {
   const { env } = await world();
   const tok = await person(env, 'guesser');

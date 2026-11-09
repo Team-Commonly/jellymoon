@@ -35,9 +35,9 @@ class Counts {
   private win = -1;
   private readonly seen = new Map<string, number>();
   constructor(private readonly ms: number) {}
-  /** One more for `key` in the window holding `now`: the new count, and the whole seconds left in the window. */
+  /** One more for `key` in the window holding `now` (or the newer one already counting): the new count, and the seconds it has left. */
   take(key: string, now: number): { n: number; retry: number } {
-    const w = Math.floor(now / this.ms);
+    const w = Math.max(Math.floor(now / this.ms), this.win);
     if (w !== this.win) { this.win = w; this.seen.clear(); }
     const n = (this.seen.get(key) ?? 0) + 1;
     this.seen.set(key, n);

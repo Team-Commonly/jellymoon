@@ -18,6 +18,16 @@ func TestStringShortensEveryTokenPrefix(t *testing.T) {
 	}
 }
 
+// A Commonly device token (cm_) the importer holds is shortened too, if one ever reaches a line; "cm_" ending a word is left alone.
+func TestStringShortensACommonlyToken(t *testing.T) {
+	if got, want := String("token cm_0123456789abcdef end"), "token cm_… end"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got := String("the vcm_ prefix and pcm_x"); got != "the vcm_ prefix and pcm_x" {
+		t.Errorf("a word that only ends in cm_ changed: %q", got)
+	}
+}
+
 func TestStringStripsControlCharactersButKeepsNewlineAndTab(t *testing.T) {
 	cases := map[string]struct{ in, want string }{
 		"ansi escape": {"a\x1b[2Jb\x1b]0;title\x07c", "a[2Jb]0;titlec"},

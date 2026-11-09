@@ -1,7 +1,9 @@
 # 0004 · The open-core boundary
 
-Status: Proposed. Nothing here is built: `ee/` is empty and no server package exists yet. It becomes Accepted when the
-maintainers ratify it, which settles none of the open items at the end.
+Status: Accepted (ratified by the product owner, 2026-11-09). Ratifying settles none of the open items at the end, which stay
+open: the `ee/` licence has had no legal review; the names and number of gated features are not chosen; how an `ee/`
+implementation verifies a subscription is not decided; and whether the entitlement interface takes more context than `podId`
+waits for the first gated feature. `ee/` is still empty and no server code gates anything yet.
 
 ## Decision
 

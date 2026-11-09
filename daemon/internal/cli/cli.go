@@ -29,7 +29,7 @@ const (
 	userTokenEnv = "JELLYMOON_USER_TOKEN"
 )
 
-const usage = "usage:\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>] [--repo <path>] [--allow-permissions]\n"
+const usage = "usage:\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>] [--repo <path>] [--allow-permissions]\n  jellymoon import commonly --instance <url> [--apply] [--include-dm <pod id>] [--anonymize]\n"
 
 var podIDShape = regexp.MustCompile(`^pod_[0-9A-Z]{26}$`)
 
@@ -44,6 +44,8 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		err = start(args[2:], stderr)
 	case len(args) == 1 && args[0] == "login":
 		err = login(stdout)
+	case len(args) >= 2 && args[0] == "import" && args[1] == "commonly":
+		err = importCommonly(args[2:], stdout, stderr)
 	case len(args) >= 2 && args[0] == "agent" && args[1] == "add":
 		err = agentAdd(args[2:], stdout)
 	default:

@@ -1,0 +1,32 @@
+name: Set up Go
+description: >-
+  actions/setup-go with one retry. A failed download of the Go archive (HTTP 403 from the release
+  mirror) fails the job before any test ran; a second attempt after a pause passes. The version is
+  still go.mod's, and the job still fails if Go is not installed after the retry.
+runs:
+  using: composite
+  steps:
+    - id: first
+      continue-on-error: true
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+    - name: Pause before the retry
+      if: steps.first.outcome == 'failure'
+      shell: bash
+      run: |
+        echo "::warning::setup-go failed once; retrying in 20s"
+        sleep 20
+    # No continue-on-error: if the retry fails too, the job fails here.
+    - id: second
+      if: steps.first.outcome == 'failure'
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+    # Whichever attempt ran, Go must be on PATH at go.mod's version, or the job fails.
+    - name: Go is installed at go.mod's version
+      shell: bash
+      run: |
+        want=$(awk '$1=="go"{print $2; exit}' go.mod)
+        got=$(go env GOVERSION)
+        case "$got" in go"$want"|go"$want".*) echo "$got" ;; *) echo "::error::wanted Go $want (go.mod), have '$got'"; exit 1 ;; esac

@@ -37,9 +37,7 @@ jobs:
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version-file: .tool-versions
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: go.mod
+      - uses: ./.github/actions/setup-go
       - name: Portable (no symlink out of the repo, no machine-local path)
         run: make portable
       - name: Generated contracts match the schema
@@ -74,9 +72,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: go.mod
+      - uses: ./.github/actions/setup-go
       - name: Full history of all branches (merge commits included) and the tracked tree (gitleaks)
         run: make secrets-all
 
@@ -130,9 +126,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: go.mod
+      - uses: ./.github/actions/setup-go
       - name: Daemon, ACP and TUI tests
         run: make test-go
 
@@ -160,9 +154,7 @@ jobs:
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version-file: .tool-versions
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: go.mod
+      - uses: ./.github/actions/setup-go
       - name: The contract suite against the pod-state server on a Postgres service container (make e2e-c)
         run: |
           if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL is unset: this job must run on Postgres, never on the in-process fallback"; exit 1; fi
@@ -179,9 +171,7 @@ jobs:
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version-file: .tool-versions
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: go.mod
+      - uses: ./.github/actions/setup-go
       - name: The contract suite against the Worker under wrangler dev --local (make e2e-a)
         run: |
           if [ ! -d e2e ]; then echo "::error::no e2e/ directory"; exit 1; fi
@@ -249,9 +239,7 @@ jobs:
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version-file: .tool-versions
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version-file: go.mod
+      - uses: ./.github/actions/setup-go
       - name: Boot the release bundle on Postgres and run the contract suite against it (make e2e-deployed)
         run: |
           if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL is unset: this job must run on Postgres, never on the in-process fallback"; exit 1; fi

@@ -51,6 +51,7 @@ merges only when all of these hold at the exact PR head:
   can read: the ledger PASS and the pod verdict above, and no failed completed check run on the head. It does not wait for CI at the head;
   the ruleset on `main` holds the merge until the required checks pass, and `landing.md` says when CI on land's own merge commit stands in
   for the local preflight. CodeRabbit is asked when there is allowance but never awaited: a head it has not reviewed does not block a land.
+  Every CI job installs Go through `.github/actions/setup-go`, which retries once when the Go download fails (an HTTP 403 from the release mirror fails a job before any test runs) and still fails the job if Go is missing after the retry.
   Land still refuses what CodeRabbit already said at the head, a `CHANGES_REQUESTED` review or an unanswered Major or Critical thread
   (`landing.md`, "The CodeRabbit path"). A Major or Critical it raises after the merge becomes a fix PR, first in the queue.
 - Workers never merge. GitHub review text is not consulted.

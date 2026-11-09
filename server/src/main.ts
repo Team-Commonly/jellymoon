@@ -1,10 +1,10 @@
 // The pod-state server: one Bun process serving every pod (ADR 0006).
-// Env: PORT, ENV, DATABASE_URL, PUBLIC_URL, TEST_BEARER, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_URL (an override, ADR 0008), JM_VAULT_KEY and JM_VAULT_OLD_KEYS (the connector vault, ADR 0009), JM_WEB_DIR (the built web client); for local runs JM_PGLITE_TEMPLATE and JM_PG_SCHEMA (see db.ts). Flag: --persist-to <dir> keeps the in-process Postgres (PGlite) there.
+// Env: PORT, ENV, DATABASE_URL, PUBLIC_URL, TEST_BEARER, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_URL (an override, ADR 0008), JM_VAULT_KEY and JM_VAULT_OLD_KEYS (the connector vault, ADR 0009), JM_WEB_DIR (the built web client); JM_DB_CLIENT_CERT, JM_DB_CLIENT_KEY, JM_DB_SERVER_CA and JM_DB_TLS_SERVERNAME (a database client certificate, config.ts); for local runs JM_PGLITE_TEMPLATE and JM_PG_SCHEMA (see db.ts). Flag: --persist-to <dir> keeps the in-process Postgres (PGlite) there.
 // Production runs against a real Postgres (DATABASE_URL). PGlite is for `make e2e` and a clean shell, so it needs ENV=local.
 import { websocket } from 'hono/bun';
 import { buildApp } from './app';
 import { githubOf } from './auth';
-import { appOptions, startupRefusal, vaultOf } from './config';
+import { appOptions, dbTlsOf, startupRefusal, vaultOf } from './config';
 import { BootRefused, Hub } from './hub';
 
 const port = Number(process.env.PORT ?? 8787);
@@ -16,8 +16,9 @@ if (refusal !== undefined) {
   process.exit(1);
 }
 const stop = (why: string): never => { console.error(why); process.exit(1); };
+const tls = dbTlsOf(process.env); // A string here was refused above.
 // The boot lock (ADR 0010): a second server on this database exits here, before it restores a pod or listens.
-const hub = await Hub.open({ DATABASE_URL: process.env.DATABASE_URL, PGLITE_DIR: dir, PGLITE_TEMPLATE: process.env.JM_PGLITE_TEMPLATE, PG_SCHEMA: process.env.JM_PG_SCHEMA }, stop)
+const hub = await Hub.open({ DATABASE_URL: process.env.DATABASE_URL, PGLITE_DIR: dir, PGLITE_TEMPLATE: process.env.JM_PGLITE_TEMPLATE, PG_SCHEMA: process.env.JM_PG_SCHEMA, TLS: typeof tls === 'object' ? tls : undefined }, stop)
   .catch((e: unknown) => { if (e instanceof BootRefused) return stop(e.message); throw e; });
 const app = buildApp(hub, { ...appOptions(process.env), github: githubOf(process.env), vault: await vaultOf(process.env) });
 Bun.serve({ port, fetch: app.fetch, websocket });

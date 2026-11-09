@@ -19,7 +19,9 @@ export interface Db extends Tx {
  * made by pglite-template.ts; a fresh PGlite dir starts from it, which skips initdb (about 5 s of CPU, against about 1 s).
  * PG_SCHEMA: confine this server to one schema of a shared Postgres, so the e2e suite can give every server fresh state.
  */
-export interface DbEnv { DATABASE_URL?: string; PGLITE_DIR?: string; PGLITE_TEMPLATE?: string; PG_SCHEMA?: string }
+/** A client certificate for the wire connection (config.ts dbTlsOf): the server's CA is checked, and the client presents its own. */
+export interface DbTls { cert: string; key: string; ca: string; servername?: string }
+export interface DbEnv { DATABASE_URL?: string; PGLITE_DIR?: string; PGLITE_TEMPLATE?: string; PG_SCHEMA?: string; TLS?: DbTls }
 
 /** A value stored as text comes back as a string; one stored as json may come back parsed. Accept both. */
 export const json = <T>(v: unknown): T => (typeof v === 'string' ? JSON.parse(v) : v) as T;
@@ -81,8 +83,8 @@ async function takeBootLock(sql: BunSql, schema: string | undefined, lost: (why:
   return undefined;
 }
 
-async function openWire(url: string, schema: string | undefined): Promise<Db> {
-  const sql = new Bun.SQL(url);
+async function openWire(url: string, schema: string | undefined, tls: DbTls | undefined): Promise<Db> {
+  const sql = tls === undefined ? new Bun.SQL(url) : new Bun.SQL({ url, tls });
   if (schema !== undefined) {
     if (!/^[a-z][a-z0-9_]{0,40}$/.test(schema)) throw new Error('PG_SCHEMA is lower-case letters, digits and underscores.');
     await sql.unsafe(`create schema if not exists ${schema}`);
@@ -103,5 +105,5 @@ async function openWire(url: string, schema: string | undefined): Promise<Db> {
 }
 
 export async function openDb(env: DbEnv): Promise<Db> {
-  return env.DATABASE_URL ? openWire(env.DATABASE_URL, env.PG_SCHEMA) : openPglite(env.PGLITE_DIR, env.PGLITE_TEMPLATE);
+  return env.DATABASE_URL ? openWire(env.DATABASE_URL, env.PG_SCHEMA, env.TLS) : openPglite(env.PGLITE_DIR, env.PGLITE_TEMPLATE);
 }

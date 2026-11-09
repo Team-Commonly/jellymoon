@@ -14,11 +14,19 @@ interface Env {
   GITHUB_CLIENT_SECRET?: string;
   JM_VAULT_KEY?: string;
   PUBLIC_URL?: string;
+  // The database client certificate (PEM) and, optionally, the name its server certificate is checked against.
+  JM_DB_CLIENT_CERT?: string;
+  JM_DB_CLIENT_KEY?: string;
+  JM_DB_SERVER_CA?: string;
+  JM_DB_TLS_SERVERNAME?: string;
   // The deployed commit, a plain var set by `wrangler deploy --var JM_BUILD:<sha>` (hosted/ship.sh).
   JM_BUILD?: string;
 }
 
-const SECRETS = ["DATABASE_URL", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "JM_VAULT_KEY", "PUBLIC_URL", "JM_BUILD"] as const;
+const SECRETS = [
+  "DATABASE_URL", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "JM_VAULT_KEY", "PUBLIC_URL", "JM_BUILD",
+  "JM_DB_CLIENT_CERT", "JM_DB_CLIENT_KEY", "JM_DB_SERVER_CA", "JM_DB_TLS_SERVERNAME",
+] as const;
 
 export class JellymoonServer extends Container<Env> {
   defaultPort = PORT;

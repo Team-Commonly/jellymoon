@@ -30,7 +30,7 @@
       "paths": [
         "server/"
       ],
-      "max": 4660
+      "max": 4700
     },
     "podcore": {
       "paths": [
@@ -60,7 +60,7 @@
       "paths": [
         "hosted/"
       ],
-      "max": 60
+      "max": 70
     }
   },
   "goImports": {

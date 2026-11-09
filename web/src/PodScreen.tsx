@@ -75,15 +75,19 @@ function useNeedsYouFilter() {
   return { on, toggle: () => setParams(on ? {} : { filter: 'needs-you' }, { replace: true }) };
 }
 
+/** The bar names the pod once hello has; until then it shows the id from the address. */
+function useBarTitle(setTitle: BarContext['setTitle'], name: string | undefined) {
+  useEffect(() => {
+    setTitle(name);
+    return () => setTitle(undefined);
+  }, [setTitle, name]);
+}
+
 export function PodPage({ connect, http }: { connect: (podId: string) => Connect; http: Http }) {
   const { id = '' } = useParams();
   const { slot, setTitle } = useOutletContext<BarContext>();
   const { store, state } = usePod(id, connect);
-  // The bar names the pod once hello has; until then it shows the id from the address.
-  useEffect(() => {
-    setTitle(state.podName);
-    return () => setTitle(undefined);
-  }, [setTitle, state.podName]);
+  useBarTitle(setTitle, state.podName);
   const filter = useNeedsYouFilter();
   const composer = useRef<HTMLTextAreaElement>(null);
   const mine = useMemo(() => (state.you ? needsYou(state.messages, state.you, state.members) : []), [state.messages, state.you, state.members]);

@@ -179,6 +179,26 @@ func TestSecretErrorNamesThePodAndMessage(t *testing.T) {
 	}
 }
 
+// A failed read names the route shape and the pod through where(), never the raw path: a GitHub- or cm_-shaped pod id (a clean name, a 404 or 400) is not echoed.
+func TestFailedReadsNeverEchoASecretShapedPodID(t *testing.T) {
+	for _, secret := range []string{"ghp_" + "0123456789" + "ABCDEFGHIJabcdefghij", "cm_" + "0123456789" + "abcdef0123456789"} {
+		for _, code := range []int{404, 400} {
+			f := cmyfake.New()
+			f.Pods[4]["_id"], f.Msgs[secret] = secret, f.Msgs["p_study"]
+			f.FailMsg = func(pod string, _ int) (int, string) {
+				if pod == secret {
+					return code, ""
+				}
+				return 0, ""
+			}
+			_, err := runWith(t, f, newSink(), opts(t, true))
+			if err == nil || strings.Contains(err.Error(), "0123456789") || !strings.Contains(err.Error(), "/api/messages/:podId") {
+				t.Errorf("%.4s %d: %v", secret, code, err)
+			}
+		}
+	}
+}
+
 // Grants and integrations are filtered to the imported pods, unrevoked, and counted by what Jellymoon supports.
 func TestGrantsAreFilteredAndCounted(t *testing.T) {
 	f := cmyfake.New()

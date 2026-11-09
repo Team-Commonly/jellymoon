@@ -130,7 +130,7 @@ func readPod(c *Commonly, sc *Scrubber, listed Pod, me Me, st *State) (*PodPlan,
 		if errors.As(err, &se) {
 			return nil, skipNotMember, nil
 		}
-		return nil, "", err
+		return nil, "", fmt.Errorf("%w (%s)", err, where(sc, listed.ID, ""))
 	}
 	pod.ID = listed.ID
 	if !pod.Has(me.ID) {
@@ -146,7 +146,7 @@ func readPod(c *Commonly, sc *Scrubber, listed Pod, me Me, st *State) (*PodPlan,
 		return nil, skipDenied, nil
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("%w (%s)", err, where(sc, pod.ID, ""))
 	}
 	for _, n := range msgs {
 		switch {
@@ -255,7 +255,7 @@ func readSides(c *Commonly, sc *Scrubber, plan *Plan) error {
 		err := c.Get("/api/integrations/"+url.PathEscape(pp.Pod.ID), nil, &rows)
 		var se *StatusError
 		if err != nil && !errors.As(err, &se) {
-			return err
+			return fmt.Errorf("%w (%s)", err, where(sc, pp.Pod.ID, ""))
 		}
 		pp.Integ = rows
 	}

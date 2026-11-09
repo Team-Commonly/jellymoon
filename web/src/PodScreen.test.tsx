@@ -12,7 +12,7 @@ const theirs = (seq: number, over: Partial<Message> = {}) => ask(seq, { needs: {
 
 function mount(msgs: Message[] = [], path = '/pod/pod_1') {
   const net = fakeNet();
-  const tree = (key: number) => <MemoryRouter initialEntries={[path]}><App key={key} connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>;
+  const tree = (key: number) => <MemoryRouter initialEntries={[path]}><App key={key} connect={() => net.connect} http={fakeHttp().http} me={you} /></MemoryRouter>;
   const view = render(tree(1));
   const push = (m: Message) => act(() => net.deliver(frame('message.created', m.seq, m)));
   act(() => {
@@ -44,7 +44,7 @@ const toggle = () => screen.getByRole('button', { name: /Needs you/ });
 describe('an empty pod', () => {
   const open = (headSeq: number) => {
     const net = fakeNet();
-    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} me={you} /></MemoryRouter>);
     return { net, hello: () => act(() => { net.open(); net.deliver(frame('hello', undefined, hello({ headSeq }))); }) };
   };
 
@@ -364,7 +364,7 @@ describe('who is working', () => {
   const scout = { kind: 'agent' as const, id: 'agt_1', displayName: 'Scout' };
   it('says an agent is working while its presence is working, and stops saying it when it goes back online', () => {
     const net = fakeNet();
-    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} signedIn /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={fakeHttp().http} me={you} /></MemoryRouter>);
     act(() => {
       net.open();
       net.deliver(frame('hello', undefined, hello({ agents: [{ agent: scout, harness: 'fake', computerId: 'cmp_1', state: 'online' }] })));

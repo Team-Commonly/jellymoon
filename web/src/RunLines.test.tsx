@@ -21,7 +21,7 @@ function mount(opts: { as?: typeof you; stop?: (podId: string, runId: string) =>
     net.open();
     net.deliver(frame('hello', undefined, hello({ you: as, members: [...members] })));
   });
-  render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={h.http} signedIn /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={h.http} me={you} /></MemoryRouter>);
   join();
   const seq = { n: 0 };
   const started = (runId: string, agent = scout, at = ++seq.n) => act(() => net.deliver(frame('run.started', at, { runId, agent })));
@@ -158,7 +158,7 @@ describe('one line per agent', () => {
   it('shows a working agent with a going run as its run line only, and as the presence line once the run ends', () => {
     const net = fakeNet();
     const h = fakeHttp();
-    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={h.http} signedIn /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/pod/pod_1']}><App connect={() => net.connect} http={h.http} me={you} /></MemoryRouter>);
     const agents: AgentPresence[] = [{ agent: scout, harness: 'fake', computerId: 'cmp_1', state: 'online' }, { agent: sage, harness: 'fake', computerId: 'cmp_1', state: 'online' }];
     act(() => { net.open(); net.deliver(frame('hello', undefined, hello({ members: [{ actor: you, role: 'owner' }], agents }))); });
     act(() => net.deliver(frame('presence.changed', undefined, { actor: scout, state: 'working', computerId: 'cmp_1' })));

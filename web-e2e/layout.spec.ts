@@ -106,8 +106,24 @@ test('the top bar keeps its layout under a pod id as long as an address can make
   await holdsLayout(page, 'the bar with a very long pod id');
   await signIn(page, await person('Ada'));
   await page.goto(`/pod/${UNBROKEN}${UNBROKEN}`);
-  await expect(page.getByRole('banner')).toContainText('Signed in');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await holdsLayout(page, 'the bar with a very long pod id, signed in');
+});
+
+test('signed in under the longest display name the schema allows, the bar names the person and keeps Sign out and the pod title on screen', async ({ page }) => {
+  const NAME = UNBROKEN.slice(0, 80); // schema/common.json: a display name is at most 80 characters, and so is a pod name
+  const ada = await person(NAME);
+  const { id } = await api<{ id: string }>('POST', '/v1/pods', ada.token, { name: NAME });
+  await signIn(page, ada);
+  const bar = page.getByRole('banner');
+  for (const [path, title] of [['/', 'Jellymoon'], [`/pod/${id}`, NAME]]) {
+    await page.goto(path);
+    await expect(bar.locator(`[title="${NAME}"]`)).toHaveText(NAME);
+    await expect(bar.locator('strong')).toHaveText(title);
+    await expect(bar.getByRole('button', { name: 'Sign out' })).toBeInViewport({ ratio: 1 });
+    await expect(bar.locator('strong')).toBeInViewport({ ratio: 1 });
+    await holdsLayout(page, `${path === '/' ? '/' : '/pod/:id'} signed in under the longest display name`);
+  }
 });
 
 test('the top bar keeps its layout under the longest pod name the schema allows, and the invite page under it too', async ({ page }) => {

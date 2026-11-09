@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import type { PodAccess } from './http';
-import { fakeHttp, fakeNet, frame, hello } from './testkit';
+import { fakeHttp, fakeNet, frame, hello, you } from './testkit';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -12,7 +12,7 @@ function open(path: string, access: PodAccess) {
   vi.useFakeTimers();
   const net = fakeNet();
   const h = fakeHttp(undefined, undefined, undefined, undefined, undefined, async () => access);
-  render(<MemoryRouter initialEntries={[path]}><App connect={() => net.connect} http={h.http} signedIn /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={[path]}><App connect={() => net.connect} http={h.http} me={you} /></MemoryRouter>);
   return { net, h };
 }
 const composer = () => screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;

@@ -131,6 +131,8 @@ async function logout(env: Env, req: Request, now: number): Promise<Response> {
   const who = await authOf(env, req, true);
   if (who instanceof Response) return who;
   const p = presented(req, true);
+  // A dead session cookie with no Bearer is a sign-out that already happened: nothing to revoke, the dead cookie is cleared.
+  if (who === null && p?.byCookie === true) return Response.json({}, { headers: { 'Set-Cookie': setCookie(env, SESSION, '', '/', 0) } });
   if (who === null || p === null) return fail('unauthorized', 'Sign in first.');
   if (who.kind !== 'user') return fail('forbidden', 'Only a person signs out.');
   for (const hash of new Set(await Promise.all([p.token, cookieOf(req, SESSION) ?? p.token].map(hashToken)))) {
@@ -154,6 +156,7 @@ async function startGate(env: Env, req: Request, route: string, now: number): Pr
     env.DB.prepare('delete from rate_limits where win < ?').bind(win),
     env.DB.prepare('delete from device_codes where expires_at <= ?').bind(now - SWEEP_GRACE_MS),
     env.DB.prepare('delete from oauth_states where expires_at <= ?').bind(now - SWEEP_GRACE_MS),
+    env.DB.prepare('delete from token_pods where hash in (select hash from tokens where revoked_at is not null or (expires_at is not null and expires_at <= ?))').bind(now),
   ]);
   if (((hit.results[0] as { n: number } | undefined)?.n ?? 0) <= (Number(env.AUTH_START_LIMIT) || START_LIMIT)) return null;
   const res = fail('rate_limited', 'Too many sign-in starts from this address; wait for Retry-After.');

@@ -112,3 +112,33 @@ test('a logout between the upgrade\'s authentication and the socket opening leav
   expect(s.hub.sockets.has(hash)).toBe(false);
   srv.stop(true);
 });
+
+test('a socket that throws after the pod attached it is closed 1011 and leaves nothing attached in the pod', async () => {
+  const boom = async (x: Awaited<ReturnType<typeof setup>>) => {
+    for (const pod of x.hub.pods.values()) {
+      const attach = pod.attach.bind(pod);
+      let once = true;
+      pod.attach = async (c) => { const r = await attach(c); if (once) { once = false; throw new Error('hello failed'); } return r; };
+    }
+  };
+  const { s, srv, dial } = await sockets(boom);
+  const a = dial();
+  const closed = new Promise<number>((done) => { a.ws.onclose = (e) => done(e.code); });
+  expect(await Promise.race([closed, sleep(1000).then(() => -1)])).toBe(1011);
+  const pod = [...s.hub.pods.values()][0];
+  await settle(() => pod.conns.size === 0);
+  expect(pod.conns.size).toBe(0);
+  srv.stop(true);
+});
+
+test('logout with a dead session cookie clears it and revokes nothing; a dead Bearer alone stays 401', async () => {
+  const s = await setup();
+  const live = (await s.call('POST', '/__test/session', undefined, { name: 'olivia' })).json.token as string;
+  const dead = (await s.call('POST', '/__test/session', undefined, { name: 'ben' })).json.token as string;
+  expect((await s.call('POST', '/v1/auth/logout', dead)).status).toBe(200);
+  const out = (headers: Record<string, string>) => s.app.fetch(new Request('http://x/v1/auth/logout', { method: 'POST', headers: { Origin: 'http://x', 'Content-Type': 'application/json', ...headers } }));
+  const res = await out({ Cookie: `jm_session=${dead}` });
+  expect([res.status, res.headers.get('Set-Cookie')?.includes('Max-Age=0')]).toEqual([200, true]);
+  expect((await out({ Authorization: `Bearer ${dead}` })).status).toBe(401);
+  expect((await s.call('GET', '/v1/me', live)).status).toBe(200);
+});

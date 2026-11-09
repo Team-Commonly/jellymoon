@@ -51,6 +51,7 @@ export function wsRoute(app: Hono, hub: Hub, onRule: OnRule): void {
     let chain: Promise<void> = Promise.resolve();
     let close = (): void => undefined;
     let live = true;
+    let attached = false; // apart from `live`: a throw after attach marks the socket dead, but the conn is still in the pod
     return {
       onOpen(_e, ws) {
         conn.send = (t) => { try { ws.send(t); } catch { /* the socket closed under us */ } };
@@ -62,6 +63,7 @@ export function wsRoute(app: Hono, hub: Hub, onRule: OnRule): void {
         // The computer is marked online before hello, so hello shows the presence this socket just made.
         chain = findToken(hub.db, s.token, hub.now()).then(async (row) => {
           if (row === undefined) { live = false; return close(); }
+          attached = true;
           await s.pod.attach(conn);
           conn.send(frame(hub, s.pod, 'hello', hello(s.pod.state, s.pod.meta, you)));
         }).catch((err) => {
@@ -74,7 +76,7 @@ export function wsRoute(app: Hono, hub: Hub, onRule: OnRule): void {
       onMessage(e) { chain = chain.then(() => (live ? onFrame(hub, s, conn, String(e.data), onRule) : undefined)).catch(crash); },
       onClose() {
         hub.dropSocket(s.token, close);
-        chain = chain.then(() => (live ? s.pod.detach(conn) : undefined)).then(() => undefined).catch(crash);
+        chain = chain.then(() => (attached ? s.pod.detach(conn) : undefined)).then(() => undefined).catch(crash);
       },
     };
   }));

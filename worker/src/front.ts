@@ -98,17 +98,16 @@ async function acceptInvite(env: Env, code: string, who: Who): Promise<Response>
 
 /**
  * The pod socket, tagged in the pod with the presented token's hash; D1 records the pod so logout can close it (ADR 0008). The
- * row is written before the pod opens the socket, so a logout after the write finds it, and dropped if the pod does not open
- * it, unless another socket of the token in this pod wrote it first. Once the pod has opened it the token is authenticated
+ * row is written before the pod opens the socket, so a logout after the write finds it. A pod that does not open the socket
+ * leaves the row: another socket of the token may have opened in that pod meanwhile and need it, and a stale row costs
+ * logout one close to a pod with no sockets for the tag. Rows go with the token (logout, or the sweep once it expires). Once the pod has opened it the token is authenticated
  * again: a logout that revoked it before the row was written, or whose close reached the pod before the socket was there,
  * found nothing to close, so this call closes the token's sockets in the pod, drops the row and refuses the upgrade.
  */
 async function openSocket(env: Env, req: Request, podId: string, who: Who): Promise<Response> {
   const hash = await presentedHash(req);
-  const mine = hash !== null && (await env.DB.prepare('insert or ignore into token_pods (hash, pod_id) values (?, ?) returning hash').bind(hash, podId).first()) !== null;
-  const drop = async (): Promise<void> => { if (mine) await env.DB.prepare('delete from token_pods where hash = ? and pod_id = ?').bind(hash, podId).run(); };
-  const res = await forward(env, req, podId, who, false, hash).catch(async (e: unknown) => { await drop(); throw e; });
-  if (res.status !== 101) await drop();
+  if (hash !== null) await env.DB.prepare('insert or ignore into token_pods (hash, pod_id) values (?, ?) returning hash').bind(hash, podId).first();
+  const res = await forward(env, req, podId, who, false, hash);
   if (res.status !== 101 || hash === null) return res;
   const again = await authOf(env, req, true);
   if (again !== null && !(again instanceof Response)) return res;

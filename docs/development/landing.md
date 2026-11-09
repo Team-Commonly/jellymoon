@@ -232,22 +232,23 @@ functions and decides nothing new.
 2. **A chain of land commits.** L1 is the land commit of main's tip and head a (the tree `merge-tree --write-tree` gives, parents exactly `[main tip, head]`), L2 is
    L1 and head b, and so on, each built by the same deterministic `landCommit` as the single land commit (`landCommitEnv`). A head that does not merge cleanly into the
    commit before it is dropped (`#6 dropped from the batch: ... does not merge cleanly ...`) and the chain goes on from the commit before it.
-3. **One push, one wait.** Only the last commit is pushed, create-only under a lease, to `refs/heads/land/<a>-<b>-...` (the PRs that remain, in order). CI runs on
-   `land/**` as for a single land. Land waits, exactly as for a single land, for every required check on that commit, counting only runs of a check suite that a `push`
-   to that ref started (`landSuiteRuns`; the suites are read with `branch=land/<a>-<b>-...`), so a pull request whose head is the batch SHA proves nothing.
+3. **Every prefix, one wait.** GitHub merges one PR at a time, so main passes through every prefix L1, L2, ... of the chain, and each is proved: each Lk is pushed,
+   create-only under a lease, to its own ref (`land/<a>`, `land/<a>-<b>`, ...; the first is the single path's own land commit). CI runs on `land/**` as for a single
+   land, and the waits run side by side, so the wall clock is one CI cycle. Each is waited on exactly as for a single land, counting only runs of a check suite that a `push`
+   to that ref started (`landSuiteRuns`; the suites are read with `branch=<that ref>`), so a pull request whose head is that SHA proves nothing.
 4. **The ref shape.** `landRef` and the delete guard (`isLandRef`) accept exactly `refs/heads/land/<digits>` and `refs/heads/land/<digits>(-<digits>)*`, nothing
-   else: land still only ever pushes or deletes a ref of that shape, never a PR branch. The batch ref is deleted on every exit, as `land/<n>` is (`ciClean`).
-5. **Green: merge in order.** Before each PR the ledger, CI, scan and pod are decided again, the PR is re-read (trust, draft, base and state), and `checkBatchStep` requires
+   else: land still only ever pushes or deletes a ref of that shape, never a PR branch. Every batch ref is deleted on every exit, as `land/<n>` is (`ciClean`).
+5. **Every prefix green: merge in order.** Before each PR the ledger, CI, scan and pod are decided again, the PR is re-read (trust, draft, and the single path's base-is-main, open and head check), and `checkBatchStep` requires
    main's tip to be exactly where the previous merge left it (main's tip for the first, the previous merge commit after that) and the PR's head to be the tested one.
    Then the merge is the single path's `gh pr merge <n> --merge --match-head-commit <head>` (`doMerge`): GitHub makes its own merge commit, so main does not end at the
    land commit's SHA. It ends at its tree: GitHub's merge of head k onto the merge commit of PR k-1 is the merge of head k onto L(k-1), whose tree is the tree CI proved,
    and the tree of every merge commit is read back and compared with the tested tree of that step. A difference is written on that PR's LANDED row (`TREE-MISMATCH`),
    stops the batch and refuses. If anything moved (main, a head, a verdict), the batch stops before that PR and the PRs not yet merged go the single path.
-6. **Red or no proof: nothing from the batch lands.** A required check that fails, the 15 minute cap, an unreadable run list or a failed push prints
+6. **Red or no proof on any prefix, a middle one included: nothing from the batch lands.** A required check that fails, the 15 minute cap, an unreadable run list or a failed push prints
    `batch red; landing one at a time`, and each PR in the original order then takes the existing single path, unchanged (its own ref, its own CI cycle). Between
    them this checkout moves to main's new tip by `git merge --ff-only`, which a single land needs anyway (it demands a checkout at main's tip). A PR the single path
    refuses is said and skipped; the exit status is non-zero if any did not land. The fallback is also how to find the culprit of a red batch.
-7. **`--dry-run`** runs every gate, builds the chain and says what it would push and merge; it pushes nothing, merges nothing and writes no ledger row.
+7. **`--dry-run`** runs every gate, builds the chain and says what it would merge; it pushes nothing, merges nothing and writes no ledger row.
 
 Two PRs can each be green alone and red together: on 11-09 two PRs that each raised the same entropy cap against their own tree were both green, and red on the
 merge. The batch commit holds both, so CI catches it, and the one-at-a-time fallback then shows which of the two breaks. The batch needs no special handling for it.

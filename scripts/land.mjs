@@ -201,7 +201,7 @@ const treeOf = (mainTip, head) => mergeTree((a) => out('git', a, { maxBuffer: 1 
 // result refuses. The only refs land ever pushes or deletes are land/<n> and, for a batch, land/<a>-<b>-... (landRef, isLandRef).
 const [POLL_MS, CAP_MS] = [20 * 1000, 15 * 60 * 1000];
 const oneLine = (m) => String(m).replace(/\s+/g, ' ').trim();
-let MADE = null; // { remote, ref }: the land ref this run created or reused, deleted on every exit
+let MADE = []; // [{ remote, ref }]: the land refs this run created or reused (one, or one per batch prefix), deleted on every exit
 const requiredNow = () => {
   try {
     const rules = jsonLines(gh('api', '--paginate', `repos/${REPO}/rules/branches/main?per_page=100`, '--jq', '.[]'));
@@ -243,7 +243,7 @@ async function ciLand(n, mainTip, head, tree) { // n: a PR number, or a batch id
     const reuse = !!there && gh('api', `repos/${REPO}/git/commits/${there}`, '--jq', '([.tree.sha] + [.parents[].sha]) | join(" ")') === [tree, mainTip, head].join(' ');
     if (!reuse && !there) { /* GitHub may still hold this exact commit's check runs from an earlier attempt (the ref is deleted on every exit): green there is the proof, anything else pushes */ const got = ciRead(sha, n); const prior = got.error ? null : ciProof({ required, tree, ciTree: got.ciTree, runs: got.runs, total: got.total }); if (prior?.ok) { say(`#${n}: ${sha.slice(0, 8)} already has green required checks on GitHub; no push`); return prior; } }
     if (reuse) sha = there; else out('git', ['push', '--quiet', `--force-with-lease=${ref}:${there}`, remote, `${sha}:${ref}`]);
-    MADE = { remote, ref }; process.on('exit', ciClean); // Ctrl-C and kill end through process.exit (see the CLI), so the ref goes on signals too; a signal runs only after this block, so none lands between the push and MADE
+    MADE.push({ remote, ref }); process.off('exit', ciClean); process.on('exit', ciClean); // Ctrl-C and kill end through process.exit (see the CLI), so the ref goes on signals too; a signal runs only after this block, so none lands between the push and MADE
   } catch (e) { return { ok: false, reason: `could not push ${ref}: ${why(e)}` }; }
   say(`#${n}: pushed ${sha.slice(0, 8)} to ${ref}; waiting for ${required.length} required checks`);
   const p = await ciWait(sha, n, tree, required);
@@ -253,11 +253,11 @@ async function ciLand(n, mainTip, head, tree) { // n: a PR number, or a batch id
 // Deletes the land ref this run made, and only that: a ref under refs/heads/land/. A failure is said and does not stop the land.
 function ciClean() {
   process.off('exit', ciClean); const made = MADE;
-  MADE = null; if (!made) return;
-  try {
-    if (!isLandRef(made.ref)) throw new Error('not a land ref');
-    out('git', ['push', '--quiet', made.remote, '--delete', made.ref]);
-  } catch (e) { console.error(`land: could not delete ${made.ref}: ${why(e)}`); }
+  MADE = [];
+  for (const m of made) try {
+    if (!isLandRef(m.ref)) throw new Error('not a land ref');
+    out('git', ['push', '--quiet', m.remote, '--delete', m.ref]);
+  } catch (e) { console.error(`land: could not delete ${m.ref}: ${why(e)}`); }
 }
 const FLAGS = ['--dry-run', '--bootstrap', '--preflight-only'];
 const USAGE = 'usage: land.mjs <pr> [--dry-run] [--bootstrap] | <pr> --preflight-only [--bootstrap]';
@@ -288,7 +288,7 @@ export async function main(deps) {
   IO = deps;
   REPO = IO.env.JM_REPO;
   SECRET = '';
-  MADE = null;
+  MADE = [];
   const args = IO.argv;
   DRY = args.includes('--dry-run');
   let release = () => {};

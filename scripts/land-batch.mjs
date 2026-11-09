@@ -1,6 +1,6 @@
 // `land.mjs --batch <a> <b> ...` (docs/development/landing.md, "Batch landing"). Each PR passes the single path's gates first; the survivors become a chain of
-// land commits (L1 = main + a, L2 = L1 + b, ...), only the last is pushed (land/<a>-<b>-...), and on green the PRs merge in order. Red, no proof or anything
-// moved: the rest land one at a time. `c` is land.mjs's own functions (this file reads and decides nothing itself); the pure pieces are in land-decide.mjs.
+// land commits (L1 = main + a, L2 = L1 + b, ...), each prefix is pushed to its own ref (land/<a>, land/<a>-<b>, ...) and proved by CI, and only when every prefix is
+// green do the PRs merge in order. Red, a prefix with no proof, or anything moved: the rest land one at a time. `c` is land.mjs's own functions (this file reads and decides nothing itself); the pure pieces are in land-decide.mjs.
 import { landAction, checkHead } from './land-decide.mjs';
 
 // The pure pieces (tested by check-land-batch.mjs).
@@ -20,6 +20,11 @@ export function planBatch(entries) {
 // Before merging PR k of a batch: main must be exactly where the previous merge left it (`expect`) and the PR head the one that was tested.
 export const checkBatchStep = ({ expect, tip, head, headNow }) => (tip !== expect ? { ok: false, reason: `main moved from ${expect.slice(0, 8)} to ${tip.slice(0, 8)} during the batch` }
   : head.toLowerCase() !== headNow.toLowerCase() ? { ok: false, reason: `the head moved from ${head.slice(0, 8)} to ${headNow.slice(0, 8)}` } : { ok: true });
+
+// GitHub merges one PR at a time, so main passes through every prefix L1, L2, ... of the chain; each is proved on its own ref (land/<a>, land/<a>-<b>, ...).
+export const prefixes = (chain) => chain.map((p, i) => ({ id: chain.slice(0, i + 1).map((x) => x.n).join('-'), parent: p.parent, head: p.head, tree: p.tree }));
+// results: ciLand's answer for each prefix, in order. The batch is proved only when every one is; the first that is not is named.
+export const batchProof = (results) => { const bad = results.find((r) => !r.ok); return bad ? { ok: false, reason: `land/${bad.id}: ${bad.reason}` } : { ok: true }; };
 
 export async function batch(c, nums, hold) {
   const { out, say, refuse, Refusal, oneLine, why } = c;
@@ -54,12 +59,15 @@ export async function batch(c, nums, hold) {
   } catch (e) { say(`batch: could not build the land commits (${why(e)})`); chain.length = 0; }
   let rest = plan.keep;
   if (chain.length >= 2) {
-    const [id, last] = [chain.map((x) => x.n).join('-'), chain.at(-1)];
     rest = chain.map((x) => x.n);
     try {
-      const proof = await c.ciLand(id, last.parent, last.head, last.tree);
-      if (c.dry) return say(`dry run: would merge ${rest.map((n) => `#${n}`).join(', ')} in that order once CI proves land commit ${tip.slice(0, 8)} (land/${id}); merged nothing`);
-      if (proof.ok) rest = await mergeBatch(c, chain, mainTip, proof.note);
+      const steps = prefixes(chain); // every prefix on its own ref, waited on side by side: one CI cycle of wall clock
+      const got = await Promise.allSettled(steps.map(async (s) => ({ id: s.id, ...(await c.ciLand(s.id, s.parent, s.head, s.tree)) })));
+      const refused = got.find((g) => g.status === 'rejected');
+      if (refused) throw refused.reason;
+      const proof = batchProof(got.map((g) => g.value));
+      if (c.dry) return say(`dry run: would merge ${rest.map((n) => `#${n}`).join(', ')} in that order once CI proves each prefix of land commit ${tip.slice(0, 8)} (land/${steps.at(-1).id}); merged nothing`);
+      if (proof.ok) rest = await mergeBatch(c, chain, mainTip, got.at(-1).value.note);
       else { console.error(`land: no CI proof (${oneLine(proof.reason)})`); say('batch red; landing one at a time'); }
     } finally { c.ciClean(); }
   }
@@ -79,6 +87,8 @@ async function mergeBatch(c, chain, mainTip, proofNote) {
       else {
         const fresh = c.viewPr(p.n);
         c.trustGate(fresh); c.draftGate(fresh, p.n, '');
+        const h = checkHead(fresh, p.head); // open, based on main, head still the tested one: the single path's check on the fresh read
+        if (!h.ok) refuse(h.reason);
         const s = checkBatchStep({ expect, tip: c.fetchRef(c.MAIN_REF), head: p.head, headNow: fresh.headRefOid });
         if (!s.ok) stop = `#${p.n}: ${s.reason}`;
       }

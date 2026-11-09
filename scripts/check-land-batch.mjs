@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Tests the pure pieces of `land.mjs --batch`: the argument shape, the plan, the ref shape and the per-merge step check. Own step in `make test-ts`.
 import { isLandRef, landRef } from './land-decide.mjs';
-import { checkBatchStep, parseBatch, planBatch } from './land-batch.mjs';
+import { batchProof, checkBatchStep, parseBatch, planBatch, prefixes } from './land-batch.mjs';
 
 const [H, H2] = ['a'.repeat(40), 'c'.repeat(40)];
 const ok = (n) => ({ n, ok: true });
@@ -20,6 +20,9 @@ const cases = [
   ['batch step: main at the expected tip and the head unmoved goes on', checkBatchStep({ expect: H, tip: H, head: H2, headNow: H2 }).ok, true],
   ['batch step: main moved mid-batch stops, naming the move', checkBatchStep({ expect: H, tip: H2, head: H, headNow: H }).reason.includes('main moved'), true],
   ['batch step: a PR head that moved stops', checkBatchStep({ expect: H, tip: H, head: H, headNow: H2 }).ok, false],
+  ['batch prefixes: one per chain step, id = the PR numbers so far, with that step\'s parent, head and tree', JSON.stringify(prefixes([{ n: '5', parent: 'm', head: 'h5', tree: 't5' }, { n: '6', parent: 'l1', head: 'h6', tree: 't6' }])), '[{"id":"5","parent":"m","head":"h5","tree":"t5"},{"id":"5-6","parent":"l1","head":"h6","tree":"t6"}]'],
+  ['batch proof: every prefix proved is a proof', batchProof([{ id: '5', ok: true }, { id: '5-6', ok: true }]).ok, true],
+  ['batch proof: one red or unproved prefix, a middle one included, is no proof and names it', JSON.stringify(batchProof([{ id: '5', ok: true }, { id: '5-6', ok: false, reason: 'x' }, { id: '5-6-7', ok: true }])), '{"ok":false,"reason":"land/5-6: x"}'],
 ];
 const bad = cases.filter(([, got, want]) => got !== want).map(([n]) => n);
 if (bad.length) { console.error(`check-land-batch: ${bad.length} of ${cases.length} wrong\n  ${bad.join('\n  ')}`); process.exit(1); }

@@ -7,8 +7,8 @@ const MINE = 'Ship the login fix tonight?';
 const THEIRS = 'Rename the billing table?';
 
 test('the filter shows exactly the asks addressed to you, counts them live, and stays on across a reload', async ({ page, pod }) => {
-  const mine = await pod.agent.post(askInput(MINE, { userIds: [pod.you.user.id] }));
-  const theirs = await pod.agent.post(askInput(THEIRS, { userIds: [pod.other.user.id] }));
+  const mine = await pod.agent.post(askInput(MINE, { userIds: [pod.you.user.id] }, pod.agent.cited));
+  const theirs = await pod.agent.post(askInput(THEIRS, { userIds: [pod.other.user.id] }, pod.agent.cited));
   await openPod(page, pod);
   const toggle = page.getByRole('button', { name: /^Needs you · / });
   const heading = (name: string) => page.getByRole('heading', { name });

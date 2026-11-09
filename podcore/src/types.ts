@@ -25,6 +25,12 @@ export interface Run {
   stop?: { reason?: string };
 }
 
+/** What the adapter found of the ids an ask cites, from this pod only (F25). A tool call carries the run it is on and its digest. */
+export interface Evidence {
+  toolCalls: Record<string, { runId: string; digest: string }>;
+  messages: Record<string, { summary: string; body?: string }>;
+}
+
 /** Who hosts an agent and who owns it; the adapter registers it (ADR 0003). */
 export interface Agent { actor: Actor; owner: Actor; computerId: ComputerId }
 
@@ -79,8 +85,10 @@ export type Cmd =
   | { type: 'task_update'; caller: Caller; taskId: TaskId; status?: TaskUpdateStatus; assignee?: ActorId; wakeId: WakeId }
   | { type: 'message_post'; caller: Caller; messageId: MessageId; text: string; threadOf?: MessageId; wakeId: WakeId }
   /** `harness` is the adapter's record of where the caller's agent runs; `decisionId` is the id an ask's decision takes; `viaMcp` is the
-   *  adapter saying this post rides on an MCP call already counted, which the receipt leaves out. `expiresAt` (ms, adapter-set) makes an ask's decision expire unruled at that time. */
-  | { type: 'post'; caller: Caller; messageId: MessageId; decisionId: DecisionId; input: PostInput; harness?: Harness; viaMcp?: boolean; expiresAt?: number; wakeId: WakeId }
+   *  adapter saying this post rides on an MCP call already counted, which the receipt leaves out. `expiresAt` (ms, adapter-set) makes an ask's decision expire unruled at that time.
+   *  `evidence` is what the adapter found of the ids an ask's claims cite (absent grounds nothing), or `pod` for an ask the pod composes
+   *  from its own records (the connector write card, ADR 0009), whose claims state what the pod itself did and so cite nothing. */
+  | { type: 'post'; caller: Caller; messageId: MessageId; decisionId: DecisionId; input: PostInput; harness?: Harness; viaMcp?: boolean; expiresAt?: number; wakeId: WakeId; evidence?: Evidence | 'pod' }
   | { type: 'tool_call'; runId: RunId }
   /** A member rules on an ask: `option` is an option id of that ask (a plain string here, so a bad one is refused, never looked up as a key). */
   | { type: 'rule'; caller: Caller; decisionId: DecisionId; option: string; wakeId: WakeId }

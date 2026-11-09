@@ -90,7 +90,7 @@ async function park(kit: Kit, k: Call, conn: ConnRow, op: PinOp, row: CallRow, a
   const expiresAt = kit.hub.now() + PARK_MS;
   const harness = k.pod.meta.harness[row.agentId] as Harness | undefined;
   const reply = await k.pod.exec(
-    { type: 'post', caller: k.caller, messageId: newId('msg_'), decisionId, wakeId: newWakeSeed(), harness, viaMcp: viaMcp(k.c.req.raw), expiresAt, input },
+    { type: 'post', caller: k.caller, messageId: newId('msg_'), decisionId, wakeId: newWakeSeed(), harness, viaMcp: viaMcp(k.c.req.raw), expiresAt, input, evidence: 'pod' },
     { extra: async (t) => { await saveCall(t, { ...row, outcome: 'parked', decisionId, expiresAt }); } },
   );
   return reply?.ok ? k.c.json({ state: 'parked', receiptId: row.id, decisionId }) : respond(k.c, reply);

@@ -4,11 +4,14 @@ import type { Json } from './world';
 
 // What a post tool description allows (every kind, an ask's parts, a taskId) the server stores, over HTTP and over jm_post.
 const TASK = 'tsk_00000000000000000000000001';
-const claim = { text: 'The tests passed.', toolCalls: [] as string[] };
-const ask = {
+/** An ask whose claims cite a message the pod holds (F25: every claim cites a record). */
+const askCiting = (messageId: string) => {
+  const claim = { text: 'The tests passed.', messages: [messageId] };
+  return {
   summary: 'Merge or wait?', kind: 'ask', status: 'blocked', needs: { to: { role: 'owner' }, action: 'approve' },
   options: [{ id: 'a', label: 'Merge', consequence: 'It merges.' }, { id: 'b', label: 'Wait', consequence: 'It waits.' }],
   context: { happened: [claim], checked: [], stakes: claim, recommendation: { option: 'a', why: claim } },
+  };
 };
 
 test('a post of every kind, an ask and a taskId are stored as sent, over HTTP and MCP', async () => {
@@ -25,6 +28,7 @@ test('a post of every kind, an ask and a taskId are stored as sent, over HTTP an
     expect(viaMcp.isError).toBe(false);
     expect(await feed(viaMcp.structuredContent.messageId)).toMatchObject(sent);
   }
+  const ask = askCiting((await w.call('POST', `/v1/pods/${w.pod.id}/messages`, run.runToken, { summary: 'The tests passed', kind: 'progress', status: 'done' })).json.messageId);
   for (const out of [(await w.call('POST', `/v1/pods/${w.pod.id}/messages`, run.runToken, ask)).json, (await mcp(ask)).structuredContent]) {
     expect(await feed(out.messageId)).toMatchObject({ kind: 'ask', decision: { id: out.decisionId, state: 'open' } });
   }

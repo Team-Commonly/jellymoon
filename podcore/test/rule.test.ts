@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import type { AskContext, Message, PostInput } from '../../gen/ts/protocol';
 import { apply, isoOf, overlayDecisions } from '../src';
 import type { Cmd, PodState } from '../src';
-import { AG1, CMP_1, RUN_A, RUN_B, U_AGENT_OWNER, U_OWNER, U_STRANGER, errCode, events, id, play, runN, toComputer, wak, world } from './helpers';
+import { AG1, CITED, CMP_1, EVIDENCE, RUN_A, RUN_B, U_AGENT_OWNER, U_OWNER, U_STRANGER, errCode, events, id, play, runN, toComputer, wak, world } from './helpers';
 
 const DEC = id('dec', 1);
 const MSG = id('msg', 1);
-const claim = { text: 'Tests passed.', toolCalls: [id('tc', 1)] };
+const claim = { text: 'Tests passed.', messages: [CITED] };
 const ctx: AskContext = { happened: [claim], checked: [], stakes: claim, recommendation: { option: 'a', why: claim } };
 const ask: PostInput = {
   summary: 'Merge or wait?', kind: 'ask', status: 'blocked', needs: { to: { role: 'owner' }, action: 'approve' }, context: ctx,
@@ -15,7 +15,7 @@ const ask: PostInput = {
 type Caller = { kind: 'run'; runId: string } | { kind: 'user'; userId: string };
 const owner: Caller = { kind: 'user', userId: U_OWNER.id };
 const post = (input: PostInput, caller: Caller = { kind: 'run', runId: RUN_A }, decisionId = DEC, messageId = MSG): Cmd => (
-  { type: 'post', caller, messageId, decisionId, wakeId: wak(1), harness: 'fake', input } as unknown as Cmd);
+  { type: 'post', caller, messageId, decisionId, wakeId: wak(1), harness: 'fake', input, evidence: EVIDENCE } as unknown as Cmd);
 const rule = (option: unknown = 'a', caller: Caller = owner, extra: Record<string, unknown> = {}): Cmd => (
   { type: 'rule', caller, decisionId: DEC, option, wakeId: wak(2), ...extra } as unknown as Cmd);
 

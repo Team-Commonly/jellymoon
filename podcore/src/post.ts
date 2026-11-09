@@ -3,10 +3,11 @@
 // Lengths and patterns are the schema's, checked by the adapter before the command; the rules here are the ones the schema
 // cannot say: a headline that is only blank space, an ask's required parts, and the facts of the run.
 import { HarnessValues } from '../../gen/ts/protocol';
-import type { Harness, Message, PostInput, Receipt } from '../../gen/ts/protocol';
+import type { AskContext, Harness, Message, PostInput, Receipt } from '../../gen/ts/protocol';
 import { who, own, isObj } from './claims';
 import { emit, fail, ok } from './emit';
 import { mentioned } from './board';
+import { ungrounded } from './ground';
 import { isoOf } from './time';
 import { seedFits, writeWake } from './wakes';
 import type { Cmd, Ctx, Run } from './types';
@@ -55,6 +56,10 @@ export function postCmd(c: Ctx, cmd: Of<'post'>): void {
   const problem = shapeProblem(input);
   if (problem !== null) return fail(c, 'invalid_input', problem);
   if (input.kind === 'ask' && own(c.s.decisions ?? {}, cmd.decisionId) !== undefined) return fail(c, 'invalid_input', 'That decision id is taken.', cmd.decisionId);
+  if (input.kind === 'ask' && cmd.evidence !== 'pod') {
+    const why = ungrounded(input.context as AskContext, isObj(cmd.evidence) ? cmd.evidence : undefined, w.run?.agent.id, c.s.runs);
+    if (why !== null) return fail(c, 'ungrounded', why);
+  }
   const receipt = w.run === undefined ? undefined : receiptOf(c, w.run, cmd.harness, cmd.viaMcp === true);
   if (receipt === null) return fail(c, 'internal', 'The run record is missing a fact the receipt needs.');
   const ids = mentioned(c, `${input.summary}\n${input.body ?? ''}`).filter((id) => id !== w.actor.id);

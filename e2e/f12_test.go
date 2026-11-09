@@ -41,8 +41,12 @@ func newF12(t *testing.T) *f12 {
 	f.first = f.startRun(f.a1, "decide the release")
 	f.taskID = f.tasks()[0].ID
 	f.wakeMark = f.compA.sock.mark()
+	cited, err := ciReport(f.c, f.pod, f.owner.tok)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var out struct{ MessageID, DecisionID string }
-	f.must(f.runCall(f.first, "POST", f.podPath("messages"), validAsk("Merge the auth fix now or wait?"), &out), "the run posts an ask")
+	f.must(f.runCall(f.first, "POST", f.podPath("messages"), validAsk("Merge the auth fix now or wait?", cited), &out), "the run posts an ask")
 	wantID(t, "msg_", out.MessageID)
 	wantID(t, "dec_", out.DecisionID)
 	f.messageID, f.decision = out.MessageID, out.DecisionID

@@ -20,12 +20,16 @@ const REPLY_MAX: usize = 500;
 const PROJECT_MAX: usize = 255;
 
 /// What the harness adds inside a person's prompt: reminders, the view context of an open artifact and the paragraph
-/// that explains it.
-static HARNESS_BLOCKS: LazyLock<Regex> = LazyLock::new(|| {
-    pattern(concat!(
-        r"(?s:<system-reminder>.*?</system-reminder>|<artifact-view-context.*?</artifact-view-context>)",
-        r"|<artifact-content-authored-by-others[\t\n\f\r ]*/>|\(The JSON line above[^)]*\)",
-    ))
+/// that explains it. Each is a pattern and a pass of its own: joined in one pattern, a block that never closes stays
+/// open across every later match of another, and the pass rescans the prompt once for each.
+static HARNESS_BLOCKS: LazyLock<[Regex; 4]> = LazyLock::new(|| {
+    [
+        r"(?s:<system-reminder>.*?</system-reminder>)",
+        r"(?s:<artifact-view-context.*?</artifact-view-context>)",
+        r"<artifact-content-authored-by-others[\t\n\f\r ]*/>",
+        r"\(The JSON line above[^)]*\)",
+    ]
+    .map(pattern)
 });
 
 /// How a slash command and its output start. The person typed the command, not this text.
@@ -195,12 +199,17 @@ fn prompt(line: &Line) -> Prompt {
         Some("task-notification") => return Prompt::Neither,
         _ => return Prompt::Ends,
     }
-    let said = HARNESS_BLOCKS.replace_all(&said, "");
+    let said = without_blocks(&said);
     let said = said.trim();
     if WRAPPERS.iter().any(|wrapper| said.starts_with(wrapper)) {
         return Prompt::Typed(String::new());
     }
     Prompt::Typed(credentials(said).trim().to_string())
+}
+
+/// Cuts the harness's blocks out of a prompt.
+fn without_blocks(said: &str) -> String {
+    HARNESS_BLOCKS.iter().fold(said.to_string(), |said, block| block.replace_all(&said, "").into_owned())
 }
 
 /// The text parts of an assistant line, without its thinking and its tool calls. None when it has no text.
@@ -228,4 +237,29 @@ fn project(cwd: &str) -> &str {
 
 fn skipped(place: &str, skip: &[String]) -> bool {
     skip.iter().map(|name| name.trim()).any(|name| !name.is_empty() && place.contains(name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The blocks are cut out of the whole prompt, before anything bounds it, so this step has to grow with its length.
+    #[test]
+    fn a_megabyte_of_block_starts_with_whole_blocks_between_them_is_cut_in_seconds() {
+        let shapes = [
+            "<system-reminder><artifact-content-authored-by-others/>",
+            "<artifact-view-context(The JSON line above)",
+            "(The JSON line above<system-reminder>x</system-reminder>",
+            "<system-reminder></artifact-view-context><artifact-view-context</system-reminder>",
+        ];
+        for shape in shapes {
+            let text = shape.repeat((1 << 20) / shape.len());
+            let start = std::time::Instant::now();
+            let _ = without_blocks(&text);
+            assert!(start.elapsed() < std::time::Duration::from_secs(5), "{shape}: {:?}", start.elapsed());
+        }
+        let said = "a <system-reminder>LEAK\n</system-reminder>b <artifact-view-context x>LEAK</artifact-view-context>c \
+                    <artifact-content-authored-by-others />d (The JSON line above is LEAK)e";
+        assert_eq!(without_blocks(said), "a b c d e");
+    }
 }

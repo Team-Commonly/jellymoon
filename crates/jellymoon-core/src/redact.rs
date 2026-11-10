@@ -20,15 +20,24 @@ pub(crate) fn pattern(source: &str) -> Regex {
 static TOKEN: LazyLock<Regex> = LazyLock::new(|| pattern(r"(jm[ucr]_|\bcm_)[A-Za-z0-9_-]*…?"));
 
 /// The vendor key shapes worth naming: model provider, Google, GitLab, Hugging Face, Stripe and GitHub keys, Slack
-/// tokens, AWS key ids, JWTs and PEM private keys.
+/// tokens and AWS key ids. Every branch is a prefix and a counted run, so one that has started either matches or ends
+/// within 40 characters: none stays open across a later match of another, which would make the pass rescan the text.
 static KEY: LazyLock<Regex> = LazyLock::new(|| {
     pattern(concat!(
         r"\bsk-[A-Za-z0-9_-]{16,}|\bAIza[A-Za-z0-9_-]{35}|\bglpat-[A-Za-z0-9_-]{20,}|\bhf_[A-Za-z0-9]{30,}",
         r"|\b[sr]k_live_[A-Za-z0-9]{16,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}",
-        r"|\bxox[a-z]-[A-Za-z0-9-]{10,}|\bAKIA[0-9A-Z]{16}\b|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*",
-        r"|(?s:-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$))",
+        r"|\bxox[a-z]-[A-Za-z0-9-]{10,}|\bAKIA[0-9A-Z]{16}\b",
     ))
 });
+
+/// A JWT. Its first part can run on for any length before its dot, so it is a pattern and a pass of its own.
+static JWT: LazyLock<Regex> = LazyLock::new(|| pattern(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*"));
+
+/// A PEM private key, from its BEGIN line to its END mark, or to the end of the text when there is none: a key cut
+/// short, by a log, is still replaced from its header on. A pass of its own for the same reason as
+/// [`JWT`]: the label in its header can be any length.
+static PEM: LazyLock<Regex> =
+    LazyLock::new(|| pattern(r"(?s:-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$))"));
 
 /// 40 or more characters of the base64 alphabets with no break: long enough to be a key of unknown make.
 static LONG_RUN: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+/=_-]{40,}"));
@@ -70,6 +79,8 @@ pub(crate) fn string(text: &str) -> String {
 /// alone, so a long folder path survives and a long mixed segment inside it does not.
 pub(crate) fn credentials(text: &str) -> String {
     let text = string(text);
+    let text = PEM.replace_all(&text, REPLACED);
+    let text = JWT.replace_all(&text, REPLACED);
     let text = KEY.replace_all(&text, REPLACED);
     let text = URL_PASSWORD.replace_all(&text, format!("${{1}}{REPLACED}@"));
     let mut shown = String::with_capacity(text.len());
@@ -230,6 +241,10 @@ mod tests {
                 format!("\u{1b}]0;\u{1b}[1;-----BEGIN-eyJ{mixed}.x://u:p."),
             ),
             ("short words", "aB3 ".to_string()),
+            // A shape that never ends, with whole keys of another shape inside it (the third review's finding).
+            ("an unfinished JWT with an AWS key id in it", format!("eyJ-{}-", key("AK", "IA", "Q7", 8))),
+            ("an unfinished JWT with a hub key in it", format!("eyJ-{}-", key("gh", "p_", "aB3x", 6))),
+            ("an unfinished PEM header with an AWS key id in it", format!("-----BEGIN {} ", key("AK", "IA", "QZ", 8))),
         ];
         for (name, shape) in shapes {
             let text = shape.repeat((1 << 20) / shape.len());

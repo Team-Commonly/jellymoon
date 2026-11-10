@@ -1,3 +1,0 @@
-# Cap note 2026-11-09: core-land-deterministic-commit
-
-2026-11-09: core cap 4,240 -> 4,290; `make land` now builds its land commit deterministically (`landCommitEnv` in `scripts/land-decide.mjs`: fixed identity, date taken from the parents) and reads the check runs GitHub already holds for that SHA before pushing. Because the SHA is computable in advance, only runs of a check suite that a push to `land/<n>` started count (`landSuiteRuns`, in both that read and the CI poll), so a fork PR on the same SHA proves nothing. Tests are in `scripts/check-land.mjs` and `scripts/check-land-e2e.mjs`. The tree printed `LOC budget: core 4289 > 4280`; the cap is the count rounded up to ten. No other cap changes.

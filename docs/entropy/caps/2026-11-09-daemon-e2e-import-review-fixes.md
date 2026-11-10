@@ -1,3 +1,0 @@
-# Cap note 2026-11-09: daemon-e2e-import-review-fixes
-
-2026-11-09: the review fixes to `jellymoon import commonly` cut and moved lines, so the caps set by the earlier note come back toward what the tree measures. daemon cap 7,160 -> 6,910 (it measures 6,909) and e2e cap 8,460 -> 8,520 (it measures 8,515). The daemon falls because the importer's unit tests no longer repeat the e2e scenarios and the duplicate state writer, `first`, `compareStr` and the second message spelling are gone. The e2e figure rises by 55 because the shared fixture Commonly server now lives in `e2e/cmyfake/` (counted here, imported by both the importer's unit tests and the e2e test) instead of in two copies. The caps are the counts rounded up to ten; no other cap changes. IMP.

@@ -1,6 +1,0 @@
-{
-  "invalid-verification-uri-http.json": {
-    "keyword": "pattern",
-    "path": "/verificationUri"
-  }
-}

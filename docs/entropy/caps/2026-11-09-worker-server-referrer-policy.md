@@ -1,3 +1,0 @@
-# Cap note 2026-11-09: worker-server-referrer-policy
-
-2026-11-09: worker cap 2,390 -> 2,420 and server cap 4,070 -> 4,080; both adapters now send `Referrer-Policy: no-referrer` on every reply, so the one-time code in a `/device?code=` or `/invite/:token` URL is not sent on in a Referer header (the #53 review). The server adds one middleware and a test in `server/test/web.test.ts`; the Worker wraps `handle` and adds `worker/test/referrer.test.ts`. The tree printed `LOC budget: worker 2413 > 2390` and `LOC budget: server 4078 > 4070`; each cap is the count rounded up to ten. No other cap changes.

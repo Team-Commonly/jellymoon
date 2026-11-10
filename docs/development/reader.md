@@ -46,10 +46,18 @@ An image alone leaves no text, so it is dropped, and it still ends the turn befo
 `said` is cut to 700 characters, `reply` to 500 and `project` to 255; a cut text ends in `…`. All three are cleaned and
 redacted before the cut.
 
-Cleaning takes out what nobody sees: control characters other than newline and tab, the bidi controls (U+061C, U+200E,
-U+200F, U+202A to U+202E, U+2066 to U+2069), and the soft hyphen, zero-width space, word joiner and byte-order mark
-(U+00AD, U+200B, U+2060, U+FEFF). The joiners U+200C and U+200D stay, since emoji and several scripts are written with
-them. Cleaning runs first, so a key split by one of these characters is still found.
+Cleaning runs first, in one pass, and takes out what nobody sees:
+
+- A whole terminal escape sequence: CSI (ESC `[` or U+009B, then parameter bytes, intermediate bytes and a final byte,
+  as in the colour code `ESC[32m`) and OSC (ESC `]` up to BEL or ESC `\`). A sequence that is cut short, or has
+  another control character inside it, is not taken whole: it loses only its control characters.
+- Every other control character except newline and tab.
+- Every format character (Unicode category Cf: the bidi controls, zero-width space, soft hyphen, word joiner,
+  byte-order mark, invisible operators, tag characters) and U+E0000 to U+E007F, except the joiners U+200C and U+200D,
+  which emoji and several scripts are written with. The cost: a flag emoji spelled with tag characters loses them.
+
+So a key right after a colour code, or split by one of these characters, is still found. A character that is seen
+only as part of its neighbour (a variation selector, a combining mark) stays, and a key split by one is missed.
 
 Redaction then replaces credential shapes with `[redacted]`: model provider, GitHub, GitLab, Hugging Face, Google
 (`AIza`), Stripe live and Slack keys, AWS key ids, JWTs, PEM private keys, the password in

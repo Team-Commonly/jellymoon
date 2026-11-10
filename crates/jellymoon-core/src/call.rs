@@ -209,7 +209,10 @@ mod tests {
     #[test]
     fn what_a_harness_printed_is_one_line_cut_and_has_credentials_replaced_before_it_is_an_error() {
         let key = format!("sk{}{}", "-ant-", "Zx9Yw8Vu7T".repeat(3));
-        assert_eq!(line(&format!("  bad key {key}\u{1b}[0m\nline two\n"), SAID_MAX), "bad key [redacted][0m line two");
+        assert_eq!(
+            line(&format!("  bad key \u{1b}[31m{key}\u{1b}[0m\nline two\n"), SAID_MAX),
+            "bad key [redacted] line two"
+        );
         assert_eq!(line(&"x".repeat(400), SAID_MAX).chars().count(), 300);
     }
 }

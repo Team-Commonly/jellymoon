@@ -283,7 +283,7 @@ fn a_project_name_has_its_control_characters_removed_and_a_credential_shape_repl
     write_log(logs.path(), "-w-x/s.jsonl", &lines);
     let (turns, raw) = day(logs.path(), &["--date", "2026-03-10"]);
     let projects: Vec<&str> = turns.iter().map(|turn| turn["project"].as_str().unwrap()).collect();
-    assert_eq!(projects, ["[redacted]", "del[2Jta", "[redacted]"]);
+    assert_eq!(projects, ["[redacted]", "delta", "[redacted]"]);
     assert!(!raw.contains("aB3x9Zq7") && !raw.contains("\\u"), "{raw}");
 }
 

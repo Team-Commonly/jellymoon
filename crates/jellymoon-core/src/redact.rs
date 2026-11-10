@@ -38,21 +38,22 @@ static LONG_RUN: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+/=_-]{4
 static URL_PASSWORD: LazyLock<Regex> =
     LazyLock::new(|| pattern(r"([A-Za-z][A-Za-z0-9+.-]*://[^\t\n\f\r /:@]*:)[^\t\n\f\r /@]+@"));
 
-/// A character nobody sees that changes what is seen or found: a control character other than newline and tab, a bidi
-/// control (it reorders the line it is in), a soft hyphen, a zero-width space, a word joiner, a byte-order mark. The
-/// zero-width joiner and non-joiner stay: emoji and several scripts are written with them.
-fn hidden(c: char) -> bool {
-    let unseen = matches!(c, '\u{ad}' | '\u{61c}' | '\u{200b}' | '\u{200e}' | '\u{200f}' | '\u{2060}' | '\u{feff}');
-    c.is_control() && !matches!(c, '\n' | '\t')
-        || unseen
-        || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
-}
+/// What nobody sees and a terminal obeys. First a whole escape sequence: CSI (ESC `[` or U+009B, parameter bytes,
+/// intermediate bytes, a final byte) or OSC (ESC `]` up to BEL or ESC `\`). Then any control character other than
+/// newline and tab, and any format character (category Cf: the bidi controls, zero-width space, soft hyphen, word
+/// joiner, byte-order mark, tag characters and the rest) other than the joiners U+200C and U+200D, which emoji and
+/// several scripts are written with. A sequence that is cut short or broken loses only those characters.
+static UNSEEN: LazyLock<Regex> = LazyLock::new(|| {
+    pattern(concat!(
+        r"(?:\x1b\[|\u{9b})[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)",
+        r"|[\p{Cc}--[\n\t]]|[\p{Cf}--[\u{200c}\u{200d}]]|[\u{e0000}-\u{e007f}]",
+    ))
+});
 
-/// Strips the [`hidden`] characters and shortens every token to its prefix and an ellipsis. The characters go first, so
-/// one planted inside a token or a key cannot hide the rest of it.
+/// Strips what is [`UNSEEN`] and shortens every token to its prefix and an ellipsis. The stripping goes first, so a
+/// colour code before a key, or a character planted inside one, cannot hide it.
 pub(crate) fn string(text: &str) -> String {
-    let shown: String = text.chars().filter(|c| !hidden(*c)).collect();
-    TOKEN.replace_all(&shown, "${1}…").into_owned()
+    TOKEN.replace_all(&UNSEEN.replace_all(text, ""), "${1}…").into_owned()
 }
 
 /// [`string`] for text a person or an agent wrote, which can hold any vendor's key: it also replaces every known key
@@ -150,6 +151,13 @@ mod tests {
         ];
         for (name, secret) in secrets {
             assert_eq!(credentials(&format!("use {secret} now")), "use [redacted] now", "{name}");
+            let coloured = format!("use \u{1b}[32m{secret}\u{1b}[0m now");
+            assert_eq!(credentials(&coloured), "use [redacted] now", "{name} after a colour code");
+            // An invisible separator, the Mongolian vowel separator and a tag character, each planted inside the key.
+            for unseen in ['\u{2063}', '\u{180e}', '\u{e0041}'] {
+                let split = format!("use {}{unseen}{} now", &secret[..3], &secret[3..]);
+                assert_eq!(credentials(&split), "use [redacted] now", "{name} split by {unseen:?}");
+            }
         }
         let pem_cut_off = format!("key: -----BEGIN {}-----\nMIIEabc and the rest", ["PRIVATE", "KEY"].join(" "));
         assert_eq!(
@@ -202,7 +210,7 @@ mod tests {
         assert_eq!(credentials(&plain), plain);
         assert_eq!(
             credentials("a jmr_AbC123 token\u{1b}[2J"),
-            "a jmr_… token[2J",
+            "a jmr_… token",
             "credentials also does what string does"
         );
     }
@@ -232,11 +240,13 @@ mod tests {
     #[test]
     fn control_characters_are_stripped_and_newline_and_tab_kept() {
         let cases = [
-            ("ansi escape", "a\u{1b}[2Jb\u{1b}]0;title\u{7}c", "a[2Jb]0;titlec"),
+            ("whole sequences", "a\u{1b}[2Jb\u{1b}]0;title\u{7}c\u{1b}]8;;x\u{1b}\\d\u{9b}1;32me\u{1b}[?25l", "abcde"),
+            ("a sequence with no end loses its escape only", "a\u{1b}[12;\u{1b}]0;title", "a[12;]0;title"),
             ("bare CR", "line one\rrewritten", "line onerewritten"),
             ("NUL", "a\0b", "ab"),
             ("DEL", "a\u{7f}b", "ab"),
-            ("C1 control", "a\u{9b}b", "ab"),
+            ("C1 control", "a\u{85}b", "ab"),
+            ("a one-character CSI takes its final byte, as a terminal does", "a\u{9b}b c", "a c"),
             ("kept", "a\tb\nc", "a\tb\nc"),
         ];
         for (name, text, want) in cases {
@@ -252,8 +262,8 @@ mod tests {
 
     #[test]
     fn bidi_controls_and_invisible_characters_are_stripped_before_a_key_is_looked_for() {
-        let gone = "\u{61c}\u{200e}\u{200f}\u{202a}\u{202b}\u{202c}\u{202d}\u{202e}\u{2066}\u{2067}\u{2068}\u{2069}\u{ad}\u{200b}\u{2060}\u{feff}";
-        assert_eq!(string(&gone.chars().map(|c| format!("x{c}")).collect::<String>()), "x".repeat(16));
+        let gone = "\u{61c}\u{200e}\u{200f}\u{202a}\u{202b}\u{202c}\u{202d}\u{202e}\u{2066}\u{2067}\u{2068}\u{2069}\u{ad}\u{200b}\u{2060}\u{feff}\u{2061}\u{2064}\u{180e}\u{fff9}\u{e0000}\u{e0001}\u{e007f}";
+        assert_eq!(string(&gone.chars().map(|c| format!("x{c}")).collect::<String>()), "x".repeat(23));
         assert_eq!(string("ab\u{202e}dc"), "abdc", "a label cannot be turned round");
         let joined = "\u{645}\u{200c}\u{6cc} and a\u{200d}b";
         assert_eq!(string(joined), joined, "the joiners are kept: emoji and several scripts need them");

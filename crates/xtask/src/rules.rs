@@ -62,7 +62,7 @@ fn dependencies(manifest: &Table, workspace: &Table) -> Vec<String> {
     found
 }
 
-/// The crates under `crates/`, by the manifests that are tracked.
+/// Every crate in the repo, wherever its folder is (`crates/<name>`, and `app`): each tracked manifest below the root.
 fn crates(root: &Path, files: &[String]) -> Vec<Crate> {
     let workspace = text(root, "Cargo.toml").and_then(|manifest| manifest.parse::<Table>().ok());
     let workspace = workspace
@@ -71,9 +71,7 @@ fn crates(root: &Path, files: &[String]) -> Vec<Crate> {
         .cloned()
         .unwrap_or_default();
     let one = |file: &String| {
-        let folder = file
-            .strip_suffix("/Cargo.toml")
-            .filter(|folder| folder.starts_with("crates/") && folder.matches('/').count() == 1)?;
+        let folder = file.strip_suffix("/Cargo.toml")?;
         let manifest: Table = fs::read_to_string(root.join(file)).ok()?.parse().ok()?;
         Some(Crate { folder: folder.to_string(), dependencies: dependencies(&manifest, &workspace), manifest })
     };
@@ -334,6 +332,27 @@ mod tests {
         // Only the crates the table names: the binary of this small repo is not one of them.
         let bin = "[package]\nname = \"bin\"\n[dependencies]\ncore = { path = \"../core\" }\ngpui = \"1\"\n";
         assert_eq!(found(&[("crates/bin/Cargo.toml", bin)]), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_crate_outside_the_crates_folder_is_held_to_the_same_rules() {
+        let shell =
+            ("app/Cargo.toml", "[package]\nname = \"shell\"\n[dependencies]\ncore = { path = \"../crates/core\" }\n");
+        let unlisted = found(&[shell]);
+        assert!(unlisted.iter().any(|line| line.contains("app: no budget")), "{unlisted:?}");
+        assert!(unlisted.iter().any(|line| line.contains("may depend on")), "{unlisted:?}");
+        let entropy = |depends: &str| {
+            let listed = format!("\"app\" = 10\n[depends]\nshell = [{depends}]");
+            ENTROPY.replace("[depends]", &listed)
+        };
+        assert_one(&found(&[shell, ("entropy.toml", &entropy(""))]), "shell may not depend on core");
+        let allowed = entropy("\"core\"");
+        assert_eq!(found(&[shell, ("entropy.toml", &allowed)]), Vec::<String>::new());
+        let long = "// line\n".repeat(11);
+        assert_one(
+            &found(&[shell, ("entropy.toml", &allowed), ("app/src/main.rs", &long)]),
+            "app: 11 lines of Rust, over its budget of 10",
+        );
     }
 
     #[test]

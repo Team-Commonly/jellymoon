@@ -2723,6 +2723,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jellymoon-app"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "gpui_platform",
+ "jellymoon-core",
+ "jiff",
+ "lexopt",
+ "serde",
+ "serde_json",
+ "sticker-kit",
+ "tempfile",
+]
+
+[[package]]
 name = "jellymoon-core"
 version = "0.1.0"
 dependencies = [

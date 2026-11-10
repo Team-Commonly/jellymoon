@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/jellymoon-core", "crates/jellymoon", "crates/xtask", "crates/sticker-kit"]
+members = ["crates/jellymoon-core", "crates/jellymoon", "crates/xtask", "crates/sticker-kit", "app"]
 
 [workspace.package]
 edition = "2024"

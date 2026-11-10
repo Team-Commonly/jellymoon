@@ -48,8 +48,8 @@ printed. Three rules follow.
 
 - **The output is page data and nothing else.** It is parsed into core's page types; anything that fails is dropped.
 - **Every quote is checked by code.** A wish carries the person's own words. A quote is rejected unless it is an exact
-  substring of one thing they typed that day, made of whole words, and at least 8 characters long or all of what they
-  typed. So the model cannot invent words. It can still choose which of the person's words to show, so a quote can
+  substring of one thing they typed that day, made of whole words, and at least 8 characters long (4 in Chinese, Japanese or
+  Korean) or all of what they typed. So the model cannot invent words. It can still choose which of the person's words to show, so a quote can
   leave out a "not" that stood before it, and code cannot tell. The page therefore shows a quote as a quote, and the
   whole turn is one tap away once the shell exists.
 - **A star needs a report.** A star is a job an agent reported as finished. The prompt asks for that, and the page says the

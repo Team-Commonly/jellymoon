@@ -21,6 +21,8 @@ const STAR_MAX: usize = 60;
 const QUOTE_MAX: usize = 200;
 /// The shortest quote kept, in characters, unless it is everything the person typed in one turn.
 const QUOTE_MIN: usize = 8;
+/// The same for a quote whose every character is at or above U+2E80 (Chinese, Japanese, Korean), which say more in one.
+const QUOTE_MIN_CJK: usize = 4;
 
 /// One reading.
 #[derive(Debug, Clone)]
@@ -125,7 +127,8 @@ fn keep(day: &ReaderDay, reading: Reading, page: &mut PageData) {
 /// of "do not delete the database". A quote over its length is then cut, with no mark added, so it is still theirs.
 fn typed(day: &ReaderDay, quote: &str) -> Option<String> {
     let quote = quote.trim();
-    let long_enough = quote.chars().count() >= QUOTE_MIN;
+    let min = if quote.chars().all(|c| c >= '\u{2e80}') { QUOTE_MIN_CJK } else { QUOTE_MIN };
+    let long_enough = quote.chars().count() >= min;
     let own = |said: &str| {
         (long_enough || said == quote)
             && said

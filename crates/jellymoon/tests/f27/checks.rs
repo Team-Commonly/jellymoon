@@ -41,18 +41,21 @@ fn a_quote_is_whole_words_and_at_least_eight_characters_or_everything_the_person
                 wish("ends", "delete the prod data", "alpha"),    // ends inside a word
                 // Whole words the person typed, so it is kept: code cannot see that a "not" stood before them.
                 wish("not", "delete the prod database", "alpha"),
-                wish("zh", "重试次数改成三次", "alpha"), // Chinese puts no space between words: any 8 characters
+                wish("zh", "重试次数改成三次", "alpha"), // Chinese puts no space between words: cut anywhere
+                wish("zh4", "改成三次", "alpha"),        // and says more in a character: 4 are enough
+                wish("zh3", "改成三", "alpha"),          // 3 are not
+                wish("mix", "ship", "alpha"),            // 4 that are not all Chinese are not either
                 wish("whole", "ship it", "alpha"),       // short, and everything typed in that turn
                 wish("twice", "fix the login", "alpha"), // inside "prefix" the first time, whole words the second
             ],
-            "clashes": [clash("o"), clash("试次数改成三次然后再"), clash("次数改成三次然")],
+            "clashes": [clash("o"), clash("试次数改成三次然后再"), clash("三次然")],
         }),
         NEXT_DAY,
     );
     let kept: Vec<&str> =
         page["wishes"].as_array().unwrap().iter().map(|wish| wish["said"].as_str().unwrap()).collect();
-    assert_eq!(kept, ["delete the prod database", "重试次数改成三次", "ship it", "fix the login"]);
-    // A clash's quotes are held to the same rules: the first is too short, the last under 8 characters.
+    assert_eq!(kept, ["delete the prod database", "重试次数改成三次", "改成三次", "ship it", "fix the login"]);
+    // A clash's quotes are held to the same rules: the first is too short, and so is the last, at 3 Chinese characters.
     assert_eq!(
         page["clashes"],
         json!([{"a": "w1", "b": "w2", "quote_a": "do not delete", "quote_b": "试次数改成三次然后再", "settled": false}])

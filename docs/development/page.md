@@ -72,7 +72,9 @@ A wish's `said` and a clash's two quotes are each kept only when all of these ho
 
 - It is an exact substring of one thing the person typed that day: one turn's `said`, as the reader printed it. The
   agent's replies do not count.
-- It is at least 8 characters long, or it is the whole of what the person typed in that turn.
+- It is at least 8 characters long, or it is the whole of what the person typed in that turn. The count is of
+  characters. When every character of the quote is at or above U+2E80 (Chinese, Japanese and Korean, their
+  punctuation, and emoji), 4 are enough, since those scripts say more in a character.
 - It does not start or end inside a word. Where the character at the quote's edge and its neighbour in the typed text
   are both letters or digits, the quote is refused. That holds for scripts that put spaces between words, taken to be
   every letter below U+2E80. Chinese, Japanese and Korean are above it and may be cut anywhere. Thai and other scripts

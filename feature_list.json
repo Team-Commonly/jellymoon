@@ -311,6 +311,101 @@
       ],
       "test": "go test ./e2e -run TestF25 (server; the Worker adds TestF25 to E2E_A_SKIP, docs/development/e2e-contract.md)",
       "passes": true
+    },
+    {
+      "id": "F26",
+      "category": "journal",
+      "description": "The daemon collects one local day of what a person typed to Claude Code, and nothing else",
+      "steps": [
+        "`jellymoon day --date <day> --logs <dir>` prints that day's turns as JSON: the time, the project, the person's text and the agent's last reply in the same turn, cut short",
+        "a turn is kept only when the log marks it as typed by a person; tool results, task notices, compaction summaries, sidechains and prompts sent by other programs are left out",
+        "text shaped like a credential is replaced before it is printed, in the person's text and in the reply",
+        "a folder the person switched off with --skip contributes no turns",
+        "the day is the local calendar day: a turn typed at 23:59 and one typed at 00:01 land on different days",
+        "a log line that is not valid JSON is skipped and the rest of the file is still read"
+      ],
+      "test": "go test ./e2e -run TestF26",
+      "passes": false
+    },
+    {
+      "id": "F27",
+      "category": "journal",
+      "description": "One reading call turns a day into page data, and code refuses what the person did not say",
+      "steps": [
+        "`schema/page.json` defines page data: wishes (label, said, project, state, stars) and clashes; `make gen` output is committed",
+        "`jellymoon page --date <day>` sends the day to the harness in one headless call with every tool, MCP server and saved session turned off, asserted on the command line the fake harness receives",
+        "a wish whose `said` is not an exact substring of what the person typed that day is dropped, and so is a clash that quotes words the person did not type",
+        "output that is not valid page data gives an error and no page; more than 8 wishes are cut to 8",
+        "no text in the day can add a tool or a flag to the call"
+      ],
+      "test": "go test ./e2e -run TestF27",
+      "passes": false,
+      "blockedBy": [
+        "F26"
+      ]
+    },
+    {
+      "id": "F28",
+      "category": "journal",
+      "description": "The app draws a page from page data using only the kit",
+      "steps": [
+        "the app's layout command reads page data and prints every placed piece: its kind, position and size",
+        "every wish gets one little one and one star per finished job; a let-go wish is drawn greyed; a clash gets one note with both quotes",
+        "no two labels overlap on a page of 8 wishes with the longest allowed labels",
+        "text from page data is drawn as text only; markup or control characters in a label change nothing but the label",
+        "a kind the kit does not have falls back to a plain note"
+      ],
+      "test": "make app-e2e",
+      "passes": false,
+      "blockedBy": [
+        "F27"
+      ]
+    },
+    {
+      "id": "F29",
+      "category": "journal",
+      "description": "A ruling made on a page reaches a running Claude Code session once, at its next step",
+      "steps": [
+        "installing the hook adds one entry to the harness settings and leaves every other byte as it was; uninstalling restores the file exactly",
+        "with no ruling waiting the hook prints nothing and exits 0",
+        "a ruling is handed to each running session exactly once, as the person's newer decision",
+        "a real Claude Code turn told to do one thing, then sent a ruling to do another, does the other (harness-real)"
+      ],
+      "test": "go test ./e2e -run TestF29",
+      "passes": false,
+      "blockedBy": [
+        "F27"
+      ]
+    },
+    {
+      "id": "F30",
+      "category": "journal",
+      "description": "Holding a key and saying a wish starts an agent on it",
+      "steps": [
+        "a wish made in the app appears on today's page at once, in the person's exact words, in the working state",
+        "the daemon starts a run for it with the person's harness (ADR 0005) and the wish's star appears when the run reports it finished",
+        "a wish made while no harness is installed stays on the page and says why nothing started"
+      ],
+      "test": "go test ./e2e -run TestF30",
+      "passes": false,
+      "blockedBy": [
+        "F28"
+      ]
+    },
+    {
+      "id": "F31",
+      "category": "journal",
+      "description": "The daemon collects a day of what a person typed to Codex the same way",
+      "steps": [
+        "`jellymoon day` reads Codex session logs with the same output shape and the same rules as F26",
+        "sessions another program drove through ACP contribute no turns"
+      ],
+      "test": "go test ./e2e -run TestF31",
+      "passes": false,
+      "blockedBy": [
+        "F26",
+        "a typed Codex session to build the fixture from"
+      ]
     }
   ]
 }

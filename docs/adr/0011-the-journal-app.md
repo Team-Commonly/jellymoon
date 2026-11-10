@@ -1,8 +1,12 @@
 # 0011 · The journal app: a local app that reads your agent sessions into a page
 
-Status: Proposed, 2026-11-09. Waiting on the owner's ruling. It adds no code. It decides the shape of a new local app so the
-features that follow have one design to build. The measurements below come from throwaway tests kept outside the repo;
+Status: Accepted, by the owner's ruling, 2026-11-09, except section 4 (the shell), which stays proposed until the stack
+evaluation the owner asked for is written down. It adds no code. It decides the shape of a new local app so the features
+that follow (F26 to F31) have one design to build. The measurements below come from throwaway tests kept outside the repo;
 "Still open" names what they did not cover.
+
+All logic lives in the daemon and is checked at its commands. The shell only draws page data, so it can be replaced
+without touching a rule.
 
 ## Decision
 

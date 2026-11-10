@@ -2,10 +2,9 @@
 //! shaped like a key or a password; [`string`], which it runs first, shortens Jellymoon's own tokens and drops control
 //! and invisible characters, so a text can neither leak a token nor move the cursor of a terminal nor reorder a line.
 
-use std::ops::Range;
 use std::sync::LazyLock;
 
-use regex::Regex;
+use regex::{Captures, Regex};
 
 /// What [`credentials`] leaves where a credential was.
 pub(crate) const REPLACED: &str = "[redacted]";
@@ -34,6 +33,14 @@ static KEY: LazyLock<Regex> = LazyLock::new(|| {
 /// 40 or more characters of the base64 alphabets with no break: long enough to be a key of unknown make.
 static LONG_RUN: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+/=_-]{40,}"));
 
+/// The same within a path, where a slash ends a run, so each segment is a run of its own.
+static LONG_SEGMENT: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+=_-]{40,}"));
+
+/// How a word that is a path or a link starts: after any opening quotes and brackets, with `/`, `./`, `../`, `~/`, a
+/// Windows drive (`C:\` or `C:/`) or a URL scheme (`https://`).
+static PATH_START: LazyLock<Regex> =
+    LazyLock::new(|| pattern(r#"^["'`(\[{<]*(?:\.{0,2}/|~/|[A-Za-z]:[\\/]|[A-Za-z][A-Za-z0-9+.-]*://)"#));
+
 /// The password in `scheme://user:password@host`. Only the password is replaced.
 static URL_PASSWORD: LazyLock<Regex> =
     LazyLock::new(|| pattern(r"([A-Za-z][A-Za-z0-9+.-]*://[^\t\n\f\r /:@]*:)[^\t\n\f\r /@]+@"));
@@ -57,47 +64,22 @@ pub(crate) fn string(text: &str) -> String {
 }
 
 /// [`string`] for text a person or an agent wrote, which can hold any vendor's key: it also replaces every known key
-/// shape, the password in a URL, and any long unbroken run that mixes digits with both letter cases. A git hash (one
-/// case) is left alone. So is a path (see [`is_path`]): it is judged one segment at a time, so a long folder path with a
-/// digit and a capital somewhere in it survives, and a long mixed segment inside it does not.
+/// shape, the password in a URL, and, word by word (a word is what stands between two spaces), any [`LONG_RUN`] that
+/// mixes digits with both letter cases. A git hash (one case) is left alone. A base64 secret has slashes too, so a
+/// slash or a dot inside a word does not make it a path: only its [`PATH_START`] does, and then each segment is judged
+/// alone, so a long folder path survives and a long mixed segment inside it does not.
 pub(crate) fn credentials(text: &str) -> String {
     let text = string(text);
     let text = KEY.replace_all(&text, REPLACED);
     let text = URL_PASSWORD.replace_all(&text, format!("${{1}}{REPLACED}@"));
-    let (mut shown, mut from) = (String::with_capacity(text.len()), 0);
-    for run in LONG_RUN.find_iter(&text) {
-        shown.push_str(&text[from..run.start()]);
-        shown.push_str(&long_run(&text, run.range()));
-        from = run.end();
+    let mut shown = String::with_capacity(text.len());
+    for piece in text.split_inclusive(char::is_whitespace) {
+        let word = piece.trim_end();
+        let runs = if PATH_START.is_match(word) { &LONG_SEGMENT } else { &LONG_RUN };
+        shown.push_str(&runs.replace_all(word, |run: &Captures| mixed(&run[0]).to_string()));
+        shown.push_str(&piece[word.len()..]);
     }
-    shown + &text[from..]
-}
-
-/// Judges the run at `at`: whole, unless it is a path, whose segments are each judged alone.
-fn long_run(text: &str, at: Range<usize>) -> String {
-    let run = &text[at.clone()];
-    if run.contains(['+', '=']) || !run.contains('/') || !is_path(text, at) {
-        return mixed(run).to_string();
-    }
-    let segments: Vec<&str> =
-        run.split('/').map(|segment| if segment.len() >= 40 { mixed(segment) } else { segment }).collect();
-    segments.join("/")
-}
-
-/// Whether a run with a slash in it shows a sign of being a path. A base64 secret has slashes too, so the slash alone
-/// is none. The signs are read off the word the run is in, which is the run and the dots, tildes and backslashes that
-/// touch it: it starts with `/` or `~` (which `./x`, `../x`, `~/x` and a URL's `//host/x` all do), it follows a
-/// Windows drive (`C:`), or one of its segments has a dot in it (`index.tsx`, `..`). A full stop that ends the word is
-/// the sentence's, not the path's.
-fn is_path(text: &str, at: Range<usize>) -> bool {
-    let wordy = |c: char| c.is_ascii_alphanumeric() || "+/=_-.~\\".contains(c);
-    let before = text[..at.start].trim_end_matches(wordy);
-    let after = text[at.end..].trim_start_matches(wordy);
-    let word = text[before.len()..text.len() - after.len()].trim_end_matches('.');
-    let on_a_drive = before.strip_suffix(':').is_some_and(|drive| drive.ends_with(|c: char| c.is_ascii_alphabetic()));
-    word.starts_with(['/', '~'])
-        || on_a_drive && word.starts_with('\\')
-        || word.split(['/', '\\']).any(|segment| segment.contains('.'))
+    shown
 }
 
 /// Replaces a run that has digits and both letter cases.
@@ -165,9 +147,22 @@ mod tests {
             "key: [redacted]",
             "a key with no end mark is replaced to the end of the text"
         );
+        // A secret of 40 characters with slashes in it, and what each neighbour makes of it (reader.md states each).
         let slashed = "wJa1r/XUtn".repeat(4);
-        assert_eq!(credentials(&format!("the key is {slashed}. Keep it")), "the key is [redacted]. Keep it");
-        assert_eq!(credentials(&format!("aws:{slashed}")), "aws:[redacted]", "a colon alone makes no drive path");
+        let cases = [
+            ("the key is {}. Keep it", "the key is [redacted]. Keep it", "a full stop after it"),
+            ("aws:{}", "aws:[redacted]", "a colon alone makes no path"),
+            ("~{}", "~[redacted]", "a tilde with no slash makes no path"),
+            ("notes.txt/{}", "notes.[redacted]", "a file name before it makes no path"),
+            ("{}.txt", "[redacted].txt", "an extension after it makes no path"),
+            ("`{}`", "`[redacted]`", "a quote mark makes no path"),
+            // Missed, and stated: in a word that starts as a path or a link, each piece between slashes is under 40.
+            ("https://example.com/{}", "https://example.com/{}", "inside a URL's path"),
+            ("/{}", "/{}", "after a leading slash"),
+        ];
+        for (text, want, name) in cases {
+            assert_eq!(credentials(&text.replace("{}", &slashed)), want.replace("{}", &slashed), "{name}");
+        }
     }
 
     // Item 19: the password only, and a long mixed segment of a path.
@@ -186,23 +181,31 @@ mod tests {
     fn a_path_a_commit_hash_and_plain_words_are_left_alone() {
         let paths = [
             "/srv/checkouts/workspace/MyProject2/internal/handlers/v2",
-            "src/components/UserProfile2/SettingsPanel3/index.tsx",
             "./src/components/UserProfile2/SettingsPanel3/index",
             "../checkouts/workspace/MyProject2/internal/handlers/v2",
             "~/checkouts/workspace/MyProject2/internal/handlers/v2",
-            "~dev/checkouts/workspace/MyProject2/internal/handlers/v2",
             r"C:\work\checkouts\Workspace2\MyProject2\internal\handlers\v2",
             "D:/work/checkouts/Workspace2/MyProject2/internal/handlers/v2",
             r"E:\work\checkouts/Workspace2/MyProject2/internal/handlers/v2",
-            "https://example.com/docs/guide",
+            "https://example.com/Docs2/guides/Getting-Started/install/v2/notes",
+            "(`./src/components/UserProfile2/SettingsPanel3/index.tsx`)",
             "mailto:someone@example.com at 10:30",
         ];
         for path in paths {
             assert_eq!(credentials(&format!("open {path} now")), format!("open {path} now"));
         }
-        // The cost of judging a run with no sign of a path whole: a long relative path with no dot in it, when it
-        // mixes digits with both cases, is replaced too.
-        assert_eq!(credentials("open src/components/UserProfile2/SettingsPanel3/index now"), "open [redacted] now");
+        // The cost of telling a path by how its word starts: a word that only has a slash or a dot in it is judged as
+        // whole runs, and a run of 40 or more that mixes digits with both cases is replaced.
+        let replaced = [
+            ("feature/JIRA-1234-AddUserProfileSettingsPanel", "[redacted]"),
+            ("src/components/UserProfile2/SettingsPanel3/index", "[redacted]"),
+            ("src/components/UserProfile2/SettingsPanel3/index.tsx", "[redacted].tsx"),
+            ("~dev/checkouts/workspace/MyProject2/internal/handlers/v2", "~[redacted]"),
+            ("--out=/srv/checkouts/workspace/MyProject2/internal/handlers", "[redacted]"),
+        ];
+        for (word, want) in replaced {
+            assert_eq!(credentials(&format!("open {word} now")), format!("open {want} now"));
+        }
         let hash = "0123456789abcdef".repeat(3);
         let plain = format!(
             "commit {hash} in docs/development/a-long-folder-name/another-long-folder-name/file.md, sk-short, ghp_x"
@@ -213,6 +216,28 @@ mod tests {
             "a jmr_… token",
             "credentials also does what string does"
         );
+    }
+
+    // A megabyte of each shape is cleaned in a time that grows with its length: no step looks back or walks outward.
+    #[test]
+    fn a_megabyte_of_the_worst_shapes_is_cleaned_in_seconds() {
+        let mixed = "aB3".repeat(13);
+        let shapes = [
+            ("a long run, a slash and a dot, over and over in one word", format!("{mixed}aB3/x.")),
+            ("one path of a megabyte", format!("/{mixed}")),
+            (
+                "the start of every pattern and none finished",
+                format!("\u{1b}]0;\u{1b}[1;-----BEGIN-eyJ{mixed}.x://u:p."),
+            ),
+            ("short words", "aB3 ".to_string()),
+        ];
+        for (name, shape) in shapes {
+            let text = shape.repeat((1 << 20) / shape.len());
+            let start = std::time::Instant::now();
+            let shown = credentials(&text);
+            assert!(start.elapsed() < std::time::Duration::from_secs(5), "{name}: {:?}", start.elapsed());
+            assert!(!shown.is_empty(), "{name}");
+        }
     }
 
     // Item 20.

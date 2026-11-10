@@ -50,7 +50,8 @@ Cleaning runs first, in one pass, and takes out what nobody sees:
 
 - A whole terminal escape sequence: CSI (ESC `[` or U+009B, then parameter bytes, intermediate bytes and a final byte,
   as in the colour code `ESC[32m`) and OSC (ESC `]` up to BEL or ESC `\`). A sequence that is cut short, or has
-  another control character inside it, is not taken whole: it loses only its control characters.
+  another of these characters inside it, is not taken whole: it loses only those characters. A key written straight
+  after a bare `ESC[` or U+009B loses its first characters to the sequence, and the rest of it is shown.
 - Every other control character except newline and tab.
 - Every format character (Unicode category Cf: the bidi controls, zero-width space, soft hyphen, word joiner,
   byte-order mark, invisible operators, tag characters) and U+E0000 to U+E007F, except the joiners U+200C and U+200D,
@@ -59,19 +60,29 @@ Cleaning runs first, in one pass, and takes out what nobody sees:
 So a key right after a colour code, or split by one of these characters, is still found. A character that is seen
 only as part of its neighbour (a variation selector, a combining mark) stays, and a key split by one is missed.
 
-Redaction then replaces credential shapes with `[redacted]`: model provider, GitHub, GitLab, Hugging Face, Google
-(`AIza`), Stripe live and Slack keys, AWS key ids, JWTs, PEM private keys, the password in
-`scheme://user:password@host` (the password only), and any run of 40 or more base64 characters (letters, digits, `+`,
-`/`, `=`, `_`, `-`) that mixes digits with both letter cases. The token shapes of the product this repo used to hold
-(`jmr_` and its siblings) are shortened to their prefix, `jmr_…`.
+Redaction then replaces credential shapes with `[redacted]`, in this order. Each step is one pass over the text.
 
-A base64 secret can hold slashes, so a slash alone does not make a run a path. A run with a `/` in it and no `+` or `=`
-is treated as a path only when it starts with `/`, `./`, `../` or `~`, or is a Windows drive path (`C:\…` or `C:/…`), or
-has a segment with a `.` in it (`index.tsx`); a full stop that ends the run is the sentence's and does not count. A path
-is judged one segment at a time, so a long folder path survives and a segment of 40 or more mixed characters inside it
-does not. Any other run is judged whole. The cost: a relative path of 40 or more characters with no dot anywhere in it,
-such as `src/components/UserProfile2/SettingsPanel3/index`, is replaced when it mixes digits with both cases. A run
-that starts with `/` is still read as a path, so a secret that happens to start with one is missed.
+1. The token shapes of the product this repo used to hold (`jmu_`, `jmc_`, `jmr_`, `cm_`) are shortened to their prefix,
+   `jmr_…`.
+2. Named keys: model provider, GitHub, GitLab, Hugging Face, Google (`AIza`), Stripe live and Slack keys, AWS key ids,
+   JWTs and PEM private keys.
+3. The password in `scheme://user:password@host`, the password only.
+4. Keys of unknown make. The text is split into words at white space. In each word, a run of 40 or more base64
+   characters (letters, digits, `+`, `/`, `=`, `_`, `-`) is replaced when it mixes digits with both letter cases.
+
+A word is a path or a link only by how it starts: `/`, `./`, `../`, `~/`, a Windows drive (`C:\` or `C:/`) or a URL
+scheme (`https://`), after any opening quotes or brackets (`"`, `'`, `` ` ``, `(`, `[`, `{`, `<`). In such a word a `/`
+ends a run, so each segment is judged alone: a long folder path survives, and a segment of 40 or more mixed characters
+inside it is replaced. Nothing else about a word is read: a slash or a dot inside it does not make it a path.
+
+What that replaces wrongly: a word that is a path but does not start like one, when a run in it reaches 40 characters
+and mixes digits with both cases. `feature/JIRA-1234-AddUserProfileSettingsPanel` and
+`src/components/UserProfile2/SettingsPanel3/index` both become `[redacted]`, and with `.tsx` after it the second becomes
+`[redacted].tsx`.
+
+What happens to a 40-character secret with slashes in it: alone, after `~`, after `notes.txt/`, before `.txt` or inside
+quotes it is replaced. Inside a word that starts as a path or a link it is missed, because each piece between its
+slashes is under 40 characters: `https://host/<secret>` and a secret that itself starts with `/` both pass.
 
 `project` is the last segment of the working directory. Under `<repo>/.claude/worktrees/<name>` it is the repo folder's
 name, so a repo and its worktrees are one project.

@@ -180,11 +180,12 @@ fn the_harness_runs_in_an_empty_folder_under_the_home_that_is_gone_afterwards() 
 #[test]
 fn a_wish_or_a_clash_that_quotes_words_the_person_did_not_type_is_dropped_and_the_models_own_words_are_cleaned() {
     let w = world();
-    let label = format!("Fail\tfast\u{7} {} and a tail that runs well past forty characters", support::hub_key());
+    let (hub, model) = (support::hub_key(), support::model_key());
+    let label = format!("Fail\tfast\u{7}\u{202e} {hub} and a tail that runs well past forty characters");
     let stars = json!([
         "retry\nremoved",
         "s".repeat(80),
-        format!("used {}", support::model_key()),
+        format!("used {}\u{200b}{}", &model[..9], &model[9..]),
         " \t ",
         "three",
         "five is one too many"

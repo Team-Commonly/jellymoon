@@ -43,13 +43,35 @@ An image alone leaves no text, so it is dropped, and it still ends the turn befo
 
 ## What is printed
 
-`said` is cut to 700 characters and `reply` to 500; a cut text ends in `…`. Before the cut, redaction replaces
-credential shapes with `[redacted]`: model provider, GitHub, GitLab, Hugging Face, Google (`AIza`), Stripe live and Slack keys,
-AWS key ids, JWTs, PEM private keys, the password in `scheme://user:password@host` (the password only), and any run of
-40 or more base64 characters that mixes digits with both letter cases. A run with a `/` and no `+` or `=` is a path: each of
-its segments is judged alone, so a long folder path survives and a long mixed segment inside one does not. The token shapes of the product this repo used to hold (`jmr_` and its
-siblings) are shortened to their prefix, `jmr_…`. `project` is the last segment of the working directory. Under `<repo>/.claude/worktrees/<name>` it is the repo folder's
+`said` is cut to 700 characters, `reply` to 500 and `project` to 255; a cut text ends in `…`. All three are cleaned and
+redacted before the cut.
+
+Cleaning takes out what nobody sees: control characters other than newline and tab, the bidi controls (U+061C, U+200E,
+U+200F, U+202A to U+202E, U+2066 to U+2069), and the soft hyphen, zero-width space, word joiner and byte-order mark
+(U+00AD, U+200B, U+2060, U+FEFF). The joiners U+200C and U+200D stay, since emoji and several scripts are written with
+them. Cleaning runs first, so a key split by one of these characters is still found.
+
+Redaction then replaces credential shapes with `[redacted]`: model provider, GitHub, GitLab, Hugging Face, Google
+(`AIza`), Stripe live and Slack keys, AWS key ids, JWTs, PEM private keys, the password in
+`scheme://user:password@host` (the password only), and any run of 40 or more base64 characters (letters, digits, `+`,
+`/`, `=`, `_`, `-`) that mixes digits with both letter cases. The token shapes of the product this repo used to hold
+(`jmr_` and its siblings) are shortened to their prefix, `jmr_…`.
+
+A base64 secret can hold slashes, so a slash alone does not make a run a path. A run with a `/` in it and no `+` or `=`
+is treated as a path only when it starts with `/`, `./`, `../` or `~`, or is a Windows drive path (`C:\…` or `C:/…`), or
+has a segment with a `.` in it (`index.tsx`); a full stop that ends the run is the sentence's and does not count. A path
+is judged one segment at a time, so a long folder path survives and a segment of 40 or more mixed characters inside it
+does not. Any other run is judged whole. The cost: a relative path of 40 or more characters with no dot anywhere in it,
+such as `src/components/UserProfile2/SettingsPanel3/index`, is replaced when it mixes digits with both cases. A run
+that starts with `/` is still read as a path, so a secret that happens to start with one is missed.
+
+`project` is the last segment of the working directory. Under `<repo>/.claude/worktrees/<name>` it is the repo folder's
 name, so a repo and its worktrees are one project.
 
 A line that is not valid JSON is skipped. A line over 64 MiB is read past without being kept. A session file whose modification time is before the start of the requested local day is not opened, since it can hold no turn of that day; the one consequence is that a file copied or restored with an old modification time is skipped. Reading a busy day on a
 computer with gigabytes of logs takes around ten seconds.
+
+## Not covered yet
+
+A session file is listed, then opened. Something that swaps the file for a link or a pipe between those two steps would
+have the swapped thing opened; the check is made on the listing only.

@@ -122,11 +122,11 @@ pub(crate) fn turns(
                 // A line with no folder is skipped by its session's folder name.
                 open = !said.is_empty() && !skipped(if cwd.is_empty() { &folder } else { cwd }, skip);
                 if open {
-                    let project = cut(project(cwd), PROJECT_MAX);
+                    // A folder's name is the log's text too: it is printed, and the model reads it.
                     let turn = ReaderTurn {
                         at: String::new(),
                         tool: Harness::ClaudeCode,
-                        project,
+                        project: cut(&credentials(project(cwd)), PROJECT_MAX),
                         said: cut(&said, SAID_MAX),
                         reply: String::new(),
                     };

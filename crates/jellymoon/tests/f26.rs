@@ -37,6 +37,7 @@ fn alpha_untyped() -> Vec<String> {
         line("user", "2026-03-10T16:00:07.000Z", A, "human", json!("LEAK sidechain prompt"), side),
         line("user", "2026-03-10T16:00:08.000Z", A, "human", json!("LEAK meta"), json!({"isMeta": true})),
         line("user", "2026-03-10T16:00:09.000Z", A, "", json!("LEAK compaction summary"), json!({"isCompactSummary": true})),
+        line("user", "2026-03-10T16:00:09.500Z", A, "human", json!("LEAK summary marked as typed"), json!({"isCompactSummary": true})),
         line("user", "2026-03-10T16:00:10.000Z", A, "", json!("LEAK prompt from another program"), json!({"promptSource": "sdk"})),
         reply("2026-03-10T16:00:11.000Z", A, "LEAK reply to another program's prompt"),
         r#"{"type":"user","timestamp":"2026-03-10T16:30:00.000Z","origin":{"kind":"human"},"message":{"content":"LEAK broken line"#.to_string(),
@@ -267,6 +268,23 @@ fn a_windows_folder_is_named_by_its_last_segment_and_a_worktree_by_its_repo() {
         turns,
         [turn("09:00", "delta", "typed on Windows", ""), turn("10:00", "beta", "typed in a worktree on Windows", "")]
     );
+}
+
+// A folder's name is a log's text like any other: cleaned, and checked for credential shapes, before it is printed.
+#[test]
+fn a_project_name_has_its_control_characters_removed_and_a_credential_shape_replaced() {
+    let logs = scratch();
+    let mixed = format!("/w/{}\u{1b}\u{9b}", "aB3x9Zq7".repeat(6));
+    let lines = [
+        said("2026-03-10T16:00:00.000Z", &mixed, "typed in a folder named like a key of unknown make"),
+        said("2026-03-10T17:00:00.000Z", "/w/del\u{1b}[2Jta\u{202e}", "typed in a folder named with an escape"),
+        said("2026-03-10T18:00:00.000Z", &format!("/w/{}", support::hub_key()), "typed in a folder named as a key"),
+    ];
+    write_log(logs.path(), "-w-x/s.jsonl", &lines);
+    let (turns, raw) = day(logs.path(), &["--date", "2026-03-10"]);
+    let projects: Vec<&str> = turns.iter().map(|turn| turn["project"].as_str().unwrap()).collect();
+    assert_eq!(projects, ["[redacted]", "del[2Jta", "[redacted]"]);
+    assert!(!raw.contains("aB3x9Zq7") && !raw.contains("\\u"), "{raw}");
 }
 
 #[test]

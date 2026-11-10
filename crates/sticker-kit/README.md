@@ -86,9 +86,13 @@ U+200D, which emoji and several scripts are written with. The kit carries no
 Unicode tables, so the list is written out in `src/text.rs`.
 
 **Notes that do not fit are counted, never dropped in silence.** Notes are
-placed in the scene's order. A list shows the rows that fit, at least one, and
-ends with `+N more`. The first note that does not fit and every note after it
-are left out together, and a last level sheet (a `Note` piece, id
+placed in the scene's order, and room is made in this order. A list shows the
+rows that fit, down to one, and ends with `+N more`. Then every option of a
+choice note is shown in two lines, not three. Then the gap under each note
+goes from 48 to 32 design units. A tighter step is taken only when it places
+more notes. Text that is cut ends in `…` after the last word that fits; the
+scene keeps the whole text. Last, the first note that does not fit and every
+note after it are left out together, and a level sheet (a `Note` piece, id
 `MORE_NOTES_ID`, index the number of notes) says `+N more of M notes`. Layout
 time does not grow with the number of notes or rows.
 

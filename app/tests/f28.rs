@@ -270,13 +270,15 @@ fn the_same_page_always_prints_the_same_bytes_and_reads_from_stdin() {
 #[test]
 fn a_wrong_command_line_exits_2_with_the_usage_and_prints_nothing() {
     let page = day().to_string();
-    let wrong: [&[&str]; 8] = [
+    let wrong: [&[&str]; 10] = [
         &[],
         &["layout"],
         &["draw", "--page", "-"],
         &["layout", "--page", "-", "--theme", "neon"],
         &["layout", "--page", "-", "--size", "960"],
         &["layout", "--page", "-", "--size", "0x640"],
+        &["layout", "--page", "-", "--size", "959x640"],
+        &["layout", "--page", "-", "--size", "960x639"],
         &["layout", "--page", "-", "--bogus"],
         &["layout", "--page"],
     ];

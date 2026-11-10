@@ -223,6 +223,35 @@ fn notes_that_do_not_fit_are_counted_on_a_last_sheet_in_both_themes() {
 }
 
 #[test]
+fn options_give_up_their_third_line_and_the_gaps_a_third_before_a_note_is_counted() {
+    let long = "an option that runs on for three whole lines of text, and then some more words".repeat(2);
+    let choice = |id: &str| Note::Choice {
+        id: id.into(),
+        title: "pick one".into(),
+        options: vec![long.clone(); 2],
+        footer: "a footer".into(),
+        struck_first: false,
+    };
+    let rows: Vec<(String, String)> = (0..9).map(|i| (format!("row {i}"), "of nine".to_string())).collect();
+    let list = Note::List { title: "a list".into(), rows };
+    let lines = |placed: &[Placed]| of(placed, PieceKind::Option).iter().map(|o| o.text.len()).max();
+    let mut scene = Scene::sample();
+    for theme in [Theme::sticker(), Theme::plain()] {
+        for viewport in [DEFAULT, SMALL] {
+            scene.notes = vec![choice("a")];
+            assert_eq!(lines(&place(&scene, &theme, viewport)), Some(3), "with room, an option has three lines");
+            scene.notes = vec![list.clone(), choice("a"), choice("b")];
+            let placed = place(&scene, &theme, viewport);
+            assert_eq!(notes_and_count(&placed), (vec!["note-0".to_string(), "a".into(), "b".into()], None));
+            assert_eq!(lines(&placed), Some(2), "two lines each, so that both choices and the list fit");
+            let shown = of(&placed, PieceKind::Note)[0].text.iter().filter(|run| run.text.starts_with("row ")).count();
+            assert!(shown >= 1, "the list keeps a row");
+            assert_sound(&scene, &theme, viewport);
+        }
+    }
+}
+
+#[test]
 fn a_scene_of_any_size_is_laid_out_in_a_time_that_does_not_grow_with_its_notes() {
     let mut scene = Scene::sample();
     scene.notes = (0..200_000).map(|i| plain(&format!("note {i}"))).collect();

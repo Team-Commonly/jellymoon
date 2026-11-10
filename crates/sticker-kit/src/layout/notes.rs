@@ -9,6 +9,10 @@ use crate::text::{Role, wrap};
 
 const MAX_OPTIONS: usize = 4;
 
+/// The ways to make room, tried in order until every note fits: how many lines an option is shown in, and the gap
+/// under a note in design units. A list gives up rows before any of them is tried. The scene keeps the whole text.
+const TIGHTER: [(usize, f32); 3] = [(3, 48.0), (2, 48.0), (2, 32.0)];
+
 /// How many notes are laid out at most. The ones after are only counted, so a scene of any length costs the same.
 pub const MAX_NOTES: usize = 12;
 
@@ -30,28 +34,25 @@ pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
     let m = cx.theme.metrics;
     let bottom = cx.paper().bottom() - cx.px(26.0);
     let mut top = cx.y(m.note_top);
-    let gap = cx.px(48.0);
     let total = scene.notes.len();
     let seen = &scene.notes[..total.min(MAX_NOTES)];
-    // What each note takes with the gap under it; for a list, the least it can be shown in.
-    let needs: Vec<f32> = seen.iter().enumerate().map(|(index, note)| height_needed(cx, note, index) + gap).collect();
-    let more = gap + more_sheet(cx, 0, total, top).rect.h;
-    // The notes placed are the first ones that fit, with room kept for the count when any is left out.
-    let (mut placed, mut used) = (0, 0.0);
-    for (index, need) in needs.iter().enumerate() {
-        let kept = if index + 1 < total { more } else { 0.0 };
-        if used + need - gap + kept > bottom - top {
-            break;
+    // Room is made in this order: lists give up rows, options their third line, the gaps a third; then notes are
+    // counted. A tighter way is taken only when it places more notes.
+    let mut plan = plan(cx, seen, total, TIGHTER[0], bottom - top);
+    for way in &TIGHTER[1..] {
+        let tighter = self::plan(cx, seen, total, *way, bottom - top);
+        if plan.placed < total && tighter.placed > plan.placed {
+            plan = tighter;
         }
-        (placed, used) = (index + 1, used + need);
     }
+    let Plan { lines, gap, more, needs, placed, used } = plan;
     let kept = if placed < total { more } else { 0.0 };
     let (mut after, mut drawn) = (used, 0);
     for (index, note) in seen.iter().enumerate().take(placed) {
         after -= needs[index];
         // A list is as long as the room it is given: what the notes after it and the count do not need.
         let room = if matches!(note, Note::List { .. }) { bottom - top - after - kept } else { f32::INFINITY };
-        let Some((sheet, id, tilt)) = fill(cx, note, index, top, room) else {
+        let Some((sheet, id, tilt)) = fill(cx, note, index, top, room, lines) else {
             break;
         };
         drawn += 1;
@@ -76,6 +77,35 @@ pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
     }
 }
 
+/// Which notes are placed when an option may take `lines` lines.
+struct Plan {
+    lines: usize,
+    gap: f32,
+    /// What the sheet that counts the notes left out takes, with the gap above it.
+    more: f32,
+    /// What each note takes with the gap under it; for a list, the least it can be shown in.
+    needs: Vec<f32>,
+    placed: usize,
+    used: f32,
+}
+
+/// The notes placed are the first ones that fit `room`, with room kept for the count when any is left out.
+fn plan(cx: &Ctx, seen: &[Note], total: usize, (lines, gap): (usize, f32), room: f32) -> Plan {
+    let gap = cx.px(gap);
+    let more = gap + more_sheet(cx, 0, total, 0.0).rect.h;
+    let needs: Vec<f32> =
+        seen.iter().enumerate().map(|(index, note)| height_needed(cx, note, index, lines) + gap).collect();
+    let (mut placed, mut used) = (0, 0.0);
+    for (index, need) in needs.iter().enumerate() {
+        let kept = if index + 1 < total { more } else { 0.0 };
+        if used + need - gap + kept > room {
+            break;
+        }
+        (placed, used) = (index + 1, used + need);
+    }
+    Plan { lines, gap, more, needs, placed, used }
+}
+
 /// The level sheet that stands for the notes left out: one line, `+N more`.
 fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
     let mut sheet = open(cx, top, cx.px(14.0), 330.0, (18.0, 22.0));
@@ -85,15 +115,15 @@ fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
 }
 
 /// The height a note takes. A list is measured with two rows: one of its own and the line that counts the rest.
-fn height_needed(cx: &Ctx, note: &Note, index: usize) -> f32 {
+fn height_needed(cx: &Ctx, note: &Note, index: usize, lines: usize) -> f32 {
     let least = match note {
         Note::List { title, rows } => list(cx, title, &rows[..rows.len().min(2)], 0.0, f32::INFINITY),
-        _ => fill(cx, note, index, 0.0, f32::INFINITY).map(|(sheet, ..)| sheet),
+        _ => fill(cx, note, index, 0.0, f32::INFINITY, lines).map(|(sheet, ..)| sheet),
     };
     least.map_or(0.0, |sheet| sheet.rect.h)
 }
 
-fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32) -> Option<(Sheet, String, f32)> {
+fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32, lines: usize) -> Option<(Sheet, String, f32)> {
     let tilt = cx.theme.tilt;
     let fallback = format!("note-{index}");
     match note {
@@ -106,7 +136,7 @@ fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32) -> Option<(She
             heading(cx, &mut sheet, title, Role::ChoiceTitle);
             for (i, option) in options.iter().take(MAX_OPTIONS).enumerate() {
                 let role = if *struck_first && i == 0 { Role::OptionStruck } else { Role::Option };
-                choice_option(cx, &mut sheet, id, i, option, role);
+                choice_option(cx, &mut sheet, (id, i), option, role, lines);
             }
             paragraph(cx, &mut sheet, footer, Role::ChoiceFooter, 1);
             close(cx, sheet, 18.0, room).map(|sheet| (sheet, id.clone(), tilt.choice_note))
@@ -162,11 +192,11 @@ fn paragraph(cx: &Ctx, sheet: &mut Sheet, text: &str, role: Role, max_lines: usi
     sheet.cursor += cx.px(9.0);
 }
 
-fn choice_option(cx: &Ctx, sheet: &mut Sheet, id: &str, index: usize, text: &str, role: Role) {
+fn choice_option(cx: &Ctx, sheet: &mut Sheet, (id, index): (&str, usize), text: &str, role: Role, max_lines: usize) {
     let size = cx.size(role);
     let height = line_height(size);
     let (pad_x, pad_y) = (cx.px(14.0), cx.px(9.0));
-    let lines = wrap(&cx.clean(text), sheet.inner - 2.0 * pad_x, 3, role, size, cx.measure);
+    let lines = wrap(&cx.clean(text), sheet.inner - 2.0 * pad_x, max_lines, role, size, cx.measure);
     let rect = Rect::new(sheet.left, sheet.cursor, sheet.inner, lines.len().max(1) as f32 * height + 2.0 * pad_y);
     let mut button = piece(PieceKind::Option, id, index, rect);
     for (i, (line, width)) in lines.into_iter().enumerate() {

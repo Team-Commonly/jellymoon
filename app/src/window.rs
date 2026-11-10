@@ -47,6 +47,7 @@ fn page(scene: Scene, theme: Theme, viewport: Viewport, cx: &mut App) -> gpui::R
     let bounds = Bounds::centered(None, size(px(viewport.w), px(viewport.h)), cx);
     let options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_min_size: Some(size(px(crate::SMALLEST.w), px(crate::SMALLEST.h))),
         titlebar: Some(TitlebarOptions { title: Some("Jellymoon".into()), ..Default::default() }),
         ..Default::default()
     };

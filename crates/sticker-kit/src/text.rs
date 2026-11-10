@@ -163,8 +163,8 @@ pub fn fit(text: &str, max_width: f32, role: Role, size: f32, measure: &dyn Meas
     best
 }
 
-/// Breaks `text` at spaces into at most `max_lines` lines that fit
-/// `max_width`; the last line is cut with an ellipsis when text is left.
+/// Breaks `text` at spaces into at most `max_lines` lines that fit `max_width`. When text is left over, the last line
+/// ends with an ellipsis after the last word that fits; a single word too long for a line is cut inside.
 pub fn wrap(
     text: &str,
     max_width: f32,
@@ -173,26 +173,28 @@ pub fn wrap(
     size: f32,
     measure: &dyn Measure,
 ) -> Vec<(String, f32)> {
+    let fits = |line: &str| measure.width(line, role, size) <= max_width;
+    let words: Vec<&str> = text.split(' ').filter(|w| !w.is_empty()).collect();
     let mut lines: Vec<String> = Vec::new();
-    let mut current = String::new();
-    let mut words = text.split(' ').filter(|w| !w.is_empty()).peekable();
-    while let Some(word) = words.next() {
-        let joined = if current.is_empty() { word.to_string() } else { format!("{current} {word}") };
+    let mut at = 0;
+    while at < words.len() {
         let last_line = lines.len() + 1 >= max_lines;
-        if last_line || current.is_empty() || measure.width(&joined, role, size) <= max_width {
-            current = joined;
-        } else {
-            lines.push(std::mem::take(&mut current));
-            current = word.to_string();
+        let mut line = words[at].to_string();
+        at += 1;
+        while at < words.len() {
+            let joined = format!("{line} {}", words[at]);
+            // The last line keeps room for the ellipsis unless the word is the last one.
+            let whole = if last_line && at + 1 < words.len() { format!("{joined}{ELLIPSIS}") } else { joined.clone() };
+            if !fits(&whole) {
+                break;
+            }
+            (line, at) = (joined, at + 1);
         }
-        if words.peek().is_none() && !current.is_empty() {
-            lines.push(std::mem::take(&mut current));
+        if last_line && at < words.len() {
+            line.push(ELLIPSIS);
+            at = words.len();
         }
+        lines.push(line);
     }
-    lines
-        .iter()
-        .take(max_lines.max(1))
-        .map(|line| fit(line, max_width, role, size, measure))
-        .filter(|(line, _)| !line.is_empty())
-        .collect()
+    lines.iter().map(|line| fit(line, max_width, role, size, measure)).filter(|(line, _)| !line.is_empty()).collect()
 }

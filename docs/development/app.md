@@ -9,7 +9,8 @@ jellymoon-app --page <file, or - for stdin> [--theme sticker|plain] [--size <W>x
 ```
 
 The first prints where every piece goes. The second opens a window (default 1440x900); `t` switches the theme, and
-`JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. A wrong command line exits 2 with the usage on stderr; a file
+`JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. `--size` is 960x640 or larger: that is the smallest size a page
+is drawn at, and the window does not shrink below it. A wrong command line exits 2 with the usage on stderr; a file
 that cannot be read, is over 1 MiB or is not page data exits 1 with one line. Both start `jellymoon-app: ` and print
 nothing on stdout.
 
@@ -51,11 +52,17 @@ starts with a plain note, "not everything is drawn", whose body counts what went
 - The notes are placed in page order: what was left out, came true today, the clashes, then the plain notes. The
   first note that does not fit and every note after it are left out together, and a last small sheet says how many:
   a `note` piece with the id `more`, its `index` the number of notes on the page, and the text `+N more of M notes`.
-  No note is skipped to make room for a later one. Measured at 1440x900 and at 960x640, in both themes: the list
-  and two clashes with one-line quotes fit; with a third the page shows the list, the first clash and
-  `+2 more of 4 notes`; and two clashes with the longest quotes core writes (200 characters, three lines each) do
-  not both fit, so the page shows the list, the first clash and `+1 more of 3 notes`.
+  No note is skipped to make room for a later one.
 - A character shows at most 4 stars; every star is a row of the list note.
+
+**The fullest page core can write is drawn whole**: 8 wishes with labels of 40 characters, 4 stars of 60 each, and
+2 clashes with two quotes of 200 each, at 1440x900 and at 960x640, in both themes. Every wish is a character, both
+clashes are choice notes with both quotes, the list note is there, and nothing is counted as left out (an F28 case
+holds this). The kit makes the room in this order: the list gives up rows, down to its title, one row and `+N more`;
+then each quote is shown in two lines, not three, ending in `…` after the last word that fits; then the gaps between
+notes close by a third. The page data keeps the whole quote. Only past what core writes (a third clash, parts the app
+does not know, a list over its length) does `+N more of M notes` appear: with three clashes, the list, the first one
+or two of them, and `+1` or `+2 more of 4 notes`.
 
 The kit has its own door for scenes and theme files (`crates/sticker-kit/README.md`).
 
@@ -64,7 +71,8 @@ The kit has its own door for scenes and theme files (`crates/sticker-kit/README.
 One JSON object a line, in the kit's order: `kind`, `id`, `index`, `x`, `y`, `w`, `h` (logical pixels, two decimals),
 `tilt` (degrees), `state` on a character, and `text`, a list of runs with `role`, `text` and their own box. Any text
 that is longer than its place is cut with an ellipsis: a label to the theme's width and length, a row of the list note
-to the note's width (the star's text gets up to 64% of the row, the wish's label what is left), a quote to three lines.
+to the note's width (the star's text gets up to 64% of the row, the wish's label what is left), a quote to three
+lines, or to two when the notes need the room.
 No text holds a control or format character, so no line of the output is broken by one.
 
 ## Two ways to measure text

@@ -64,6 +64,28 @@ decided the journal app; this note makes the journal app the whole repo and says
 - A new dependency or a new crate gets a short ADR note: what it is for and what was rejected. Versions are exact in
   `Cargo.lock`.
 
+## Dependencies
+
+The note each direct dependency owes, for the seven the workspace starts with. Versions are in the root `Cargo.toml`.
+
+| Dependency | Where | What it is for | Rejected |
+|---|---|---|---|
+| `serde` | core | Deriving the wire shapes, and the few fields the reader takes from a log line | Reading and writing JSON by hand: the types would stop being the contract |
+| `serde_json` | core; the binary's tests | Decoding log lines and the harness's reply, printing the day and the page | Nothing else was weighed: it is the JSON crate serde is written for |
+| `regex` | core | The credential shapes and the blocks a harness adds to a prompt. It matches in time linear in the text, which matters on untrusted logs | Hand-written scanners for a dozen key shapes |
+| `jiff` | core | The edges of a local calendar day and the `HH:MM` of a turn. It honours `TZ`, and bundles the zone database on Windows, which has none | `chrono` with `chrono-tz` (two crates for the one job); `time` (no zone database) |
+| `tempfile` | core; tests | The call's own folder, under a name nobody can guess, removed when the call ends however it ends. Scratch folders in tests | Naming and removing the folder by hand |
+| `lexopt` | the binary | Reading the command line. It has no dependencies of its own | A derive-macro parser such as `clap`: far more code than two commands and four flags need |
+| `toml` | xtask | Reading `entropy.toml` and the crates' manifests, with its default features off | Matching manifest lines as text, which a rename or a `[target.*]` table defeats |
+
+Left out on purpose:
+
+- **No async runtime.** The reading call is one child process. Standard threads read its two pipes, `try_wait` watches
+  the limit, and `recv_timeout` bounds the wait for what it printed.
+- **No directory-walking crate.** The logs are two levels deep, so the standard library's `read_dir` lists them, and
+  following no link is a few lines.
+- **No error crate.** Core has one `Error` enum with a hand-written `Display`.
+
 ## What was removed, and where it remains
 
 All of it is at the tag `harness-final` and nowhere in the tree:

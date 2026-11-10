@@ -48,6 +48,10 @@ There is no page, only an error on stderr and a non-zero exit, when the harness 
 `is_error`, prints something else, or takes too long, and when the model's text is not JSON with `wishes` and `clashes`, lacks a
 field, has a value of the wrong type, or names a state that is not one of the four.
 
+An error never quotes the model. A reading that is not page data is named by where it stopped being so, as a line and a
+column of the model's JSON. What the harness itself printed (its stderr when it fails, its result when it reports an
+error) is shown on one line, cleaned and redacted as the reader does it, and cut to 300 characters.
+
 Otherwise each piece is checked on its own:
 
 - A wish is dropped unless its `said` is a quote of the person (the rule is below) and its `project` is one of the
@@ -55,8 +59,9 @@ Otherwise each piece is checked on its own:
 - The first 8 wishes that pass are kept and given the ids `w1` to `w8`. The model's ids are only used to match clashes.
 - A clash is dropped unless both its quotes are quotes of the person and it names two different kept wishes. The
   first 2 that pass are kept.
-- `label` and each star are the model's words: control characters and line breaks are taken out, credential shapes are replaced
-  as the reader replaces them, and a text over its length (40 and 60 characters) is cut and ends in `…`. At most 4 stars are kept.
+- `label` and each star are the model's words: control characters, invisible characters (the reader's list) and line
+  breaks are taken out, credential shapes are replaced as the reader replaces them, and a text over its length (40 and
+  60 characters) is cut and ends in `…`. At most 4 stars are kept.
 - A quote over 200 characters is cut to its first 200, with no mark added, so it is still the person's words. The cut
   is code's and can fall inside a word.
 - `day` and `read` (how many turns, which projects) are written from the reader's output. A field the model adds is not copied.
@@ -81,4 +86,13 @@ cannot tell that it lost its "not". The page shows a quote as a quote for that r
 
 The reading call has been run against a made-up harness only (the F27 test); the real Claude Code check is the coordinator's.
 A harness that is installed but not on `PATH` (a shell alias, for one) is not found; `JELLYMOON_CLAUDE` is the way round.
-Nothing here has been run on Windows by a person: a `claude.cmd` shim may refuse the prompt's line breaks. Codex is not read.
+Codex is not read.
+
+Windows has been run in CI only, against a made-up `.exe` harness, never by a person against Claude Code. Three things
+are known to be open there. A `claude.cmd` shim may refuse the prompt's line breaks. Stopping a call that ran too long
+stops the program Jellymoon started, not what that program started: behind a `.cmd` shim that is `cmd.exe`, and the
+`node` under it keeps running and holds the call's folder. The short environment may leave out a variable Claude Code
+uses there to find its shell.
+
+On every system, a harness that exits while something it started still holds its output is waited on for one second,
+then reported as having printed something other than its result.

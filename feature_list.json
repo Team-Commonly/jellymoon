@@ -14,7 +14,7 @@
         "a log line that is not valid JSON is skipped and the rest of the file is still read"
       ],
       "test": "cargo test -p jellymoon --test f26",
-      "passes": false
+      "passes": true
     },
     {
       "id": "F27",
@@ -28,7 +28,7 @@
         "no text in the day can add a tool or a flag to the call"
       ],
       "test": "cargo test -p jellymoon --test f27",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F26"
       ]

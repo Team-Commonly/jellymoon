@@ -16,7 +16,7 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
 ## What counts as typed by a person
 
 Measured on Claude Code 2.1 logs. A line starts a turn only when all of these hold: `type` is `user`, `origin.kind` is `human`,
-`message.content` is a string, and `isMeta`, `isSidechain` and `isCompactSummary` are not true. That leaves out tool results
+`message.content` is a string or a list with no `tool_result` part, and `isMeta`, `isSidechain` and `isCompactSummary` are not true. That leaves out tool results
 (a list, no origin), task notices (`origin.kind` `task-notification`), messages from other sessions (`peer`), compaction
 summaries and prompts another program sent (no `origin`).
 
@@ -28,8 +28,8 @@ dropped.
 The reply is the text parts of the last assistant line before the person's next prompt, on any day; thinking and tool calls are
 not text. A dropped prompt still ends the turn before it.
 
-Known gap: a prompt typed with a pasted image is a list, not a string, so the reader drops it. In the logs measured that was
-under 1% of typed prompts.
+A prompt typed with a pasted image is a list: the person's text is its `text` parts joined, treated as a string prompt is.
+An image alone leaves no text, so it is dropped, and it still ends the turn before it.
 
 ## What is printed
 
@@ -39,5 +39,5 @@ credential shapes with `[redacted]`: model provider, GitHub and Slack keys, AWS 
 everywhere in the CLI. `project` is the last segment of the working directory, or the worktree's name under
 `.claude/worktrees/`.
 
-A line that is not valid JSON is skipped. A file last written before the day began is not opened. Reading a busy day on a
+A line that is not valid JSON is skipped. A session file whose modification time is before the start of the requested local day is not opened, since it can hold no turn of that day; the one consequence is that a file copied or restored with an old modification time is skipped. Reading a busy day on a
 computer with gigabytes of logs takes around ten seconds.

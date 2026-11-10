@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestF26: `jellymoon day` prints one local day of what a person typed to Claude Code, and nothing else (feature_list.json
@@ -53,6 +54,7 @@ const (
 	f26A = "/work/alpha"
 	f26B = "/work/private-notes"
 	f26C = "/work/beta/.claude/worktrees/fix-login/web"
+	f26G = "/work/gamma"
 )
 
 // f26Logs writes the projects directory. The day under test is 2026-03-10 in America/Los_Angeles (UTC-7 that day).
@@ -87,7 +89,20 @@ func f26Logs(t *testing.T) string {
 		f26Said("2026-03-11T07:01:00.000Z", f26A, "one minute after midnight"),
 		f26Reply("2026-03-11T07:01:30.000Z", f26A, "noted after midnight"),
 	}
+	image := map[string]any{"type": "image", "source": map[string]any{"type": "base64", "data": "LEAK"}}
+	text := func(t string) map[string]any { return map[string]any{"type": "text", "text": t} }
+	gamma := []string{
+		f26Said("2026-03-10T21:00:00.000Z", f26G, "first gamma ask"),
+		f26Line("user", "2026-03-10T21:00:30.000Z", f26G, "human", []map[string]any{text("LEAK beside a tool result"), {"type": "tool_result", "tool_use_id": "t2", "content": "LEAK"}}, nil),
+		f26Reply("2026-03-10T21:00:40.000Z", f26G, "gamma reply one"),
+		f26Line("user", "2026-03-10T21:01:00.000Z", f26G, "human", []map[string]any{image}, nil),
+		f26Reply("2026-03-10T21:01:30.000Z", f26G, "LEAK reply to an image alone"),
+		f26Line("user", "2026-03-10T21:02:00.000Z", f26G, "human", []map[string]any{text("<system-reminder>LEAK</system-reminder>look at "), image, text("this screenshot")}, nil),
+		f26Reply("2026-03-10T21:02:30.000Z", f26G, "seen"),
+	}
 	files := map[string][]string{
+		"-work-gamma/s4.jsonl":         gamma,
+		"-work-alpha/old.jsonl":        {f26Said("2026-03-10T22:00:00.000Z", f26A, "LEAK from a file last written before the day")},
 		"-work-alpha/s1.jsonl":         alpha,
 		"-work-private-notes/s2.jsonl": {f26Said("2026-03-10T19:00:00.000Z", f26B, "a private note"), f26Reply("2026-03-10T19:00:05.000Z", f26B, "kept private")},
 		"-work-beta/s3.jsonl":          {f26Said("2026-03-10T20:15:00.000Z", f26C, "fix the login page")},
@@ -101,6 +116,11 @@ func f26Logs(t *testing.T) string {
 		if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// A file last written before the day began is not opened, whatever its lines say.
+	before := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "-work-alpha/old.jsonl"), before, before); err != nil {
+		t.Fatal(err)
 	}
 	return dir
 }
@@ -130,13 +150,15 @@ func TestF26(t *testing.T) {
 	bin, logs := buildDaemon(t), f26Logs(t)
 	day, raw := f26Read(t, bin, "--date", "2026-03-10", "--logs", logs, "--skip", "unrelated,private-notes")
 	t.Run("the day's turns are the time, the tool, the project, the person's text and the agent's last reply, read past a broken line", func(t *testing.T) {
-		if day.Day != "2026-03-10" || len(day.Turns) != 4 {
-			t.Fatalf("day %q with %d turns, want 2026-03-10 with 4:\n%.2000s", day.Day, len(day.Turns), raw)
+		if day.Day != "2026-03-10" || len(day.Turns) != 6 {
+			t.Fatalf("day %q with %d turns, want 2026-03-10 with 6:\n%.2000s", day.Day, len(day.Turns), raw)
 		}
 		want := []f26Turn{
 			{"09:00", "claude-code", "alpha", "add a retry to the uploader", "retry added, tests pass"},
 			{At: "10:30", Tool: "claude-code", Project: "alpha"},
 			{"13:15", "claude-code", "fix-login", "fix the login page", ""},
+			{"14:00", "claude-code", "gamma", "first gamma ask", "gamma reply one"}, // a list with a tool result does not end it; an image alone does
+			{"14:02", "claude-code", "gamma", "look at this screenshot", "seen"},    // typed with a pasted image: its text parts
 			{"23:59", "claude-code", "alpha", "one minute before midnight", "noted before midnight"},
 		}
 		want[1].Said, want[1].Reply = day.Turns[1].Said, day.Turns[1].Reply // judged by the next two steps
@@ -168,7 +190,7 @@ func TestF26(t *testing.T) {
 	})
 	t.Run("a skipped folder contributes nothing, and is read when it is not skipped", func(t *testing.T) {
 		all, _ := f26Read(t, bin, "--date", "2026-03-10", "--logs", logs)
-		if strings.Contains(raw, "private") || len(all.Turns) != 5 || all.Turns[2] != (f26Turn{"12:00", "claude-code", "private-notes", "a private note", "kept private"}) {
+		if strings.Contains(raw, "private") || len(all.Turns) != 7 || all.Turns[2] != (f26Turn{"12:00", "claude-code", "private-notes", "a private note", "kept private"}) {
 			t.Errorf("with --skip the output names the folder, or without it the folder's turn is missing: %+v", all.Turns)
 		}
 	})

@@ -135,19 +135,28 @@ func session(file string, skip []string) []turn {
 
 // typedBy reports whether the log marks the line as typed by a person, and what they typed once the harness's blocks are cut
 // out and credentials replaced. said is empty for a slash command and for a prompt that was only harness blocks: such a line
-// still ends the turn before it, and so does a prompt with a pasted image, which is a list and not a string. A tool result is a
-// list too, and carries no origin.
+// still ends the turn before it. A prompt typed with a pasted image is a list: what was typed is its text parts, joined. A list
+// that holds a tool result is never typed, whatever its origin says.
 func typedBy(l line) (said string, typed bool) {
 	if l.Type != "user" || l.IsMeta || l.IsCompactSummary || l.Origin == nil || l.Origin.Kind != "human" {
 		return "", false
 	}
 	var m struct {
-		Content string `json:"content"`
+		Content json.RawMessage `json:"content"`
 	}
-	if json.Unmarshal(l.Message, &m) != nil {
-		return "", true
+	var parts []part
+	if json.Unmarshal(l.Message, &m) != nil || json.Unmarshal(m.Content, &said) != nil && json.Unmarshal(m.Content, &parts) != nil {
+		return "", false
 	}
-	said = strings.TrimSpace(harnessBlocks.ReplaceAllString(m.Content, ""))
+	for _, p := range parts {
+		if p.Type == "tool_result" {
+			return "", false
+		}
+		if p.Type == "text" {
+			said += p.Text
+		}
+	}
+	said = strings.TrimSpace(harnessBlocks.ReplaceAllString(said, ""))
 	for _, wrapper := range []string{"<command-name>", "<command-message>", "<local-command"} {
 		if strings.HasPrefix(said, wrapper) {
 			return "", true

@@ -1,0 +1,189 @@
+//! Scene text is only ever text: cleaned of control characters, cut to a
+//! measured width, and carried as a string for the drawing side to show.
+
+use serde::{Deserialize, Serialize};
+
+use crate::theme::Theme;
+
+/// What a run of text is for; it decides the font, size and colour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    Date,
+    Title,
+    Label,
+    LabelStruck,
+    NoteTitle,
+    ChoiceTitle,
+    RowMain,
+    RowSub,
+    Body,
+    Option,
+    OptionStruck,
+    ChoiceFooter,
+    /// A star glyph in front of a list row or a legend entry.
+    Bullet,
+    Legend,
+    Footer,
+}
+
+/// Which of the theme's three font families a role uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Face {
+    Display,
+    Body,
+    Hand,
+}
+
+impl Role {
+    pub fn face(self) -> Face {
+        match self {
+            Role::Label | Role::LabelStruck => Face::Display,
+            Role::Date | Role::Title | Role::NoteTitle | Role::ChoiceTitle | Role::ChoiceFooter => Face::Hand,
+            _ => Face::Body,
+        }
+    }
+
+    /// The font size in logical pixels at page scale `k`.
+    pub fn size(self, theme: &Theme, k: f32) -> f32 {
+        let m = &theme.metrics;
+        let base = match self {
+            Role::Date => m.date_size,
+            Role::Title => m.title_size,
+            Role::Label | Role::LabelStruck => theme.labels.font_size,
+            Role::NoteTitle | Role::ChoiceTitle => m.note_title_size,
+            Role::ChoiceFooter => m.note_title_size * 0.74,
+            Role::RowMain => m.body_size,
+            Role::Bullet => m.body_size * 1.2,
+            Role::Body | Role::Option | Role::OptionStruck | Role::Legend => m.body_size - 1.0,
+            Role::RowSub | Role::Footer => m.small_size,
+        };
+        (base * k).max(base.min(theme.labels.min_font_size))
+    }
+}
+
+/// How wide a single line of text is. The drawing side answers with real
+/// glyph metrics; tests answer with a fixed advance.
+pub trait Measure {
+    fn width(&self, text: &str, role: Role, size: f32) -> f32;
+}
+
+/// Every character advances by a fixed share of the font size; wide
+/// characters (CJK, emoji) by a whole em.
+#[derive(Clone, Copy, Debug)]
+pub struct FixedAdvance(pub f32);
+
+impl Measure for FixedAdvance {
+    fn width(&self, text: &str, _role: Role, size: f32) -> f32 {
+        text.chars().map(|c| if (c as u32) >= 0x1100 { size } else { size * self.0 }).sum()
+    }
+}
+
+const ELLIPSIS: char = '…';
+
+fn is_direction_mark(c: char) -> bool {
+    matches!(c as u32, 0x061C | 0x200E | 0x200F | 0x202A..=0x202E | 0x2066..=0x2069 | 0xFEFF)
+}
+
+/// Removes control characters and direction marks, turns line breaks and
+/// tabs into single spaces, and keeps at most `max_chars` characters.
+pub fn clean(text: &str, max_chars: usize) -> String {
+    let mut out = String::new();
+    let mut count = 0;
+    let mut pending_space = false;
+    for c in text.chars() {
+        if matches!(c, '\n' | '\r' | '\t' | ' ') {
+            pending_space = !out.is_empty();
+            continue;
+        }
+        if c.is_control() || is_direction_mark(c) {
+            continue;
+        }
+        let needed = if pending_space { 2 } else { 1 };
+        if count + needed > max_chars {
+            trim_joiners(&mut out);
+            out.push(ELLIPSIS);
+            return out;
+        }
+        if pending_space {
+            out.push(' ');
+        }
+        out.push(c);
+        count += needed;
+        pending_space = false;
+    }
+    out
+}
+
+/// A cut must not leave half of a joined emoji or a dangling space.
+fn trim_joiners(text: &mut String) {
+    while text.chars().last().is_some_and(|c| matches!(c as u32, 0x200D | 0xFE0F | 0x20) || is_modifier(c)) {
+        text.pop();
+    }
+}
+
+fn is_modifier(c: char) -> bool {
+    matches!(c as u32, 0x0300..=0x036F | 0x1F3FB..=0x1F3FF)
+}
+
+/// The longest prefix of `text` that fits `max_width`, with an ellipsis when
+/// it was cut. Returns the text and its measured width.
+pub fn fit(text: &str, max_width: f32, role: Role, size: f32, measure: &dyn Measure) -> (String, f32) {
+    let full = measure.width(text, role, size);
+    if full <= max_width {
+        return (text.to_string(), full);
+    }
+    let starts: Vec<usize> = text.char_indices().map(|(i, _)| i).collect();
+    let mut best = (String::new(), 0.0);
+    let (mut low, mut high) = (0, starts.len().saturating_sub(1));
+    while low <= high {
+        let mid = (low + high) / 2;
+        let mut candidate = text[..starts[mid]].to_string();
+        trim_joiners(&mut candidate);
+        candidate.push(ELLIPSIS);
+        let width = measure.width(&candidate, role, size);
+        if width <= max_width {
+            best = (candidate, width);
+            low = mid + 1;
+        } else if mid == 0 {
+            break;
+        } else {
+            high = mid - 1;
+        }
+    }
+    best
+}
+
+/// Breaks `text` at spaces into at most `max_lines` lines that fit
+/// `max_width`; the last line is cut with an ellipsis when text is left.
+pub fn wrap(
+    text: &str,
+    max_width: f32,
+    max_lines: usize,
+    role: Role,
+    size: f32,
+    measure: &dyn Measure,
+) -> Vec<(String, f32)> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut words = text.split(' ').filter(|w| !w.is_empty()).peekable();
+    while let Some(word) = words.next() {
+        let joined = if current.is_empty() { word.to_string() } else { format!("{current} {word}") };
+        let last_line = lines.len() + 1 >= max_lines;
+        if last_line || current.is_empty() || measure.width(&joined, role, size) <= max_width {
+            current = joined;
+        } else {
+            lines.push(std::mem::take(&mut current));
+            current = word.to_string();
+        }
+        if words.peek().is_none() && !current.is_empty() {
+            lines.push(std::mem::take(&mut current));
+        }
+    }
+    lines
+        .iter()
+        .take(max_lines.max(1))
+        .map(|line| fit(line, max_width, role, size, measure))
+        .filter(|(line, _)| !line.is_empty())
+        .collect()
+}

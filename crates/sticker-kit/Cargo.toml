@@ -1,0 +1,43 @@
+[package]
+name = "sticker-kit"
+version = "0.1.0"
+description = "A sticker-journal page for GPUI: data in, a pure layout, themes that are data."
+license = "Apache-2.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = ["gpui"]
+# The drawing half. Without it the crate is scene, theme and layout only.
+# The last two are GPUI's Linux display servers; without one a Linux build can open no window. Elsewhere they add nothing.
+gpui = ["dep:gpui", "dep:gpui_platform", "gpui_platform/wayland", "gpui_platform/x11"]
+# Compile Metal shaders at run time, for machines without the full Xcode toolchain.
+runtime_shaders = ["gpui", "gpui_platform/runtime_shaders", "gpui_apple?/runtime_shaders"]
+# Windowless rendering: the draw tests and the snapshot example.
+headless = ["gpui", "gpui/test-support", "gpui_platform/test-support", "dep:gpui_apple"]
+
+[dependencies]
+serde.workspace = true
+toml = { workspace = true, features = ["display"] }
+ttf-parser.workspace = true
+gpui = { workspace = true, optional = true }
+gpui_platform = { workspace = true, optional = true, features = ["font-kit"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+gpui_apple = { workspace = true, optional = true, features = ["font-kit"] }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "page"
+required-features = ["gpui"]
+
+[[example]]
+name = "snapshot"
+required-features = ["headless"]
+
+[[test]]
+name = "draw"
+required-features = ["headless"]

@@ -51,9 +51,10 @@ fn every_key_shape_is_replaced() {
         ("notes.txt/{}", "notes.[redacted]", "a file name before it makes no path"),
         ("{}.txt", "[redacted].txt", "an extension after it makes no path"),
         ("`{}`", "`[redacted]`", "a quote mark makes no path"),
-        // Missed, and stated: in a word that starts as a path or a link, each piece between slashes is under 40.
+        // Missed, and stated: inside a path or a link, each piece between slashes is under 40.
         ("https://example.com/{}", "https://example.com/{}", "inside a URL's path"),
         ("/{}", "/{}", "after a leading slash"),
+        ("key:{},https://example.com/{}", "key:[redacted],https://example.com/{}", "before a link and inside it"),
     ];
     for (text, want, name) in cases {
         assert_eq!(credentials(&text.replace("{}", &slashed)), want.replace("{}", &slashed), "{name}");
@@ -85,6 +86,10 @@ fn a_path_a_commit_hash_and_plain_words_are_left_alone() {
         "https://example.com/Docs2/guides/Getting-Started/install/v2/notes",
         "(`./src/components/UserProfile2/SettingsPanel3/index.tsx`)",
         "mailto:someone@example.com at 10:30",
+        // A link that starts inside its word: a markdown link, a JSON value, an assignment.
+        "[the notes](https://example.com/Docs2/guides/Getting-Started/install/v2/notes)",
+        r#"{"url":"https://example.com/Docs2/guides/Getting-Started/install/v2/notes"}"#,
+        "DOCS=https://example.com/Docs2/guides/Getting-Started/install/v2/notes",
     ];
     for path in paths {
         assert_eq!(credentials(&format!("open {path} now")), format!("open {path} now"));

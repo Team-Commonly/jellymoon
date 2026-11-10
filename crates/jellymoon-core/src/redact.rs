@@ -46,10 +46,10 @@ static LONG_RUN: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+/=_-]{4
 /// The same within a path, where a slash ends a run, so each segment is a run of its own.
 static LONG_SEGMENT: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+=_-]{40,}"));
 
-/// How a word that is a path or a link starts: after any opening quotes and brackets, with `/`, `./`, `../`, `~/`, a
-/// Windows drive (`C:\` or `C:/`) or a URL scheme (`https://`).
+/// Where a word turns into a path or a link. At its start, after any opening quotes and brackets: `/`, `./`, `../`,
+/// `~/` or a Windows drive (`C:\` or `C:/`). Anywhere in it: a URL scheme (`https://`), as in a markdown link.
 static PATH_START: LazyLock<Regex> =
-    LazyLock::new(|| pattern(r#"^["'`(\[{<]*(?:\.{0,2}/|~/|[A-Za-z]:[\\/]|[A-Za-z][A-Za-z0-9+.-]*://)"#));
+    LazyLock::new(|| pattern(r#"^["'`(\[{<]*(?:\.{0,2}/|~/|[A-Za-z]:[\\/])|[A-Za-z][A-Za-z0-9+.-]*://"#));
 
 /// The password in `scheme://user:password@host`. Only the password is replaced.
 static URL_PASSWORD: LazyLock<Regex> =
@@ -76,8 +76,8 @@ fn string(text: &str) -> String {
 /// [`string`] for text a person or an agent wrote, which can hold any vendor's key: it also replaces every known key
 /// shape, the password in a URL, and, word by word (a word is what stands between two spaces), any [`LONG_RUN`] that
 /// mixes digits with both letter cases. A git hash (one case) is left alone. A base64 secret has slashes too, so a
-/// slash or a dot inside a word does not make it a path: only its [`PATH_START`] does, and then each segment is judged
-/// alone, so a long folder path survives and a long mixed segment inside it does not.
+/// slash or a dot inside a word does not make it a path: only its [`PATH_START`] does, and from there on each segment
+/// is judged alone, so a long folder path survives and a long mixed segment inside it does not.
 fn credentials(text: &str) -> String {
     let text = string(text);
     let text = PEM.replace_all(&text, REPLACED);
@@ -87,8 +87,14 @@ fn credentials(text: &str) -> String {
     let mut shown = String::with_capacity(text.len());
     for piece in text.split_inclusive(char::is_whitespace) {
         let word = piece.trim_end();
-        let runs = if PATH_START.is_match(word) { &LONG_SEGMENT } else { &LONG_RUN };
-        shown.push_str(&runs.replace_all(word, |run: &Captures| mixed(&run[0]).to_string()));
+        let path = PATH_START.find(word).map_or(word.len(), |start| start.start());
+        shown.push_str(&LONG_RUN.replace_all(word, |run: &Captures| {
+            let (at, run) = run.get(0).map_or((0, ""), |run| (run.start(), run.as_str()));
+            if at < path {
+                return mixed(run).to_string();
+            }
+            LONG_SEGMENT.replace_all(run, |segment: &Captures| mixed(&segment[0]).to_string()).into_owned()
+        }));
         shown.push_str(&piece[word.len()..]);
     }
     shown

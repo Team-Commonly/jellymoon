@@ -84,10 +84,12 @@ any length (a PEM header, a JWT's first part) has a pass of its own, so it canno
 4. Keys of unknown make. The text is split into words at white space. In each word, a run of 40 or more base64
    characters (letters, digits, `+`, `/`, `=`, `_`, `-`) is replaced when it mixes digits with both letter cases.
 
-A word is a path or a link only by how it starts: `/`, `./`, `../`, `~/`, a Windows drive (`C:\` or `C:/`) or a URL
-scheme (`https://`), after any opening quotes or brackets (`"`, `'`, `` ` ``, `(`, `[`, `{`, `<`). In such a word a `/`
-ends a run, so each segment is judged alone: a long folder path survives, and a segment of 40 or more mixed characters
-inside it is replaced. Nothing else about a word is read: a slash or a dot inside it does not make it a path.
+A word is a path only by how it starts: `/`, `./`, `../`, `~/` or a Windows drive (`C:\` or `C:/`), after any opening
+quotes or brackets (`"`, `'`, `` ` ``, `(`, `[`, `{`, `<`). A link starts at its URL scheme (`https://`) wherever that
+is in the word, so a markdown link, `[the notes](https://…)`, and a JSON value, `"url":"https://…"`, are links from
+the scheme on. From where a path or a link starts, a `/` ends a run, so each segment is judged alone: a long folder
+path survives, and a segment of 40 or more mixed characters inside it is replaced. A run that begins before a link is
+judged whole. Nothing else about a word is read: a slash or a dot inside it does not make it a path.
 
 What that replaces wrongly: a word that is a path but does not start like one, when a run in it reaches 40 characters
 and mixes digits with both cases. `feature/JIRA-1234-AddUserProfileSettingsPanel` and
@@ -95,8 +97,8 @@ and mixes digits with both cases. `feature/JIRA-1234-AddUserProfileSettingsPanel
 `[redacted].tsx`.
 
 What happens to a 40-character secret with slashes in it: alone, after `~`, after `notes.txt/`, before `.txt` or inside
-quotes it is replaced. Inside a word that starts as a path or a link it is missed, because each piece between its
-slashes is under 40 characters: `https://host/<secret>` and a secret that itself starts with `/` both pass.
+quotes it is replaced. Inside a path or a link it is missed, because each piece between its slashes is under 40
+characters: `https://host/<secret>` and a secret that itself starts with `/` both pass.
 
 `project` is the last segment of the working directory. Under `<repo>/.claude/worktrees/<name>` it is the repo folder's
 name, so a repo and its worktrees are one project.

@@ -52,6 +52,11 @@ An error never quotes the model. A reading that is not page data is named by whe
 column of the model's JSON. What the harness itself printed (its stderr when it fails, its result when it reports an
 error) is shown on one line, cleaned and redacted as the reader does it, and cut to 300 characters.
 
+The model's and the harness's words are read only from their start, as the reader reads a long text
+([what is printed](reader.md#what-is-printed)): the length a text is cut to and 16,384 characters more. A secret under
+8,192 characters that starts in what is shown is inside that and is replaced whole, and what comes after is never
+cleaned or kept, so a reply of any length costs the same.
+
 Otherwise each piece is checked on its own:
 
 - A wish is dropped unless its `said` is a quote of the person (the rule is below) and its `project` is one of the
@@ -73,8 +78,9 @@ A wish's `said` and a clash's two quotes are each kept only when all of these ho
 - It is an exact substring of one thing the person typed that day: one turn's `said`, as the reader printed it. The
   agent's replies do not count.
 - It is at least 8 characters long, or it is the whole of what the person typed in that turn. The count is of
-  characters. When every character of the quote is at or above U+2E80 (Chinese, Japanese and Korean, their
-  punctuation, and emoji), 4 are enough, since those scripts say more in a character.
+  characters. When every character of the quote is at or above U+2E80 (Chinese, Japanese and Korean and their
+  punctuation), 4 are enough, since those scripts say more in a character. One letter, digit or space from below it
+  and the quote needs 8.
 - It does not start or end inside a word. Where the character at the quote's edge and its neighbour in the typed text
   are both letters or digits, the quote is refused. That holds for scripts that put spaces between words, taken to be
   every letter below U+2E80. Chinese, Japanese and Korean are above it and may be cut anywhere. Thai and other scripts

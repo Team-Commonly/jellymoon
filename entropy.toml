@@ -6,8 +6,8 @@ max_file_lines = 400
 
 # The most lines of Rust each crate may hold, tests included. Every crate under crates/ needs one.
 [budget]
-"crates/jellymoon-core" = 1367
-"crates/jellymoon" = 1082
+"crates/jellymoon-core" = 1499
+"crates/jellymoon" = 1104
 "crates/xtask" = 392
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.

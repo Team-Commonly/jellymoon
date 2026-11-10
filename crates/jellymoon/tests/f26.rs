@@ -287,6 +287,26 @@ fn a_project_name_has_its_control_characters_removed_and_a_credential_shape_repl
     assert!(!raw.contains("aB3x9Zq7") && !raw.contains("\\u"), "{raw}");
 }
 
+// Only the start of a long text is read (reader.md): a key across the cut is replaced whole, and when cleaning
+// brings the place the reading stopped into view, the word there is not shown.
+#[test]
+fn a_long_text_is_cleaned_from_its_start_and_a_key_the_reading_stopped_in_is_not_shown() {
+    let (logs, key) = (scratch(), support::hub_key());
+    let across = format!("{} {key} {}", "x".repeat(680), "and more ".repeat(4000));
+    let stopped_in = format!("say {}{key}", "\u{200b}".repeat(700 + 16_384 - 4 - 10));
+    let lines = [
+        said("2026-03-10T16:00:00.000Z", A, &across),
+        reply("2026-03-10T16:00:05.000Z", A, &across),
+        said("2026-03-10T17:00:00.000Z", A, &stopped_in),
+    ];
+    write_log(logs.path(), "-work-alpha/s.jsonl", &lines);
+    let (turns, raw) = day(logs.path(), &["--date", "2026-03-10"]);
+    assert_eq!(turns[0]["said"], format!("{} [redacted] and mor…", "x".repeat(680)));
+    assert_eq!(turns[0]["reply"], format!("{}…", "x".repeat(499)));
+    assert_eq!(turns[1]["said"], "say…");
+    assert!(!raw.contains(&key[..6]), "part of the key is printed");
+}
+
 #[test]
 fn the_logs_default_to_the_harness_own_folder_under_home_or_its_config_dir() {
     let (home, config) = (scratch(), scratch());

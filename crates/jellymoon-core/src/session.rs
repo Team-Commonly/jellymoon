@@ -11,10 +11,10 @@ use jiff::Timestamp;
 use regex::Regex;
 use serde::Deserialize;
 
-use crate::redact::{credentials, cut, pattern};
+use crate::redact::{pattern, shown};
 use crate::{Harness, ReaderTurn};
 
-/// The lengths `said`, `reply` and `project` are cut to, in characters.
+/// The lengths `said`, `reply` and `project` are cleaned and cut to, in characters (`redact::shown`).
 const SAID_MAX: usize = 700;
 const REPLY_MAX: usize = 500;
 const PROJECT_MAX: usize = 255;
@@ -130,8 +130,8 @@ pub(crate) fn turns(
                     let turn = ReaderTurn {
                         at: String::new(),
                         tool: Harness::ClaudeCode,
-                        project: cut(&credentials(project(cwd)), PROJECT_MAX),
-                        said: cut(&said, SAID_MAX),
+                        project: shown(project(cwd), PROJECT_MAX),
+                        said,
                         reply: String::new(),
                     };
                     turns.push((line.timestamp, turn));
@@ -139,7 +139,7 @@ pub(crate) fn turns(
             }
             Prompt::Neither => {
                 if let (true, Some(text), Some((_, turn))) = (open, reply(&line), turns.last_mut()) {
-                    turn.reply = cut(&credentials(&text), REPLY_MAX);
+                    turn.reply = shown(&text, REPLY_MAX);
                 }
             }
         }
@@ -180,7 +180,7 @@ fn decode(raw: &[u8], open: bool) -> Option<Line> {
 }
 
 /// Reports whether the log marks the line as typed by a person, and what they typed once the harness's blocks are cut out
-/// and credentials replaced. A prompt typed with a pasted image is a list: what was typed is its text parts, joined. A
+/// and the start of what is left is cleaned and cut to its length. A prompt typed with a pasted image is a list: what was typed is its text parts, joined. A
 /// list that holds a tool result is never typed, whatever its origin says.
 fn prompt(line: &Line) -> Prompt {
     if line.kind.as_deref() != Some("user") || line.is_meta == Some(true) || line.is_compact_summary == Some(true) {
@@ -204,7 +204,7 @@ fn prompt(line: &Line) -> Prompt {
     if WRAPPERS.iter().any(|wrapper| said.starts_with(wrapper)) {
         return Prompt::Typed(String::new());
     }
-    Prompt::Typed(credentials(said).trim().to_string())
+    Prompt::Typed(shown(said, SAID_MAX))
 }
 
 /// Cuts the harness's blocks out of a prompt.

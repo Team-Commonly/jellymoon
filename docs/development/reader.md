@@ -28,7 +28,8 @@ summaries and prompts another program sent (no `origin`).
 Of what is left, a slash command (text starting `<command-name>`, `<command-message>` or `<local-command`) is dropped. The
 blocks the harness adds inside a prompt are cut out: `<system-reminder>`, `<artifact-view-context>`, the
 `<artifact-content-authored-by-others/>` mark and the paragraph starting `(The JSON line above`. A prompt with nothing left is
-dropped.
+dropped. This is the one step that reads a whole prompt, since a block can be any length: four passes, one for each
+kind of block, each taking time in step with the prompt's length.
 
 The reply is the text parts of the last assistant line before the person's next prompt, on any day; thinking and tool calls are
 not text. A dropped prompt still ends the turn before it. So does a prompt nobody typed: a message from another session
@@ -44,9 +45,20 @@ An image alone leaves no text, so it is dropped, and it still ends the turn befo
 ## What is printed
 
 `said` is cut to 700 characters, `reply` to 500 and `project` to 255; a cut text ends in `…`. All three are cleaned and
-redacted before the cut.
+redacted before the cut, and spaces around them are dropped.
 
-Cleaning runs first, in one pass, and takes out what nobody sees:
+Only the start of a long text is read: the length it is cut to and 16,384 characters more (17,084 for `said`). That
+much is cleaned, redacted and then cut, and the rest is never looked at, so cleaning and redaction take no longer on
+a text of 64 MiB than on one of 20 KB. It is safe because a secret under 8,192 characters that starts in what is printed ends inside
+what was read, and is replaced whole before the cut. A PEM private key can be longer, so it is replaced from its
+BEGIN line on, whether or not its END mark was read.
+
+One case needs more. When cleaning takes out or squeezes so much that fewer than 8,192 characters are left after the
+cut (a text that is mostly invisible characters, or spaces in a text printed on one line), the place where reading
+stopped is close to what is printed, and the word there may be the first half of a secret. That last word is then left
+out and the text ends in `…`; with no space before it, nothing is printed and the prompt makes no turn.
+
+Cleaning runs first and takes out what nobody sees:
 
 - A whole terminal escape sequence: CSI (ESC `[` or U+009B, then parameter bytes, intermediate bytes and a final byte,
   as in the colour code `ESC[32m`) and OSC (ESC `]` up to BEL or ESC `\`). A sequence that is cut short, or has
@@ -60,12 +72,14 @@ Cleaning runs first, in one pass, and takes out what nobody sees:
 So a key right after a colour code, or split by one of these characters, is still found. A character that is seen
 only as part of its neighbour (a variation selector, a combining mark) stays, and a key split by one is missed.
 
-Redaction then replaces credential shapes with `[redacted]`, in this order. Each step is one pass over the text.
+Redaction then replaces credential shapes with `[redacted]`, in this order. A shape that can stay unfinished for
+any length (a PEM header, a JWT's first part) has a pass of its own, so it cannot make another shape's pass start over.
 
 1. The token shapes of the product this repo used to hold (`jmu_`, `jmc_`, `jmr_`, `cm_`) are shortened to their prefix,
    `jmr_…`.
-2. Named keys: model provider, GitHub, GitLab, Hugging Face, Google (`AIza`), Stripe live and Slack keys, AWS key ids,
-   JWTs and PEM private keys.
+2. PEM private keys, from the BEGIN line to the END mark, or to the end of what was read when there is none. Then
+   JWTs. Then named keys: model provider, GitHub, GitLab, Hugging Face, Google (`AIza`), Stripe live and Slack keys
+   and AWS key ids.
 3. The password in `scheme://user:password@host`, the password only.
 4. Keys of unknown make. The text is split into words at white space. In each word, a run of 40 or more base64
    characters (letters, digits, `+`, `/`, `=`, `_`, `-`) is replaced when it mixes digits with both letter cases.

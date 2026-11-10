@@ -1,8 +1,11 @@
 use std::time::Duration;
 use std::{fmt, io};
 
-/// Why there is no day or no page. Each prints as one sentence for the person; none holds text from a session log, and
-/// what a harness printed is cut short and has credential shapes replaced before it is kept here.
+/// Why there is no day or no page. Each prints as one line for the person. None holds text from a session log or from
+/// the model's reading: a reading that is not page data is named by the place it went wrong, never quoted. The two that
+/// hold what the harness itself printed ([`Error::Failed`], [`Error::Harness`]) hold it made one line, with control and
+/// invisible characters removed, credential shapes replaced, and cut short (`redact::line`). An `io::Error` is the
+/// system's own words, with no path in it.
 #[derive(Debug)]
 pub enum Error {
     /// The date is not a calendar day written YYYY-MM-DD.
@@ -23,8 +26,9 @@ pub enum Error {
     NotAResult,
     /// The harness's result says the call was an error.
     Harness(String),
-    /// The model's text is not page data.
-    NotPageData(String),
+    /// The model's text is not page data. Only where it stopped being so is kept: the parser's own message would quote
+    /// the model.
+    NotPageData { line: usize, column: usize },
 }
 
 impl fmt::Display for Error {
@@ -41,7 +45,9 @@ impl fmt::Display for Error {
             }
             Error::NotAResult => write!(f, "the reading call printed something other than its result"),
             Error::Harness(said) => write!(f, "the harness reported an error: {said}"),
-            Error::NotPageData(why) => write!(f, "the reading is not page data: {why}"),
+            Error::NotPageData { line, column } => {
+                write!(f, "the reading is not page data (line {line}, column {column} of the model's JSON)")
+            }
         }
     }
 }

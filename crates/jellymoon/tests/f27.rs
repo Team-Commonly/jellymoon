@@ -274,7 +274,22 @@ fn output_that_is_not_page_data_gives_an_error_and_no_page() {
             ran.stderr
         );
     }
-    // The same wish, valid, is a page: these bytes, in this order.
+    // Neither error quotes what the model or the harness wrote as it came: no escape, no key, one line.
+    let hostile = format!("\u{1b}[2J\u{202e}{}\nsecond line", support::hub_key());
+    let state = json!({"wishes": [{"id": "a", "label": "x", "said": "add a retry", "project": "alpha", "state": hostile, "stars": []}], "clashes": []});
+    let reported = json!({"type": "result", "is_error": true, "result": hostile});
+    for (name, reply) in [("the model's text", result(&state.to_string())), ("the harness's", reported.to_string())] {
+        let ran = w.run(&reply, 0, "page", DAY);
+        let shown = ran.stderr.trim_end();
+        let clean = !shown.contains(|c: char| c.is_control() || c == '\u{202e}') && !shown.contains("a1B2c3D4e5");
+        assert!(
+            ran.code == 1 && ran.stdout.is_empty() && clean && shown.starts_with("jellymoon: "),
+            "{name}: {shown:?}"
+        );
+    }
+    let ran = w.run(&result(&state.to_string()), 0, "page", DAY);
+    // The state is the last thing in the wish, on the JSON's one line: the place is named and nothing is quoted.
+    assert_eq!(ran.stderr, "jellymoon: the reading is not page data (line 1, column 175 of the model's JSON)\n");
     let ran = w.run(&good, 0, "page", DAY);
     let want = r#"{"day":"2026-03-10","wishes":[{"id":"w1","label":"Wish a","said":"add a retry","project":"alpha","state":"working","stars":[]}],"clashes":[],"read":{"turns":3,"projects":["alpha","beta"]}}"#;
     assert_eq!((ran.stdout, ran.code), (format!("{want}\n"), 0), "{}", ran.stderr);

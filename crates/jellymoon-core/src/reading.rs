@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use crate::redact::{credentials, cut};
+use crate::redact::line;
 use crate::{Clash, Error, PageData, PageRead, ReaderDay, Wish, call};
 
 /// The limits of page data.
@@ -59,7 +59,8 @@ pub fn page(day: &ReaderDay, options: &PageOptions) -> Result<PageData, Error> {
         return Ok(page);
     }
     let text = call::reading(day, options)?;
-    let reading: Reading = serde_json::from_str(unfence(&text)).map_err(|e| Error::NotPageData(e.to_string()))?;
+    let reading: Reading =
+        serde_json::from_str(unfence(&text)).map_err(|e| Error::NotPageData { line: e.line(), column: e.column() })?;
     keep(day, reading, &mut page);
     Ok(page)
 }
@@ -84,7 +85,7 @@ fn unfence(text: &str) -> &str {
 fn keep(day: &ReaderDay, reading: Reading, page: &mut PageData) {
     let mut ids: HashMap<String, String> = HashMap::new(); // the model's id of a kept wish, to the page's
     for wish in reading.wishes {
-        let label = clean(&wish.label, LABEL_MAX);
+        let label = line(&wish.label, LABEL_MAX);
         let Some(said) = typed(day, &wish.said) else {
             continue;
         };
@@ -95,7 +96,7 @@ fn keep(day: &ReaderDay, reading: Reading, page: &mut PageData) {
         let stars = wish
             .stars
             .iter()
-            .map(|star| clean(star, STAR_MAX))
+            .map(|star| line(star, STAR_MAX))
             .filter(|star| !star.is_empty())
             .take(STARS_MAX)
             .collect();
@@ -122,9 +123,4 @@ fn typed(day: &ReaderDay, quote: &str) -> Option<String> {
     let end = quote.char_indices().nth(QUOTE_MAX).map_or(quote.len(), |(at, _)| at);
     let quote = quote[..end].trim();
     (!quote.is_empty() && day.turns.iter().any(|turn| turn.said.contains(quote))).then(|| quote.to_string())
-}
-
-/// Makes the model's own words safe to show: no control characters, one line, credential shapes replaced, cut to `max`.
-fn clean(text: &str, max: usize) -> String {
-    cut(&credentials(text).split_whitespace().collect::<Vec<_>>().join(" "), max)
 }

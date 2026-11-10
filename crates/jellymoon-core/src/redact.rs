@@ -113,6 +113,11 @@ pub(crate) fn cut(text: &str, max: usize) -> String {
     }
 }
 
+/// Makes words that are not the person's (a model's, a harness's) safe to show: [`credentials`], on one line, cut to `max`.
+pub(crate) fn line(text: &str, max: usize) -> String {
+    cut(&credentials(text).split_whitespace().collect::<Vec<_>>().join(" "), max)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

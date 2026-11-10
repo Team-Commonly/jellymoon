@@ -12,7 +12,7 @@ use std::{env, fs, io, path, thread};
 
 use serde::Deserialize;
 
-use crate::redact::{credentials, cut};
+use crate::redact::line;
 use crate::{Error, PageOptions, ReaderDay};
 
 /// The whole system prompt of the reading call: a fixed text, so nothing in a day can change it.
@@ -87,19 +87,14 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
     if !output.status.success() {
         return Err(Error::Failed {
             status: output.status.to_string(),
-            said: said(&String::from_utf8_lossy(&output.stderr)),
+            said: line(&String::from_utf8_lossy(&output.stderr), SAID_MAX),
         });
     }
     match serde_json::from_slice::<Reply>(&output.stdout) {
-        Ok(reply) if reply.is_error => Err(Error::Harness(said(&reply.result))),
+        Ok(reply) if reply.is_error => Err(Error::Harness(line(&reply.result, SAID_MAX))),
         Ok(reply) => Ok(reply.result),
         Err(_) => Err(Error::NotAResult),
     }
-}
-
-/// What a harness printed, made safe to show in an error.
-fn said(text: &str) -> String {
-    cut(credentials(text).trim(), SAID_MAX)
 }
 
 /// Finds `claude` in the folders of `PATH`.
@@ -209,9 +204,9 @@ mod tests {
     }
 
     #[test]
-    fn what_a_harness_printed_is_cut_and_has_credentials_replaced_before_it_is_an_error() {
+    fn what_a_harness_printed_is_one_line_cut_and_has_credentials_replaced_before_it_is_an_error() {
         let key = format!("sk{}{}", "-ant-", "Zx9Yw8Vu7T".repeat(3));
-        assert_eq!(said(&format!("  bad key {key}\u{1b}[0m\n")), "bad key [redacted][0m");
-        assert_eq!(said(&"x".repeat(400)).chars().count(), 300);
+        assert_eq!(line(&format!("  bad key {key}\u{1b}[0m\nline two\n"), SAID_MAX), "bad key [redacted][0m line two");
+        assert_eq!(line(&"x".repeat(400), SAID_MAX).chars().count(), 300);
     }
 }

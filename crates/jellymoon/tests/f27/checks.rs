@@ -21,6 +21,7 @@ fn world_with_a_second_day() -> World {
         said("2026-03-11T18:00:00.000Z", A, "ship it"),
         said("2026-03-11T19:00:00.000Z", A, "prefix the login, then fix the login"),
         said("2026-03-11T20:00:00.000Z", A, &long()),
+        said("2026-03-11T21:00:00.000Z", A, "把接口升级v2 然后上线"),
     ];
     write_log(&w.dir.path().join("logs"), "-work-alpha/s2.jsonl", &lines);
     w
@@ -45,6 +46,7 @@ fn a_quote_is_whole_words_and_at_least_eight_characters_or_everything_the_person
                 wish("zh4", "改成三次", "alpha"),        // and says more in a character: 4 are enough
                 wish("zh3", "改成三", "alpha"),          // 3 are not
                 wish("mix", "ship", "alpha"),            // 4 that are not all Chinese are not either
+                wish("zh+", "升级v2", "alpha"),          // nor 4 that are only partly Chinese
                 wish("whole", "ship it", "alpha"),       // short, and everything typed in that turn
                 wish("twice", "fix the login", "alpha"), // inside "prefix" the first time, whole words the second
             ],

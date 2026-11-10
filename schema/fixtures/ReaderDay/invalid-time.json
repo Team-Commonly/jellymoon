@@ -1,0 +1,12 @@
+{
+  "day": "2026-03-10",
+  "turns": [
+    {
+      "at": "24:00",
+      "tool": "claude-code",
+      "project": "alpha",
+      "said": "add a retry to the uploader",
+      "reply": ""
+    }
+  ]
+}

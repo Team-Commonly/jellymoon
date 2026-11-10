@@ -9,7 +9,7 @@ const slug = (t) => t.toLowerCase().replace(/[^a-z0-9 _-]/g, '').replace(/ /g, '
 // Section titles, in document order. head(), the contents line and the errors table all read this one list.
 const TITLE = {
   common: 'Ids, actors and harnesses', errors: 'Errors', tokens: 'Tokens', 'pod-api': 'Worker HTTP API',
-  events: 'Socket events', message: 'Messages and cards', task: 'Tasks', operations: 'Operations',
+  events: 'Socket events', message: 'Messages and cards', task: 'Tasks', operations: 'Operations', journal: 'Journal',
 };
 const rulesTitle = (file) => `Rules for ${TITLE[file]}`;
 
@@ -208,5 +208,6 @@ export function renderProtocol(ctx) {
     head(ctx.docs, 'message') + renderDefs(ctx, defsOf(ctx, 'message')),
     head(ctx.docs, 'task') + renderDefs(ctx, defsOf(ctx, 'task')),
     operationsSection(ctx),
+    head(ctx.docs, 'journal') + renderDefs(ctx, defsOf(ctx, 'journal')),
   ].join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
 }

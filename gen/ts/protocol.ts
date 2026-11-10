@@ -946,6 +946,27 @@ export interface PostOutput {
   decisionId?: DecisionId;
 }
 
+/** One thing a person typed to an agent, with the agent's last text reply before the person typed again. */
+export interface ReaderTurn {
+  /** The local time the person typed it, as HH:MM on a 24-hour clock. */
+  at: string;
+  tool: Harness;
+  /** The last segment of the folder the session ran in, or the worktree's name when that folder is inside a harness worktree. */
+  project: string;
+  /** What the person typed. */
+  said: string;
+  /** The agent's last text reply in the turn. Empty when it has not replied in text. */
+  reply: string;
+}
+
+/** One local calendar day of what a person typed to their agents: the reader's whole output. */
+export interface ReaderDay {
+  /** The local calendar day, as YYYY-MM-DD. */
+  day: string;
+  /** The day's turns, oldest first. */
+  turns: ReaderTurn[];
+}
+
 /** Which data definition each event type carries (events.json x-variants). */
 export interface EventDataMap {
   "hello": Hello;

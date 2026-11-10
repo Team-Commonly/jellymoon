@@ -2670,6 +2670,57 @@ func (x *PostOutput) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// One thing a person typed to an agent, with the agent's last text reply before the person typed again.
+type ReaderTurn struct {
+	// The local time the person typed it, as HH:MM on a 24-hour clock.
+	At   string  `json:"at"`
+	Tool Harness `json:"tool"`
+	// The last segment of the folder the session ran in, or the worktree's name when that folder is inside a harness worktree.
+	Project string `json:"project"`
+	// What the person typed.
+	Said string `json:"said"`
+	// The agent's last text reply in the turn. Empty when it has not replied in text.
+	Reply string `json:"reply"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ReaderTurn) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"at", "tool", "project", "said", "reply"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ReaderTurn: missing required field %q", k)
+		}
+	}
+	type plain ReaderTurn
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// One local calendar day of what a person typed to their agents: the reader's whole output.
+type ReaderDay struct {
+	// The local calendar day, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// The day's turns, oldest first.
+	Turns []ReaderTurn `json:"turns"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *ReaderDay) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"day", "turns"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("ReaderDay: missing required field %q", k)
+		}
+	}
+	type plain ReaderDay
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // Registry returns a fresh value for each object definition, by schema name. Tests and decoders use it.
 var Registry = map[string]func() any{
 	"Actor":                    func() any { return new(Actor) },
@@ -2764,6 +2815,8 @@ var Registry = map[string]func() any{
 	"ConnectorReceiptsInput":   func() any { return new(ConnectorReceiptsInput) },
 	"ConnectorReceiptsOutput":  func() any { return new(ConnectorReceiptsOutput) },
 	"PostOutput":               func() any { return new(PostOutput) },
+	"ReaderTurn":               func() any { return new(ReaderTurn) },
+	"ReaderDay":                func() any { return new(ReaderDay) },
 }
 
 // EventDirection is who sends each event type: s2c, c2s or local (daemon to TUI only).

@@ -42,7 +42,7 @@
       "paths": [
         "daemon/"
       ],
-      "max": 8180
+      "max": 8500
     },
     "web": {
       "paths": [
@@ -54,7 +54,7 @@
       "paths": [
         "e2e/"
       ],
-      "max": 10300
+      "max": 10490
     },
     "hosted": {
       "paths": [

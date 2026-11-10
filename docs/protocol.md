@@ -8,7 +8,7 @@ defined in [GLOSSARY.md](GLOSSARY.md). Every definition appears once and is link
 How to read a table: **Required** says whether the field must be present. Limits in **Notes** come from the
 schema. Every definition that lists fields accepts only those fields; anything else fails validation. The exception is `Envelope.data`, `ConnectorCallInput.args`, `ConnectorCallOutput.result`, `ConnectorReceipt.result`: an object whose fields come from the rule in its description.
 
-Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#errors) · [Tokens](#tokens) · [Worker HTTP API](#worker-http-api) · [Socket events](#socket-events) · [Messages and cards](#messages-and-cards) · [Tasks](#tasks) · [Operations](#operations)
+Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#errors) · [Tokens](#tokens) · [Worker HTTP API](#worker-http-api) · [Socket events](#socket-events) · [Messages and cards](#messages-and-cards) · [Tasks](#tasks) · [Operations](#operations) · [Journal](#journal)
 
 ## Ids, actors and harnesses
 
@@ -1641,3 +1641,37 @@ The stored message's id and sequence number, and the decision id when the post i
 | `messageId` | [MessageId](#def-MessageId) | yes | The id of a message posted to a pod. |
 | `seq` | [Seq](#def-Seq) | yes | Monotonic per pod, assigned by the pod. Starts at 1. |
 | `decisionId` | [DecisionId](#def-DecisionId) | no | The id of a decision, the open choice an ask carries. |
+
+## Journal
+
+What the journal app's parts pass between them on one computer (ADR 0011). ReaderDay is what the reader prints with `jellymoon day`: one local day of what a person typed to their agents. None of it is sent to a pod.
+
+### Rules for Journal
+
+- A turn is in a ReaderDay only when the session log marks it as typed by a person. Tool results, task notices, compaction summaries, sidechains, slash-command wrappers and prompts sent by other programs are left out.
+- Blocks the harness adds to a person's prompt are cut out of said. A turn with nothing left is left out.
+- Text shaped like a credential is replaced in said and in reply before either is cut to its length. A text that was cut ends in an ellipsis.
+- at and day are in the computer's local time zone. Turns are in the order they were typed.
+
+<a id="def-ReaderTurn"></a>
+### ReaderTurn
+
+One thing a person typed to an agent, with the agent's last text reply before the person typed again.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `at` | string | yes | The local time the person typed it, as HH:MM on a 24-hour clock. Limit: matches `^([01][0-9]\|2[0-3]):[0-5][0-9]$` |
+| `tool` | [Harness](#def-Harness) | yes | Which agent program a registered agent runs. fake is the deterministic test agent. |
+| `project` | string | yes | The last segment of the folder the session ran in, or the worktree's name when that folder is inside a harness worktree. Limit: up to 255 characters |
+| `said` | string | yes | What the person typed. Limit: 1 to 700 characters |
+| `reply` | string | yes | The agent's last text reply in the turn. Empty when it has not replied in text. Limit: up to 500 characters |
+
+<a id="def-ReaderDay"></a>
+### ReaderDay
+
+One local calendar day of what a person typed to their agents: the reader's whole output.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `day` | string | yes | The local calendar day, as YYYY-MM-DD. Limit: matches `^[0-9]{4}-[0-9]{2}-[0-9]{2}$` |
+| `turns` | list of [ReaderTurn](#def-ReaderTurn) | yes | The day's turns, oldest first. |

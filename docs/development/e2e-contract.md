@@ -307,3 +307,13 @@ JM_E2E_SERVER="$S/fakeserver" go test ./e2e -count=1 -v
 ```
 
 Every test must fail in under 10 s with a message naming the missing route, and `TestF14Budget` must fail.
+
+## Needs no server
+
+`TestF26` (F26, ADR 0011 section 1) builds the daemon and runs `jellymoon day` over session logs the test writes itself, in a
+fixed time zone (`TZ`). It talks to no server, so it runs with `JM_E2E_SERVER` unset (under `make test` too), is not in the
+budget's list and passes in the self-check above. Its steps: the day's turns with time, tool, project, text and last reply, read
+past a line that is not JSON and a 3 MB line; nothing a person did not type (tool results, task notices, compaction summaries,
+sidechains, meta lines, slash commands, another program's prompt, the harness's own blocks); credential shapes replaced and
+both texts cut; a skipped folder; and 23:59 and 00:01 on different days. Every log line in it is made up
+([reader.md](reader.md)).

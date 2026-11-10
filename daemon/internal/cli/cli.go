@@ -1,4 +1,4 @@
-// Package cli is the jellymoon command line: `daemon start --foreground` and `agent add <harness> --pod <id>`.
+// Package cli is the jellymoon command line: `daemon start --foreground`, `agent add <harness> --pod <id>` and the rest of usage.
 // Tokens never come from argv: the user token (used once, to register the computer) comes from JELLYMOON_USER_TOKEN or a
 // 0600 file in the config dir, the computer token is the daemon's, and the CLI never sees it. Nothing here prints a token.
 package cli
@@ -29,7 +29,7 @@ const (
 	userTokenEnv = "JELLYMOON_USER_TOKEN"
 )
 
-const usage = "usage:\n  jellymoon login\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>] [--repo <path>] [--allow-permissions]\n  jellymoon import commonly --instance <url> [--apply] [--include-dm <pod id>] [--anonymize]\n  jellymoon connector connect <vendor> --pod <pod id> --url <url>   (the token: JELLYMOON_CONNECTOR_TOKEN or a hidden prompt)\n  jellymoon connector grant --pod <pod id> --connection <id> --agent <id> --access read|write-with-confirm\n  jellymoon connector approvers --pod <pod id> --connection <id> --users <user ids, comma separated; \"\" clears>\n  jellymoon connector list --pod <pod id>\n  jellymoon connector receipts --pod <pod id> [--decision <id>] [--limit <n>]\n"
+const usage = "usage:\n  jellymoon login\n  jellymoon daemon start --foreground\n  jellymoon agent add <harness> --pod <pod id> [--name <display name>] [--repo <path>] [--allow-permissions]\n  jellymoon import commonly --instance <url> [--apply] [--include-dm <pod id>] [--anonymize]\n  jellymoon connector connect <vendor> --pod <pod id> --url <url>   (the token: JELLYMOON_CONNECTOR_TOKEN or a hidden prompt)\n  jellymoon connector grant --pod <pod id> --connection <id> --agent <id> --access read|write-with-confirm\n  jellymoon connector approvers --pod <pod id> --connection <id> --users <user ids, comma separated; \"\" clears>\n  jellymoon connector list --pod <pod id>\n  jellymoon connector receipts --pod <pod id> [--decision <id>] [--limit <n>]\n  jellymoon day [--date <YYYY-MM-DD>] [--logs <Claude Code projects dir>] [--skip <folder names, comma separated>]\n"
 
 var podIDShape = regexp.MustCompile(`^pod_[0-9A-Z]{26}$`)
 
@@ -55,6 +55,8 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		err = importCommonly(args[2:], stdout, stderr)
 	case len(args) >= 1 && args[0] == "connector":
 		err = connectorCmd(args[1:], stdout, stderr)
+	case len(args) >= 1 && args[0] == "day":
+		err = day(args[1:], stdout, stderr)
 	case len(args) >= 2 && args[0] == "agent" && args[1] == "add":
 		err = agentAdd(args[2:], stdout)
 	default:

@@ -23,8 +23,8 @@ One long-running builder session builds Jellymoon, with subagents for parallel p
 
 ## Size
 `make preflight` runs `cargo xtask check`: each file at most 400 lines, a LOC budget per crate in `entropy.toml`, no
-machine-local path in a tracked file, and the crate direction (core, then the binary; the kit, then the app). Clippy holds
-a function to 60 lines.
+machine-local path in a tracked file, the crate direction (core, then the binary; the kit, then the app), and no
+package under `[forbidden]` (GPUI, for core and the binary) listed in a crate's manifest. Clippy holds a function to 60 lines.
 
 - A budget grows only in the PR of the feature that needs it, with the measured count and the reason in the PR. Never
   for a refactor, never by deleting tests.

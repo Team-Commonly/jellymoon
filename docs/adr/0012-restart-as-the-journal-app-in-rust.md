@@ -53,8 +53,11 @@ decided the journal app; this note makes the journal app the whole repo and says
   inside the repo. Nothing is installed globally. `.tool-versions` is gone: it would be a second pin for one tool.
 - A file is at most 400 lines and a function at most 60. Each crate has a LOC budget in `entropy.toml`.
   `cargo xtask check` enforces the file and crate numbers, the dependency direction (core, then the binary; the kit,
-  then the app; core and the binary never depend on GPUI) and that no tracked file names a machine-local path; clippy
-  enforces the function length.
+  then the app) and that no tracked file names a machine-local path; clippy enforces the function length.
+- Core and the binary never depend on GPUI. `cargo xtask check` enforces that as far as a manifest shows it: the
+  `[forbidden]` table of `entropy.toml` names the packages, and neither crate may list one in any dependency table,
+  under any `[target.*]`, or renamed with `package`. The direction rule reads manifests the same way. Neither rule
+  sees what an outside dependency brings in with it; a new dependency's ADR note is where that is checked.
 - A budget grows only in the pull request of the feature that needs it, with the measured count and the reason in that
   pull request. Never for a refactor and never by deleting tests. The budgets exist because agent-written code grows
   without bound when nothing pushes back.

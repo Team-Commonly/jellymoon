@@ -2,12 +2,14 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -50,6 +52,9 @@ var (
 	f26Raw = strings.Repeat("Ab3/dE+9", 6)
 )
 
+// f26First is a typed line that a resumed session repeats in a second file, under the same uuid.
+var f26First = f26Line("user", "2026-03-10T16:00:00.000Z", f26A, "human", "add a retry to the uploader", map[string]any{"uuid": "u1"})
+
 const (
 	f26A = "/work/alpha"
 	f26B = "/work/private-notes"
@@ -80,7 +85,7 @@ func f26Logs(t *testing.T) string {
 	alpha := []string{
 		f26Said("2026-03-10T06:30:00.000Z", f26A, "the evening before"),
 		f26Reply("2026-03-10T06:30:05.000Z", f26A, "LEAK reply from the evening before"),
-		f26Said("2026-03-10T16:00:00.000Z", f26A, "add a retry to the uploader"),
+		f26First,
 		f26Line("assistant", "2026-03-10T16:00:01.000Z", f26A, "", []map[string]any{{"type": "tool_use", "id": "t1", "name": "Bash", "input": map[string]any{}}}, nil),
 		f26Line("user", "2026-03-10T16:00:02.000Z", f26A, "", toolResult, nil),
 		f26Reply("2026-03-10T16:00:03.000Z", f26A, "LEAK an earlier reply in the same turn"),
@@ -91,6 +96,7 @@ func f26Logs(t *testing.T) string {
 		f26Line("user", "2026-03-10T16:00:08.000Z", f26A, "human", "LEAK meta", map[string]any{"isMeta": true}),
 		f26Line("user", "2026-03-10T16:00:09.000Z", f26A, "", "LEAK compaction summary", map[string]any{"isCompactSummary": true}),
 		f26Line("user", "2026-03-10T16:00:10.000Z", f26A, "", "LEAK prompt from another program", map[string]any{"promptSource": "sdk"}),
+		f26Reply("2026-03-10T16:00:11.000Z", f26A, "LEAK reply to another program's prompt"),
 		`{"type":"user","timestamp":"2026-03-10T16:30:00.000Z","origin":{"kind":"human"},"message":{"content":"LEAK broken line`,
 		f26Said("2026-03-10T17:30:00.000Z", f26A, "<system-reminder>\nLEAK reminder\n</system-reminder>\n<artifact-view-context id=\"a1\">\n{\"LEAK\":\"view\"}\n(The JSON line above is LEAK explainer.)\n</artifact-view-context>\n\n<artifact-content-authored-by-others/>\n(The JSON line above is LEAK explainer\nover two lines.)\ndeploy with "+f26Hub+" and "+f26Run+" then "+f26Raw+" "+strings.Repeat("long ", 200)),
 		f26Reply("2026-03-10T17:30:05.000Z", f26A, "used "+f26Key+" "+strings.Repeat("done ", 200)),
@@ -109,7 +115,10 @@ func f26Logs(t *testing.T) string {
 		"-work-alpha/old.jsonl":        {f26Said("2026-03-10T22:00:00.000Z", f26A, "LEAK from a file last written before the day")},
 		"-work-alpha/s1.jsonl":         alpha,
 		"-work-private-notes/s2.jsonl": {f26Said("2026-03-10T19:00:00.000Z", f26B, "a private note"), f26Reply("2026-03-10T19:00:05.000Z", f26B, "kept private")},
-		"-work-beta/s3.jsonl":          {f26Said("2026-03-10T20:15:00.000Z", f26C, "fix the login page")},
+		"-work-beta/s3.jsonl": {f26Said("2026-03-10T20:15:00.000Z", f26C, "fix the login page"),
+			f26Line("user", "2026-03-10T20:15:30.000Z", f26C, "peer", "LEAK message from another session", nil), f26Reply("2026-03-10T20:15:40.000Z", f26C, "LEAK reply to a peer")},
+		"-work-alpha/s9.jsonl":         {f26First, f26Reply("2026-03-10T16:00:20.000Z", f26A, "LEAK reply in the resumed copy")},
+		"-work-private-notes/s6.jsonl": {f26Said("2026-03-10T22:30:00.000Z", "", "a note typed with no folder on its line")},
 		"-work-alpha/readme.txt":       {f26Said("2026-03-10T20:00:00.000Z", f26A, "LEAK not a session log")},
 	}
 	for name, lines := range files {
@@ -121,6 +130,7 @@ func f26Logs(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
+	f26Traps(t, dir)
 	// A file last written before the day began is not opened, whatever its lines say.
 	before := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC)
 	if err := os.Chtimes(filepath.Join(dir, "-work-alpha/old.jsonl"), before, before); err != nil {
@@ -129,10 +139,31 @@ func f26Logs(t *testing.T) string {
 	return dir
 }
 
+// f26Traps puts things in the logs directory that are not session files in real folders: a link to a file and a link to a
+// folder, both outside it, and a pipe nobody writes to. None may be opened.
+func f26Traps(t *testing.T, dir string) {
+	t.Helper()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "s.jsonl"), []byte(f26Said("2026-03-10T20:30:00.000Z", f26A, "LEAK from outside the logs")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "s.jsonl"), filepath.Join(dir, "-work-alpha", "link.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "-work-linked")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(dir, "-work-alpha", "pipe.jsonl"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // f26Read runs `jellymoon day` in the test's time zone with an empty home, and decodes what it printed.
 func f26Read(t *testing.T, bin string, args ...string) (f26Day, string) {
 	t.Helper()
-	cmd := exec.Command(bin, append([]string{"day"}, args...)...)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second) // a reader stuck on a pipe fails here
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, append([]string{"day"}, args...)...)
 	cmd.Env = []string{"TZ=America/Los_Angeles", "HOME=" + t.TempDir()}
 	var so, se bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &so, &se
@@ -152,7 +183,7 @@ func f26Read(t *testing.T, bin string, args ...string) (f26Day, string) {
 func TestF26(t *testing.T) {
 	t.Parallel()
 	bin, logs := buildDaemon(t), f26Logs(t)
-	day, raw := f26Read(t, bin, "--date", "2026-03-10", "--logs", logs, "--skip", "unrelated,private-notes")
+	day, raw := f26Read(t, bin, "--date", "2026-03-10", "--logs", logs, "--skip", "unrelated, private-notes,")
 	t.Run("the day's turns are the time, the tool, the project, the person's text and the agent's last reply, read past a broken line", func(t *testing.T) {
 		if day.Day != "2026-03-10" || len(day.Turns) != 6 {
 			t.Fatalf("day %q with %d turns, want 2026-03-10 with 6:\n%.2000s", day.Day, len(day.Turns), raw)
@@ -160,7 +191,7 @@ func TestF26(t *testing.T) {
 		want := []f26Turn{
 			{"09:00", "claude-code", "alpha", "add a retry to the uploader", "retry added, tests pass"},
 			{At: "10:30", Tool: "claude-code", Project: "alpha"},
-			{"13:15", "claude-code", "beta", "fix the login page", ""}, // typed in a worktree of beta: the repo is the project
+			{"13:15", "claude-code", "beta", "fix the login page", ""},              // typed in a worktree of beta: the repo is the project
 			{"14:00", "claude-code", "gamma", "first gamma ask", "gamma reply one"}, // a list with a tool result does not end it; an image alone does
 			{"14:02", "claude-code", "gamma", "look at this screenshot", "seen"},    // typed with a pasted image: its text parts
 			{"23:59", "claude-code", "alpha", "one minute before midnight", "noted before midnight"},
@@ -194,7 +225,7 @@ func TestF26(t *testing.T) {
 	})
 	t.Run("a skipped folder contributes nothing, and is read when it is not skipped", func(t *testing.T) {
 		all, _ := f26Read(t, bin, "--date", "2026-03-10", "--logs", logs)
-		if strings.Contains(raw, "private") || len(all.Turns) != 7 || all.Turns[2] != (f26Turn{"12:00", "claude-code", "private-notes", "a private note", "kept private"}) {
+		if strings.Contains(raw, "private") || len(all.Turns) != 8 || all.Turns[2] != (f26Turn{"12:00", "claude-code", "private-notes", "a private note", "kept private"}) || all.Turns[6].Said != "a note typed with no folder on its line" {
 			t.Errorf("with --skip the output names the folder, or without it the folder's turn is missing: %+v", all.Turns)
 		}
 	})

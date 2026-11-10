@@ -56,7 +56,8 @@ BEGIN line on, whether or not its END mark was read.
 One case needs more. When cleaning takes out or squeezes so much that fewer than 8,192 characters are left after the
 cut (a text that is mostly invisible characters, or spaces in a text printed on one line), the place where reading
 stopped is close to what is printed, and the word there may be the first half of a secret. That last word is then left
-out and the text ends in `…`; with no space before it, nothing is printed and the prompt makes no turn.
+out and the text ends in `…`; with no space before it, nothing is printed and the prompt makes no turn. The word stays
+only when it is `[redacted]` and nothing more, as a PEM key's replacement is.
 
 Cleaning runs first and takes out what nobody sees:
 
@@ -87,9 +88,11 @@ any length (a PEM header, a JWT's first part) has a pass of its own, so it canno
 A word is a path only by how it starts: `/`, `./`, `../`, `~/` or a Windows drive (`C:\` or `C:/`), after any opening
 quotes or brackets (`"`, `'`, `` ` ``, `(`, `[`, `{`, `<`). A link starts at its URL scheme (`https://`) wherever that
 is in the word, so a markdown link, `[the notes](https://…)`, and a JSON value, `"url":"https://…"`, are links from
-the scheme on. From where a path or a link starts, a `/` ends a run, so each segment is judged alone: a long folder
-path survives, and a segment of 40 or more mixed characters inside it is replaced. A run that begins before a link is
-judged whole. Nothing else about a word is read: a slash or a dot inside it does not make it a path.
+the scheme on. A path or a link ends at the next closing quote, closing bracket or comma (`"`, `'`, `` ` ``, `)`, `]`,
+`}`, `>`, `,`), or with its word. Inside it a `/` ends a run, so each segment is judged alone: a long folder path
+survives, and a segment of 40 or more mixed characters inside it is replaced. A run before it or after it is judged
+whole, so the next value of a JSON object is, and so is a second link in the same word. Nothing else about a word is
+read: a slash or a dot inside it does not make it a path.
 
 What that replaces wrongly: a word that is a path but does not start like one, when a run in it reaches 40 characters
 and mixes digits with both cases. `feature/JIRA-1234-AddUserProfileSettingsPanel` and
@@ -103,7 +106,9 @@ characters: `https://host/<secret>` and a secret that itself starts with `/` bot
 `project` is the last segment of the working directory. Under `<repo>/.claude/worktrees/<name>` it is the repo folder's
 name, so a repo and its worktrees are one project.
 
-A line that is not valid JSON is skipped. A line over 64 MiB is read past without being kept. A session file whose modification time is before the start of the requested local day is not opened, since it can hold no turn of that day; the one consequence is that a file copied or restored with an old modification time is skipped. Reading a busy day on a
+A line that is not valid JSON is skipped. A line over 64 MiB is read past without being kept. Decoding a line takes
+memory many times its size (about 27 times for a line that is one long list), so the largest line kept can take
+well over a gigabyte while it is read. A session file whose modification time is before the start of the requested local day is not opened, since it can hold no turn of that day; the one consequence is that a file copied or restored with an old modification time is skipped. Reading a busy day on a
 computer with gigabytes of logs takes around ten seconds.
 
 ## Not covered yet

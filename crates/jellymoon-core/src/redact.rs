@@ -51,6 +51,10 @@ static LONG_SEGMENT: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+=_-
 static PATH_START: LazyLock<Regex> =
     LazyLock::new(|| pattern(r#"^["'`(\[{<]*(?:\.{0,2}/|~/|[A-Za-z]:[\\/])|[A-Za-z][A-Za-z0-9+.-]*://"#));
 
+/// What ends a path or a link inside a word: a closing quote, a closing bracket or a comma. What follows it in the
+/// word (the next value of a JSON object, say) is no part of the path.
+const PATH_END: [char; 8] = ['"', '\'', '`', ')', ']', '}', '>', ','];
+
 /// The password in `scheme://user:password@host`. Only the password is replaced.
 static URL_PASSWORD: LazyLock<Regex> =
     LazyLock::new(|| pattern(r"([A-Za-z][A-Za-z0-9+.-]*://[^\t\n\f\r /:@]*:)[^\t\n\f\r /@]+@"));
@@ -87,10 +91,13 @@ fn credentials(text: &str) -> String {
     let mut shown = String::with_capacity(text.len());
     for piece in text.split_inclusive(char::is_whitespace) {
         let word = piece.trim_end();
-        let path = PATH_START.find(word).map_or(word.len(), |start| start.start());
+        let path = PATH_START.find(word).map_or(word.len()..word.len(), |start| {
+            let end = word[start.end()..].find(PATH_END).map_or(word.len(), |at| start.end() + at);
+            start.start()..end
+        });
         shown.push_str(&LONG_RUN.replace_all(word, |run: &Captures| {
             let (at, run) = run.get(0).map_or((0, ""), |run| (run.start(), run.as_str()));
-            if at < path {
+            if !path.contains(&at) {
                 return mixed(run).to_string();
             }
             LONG_SEGMENT.replace_all(run, |segment: &Captures| mixed(&segment[0]).to_string()).into_owned()
@@ -153,8 +160,9 @@ fn bounded(text: &str, limit: usize, tidy: fn(&str) -> String) -> String {
     }
     // The window cut the text, and its last word may be the head of a secret whose rest was never read. That word is
     // far past the cut unless cleaning took out or squeezed most of the window; then only what stands before it is
-    // kept. A replacement that reaches the end (a PEM key's) hides what it stands for.
-    let reaches = tidied.ends_with(REPLACED) || tidied.chars().count() >= limit + SECRET_MAX;
+    // kept. A last word that is the mark and nothing more (a PEM key's replacement) shows nothing, so it stays.
+    let marked = cleaned.split_whitespace().next_back() == Some(REPLACED);
+    let reaches = marked || tidied.chars().count() >= limit + SECRET_MAX;
     let kept = if reaches { tidied } else { tidy(cleaned.rfind(char::is_whitespace).map_or("", |at| &cleaned[..at])) };
     if kept.is_empty() { kept } else { cut(&format!("{kept}…"), limit) }
 }

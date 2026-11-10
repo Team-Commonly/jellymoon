@@ -55,15 +55,18 @@ error) is shown on one line, cleaned and redacted as the reader does it, and cut
 The model's and the harness's words are read only from their start, as the reader reads a long text
 ([what is printed](reader.md#what-is-printed)): the length a text is cut to and 16,384 characters more. A secret under
 8,192 characters that starts in what is shown is inside that and is replaced whole, and what comes after is never
-cleaned or kept, so a reply of any length costs the same.
+cleaned or kept, so a label, a star or an error of any length costs the same.
+
+The check below is bounded the same way. Only the first 64 wishes and the first 64 clashes of a reading are looked at,
+and the looking stops when the page is full. A quote longer than the turn it is compared with is not searched for.
 
 Otherwise each piece is checked on its own:
 
 - A wish is dropped unless its `said` is a quote of the person (the rule is below) and its `project` is one of the
   day's. A wish with no label, or with an id an earlier wish used, is dropped too.
-- The first 8 wishes that pass are kept and given the ids `w1` to `w8`. The model's ids are only used to match clashes.
+- The first 8 wishes that pass, among the first 64 the model wrote, are kept and given the ids `w1` to `w8`. The model's ids are only used to match clashes.
 - A clash is dropped unless both its quotes are quotes of the person and it names two different kept wishes. The
-  first 2 that pass are kept.
+  first 2 that pass, among the first 64, are kept.
 - `label` and each star are the model's words: control characters, invisible characters (the reader's list) and line
   breaks are taken out, credential shapes are replaced as the reader replaces them, and a text over its length (40 and
   60 characters) is cut and ends in `…`. At most 4 stars are kept.

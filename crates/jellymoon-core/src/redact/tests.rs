@@ -55,6 +55,11 @@ fn every_key_shape_is_replaced() {
         ("https://example.com/{}", "https://example.com/{}", "inside a URL's path"),
         ("/{}", "/{}", "after a leading slash"),
         ("key:{},https://example.com/{}", "key:[redacted],https://example.com/{}", "before a link and inside it"),
+        // A path or a link ends at a closing quote, a closing bracket or a comma; what follows is judged whole.
+        (r#"{"u":"https://example.com/a","k":"{}"}"#, r#"{"u":"https://example.com/a","k":"[redacted]"}"#, "JSON"),
+        (r#"["/srv/a","{}"]"#, r#"["/srv/a","[redacted]"]"#, "after a path in a list"),
+        ("https://example.com/a,{}", "https://example.com/a,[redacted]", "after a link and a comma"),
+        ("[notes](https://example.com/a){}", "[notes](https://example.com/a)[redacted]", "after a markdown link"),
     ];
     for (text, want, name) in cases {
         assert_eq!(credentials(&text.replace("{}", &slashed)), want.replace("{}", &slashed), "{name}");
@@ -262,7 +267,11 @@ fn a_key_that_starts_just_before_the_windows_end_leaves_nothing_visible() {
     // The same for a password in a URL and a key of unknown make, which have no prefix to be known by.
     let password = format!("see x://u:{}@host", ["hunter", "2secret"].concat());
     let unknown = format!("use {}", "aB3+/x9Z".repeat(5));
-    for (text, kept) in [(password, 20), (unknown, 34)] {
+    // And for a word the window cut that only ends in the mark: a JWT cut in its second part, whose first part
+    // is no key by itself, and a password whose tail alone is long enough to be replaced.
+    let jwt = format!("use ey{}{}.{}.sig", "J", "hbGci".repeat(7), "aB3xY9Zq".repeat(10));
+    let tailed = format!("see x://u:Zq7!{}@host", "aB3x9Zq_".repeat(10));
+    for (text, kept) in [(password, 20), (unknown, 34), (jwt, 88), (tailed, 58)] {
         let cut_short = format!("{}{}{}", &text[..4], "\u{200b}".repeat(SAID + WINDOW - kept), &text[4..]);
         assert_eq!(shown(&cut_short, SAID), format!("{}…", &text[..3]), "{text}");
     }

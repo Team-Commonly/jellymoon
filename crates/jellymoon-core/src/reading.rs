@@ -3,7 +3,7 @@
 //! nothing but return text (`call.rs`), and here code keeps a wish or a clash only when its words are the person's own,
 //! writes the day, the ids and what was read itself, and cleans and cuts the few words that are the model's.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -15,6 +15,8 @@ use crate::{Clash, Error, PageData, PageRead, ReaderDay, Wish, call};
 /// The limits of page data.
 const WISHES_MAX: usize = 8;
 const CLASHES_MAX: usize = 2;
+/// How many of a reading's wishes, and of its clashes, are looked at. A model can write any number of them.
+const SEEN_MAX: usize = 64;
 const STARS_MAX: usize = 4;
 const LABEL_MAX: usize = 40;
 const STAR_MAX: usize = 60;
@@ -48,13 +50,7 @@ struct Reading {
 /// Returns the day's page data. A day with no turns is an empty page and makes no call. A reading that is not page data
 /// is an error: there is no page to print.
 pub fn page(day: &ReaderDay, options: &PageOptions) -> Result<PageData, Error> {
-    let mut projects: Vec<String> = Vec::new();
-    for turn in &day.turns {
-        if !projects.contains(&turn.project) {
-            projects.push(turn.project.clone());
-        }
-    }
-    let read = PageRead { turns: day.turns.len(), projects };
+    let read = PageRead { turns: day.turns.len(), projects: projects(day) };
     let mut page = PageData { day: day.day.clone(), wishes: Vec::new(), clashes: Vec::new(), read };
     if !is_model_name(&options.model) {
         return Err(Error::Model);
@@ -67,6 +63,12 @@ pub fn page(day: &ReaderDay, options: &PageOptions) -> Result<PageData, Error> {
         serde_json::from_str(unfence(&text)).map_err(|e| Error::NotPageData { line: e.line(), column: e.column() })?;
     keep(day, reading, &mut page);
     Ok(page)
+}
+
+/// The day's projects, each once, in the order first typed in.
+fn projects(day: &ReaderDay) -> Vec<String> {
+    let mut seen = HashSet::new();
+    day.turns.iter().filter(|turn| seen.insert(turn.project.as_str())).map(|turn| turn.project.clone()).collect()
 }
 
 /// The only part of the harness's command line a caller chooses: a name, which cannot start a flag or hold a space.
@@ -85,16 +87,19 @@ fn unfence(text: &str) -> &str {
 }
 
 /// Moves into the page what of the reading is the person's own: the first wishes whose words they typed, under the
-/// page's ids, then the first clashes between two of those wishes whose quotes they typed.
+/// page's ids, then the first clashes between two of those wishes whose quotes they typed. Only the first
+/// [`SEEN_MAX`] of each are looked at, and the looking stops when the page is full.
 fn keep(day: &ReaderDay, reading: Reading, page: &mut PageData) {
     let mut ids: HashMap<String, String> = HashMap::new(); // the model's id of a kept wish, to the page's
-    for wish in reading.wishes {
+    for wish in reading.wishes.into_iter().take(SEEN_MAX) {
+        if page.wishes.len() == WISHES_MAX {
+            break;
+        }
         let label = line(&wish.label, LABEL_MAX);
         let Some(said) = typed(day, &wish.said) else {
             continue;
         };
-        let known = page.read.projects.contains(&wish.project);
-        if ids.contains_key(&wish.id) || label.is_empty() || !known || page.wishes.len() == WISHES_MAX {
+        if ids.contains_key(&wish.id) || label.is_empty() || !page.read.projects.contains(&wish.project) {
             continue;
         }
         let stars = wish
@@ -108,14 +113,17 @@ fn keep(day: &ReaderDay, reading: Reading, page: &mut PageData) {
         ids.insert(wish.id, id.clone());
         page.wishes.push(Wish { id, label, said, project: wish.project, state: wish.state, stars });
     }
-    for clash in reading.clashes {
+    for clash in reading.clashes.into_iter().take(SEEN_MAX) {
+        if page.clashes.len() == CLASHES_MAX {
+            break;
+        }
         let (Some(a), Some(b)) = (ids.get(&clash.a), ids.get(&clash.b)) else {
             continue;
         };
         let (Some(quote_a), Some(quote_b)) = (typed(day, &clash.quote_a), typed(day, &clash.quote_b)) else {
             continue;
         };
-        if a != b && page.clashes.len() < CLASHES_MAX {
+        if a != b {
             page.clashes.push(Clash { a: a.clone(), b: b.clone(), quote_a, quote_b, settled: clash.settled });
         }
     }
@@ -125,12 +133,14 @@ fn keep(day: &ReaderDay, reading: Reading, page: &mut PageData) {
 /// words, and long enough to mean something or else all of what they typed. That stops the model inventing words, and
 /// passing off a letter or half a word as a quote. It does not stop it choosing: "delete the database" is whole words
 /// of "do not delete the database". A quote over its length is then cut, with no mark added, so it is still theirs.
+/// A quote longer than what was typed is not searched for, so a quote of any length costs what a short one does.
 fn typed(day: &ReaderDay, quote: &str) -> Option<String> {
     let quote = quote.trim();
     let min = if quote.chars().all(|c| c >= '\u{2e80}') { QUOTE_MIN_CJK } else { QUOTE_MIN };
     let long_enough = quote.chars().count() >= min;
     let own = |said: &str| {
-        (long_enough || said == quote)
+        quote.len() <= said.len()
+            && (long_enough || said == quote)
             && said
                 .match_indices(quote)
                 .any(|(at, _)| !inside_a_word(said, at) && !inside_a_word(said, at + quote.len()))
@@ -147,4 +157,76 @@ fn typed(day: &ReaderDay, quote: &str) -> Option<String> {
 fn inside_a_word(said: &str, at: usize) -> bool {
     let spaced = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() && c < '\u{2e80}');
     spaced(said[..at].chars().next_back()) && spaced(said[at..].chars().next())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Harness, ReaderTurn, WishState};
+
+    fn day(turns: usize) -> ReaderDay {
+        let turn = |n: usize| ReaderTurn {
+            at: "09:00".into(),
+            tool: Harness::ClaudeCode,
+            project: format!("project-{n}"),
+            said: format!("please build the thing numbered {n} today"),
+            reply: String::new(),
+        };
+        ReaderDay { day: "2026-11-09".into(), turns: (0..turns).map(turn).collect() }
+    }
+
+    fn wish(n: usize, said: String) -> Wish {
+        let (id, project) = (format!("m{n}"), "project-0".to_string());
+        Wish { id, label: "a thing".into(), said, project, state: WishState::Working, stars: Vec::new() }
+    }
+
+    fn kept(day: &ReaderDay, reading: Reading) -> PageData {
+        let read = PageRead { turns: day.turns.len(), projects: projects(day) };
+        let mut page = PageData { day: day.day.clone(), wishes: Vec::new(), clashes: Vec::new(), read };
+        keep(day, reading, &mut page);
+        page
+    }
+
+    // A reading can hold any number of wishes and clashes; only the first SEEN_MAX of each are looked at.
+    #[test]
+    fn only_the_first_wishes_and_clashes_of_a_reading_are_looked_at() {
+        let day = day(3);
+        let typed = "build the thing numbered 0".to_string();
+        let mut wishes: Vec<Wish> = (0..SEEN_MAX - 1).map(|n| wish(n, "words nobody typed".into())).collect();
+        wishes.push(wish(SEEN_MAX - 1, typed.clone()));
+        wishes.push(wish(SEEN_MAX, "build the thing numbered 1".into()));
+        let page = kept(&day, Reading { wishes, clashes: Vec::new() });
+        assert_eq!(page.wishes.iter().map(|w| w.said.as_str()).collect::<Vec<_>>(), [typed.as_str()]);
+
+        let wishes = vec![wish(0, typed.clone()), wish(1, "build the thing numbered 1".into())];
+        let clash = |a: &str, quote_a: &str| Clash {
+            a: a.into(),
+            b: "m1".into(),
+            quote_a: quote_a.into(),
+            quote_b: "build the thing numbered 1".into(),
+            settled: false,
+        };
+        let mut clashes: Vec<Clash> = (0..SEEN_MAX).map(|_| clash("m0", "words nobody typed")).collect();
+        clashes.push(clash("m0", &typed));
+        let page = kept(&day, Reading { wishes: wishes.clone(), clashes });
+        assert!(page.clashes.is_empty(), "the clash after the last one looked at is not kept");
+        let page = kept(&day, Reading { wishes, clashes: vec![clash("m0", &typed)] });
+        assert_eq!(page.clashes.len(), 1);
+    }
+
+    // The check of a reading costs the same whatever the model wrote: a quote longer than what the person typed is
+    // refused unread, a full page stops the looking, and projects are told apart through a set.
+    #[test]
+    fn a_huge_reading_of_a_huge_day_is_checked_in_seconds() {
+        let day = day(4000);
+        let start = std::time::Instant::now();
+        let mut wishes = vec![wish(0, "aB3 ".repeat(1 << 20))];
+        wishes.extend((1..20_000).map(|n| wish(n, format!("words nobody typed {n}"))));
+        let page = kept(&day, Reading { wishes, clashes: Vec::new() });
+        assert!(page.wishes.is_empty());
+        assert_eq!(page.read.projects.len(), 4000);
+        let full = (0..20_000).map(|n| wish(n, "build the thing numbered 0".into())).collect();
+        assert_eq!(kept(&day, Reading { wishes: full, clashes: Vec::new() }).wishes.len(), WISHES_MAX);
+        assert!(start.elapsed() < Duration::from_secs(10), "{:?}", start.elapsed());
+    }
 }

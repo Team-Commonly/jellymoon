@@ -60,8 +60,17 @@ fn every_key_shape_is_replaced() {
         (r#"["/srv/a","{}"]"#, r#"["/srv/a","[redacted]"]"#, "after a path in a list"),
         ("https://example.com/a,{}", "https://example.com/a,[redacted]", "after a link and a comma"),
         ("[notes](https://example.com/a){}", "[notes](https://example.com/a)[redacted]", "after a markdown link"),
+        // Each closing mark ends a path or a link.
+        ("'https://example.com/a'{}", "'https://example.com/a'[redacted]", "after a single quote"),
+        ("`/srv/a`{}", "`/srv/a`[redacted]", "after a backtick"),
+        ("<https://example.com/a>{}", "<https://example.com/a>[redacted]", "after an angle bracket"),
+        ("{/srv/a}{}", "{/srv/a}[redacted]", "after a brace"),
+        // Every link in a word is a link; a path counts only at the start of its word.
+        (r#"{"a":"https://example.com/a","b":"https://example.com/{}"}"#, "", "inside a second link"),
+        (r#"["/srv/a","/{}"]"#, r#"["/srv/a","[redacted]"]"#, "a path that does not start its word"),
     ];
     for (text, want, name) in cases {
+        let want = if want.is_empty() { text } else { want };
         assert_eq!(credentials(&text.replace("{}", &slashed)), want.replace("{}", &slashed), "{name}");
     }
 }
@@ -95,6 +104,10 @@ fn a_path_a_commit_hash_and_plain_words_are_left_alone() {
         "[the notes](https://example.com/Docs2/guides/Getting-Started/install/v2/notes)",
         r#"{"url":"https://example.com/Docs2/guides/Getting-Started/install/v2/notes"}"#,
         "DOCS=https://example.com/Docs2/guides/Getting-Started/install/v2/notes",
+        // Two links in one word, as compact JSON has them: each is a link from its own scheme on.
+        r#"{"html":"https://example.com/Team-Name/project/pull/108","diff":"https://example.com/Team-Name/project/pull/108/files"}"#,
+        r#"{"a":"https://example.com/Docs2/guides","b":"https://example.com/Docs2/guides/Getting-Started/install/v2"}"#,
+        "[one](https://example.com/Docs2/guides),[two](https://example.com/Docs2/guides/Getting-Started/install/v2)",
     ];
     for path in paths {
         assert_eq!(credentials(&format!("open {path} now")), format!("open {path} now"));
@@ -128,6 +141,7 @@ fn a_megabyte_of_the_worst_shapes_is_cleaned_in_seconds() {
         ("one path of a megabyte", format!("/{mixed}")),
         ("the start of every pattern and none finished", format!("\u{1b}]0;\u{1b}[1;-----BEGIN-eyJ{mixed}.x://u:p.")),
         ("short words", "aB3 ".to_string()),
+        ("a link after a link, over and over in one word", format!("x://h/{mixed}/a\",")),
         // A shape that never ends, with whole keys of another shape inside it (the third review's finding).
         ("an unfinished JWT with an AWS key id in it", format!("eyJ-{}-", key("AK", "IA", "Q7", 8))),
         ("an unfinished JWT with a hub key in it", format!("eyJ-{}-", key("gh", "p_", "aB3x", 6))),

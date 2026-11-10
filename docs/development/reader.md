@@ -90,9 +90,12 @@ quotes or brackets (`"`, `'`, `` ` ``, `(`, `[`, `{`, `<`). A link starts at its
 is in the word, so a markdown link, `[the notes](https://…)`, and a JSON value, `"url":"https://…"`, are links from
 the scheme on. A path or a link ends at the next closing quote, closing bracket or comma (`"`, `'`, `` ` ``, `)`, `]`,
 `}`, `>`, `,`), or with its word. Inside it a `/` ends a run, so each segment is judged alone: a long folder path
-survives, and a segment of 40 or more mixed characters inside it is replaced. A run before it or after it is judged
-whole, so the next value of a JSON object is, and so is a second link in the same word. Nothing else about a word is
-read: a slash or a dot inside it does not make it a path.
+survives, and a segment of 40 or more mixed characters inside it is replaced. A run outside every path and link is
+judged whole, so the next value of a JSON object is. A word can hold any number of links, each from its own scheme to
+its own end, so both links of `{"html":"https://…","diff":"https://…"}` are kept. It holds at most one path, the one
+it starts with: after a path or a link has ended, a `/`, `./`, `../`, `~/` or a drive starts nothing, so the second
+path of `["/srv/a","/srv/b"]` is judged whole. Nothing else about a word is read: a slash or a dot inside it does not
+make it a path.
 
 What that replaces wrongly: a word that is a path but does not start like one, when a run in it reaches 40 characters
 and mixes digits with both cases. `feature/JIRA-1234-AddUserProfileSettingsPanel` and

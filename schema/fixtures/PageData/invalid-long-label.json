@@ -1,0 +1,23 @@
+{
+  "day": "2026-03-10",
+  "wishes": [
+    {
+      "id": "w1",
+      "label": "a label that runs on for more than forty characters",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    }
+  ],
+  "clashes": [],
+  "read": {
+    "turns": 3,
+    "projects": [
+      "alpha",
+      "beta"
+    ]
+  }
+}

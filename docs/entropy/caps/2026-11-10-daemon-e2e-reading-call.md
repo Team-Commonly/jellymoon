@@ -1,0 +1,3 @@
+# Cap note 2026-11-10: daemon-e2e-reading-call
+
+2026-11-10: daemon cap 8,510 -> 8,780 and e2e cap 10,510 -> 10,820; F27 (ADR 0011 section 2): `jellymoon page`. The daemon gains `daemon/internal/reading` (the reading call, the checks code makes on what the model returns, and a timeout test) and the command in `cli/day.go`, which now shares the reader's flags between `day` and `page`. The e2e gains `f27_test.go`: a recording fake harness and five steps. The tree printed `LOC budget: daemon 8772 > 8510` and `LOC budget: e2e 10812 > 10510`; each cap is the count rounded up to ten. The schema, its fixtures and the prompt are not counted. No other cap changes.

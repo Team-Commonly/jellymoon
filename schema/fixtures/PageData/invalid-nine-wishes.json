@@ -1,0 +1,103 @@
+{
+  "day": "2026-03-10",
+  "wishes": [
+    {
+      "id": "w1",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w2",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w3",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w4",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w5",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w6",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w7",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w8",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w1",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    }
+  ],
+  "clashes": [],
+  "read": {
+    "turns": 3,
+    "projects": [
+      "alpha",
+      "beta"
+    ]
+  }
+}

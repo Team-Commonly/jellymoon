@@ -1,0 +1,1 @@
+{"invalid-required-read.json": {"keyword": "required", "path": ""}, "invalid-state.json": {"keyword": "enum", "path": "/wishes/0/state"}, "invalid-nine-wishes.json": {"keyword": "maxItems", "path": "/wishes"}, "invalid-long-label.json": {"keyword": "maxLength", "path": "/wishes/0/label"}, "invalid-three-clashes.json": {"keyword": "maxItems", "path": "/clashes"}}

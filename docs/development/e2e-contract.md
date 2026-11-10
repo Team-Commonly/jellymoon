@@ -317,3 +317,11 @@ past a line that is not JSON and a 3 MB line; nothing a person did not type (too
 sidechains, meta lines, slash commands, another program's prompt, the harness's own blocks); credential shapes replaced and
 both texts cut; a skipped folder; and 23:59 and 00:01 on different days. Every log line in it is made up
 ([reader.md](reader.md)).
+
+`TestF27` (F27, ADR 0011 section 2) runs `jellymoon page` the same way, with a script on `PATH` as `claude` that records its
+arguments, input, folder and environment and prints the reply the test chose. Its steps: the exact command line, with the day
+on stdin (equal to what `jellymoon day` prints) and no text of the day in the arguments or environment, though a turn holds
+flags and an instruction; a new empty folder under the config dir, gone after; a wish or clash dropped for words the person did
+not type, an agent's words, an unknown project, a taken id or a dropped wish; the model's label and stars cleaned and cut;
+ten replies that are not page data, each an error with nothing on stdout; 9 wishes cut to 8 and 3 clashes to 2; an empty day
+with no call; and a `--model` that is not a name refused ([page.md](page.md)).

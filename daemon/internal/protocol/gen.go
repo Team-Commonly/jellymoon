@@ -2721,6 +2721,133 @@ func (x *ReaderDay) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(x))
 }
 
+// How a wish stands: working (in progress, and the answer when unsure), done (the person got it), needs_you (an agent waits on the person), let_go (the person dropped or replaced it).
+type WishState string
+
+const (
+	WishStateWorking  WishState = "working"
+	WishStateDone     WishState = "done"
+	WishStateNeedsYou WishState = "needs_you"
+	WishStateLetGo    WishState = "let_go"
+)
+
+// Valid reports whether x is one of the schema's values.
+func (x WishState) Valid() bool {
+	switch x {
+	case WishStateWorking, WishStateDone, WishStateNeedsYou, WishStateLetGo:
+		return true
+	}
+	return false
+}
+
+// Something a person wants to exist or be true, worked out from what they typed to their agents.
+type Wish struct {
+	// The wish's id on this page: w1 to w8, in page order.
+	ID string `json:"id"`
+	// A short name for the wish, in the model's words.
+	Label string `json:"label"`
+	// The person's own words for it, copied from one thing they typed that day.
+	Said string `json:"said"`
+	// The project the wish came from: a ReaderTurn's project.
+	Project string    `json:"project"`
+	State   WishState `json:"state"`
+	// One short text for each finished job an agent reported for the wish.
+	Stars []string `json:"stars"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *Wish) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"id", "label", "said", "project", "state", "stars"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("Wish: missing required field %q", k)
+		}
+	}
+	type plain Wish
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// Two things the person said that cannot both stand.
+type Clash struct {
+	// The id of the wish the first statement belongs to.
+	A string `json:"a"`
+	// The id of the wish the second statement belongs to.
+	B string `json:"b"`
+	// The person's own words for the first statement.
+	QuoteA string `json:"quote_a"`
+	// The person's own words for the second statement.
+	QuoteB string `json:"quote_b"`
+	// True when the later statement already replaced the earlier one, so nothing is left to rule on.
+	Settled bool `json:"settled"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *Clash) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"a", "b", "quote_a", "quote_b", "settled"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("Clash: missing required field %q", k)
+		}
+	}
+	type plain Clash
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// What a page was made from, so the page can say so.
+type PageRead struct {
+	// How many turns the reader collected for the day.
+	Turns int64 `json:"turns"`
+	// The projects those turns ran in, each once, in the order first typed in.
+	Projects []string `json:"projects"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *PageRead) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"turns", "projects"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("PageRead: missing required field %q", k)
+		}
+	}
+	type plain PageRead
+	return json.Unmarshal(b, (*plain)(x))
+}
+
+// One local day's page as data: the whole output of `jellymoon page`.
+type PageData struct {
+	// The local calendar day, as YYYY-MM-DD.
+	Day string `json:"day"`
+	// The day's wishes.
+	Wishes []Wish `json:"wishes"`
+	// The day's clashes.
+	Clashes []Clash  `json:"clashes"`
+	Read    PageRead `json:"read"`
+}
+
+// UnmarshalJSON rejects input that lacks a required key.
+func (x *PageData) UnmarshalJSON(b []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	for _, k := range []string{"day", "wishes", "clashes", "read"} {
+		if _, ok := keys[k]; !ok {
+			return fmt.Errorf("PageData: missing required field %q", k)
+		}
+	}
+	type plain PageData
+	return json.Unmarshal(b, (*plain)(x))
+}
+
 // Registry returns a fresh value for each object definition, by schema name. Tests and decoders use it.
 var Registry = map[string]func() any{
 	"Actor":                    func() any { return new(Actor) },
@@ -2817,6 +2944,10 @@ var Registry = map[string]func() any{
 	"PostOutput":               func() any { return new(PostOutput) },
 	"ReaderTurn":               func() any { return new(ReaderTurn) },
 	"ReaderDay":                func() any { return new(ReaderDay) },
+	"Wish":                     func() any { return new(Wish) },
+	"Clash":                    func() any { return new(Clash) },
+	"PageRead":                 func() any { return new(PageRead) },
+	"PageData":                 func() any { return new(PageData) },
 }
 
 // EventDirection is who sends each event type: s2c, c2s or local (daemon to TUI only).

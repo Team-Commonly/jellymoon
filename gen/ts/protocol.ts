@@ -967,6 +967,58 @@ export interface ReaderDay {
   turns: ReaderTurn[];
 }
 
+/** How a wish stands: working (in progress, and the answer when unsure), done (the person got it), needs_you (an agent waits on the person), let_go (the person dropped or replaced it). */
+export type WishState = "working" | "done" | "needs_you" | "let_go";
+export const WishStateValues = ["working","done","needs_you","let_go"] as const;
+
+/** Something a person wants to exist or be true, worked out from what they typed to their agents. */
+export interface Wish {
+  /** The wish's id on this page: w1 to w8, in page order. */
+  id: string;
+  /** A short name for the wish, in the model's words. */
+  label: string;
+  /** The person's own words for it, copied from one thing they typed that day. */
+  said: string;
+  /** The project the wish came from: a ReaderTurn's project. */
+  project: string;
+  state: WishState;
+  /** One short text for each finished job an agent reported for the wish. */
+  stars: string[];
+}
+
+/** Two things the person said that cannot both stand. */
+export interface Clash {
+  /** The id of the wish the first statement belongs to. */
+  a: string;
+  /** The id of the wish the second statement belongs to. */
+  b: string;
+  /** The person's own words for the first statement. */
+  quote_a: string;
+  /** The person's own words for the second statement. */
+  quote_b: string;
+  /** True when the later statement already replaced the earlier one, so nothing is left to rule on. */
+  settled: boolean;
+}
+
+/** What a page was made from, so the page can say so. */
+export interface PageRead {
+  /** How many turns the reader collected for the day. */
+  turns: number;
+  /** The projects those turns ran in, each once, in the order first typed in. */
+  projects: string[];
+}
+
+/** One local day's page as data: the whole output of `jellymoon page`. */
+export interface PageData {
+  /** The local calendar day, as YYYY-MM-DD. */
+  day: string;
+  /** The day's wishes. */
+  wishes: Wish[];
+  /** The day's clashes. */
+  clashes: Clash[];
+  read: PageRead;
+}
+
 /** Which data definition each event type carries (events.json x-variants). */
 export interface EventDataMap {
   "hello": Hello;

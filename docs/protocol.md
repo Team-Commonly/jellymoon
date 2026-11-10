@@ -8,7 +8,7 @@ defined in [GLOSSARY.md](GLOSSARY.md). Every definition appears once and is link
 How to read a table: **Required** says whether the field must be present. Limits in **Notes** come from the
 schema. Every definition that lists fields accepts only those fields; anything else fails validation. The exception is `Envelope.data`, `ConnectorCallInput.args`, `ConnectorCallOutput.result`, `ConnectorReceipt.result`: an object whose fields come from the rule in its description.
 
-Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#errors) · [Tokens](#tokens) · [Worker HTTP API](#worker-http-api) · [Socket events](#socket-events) · [Messages and cards](#messages-and-cards) · [Tasks](#tasks) · [Operations](#operations) · [Journal](#journal)
+Contents: [Ids, actors and harnesses](#ids-actors-and-harnesses) · [Errors](#errors) · [Tokens](#tokens) · [Worker HTTP API](#worker-http-api) · [Socket events](#socket-events) · [Messages and cards](#messages-and-cards) · [Tasks](#tasks) · [Operations](#operations) · [Journal](#journal) · [Page data](#page-data)
 
 ## Ids, actors and harnesses
 
@@ -1675,3 +1675,70 @@ One local calendar day of what a person typed to their agents: the reader's whol
 |---|---|---|---|
 | `day` | string | yes | The local calendar day, as YYYY-MM-DD. Limit: matches `^[0-9]{4}-[0-9]{2}-[0-9]{2}$` |
 | `turns` | list of [ReaderTurn](#def-ReaderTurn) | yes | The day's turns, oldest first. |
+
+## Page data
+
+What `jellymoon page` prints for one local day and the journal app's shell draws (ADR 0011, section 2). The reading call, one model call through the person's own harness, proposes the wishes and clashes; the daemon checks every one against the day's ReaderDay before it prints. None of it is sent to a pod.
+
+### Rules for Page data
+
+- A wish's said, and both quotes of a clash, are exact substrings of what the person typed that day (a ReaderTurn's said). The daemon drops a wish or a clash whose words the person did not type.
+- A wish's project is one of read.projects. A clash names two different wishes of the same page.
+- day, read and every wish id are written by the daemon, never taken from the model. label and stars are the model's words: control characters are taken out, credential shapes are replaced, and a text over its length is cut and ends in an ellipsis.
+- A reading that is not page data gives no page at all. A day with no turns is an empty page, made without a reading call.
+
+<a id="def-WishState"></a>
+### WishState
+
+How a wish stands: working (in progress, and the answer when unsure), done (the person got it), needs_you (an agent waits on the person), let_go (the person dropped or replaced it).
+
+One of: `working`, `done`, `needs_you`, `let_go`.
+
+<a id="def-Wish"></a>
+### Wish
+
+Something a person wants to exist or be true, worked out from what they typed to their agents.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `id` | string | yes | The wish's id on this page: w1 to w8, in page order. Limit: matches `^w[1-8]$` |
+| `label` | string | yes | A short name for the wish, in the model's words. Limit: 1 to 40 characters |
+| `said` | string | yes | The person's own words for it, copied from one thing they typed that day. Limit: 1 to 200 characters |
+| `project` | string | yes | The project the wish came from: a ReaderTurn's project. Limit: up to 255 characters |
+| `state` | [WishState](#def-WishState) | yes | How a wish stands: working (in progress, and the answer when unsure), done (the person got it), needs_you (an agent waits on the person), let_go (the person dropped or replaced it). |
+| `stars` | list of string | yes | One short text for each finished job an agent reported for the wish. Limit: up to 4 items, 1 to 60 characters |
+
+<a id="def-Clash"></a>
+### Clash
+
+Two things the person said that cannot both stand.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `a` | string | yes | The id of the wish the first statement belongs to. Limit: matches `^w[1-8]$` |
+| `b` | string | yes | The id of the wish the second statement belongs to. Limit: matches `^w[1-8]$` |
+| `quote_a` | string | yes | The person's own words for the first statement. Limit: 1 to 200 characters |
+| `quote_b` | string | yes | The person's own words for the second statement. Limit: 1 to 200 characters |
+| `settled` | boolean | yes | True when the later statement already replaced the earlier one, so nothing is left to rule on. |
+
+<a id="def-PageRead"></a>
+### PageRead
+
+What a page was made from, so the page can say so.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `turns` | integer | yes | How many turns the reader collected for the day. Limit: at least 0 |
+| `projects` | list of string | yes | The projects those turns ran in, each once, in the order first typed in. Limit: up to 255 characters |
+
+<a id="def-PageData"></a>
+### PageData
+
+One local day's page as data: the whole output of `jellymoon page`.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `day` | string | yes | The local calendar day, as YYYY-MM-DD. Limit: matches `^[0-9]{4}-[0-9]{2}-[0-9]{2}$` |
+| `wishes` | list of [Wish](#def-Wish) | yes | The day's wishes. Limit: up to 8 items |
+| `clashes` | list of [Clash](#def-Clash) | yes | The day's clashes. Limit: up to 2 items |
+| `read` | [PageRead](#def-PageRead) | yes | What a page was made from, so the page can say so. |

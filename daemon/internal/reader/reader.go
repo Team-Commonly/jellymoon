@@ -119,11 +119,11 @@ func session(file string, skip []string) []turn {
 			switch said, typed := typedBy(l); {
 			case typed:
 				if open = said != "" && !skipped(l.Cwd, skip); open {
-					turns = append(turns, turn{l.Timestamp, protocol.ReaderTurn{Tool: protocol.HarnessClaudeCode, Project: cut(project(l.Cwd), projectMax), Said: cut(said, saidMax)}})
+					turns = append(turns, turn{l.Timestamp, protocol.ReaderTurn{Tool: protocol.HarnessClaudeCode, Project: Cut(project(l.Cwd), projectMax), Said: Cut(said, saidMax)}})
 				}
 			case open && l.Type == "assistant":
 				if text := replyText(l.Message); text != "" {
-					turns[len(turns)-1].Reply = cut(redact.Credentials(text), replyMax)
+					turns[len(turns)-1].Reply = Cut(redact.Credentials(text), replyMax)
 				}
 			}
 		}
@@ -202,8 +202,8 @@ func skipped(cwd string, skip []string) bool {
 	return false
 }
 
-// cut shortens s to max characters; a text that was cut ends in an ellipsis.
-func cut(s string, max int) string {
+// Cut shortens s to max characters; a text that was cut ends in an ellipsis.
+func Cut(s string, max int) string {
 	if r := []rune(s); len(r) > max {
 		return string(r[:max-1]) + "…"
 	}

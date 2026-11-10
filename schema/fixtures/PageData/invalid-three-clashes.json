@@ -1,0 +1,56 @@
+{
+  "day": "2026-03-10",
+  "wishes": [
+    {
+      "id": "w1",
+      "label": "Uploader retry",
+      "said": "add a retry to the uploader",
+      "project": "alpha",
+      "state": "let_go",
+      "stars": [
+        "retry added"
+      ]
+    },
+    {
+      "id": "w2",
+      "label": "Fail fast uploads",
+      "said": "never retry uploads, fail fast",
+      "project": "alpha",
+      "state": "done",
+      "stars": [
+        "retry removed",
+        "tests pass"
+      ]
+    }
+  ],
+  "clashes": [
+    {
+      "a": "w1",
+      "b": "w2",
+      "quote_a": "add a retry",
+      "quote_b": "never retry uploads",
+      "settled": true
+    },
+    {
+      "a": "w1",
+      "b": "w2",
+      "quote_a": "add a retry",
+      "quote_b": "never retry uploads",
+      "settled": true
+    },
+    {
+      "a": "w1",
+      "b": "w2",
+      "quote_a": "add a retry",
+      "quote_b": "never retry uploads",
+      "settled": true
+    }
+  ],
+  "read": {
+    "turns": 3,
+    "projects": [
+      "alpha",
+      "beta"
+    ]
+  }
+}

@@ -45,4 +45,6 @@ review may rename terms, and a rename lands here and in `schema/` together.
 | **star** | One finished job an agent reported for a wish | a receipt, which the server stamps |
 | **clash** | Two things one person said that cannot both stand. Shown as an ask; the person's tap is the ruling | a merge conflict |
 | **reader** | The part of the daemon that collects one day of what the person typed from session logs | the reading call, which is the model's part |
+| **reading call** | The one headless model call, through the person's own harness with every tool off, that proposes a day's wishes and clashes | the reader, which is code; a run |
+| **page data** | What a page is drawn from: the day's wishes, stars and clashes after code has checked them (`schema/page.json`) | the reading call's raw reply |
 | **kit** | The fixed set of drawable pieces a page is arranged from. The model picks pieces; it never draws one (ADR 0011) | generated UI |

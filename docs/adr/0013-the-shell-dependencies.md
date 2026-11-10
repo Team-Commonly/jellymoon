@@ -12,7 +12,7 @@ note lists what that choice and the `layout` command brought into the workspace,
    the Linux package list in `.github/workflows/ci.yml` with Zed's `script/linux` at the new commit. GPUI is not
    patched; what it cannot do is worked around in the kit or left out.
 2. **Only the kit and the shell see GPUI.** Core and the `jellymoon` binary never depend on it (`entropy.toml` holds
-   the direction). In the kit it is the default feature `gpui`, in the shell the default feature `window`; without
+   the direction, and its `[forbidden]` table bars every package whose name starts with `gpui`). In the kit it is the default feature `gpui`, in the shell the default feature `window`; without
    them both crates build in seconds and the `layout` command still works. The lock file grew from 50 packages
    to 691, nearly all of it GPUI's.
 3. **`ttf-parser` reads advance widths from the bundled font files** for `BundledMeasure`, so `layout` prints the same

@@ -24,7 +24,7 @@ pub mod draw;
 pub use color::Color;
 pub use fonts::BundledMeasure;
 pub use geom::{Rect, Viewport};
-pub use layout::{PieceKind, Placed, TextRun, layout};
+pub use layout::{MAX_NOTES, MAX_PIECES, MORE_NOTES_ID, PieceKind, Placed, TextRun, layout};
 pub use scene::{Character, LegendItem, Mark, Mood, Note, Scene, State};
 pub use text::{FixedAdvance, Measure, Role};
 pub use theme::{Loaded, Theme, ThemeError};

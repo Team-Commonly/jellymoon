@@ -51,12 +51,54 @@ star = "star.svg"   # a file in the theme's own folder
 
 `Theme::load(path)` returns the theme and its warnings. An unknown key is
 ignored and named in a warning, so a theme for a newer kit still loads.
-Refused: an art path that leaves the theme's folder (a symlink counts), and
-an SVG that could run code or reach outside itself.
+
+## The door: what the kit holds its input to
+
+A scene and a theme file may come from anywhere, so each is held to stated
+bounds. A theme outside them is **refused**, never clamped, with the key named.
+
+| Input | Bound | Where |
+|---|---|---|
+| theme file | a regular file of at most 256 KiB | `theme::MAX_THEME_BYTES` |
+| art file | a regular file of at most 1 MiB, inside the theme's folder (a symlink out of it counts as outside) | `theme::MAX_ART_BYTES` |
+| any number in a theme | finite, and 0 to 10000 unless a line below says otherwise | `theme::RANGES` |
+| `metrics.width`, `metrics.height` | 200 to 10000 | |
+| `metrics.columns` | 1 to 12 | |
+| `metrics.max_scale` | 0.1 to 10 | |
+| `labels.max_chars` | 1 to 200 | |
+| every angle under `tilt` | -45 to 45 | |
+| an SVG | only the elements in `theme::SVG_ELEMENTS`; no DOCTYPE, entity, processing instruction, `on…` attribute, `xml:base`, `@import`, `javascript:`, or `href`/`url(` that is not a `#fragment` of the same file | `svg_refusal` |
+| notes in a scene | the first 12 are laid out, the rest only counted | `MAX_NOTES` |
+| options of a choice note | the first 4 | |
+| any text | 400 characters, a label `labels.max_chars`; cut with an ellipsis | `layout::MAX_TEXT_CHARS` |
+| pieces a layout returns | 5000; what would come after is dropped | `MAX_PIECES` |
+
+`Theme::load("theme.toml")`, a bare name, reads from the folder the program
+runs in. A theme built in code is not checked; `layout` still returns at most
+`MAX_PIECES` pieces and punches at most 160 holes, and the view draws at most
+1000 grid lines each way and 64 stripes on a tape.
+
+**Text is cleaned before it is measured or drawn** (`text::clean`): control
+characters, the line and paragraph separators U+2028 and U+2029, and every
+format character (direction marks, zero-width space, soft hyphen, word joiner,
+byte-order mark, tag characters) are removed, except the joiners U+200C and
+U+200D, which emoji and several scripts are written with. The kit carries no
+Unicode tables, so the list is written out in `src/text.rs`.
+
+**Notes that do not fit are counted, never dropped in silence.** Notes are
+placed in the scene's order. A list shows the rows that fit, at least one, and
+ends with `+N more`. The first note that does not fit and every note after it
+are left out together, and a last level sheet (a `Note` piece, id
+`MORE_NOTES_ID`, index the number of notes) says `+N more of M notes`. Layout
+time does not grow with the number of notes or rows.
 
 ## Limits
 
 GPUI rotates drawn paths only. Paper and tape tilt; **text never tilts**, and
 the kit does not fake it. GPUI cannot pick a weight on a variable font, so
-`assets/fonts/` holds static cuts pinned from the Google Fonts variable files
+`assets/fonts/` holds static cuts made from the Google Fonts variable files
 (Fredoka 500, Nunito 600 and 700, Caveat 600 and 700; OFL texts beside them).
+What is known of their source is what the files say in their own name tables:
+Fredoka `Version 2.001`, Nunito `Version 3.602`, Caveat `Version 2.000`. The
+commit of the Google Fonts repository they were cut from was not recorded, and
+the tool that cut them is not in this repository.

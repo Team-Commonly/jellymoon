@@ -1,14 +1,16 @@
-//! Reading a theme file. Unknown keys are ignored and reported, so a theme
-//! written for a newer kit still loads. Two things are refused, because they
-//! would make a theme more than data: a path that leaves the theme's folder,
-//! and an SVG that could run code.
+//! Reading a theme file. Unknown keys are ignored and reported, so a theme written for a newer kit still loads.
+//! Refused, because they would make a theme more than data or more than a page can hold: a file over its size
+//! (`bounds.rs`), a number that is not finite or is outside its range, a path that leaves the theme's folder, and an
+//! SVG that is not a regular file of pictures only.
 
 use std::fmt;
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use toml::{Table, Value};
 
+use super::bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, check};
 use super::{Theme, svg_refusal};
 
 /// A theme, and what the loader ignored on the way.
@@ -32,6 +34,13 @@ pub enum ThemeError {
         key: String,
         reason: String,
     },
+    /// The number at `key` is not finite or is outside `low` to `high`.
+    OutOfRange {
+        key: String,
+        value: String,
+        low: f64,
+        high: f64,
+    },
 }
 
 impl fmt::Display for ThemeError {
@@ -45,6 +54,9 @@ impl fmt::Display for ThemeError {
             ThemeError::RefusedSvg { key, reason } => {
                 write!(f, "the SVG for {key} is refused: {reason}")
             }
+            ThemeError::OutOfRange { key, value, low, high } => {
+                write!(f, "{key} = {value} is not a number from {low} to {high}")
+            }
         }
     }
 }
@@ -55,10 +67,14 @@ impl Theme {
     /// Parses theme text. Art names are checked by shape only, since there
     /// is no folder to resolve them in.
     pub fn from_toml(text: &str) -> Result<Loaded, ThemeError> {
+        if text.len() as u64 > MAX_THEME_BYTES {
+            return Err(ThemeError::Read(over(MAX_THEME_BYTES)));
+        }
         let mut table: Table = text.parse().map_err(|e: toml::de::Error| ThemeError::Parse(e.to_string()))?;
         let known = Table::try_from(Theme::default()).map_err(|e| ThemeError::Parse(e.to_string()))?;
         let mut warnings = Vec::new();
         prune(&mut table, &known, "", &mut warnings);
+        check(&table, "")?;
         let theme: Theme = table.try_into().map_err(|e: toml::de::Error| ThemeError::Parse(e.to_string()))?;
         for (key, name) in theme.art.entries() {
             if escapes_by_shape(name) {
@@ -70,9 +86,11 @@ impl Theme {
 
     /// Reads a theme file and checks every art file it names.
     pub fn load(path: &Path) -> Result<Loaded, ThemeError> {
-        let text = fs::read_to_string(path).map_err(|e| ThemeError::Read(e.to_string()))?;
+        let text = read_capped(path, MAX_THEME_BYTES).map_err(ThemeError::Read)?;
         let mut loaded = Theme::from_toml(&text)?;
-        let folder = path.parent().unwrap_or(Path::new(".")).to_path_buf();
+        // A bare file name has the empty path for a parent: that is the folder the program runs in.
+        let folder = path.parent().filter(|parent| !parent.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        let folder = folder.to_path_buf();
         if loaded.theme.name.is_empty()
             && let Some(stem) = path.file_stem()
         {
@@ -158,9 +176,28 @@ fn read_art(folder: &Path, key: &str, name: &str) -> Result<Option<String>, Them
         return Err(escape(key, name));
     }
     let refuse = |reason: String| ThemeError::RefusedSvg { key: format!("art.{key}"), reason };
-    let text = fs::read_to_string(&real).map_err(|_| refuse("it is not text".into()))?;
+    let text = read_capped(&real, MAX_ART_BYTES).map_err(refuse)?;
     match svg_refusal(&text) {
         Some(reason) => Err(refuse(reason)),
         None => Ok(Some(text)),
     }
+}
+
+fn over(max: u64) -> String {
+    format!("it is over {} KiB", max / 1024)
+}
+
+/// The text of a regular file of at most `max` bytes. A folder, a pipe or a device is not read at all.
+fn read_capped(path: &Path, max: u64) -> Result<String, String> {
+    let meta = fs::metadata(path).map_err(|e| e.to_string())?;
+    if !meta.is_file() {
+        return Err("it is not a regular file".into());
+    }
+    let mut text = String::new();
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    file.take(max + 1).read_to_string(&mut text).map_err(|_| "it is not text".to_string())?;
+    if meta.len() > max || text.len() as u64 > max {
+        return Err(over(max));
+    }
+    Ok(text)
 }

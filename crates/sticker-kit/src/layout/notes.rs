@@ -1,5 +1,6 @@
-//! Notes stack down the right-hand side, each under a strip of tape. A note
-//! that would run off the paper loses rows or is left out.
+//! Notes stack down the right-hand side, each under a strip of tape, in the scene's order. A list gives up rows to
+//! the notes after it. When the notes do not all fit, the first that does not and every one after it are left out,
+//! and a last small sheet says how many: no note goes without a word.
 
 use super::{Ctx, PieceKind, Placed, TextRun, line_height, piece, run};
 use crate::geom::Rect;
@@ -7,6 +8,12 @@ use crate::scene::{Note, Scene};
 use crate::text::{Role, wrap};
 
 const MAX_OPTIONS: usize = 4;
+
+/// How many notes are laid out at most. The ones after are only counted, so a scene of any length costs the same.
+pub const MAX_NOTES: usize = 12;
+
+/// The id of the sheet that says how many notes were left out. Its index is the number of notes in the scene.
+pub const MORE_NOTES_ID: &str = "more";
 
 /// A note being filled from the top down.
 struct Sheet {
@@ -24,45 +31,66 @@ pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
     let bottom = cx.paper().bottom() - cx.px(26.0);
     let mut top = cx.y(m.note_top);
     let gap = cx.px(48.0);
-    // A list is as long as the room it is given, so it is given what the notes after it do not need.
-    let needs: Vec<f32> =
-        scene.notes.iter().enumerate().map(|(index, note)| height_needed(cx, note, index, gap)).collect();
-    for (index, note) in scene.notes.iter().enumerate() {
-        let after: f32 = needs[index + 1..].iter().sum();
-        let room = bottom - top - if matches!(note, Note::List { .. }) { after } else { 0.0 };
+    let total = scene.notes.len();
+    let seen = &scene.notes[..total.min(MAX_NOTES)];
+    // What each note takes with the gap under it; for a list, the least it can be shown in.
+    let needs: Vec<f32> = seen.iter().enumerate().map(|(index, note)| height_needed(cx, note, index) + gap).collect();
+    let more = gap + more_sheet(cx, 0, total, top).rect.h;
+    // The notes placed are the first ones that fit, with room kept for the count when any is left out.
+    let (mut placed, mut used) = (0, 0.0);
+    for (index, need) in needs.iter().enumerate() {
+        let kept = if index + 1 < total { more } else { 0.0 };
+        if used + need - gap + kept > bottom - top {
+            break;
+        }
+        (placed, used) = (index + 1, used + need);
+    }
+    let kept = if placed < total { more } else { 0.0 };
+    let (mut after, mut drawn) = (used, 0);
+    for (index, note) in seen.iter().enumerate().take(placed) {
+        after -= needs[index];
+        // A list is as long as the room it is given: what the notes after it and the count do not need.
+        let room = if matches!(note, Note::List { .. }) { bottom - top - after - kept } else { f32::INFINITY };
         let Some((sheet, id, tilt)) = fill(cx, note, index, top, room) else {
-            continue;
+            break;
         };
-        let tilt = cx.theme.tilted(tilt);
+        drawn += 1;
         let mut paper = piece(PieceKind::Note, &id, index, sheet.rect);
-        paper.tilt_degrees = tilt;
+        paper.tilt_degrees = cx.theme.tilted(tilt);
         paper.text = sheet.runs;
         let tape_width = cx.px(104.0);
-        let mut tape = piece(
-            PieceKind::Tape,
-            &id,
-            index,
-            Rect::new(
-                sheet.rect.x + (sheet.rect.w - tape_width) / 2.0,
-                sheet.rect.y - cx.px(14.0),
-                tape_width,
-                cx.px(28.0),
-            ),
-        );
+        let tape_left = sheet.rect.x + (sheet.rect.w - tape_width) / 2.0;
+        let tape_rect = Rect::new(tape_left, sheet.rect.y - cx.px(14.0), tape_width, cx.px(28.0));
+        let mut tape = piece(PieceKind::Tape, &id, index, tape_rect);
         tape.tilt_degrees = cx.theme.tilted(cx.theme.tilt.note_tape);
         top = sheet.rect.bottom() + gap;
         cx.out.push(paper);
         cx.out.extend(sheet.options);
         cx.out.push(tape);
     }
+    if drawn < total {
+        let sheet = more_sheet(cx, total - drawn, total, top);
+        let mut paper = piece(PieceKind::Note, MORE_NOTES_ID, total, sheet.rect);
+        paper.text = sheet.runs;
+        cx.out.push(paper);
+    }
 }
 
-/// The height a note takes with the gap above it. A list takes what it is given, so it asks for nothing.
-fn height_needed(cx: &Ctx, note: &Note, index: usize, gap: f32) -> f32 {
-    if matches!(note, Note::List { .. }) {
-        return 0.0;
-    }
-    fill(cx, note, index, 0.0, f32::INFINITY).map_or(0.0, |(sheet, ..)| sheet.rect.h + gap)
+/// The level sheet that stands for the notes left out: one line, `+N more`.
+fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
+    let mut sheet = open(cx, top, cx.px(14.0), 330.0, (18.0, 22.0));
+    paragraph(cx, &mut sheet, &format!("+{left_out} more of {total} notes"), Role::RowSub, 1);
+    sheet.rect.h = sheet.cursor - sheet.rect.y + cx.px(18.0 - 9.0);
+    sheet
+}
+
+/// The height a note takes. A list is measured with two rows: one of its own and the line that counts the rest.
+fn height_needed(cx: &Ctx, note: &Note, index: usize) -> f32 {
+    let least = match note {
+        Note::List { title, rows } => list(cx, title, &rows[..rows.len().min(2)], 0.0, f32::INFINITY),
+        _ => fill(cx, note, index, 0.0, f32::INFINITY).map(|(sheet, ..)| sheet),
+    };
+    least.map_or(0.0, |sheet| sheet.rect.h)
 }
 
 fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32) -> Option<(Sheet, String, f32)> {

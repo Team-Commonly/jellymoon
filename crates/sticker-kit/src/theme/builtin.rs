@@ -192,8 +192,8 @@ impl Theme {
         Theme { name: "sticker".into(), ..Theme::default() }
     }
 
-    /// Level and quiet: greys and one accent, no tilt, no idle motion,
-    /// system fonts.
+    /// Level and quiet: greys and one accent, no tilt, system fonts. Nothing moves while the page is idle but the
+    /// small hop of a busy character.
     pub fn plain() -> Theme {
         Theme {
             name: "plain".into(),

@@ -2,6 +2,7 @@
 //! Every key is optional in a theme file and falls back to the built-in
 //! `sticker` theme, which is what each `Default` here returns.
 
+mod bounds;
 mod builtin;
 mod load;
 mod svg_check;
@@ -12,8 +13,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::color::Color;
 
+pub use bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, RANGES};
 pub use load::{Loaded, ThemeError};
-pub use svg_check::svg_refusal;
+pub use svg_check::{ELEMENTS as SVG_ELEMENTS, svg_refusal};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

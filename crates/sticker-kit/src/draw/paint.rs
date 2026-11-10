@@ -75,20 +75,20 @@ pub(crate) fn paint(shapes: &[Shape], origin: Point<Pixels>, window: &mut Window
     }
 }
 
+/// The most grid lines drawn each way and the most stripes on a tape, whatever sizes the theme gives.
+const MAX_GRID_LINES: usize = 1000;
+const MAX_STRIPES: usize = 64;
+
 fn paint_grid(rect: Rect, step: f32, color: Color, origin: Point<Pixels>, window: &mut Window) {
     if step < 2.0 || color.a == 0 {
         return;
     }
     let ink = hsla(color);
-    let mut x = rect.x + step;
-    while x < rect.right() - 1.0 {
+    for x in (1..=MAX_GRID_LINES).map(|i| rect.x + i as f32 * step).take_while(|x| *x < rect.right() - 1.0) {
         window.paint_quad(fill(bounds(Rect::new(x, rect.y, 1.0, rect.h), origin), ink));
-        x += step;
     }
-    let mut y = rect.y + step;
-    while y < rect.bottom() - 1.0 {
+    for y in (1..=MAX_GRID_LINES).map(|i| rect.y + i as f32 * step).take_while(|y| *y < rect.bottom() - 1.0) {
         window.paint_quad(fill(bounds(Rect::new(rect.x, y, rect.w, 1.0), origin), ink));
-        y += step;
     }
 }
 
@@ -127,14 +127,12 @@ fn paint_tape(rect: Rect, tilt: f32, a: Color, b: Color, origin: Point<Pixels>, 
     let mut stripe_color = b;
     stripe_color.a = 235;
     let band = (rect.h * 0.4).max(4.0);
-    let mut start = 0.0;
-    while start < rect.w + rect.h {
+    for start in (0..MAX_STRIPES).map(|i| i as f32 * 2.0 * band).take_while(|start| *start < rect.w + rect.h) {
         let stripe = [(start, 0.0), (start + band, 0.0), (start + band - rect.h, rect.h), (start - rect.h, rect.h)];
         let turned: Vec<(f32, f32)> = clip_x(&stripe, 0.0, rect.w)
             .into_iter()
             .map(|(u, v)| turn((rect.x + u, rect.y + v), centre, tilt))
             .collect();
         paint_polygon(&turned, stripe_color, origin, window);
-        start += 2.0 * band;
     }
 }

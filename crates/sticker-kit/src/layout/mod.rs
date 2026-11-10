@@ -53,8 +53,13 @@ pub struct Placed {
     pub text: Vec<TextRun>,
 }
 
+pub use notes::{MAX_NOTES, MORE_NOTES_ID};
+
 /// Longest text the kit carries for anything that is not a label.
-const MAX_TEXT_CHARS: usize = 400;
+pub const MAX_TEXT_CHARS: usize = 400;
+
+/// The most pieces a layout returns. A backstop against a scene nobody bounded: what would come after is dropped.
+pub const MAX_PIECES: usize = 5000;
 
 /// The scale from the theme's design canvas to the viewport.
 pub fn page_scale(theme: &Theme, viewport: Viewport) -> f32 {
@@ -80,6 +85,7 @@ pub fn layout(scene: &Scene, theme: &Theme, viewport: Viewport, measure: &dyn Me
     grid::characters(&mut cx, scene, top);
     notes::notes(&mut cx, scene);
     page::legend_and_footer(&mut cx, scene);
+    cx.out.truncate(MAX_PIECES);
     cx.out
 }
 

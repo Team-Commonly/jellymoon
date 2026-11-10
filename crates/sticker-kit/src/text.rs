@@ -81,12 +81,21 @@ impl Measure for FixedAdvance {
 
 const ELLIPSIS: char = '…';
 
-fn is_direction_mark(c: char) -> bool {
-    matches!(c as u32, 0x061C | 0x200E | 0x200F | 0x202A..=0x202E | 0x2066..=0x2069 | 0xFEFF)
+/// What nobody sees: the line and paragraph separators, and every format character (Unicode category Cf: direction
+/// marks, zero-width space, soft hyphen, word joiner, byte-order mark, tag characters and the rest) other than the
+/// joiners U+200C and U+200D, which emoji and several scripts are written with. The list is written out because the
+/// kit carries no Unicode tables.
+fn is_unseen(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x00AD | 0x0600..=0x0605 | 0x061C | 0x06DD | 0x070F | 0x0890 | 0x0891 | 0x08E2 | 0x180E
+            | 0x200B | 0x200E | 0x200F | 0x2028..=0x202E | 0x2060..=0x206F | 0xFEFF | 0xFFF9..=0xFFFB
+            | 0x110BD | 0x110CD | 0x13430..=0x1343F | 0x1BCA0..=0x1BCA3 | 0x1D173..=0x1D17A | 0xE0000..=0xE007F
+    )
 }
 
-/// Removes control characters and direction marks, turns line breaks and
-/// tabs into single spaces, and keeps at most `max_chars` characters.
+/// Removes control characters and what is [`is_unseen`], turns line breaks and tabs into single spaces, and keeps at
+/// most `max_chars` characters.
 pub fn clean(text: &str, max_chars: usize) -> String {
     let mut out = String::new();
     let mut count = 0;
@@ -96,7 +105,7 @@ pub fn clean(text: &str, max_chars: usize) -> String {
             pending_space = !out.is_empty();
             continue;
         }
-        if c.is_control() || is_direction_mark(c) {
+        if c.is_control() || is_unseen(c) {
             continue;
         }
         let needed = if pending_space { 2 } else { 1 };

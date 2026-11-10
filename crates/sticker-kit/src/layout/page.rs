@@ -11,6 +11,9 @@ use crate::text::Role;
 pub(crate) const BODY_TOP: f32 = 14.0;
 pub(crate) const BODY_BOTTOM: f32 = 154.0;
 
+/// The most holes punched down the paper's edge, whatever height a theme gives the page.
+const MAX_HOLES: usize = 160;
+
 pub(crate) fn header(cx: &mut Ctx, scene: &Scene) {
     cx.out.push(piece(PieceKind::Paper, "paper", 0, cx.paper()));
     holes(cx);
@@ -25,7 +28,7 @@ fn holes(cx: &mut Ctx) {
     let hole_x = cx.x(m.margin_x + 36.0);
     let mut y = m.margin_y + 70.0;
     let mut index = 0;
-    while y < m.height - m.margin_y - 26.0 {
+    while y < m.height - m.margin_y - 26.0 && index < MAX_HOLES {
         let rect = Rect::new(hole_x - radius, cx.y(y) - radius, 2.0 * radius, 2.0 * radius);
         cx.out.push(piece(PieceKind::Hole, "hole", index, rect));
         y += 66.0;

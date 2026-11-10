@@ -1,7 +1,8 @@
 //! The layout rules, with a fixed-advance measurer and no GPUI.
 
 use sticker_kit::{
-    Character, FixedAdvance, Mood, Note, PieceKind, Placed, Rect, Scene, State, Theme, Viewport, layout,
+    Character, FixedAdvance, MAX_NOTES, MAX_PIECES, MORE_NOTES_ID, Mood, Note, PieceKind, Placed, Rect, Scene, State,
+    Theme, Viewport, layout,
 };
 
 const DEFAULT: Viewport = Viewport { w: 1440.0, h: 900.0 };
@@ -175,22 +176,93 @@ fn a_long_list_gives_up_rows_to_the_notes_after_it_and_says_how_many() {
     }
 }
 
-#[test]
-fn a_note_too_tall_for_the_room_left_is_left_out_and_a_smaller_one_after_it_is_placed() {
-    let tall = Note::Choice {
-        id: "tall".into(),
+fn tall(id: &str) -> Note {
+    Note::Choice {
+        id: id.into(),
         title: "four long options".into(),
         options: vec!["an option that runs on for three whole lines of text, and then some more words".repeat(2); 4],
         footer: "a footer".into(),
         struck_first: false,
-    };
+    }
+}
+
+/// The notes placed, by id, and what the last sheet says when notes were left out.
+fn notes_and_count(placed: &[Placed]) -> (Vec<String>, Option<String>) {
+    let notes = of(placed, PieceKind::Note);
+    let more = notes.iter().find(|note| note.id == MORE_NOTES_ID).map(|note| note.text[0].text.clone());
+    (notes.iter().filter(|note| note.id != MORE_NOTES_ID).map(|note| note.id.clone()).collect(), more)
+}
+
+#[test]
+fn notes_that_do_not_fit_are_counted_on_a_last_sheet_in_both_themes() {
+    let rows: Vec<(String, String)> = (0..6).map(|i| (format!("row {i}"), "of six".to_string())).collect();
     let mut scene = Scene::sample();
-    scene.notes = vec![tall.clone(), tall, plain("last")];
+    scene.notes = vec![Note::List { title: "a list".into(), rows }, tall("a"), tall("b"), plain("small"), tall("c")];
+    for theme in [Theme::sticker(), Theme::plain()] {
+        for viewport in [DEFAULT, SMALL] {
+            let placed = place(&scene, &theme, viewport);
+            let (ids, more) = notes_and_count(&placed);
+            assert!(!ids.is_empty() && ids.len() < 5, "{ids:?}");
+            assert_eq!(
+                ids,
+                ["note-0", "a", "b", "note-3", "c"][..ids.len()],
+                "the first notes, in order, none skipped"
+            );
+            assert_eq!(more, Some(format!("+{} more of 5 notes", 5 - ids.len())));
+            let list = &of(&placed, PieceKind::Note)[0];
+            assert!(list.text.iter().any(|run| run.text == "row 0"), "the list keeps a row: {:?}", list.text);
+            let last = placed.iter().rfind(|p| p.piece == PieceKind::Note).unwrap();
+            assert_eq!((last.id.as_str(), last.index, last.tilt_degrees), (MORE_NOTES_ID, 5, 0.0));
+            let paper = of(&placed, PieceKind::Paper)[0].rect;
+            assert!(last.rect.inside(&paper), "the count is on the paper: {:?}", last.rect);
+            assert_sound(&scene, &theme, viewport);
+        }
+    }
+    scene.notes.truncate(2);
+    assert_eq!(notes_and_count(&place(&scene, &Theme::sticker(), DEFAULT)).1, None, "all fit: no count");
+}
+
+#[test]
+fn a_scene_of_any_size_is_laid_out_in_a_time_that_does_not_grow_with_its_notes() {
+    let mut scene = Scene::sample();
+    scene.notes = (0..200_000).map(|i| plain(&format!("note {i}"))).collect();
+    let start = std::time::Instant::now();
     let placed = place(&scene, &Theme::sticker(), DEFAULT);
-    let notes: Vec<(&str, usize)> =
-        of(&placed, PieceKind::Note).iter().map(|note| (note.id.as_str(), note.index)).collect();
-    assert_eq!(notes, [("tall", 0), ("note-2", 2)]);
-    assert_sound(&scene, &Theme::sticker(), DEFAULT);
+    assert!(start.elapsed() < std::time::Duration::from_secs(2), "{:?}", start.elapsed());
+    let (ids, more) = notes_and_count(&placed);
+    assert!(ids.len() <= MAX_NOTES);
+    assert_eq!(more, Some(format!("+{} more of 200000 notes", 200_000 - ids.len())));
+
+    let crowd = Scene::crowd(100_000);
+    let placed = place(&crowd, &Theme::sticker(), DEFAULT);
+    assert_eq!(placed.len(), MAX_PIECES, "the backstop: no layout returns more pieces than this");
+
+    // A theme built in code is not checked by the loader. Layout still ends, and punches no more holes than it may.
+    let mut endless = Theme::sticker();
+    endless.metrics.height = f32::INFINITY;
+    let placed = place(&Scene::sample(), &endless, DEFAULT);
+    assert_eq!(of(&placed, PieceKind::Hole).len(), 160);
+}
+
+#[test]
+fn a_long_text_is_carried_to_400_characters_and_a_label_stays_on_the_paper() {
+    let narrow = FixedAdvance(0.001);
+    let mut scene = Scene::sample();
+    scene.notes = vec![Note::Plain { title: "t".into(), body: "b".repeat(1000) }];
+    let placed = layout(&scene, &Theme::sticker(), DEFAULT, &narrow);
+    let body = &of(&placed, PieceKind::Note)[0].text[1].text;
+    assert_eq!(body.chars().count(), 401, "400 characters and the ellipsis");
+
+    // One column, hard against the paper's left edge, and a label allowed to be far wider than the room there.
+    let mut theme = Theme::sticker();
+    theme.metrics.columns = 1;
+    theme.labels.max_width = 2000.0;
+    theme.labels.max_chars = 200;
+    let scene = scene_with(vec![character(0, &"W".repeat(200), 0, State::Idle)]);
+    let placed = place(&scene, &theme, DEFAULT);
+    let (label, paper) = (of(&placed, PieceKind::Label)[0], of(&placed, PieceKind::Paper)[0]);
+    assert!(label.text[0].text.ends_with('…'), "the label was cut");
+    assert!(label.rect.x >= paper.rect.x + 7.0, "{:?} reaches the paper's edge at {}", label.rect, paper.rect.x);
 }
 
 #[test]

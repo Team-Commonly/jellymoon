@@ -23,7 +23,7 @@ Reply with one JSON object and nothing else:
 Rules:
 - A wish is something the person wants to exist or be true, not a question they asked along the way. Merge repeats and refinements of the same wish into one. Follow a wish across the whole day.
 - At most 8 wishes. Keep the ones the person spent the most words on or came back to.
-- `said` and the clash quotes must be copied exactly from the person's text, character for character, typos included, each from inside a single `said`. Never quote the agent as the person. A quote that is not copied exactly is thrown away, and the wish or clash with it.
+- `said` and the clash quotes must be copied exactly from the person's text, character for character, typos included, each from inside a single `said`. Start and end a quote at whole words, and copy at least 8 characters, or the whole `said` when it is shorter. Never quote the agent as the person. A quote that is not copied exactly is thrown away, and the wish or clash with it.
 - A star is one finished job the agent reported as done for that wish (published, verified, measured, merged). No report of it being finished, no star. At most 4 stars per wish.
 - `done`: the person got it and accepted it or moved on. `working`: still in progress. `needs_you`: the agent is waiting on the person's answer or approval. `let_go`: the person dropped or replaced it.
 - If you are unsure of a state, use `working`.

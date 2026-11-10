@@ -50,14 +50,32 @@ field, has a value of the wrong type, or names a state that is not one of the fo
 
 Otherwise each piece is checked on its own:
 
-- A wish is dropped unless its `said` is an exact substring of one thing the person typed that day and its `project` is one of
-  the day's. The agent's replies do not count. A wish with no label, or with an id an earlier wish used, is dropped too.
+- A wish is dropped unless its `said` is a quote of the person (the rule is below) and its `project` is one of the
+  day's. A wish with no label, or with an id an earlier wish used, is dropped too.
 - The first 8 wishes that pass are kept and given the ids `w1` to `w8`. The model's ids are only used to match clashes.
-- A clash is dropped unless both quotes are such substrings and it names two different kept wishes. The first 2 that pass are kept.
+- A clash is dropped unless both its quotes are quotes of the person and it names two different kept wishes. The
+  first 2 that pass are kept.
 - `label` and each star are the model's words: control characters and line breaks are taken out, credential shapes are replaced
   as the reader replaces them, and a text over its length (40 and 60 characters) is cut and ends in `…`. At most 4 stars are kept.
-- A quote over 200 characters is cut to its first 200, with no mark added, so it is still the person's words.
+- A quote over 200 characters is cut to its first 200, with no mark added, so it is still the person's words. The cut
+  is code's and can fall inside a word.
 - `day` and `read` (how many turns, which projects) are written from the reader's output. A field the model adds is not copied.
+
+### What a quote of the person is
+
+A wish's `said` and a clash's two quotes are each kept only when all of these hold. Spaces around a quote are dropped first.
+
+- It is an exact substring of one thing the person typed that day: one turn's `said`, as the reader printed it. The
+  agent's replies do not count.
+- It is at least 8 characters long, or it is the whole of what the person typed in that turn.
+- It does not start or end inside a word. Where the character at the quote's edge and its neighbour in the typed text
+  are both letters or digits, the quote is refused. That holds for scripts that put spaces between words, taken to be
+  every letter below U+2E80. Chinese, Japanese and Korean are above it and may be cut anywhere. Thai and other scripts
+  below it that use no spaces are held to the rule, so a quote of them must run from one space or mark to another.
+
+So the model cannot invent words, or show a letter or half a word as a quote. It can still choose which of the person's
+words to show: from "please do not delete the prod database" the quote "delete the prod database" is kept, and code
+cannot tell that it lost its "not". The page shows a quote as a quote for that reason.
 
 ## Not covered yet
 

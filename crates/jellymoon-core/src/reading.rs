@@ -19,6 +19,8 @@ const STARS_MAX: usize = 4;
 const LABEL_MAX: usize = 40;
 const STAR_MAX: usize = 60;
 const QUOTE_MAX: usize = 200;
+/// The shortest quote kept, in characters, unless it is everything the person typed in one turn.
+const QUOTE_MIN: usize = 8;
 
 /// One reading.
 #[derive(Debug, Clone)]
@@ -117,10 +119,29 @@ fn keep(day: &ReaderDay, reading: Reading, page: &mut PageData) {
     }
 }
 
-/// Returns the quote when it is the person's own words: an exact substring of one thing they typed that day. A quote
-/// over its length is cut first, with no mark added, so what is left is still theirs.
+/// Returns the quote when it is the person's own words: an exact substring of one thing they typed that day, of whole
+/// words, and long enough to mean something or else all of what they typed. That stops the model inventing words, and
+/// passing off a letter or half a word as a quote. It does not stop it choosing: "delete the database" is whole words
+/// of "do not delete the database". A quote over its length is then cut, with no mark added, so it is still theirs.
 fn typed(day: &ReaderDay, quote: &str) -> Option<String> {
+    let quote = quote.trim();
+    let long_enough = quote.chars().count() >= QUOTE_MIN;
+    let own = |said: &str| {
+        (long_enough || said == quote)
+            && said
+                .match_indices(quote)
+                .any(|(at, _)| !inside_a_word(said, at) && !inside_a_word(said, at + quote.len()))
+    };
+    if quote.is_empty() || !day.turns.iter().any(|turn| own(&turn.said)) {
+        return None;
+    }
     let end = quote.char_indices().nth(QUOTE_MAX).map_or(quote.len(), |(at, _)| at);
-    let quote = quote[..end].trim();
-    (!quote.is_empty() && day.turns.iter().any(|turn| turn.said.contains(quote))).then(|| quote.to_string())
+    Some(quote[..end].to_string())
+}
+
+/// Whether `at` splits a word of `said`: a letter or digit on both sides, in a script that puts spaces between words.
+/// Every letter below U+2E80 is taken for one; Chinese, Japanese and Korean, above it, are cut anywhere.
+fn inside_a_word(said: &str, at: usize) -> bool {
+    let spaced = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() && c < '\u{2e80}');
+    spaced(said[..at].chars().next_back()) && spaced(said[at..].chars().next())
 }

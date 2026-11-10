@@ -1,6 +1,8 @@
 //! F28: the app draws a page from page data using only the kit. Black-box: each test writes made-up page data, runs
 //! the built `jellymoon-app layout` on it and reads the placed pieces it prints, one JSON object a line.
 
+#[path = "f28/door.rs"]
+mod door;
 mod support;
 
 use serde_json::{Value, json};
@@ -221,6 +223,8 @@ fn a_kind_the_app_does_not_know_falls_back_to_a_plain_note() {
     let mut day = day();
     day["wishes"][3]["state"] = json!("paused");
     day["reminders"] = json!([{ "label": "Water the plants" }]);
+    // No star, so no list note: the clash and the two plain notes all fit the page.
+    (0..3).for_each(|wish| day["wishes"][wish]["stars"] = json!([]));
     let placed = pieces(&day, &[]);
 
     let little_ones: Vec<&str> = placed.iter().filter(|p| p.kind() == "character").map(Piece::id).collect();

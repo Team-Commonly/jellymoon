@@ -10,7 +10,8 @@ jellymoon-app --page <file, or - for stdin> [--theme sticker|plain] [--size <W>x
 
 The first prints where every piece goes. The second opens a window (default 1440x900); `t` switches the theme, and
 `JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. A wrong command line exits 2 with the usage on stderr; a file
-that cannot be read or is not page data exits 1 with one line. Both start `jellymoon-app: ` and print nothing on stdout.
+that cannot be read, is over 1 MiB or is not page data exits 1 with one line. Both start `jellymoon-app: ` and print
+nothing on stdout.
 
 ## From page data to pieces (`app/src/scene.rs`)
 
@@ -21,17 +22,50 @@ that cannot be read or is not page data exits 1 with one line. Both start `jelly
 | each star | a star on its wish's character (the kit draws at most 4) and a row in the list note "came true today" |
 | a clash | a choice note `clash-<n>` with both quotes; `settled` strikes the first |
 | `read` | the footer: how many things were typed, in which projects, and that the reading is unedited |
-| nothing at all | one plain note: "Nothing wished for yet today." |
+| no wish, and nothing set aside | one plain note: "Nothing wished for yet today." |
+| more than the app draws | the first note, "not everything is drawn", with the counts (next section) |
 
 **What the app has no piece for becomes a plain note** (`app/src/read.rs`). A wish whose `state` is a word this app
 does not know, and each item of a top-level part other than `day`, `wishes`, `clashes` and `read`, is set aside and
 drawn as a plain note with its label or text. Anything else that does not fit core's shapes refuses the whole file.
 
+## The door: a size, four lengths, and a count of what was left out
+
+Page data is untrusted input. `app/src/read.rs` holds it to these before anything else looks at it:
+
+| Bound | Number | Core writes at most |
+|---|---|---|
+| the page file, or what is piped in | 1 MiB (`MAX_PAGE_BYTES`); over it the file is refused | under 10 KiB |
+| wishes | the first 24 (`MAX_WISHES`) | 8 |
+| clashes | the first 8 (`MAX_CLASHES`) | 2 |
+| stars of one wish | the first 12 (`MAX_STARS`) | 4 |
+| items of parts the app does not know, all parts together in name order | the first 8 (`MAX_UNKNOWN`) | none |
+
+A list over its length is cut, not refused, and what is cut is never checked against core's shapes. The page then
+starts with a plain note, "not everything is drawn", whose body counts what went: `Left out of this page: 9976 wishes,
+12 clashes.` So the work `layout` does is bounded by these numbers, whatever the file holds.
+
+**Nothing is left out without a word.** Three places can run out of room, and each says how much it left out:
+
+- The list note shows the rows that fit and ends with `+N more`. When it is placed it keeps at least one row.
+- The notes are placed in page order: what was left out, came true today, the clashes, then the plain notes. The
+  first note that does not fit and every note after it are left out together, and a last small sheet says how many:
+  a `note` piece with the id `more`, its `index` the number of notes on the page, and the text `+N more of M notes`.
+  No note is skipped to make room for a later one. Measured at 1440x900 and at 960x640, in both themes: the list
+  and two clashes with one-line quotes fit; with a third the page shows the list, the first clash and
+  `+2 more of 4 notes`; and two clashes with the longest quotes core writes (200 characters, three lines each) do
+  not both fit, so the page shows the list, the first clash and `+1 more of 3 notes`.
+- A character shows at most 4 stars; every star is a row of the list note.
+
+The kit has its own door for scenes and theme files (`crates/sticker-kit/README.md`).
+
 ## `layout` output
 
 One JSON object a line, in the kit's order: `kind`, `id`, `index`, `x`, `y`, `w`, `h` (logical pixels, two decimals),
-`tilt` (degrees), `state` on a character, and `text`, a list of runs with `role`, `text` and their own box. A label
-longer than the theme allows is cut with an ellipsis; the list note keeps the whole label.
+`tilt` (degrees), `state` on a character, and `text`, a list of runs with `role`, `text` and their own box. Any text
+that is longer than its place is cut with an ellipsis: a label to the theme's width and length, a row of the list note
+to the note's width (the star's text gets up to 64% of the row, the wish's label what is left), a quote to three lines.
+No text holds a control or format character, so no line of the output is broken by one.
 
 ## Two ways to measure text
 

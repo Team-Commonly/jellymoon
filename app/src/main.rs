@@ -118,12 +118,14 @@ fn viewport(given: &str) -> Option<Viewport> {
 
 /// The page the file holds, or what is on stdin when the file is `-`.
 fn page(file: &str) -> Result<read::Page, Failure> {
-    let text = if file == "-" {
-        let mut text = String::new();
-        io::stdin().read_to_string(&mut text).map(|_| text)
+    // One byte more than a page may be is enough to know it is too large, however much there is to read.
+    let most = read::MAX_PAGE_BYTES as u64 + 1;
+    let mut bytes = Vec::new();
+    let got = if file == "-" {
+        io::stdin().take(most).read_to_end(&mut bytes)
     } else {
-        fs::read_to_string(file)
+        fs::File::open(file).and_then(|file| file.take(most).read_to_end(&mut bytes))
     };
-    let text = text.map_err(|e| Failure::Run(format!("reading {}: {e}", if file == "-" { "stdin" } else { file })))?;
-    read::page(&text).map_err(|why| Failure::Run(format!("the file is not page data: {why}")))
+    got.map_err(|e| Failure::Run(format!("reading {}: {e}", if file == "-" { "stdin" } else { file })))?;
+    read::bytes(bytes).map_err(|why| Failure::Run(format!("the file is not page data: {why}")))
 }

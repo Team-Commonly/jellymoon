@@ -6,16 +6,17 @@ use jellymoon_core::{Clash, PageRead, Wish, WishState};
 use sticker_kit::text::clean;
 use sticker_kit::{Character, LegendItem, Mark, Mood, Note, Scene, State};
 
-use crate::read::Page;
+use crate::read::{LeftOut, Page};
 
 /// The longest id a piece carries. Core's are `w1` to `w8`; a file may hold anything.
 const MAX_ID_CHARS: usize = 40;
 
 /// The page as the kit's pieces: a hero, one little one per wish in page order with one star per finished job, a list
-/// of what came true, one choice note per clash, and a plain note for each thing the app has no piece for.
+/// of what came true, one choice note per clash, and a plain note for each thing the app has no piece for. When the
+/// file held more than the app draws, the first note says how much was left out.
 pub fn scene(page: &Page) -> Scene {
     let data = &page.data;
-    let mut notes = Vec::new();
+    let mut notes: Vec<Note> = left_out(page.left_out).into_iter().collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
         notes.push(Note::Plain {
             title: "Nothing wished for yet today.".to_string(),
@@ -45,6 +46,21 @@ pub fn scene(page: &Page) -> Scene {
         .to_vec(),
         footer: footer(&data.read),
     }
+}
+
+/// The note that counts what the file held beyond what is drawn, when it held any.
+fn left_out(left_out: LeftOut) -> Option<Note> {
+    let counts = [
+        (left_out.wishes, "wishes"),
+        (left_out.clashes, "clashes"),
+        (left_out.stars, "stars"),
+        (left_out.unknown, "things in parts this app does not know"),
+    ];
+    let said: Vec<String> = counts.iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
+    (!said.is_empty()).then(|| Note::Plain {
+        title: "not everything is drawn".to_string(),
+        body: format!("Left out of this page: {}.", said.join(", ")),
+    })
 }
 
 /// The character that stands for a wish. Its colour only tells neighbours apart: the hero has the first hue, the
@@ -119,7 +135,8 @@ mod tests {
 
     fn page(wishes: Vec<Wish>, clashes: Vec<Clash>) -> Page {
         let read = PageRead { turns: 5, projects: vec!["alpha".to_string(), "beta".to_string()] };
-        Page { data: PageData { day: "2026-03-10".to_string(), wishes, clashes, read }, unknown: Vec::new() }
+        let data = PageData { day: "2026-03-10".to_string(), wishes, clashes, read };
+        Page { data, unknown: Vec::new(), left_out: LeftOut::default() }
     }
 
     fn clash(settled: bool) -> Clash {
@@ -154,7 +171,9 @@ mod tests {
                 ("w4", "Label of w4", State::Dimmed, 5),
             ]
         );
-        assert_eq!(scene.hero.map(|hero| hero.id), Some("me".to_string()));
+        assert_eq!(scene.characters.iter().map(|c| c.hue).collect::<Vec<_>>(), [1, 2, 3, 4]);
+        assert_eq!(little_one(4, &wish("w5", WishState::Done, &[])).hue, 1, "the hues take turns; the hero keeps 0");
+        assert_eq!(scene.hero.map(|hero| (hero.id, hero.hue)), Some(("me".to_string(), 0)));
         assert_eq!(scene.title, "what I wished for today");
         assert_eq!(scene.date_label, "Tue · Mar 10");
         assert_eq!(scene.legend.len(), 4);
@@ -196,6 +215,18 @@ mod tests {
         assert_eq!(scene.notes.len(), 3);
         let plain = Note::Plain { title: "reminders".to_string(), body: "Water the plants".to_string() };
         assert_eq!(scene.notes.last(), Some(&plain));
+    }
+
+    #[test]
+    fn what_was_left_out_is_the_first_note_and_names_only_what_went() {
+        let mut page = page(vec![wish("w1", WishState::Done, &["a"])], vec![clash(false)]);
+        page.left_out = LeftOut { wishes: 3, stars: 1, ..LeftOut::default() };
+        let first = Note::Plain {
+            title: "not everything is drawn".to_string(),
+            body: "Left out of this page: 3 wishes, 1 stars.".to_string(),
+        };
+        let notes = scene(&page).notes;
+        assert_eq!((notes.len(), notes.first()), (3, Some(&first)));
     }
 
     #[test]

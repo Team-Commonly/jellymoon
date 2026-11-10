@@ -1,0 +1,30 @@
+[package]
+name = "jellymoon"
+version = "0.1.0"
+description = "The jellymoon command: `day` prints what a person typed to their agents, `page` prints the day's page data."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "jellymoon"
+path = "src/main.rs"
+
+# The made-up harness the black-box tests run in place of Claude Code. A binary, not a script, so they run on Windows.
+# Cargo only hands a test the path of a binary of its own package, which is why it is declared here. Never shipped.
+[[bin]]
+name = "fake-claude"
+path = "tests/support/fake_claude.rs"
+test = false
+doc = false
+
+[dependencies]
+jellymoon-core.workspace = true
+lexopt.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

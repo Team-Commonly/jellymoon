@@ -1,0 +1,17 @@
+# The numbers `cargo xtask check` holds the repo to (crates/xtask/src/rules.rs). A budget may be raised only with a
+# reason in the same change; how long a function may be is in clippy.toml.
+
+# The most lines a Rust file may have.
+max_file_lines = 400
+
+# The most lines of Rust each crate may hold, tests included. Every crate under crates/ needs one.
+[budget]
+"crates/jellymoon-core" = 1250
+"crates/jellymoon" = 1000
+"crates/xtask" = 350
+
+# The workspace crates each crate may depend on. Core depends on none; the binary only on core.
+[depends]
+jellymoon-core = []
+jellymoon = ["jellymoon-core"]
+xtask = []

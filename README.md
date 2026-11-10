@@ -1,132 +1,67 @@
 # Jellymoon
 
-*Jellymoon, by [Commonly](https://commonly.me).* A multiplayer harness for the agents people already use.
+*Jellymoon, by [Commonly](https://commonly.me).* A journal of what you asked your coding agents for.
 
-It's for small teams where each engineer works with their own coding agent and the agents need to share one
-board and one set of decisions. People and their agents share a **pod**: its members, the task board, the
-messages and an event log.
+Jellymoon is a local desktop app that reads the Claude Code and Codex sessions already on your computer. It shows one
+**page** per day: each thing you wished for, a star for every job an agent finished on it, and a note wherever two
+things you said cannot both stand. Tapping that note settles it, and the answer reaches the agents that are running.
 
-## Status: pre-alpha
+It needs no account and no server. Your session logs stay on your computer; the one model call that reads a day goes
+through the harness you already use, under your own sign-in, with every tool turned off.
 
-Nothing here is ready for a team yet. There's no hosted pod to sign in to. You can run the server and the daemon
-yourself, on one computer, by following [Run it yourself](#run-it-yourself) below.
+## Status: early
 
-The first slice is being built test-first. Each step is a test in [`feature_list.json`](feature_list.json),
-most of them end to end, and `./init.sh` prints which ones pass.
+There is no app to install yet. What exists is the `jellymoon` command-line binary, which holds the logic the app will
+draw: `day` collects what you typed, `page` turns a day into page data. Each step of the plan is a test in
+[`feature_list.json`](feature_list.json), and `./init.sh` prints which ones pass. The design is
+[ADR 0011](docs/adr/0011-the-journal-app.md). The Mac comes first and Windows after.
 
-## How it's meant to work
-
-The pod doesn't run your agent. Your agent runs on your own computer: in Claude Code, or in Codex on a
-Mac. A small daemon there gets a wake from the pod when something is addressed to your agent, and starts
-a run.
-
-Someone assigns a task to an agent. The agent's run claims it and holds the claim while the run is alive.
-
-When the agent needs a person to decide something, it posts an ask. The ask carries the options, what
-happened, what the agent checked, what's at stake and what it recommends. A person rules on it once, and
-the agent wakes with the ruling.
-
-Each agent message carries a receipt that the pod stamps itself: the run, the harness, why the agent woke
-and how many tool calls the pod saw it make.
-
-The pod server is one Bun process on Postgres, serving every pod ([ADR 0006](docs/adr/0006-pod-state-server.md),
-"Deployed form"). The wire protocol is one schema in
-[`schema/`](schema/), and the TypeScript and Go types are generated from it. Terms are defined in
-[`docs/GLOSSARY.md`](docs/GLOSSARY.md), and the rest of the docs start at [`docs/INDEX.md`](docs/INDEX.md).
-
-## Run it yourself
-
-This runs a server on your own computer, on its in-process Postgres, with GitHub sign-in through an OAuth app of your
-own. Everything stays on `localhost`.
-
-1. **Tools and dependencies.** `./init.sh` installs Go and Bun into `.tools/` and runs the checks. Then put them on
-   your `PATH`: `export PATH="$PWD/.tools/bin:$PATH"`.
-2. **A GitHub OAuth app.** Create one under GitHub's Settings, Developer settings, OAuth Apps. Set its callback URL to
-   `http://localhost:8787/v1/auth/github/callback`.
-3. **Build the server, the web client and the CLI.**
-
-   ```sh
-   mkdir -p .tools/deployed
-   bun build server/src/main.ts --target=bun --external @electric-sql/pglite --outfile .tools/deployed/server.js
-   bun run build:web                       # writes web/dist
-   go build -o .tools/bin/jellymoon ./daemon/cmd/jellymoon
-   ```
-
-4. **Start the server.** `ENV=local` uses the in-process Postgres and keeps it in the `--persist-to` folder. It also
-   opens test routes, so keep the server on `localhost`.
-
-   ```sh
-   ENV=local PORT=8787 JM_WEB_DIR=web/dist \
-   GITHUB_CLIENT_ID=<your app's client id> GITHUB_CLIENT_SECRET=<its secret> \
-   bun .tools/deployed/server.js --persist-to .jellymoon-state
-   ```
-
-   `http://localhost:8787/healthz` answers 200 when it's up.
-5. **Sign in from the terminal.** The CLI keeps its settings and your sign-in in `JELLYMOON_HOME`:
-
-   ```sh
-   export JELLYMOON_SERVER=http://localhost:8787 JELLYMOON_HOME="$PWD/.jellymoon-home"
-   jellymoon login
-   ```
-
-   Open the page it prints, sign in with GitHub, and approve the code. The token is saved to
-   `$JELLYMOON_HOME/user-token`, readable only by you.
-6. **Create a pod.** Open `http://localhost:8787/`, sign in with GitHub, and use the New pod form. It opens the new
-   pod, and the pod id is the last part of its address (`/pod/<pod id>`). From a terminal, the API does the same with
-   the token from step 5, and the reply's `id` is the pod id:
-
-   ```sh
-   curl -s -X POST "$JELLYMOON_SERVER/v1/pods" -H "authorization: Bearer $(cat "$JELLYMOON_HOME/user-token")" \
-     -H 'content-type: application/json' -d '{"name":"My pod"}'
-   ```
-
-7. **Connect an agent.** `make acp-tools` installs the pinned agent adapters into `.tools/acp/`. Start the daemon in a
-   terminal of its own, with the same two exports as step 5, and tell it which adapter runs your harness:
-
-   ```sh
-   export JELLYMOON_HARNESS_CLAUDE_CODE="$PWD/.tools/acp/node_modules/.bin/claude-agent-acp"
-   jellymoon daemon start --foreground
-   ```
-
-   Then, in the first terminal, add the agent to the pod: `jellymoon agent add claude-code --pod <pod id>`. For Codex,
-   the harness is `codex`, and the variable is `JELLYMOON_HARNESS_CODEX` with the `codex-acp` adapter.
-8. **Open the pod** at `http://localhost:8787/pod/<pod id>` and @mention your agent.
-
-A real deploy, on a Postgres server behind TLS, needs `DATABASE_URL`, an https `PUBLIC_URL`, `TRUST_PROXY` and no
-`ENV`. The full list of settings is at the top of [`server/src/main.ts`](server/src/main.ts), and the checks the server runs at startup are in
-[`server/src/config.ts`](server/src/config.ts).
-
-## Build and check
-
-To build it and run the checks:
+## Build and run
 
 ```sh
-./init.sh        # installs Go and Bun into .tools/ if they are missing, runs the baseline, prints the scoreboard
-make hooks       # pre-commit: contracts in sync, entropy budgets, portable paths, no secrets or private names
+./init.sh        # installs the pinned Rust and gitleaks into .tools/, runs the checks, prints the scoreboard
+```
+
+`init.sh` installs nothing outside the repo. To use that toolchain in your shell:
+
+```sh
+export RUSTUP_HOME="$PWD/.tools/rustup" CARGO_HOME="$PWD/.tools/cargo" PATH="$PWD/.tools/cargo/bin:$PATH"
+```
+
+If you already have rustup, skip both: `cargo` reads `rust-toolchain.toml` and fetches the pinned toolchain itself.
+
+```sh
+cargo run -p jellymoon -- day                      # today's typed turns, as JSON
+cargo run -p jellymoon -- day --date 2026-11-09 --skip private-notes
+cargo run -p jellymoon -- page                     # today's page data; makes one call to `claude` on your PATH
+```
+
+[`docs/development/reader.md`](docs/development/reader.md) and [`page.md`](docs/development/page.md) say exactly what
+each command reads, keeps and checks. `page` spends your own Claude plan: one call per run.
+
+```sh
+make hooks       # pre-commit: format, the repo's own rules, a secret scan of what is staged
 make preflight   # what a pull request has to pass
 ```
 
+## The old harness
+
+Before November 2026 this repo held a different product, a shared space for people and their agents with a server and
+a daemon. That code is not in the tree. It stays reachable at the tag
+[`harness-final`](https://github.com/Team-Commonly/jellymoon/tree/harness-final);
+[ADR 0012](docs/adr/0012-restart-as-the-journal-app-in-rust.md) says what was removed and why.
+
 ## Licence
 
-Everything outside [`ee/`](ee/) is Apache-2.0 ([`LICENSE`](LICENSE)), except third-party files vendored into the
-repo, which keep their own licences. The vendored agent skills are listed in
-[`docs/skills/SOURCES.md`](docs/skills/SOURCES.md).
-
-`ee/` is for features of paid plans, under its own commercial licence ([`ee/LICENSE`](ee/LICENSE)), not
-Apache-2.0. It holds no code today, and nothing outside it imports from it.
-
-Agents you bring yourself are always free, and they never count toward a plan.
+Apache-2.0 ([`LICENSE`](LICENSE)), except third-party files vendored into the repo, which keep their own licences. The
+vendored agent skills are listed in [`docs/skills/SOURCES.md`](docs/skills/SOURCES.md).
 
 ## Contributing
 
-People and agents follow the same loop, written in [`AGENTS.md`](AGENTS.md). Setup and the pull request
-steps are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-Sign off every commit with `git commit -s`. The sign-off certifies the
-[Developer Certificate of Origin](https://developercertificate.org): that you have the right to submit the change
-under the licence of the files it touches, and that the change and your sign-off stay public.
+People and agents follow the same loop, written in [`AGENTS.md`](AGENTS.md). Setup and the pull request steps are in
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Sign off every commit with `git commit -s`; the sign-off certifies the
+[Developer Certificate of Origin](https://developercertificate.org).
 
 ## Security
 
-Please don't open a public issue for a security problem. Report it privately; [`SECURITY.md`](SECURITY.md)
-says how.
+Please don't open a public issue for a security problem. Report it privately; [`SECURITY.md`](SECURITY.md) says how.

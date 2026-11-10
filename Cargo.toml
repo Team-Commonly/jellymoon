@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/jellymoon-core", "crates/jellymoon", "crates/xtask"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[workspace.dependencies]
+jellymoon-core = { path = "crates/jellymoon-core" }
+jiff = { version = "0.2.42", features = ["serde"] }
+lexopt = "0.3.2"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tempfile = "3.27.0"
+toml = { version = "1.2.1", default-features = false, features = ["parse", "serde", "std"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+# Function length is clippy's job (clippy.toml sets the threshold). unwrap and expect are for tests only.
+[workspace.lints.clippy]
+too_many_lines = "deny"
+unwrap_used = "deny"
+expect_used = "deny"

@@ -3,41 +3,35 @@
 Agents and people follow the same loop; it lives in [`AGENTS.md`](AGENTS.md). This page is the setup.
 
 ## Setup
-1. `./init.sh` — installs Go and Bun (versions in `.tool-versions`) into `.tools/` inside the repo, then the
-   repo-local dependencies, runs the baseline and prints the feature scoreboard. Nothing to install first.
-2. `make hooks` — installs this repo's pre-commit (contracts in sync, entropy budgets, no secrets).
+1. `./init.sh` installs the Rust named in `rust-toolchain.toml` and a pinned `gitleaks` into `.tools/` inside the repo,
+   runs the baseline and prints the feature scoreboard. Nothing to install first on macOS or Linux.
+2. `make hooks` installs this repo's pre-commit (format, the repo's own rules, a secret scan of what is staged).
+
+On Windows, install rustup yourself and run the four commands `make preflight` runs: `cargo fmt --all --check`,
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo xtask check` and `cargo test --workspace`.
 
 ## What to work on
-The first `feature_list.json` feature with `passes: false` and no `blockedBy`, or an issue labelled
-`ready`. One feature per pull request.
+The first `feature_list.json` feature with `passes: false` and no `blockedBy`, or an issue labelled `ready`. One
+feature per pull request.
 
 ## Pull requests
-- Base `main`. Fill in [`.github/pull_request_template.md`](.github/pull_request_template.md): the
-  feature, the done-test with its output, lines added and removed.
+- Base `main`. Fill in [`.github/pull_request_template.md`](.github/pull_request_template.md): the feature, the
+  done-test with its output, lines added and removed.
 - Every commit carries a `Signed-off-by` line matching its author: use `git commit -s`. That certifies the
-  [Developer Certificate of Origin](https://developercertificate.org). CI's `dco` job checks that each commit a pull request adds, merges excluded, has a `Signed-off-by` line matching its author; a maintainer who re-authors an outside change signs off the new commits.
-- `make preflight` is what a pull request must pass, and it must pass locally. CI runs on every pull request and every push to
-  `main`, runs the checks `make preflight` runs, and a failing check run blocks a land; CI never lands anything, and `make land` stays the only
-  merge path. CodeRabbit reviews pull requests; at a PR's first head its review is information for the author.
-- A pull request from a fork or an outside account is not run by the maintainers' tooling and is not landed with `make land`:
-  a maintainer re-authors the change through their own loop. Maintainer PRs land with `make land`, and every land needs a
-  ledger `PASS` at the head, admitted one of two ways ([`docs/development/landing.md`](docs/development/landing.md)):
-  - a verifier's ledger line passes at the head (the one local review, at a PR's first head);
-  - or, for a later head (a fix, or a merge of main), the CodeRabbit path: the one local review is on the PR's history, no
-    `FAIL` is recorded at this head, CodeRabbit reviewed this exact head with no unanswered Major or Critical thread, and every
-    commit the PR adds is authored and committed by a trusted maintainer. Land reads CodeRabbit's review and threads on GitHub
-    itself; that is the only GitHub review text it consults.
-  Every land also needs the review's pod verdict at the head (see `AGENTS.md`). The secret scans can only refuse a land, never
-  waive either requirement. Local verification is the authority. A failed check run on the head refuses the land, and land
-  itself does not wait for CI (no check runs is fine); the ruleset on `main` then holds the merge until the required checks pass.
-- A new dependency or module needs a short note in `docs/adr/`.
+  [Developer Certificate of Origin](https://developercertificate.org). CI's `dco` job checks each commit a pull request adds.
+- `make preflight` must pass locally. CI runs the same checks on macOS, Linux and Windows.
+- A pull request merges when CI is green on its head and a review of that head ends in `GATE: PASS`
+  ([`docs/development/workflow.md`](docs/development/workflow.md)). A maintainer merges it.
+- Code from a pull request by someone outside the maintainers is read, never run on a maintainer's machine, until a
+  maintainer has reviewed it. Expect the first reply to come from reading your diff.
+- A new dependency or crate needs a short note in `docs/adr/`.
 
-## The deny check
-`make preflight` runs `scripts/check-private.mjs`, which fails on private-looking text in tracked files: operator paths, personal emails, internal ids, cloud identifiers, internal note labels and section marks (`§`) that cite no public standard. Names, handles and project ids have no safe pattern: a maintainer supplies them in the `JM_PRIVATE_NAMES` environment variable, and without it that class is skipped. The names class runs in CI once a `JM_PRIVATE_NAMES` repository secret is set (it is not yet), or locally when the operator exports `JM_PRIVATE_NAMES`; it does not run during `make land`. The names class also checks tracked file paths and reports one as `path: names` without printing it. The check never prints matched text, only `file:line: class`. On a false positive, reword the text; if the pattern is wrong for honest input, narrow it in `scripts/check-private.mjs` with a clean case, in the same pull request.
+## Session logs are private
+Jellymoon reads people's agent session logs. Never put text from a real log in a test, a fixture, an issue or a pull
+request. Type fixtures by hand, with made-up projects, words and credential shapes.
 
 ## Licence
-Core is Apache-2.0 (`LICENSE`); contributions are accepted under it. `ee/` is under its own commercial licence
-(`ee/LICENSE`) and does not accept outside contributions. See `docs/adr/0004-open-core-boundary.md`.
+Apache-2.0 (`LICENSE`); contributions are accepted under it.
 
 ## Reporting a security issue
 Don't open a public issue. Follow [`SECURITY.md`](SECURITY.md): GitHub's private vulnerability reporting.

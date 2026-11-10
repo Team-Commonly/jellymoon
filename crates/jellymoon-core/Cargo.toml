@@ -1,0 +1,17 @@
+[package]
+name = "jellymoon-core"
+version = "0.1.0"
+description = "The journal app without a screen: the reader, credential redaction, page data and the reading call."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+jiff.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

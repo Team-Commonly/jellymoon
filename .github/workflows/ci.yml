@@ -1,86 +1,85 @@
 name: CI
-# Runs on every pull request and every push to main, and runs the checks `make preflight` runs. A failing check run blocks a land
-# (docs/development/landing.md). CI never lands anything: `make land` stays the only merge path.
-
-# Verification loop (docs/development/workflow.md). Each check is a job here. A job passes only by running what it is named
-# for: when the code it needs is missing, or it ran nothing, it fails. A job that cannot test anything is removed, not stubbed.
-# Budget: 5 minutes wall clock for the whole workflow.
+# The checks `make preflight` runs, on every pull request and every push to main. A pull request merges only when
+# these are green on its head (docs/development/workflow.md). No job holds a secret, deploys, or writes to the repo.
 
 on:
   workflow_dispatch:
   # Never `pull_request_target`: it runs with secrets.
   pull_request:
   push:
-    # land/** is `make land`'s own ref: it pushes the merge commit of a PR there so these checks run on the exact tree it will merge
-    # (docs/development/landing.md, step 5).
-    branches: [main, 'land/**']
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# Read-only by default. The only secret is the names list of the deny check (private; GitHub withholds it from fork pull
-# requests, so it is empty there). No job deploys anywhere or needs a cloud account.
 permissions:
   contents: read
 
 jobs:
-  gen-drift:
-    runs-on: ubuntu-latest
-    # Runs make test-ts (fixtures, generated types, land/scan self-tests): 158-188 s on 11-09. A timeout reads as cancelled, which land refuses.
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
-        with:
-          bun-version-file: .tool-versions
-      - uses: ./.github/actions/setup-go
-      - name: Portable (no symlink out of the repo, no machine-local path)
-        run: make portable
-      - name: Generated contracts match the schema
-        run: make check-gen
-      - name: Fixtures validate (ajv) and generated TS type-checks
-        run: make test-ts
-      - name: Entropy gate (budgets, ratchet, dead code, boundaries)
-        run: make entropy
-
-  private:
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
+  check:
+    # The app supports the Mac first and Windows after (ADR 0011, section 4), so all three run from the first commit.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+      - name: The toolchain rust-toolchain.toml pins, with rustfmt and clippy
+        run: rustup toolchain install
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          bun-version-file: .tool-versions
-      - name: Nothing private in tracked files (the deny check)
-        # Only this step sees the names list. It is empty on fork pull requests, where GitHub withholds secrets; the check
-        # then says the names class was skipped. The check prints `file:line: class`, never the matched text.
-        env:
-          JM_PRIVATE_NAMES: ${{ secrets.JM_PRIVATE_NAMES }}
-        run: make private
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: The repo's own rules (file size, LOC budgets, portable paths, crate direction)
+        run: cargo xtask check
+      - name: Tests
+        run: cargo test --workspace
 
   secrets:
     runs-on: ubuntu-latest
-    # 5, was 4: same fallback headroom as the go job.
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: ./.github/actions/setup-go
-      - name: Full history of all branches (merge commits included) and the tracked tree (gitleaks)
-        run: make secrets-all
+      - name: gitleaks, pinned and checksum-checked (the same release init.sh installs)
+        run: |
+          set -euo pipefail
+          tarball=gitleaks_8.30.1_linux_x64.tar.gz
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/$tarball" "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/$tarball"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" gitleaks
+      - name: Every commit the pull request adds; on a push, everything reachable from the head
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = pull_request ]; then range="$BASE..$HEAD"; else range=HEAD; fi
+          "$RUNNER_TEMP/gitleaks" git --log-opts="-m $range" --redact --no-banner .
 
-  # On a pull request, and on a land/** push (the merge commit `make land` builds: its parents are main's tip and the PR head, and the same
-  # range is checked): every commit the PR adds must be signed off by its own author (DCO, CONTRIBUTING.md).
+  # Every commit a pull request adds must be signed off by its own author (DCO, CONTRIBUTING.md).
   dco:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/land/'))
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -92,10 +91,8 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = push ]; then BASE=$(git rev-parse HEAD^1); HEAD=$(git rev-parse HEAD^2); fi
           commits=$(git rev-list --no-merges "$BASE..$HEAD")
           if [ -z "$commits" ]; then echo "::error::no commits found in $BASE..$HEAD"; exit 1; fi
           fail=0
@@ -106,143 +103,3 @@ jobs:
             fi
           done
           exit $fail
-
-  worker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
-        with:
-          bun-version-file: .tool-versions
-      - name: Worker unit tests (bun test fails when it finds none)
-        run: make test-worker
-
-  go:
-    runs-on: ubuntu-latest
-    # 5, was 3: when setup-go fails, its three 504 retries plus the dl.google.com fallback download come before any test.
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-go
-      - name: Daemon, ACP and TUI tests
-        run: make test-go
-
-  e2e-local:
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: ci
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
-        with:
-          bun-version-file: .tool-versions
-      - uses: ./.github/actions/setup-go
-      - name: The contract suite against the pod-state server on a Postgres service container (make e2e-c)
-        run: |
-          if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL is unset: this job must run on Postgres, never on the in-process fallback"; exit 1; fi
-          if [ ! -d e2e ]; then echo "::error::no e2e/ directory"; exit 1; fi
-          make e2e-c
-
-  e2e-worker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
-        with:
-          bun-version-file: .tool-versions
-      - uses: ./.github/actions/setup-go
-      - name: The contract suite against the Worker under wrangler dev --local (make e2e-a)
-        run: |
-          if [ ! -d e2e ]; then echo "::error::no e2e/ directory"; exit 1; fi
-          make e2e-a
-
-  browser:
-    # The browser specs (web-e2e/, docs/development/browser-specs.md): each spec at 390x844 and 1440x900 in Chromium, against the
-    # pod-state server on the in-process Postgres (ENV=local) with the fake agent, never a deployed one. The browser is installed
-    # here, in the job, at the version the lockfile pins; it is never installed on a laptop for this.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
-        with:
-          bun-version-file: .tool-versions
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: 22
-      - name: Dependencies (the lockfile's Playwright)
-        run: make node_modules
-      - name: Chromium and its system libraries, at the pinned Playwright's version
-        run: node_modules/.bin/playwright install --with-deps chromium
-      - name: Build the web client and run the browser specs (make e2e-web)
-        run: |
-          if [ ! -d web-e2e ]; then echo "::error::no web-e2e/ directory"; exit 1; fi
-          make e2e-web
-      - name: Report and traces of a failed run
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: browser-specs
-          path: |
-            web-e2e/report/
-            web-e2e/test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  e2e-deployed:
-    # The server as a self-hoster runs it: the PR's own release bundle, started as its own process against a Postgres service
-    # container (make deployed-boot), then the contract suite with that bundle as the server under test. No secret, no cloud
-    # account, so it runs on pull requests from forks too.
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: ci
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
-        with:
-          bun-version-file: .tool-versions
-      - uses: ./.github/actions/setup-go
-      - name: Boot the release bundle on Postgres and run the contract suite against it (make e2e-deployed)
-        run: |
-          if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL is unset: this job must run on Postgres, never on the in-process fallback"; exit 1; fi
-          make e2e-deployed

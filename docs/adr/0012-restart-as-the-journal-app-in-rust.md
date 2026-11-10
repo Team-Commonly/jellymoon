@@ -72,7 +72,7 @@ The note each direct dependency owes, for the seven the workspace starts with. V
 |---|---|---|---|
 | `serde` | core | Deriving the wire shapes, and the few fields the reader takes from a log line | Reading and writing JSON by hand: the types would stop being the contract |
 | `serde_json` | core; the binary's tests | Decoding log lines and the harness's reply, printing the day and the page | Nothing else was weighed: it is the JSON crate serde is written for |
-| `regex` | core | The credential shapes and the blocks a harness adds to a prompt. It matches in time linear in the text, which matters on untrusted logs | Hand-written scanners for a dozen key shapes |
+| `regex` | core | The credential shapes and the blocks a harness adds to a prompt. One search takes time linear in the text, which matters on untrusted logs. A `replace_all` is many searches and can rescan, so each shape that can stay open has a pattern and a pass of its own, and cleaning reads only a window of a text; the megabyte timing tests are the check | Hand-written scanners for a dozen key shapes |
 | `jiff` | core | The edges of a local calendar day and the `HH:MM` of a turn. It honours `TZ`, and bundles the zone database on Windows, which has none | `chrono` with `chrono-tz` (two crates for the one job); `time` (no zone database) |
 | `tempfile` | core; tests | The call's own folder, under a name nobody can guess, removed when the call ends however it ends. Scratch folders in tests | Naming and removing the folder by hand |
 | `lexopt` | the binary | Reading the command line. It has no dependencies of its own | A derive-macro parser such as `clap`: far more code than two commands and four flags need |

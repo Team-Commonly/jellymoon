@@ -225,14 +225,20 @@ fn reply(line: &Line) -> Option<String> {
 }
 
 /// Names the folder a turn ran in: the repo's folder inside a harness worktree of it, the folder's last segment
-/// otherwise. A folder is written with `\` on Windows, so both separators count on every system.
+/// otherwise. A folder is written with `\` on Windows, so both separators count on every system. One walk that holds
+/// three segments at a time: a log's folder can be any length, and nothing here grows with it.
 fn project(cwd: &str) -> &str {
-    let segments: Vec<&str> = cwd.split(['/', '\\']).collect();
-    let in_worktree = |at: &[&str]| !at[0].is_empty() && at[1] == ".claude" && at[2] == "worktrees";
-    if let Some(at) = segments.windows(4).find(|at| in_worktree(at)) {
-        return at[0];
+    let (mut before, mut last) = ([""; 3], "");
+    for segment in cwd.split(['/', '\\']) {
+        if !before[0].is_empty() && before[1] == ".claude" && before[2] == "worktrees" {
+            return before[0];
+        }
+        before = [before[1], before[2], segment];
+        if !segment.is_empty() {
+            last = segment;
+        }
     }
-    segments.into_iter().rfind(|segment| !segment.is_empty()).unwrap_or_default()
+    last
 }
 
 fn skipped(place: &str, skip: &[String]) -> bool {
@@ -261,5 +267,29 @@ mod tests {
         let said = "a <system-reminder>LEAK\n</system-reminder>b <artifact-view-context x>LEAK</artifact-view-context>c \
                     <artifact-content-authored-by-others />d (The JSON line above is LEAK)e";
         assert_eq!(without_blocks(said), "a b c d e");
+    }
+
+    // A folder of megabytes of slashes is walked once, three segments in hand, with no list of them made.
+    #[test]
+    fn a_project_is_named_from_a_folder_of_any_length_in_one_walk() {
+        let names = [
+            ("/work/alpha", "alpha"),
+            ("/work/alpha/", "alpha"),
+            ("/work/beta/.claude/worktrees/fix-login/web", "beta"),
+            (r"C:\work\beta\.claude\worktrees\fix", "beta"),
+            ("/a/.claude/worktrees/x/b/.claude/worktrees/y", "a"),
+            ("/.claude/worktrees/x", "x"),
+            ("/work/beta/.claude/worktrees", "worktrees"),
+            ("", ""),
+        ];
+        for (cwd, want) in names {
+            assert_eq!(project(cwd), want, "{cwd}");
+        }
+        let slashes = "/".repeat(8 << 20);
+        let start = std::time::Instant::now();
+        assert_eq!(project(&slashes), "");
+        assert_eq!(project(&format!("{slashes}gamma{slashes}")), "gamma");
+        assert_eq!(project(&format!("{slashes}beta/.claude/worktrees/x{slashes}")), "beta");
+        assert!(start.elapsed() < std::time::Duration::from_secs(5), "{:?}", start.elapsed());
     }
 }

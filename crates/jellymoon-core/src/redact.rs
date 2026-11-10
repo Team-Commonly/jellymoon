@@ -140,17 +140,17 @@ pub(crate) fn line(text: &str, limit: usize) -> String {
 
 fn bounded(text: &str, limit: usize, tidy: fn(&str) -> String) -> String {
     let (window, whole) = start(text, limit + WINDOW);
-    let cleaned = tidy(&credentials(window));
+    let cleaned = credentials(window);
+    let tidied = tidy(&cleaned);
     if whole {
-        return cut(&cleaned, limit);
+        return cut(&tidied, limit);
     }
     // The window cut the text, and its last word may be the head of a secret whose rest was never read. That word is
-    // far past the cut unless cleaning took out or squeezed most of the window; then everything before it is kept. A
-    // replacement that reaches the end (a PEM key's) hides what it stands for.
-    let reaches = cleaned.ends_with(REPLACED) || cleaned.chars().count() >= limit + SECRET_MAX;
-    let kept =
-        if reaches { cleaned.as_str() } else { cleaned.rfind(char::is_whitespace).map_or("", |at| &cleaned[..at]) };
-    if kept.trim_end().is_empty() { String::new() } else { cut(&format!("{}…", kept.trim_end()), limit) }
+    // far past the cut unless cleaning took out or squeezed most of the window; then only what stands before it is
+    // kept. A replacement that reaches the end (a PEM key's) hides what it stands for.
+    let reaches = tidied.ends_with(REPLACED) || tidied.chars().count() >= limit + SECRET_MAX;
+    let kept = if reaches { tidied } else { tidy(cleaned.rfind(char::is_whitespace).map_or("", |at| &cleaned[..at])) };
+    if kept.is_empty() { kept } else { cut(&format!("{kept}…"), limit) }
 }
 
 #[cfg(test)]

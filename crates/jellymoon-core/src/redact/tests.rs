@@ -252,6 +252,8 @@ fn a_key_that_starts_just_before_the_windows_end_leaves_nothing_visible() {
         assert_eq!(shown(&fill(lead, filler, SAID), SAID), want_shown, "{name}");
         assert_eq!(line(&fill(lead, filler, 300), 300), want_line, "{name}, on one line");
     }
+    let nothing_after = format!("say {}", "\u{200b}".repeat(SAID + WINDOW));
+    assert_eq!(shown(&nothing_after, SAID), "say…", "a word with a space after it is whole");
     // The same for a password in a URL and a key of unknown make, which have no prefix to be known by.
     let password = format!("see x://u:{}@host", ["hunter", "2secret"].concat());
     let unknown = format!("use {}", "aB3+/x9Z".repeat(5));

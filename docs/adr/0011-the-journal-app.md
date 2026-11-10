@@ -61,6 +61,12 @@ where it goes and how it moves. A day that needs a piece the kit lacks falls bac
 
 This keeps every page in one look, keeps frame time in our hands, and means nothing in a log can change what the app does.
 
+The look is a **theme**, kept apart from the kit's rules. Page data says what is on a page, layout says where, and a
+theme says how each piece looks: its colours, fonts, paper, the art for each piece and how much things move. The sticker
+journal is the first theme; a plain one, level and quiet for people who want something more serious, is built beside it
+so the seam is proved by two users. Extra pieces (a pack) are added the same way. A theme or a pack is data and art
+only. It carries no code, so installing one cannot change what the app does.
+
 ### 4. The shell is Rust and GPUI, one shell for Mac and Windows
 
 The owner's ruling (2026-11-10): the app supports Windows, and Windows need not be first class. So the Mac is where the

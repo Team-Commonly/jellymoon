@@ -48,3 +48,5 @@ review may rename terms, and a rename lands here and in `schema/` together.
 | **reading call** | The one headless model call, through the person's own harness with every tool off, that proposes a day's wishes and clashes | the reader, which is code; a run |
 | **page data** | What a page is drawn from: the day's wishes, stars and clashes after code has checked them (`schema/page.json`) | the reading call's raw reply |
 | **kit** | The fixed set of drawable pieces a page is arranged from. The model picks pieces; it never draws one (ADR 0011) | generated UI |
+| **theme** | How a page looks: colours, fonts, paper, the art for each piece and how much things move. Data and art only, never code (ADR 0011) | the kit, which is the pieces and their rules |
+| **pack** | Extra pieces added to the kit as data and art only | a plugin, which would run code |

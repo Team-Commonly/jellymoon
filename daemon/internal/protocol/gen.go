@@ -2675,7 +2675,7 @@ type ReaderTurn struct {
 	// The local time the person typed it, as HH:MM on a 24-hour clock.
 	At   string  `json:"at"`
 	Tool Harness `json:"tool"`
-	// The last segment of the folder the session ran in, or the worktree's name when that folder is inside a harness worktree.
+	// The last segment of the folder the session ran in. Inside a harness worktree of a repo, it is the repo folder's name.
 	Project string `json:"project"`
 	// What the person typed.
 	Said string `json:"said"`

@@ -1662,7 +1662,7 @@ One thing a person typed to an agent, with the agent's last text reply before th
 |---|---|---|---|
 | `at` | string | yes | The local time the person typed it, as HH:MM on a 24-hour clock. Limit: matches `^([01][0-9]\|2[0-3]):[0-5][0-9]$` |
 | `tool` | [Harness](#def-Harness) | yes | Which agent program a registered agent runs. fake is the deterministic test agent. |
-| `project` | string | yes | The last segment of the folder the session ran in, or the worktree's name when that folder is inside a harness worktree. Limit: up to 255 characters |
+| `project` | string | yes | The last segment of the folder the session ran in. Inside a harness worktree of a repo, it is the repo folder's name. Limit: up to 255 characters |
 | `said` | string | yes | What the person typed. Limit: 1 to 700 characters |
 | `reply` | string | yes | The agent's last text reply in the turn. Empty when it has not replied in text. Limit: up to 500 characters |
 

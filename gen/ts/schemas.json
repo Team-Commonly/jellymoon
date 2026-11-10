@@ -2631,7 +2631,7 @@
           "$ref": "#/$defs/Harness"
         },
         "project": {
-          "description": "The last segment of the folder the session ran in, or the worktree's name when that folder is inside a harness worktree.",
+          "description": "The last segment of the folder the session ran in. Inside a harness worktree of a repo, it is the repo folder's name.",
           "type": "string",
           "maxLength": 255
         },

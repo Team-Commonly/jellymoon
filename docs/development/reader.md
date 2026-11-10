@@ -36,8 +36,8 @@ An image alone leaves no text, so it is dropped, and it still ends the turn befo
 `said` is cut to 700 characters and `reply` to 500; a cut text ends in `…`. Before the cut, `redact.Credentials` replaces
 credential shapes with `[redacted]`: model provider, GitHub and Slack keys, AWS key ids, JWTs, PEM private keys, and any run of
 40 or more base64 characters that mixes digits with both letter cases. Jellymoon's own tokens are shortened to their prefix, as
-everywhere in the CLI. `project` is the last segment of the working directory, or the worktree's name under
-`.claude/worktrees/`.
+everywhere in the CLI. `project` is the last segment of the working directory. Under `<repo>/.claude/worktrees/<name>` it is the repo folder's
+name, so a repo and its worktrees are one project.
 
 A line that is not valid JSON is skipped. A session file whose modification time is before the start of the requested local day is not opened, since it can hold no turn of that day; the one consequence is that a file copied or restored with an old modification time is skipped. Reading a busy day on a
 computer with gigabytes of logs takes around ten seconds.

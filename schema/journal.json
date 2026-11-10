@@ -18,7 +18,7 @@
       "properties": {
         "at": { "description": "The local time the person typed it, as HH:MM on a 24-hour clock.", "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
         "tool": { "$ref": "common.json#/$defs/Harness" },
-        "project": { "description": "The last segment of the folder the session ran in, or the worktree's name when that folder is inside a harness worktree.", "type": "string", "maxLength": 255 },
+        "project": { "description": "The last segment of the folder the session ran in. Inside a harness worktree of a repo, it is the repo folder's name.", "type": "string", "maxLength": 255 },
         "said": { "description": "What the person typed.", "type": "string", "minLength": 1, "maxLength": 700 },
         "reply": { "description": "The agent's last text reply in the turn. Empty when it has not replied in text.", "type": "string", "maxLength": 500 }
       }

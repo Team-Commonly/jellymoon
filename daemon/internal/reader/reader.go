@@ -67,7 +67,7 @@ var harnessBlocks = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminde
 
 var originKey, assistantWord = []byte(`"origin"`), []byte(`"assistant"`)
 
-var worktree = regexp.MustCompile(`/\.claude/worktrees/([^/]+)`)
+var worktree = regexp.MustCompile(`([^/]+)/\.claude/worktrees/`)
 
 // Day reads every session log under o.Logs and returns the turns typed on o.Day, oldest first.
 func Day(o Options) (protocol.ReaderDay, error) {
@@ -182,7 +182,7 @@ func replyText(message json.RawMessage) string {
 	return strings.Join(texts, " ")
 }
 
-// project names the folder a turn ran in: the worktree's name inside a harness worktree, the folder's last segment otherwise.
+// project names the folder a turn ran in: the repo's folder inside a harness worktree of it, the folder's last segment otherwise.
 func project(cwd string) string {
 	if m := worktree.FindStringSubmatch(cwd); m != nil {
 		return m[1]

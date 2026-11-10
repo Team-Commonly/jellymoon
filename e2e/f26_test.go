@@ -160,7 +160,7 @@ func TestF26(t *testing.T) {
 		want := []f26Turn{
 			{"09:00", "claude-code", "alpha", "add a retry to the uploader", "retry added, tests pass"},
 			{At: "10:30", Tool: "claude-code", Project: "alpha"},
-			{"13:15", "claude-code", "fix-login", "fix the login page", ""},
+			{"13:15", "claude-code", "beta", "fix the login page", ""}, // typed in a worktree of beta: the repo is the project
 			{"14:00", "claude-code", "gamma", "first gamma ask", "gamma reply one"}, // a list with a tool result does not end it; an image alone does
 			{"14:02", "claude-code", "gamma", "look at this screenshot", "seen"},    // typed with a pasted image: its text parts
 			{"23:59", "claude-code", "alpha", "one minute before midnight", "noted before midnight"},

@@ -1,103 +1,71 @@
 # How Jellymoon is built
 
-Jellymoon is built by one long-running builder session, using the harness from Anthropic's
+One long-running builder session builds Jellymoon, with subagents for parallel pieces, after Anthropic's
 [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents).
+`AGENTS.md` has the rules; this file has the reasons and the two protocols.
 
 | File | Role |
 |---|---|
-| `feature_list.json` | Every slice feature, written as an end-to-end test. Only `passes` may change. |
-| `init.sh` | Brings up the environment, runs the baseline and prints the scoreboard. |
-| `progress/` | The hand-off between sessions and across context compactions: one file per unit, named `YYYY-MM-DD-HHMM-<unit>.md` (UTC, the time the entry is written), so the newest sorts last. Each entry has four parts (what changed, the evidence, what's next, anything surprising) and stays under 15 lines; the detail goes in the PR. Put nothing else in the directory: any other name sorts above the dated entries under `ls -r`. `progress.md` keeps the entries written before it. |
-| git log | The record. Small commits, one feature per PR. |
+| `feature_list.json` | Every feature, written as a test at the `jellymoon` binary's boundary. Only `passes` may change |
+| `init.sh` | Installs the pinned tools into `.tools/`, runs the baseline and prints the scoreboard |
+| `progress/` | The hand-off between sessions: one file per unit, named `YYYY-MM-DD-HHMM-<unit>.md` (UTC), so the newest sorts last. Four parts (what changed, the evidence, what's next, anything surprising), under 15 lines; the detail goes in the PR. Nothing else lives in the folder |
+| git log | The record. Small commits, one feature per PR |
 
 ## Why each rule exists
-- **The feature list is JSON and tests are never edited.** The article found that models rewrite
-  Markdown checklists. Removing a test to make it pass is the failure that hides missing
-  functionality.
-- **One feature at a time.** Long runs fail by declaring done too early or by half-finishing several
-  features. Taking the top unfinished feature every time prevents both.
+- **The feature list is JSON and its text is never edited.** Models rewrite Markdown checklists, and removing a test
+  to make it pass hides missing behaviour.
+- **One feature at a time.** Long runs fail by declaring done too early or by half-finishing several features.
 - **The baseline runs first.** A session that builds on a broken tree compounds the break.
-  `init.sh` makes the state visible before any edit.
-- **Verify at the API, not with unit tests.** The article saw agents mark features done on unit
-  tests or a single curl. Here a feature passes only on its `test` command. For the slice, that is
-  the Go e2e that drives the real Worker and daemon. Browser checks join it for the client (F18): the Playwright specs in
-  `web-e2e/` (`make e2e-web`, [browser-specs.md](browser-specs.md)), whose browsers are installed only in CI.
-- **Compact at feature boundaries.** `progress/` plus git carry the state, so a fresh context can
-  resume without the transcript.
-- **One progress file per unit.** Units used to add their entry at the top of `progress.md`, so a
-  land usually left the other open PRs conflicting there. Merging main moves a PR's head, and a moved head
-  needs a new review. Separate files never conflict.
+- **Prove it at the binary.** Agents mark features done on a unit test. Here a feature passes only on its `test`
+  command, which runs the built `jellymoon` binary as a person would and reads what it prints.
+- **One progress file per unit.** Separate files never conflict, so a merge never moves another PR's head.
+- **Lessons land in the PR.** A lesson kept only in a chat or a private note is lost to the next contributor.
 
-## Stage skills
-The table in `AGENTS.md` maps each stage to one skill in `.agents/skills/`. They are vendored, not
-installed, so the loop works from a fresh clone; pins and update rules are in `docs/skills/SOURCES.md`.
-`code-review` and `deslop` run in a fresh-context subagent; `retro` runs at the end of each wave or
-after a surprise.
+## Size
+`make preflight` runs `cargo xtask check`: each file at most 400 lines, a LOC budget per crate in `entropy.toml`, no
+machine-local path in a tracked file, the crate direction (core, then the binary; the kit, then the app), and no
+package under `[forbidden]` (GPUI, for core and the binary) listed in a crate's manifest. Clippy holds a function to 60 lines.
 
-## Review and merge
-Local verification is the authority. Land does not wait for CI: it refuses when a completed check run on the head
-failed, and no check runs at all is fine. `make land PR=<n>` is the only merge path (`docs/development/landing.md`).
-It runs PR code only for a trusted PR (same repo, author and every push-capable account in `JM_TRUSTED_LOGINS`) and
-merges only when all of these hold at the exact PR head:
-- a clean-shell `make preflight` passes on the merge result (main plus that head); it is a correctness check, not a
-  security boundary (`landing.md`, Threat model);
-- the verifier's ledger line at the head is `PASS` (the check of record, `docs/development/verifier.md`), and no
-  verifier wrote a `FAIL` at that head: a FAIL blocks the head, whoever wrote it, and the fix is a new head;
-- the review's pod verdict also passes, for every PR (one review per head; the operator posts it, there is no separate reviewer). It is a
-  message by a listed reviewer's immutable user id, whose first line is `jellymoon#<pr> <full head>` and whose
-  last line is `GATE: PASS`. No path and no scan result waives it;
-- the secret scans (`make secrets-range` over the PR's commits, and `make secrets` in the preflight) found nothing. They can only refuse; a clean scan waives nothing, and what they do not read is listed in `landing.md` (Known limits) for the review to cover.
-- the review rule is one review from any one source (the local verifier, another agent, or CodeRabbit) plus green CI. Land checks the part it
-  can read: the ledger PASS and the pod verdict above, and no failed completed check run on the head. It does not wait for CI at the head;
-  the ruleset on `main` holds the merge until the required checks pass, and `landing.md` says when CI on land's own merge commit stands in
-  for the local preflight. CodeRabbit is asked when there is allowance but never awaited: a head it has not reviewed does not block a land.
-  Every job that installs Go does so through `.github/actions/setup-go`. When `actions/setup-go` fails (its GitHub-asset download returns 504 and its own fallback host answers 403), the action downloads the Go pinned in `.tool-versions` from dl.google.com, checks its sha256 against go.dev's release index, and fails the job on any download or checksum mismatch or version drift. The module cache is not restored on that path.
-  Land still refuses what CodeRabbit already said at the head, a `CHANGES_REQUESTED` review or an unanswered Major or Critical thread
-  (`landing.md`, "The CodeRabbit path"). A Major or Critical it raises after the merge becomes a fix PR, first in the queue.
-- Workers never merge. GitHub review text is not consulted.
-  Run land from a clean checkout of main. The check lives in the checked-out tree, so it is operator discipline: it binds
-  only a tree that really is main.
-- **Verifiers run PR code only after the same trust gate:** `make verify-preflight PR=<n>` (`landing.md`).
-- **Accepted reviewers:** operator env `JM_VERDICT_REVIEWERS` (`<id>:<Name>,...`), keyed by the immutable pod user id. No repo file lists them, so a PR cannot widen the list, and no id is ever committed.
-- **How the verdict is read** (`verdictOf` in `scripts/land-decide.mjs`). The verdict is the message's LAST
-  non-empty line, with HTML comments removed and emphasis and list or heading markers stripped. It passes only
-  if that is exactly `GATE: PASS` (case-insensitive). A missing line, a FAIL after the PASS, prose after it, an
-  indented line, or a fullwidth or zero-width variant blocks. Cases: `scripts/check-review-gate.mjs`; land's
-  cases: `scripts/check-land.mjs`.
-- **CI** runs on every pull request and every push to `main`. It runs the checks `make preflight` runs, and a failing check run blocks a
-  land; CI never lands anything, and `make land` stays the only merge path. The review-gate workflow is deleted.
-- **One door:** `make land` is the only merge path, with a lock so two lands cannot run at once.
+- A budget grows only in the PR of the feature that needs it, with the measured count and the reason in the PR. Never
+  for a refactor, never by deleting tests.
+- A new dependency or crate gets a short note in `docs/adr/`: what it is for and what was rejected.
+- Every report states lines added and removed (`git diff --shortstat`), and answers: what did this change make
+  obsolete, and was it deleted?
 
-## Design-gated features
-- **F18 (client) and F19 (connectors)** stay blocked until their options docs are reviewed by the maintainers.
-  The docs are `docs/design/client-options.md` and `docs/design/connector-options.md`.
-- **After the review:**
-  1. add the steps and test to the existing F18 or F19 entry, and clear `blockedBy`;
-  2. note in a `progress/` entry that the review set them.
+## The fresh-context review
+Every PR head that is to merge gets one review by a subagent that never saw the builder's reasoning, on a different
+model from the builder where possible. It is given the PR number and head SHA, the feature from `feature_list.json`
+(or the unit's brief), the diff, and this file. In order:
 
-  This is the only time a feature's text changes, and only for these placeholders.
+1. **Trust.** For a PR from outside the maintainers, read the code with `git show`, `git diff` or on GitHub. Never
+   check it out and run `make`, `cargo` or `./init.sh`: a build script and a test are code. A maintainer's PR may be run.
+2. **Reproduce** (a maintainer's PR only). From a clean checkout of the head: `make preflight`, then the feature's `test` command. Red ends
+   the review with `GATE: FAIL`.
+3. **Acceptance.** Walk each step of the feature against what the test asserts. A step no assertion covers is a finding.
+4. **Review.** Apply `code-review` to the diff against `main`. Correctness first, then the repo's rules: logic in core,
+   the privacy rules (synthetic fixtures, only typed text kept, credentials replaced, model text never run), every system.
+5. **Deslop.** Apply `deslop`: dead code, needless abstraction, comments that restate code, over-defensive guards.
+6. **Subtract.** Could the diff be smaller, and does it delete what it made obsolete? Report lines added and removed.
+7. **Secrets the scanner skips.** A scan can refuse but cannot prove a secret absent: read binaries, images, lockfiles
+   and commit messages in the range yourself.
 
-## Entropy gate
-Maintainability is a gate in the loop, not a cleanup phase. `make preflight` runs `make entropy`.
-- **Budgets** live in `entropy.json`:
-  - each file at most 400 lines and each function at most 60;
-  - a LOC cap per area;
-  - `TODO` only with a row id, like `TODO(F07)`;
-  - Go import boundaries;
-  - exceptions only shrink, unless a new one cites a `docs/adr/` note.
-- **Raising a cap** adds one new file in `docs/entropy/caps/` in the same change as the `entropy.json` edit, named
-  `YYYY-MM-DD-<area>-<old>-to-<new>.md`, with the area, old and new cap, measured count, the PR or feature that grew it
-  and why (feature growth, never a refactor, never by deleting tests). Never edit an old note and never restate a total:
-  `entropy.json` is the only source of the numbers and `make entropy` prints the total. The gate fails a changed
-  `locBudget` max with no new note in the diff against the merge-base with main (it skips that one check, and says so,
-  in a shallow clone; CI fetches full history).
-- **Dead code:** knip (TS), staticcheck and deadcode (Go).
-- **Boundaries:** dependency-cruiser (TS).
-- **Every unit report** states its lines added and removed, and answers the subtract-before-you-add
-  question: what did this change make obsolete, and was it deleted?
-- **New dependencies:** a new dependency or module gets a short note in `docs/adr/`.
-- **Each wave** includes one removal-only unit:
-  - `deslop` plus Pocock `codebase-design`, with no new behaviour;
-  - a `docs/INDEX.md` drift check;
-  - quarantining any flaky test, with a fix row.
-- **Next, once the slice is green:** jscpd duplication and a full ratchet report.
+The last lines of the report are always these two:
+```
+FINDINGS <n blocking> <n non-blocking>
+GATE: PASS | GATE: FAIL
+```
+`GATE: PASS` requires zero blocking findings. The reviewer never pushes or merges. The coordinator posts the report as
+a PR comment whose first line is `Review at <full head SHA>`, changing nothing in it.
+
+## Landing
+A PR is squash-merged when both hold at its current head:
+- CI is green: `check` on macOS, Linux and Windows, `secrets`, and `dco`;
+- a review comment for that exact head ends in `GATE: PASS`.
+
+A blocking finding gets a fix, which is a new head, and a new review of it. A head that only merges `main` needs CI
+again and a review of what the merge changed. Only the coordinator merges. Workers commit on their own branch with
+`git commit -s`, in a worktree fenced by `make hooks fence=1`; the coordinator pushes and opens the PR.
+
+## Entropy
+After every few features, one PR removes and adds nothing: `deslop` plus `improve-codebase-architecture`, a check of
+`docs/INDEX.md` against the files under `docs/`, and any flaky test quarantined with a fix noted in `progress/`.

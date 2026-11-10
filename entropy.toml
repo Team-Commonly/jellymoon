@@ -1,0 +1,23 @@
+# The numbers `cargo xtask check` holds the repo to (crates/xtask/src/rules.rs). A budget may be raised only with a
+# reason in the same change; how long a function may be is in clippy.toml.
+
+# The most lines a Rust file may have.
+max_file_lines = 400
+
+# The most lines of Rust each crate may hold, tests included. Every crate under crates/ needs one.
+[budget]
+"crates/jellymoon-core" = 1641
+"crates/jellymoon" = 1104
+"crates/xtask" = 392
+
+# The workspace crates each crate may depend on. Core depends on none; the binary only on core.
+[depends]
+jellymoon-core = []
+jellymoon = ["jellymoon-core"]
+xtask = []
+
+# The outside packages a crate may never list: in any dependency table, under any [target.*], or renamed with
+# `package = "..."`. Core and the binary never depend on GPUI, so every rule can be proved with no display.
+[forbidden]
+jellymoon-core = ["gpui", "gpui_platform"]
+jellymoon = ["gpui", "gpui_platform"]

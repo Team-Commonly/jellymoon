@@ -1,3 +1,0 @@
-# Cap note 2026-11-09: ruled-task-from-run
-
-2026-11-09: podcore cap 2,720 -> 2,780; the review of the ruled-wake change found an ask's own `taskId` reached a pod-stamped receipt, so the decision record now takes the asking run's `wakeTaskId` and `overlayDecisions` applies a record only to its own message. The regression test `podcore/test/ruled-task.test.ts` (a bogus ask taskId reaches neither the wake refs nor a later receipt; the task_assigned path still carries its task) is most of the added lines. The tree printed `LOC budget: podcore 2771 > 2720`; the cap is the count rounded up to ten. No other cap changes.

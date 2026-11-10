@@ -1,316 +1,132 @@
 {
-  "$comment": "The v4 slice as end-to-end tests, in priority order. A building session changes ONLY the `passes` field, and sets it true only after `test` passes locally and in CI. Never delete, reword or reorder a feature to make it pass; a feature that turns out wrong gets a new feature plus a note in progress.md. `blockedBy` names what must happen before work starts. See docs/development/workflow.md.",
+  "$comment": "The journal app (ADR 0011) as tests at the `jellymoon` binary's boundary, in priority order. A building session changes ONLY the `passes` field, and sets it true only after `test` passes locally and in CI. Never delete, reword or reorder a feature to make it pass; a feature that turns out wrong gets a new feature plus a note in progress/. `blockedBy` names what must happen before work starts. This list was rewritten once, at the restart (ADR 0012). See docs/development/workflow.md.",
   "features": [
     {
-      "id": "F01",
-      "category": "contract",
-      "description": "One schema generates the TS and Go contracts, and every fixture validates in both",
+      "id": "F26",
+      "category": "journal",
+      "description": "Jellymoon collects one local day of what a person typed to Claude Code, and nothing else",
       "steps": [
-        "make gen twice leaves the tree clean",
-        "check-fixtures passes all fixtures with ajv",
-        "the Go round-trip test passes and rejects every invalid-required fixture",
-        "a schema edit without make gen fails check-gen"
+        "`jellymoon day --date <day> --logs <dir>` prints that day's turns as JSON: the time, the project, the person's text and the agent's last reply in the same turn, cut short",
+        "a turn is kept only when the log marks it as typed by a person; tool results, task notices, compaction summaries, sidechains and prompts sent by other programs are left out",
+        "text shaped like a credential is replaced before it is printed, in the person's text and in the reply",
+        "a folder the person switched off with --skip contributes no turns",
+        "the day is the local calendar day: a turn typed at 23:59 and one typed at 00:01 land on different days",
+        "a log line that is not valid JSON is skipped and the rest of the file is still read"
       ],
-      "test": "make check-gen test",
+      "test": "cargo test -p jellymoon --test f26",
       "passes": true
     },
     {
-      "id": "F02",
-      "category": "harness",
-      "description": "make e2e boots wrangler dev on a free port, waits for /healthz, runs the named e2e tests and prints E2E_MS",
+      "id": "F27",
+      "category": "journal",
+      "description": "One reading call turns a day into page data, and code refuses what the person did not say",
       "steps": [
-        "make e2e starts the Worker with --persist-to a temp dir",
-        "GET /healthz returns 200 within 10 s",
-        "a failing step names itself and prints the last 20 events",
-        "the run ends with E2E_MS=<n> STEPS=<k>/<k>"
+        "page data is a typed shape in core with example files that round-trip: wishes (label, said, project, state, stars) and clashes",
+        "`jellymoon page --date <day>` sends the day to the harness in one headless call with every tool, MCP server and saved session turned off, asserted on the command line the fake harness receives",
+        "a wish whose `said` is not an exact substring of what the person typed that day is dropped, and so is a clash that quotes words the person did not type",
+        "output that is not valid page data gives an error and no page; more than 8 wishes are cut to 8",
+        "no text in the day can add a tool or a flag to the call"
       ],
-      "test": "make e2e-a (steps 1 to 3: go test ./e2e -run TestF02; step 4: the closing-line assertion in the Makefile target)",
-      "passes": true
+      "test": "cargo test -p jellymoon --test f27",
+      "passes": true,
+      "blockedBy": [
+        "F26"
+      ]
     },
     {
-      "id": "F03",
-      "category": "pod",
-      "description": "A test user creates a pod and receives hello over the pod WebSocket",
+      "id": "F28",
+      "category": "journal",
+      "description": "The app draws a page from page data using only the kit",
       "steps": [
-        "POST /__test/session mints a user and returns a jmu_ token (local and preview builds only)",
-        "POST /v1/pods with that token creates a pod and returns its id",
-        "GET /v1/pods/:pod/ws with the token upgrades and the first frame is hello with headSeq 0 and the user as owner"
+        "the app's layout command reads page data and prints every placed piece: its kind, position and size",
+        "every wish gets one little one and one star per finished job; a let-go wish is drawn greyed; a clash gets one note with both quotes",
+        "no two labels overlap on a page of 8 wishes with the longest allowed labels",
+        "text from page data is drawn as text only; markup or control characters in a label change nothing but the label",
+        "a kind the kit does not have falls back to a plain note"
       ],
-      "test": "go test ./e2e -run TestF03",
-      "passes": true
+      "test": "cargo test -p jellymoon-app --test f28",
+      "passes": false,
+      "blockedBy": [
+        "F27"
+      ]
     },
     {
-      "id": "F04",
-      "category": "pod",
-      "description": "Human messages fan out live, and a reconnecting client resumes from sinceSeq with no gaps",
+      "id": "F29",
+      "category": "journal",
+      "description": "A ruling made on a page reaches a running Claude Code session once, at its next step",
       "steps": [
-        "two members subscribe; one sends message.post",
-        "both receive message.created with the same seq",
-        "the second client disconnects, three more posts happen, it reconnects with subscribe{sinceSeq}",
-        "it receives exactly the three missed events, in order",
-        "the same holds after the Durable Object hibernates"
+        "installing the hook adds one entry to the harness settings and leaves every other byte as it was; uninstalling restores the file exactly",
+        "with no ruling waiting the hook prints nothing and exits 0",
+        "a ruling is handed to each running session exactly once, as the person's newer decision",
+        "a real Claude Code turn told to do one thing, then sent a ruling to do another, does the other (harness-real)"
       ],
-      "test": "go test ./e2e -run TestF04",
-      "passes": true
+      "test": "cargo test -p jellymoon --test f29",
+      "passes": false,
+      "blockedBy": [
+        "F27"
+      ]
     },
     {
-      "id": "F05",
-      "category": "pod",
-      "description": "Invites add members; used, expired and non-member cases are refused",
+      "id": "F30",
+      "category": "journal",
+      "description": "Holding a key and saying a wish starts an agent on it",
       "steps": [
-        "the owner creates an invite and a second user accepts it",
-        "the second user's hello lists them as a member",
-        "accepting the same single-use invite again returns 410",
-        "accepting an expired invite returns 410 and adds no member",
-        "a non-member creating an invite gets 403"
+        "a wish made in the app appears on today's page at once, in the person's exact words, in the working state",
+        "Jellymoon starts a run for it with the person's harness (ADR 0011, sections 5 and 7) and the wish's star appears when the run reports it finished",
+        "a wish made while no harness is installed stays on the page and says why nothing started"
       ],
-      "test": "go test ./e2e -run TestF05",
-      "passes": true
+      "test": "cargo test -p jellymoon --test f30",
+      "passes": false,
+      "blockedBy": [
+        "F28"
+      ]
     },
     {
-      "id": "F06",
-      "category": "board",
-      "description": "A member creates a task assigned to an agent and every member sees task.created",
+      "id": "F31",
+      "category": "journal",
+      "description": "Jellymoon collects a day of what a person typed to Codex the same way",
       "steps": [
-        "a registered agent exists in the pod",
-        "a member sends task.create with the agent as assignee",
-        "all subscribers receive task.created with status open and the assignee set"
+        "`jellymoon day` reads Codex session logs with the same output shape and the same rules as F26",
+        "sessions another program drove through ACP contribute no turns"
       ],
-      "test": "go test ./e2e -run TestF06",
-      "passes": true
+      "test": "cargo test -p jellymoon --test f31",
+      "passes": false,
+      "blockedBy": [
+        "F26",
+        "a typed Codex session to build the fixture from"
+      ]
     },
     {
-      "id": "F07",
-      "category": "wake",
-      "description": "Only addressed changes wake an agent, wakes coalesce, and unacked wakes are re-sent",
+      "id": "F32",
+      "category": "journal",
+      "description": "A theme changes how a page looks and nothing else",
       "steps": [
-        "an ambient human message produces no run.wake",
-        "assigning three tasks to the agent in a row produces one pending wake, delivered once",
-        "a wake not acked within 60 s is re-sent on the next heartbeat (clock is test-controlled)",
-        "run.wake goes only to the computer that hosts the agent"
+        "the same page data laid out under the sticker theme and the plain theme places the same pieces in the same order",
+        "the plain theme has no tilt and no idle motion",
+        "a theme file with an unknown key or a missing piece falls back to the default for that piece",
+        "a theme carries no code: a theme file containing a script or a path outside its folder is refused"
       ],
-      "test": "go test ./e2e -run TestF07",
-      "passes": true
+      "test": "cargo test -p sticker-kit --test f32",
+      "passes": false,
+      "blockedBy": [
+        "F28"
+      ]
     },
     {
-      "id": "F08",
-      "category": "daemon",
-      "description": "The daemon registers its computer and an agent, and the pod shows the agent online",
+      "id": "F33",
+      "category": "journal",
+      "description": "One command installs Jellymoon on a Mac with no Apple Developer signature",
       "steps": [
-        "jellymoon daemon start --foreground registers the computer and stores jmc_ at mode 0600",
-        "jellymoon agent add fake registers an agent in the pod",
-        "members receive presence.changed online for the agent within 5 s",
-        "killing the daemon produces presence.changed offline within 45 s"
+        "the install script downloads the release for the machine's architecture, checks its checksum, and puts the app and the `jellymoon` binary in the user's own folders with no sudo",
+        "the app opens with no Gatekeeper block because the download is not quarantined",
+        "running it again updates in place",
+        "an uninstall command removes everything it added and the delivery hook"
       ],
-      "test": "go test ./e2e -run TestF08",
-      "passes": true
-    },
-    {
-      "id": "F09",
-      "category": "run",
-      "description": "On run.wake the daemon claims a run and starts the agent with a run token and the pod MCP server",
-      "steps": [
-        "the daemon receives run.wake and calls POST /v1/runs",
-        "the response carries runId, a jmr_ token, a brief and the MCP URL",
-        "the fake ACP agent starts with the MCP server passed in session/new",
-        "jm_whoami over MCP returns the agent, pod and run",
-        "the agent's argv and env contain jmr_ and never jmc_"
-      ],
-      "test": "go test ./e2e -run TestF09",
-      "passes": true
-    },
-    {
-      "id": "F10",
-      "category": "board",
-      "description": "jm_task_claim is exclusive, and its lease lives as long as its run",
-      "steps": [
-        "two runs claim the same task concurrently; exactly one wins",
-        "the loser gets already_claimed naming the holder",
-        "members receive task.claimed with leaseUntil",
-        "an operation on the winning run, or a heartbeat from its computer, moves leaseUntil forward",
-        "with the daemon stopped, the claim is dropped 60 s after the last renewal and members receive task.updated with no claim",
-        "the claiming agent's owner releases the claim; the holding run's next operation on the task gets forbidden",
-        "each way a claim ends (expiry, release, run end, stop) sends members one claim.released with that cause"
-      ],
-      "test": "go test ./e2e -run TestF10",
-      "passes": true
-    },
-    {
-      "id": "F11",
-      "category": "cards",
-      "description": "jm_post enforces the headline contract and the pod stamps the receipt",
-      "steps": [
-        "a post without summary gets summary_required; one over 120 chars gets invalid_input",
-        "an ask without options, or a non-ask with needs, gets invalid_input",
-        "a post carrying receipt is rejected",
-        "a valid ask creates a message whose receipt has the runId, harness fake, wakeReason and toolCalls equal to the MCP calls made so far",
-        "the ask carries an open decision"
-      ],
-      "test": "go test ./e2e -run TestF11",
-      "passes": true
-    },
-    {
-      "id": "F12",
-      "category": "cards",
-      "description": "A human rules on an ask once, and the agent is woken with the ruling and finishes the task",
-      "steps": [
-        "a member sends decision.rule with an option id",
-        "members receive message.updated with the decision ruled and frozen",
-        "a second ruling returns already_ruled and changes nothing",
-        "the agent receives run.wake with reason decision_ruled",
-        "the agent calls jm_task_update done and members receive task.updated done"
-      ],
-      "test": "go test ./e2e -run TestF12",
-      "passes": true
-    },
-    {
-      "id": "F13",
-      "category": "security",
-      "description": "Tokens are scoped: a run cannot cross pods, an ended run is dead, and test routes are absent in production",
-      "steps": [
-        "a jmr_ for pod A posting to pod B gets forbidden",
-        "after POST /v1/runs/:run/end the same jmr_ gets unauthorized",
-        "an actor field in MCP tool arguments is ignored",
-        "the production build of the Worker contains no /__test handler",
-        "a pod owner stops a live run; the daemon receives run.stop, the run ends cancelled, and its jmr_ gets unauthorized at once"
-      ],
-      "test": "go test ./e2e -run TestF13",
-      "passes": true
-    },
-    {
-      "id": "F14",
-      "category": "slice",
-      "description": "The whole slice runs end to end with the fake agent in under 60 s",
-      "steps": [
-        "sign in, create pod, invite, join",
-        "start the daemon and add the fake agent",
-        "create a task assigned to it",
-        "observe run.wake, task.claimed, then an ask with a receipt",
-        "rule on the ask, observe the second wake and task.updated done",
-        "E2E_MS under 60000"
-      ],
-      "test": "go test ./e2e -run TestF14",
-      "passes": true
-    },
-    {
-      "id": "F15",
-      "category": "auth",
-      "description": "jellymoon login signs in with GitHub's device flow and stores a user token safely",
-      "steps": [
-        "against a stub GitHub, jellymoon login prints the user code and verification URL",
-        "the person signs in through the server's GitHub OAuth web flow (the stub) and approves the code at POST /v1/auth/device/approve; POST /v1/auth/device/token then returns a jmu_ exactly once",
-        "the token file is mode 0600 and the token is never printed",
-        "a revoked or invalid GitHub token gets unauthorized"
-      ],
-      "test": "go test ./e2e -run TestF15",
-      "passes": true
-    },
-    {
-      "id": "F16",
-      "category": "harness-real",
-      "description": "A recorded real Claude Code session (claude-agent-acp) replays through the daemon and makes the slice's pod calls",
-      "steps": [
-        "daemon/testdata/acp/claude-slice.jsonl is recorded against the pinned adapter, scrubbed",
-        "the replay test drives the daemon with it and the pod calls match the golden list",
-        "one operator walks the slice by hand with real Claude Code and the result is noted in progress.md"
-      ],
-      "test": "go test ./daemon/... -run TestReplayClaude",
-      "passes": true
-    },
-    {
-      "id": "F17",
-      "category": "preview",
-      "description": "Every PR boots the server as a self-hoster runs it, from the PR's own build, and the contract suite passes against it",
-      "steps": [
-        "the e2e-deployed job builds the server bundle and boots it as its own process on a Postgres service container, with env config only (make deployed-boot)",
-        "deployed-boot refuses a server with no database, finds the test routes closed in the hosted shape, serves a pod through the real routes and keeps it across kill -9",
-        "the contract suite, TestF14Budget included, passes with that bundle as the server under test (make e2e-deployed); a server that fails to boot fails the job"
-      ],
-      "test": "CI job e2e-deployed",
-      "passes": true
-    },
-    {
-      "id": "F18",
-      "category": "client",
-      "description": "A person uses the slice from the client chosen in the client options review",
-      "steps": [
-        "the four slice screens (/device, /pod/:id, the needs-you queue as a filter on the same stream, /invite/:token) render inside one layout shell",
-        "/device approves a daemon's device code after GitHub sign-in",
-        "/pod/:id shows each card with its summary line, status and receipt chip, folded body and composer",
-        "the needs-you filter lists the open asks of the same stream, and a, 1..n and j/k work with the keyboard only",
-        "pressing a on an open ask makes the ruled state appear live over the WebSocket, with no reload",
-        "/invite/:token joins a teammate who has no install to the pod",
-        "the same specs pass at 390 and 1440 px, with no horizontal page scroll and no clipped text on any route"
-      ],
-      "test": "Playwright specs at 390 and 1440 px: sign-in and /device approval; open pod, see card, press a, ruled state appears live; invite link join; layout invariants on each route; keyboard approve driven by key presses, not clicks",
-      "passes": true
-    },
-    {
-      "id": "F19",
-      "category": "connector",
-      "description": "An agent reads Linear through a pod grant without ever holding the Linear token",
-      "steps": [
-        "against a stub Linear, a pod admin connects Linear and grants an agent read access through the pod",
-        "the agent reads Linear through the pod grant, and the result comes back to it",
-        "the Linear token is absent from every agent-visible payload: tool lists, results, errors and the run's env",
-        "a write call from the agent parks as a decision card with the exact arguments, and the stub Linear sees no write while it is parked",
-        "one approval releases exactly one upstream call; a rejection or expiry releases none",
-        "the receipt is stamped by the server and links the card, the approver and the result"
-      ],
-      "test": "go test ./e2e -run TestF19 (against a stub Linear)",
-      "passes": true
-    },
-    {
-      "id": "F20",
-      "category": "harness-real",
-      "description": "A recorded real Codex session (codex-acp) replays through the daemon and makes the slice's pod calls",
-      "steps": [
-        "daemon/testdata/acp/codex-slice.jsonl is recorded against the pinned adapter, scrubbed",
-        "the replay test passes"
-      ],
-      "test": "go test ./daemon/... -run TestReplayCodex",
-      "passes": true
-    },
-    {
-      "id": "F21",
-      "category": "evidence",
-      "description": "Evidence is served: the pod stamps every run operation as a tool-call record, and the evidence read returns them",
-      "steps": [
-        "a run makes three MCP calls; its run token reads three tc_ records, source pod, in order, each with a digest, in the shape ToolCallRecord fixes",
-        "a member's user token reads the same records; a non-member, another run's token and another pod's token get forbidden",
-        "a toolCalls or actor field an agent sends is ignored, and no operation writes a record",
-        "the read returns at most 500 records, and the count matches the run receipt's toolCalls"
-      ],
-      "test": "go test ./e2e -run TestF21 (server; the Worker adds TestF21 to E2E_A_SKIP, docs/development/e2e-contract.md)",
-      "passes": true
-    },
-    {
-      "id": "F22",
-      "category": "connector",
-      "description": "A pod owner connects a connector, grants it to an agent and names approvers from the CLI, not hand-built HTTP",
-      "steps": [
-        "jellymoon connector connect reads the token from JELLYMOON_CONNECTOR_TOKEN or a hidden prompt, never argv, and the token is never printed, logged or written to the config dir",
-        "connector grant takes --access read or write-with-confirm, and --access write is refused client-side",
-        "connector approvers replaces the set and an empty list clears it",
-        "connector list shows pinned operations by access level and never a credential; connector receipts shows the server's receipts",
-        "a drift refusal prints connector_drift naming the operation; a non-owner gets forbidden and a non-zero exit"
-      ],
-      "test": "go test ./e2e -run TestF22 (server; against the stub Linear F19 uses; Worker skip listed in E2E_A_SKIP and docs/development/e2e-contract.md)",
-      "passes": true
-    },
-    {
-      "id": "F25",
-      "category": "evidence",
-      "description": "An ask whose claims cite nothing, or whose numbers are not in the cited call, is refused ungrounded",
-      "steps": [
-        "an ask with a claim citing nothing gets 422 ungrounded",
-        "a cite of an id that is not a record in this pod, or a tool call from another agent's run, gets ungrounded",
-        "a number in a claim's text that is in neither the cited call's digest nor a cited message gets ungrounded",
-        "a fully cited ask is accepted and F11, F12 and F14 still pass",
-        "the refusal names the claim index and never echoes the digest"
-      ],
-      "test": "go test ./e2e -run TestF25 (server; the Worker adds TestF25 to E2E_A_SKIP, docs/development/e2e-contract.md)",
-      "passes": true
+      "test": "cargo test -p jellymoon --test f33",
+      "passes": false,
+      "blockedBy": [
+        "F28"
+      ]
     }
   ]
 }

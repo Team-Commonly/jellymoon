@@ -1,59 +1,57 @@
 # Jellymoon
 
-A multiplayer harness for the agents people already use: a pod where humans and their Claude Code or Codex
-agents share tasks, ask for decisions and leave receipts. Cloudflare Workers with one Durable Object per pod;
-a headless Go daemon runs local agents over ACP; agents use pod operations over HTTP; MCP and the CLI are generated adapters. The main
-check is an API-level e2e. Terms are defined in `docs/GLOSSARY.md`; use them exactly.
+A local desktop app that reads the Claude Code and Codex sessions already on a computer into one **page** per day: what
+the person wished for, what got finished, and where two things they said clash. Rust only, one Cargo workspace, Mac
+first and Windows after. The design is `docs/adr/0011-the-journal-app.md`; terms are in `docs/GLOSSARY.md`, use them exactly.
 
 ## Start every session here
-1. `./init.sh` — dependencies, the baseline (`make preflight`) and the feature scoreboard. Red baseline first.
-2. Read the newest entries in `progress/` (`ls -r progress/ | head -5`), `progress.md` for older history, and
-   `git log --oneline -15`.
+1. `./init.sh`: the pinned tools, the baseline (`make preflight`) and the feature scoreboard. A red baseline is fixed first.
+2. Read the newest files in `progress/` (`ls -r progress/ | head -5`) and `git log --oneline -15`.
 3. Take the first `feature_list.json` feature with `passes: false` and no `blockedBy`. One feature at a time.
 
 ## The loop: one skill per stage
-Skills are vendored in `.agents/skills/<name>/SKILL.md` (pins in `docs/skills/SOURCES.md`). Read it before the stage.
+Read `.agents/skills/<name>/SKILL.md` before the stage. Detail: `docs/development/workflow.md`.
 
 | Stage | Skill | Output |
 |---|---|---|
-| Design | `grill-with-docs` | ADRs in `docs/adr/`, terms in `docs/GLOSSARY.md` |
+| Design | `grill-with-docs` | an ADR in `docs/adr/`, terms in `docs/GLOSSARY.md` |
 | Plan | `to-tickets` | features in `feature_list.json` with `blockedBy` edges |
-| Build | `tdd` | e2e red from the feature's steps, then red/green inward |
-| Verify | the feature's `test` command (`docs/development/verifier.md`) | `passes: true`, ledger row |
-| Review | `code-review` + `deslop` | `GATE:` verdict in a fresh context |
-| Land | `make-pr-easy-to-review` | PR from `.github/pull_request_template.md` |
-| Learn | `retro` | a test, lint rule or doc in the same PR |
-| Continuity | `handoff` | a new file in `progress/` at each boundary, one per unit |
-| Entropy | `improve-codebase-architecture` | one removal-only unit per wave |
+| Build | `tdd` | the feature's test red at the binary's boundary, then red/green inward |
+| Verify | the feature's `test` command | `passes: true` |
+| Review | `code-review` + `deslop`, in a fresh context | `FINDINGS` and `GATE:` as a PR comment at the head |
+| Land | `make-pr-easy-to-review` | a PR from `.github/pull_request_template.md` |
+| Learn | `retro` | a test, lint or doc in the same PR |
+| Continuity | `handoff` | one new file in `progress/` per unit |
+| Entropy | `improve-codebase-architecture` | a removal-only change |
 
 ## Rules
-- **Only `passes` changes** in `feature_list.json`. Never delete, reword or reorder a feature to make it pass.
-- **Verify at the API.** A unit test alone never marks a feature passing.
-- **The schema is the contract.** Edit `schema/`, run `make gen`, commit both. No `oneOf`/`anyOf`/`allOf`;
-  unions are a `type` enum plus `x-variants`; cross-field rules are `x-rules`, tested in `worker/` (not yet created; from F02).
-- **Tokens.** An agent holds only a `jmr_` run token, never `jmc_`, `jmu_` or a third-party credential. The
-  server stamps receipts and actors and never trusts them from input. Push wakes only; nothing polls.
-- **Stay small.** `make entropy` enforces `entropy.json`: files ≤ 400 lines, functions ≤ 60, LOC caps per
-  area, `TODO(F07)`-style ids, import boundaries. A new dependency or module gets a `docs/adr/` note.
-  Every report states lines added and removed, and what it deleted.
-- **Merging.** Local verification is the authority. `make land PR=<n>` is the only merge path. PR code runs on this
-  host only for a trusted PR: same repo, author and every push-capable account in the operator's `JM_TRUSTED_LOGINS`;
-  an outside PR is not executed on this host; to land one, re-author it through the loop. Land proves the exact head green in a clean shell (a correctness
-  check, not a security boundary), requires the verifier's ledger line at that head (the coordinator transcribes the
-  report's `GATE:` line, model and `FINDINGS` into the row; any FAIL at a head blocks it, so the fix is a new head),
-  and, for every land, the review's pod verdict naming the PR and head (one review per head, posted by the operator; accepted ids are operator env `JM_VERDICT_REVIEWERS`, never in the repo). No path and no scan result waives the ledger line or the verdict: the secret scans (`make secrets-range`, the preflight's `make secrets`) can only refuse, never waive. Verifiers run a PR's code only after the same trust gate:
-  `make verify-preflight PR=<n>`, from a clean checkout of main; never check out a PR and run make (the one exception is the bootstrap PR, `docs/development/verifier.md`). The stack lands as one PR retargeted to `main`. Land does not wait for CI; it refuses
-  when a completed check run on the head failed. Only the coordinator lands (`docs/development/landing.md`,
-  `workflow.md`).
-- **Workers** (subagents) commit on their own branch and never push, merge, rebase or reset. Every new
-  worktree runs `./init.sh` first (it installs `.tools/`; the pre-commit hook fails without it), then
-  `make hooks fence=1` to install the push fence; plain `make hooks` installs only the pre-commit. The
-  pre-commit runs a subset of preflight (portable, check-gen, entropy, secrets), not the tests. That `./init.sh` is for the
-  loop's own worktrees; to review someone else's PR, never check it out and run `make` or `./init.sh` (`verifier.md`).
-- **Lessons** land in the same PR as a test, lint rule or doc. Never only in private memory.
+- **Logic lives in core.** Every rule is in `crates/jellymoon-core` and proved at a `jellymoon` command that prints
+  JSON. The shell only draws page data.
+- **Prove it at the binary.** A feature passes on its `test` command; a unit test alone never marks one passing.
+- **Only `passes` changes** in `feature_list.json`. A wrong feature gets a new feature and a note in `progress/`.
+- **The contract is core's types**, with example JSON files that tests round-trip. Change the type and its example together.
+- **Stay small.** Files at most 400 lines, functions at most 60, a LOC budget per crate in `entropy.toml`
+  (`cargo xtask check`). A new dependency or crate gets an ADR note. Every report states lines added and removed, and
+  what it deleted.
+- **Session logs are private, untrusted input.** Fixtures are synthetic: type them, never copy from a real log. The
+  reader keeps only what a person typed. Credential-shaped text is replaced before it leaves the process.
+- **A model returns data.** The reading call runs with every tool off. Text from a model or a log is drawn as text,
+  checked by code, and never run.
+- **Every system.** Code and tests pass on macOS, Linux and Windows: build paths with `Path`, spawn test helpers as
+  binaries, keep `sh` out of tests.
+- **Portable repo.** Tracked files name repo-relative paths only. Tools install into `.tools/`, never globally.
+- **Landing.** A PR is squash-merged when CI is green on its head and a fresh-context review posted `GATE: PASS` at
+  that head. Blocking findings get a fix and a new review. Only the coordinator merges.
+- **Outside code is read, never run** on a maintainer's machine, until a maintainer has reviewed it.
+- **Workers** (subagents) commit with `git commit -s` on their own branch; the coordinator pushes, rebases and merges.
+  A new worktree runs `./init.sh`, then `make hooks fence=1`.
+- **Lessons** land in the same PR as a test, lint or doc.
 
 ## Map
-- `schema/` wire shapes; `schema/fixtures/` examples every test loads. `gen/`, `daemon/internal/protocol/gen.go`
-  are generated. `worker/` (not yet created) Worker, PodDO, the operations and their MCP adapter, auth. `daemon/` Go daemon, ACP. `e2e/` (not yet created) slice tests.
-- `docs/INDEX.md` lists every doc. Go and Bun are pinned in `.tool-versions`; `init.sh` installs them into
-  `.tools/` (repo-local). Never install anything globally. No machine-local paths (`make portable`).
+- `crates/jellymoon-core`: the reader, redaction, page types and their checks, the reading call.
+- `crates/jellymoon`: the binary. `day` and `page` today: parse arguments, call core, print JSON
+  (`docs/development/reader.md`, `page.md`). Feature tests are `crates/jellymoon/tests/f<nn>.rs`.
+- `crates/xtask`: `cargo xtask check`, the repo's own rules, with budgets in `entropy.toml`.
+- Later features add `crates/sticker-kit` (a GPUI kit that knows nothing of Jellymoon) and `app/` (the shell).
+  Direction: core, then the binary; the kit, then the app. Core and the binary never depend on GPUI.
+- `docs/INDEX.md` lists every doc. `docs/adr/0012-restart-as-the-journal-app-in-rust.md` says why the repo looks like this.

@@ -1,3 +1,0 @@
-# Cap note 2026-11-09: f22-connector-cli
-
-2026-11-09: daemon cap 6,970 -> 7,510 and e2e cap 8,740 -> 9,070; `jellymoon connector connect|grant|approvers|list|receipts` (the argument checks, five client calls and the output, with their unit tests) and `TestF22` (the CLI against the real server and the stub Linear, with the credential scan over every stream, file and request). Two review fixes followed: a flag error is a fixed message and the usage, never the argument; and an API error names the route without its query string, with --decision checked against the decision id shape. The daemon count ended at 7,506. The e2e count is 9,062 after rebasing onto F21, which had raised that cap to 8,740. Each cap is the count rounded up to ten. No other cap changes. F22.

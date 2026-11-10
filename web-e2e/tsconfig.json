@@ -1,5 +1,0 @@
-{
-  "extends": "../tsconfig.json",
-  "compilerOptions": { "types": [], "lib": ["ES2023", "DOM"] },
-  "include": ["../gen/ts/**/*.ts", "./**/*.ts"]
-}

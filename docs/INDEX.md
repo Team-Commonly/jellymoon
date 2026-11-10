@@ -1,35 +1,14 @@
 # Docs index
 
-Every file under `docs/` is listed here with one line. `make entropy` doesn't check this yet. A
-per-wave unit compares this list with `ls docs/**` and fixes the drift.
+Every file under `docs/` is listed here with one line. A PR that adds, moves or removes a doc edits this list.
 
 | File | What it is for |
 |---|---|
-| `GLOSSARY.md` | Terms used precisely across code, schema and docs |
-| `protocol.md` | The wire protocol in plain words: ids, tokens, HTTP routes, events, messages, tasks, operations (MCP is an adapter over them) and errors. Generated from `schema/` by `make gen`; never edit by hand |
-| `development/workflow.md` | How Jellymoon is built: the long-running harness, stage skills, entropy gate, review and merge (local verification is the authority) |
-| `development/landing.md` | `make land`: the only merge path, its environment variables, the ledger format and the verdict message the operator posts |
-| `development/verifier.md` | The verifier protocol: what a fresh-context reviewer checks, and its verdict format |
-| `development/browser-specs.md` | The Playwright browser specs in `web-e2e/`: what they prove, how the harness starts the server and bridges the pod socket, `make e2e-web`, and that browsers are installed only in CI |
-| `development/e2e-contract.md` | The black-box e2e contract suite in `e2e/`: how it starts a server, the `/__test/*` routes, the clock and persistence rules, and what each test proves |
-| `adr/0010-hosted-instance.md` | The hosted instance: `server/` in one Cloudflare Container behind a thin front Worker, Postgres outside Cloudflare; the two shapes counted, user data, backups, the OAuth app, the CI deploy plan, and the order `worker/` retires in (Accepted; Postgres provider open) |
-| `runbooks/hosted-instance.md` | The hosted instance: what `hosted/` holds, the CI jobs, the secrets and the one variable by name, the Postgres URL, how to ship, roll back and stop it |
-| `adr/0009-connector-layer.md` | The connector layer in the pod-state server: the vault, the catalogue pin and drift check, the write gate, receipts; Worker not built, OAuth deferred |
-| `adr/0006-pod-state-server.md` | The decision that the server is one Bun process with Hono and Postgres, the five adapter duties, storage, test routes, and the two open questions |
-| `../worker/README.md` | The Cloudflare adapter in `worker/`: what it is, `make worker-dev`, `make e2e-a` |
-| `adr/0001-dev-tooling.md` | Dev dependencies, the entropy budgets and the rule for raising a LOC cap |
-| `entropy/caps/` | One dated note per LOC cap change (area, old and new cap, measured count, why); `entropy.json` holds the numbers |
-| `adr/0002-claims-and-leases.md` | When a task claim's lease renews, expires and is released; the unknowns left open |
-| `adr/0003-pure-pod-core.md` | Why claims, leases and recourse are a pure module, and what an adapter must do around it |
-| `adr/0004-open-core-boundary.md` | Accepted (product owner, 2026-11-09; the licence, the gated features, subscription checks and the entitlement context stay open): the Apache-2.0 core and the commercial `ee/`, the one-way import rule and the entitlement interface core calls |
-| `adr/0005-how-the-daemon-starts-an-agent.md` | The agent as an ACP child, where the run token travels, the MCP URL check, how a run ends and how a real Claude Code session is replayed |
-| `development/import-commonly.md` | `jellymoon import commonly`: usage, what it reads, what it never copies, what is lost |
-| `development/record-acp.md` | How to record a real Claude Code session through the pinned adapter, scrub it and replay it (`make record-acp`) |
+| `GLOSSARY.md` | Terms used precisely across code, docs and tests |
+| `adr/0011-the-journal-app.md` | The design: a local app that reads agent sessions into one page per day; the reader, the reading call, the kit, the GPUI shell, how a ruling reaches a running session, and a run's own copy of the repo |
+| `adr/0012-restart-as-the-journal-app-in-rust.md` | Why the repo is Rust only and this small: what the restart decided, what it removed and where the old code remains |
+| `development/workflow.md` | How Jellymoon is built: the loop, the size rules, the fresh-context review and its verdict lines, and how a PR lands |
+| `development/reader.md` | `jellymoon day`: usage, what counts as typed by a person, what is cut and replaced, which files are skipped |
+| `development/page.md` | `jellymoon page`: usage, the exact harness command line, what goes in on stdin, and every check code makes on what the model returns |
+| `runbooks/old-hosted-instance.md` | The hosted instance of the removed product, which may still be running: what it is, what this repo no longer does to it, and how to stop it |
 | `skills/SOURCES.md` | Where the vendored stage skills in `.agents/skills/` come from, their pins and how to update them |
-| `design/protocol.md` | Protocol review: what the schema decides, the open questions and recommendations |
-| `design/connector-options.md` | Connectors options paper (OSS-first): Linear read through a pod grant, the write gate |
-| `design/client-options.md` | Client strategy options paper: web-first slice, four screens |
-| `design/ux-concepts.html` | Six interaction paradigms (Round table included) as clickable prototypes on one scenario, with verdicts. Exploration only: the direction picked from it is `night-shift.html`; the client itself stays open until the maintainers review it (F18) |
-| `design/generative-ui.md` | Generative UI paper: a fixed card catalogue, validated and grounded server-side, rendered with OpenUI |
-| `design/openui-upstream-issue.md` | Draft issue for OpenUI (data-only Renderer input, strict parse). Not posted; needs review |
-| `design/night-shift.html` | Preview: Night shift and Day shift themes, the pod Floor (pose = lease state), Round table, Inbox |

@@ -1,3 +1,0 @@
-# Cap note 2026-11-09: grounding
-
-2026-11-09: podcore cap 2,780 -> 3,020, server cap 4,300 -> 4,360, worker cap 2,520 -> 2,560 and e2e cap 9,070 -> 9,330; F25 refuses an ask whose claims are not grounded. The check and the number rule are in the core (`podcore/src/ground.ts`, with `podcore/test/ground.test.ts` testing the number edges), each adapter looks up the cited records (`server/src/store.ts`, `server/src/evidence.ts`, `worker/src/pod-do.ts`, `worker/src/pod-routes.ts`), and `TestF25` walks steps (a) to (e). The tree printed `LOC budget: podcore 3019 > 2780`, `server 4355 > 4300`, `worker 2553 > 2520` and `e2e 9329 > 9070`; each cap is the count rounded up to ten. No other cap changes.

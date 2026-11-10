@@ -5,15 +5,14 @@
 <!-- The exact command and its result. Red before this PR, green after. -->
 ```
 $ <test command>
-E2E_MS=<n> STEPS=<k>/<k>
 ```
 
 ## What changed and why
-<!-- Three lines at most. The diff tells the rest. -->
+<!-- Three lines at most. Lines added and removed, and what this PR deleted. -->
 
 ## Review
 - [ ] `make preflight` green locally
 - [ ] `feature_list.json`: only `passes` changed
-- [ ] `progress/` entry added (a new file; `progress.md` takes no new entries)
-- [ ] Every land needs the review's pod verdict at the head, whatever the paths (one review per head). See `docs/development/landing.md`
+- [ ] `progress/` entry added (a new file)
+- [ ] Fixtures are synthetic: no text from a real session log
 - [ ] Lesson captured in the repo (test, lint or docs/), or none surfaced

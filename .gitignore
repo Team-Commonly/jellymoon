@@ -1,9 +1,2 @@
-node_modules/
+/target/
 .tools/
-.wrangler-data/
-web/dist/
-web-e2e/report/
-web-e2e/test-results/
-# The README's Run it yourself folders: the server's local Postgres, and the CLI's sign-in token.
-.jellymoon-state/
-.jellymoon-home/

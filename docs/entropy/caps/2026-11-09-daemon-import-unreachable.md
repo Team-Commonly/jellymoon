@@ -1,3 +1,0 @@
-# Cap note 2026-11-09: daemon-import-unreachable
-
-2026-11-09: daemon cap 7,960 -> 8,170; `jellymoon import commonly` against a host that refuses the connection or does not resolve now fails on the first request with "can't reach <host>: <reason>" instead of retrying five times, and the stop message claims saved state only when a state file exists. The change is a small classifier in `importer/commonly.go` and `explainStop` in `cli/import.go`, with tests in `importer/unreachable_test.go` and `cli/import_unreachable_test.go`. The tree printed `LOC budget: daemon 8162 > 7960`; the cap is the count rounded up to ten. No other cap changes.

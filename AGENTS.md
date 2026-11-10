@@ -52,6 +52,6 @@ Read `.agents/skills/<name>/SKILL.md` before the stage. Detail: `docs/developmen
 - `crates/jellymoon`: the binary. `day` and `page` today: parse arguments, call core, print JSON
   (`docs/development/reader.md`, `page.md`). Feature tests are `crates/jellymoon/tests/f<nn>.rs`.
 - `crates/xtask`: `cargo xtask check`, the repo's own rules, with budgets in `entropy.toml`.
-- Later features add `crates/sticker-kit` (a GPUI kit that knows nothing of Jellymoon) and `app/` (the shell).
-  Direction: core, then the binary; the kit, then the app. Core and the binary never depend on GPUI.
+- `crates/sticker-kit`: a GPUI kit that knows nothing of Jellymoon. `app/`: the shell, `jellymoon-app` (`docs/development/app.md`).
+  Direction: core, then the binary; the kit, then the app, which also uses core. Core and the binary never depend on GPUI.
 - `docs/INDEX.md` lists every doc. `docs/adr/0012-restart-as-the-journal-app-in-rust.md` says why the repo looks like this.

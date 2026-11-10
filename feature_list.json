@@ -45,7 +45,7 @@
         "a kind the kit does not have falls back to a plain note"
       ],
       "test": "cargo test -p jellymoon-app --test f28",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F27"
       ]

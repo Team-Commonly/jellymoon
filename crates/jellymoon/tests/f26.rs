@@ -314,24 +314,26 @@ fn a_command_that_cannot_run_prints_an_error_and_no_day() {
     let (_dir, logs) = logs();
     let logs = logs.to_str().unwrap();
     let missing = scratch().path().join("gone");
-    let cases: &[&[&str]] = &[
-        &["--logs", logs, "--date", "10-03-2026"],
-        &["--logs", logs, "--date", "2026-02-30"],
-        &["--logs", missing.to_str().unwrap()],
-        &["--logs", logs, "--verbose"],
-        &["--logs", logs, "--model", "sonnet"],
-        &["--logs", logs, "extra"],
-        &["--logs"],
+    // A run that fails exits 1; a command line that is wrong exits 2 and prints the usage after the reason.
+    let cases: &[(i32, &[&str])] = &[
+        (1, &["--logs", logs, "--date", "10-03-2026"]),
+        (1, &["--logs", logs, "--date", "2026-02-30"]),
+        (1, &["--logs", missing.to_str().unwrap()]),
+        (2, &["--logs", logs, "--verbose"]),
+        (2, &["--logs", logs, "--model", "sonnet"]),
+        (2, &["--logs", logs, "extra"]),
+        (2, &["--logs"]),
     ];
-    for args in cases {
+    for (code, args) in cases {
         let ran = run(args);
         assert!(
-            ran.code != 0 && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: "),
+            ran.code == *code && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: "),
             "{args:?}: {} {:?} {:?}",
             ran.code,
             ran.stdout,
             ran.stderr
         );
+        assert_eq!(ran.stderr.contains("usage:"), *code == 2, "{args:?}: {}", ran.stderr);
     }
     assert!(run(&["--logs", logs, "--date", "tomorrow"]).stderr.contains("--date"));
 }
@@ -352,7 +354,7 @@ fn help_prints_the_usage_and_no_command_is_an_error() {
     for args in [&[][..], &["days"], &["daemon", "start"]] {
         let ran = support::jellymoon(&[], args);
         assert!(
-            ran.code != 0
+            ran.code == 2
                 && ran.stdout.is_empty()
                 && ran.stderr.starts_with("jellymoon: ")
                 && ran.stderr.contains("usage:"),

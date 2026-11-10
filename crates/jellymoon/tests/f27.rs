@@ -174,7 +174,7 @@ fn the_harness_runs_in_an_empty_folder_under_the_home_that_is_gone_afterwards() 
         );
     }
     // A call that fails leaves nothing behind either.
-    assert_ne!(w.run("Not logged in", 3, "page", DAY).code, 0);
+    assert_eq!(w.run("Not logged in", 3, "page", DAY).code, 1);
     assert_eq!(fs::read_dir(&reading).unwrap().count(), 0, "a failed call's folder was left behind");
 }
 
@@ -190,7 +190,7 @@ fn a_day_with_no_turns_is_an_empty_page_with_no_call_and_a_model_name_that_is_no
     {
         let ran = w.run(&result(r#"{"wishes":[],"clashes":[]}"#), 0, "page", &[DAY, &["--model", model]].concat());
         assert!(
-            ran.code != 0
+            ran.code == 1
                 && ran.stdout.is_empty()
                 && ran.stderr.starts_with("jellymoon: ")
                 && ran.stderr.contains("--model"),
@@ -210,7 +210,7 @@ fn the_harness_is_claude_on_path_or_the_program_jellymoon_claude_names() {
     w.vars[path].1 = w.dir.path().join("user").into();
     let ran = w.run(&result(r#"{"wishes":[],"clashes":[]}"#), 0, "page", DAY);
     assert!(
-        ran.code != 0 && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: ") && ran.stderr.contains("PATH"),
+        ran.code == 1 && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: ") && ran.stderr.contains("PATH"),
         "{}",
         ran.stderr
     );
@@ -224,7 +224,23 @@ fn the_harness_is_claude_on_path_or_the_program_jellymoon_claude_names() {
     w.vars.push(("JELLYMOON_CLAUDE", w.dir.path().join("nowhere").into()));
     w.vars[path].1 = w.dir.path().join("bin").into();
     let ran = w.run(&result(r#"{"wishes":[],"clashes":[]}"#), 0, "page", DAY);
-    assert!(ran.code != 0 && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: "), "{}", ran.stderr);
+    assert!(ran.code == 1 && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: "), "{}", ran.stderr);
+    // A command line that is wrong is not a failed run: it exits 2, with the usage, and no call is made.
+    let ran = w.run("", 0, "page", &["--tools", "Bash"]);
+    assert!(ran.code == 2 && ran.stdout.is_empty() && ran.stderr.contains("usage:"), "{} {}", ran.code, ran.stderr);
+}
+
+// Item 27: a folder left wider by an earlier version, or made by hand, is closed before a call runs in it.
+#[cfg(unix)]
+#[test]
+fn a_reading_folder_that_others_could_open_is_made_the_users_alone() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = world();
+    let reading = w.home.join("reading");
+    fs::create_dir_all(&reading).unwrap();
+    fs::set_permissions(&reading, fs::Permissions::from_mode(0o755)).unwrap();
+    w.page(json!({"wishes": [], "clashes": []}), &[]);
+    assert_eq!(fs::metadata(&reading).unwrap().permissions().mode() & 0o777, 0o700);
 }
 
 #[test]

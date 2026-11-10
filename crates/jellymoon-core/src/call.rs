@@ -119,14 +119,17 @@ fn runnable(_: &fs::Metadata) -> bool {
     true
 }
 
-/// Makes the folder the call folders go in, for this user only where the system has file modes. On Windows the folder
-/// is under the user's profile, which other users cannot read.
+/// Makes the folder the call folders go in, for this user only where the system has file modes; one that is already
+/// there is closed to others too. On Windows the folder is under the user's profile, which other users cannot read.
 fn private_dir(dir: &Path) -> io::Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]
     std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
-    builder.create(dir)
+    builder.create(dir)?;
+    #[cfg(unix)]
+    fs::set_permissions(dir, std::os::unix::fs::PermissionsExt::from_mode(0o700))?;
+    Ok(())
 }
 
 /// Runs the command with `input` on its stdin and returns what it printed. One still running at `limit` is stopped.

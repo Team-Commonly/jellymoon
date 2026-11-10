@@ -92,6 +92,7 @@ fn a_wish_or_a_clash_that_quotes_words_the_person_did_not_type_is_dropped_and_th
                 wish("gamma", "fix the login page", "gamma"),      // no turn ran in gamma
                 wish("a", "fail fast", "alpha"),                   // an id already taken
                 wish("nothing", " ", "alpha"),                     // no words at all
+                {"id": "unnamed", "label": " \t\u{200b}", "said": "fail fast", "project": "alpha", "state": "working", "stars": []},
                 {"id": "b", "label": label, "said": "never retry uploads", "project": "alpha", "state": "done", "stars": stars, "mood": "added by the model"},
                 wish("c", "fix the login page", "beta"),
             ],
@@ -159,7 +160,7 @@ fn output_that_is_not_page_data_gives_an_error_and_no_page() {
     for (name, reply, code) in cases {
         let ran = w.run(&reply, code, "page", DAY);
         assert!(
-            ran.code != 0 && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: "),
+            ran.code == 1 && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: "),
             "{name}: exit {}, stdout {:?}, stderr {:?}",
             ran.code,
             ran.stdout,

@@ -1,16 +1,16 @@
 # 0011 · The journal app: a local app that reads your agent sessions into a page
 
-Status: Accepted, by the owner's ruling, 2026-11-09, except section 4 (the shell), which stays proposed until the stack
-evaluation the owner asked for is written down. It adds no code. It decides the shape of a new local app so the features
-that follow (F26 to F31) have one design to build. The measurements below come from throwaway tests kept outside the repo;
-"Still open" names what they did not cover.
+Status: Accepted, by the owner's ruling, 2026-11-09. Sections 4 (the shell) and 7 (working copies) were decided on
+2026-11-10 from the stack evaluation the owner asked for; the owner can overrule either, and section 4 says what would
+change it. This note decides the shape of a new local app so the features that follow (F26 to F31) have one design to
+build. The measurements below come from throwaway tests kept outside the repo; "Still open" names what they did not cover.
 
 All logic lives in the daemon and is checked at its commands. The shell only draws page data, so it can be replaced
 without touching a rule.
 
 ## Decision
 
-Jellymoon gains a Mac app. It reads the Claude Code and Codex session logs already on the computer, works out what the
+Jellymoon gains a desktop app, for the Mac first and for Windows after it. It reads the Claude Code and Codex session logs already on the computer, works out what the
 person asked their agents for, and shows one **page** per local day: each **wish** as a **little one** carrying a **star**
 for every finished job, and a note wherever two things the person said cannot both stand (a **clash**). A tap on the page
 settles a clash, and the answer reaches the agents that are running.
@@ -61,22 +61,50 @@ where it goes and how it moves. A day that needs a piece the kit lacks falls bac
 
 This keeps every page in one look, keeps frame time in our hands, and means nothing in a log can change what the app does.
 
-### 4. The shell is Rust and GPUI
+### 4. The shell is Rust and GPUI, one shell for Mac and Windows
 
-A throwaway GPUI window (transparent, always on top, one character with five simulated ropes) held 60.0 frames a second
-for 14 seconds on a 60 Hz display, with the worst frame at 17.1 ms, 6 to 15% of one core and about 65 MB of memory. The
-binary was 8.9 MB.
+The owner's ruling (2026-11-10): the app supports Windows, and Windows need not be first class. So the Mac is where the
+app is polished first, and one shell serves both. The shell is a Rust program on GPUI, the UI framework of the Zed
+editor, which ships on Mac, Windows and Linux.
 
-Known gaps, read from the GPUI source at the pinned commit: no menu-bar item, no radial gradient or blur on drawn paths,
-and no option for a click-through window. The flat sticker look needs none of the three. A menu-bar item, if wanted, is a
-small piece of native code beside GPUI.
+GPUI and a native Swift shell were each built as a 50-sticker test page on the same Mac (60 Hz, Command Line Tools only).
 
-This adds a language and a toolchain to the repo. Rust is pinned in `.tool-versions` and installed into `.tools/` by
-`init.sh`, like Go and Bun; GPUI is pinned to one commit. `app/` gets its own budget in `entropy.json` and may import
-nothing from `daemon/`, `server/` or `web/`: it talks to the daemon only through page data and the daemon's local commands.
+| | GPUI (Rust, pinned commit) | Swift (AppKit, Core Animation) |
+|---|---|---|
+| Runs on | Mac and Windows | Mac only |
+| 50 animated stickers | 60.0 frames a second, worst frame 17.1 ms, 5 to 10% of a core, 74 MB | 0.0% of a core in the app process, 43 MB; frame pacing not measured |
+| Binary | 12.7 MB | 141 KB |
+| Tilted text and pictures | no: only single-colour vector art and drawn paths take a transform at that commit | yes |
+| Tests with no display | layout, a simulated tap and a picture, 0.95 s; the best of any candidate | layout assertions and an offscreen picture, 0.5 s |
+| How it is consumed | a pinned commit; no versioned release | the system SDK |
+| Menu-bar item, held key | separate crates, both registered inside GPUI's loop in the test | first-party |
 
-Considered and not taken: a web view shell. It is quicker to draw in and can run generated pages, but it gives up the
-frame budget and rule 3.
+Swift is the better Mac app and was the pick for one day, until Windows became a requirement. A Swift shell now and a
+second shell for Windows later would mean two shells to keep in step; one shell that trails on Windows is the cheaper
+promise to keep.
+
+What this costs, and how each cost is held:
+
+- **No tilted text.** On the page, paper and tape tilt (they are drawn paths); the words on them stay level. Fixed
+  titles can be shipped as vector art, which does tilt. The kit is designed inside that limit.
+- **A pinned commit, not a release.** `app/` pins one GPUI commit and moves it on purpose, with the layout and picture
+  tests as the check. Rust is pinned in `.tool-versions` and installed into `.tools/` by `init.sh`, like Go and Bun.
+- **Packaging is ours.** The app bundle, signing and updates are built by script on each system; GPUI provides none.
+- **Speech is a helper per system.** On-device speech that covers Chinese on the Mac is Apple's framework, reached
+  through a small Swift helper when F30 needs it. Windows starts with a typed wish.
+- **Windows has not been run.** Nothing here was measured on Windows. From its first commit the shell builds and passes
+  its layout tests on a Windows CI runner; a person on Windows tries a real build before Windows is announced.
+- **Whether a held key reports its release has not been proved** on any candidate. A person holds the key on a real
+  build before F30 passes.
+
+Layout is a pure function from page data to placed pieces, asserted as data (F28). `app/` gets its own budget in
+`entropy.json` and may import nothing from `daemon/`, `server/` or `web/`: it talks to the daemon only through page data
+and the daemon's local commands. Because every rule lives in the daemon, a different shell can replace this one.
+
+What would change this: the Windows CI check failing in a way a pin cannot fix, in which case Windows gets a web shell
+drawing the same page data. Considered and not taken: a web view shell for both systems (Electron, Tauri), which is
+quicker to draw in and can run generated pages, but is either a far larger download (Electron) or held to 60 frames a
+second by the Mac's own web view (Tauri), and gives up rule 3; and game engines, which have no held global key or speech without native code.
 
 ### 5. A ruling reaches a running session through a hook
 
@@ -100,6 +128,18 @@ the pod comes in: two people in one pod can see each other's pages. That slice i
 The token rule holds: the app and the reading call hold no `jmc_`, `jmu_` or third-party credential. The reading call
 runs under whatever sign-in the person's harness already has.
 
+### 7. A run the app starts works in its own copy of the repo
+
+When a wish starts a run (F30), the daemon gives that run its own working copy, so two wishes in one repo never write
+over each other. The daemon already has the seam: `daemon/internal/workspace` prepares a git worktree of the person's
+repo for each run and cleans it up after. The app uses that as it is. The work stays in the person's repo, where they
+already look for it.
+
+LayerFS, a filesystem that gives each agent a writable copy over shared committed history, was evaluated for the same
+seam. Its macOS support ran here from an unreleased branch with no installer and no extra permission, which is
+promising, but it has no macOS release yet and no path from its copy back into the person's git history. It goes behind
+the same seam when it ships for macOS and that path exists; nothing above the seam changes.
+
 ## Still open
 
 - **The reading has been tried on one person's one day.** Whether it holds on other people's sessions, on a week, or on a
@@ -108,5 +148,9 @@ runs under whatever sign-in the person's harness already has.
 - **Delivery in an interactive session.** The delivery tests ran headless. The hook path is the same, but an open terminal
   session has not been tried, nor the hook that fires with the person's next prompt.
 - **Cost to the person.** The reading call spends the person's own plan. How often it runs, and on which model, is not set.
-- **A 120 Hz display.** The frame test ran at 60 Hz.
+- **A 120 Hz display.** Both test pages ran at 60 Hz.
+- **Windows.** Nothing was run on Windows. Where the reader finds session logs there, the hook's script, and the
+  floating window all need their own check.
+- **The oldest macOS the app supports.** On-device speech as chosen needs macOS 26.
+- **Packaging.** The app bundle, signing and updates are assembled by script; that has not been tried on either system.
 - **A second person.** The friend's page, and whether a page ever leaves the computer, need their own decision.

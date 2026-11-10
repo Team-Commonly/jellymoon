@@ -57,6 +57,21 @@ const (
 	f26G = "/work/gamma"
 )
 
+// f26Gamma is a session with prompts whose content is a list: beside a tool result, an image alone, and text typed with an image.
+func f26Gamma() []string {
+	image := map[string]any{"type": "image", "source": map[string]any{"type": "base64", "data": "LEAK"}}
+	text := func(t string) map[string]any { return map[string]any{"type": "text", "text": t} }
+	return []string{
+		f26Said("2026-03-10T21:00:00.000Z", f26G, "first gamma ask"),
+		f26Line("user", "2026-03-10T21:00:30.000Z", f26G, "human", []map[string]any{text("LEAK beside a tool result"), {"type": "tool_result", "tool_use_id": "t2", "content": "LEAK"}}, nil),
+		f26Reply("2026-03-10T21:00:40.000Z", f26G, "gamma reply one"),
+		f26Line("user", "2026-03-10T21:01:00.000Z", f26G, "human", []map[string]any{image}, nil),
+		f26Reply("2026-03-10T21:01:30.000Z", f26G, "LEAK reply to an image alone"),
+		f26Line("user", "2026-03-10T21:02:00.000Z", f26G, "human", []map[string]any{text("<system-reminder>LEAK</system-reminder>look at "), image, text("this screenshot")}, nil),
+		f26Reply("2026-03-10T21:02:30.000Z", f26G, "seen"),
+	}
+}
+
 // f26Logs writes the projects directory. The day under test is 2026-03-10 in America/Los_Angeles (UTC-7 that day).
 func f26Logs(t *testing.T) string {
 	t.Helper()
@@ -89,19 +104,8 @@ func f26Logs(t *testing.T) string {
 		f26Said("2026-03-11T07:01:00.000Z", f26A, "one minute after midnight"),
 		f26Reply("2026-03-11T07:01:30.000Z", f26A, "noted after midnight"),
 	}
-	image := map[string]any{"type": "image", "source": map[string]any{"type": "base64", "data": "LEAK"}}
-	text := func(t string) map[string]any { return map[string]any{"type": "text", "text": t} }
-	gamma := []string{
-		f26Said("2026-03-10T21:00:00.000Z", f26G, "first gamma ask"),
-		f26Line("user", "2026-03-10T21:00:30.000Z", f26G, "human", []map[string]any{text("LEAK beside a tool result"), {"type": "tool_result", "tool_use_id": "t2", "content": "LEAK"}}, nil),
-		f26Reply("2026-03-10T21:00:40.000Z", f26G, "gamma reply one"),
-		f26Line("user", "2026-03-10T21:01:00.000Z", f26G, "human", []map[string]any{image}, nil),
-		f26Reply("2026-03-10T21:01:30.000Z", f26G, "LEAK reply to an image alone"),
-		f26Line("user", "2026-03-10T21:02:00.000Z", f26G, "human", []map[string]any{text("<system-reminder>LEAK</system-reminder>look at "), image, text("this screenshot")}, nil),
-		f26Reply("2026-03-10T21:02:30.000Z", f26G, "seen"),
-	}
 	files := map[string][]string{
-		"-work-gamma/s4.jsonl":         gamma,
+		"-work-gamma/s4.jsonl":         f26Gamma(),
 		"-work-alpha/old.jsonl":        {f26Said("2026-03-10T22:00:00.000Z", f26A, "LEAK from a file last written before the day")},
 		"-work-alpha/s1.jsonl":         alpha,
 		"-work-private-notes/s2.jsonl": {f26Said("2026-03-10T19:00:00.000Z", f26B, "a private note"), f26Reply("2026-03-10T19:00:05.000Z", f26B, "kept private")},
@@ -200,8 +204,7 @@ func TestF26(t *testing.T) {
 		if !reflect.DeepEqual(next.Turns, want) {
 			t.Errorf("2026-03-11 has %+v, want %+v", next.Turns, want)
 		}
-		none, rawNone := f26Read(t, bin, "--date", "2026-03-12", "--logs", logs)
-		if len(none.Turns) != 0 || !strings.Contains(rawNone, `"turns":[]`) {
+		if none, rawNone := f26Read(t, bin, "--date", "2026-03-12", "--logs", logs); len(none.Turns) != 0 || !strings.Contains(rawNone, `"turns":[]`) {
 			t.Errorf("a day with nothing typed must print an empty list: %s", rawNone)
 		}
 	})

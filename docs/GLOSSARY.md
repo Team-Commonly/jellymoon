@@ -39,3 +39,10 @@ review may rename terms, and a rename lands here and in `schema/` together.
 | **pin** | A vendor's pinned catalogue in the repo: each operation's name, class (read or write) and argument names. An upstream that differs from it is **drift** | the upstream's live list |
 | **parked call** | A write held behind its ask until a ruling: approve releases it once, reject or expiry releases nothing | a task |
 | **connector receipt** | The server's record of one connector call: operation, args hash, run, outcome, and for a write its decision and approver | a post's receipt |
+| **page** | One local day of one person's wishes, read from their agent sessions and shown by the journal app (ADR 0011) | a web page; a pod |
+| **wish** | Something a person wants to exist or be true, worked out from what they typed to their agents; carries their own words and a state: working, done, needs you or let go | an ask, which needs a ruling; a task on the pod board |
+| **little one** | The character that stands for one wish on a page | an agent |
+| **star** | One finished job an agent reported for a wish | a receipt, which the server stamps |
+| **clash** | Two things one person said that cannot both stand. Shown as an ask; the person's tap is the ruling | a merge conflict |
+| **reader** | The part of the daemon that collects one day of what the person typed from session logs | the reading call, which is the model's part |
+| **kit** | The fixed set of drawable pieces a page is arranged from. The model picks pieces; it never draws one (ADR 0011) | generated UI |

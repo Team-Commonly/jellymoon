@@ -70,7 +70,10 @@ one whose output something it left still holds open, so that its reader never fi
 what counts, and a reader that did not finish is never the reader of a harness too old. For the wish to be as it
 was, the day's lock is waited for as a run's end waits for it. Whatever came of that, and in this order: the
 record takes `not_started` as its outcome, an end of its own kind; the copy is taken back; and only then is the
-run's lock let go. So at no moment does a look find a run that nothing holds and that has no end. If the day
+run's lock let go. So at no moment does a look find a run that nothing holds and that has no end. The run's folder
+in `runs`, which holds its lock and its record, goes in one step: it is moved to `gone-<id>`, a name no look takes
+for a run, and removed there. Removed file by file, a look could find it with the lock and the record gone and the
+folder still there, and take the run for one cut off; on Linux, where files go in no set order, one did. If the day
 stayed locked, the wish still names the run. The next page or `jellymoon run` that finds a wish naming a run
 whose record says `not_started` (its copy is then taken back), or of which nothing is kept, not even its folder
 in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never

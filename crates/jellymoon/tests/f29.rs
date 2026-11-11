@@ -3,6 +3,8 @@
 //! in a folder of the test's own. Only the last test runs the real Claude Code, and only when a person asks it to.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f29/edges.rs"]
+mod edges;
 mod support;
 
 use std::ffi::OsString;

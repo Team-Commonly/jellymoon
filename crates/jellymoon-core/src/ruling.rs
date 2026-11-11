@@ -4,14 +4,14 @@
 //! create, so two hooks of one session that race hand a ruling over one time between them.
 
 use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::redact::shown;
+use crate::redact::line;
 use crate::{Error, Ruling};
 
 /// The most characters of a statement kept: what a quote on a page may hold.
@@ -31,6 +31,25 @@ const EVENTS: [&str; 3] = ["PostToolUse", "PreToolUse", "UserPromptSubmit"];
 struct Step {
     session_id: String,
     hook_event_name: String,
+    /// Set when the step is a subagent's. A ruling is for the session's main thread, which decides what is done.
+    agent_id: Option<serde_json::Value>,
+}
+
+/// A statement as it is kept and handed over: cleaned and cut as the reader does it, on one line (a line break, a
+/// tab and any run of spaces become one space), with each `"` made `'`. So a statement cannot end its own quote in
+/// what the hook prints, or start a line that reads as another ruling.
+fn words(text: &str) -> String {
+    line(text, WORDS_MAX).replace('"', "'")
+}
+
+/// Makes a folder of Jellymoon's own, and the folders above it that are missing, for the person alone (0700) where
+/// the system has such modes. A folder that is there is left as it is.
+pub(crate) fn private_dir(path: &Path) -> io::Result<()> {
+    let mut make = fs::DirBuilder::new();
+    make.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut make, 0o700);
+    make.create(path)
 }
 
 fn millis(now: SystemTime) -> u64 {
@@ -44,12 +63,12 @@ pub fn rule(home: &Path, stands: &str, over: &str) -> Result<Ruling, Error> {
 }
 
 fn rule_at(home: &Path, stands: &str, over: &str, now: u64) -> Result<Ruling, Error> {
-    let (stands, over) = (shown(stands, WORDS_MAX), shown(over, WORDS_MAX));
+    let (stands, over) = (words(stands), words(over));
     if stands.is_empty() || over.is_empty() {
         return Err(Error::Ruling);
     }
     let dir = home.join("rulings");
-    fs::create_dir_all(&dir).map_err(Error::Store)?;
+    private_dir(&dir).map_err(Error::Store)?;
     forget(&dir, now);
     // The id is the time it was made, moved on until no ruling has it. The file appears whole or not at all.
     let mut id = now;
@@ -110,6 +129,9 @@ fn deliver_at(home: &Path, input: impl Read, now: u64) -> Option<String> {
     if step.session_id.is_empty() || step.session_id.len() > 64 || !step.session_id.chars().all(plain) {
         return None;
     }
+    if step.agent_id.is_some() {
+        return None;
+    }
     let event = EVENTS.iter().find(|event| **event == step.hook_event_name)?;
     let mut told = Vec::new();
     for id in waiting {
@@ -126,8 +148,8 @@ fn deliver_at(home: &Path, input: impl Read, now: u64) -> Option<String> {
             // The file is read as untrusted: its words are cleaned again on the way out.
             told.push(format!(
                 "- What stands: \"{}\". It replaces: \"{}\".",
-                shown(&ruling.stands, WORDS_MAX),
-                shown(&ruling.over, WORDS_MAX)
+                words(&ruling.stands),
+                words(&ruling.over)
             ));
         }
     }

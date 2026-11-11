@@ -15,10 +15,13 @@ jellymoon hook uninstall
 `jellymoon rule` keeps one ruling as one file, `rulings/<id>.json`, in Jellymoon's home (`JELLYMOON_HOME`, or
 `.jellymoon` in the home directory) and prints it: `{"id","stands","over"}`. The app calls the same core function
 (`jellymoon_core::rule`) when a clash option is tapped. The id is the time it was made, in milliseconds. Both
-statements pass through the reader's cleaning ([what is printed](reader.md#what-is-printed)) before they are stored
-and again when they are handed over: credential shapes replaced, control characters removed, cut to 200 characters. A
-ruling without both statements is refused. The file is written under another name and then renamed, so a hook never
-reads half of one.
+statements are cleaned before they are stored and again when they are handed over, as the reader cleans a text
+([what is printed](reader.md#what-is-printed)): credential shapes replaced, control and invisible characters
+removed, cut to 200 characters. Each is also made one line: a line break, a tab and any run of spaces become one
+space, and every `"` becomes `'`. So a statement cannot close its own quote in what the hook prints or start a line
+that reads as another ruling. A ruling without both statements is refused. The file is written under another name
+and then renamed, so a hook never reads half of one. The folders Jellymoon makes are for the person alone (0700) on
+a system with such modes.
 
 A ruling waits for 24 hours. After that no session is told, and the next `jellymoon rule` removes its files.
 
@@ -30,7 +33,11 @@ Checked against <https://code.claude.com/docs/en/hooks> on 2026-11-10.
   the "next step" ADR 0011 measured (a ruling arrived at the next tool call). `UserPromptSubmit` alone would not reach
   a turn that is already running. One event keeps it to one entry; a session that is idle is told after the first
   tool call of its next turn.
-- **Input.** Claude Code gives the hook a JSON object on stdin. Only `session_id` and `hook_event_name` are read.
+- **Input.** Claude Code gives the hook a JSON object on stdin. `session_id`, `hook_event_name` and `agent_id` are
+  read, and stdin is read only when a ruling waits, at most 1 MiB of it. A step larger than that is cut, is then not
+  JSON, and is told nothing; the ruling waits for the session's next step.
+- **A subagent's step is told nothing.** A step that carries `agent_id` is a subagent's. The ruling waits for the
+  main thread, which decides what is done; a subagent would use it up for the session.
 - **Output.** With nothing to hand over it prints nothing and exits 0, without reading its input. Otherwise it prints
   one object, the documented way to add context "alongside the tool result":
 
@@ -43,6 +50,8 @@ Checked against <https://code.claude.com/docs/en/hooks> on 2026-11-10.
   one step, so the text stays far under the 10,000 characters Claude Code keeps; the rest come at the next step.
 - **It never stops a session.** Input that is not a hook step, a session id that is not a plain name (letters,
   digits, dash, underscore, at most 64), an unknown event or a store that cannot be read all print nothing and exit 0.
+  So does a home that is missing: with `JELLYMOON_HOME` unset and no home directory, or with the folder not there,
+  the hook prints nothing, exits 0 and makes no folder.
   Exit code 2 is never used for a delivery. `PreToolUse` and `UserPromptSubmit` are answered in the same shape, for a
   person who wires the hook to those by hand.
 
@@ -66,30 +75,49 @@ Windows and a path with spaces needs no quoting.
 
 The settings file is never parsed and written back. The entry is one piece of text put right after the opening
 bracket of the `PostToolUse` list, with `"PostToolUse"` and `"hooks"` around it when the file lacks them. Every other
-byte stays: comments, key order, spacing, line ends. The text and the file's path are kept in `hook.json` in
-Jellymoon's home, and `jellymoon hook uninstall` removes exactly that text, so the file is as it was, along with
-anything the person changed elsewhere in between. Both print `{"installed","changed"}`.
+byte stays: comments, key order, spacing, line ends. The text, the program and the file's path are kept in
+`hook.json` in Jellymoon's home, and `jellymoon hook uninstall` removes exactly that text, so the file is as it was,
+along with anything the person changed elsewhere in between. Both print `{"installed","changed"}`.
+
+**The file is replaced whole.** The new content is written to a new file beside the settings,
+`<name>.jellymoon-<process id>`, opened create-new so a file that is there is never written over. It is synced,
+given the old file's permissions, and renamed over the old one. A link is resolved first, so the link stays and the
+file it points at is replaced. If any step fails the new file is removed, the settings are as they were, and the
+command exits 1; an install that failed leaves no record, and a removal that failed keeps its record to try again.
 
 - A missing file is made, and removed again by uninstall. An empty file gets one object and is emptied again.
 - A file that is not a JSON object (`//` and `/* */` comments allowed), or whose `hooks` or `PostToolUse` are not an
   object and a list, is refused with exit 1 and left as it was.
-- Installing twice changes nothing. Installing into a second settings file while the first holds the entry is refused.
-- When the entry is no longer in the file as written (edited or reformatted), uninstall changes nothing and says to
-  remove it by hand.
+- A file that already holds an entry running this program with `["hook"]`, in any layout, is left alone: install
+  records it and prints `"changed":false`. So a file another program laid out anew never gets a second entry.
+  Installing into a second settings file while the first holds the entry is refused.
+- When the exact text is gone (the file was laid out anew), uninstall looks for a `PostToolUse` group that is exactly
+  the entry and cuts it out with its comma. The `"hooks"` and `"PostToolUse"` keys install added stay, empty:
+  nothing says they were not the person's. When the program is named in some other shape (the person edited the
+  entry), uninstall changes nothing and says to remove it by hand.
+- With the settings file gone, or no group naming the program, uninstall forgets the record and exits 0.
+
+`jellymoon uninstall` ([install.md](install.md)) removes the hook the same way before the app and the binary. An
+entry the person edited is left for them, the rest is still removed, and the JSON says `"hook_by_hand":true`.
 
 Core's `serde_json` gained the `raw_value` feature for this: it gives the place of a value in the text. No new package.
 
+## The harness-real step
+
+The coordinator ran it on 2026-11-10 and it passed (1 passed in 11.66 s): a real Claude Code turn told to write RED
+was sent a ruling once the turn had started and wrote BLUE. It needs a signed-in person, so it is ignored by default. It installs
+the hook in a settings file of the test's own, never in the person's.
+
+```
+JELLYMOON_HARNESS_REAL=1 cargo test -p jellymoon --test f29 -- --ignored harness_real --nocapture
+```
+
 ## What is unproved
-
-- **The harness-real step of F29.** No real Claude Code turn has run against this hook. A person runs it, signed in,
-  with the command below; it installs the hook in a settings file of the test's own, never in the person's.
-
-  ```
-  JELLYMOON_HARNESS_REAL=1 cargo test -p jellymoon --test f29 -- --ignored harness_real --nocapture
-  ```
 
 - **Old Claude Code.** A version from before the exec form would ignore `args` and run the program bare, which fails
   at every tool call. The version that added `args` is not in the documentation.
 - **A ruling goes to every session**, whatever project it runs in. Whether it should go only to the clash's project
   is not decided.
-- **Windows and Codex.** The tests are written to pass on Windows; no real session there has been tried. Codex has no hook yet.
+- **Windows and Codex.** The tests are written to pass on Windows; no real session there has been tried, and a
+  settings file marked read-only there cannot be renamed over, so install fails and can leave its new file beside
+  it. Codex has no hook yet.

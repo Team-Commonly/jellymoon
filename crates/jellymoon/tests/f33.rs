@@ -30,13 +30,13 @@ fn uninstall_removes_the_app_and_the_binary_and_nothing_else() {
     assert_eq!((ran.code, ran.stderr.as_str()), (0, ""));
     let said: Value = serde_json::from_str(&ran.stdout).unwrap();
     let removed = [apps.join("Jellymoon.app").display().to_string(), binary.display().to_string()];
-    assert_eq!(said, json!({"hook": false, "removed": removed}));
+    assert_eq!(said, json!({"hook": false, "hook_by_hand": false, "removed": removed}));
     let left = |folder| fs::read_dir(folder).unwrap().map(|entry| entry.unwrap().file_name()).collect::<Vec<_>>();
     assert_eq!((left(&apps), left(&bin)), (vec!["Other.app".into()], vec!["other-tool".into()]));
 
     // A second time there is nothing to remove, and that is not an error.
     let again = jellymoon(&vars, &["uninstall"]);
-    assert_eq!((again.code, again.stdout.as_str()), (0, "{\"removed\":[],\"hook\":false}\n"));
+    assert_eq!((again.code, again.stdout.as_str()), (0, "{\"removed\":[],\"hook\":false,\"hook_by_hand\":false}\n"));
     // It takes no arguments: a path given to it is refused, never removed.
     let refused = jellymoon(&vars, &["uninstall", apps.to_str().unwrap()]);
     assert_eq!((refused.code, refused.stdout.as_str()), (2, ""));
@@ -263,7 +263,7 @@ mod mac {
 
         let said: Value = serde_json::from_str(&ok(mac.command(&mac.binary(), "").arg("uninstall"))).unwrap();
         let removed = [mac.app().display().to_string(), mac.binary().display().to_string()];
-        assert_eq!(said, json!({"hook": false, "removed": removed}));
+        assert_eq!(said, json!({"hook": false, "hook_by_hand": false, "removed": removed}));
         assert_eq!(mac.names("home/Applications"), Vec::<String>::new());
         assert_eq!(mac.names("home/.local/bin"), Vec::<String>::new());
     }

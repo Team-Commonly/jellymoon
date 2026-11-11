@@ -78,14 +78,16 @@ fn run() -> Result<String, Failure> {
                 return Err(Failure::Run("no home directory: set JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR".to_string()));
             };
             let binary = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
-            let options = UninstallOptions { app: app.join("Jellymoon.app"), binary };
+            let options = UninstallOptions { app: app.join("Jellymoon.app"), binary, home: home().ok() };
             Ok(format!("{}\n", jellymoon_core::uninstall(&options).map_err(failed)?))
         }
         Command::Rule { stands, over } => {
             Ok(format!("{}\n", jellymoon_core::rule(&home()?, &stands, &over).map_err(failed)?))
         }
         Command::Hook => {
-            Ok(jellymoon_core::deliver(&home()?, io::stdin().lock()).map(|out| out + "\n").unwrap_or_default())
+            // With no home there is no ruling, and a hook that fails would show an error at every step of a session.
+            let told = home().ok().and_then(|home| jellymoon_core::deliver(&home, io::stdin().lock()));
+            Ok(told.map(|told| told + "\n").unwrap_or_default())
         }
         Command::InstallHook(settings) => {
             let settings = match settings {

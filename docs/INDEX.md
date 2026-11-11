@@ -11,6 +11,7 @@ Every file under `docs/` is listed here with one line. A PR that adds, moves or 
 | `development/workflow.md` | How Jellymoon is built: the loop, the size rules, the fresh-context review and its verdict lines, and how a PR lands |
 | `development/reader.md` | `jellymoon day`: usage, what counts as typed by a person, what is cut and replaced, which files are skipped |
 | `development/page.md` | `jellymoon page`: usage, the exact harness command line, what goes in on stdin, and every check code makes on what the model returns |
+| `development/delivery.md` | `jellymoon rule` and `jellymoon hook`: the ruling store, the Claude Code hook event and output used and why, how exactly-once is kept, install and uninstall, and what is unproved |
 | `development/app.md` | `jellymoon-app`: usage, which piece each part of page data becomes, the `layout` output, the two ways text is measured, and how to build with and without GPUI |
 | `development/install.md` | Installing on a Mac: what `install.sh` does and trusts, why Gatekeeper does not ask, `jellymoon uninstall`, how a release is cut, and what only a person on a clean Mac can prove |
 | `development/smoke.md` | `cargo xtask smoke`: the chain that runs the built programs together, its three modes, what it does not prove, how a feature adds a step, and the checklist before a release |

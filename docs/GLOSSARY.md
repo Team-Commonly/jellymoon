@@ -11,6 +11,7 @@ The words below mean exactly this in code, docs and tests. A new term is added h
 | **clash** | Two things one person said that cannot both stand. Shown as an ask; the person's tap is the ruling | a merge conflict |
 | **ask** | A question put to the person with fixed options and an open decision | a question in prose |
 | **ruling** | The person's choice on an ask; made once, then handed to running sessions | approval in chat |
+| **hook** | The one entry Jellymoon adds to the harness settings; the harness runs it at each step of a session, and it hands over the rulings that wait (`jellymoon hook`) | a git hook |
 | **harness** | The agent program a person already uses: `claude-code` or `codex` | Jellymoon, which only reads its logs and calls it |
 | **session log** | The file a harness writes for one session. Private, and untrusted input: it can hold any text an agent ever printed | page data, which code has checked |
 | **turn** | One thing a person typed, with the agent's last reply to it | a line of a session log |

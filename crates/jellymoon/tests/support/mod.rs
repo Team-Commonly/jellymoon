@@ -3,7 +3,7 @@
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
 use std::ffi::OsStr;
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -34,9 +34,17 @@ pub fn scratch() -> TempDir {
 /// Runs `jellymoon` with only the variables given. A run still going after 20 seconds (a reader stuck on a pipe would be)
 /// is stopped and fails the test. Output goes to files, so a full pipe can never be what holds it up.
 pub fn jellymoon(vars: &[(&str, &OsStr)], args: &[&str]) -> Ran {
+    jellymoon_fed(vars, args, "")
+}
+
+/// The same, with `input` as the program's input.
+pub fn jellymoon_fed(vars: &[(&str, &OsStr)], args: &[&str], input: &str) -> Ran {
     let (mut out, mut err) = (tempfile::tempfile().unwrap(), tempfile::tempfile().unwrap());
+    let mut fed = tempfile::tempfile().unwrap();
+    fed.write_all(input.as_bytes()).unwrap();
+    fed.rewind().unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
-    cmd.args(args).env_clear().envs(vars.iter().copied()).stdin(Stdio::null());
+    cmd.args(args).env_clear().envs(vars.iter().copied()).stdin(Stdio::from(fed));
     cmd.stdout(out.try_clone().unwrap()).stderr(err.try_clone().unwrap());
     if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
         cmd.env("SystemRoot", root); // a Windows program needs it to start

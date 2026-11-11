@@ -164,8 +164,11 @@ pub(super) fn settle(
     let noted = note(home, run, outcome, (read.denied, read.skipped), &why);
     let told = tell(home, day, wish, run, outcome, &why, wait()).map_err(|e| match e {
         Error::Store(e) => Error::Store(e),
-        _ => refused(format!(
+        e if wish::was_locked(&e) => refused(format!(
             "run {run} has ended and its record says how; the page of {day} was busy, and shows it when it is next drawn"
+        )),
+        _ => refused(format!(
+            "run {run} has ended and its record says how; the made wishes of {day} could not be used, so the wish does not show it"
         )),
     });
     told.and(noted)?;

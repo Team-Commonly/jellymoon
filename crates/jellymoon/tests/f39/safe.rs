@@ -175,6 +175,35 @@ fn a_run_that_finished_while_the_day_was_locked_is_drawn_finished_with_its_star(
     assert!(refused(&w.start(&wish, &repo)).contains("has had its run"));
 }
 
+// The made wishes are changed by hand while the agent works, to hold a wish with no words, which is refused. The
+// day is not locked, so the run does not say it was busy.
+#[test]
+fn a_run_that_finished_over_made_wishes_that_cannot_be_used_says_so_and_not_that_the_day_was_busy() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    w.play("slow", 0);
+    let file = w.jm("pages").join(format!("{DAY}.wishes.json"));
+    let ended = thread::scope(|scope| {
+        let going = scope.spawn(|| w.start(&wish, &repo));
+        wait_for(&w.at("rec").join("started"));
+        let mut made: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        let mut empty = made["wishes"][0].clone();
+        (empty["id"], empty["said"]) = (json!("m2"), json!(""));
+        made["wishes"].as_array_mut().unwrap().push(empty);
+        fs::write(&file, format!("{made}\n")).unwrap();
+        fs::write(w.at("rec").join("go"), "").unwrap();
+        going.join().unwrap()
+    });
+    let run = w.kept(&wish)["run"].as_str().unwrap().to_string();
+    let unused = format!(
+        "jellymoon: run {run} has ended and its record says how; the made wishes of {DAY} could not be used, so the \
+         wish does not show it\n"
+    );
+    assert_eq!(refused(&ended), unused);
+    assert_eq!((&w.record(&run)["outcome"], &w.kept(&wish)["state"]), (&json!("completed"), &json!("working")));
+    assert_eq!(w.copies(), Vec::<String>::new());
+}
+
 // A dead run's agent has nobody to report to: it is not asked and waited for, it is killed.
 #[test]
 fn a_page_does_not_wait_for_the_agent_a_dead_run_left() {

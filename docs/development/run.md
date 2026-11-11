@@ -155,6 +155,9 @@ the day's lock. Another change to the day may hold that lock, so it is waited fo
 a lock can be held (one older than 30 seconds is taken as left behind). A build with debug assertions reads a
 shorter wait from `JELLYMOON_TEST_END_WAIT_MS`. If the day stays locked even so, `jellymoon run` exits 1 with one
 line that says the run has ended, that its record says how, and that the page shows it when it is next drawn.
+When the wish could not be told for any other reason (the made wishes were changed while the run worked and
+cannot be used, or the wish no longer names this run as going), the line says instead that the made wishes of the
+day could not be used, so the wish does not show it. The record has the end in both cases.
 
 Whoever next finds the wish still `working` with nothing holding its run (below) reads the record. With an end in
 it that is core's, the wish is given that end, star included: `done` with its star, or `needs_you`. A record is

@@ -83,8 +83,9 @@ A PR is squash-merged as soon as both hold at its current head:
 - CI is green: `check` on macOS, Linux and Windows, `secrets`, and `dco`.
 
 Nothing waits on CI but the merge itself: the next feature starts from the branch while the checks run. A PR that
-changes what leaves the machine, or comes from outside the maintainers, also needs a review comment for its exact
-head ending in `GATE: PASS`. Only the coordinator merges. Workers commit on their own branch with `git commit -s`, in
+changes what leaves the machine or what an agent may do on it, or comes from outside the maintainers, also needs a
+review comment for its exact head ending in `GATE: PASS`. CI is read on that head before the gate's pass counts: F39
+passed its gate on a head whose Windows check had failed unread, and the fix came after the pass. Only the coordinator merges. Workers commit on their own branch with `git commit -s`, in
 a worktree fenced by `make hooks fence=1`; the coordinator pushes and opens the PR.
 
 ## Entropy

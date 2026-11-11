@@ -7,6 +7,7 @@
 
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::Duration;
 
 use super::child::{End, Ended};
@@ -140,6 +141,8 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     }
     // The record is read once nothing holds the run: one read before that could miss the end the run wrote.
     let record = record::kept(home, &run);
+    // A test's build can wait here, with the record read, for a run to finish meanwhile ([`written`]).
+    thread::sleep(or_test(Duration::ZERO, "JELLYMOON_TEST_LOOK_WAIT_MS"));
     let kill = || {
         if let Some((pid, mark)) = record.as_ref().and_then(|record| Some((record.pid?, record.mark.as_deref()?))) {
             dead::kill(pid, mark);
@@ -160,27 +163,39 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
         }
         return unstarted(home, day, wish, &run);
     }
-    let ended = record.as_ref().and_then(|record| recorded(home, day, &wish.id, &run, record));
-    let (outcome, why) = ended.clone().unwrap_or_else(|| (RunOutcome::Failed, cut(&run)));
-    let drawn = |mut wish: MadeWish| {
-        apply(&mut wish, outcome, &why);
-        wish
-    };
     // Nothing holds the run, so nobody reads its child any more, whatever the record says of an end: a record
     // can be written by hand. A child that ended is not that process any more, and is not signalled.
     kill();
+    written(home, day, wish, &run, record.as_ref())
+}
+
+/// Writes down a run that nothing holds, whose record was read as `record`: the end that record has, when it is
+/// believed, and else that the run was cut off.
+fn written(home: &Path, day: &str, wish: MadeWish, run: &str, record: Option<&Record>) -> MadeWish {
+    let end = |record: Option<&Record>| record.and_then(|record| recorded(home, day, &wish.id, run, record));
+    let cut_off = || (RunOutcome::Failed, cut(run));
+    let drawn = |mut wish: MadeWish, (outcome, why): &(RunOutcome, String)| {
+        apply(&mut wish, *outcome, why);
+        wish
+    };
+    let first = end(record);
     // The copy is marked before anything is written. With its lock not had in time nothing is written at all:
     // the wish is drawn as it will be kept, and the next look, which finds it as this one did, does the rest.
     // An end that is believed and is not a finished run's can have been written by hand too, over a run whose
     // own command never marked its copy, so its copy is marked as a cut off run's is.
-    if outcome != RunOutcome::Completed && !mark(home, &run, soon()) {
-        return drawn(wish);
+    let finished = first.as_ref().is_some_and(|(outcome, _)| *outcome == RunOutcome::Completed);
+    if !finished && !mark(home, run, soon()) {
+        return drawn(wish, &first.unwrap_or_else(cut_off));
     }
-    let mut told = tell(home, day, &wish.id, &run, outcome, &why, Duration::ZERO);
+    // A run whose lock could not be asked about may have been going still, and have ended since its record was
+    // read: the record is read again, behind the mark, and the wish is given the end it has by now.
+    let ended = first.or_else(|| end(record::kept(home, run).as_ref()));
+    let (outcome, why) = ended.clone().unwrap_or_else(cut_off);
+    let mut told = tell(home, day, &wish.id, run, outcome, &why, Duration::ZERO);
     if ended.is_none() {
-        told = told.and_then(|told| note(home, &run, outcome, (0, 0), &why).map(|()| told));
+        told = told.and_then(|told| note(home, run, outcome, (0, 0), &why).map(|()| told));
     }
-    told.unwrap_or_else(|_| drawn(wish))
+    told.unwrap_or_else(|_| drawn(wish, &(outcome, why)))
 }
 
 /// What a child that is gone comes to: the copy is ended as completed or failed, and the record and the wish say

@@ -95,7 +95,9 @@ started again without the flag.
 A record that says `not_started` is written with no child named: a harness that was started and found too old is
 gone by then. One that says so and names a child is a record changed by hand, of a run that did start, and a
 look does not remove a copy on its word, since the copy can hold work. That run was cut off ("A run that was cut
-off"): its child is killed, its copy is kept and marked failed, and the wish needs the person.
+off"): its child is killed, its copy is kept and marked failed, and the wish needs the person. A record made by
+hand to say `not_started` with no child named has its copy removed, work and all, and the agent of that run, if
+one still goes, is not stopped: nothing in the home says otherwise.
 
 If the repo was moved away while the harness ran, git cannot take the copy back, and `jellymoon run` exits 1 with
 git's reason: the copy's folder and the run's folder in `runs` are removed all the same and the wish is as it was,
@@ -342,7 +344,7 @@ is opened: what is at the name is asked first, and then it is opened, as the pag
 
 | At the name | Not a plain file |
 |---|---|
-| `runs/<id>/run.lock` | nothing holds the run, so it was cut off: it is written down as failed, and the child it left is killed ("A run that was cut off"). So is a run whose lock is a plain file that cannot be opened: a lock that cannot be asked about is no lock |
+| `runs/<id>/run.lock` | nothing holds the run, so it was cut off: it is written down as failed, and the child it left is killed ("A run that was cut off"). So is a run whose lock is a plain file that cannot be opened: a lock that cannot be asked about is no lock. Made unreadable by hand while its run goes, it ends that run: the next look kills the child and writes the run down as cut off, or, when the run finished by itself meanwhile, with the end its record has by then |
 | `runs/<id>/copy.json` | the copy's record cannot be read: the copy is left as it is, and the run's end is written all the same |
 | `runs/clean.lock` | no copy is ended or cleaned while it is so: a run that finishes then has failed, as its work could not be committed |
 | `runs/<id>/run.json`, the day's wishes, the day's page | not read, as before: a run with no record that can be used was cut off, and wishes that cannot be used are none |

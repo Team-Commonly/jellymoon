@@ -89,9 +89,13 @@ fn a_day_holds_eight_made_wishes_and_the_ninth_is_refused() {
 /// What a test leaves where the made wishes are kept.
 type Spoil = Box<dyn Fn(&World)>;
 
-/// Leaves this text there.
+/// Leaves this text there, for its owner alone to write, whatever the umask the tests run under.
 fn text(text: String) -> Spoil {
-    Box::new(move |w| fs::write(w.wishes(), &text).unwrap())
+    Box::new(move |w| {
+        fs::write(w.wishes(), &text).unwrap();
+        #[cfg(unix)]
+        fs::set_permissions(w.wishes(), std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
+    })
 }
 
 fn wishes(day: &str, wishes: Value) -> Spoil {

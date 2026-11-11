@@ -55,7 +55,8 @@ impl Today {
         let standing = jellymoon_core::standing(&self.home, &self.date, &page.data.clashes);
         // The day's made wishes stand after the reading's. They are on the drawing only: a tap acts on `page`.
         let data = jellymoon_core::with_made(&self.home, page.data.clone());
-        let mut shown = scene::ruled(&Page { data, ..page.clone() }, &standing);
+        let made = data.wishes.len().saturating_sub(page.data.wishes.len());
+        let mut shown = scene::ruled(&Page { data, ..page.clone() }, &standing, made);
         if !page.data.clashes.is_empty() && !jellymoon_core::hook_installed(&self.home) {
             // Before the clashes, so a full page never shows a clash to tap and hides that no session would hear.
             let clash = |note: &Note| matches!(note, Note::Choice { id, .. } if id.starts_with("clash-"));

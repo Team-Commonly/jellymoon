@@ -66,6 +66,12 @@ pub enum Note {
         title: String,
         body: String,
     },
+    /// A list of texts no word of which may be hidden. Each row is drawn after its mark to its last word, on as many
+    /// lines as that takes, or it is left out; a last line, `+N more`, counts the rows left out. No row is cut short.
+    Whole {
+        title: String,
+        rows: Vec<(Mark, String)>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

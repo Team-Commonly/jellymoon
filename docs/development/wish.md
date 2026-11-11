@@ -58,3 +58,8 @@ own words. The kept page itself never holds a made wish.
 - Nothing checks that the project is a folder on this computer. F39 does, and refuses a name two folders share.
 - The same words made twice are two wishes.
 - With eight wishes read and eight made, a page holds sixteen. How many of them the kit shows is the kit's layout.
+- A made wish's little one carries a short label, cut. Its words are in the note "wished here today", whole or
+  counted (`+N more`), and that note comes after the clashes and the delivery note, so it never pushes one out. On
+  a full page the note has little room: beside the list, the delivery note and one clash, 960x640 in the sticker
+  theme draws no wish of 200 characters, and counts it. `layout` prints the note's lines and one `mark` piece a
+  wish drawn.

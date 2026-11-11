@@ -15,7 +15,7 @@ use jellymoon_core::{DayOptions, Error, PageData, PageOptions, PageRead, ReaderD
 use sticker_kit::{Note, Scene};
 
 use crate::read::{self, LeftOut, Page};
-use crate::scene::{bare, scene};
+use crate::scene::{bare, own, ruled};
 
 /// How long the reading call may take: the `jellymoon` command's own limit.
 const READING_LIMIT: Duration = Duration::from_secs(180);
@@ -223,10 +223,11 @@ impl Today {
             return bare(&self.date, vec![Note::Plain { title: title.to_string(), body: body.to_string() }]);
         }
         let read = PageRead { turns: 0, projects: Vec::new() };
+        let made = wishes.len();
         let data = PageData { day: self.date.clone(), wishes, clashes: Vec::new(), read };
-        let shown = scene(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() });
-        // Nothing was read, so the line that says what the page was read from is left out.
-        noted(Scene { footer: String::new(), ..shown }, title, body)
+        let shown = ruled(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() }, &[], made);
+        // Nothing was read, so the footer says nothing of a reading: only whose words the made wishes are.
+        noted(Scene { footer: own(made), ..shown }, title, body)
     }
 }
 

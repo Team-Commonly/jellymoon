@@ -25,10 +25,10 @@ max_file_lines = 400
 # tests at the binary, `tests/f38.rs`, `tests/f38/hostile.rs` and `tests/f38/limits.rs`, and the two made-up programs:
 # one for git to start, one that is a git that never returns).
 # F37, a made wish, raised core by 229 (`wish.rs`, its rules, its kept file and one test, is 203; the day's lock as one
-# function for the tap and the wish; the example of what it prints, round-tripped) and the binary by 407 (`wish`
+# function for the tap and the wish; the example of what it prints, round-tripped) and the binary by 411 (`wish`
 # and its parsing are 24; the rest is its tests at the binary, `tests/f37.rs` and `tests/f37/refused.rs`).
 "crates/jellymoon-core" = 3886
-"crates/jellymoon" = 4887
+"crates/jellymoon" = 4891
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -41,7 +41,10 @@ max_file_lines = 400
 # A whole choice (F35: every word of an option, or the note left out) raised the kit by 110: 84 are `tests/whole.rs`.
 # A text run's own size, which the drawing paints at, raised the kit by 80: 77 are the two tests that hold it
 # (`tests/whole.rs` by measure, `tests/draw.rs` by what is painted).
-"crates/sticker-kit" = 5553
+# A whole list (F37: a made wish's words after its mark, each row drawn to its last word or counted) raised the kit
+# by 139: 42 are its test in `tests/whole.rs`; the rest is its layout, the mark's piece and its drawing, and the
+# notes laid out once per way, so that a tighter way can be taken when it draws more rows.
+"crates/sticker-kit" = 5692
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -50,8 +53,9 @@ max_file_lines = 400
 # The tidy raised the app by 47: a run's `size` in `layout` (9 lines), its assertion, and the test helper that
 # finds an open folder above a test.
 # F38 raised the app by 1: the arm for core's new error where it puts an error into words.
-# F37 raised the app by 84: 68 are `tests/f37.rs`; the rest draws the day's made wishes, also on a day not read yet.
-"app" = 3126
+# F37 raised the app by 207: 160 are `tests/f37.rs`; the rest draws the day's made wishes, their note and the
+# footer's count of them, also on a day not read yet.
+"app" = 3249
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

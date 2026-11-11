@@ -22,7 +22,17 @@ statements are cleaned before they are stored and again when they are handed ove
 ([what is printed](reader.md#what-is-printed)): credential shapes replaced, control and invisible characters
 removed, cut to 200 characters. Each is also made one line: a line break, a tab and any run of spaces become one
 space, and every `"` becomes `'`. So a statement cannot close its own quote in what the hook prints or start a line
-that reads as another ruling. A ruling without both statements is refused. The file is written under another name
+that reads as another ruling. A statement is cleaned again until a cleaning changes nothing, and cut only then
+(`still.rs` in core; why is in [wish.md](wish.md), "What is kept"): the words a ruling carries are the words the
+next tap compares. Up to 8 cleanings may change it and the one after them must change nothing; the cut is not
+counted, and what it leaves is cleaned again within the same 8. That is the whole rule: how many keys in a row it
+allows depends on their shapes and on where the cut falls (wish.md has the example of keys of letters alone).
+Because the cut comes last, a statement can hold words from past the first 200 characters of what was typed, when
+a later cleaning made the text before them shorter; those words are ones the cleaning leaves as they are. A statement a ninth cleaning still changes, or
+of over 4096 bytes (4096 are cleaned), cannot be ruled on: `jellymoon rule` and a tap refuse it in one line, exit 1,
+with nothing kept, since its ruling would tell a session only that `[redacted]` stands. A page still draws such a
+statement, as `[redacted]` and nothing else, and so does the hook for a ruling file that holds one; a tap on it in
+the app says "That tap did nothing." and why. A ruling without both statements is refused. The file is written under another name
 and then renamed, so a hook never reads half of one. The `rulings` folder is set to the person alone (0700) each
 time a ruling is made, also when it was there before and open to others, on a system with such modes.
 
@@ -75,6 +85,16 @@ This is the only way text gets from a page into a running session, so what is ch
   is not ruled out. `pages` is made the person's alone (0700) only once the lock is held. The settlement is written to a
   file of the process's own, made with create-new and 0600, and moved into place; a link waiting at either name is
   replaced, never followed, and a failed write removes its temporary file.
+- **On Windows** a file another process is using at that moment cannot be made, opened, removed or renamed over:
+  the step fails with "Access is denied" or a sharing violation, where unix lets it through. Between two changes
+  to one day that happens at four steps: making the lock while the last holder's is being removed, removing the
+  lock while a waiter looks at it, reading a kept file while it is replaced, and moving a new file over one being
+  read. So on Windows only, each of the four is tried again every 10 ms for the same 3 seconds (`busy.rs`), and a
+  lock that still cannot be made is "another tap on this day has not finished", as on unix. The cost: a folder
+  nobody may write in gives the same error, so there a refusal takes 3 seconds, and then says the system's own
+  words. Seen once in three CI runs before this, in eight wishes made at once; that test now runs 12 rounds and the
+  taps' 24. A run's `runs/clean.lock` is not of this kind: it is the system's lock on a file that is never
+  removed or renamed, and a copy's record is read only behind it.
 - **When the settlement cannot be written** the ruling stands: exit 0, the ruling in the JSON, the reason in
   `unkept`, and one line on stderr, "the ruling was made, but the page could not keep it". The same holds after a
   crash between the two writes. For the 24 hours the ruling waits it says what stands, so the same tap again makes
@@ -82,7 +102,7 @@ This is the only way text gets from a page into a running session, so what is ch
   wait: behind more than that it is no longer seen, and the same tap makes a second ruling. After those 24 hours a
   settlement that was never written is forgotten: the clash is drawn open, and a tap makes a ruling again.
 - **A refusal writes nothing**: no kept page, a clash that is not on it, an option that is not 1 or 2, a statement
-  that is empty once cleaned, two statements that are the same once cleaned (they differ only in spacing or quote
+  that is empty once cleaned, a statement that cannot be cleaned (above), two statements that are the same once cleaned (they differ only in spacing or quote
   marks, or each is a credential shape that was replaced: a ruling of a statement over itself says nothing, and the
   same tap again could not be told from the first), a lock that was not freed. One line on stderr, exit 1.
   `--clash` and `--option` take digits only (`+1` is an argument error, exit 2).

@@ -7,6 +7,8 @@
 mod delivery;
 #[path = "f35/lock.rs"]
 mod lock;
+#[path = "f35/still.rs"]
+mod still;
 mod support;
 
 use std::ffi::OsString;
@@ -346,7 +348,7 @@ fn a_ruling_the_page_could_not_keep_is_said_so_and_is_not_made_twice() {
 
 #[test]
 fn two_taps_at_once_on_two_clashes_both_keep_theirs_and_two_on_one_statement_make_one_ruling() {
-    for round in 0..8 {
+    for round in 0..24 {
         let w = world();
         w.keep(&[(A, B), ("ship on friday", "ship when it is ready")]);
         std::thread::scope(|scope| {

@@ -6,7 +6,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde_json::{Value, json};
 
 use super::{DAY, SAID, World, made, world};
-use crate::support::{hub_key, tree};
+use crate::support::{hub_key, key_header, tree};
 
 const NAME: &str = "jellymoon: --project takes one folder's name of at most 100 characters: no path, nothing that \
                     cannot be seen and nothing shaped like a credential\n";
@@ -36,12 +36,14 @@ fn a_wish_with_no_words_too_many_words_or_no_plain_project_is_refused_and_writes
     let (fits, key_name) = ("word ".repeat(39) + "words", hub_key());
     let long = format!("{fits}x");
     let many = "é".repeat(5000);
-    let cases: [(&str, &str, &str, &str); 12] = [
+    let bytes = format!("x{}", " ".repeat(4096));
+    let cases: [(&str, &str, &str, &str); 13] = [
         ("no words", "", "alpha", EMPTY),
         ("only spaces", " \n\t ", "alpha", EMPTY),
         ("only what cannot be seen", "\u{2065}\u{200b}\u{feff}", "alpha", EMPTY),
         ("201 characters", &long, "alpha", LONG),
         ("far too long", &many, "alpha", LONG),
+        ("4097 bytes as typed", &bytes, "alpha", LONG),
         ("no project", SAID, "", NAME),
         ("a path", SAID, "work/alpha", NAME),
         ("a Windows path", SAID, "work\\alpha", NAME),
@@ -127,7 +129,8 @@ fn spoiled() -> Vec<(&'static str, Spoil, &'static str)> {
         ("a field nobody knows", text(json!({"day": DAY, "wishes": [], "more": 1}).to_string()), shape),
         ("an id of the reading's", wishes(DAY, json!([made("w1", SAID, "alpha")])), shape),
         ("an id out of its place", wishes(DAY, json!([made("m2", SAID, "alpha")])), shape),
-        ("words that are not clean", wishes(DAY, json!([made("m1", "two\nlines", "alpha")])), shape),
+        ("words with nothing left once cleaned", wishes(DAY, json!([made("m1", " \u{2065}", "alpha")])), shape),
+        ("words over their length", wishes(DAY, json!([made("m1", &"x".repeat(201), "alpha")])), shape),
         ("a project that is a path", wishes(DAY, json!([made("m1", SAID, "../alpha")])), shape),
         (
             "nine of them",
@@ -160,6 +163,23 @@ fn made_wishes_that_cannot_be_used_are_not_drawn_and_a_new_wish_is_refused() {
         let line = format!("jellymoon: the made wishes of 2026-03-10 are not used: {why}; this wish was not kept\n");
         w.refused(case, &w.say("one more", "alpha"), &line, &before);
     }
+}
+
+// Words are kept only as cleaning leaves them, and cleaning them again changes nothing: a private key's first line
+// with a tab for one of its spaces is replaced like any other, so the wishes made before it are still drawn.
+#[test]
+fn a_wish_whose_words_only_look_like_a_key_once_on_one_line_is_cleaned_once_and_the_day_s_wishes_stay() {
+    let w = world();
+    w.wish("the one before", "alpha");
+    for (n, gap) in ["\t", "\n", " \t ", "\u{a0}", "\u{2028}"].into_iter().enumerate() {
+        let header = key_header(gap);
+        let kept = w.wish(&format!("paste {header} and go on"), "alpha");
+        assert_eq!(kept["wish"], made(&format!("m{}", n + 2), "paste [redacted]", "alpha"), "{gap:?}");
+    }
+    assert_eq!(w.wish("the one after", "alpha")["wish"]["id"], "m7");
+    let page = w.page();
+    assert_eq!((page.len(), page[0]["said"].as_str()), (7, Some("the one before")));
+    assert!(!fs::read_to_string(w.wishes()).unwrap().contains("PRIVATE"));
 }
 
 #[test]

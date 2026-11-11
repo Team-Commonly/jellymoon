@@ -16,9 +16,10 @@ use std::{fmt, thread};
 
 use serde::{Deserialize, Serialize};
 
+use crate::busy::{in_use, retried};
 use crate::hook::put;
 use crate::reader::parse;
-use crate::ruling::{own_dir, private_dir, rule, waiting, words};
+use crate::ruling::{own_dir, private_dir, rule, ruled_on, waiting, words};
 use crate::{Clash, Error, Ruling};
 
 /// The most bytes of a kept page that are read: what the app's own door takes.
@@ -29,7 +30,7 @@ const RULED_MAX: usize = 64 * 1024;
 pub const CLASHES_MAX: usize = 8;
 /// How long a tap waits for another tap on the same day, and how old a lock is before it is taken for one left by a
 /// run that was killed. A lock whose age cannot be read, or that is dated ahead of now, is taken for one too.
-const LOCK_WAIT: Duration = Duration::from_secs(3);
+const LOCK_WAIT: Duration = crate::busy::WAIT;
 const LOCK_STALE: Duration = Duration::from_secs(30);
 
 /// One of a clash's two statements: `a` is its `quote_a`, `b` its `quote_b`.
@@ -104,8 +105,12 @@ fn refused(why: impl Into<String>) -> Error {
 }
 
 /// A file of the pages folder as it may be used: a plain file, never a link, that only its owner can write to, of
-/// at most `most` bytes.
+/// at most `most` bytes. Windows refuses to open one that is being replaced at that moment: tried again (`busy.rs`).
 pub(crate) fn plain(file: &Path, most: usize) -> io::Result<Vec<u8>> {
+    retried(|| read_plain(file, most))
+}
+
+fn read_plain(file: &Path, most: usize) -> io::Result<Vec<u8>> {
     let not = |why: &str| io::Error::new(ErrorKind::InvalidData, why.to_string());
     let meta = fs::symlink_metadata(file)?;
     if !meta.is_file() {
@@ -135,11 +140,13 @@ fn ruled_file(home: &Path, day: &str) -> PathBuf {
 }
 
 /// The day's settlement. A file that is missing, a link, writable by others, too large, not of this exact shape, of
-/// another day or of more clashes than a page has is no settlement.
+/// another day or of more clashes than a page has is no settlement. Each statement is read as the page's are, through
+/// [`words`]: one kept before a statement was cleaned to its end is still the page's.
 fn ruled(home: &Path, day: &str) -> Vec<One> {
     let kept = plain(&ruled_file(home, day), RULED_MAX).ok();
     let kept = kept.and_then(|bytes| serde_json::from_slice::<Ruled>(&bytes).ok()).filter(|kept| kept.day == day);
-    kept.map(|kept| kept.clashes).filter(|clashes| clashes.len() <= CLASHES_MAX).unwrap_or_default()
+    let kept = kept.map(|kept| kept.clashes).filter(|clashes| clashes.len() <= CLASHES_MAX).unwrap_or_default();
+    kept.into_iter().map(|one| One { a: words(&one.a), b: words(&one.b), ..one }).collect()
 }
 
 /// The side that stands for the clash of `a` and `b`: by the newest ruling of those two statements that still
@@ -179,7 +186,8 @@ pub fn settle_kept(home: &Path, day: &str, clash: usize, option: usize) -> Resul
 
 /// A tap on statement `option` of clash `clash` of these clashes, which are the day's page data. The statement tapped
 /// stands and the other is what it replaces; both go through the ruling's own cleaning and no other text is added.
-/// A refusal has written nothing. A tap on the statement that already stands makes no ruling.
+/// A refusal has written nothing: so is a tap on a clash with a statement that cannot be cleaned, which the page
+/// draws as the mark. A tap on the statement that already stands makes no ruling.
 pub fn settle(home: &Path, day: &str, clashes: &[Clash], clash: usize, option: usize) -> Result<Settled, Error> {
     parse(day)?;
     let found = clash.checked_sub(1).filter(|at| *at < CLASHES_MAX).and_then(|at| clashes.get(at));
@@ -189,7 +197,7 @@ pub fn settle(home: &Path, day: &str, clashes: &[Clash], clash: usize, option: u
         2 => Side::B,
         _ => return Err(refused(format!("a clash has two statements, 1 and 2, and {option} was asked for"))),
     };
-    let (a, b) = (words(&found.quote_a), words(&found.quote_b));
+    let (a, b) = (ruled_on(&found.quote_a)?, ruled_on(&found.quote_b)?);
     if a.is_empty() || b.is_empty() {
         return Err(Error::Ruling);
     }
@@ -246,18 +254,23 @@ pub(crate) struct Lock(PathBuf);
 
 impl Lock {
     /// Waits [`LOCK_WAIT`], by the clock, for the name to be free. A lock that is stale is removed and taken. A
-    /// folder at the name is never removed: the tap is refused after the same wait.
+    /// folder at the name is never removed: the tap is refused after the same wait. On Windows a name another
+    /// process is removing, or looking at, cannot be made for that moment and says "denied": that is a lock in the
+    /// way like any other (`busy.rs`). Only when the wait ends with no lock there is the error itself the answer.
     fn take(path: PathBuf) -> io::Result<Lock> {
         let started = Instant::now();
         loop {
             let taken = OpenOptions::new().write(true).create_new(true).open(&path);
             let Err(e) = taken else { return Ok(Lock(path)) };
             let there = fs::symlink_metadata(&path);
-            if e.kind() != ErrorKind::AlreadyExists && !there.as_ref().is_ok_and(fs::Metadata::is_dir) {
+            let used = in_use(&e);
+            if e.kind() != ErrorKind::AlreadyExists && !there.as_ref().is_ok_and(fs::Metadata::is_dir) && !used {
                 return Err(e);
             }
             if started.elapsed() >= LOCK_WAIT {
-                return Err(io::Error::new(ErrorKind::TimedOut, "another tap on this day has not finished"));
+                let none = matches!(&there, Err(gone) if gone.kind() == ErrorKind::NotFound);
+                let held = || io::Error::new(ErrorKind::TimedOut, "another tap on this day has not finished");
+                return Err(if used && none { e } else { held() });
             }
             let age = |meta: fs::Metadata| meta.modified().ok().and_then(|at| at.elapsed().ok());
             let stale = match there {
@@ -275,7 +288,7 @@ impl Lock {
 
 impl Drop for Lock {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        let _ = retried(|| fs::remove_file(&self.0));
     }
 }
 

@@ -174,6 +174,48 @@ pub fn model_key() -> String {
 pub fn run_token() -> String {
     format!("jm{}{}", "r_", "Q7".repeat(20))
 }
+/// The first line of a private key, with `gap` where the space after its first word goes.
+pub fn key_header(gap: &str) -> String {
+    format!("{0}BEGIN{gap}RSA PRIVATE {1}{0}", "-".repeat(5), "KEY")
+}
+/// A map key's shape of letters only, so no other shape finds it. `fill` is five letters that tell two apart.
+pub fn map_key(fill: &str) -> String {
+    format!("AI{}{}", "za", fill.repeat(7))
+}
+/// A payment key's shape, short and of letters only: straight after another key, only its own shape finds it.
+pub fn pay_key() -> String {
+    format!("sk{}{}", "_live_", "qRsTuVwX".repeat(2))
+}
+/// A cloud key id's shape. It is one only where no capital or digit follows it.
+pub fn key_id() -> String {
+    format!("AK{}{}", "IA", "Q7".repeat(8))
+}
+/// Whether any 8 characters in a row of `secret` can be read in `text`.
+pub fn shows(text: &str, secret: &str) -> bool {
+    secret.as_bytes().windows(8).any(|run| text.contains(std::str::from_utf8(run).unwrap()))
+}
+/// Words that cleaning once leaves changed by cleaning again, each with what is kept of it and what was planted in
+/// it: a private key's first line with a tab in it; two keys and three with nothing between; two keys where a cut
+/// made before the second was found would show half of it; seven keys and eight, which eight cleanings are done
+/// with; nine, which they are not, so it has no words to keep.
+pub fn restless() -> Vec<(String, String, Vec<String>)> {
+    let (one, two, pay) = (map_key("kLmNo"), map_key("pQrSt"), pay_key());
+    let (words, many, marks) = ("word ".repeat(33), map_key("dEfGh"), "[redacted]".repeat(8));
+    let row = |keys: usize| format!("use {} here", many.repeat(keys));
+    vec![
+        (format!("paste {} and go on", key_header("\t")), "paste [redacted]".into(), vec![key_header(" ")]),
+        (format!("use {one}{pay} here"), format!("use {} here", &marks[..20]), vec![one.clone(), pay.clone()]),
+        (
+            format!("use {one}{two}{pay} here"),
+            format!("use {} here", &marks[..30]),
+            vec![one.clone(), two.clone(), pay],
+        ),
+        (format!("{words}{one}{two}"), format!("{words}{}", &marks[..20]), vec![one, two]),
+        (row(7), format!("use {} here", &marks[..70]), vec![many.clone()]),
+        (row(8), format!("use {marks} here"), vec![many.clone()]),
+        (row(9), String::new(), vec![many]),
+    ]
+}
 pub fn unknown_key() -> String {
     "Ab3/dE+9".repeat(6)
 }

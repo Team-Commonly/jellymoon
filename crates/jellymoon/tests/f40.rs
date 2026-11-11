@@ -10,6 +10,8 @@
 mod deaf;
 #[path = "f40/denied.rs"]
 mod denied;
+#[path = "f40/hand.rs"]
+mod hand;
 #[path = "f40/nothing.rs"]
 mod nothing;
 #[path = "f40/obeys.rs"]

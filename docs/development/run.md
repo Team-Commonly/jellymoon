@@ -243,6 +243,10 @@ nothing of the copy is kept, as after a finished run, whose work is on its branc
 run's. The branch itself is not asked for: it is there from the copy's making, so it would prove nothing, and
 the record names no repo. The denials counted are the first result's.
 
+Believed or not, the child the record names is killed, if it is still that process ("A run that was cut off"):
+nothing holds the run, so nobody reads that child any more, and a record that says the run ended can have been
+written by hand over one that was cut off.
+
 ## A run that was cut off
 
 While `jellymoon run` lives it holds the system's lock on `runs/<id>/run.lock`, taken before the wish names the

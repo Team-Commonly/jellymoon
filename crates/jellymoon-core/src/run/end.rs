@@ -95,9 +95,9 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 
 /// What a `jellymoon run` or a page does with a wish that still says working while nothing holds its run. It is
 /// returned as it is then drawn, written down or not, never as working for ever. A run whose record has its end
-/// ended while the day was locked: the wish is given that end, its star included. Any other was cut off: the
-/// harness child it left is killed, if the pid in the record is still that process (`dead.rs`), and the run is
+/// ended while the day was locked: the wish is given that end, its star included. Any other was cut off, and is
 /// written down as failed, the wish first, so that nothing is written for a wish that no longer says working.
+/// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`).
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     let cut_off = |run: &String| wish.state == WishState::Working && !held(home, run);
     let Some(run) = wish.run.clone().filter(cut_off) else { return wish };
@@ -113,10 +113,12 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     let ended = record.as_ref().and_then(|record| recorded(home, day, &wish.id, &run, record));
     let (outcome, why) = ended.clone().unwrap_or_else(|| (RunOutcome::Failed, cut(&run)));
     let mut told = tell(home, day, &wish.id, &run, outcome, &why, Duration::ZERO);
+    // Nothing holds the run, so nobody reads its child any more, whatever the record says of an end: a record
+    // can be written by hand. A child that ended is not that process any more, and is not signalled.
+    if let Some((pid, mark)) = record.and_then(|record| Some((record.pid?, record.mark?))) {
+        dead::kill(pid, &mark);
+    }
     if ended.is_none() {
-        if let Some((pid, mark)) = record.and_then(|record| Some((record.pid?, record.mark?))) {
-            dead::kill(pid, &mark);
-        }
         told = told.and_then(|told| note(home, &run, outcome, (0, 0), &why).map(|()| told));
     }
     told.unwrap_or_else(|_| {

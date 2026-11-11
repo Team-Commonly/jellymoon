@@ -233,7 +233,7 @@ fn a_never_started_run_whose_copy_cannot_be_taken_back_is_still_named_by_its_wis
     // A run asked for now is refused for the run the wish names before any copy is made: it does not wait for the
     // lock a copy is made behind, and leaves no new name in the home and no new branch or worktree in the repo.
     let (tree_before, args) =
-        (tree(&w.jm("runs")), ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+        (in_runs(&w.jm("runs")), ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
     let (asked, in_time) = thread::scope(|scope| {
         let (from, asking) = (Instant::now(), scope.spawn(|| w.run_with(&short, &args)));
         while !asking.is_finished() && from.elapsed() < Duration::from_secs(10) {
@@ -245,12 +245,25 @@ fn a_never_started_run_whose_copy_cannot_be_taken_back_is_still_named_by_its_wis
     });
     assert!(in_time && refused(&asked).contains("has had its run"), "it waited to make a copy: {}", asked.stderr);
     assert_eq!((w.kept(&wish), w.copies(), w.branches(&repo).len()), (going, vec![run.clone()], 1));
-    assert!(tree(&w.jm("runs")) == tree_before, "something was written in `runs`");
+    assert!(in_runs(&w.jm("runs")) == tree_before, "something was written in `runs`");
     assert_eq!(w.git(&repo, &["worktree", "list", "--porcelain"]).matches("worktree ").count(), 2);
 
     w.let_end("go"); // where nothing stops the agent the run left, it ends here: a folder it stands in cannot go
     assert_eq!((&w.on_page(&wish)["run"], w.kept(&wish)), (&json!(null), before), "the next look took it back");
     assert_eq!((w.copies(), w.branches(&repo), w.jm("runs").join(&run).exists()), (vec![], vec![], false));
+}
+
+/// Every name in `runs`, and all that is in each folder there with its bytes. The files of `runs` itself are named
+/// and not read: one is the lock this test holds, and where a held lock is the system's own (Windows) no other
+/// handle may read the file.
+fn in_runs(runs: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut names: Vec<PathBuf> = fs::read_dir(runs).unwrap().map(|entry| entry.unwrap().path()).collect();
+    names.sort();
+    let all = |path: PathBuf| {
+        let inside = if path.is_dir() { tree(&path) } else { Vec::new() };
+        std::iter::once((path, Vec::new())).chain(inside)
+    };
+    names.into_iter().flat_map(all).collect()
 }
 
 // The same record, over a repo that was moved away since: git can never take that copy back. The look removes what

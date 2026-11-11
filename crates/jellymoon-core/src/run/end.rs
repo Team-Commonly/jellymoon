@@ -99,7 +99,8 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 /// ended while the day was locked: the wish is given that end, its star included. Any other was cut off: the
 /// harness child it left is killed, if the pid in the record is still that process (`dead.rs`), and the run is
 /// written down as failed: its copy is marked, then the wish is told, and only for a wish that took it the record.
-/// A run whose record says it was never started has the child it names killed the same way, then its copy taken back.
+/// A run whose record says it was never started has the child it names killed the same way, then its copy taken
+/// back, and only then is its wish made as it was.
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     let cut_off = |run: &String| wish.state == WishState::Working && !held(home, run);
     let Some(run) = wish.run.clone().filter(cut_off) else { return wish };
@@ -116,7 +117,11 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
         // Its `jellymoon run` said so and then could not take the copy back, or tell the wish. A record is a file
         // anyone who can write the home can write: the child it names is stopped before its copy goes.
         kill();
-        let _ = copy::take_back(home, &run, soon());
+        if copy::take_back(home, &run, soon()).is_err() {
+            // The copy, its branch and the run's folder are still there. The wish goes on naming the run where it
+            // is kept, so the next look tries again; it is drawn as it was, with no run, and never as one going.
+            return MadeWish { run: None, why: None, ..wish };
+        }
         return unstarted(home, day, wish, &run);
     }
     let ended = record.as_ref().and_then(|record| recorded(home, day, &wish.id, &run, record));

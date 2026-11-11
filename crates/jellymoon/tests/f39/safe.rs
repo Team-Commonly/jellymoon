@@ -204,6 +204,39 @@ fn a_run_that_finished_over_made_wishes_that_cannot_be_used_says_so_and_not_that
     assert_eq!(w.copies(), Vec::<String>::new());
 }
 
+// A record says its run was never started, and the copy cannot be taken back now: the lock a copy is taken back
+// behind is held. The wish goes on naming the run, so the copy, its branch and the run's folder are not left with
+// nothing naming them, and the next look takes them back. It is drawn as it was, never as a run going.
+#[test]
+fn a_never_started_run_whose_copy_cannot_be_taken_back_is_still_named_by_its_wish_for_the_next_look() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let before = w.kept(&wish);
+    w.play("slow", 0);
+    let mut command = w.start_going(&wish, &repo);
+    wait_for(&w.at("rec").join("started"));
+    let going = w.kept(&wish);
+    let run = going["run"].as_str().unwrap().to_string();
+    command.kill().unwrap();
+    command.wait().unwrap();
+    let mut record = w.record(&run);
+    record["outcome"] = json!("not_started");
+    fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
+
+    let held = fs::File::options().write(true).open(w.jm("runs").join("clean.lock")).unwrap();
+    held.lock().unwrap();
+    let (logs, short) = (w.at("logs"), [("JELLYMOON_TEST_COPY_WAIT_MS", OsString::from("100"))]);
+    let page = printed(&w.run_with(&short, &["page", "--date", DAY, "--logs", logs.to_str().unwrap()]));
+    assert_eq!((&page["wishes"][0]["state"], &page["wishes"][0]["run"]), (&json!("working"), &json!(null)));
+    assert_eq!(w.kept(&wish), going, "the wish still names the run");
+    assert_eq!((w.copies(), w.branches(&repo).len()), (vec![run.clone()], 1), "and its copy is still there");
+    held.unlock().unwrap();
+
+    w.let_end("go"); // where nothing stops the agent the run left, it ends here: a folder it stands in cannot go
+    assert_eq!((&w.on_page(&wish)["run"], w.kept(&wish)), (&json!(null), before), "the next look took it back");
+    assert_eq!((w.copies(), w.branches(&repo), w.jm("runs").join(&run).exists()), (vec![], vec![], false));
+}
+
 // A dead run's agent has nobody to report to: it is not asked and waited for, it is killed.
 #[test]
 fn a_page_does_not_wait_for_the_agent_a_dead_run_left() {

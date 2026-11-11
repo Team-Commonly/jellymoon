@@ -87,12 +87,17 @@ pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &R
     ours.into_iter().find(|ours| ours == said && line(ours, 200) == *ours).map(|why| (outcome, why))
 }
 
-/// Whether a run is another wish's: its record names another wish, or another day, and that wish names the run.
-/// The day's wishes are a file that can be changed by hand, and a wish made to name the run of another is given
-/// no say over it: that run is stopped, and written down, on the word of its own wish only. A record that names a
-/// wish which does not name the run is the one that was changed, and the run is this wish's, cut off ([`recorded`]).
+/// Whether a run is another wish's: its record names another wish, or another day, and either that wish names the
+/// run or a `jellymoon run` still holds it. The day's wishes are a file that can be changed by hand, and a wish
+/// made to name the run of another is given no say over it: that run is stopped, and written down, on the word of
+/// its own wish only. While its command lives the run is that command's, whatever the wishes say by then. Once
+/// nothing holds it, a record that names a wish which does not name the run is the one that was changed, and the
+/// run is this wish's, cut off ([`recorded`]).
 pub(super) fn of_another(home: &Path, run: &str, record: Option<&Record>, day: &str, wish: &str) -> bool {
     let Some(record) = record.filter(|record| record.wish != wish || record.day != day) else { return false };
+    if held(home, run) {
+        return true;
+    }
     // The day in a record is a word from a file: it is a day, or no file is looked for.
     let theirs = wish::day_of(Some(&record.day)).and_then(|day| wish::kept_of(home, &day)).unwrap_or_default();
     theirs.iter().any(|theirs| theirs.id == record.wish && theirs.run.as_deref() == Some(run))

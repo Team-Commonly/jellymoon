@@ -25,6 +25,8 @@ mod races;
 #[path = "f40/request.rs"]
 mod request;
 mod support;
+#[path = "f40/theirs.rs"]
+mod theirs;
 #[path = "f39/world.rs"]
 mod world;
 

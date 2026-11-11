@@ -277,8 +277,12 @@ done before the wish is told, behind `runs/clean.lock` and with a cut-off run's 
 had in time nothing is written, and the next look does the rest.
 
 **A wish that names another wish's run.** The day's wishes are a file too. A run is another wish's when its
-record names another wish, or another day, and that wish names the run. (A record that names a wish which does
-not name the run is the file that was changed: the run is this wish's, and was cut off.) A wish changed by hand
+record names another wish, or another day, and either that wish names the run or a `jellymoon run` still holds
+it: while its command lives a run is stopped on the word of the wish its record names and no other, whatever the
+day's wishes say by then, two wishes made to name each other's runs included. (Once nothing holds it, a record
+that names a wish which does not name the run is the file that was changed: the run is this wish's, and was cut
+off.) So a record changed by hand to name another wish while its run goes makes that run one no `run stop`
+reaches until it has ended or was cut off; a request left by hand and the run's limit end it still. A wish changed by hand
 to name another wish's run is given no say over that run: `run stop` for it is refused and
 leaves no request, `jellymoon run` for it is refused as for any wish that names a run, and neither they nor a
 page write the run down or kill its child on that wish's word. The run is stopped, and written down when it was

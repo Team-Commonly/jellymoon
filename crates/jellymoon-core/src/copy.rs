@@ -8,6 +8,7 @@
 //! outside the copy, and the folder and the branch come from the run id alone.
 
 mod git;
+mod gone;
 mod record;
 
 use std::collections::hash_map::RandomState;
@@ -275,7 +276,7 @@ pub(crate) fn take_back(home: &Path, run: &str) -> Result<(), Error> {
         let name = format!("refs/heads/{}", branch(run));
         git.open(&record.repo).and_then(|repo| repo.run(None, &[], &["update-ref", "-d", &name])).map_err(refused)?;
     }
-    fs::remove_dir_all(at.runs.join(run)).map_err(Error::Store)
+    gone::remove(&at.runs, run).map_err(Error::Store)
 }
 
 /// What is left to do for a copy [`take_back`] could not undo, because git could not be asked (the repo was moved

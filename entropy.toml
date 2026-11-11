@@ -57,6 +57,8 @@ max_file_lines = 400
 # `tests/support/mod.rs`, 11; `tests/f37/refused.rs`, 2).
 # Two of F39's tests letting the made-up agent end first on Windows, where a folder a command stands in cannot be
 # removed, raised the binary by 6 (`tests/f39/refused.rs`).
+# A run's folder removed in one step (`copy/gone.rs`, 62 lines, 39 of them its test of a look during a removal)
+# raised core by 63.
 # The child a never-started record names, killed before its copy is taken back, raised core by 6 (`run/end.rs`)
 # and the binary by 20 (its test, `tests/f39/limits.rs`).
 # What Jellymoon's home holds of a run, removed when git cannot take its copy back, raised core by 18 (`copy.rs`,
@@ -67,7 +69,7 @@ max_file_lines = 400
 # (`copy.rs`) and the binary by 31 (`tests/f38/limits.rs`, 26; four runs at once in `tests/f39/limits.rs`, 5).
 # A run's end that says the made wishes could not be used, where it said the page was busy, raised core by 9
 # (`wish.rs`, `run/end.rs`) and the binary by 29 (its test, `tests/f39/safe.rs`).
-"crates/jellymoon-core" = 5462
+"crates/jellymoon-core" = 5525
 "crates/jellymoon" = 7359
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no

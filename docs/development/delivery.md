@@ -81,7 +81,8 @@ along with anything the person changed elsewhere in between. Both print `{"insta
 
 **The file is replaced whole.** The new content is written to a new file beside the settings,
 `<name>.jellymoon-<process id>`, opened create-new so a file that is there is never written over, and readable by the
-person alone (0600) on Unix until it is given the old file's mode. It is synced and renamed over the old one. A link
+person alone (0600) on Unix until it is given the old file's mode. A settings file install creates has no old
+file, so it stays 0600. It is synced and renamed over the old one. A link
 is resolved first, so the link stays and the file it points at is replaced; a link that points at nothing is itself
 replaced by a regular file. A read-only settings file is replaced too, with its mode kept (on Windows such a
 file may refuse the rename; then the command fails and the file is as it was). Hard links to the old file and its extended attributes are not carried over. When a step

@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
 
-use crate::ruling::private_dir;
+use crate::ruling::{EVENTS, private_dir};
 use crate::{Error, HookState};
 
 /// The hook event the entry is added under: it fires after each tool call that worked, in every session.
@@ -71,15 +71,17 @@ fn groups(clean: &str) -> Option<Vec<(Range<usize>, Value)>> {
     list.iter().map(placed).collect()
 }
 
-/// Whether settings with no comments name `program` in a handler under any event; with `whole`, as `program hook`.
-/// None when the text is not a JSON object.
+/// Whether settings with no comments name `program` in a handler under any event; with `whole`, as `program hook`
+/// under an event the hook answers. None when the text is not a JSON object.
 fn named(clean: &str, program: &str, whole: bool) -> Option<bool> {
     let top: HashMap<String, Value> = serde_json::from_str(clean).ok()?;
     let Some(events) = top.get("hooks").and_then(Value::as_object) else { return Some(false) };
-    Some(events.values().filter_map(Value::as_array).flatten().any(|group| runs(group, program, whole)))
+    let answered = events.iter().filter(|(event, _)| !whole || EVENTS.contains(&event.as_str()));
+    Some(answered.filter_map(|(_, groups)| groups.as_array()).flatten().any(|group| runs(group, program, whole)))
 }
 
-/// Whether `text` already holds an entry that runs `program hook`, however it is laid out and under any event.
+/// Whether `text` already holds an entry that runs `program hook` under an event the hook answers, however it is
+/// laid out. An entry under another event, or in a comment, is not one.
 fn holds(text: &str, program: &str) -> bool {
     named(&without_comments(text), program, true) == Some(true)
 }
@@ -97,7 +99,8 @@ pub fn install_hook(settings: &Path, home: &Path, program: &Path) -> Result<Hook
     let settings = absolute(settings).map_err(Error::Settings)?;
     let kept = home.join("hook.json");
     let has = |record: &Record, text: &str| {
-        (!record.inserted.is_empty() && text.contains(&record.inserted)) || holds(text, &record.program)
+        let kept = !record.inserted.is_empty() && without_comments(text).contains(&record.inserted);
+        kept || holds(text, &record.program)
     };
     if let Some(record) = record(&kept)
         && fs::read_to_string(&record.settings).is_ok_and(|text| has(&record, &text))

@@ -24,7 +24,7 @@ const TOLD_MAX: usize = 8;
 /// The most of the harness's input that is read.
 const INPUT_MAX: u64 = 1 << 20;
 /// The hook events whose output may carry context for the model in the shape [`deliver`] prints.
-const EVENTS: [&str; 3] = ["PostToolUse", "PreToolUse", "UserPromptSubmit"];
+pub(crate) const EVENTS: [&str; 3] = ["PostToolUse", "PreToolUse", "UserPromptSubmit"];
 
 /// What Claude Code gives a hook on its input, as far as it is used here.
 #[derive(Deserialize)]

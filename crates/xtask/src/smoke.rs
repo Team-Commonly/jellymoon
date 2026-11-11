@@ -9,7 +9,7 @@ mod steps;
 
 use std::ffi::OsString;
 use std::path::{self, Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
@@ -140,11 +140,20 @@ impl World {
     /// Runs a built program and returns what it printed. Whatever Jellymoon writes goes to the temporary home. A
     /// made-up run sees no variable of this process and no harness but the made-up one.
     pub fn run(&self, program: &str, args: &[String]) -> Result<Ran, String> {
+        self.fed(program, args, "")
+    }
+
+    /// The same, with `input` on the program's standard input.
+    pub fn fed(&self, program: &str, args: &[String], input: &str) -> Result<Ran, String> {
+        let given = self.at("stdin");
+        write(&given, input)?;
         let mut command = Command::new(self.program(program));
+        command.stdin(fs::File::open(&given).map_err(|e| format!("{}: {e}", given.display()))?);
         command.args(args);
         if !self.real {
             command.env_clear().env("TZ", ZONE).env("PATH", self.at("bin")).env("JELLYMOON_CLAUDE", self.harness());
             command.env("HOME", self.at("user")).env("USERPROFILE", self.at("user"));
+            command.env("CLAUDE_CONFIG_DIR", self.at("harness")); // where the delivery hook's settings are
             if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
                 command.env("SystemRoot", root); // a Windows program needs it to start
             }
@@ -159,7 +168,7 @@ impl World {
     pub fn wait(&self, mut command: Command, limit: Duration) -> Result<Ran, String> {
         let (out, err) = (self.at("stdout"), self.at("stderr"));
         let file = |path: &Path| fs::File::create(path).map_err(|e| format!("{}: {e}", path.display()));
-        command.stdin(Stdio::null()).stdout(file(&out)?).stderr(file(&err)?);
+        command.stdout(file(&out)?).stderr(file(&err)?);
         let mut child = command.spawn().map_err(|e| format!("starting {:?}: {e}", command.get_program()))?;
         let deadline = Instant::now() + limit;
         let status = loop {

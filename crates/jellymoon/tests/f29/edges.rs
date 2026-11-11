@@ -102,6 +102,35 @@ fn settings_laid_out_anew_never_get_a_second_entry_and_the_entry_is_still_remove
 }
 
 #[test]
+fn an_entry_counts_as_installed_only_under_an_event_the_hook_answers_and_outside_a_comment() {
+    let first = world();
+    fs::write(first.settings(), "{}").unwrap();
+    assert_eq!(first.install().code, 0);
+    let installed: Value = serde_json::from_str(&fs::read_to_string(first.settings()).unwrap()).unwrap();
+    let ours = &installed["hooks"]["PostToolUse"][0];
+    for (event, changed) in [("PreToolUse", false), ("UserPromptSubmit", false), ("Stop", true), ("MadeUp", true)] {
+        let w = world();
+        fs::write(w.settings(), json!({"hooks": {event: [ours]}}).to_string()).unwrap();
+        assert_eq!(
+            w.ok(&["hook", "install", "--settings", w.settings().to_str().unwrap()])["changed"],
+            changed,
+            "{event}"
+        );
+        let settings: Value = serde_json::from_str(&fs::read_to_string(w.settings()).unwrap()).unwrap();
+        assert_eq!(settings["hooks"]["PostToolUse"].is_array(), changed, "{event}");
+    }
+
+    // The person commented the entry out: it no longer runs, so it is put in again.
+    let text = fs::read_to_string(first.settings()).unwrap();
+    fs::write(first.settings(), format!("/* {} */\n{{}}\n", text.trim_end())).unwrap();
+    assert_eq!(
+        first.ok(&["hook", "install", "--settings", first.settings().to_str().unwrap()]),
+        json!({"installed": true, "changed": true})
+    );
+    assert_eq!(fs::read_to_string(first.settings()).unwrap().matches("\"PostToolUse\"").count(), 2);
+}
+
+#[test]
 fn uninstall_takes_the_hook_out_and_leaves_an_entry_the_person_edited_for_them() {
     let w = world();
     let (apps, bin) = (w.dir.path().join("Applications"), w.dir.path().join("bin"));

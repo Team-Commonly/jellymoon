@@ -192,6 +192,15 @@ fn words(error: &Error) -> String {
              {error}."
         ),
         Error::Date | Error::Model | Error::Uninstall(_) => format!("{error}."),
+        // The app makes no ruling and installs no hook yet; these say what core says.
+        Error::Ruling
+        | Error::Store(_)
+        | Error::Settings(_)
+        | Error::NotSettings
+        | Error::Elsewhere
+        | Error::Changed => {
+            format!("{error}.")
+        }
     }
 }
 

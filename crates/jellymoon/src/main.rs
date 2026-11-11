@@ -1,6 +1,8 @@
 //! The `jellymoon` command. `day` prints one local day of what the person typed to Claude Code; `page` prints that
-//! day's page data, made with one reading call through their own Claude Code. Each prints one line of JSON on stdout,
-//! or an error on stderr and nothing on stdout. Neither talks to a server. `uninstall` removes what `install.sh` added.
+//! day's page data, made with one reading call through their own Claude Code; `rule` keeps a ruling, and `hook`, run
+//! by Claude Code, hands it to a session. Each prints one line of JSON on stdout (`hook` nothing when no ruling
+//! waits), or an error on stderr and nothing on stdout. None talks to a server. `uninstall` removes what `install.sh`
+//! added, and the hook.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -14,6 +16,10 @@ use lexopt::prelude::*;
 const USAGE: &str = "usage:
   jellymoon day [--date <YYYY-MM-DD>] [--logs <Claude Code projects dir>] [--skip <folder names, comma separated>]
   jellymoon page [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <names>] [--model <name>]   (one reading call through your own Claude Code)
+  jellymoon rule --stands <the words that stand> --over <the words they replace>
+  jellymoon hook                                 (run by Claude Code: hands waiting rulings to the session on stdin)
+  jellymoon hook install [--settings <Claude Code settings file>]
+  jellymoon hook uninstall
   jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay)
 ";
 
@@ -30,6 +36,10 @@ enum Command {
     Help,
     Day(DayOptions),
     Page(DayOptions, String),
+    Rule { stands: String, over: String },
+    Hook,
+    InstallHook(Option<PathBuf>),
+    RemoveHook,
     Uninstall,
 }
 
@@ -68,9 +78,26 @@ fn run() -> Result<String, Failure> {
                 return Err(Failure::Run("no home directory: set JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR".to_string()));
             };
             let binary = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
-            let options = UninstallOptions { app: app.join("Jellymoon.app"), binary };
+            let options = UninstallOptions { app: app.join("Jellymoon.app"), binary, home: home().ok() };
             Ok(format!("{}\n", jellymoon_core::uninstall(&options).map_err(failed)?))
         }
+        Command::Rule { stands, over } => {
+            Ok(format!("{}\n", jellymoon_core::rule(&home()?, &stands, &over).map_err(failed)?))
+        }
+        Command::Hook => {
+            // With no home there is no ruling, and a hook that fails would show an error at every step of a session.
+            let told = home().ok().and_then(|home| jellymoon_core::deliver(&home, io::stdin().lock()));
+            Ok(told.map(|told| told + "\n").unwrap_or_default())
+        }
+        Command::InstallHook(settings) => {
+            let settings = match settings {
+                Some(settings) => settings,
+                None => harness_folder()?.join("settings.json"),
+            };
+            let program = env::current_exe().map_err(|e| Failure::Run(format!("finding this program: {e}")))?;
+            Ok(format!("{}\n", jellymoon_core::install_hook(&settings, &home()?, &program).map_err(failed)?))
+        }
+        Command::RemoveHook => Ok(format!("{}\n", jellymoon_core::remove_hook(&home()?).map_err(failed)?)),
     }
 }
 
@@ -87,6 +114,8 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
                 Some(other) => Err(usage(other.unexpected())),
             };
         }
+        Some(Value(command)) if command == "rule" => return parse_rule(parser),
+        Some(Value(command)) if command == "hook" => return parse_hook(parser),
         Some(Long("help") | Short('h')) => return Ok(Command::Help),
         Some(other) => return Err(usage(other.unexpected())),
         None => return Err(Failure::Usage("no command".to_string())),
@@ -107,10 +136,41 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     }
     let logs = match logs {
         Some(logs) => logs,
-        None => harness_logs()?,
+        None => harness_folder()?.join("projects"),
     };
     let options = DayOptions { logs, date, skip: skip.split(',').map(str::to_string).collect() };
     Ok(if command == "day" { Command::Day(options) } else { Command::Page(options, model) })
+}
+
+fn parse_rule(mut parser: lexopt::Parser) -> Result<Command, Failure> {
+    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
+    let (mut stands, mut over) = (String::new(), String::new());
+    while let Some(arg) = parser.next().map_err(usage)? {
+        match arg {
+            Long("help") | Short('h') => return Ok(Command::Help),
+            Long("stands") => stands = parser.value().and_then(|v| v.string()).map_err(usage)?,
+            Long("over") => over = parser.value().and_then(|v| v.string()).map_err(usage)?,
+            other => return Err(usage(other.unexpected())),
+        }
+    }
+    Ok(Command::Rule { stands, over })
+}
+
+fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {
+    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
+    let (mut action, mut settings) = (Command::Hook, None);
+    while let Some(arg) = parser.next().map_err(usage)? {
+        match arg {
+            Long("help") | Short('h') => return Ok(Command::Help),
+            Value(word) if matches!(action, Command::Hook) && word == "install" => action = Command::InstallHook(None),
+            Value(word) if matches!(action, Command::Hook) && word == "uninstall" => action = Command::RemoveHook,
+            Long("settings") if matches!(action, Command::InstallHook(_)) => {
+                settings = Some(PathBuf::from(parser.value().map_err(usage)?));
+            }
+            other => return Err(usage(other.unexpected())),
+        }
+    }
+    Ok(if matches!(action, Command::InstallHook(_)) { Command::InstallHook(settings) } else { action })
 }
 
 /// The path a variable names, when it is set to something.
@@ -122,14 +182,13 @@ fn user_home() -> Option<PathBuf> {
     env::home_dir().filter(|home| !home.as_os_str().is_empty())
 }
 
-/// Claude Code's own projects directory: under `CLAUDE_CONFIG_DIR`, its own setting for where it keeps its files, or
-/// under `.claude` in the user's home.
-fn harness_logs() -> Result<PathBuf, Failure> {
+/// Claude Code's own folder, which holds its `projects` and its `settings.json`: `CLAUDE_CONFIG_DIR`, its own setting
+/// for where it keeps its files, or `.claude` in the user's home.
+fn harness_folder() -> Result<PathBuf, Failure> {
     let config = named("CLAUDE_CONFIG_DIR").or_else(|| Some(user_home()?.join(".claude")));
-    let config = config.ok_or_else(|| {
-        Failure::Run("finding the session logs: no home directory; name them with --logs".to_string())
-    })?;
-    Ok(config.join("projects"))
+    config.ok_or_else(|| {
+        Failure::Run("finding Claude Code's files: no home directory; name them with --logs or --settings".to_string())
+    })
 }
 
 /// Where jellymoon keeps its own files: `JELLYMOON_HOME`, or `.jellymoon` in the user's home.

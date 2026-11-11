@@ -31,6 +31,18 @@ pub enum Error {
     NotPageData { line: usize, column: usize },
     /// A piece of the install, or the delivery hook, could not be removed.
     Uninstall(io::Error),
+    /// A ruling lacks the statement that stands or the one it replaces.
+    Ruling,
+    /// The ruling, or the record of the installed hook, could not be kept or read.
+    Store(io::Error),
+    /// The harness settings file could not be read or written.
+    Settings(io::Error),
+    /// The harness settings are not a JSON object, or their hooks are not shaped as Claude Code shapes them.
+    NotSettings,
+    /// The hook is installed in another settings file.
+    Elsewhere,
+    /// The text that was installed is no longer in the settings file as it was written.
+    Changed,
 }
 
 impl fmt::Display for Error {
@@ -51,6 +63,16 @@ impl fmt::Display for Error {
                 write!(f, "the reading is not page data (line {line}, column {column} of the model's JSON)")
             }
             Error::Uninstall(e) => write!(f, "uninstalling: {e}"),
+            Error::Ruling => write!(f, "a ruling needs the words that stand and the words they replace"),
+            Error::Store(e) => write!(f, "jellymoon's own files: {e}"),
+            Error::Settings(e) => write!(f, "the harness settings file: {e}"),
+            Error::NotSettings => write!(f, "the harness settings file is not a JSON object; nothing was changed"),
+            Error::Elsewhere => {
+                write!(f, "the hook is installed in another settings file; uninstall it first. Nothing was changed")
+            }
+            Error::Changed => {
+                write!(f, "the installed hook entry cannot be taken out safely; remove it by hand. Nothing was changed")
+            }
         }
     }
 }
@@ -58,7 +80,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Error::Logs(e) | Error::Call(e) | Error::Uninstall(e) => Some(e),
+            Error::Logs(e) | Error::Call(e) | Error::Uninstall(e) | Error::Store(e) | Error::Settings(e) => Some(e),
             _ => None,
         }
     }

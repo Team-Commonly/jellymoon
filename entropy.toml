@@ -6,14 +6,16 @@ max_file_lines = 400
 
 # The most lines of Rust each crate may hold, tests included. Every crate needs one.
 [budget]
-"crates/jellymoon-core" = 1761
-"crates/jellymoon" = 1408
-# The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md).
-"crates/xtask" = 885
+"crates/jellymoon-core" = 2403
+"crates/jellymoon" = 2088
+# The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
+# four delivery steps raised it by 76.
+"crates/xtask" = 961
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 "crates/sticker-kit" = 5116
-"app" = 2222
+# F29 raised the app by 9: the arm for core's new errors where it puts an error into words.
+"app" = 2231
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

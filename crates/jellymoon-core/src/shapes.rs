@@ -1,4 +1,4 @@
-//! The wire shapes: what `jellymoon day` and `jellymoon page` print, and the journal app's shell reads. These types are
+//! The wire shapes: what `jellymoon day`, `page`, `rule` and `hook install` print, and the journal app's shell reads. These types are
 //! the contract. A field's place here is its place on the wire; a missing field, a wrong type and an unknown state or
 //! tool are refused when one is read.
 
@@ -102,6 +102,26 @@ pub struct PageRead {
     pub projects: Vec<String>,
 }
 
+/// The person's choice on a clash, as it is kept and as `jellymoon rule` prints it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ruling {
+    /// When it was made, in milliseconds since 1970, as digits: its name in the store and its place in the order.
+    pub id: String,
+    /// The statement that stands, in the person's own words, at most 200 characters.
+    pub stands: String,
+    /// The statement it replaces, in the person's own words, at most 200 characters.
+    pub over: String,
+}
+
+/// What `jellymoon hook install` and `jellymoon hook uninstall` print.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HookState {
+    /// Whether Jellymoon's entry is in the harness settings now.
+    pub installed: bool,
+    /// Whether this command changed the settings file.
+    pub changed: bool,
+}
+
 /// A day prints as its JSON on one line, with no line break: what `jellymoon day` prints and what the model reads.
 impl fmt::Display for ReaderDay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -118,4 +138,18 @@ impl fmt::Display for PageData {
 
 fn json<T: Serialize>(value: &T, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.write_str(&serde_json::to_string(value).map_err(|_| fmt::Error)?)
+}
+
+/// A ruling prints as its JSON on one line, with no line break: what `jellymoon rule` prints and what is kept.
+impl fmt::Display for Ruling {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        json(self, f)
+    }
+}
+
+/// What a hook command did prints as its JSON on one line, with no line break.
+impl fmt::Display for HookState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        json(self, f)
+    }
 }

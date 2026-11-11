@@ -40,12 +40,13 @@ with a browser instead gets the flag, and the Finder will refuse the app: use th
 jellymoon uninstall
 ```
 
-It prints `{"removed":[...],"hook":false}`: the paths it removed, and whether it took the delivery hook out of the
-harness's settings. It reads the same `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR`, removes `Jellymoon.app` and
-`jellymoon` from them and nothing else, and takes no arguments. The journal's own files (`~/.jellymoon`) stay. It is a
-command and not a flag of the script because the hook lives in the harness's settings, which only core reads and
-writes, and because the command is already on the machine and needs no network. No hook can be installed yet (F29):
-`remove_delivery_hook` in `crates/jellymoon-core/src/uninstall.rs` removes nothing until F29 puts its removal there.
+It prints `{"removed":[...],"hook":false,"hook_by_hand":false}`: the paths it removed, whether it took the delivery
+hook out of the harness's settings, and whether it left a hook entry the person had edited, which they then remove
+by hand. It reads the same `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR`, removes `Jellymoon.app` and `jellymoon` from
+them and nothing else, and takes no arguments. The journal's own files (`~/.jellymoon`) stay. It is a command and not
+a flag of the script because the hook lives in the harness's settings, which only core reads and writes, and because
+the command is already on the machine and needs no network. The hook goes first, as `jellymoon hook uninstall`
+removes it ([delivery.md](delivery.md)).
 
 ## Cutting a release
 

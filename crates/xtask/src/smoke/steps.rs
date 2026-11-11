@@ -3,7 +3,7 @@
 //! go through `World::made_up`, so `--real` runs the same step without them and never prints the person's words.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 use std::{env, fs};
 
@@ -19,7 +19,11 @@ pub const STEPS: &[Step] = &[
     Step { name: "layout-plain", only: Only::Any, run: |world| layout(world, "plain") },
     Step { name: "broken-page", only: Only::Any, run: broken_page },
     Step { name: "empty-day", only: Only::Synthetic, run: empty_day },
-    // Not with --real: an uninstall will also take the delivery hook out of the harness's own settings.
+    // Delivery, never with --real: these would write the person's own harness settings and tell their sessions.
+    Step { name: "hook-install", only: Only::Synthetic, run: hook_install },
+    Step { name: "rule", only: Only::Synthetic, run: rule },
+    Step { name: "hook-told", only: Only::Synthetic, run: hook_told },
+    Step { name: "hook-again", only: Only::Synthetic, run: hook_again },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
     Step { name: "window", only: Only::Window, run: window },
 ];
@@ -142,7 +146,67 @@ fn empty_day(world: &World) -> Result<String, String> {
     Ok(format!("an empty page and no call; {}", placed(world, "empty.json", "sticker")?))
 }
 
+/// The made-up harness settings, and what they hold before the hook goes in. They are in the temporary home, where
+/// `CLAUDE_CONFIG_DIR` points every made-up run.
+const SETTINGS: &str = "{\n  // the person's own\n  \"model\": \"opus\"\n}\n";
+const STANDS: &str = "never retry uploads, fail fast";
+
+fn settings(world: &World) -> std::path::PathBuf {
+    world.at("harness").join("settings.json")
+}
+
+/// `jellymoon hook install` puts its entry into the settings, which stay a JSON object around it.
+fn hook_install(world: &World) -> Result<String, String> {
+    write(&settings(world), SETTINGS)?;
+    let args = ["hook", "install", "--settings", &text(&settings(world))].map(str::to_string);
+    let state = world.json("jellymoon", &args)?;
+    let now = fs::read_to_string(settings(world)).map_err(|e| format!("the settings: {e}"))?;
+    let entry =
+        now.contains("\"PostToolUse\":[{\"hooks\":[{\"type\":\"command\"") && now.contains("\"args\":[\"hook\"]");
+    if state != json!({"installed": true, "changed": true}) || !entry || !now.ends_with(&SETTINGS[1..]) {
+        return Err(format!("{state}, and the settings are now: {now}"));
+    }
+    Ok("the entry is in the settings".to_string())
+}
+
+/// `jellymoon rule` keeps a ruling, which waits in Jellymoon's home.
+fn rule(world: &World) -> Result<String, String> {
+    let args = ["rule", "--stands", STANDS, "--over", "add a retry to the uploader"].map(str::to_string);
+    let ruling = world.json("jellymoon", &args)?;
+    let waiting = fs::read_dir(world.at("jm").join("rulings")).map_or(0, Iterator::count);
+    if ruling["stands"] != STANDS || waiting != 1 {
+        return Err(format!("{waiting} files in the store, not 1: {ruling}"));
+    }
+    Ok("1 ruling waits".to_string())
+}
+
+/// `jellymoon hook` on one made-up step of a session: the lines it printed.
+fn hook(world: &World) -> Result<Vec<Value>, String> {
+    let step = json!({"session_id": "smoke-1", "hook_event_name": "PostToolUse", "tool_name": "Read"});
+    let ran = world.fed("jellymoon", &["hook".to_string()], &step.to_string())?;
+    let lines: Result<Vec<Value>, _> = ran.stdout.lines().map(serde_json::from_str).collect();
+    lines.ok().filter(|_| ran.code == 0 && ran.stderr.is_empty()).ok_or_else(|| world.printed(&ran))
+}
+
+/// The session's next step is handed the ruling, as context on the event it ran for.
+fn hook_told(world: &World) -> Result<String, String> {
+    let told = hook(world)?;
+    let output = told.first().map_or(&Value::Null, |line| &line["hookSpecificOutput"]);
+    let context = output["additionalContext"].as_str().unwrap_or_default();
+    if told.len() != 1 || output["hookEventName"] != "PostToolUse" || !context.contains(STANDS) {
+        return Err(format!("the step was not told the ruling: {told:?}"));
+    }
+    Ok("told the ruling once".to_string())
+}
+
+/// A second step of the same session is told nothing: the hook prints nothing and exits 0.
+fn hook_again(world: &World) -> Result<String, String> {
+    let told = hook(world)?;
+    if told.is_empty() { Ok("told nothing".to_string()) } else { Err(format!("told again: {told:?}")) }
+}
+
 /// `jellymoon uninstall` removes the app and the command from where an install put them, and leaves nothing there.
+/// It takes the delivery hook out too, and the settings are as they were.
 fn uninstall(world: &World) -> Result<String, String> {
     let (apps, installed) = (world.at("apps"), world.at("installed"));
     write(&apps.join("Jellymoon.app").join("Contents").join("Info.plist"), "")?;
@@ -150,16 +214,19 @@ fn uninstall(world: &World) -> Result<String, String> {
     let done = world.json("jellymoon", &["uninstall".to_string()])?;
     let removed = done["removed"].as_array().map_or(0, Vec::len);
     let left: usize = [apps, installed].iter().map(|folder| fs::read_dir(folder).map_or(1, Iterator::count)).sum();
-    if (removed, left) != (2, 0) {
-        return Err(format!("{removed} removed and {left} left, not 2 and 0: {done}"));
+    let restored = fs::read_to_string(settings(world)).is_ok_and(|now| now == SETTINGS);
+    if (removed, left) != (2, 0) || done["hook"] != true || !restored {
+        return Err(format!(
+            "{removed} removed and {left} left, not 2 and 0, or the hook is still in the settings: {done}"
+        ));
     }
-    Ok("2 removed, nothing left where they were".to_string())
+    Ok("2 removed, nothing left where they were; the hook is out and the settings are as they were".to_string())
 }
 
 /// The app opens the page in a window and closes it by itself. It needs a display, so it sees this process's variables.
 fn window(world: &World) -> Result<String, String> {
     let mut command = Command::new(world.program("jellymoon-app"));
-    command.arg("--page").arg(world.at("page.json")).env("JELLYMOON_QUIT_AFTER", "3");
+    command.arg("--page").arg(world.at("page.json")).env("JELLYMOON_QUIT_AFTER", "3").stdin(Stdio::null());
     let ran = world.wait(command, Duration::from_secs(30))?;
     if ran.code != 0 || ran.stderr.contains("panicked") {
         return Err(world.printed(&ran));

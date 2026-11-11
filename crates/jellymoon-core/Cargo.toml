@@ -10,7 +10,8 @@ publish.workspace = true
 jiff.workspace = true
 regex.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+# raw_value: the hook is spliced into the settings text at the place serde_json found, so every other byte stays.
+serde_json = { workspace = true, features = ["raw_value"] }
 tempfile.workspace = true
 
 [lints]

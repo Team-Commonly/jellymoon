@@ -61,7 +61,7 @@
         "a real Claude Code turn told to do one thing, then sent a ruling to do another, does the other (harness-real)"
       ],
       "test": "cargo test -p jellymoon --test f29",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F27"
       ]

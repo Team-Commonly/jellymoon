@@ -50,9 +50,9 @@ Read `.agents/skills/<name>/SKILL.md` before the stage. Detail: `docs/developmen
 - **Lessons** land in the same PR as a test, lint or doc.
 
 ## Map
-- `crates/jellymoon-core`: the reader, redaction, page types and their checks, the reading call.
-- `crates/jellymoon`: the binary. `day`, `page` and `uninstall` today: parse arguments, call core, print JSON
-  (`docs/development/reader.md`, `page.md`, `install.md`; `install.sh` is the Mac installer). Feature tests are `crates/jellymoon/tests/f<nn>.rs`.
+- `crates/jellymoon-core`: the reader, redaction, page types and their checks, the reading call, rulings and the hook.
+- `crates/jellymoon`: the binary. `day`, `page`, `rule`, `hook` and `uninstall` today: parse arguments, call core, print JSON
+  (`docs/development/reader.md`, `page.md`, `delivery.md`, `install.md`; `install.sh` is the Mac installer). Feature tests are `crates/jellymoon/tests/f<nn>.rs`.
 - `crates/xtask`: `cargo xtask check`, the repo's own rules, with budgets in `entropy.toml`; `cargo xtask smoke`.
 - `crates/sticker-kit`: a GPUI kit that knows nothing of Jellymoon. `app/`: the shell, `jellymoon-app` (`docs/development/app.md`).
   Direction: core, then the binary; the kit, then the app, which also uses core. Core and the binary never depend on GPUI.

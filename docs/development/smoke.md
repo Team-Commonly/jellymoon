@@ -19,11 +19,14 @@ cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build argument
 | `layout-sticker`, `layout-plain` | `jellymoon-app layout` on that page, in each built-in theme: every wish is a character and the clash is a choice note |
 | `broken-page` | a file that is not page data is refused in one line, exit 1, nothing on stdout |
 | `empty-day` | a day nobody typed in is an empty page, made with no reading call, and the app draws it |
-| `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty |
+| `hook-install` | `jellymoon hook install` puts its entry into made-up harness settings in the temporary home |
+| `rule` | `jellymoon rule` keeps a ruling, and one waits in the store |
+| `hook-told`, `hook-again` | `jellymoon hook`, given a made-up step, hands the session the ruling; its next step is told nothing |
+| `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty; the hook is out and the settings are as they were |
 | `window` (with `--window`) | `jellymoon-app --page` opens a window and, with `JELLYMOON_QUIT_AFTER=3`, exits 0 within 30 seconds with no panic |
 
-A made-up run starts each program with no variable of the caller's: a scratch `HOME`, `JELLYMOON_HOME`,
-`JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` in the temporary home, and `JELLYMOON_CLAUDE` naming the copy of
+A made-up run starts each program with no variable of the caller's: a scratch `HOME`, `CLAUDE_CONFIG_DIR`,
+`JELLYMOON_HOME`, `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` in the temporary home, and `JELLYMOON_CLAUDE` naming the copy of
 `fake-claude` there. It never runs Claude Code and never reads a real log.
 
 ## The three modes
@@ -32,7 +35,7 @@ A made-up run starts each program with no variable of the caller's: a scratch `H
 - **`--window`** adds the window step. It needs a display, so that step alone sees the caller's variables. CI tries
   it on macOS without failing the job, to learn whether a hosted runner can open a GPUI window.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
-  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `empty-day` and `uninstall` are left out;
+  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `empty-day`, the delivery steps and `uninstall` are left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what.
 

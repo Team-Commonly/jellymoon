@@ -3,7 +3,9 @@
 //! `jellymoon run` that is going, in F39's test folder (`f39/world.rs`) with the made-up `fake-agent` as the
 //! harness, so the real Claude Code is never started. `f40/deaf.rs` holds the agents that do not hear, and what
 //! is asked meanwhile; `f40/nothing.rs` a stop with nothing going, a stop left by hand and a locked day;
-//! `f40/races.rs` a stop against the run's own finish; `f40/denied.rs` what is counted as denied.
+//! `f40/races.rs` a stop against the run's own finish; `f40/denied.rs` what is counted as denied; `f40/obeys.rs`
+//! an agent that ends by itself at the interrupt; `f40/hand.rs` a record and a wish changed by hand;
+//! `f40/request.rs` a request that is no plain file; `f40/pipe.rs` a named pipe at a file of the home.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f40/deaf.rs"]

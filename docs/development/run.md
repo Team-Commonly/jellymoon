@@ -203,7 +203,7 @@ ended changes nothing. No lock is taken to leave it: making a new file either ha
 | A run that was cut off | `failed`, and `why` says it was cut off; it is written down and its child killed, as a page does it ("A run that was cut off") | 0 |
 | A wish that names no run: none was started, or the harness was too old, or `jellymoon run` has not got as far as naming one | `wish m1 has no run going, so nothing was stopped` | 1 |
 | No made wish of that id | the page has no made wish of that id | 1 |
-| A wish that names a run whose record names another wish or day | `wish m2 names run <id>, which is another wish's run, so nothing was stopped`; no request is left | 1 |
+| A wish that names another wish's run | `wish m2 names run <id>, which is another wish's run, so nothing was stopped`; no request is left | 1 |
 | A run that has not ended 65 seconds after it was asked | `run <id> was asked to stop and has not ended yet; the page shows its end when it has` | 1 |
 
 The 65 seconds are the two times five of the sequence, two more waits of five for what the child printed, the
@@ -250,8 +250,10 @@ Believed or not, the child the record names is killed, if it is still that proce
 nothing holds the run, so nobody reads that child any more, and a record that says the run ended can have been
 written by hand over one that was cut off.
 
-**A wish that names another wish's run.** The day's wishes are a file too. A wish changed by hand to name a run
-whose record names another wish, or another day, is given no say over that run: `run stop` for it is refused and
+**A wish that names another wish's run.** The day's wishes are a file too. A run is another wish's when its
+record names another wish, or another day, and that wish names the run. (A record that names a wish which does
+not name the run is the file that was changed: the run is this wish's, and was cut off.) A wish changed by hand
+to name another wish's run is given no say over that run: `run stop` for it is refused and
 leaves no request, `jellymoon run` for it is refused as for any wish that names a run, and neither they nor a
 page write the run down or kill its child on that wish's word. The run is stopped, and written down when it was
 cut off, for its own wish only. The wish that was changed is left as it was written: one made to say `working`

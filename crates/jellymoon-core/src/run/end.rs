@@ -81,11 +81,15 @@ pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &R
     ours.into_iter().find(|ours| ours == said && line(ours, 200) == *ours).map(|why| (outcome, why))
 }
 
-/// Whether a run's record says the run is another wish's. The day's wishes are a file that can be changed by hand,
-/// and a wish made to name the run of another is given no say over it: that run is stopped, and written down, on
-/// the word of its own wish only.
-pub(super) fn of_another(record: Option<&Record>, day: &str, wish: &str) -> bool {
-    record.is_some_and(|record| record.wish != wish || record.day != day)
+/// Whether a run is another wish's: its record names another wish, or another day, and that wish names the run.
+/// The day's wishes are a file that can be changed by hand, and a wish made to name the run of another is given
+/// no say over it: that run is stopped, and written down, on the word of its own wish only. A record that names a
+/// wish which does not name the run is the one that was changed, and the run is this wish's, cut off ([`recorded`]).
+pub(super) fn of_another(home: &Path, run: &str, record: Option<&Record>, day: &str, wish: &str) -> bool {
+    let Some(record) = record.filter(|record| record.wish != wish || record.day != day) else { return false };
+    // The day in a record is a word from a file: it is a day, or no file is looked for.
+    let theirs = wish::day_of(Some(&record.day)).and_then(|day| wish::kept_of(home, &day)).unwrap_or_default();
+    theirs.iter().any(|theirs| theirs.id == record.wish && theirs.run.as_deref() == Some(run))
 }
 
 /// A wish that names a run of which nothing is kept, not even its folder in `runs`: the run was never started
@@ -113,7 +117,7 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
         return unstarted(home, day, wish, &run);
     }
     let record = record::kept(home, &run);
-    if of_another(record.as_ref(), day, &wish.id) {
+    if of_another(home, &run, record.as_ref(), day, &wish.id) {
         return wish;
     }
     if record.as_ref().is_some_and(|record| record.outcome == Some(RunOutcome::NotStarted)) {

@@ -278,6 +278,28 @@ fn minded(rec: &Path, signal: &str, last: &str, flood: usize) -> ! {
     cannot(rec)
 }
 
+/// The scripts that start this program a second time, with something done about signals first.
+fn again(script: &str, rec: &Path, number: usize) {
+    match script {
+        "deaf" if number < 3 => deafen(rec, number),
+        "deaf" => minded(rec, "TERM", "", 0),
+        "obeys" => minded(rec, "INT", &if number == 1 { success() } else { String::new() }, 0),
+        "floods" => minded(rec, "INT", "", 1100),
+        _ => {}
+    }
+}
+
+/// `obeys` and `floods`, started the second time: the work, the result too when it comes `first`, and then a wait
+/// that the `perl` above ends at the interrupt. There `obeys` reports a success (1) or has already (0), and
+/// `floods` prints more than is read of a run.
+fn obeys(first: bool, rec: &Path) -> i32 {
+    edits();
+    if first {
+        line(&success());
+    }
+    waits(false, rec)
+}
+
 fn record(rec: &Path) {
     let mut starts = fs::OpenOptions::new().append(true).create(true).open(rec.join("starts")).unwrap();
     starts.write_all(b"started\n").unwrap();
@@ -304,13 +326,8 @@ fn main() {
     let play = fs::read_to_string(env::current_exe().unwrap().with_file_name("play")).unwrap();
     let play: Vec<&str> = play.lines().collect();
     let (script, rec, number) = (play[0], Path::new(play[1]), play[2].parse::<usize>().unwrap());
-    let again = env::args().nth(1).as_deref() != Some("now");
-    match script {
-        "deaf" if again && number < 3 => deafen(rec, number),
-        "deaf" if again => minded(rec, "TERM", "", 0),
-        "obeys" if again => minded(rec, "INT", &if number == 1 { success() } else { String::new() }, 0),
-        "floods" if again => minded(rec, "INT", "", 1100),
-        _ => {}
+    if env::args().nth(1).as_deref() != Some("now") {
+        again(script, rec, number);
     }
     record(rec);
     let code = match script {
@@ -359,15 +376,7 @@ fn main() {
             1
         }
         "forever" | "deaf" | "slow" => waits(script == "slow", rec),
-        // F40: the work, for `obeys` 0 its result too, and then a wait that the `perl` above it ends at a signal:
-        // `obeys` reports a success there (1) or has already (0), `floods` prints more than is read of a run.
-        "obeys" | "floods" => {
-            edits();
-            if script == "obeys" && number == 0 {
-                line(&success());
-            }
-            waits(false, rec)
-        }
+        "obeys" | "floods" => obeys(script == "obeys" && number == 0, rec),
         "scribble" => scribbles(rec),
         other => gate::play(other, number, rec),
     };

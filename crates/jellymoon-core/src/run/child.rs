@@ -52,7 +52,7 @@ pub(super) fn run(mut command: Command, said: String, limit: Duration, started: 
     let stdin = child.stdin.take();
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(said.as_bytes())));
-    let (stream, head) = (stream::reader(child.stdout.take()), stderr_head(child.stderr.take()));
+    let ((stream, so_far), head) = (stream::reader(child.stdout.take()), stderr_head(child.stderr.take()));
     let deadline = Instant::now() + limit;
     let mut read = None;
     let (end, grace) = loop {
@@ -68,11 +68,13 @@ pub(super) fn run(mut command: Command, said: String, limit: Duration, started: 
         }
     };
     let status = stop(&mut child, grace);
-    let read = read.or_else(|| stream.recv_timeout(DRAIN).ok()).unwrap_or_default();
+    // A reader that does not finish has read what it has so far: its stream is never taken for an empty one.
+    let whole = read.or_else(|| stream.recv_timeout(DRAIN).ok());
+    let read = whole.or_else(|| so_far.lock().ok().map(|so_far| *so_far)).unwrap_or_default();
     let exit_0 = end == End::Exited && status.is_some_and(|status| status.success());
     let head = head.recv_timeout(DRAIN).unwrap_or_default();
     let unknown = head.contains("unknown option") && head.contains("--restricted");
-    let old = end == End::Exited && !exit_0 && read.lines == 0 && unknown;
+    let old = end == End::Exited && !exit_0 && whole.is_some() && read.lines == 0 && unknown;
     Ok(Ended { end: if read.over { End::Over } else { end }, exit_0, read, old })
 }
 

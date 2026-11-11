@@ -6,6 +6,7 @@
 use std::io::{BufReader, Read};
 use std::process::ChildStdout;
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use serde::Deserialize;
@@ -77,19 +78,19 @@ fn measured(raw: &[u8]) -> bool {
 }
 
 impl Stream {
-    /// Takes the next line. False when nothing more is to be read: the stream did not start as a run's does.
-    /// Before the init line only other `system` lines are let by, which are the harness's own and show no work.
+    /// Takes the next line. False when nothing more is to be read: the stream did not start as a run's does, or
+    /// said later that it is not one. Before the init line only other `system` lines are let by, which are the
+    /// harness's own and show no work. Every init line is measured, wherever it comes.
     fn take(&mut self, raw: &[u8]) -> bool {
         self.lines += 1;
         let read = line(raw);
-        if self.start.is_none() {
-            let system = read.as_ref().is_some_and(|line| line.kind == "system");
-            let init = read.is_some_and(|line| line.subtype.as_deref() == Some("init"));
-            if system && !init {
-                return true;
-            }
-            self.start = Some(system && measured(raw));
-            return self.start == Some(true);
+        let system = read.as_ref().is_some_and(|line| line.kind == "system");
+        let init = system && read.as_ref().is_some_and(|line| line.subtype.as_deref() == Some("init"));
+        if init || (self.start.is_none() && !system) {
+            self.start = Some(init && measured(raw));
+        }
+        if self.start != Some(true) {
+            return self.start.is_none();
         }
         match read {
             Some(line) if line.kind == "result" => {
@@ -110,16 +111,23 @@ impl Stream {
 }
 
 /// Reads the stream on a thread of its own and sends what it found: at the stream's end, at the cap, or at a start
-/// that is not a run's, after which nothing is read.
-pub(super) fn reader(stdout: Option<ChildStdout>) -> Receiver<Stream> {
+/// that is not a run's, after which nothing is read. What it has so far is kept in the second part after every
+/// line, for a stream whose end never comes: something the child left may hold it open.
+pub(super) fn reader(stdout: Option<ChildStdout>) -> (Receiver<Stream>, Arc<Mutex<Stream>>) {
     let (send, receive) = mpsc::channel();
+    let so_far = Arc::new(Mutex::new(Stream::default()));
+    let shared = Arc::clone(&so_far);
     thread::spawn(move || {
         let mut found = Stream::default();
         if let Some(stdout) = stdout {
             let mut pipe = BufReader::with_capacity(1 << 16, stdout.take(STREAM_MAX + 1));
             let mut raw = Vec::new();
             while let Ok(true) = next_line(&mut pipe, LINE_MAX, &mut raw) {
-                if !found.take(&raw) {
+                let more = found.take(&raw);
+                if let Ok(mut shared) = shared.lock() {
+                    *shared = found;
+                }
+                if !more {
                     break;
                 }
             }
@@ -128,5 +136,5 @@ pub(super) fn reader(stdout: Option<ChildStdout>) -> Receiver<Stream> {
         }
         let _ = send.send(found);
     });
-    receive
+    (receive, so_far)
 }

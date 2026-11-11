@@ -189,13 +189,16 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     let ended = child::run(command, format!("{}\n", wish.said), limit, |pid| record::child(home, &copy.run, pid));
     let ended = ended.map_err(|e| refused(format!("nothing was started: Claude Code could not be started: {e}")));
     if !ended.as_ref().is_ok_and(|ended| !ended.old) {
-        // Nothing ran: the wish is as it was, and can be run again.
-        wish::change(home, &day, &wish.id, Duration::ZERO, |wish| {
+        // Nothing ran: the wish is as it was, and can be run again. The day is waited for as a run's end waits,
+        // and the copy is taken back whatever came of it: a wish that still names the run then names one of
+        // which nothing is kept, and the next look makes it as it was (`end::bury`).
+        let undone = wish::change(home, &day, &wish.id, end::wait(), |wish| {
             (wish.run, wish.why) = (None, None);
             Ok(())
-        })?;
+        });
         drop(lock);
         copy::take_back(home, &copy.run)?;
+        undone?;
         return ended.and_then(|_| not_started(OLD.to_string()));
     }
     let ran = ended.and_then(|ended| settle(home, (&day, &wish.id), &copy, &ended, limit));

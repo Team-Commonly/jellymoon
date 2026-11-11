@@ -95,7 +95,7 @@ fn refused(why: impl Into<String>) -> Error {
     Error::Copy(why.into())
 }
 
-fn branch(run: &str) -> String {
+pub(crate) fn branch(run: &str) -> String {
     format!("jellymoon/run-{run}")
 }
 
@@ -250,6 +250,12 @@ pub(crate) fn end_copy(home: &Path, run: &str, outcome: Outcome) -> Result<(RunC
     gone(&git, &record, &folder, there)?;
     forget(&file);
     Ok((at.printed(run, false), made))
+}
+
+/// Whether nothing of a run's copy is kept: a finished run's copy is gone, with its record, and its branch stays.
+pub(crate) fn is_gone(home: &Path, run: &str) -> bool {
+    let at = Places::of(home);
+    known(run).is_ok() && !at.record(run).exists() && fs::symlink_metadata(at.root.join(run)).is_err()
 }
 
 /// Undoes a copy no run was started in (F39: the harness was too old, or another run took the wish first): its

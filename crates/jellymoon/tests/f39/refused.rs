@@ -2,11 +2,13 @@
 //! had its run. Where nothing is started, nothing is left: no copy, no branch, no record, and the wish as it was.
 
 use std::ffi::OsString;
-use std::fs;
 use std::path::Path;
+use std::time::Duration;
+use std::{fs, thread};
 
 use serde_json::json;
 
+use super::limits::wait_for;
 use super::{DAY, STAR, World, printed, ran, refused, world, world_in};
 use crate::support::{said, tree, write_log};
 
@@ -162,4 +164,72 @@ fn a_repo_of_another_name_no_repo_a_second_run_and_a_wish_that_is_not_there_are_
     let second = format!("jellymoon: wish {wish} has had its run, {run}: a made wish gets one run\n");
     assert_eq!(refused(&w.start(&wish, &repo)), second);
     assert!(tree(w.dir.path()) == before && w.starts() == 1);
+}
+
+// The harness turns out too old while another change holds the day. Held for a while, the day is waited for; held
+// past the wait, the copy is taken back all the same, and the next look finds a wish whose run left nothing.
+#[test]
+fn a_harness_too_old_while_the_day_is_locked_leaves_the_wish_as_it_was_and_no_copy() {
+    for (wait, held) in [(None, 4), (Some("300"), 5)] {
+        let w = world();
+        let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+        let before = w.kept(&wish);
+        w.play("old-late", 0);
+        let lock = w.jm("pages").join(format!("{DAY}.ruled.lock"));
+        let short: Vec<_> = wait.map(|ms| ("JELLYMOON_TEST_END_WAIT_MS", OsString::from(ms))).into_iter().collect();
+        let args = ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
+        let ended = thread::scope(|scope| {
+            let going = scope.spawn(|| w.run_with(&short, &args));
+            wait_for(&w.at("rec").join("started"));
+            fs::write(&lock, "").unwrap();
+            fs::write(w.at("rec").join("go"), "").unwrap();
+            thread::sleep(Duration::from_secs(held));
+            fs::remove_file(&lock).unwrap();
+            going.join().unwrap()
+        });
+        if wait.is_none() {
+            assert_eq!(printed(&ended)["outcome"], "not_started");
+        } else {
+            assert_eq!((ended.code, ended.stdout.as_str()), (1, ""), "{}", ended.stderr);
+            assert_eq!((&w.on_page(&wish)["state"], &w.on_page(&wish)["stars"]), (&json!("working"), &json!([])));
+        }
+        let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
+        let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
+        assert_eq!((w.copies(), w.branches(&repo), runs), (vec![], vec![], Vec::<String>::new()), "{wait:?}");
+        assert_eq!(w.kept(&wish), before, "{wait:?}: the wish is as it was");
+        w.play("edits", 0);
+        assert_eq!(ran(&w.start(&wish, &repo)).1["star"], json!(STAR), "{wait:?}: and can be run again");
+    }
+}
+
+// A record is a file anyone who can write the home can write. An end in it is believed only when it is one core
+// writes, for this wish, and, for a finished run, when the copy is gone as a finished run's is.
+#[test]
+fn an_end_written_into_a_cut_off_run_s_record_by_hand_gives_no_star() {
+    for edit in 0..3 {
+        let w = world();
+        let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+        w.play("slow", 0);
+        let mut command = w.start_going(&wish, &repo);
+        wait_for(&w.at("rec").join("started"));
+        command.kill().unwrap();
+        command.wait().unwrap();
+        let run = w.kept(&wish)["run"].as_str().unwrap().to_string();
+        let mut record = w.record(&run);
+        let fine = format!("run {run} finished: its work is one commit on the branch jellymoon/run-{run}");
+        record["outcome"] = json!("completed");
+        record["why"] = json!(if edit == 0 { "words nobody but the editor wrote" } else { &fine });
+        // 0: words that are not core's. 1: the copy still stands. 2: the record is another wish's.
+        record["wish"] = json!(if edit == 2 { "m2" } else { &wish });
+        if edit != 1 {
+            fs::remove_dir_all(w.jm("copies").join(&run)).unwrap();
+            fs::remove_file(w.jm("runs").join(&run).join("copy.json")).unwrap();
+        }
+        fs::write(w.jm("runs").join(&run).join("run.json"), record.to_string()).unwrap();
+        let on_page = w.on_page(&wish);
+        assert_eq!((&on_page["state"], &on_page["stars"]), (&json!("needs_you"), &json!([])), "edit {edit}");
+        let cut = format!("run {run} was cut off before it ended: its copy is kept and no star was added");
+        assert_eq!(w.kept(&wish)["why"], json!(cut), "edit {edit}");
+        fs::write(w.at("rec").join("go"), "").unwrap();
+    }
 }

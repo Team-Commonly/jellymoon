@@ -65,7 +65,12 @@ with none left nothing is started, and one line says so. A variable that names o
 
 A Claude Code that answers this command line with an unknown option, naming `--restricted`, is too old. That is
 read from all of: no line at all on its output, an exit with a failure, and those two fixed pieces in the first
-4 KiB of what it said on stderr. A harness that printed anything first has worked, and is a failed run. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
+4 KiB of what it said on stderr. A harness that printed anything first has worked, and is a failed run; so is
+one whose output something it left still holds open, so that its reader never finishes: what was read so far is
+what counts, and a reader that did not finish is never the reader of a harness too old. For the wish to be as it
+was, the day's lock is waited for as a run's end waits for it, and the copy is taken back whatever came of that.
+If the day stayed locked, the wish still names a run of which nothing is kept, not even its folder in `runs`:
+the next page or `jellymoon run` that finds such a wish makes it as it was, with no run. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
 started again without the flag.
 
 ## What is read of the stream
@@ -80,7 +85,8 @@ the agent's is kept, printed or put in the commit message, and nothing of what i
 **The start is checked.** The stream's `system`/`init` line says what the harness really started with, and three
 parts of it are compared: `tools` is exactly `Edit`, `Glob`, `Grep`, `Read`, `Write` in any order, `mcp_servers`
 is an empty list, and `permissionMode` is `acceptEdits`. A part that is missing or of another shape differs.
-Every other part of the line is passed over. Before that line only other `system` lines are let by. Anything
+Every other part of the line is passed over. Before that line only other `system` lines are let by. Every
+later init line is measured the same way: one that differs stops the child and fails the run, wherever it comes. Anything
 else first (a skipped line, a line of another `type`, an init line that differs) is not a run's stream: the
 child is killed at once, with no five seconds, nothing more is read, and the run has failed.
 
@@ -142,8 +148,13 @@ shorter wait from `JELLYMOON_TEST_END_WAIT_MS`. If the day stays locked even so,
 line that says the run has ended, that its record says how, and that the page shows it when it is next drawn.
 
 Whoever next finds the wish still `working` with nothing holding its run (below) reads the record. With an end in
-it, the wish is given that end, star included: `done` with its star, or `needs_you`. The record's `why` is used
-only when cleaning it as a wish's words are cleaned changes nothing.
+it that is core's, the wish is given that end, star included: `done` with its star, or `needs_you`. A record is
+a file that whoever can write the home can write, so its end is believed only when all of this holds: its `wish`
+and `day` are this wish and day; its `why` is, word for word, one of the texts core makes for that outcome and
+this run (the text put on the wish is made again by core, never copied from the file); and, for `completed`,
+nothing of the copy is kept, as after a finished run, whose work is on its branch. Any other record is a cut-off
+run's. The branch itself is not asked for: it is there from the copy's making, so it would prove nothing, and
+the record names no repo. The denials counted are the first result's.
 
 ## A run that was cut off
 
@@ -197,8 +208,10 @@ empty `runs/no-hooks`), and they stay.
   was cut off"), and on Windows for as long as that harness goes.
 - The test of a child deaf to `SIGTERM` needs `/usr/bin/perl` to start one, and says so where it is skipped.
 - A process the harness moved to another process group, or to another session, is not reached by any kill.
-- On Windows nothing the harness started is ended with it, and a relative `PATH` entry is told by `Path::is_absolute`,
-  which there wants a drive or a share: `\\bin` alone is not a full path and is dropped.
+- On Windows nothing the harness started is ended with it. A full path is told by `Path::is_absolute`, which
+  there wants a drive with a root, or a share: `C:\bin` and `\\server\share\bin` are kept (so is anything else
+  that starts with two separators, which is read as a share), and `\bin` (no drive), `C:bin` (no root), `bin`
+  and `.` are dropped.
 - A harness whose init line names more than the three compared parts differently (a new field, say) still passes:
   only tools, MCP servers and permission mode are compared.
 - What the real harness does with the command line is measured once, on a Mac (ADR 0014, "Measured"). A repo with

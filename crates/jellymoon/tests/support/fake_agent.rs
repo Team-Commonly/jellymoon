@@ -11,6 +11,9 @@ use std::path::Path;
 use std::time::Duration;
 use std::{env, fs, io, process, thread};
 
+#[path = "fake_agent/gate.rs"]
+mod gate;
+
 /// What the agent says, in every text of its own.
 const MARKER: &str = "zebra-quartz-said-by-the-agent";
 
@@ -209,6 +212,9 @@ fn litters(rec: &Path) -> ! {
     let held = fs::File::create(rec.join("litter-held")).unwrap();
     held.lock().unwrap();
     for _ in 0..3000 {
+        if rec.join("stop").exists() {
+            break;
+        }
         let mut file = fs::OpenOptions::new().append(true).create(true).open(rec.join("litter.txt")).unwrap();
         file.write_all(b"more\n").unwrap();
         thread::sleep(Duration::from_millis(10));
@@ -309,50 +315,7 @@ fn main() {
         }
         "forever" | "deaf" | "slow" => waits(script == "slow", rec),
         "scribble" => scribbles(rec),
-        other => gate(other, number, rec),
+        other => gate::play(other, number, rec),
     };
     process::exit(code);
-}
-
-/// The scripts of the gate review's tests (`tests/f39/stream.rs`, `tests/f39/safe.rs`).
-fn gate(script: &str, number: usize, rec: &Path) -> i32 {
-    match script {
-        // What may not come after a success: 0 a line that is not the stream's, 1 one over the line cap, 2 a second
-        // success, 3 a result that is not one, 4 the list. 5 is a success after a result that was not one.
-        "after" => {
-            edits();
-            let (fine, not) = (success(), result("error_during_execution", "true", 0, 0));
-            line(if number == 5 { &not } else { &fine });
-            match number {
-                0 => line(&format!("{MARKER} is not JSON")),
-                1 => line(&"j".repeat(1 << 20)),
-                2 | 5 => line(&fine),
-                3 => line(&not),
-                _ => line(r#"["result","success",false,[]]"#),
-            }
-            0
-        }
-        // A result that does not say whether it is an error: 0 leaves the part out, 1 has it as nothing.
-        "unsaid" => {
-            let said = if number == 0 { "" } else { r#""is_error":null,"# };
-            ends(&format!(r#"{{"type":"result","subtype":"success",{said}"permission_denials":[]}}"#), 0)
-        }
-        // Before the result, a result written as a list, which is no line of the stream either.
-        "garbage" => {
-            starts();
-            garbage();
-            work();
-            line(r#"["result","error_during_execution",true,[]]"#);
-            ends_with(&success())
-        }
-        "first" => first(number, rec),
-        "litter" => litter(rec, number),
-        // A harness that did its work and then fails in the words of one too old.
-        "worked-old" => {
-            edits();
-            eprintln!("error: unknown option '--restricted'");
-            1
-        }
-        other => panic!("no script {other}"),
-    }
 }

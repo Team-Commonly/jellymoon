@@ -109,11 +109,11 @@ fn a_wish_whose_run_is_not_in_the_shape_of_a_run_id_is_not_used() {
         assert!(tree(w.dir.path()) == before, "{run:?}: something was written");
         assert_eq!(page()["wishes"], json!([]), "{run:?}");
     }
-    // One in the shape is a run that nothing holds: the wish needs the person.
+    // One in the shape, of which nothing is kept, is a run that was never started: the wish is as it was.
     let mut named = made.clone();
     named["wishes"][0]["run"] = json!("r0123456789abcdef");
     fs::write(&file, format!("{named}\n")).unwrap();
-    assert_eq!(page()["wishes"][0]["state"], "needs_you");
+    assert_eq!((&page()["wishes"][0]["state"], w.kept(&wish)), (&json!("working"), made["wishes"][0].clone()));
 }
 
 #[test]

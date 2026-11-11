@@ -1,11 +1,11 @@
 # The app: `jellymoon-app`
 
-The shell (`app/`) draws page data with the kit. It makes no reading call, opens no network connection and writes no
-file; `jellymoon page` makes the page data (`page.md`).
+The shell (`app/`) draws page data with the kit. Opened with nothing, it shows today's page (next section). Given a
+page-data file with `--page`, it draws that and does nothing else: no reading call, no file written.
 
 ```sh
-jellymoon-app layout --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]
-jellymoon-app --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]
+jellymoon-app [layout] [--date <YYYY-MM-DD>] [--fresh] [--theme <theme>] [--size <W>x<H>]
+jellymoon-app [layout] --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]
 ```
 
 `--theme` is `sticker` (the default), `plain`, or the path of a theme file; the two names win over a file called the
@@ -15,12 +15,43 @@ that is not there fall back to the sticker theme's, each said in one `jellymoon-
 first 8 of them. A theme file that cannot be read or that the kit refuses (a number out of its range, art that is
 more than a flat picture, a path out of the theme's folder) exits 1 with one line that names the key and the reason.
 
-The first prints where every piece goes. The second opens a window (default 1440x900); `t` switches between the two built-in themes, and
+With `layout` it prints where every piece goes. Without, it opens a window (default 1440x900); `t` switches between the two built-in themes, and
 `JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. `--size` is from 960x640 to 16384x16384, each side a whole
 number of pixels: 960x640 is the smallest size a page is drawn at, and the window is asked not to shrink below it
 (a unit test holds what is asked; that the system obeys was seen by hand on the Mac only). A wrong command line exits 2 with the usage on stderr; a file
 that cannot be read, is over 1 MiB or is not page data exits 1 with one line. Both start `jellymoon-app: ` and print
 nothing on stdout.
+
+## Today's page (`app/src/today.rs`)
+
+With no `--page` the app shows a day: today in the computer's time zone, or `--date`. It calls core's `day` and `page`
+itself, with what the `jellymoon` command would use: the logs under `CLAUDE_CONFIG_DIR` or `~/.claude` (or `--logs`),
+the harness `JELLYMOON_CLAUDE` names or `claude` on `PATH`, `--model` (default `sonnet`), a 180 s limit. It never runs
+the `jellymoon` binary. Core's rules are core's: only the day goes to the call, with every tool off. The user's home
+is the `HOME` variable (`USERPROFILE` on Windows) and nothing else: with neither that nor `--logs` and
+`JELLYMOON_HOME`, the app exits 2 and reads nothing, so a test run with an empty environment cannot reach real logs.
+
+- **Where pages are kept.** `<home>/pages/<YYYY-MM-DD>.json`, where `<home>` is `JELLYMOON_HOME` or `~/.jellymoon`.
+  The file is the checked page data, one line as `jellymoon page` prints it, and nothing else, in a folder for this
+  user only. It is written beside its place and moved there. It is read back through the same door as any page file.
+- **What is shown first.** The kept page, when there is one. Otherwise a waiting page: the date, the hero and one
+  note, "Reading your day…". The window opens on it at once; the day is read off the window's thread and the page
+  replaces it. `layout --waiting` prints the waiting page; `layout` alone prints what the window ends on.
+- **When the day is read again.** Each time the app opens it reads the session logs (no model) and compares the day's
+  count of turns with `read.turns` of the kept page. The same count: the kept page stays and no call is made. Any
+  other count, no kept page, or `--fresh`: one reading call, and the new page is kept. The count is the whole test,
+  so a day whose turns changed but not their number (a folder switched off and one more turn typed) keeps its page
+  until `--fresh`. A day with nothing typed makes no call.
+- **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
+  no command line. Both go to core's `skip`.
+- **When the reading cannot run** the page is one plain note, "Today could not be read.", that says why: Claude Code
+  was not found, no session logs, the call failed or took too long (core's own line follows), or the model's answer
+  was not a page. With a kept page, that page stays and the note is its first, "This page is from an earlier
+  reading." A page that could not be written to its file is shown with a first note that says so. `layout` prints
+  these pages and exits 0: they are what the window shows.
+
+The window does not look again while it is open, and closing it while a call runs leaves that call to end by itself.
+A tap is still one line on stderr (F29).
 
 ## From page data to pieces (`app/src/scene.rs`)
 

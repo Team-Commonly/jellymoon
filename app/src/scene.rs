@@ -31,10 +31,20 @@ pub fn scene(page: &Page) -> Scene {
     notes.extend(data.clashes.iter().enumerate().map(|(index, clash)| choice(index, clash)));
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
     Scene {
-        date_label: date_label(&data.day),
+        characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
+        footer: footer(&data.read),
+        ..bare(&data.day, notes)
+    }
+}
+
+/// A day's page with no wish on it: the date, the title, the hero, the legend, and these notes. It is what the app
+/// shows while a day is being read and when it could not be.
+pub fn bare(day: &str, notes: Vec<Note>) -> Scene {
+    Scene {
+        date_label: date_label(day),
         title: "what I wished for today".to_string(),
         hero: Some(Character { id: "me".to_string(), ..Character::default() }),
-        characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
+        characters: Vec::new(),
         notes,
         legend: [
             (Mark::Star, "finished"),
@@ -44,7 +54,7 @@ pub fn scene(page: &Page) -> Scene {
         ]
         .map(|(mark, text)| LegendItem { mark, text: text.to_string() })
         .to_vec(),
-        footer: footer(&data.read),
+        footer: String::new(),
     }
 }
 

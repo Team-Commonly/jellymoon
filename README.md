@@ -23,11 +23,12 @@ script before running it, open [`install.sh`](install.sh), or download it first:
 
 ## Status: early
 
-The app draws a page it is handed and cannot yet make one by itself, so opening it from the Finder shows nothing:
+Open the app and it shows today's page: it reads the day with one call through your own Claude Code, keeps the page
+in `~/.jellymoon`, and reads again only when you have typed more. An app opened from the Finder may not find Claude
+Code yet (it does not see your shell's `PATH`); until that is fixed, start it from a terminal:
 
 ```sh
-jellymoon page > ~/jellymoon-today.json                              # one call through your own Claude Code
-open ~/Applications/Jellymoon.app --args --page ~/jellymoon-today.json
+~/Applications/Jellymoon.app/Contents/MacOS/jellymoon-app
 ```
 
 The `jellymoon` command-line binary holds the logic the app draws: `day` collects what you typed, `page` turns a day

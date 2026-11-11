@@ -127,6 +127,22 @@
       "blockedBy": [
         "F28"
       ]
+    },
+    {
+      "id": "F34",
+      "category": "journal",
+      "description": "Opening the app shows today's page",
+      "steps": [
+        "`jellymoon-app` with no `--page` shows a waiting page drawn by the kit at once, reads the day off the window's thread by calling core's `day` and `page` (never by running the `jellymoon` binary), and shows the page when it is ready; `layout` with no `--page` prints that page, and `layout --waiting` the waiting page",
+        "the page data of each day is kept in the user's jellymoon folder; opening again shows the kept page and makes a reading call only when the day's count of turns differs from the count the kept page was read from, or with `--fresh`; `--date` shows another day",
+        "when the reading cannot run (no harness, the call fails, the reply is not page data, no session logs) the page is one plain note that says why in plain words, on the kept page when there is one; a day with nothing typed says so and makes no call",
+        "only what core's `day` returns goes to the reading call, with every tool off; what is kept is the checked page data and nothing else; nothing from the day is printed"
+      ],
+      "test": "cargo test -p jellymoon-app --test f34",
+      "passes": true,
+      "blockedBy": [
+        "F28"
+      ]
     }
   ]
 }

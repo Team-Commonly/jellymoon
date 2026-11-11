@@ -113,9 +113,10 @@ main() {
   esac
   say ""
   say "Next:"
-  say "  jellymoon page > ~/jellymoon-today.json    reads today into a page, with one call through your own Claude Code"
-  say "  open \"$app_dir/Jellymoon.app\" --args --page ~/jellymoon-today.json"
-  say "  jellymoon uninstall                        takes Jellymoon off this Mac again"
+  say "  open \"$app_dir/Jellymoon.app\"    shows today's page, read with one call through your own Claude Code"
+  say "  \"$app_dir/Jellymoon.app/Contents/MacOS/jellymoon-app\"    the same from this terminal, if the opened app"
+  say "                                     cannot find Claude Code yet"
+  say "  jellymoon uninstall                takes Jellymoon off this Mac again"
 }
 
 # The whole script is read before any of it runs, so a download of this file that stops half way does nothing.

@@ -1,4 +1,4 @@
-//! The window: the kit's view of one scene. `t` switches between the two built-in themes. A tap on a little one or on
+//! The window: the kit's view of one scene, and of the scene that replaces it when a day has been read. `t` switches between the two built-in themes. A tap on a little one or on
 //! a choice's option is received and, until rulings exist (F29), only written to stderr as one line.
 //!
 //! The view measures text with GPUI's shaped glyphs, not with the bundled advances the `layout` command uses: shaping
@@ -12,8 +12,13 @@ use gpui_platform::application;
 use sticker_kit::draw::{Page, Tap, load_fonts};
 use sticker_kit::{Scene, Theme, Viewport};
 
-/// Opens the window and runs until it is closed, or until `quit_after` has passed.
-pub fn open(scene: Scene, theme: Theme, viewport: Viewport, quit_after: Option<Duration>) {
+/// Work that gives the scene to show next, or none when what is shown stays. It may take as long as a reading call,
+/// so it runs off the window's thread.
+pub type Later = Box<dyn FnOnce() -> Option<Scene> + Send>;
+
+/// Opens the window on `scene` and runs until it is closed, or until `quit_after` has passed. `later` is started at
+/// once, and the scene it gives replaces the first.
+pub fn open(scene: Scene, theme: Theme, viewport: Viewport, quit_after: Option<Duration>, later: Option<Later>) {
     application().run(move |cx: &mut App| {
         if let Err(error) = load_fonts(cx) {
             say(&format!("the bundled fonts did not load: {error}"));
@@ -32,6 +37,14 @@ pub fn open(scene: Scene, theme: Theme, viewport: Viewport, quit_after: Option<D
             }
         })
         .detach();
+        if let Some(later) = later {
+            cx.spawn(async move |cx| {
+                if let Some(scene) = cx.background_executor().spawn(async move { later() }).await {
+                    let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
+                }
+            })
+            .detach();
+        }
         if let Some(limit) = quit_after {
             cx.spawn(async move |cx| {
                 cx.background_executor().timer(limit).await;

@@ -1,7 +1,6 @@
 //! A run's lock that cannot be opened. A lock that cannot be asked about is no lock: the run is held by nothing,
 //! so it was cut off (`docs/development/run.md`, "A file of the home that is not a plain file").
 
-use std::fs;
 use std::path::Path;
 
 use serde_json::json;
@@ -12,8 +11,8 @@ use crate::support::skipped;
 /// Takes every permission off a file. False where that does not keep this user from opening it.
 #[cfg(unix)]
 fn closed(file: &Path) -> bool {
-    fs::set_permissions(file, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
-    fs::File::open(file).is_err()
+    std::fs::set_permissions(file, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+    std::fs::File::open(file).is_err()
 }
 
 #[cfg(not(unix))]

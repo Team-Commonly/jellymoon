@@ -33,6 +33,8 @@ pub(crate) struct Sprites {
 /// instead of making one per pixel of width.
 const SIZES: [f32; 12] = [16.0, 24.0, 32.0, 48.0, 64.0, 96.0, 128.0, 200.0, 280.0, 400.0, 560.0, 800.0];
 const MOST: usize = 96;
+/// The widest rim an image is rasterised with, in half pixels: 64 px, whatever a theme and a window multiply out to.
+const MOST_HALF_RIMS: f32 = 128.0;
 
 fn svg_image(svg: String) -> Arc<Image> {
     Arc::new(Image::from_bytes(ImageFormat::Svg, svg.into_bytes()))
@@ -75,9 +77,10 @@ impl Sprites {
             return (image.clone(), piece.rect);
         }
         let width = piece.rect.w.max(1.0);
-        let size = SIZES.iter().copied().find(|s| *s >= width).unwrap_or(width.ceil());
+        // A piece wider than the largest size is drawn from that size, scaled up: no theme or window buys more pixels.
+        let size = SIZES.iter().copied().find(|s| *s >= width).unwrap_or(SIZES[SIZES.len() - 1]);
         let grow = size / width;
-        let half_rims = (rim * grow * 2.0).round().max(1.0) as u32;
+        let half_rims = (rim * grow * 2.0).round().clamp(1.0, MOST_HALF_RIMS) as u32;
         let who = match piece.piece {
             PieceKind::Hero => scene.hero.as_ref(),
             PieceKind::Character => scene.characters.get(piece.index),

@@ -60,11 +60,15 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | Input | Bound | Where |
 |---|---|---|
 | theme file | a regular file of at most 256 KiB | `theme::MAX_THEME_BYTES` |
-| art file | a regular file of at most 1 MiB, inside the theme's folder (a symlink out of it counts as outside) | `theme::MAX_ART_BYTES` |
+| art file | a regular file of at most 64 KiB, inside the theme's folder (a symlink out of it counts as outside) | `theme::MAX_ART_BYTES` |
 | any number in a theme | finite, and 0 to 10000 unless a line below says otherwise | `theme::RANGES` |
 | `metrics.width`, `metrics.height` | 200 to 10000 | |
 | `metrics.columns` | 1 to 12 | |
 | `metrics.max_scale` | 0.1 to 10 | |
+| `metrics.hero_size` | 0 to 800 (the sticker theme: 200) | |
+| `metrics.character_size` | 0 to 400 (92) | |
+| `metrics.rim` | 0 to 40 (5) | |
+| `motion.damping` | 0 to 200 (14); the spring is stable all the way | |
 | `labels.max_chars` | 1 to 200 | |
 | every angle under `tilt` | -45 to 45 | |
 | an art file's SVG | a flat picture, held to the list below | `svg_refusal` |
@@ -104,13 +108,20 @@ and a file that has gone bad since is left out for the kit's own art:
 - At most 100 elements (`MAX_ART_ELEMENTS`), nested at most 12 deep
   (`MAX_ART_DEPTH`), the `<svg` counted in both.
 - `width`, `height` and the size in `viewBox` are 1 to 256
-  (`MAX_ART_SIDE`), with no unit but `px`. Every other number is plain digits
-  with no exponent, at most 4096 (`MAX_ART_NUMBER`).
+  (`MAX_ART_SIDE`); `px` may follow the picture's own `width` and `height`.
+  Every other number is plain digits with no exponent, no unit and no `%`, at
+  most 4096 (`MAX_ART_NUMBER`). The only letters beside numbers are the path
+  commands in a `d` and the two names in a transform.
+- A `d` or `points` value is at most 4096 bytes (`MAX_ART_PATH_BYTES`).
 - A transform is only `translate` and `rotate`.
 
-The heaviest file tried inside these (560 KiB: one path of 60000 segments, 87
-circles 4096 wide under 11 nested groups) is drawn five times over in 7 s by a
-debug build on a Mac; a draw test holds it under a minute. The kit's own art
+What a file costs to draw grows with its bytes, so its size is the bound: 64
+KiB a file, five files a theme. A draw test (`tests/draw.rs`) fills five
+different files to these limits (13 paths of the longest `d`, 75 circles, every
+stroke 4096 wide, 11 nested groups) and holds the draw under a minute. Behind
+the ranges, the view rasterises the kit's own art at no more than 800 pixels a
+side with a rim of no more than 64, whatever a theme and a window multiply out
+to; a larger piece is that image scaled up. The kit's own art
 is built in code and does not come through this door. It alone blurs a shadow,
 scales, and fades a group, which a file may not ask for: the renderer panics
 on a blurred group whose box overflows, and keeps a layer of memory for every

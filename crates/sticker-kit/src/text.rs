@@ -95,7 +95,7 @@ fn is_unseen(c: char) -> bool {
 }
 
 /// Removes control characters and what is [`is_unseen`], turns line breaks and tabs into single spaces, and keeps at
-/// most `max_chars` characters.
+/// most `max_chars` characters, then an ellipsis when any were cut.
 pub fn clean(text: &str, max_chars: usize) -> String {
     let mut out = String::new();
     let mut count = 0;

@@ -118,47 +118,77 @@ fn bundled_advances_run_a_little_wider_than_shaped_text() {
     });
 }
 
-/// Art as heavy as the door lets through: the largest size, the most elements and depth, the largest numbers, and
-/// a path of many thousand segments. Every shape covers the whole picture.
-fn heaviest_art() -> String {
-    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_SIDE};
+/// Art as heavy as the door lets through: the largest size, the most elements and depth, the largest numbers and
+/// strokes, and as many paths of the longest `d` as the file's size has room for. Every shape covers the whole
+/// picture. `nth` moves every point, so no two files are the same picture.
+fn heaviest_art(nth: usize) -> String {
+    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_PATH_BYTES, MAX_ART_SIDE};
+    const PATHS: usize = 13;
     let mut svg = format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{MAX_ART_SIDE}" height="{MAX_ART_SIDE}" viewBox="0 0 1 1">"#
     );
-    let zigzag: String = (0..60_000).map(|i| format!("L{} {}", (i * 37) % 4096, (i * 91) % 4096)).collect();
-    svg +=
-        &format!(r##"<path d="M0 0{zigzag}" fill="none" stroke="#123456" stroke-width="3" stroke-linejoin="round"/>"##);
     for _ in 1..MAX_ART_DEPTH {
         svg += r#"<g transform="translate(4096 -4096) rotate(4096)">"#;
     }
-    for i in 0..MAX_ART_ELEMENTS - MAX_ART_DEPTH - 1 {
+    for path in 0..PATHS {
+        let mut d = String::from("M0 0");
+        for i in 0.. {
+            let line = format!("L{} {}", ((i + nth + path) * 37) % 4096, (i * 91) % 4096);
+            if d.len() + line.len() > MAX_ART_PATH_BYTES {
+                break;
+            }
+            d += &line;
+        }
+        svg +=
+            &format!(r##"<path d="{d}" fill="none" stroke="#123456" stroke-width="4096" stroke-linejoin="round"/>"##);
+    }
+    for i in 0..MAX_ART_ELEMENTS - MAX_ART_DEPTH - PATHS {
         svg += &format!(
             r##"<circle cx="{}" cy="4096" r="4096" fill="#abcdef" fill-opacity="0.2" stroke="#000" stroke-width="4096"/>"##,
-            i * 3
+            i * 3 + nth
         );
     }
     svg + &"</g>".repeat(MAX_ART_DEPTH - 1) + "</svg>"
 }
 
+/// Draws the sample scene headless and holds the draw under a minute.
+fn drawn_in_seconds(theme: Theme, name: &str) {
+    let out = std::env::temp_dir().join(format!("sticker-kit-{name}-{}.png", std::process::id()));
+    let started = std::time::Instant::now();
+    sticker_kit::draw::headless::snapshot(Scene::sample(), theme, 1440.0, 900.0, &out).expect("it is drawn");
+    let took = started.elapsed();
+    eprintln!("{name}: {took:?}");
+    assert!(out.is_file() && took.as_secs() < 60, "{name} took {took:?}");
+    let _ = std::fs::remove_file(&out);
+}
+
 #[test]
-fn art_at_the_door_s_limits_is_drawn_in_seconds() {
+fn five_different_art_files_at_the_door_s_limits_are_drawn_in_seconds() {
     let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{}", std::process::id()));
     std::fs::create_dir_all(&folder).unwrap();
-    let art = heaviest_art();
-    assert!(art.len() < 1024 * 1024);
     let mut theme = String::from("[art]\n");
-    for piece in ["hero", "character", "star", "bubble", "badge"] {
+    for (nth, piece) in ["hero", "character", "star", "bubble", "badge"].into_iter().enumerate() {
+        let art = heaviest_art(nth);
+        let room = sticker_kit::theme::MAX_ART_BYTES as usize - art.len();
+        assert!(room < 4096, "{room} bytes of the file's size are unused: a heavier file would pass the door");
         std::fs::write(folder.join(format!("{piece}.svg")), &art).unwrap();
         theme += &format!("{piece} = \"{piece}.svg\"\n");
     }
     std::fs::write(folder.join("theme.toml"), theme).unwrap();
     let loaded = Theme::load(&folder.join("theme.toml")).expect("the art is inside the door");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
-    let started = std::time::Instant::now();
-    let out = folder.join("heavy.png");
-    sticker_kit::draw::headless::snapshot(Scene::sample(), loaded.theme, 1440.0, 900.0, &out).expect("it is drawn");
-    let took = started.elapsed();
-    eprintln!("heaviest art: {took:?}");
-    assert!(out.is_file() && took.as_secs() < 60, "it took {took:?}");
+    drawn_in_seconds(loaded.theme, "heaviest art");
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// The largest sizes a theme may ask for, on the smallest canvas at the largest scale: the hero comes out 3600 px
+/// wide and is drawn from an image of 800.
+#[test]
+fn a_theme_at_the_top_of_its_size_ranges_is_drawn_in_seconds() {
+    let mut theme = Theme::sticker();
+    let m = &mut theme.metrics;
+    (m.width, m.height, m.max_scale) = (200.0, 200.0, 10.0);
+    (m.hero_size, m.character_size, m.rim) = (800.0, 400.0, 40.0);
+    assert_eq!(theme.check(), Ok(()));
+    drawn_in_seconds(theme, "largest sizes");
 }

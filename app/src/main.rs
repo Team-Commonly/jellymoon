@@ -3,6 +3,7 @@
 //! no file written.
 
 use std::io::{Read, Write};
+use std::path::Path;
 use std::process::ExitCode;
 use std::{fs, io};
 
@@ -11,8 +12,9 @@ use lexopt::prelude::*;
 use sticker_kit::{Theme, Viewport};
 
 const USAGE: &str = "usage:
-  jellymoon-app layout --page <file, or - for stdin> [--theme sticker|plain] [--size <W>x<H>]   (prints each placed piece)
-  jellymoon-app --page <file, or - for stdin> [--theme sticker|plain] [--size <W>x<H>]          (opens a window; t switches the theme)
+  jellymoon-app layout --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]   (prints each placed piece)
+  jellymoon-app --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]          (opens a window; t switches the theme)
+a theme is sticker, plain, or a theme file
 ";
 
 /// The size a page is designed at, and the window's first size.
@@ -82,18 +84,14 @@ fn window(_: sticker_kit::Scene, _: Options) -> Result<(), Failure> {
 fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut layout, mut first) = (false, true);
-    let (mut page, mut theme, mut size) = (None, Theme::sticker(), DEFAULT_SIZE);
+    let (mut page, mut theme, mut size) = (None, String::from("sticker"), DEFAULT_SIZE);
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(command) if first && command == "help" => return Ok(Command::Help),
             Value(command) if first && command == "layout" => layout = true,
             Long("page") => page = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("theme") => {
-                let name = parser.value().and_then(|v| v.string()).map_err(usage)?;
-                theme = Theme::builtin(&name)
-                    .ok_or_else(|| Failure::Usage(format!("--theme must be sticker or plain, not {name:?}")))?;
-            }
+            Long("theme") => theme = parser.value().and_then(|v| v.string()).map_err(usage)?,
             Long("size") => {
                 let given = parser.value().and_then(|v| v.string()).map_err(usage)?;
                 size = viewport(&given).ok_or_else(|| {
@@ -107,8 +105,39 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         first = false;
     }
     let page = page.ok_or_else(|| Failure::Usage("no page: name a page-data file with --page".to_string()))?;
-    let options = Options { page, theme, size };
+    let options = Options { page, theme: named(&theme)?, size };
     Ok(if layout { Command::Layout(options) } else { Command::Window(options) })
+}
+
+/// The most ignored keys of a theme file that are said, one a line; the rest are counted.
+const MOST_WARNINGS: usize = 8;
+
+/// The theme `--theme` names: a built-in one, or else a theme file. The keys the kit ignored are said on stderr.
+fn named(theme: &str) -> Result<Theme, Failure> {
+    if let Some(built_in) = Theme::builtin(theme) {
+        return Ok(built_in);
+    }
+    let loaded = Theme::load(Path::new(theme)).map_err(|why| {
+        let why = one_line(&why.to_string());
+        Failure::Run(format!("--theme {theme:?} is not sticker, plain or a theme file the kit takes: {why}"))
+    })?;
+    let mut said: Vec<String> = loaded.warnings.iter().take(MOST_WARNINGS).map(|warning| one_line(warning)).collect();
+    if loaded.warnings.len() > MOST_WARNINGS {
+        said.push(format!("+{} more", loaded.warnings.len() - MOST_WARNINGS));
+    }
+    for line in said {
+        let _ = io::stderr().write_all(format!("jellymoon-app: theme: {line}\n").as_bytes());
+    }
+    Ok(loaded.theme)
+}
+
+/// The first and the last line of `text` as one line with no control character. A TOML error is several lines: where
+/// it is, the text there, and what is wrong.
+fn one_line(text: &str) -> String {
+    let mut lines = text.lines().map(str::trim).filter(|line| !line.is_empty());
+    let first = lines.next().unwrap_or_default();
+    let line = lines.next_back().map_or(first.to_string(), |last| format!("{first}: {last}"));
+    line.replace(char::is_control, " ")
 }
 
 /// `960x640` as a viewport. Each side is a whole number of pixels, from the smallest size a page is drawn at to

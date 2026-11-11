@@ -21,7 +21,7 @@ FEATURES := $(FEATURES),sticker-kit/runtime_shaders
 endif
 endif
 
-.PHONY: preflight fmt fmt-check clippy check test secrets secrets-staged hooks
+.PHONY: preflight fmt fmt-check clippy check test smoke secrets secrets-staged hooks
 
 # What a pull request has to pass, and what CI runs.
 preflight: fmt-check clippy check test secrets
@@ -41,6 +41,10 @@ check:
 
 test:
 	$(CARGO) test --workspace $(FEATURES)
+
+# The built programs run together in a temporary home, on made-up logs (docs/development/smoke.md). Flags: make smoke args=--window
+smoke:
+	$(CARGO) xtask smoke $(args) -- $(FEATURES)
 
 # Every commit reachable from HEAD, merges included. A scan can refuse; a clean one proves nothing absent.
 secrets:

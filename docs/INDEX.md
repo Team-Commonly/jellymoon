@@ -13,5 +13,6 @@ Every file under `docs/` is listed here with one line. A PR that adds, moves or 
 | `development/page.md` | `jellymoon page`: usage, the exact harness command line, what goes in on stdin, and every check code makes on what the model returns |
 | `development/app.md` | `jellymoon-app`: usage, which piece each part of page data becomes, the `layout` output, the two ways text is measured, and how to build with and without GPUI |
 | `development/install.md` | Installing on a Mac: what `install.sh` does and trusts, why Gatekeeper does not ask, `jellymoon uninstall`, how a release is cut, and what only a person on a clean Mac can prove |
+| `development/smoke.md` | `cargo xtask smoke`: the chain that runs the built programs together, its three modes, what it does not prove, how a feature adds a step, and the checklist before a release |
 | `runbooks/old-hosted-instance.md` | The hosted instance of the removed product, which may still be running: what it is, what this repo no longer does to it, and how to stop it |
 | `skills/SOURCES.md` | Where the vendored stage skills in `.agents/skills/` come from, their pins and how to update them |

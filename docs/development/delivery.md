@@ -25,8 +25,10 @@ space, and every `"` becomes `'`. So a statement cannot close its own quote in w
 that reads as another ruling. A statement is cleaned again until a cleaning changes nothing, and cut only then
 (`still.rs` in core; why is in [wish.md](wish.md), "What is kept"): the words a ruling carries are the words the
 next tap compares. Up to 8 cleanings may change it and the one after them must change nothing; the cut is not
-counted, and what it leaves is cleaned again within the same 8. So a statement of any length with eight keys in a
-row with nothing between them is kept, and one with nine is not. A statement a ninth cleaning still changes, or
+counted, and what it leaves is cleaned again within the same 8. That is the whole rule: how many keys in a row it
+allows depends on their shapes and on where the cut falls (wish.md has the example of keys of letters alone).
+Because the cut comes last, a statement can hold words from past the first 200 characters of what was typed, when
+a later cleaning made the text before them shorter; those words are ones the cleaning leaves as they are. A statement a ninth cleaning still changes, or
 of over 4096 bytes (4096 are cleaned), cannot be ruled on: `jellymoon rule` and a tap refuse it in one line, exit 1,
 with nothing kept, since its ruling would tell a session only that `[redacted]` stands. A page still draws such a
 statement, as `[redacted]` and nothing else, and so does the hook for a ruling file that holds one; a tap on it in

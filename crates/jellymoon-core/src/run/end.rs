@@ -93,6 +93,7 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 /// ended while the day was locked: the wish is given that end, its star included. Any other was cut off: the
 /// harness child it left is killed, if the pid in the record is still that process (`dead.rs`), and the run is
 /// written down as failed, the wish first, so that nothing is written for a wish that no longer says working.
+/// A run whose record says it was never started has the child it names killed the same way, then its copy taken back.
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     let cut_off = |run: &String| wish.state == WishState::Working && !held(home, run);
     let Some(run) = wish.run.clone().filter(cut_off) else { return wish };
@@ -100,8 +101,15 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
         return unstarted(home, day, wish, &run);
     }
     let record = record::kept(home, &run);
+    let kill = || {
+        if let Some((pid, mark)) = record.as_ref().and_then(|record| Some((record.pid?, record.mark.as_deref()?))) {
+            dead::kill(pid, mark);
+        }
+    };
     if record.as_ref().is_some_and(|record| record.outcome == Some(RunOutcome::NotStarted)) {
-        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
+        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish. A record is a file
+        // anyone who can write the home can write: the child it names is stopped before its copy goes.
+        kill();
         let _ = copy::take_back(home, &run);
         return unstarted(home, day, wish, &run);
     }
@@ -109,9 +117,7 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     let (outcome, why) = ended.clone().unwrap_or_else(|| (RunOutcome::Failed, cut(&run)));
     let mut told = tell(home, day, &wish.id, &run, outcome, &why, Duration::ZERO);
     if ended.is_none() {
-        if let Some((pid, mark)) = record.and_then(|record| Some((record.pid?, record.mark?))) {
-            dead::kill(pid, &mark);
-        }
+        kill();
         told = told.and_then(|told| note(home, &run, outcome, (0, 0), &why).map(|()| told));
     }
     told.unwrap_or_else(|_| {

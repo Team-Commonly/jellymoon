@@ -57,8 +57,10 @@ max_file_lines = 400
 # `tests/support/mod.rs`, 11; `tests/f37/refused.rs`, 2).
 # Two of F39's tests letting the made-up agent end first on Windows, where a folder a command stands in cannot be
 # removed, raised the binary by 6 (`tests/f39/refused.rs`).
-"crates/jellymoon-core" = 5411
-"crates/jellymoon" = 7215
+# The child a never-started record names, killed before its copy is taken back, raised core by 6 (`run/end.rs`)
+# and the binary by 20 (its test, `tests/f39/limits.rs`).
+"crates/jellymoon-core" = 5417
+"crates/jellymoon" = 7235
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

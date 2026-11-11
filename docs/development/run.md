@@ -72,7 +72,8 @@ was, the day's lock is waited for as a run's end waits for it. Whatever came of 
 record takes `not_started` as its outcome, an end of its own kind; the copy is taken back; and only then is the
 run's lock let go. So at no moment does a look find a run that nothing holds and that has no end. If the day
 stayed locked, the wish still names the run. The next page or `jellymoon run` that finds a wish naming a run
-whose record says `not_started` (its copy is then taken back), or of which nothing is kept, not even its folder
+whose record says `not_started` (the child that record names is killed first, as a cut-off run's is, and its copy
+is then taken back), or of which nothing is kept, not even its folder
 in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
 started again without the flag.
 

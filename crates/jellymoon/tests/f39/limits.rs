@@ -157,6 +157,26 @@ fn the_agent_a_killed_run_left_editing_is_stopped_by_the_next_page() {
     assert_eq!((w.copies(), w.starts()), (vec![run], 1));
 }
 
+// A record is a file that whoever can write the home can write. One that says a cut-off run was never started has
+// its copy taken back, so the agent that run left is stopped first: no agent outlives its copy, and no second run
+// is started beside it.
+#[test]
+fn the_agent_of_a_cut_off_run_whose_record_says_never_started_is_stopped_with_its_copy_taken_back() {
+    if !cfg!(unix) {
+        return skipped(NO_SIGNAL);
+    }
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let (run, _) = left_editing(&w, &wish, &repo);
+    let mut record = w.record(&run);
+    record["outcome"] = json!("not_started");
+    fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
+
+    assert_eq!((&w.on_page(&wish)["state"], &w.kept(&wish)["run"]), (&json!("working"), &json!(null)));
+    assert!(w.freed("held"), "the agent is still running after its copy was taken back");
+    assert_eq!((w.copies(), w.branches(&repo), w.starts()), (vec![], vec![], 1));
+}
+
 // A pid is given out again. One whose process did not start when the record says is another process: never signalled.
 #[test]
 fn a_pid_that_is_another_process_by_now_is_never_signalled() {

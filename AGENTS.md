@@ -18,8 +18,8 @@ Read `.agents/skills/<name>/SKILL.md` before the stage. Detail: `docs/developmen
 | Plan | `to-tickets` | features in `feature_list.json` with `blockedBy` edges |
 | Build | `tdd` | the feature's test red at the binary's boundary, then red/green inward |
 | Verify | the feature's `test` command | `passes: true` |
-| Review | `code-review` + `deslop`, in a fresh context | `FINDINGS` and `GATE:` as a PR comment at the head |
-| Land | `make-pr-easy-to-review` | a PR from `.github/pull_request_template.md` |
+| Land | `make-pr-easy-to-review` | a PR from `.github/pull_request_template.md`, merged on green CI |
+| Review | `code-review` + `deslop`, in a fresh context, after the merge | `FINDINGS` and `GATE:` as a PR comment |
 | Learn | `retro` | a test, lint or doc in the same PR |
 | Continuity | `handoff` | one new file in `progress/` per unit |
 | Entropy | `improve-codebase-architecture` | a removal-only change |
@@ -40,8 +40,10 @@ Read `.agents/skills/<name>/SKILL.md` before the stage. Detail: `docs/developmen
 - **Every system.** Code and tests pass on macOS, Linux and Windows: build paths with `Path`, spawn test helpers as
   binaries, keep `sh` out of tests.
 - **Portable repo.** Tracked files name repo-relative paths only. Tools install into `.tools/`, never globally.
-- **Landing.** A PR is squash-merged when CI is green on its head and a fresh-context review posted `GATE: PASS` at
-  that head. Blocking findings get a fix and a new review. Only the coordinator merges.
+- **Landing.** A PR is squash-merged as soon as `make preflight` passed locally and CI is green on its head. The
+  fresh-context review runs after the merge, once, and its blocking findings are the next PR. Only a PR that changes
+  what leaves the machine (the reader, redaction, the reading call, delivery) or comes from outside the maintainers
+  waits for `GATE: PASS` first. Only the coordinator merges.
 - **Outside code is read, never run** on a maintainer's machine, until a maintainer has reviewed it.
 - **Workers** (subagents) commit with `git commit -s` on their own branch; the coordinator pushes, rebases and merges.
   A new worktree runs `./init.sh`, then `make hooks fence=1`.

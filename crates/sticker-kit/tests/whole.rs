@@ -1,6 +1,8 @@
 //! A whole choice: every word of its options is drawn, or the note is left out and counted. Never a cut option.
 
-use sticker_kit::{FixedAdvance, MORE_NOTES_ID, Measure, Note, PieceKind, Placed, Scene, Theme, Viewport, layout};
+use sticker_kit::{
+    FixedAdvance, MORE_NOTES_ID, Mark, Measure, Note, PieceKind, Placed, Rect, Scene, Theme, Viewport, layout,
+};
 
 const DEFAULT: Viewport = Viewport { w: 1440.0, h: 900.0 };
 const SMALL: Viewport = Viewport { w: 960.0, h: 640.0 };
@@ -124,4 +126,53 @@ fn every_line_of_a_whole_option_lies_inside_its_bubble_and_the_bubble_inside_its
             }
         }
     }
+}
+
+// A whole list is the same promise for a row: drawn after its mark to its last word, or passed over and counted in
+// the list's own last line. It comes below the other notes, in the room they leave, and never moves or shrinks one.
+#[test]
+fn a_whole_list_draws_each_row_to_its_last_word_or_counts_it_and_never_cuts_one() {
+    let long: String = (0..40).map(|i| format!("w{i:03}")).collect::<Vec<_>>().join(" ");
+    let row = |i: usize| if i.is_multiple_of(2) { long.replace('w', &i.to_string()) } else { format!("row {i}") };
+    let (mut scene, mut passed_over) = (Scene::sample(), 0);
+    for (theme, viewport, n) in [Theme::sticker(), Theme::plain()]
+        .into_iter()
+        .flat_map(|theme| [DEFAULT, SMALL].map(|viewport| (theme.clone(), viewport)))
+        .flat_map(|(theme, viewport)| [1, 2, 8, 40].map(|n| (theme.clone(), viewport, n)))
+    {
+        let rows: Vec<(Mark, String)> = (0..n).map(|i| (Mark::Busy, row(i))).collect();
+        scene.notes = vec![
+            Note::List { title: "a list".into(), rows: vec![("a row".into(), String::new())] },
+            Note::Whole { title: "a whole list".into(), rows: rows.clone() },
+            Note::Plain { title: "the note after".into(), body: "is not pushed out".into() },
+        ];
+        let placed = place(&scene, &theme, viewport);
+        let at = format!("{n} rows at {}x{}", viewport.w, viewport.h);
+        assert_eq!(notes_and_count(&placed).0, ["note-0", "note-2", "note-1"], "{at}");
+        let others = |placed: &[Placed]| placed.iter().filter(|piece| piece.id != "note-1").cloned().collect();
+        let (with, mut without): (Vec<Placed>, Scene) = (others(&placed), scene.clone());
+        without.notes[1] = Note::Whole { title: String::new(), rows: Vec::new() };
+        assert!(with == others(&place(&without, &theme, viewport)), "{at}: no other piece moved");
+        let sheet = placed.iter().find(|piece| piece.piece == PieceKind::Note && piece.id == "note-1").expect(&at);
+        let marks: Vec<&Placed> = of(&placed, PieceKind::Mark);
+        let lines: Vec<&str> = sheet.text[1..].iter().map(|run| run.text.as_str()).collect();
+        let drawn: Vec<String> = marks.iter().map(|mark| rows[mark.index].1.clone()).collect();
+        let counted = n - marks.len();
+        let more = (counted > 0).then(|| format!("+{counted} more"));
+        assert_eq!(lines.join(" "), drawn.iter().chain(&more).cloned().collect::<Vec<_>>().join(" "), "{at}");
+        assert!(n > 2 || counted == 0, "{at}: one or two rows are drawn");
+        // With room for every row, they are written at a row's own size: no smaller step is taken for nothing.
+        let own = placed.iter().find(|piece| piece.id == "note-0").map(|list| list.text[2].size);
+        assert!(n > 1 || sheet.text[1..].iter().all(|run| Some(run.size) == own), "{at}: {own:?}");
+        passed_over += usize::from(marks.last().is_some_and(|last| last.index >= marks.len()));
+        assert!(n < 40 || (counted >= 28 && !marks.is_empty()), "{at}: rows past the twelfth are only counted");
+        let inside = |r: Rect| {
+            let s = sheet.rect;
+            r.x >= s.x && r.x + r.w <= s.x + s.w && r.y >= s.y && r.y + r.h <= s.y + s.h
+        };
+        for piece in marks.iter().copied().chain([sheet]) {
+            assert!(inside(piece.rect) && piece.text.iter().all(|run| inside(run.rect)), "{at}: {piece:?}");
+        }
+    }
+    assert!(passed_over >= 3, "a long row is passed over for a shorter one after it: {passed_over} times");
 }

@@ -17,9 +17,9 @@ const WISHES_MAX: usize = 8;
 const CLASHES_MAX: usize = 2;
 /// How many of a reading's wishes, and of its clashes, are looked at. A model can write any number of them.
 const SEEN_MAX: usize = 64;
-const STARS_MAX: usize = 4;
-const LABEL_MAX: usize = 40;
-const STAR_MAX: usize = 60;
+pub(crate) const STARS_MAX: usize = 4;
+pub(crate) const LABEL_MAX: usize = 40;
+pub(crate) const STAR_MAX: usize = 60;
 const QUOTE_MAX: usize = 200;
 /// The shortest quote kept, in characters, unless it is everything the person typed in one turn.
 const QUOTE_MIN: usize = 8;

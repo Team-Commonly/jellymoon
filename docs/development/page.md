@@ -11,6 +11,9 @@ jellymoon page [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>] [--mode
 must be a name: letters, digits, dot, dash and underscore, starting with a letter or digit. Anything else is refused before any
 call.
 
+The day's made wishes ([wish.md](wish.md)) are printed after the reading's, under the ids `m1` to `m8`. They are the
+person's own and go through none of the checks below; the reading call never sees them.
+
 ## The call
 
 The harness is `claude` (on Windows `claude.exe`, then `claude.cmd`, then `claude`), looked for as the next section

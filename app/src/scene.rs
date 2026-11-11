@@ -17,9 +17,12 @@ pub fn order(stands: Option<Side>) -> [Side; 2] {
     if stands == Some(Side::A) { [Side::B, Side::A] } else { [Side::A, Side::B] }
 }
 
-/// [`ruled`] for a page nobody ruled on.
+/// The title of the note that holds the day's made wishes, each in the person's exact words.
+pub const MADE: &str = "wished here today";
+
+/// [`ruled`] for a page nobody ruled on, with no made wish on it.
 pub fn scene(page: &Page) -> Scene {
-    ruled(page, &[])
+    ruled(page, &[], 0)
 }
 
 /// The page as the kit's pieces: a hero, one little one per wish in page order with one star per finished job, a list
@@ -27,8 +30,11 @@ pub fn scene(page: &Page) -> Scene {
 /// file held more than the app draws, the first note says how much was left out. `standing` holds, clash by clash,
 /// what core says of it: its two statements as a ruling would carry them, and the side the person chose with a tap.
 /// A clash core says is no choice (its statements are the same once cleaned, or one is empty) is a plain note.
-pub fn ruled(page: &Page, standing: &[Standing]) -> Scene {
+/// The page's last `made` wishes are the person's made wishes. A reading's wish has a title the model wrote; a made
+/// wish has only the person's words, so one note after the clashes lists them, each whole or counted, never cut.
+pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let data = &page.data;
+    let made = &data.wishes[data.wishes.len().saturating_sub(made)..];
     let mut notes: Vec<Note> = left_out(page.left_out).into_iter().collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
         notes.push(Note::Plain {
@@ -54,10 +60,14 @@ pub fn ruled(page: &Page, standing: &[Standing]) -> Scene {
         },
         standing => choice(index, &data.clashes[index], standing),
     }));
+    if !made.is_empty() {
+        let rows = made.iter().map(|wish| (mark(wish.state), wish.said.clone())).collect();
+        notes.push(Note::Whole { title: MADE.to_string(), rows });
+    }
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
-        footer: footer(&data.read),
+        footer: [footer(&data.read), own(made.len())].join(" ").trim_end().to_string(),
         ..bare(&data.day, notes)
     }
 }
@@ -97,6 +107,25 @@ fn left_out(left_out: LeftOut) -> Option<Note> {
         title: "not everything is drawn".to_string(),
         body: format!("Left out of this page: {}.", said.join(", ")),
     })
+}
+
+/// How many of the page's wishes are the person's own made wishes, for the footer. Nothing when there is none.
+pub fn own(made: usize) -> String {
+    match made {
+        0 => String::new(),
+        1 => "1 made wish is in your own words.".to_string(),
+        n => format!("{n} made wishes are in your own words."),
+    }
+}
+
+/// The legend's mark for a wish's state.
+fn mark(state: WishState) -> Mark {
+    match state {
+        WishState::Working => Mark::Busy,
+        WishState::Done => Mark::Star,
+        WishState::NeedsYou => Mark::NeedsYou,
+        WishState::LetGo => Mark::Dimmed,
+    }
 }
 
 /// The character that stands for a wish. Its colour only tells neighbours apart: the hero has the first hue, the

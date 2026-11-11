@@ -29,6 +29,7 @@ cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build argument
 | `tap` | `jellymoon settle`, the tap, on the second statement of the kept page's clash makes one ruling, which waits, and the page keeps it |
 | `tap-told` | the session's next step is told that ruling alone, once |
 | `today-settled` | `jellymoon-app layout` draws the clash settled, the replaced statement struck, and no delivery note |
+| `wish` | `jellymoon wish` keeps a made wish as `m1`, working, with no run, and `jellymoon-app layout` draws it on the kept page with no reading call |
 | `copy` | with the real `git` on the caller's `PATH` and no git config of this machine: a repo the chain makes, `jellymoon copy make` on it, an edit in the copy, and `jellymoon copy clean` leaving one commit on the run's branch, the folder gone and the checkout as it was |
 | `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty; the hook is out and the settings are as they were |
 | `window` (with `--window`) | `jellymoon-app --page` opens a window and, with `JELLYMOON_QUIT_AFTER=3`, exits 0 within 30 seconds with no panic |
@@ -45,7 +46,7 @@ caller's `PATH`, to find git, with an empty global git config and the system's s
   it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
   logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`,
-  `no-logs`, the delivery steps, `copy` and `uninstall` are left out;
+  `no-logs`, the delivery steps, `wish`, `copy` and `uninstall` are left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what.
 

@@ -37,6 +37,9 @@ is the `HOME` variable (`USERPROFILE` on Windows), a full path, and nothing else
 `JELLYMOON_HOME`, the app exits 2 and reads nothing, so a test run with an empty environment cannot reach real logs.
 A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that is not absolute exits 2.
 
+- **Made wishes.** The day's made wishes ([wish.md](wish.md)) are drawn after the reading's on every scene of the
+  day: the kept page, a page just read, and, under its one note, the day that is still being read or could not be.
+  They are put on by core's `with_made` when the scene is drawn, and are never in the kept page.
 - **Where pages are kept.** `<home>/pages/<YYYY-MM-DD>.json`, where `<home>` is `JELLYMOON_HOME` or `~/.jellymoon`.
   The file is the checked page data, one line as `jellymoon page` prints it, and nothing else, in a folder for this
   user only (0700; the file 0600). It is written beside its place, in a file named for the process, and moved there.
@@ -126,6 +129,7 @@ the clashes, so on a page too full for all its notes it is a clash that falls in
 | each star | a star on its wish's character (the kit draws at most 4) and a row in the list note "came true today" |
 | a clash | a choice note `clash-<n>` with both quotes, each drawn whole; `settled` strikes the first |
 | `read` | the footer: how many things were typed, in which projects, and that the reading is unedited |
+| the day's made wishes | a character each, like any wish, and one whole list note, "wished here today", after the clashes: each made wish's own words after the mark of its state, drawn to the last word or counted in the note's last line, `+N more`, never cut. The footer adds "N made wishes are in your own words."; on a day not read yet that is all the footer says |
 | no wish, and nothing set aside | one plain note: "Nothing wished for yet today." |
 | more than the app draws | the first note, "not everything is drawn", with the counts (next section) |
 

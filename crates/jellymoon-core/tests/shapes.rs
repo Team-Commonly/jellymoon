@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use jellymoon_core::{Harness, HookState, PageData, ReaderDay, Ruling, WishState};
+use jellymoon_core::{Harness, HookState, PageData, ReaderDay, Ruling, WishState, Wished};
 
 fn fixture(name: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
@@ -45,6 +45,16 @@ fn a_ruling_and_what_a_hook_command_did_round_trip_byte_for_byte() {
     let example = fixture("hook-state.json");
     let state: HookState = serde_json::from_str(&example).unwrap();
     assert_eq!((format!("{state}\n"), state.installed, state.changed), (example, true, false));
+}
+
+#[test]
+fn what_a_made_wish_prints_round_trips_byte_for_byte() {
+    let example = fixture("wished.json");
+    let wished: Wished = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{wished}\n"), example);
+    assert_eq!((wished.wish.id.as_str(), wished.wish.state, wished.run), ("m1", WishState::Working, None));
+    let more = example.replace("\"stars\":[]", "\"stars\":[],\"label\":\"x\"");
+    assert!(serde_json::from_str::<Wished>(&more).is_err(), "a made wish with a field nobody knows is refused");
 }
 
 #[test]

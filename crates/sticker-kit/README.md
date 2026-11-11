@@ -74,6 +74,7 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | an art file's SVG | a flat picture, held to the list below | `svg_refusal` |
 | notes in a scene | the first 12 are laid out, the rest only counted | `MAX_NOTES` |
 | options of a choice note | the first 4 | |
+| rows of a whole list | the first 12 are laid out, the rest only counted | |
 | any text | 400 characters, a label `labels.max_chars`; cut with an ellipsis | `layout::MAX_TEXT_CHARS` |
 | pieces a layout returns | 5000; what would come after is dropped | `MAX_PIECES` |
 
@@ -160,6 +161,14 @@ A choice with `whole: true` is for options a person acts on by what they
 read: no option of it is ever cut. Its sheet is as wide as the note column,
 its options take the lines they need, and after the gaps close they are
 written at 0.85 and then 0.72 of their size when that places more notes.
+A `Whole` list is that promise for rows: each is drawn after its mark to its
+last word, or passed over and counted in the list's last line, `+N more`.
+It never moves or shrinks another note: the other notes are placed as if the
+scene had no whole list, and it comes below them in the room they leave. It
+makes room for itself alone, by a closer gap above it (32, then 16) and rows
+written at 0.85 and 0.72, taking a step only when it draws more rows. With no
+room for even its count line it is counted with the notes left out, where
+that sheet fits. `layout` returns one `mark` piece a row drawn.
 That can go under the theme's `min_font_size`, which holds for every other
 text: 9.35 pixels at 960x640 where the smallest is 11. Each text run carries
 the `size` it was measured at, and the drawing paints it at that size, so a

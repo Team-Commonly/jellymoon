@@ -27,6 +27,8 @@ pub enum PieceKind {
     Label,
     Note,
     Option,
+    /// The mark in front of a row of a whole list: `id` is the note's, `index` the row.
+    Mark,
     Legend,
     Footer,
 }
@@ -171,7 +173,7 @@ impl PieceKind {
             PieceKind::Star => 12,
             PieceKind::Bubble | PieceKind::Badge => 13,
             PieceKind::Note => 20,
-            PieceKind::Option => 21,
+            PieceKind::Option | PieceKind::Mark => 21,
             PieceKind::Tape => 22,
         }
     }

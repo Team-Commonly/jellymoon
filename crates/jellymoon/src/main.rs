@@ -20,6 +20,7 @@ const USAGE: &str = "usage:
   jellymoon rule --stands <the words that stand> --over <the words they replace>
   jellymoon hook                                 (run by Claude Code: hands waiting rulings to the session on stdin)
   jellymoon settle --date <YYYY-MM-DD> --clash <n> --option <1|2>   (a tap on a clash of the kept page: that statement stands)
+  jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]   (keeps a wish you make on the day's page; starts nothing)
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
@@ -45,6 +46,7 @@ enum Command {
     Hook,
     InstallHook { settings: Option<PathBuf>, installed: bool },
     Settle { date: String, clash: usize, option: usize },
+    Wish { date: Option<String>, say: String, project: String },
     RemoveHook,
     HookStatus,
     Uninstall,
@@ -96,7 +98,8 @@ fn run() -> Result<String, Failure> {
             let day = day(&options)?;
             let harness = named("JELLYMOON_CLAUDE");
             let options = PageOptions { model, dir: home()?.join("reading"), limit: READING_LIMIT, harness };
-            Ok(format!("{}\n", jellymoon_core::page(&day, &options).map_err(failed)?))
+            let page = jellymoon_core::page(&day, &options).map_err(failed)?;
+            Ok(format!("{}\n", jellymoon_core::with_made(&home()?, page)))
         }
         Command::Uninstall => {
             // The same two folders, under the same two names, that install.sh puts the pieces in.
@@ -129,6 +132,9 @@ fn run() -> Result<String, Failure> {
             }
             Ok(format!("{settled}\n"))
         }
+        Command::Wish { date, say, project } => {
+            Ok(format!("{}\n", jellymoon_core::wish(&home()?, date.as_deref(), &say, &project).map_err(failed)?))
+        }
         Command::HookStatus => {
             let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));
             Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))
@@ -158,6 +164,7 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         }
         Some(Value(command)) if command == "rule" => return parse_rule(parser),
         Some(Value(command)) if command == "settle" => return parse_settle(parser),
+        Some(Value(command)) if command == "wish" => return parse_wish(parser),
         Some(Value(command)) if command == "hook" => return parse_hook(parser),
         Some(Value(command)) if command == "copy" => return parse_copy(parser),
         Some(Long("help") | Short('h')) => return Ok(Command::Help),
@@ -226,6 +233,24 @@ fn parse_settle(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     match (date, clash, option) {
         (Some(date), Some(clash), Some(option)) => Ok(Command::Settle { date, clash, option }),
         _ => Err(Failure::Usage("settle takes --date, --clash and --option".to_string())),
+    }
+}
+
+fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
+    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
+    let (mut date, mut say, mut project) = (None, None, None);
+    while let Some(arg) = parser.next().map_err(usage)? {
+        match arg {
+            Long("help") | Short('h') => return Ok(Command::Help),
+            Long("date") => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("say") => say = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("project") => project = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            other => return Err(usage(other.unexpected())),
+        }
+    }
+    match (say, project) {
+        (Some(say), Some(project)) => Ok(Command::Wish { date, say, project }),
+        _ => Err(Failure::Usage("wish takes --say and --project".to_string())),
     }
 }
 

@@ -34,6 +34,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "tap", only: Only::Synthetic, run: tap },
     Step { name: "tap-told", only: Only::Synthetic, run: tap_told },
     Step { name: "today-settled", only: Only::Synthetic, run: today_settled },
+    // Never with --real: it would put a made-up wish on the person's own day.
+    Step { name: "wish", only: Only::Synthetic, run: wish },
     // A run's copy (F38). Not with --real: it makes a repo of its own, and that is all it reads.
     Step { name: "copy", only: Only::Synthetic, run: super::copy::copy },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
@@ -334,6 +336,29 @@ fn today_settled(world: &World) -> Result<String, String> {
         return Err(format!("the clash is not drawn settled with delivery on: options {roles:?}"));
     }
     Ok("the clash is settled, its first option struck; no delivery note".to_string())
+}
+
+/// `jellymoon wish` keeps a made wish and starts nothing, and `jellymoon-app layout` draws it on the kept page with
+/// no reading call.
+fn wish(world: &World) -> Result<String, String> {
+    let words = "ship the changelog";
+    let args = ["wish", "--date", DAY, "--say", words, "--project", "alpha"].map(str::to_string);
+    let said = world.json("jellymoon", &args)?;
+    let kept = said["wish"] == json!({"id": "m1", "said": words, "project": "alpha", "state": "working", "stars": []});
+    if !kept
+        || !said["run"].is_null()
+        || !said["why"].as_str().is_some_and(|why| why.starts_with("nothing was started"))
+    {
+        return Err(format!("the wish was not kept as made, with no run: {said}"));
+    }
+    let (_, seen) = kept_and_seen(world);
+    let _ = fs::remove_file(&seen);
+    let pieces = world.lines("jellymoon-app", &world.day("layout"))?;
+    let drawn = pieces.iter().filter(|piece| piece["kind"] == "character" && piece["id"] == "m1").count();
+    if drawn != 1 || seen.exists() {
+        return Err(format!("the made wish is drawn {drawn} times, not once, or the day was read again"));
+    }
+    Ok("a made wish is kept as m1, working, with no run, and the page draws it with no reading".to_string())
 }
 
 /// `jellymoon uninstall` removes the app and the command from where an install put them, and leaves nothing there.

@@ -42,7 +42,12 @@ struct Step {
 /// tab and any run of spaces become one space), with each `"` made `'`. So a statement cannot end its own quote in
 /// what the hook prints, or start a line that reads as another ruling.
 pub(crate) fn words(text: &str) -> String {
-    line(text, WORDS_MAX).replace('"', "'")
+    words_of(text, WORDS_MAX)
+}
+
+/// [`words`] cut to `most` characters: a made wish asks for one more than it may have, to tell that it is over.
+pub(crate) fn words_of(text: &str, most: usize) -> String {
+    line(text, most).replace('"', "'")
 }
 
 /// Makes a folder of Jellymoon's own, and the folders above it that are missing, for the person alone (0700) where

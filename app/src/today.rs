@@ -82,15 +82,15 @@ impl Today {
     /// led would depend on the folder the app was started in.
     pub fn from_env(asked: Asked) -> Result<Today, String> {
         let named = |variable: &str| env::var_os(variable).filter(|path| !path.is_empty()).map(PathBuf::from);
-        // The home is core's: the variable as a full path and nothing else, so a run with an empty environment (a
+        // The homes are core's: the variable as a full path and nothing else, so a run with an empty environment (a
         // test's) is refused here and can never reach a real person's logs.
         let user = jellymoon_core::user_home;
-        if named("JELLYMOON_HOME").is_some_and(|home| !home.is_absolute()) {
-            return Err("no home directory: set JELLYMOON_HOME to an absolute path".to_string());
+        let home = jellymoon_core::own_folder().map_err(|e| e.to_string())?;
+        if asked.logs.as_ref().is_some_and(|logs| logs.as_os_str().is_empty()) {
+            return Err("--logs needs a folder".to_string());
         }
         let config = || named("CLAUDE_CONFIG_DIR").or_else(|| Some(user()?.join(".claude")));
         let logs = asked.logs.or_else(|| Some(config()?.join("projects")));
-        let home = named("JELLYMOON_HOME").or_else(|| Some(user()?.join(".jellymoon")));
         Ok(Today {
             date: date(asked.date.as_deref()).ok_or("--date must be a day as YYYY-MM-DD")?,
             logs: logs.ok_or("finding the session logs: no home directory; name them with --logs")?,
@@ -227,8 +227,10 @@ fn words(error: &Error) -> String {
              Code once and open Jellymoon again. They were looked for in {looked}."
         ),
         Error::Logs(_) => format!("Your Claude Code session logs could not be read ({error})."),
-        // Core's own line, as a sentence: it already says what to the person.
-        Error::Skip(_) => format!("T{}.", &error.to_string()[1..]),
+        Error::Skip(why) => format!(
+            "The list of folders you switched off (skip.txt in Jellymoon's folder) could not be read, so nothing was \
+             read: {why}."
+        ),
         Error::TooLong(_) => format!("The reading took too long and was stopped. {again}"),
         Error::NotPageData { .. } => {
             format!("The model's answer was not a page, so nothing from it is shown. {again}")
@@ -237,7 +239,7 @@ fn words(error: &Error) -> String {
             "Claude Code could not do the reading. Check that `claude` answers in a terminal. {again} What happened: \
              {error}."
         ),
-        Error::Date | Error::Model | Error::NotAbsolute | Error::Uninstall(_) => format!("{error}."),
+        Error::Date | Error::Model | Error::Home | Error::NotAbsolute | Error::Uninstall(_) => format!("{error}."),
         // The app makes no ruling and installs no hook yet; these say what core says.
         Error::Ruling
         | Error::Store(_)

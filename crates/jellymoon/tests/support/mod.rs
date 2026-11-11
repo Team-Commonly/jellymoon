@@ -95,6 +95,19 @@ pub fn install(dir: &Path, name: &str) -> PathBuf {
     program
 }
 
+/// Every folder and file under a folder, in name order, each file with its bytes: what a refusal must leave as it was.
+pub fn tree(folder: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut paths: Vec<PathBuf> = fs::read_dir(folder).unwrap().map(|entry| entry.unwrap().path()).collect();
+    paths.sort();
+    let mut held = Vec::new();
+    for path in paths {
+        let inside = if path.is_dir() { tree(&path) } else { Vec::new() };
+        held.push((path.clone(), if path.is_file() { fs::read(&path).unwrap() } else { Vec::new() }));
+        held.extend(inside);
+    }
+    held
+}
+
 /// One session log line. `origin` is the origin kind; "" leaves origin out, as a prompt sent by another program has none.
 pub fn line(kind: &str, at: &str, cwd: &str, origin: &str, content: Value, extra: Value) -> String {
     let mut o = json!({"type": kind, "timestamp": at, "cwd": cwd, "sessionId": "s", "message": {"role": kind, "content": content}});

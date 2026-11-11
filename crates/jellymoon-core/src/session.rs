@@ -241,8 +241,11 @@ fn project(cwd: &str) -> &str {
     last
 }
 
+/// Whether a folder is switched off: it contains one of the names, character for character. White space around a
+/// name and separators at its end are dropped first, and a name with nothing left is no name.
 fn skipped(place: &str, skip: &[String]) -> bool {
-    skip.iter().map(|name| name.trim()).any(|name| !name.is_empty() && place.contains(name))
+    let names = skip.iter().map(|name| name.trim().trim_end_matches(['/', '\\']));
+    names.into_iter().any(|name| !name.is_empty() && place.contains(name))
 }
 
 #[cfg(test)]

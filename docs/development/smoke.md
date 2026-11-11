@@ -44,8 +44,8 @@ A made-up run starts each program with no variable of the caller's: a scratch `H
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what.
 
-The first `--real` run was made by a maintainer before the tag `v0.1.0-rc1`, when the chain with `--real` had five
-steps, and it passed. No run with `--real` has been made since the chain grew.
+A maintainer ran `--real` on the commit the tag `v0.1.0-rc1` points at, and its five steps passed. Steps added since
+are made-up only, so `--real` still runs those five.
 
 ## What it does not prove
 

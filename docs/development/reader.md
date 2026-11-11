@@ -11,17 +11,30 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
 - `--date`: the local calendar day; today when left out. The time zone is the process's (`TZ`).
 - `--logs`: a Claude Code projects directory, laid out `<dir>/<project folder>/<session>.jsonl`. Left out, it is `projects`
   under `CLAUDE_CONFIG_DIR`, or under `.claude` in the home directory.
-- `--skip`: folders the person switched off. A turn whose working directory contains one of the names contributes nothing.
-  Spaces around a name are dropped, and an empty name is ignored. A line with no working directory is matched by the name of
-  the folder its session file is in.
+- `--skip`: folders the person switched off. A turn whose working directory contains one of the names contributes
+  nothing. A line with no working directory is matched by the name of the folder its session file is in.
 - **`skip.txt`.** The names in `<home>/skip.txt`, one a line, are switched off as well, joined with `--skip`: it is
   the list the app keeps, so a folder switched off there is not read by `day` or `page` either. `<home>` is
-  `JELLYMOON_HOME`, or `.jellymoon` in the home directory; with neither there is no such file. No file is no names.
-  One that cannot be read, is over 64 KiB or is not UTF-8 stops the command with one line, exit 1, before a log is
-  opened and before any reading call: a damaged list is never an empty list. A byte order mark at its start is dropped.
+  `JELLYMOON_HOME`, or `.jellymoon` in the home directory; with neither there is no such file. A `JELLYMOON_HOME`
+  that is not a full path is refused in one line by every command and by the app: a relative one would name another
+  list in every folder a command starts in.
+- **How a name matches.** White space around a name and any `/` or `\` at its end are dropped, and a name with
+  nothing left is ignored. A turn is left out when its working directory, as the log wrote it, contains the name
+  character for character. The match is exact: case matters (`Private-Notes` does not switch off `private-notes`),
+  and a letter written in another Unicode form does not match. It is not a whole folder name either: `notes` also
+  switches off `/work/my-notes-old`. In `skip.txt` a line is one name, whole: a comma or a quote is part of it.
+  Nothing counts the folders switched off. What was read is named instead: every turn of `day` carries its
+  `project`, `page` lists them in `read.projects`, and the app's footer names them, so a name that matched nothing
+  shows as its folder still being there.
+- **A list that is not a list stops the command**, with one line, exit 1, before a log is opened and before any
+  reading call: a damaged list is never an empty list. Only nothing at all under the name `skip.txt` is no names.
+  Refused: a link to nothing, a folder, a pipe, a file that cannot be read, one over 64 KiB or not UTF-8, and a line
+  that holds a NUL, a byte order mark (one at the very start of the file is dropped) or a carriage return that does
+  not end it, as UTF-16 text and old Mac line ends do. The line is named by its number, never by its text.
 - **No session logs.** When the projects directory is not there (Claude Code was never used, or keeps its files
-  elsewhere), the command says so in one line that names the folder it looked for, and exits 1. A directory that is
-  there with no session in it is a day with no turns.
+  elsewhere), the command says so in one line that names the folder it looked for, and exits 1. When the folder is
+  the one nobody named, the line adds what to do. A directory that is there with no session in it is a day with no
+  turns. An empty `--logs` is an argument error.
 
 Only a regular `.jsonl` file in a real folder of the projects directory is opened. A link is never followed, to a file or to a
 folder, and a pipe or anything else that is not a file is left alone.

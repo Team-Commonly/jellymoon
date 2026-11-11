@@ -73,6 +73,17 @@ pub fn user_home() -> Option<PathBuf> {
     env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).filter(|home| home.is_absolute())
 }
 
+/// Where Jellymoon keeps its own files: `JELLYMOON_HOME`, or `.jellymoon` in the person's home; none with neither. A
+/// `JELLYMOON_HOME` that is set and not a full path is refused, for every command and the app alike: the list of
+/// folders switched off, the rulings and the hook's record would be other files in every folder a program starts in.
+pub fn own_folder() -> Result<Option<PathBuf>, Error> {
+    match env::var_os("JELLYMOON_HOME").filter(|home| !home.is_empty()).map(PathBuf::from) {
+        Some(home) if home.is_absolute() => Ok(Some(home)),
+        Some(_) => Err(Error::Home),
+        None => Ok(user_home().map(|home| home.join(".jellymoon"))),
+    }
+}
+
 /// The well-known folders in the order tried, each with the name a person knows it by.
 /// `JELLYMOON_SYSTEM_BIN`, folders written as `PATH` is, takes the place of the system's: what the tests set.
 fn places(home: Option<&Path>) -> Vec<(PathBuf, String)> {

@@ -48,10 +48,15 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
     let (start, end) = (edge(date)?, edge(date.tomorrow().map_err(|_| Error::Date)?)?);
     let mut skip = options.skip.clone();
     if let Some(home) = &options.home {
+        if !home.is_absolute() {
+            return Err(Error::Home);
+        }
         skip.extend(switched_off(home).map_err(Error::Skip)?);
     }
     match fs::metadata(&options.logs) {
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(Error::NoLogs(options.logs.display().to_string())),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            return Err(Error::NoLogs(options.logs.display().to_string().replace(char::is_control, " ")));
+        }
         found => found.map_err(Error::Logs)?,
     };
     let mut seen = HashSet::new();
@@ -68,20 +73,41 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
     Ok(ReaderDay { day: date.to_string(), turns: turns.into_iter().map(|(_, turn)| turn).collect() })
 }
 
-/// The folder names in `<home>/skip.txt`, one a line. No file is no names. A file that cannot be read, is too large or
-/// is not UTF-8 is an error and never an empty list: a folder the person switched off must not reach the reading call.
+/// The folder names in `<home>/skip.txt`, one a line. Nothing at all under that name is no names. Anything else that
+/// is not a whole, plain list is an error and never an empty list, since a folder the person switched off must not
+/// reach the reading call: a link to nothing, a folder, a pipe, a file that cannot be read, is too large or is not
+/// UTF-8, or a line with a character no folder name holds (which says the file is not the list it looks like). An
+/// error names a line by its number, never by its text.
 fn switched_off(home: &Path) -> Result<Vec<String>, String> {
-    let mut bytes = Vec::new();
-    match fs::File::open(home.join("skip.txt")) {
-        Ok(file) => file.take(MAX_SKIP_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?,
+    let path = home.join("skip.txt");
+    match fs::symlink_metadata(&path) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e.to_string()),
-    };
+        Ok(_) => {}
+    }
+    // Asked before it is opened, and through a link: opening a pipe would wait for a writer that never comes.
+    if !fs::metadata(&path).map_err(|e| e.to_string())?.is_file() {
+        return Err("it is not a file".to_string());
+    }
+    let mut bytes = Vec::new();
+    let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+    file.take(MAX_SKIP_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
     if bytes.len() > MAX_SKIP_BYTES {
         return Err(format!("it is over {MAX_SKIP_BYTES} bytes"));
     }
     let text = String::from_utf8(bytes).map_err(|_| "it is not UTF-8 text".to_string())?;
-    Ok(text.strip_prefix('\u{feff}').unwrap_or(&text).lines().map(str::to_string).collect())
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    let odd = [
+        ('\0', "a NUL character"),
+        ('\u{feff}', "a byte order mark"),
+        ('\r', "a carriage return that does not end it"),
+    ];
+    for (at, line) in text.lines().enumerate() {
+        if let Some((_, what)) = odd.iter().find(|(odd, _)| line.contains(*odd)) {
+            return Err(format!("line {} holds {what}", at + 1));
+        }
+    }
+    Ok(text.lines().map(str::to_string).collect())
 }
 
 /// A calendar day written exactly YYYY-MM-DD.

@@ -40,6 +40,9 @@ impl fmt::Display for Uninstalled {
 /// A piece that is already gone is not an error and is not listed. A place that is not a full path is refused before
 /// anything is touched: what it named would depend on the folder the command was started in.
 pub fn uninstall(options: &UninstallOptions) -> Result<Uninstalled, Error> {
+    if options.home.as_ref().is_some_and(|home| !home.is_absolute()) {
+        return Err(Error::Home);
+    }
     if !(options.app.is_absolute() && options.binary.is_absolute()) {
         return Err(Error::NotAbsolute);
     }

@@ -11,7 +11,7 @@ pub enum Error {
     /// The date is not a calendar day written YYYY-MM-DD.
     Date,
     /// There is no session logs folder: Claude Code has not been used yet, or keeps its files elsewhere. It holds the
-    /// folder looked for.
+    /// folder looked for, made one line.
     NoLogs(String),
     /// The session logs could not be read.
     Logs(io::Error),
@@ -34,6 +34,9 @@ pub enum Error {
     /// The model's text is not page data. Only where it stopped being so is kept: the parser's own message would quote
     /// the model.
     NotPageData { line: usize, column: usize },
+    /// `JELLYMOON_HOME`, or the home a caller gave, is not a full path: which folder it named would depend on where
+    /// the program was started.
+    Home,
     /// The app's or the binary's place is not a full path: where it led would depend on the folder the command ran in.
     NotAbsolute,
     /// A piece of the install, or the delivery hook, could not be removed.
@@ -56,10 +59,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Date => write!(f, "--date must be a day as YYYY-MM-DD"),
-            Error::NoLogs(looked) => write!(
-                f,
-                "no Claude Code session logs were found: there is no folder {looked}. Use Claude Code once and they will be there, or name its projects folder with --logs"
-            ),
+            Error::NoLogs(looked) => {
+                write!(f, "no Claude Code session logs were found: there is no folder {looked}")
+            }
             Error::Logs(e) => write!(f, "reading the session logs: {e}"),
             Error::Skip(why) => write!(
                 f,
@@ -80,6 +82,7 @@ impl fmt::Display for Error {
             Error::NotPageData { line, column } => {
                 write!(f, "the reading is not page data (line {line}, column {column} of the model's JSON)")
             }
+            Error::Home => write!(f, "no home directory: set JELLYMOON_HOME to an absolute path"),
             Error::NotAbsolute => write!(
                 f,
                 "uninstalling: JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR must be full paths, from the root; nothing was removed"

@@ -11,7 +11,7 @@ use std::ffi::OsStr;
 use std::fs;
 
 use serde_json::{Value, json};
-use support::{jellymoon, jellymoon_in, scratch};
+use support::{jellymoon, jellymoon_in, scratch, tree};
 
 #[test]
 fn uninstall_removes_the_app_and_the_binary_and_nothing_else() {
@@ -43,23 +43,41 @@ fn uninstall_removes_the_app_and_the_binary_and_nothing_else() {
     assert!(apps.join("Other.app").exists());
 }
 
-// A relative folder would name whatever is under the folder the command was started in.
+// A relative folder would name whatever is under the folder the command was started in. The hook is installed, so
+// a refusal that came after the hook's removal would show in the settings.
 #[test]
 fn uninstall_refuses_a_folder_that_is_not_a_full_path_and_touches_nothing() {
     let dir = scratch();
-    let (app, binary) =
-        (dir.path().join("Applications").join("Jellymoon.app"), dir.path().join("bin").join("jellymoon"));
-    fs::create_dir_all(&app).unwrap();
-    fs::create_dir_all(binary.parent().unwrap()).unwrap();
-    fs::write(binary.with_extension(std::env::consts::EXE_EXTENSION), "made up").unwrap();
-    let (apps, bin) = (dir.path().join("Applications"), dir.path().join("bin"));
-    for (app_dir, bin_dir) in [(OsStr::new("Applications"), bin.as_os_str()), (apps.as_os_str(), OsStr::new("bin"))] {
-        let vars = [("JELLYMOON_APP_DIR", app_dir), ("JELLYMOON_BIN_DIR", bin_dir)];
+    let at = |name: &str| dir.path().join(name);
+    fs::create_dir_all(at("Applications").join("Jellymoon.app")).unwrap();
+    fs::create_dir_all(at("bin")).unwrap();
+    fs::write(at("bin").join(format!("jellymoon{}", std::env::consts::EXE_SUFFIX)), "made up").unwrap();
+    fs::write(at("settings.json"), "{\"model\": \"sonnet\"}\n").unwrap();
+    let (apps, bin, home, settings) = (at("Applications"), at("bin"), at("jm"), at("settings.json"));
+    let installed = jellymoon(
+        &[("JELLYMOON_HOME", home.as_os_str())],
+        &["hook", "install", "--settings", settings.to_str().unwrap()],
+    );
+    assert_eq!((installed.code, installed.stderr.as_str()), (0, ""));
+    let before = tree(dir.path());
+    assert!(String::from_utf8_lossy(&fs::read(&settings).unwrap()).contains("hook"), "the hook is in the settings");
+
+    let folders = "jellymoon: uninstalling: JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR must be full paths, from the root; \
+                   nothing was removed\n";
+    let own = "jellymoon: no home directory: set JELLYMOON_HOME to an absolute path\n";
+    let rel = OsStr::new;
+    for (app_dir, bin_dir, home_dir, line) in [
+        (rel("Applications"), bin.as_os_str(), home.as_os_str(), folders),
+        (apps.as_os_str(), rel("bin"), home.as_os_str(), folders),
+        (apps.as_os_str(), bin.as_os_str(), rel("jm"), own),
+    ] {
+        let vars = [("JELLYMOON_APP_DIR", app_dir), ("JELLYMOON_BIN_DIR", bin_dir), ("JELLYMOON_HOME", home_dir)];
         let ran = jellymoon_in(dir.path(), &vars, &["uninstall"]);
-        let line = "jellymoon: uninstalling: JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR must be full paths, from the \
-                    root; nothing was removed\n";
         assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (1, "", line));
-        assert!(app.exists() && binary.with_extension(std::env::consts::EXE_EXTENSION).exists());
+        assert!(
+            tree(dir.path()) == before,
+            "{vars:?}: the app, the command, the settings and the home are as they were"
+        );
     }
 }
 

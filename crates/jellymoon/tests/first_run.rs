@@ -10,11 +10,12 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
-use support::{A, B, Ran, ZONE, install, said, scratch, write_log};
+use support::{A, B, Ran, ZONE, install, said, scratch, tree, write_log};
 use tempfile::TempDir;
 
 const SKIP_LINE: &str = "jellymoon: the list of folders you switched off (skip.txt in Jellymoon's folder) could not be \
                          read, so nothing was read: ";
+const NO_LOGS: &str = "jellymoon: no Claude Code session logs were found: there is no folder ";
 
 /// One test's logs (a turn in `alpha`, one in `private-notes`), scratch home and harness.
 struct World {
@@ -70,6 +71,18 @@ impl World {
         fs::remove_file(seen).unwrap();
         Some(typed(&day))
     }
+
+    /// Both commands stop on the list as it is now: one line that ends with `why` and quotes no name, and no call.
+    fn refused(&self, why: &str) {
+        for command in ["day", "page"] {
+            let ran = self.over_logs(command, &[]);
+            assert_eq!((ran.code, ran.stdout.as_str()), (1, ""), "{command}: {}", ran.stderr);
+            assert!(ran.stderr.starts_with(SKIP_LINE) && ran.stderr.lines().count() == 1, "{command}: {}", ran.stderr);
+            assert!(ran.stderr.ends_with(&format!("{why}\n")), "{command}, {why}: {}", ran.stderr);
+            assert!(!ran.stderr.contains("private"), "{command}: a line is named by its number: {}", ran.stderr);
+            assert_eq!(self.sent(), None, "{command}");
+        }
+    }
 }
 
 /// What the turns of a printed day say.
@@ -82,14 +95,20 @@ fn typed(day: &str) -> Vec<String> {
 fn a_home_with_no_session_logs_gets_one_plain_line_that_names_the_folder_and_no_call() {
     let w = world();
     let looked = w.at("user").join(".claude").join("projects");
+    let advice = ". Use Claude Code once and they will be there, or name its projects folder with --logs";
     for command in ["day", "page"] {
         let ran = w.run(&[command, "--date", "2026-03-10"]);
-        let line = format!(
-            "jellymoon: no Claude Code session logs were found: there is no folder {}. Use Claude Code once and they \
-             will be there, or name its projects folder with --logs\n",
-            looked.display()
-        );
+        let line = format!("{NO_LOGS}{}{advice}\n", looked.display());
         assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr), (1, "", line), "{command}");
+        // A folder the person named gets no advice to name one.
+        let nowhere = w.at("nowhere");
+        let ran = w.run(&[command, "--logs", nowhere.to_str().unwrap()]);
+        assert_eq!((ran.code, ran.stderr), (1, format!("{NO_LOGS}{}\n", nowhere.display())), "{command}");
+        // No folder at all is not a folder that is missing, and a name with a line break in it is still one line.
+        let ran = w.run(&[command, "--logs", ""]);
+        assert!(ran.code == 2 && ran.stderr.starts_with("jellymoon: --logs needs a folder\n"), "{}", ran.stderr);
+        let ran = w.run(&[command, "--logs", "no\nwhere"]);
+        assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.lines().count()), (1, "", 1), "{}", ran.stderr);
         assert_eq!(w.sent(), None, "{command}");
     }
     // A folder that is there and holds no session is a day nobody typed in, as before.
@@ -110,6 +129,12 @@ fn a_folder_named_in_skip_txt_is_read_by_neither_command_and_joins_the_ones_name
     assert_eq!(w.sent(), Some(vec!["add a retry".to_string()]), "the call is sent the day less the folder");
     assert!(typed(&w.over_logs("day", &["--skip", "alpha"]).stdout).is_empty(), "the file's names and the flag's");
 
+    // A separator at a name's end is dropped, in the file and in the flag. The match is exact, so case matters.
+    fs::write(w.skip_txt(), "  private-notes/ \n").unwrap();
+    assert_eq!(typed(&w.over_logs("day", &["--skip", r"alpha\"]).stdout), [""; 0]);
+    fs::write(w.skip_txt(), "Private-Notes\n/\n").unwrap();
+    assert_eq!(typed(&w.over_logs("day", &[]).stdout).len(), 2, "another case is another name, and `/` is no name");
+
     // `JELLYMOON_HOME` moves the list with the rest of Jellymoon's files.
     let mut moved = World { dir: w.dir, vars: w.vars };
     moved.vars.push(("JELLYMOON_HOME", moved.at("jm").into()));
@@ -121,25 +146,92 @@ fn a_folder_named_in_skip_txt_is_read_by_neither_command_and_joins_the_ones_name
 
 // A list that cannot be read whole is never an empty list: nothing is printed and nothing goes to the call.
 #[test]
-fn a_skip_txt_that_cannot_be_read_stops_both_commands_with_one_line_and_no_call() {
+fn a_skip_txt_that_is_not_a_whole_plain_list_stops_both_commands_with_one_line_and_no_call() {
     let w = world();
-    let refused = |why: &str| {
-        for command in ["day", "page"] {
-            let ran = w.over_logs(command, &[]);
-            assert_eq!((ran.code, ran.stdout.as_str()), (1, ""), "{command}: {}", ran.stderr);
-            assert!(ran.stderr.starts_with(SKIP_LINE) && ran.stderr.lines().count() == 1, "{command}: {}", ran.stderr);
-            assert!(ran.stderr.ends_with(&format!("{why}\n")), "{command}: {}", ran.stderr);
-            assert_eq!(w.sent(), None, "{command}");
-        }
-    };
     fs::write(w.skip_txt(), [b'p', 0xff, 0xfe, b'\n']).unwrap();
-    refused("it is not UTF-8 text");
+    w.refused("it is not UTF-8 text");
     fs::write(w.skip_txt(), "private-notes\n".repeat(4682)).unwrap(); // 65548 bytes
-    refused("it is over 65536 bytes");
+    w.refused("it is over 65536 bytes");
+    fs::write(w.skip_txt(), "private-notes\n".repeat(4681) + "xyz").unwrap(); // 65537 bytes: one over
+    w.refused("it is over 65536 bytes");
     fs::write(w.skip_txt(), "private-notes\n".repeat(4681) + "xy").unwrap(); // 65536 bytes: the most that is read
     assert_eq!(typed(&w.over_logs("day", &[]).stdout), ["add a retry"]);
+
+    // Characters no folder name holds say the file is not the list it looks like: the line's number, never its text.
+    fs::write(w.skip_txt(), "alpha\nprivate\0notes\n").unwrap();
+    w.refused("line 2 holds a NUL character");
+    let utf16: Vec<u8> = "private-notes\n".encode_utf16().flat_map(u16::to_le_bytes).collect();
+    fs::write(w.skip_txt(), utf16).unwrap();
+    w.refused("line 1 holds a NUL character");
+    fs::write(w.skip_txt(), "alpha\n\u{feff}private-notes\n").unwrap();
+    w.refused("line 2 holds a byte order mark");
+    fs::write(w.skip_txt(), "\u{feff}\u{feff}private-notes\n").unwrap();
+    w.refused("line 1 holds a byte order mark");
+    fs::write(w.skip_txt(), "private-notes\ralpha\r").unwrap(); // old Mac line ends: one line to every reader since
+    w.refused("line 1 holds a carriage return that does not end it");
+
     // A folder under the list's name cannot be read as a list on any system.
     fs::remove_file(w.skip_txt()).unwrap();
     fs::create_dir(w.skip_txt()).unwrap();
-    refused("");
+    w.refused("it is not a file");
+    // The list is looked at before the logs, so a damaged one is what is said even when there are no logs.
+    let ran = w.run(&["day", "--logs", w.at("nowhere").to_str().unwrap()]);
+    assert!(ran.code == 1 && ran.stderr.starts_with(SKIP_LINE), "{}", ran.stderr);
+}
+
+// Only nothing at all under the name is no list. A pipe is told by its type and never opened: opening one would wait.
+#[cfg(unix)]
+#[test]
+fn a_link_to_nothing_a_pipe_a_closed_file_and_a_home_that_is_a_file_each_stop_both_commands() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let mut w = world();
+    symlink(w.at("gone"), w.skip_txt()).unwrap();
+    w.refused("(os error 2)");
+    fs::write(w.at("gone"), "private-notes\n").unwrap();
+    assert_eq!(typed(&w.over_logs("day", &[]).stdout), ["add a retry"], "a link to a list is the list");
+
+    fs::remove_file(w.skip_txt()).unwrap();
+    assert!(std::process::Command::new("mkfifo").arg(w.skip_txt()).status().unwrap().success());
+    w.refused("it is not a file");
+
+    fs::remove_file(w.skip_txt()).unwrap();
+    fs::write(w.skip_txt(), "private-notes\n").unwrap();
+    fs::set_permissions(w.skip_txt(), fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::File::open(w.skip_txt()).is_err() {
+        w.refused("(os error 13)"); // not for a user that no mode stops
+    }
+
+    fs::write(w.at("file"), "not a folder").unwrap();
+    w.vars.push(("JELLYMOON_HOME", w.at("file").into()));
+    w.refused("(os error 20)");
+}
+
+// A relative home would name another list, other rulings and another hook record in every folder a command starts in.
+#[test]
+fn a_jellymoon_home_that_is_not_a_full_path_is_refused_by_every_command_that_would_use_it() {
+    let mut w = world();
+    fs::create_dir(w.at("rel")).unwrap();
+    fs::write(w.at("rel").join("skip.txt"), "private-notes\n").unwrap();
+    fs::write(w.at("settings.json"), "{}\n").unwrap();
+    w.vars.push(("JELLYMOON_HOME", "rel".into()));
+    w.vars.push(("JELLYMOON_APP_DIR", w.at("apps").into()));
+    w.vars.push(("JELLYMOON_BIN_DIR", w.at("installed").into()));
+    let (logs, settings) = (w.at("logs"), w.at("settings.json"));
+    let (logs, settings) = (logs.to_str().unwrap(), settings.to_str().unwrap());
+    let before = tree(w.dir.path());
+    let commands: [&[&str]; 7] = [
+        &["day", "--date", "2026-03-10", "--logs", logs],
+        &["page", "--date", "2026-03-10", "--logs", logs],
+        &["rule", "--stands", "fail fast", "--over", "add a retry"],
+        &["hook"],
+        &["hook", "install", "--settings", settings],
+        &["hook", "uninstall"],
+        &["uninstall"],
+    ];
+    for args in commands {
+        let ran = w.run(args);
+        let line = "jellymoon: no home directory: set JELLYMOON_HOME to an absolute path\n";
+        assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (1, "", line), "{args:?}");
+        assert!(tree(w.dir.path()) == before, "{args:?}: nothing was written and no call was made");
+    }
 }

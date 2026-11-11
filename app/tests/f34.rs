@@ -165,6 +165,9 @@ fn with_no_home_in_the_environment_the_app_stops_before_it_reads_anything() {
         assert!(said.starts_with("jellymoon-app: finding the session logs: no home directory"), "{args:?}: {said}");
         assert!(out.stdout.is_empty());
     }
+    let out = support::run(&["layout", "--logs", ""], None);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).starts_with("jellymoon-app: --logs needs a folder"));
 }
 
 #[test]

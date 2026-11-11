@@ -8,10 +8,11 @@ max_file_lines = 400
 [budget]
 # Finding the harness off `PATH` raised the next two: core by 94 (`find.rs`: the well-known places, the mode checks,
 # the child's `PATH`, the one home) and the binary by 273 (its tests at the binary, `tests/harness.rs`, are 252 of them).
-# The first run raised them again: core by 57 (the reader of `skip.txt`, moved in from the app, and three plain
-# errors) and the binary by 168 (its tests at the binary: `tests/first_run.rs`, 141 lines, and one in `tests/f33.rs`).
-"crates/jellymoon-core" = 2554
-"crates/jellymoon" = 2587
+# The first run raised them again: core by 103 (the reader of `skip.txt`, moved in from the app, with what it refuses;
+# the one rule for Jellymoon's home; four plain errors) and the binary by 305 (its tests at the binary:
+# `tests/first_run.rs`, one in `tests/f33.rs` and the helper that compares a whole folder).
+"crates/jellymoon-core" = 2600
+"crates/jellymoon" = 2724
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12.
@@ -22,7 +23,7 @@ max_file_lines = 400
 "crates/sticker-kit" = 5363
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
-"app" = 2414
+"app" = 2419
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

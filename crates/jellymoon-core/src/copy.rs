@@ -14,14 +14,14 @@ mod record;
 use std::collections::hash_map::RandomState;
 use std::ffi::OsStr;
 use std::fmt;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::hash::{BuildHasher, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use git::{Git, Repo};
-use record::{Record, forget, read, write};
+use record::{Record, forget, lock_of, read, write};
 use serde::Serialize;
 
 use crate::Error;
@@ -168,7 +168,7 @@ fn make(home: &Path, repo: &Path, run: Option<&str>, found: bool) -> Result<RunC
     let person = git.open(Path::new(own)).map_err(refused)?;
     let base = person.ask(None, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).map_err(refused)?;
     let base = base.ok_or_else(|| refused("--repo has no commit yet, so there is nothing to copy"))?;
-    OpenOptions::new().append(true).create(true).open(at.lock()).map_err(Error::Store)?;
+    lock_of(&at.lock(), true).map_err(Error::Store)?;
     let run = claim(&at.runs, run)?;
     let made = add(&git, &person, &at, &run, Path::new(shared), &base);
     if made.is_err() {
@@ -227,7 +227,7 @@ pub(crate) fn end_copy(home: &Path, run: &str, outcome: Outcome) -> Result<(RunC
     // One clean at a time, of any run: a second call waits here, then finds what the first left. The system drops
     // the lock when this process ends, however it ends, and no git child outlasts its limit, so the wait ends.
     // The file is made with the first copy, so a clean that is refused writes nothing.
-    let held = OpenOptions::new().write(true).open(at.lock());
+    let held = lock_of(&at.lock(), false);
     let held = held.map_err(|e| if e.kind() == ErrorKind::NotFound { none() } else { Error::Store(e) })?;
     held.lock().map_err(Error::Store)?;
     sweep(&at);
@@ -264,7 +264,7 @@ pub(crate) fn is_gone(home: &Path, run: &str) -> bool {
 pub(crate) fn take_back(home: &Path, run: &str) -> Result<(), Error> {
     known(run)?;
     let at = Places::of(home);
-    let held = OpenOptions::new().write(true).open(at.lock()).map_err(Error::Store)?;
+    let held = lock_of(&at.lock(), false).map_err(Error::Store)?;
     held.lock().map_err(Error::Store)?;
     if let Some(record) = read(&at.record(run))? {
         let folder = at.root.join(run);

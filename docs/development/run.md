@@ -271,6 +271,23 @@ that outlives its `jellymoon run` and still prints is ended by the system at its
 harness is in a group of its own, Ctrl-C in the terminal of `jellymoon run` ends `jellymoon run` and not the
 harness: that is a cut-off run like any other.
 
+## A file of the home that is not a plain file
+
+Anyone who can write Jellymoon's home can put something else where one of its files is expected, and opening a
+named pipe waits for whoever is at its other end. So of what a page or a stop opens for a run, only a plain file
+is opened: what is at the name is asked first, and then it is opened, as the pages' files are read (`tap::plain`).
+
+| At the name | Not a plain file |
+|---|---|
+| `runs/<id>/run.lock` | nothing holds the run, so it was cut off: it is written down as failed, and the child it left is killed ("A run that was cut off") |
+| `runs/<id>/copy.json` | the copy's record cannot be read: the copy is left as it is, and the run's end is written all the same |
+| `runs/clean.lock` | no copy is ended or cleaned while it is so: a run that finishes then has failed, as its work could not be committed |
+| `runs/<id>/run.json`, the day's wishes, the day's page | not read, as before: a run with no record that can be used was cut off, and wishes that cannot be used are none |
+| `runs/<id>/stop` | never opened: only its being there is read |
+
+The question and the opening are two steps, so a file changed between them is not covered. `tests/f40/pipe.rs`
+puts a named pipe at each of these, and at the other files of the home, and gives `run stop` and `page` ten seconds.
+
 ## What is refused
 
 One line on stderr, exit 1. No copy is left, no branch is made and the wish is as it was. The first refusal past

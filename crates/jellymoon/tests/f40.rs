@@ -12,6 +12,8 @@ mod deaf;
 mod denied;
 #[path = "f40/nothing.rs"]
 mod nothing;
+#[path = "f40/pipe.rs"]
+mod pipe;
 #[path = "f40/races.rs"]
 mod races;
 mod support;
@@ -20,7 +22,7 @@ mod world;
 
 use std::ffi::OsString;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::{Duration, Instant};
 
@@ -69,6 +71,17 @@ impl World {
         (going, self.kept(wish)["run"].as_str().unwrap().to_string())
     }
 
+    /// A run that was cut off: its `jellymoon run` is killed while the made-up agent goes on writing a file in the
+    /// copy, which is returned after the run. The agent ends when the test leaves `stop`, if nothing ends it first.
+    pub fn cut_off(&self, wish: &str, repo: &Path) -> (String, PathBuf) {
+        let (mut going, run) = self.run_going(("scribble", 0), &[], wish, repo);
+        going.kill().unwrap();
+        going.wait().unwrap();
+        let file = self.jm("copies").join(&run).join("scribble.txt");
+        assert!(grows(&file), "the agent was to be left editing");
+        (run, file)
+    }
+
     /// A cancelled run as it is left: the wish needs the person and has no star, on the page too; the record says
     /// cancelled; the copy is kept, and nothing is committed on the run's branch.
     pub fn is_cancelled(&self, wish: &str, run: &str, repo: &Path, denied: usize) {
@@ -85,6 +98,20 @@ impl World {
         assert!(self.jm("copies").join(run).is_dir(), "a stopped run keeps its copy");
         assert_eq!(self.commit(repo, &format!("jellymoon/run-{run}")), self.commit(repo, "HEAD"));
     }
+}
+
+/// What a command that is still going printed, if it ends within `seconds`. One that does not is killed: None.
+pub fn within(mut going: Child, seconds: u64) -> Option<Ran> {
+    let deadline = Instant::now() + Duration::from_secs(seconds);
+    while going.try_wait().unwrap().is_none() {
+        if Instant::now() > deadline {
+            going.kill().unwrap();
+            going.wait().unwrap();
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    Some(ended(going))
 }
 
 #[test]

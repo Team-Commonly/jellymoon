@@ -1,7 +1,7 @@
 //! A copy's record, `runs/<id>/copy.json`: what core knows of a copy, written when it is made and outside it.
 
-use std::fs;
-use std::io::ErrorKind;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,24 @@ pub(super) struct Record {
     pub found: bool,
 }
 
+/// Whether something that is not a plain file is at the name. Such a thing is never opened: a named pipe would
+/// keep whoever opens it waiting for ever.
+fn not_plain(file: &Path) -> bool {
+    fs::symlink_metadata(file).is_ok_and(|meta| !meta.is_file())
+}
+
+/// Opens the file a clean holds the system's lock on, making it first when `make` says so.
+pub(super) fn lock_of(file: &Path, make: bool) -> io::Result<File> {
+    if not_plain(file) {
+        return Err(io::Error::new(ErrorKind::InvalidData, "the lock of the copies is not a plain file"));
+    }
+    OpenOptions::new().append(true).create(make).open(file)
+}
+
 pub(super) fn read(file: &Path) -> Result<Option<Record>, Error> {
+    if not_plain(file) {
+        return Err(refused("the record of that run's copy cannot be read; nothing was done"));
+    }
     match fs::read(file) {
         Ok(text) => {
             let record = serde_json::from_slice(&text);

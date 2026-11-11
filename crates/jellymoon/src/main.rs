@@ -10,7 +10,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, PageOptions, UninstallOptions, user_home};
+use jellymoon_core::{DayOptions, Error, PageOptions, ReaderDay, UninstallOptions, user_home};
 use lexopt::prelude::*;
 
 const USAGE: &str = "usage:
@@ -63,9 +63,9 @@ fn run() -> Result<String, Failure> {
     let failed = |e: jellymoon_core::Error| Failure::Run(e.to_string());
     match parse(lexopt::Parser::from_env())? {
         Command::Help => Ok(USAGE.to_string()),
-        Command::Day(options) => Ok(format!("{}\n", jellymoon_core::day(&options).map_err(failed)?)),
+        Command::Day(options) => Ok(format!("{}\n", day(&options)?)),
         Command::Page(options, model) => {
-            let day = jellymoon_core::day(&options).map_err(failed)?;
+            let day = day(&options)?;
             let harness = named("JELLYMOON_CLAUDE");
             let options = PageOptions { model, dir: home()?.join("reading"), limit: READING_LIMIT, harness };
             Ok(format!("{}\n", jellymoon_core::page(&day, &options).map_err(failed)?))
@@ -74,19 +74,22 @@ fn run() -> Result<String, Failure> {
             // The same two folders, under the same two names, that install.sh puts the pieces in.
             let app = named("JELLYMOON_APP_DIR").or_else(|| Some(user_home()?.join("Applications")));
             let bin = named("JELLYMOON_BIN_DIR").or_else(|| Some(user_home()?.join(".local").join("bin")));
+            let home = own_folder()?;
             let (Some(app), Some(bin)) = (app, bin) else {
                 return Err(Failure::Run("no home directory: set JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR".to_string()));
             };
             let binary = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
-            let options = UninstallOptions { app: app.join("Jellymoon.app"), binary, home: home().ok() };
+            let options = UninstallOptions { app: app.join("Jellymoon.app"), binary, home };
             Ok(format!("{}\n", jellymoon_core::uninstall(&options).map_err(failed)?))
         }
         Command::Rule { stands, over } => {
             Ok(format!("{}\n", jellymoon_core::rule(&home()?, &stands, &over).map_err(failed)?))
         }
         Command::Hook => {
-            // With no home there is no ruling, and a hook that fails would show an error at every step of a session.
-            let told = home().ok().and_then(|home| jellymoon_core::deliver(&home, io::stdin().lock()));
+            // With no home there is no ruling, and a hook that fails would show an error at every step of a session:
+            // a home that is refused is no home here, and nothing is said.
+            let home = jellymoon_core::own_folder().ok().flatten();
+            let told = home.and_then(|home| jellymoon_core::deliver(&home, io::stdin().lock()));
             Ok(told.map(|told| told + "\n").unwrap_or_default())
         }
         Command::InstallHook(settings) => {
@@ -135,10 +138,13 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         return Ok(Command::Help);
     }
     let logs = match logs {
+        Some(logs) if logs.to_string_lossy().trim().is_empty() => {
+            return Err(Failure::Usage("--logs needs a folder".to_string()));
+        }
         Some(logs) => logs,
         None => harness_folder()?.join("projects"),
     };
-    let options = DayOptions { logs, date, skip: skip.split(',').map(str::to_string).collect() };
+    let options = DayOptions { logs, date, skip: skip.split(',').map(str::to_string).collect(), home: own_folder()? };
     Ok(if command == "day" { Command::Day(options) } else { Command::Page(options, model) })
 }
 
@@ -187,8 +193,23 @@ fn harness_folder() -> Result<PathBuf, Failure> {
     })
 }
 
-/// Where jellymoon keeps its own files: `JELLYMOON_HOME`, or `.jellymoon` in the user's home.
+/// Where jellymoon keeps its own files, by core's one rule; none when no home is known.
+fn own_folder() -> Result<Option<PathBuf>, Failure> {
+    jellymoon_core::own_folder().map_err(|e| Failure::Run(e.to_string()))
+}
+
 fn home() -> Result<PathBuf, Failure> {
-    let home = named("JELLYMOON_HOME").or_else(|| Some(user_home()?.join(".jellymoon")));
-    home.ok_or_else(|| Failure::Run("no home directory: set JELLYMOON_HOME".to_string()))
+    own_folder()?.ok_or_else(|| Failure::Run("no home directory: set JELLYMOON_HOME".to_string()))
+}
+
+/// Reads the day. When the logs folder that is not there is the one nobody named, the line says what to do.
+fn day(options: &DayOptions) -> Result<ReaderDay, Failure> {
+    jellymoon_core::day(options).map_err(|e| match &e {
+        Error::NoLogs(_) if harness_folder().is_ok_and(|folder| folder.join("projects") == options.logs) => {
+            Failure::Run(format!(
+                "{e}. Use Claude Code once and they will be there, or name its projects folder with --logs"
+            ))
+        }
+        _ => Failure::Run(e.to_string()),
+    })
 }

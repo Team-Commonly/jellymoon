@@ -21,6 +21,16 @@ One long-running builder session builds Jellymoon, with subagents for parallel p
 - **One progress file per unit.** Separate files never conflict, so a merge never moves another PR's head.
 - **Lessons land in the PR.** A lesson kept only in a chat or a private note is lost to the next contributor.
 
+## What a worker's own runs taught
+- **`HOME` is never empty or unset in a probe or a test.** The platform then finds the real account's home another
+  way, and the run reads a real person's files. Ours reads the variable only, and only a full path
+  (`jellymoon_core::user_home`); a run still gets a scratch home, `PATH` and `JELLYMOON_SYSTEM_BIN`.
+- **Builders on different trees never share one `CARGO_TARGET_DIR`.** The programs Cargo lifts to the folder's top,
+  `xtask` among them, overwrite each other, and a test runs another tree's program. Take a copy-on-write copy of a
+  warm folder and clear the workspace crates' builds in it.
+- **A wall-clock limit is never a test's only bound.** A slow runner fails it and a fast one hides the cost. Assert a
+  count (calls made, pieces drawn, units spent) and keep the clock as a generous backstop.
+
 ## Size
 `make preflight` runs `cargo xtask check`: each file at most 400 lines, a LOC budget per crate in `entropy.toml`, no
 machine-local path in a tracked file, the crate direction (core, then the binary; the kit, then the app), and no

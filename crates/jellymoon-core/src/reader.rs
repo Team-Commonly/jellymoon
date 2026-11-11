@@ -3,6 +3,7 @@
 
 use std::collections::HashSet;
 use std::fs;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use jiff::civil::Date;
@@ -14,6 +15,9 @@ use crate::{Error, ReaderDay, session};
 /// The longest log line kept, in bytes. A longer one is read past.
 const LINE_MAX: usize = 64 << 20;
 
+/// The most bytes of `skip.txt` that are read: far more than a list of folder names needs.
+const MAX_SKIP_BYTES: usize = 64 * 1024;
+
 /// One read of the session logs.
 #[derive(Debug, Clone, Default)]
 pub struct DayOptions {
@@ -24,6 +28,9 @@ pub struct DayOptions {
     /// Names of the folders the person switched off. A turn whose folder contains one contributes nothing. Spaces
     /// around a name are dropped and an empty name is ignored.
     pub skip: Vec<String>,
+    /// Jellymoon's own folder. Its `skip.txt`, one folder name a line, names more folders switched off. None reads no
+    /// such file.
+    pub home: Option<PathBuf>,
 }
 
 /// Reads every session log under `options.logs` and returns the turns typed on the day, oldest first. The day is a
@@ -39,11 +46,23 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
     };
     let edge = |date: Date| date.to_zoned(zone.clone()).map(|start| start.timestamp()).map_err(|_| Error::Date);
     let (start, end) = (edge(date)?, edge(date.tomorrow().map_err(|_| Error::Date)?)?);
-    fs::metadata(&options.logs).map_err(Error::Logs)?;
+    let mut skip = options.skip.clone();
+    if let Some(home) = &options.home {
+        if !home.is_absolute() {
+            return Err(Error::Home);
+        }
+        skip.extend(switched_off(home).map_err(Error::Skip)?);
+    }
+    match fs::metadata(&options.logs) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            return Err(Error::NoLogs(options.logs.display().to_string().replace(unseen, " ")));
+        }
+        found => found.map_err(Error::Logs)?,
+    };
     let mut seen = HashSet::new();
     let mut turns = Vec::new();
     for file in session_files(&options.logs, start) {
-        for (typed, mut turn) in session::turns(&file, &options.skip, &mut seen, line_max) {
+        for (typed, mut turn) in session::turns(&file, &skip, &mut seen, line_max) {
             if let Some(typed) = typed.filter(|at| (start..end).contains(at)) {
                 turn.at = typed.to_zoned(zone.clone()).strftime("%H:%M").to_string();
                 turns.push((typed, turn));
@@ -52,6 +71,55 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
     }
     turns.sort_by_key(|(typed, _)| *typed);
     Ok(ReaderDay { day: date.to_string(), turns: turns.into_iter().map(|(_, turn)| turn).collect() })
+}
+
+/// The folder names in `<home>/skip.txt`, one a line. Nothing at all under that name is no names. Anything else that
+/// is not a whole, plain list is an error and never an empty list, since a folder the person switched off must not
+/// reach the reading call: a link to nothing, a folder, a pipe, a file that cannot be read, is too large or is not
+/// UTF-8, or a line with a character no folder name holds or nobody can see (which says the file is not the list it
+/// looks like). An error names a line by its number, never by its text.
+fn switched_off(home: &Path) -> Result<Vec<String>, String> {
+    let path = home.join("skip.txt");
+    match fs::symlink_metadata(&path) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.to_string()),
+        Ok(_) => {}
+    }
+    // Asked before it is opened, and through a link: opening a pipe would wait for a writer that never comes.
+    if !fs::metadata(&path).map_err(|e| e.to_string())?.is_file() {
+        return Err("it is not a file".to_string());
+    }
+    let mut bytes = Vec::new();
+    let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+    file.take(MAX_SKIP_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() > MAX_SKIP_BYTES {
+        return Err(format!("it is over {MAX_SKIP_BYTES} bytes"));
+    }
+    let text = String::from_utf8(bytes).map_err(|_| "it is not UTF-8 text".to_string())?;
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    let odd = [
+        ('\0', "a NUL character"),
+        ('\u{feff}', "a byte order mark"),
+        ('\r', "a carriage return that does not end it"),
+    ];
+    for (at, line) in text.lines().enumerate() {
+        if let Some((_, what)) = odd.iter().find(|(odd, _)| line.contains(*odd)) {
+            return Err(format!("line {} holds {what}", at + 1));
+        }
+        if line.contains(|c| c != '\t' && unseen(c)) {
+            return Err(format!("line {} holds a character that cannot be seen", at + 1));
+        }
+    }
+    Ok(text.lines().map(str::to_string).collect())
+}
+
+/// A character that draws nothing or moves what is drawn: a control character, or one of the invisible format
+/// characters (soft hyphen, zero-width spaces and joiners, direction marks and overrides, the byte order mark). In a
+/// line for the person it becomes a space; in a list name it could not be told from the name without it.
+fn unseen(c: char) -> bool {
+    let format = ['\u{ad}', '\u{61c}', '\u{180e}', '\u{feff}'];
+    let ranges = ['\u{200b}'..='\u{200f}', '\u{202a}'..='\u{202e}', '\u{2060}'..='\u{2064}', '\u{2066}'..='\u{206f}'];
+    c.is_control() || format.contains(&c) || ranges.iter().any(|range| range.contains(&c))
 }
 
 /// A calendar day written exactly YYYY-MM-DD.
@@ -105,7 +173,8 @@ mod tests {
     fn read_utc(logs: &Path, lines: &[String], line_max: usize) -> Vec<String> {
         fs::create_dir_all(logs.join("-work-alpha")).unwrap();
         fs::write(logs.join("-work-alpha/s.jsonl"), lines.join("\n")).unwrap();
-        let options = DayOptions { logs: logs.to_path_buf(), date: Some("2026-03-10".to_string()), skip: Vec::new() };
+        let options =
+            DayOptions { logs: logs.to_path_buf(), date: Some("2026-03-10".to_string()), ..DayOptions::default() };
         read(&options, &TimeZone::UTC, line_max).unwrap().turns.into_iter().map(|turn| turn.said).collect()
     }
 
@@ -139,8 +208,11 @@ mod tests {
         let line = typed("2026-03-10T10:00:00Z", "caf? au lait");
         let line: Vec<u8> = line.bytes().map(|byte| if byte == b'?' { 0xE9 } else { byte }).collect(); // Latin-1's é
         fs::write(logs.path().join("-work-alpha/s.jsonl"), line).unwrap();
-        let options =
-            DayOptions { logs: logs.path().to_path_buf(), date: Some("2026-03-10".to_string()), skip: Vec::new() };
+        let options = DayOptions {
+            logs: logs.path().to_path_buf(),
+            date: Some("2026-03-10".to_string()),
+            ..DayOptions::default()
+        };
         assert_eq!(read(&options, &TimeZone::UTC, LINE_MAX).unwrap().turns[0].said, "caf\u{fffd} au lait");
     }
 

@@ -37,8 +37,15 @@ impl fmt::Display for Uninstalled {
 
 /// Removes the delivery hook, then the app, then the binary. The hook goes first: if it cannot be removed, the binary
 /// is still there to try again with. A hook entry the person edited is left for them and everything else still goes.
-/// A piece that is already gone is not an error and is not listed.
+/// A piece that is already gone is not an error and is not listed. A place that is not a full path is refused before
+/// anything is touched: what it named would depend on the folder the command was started in.
 pub fn uninstall(options: &UninstallOptions) -> Result<Uninstalled, Error> {
+    if options.home.as_ref().is_some_and(|home| !home.is_absolute()) {
+        return Err(Error::Home);
+    }
+    if !(options.app.is_absolute() && options.binary.is_absolute()) {
+        return Err(Error::NotAbsolute);
+    }
     let (hook, hook_by_hand) = match options.home.as_deref().map(crate::remove_hook) {
         None => (false, false),
         Some(Ok(state)) => (state.changed, false),

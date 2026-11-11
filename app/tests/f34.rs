@@ -87,7 +87,10 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
     );
     let nowhere = world.dir.path().join("nowhere");
     let none = one(&world, &["--logs", nowhere.to_str().unwrap()]);
-    assert!(none.starts_with("Today could not be read. No Claude Code sessions were found on this computer"), "{none}");
+    assert!(
+        none.starts_with("Today could not be read. No Claude Code session logs were found on this computer"),
+        "{none}"
+    );
 
     fs::remove_file(world.rec.join(format!("claude{}", env::consts::EXE_SUFFIX))).unwrap();
     let missing = one(&world, &[]);
@@ -162,6 +165,18 @@ fn with_no_home_in_the_environment_the_app_stops_before_it_reads_anything() {
         assert!(said.starts_with("jellymoon-app: finding the session logs: no home directory"), "{args:?}: {said}");
         assert!(out.stdout.is_empty());
     }
+    for logs in ["", "  "] {
+        let out = support::run(&["layout", "--logs", logs], None);
+        assert_eq!(out.status.code(), Some(2));
+        assert!(String::from_utf8_lossy(&out.stderr).starts_with("jellymoon-app: --logs needs a folder"));
+    }
+    // Core's one rule for Jellymoon's home is the app's too: a relative one is refused before anything is read.
+    let world = world();
+    let out = run(&world, &[], &[("JELLYMOON_HOME", "rel")]);
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{said}");
+    assert!(said.starts_with("jellymoon-app: no home directory: set JELLYMOON_HOME to an absolute path"), "{said}");
+    assert!(out.stdout.is_empty() && !called(&world) && !world.dir.path().join("rel").exists());
 }
 
 #[test]

@@ -11,9 +11,34 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
 - `--date`: the local calendar day; today when left out. The time zone is the process's (`TZ`).
 - `--logs`: a Claude Code projects directory, laid out `<dir>/<project folder>/<session>.jsonl`. Left out, it is `projects`
   under `CLAUDE_CONFIG_DIR`, or under `.claude` in the home directory.
-- `--skip`: folders the person switched off. A turn whose working directory contains one of the names contributes nothing.
-  Spaces around a name are dropped, and an empty name is ignored. A line with no working directory is matched by the name of
-  the folder its session file is in.
+- `--skip`: folders the person switched off. A turn whose working directory contains one of the names contributes
+  nothing. A line with no working directory is matched by the name of the folder its session file is in.
+- **`skip.txt`.** The names in `<home>/skip.txt`, one a line, are switched off as well, joined with `--skip`: it is
+  the list the app keeps, so a folder switched off there is not read by `day` or `page` either. `<home>` is
+  `JELLYMOON_HOME`, or `.jellymoon` in the home directory; with neither there is no such file. A `JELLYMOON_HOME`
+  that is not a full path is refused in one line by every command and by the app: a relative one would name another
+  list in every folder a command starts in. (`jellymoon hook` alone says nothing and does nothing: `delivery.md`.)
+- **How a name matches.** White space around a name is dropped, and a name of white space alone is ignored. Any `/`
+  or `\` at its end is dropped too, unless the name is nothing else: `/` alone stays as written and switches off
+  every folder written with a `/`. A turn is left out when its working directory, as the log wrote it, contains the name
+  character for character. The match is exact: case matters (`Private-Notes` does not switch off `private-notes`),
+  and a letter written in another Unicode form does not match. It is not a whole folder name either: `notes` also
+  switches off `/work/my-notes-old`. In `skip.txt` a line is one name, whole: a comma or a quote is part of it.
+  Nothing counts the folders switched off. What was read is named instead: every turn of `day` carries its
+  `project`, `page` lists them in `read.projects`, and the app's footer names them, so a name that matched nothing
+  shows as its folder still being there.
+- **A list that is not a list stops the command**, with one line, exit 1, before a log is opened and before any
+  reading call: a damaged list is never an empty list. Only nothing at all under the name `skip.txt` is no names.
+  Refused: a link to nothing, a folder, a pipe, a file that cannot be read, one over 64 KiB or not UTF-8, and a line
+  that holds a NUL, a byte order mark (one at the very start of the file is dropped), a carriage return that does
+  not end it, as UTF-16 text and old Mac line ends do, or any other character that cannot be seen: a control
+  character but a tab, a soft hyphen, a zero-width space or joiner, a direction mark or override. The line is named
+  by its number, never by its text.
+- **No session logs.** When the projects directory is not there (Claude Code was never used, or keeps its files
+  elsewhere), the command says so in one line that names the folder it looked for, and exits 1. When the folder is
+  the one nobody named, the line adds what to do. A directory that is there with no session in it is a day with no
+  turns. A `--logs` that is empty or only spaces is an argument error. In the line, a character
+  of the folder's name that cannot be seen is shown as a space.
 
 Only a regular `.jsonl` file in a real folder of the projects directory is opened. A link is never followed, to a file or to a
 folder, and a pipe or anything else that is not a file is left alone.
@@ -117,4 +142,6 @@ computer with gigabytes of logs takes around ten seconds.
 ## Not covered yet
 
 A session file is listed, then opened. Something that swaps the file for a link or a pipe between those two steps would
-have the swapped thing opened; the check is made on the listing only.
+have the swapped thing opened; the check is made on the listing only. `skip.txt` is the same: its type is looked at,
+then it is opened, and a pipe put there between the two would make the open wait. That needs write access to
+Jellymoon's own folder, and nothing is read or sent while it waits.

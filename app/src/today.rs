@@ -21,9 +21,6 @@ use crate::scene::{bare, scene};
 /// How long the reading call may take: the `jellymoon` command's own limit.
 const READING_LIMIT: Duration = Duration::from_secs(180);
 
-/// The most bytes of `skip.txt` that are read: far more than a list of folder names needs.
-const MAX_SKIP_BYTES: usize = 64 * 1024;
-
 /// A scene to show, and the work that gives the one after it.
 pub struct Next {
     pub scene: Scene,
@@ -41,7 +38,7 @@ pub struct Today {
     pub date: String,
     /// The Claude Code projects directory.
     pub logs: PathBuf,
-    /// Names of the folders the person switched off, besides those in `skip.txt`.
+    /// Names of the folders the person switched off, besides those in `skip.txt`, which core reads.
     pub skip: Vec<String>,
     pub model: String,
     /// Where jellymoon keeps its own files.
@@ -85,15 +82,15 @@ impl Today {
     /// led would depend on the folder the app was started in.
     pub fn from_env(asked: Asked) -> Result<Today, String> {
         let named = |variable: &str| env::var_os(variable).filter(|path| !path.is_empty()).map(PathBuf::from);
-        // The home is core's: the variable as a full path and nothing else, so a run with an empty environment (a
+        // The homes are core's: the variable as a full path and nothing else, so a run with an empty environment (a
         // test's) is refused here and can never reach a real person's logs.
         let user = jellymoon_core::user_home;
-        if named("JELLYMOON_HOME").is_some_and(|home| !home.is_absolute()) {
-            return Err("no home directory: set JELLYMOON_HOME to an absolute path".to_string());
+        let home = jellymoon_core::own_folder().map_err(|e| e.to_string())?;
+        if asked.logs.as_ref().is_some_and(|logs| logs.to_string_lossy().trim().is_empty()) {
+            return Err("--logs needs a folder".to_string());
         }
         let config = || named("CLAUDE_CONFIG_DIR").or_else(|| Some(user()?.join(".claude")));
         let logs = asked.logs.or_else(|| Some(config()?.join("projects")));
-        let home = named("JELLYMOON_HOME").or_else(|| Some(user()?.join(".jellymoon")));
         Ok(Today {
             date: date(asked.date.as_deref()).ok_or("--date must be a day as YYYY-MM-DD")?,
             logs: logs.ok_or("finding the session logs: no home directory; name them with --logs")?,
@@ -146,18 +143,8 @@ impl Today {
     }
 
     fn count(self, kept: Option<Page>) -> Option<Next> {
-        let mut skip = self.skip.clone();
-        match self.switched_off() {
-            Ok(names) => skip.extend(names),
-            Err(why) => {
-                let why = format!(
-                    "The list of folders you switched off (skip.txt in Jellymoon's folder) could not be read, so \
-                     nothing was read: {why}."
-                );
-                return Some(Next { scene: self.failed(kept.as_ref(), &why), later: None });
-            }
-        }
-        let day = DayOptions { logs: self.logs.clone(), date: Some(self.date.clone()), skip };
+        let (skip, home) = (self.skip.clone(), Some(self.home.clone()));
+        let day = DayOptions { logs: self.logs.clone(), date: Some(self.date.clone()), skip, home };
         let day = match jellymoon_core::day(&day) {
             Ok(day) => day,
             Err(error) => return Some(Next { scene: self.failed(kept.as_ref(), &words(&error)), later: None }),
@@ -171,22 +158,6 @@ impl Today {
         };
         let call: Later = Box::new(move || Some(Next { scene: self.call(&day, kept.as_ref()), later: None }));
         Some(Next { scene, later: Some(call) })
-    }
-
-    /// The folder names in `skip.txt`, one a line. No file is no names. A file that cannot be read, is too large or
-    /// is not UTF-8 is an error and never an empty list: a folder the person switched off must not reach the call.
-    fn switched_off(&self) -> Result<Vec<String>, String> {
-        let mut bytes = Vec::new();
-        match fs::File::open(self.home.join("skip.txt")) {
-            Ok(file) => file.take(MAX_SKIP_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(e) => return Err(e.to_string()),
-        };
-        if bytes.len() > MAX_SKIP_BYTES {
-            return Err(format!("it is over {MAX_SKIP_BYTES} bytes"));
-        }
-        let text = String::from_utf8(bytes).map_err(|_| "it is not UTF-8 text".to_string())?;
-        Ok(text.strip_prefix('\u{feff}').unwrap_or(&text).lines().map(str::to_string).collect())
     }
 
     fn call(&self, day: &ReaderDay, kept: Option<&Page>) -> Scene {
@@ -251,9 +222,15 @@ fn words(error: &Error) -> String {
             "Claude Code was not found on this computer. Jellymoon reads your day with your own Claude Code: install \
              it, or open Jellymoon from a terminal where `claude` runs. It was looked for in {looked}."
         ),
-        Error::Logs(_) => {
-            format!("No Claude Code sessions were found on this computer, so there is nothing to read yet ({error}).")
-        }
+        Error::NoLogs(looked) => format!(
+            "No Claude Code session logs were found on this computer, so there is nothing to read yet. Use Claude \
+             Code once and open Jellymoon again. They were looked for in {looked}."
+        ),
+        Error::Logs(_) => format!("Your Claude Code session logs could not be read ({error})."),
+        Error::Skip(why) => format!(
+            "The list of folders you switched off (skip.txt in Jellymoon's folder) could not be read, so nothing was \
+             read: {why}."
+        ),
         Error::TooLong(_) => format!("The reading took too long and was stopped. {again}"),
         Error::NotPageData { .. } => {
             format!("The model's answer was not a page, so nothing from it is shown. {again}")
@@ -262,7 +239,7 @@ fn words(error: &Error) -> String {
             "Claude Code could not do the reading. Check that `claude` answers in a terminal. {again} What happened: \
              {error}."
         ),
-        Error::Date | Error::Model | Error::Uninstall(_) => format!("{error}."),
+        Error::Date | Error::Model | Error::Home | Error::NotAbsolute | Error::Uninstall(_) => format!("{error}."),
         // The app makes no ruling and installs no hook yet; these say what core says.
         Error::Ruling
         | Error::Store(_)

@@ -21,7 +21,7 @@ fn a_kept_page_comes_out_when_the_logs_cannot_be_read_with_a_note_that_says_so()
     assert_eq!(labels(&placed), ["Fail fast", "Retry uploads"]);
     let said = notes(&placed);
     assert!(
-        said[0].starts_with("This page is from an earlier reading. No Claude Code sessions were found"),
+        said[0].starts_with("This page is from an earlier reading. No Claude Code session logs were found"),
         "{said:?}"
     );
     assert_eq!(said[1..], first[..]);

@@ -10,7 +10,7 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, SAID, STAR, World, grows, ran, refused, wait_for, world};
+use super::{DAY, SAID, STAR, World, ended, grows, ran, refused, wait_for, world};
 use crate::support::skipped;
 
 const NO_SIGNAL: &str = "this system has no signal to stop another command's child with, and nothing is stopped";
@@ -128,21 +128,29 @@ fn an_agent_deaf_to_the_stop_signal_is_killed_after_its_five_seconds() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
     w.play("deaf", 0);
-    // Three seconds, so that the agent has made itself deaf before it is asked, also on a machine that is busy.
-    let short = [("JELLYMOON_TEST_RUN_LIMIT_MS", OsString::from("3000"))];
+    // Eight seconds. The agent is deaf only once it has started a second time, and leaves `started` after that: on
+    // a busy machine that has taken more than three seconds, and an agent asked before it was deaf ended at once.
+    let limit = Duration::from_secs(8);
+    let short = [("JELLYMOON_TEST_RUN_LIMIT_MS", OsString::from("8000"))];
     let from = Instant::now();
-    let stopped = w.run_with(&short, &["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    let going = w.going(&short, &["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    while !w.at("rec").join("started").exists() && w.rec("cannot").is_none() {
+        // The limit is counted from after this moment, so an agent deaf by now was deaf when it was asked.
+        assert!(from.elapsed() < limit, "this machine is too busy to say: the agent was not deaf before the limit");
+        thread::sleep(Duration::from_millis(10));
+    }
+    let stopped = ended(going);
     let took = from.elapsed();
     if let Some(why) = w.rec("cannot") {
         return skipped(&why);
     }
     let (run, said) = ran(&stopped);
     let why = format!(
-        "run {run} did not finish (it was stopped at its time limit of 3 seconds): its copy is kept and no star was added"
+        "run {run} did not finish (it was stopped at its time limit of 8 seconds): its copy is kept and no star was added"
     );
     assert_eq!((&said["outcome"], &said["why"]), (&json!("failed"), &json!(why)));
     // It was asked, was given its five seconds, and was then killed: the agent sleeps for a minute.
-    assert!(took >= Duration::from_secs(8) && took < Duration::from_secs(30), "{took:?}");
+    assert!(took >= limit + Duration::from_secs(5) && took < Duration::from_secs(35), "{took:?}");
     assert!(w.agent_came_and_went(), "the deaf agent is still running");
 }
 

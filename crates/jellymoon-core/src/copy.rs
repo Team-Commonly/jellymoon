@@ -9,18 +9,20 @@
 
 mod git;
 mod gone;
+mod hold;
 mod record;
 
 use std::collections::hash_map::RandomState;
 use std::ffi::OsStr;
 use std::fmt;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::hash::{BuildHasher, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use git::{Git, Repo};
+pub(crate) use hold::timed_out;
 use record::{Record, forget, read, write};
 use serde::Serialize;
 
@@ -168,10 +170,8 @@ fn make(home: &Path, repo: &Path, run: Option<&str>, found: bool) -> Result<RunC
     let person = git.open(Path::new(own)).map_err(refused)?;
     let base = person.ask(None, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).map_err(refused)?;
     let base = base.ok_or_else(|| refused("--repo has no commit yet, so there is nothing to copy"))?;
-    // git reads every worktree of the repo while it adds one, and fails on one half made or half removed. So a
-    // copy is made behind the lock a clean holds: one at a time, and never while another is removed.
-    let held = OpenOptions::new().write(true).create(true).truncate(false).open(at.lock()).map_err(Error::Store)?;
-    held.lock().map_err(Error::Store)?;
+    // git reads every worktree of a repo while it adds one, and fails on one half made or half removed (`hold.rs`).
+    let _held = hold::held(&at.lock(), true, None).map_err(Error::Store)?;
     let run = claim(&at.runs, run)?;
     let made = add(&git, &person, &at, &run, Path::new(shared), &base);
     if made.is_err() {
@@ -218,21 +218,24 @@ fn note(git: &Git, at: &Places, run: &str, shared: &Path, folder: &Path) -> Resu
 /// Ends a run's copy. Completed: what is in the copy is committed onto the run's branch, the folder is removed and
 /// the branch is kept. Failed: the copy stays, and of all failed copies only the newest [`KEPT`] do.
 pub fn clean_copy(home: &Path, run: &str, outcome: Outcome) -> Result<RunCopy, Error> {
-    end_copy(home, run, outcome).map(|(copy, _)| copy)
+    end_copy(home, run, outcome, None).map(|(copy, _)| copy)
 }
 
 /// [`clean_copy`], which also says whether a completed run's commit was made: false when the copy held nothing new.
-pub(crate) fn end_copy(home: &Path, run: &str, outcome: Outcome) -> Result<(RunCopy, bool), Error> {
+pub(crate) fn end_copy(
+    home: &Path,
+    run: &str,
+    outcome: Outcome,
+    wait: Option<Duration>,
+) -> Result<(RunCopy, bool), Error> {
     known(run)?;
     let at = Places::of(home);
     let file = at.record(run);
     let none = || refused(format!("no copy is kept for run {run}"));
-    // One clean at a time, of any run: a second call waits here, then finds what the first left. The system drops
-    // the lock when this process ends, however it ends, and no git child outlasts its limit, so the wait ends.
+    // One clean at a time, of any run: a second call waits here, then finds what the first left (`hold.rs`).
     // The file is made with the first copy, so a clean that is refused writes nothing.
-    let held = OpenOptions::new().write(true).open(at.lock());
-    let held = held.map_err(|e| if e.kind() == ErrorKind::NotFound { none() } else { Error::Store(e) })?;
-    held.lock().map_err(Error::Store)?;
+    let held = hold::held(&at.lock(), false, wait);
+    let _held = held.map_err(|e| if e.kind() == ErrorKind::NotFound { none() } else { Error::Store(e) })?;
     sweep(&at);
     let mut record = read(&file)?.ok_or_else(none)?;
     if record.failed.is_some() {
@@ -264,11 +267,10 @@ pub(crate) fn is_gone(home: &Path, run: &str) -> bool {
 
 /// Undoes a copy no run was started in (F39: the harness was too old, or another run took the wish first): its
 /// folder, git's registration of it, its branch, which is where the checkout was, and everything kept for the run.
-pub(crate) fn take_back(home: &Path, run: &str) -> Result<(), Error> {
+pub(crate) fn take_back(home: &Path, run: &str, wait: Option<Duration>) -> Result<(), Error> {
     known(run)?;
     let at = Places::of(home);
-    let held = OpenOptions::new().write(true).open(at.lock()).map_err(Error::Store)?;
-    held.lock().map_err(Error::Store)?;
+    let _held = hold::held(&at.lock(), false, wait).map_err(Error::Store)?;
     if let Some(record) = read(&at.record(run))? {
         let folder = at.root.join(run);
         let git = Git::find(&at.runs, record.found).map_err(refused)?;
@@ -284,7 +286,7 @@ pub(crate) fn take_back(home: &Path, run: &str) -> Result<(), Error> {
 /// branch and git's registration of it are in the repo, wherever that is now, and are not reached.
 pub(crate) fn remove_ours(home: &Path, run: &str) {
     let at = Places::of(home);
-    let held = OpenOptions::new().write(true).open(at.lock()).and_then(|held| held.lock().map(|()| held));
+    let held = hold::held(&at.lock(), false, None);
     if known(run).is_err() || held.is_err() {
         return;
     }

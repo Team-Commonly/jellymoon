@@ -178,12 +178,17 @@ run. The system drops that lock when the process ends, however it ends. So a wis
 a run whose record has no end, and whose run nothing holds was cut off. The next `jellymoon page`, app page or
 `jellymoon run` for that wish that finds it so:
 
-1. writes the wish down, behind the day's lock and only if it still says `working` there: the wish is
-   `needs_you` and its `why` says the run was cut off;
-2. kills the harness child the run left, if it can be told to be the same process (below): at once, with no
+1. kills the harness child the run left, if it can be told to be the same process (below): at once, with no
    `SIGTERM` and no wait, so a page is not kept waiting for an agent nobody reads;
-3. marks the copy failed, so it is kept, and writes `failed` in the record;
-4. draws the wish as `needs_you`, written down or not. A `jellymoon run` is then refused like any second run.
+2. marks the copy failed, so it is kept. That is done behind `runs/clean.lock` ([copy.md](copy.md)), which a
+   `copy make`, a `copy clean` or another `run` may hold for as long as its git children take. A look waits for
+   it 3 seconds and no more (a build with debug assertions reads a shorter wait from
+   `JELLYMOON_TEST_COPY_WAIT_MS`). If it is still held then, nothing more is written, and the next look, which
+   finds the wish as this one did, does the rest;
+3. writes the wish down, behind the day's lock and only if it still says `working` there: the wish is
+   `needs_you` and its `why` says the run was cut off;
+4. writes `failed` in the record;
+5. draws the wish as `needs_you`, written down or not. A `jellymoon run` is then refused like any second run.
 
 A pid is given out again once its process is gone, so the pid alone is never signalled. The record keeps the
 child's **mark**, when the process started, and the pid is signalled only while its mark is the recorded one; it

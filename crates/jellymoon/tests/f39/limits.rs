@@ -11,7 +11,7 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, SAID, STAR, World, ran, refused, world};
+use super::{DAY, SAID, STAR, World, printed, ran, refused, world};
 use crate::support::skipped;
 
 const NO_SIGNAL: &str = "this system has no signal to stop another command's child with, and nothing is stopped";
@@ -113,6 +113,42 @@ fn a_run_cut_off_with_its_command_is_not_shown_as_going() {
     let kept = json!({"id": wish, "said": SAID, "project": "alpha", "state": "needs_you", "stars": [], "run": run, "why": why});
     assert_eq!((w.kept(&wish), &w.record(&run)["outcome"]), (kept, &json!("failed")));
     assert_eq!((w.copies(), w.starts()), (vec![run], 1));
+}
+
+// A page never waits behind another command. Here the lock a copy is made and cleaned behind is held, as by a
+// clean whose git has minutes to go, while a page draws a run that was cut off: the wish is drawn as needing the
+// person within the page's own short wait, nothing is written, and the next look writes it all down.
+#[test]
+fn a_page_with_a_cut_off_run_does_not_wait_for_the_lock_a_copy_is_cleaned_behind() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    w.play("slow", 0);
+    let mut command = w.start_going(&wish, &repo);
+    wait_for(&w.at("rec").join("started"));
+    let going = w.kept(&wish);
+    let run = going["run"].as_str().unwrap().to_string();
+    command.kill().unwrap();
+    command.wait().unwrap();
+    let held = fs::File::options().write(true).open(w.jm("runs").join("clean.lock")).unwrap();
+    held.lock().unwrap();
+    let (logs, short) = (w.at("logs"), [("JELLYMOON_TEST_COPY_WAIT_MS", OsString::from("200"))]);
+    let page = || w.run_with(&short, &["page", "--date", DAY, "--logs", logs.to_str().unwrap()]);
+    let (drawn, waited) = thread::scope(|scope| {
+        let (from, drawing) = (Instant::now(), scope.spawn(page));
+        while !drawing.is_finished() && from.elapsed() < Duration::from_secs(10) {
+            thread::sleep(Duration::from_millis(10));
+        }
+        let waited = from.elapsed();
+        held.unlock().unwrap(); // a page that waited for the lock ends now, and the test with it
+        (drawing.join().unwrap(), waited)
+    });
+    assert!(waited < Duration::from_secs(10), "the page waited for the lock a copy is cleaned behind");
+    assert_eq!(printed(&drawn)["wishes"][0]["state"], "needs_you");
+    assert_eq!((w.kept(&wish), &w.record(&run)["outcome"]), (going, &json!(null)), "nothing was written");
+    // With the lock free the next look marks the copy, tells the wish and writes the record.
+    assert_eq!(w.on_page(&wish)["state"], "needs_you");
+    assert_eq!((&w.kept(&wish)["state"], &w.record(&run)["outcome"]), (&json!("needs_you"), &json!("failed")));
+    w.let_end("go");
 }
 
 /// A `jellymoon run` killed while its agent keeps editing the copy and prints nothing. Returns the run and the file

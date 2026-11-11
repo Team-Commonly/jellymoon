@@ -57,6 +57,13 @@ finds what the first left: `no copy is kept for run <run>` after a completed one
 one, and fails on one that is half made or half removed (`failed to read .../commondir`), so copies are made one at
 a time and never while one is cleaned or taken back. A `make` waits for the lock; it is not refused for it.
 
+**How long the lock is waited for.** `copy make`, `copy clean` and `run` wait with no limit of their own. The wait
+ends because whoever holds the lock ends: each git child has its five minutes (below), a `make` starts about six of
+them behind the lock and a completed clean about a dozen, so one holder is done within an hour at the very worst,
+and in well under a second on a repo git answers for. Commands waiting take the lock one after another. A page
+is different: it never waits behind another command for more than 3 seconds ([run.md](run.md), "A run that was cut
+off"), and leaves the cleanup to the next look.
+
 **A git that never returns.** Each git child has five minutes. One still running then is killed by its process id,
 and the command exits 1 with `git did not finish in 300 seconds and was stopped`. A `make` stopped so takes its
 half-made copy back: the folder, git's registration of it, its new branch and its record. A `clean` stopped so

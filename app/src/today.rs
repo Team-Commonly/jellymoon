@@ -257,7 +257,8 @@ fn words(error: &Error) -> String {
         | Error::Elsewhere
         | Error::Changed
         | Error::Tap(_)
-        | Error::Command(_) => {
+        | Error::Command(_)
+        | Error::Copy(_) => {
             format!("{error}.")
         }
     }

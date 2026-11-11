@@ -11,7 +11,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, Error, PageOptions, ReaderDay, UninstallOptions, user_home};
+use jellymoon_core::{DayOptions, Error, Outcome, PageOptions, ReaderDay, UninstallOptions, user_home};
 use lexopt::prelude::*;
 
 const USAGE: &str = "usage:
@@ -23,6 +23,8 @@ const USAGE: &str = "usage:
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
+  jellymoon copy make --repo <folder> [--run <id>]   (a run's own copy of a repo: a git worktree on a branch of its own)
+  jellymoon copy clean --run <id> --outcome <completed|failed>   (completed: committed on its branch, the folder removed; failed: kept)
   jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay)
 ";
 
@@ -46,6 +48,8 @@ enum Command {
     RemoveHook,
     HookStatus,
     Uninstall,
+    MakeCopy { repo: PathBuf, run: Option<String> },
+    CleanCopy { run: String, outcome: Outcome },
 }
 
 fn main() -> ExitCode {
@@ -130,6 +134,12 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))
         }
         Command::RemoveHook => Ok(format!("{}\n", jellymoon_core::remove_hook(&home()?).map_err(failed)?)),
+        Command::MakeCopy { repo, run } => {
+            Ok(format!("{}\n", jellymoon_core::make_copy(&home()?, &repo, run.as_deref()).map_err(failed)?))
+        }
+        Command::CleanCopy { run, outcome } => {
+            Ok(format!("{}\n", jellymoon_core::clean_copy(&home()?, &run, outcome).map_err(failed)?))
+        }
     }
 }
 
@@ -149,6 +159,7 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         Some(Value(command)) if command == "rule" => return parse_rule(parser),
         Some(Value(command)) if command == "settle" => return parse_settle(parser),
         Some(Value(command)) if command == "hook" => return parse_hook(parser),
+        Some(Value(command)) if command == "copy" => return parse_copy(parser),
         Some(Long("help") | Short('h')) => return Ok(Command::Help),
         Some(other) => return Err(usage(other.unexpected())),
         None => return Err(Failure::Usage("no command".to_string())),
@@ -236,6 +247,37 @@ fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         }
     }
     Ok(if install(&action) { Command::InstallHook { settings, installed } } else { action })
+}
+
+/// `copy make` and `copy clean`. What a run id may be is core's rule, so any text is taken here.
+fn parse_copy(mut parser: lexopt::Parser) -> Result<Command, Failure> {
+    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
+    let (mut action, mut repo, mut run, mut outcome) = (String::new(), None, None, None);
+    while let Some(arg) = parser.next().map_err(usage)? {
+        match arg {
+            Long("help") | Short('h') => return Ok(Command::Help),
+            Value(word) if action.is_empty() && (word == "make" || word == "clean") => {
+                action = word.string().map_err(usage)?
+            }
+            Long("repo") if action == "make" => repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
+            Long("run") if !action.is_empty() => run = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("outcome") if action == "clean" => {
+                let named = parser.value().and_then(|v| v.string()).map_err(usage)?;
+                let known = Outcome::named(&named);
+                outcome = Some(
+                    known.ok_or_else(|| Failure::Usage(format!("--outcome is completed or failed, not {named:?}")))?,
+                );
+            }
+            other => return Err(usage(other.unexpected())),
+        }
+    }
+    match (action.as_str(), repo, run, outcome) {
+        ("make", Some(repo), run, _) => Ok(Command::MakeCopy { repo, run }),
+        ("clean", _, Some(run), Some(outcome)) => Ok(Command::CleanCopy { run, outcome }),
+        _ => Err(Failure::Usage(
+            "copy is `copy make --repo <folder>` or `copy clean --run <id> --outcome <completed|failed>`".to_string(),
+        )),
+    }
 }
 
 /// The path a variable names, when it is set to something.

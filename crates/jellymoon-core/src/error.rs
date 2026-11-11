@@ -57,6 +57,9 @@ pub enum Error {
     Tap(String),
     /// The installed `jellymoon` command is not a file the hook may name. It holds why.
     Command(String),
+    /// A run's copy of a repo could not be made or cleaned. It holds why, in one line. What git said is in it made
+    /// one line and cut short, with credential shapes replaced.
+    Copy(String),
 }
 
 impl fmt::Display for Error {
@@ -102,7 +105,7 @@ impl fmt::Display for Error {
             Error::Changed => {
                 write!(f, "the installed hook entry cannot be taken out safely; remove it by hand. Nothing was changed")
             }
-            Error::Tap(why) => write!(f, "{why}"),
+            Error::Tap(why) | Error::Copy(why) => write!(f, "{why}"),
             Error::Command(why) => write!(f, "the installed jellymoon command is not used: {why}"),
         }
     }

@@ -3,10 +3,11 @@
 //! person said. [`rule`] keeps the person's choice on a clash; [`deliver`], run by the hook that [`install_hook`] adds
 //! to the harness settings, hands it to each running session once. [`settle`] is a tap on a clash: the ruling, and
 //! which side stands. [`uninstall`] takes off a machine what the install
-//! script put there. A session log and a model's answer are both untrusted input: nothing here panics on either.
+//! script put there. [`make_copy`] gives a run its own copy of a repo and [`clean_copy`] ends it. A session log and a model's answer are both untrusted input: nothing here panics on either.
 
 mod call;
 mod command;
+mod copy;
 mod error;
 mod find;
 mod hook;
@@ -20,6 +21,7 @@ mod tap;
 mod uninstall;
 
 pub use command::{installed_command, turn_on_delivery};
+pub use copy::{Outcome, RunCopy, clean_copy, make_copy};
 pub use error::Error;
 pub use find::{own_folder, user_home};
 pub use hook::{hook_installed, install_hook, remove_hook};

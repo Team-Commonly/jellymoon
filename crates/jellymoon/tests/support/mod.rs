@@ -80,20 +80,24 @@ pub fn started(folder: &Path, vars: &[(&str, &OsStr)], args: &[&str], input: &st
     Ran { stdout: read(&mut out), stderr: read(&mut err), code: status.code().unwrap_or(-1) }
 }
 
-/// Puts the made-up harness in `dir` under `name`. On Linux it is a link: a program file that was just written cannot
-/// be started there while a child of another test still holds it open ("text file busy"). Elsewhere it is a copy: a Mac
-/// now and then kills a signed program started through a fresh link.
+/// Puts the made-up harness in `dir` under `name`.
 pub fn install(dir: &Path, name: &str) -> PathBuf {
     fs::create_dir_all(dir).unwrap();
-    let (built, program) =
-        (env!("CARGO_BIN_EXE_fake-claude"), dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)));
-    if !cfg!(target_os = "linux") || fs::hard_link(built, &program).is_err() {
-        fs::copy(built, &program).unwrap();
+    let program = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+    plant(env!("CARGO_BIN_EXE_fake-claude"), &program);
+    program
+}
+
+/// Puts a built test program at `program`. On Linux it is a link: a program file that was just written cannot be
+/// started there while a child of another test still holds it open ("text file busy"). Elsewhere it is a copy: a Mac
+/// now and then kills a signed program started through a fresh link.
+pub fn plant(built: &str, program: &Path) {
+    if !cfg!(target_os = "linux") || fs::hard_link(built, program).is_err() {
+        fs::copy(built, program).unwrap();
     }
     // A copy takes the mode the build left, which the group can write to where files are made so (a umask of 002).
     #[cfg(unix)]
-    fs::set_permissions(&program, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
-    program
+    fs::set_permissions(program, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
 }
 
 /// Every folder and file under a folder, in name order, each file with its bytes: what a refusal must leave as it was.

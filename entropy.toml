@@ -37,20 +37,20 @@ max_file_lines = 400
 # one cleaning is not done with, through `wish`, `rule` and `settle`, and files kept before the door); the cases of
 # a copy in `tests/f38/hostile.rs` and `tests/f38/limits.rs` are 81; `tests/f37/refused.rs` is 18, and 2 are the
 # comment on the wishes made at once, now twelve rounds.
-# F39, a run, with the two rounds of its gate, raised core by 1147, measured as the files stand. The run's own
-# files are 905: `run.rs`, a run's order and its fixed words, 286; `run/end.rs`, an end written in the record
-# before the wish is told, and a record's end believed only when it is core's, 230; `run/stream.rs`, the measured
+# F39, a run, with the three rounds of its gate, raised core by 1165, measured as the files stand. The run's own
+# files are 923: `run.rs`, a run's order and its fixed words, 291; `run/end.rs`, an end written in the record
+# before the wish is told, and a record's end believed only when it is core's, 235; `run/stream.rs`, the measured
 # start and what is read for the star, 140; `run/child.rs`, the harness child and its stop, 117; `run/dead.rs`, the
-# one stop sequence and the child a cut-off run left, 70; `run/record.rs`, a run's record, 62. The other 242 are a
+# one stop sequence and the child a cut-off run left, 70; `run/record.rs`, a run's record, 70. The other 242 are a
 # wish's `run` and `why` and its change behind the day's lock, the folders of a day, taking a copy back, a copy's
 # record with nothing git says of a log's folder repeated, the one function that passes on only full paths, and
 # the examples of what a run prints.
-# It raised the binary by 1864: its tests at the binary are 1353 (`tests/f39.rs`, 400, and `tests/f39/`: `failed.rs`
-# 85, `limits.rs` 229, `refused.rs` 235, `safe.rs` 228, `stream.rs` 176), the made-up agent they start is 437
-# (`tests/support/fake_agent.rs`, 321, and `fake_agent/gate.rs`, 116), and the other 74 are `run` and its parsing,
+# It raised the binary by 1959: its tests at the binary are 1445 (`tests/f39.rs`, 400, and `tests/f39/`: `failed.rs`
+# 85, `limits.rs` 229, `refused.rs` 309, `safe.rs` 228, `stream.rs` 194), the made-up agent they start is 440
+# (`tests/support/fake_agent.rs`, 321, and `fake_agent/gate.rs`, 119), and the other 74 are `run` and its parsing,
 # 23, the reading call's test of full paths in `tests/harness.rs`, and a skipped test saying why.
-"crates/jellymoon-core" = 5355
-"crates/jellymoon" = 7030
+"crates/jellymoon-core" = 5373
+"crates/jellymoon" = 7125
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -52,6 +52,14 @@ pub(super) fn kept(home: &Path, run: &str) -> Option<Record> {
     serde_json::from_slice(&bytes).ok()
 }
 
+/// Writes down that the run was never started: an end of its own kind, which no look takes for a run cut off.
+pub(super) fn unstarted(home: &Path, run: &str) {
+    if let Some(mut record) = kept(home, run) {
+        record.outcome = Some(RunOutcome::NotStarted);
+        let _ = write(home, run, &record);
+    }
+}
+
 /// Writes down the harness child that was just started, so that a later `jellymoon` can stop it if this one is cut
 /// off. A record that cannot be written leaves the child unknown, and so never signalled.
 pub(super) fn child(home: &Path, run: &str, pid: u32) {

@@ -151,9 +151,10 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     let day = wish::day_of(options.day.as_deref())?;
     let none = || refused(format!("the page of {day} has no made wish of that id; a made wish's id is m1 to m8"));
     let wish = wish::kept_of(home, &day)?.into_iter().find(|wish| wish.id == options.wish).ok_or_else(none)?;
-    if let Some(run) = wish.run.clone() {
-        let wish = bury(home, &day, wish);
-        return Err(had(&wish.id, &run));
+    // A wish whose run was never started comes back with no run, and this call goes on to start one.
+    let wish = bury(home, &day, wish);
+    if let Some(run) = &wish.run {
+        return Err(had(&wish.id, run));
     }
     let not_started = |why: String| {
         Ok(Ran { run: None, wish: wish.id.clone(), outcome: RunOutcome::NotStarted, star: None, denied: 0, why })
@@ -189,15 +190,19 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     let ended = child::run(command, format!("{}\n", wish.said), limit, |pid| record::child(home, &copy.run, pid));
     let ended = ended.map_err(|e| refused(format!("nothing was started: Claude Code could not be started: {e}")));
     if !ended.as_ref().is_ok_and(|ended| !ended.old) {
-        // Nothing ran: the wish is as it was, and can be run again. The day is waited for as a run's end waits,
-        // and the copy is taken back whatever came of it: a wish that still names the run then names one of
-        // which nothing is kept, and the next look makes it as it was (`end::bury`).
+        // Nothing ran: the wish is as it was, and can be run again. The day is waited for as a run's end waits.
+        // Whatever came of that, the record says the run was never started and the copy is taken back, both
+        // while this run's lock is held: so no look ever finds a run that nothing holds and that has no end. A
+        // wish that still names the run is made as it was by the next look (`end::bury`).
         let undone = wish::change(home, &day, &wish.id, end::wait(), |wish| {
             (wish.run, wish.why) = (None, None);
             Ok(())
         });
+        record::unstarted(home, &copy.run);
+        let taken = copy::take_back(home, &copy.run);
         drop(lock);
-        copy::take_back(home, &copy.run)?;
+        // Where a file that is open cannot be removed, it can be now.
+        taken.or_else(|_| copy::take_back(home, &copy.run))?;
         undone?;
         return ended.and_then(|_| not_started(OLD.to_string()));
     }

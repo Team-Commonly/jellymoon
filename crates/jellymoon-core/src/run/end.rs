@@ -100,6 +100,11 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
         return unstarted(home, day, wish, &run);
     }
     let record = record::kept(home, &run);
+    if record.as_ref().is_some_and(|record| record.outcome == Some(RunOutcome::NotStarted)) {
+        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
+        let _ = copy::take_back(home, &run);
+        return unstarted(home, day, wish, &run);
+    }
     let ended = record.as_ref().and_then(|record| recorded(home, day, &wish.id, &run, record));
     let (outcome, why) = ended.clone().unwrap_or_else(|| (RunOutcome::Failed, cut(&run)));
     let mut told = tell(home, day, &wish.id, &run, outcome, &why, Duration::ZERO);

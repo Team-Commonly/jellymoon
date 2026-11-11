@@ -57,8 +57,10 @@ const OLD: &str = "error: unknown option '--restricted'";
 
 /// `holds`: the measured start and the work, then a program of its own left going in another process group with
 /// this one's output open, then the words of a harness too old and a failure.
-fn holds(rec: &Path) -> i32 {
-    edits();
+fn holds(rec: &Path, silent: bool) -> i32 {
+    if !silent {
+        edits();
+    }
     let mut left = process::Command::new(env::current_exe().unwrap());
     left.arg("litters").arg(rec).stdin(process::Stdio::null()).stderr(process::Stdio::null());
     #[cfg(unix)]
@@ -86,7 +88,8 @@ fn round_2(script: &str, number: usize, rec: &Path) -> i32 {
             eprintln!("{OLD}");
             1
         }
-        "holds" => holds(rec),
+        // 1: with no line printed at all.
+        "holds" => holds(rec, number == 1),
         // The words of one too old, and no failure.
         "old-0" => {
             eprintln!("{OLD}");

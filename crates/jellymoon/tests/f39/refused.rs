@@ -3,7 +3,7 @@
 
 use std::ffi::OsString;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{fs, thread};
 
 use serde_json::json;
@@ -232,4 +232,78 @@ fn an_end_written_into_a_cut_off_run_s_record_by_hand_gives_no_star() {
         assert_eq!(w.kept(&wish)["why"], json!(cut), "edit {edit}");
         fs::write(w.at("rec").join("go"), "").unwrap();
     }
+}
+
+/// Whether nothing holds a run's lock: it is free, or gone with everything else of the run.
+fn let_go(lock: &Path) -> bool {
+    fs::File::open(lock).map_or(true, |lock| lock.try_lock().is_ok())
+}
+
+// The day stays locked for the whole of the wait, and a page is drawn the moment the run's lock is let go. There
+// is no moment at which that run looks cut off: it holds its lock until nothing of it is kept.
+#[test]
+fn a_look_the_moment_a_run_that_never_started_lets_go_finds_the_wish_as_it_was() {
+    let round = |_| {
+        let w = world();
+        let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+        let before = w.kept(&wish);
+        w.play("old-late", 0);
+        let day = w.jm("pages").join(format!("{DAY}.ruled.lock"));
+        let short = [("JELLYMOON_TEST_END_WAIT_MS", OsString::from("500"))];
+        let args = ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
+        let (ended, seen) = thread::scope(|scope| {
+            let going = scope.spawn(|| w.run_with(&short, &args));
+            wait_for(&w.at("rec").join("started"));
+            let lock = w.jm("runs").join(w.kept(&wish)["run"].as_str().unwrap()).join("run.lock");
+            fs::write(&day, "").unwrap();
+            fs::write(w.at("rec").join("go"), "").unwrap();
+            let deadline = Instant::now() + Duration::from_secs(30);
+            while !let_go(&lock) && Instant::now() < deadline {
+                thread::yield_now();
+            }
+            fs::remove_file(&day).unwrap();
+            let seen = w.on_page(&wish);
+            (going.join().unwrap(), seen)
+        });
+        assert_eq!((ended.code, ended.stdout.as_str()), (1, ""), "{}", ended.stderr);
+        assert_eq!((&seen["state"], &seen["stars"]), (&json!("working"), &json!([])));
+        assert_eq!((w.kept(&wish), w.copies(), w.branches(&repo)), (before, vec![], vec![]));
+        w.play("edits", 0);
+        assert_eq!(ran(&w.start(&wish, &repo)).1["star"], json!(STAR), "and can be run again");
+    };
+    thread::scope(|scope| {
+        let lanes: Vec<_> = (0..4).map(|_| scope.spawn(|| (0..5).for_each(round))).collect();
+        lanes.into_iter().for_each(|lane| lane.join().unwrap());
+    });
+}
+
+// A wish that names a run of which nothing is kept is run by the `jellymoon run` that finds it so. A run whose
+// record says it was never started is taken back by the next look, and its wish runs again too.
+#[test]
+fn the_run_that_finds_a_wish_naming_a_run_never_started_starts_one() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let file = w.jm("pages").join(format!("{DAY}.wishes.json"));
+    let mut named: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    named["wishes"][0]["run"] = json!("r0123456789abcdef");
+    fs::write(&file, format!("{named}\n")).unwrap();
+    w.play("edits", 0);
+    let (run, said) = ran(&w.start(&wish, &repo));
+    assert_eq!((&said["star"], &w.kept(&wish)["run"]), (&json!(STAR), &json!(run)));
+
+    let (w, wish) = (world(), "m1");
+    let repo = w.repo("alpha");
+    w.wish("alpha");
+    w.play("slow", 0);
+    let mut command = w.start_going(wish, &repo);
+    wait_for(&w.at("rec").join("started"));
+    command.kill().unwrap();
+    command.wait().unwrap();
+    let cut = w.kept(wish)["run"].as_str().unwrap().to_string();
+    let mut record = w.record(&cut);
+    record["outcome"] = json!("not_started");
+    fs::write(w.jm("runs").join(&cut).join("run.json"), record.to_string()).unwrap();
+    assert_eq!((&w.on_page(wish)["state"], &w.kept(wish)["run"]), (&json!("working"), &json!(null)));
+    assert_eq!((w.copies(), w.branches(&repo)), (vec![], vec![]), "the copy of a run never started is taken back");
+    fs::write(w.at("rec").join("go"), "").unwrap();
 }

@@ -68,9 +68,12 @@ read from all of: no line at all on its output, an exit with a failure, and thos
 4 KiB of what it said on stderr. A harness that printed anything first has worked, and is a failed run; so is
 one whose output something it left still holds open, so that its reader never finishes: what was read so far is
 what counts, and a reader that did not finish is never the reader of a harness too old. For the wish to be as it
-was, the day's lock is waited for as a run's end waits for it, and the copy is taken back whatever came of that.
-If the day stayed locked, the wish still names a run of which nothing is kept, not even its folder in `runs`:
-the next page or `jellymoon run` that finds such a wish makes it as it was, with no run. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
+was, the day's lock is waited for as a run's end waits for it. Whatever came of that, and in this order: the
+record takes `not_started` as its outcome, an end of its own kind; the copy is taken back; and only then is the
+run's lock let go. So at no moment does a look find a run that nothing holds and that has no end. If the day
+stayed locked, the wish still names the run. The next page or `jellymoon run` that finds a wish naming a run
+whose record says `not_started` (its copy is then taken back), or of which nothing is kept, not even its folder
+in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
 started again without the flag.
 
 ## What is read of the stream

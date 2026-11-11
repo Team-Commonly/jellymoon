@@ -174,3 +174,21 @@ fn a_run_s_end_waits_for_a_day_that_is_locked_for_a_while() {
     });
     assert_eq!((&printed(&ended)["outcome"], &w.kept(&wish)["state"]), (&json!("completed"), &json!("done")));
 }
+
+// No line came, and the reader never finished: nobody knows that none would have come.
+#[test]
+fn a_harness_that_printed_nothing_and_left_its_output_held_open_is_not_called_too_old() {
+    if !cfg!(unix) {
+        return skipped("this system has no process group for the made-up agent to leave a program in");
+    }
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    w.play("holds", 1);
+    let ended = w.start(&wish, &repo);
+    fs::write(w.at("rec").join("stop"), "").unwrap();
+    let (run, said) = ran(&ended);
+    assert_eq!(
+        (&said["outcome"], &said["why"]),
+        (&json!("failed"), &json!(failed(&run, "Claude Code ended without a result")))
+    );
+}

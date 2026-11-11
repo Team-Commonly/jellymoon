@@ -36,6 +36,9 @@ pub struct TextRun {
     pub rect: Rect,
     pub text: String,
     pub role: Role,
+    /// The font size, in logical pixels, the text was measured at and is drawn at. It is the role's own size unless
+    /// the layout wrote the text smaller to make room (a whole choice's options).
+    pub size: f32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -183,7 +186,7 @@ pub(crate) fn piece(kind: PieceKind, id: &str, index: usize, rect: Rect) -> Plac
 /// the line centred on `mid_y`.
 pub(crate) fn run(text: String, role: Role, x: f32, mid_y: f32, width: f32, size: f32) -> TextRun {
     let height = line_height(size);
-    TextRun { rect: Rect::new(x, mid_y - height / 2.0, width, height), text, role }
+    TextRun { rect: Rect::new(x, mid_y - height / 2.0, width, height), text, role, size }
 }
 
 pub(crate) fn line_height(size: f32) -> f32 {

@@ -92,16 +92,26 @@ fn sound(text: &str, program: &str) -> bool {
     text.trim().is_empty() || named(&without_comments(text), program, false) == Some(false)
 }
 
+/// Whether the settings text holds what the record says was installed: the recorded text, or an entry that runs the
+/// recorded program however it is laid out.
+fn has(record: &Record, text: &str) -> bool {
+    let kept = !record.inserted.is_empty() && without_comments(text).contains(&record.inserted);
+    kept || holds(text, &record.program)
+}
+
+/// Whether the hook is installed now: there is a record of it, and the settings file it names still holds the
+/// entry. Nothing is written.
+pub fn hook_installed(home: &Path) -> bool {
+    let installed = |record: Record| fs::read_to_string(&record.settings).is_ok_and(|text| has(&record, &text));
+    record(&home.join("hook.json")).is_some_and(installed)
+}
+
 /// Adds one entry to `settings` that runs `program hook` with no shell. A missing or empty file becomes one object
 /// holding the entry. A file that is not a JSON object (comments are allowed) is refused and left as it was, and so is
 /// one whose `hooks` are not shaped as Claude Code shapes them. A file that already holds the entry is left alone.
 pub fn install_hook(settings: &Path, home: &Path, program: &Path) -> Result<HookState, Error> {
     let settings = absolute(settings).map_err(Error::Settings)?;
     let kept = home.join("hook.json");
-    let has = |record: &Record, text: &str| {
-        let kept = !record.inserted.is_empty() && without_comments(text).contains(&record.inserted);
-        kept || holds(text, &record.program)
-    };
     if let Some(record) = record(&kept)
         && fs::read_to_string(&record.settings).is_ok_and(|text| has(&record, &text))
     {
@@ -205,7 +215,12 @@ fn without_comments(text: &str) -> String {
 /// the old one. A link is followed first, so the link stays and what it points at is replaced. When a step fails the
 /// new file is removed and the old one is as it was. A run that is killed in between leaves the new file there.
 fn replace(path: &Path, text: &str) -> io::Result<()> {
-    let target = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    put(&fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()), text, true)
+}
+
+/// [`replace`] with no link followed: what is at `target` is replaced. With `as_old` the new file takes the old
+/// file's mode; without it the file is the person's alone.
+pub(crate) fn put(target: &Path, text: &str, as_old: bool) -> io::Result<()> {
     let mut name = target.file_name().ok_or(ErrorKind::InvalidInput)?.to_os_string();
     name.push(format!(".jellymoon-{}", process::id()));
     let new = target.with_file_name(name);
@@ -214,19 +229,19 @@ fn replace(path: &Path, text: &str) -> io::Result<()> {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
     let file = open.open(&new)?;
-    let filled = fill(file, text, &target).and_then(|()| fs::rename(&new, &target));
+    let filled = fill(file, text, as_old.then_some(target)).and_then(|()| fs::rename(&new, target));
     if filled.is_err() {
         let _ = fs::remove_file(&new);
     }
     filled
 }
 
-fn fill(mut file: File, text: &str, target: &Path) -> io::Result<()> {
+fn fill(mut file: File, text: &str, target: Option<&Path>) -> io::Result<()> {
     file.write_all(text.as_bytes())?;
     // Only where a mode says who may read: elsewhere it is the read-only mark, which would keep a new file that
     // could not be renamed from being removed.
     #[cfg(unix)]
-    if let Ok(old) = fs::metadata(target) {
+    if let Some(old) = target.and_then(|target| fs::metadata(target).ok()) {
         file.set_permissions(old.permissions())?;
     }
     #[cfg(not(unix))]

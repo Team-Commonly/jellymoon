@@ -45,6 +45,7 @@ fn four_options_are_laid_out_and_the_fifth_is_not() {
             options: (0..given).map(|i| format!("option {i}")).collect(),
             footer: String::new(),
             struck_first: false,
+            whole: false,
         }];
         let placed = layout(&scene, &theme, viewport, &MEASURE);
         let options: Vec<&str> =

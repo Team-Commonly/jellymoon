@@ -30,6 +30,10 @@ pub const STEPS: &[Step] = &[
     Step { name: "rule", only: Only::Synthetic, run: rule },
     Step { name: "hook-told", only: Only::Synthetic, run: hook_told },
     Step { name: "hook-again", only: Only::Synthetic, run: hook_again },
+    // The join (F35): a tap on a clash is a ruling, the session hears it, and the page shows the clash settled.
+    Step { name: "tap", only: Only::Synthetic, run: tap },
+    Step { name: "tap-told", only: Only::Synthetic, run: tap_told },
+    Step { name: "today-settled", only: Only::Synthetic, run: today_settled },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
     Step { name: "window", only: Only::Window, run: window },
 ];
@@ -283,6 +287,51 @@ fn hook_told(world: &World) -> Result<String, String> {
 fn hook_again(world: &World) -> Result<String, String> {
     let told = hook(world)?;
     if told.is_empty() { Ok("told nothing".to_string()) } else { Err(format!("told again: {told:?}")) }
+}
+
+/// The statement of the made-up day's clash that the tap chooses: its second.
+const TAPPED: &str = "never retry uploads";
+
+/// `jellymoon settle`, the tap, on the second statement of the kept page's clash makes one ruling, which waits beside
+/// the first, and the page keeps it.
+fn tap(world: &World) -> Result<String, String> {
+    let args = ["settle", "--date", DAY, "--clash", "1", "--option", "2"].map(str::to_string);
+    let said = world.json("jellymoon", &args)?;
+    let waiting = fs::read_dir(world.at("jm").join("rulings")).into_iter().flatten().flatten();
+    let waiting = waiting.filter(|entry| entry.path().extension().is_some_and(|kind| kind == "json")).count();
+    let ruled = said["ruling"]["stands"] == TAPPED && said["ruling"]["over"] == "add a retry";
+    if !ruled || said["stands"] != TAPPED || !said["unkept"].is_null() || waiting != 2 {
+        return Err(format!("{waiting} rulings in the store, not 2: {said}"));
+    }
+    Ok("a tap on the clash made 1 ruling, and it waits".to_string())
+}
+
+/// The session's next step is handed the tapped ruling, and only that one: it heard the other already.
+fn tap_told(world: &World) -> Result<String, String> {
+    let told = hook(world)?;
+    let context =
+        told.first().map_or("", |line| line["hookSpecificOutput"]["additionalContext"].as_str().unwrap_or(""));
+    let ours = format!("What stands: \"{TAPPED}\". It replaces: \"add a retry\".");
+    if told.len() != 1 || !context.contains(&ours) || context.matches("What stands").count() != 1 {
+        return Err(format!("the step was not told the tapped ruling alone: {told:?}"));
+    }
+    if !hook(world)?.is_empty() {
+        return Err("the tapped ruling was told twice".to_string());
+    }
+    Ok("told the tapped ruling once".to_string())
+}
+
+/// `jellymoon-app layout` draws the clash settled, the replaced statement struck, and says nothing about delivery.
+fn today_settled(world: &World) -> Result<String, String> {
+    let pieces = world.lines("jellymoon-app", &world.day("layout"))?;
+    let of_clash = |piece: &&Value| piece["id"] == "clash-1" && piece["kind"] == "option";
+    let roles: Vec<&str> =
+        pieces.iter().filter(of_clash).filter_map(|piece| piece["text"][0]["role"].as_str()).collect();
+    let all = pieces.iter().map(Value::to_string).collect::<String>();
+    if roles != ["option_struck", "option"] || !all.contains("you chose") || all.contains("not told yet") {
+        return Err(format!("the clash is not drawn settled with delivery on: options {roles:?}"));
+    }
+    Ok("the clash is settled, its first option struck; no delivery note".to_string())
 }
 
 /// `jellymoon uninstall` removes the app and the command from where an install put them, and leaves nothing there.

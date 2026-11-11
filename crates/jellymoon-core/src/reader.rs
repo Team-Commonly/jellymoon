@@ -148,7 +148,7 @@ pub fn skip_names(value: &str) -> Result<Vec<String>, String> {
 }
 
 /// A calendar day written exactly YYYY-MM-DD.
-fn parse(date: &str) -> Result<Date, Error> {
+pub(crate) fn parse(date: &str) -> Result<Date, Error> {
     let shaped = date.len() == 10
         && date.bytes().enumerate().all(
             |(at, byte)| {

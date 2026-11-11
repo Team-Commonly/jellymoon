@@ -60,3 +60,17 @@ fn a_link_stays_a_link_and_the_files_permissions_are_kept() {
         assert_eq!(fs::read_dir(real.parent().unwrap()).unwrap().count(), 1, "no new file is left behind");
     }
 }
+
+// The new file is made new. A link waiting at its name is never written through to where it leads.
+#[cfg(unix)]
+#[test]
+fn a_link_at_the_name_of_the_new_file_is_not_written_through() {
+    let dir = tempfile::tempdir().unwrap();
+    let (target, elsewhere) = (dir.path().join("kept.json"), dir.path().join("elsewhere"));
+    fs::write(&elsewhere, "not ours").unwrap();
+    let new = dir.path().join(format!("kept.json.jellymoon-{}", process::id()));
+    std::os::unix::fs::symlink(&elsewhere, &new).unwrap();
+    assert_eq!(put(&target, "ours", false).map_err(|e| e.kind()), Err(ErrorKind::AlreadyExists));
+    assert_eq!(fs::read_to_string(&elsewhere).unwrap(), "not ours");
+    assert!(!target.exists() && fs::read_link(&new).is_ok(), "nothing is at the place, and the link is left alone");
+}

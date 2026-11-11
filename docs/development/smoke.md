@@ -26,6 +26,9 @@ cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build argument
 | `hook-install` | `jellymoon hook install` puts its entry into made-up harness settings in the temporary home |
 | `rule` | `jellymoon rule` keeps a ruling, and one waits in the store |
 | `hook-told`, `hook-again` | `jellymoon hook`, given a made-up step, hands the session the ruling; its next step is told nothing |
+| `tap` | `jellymoon settle`, the tap, on the second statement of the kept page's clash makes one ruling, which waits, and the page keeps it |
+| `tap-told` | the session's next step is told that ruling alone, once |
+| `today-settled` | `jellymoon-app layout` draws the clash settled, the replaced statement struck, and no delivery note |
 | `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty; the hook is out and the settings are as they were |
 | `window` (with `--window`) | `jellymoon-app --page` opens a window and, with `JELLYMOON_QUIT_AFTER=3`, exits 0 within 30 seconds with no panic |
 

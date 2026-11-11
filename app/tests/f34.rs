@@ -26,7 +26,7 @@ fn the_waiting_state_is_a_page_with_one_note_and_the_day_s_page_follows_it() {
     assert_eq!(labels(&page), ["Fail fast", "Retry uploads"], "the let-go wish is placed last");
     let said = notes(&page);
     assert!(
-        said[0].starts_with("came true today ★ no retry left") && said[1].starts_with("you changed your mind"),
+        said[0].starts_with("came true today ★ no retry left") && said[2].starts_with("you changed your mind"),
         "{said:?}"
     );
     assert!(called(&world));

@@ -2,7 +2,7 @@
 //! goes and how it looks are the kit's layout and the theme. Every text is handed over as it is, and the kit shows it
 //! as text only.
 
-use jellymoon_core::{Clash, PageRead, Wish, WishState};
+use jellymoon_core::{Clash, PageRead, Side, Standing, Wish, WishState};
 use sticker_kit::text::clean;
 use sticker_kit::{Character, LegendItem, Mark, Mood, Note, Scene, State};
 
@@ -11,10 +11,23 @@ use crate::read::{LeftOut, Page};
 /// The longest id a piece carries. Core's are `w1` to `w8`; a file may hold anything.
 const MAX_ID_CHARS: usize = 40;
 
+/// The sides of a clash in the order its options are drawn. The one the person chose is drawn last, under the one
+/// it replaced, which is struck: the kit strikes the first option of a choice and no other.
+pub fn order(stands: Option<Side>) -> [Side; 2] {
+    if stands == Some(Side::A) { [Side::B, Side::A] } else { [Side::A, Side::B] }
+}
+
+/// [`ruled`] for a page nobody ruled on.
+pub fn scene(page: &Page) -> Scene {
+    ruled(page, &[])
+}
+
 /// The page as the kit's pieces: a hero, one little one per wish in page order with one star per finished job, a list
 /// of what came true, one choice note per clash, and a plain note for each thing the app has no piece for. When the
-/// file held more than the app draws, the first note says how much was left out.
-pub fn scene(page: &Page) -> Scene {
+/// file held more than the app draws, the first note says how much was left out. `standing` holds, clash by clash,
+/// what core says of it: its two statements as a ruling would carry them, and the side the person chose with a tap.
+/// A clash core says is no choice (its statements are the same once cleaned, or one is empty) is a plain note.
+pub fn ruled(page: &Page, standing: &[Standing]) -> Scene {
     let data = &page.data;
     let mut notes: Vec<Note> = left_out(page.left_out).into_iter().collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
@@ -28,7 +41,19 @@ pub fn scene(page: &Page) -> Scene {
     if !came_true.is_empty() {
         notes.push(Note::List { title: "came true today".to_string(), rows: came_true });
     }
-    notes.extend(data.clashes.iter().enumerate().map(|(index, clash)| choice(index, clash)));
+    // A clash the person has not chosen on comes before one they have: when the notes do not all fit, the ones left
+    // out and counted are the ones already settled. A clash keeps its id, its place among the page's clashes.
+    let chosen = |index: &usize| standing.get(*index).is_some_and(|standing| standing.stands.is_some());
+    let (open, settled): (Vec<usize>, Vec<usize>) = (0..data.clashes.len()).partition(|index| !chosen(index));
+    let clashes = open.into_iter().chain(settled);
+    notes.extend(clashes.map(|index| match standing.get(index) {
+        // Nothing to choose, so nothing to tap: the clash is said, and neither statement is drawn.
+        Some(standing) if !standing.is_choice() => Note::Plain {
+            title: "two things you said clash".to_string(),
+            body: "Their words cannot be told apart here, so there is nothing to choose.".to_string(),
+        },
+        standing => choice(index, &data.clashes[index], standing),
+    }));
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
@@ -92,19 +117,31 @@ fn little_one(index: usize, wish: &Wish) -> Character {
     }
 }
 
-/// A clash as an ask: both statements as options. A settled clash strikes the first, which the second replaced.
-fn choice(index: usize, clash: &Clash) -> Note {
-    let (title, footer) = if clash.settled {
-        ("you changed your mind", "the first one was let go")
-    } else {
-        ("these two clash", "tap the one that stands")
+/// A statement as an option of a clash: its words between quotation marks, and nothing else.
+pub fn quoted(statement: &str) -> String {
+    format!("“{statement}”")
+}
+
+/// A clash as an ask: both statements as options, in [`order`]. A settled clash strikes the first, which the second
+/// replaced: by the person's own tap (`standing`), or as the reading found it. With `standing` (a day's page, which
+/// can be tapped) the words are core's, exactly as a ruling would carry them, and the choice is whole: every word is
+/// drawn or the note is left out. A page-data file with no day shows the file's own words, cut to fit.
+fn choice(index: usize, clash: &Clash, standing: Option<&Standing>) -> Note {
+    let stands = standing.and_then(|standing| standing.stands);
+    let (a, b) = standing.map_or((&clash.quote_a, &clash.quote_b), |standing| (&standing.a, &standing.b));
+    let (title, footer) = match (stands, clash.settled) {
+        (Some(_), _) => ("you chose", "tap the other to change it"),
+        (None, true) => ("you changed your mind", "the first one was let go"),
+        (None, false) => ("these two clash", "tap the one that stands"),
     };
+    let quote = |side: Side| quoted(if side == Side::A { a } else { b });
     Note::Choice {
         id: format!("clash-{}", index + 1),
         title: title.to_string(),
-        options: vec![format!("“{}”", clash.quote_a), format!("“{}”", clash.quote_b)],
+        options: order(stands).map(quote).to_vec(),
         footer: footer.to_string(),
-        struck_first: clash.settled,
+        struck_first: stands.is_some() || clash.settled,
+        whole: standing.is_some(),
     }
 }
 

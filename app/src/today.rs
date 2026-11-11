@@ -7,16 +7,15 @@
 //! else. Nothing is printed here: the scenes go to the window, or to `layout`, which prints the page's own words on
 //! stdout as it does for any page.
 
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
-use std::{env, fs, io, process};
+use std::{env, io};
 
 use jellymoon_core::{DayOptions, Error, PageData, PageOptions, ReaderDay};
 use sticker_kit::{Note, Scene};
 
 use crate::read::{self, LeftOut, Page};
-use crate::scene::{bare, scene};
+use crate::scene::bare;
 
 /// How long the reading call may take: the `jellymoon` command's own limit.
 const READING_LIMIT: Duration = Duration::from_secs(180);
@@ -24,6 +23,8 @@ const READING_LIMIT: Duration = Duration::from_secs(180);
 /// A scene to show, and the work that gives the one after it.
 pub struct Next {
     pub scene: Scene,
+    /// The page data the scene shows, when it shows a page: what a tap on it acts on.
+    pub page: Option<Page>,
     pub later: Option<Later>,
 }
 
@@ -47,6 +48,10 @@ pub struct Today {
     pub harness: Option<PathBuf>,
     /// Read again even when the kept page saw every turn.
     pub fresh: bool,
+    /// Claude Code's settings file, where "Turn on delivery" adds the hook. None when no folder of its is known.
+    pub settings: Option<PathBuf>,
+    /// The folder `install.sh` puts the `jellymoon` command in, which the hook runs. None when there is no home.
+    pub bin: Option<PathBuf>,
 }
 
 /// What was asked for on the command line; what is left out comes from the environment, as for `jellymoon`.
@@ -91,6 +96,8 @@ impl Today {
         }
         let config = || named("CLAUDE_CONFIG_DIR").or_else(|| Some(user()?.join(".claude")));
         let logs = asked.logs.or_else(|| Some(config()?.join("projects")));
+        // The folder `install.sh` puts the command in, under the name it gives it.
+        let bin = named("JELLYMOON_BIN_DIR").or_else(|| Some(user()?.join(".local").join("bin")));
         Ok(Today {
             date: date(asked.date.as_deref()).ok_or("--date must be a day as YYYY-MM-DD")?,
             logs: logs.ok_or("finding the session logs: no home directory; name them with --logs")?,
@@ -99,6 +106,8 @@ impl Today {
             home: home.ok_or("no home directory: set JELLYMOON_HOME")?,
             harness: named("JELLYMOON_CLAUDE"),
             fresh: asked.fresh,
+            settings: config().map(|config| config.join("settings.json")),
+            bin,
         })
     }
 
@@ -107,11 +116,11 @@ impl Today {
         self.home.join("pages").join(format!("{}.json", self.date))
     }
 
-    /// The kept page of the day, when there is one that reads as page data of that day. It comes through the same
-    /// door as any page file.
+    /// The kept page of the day, when there is one that reads as page data of that day. Core says whether the file
+    /// may be used (a plain file only this user can write to, of a page's size); then it comes through the same door
+    /// as any page file.
     pub fn kept(&self) -> Option<Page> {
-        let mut bytes = Vec::new();
-        fs::File::open(self.file()).ok()?.take(read::MAX_PAGE_BYTES as u64 + 1).read_to_end(&mut bytes).ok()?;
+        let bytes = jellymoon_core::kept_page(&self.home, &self.date).ok()?;
         read::bytes(bytes).ok().filter(|page| page.data.day == self.date)
     }
 
@@ -119,7 +128,7 @@ impl Today {
     /// on to [`Today::later`].
     pub fn first(&self) -> (Scene, Option<Page>) {
         match self.kept() {
-            Some(page) => (scene(&page), Some(page)),
+            Some(page) => (self.draw(&page), Some(page)),
             None => (waiting(&self.date), None),
         }
     }
@@ -147,20 +156,28 @@ impl Today {
         let day = DayOptions { logs: self.logs.clone(), date: Some(self.date.clone()), skip, home };
         let day = match jellymoon_core::day(&day) {
             Ok(day) => day,
-            Err(error) => return Some(Next { scene: self.failed(kept.as_ref(), &words(&error)), later: None }),
+            Err(error) => return Some(self.stopped(kept, &words(&error))),
         };
         if !self.fresh && kept.as_ref().is_some_and(|kept| kept.data.read.turns == day.turns.len()) {
             return None;
         }
         let scene = match &kept {
-            Some(page) => noted(page, "Reading your day again…", "This page will change when the reading is done."),
+            Some(page) => {
+                noted(self.draw(page), "Reading your day again…", "This page will change when the reading is done.")
+            }
             None => waiting(&self.date),
         };
-        let call: Later = Box::new(move || Some(Next { scene: self.call(&day, kept.as_ref()), later: None }));
-        Some(Next { scene, later: Some(call) })
+        let page = kept.clone();
+        let call: Later = Box::new(move || Some(self.call(&day, kept)));
+        Some(Next { scene, page, later: Some(call) })
     }
 
-    fn call(&self, day: &ReaderDay, kept: Option<&Page>) -> Scene {
+    /// What is shown when the day could not be read: the kept page stays, and can still be tapped.
+    fn stopped(&self, kept: Option<Page>, why: &str) -> Next {
+        Next { scene: self.failed(kept.as_ref(), why), page: kept, later: None }
+    }
+
+    fn call(&self, day: &ReaderDay, kept: Option<Page>) -> Next {
         let options = PageOptions {
             model: self.model.clone(),
             dir: self.home.join("reading"),
@@ -169,36 +186,29 @@ impl Today {
         };
         let data = match jellymoon_core::page(day, &options) {
             Ok(data) => data,
-            Err(error) => return self.failed(kept, &words(&error)),
+            Err(error) => return self.stopped(kept, &words(&error)),
         };
         let unkept = self.keep(&data).err();
-        let mut shown = scene(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() });
+        let page = Page { data, unknown: Vec::new(), left_out: LeftOut::default() };
+        let mut shown = self.draw(&page);
         if let Some(error) = unkept {
             let body = format!("It will be read again the next time Jellymoon opens ({error}).");
             shown.notes.insert(0, Note::Plain { title: "This page could not be kept.".to_string(), body });
         }
-        shown
+        Next { scene: shown, page: Some(page), later: None }
     }
 
     /// Keeps the checked page data, one line of JSON as `jellymoon page` prints it, in a folder for this user only.
     /// It is written beside its place, in a file of this process's own that only this user can read, and moved
     /// there, so a kept page is never half a page and two apps open at once never write the same file.
     fn keep(&self, data: &PageData) -> io::Result<()> {
-        let file = self.file();
-        private_dir(&self.home.join("pages"))?;
-        let beside = file.with_extension(format!("json.{}.new", process::id()));
-        let mut options = fs::OpenOptions::new();
-        options.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        options.open(&beside)?.write_all(format!("{data}\n").as_bytes())?;
-        fs::rename(&beside, &file)
+        jellymoon_core::keep_private(&self.file(), &format!("{data}\n"))
     }
 
     /// The page when the day could not be read: one plain note that says why, on the kept page when there is one.
     fn failed(&self, kept: Option<&Page>, why: &str) -> Scene {
         match kept {
-            Some(page) => noted(page, "This page is from an earlier reading.", why),
+            Some(page) => noted(self.draw(page), "This page is from an earlier reading.", why),
             None => bare(
                 &self.date,
                 vec![Note::Plain { title: "Today could not be read.".to_string(), body: why.to_string() }],
@@ -207,9 +217,8 @@ impl Today {
     }
 }
 
-/// The page with one plain note before its own.
-fn noted(page: &Page, title: &str, body: &str) -> Scene {
-    let mut shown = scene(page);
+/// The scene with one plain note before its own.
+fn noted(mut shown: Scene, title: &str, body: &str) -> Scene {
     shown.notes.insert(0, Note::Plain { title: title.to_string(), body: body.to_string() });
     shown
 }
@@ -240,26 +249,16 @@ fn words(error: &Error) -> String {
              {error}."
         ),
         Error::Date | Error::Model | Error::Home | Error::NotAbsolute | Error::Uninstall(_) => format!("{error}."),
-        // The app makes no ruling and installs no hook yet; these say what core says.
+        // A tap's errors are put into words in `taps.rs`; these say what core says.
         Error::Ruling
         | Error::Store(_)
         | Error::Settings(_)
         | Error::NotSettings
         | Error::Elsewhere
-        | Error::Changed => {
+        | Error::Changed
+        | Error::Tap(_)
+        | Error::Command(_) => {
             format!("{error}.")
         }
     }
-}
-
-/// Makes a folder for this user only where the system has file modes, as core does for its own.
-fn private_dir(dir: &Path) -> io::Result<()> {
-    let mut builder = fs::DirBuilder::new();
-    builder.recursive(true);
-    #[cfg(unix)]
-    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
-    builder.create(dir)?;
-    #[cfg(unix)]
-    fs::set_permissions(dir, std::os::unix::fs::PermissionsExt::from_mode(0o700))?;
-    Ok(())
 }

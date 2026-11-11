@@ -1,6 +1,7 @@
 //! The `jellymoon` command. `day` prints one local day of what the person typed to Claude Code; `page` prints that
 //! day's page data, made with one reading call through their own Claude Code; `rule` keeps a ruling, and `hook`, run
-//! by Claude Code, hands it to a session. Each prints one line of JSON on stdout (`hook` nothing when no ruling
+//! by Claude Code, hands it to a session. `settle` is a tap on a clash of the day's kept page: a ruling of its two
+//! statements. Each prints one line of JSON on stdout (`hook` nothing when no ruling
 //! waits), or an error on stderr and nothing on stdout. None talks to a server. `uninstall` removes what `install.sh`
 //! added, and the hook.
 
@@ -18,8 +19,10 @@ const USAGE: &str = "usage:
   jellymoon page [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <names>] [--model <name>]   (one reading call through your own Claude Code)
   jellymoon rule --stands <the words that stand> --over <the words they replace>
   jellymoon hook                                 (run by Claude Code: hands waiting rulings to the session on stdin)
-  jellymoon hook install [--settings <Claude Code settings file>]
+  jellymoon settle --date <YYYY-MM-DD> --clash <n> --option <1|2>   (a tap on a clash of the kept page: that statement stands)
+  jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
+  jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
   jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay)
 ";
 
@@ -38,8 +41,10 @@ enum Command {
     Page(DayOptions, String),
     Rule { stands: String, over: String },
     Hook,
-    InstallHook(Option<PathBuf>),
+    InstallHook { settings: Option<PathBuf>, installed: bool },
+    Settle { date: String, clash: usize, option: usize },
     RemoveHook,
+    HookStatus,
     Uninstall,
 }
 
@@ -58,6 +63,25 @@ fn main() -> ExitCode {
     ExitCode::from(code)
 }
 
+/// `hook install`: for this program, or with `--installed` for the checked command in the install folder.
+fn install_hook(settings: Option<PathBuf>, installed: bool) -> Result<jellymoon_core::HookState, Failure> {
+    let settings = match settings {
+        Some(settings) => settings,
+        None => harness_folder()?.join("settings.json"),
+    };
+    if !settings.is_absolute() && named("CLAUDE_CONFIG_DIR").is_some_and(|folder| settings.starts_with(folder)) {
+        return Err(Failure::Run("CLAUDE_CONFIG_DIR must be an absolute path; nothing was changed".to_string()));
+    }
+    let state = if installed {
+        let bin = bin().ok_or_else(|| Failure::Run("no home directory: set JELLYMOON_BIN_DIR".to_string()))?;
+        jellymoon_core::turn_on_delivery(&settings, &home()?, &bin)
+    } else {
+        let program = env::current_exe().map_err(|e| Failure::Run(format!("finding this program: {e}")))?;
+        jellymoon_core::install_hook(&settings, &home()?, &program)
+    };
+    state.map_err(|e| Failure::Run(e.to_string()))
+}
+
 /// Runs the command and returns what it prints.
 fn run() -> Result<String, Failure> {
     let failed = |e: jellymoon_core::Error| Failure::Run(e.to_string());
@@ -73,9 +97,8 @@ fn run() -> Result<String, Failure> {
         Command::Uninstall => {
             // The same two folders, under the same two names, that install.sh puts the pieces in.
             let app = named("JELLYMOON_APP_DIR").or_else(|| Some(user_home()?.join("Applications")));
-            let bin = named("JELLYMOON_BIN_DIR").or_else(|| Some(user_home()?.join(".local").join("bin")));
             let home = own_folder()?;
-            let (Some(app), Some(bin)) = (app, bin) else {
+            let (Some(app), Some(bin)) = (app, bin()) else {
                 return Err(Failure::Run("no home directory: set JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR".to_string()));
             };
             let binary = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
@@ -92,13 +115,19 @@ fn run() -> Result<String, Failure> {
             let told = home.and_then(|home| jellymoon_core::deliver(&home, io::stdin().lock()));
             Ok(told.map(|told| told + "\n").unwrap_or_default())
         }
-        Command::InstallHook(settings) => {
-            let settings = match settings {
-                Some(settings) => settings,
-                None => harness_folder()?.join("settings.json"),
-            };
-            let program = env::current_exe().map_err(|e| Failure::Run(format!("finding this program: {e}")))?;
-            Ok(format!("{}\n", jellymoon_core::install_hook(&settings, &home()?, &program).map_err(failed)?))
+        Command::InstallHook { settings, installed } => Ok(format!("{}\n", install_hook(settings, installed)?)),
+        Command::Settle { date, clash, option } => {
+            let settled = jellymoon_core::settle_kept(&home()?, &date, clash, option).map_err(failed)?;
+            if let Some(why) = &settled.unkept {
+                // The ruling was made, so this is not a failure: the line says what the page will not show.
+                let line = format!("jellymoon: the ruling was made, but the page could not keep it: {why}\n");
+                let _ = io::stderr().write_all(line.as_bytes());
+            }
+            Ok(format!("{settled}\n"))
+        }
+        Command::HookStatus => {
+            let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));
+            Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))
         }
         Command::RemoveHook => Ok(format!("{}\n", jellymoon_core::remove_hook(&home()?).map_err(failed)?)),
     }
@@ -118,6 +147,7 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             };
         }
         Some(Value(command)) if command == "rule" => return parse_rule(parser),
+        Some(Value(command)) if command == "settle" => return parse_settle(parser),
         Some(Value(command)) if command == "hook" => return parse_hook(parser),
         Some(Long("help") | Short('h')) => return Ok(Command::Help),
         Some(other) => return Err(usage(other.unexpected())),
@@ -163,26 +193,59 @@ fn parse_rule(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     Ok(Command::Rule { stands, over })
 }
 
-fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {
+fn parse_settle(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let (mut action, mut settings) = (Command::Hook, None);
+    let (mut date, mut clash, mut option) = (None, None, None);
+    // Digits and nothing else: `+1` is not a number here, though it would parse as one.
+    let number = |parser: &mut lexopt::Parser| {
+        let value = parser.value().and_then(|v| v.string()).map_err(usage)?;
+        let digits = !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
+        let number = digits.then(|| value.parse::<usize>().ok()).flatten();
+        number.ok_or_else(|| Failure::Usage(format!("--clash and --option take a number, and {value:?} is not one")))
+    };
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
-            Value(word) if matches!(action, Command::Hook) && word == "install" => action = Command::InstallHook(None),
-            Value(word) if matches!(action, Command::Hook) && word == "uninstall" => action = Command::RemoveHook,
-            Long("settings") if matches!(action, Command::InstallHook(_)) => {
-                settings = Some(PathBuf::from(parser.value().map_err(usage)?));
-            }
+            Long("date") => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("clash") => clash = Some(number(&mut parser)?),
+            Long("option") => option = Some(number(&mut parser)?),
             other => return Err(usage(other.unexpected())),
         }
     }
-    Ok(if matches!(action, Command::InstallHook(_)) { Command::InstallHook(settings) } else { action })
+    match (date, clash, option) {
+        (Some(date), Some(clash), Some(option)) => Ok(Command::Settle { date, clash, option }),
+        _ => Err(Failure::Usage("settle takes --date, --clash and --option".to_string())),
+    }
+}
+
+fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {
+    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
+    let install = |action: &Command| matches!(action, Command::InstallHook { .. });
+    let (mut action, mut settings, mut installed) = (Command::Hook, None, false);
+    while let Some(arg) = parser.next().map_err(usage)? {
+        match arg {
+            Long("help") | Short('h') => return Ok(Command::Help),
+            Value(word) if matches!(action, Command::Hook) && word == "install" => {
+                action = Command::InstallHook { settings: None, installed: false };
+            }
+            Value(word) if matches!(action, Command::Hook) && word == "uninstall" => action = Command::RemoveHook,
+            Value(word) if matches!(action, Command::Hook) && word == "status" => action = Command::HookStatus,
+            Long("settings") if install(&action) => settings = Some(PathBuf::from(parser.value().map_err(usage)?)),
+            Long("installed") if install(&action) => installed = true,
+            other => return Err(usage(other.unexpected())),
+        }
+    }
+    Ok(if install(&action) { Command::InstallHook { settings, installed } } else { action })
 }
 
 /// The path a variable names, when it is set to something.
 fn named(variable: &str) -> Option<PathBuf> {
     env::var_os(variable).filter(|path| !path.is_empty()).map(PathBuf::from)
+}
+
+/// The folder `install.sh` puts the `jellymoon` command in.
+fn bin() -> Option<PathBuf> {
+    named("JELLYMOON_BIN_DIR").or_else(|| Some(user_home()?.join(".local").join("bin")))
 }
 
 /// Claude Code's own folder, which holds its `projects` and its `settings.json`: `CLAUDE_CONFIG_DIR`, its own setting

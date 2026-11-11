@@ -126,11 +126,18 @@ fn install_adds_one_entry_and_leaves_every_other_byte_and_uninstall_restores_the
     for (before, held) in SETTINGS {
         let w = world();
         fs::write(w.settings(), before).unwrap();
+        assert_eq!(w.ok(&["hook", "status"]), json!({"installed": false, "changed": false}));
         assert_eq!(
             w.ok(&["hook", "install", "--settings", w.settings().to_str().unwrap()]),
             json!({"installed": true, "changed": true})
         );
         let after = fs::read_to_string(w.settings()).unwrap();
+        assert_eq!(w.ok(&["hook", "status"]), json!({"installed": true, "changed": false}));
+        assert_eq!(fs::read_to_string(w.settings()).unwrap(), after, "asking changes nothing");
+        // The record alone is not the hook: with the entry taken out by hand, it is not installed.
+        fs::write(w.settings(), before).unwrap();
+        assert_eq!(w.ok(&["hook", "status"]), json!({"installed": false, "changed": false}));
+        fs::write(w.settings(), &after).unwrap();
         // Every byte of the file is still there, in order, around one piece of new text.
         let head = before.bytes().zip(after.bytes()).take_while(|(a, b)| a == b).count();
         let tail = before.bytes().rev().zip(after.bytes().rev()).take_while(|(a, b)| a == b).count();
@@ -149,6 +156,7 @@ fn install_adds_one_entry_and_leaves_every_other_byte_and_uninstall_restores_the
         assert_eq!(fs::read_to_string(w.settings()).unwrap(), after, "a second install changes nothing");
         assert_eq!(w.ok(&["hook", "uninstall"]), json!({"installed": false, "changed": true}));
         assert_eq!(fs::read_to_string(w.settings()).unwrap(), *before, "uninstall restores the file exactly");
+        assert_eq!(w.ok(&["hook", "status"]), json!({"installed": false, "changed": false}));
         assert_eq!(w.ok(&["hook", "uninstall"]), json!({"installed": false, "changed": false}));
     }
 }

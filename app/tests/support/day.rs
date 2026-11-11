@@ -94,17 +94,21 @@ pub fn answer(world: &World, reply: &str, exit: i32) {
     fs::write(world.rec.join("exit"), exit.to_string()).unwrap();
 }
 
-/// Runs `jellymoon-app layout` on the day with the world's logs, and the world's variables with `more` over them.
-pub fn run(world: &World, args: &[&str], more: &[(&str, &str)]) -> Output {
-    let logs = world.dir.path().join("logs");
+/// Runs `jellymoon-app` with the world's variables, and `more` over them.
+pub fn app(world: &World, args: &[&str], more: &[(&str, &str)]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon-app"));
-    cmd.args(["layout", "--date", DAY, "--logs"]).arg(logs).args(args);
-    cmd.env_clear().envs(world.vars.iter().map(|(name, value)| (name, value))).stdin(Stdio::null());
+    cmd.args(args).env_clear().envs(world.vars.iter().map(|(name, value)| (name, value))).stdin(Stdio::null());
     cmd.envs(more.iter().copied());
     if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
         cmd.env("SystemRoot", root);
     }
     cmd.output().unwrap()
+}
+
+/// Runs `jellymoon-app layout` on the day with the world's logs.
+pub fn run(world: &World, args: &[&str], more: &[(&str, &str)]) -> Output {
+    let logs = world.dir.path().join("logs");
+    app(world, &[&["layout", "--date", DAY, "--logs", logs.to_str().unwrap()], args].concat(), more)
 }
 
 /// What [`run`] placed. It must exit 0 and say nothing on stderr.

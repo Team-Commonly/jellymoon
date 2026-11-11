@@ -1,7 +1,7 @@
 //! The `jellymoon-app` command. With `layout` it prints where the kit puts every piece of a page, one line of JSON
 //! each; without, it opens the page in a window. With `--page` both draw the page data they are given and nothing
 //! else happens. With no `--page` the page is the day's own (`today.rs`): kept in the user's folder, and read through
-//! core when the day has moved on.
+//! core when the day has moved on. A tap in the window goes to core through `taps.rs`.
 
 use std::io::{Read, Write};
 use std::path::Path;
@@ -89,18 +89,19 @@ fn run() -> Result<String, Failure> {
 /// replaces the scene. `JELLYMOON_QUIT_AFTER=<seconds>` closes the window by itself, for checks.
 #[cfg(feature = "window")]
 fn window(options: Options) -> Result<(), Failure> {
-    use jellymoon_app::{today::Later, window::open};
-    let (scene, later): (_, Option<Later>) = match options.page {
+    use jellymoon_app::{taps::OnShow, window::open};
+    let (scene, day) = match options.page {
         Source::File(file) => (scene::scene(&page(&file)?), None),
         Source::Waiting(date) => (today::waiting(&date), None),
         Source::Day(day) => {
             let (first, kept) = day.first();
-            (first, Some(day.later(kept)))
+            let shown = OnShow { today: (*day).clone(), page: kept.clone(), scene: first.clone() };
+            (first, Some((shown, day.later(kept))))
         }
     };
     let seconds = std::env::var("JELLYMOON_QUIT_AFTER").ok().and_then(|seconds| seconds.parse::<f32>().ok());
     let quit_after = seconds.and_then(|seconds| std::time::Duration::try_from_secs_f32(seconds).ok());
-    open(scene, options.theme, options.size, quit_after, later);
+    open(scene, options.theme, options.size, quit_after, day);
     Ok(())
 }
 

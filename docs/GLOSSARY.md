@@ -10,7 +10,8 @@ The words below mean exactly this in code, docs and tests. A new term is added h
 | **star** | One finished job an agent reported for a wish | proof the job was done; it is the model's reading |
 | **clash** | Two things one person said that cannot both stand. Shown as an ask; the person's tap is the ruling | a merge conflict |
 | **ask** | A question put to the person with fixed options and an open decision | a question in prose |
-| **ruling** | The person's choice on an ask; made once, then handed to running sessions | approval in chat |
+| **ruling** | The person's choice on an ask, made by a tap and handed to each running session once. A tap the other way is a new ruling that replaces it | approval in chat |
+| **settlement** | The file beside a day's kept page that says which statement of each clash stands, so the page draws it settled. No ruling is made from it | the ruling |
 | **hook** | The one entry Jellymoon adds to the harness settings; the harness runs it at each step of a session, and it hands over the rulings that wait (`jellymoon hook`) | a git hook |
 | **harness** | The agent program a person already uses: `claude-code` or `codex` | Jellymoon, which only reads its logs and calls it |
 | **session log** | The file a harness writes for one session. Private, and untrusted input: it can hold any text an agent ever printed | page data, which code has checked |

@@ -65,11 +65,12 @@ static URL_PASSWORD: LazyLock<Regex> =
 /// intermediate bytes, a final byte) or OSC (ESC `]` up to BEL or ESC `\`). Then any control character other than
 /// newline and tab, and any format character (category Cf: the bidi controls, zero-width space, soft hyphen, word
 /// joiner, byte-order mark, tag characters and the rest) other than the joiners U+200C and U+200D, which emoji and
-/// several scripts are written with. A sequence that is cut short or broken loses only those characters.
+/// several scripts are written with, and U+2065, which has no category and stands unseen among the invisible
+/// operators. A sequence that is cut short or broken loses only those characters.
 static UNSEEN: LazyLock<Regex> = LazyLock::new(|| {
     pattern(concat!(
         r"(?:\x1b\[|\u{9b})[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)",
-        r"|[\p{Cc}--[\n\t]]|[\p{Cf}--[\u{200c}\u{200d}]]|[\u{e0000}-\u{e007f}]",
+        r"|[\p{Cc}--[\n\t]]|[\p{Cf}--[\u{200c}\u{200d}]]|[\u{2065}\u{e0000}-\u{e007f}]",
     ))
 });
 

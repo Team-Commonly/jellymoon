@@ -13,20 +13,29 @@ max_file_lines = 400
 # `tests/first_run.rs`, one in `tests/f33.rs` and the helper that compares a whole folder).
 # The closed list of characters that cannot be seen, and the check of `--skip` names against it, raised core by 25
 # and the binary by 17 (the test's array of every entry).
-"crates/jellymoon-core" = 2642
-"crates/jellymoon" = 2790
+# F35 and F36 raised them once more: core by 448 (`tap.rs`, the tap's rules, is 274 and `command.rs`, the check of the
+# installed command, 105; the rest is `hook_installed`, the waiting rulings and the create-new write)
+# and the binary by 786 (`settle`, `hook status` and `hook install --installed`; nearly all of it their tests at the binary:
+# `tests/f35.rs`, `tests/f35/delivery.rs` and `tests/f35/lock.rs`).
+"crates/jellymoon-core" = 3090
+"crates/jellymoon" = 3576
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
-# session logs raised it by 12.
-"crates/xtask" = 1042
+# session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
+"crates/xtask" = 1091
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
-"crates/sticker-kit" = 5363
+# A whole choice (F35: every word of an option, or the note left out) raised the kit by 110: 84 are `tests/whole.rs`.
+# A text run's own size, which the drawing paints at, raised the kit by 80: 77 are the two tests that hold it
+# (`tests/whole.rs` by measure, `tests/draw.rs` by what is painted).
+"crates/sticker-kit" = 5553
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
-"app" = 2434
+# F35 raised the app by 560: `taps.rs` (a tap carried to core and drawn), its cases in `tests/f35.rs`, and the
+# scene, the window and the day drawing what core says stands.
+"app" = 2994
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

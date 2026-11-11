@@ -258,10 +258,11 @@ fn a_jellymoon_home_that_is_not_a_full_path_is_refused_by_every_command_that_wou
     let (logs, settings) = (w.at("logs"), w.at("settings.json"));
     let (logs, settings) = (logs.to_str().unwrap(), settings.to_str().unwrap());
     let before = tree(w.dir.path());
-    let commands: [&[&str]; 6] = [
+    let commands: [&[&str]; 7] = [
         &["day", "--date", "2026-03-10", "--logs", logs],
         &["page", "--date", "2026-03-10", "--logs", logs],
         &["rule", "--stands", "fail fast", "--over", "add a retry"],
+        &["settle", "--date", "2026-03-10", "--clash", "1", "--option", "1"],
         &["hook", "install", "--settings", settings],
         &["hook", "uninstall"],
         &["uninstall"],

@@ -11,7 +11,8 @@ use std::time::Duration;
 use std::{env, fs};
 
 use crate::Error;
-use crate::call::run;
+use crate::busy::or_test;
+use crate::call::{full_folders, passed_on, run};
 use crate::redact::line;
 
 /// What git may see of this process's environment: where its programs and the person's config are, and the two
@@ -46,20 +47,21 @@ const OFF: &[&str] =
 /// How much of what git printed is kept in an error, in characters.
 const SAID_MAX: usize = 300;
 
-/// How long one git child may run. One still running then is killed, and the command it was for fails.
+/// How long one git child may run. One still running then is killed, and the command it was for fails. A test's
+/// build reads a shorter one from `JELLYMOON_TEST_GIT_LIMIT_MS`.
 const LIMIT: Duration = Duration::from_secs(300);
 
-/// The limit, shorter for a test: the variable is read only by a build with debug assertions, which a release is not.
-fn limit() -> Duration {
-    let short = env::var("JELLYMOON_TEST_GIT_LIMIT_MS").ok().filter(|_| cfg!(debug_assertions));
-    short.and_then(|ms| ms.parse().ok()).map_or(LIMIT, Duration::from_millis)
-}
+/// What stands where git's own words would, for a repo whose folder was read from a session log.
+const UNSAID: &str = "what git said of a folder read from a session log is not repeated";
 
 /// The `git` program, the empty folder it is started in and told to look for hooks in, and its time limit.
 pub(super) struct Git {
     program: PathBuf,
     empty: PathBuf,
     limit: Duration,
+    /// The repo's folder was read from a session log: nothing git says of it, and no name from its config, is
+    /// put in an error, since git's words name the folder.
+    pub quiet: bool,
 }
 
 /// One repo, named to git by its git folder, with the filters its config names switched off.
@@ -73,16 +75,15 @@ impl Git {
     /// Finds `git` in the folders of `PATH` that are full paths (a relative one would be read from the folder git
     /// starts in), and makes the empty folder, under `runs`. A folder there that holds anything is refused: a file
     /// in it could be run as a hook.
-    pub fn find(runs: &Path) -> Result<Git, String> {
+    pub fn find(runs: &Path, quiet: bool) -> Result<Git, String> {
         let name = format!("git{}", env::consts::EXE_SUFFIX);
-        let folders = env::var_os("PATH").unwrap_or_default();
-        let on_path = env::split_paths(&folders).filter(|folder| folder.is_absolute()).map(|folder| folder.join(&name));
-        let program = on_path.into_iter().find(|program| program.is_file());
+        let on_path = full_folders(&env::var_os("PATH").unwrap_or_default());
+        let program = on_path.into_iter().map(|folder| folder.join(&name)).find(|program| program.is_file());
         let program = program.ok_or("no `git` program was found on PATH; a run's copy is made with git")?;
         let empty = runs.join("no-hooks");
         let held = fs::create_dir_all(&empty).and_then(|()| fs::read_dir(&empty)).map(|mut held| held.next().is_some());
         match held {
-            Ok(false) => Ok(Git { program, empty, limit: limit() }),
+            Ok(false) => Ok(Git { program, empty, limit: or_test(LIMIT, "JELLYMOON_TEST_GIT_LIMIT_MS"), quiet }),
             Ok(true) => Err("the folder Jellymoon keeps empty for git (runs/no-hooks) holds something".to_string()),
             Err(e) => Err(format!("the folder Jellymoon keeps empty for git (runs/no-hooks): {e}")),
         }
@@ -91,7 +92,7 @@ impl Git {
     fn command(&self) -> Command {
         let mut command = Command::new(&self.program);
         command.current_dir(&self.empty).env_clear();
-        command.envs(ENVIRONMENT.iter().filter_map(|name| Some((name, env::var_os(name)?))));
+        command.envs(passed_on(ENVIRONMENT));
         command.env("GIT_TERMINAL_PROMPT", "0").env("GIT_NO_LAZY_FETCH", "1");
         command.arg("--no-pager").arg("-c").arg(joined("core.hooksPath=", &self.empty));
         command.args(OFF.iter().flat_map(|off| ["-c", off]));
@@ -108,7 +109,7 @@ impl Git {
         command.envs(folder.parent().map(|above| ("GIT_CEILING_DIRECTORIES", above)));
         command.arg("-C").arg(folder).args(["rev-parse", "--path-format=absolute", "--is-bare-repository"]);
         command.args(["--is-inside-work-tree", "--show-prefix", "--git-dir", "--git-common-dir"]);
-        Ok(printed(command, self.limit)?.unwrap_or_default().lines().map(str::to_string).collect())
+        Ok(printed(command, self)?.unwrap_or_default().lines().map(str::to_string).collect())
     }
 
     /// Names a repo by its git folder and reads which filters and which transports its config names, so each call
@@ -117,7 +118,7 @@ impl Git {
         let mut repo = Repo { git: self, dir: dir.to_path_buf(), blanks: Vec::new() };
         let keys = r"^(filter\..*\.(clean|smudge|process)|protocol\..*\.allow)$";
         let named = repo.ask(None, &[], &["config", "-z", "--name-only", "--get-regexp", keys])?.unwrap_or_default();
-        repo.blanks = blanks(&named)?;
+        repo.blanks = blanks(&named).map_err(|named| if self.quiet { UNSAID.to_string() } else { named })?;
         Ok(repo)
     }
 }
@@ -154,7 +155,7 @@ impl Repo<'_> {
         let mut command = self.git.command();
         command.args(self.blanks.iter().flat_map(|blank| ["-c", blank])).arg(joined("--git-dir=", &self.dir));
         command.args(tree.map(|tree| joined("--work-tree=", tree))).args(args).envs(vars.iter().copied());
-        printed(command, self.git.limit)
+        printed(command, self.git)
     }
 
     /// The same, for a command that must work.
@@ -176,8 +177,8 @@ fn joined(flag: &str, path: &Path) -> OsString {
 
 /// What the command printed. A failure is the start of what git said, made one line. A git still running at `limit`
 /// is killed, by the reading call's own runner: git is given nothing to read.
-fn printed(command: Command, limit: Duration) -> Result<Option<String>, String> {
-    let output = run(command, Vec::new(), limit).map_err(|e| match e {
+fn printed(command: Command, git: &Git) -> Result<Option<String>, String> {
+    let output = run(command, Vec::new(), git.limit).map_err(|e| match e {
         Error::TooLong(limit) => format!("git did not finish in {} seconds and was stopped", limit.as_secs_f32()),
         e => format!("git could not be started: {e}"),
     })?;
@@ -188,6 +189,7 @@ fn printed(command: Command, limit: Duration) -> Result<Option<String>, String> 
             Err(_) => Err("git printed a name that is not text".to_string()),
         },
         (false, Some(1)) if said.is_empty() => Ok(None),
+        _ if git.quiet => Err(UNSAID.to_string()),
         _ => Err(said),
     }
 }

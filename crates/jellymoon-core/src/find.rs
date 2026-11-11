@@ -23,6 +23,14 @@ pub(crate) struct Found {
     pub path: Option<OsString>,
 }
 
+/// The harness a caller named, as it is, or the one found.
+pub(crate) fn named_or_found(named: Option<&Path>) -> Result<Found, Error> {
+    match named {
+        Some(harness) => Ok(Found { program: path::absolute(harness).map_err(Error::Call)?, path: None }),
+        None => harness(),
+    }
+}
+
 /// Finds `claude` in the folders of `PATH`, then in the well-known places. A program there that someone other than
 /// its owner can write to, or whose folder everyone can write to, is passed over; the error names it when no later
 /// place has one.

@@ -158,6 +158,50 @@ fn a_harness_found_off_path_can_start_a_helper_beside_it_or_in_a_well_known_plac
     assert_eq!(child_path(&w, "path"), [w.place("path")]);
 }
 
+// The reading call's folder is empty and Jellymoon's own, but the list is the one a run is started with, in a
+// copy the agent writes: an entry that is not a full path is never passed on.
+#[test]
+fn only_the_full_paths_of_the_environment_reach_the_reading_call() {
+    let relative = |w: &mut World, path: OsString| {
+        w.vars.push(("PATH", path));
+        w.vars.extend(["TMPDIR", "CLAUDE_CONFIG_DIR"].map(|name| (name, "elsewhere".into())));
+    };
+    let seen = |w: &World, place: &str, name: &str| {
+        let env = fs::read_to_string(w.place(place).join("env")).unwrap();
+        env.lines().find_map(|line| line.strip_prefix(&format!("{name}=")).map(str::to_string))
+    };
+    let mut w = world();
+    w.harness_at("path");
+    let mixed = [PathBuf::from("elsewhere"), w.place("path"), PathBuf::from("."), w.place("sys")];
+    relative(&mut w, std::env::join_paths(mixed).unwrap());
+    w.vars.extend(["HOME", "USERPROFILE"].map(|name| (name, "user".into())));
+    assert_eq!(w.ran_at(), ["path"]);
+    let full = std::env::join_paths([w.place("path"), w.place("sys")]).unwrap();
+    assert_eq!(seen(&w, "path", "PATH").map(OsString::from), Some(full));
+    for name in ["TMPDIR", "CLAUDE_CONFIG_DIR", "HOME", "USERPROFILE"] {
+        assert_eq!(seen(&w, "path", name), None, "{name} was passed on");
+    }
+
+    // A harness found off a PATH with no full path in it is given the well-known folders alone.
+    let mut w = world();
+    w.harness_at("native");
+    relative(&mut w, "elsewhere".into());
+    assert_eq!(w.ran_at(), ["native"]);
+    let path = seen(&w, "native", "PATH").unwrap();
+    assert!(std::env::split_paths(&path).all(|folder| folder.is_absolute()), "{path}");
+
+    // A harness that was named, and no full path in PATH: one line, and nothing is started.
+    let mut w = world();
+    let named = w.harness_at("elsewhere");
+    relative(&mut w, "path".into());
+    w.vars.push(("JELLYMOON_CLAUDE", named.into()));
+    let ran = w.run("page");
+    let none = "jellymoon: the reading call could not run: PATH names no folder by its full path, and a folder named \
+                any other way is not passed on to Claude Code\n";
+    assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (1, "", none));
+    assert!(!w.place("elsewhere").join("arg0").exists(), "the harness was started");
+}
+
 #[test]
 fn nothing_found_is_one_line_that_names_where_it_looked() {
     let w = world();

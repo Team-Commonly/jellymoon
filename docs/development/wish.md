@@ -2,7 +2,8 @@
 
 A made wish is one the person made themselves, not one the reading call worked out (F37,
 [ADR 0014](../adr/0014-a-run-is-started-headless.md)). The rules are core's, in `crates/jellymoon-core/src/wish.rs`.
-Nothing is started for a made wish yet: a run is F39.
+`jellymoon wish` starts nothing: a made wish gets its run from `jellymoon run` ([run.md](run.md)), which adds
+`run` and `why` to the kept wish.
 
 ```
 jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]
@@ -72,8 +73,9 @@ own words. The kept page itself never holds a made wish.
 
 ## Not covered yet
 
-- A made wish cannot be taken back or changed, and its state never moves: F39 gives it a run and a star.
-- Nothing checks that the project is a folder on this computer. F39 does, and refuses a name two folders share.
+- A made wish cannot be taken back or changed. Its state moves only with its one run ([run.md](run.md)).
+- `jellymoon wish` does not check that the project is a folder on this computer. `jellymoon run` does, and
+  refuses a name two folders share.
 - The same words made twice are two wishes.
 - With eight wishes read and eight made, a page holds sixteen. How many of them the kit shows is the kit's layout.
 - A made wish's little one carries a short label, cut. Its words are in the note "wished here today", whole or

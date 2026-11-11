@@ -52,18 +52,38 @@ here: **F30 waits on F40.**
 | F40 | `jellymoon run stop`, and denials counted | F39 | yes |
 | F30 | The held key: a helper prints the words, and core treats them as a typed wish | F40 | no |
 
+## Measured
+
+The coordinator measured these on Claude Code 2.1.322, on a Mac, in a scratch repo, before F39 was built. F39
+starts a run with exactly this command line (`docs/development/run.md`).
+
+- **The command line.** `-p --restricted --strict-mcp-config --permission-prompts none --permission-mode acceptEdits
+  --tools Read Edit Write Glob Grep --no-session-persistence --output-format stream-json --verbose`, with the wish
+  on the input.
+- **What the harness then has.** The stream's first line is `system`/`init`: the tools are `Edit`, `Glob`, `Grep`,
+  `Read` and `Write`, there are no MCP servers, and the permission mode is `acceptEdits`.
+- **A write outside the folder is denied.** It gives one `system`/`permission_denied` line, and the result's
+  `permission_denials` then holds one entry, which names `Write`.
+- **The end.** The last line is `type: result` with `subtype: success` and `is_error: false`; the exit is 0 and
+  stderr is empty. No session is kept.
+
+F39 adds one dependency for this: `rustix`, to core, under `[target.'cfg(unix)'.dependencies]` only, with its
+default features off and `std` and `process` on. The standard library can only kill its own child outright
+(`Child::kill`): it has no call that asks a process to stop first, and none that signals a process group or a pid
+it did not start, and `rustix::process::kill_process_group` is that call without `unsafe` (`run/child.rs`,
+`run/dead.rs`). It is the version `tempfile` already brings into the build, so no new package is downloaded.
+`cargo xtask check` asks nothing more of a new dependency than `entropy.toml`'s `[depends]` and `[forbidden]`,
+which it passes; this note is the rule's.
+
 ## Still open
 
-- **Interrupting.** Whether the stream mode takes a supported interrupt message on its input is not confirmed, nor how
-  a child is interrupted on Windows. Until it is, a stop is the signal and then the kill.
-- **Hooks and protected paths.** Whether hooks load from a settings file given on the command line is not confirmed,
-  nor the harness's exact list of protected paths, and so whether `.git` inside the copy is covered by the edit allow.
-- **The flags.** The coordinator checked these against the `--help` of Claude Code 2.1.322: `--permission-mode` (with
-  `dontAsk`), `--permission-prompts none`, `--strict-mcp-config`, `--setting-sources`, `--no-session-persistence`,
-  `--tools`, `--allowedTools`, `--disallowedTools`, `--add-dir`, `--output-format stream-json`, and `--restricted`
-  (no built-in tool that runs commands or code, no WebFetch, the person's, the project's and the local settings files
-  ignored, file tools held to the working folders). F39 starts from `--restricted --strict-mcp-config
-  --permission-prompts none` and a named `--tools` list. A Claude Code too old to know `--restricted` is refused in a
-  plain line and is never run without it. What each flag does was read from `--help`, not measured: F39's tests prove
-  what core passes, and a person's own run proves what the harness does with it.
+- **Interrupting.** Whether the stream mode takes a supported interrupt message on its input was not measured, nor
+  how a child is interrupted on Windows. Until it is, a stop is the signal and then the kill; on Windows, the kill.
+- **A repo with its own instructions.** A run in a repo that has its own `CLAUDE.md`, settings or hooks was not
+  measured, nor the harness's exact list of protected paths, and so whether `.git` inside the copy is covered by
+  the edit allow.
+- **Windows, and an older Claude Code.** Neither was measured. A Claude Code too old to know `--restricted` is
+  told by its exit and the words `unknown option` and `--restricted` on stderr. Those words are what such a harness
+  is expected to print, not what one was seen to print: a harness that says it another way gives a failed run with
+  its copy kept, never a run without the flag.
 - **Workers never run the real `claude`.** Every test uses a made-up agent that prints a scripted stream.

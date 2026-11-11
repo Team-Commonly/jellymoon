@@ -33,7 +33,9 @@ claude -p --model <name> --tools "" --strict-mcp-config --disable-slash-commands
 - The environment is `PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM` and `CLAUDE_CONFIG_DIR`, when set: enough for
   the harness to find its own sign-in. On Windows the list is the system's equivalents (`USERPROFILE`, `APPDATA`,
   `SystemRoot` and the like). Jellymoon passes no credential of its own or anyone else's. `PATH` is this process's own,
-  made longer only when the harness was found in a well-known place (below).
+  made longer only when the harness was found in a well-known place (below). Only full paths are passed on, as for a
+  run ([run.md](run.md), "What the harness is started with"): of `PATH` the folders named by a full path, and with
+  none the call does not run and one line says so; a `HOME`, `TMPDIR` or `CLAUDE_CONFIG_DIR` that is not one is dropped.
 - It runs in a new empty folder under `reading/` in Jellymoon's home (`JELLYMOON_HOME`, or `.jellymoon` in the home
   directory), removed when the call ends.
 - It may take three minutes. After that it is stopped and there is no page.

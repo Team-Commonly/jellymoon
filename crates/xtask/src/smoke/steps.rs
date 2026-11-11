@@ -38,6 +38,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "wish", only: Only::Synthetic, run: wish },
     // A run's copy (F38). Not with --real: it makes a repo of its own, and that is all it reads.
     Step { name: "copy", only: Only::Synthetic, run: super::copy::copy },
+    // A run (F39), in a repo it makes. With --real it starts the person's own Claude Code on one harmless wish.
+    Step { name: "run", only: Only::Any, run: super::run::run },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
     Step { name: "window", only: Only::Window, run: window },
 ];

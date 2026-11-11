@@ -18,6 +18,8 @@ use crate::{Harness, ReaderTurn};
 const SAID_MAX: usize = 700;
 const REPLY_MAX: usize = 500;
 const PROJECT_MAX: usize = 255;
+/// The most characters of a folder that are kept for a run to find its repo by. A longer one is no folder.
+pub(crate) const FOLDER_MAX: usize = 4096;
 
 /// What the harness adds inside a person's prompt: reminders, the view context of an open artifact and the paragraph
 /// that explains it. Each is a pattern and a pass of its own: joined in one pattern, a block that never closes stays
@@ -95,22 +97,20 @@ enum Prompt {
     Neither,
 }
 
+/// A turn, when it was typed, and the folder its project is named after: the log's own text, which is never printed.
+pub(crate) type Typed = (Option<Timestamp>, ReaderTurn, String);
+
 /// Returns one log's turns, on any day, each with when it was typed. A line that is not valid JSON is skipped; a file
 /// that cannot be read gives what was read before the error. `seen` holds the uuid of every typed line so far: a resumed
 /// or forked session repeats earlier lines in a new file, and the first one read is the one kept.
-pub(crate) fn turns(
-    file: &Path,
-    skip: &[String],
-    seen: &mut HashSet<String>,
-    line_max: usize,
-) -> Vec<(Option<Timestamp>, ReaderTurn)> {
+pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, line_max: usize) -> Vec<Typed> {
     let Ok(log) = File::open(file) else {
         return Vec::new();
     };
     let folder =
         file.parent().and_then(Path::file_name).map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let (mut log, mut raw) = (BufReader::with_capacity(1 << 16, log), Vec::new());
-    let mut turns: Vec<(Option<Timestamp>, ReaderTurn)> = Vec::new();
+    let mut turns: Vec<Typed> = Vec::new();
     let mut open = false; // whether the last turn can still take a reply
     while let Ok(true) = next_line(&mut log, line_max, &mut raw) {
         let Some(line) = decode(&raw, open) else {
@@ -127,18 +127,20 @@ pub(crate) fn turns(
                 open = !said.is_empty() && !skipped(if cwd.is_empty() { &folder } else { cwd }, skip);
                 if open {
                     // A folder's name is the log's text too: it is printed, and the model reads it.
+                    let (project, folder) = place(cwd);
+                    let project = shown(project, PROJECT_MAX);
                     let turn = ReaderTurn {
                         at: String::new(),
                         tool: Harness::ClaudeCode,
-                        project: shown(project(cwd), PROJECT_MAX),
+                        project,
                         said,
                         reply: String::new(),
                     };
-                    turns.push((line.timestamp, turn));
+                    turns.push((line.timestamp, turn, folder.chars().take(FOLDER_MAX + 1).collect()));
                 }
             }
             Prompt::Neither => {
-                if let (true, Some(text), Some((_, turn))) = (open, reply(&line), turns.last_mut()) {
+                if let (true, Some(text), Some((_, turn, _))) = (open, reply(&line), turns.last_mut()) {
                     turn.reply = shown(&text, REPLY_MAX);
                 }
             }
@@ -149,7 +151,7 @@ pub(crate) fn turns(
 
 /// Reads the next line into `line` and reports whether there was one. A line longer than `max` bytes is read past and
 /// comes back empty: no prompt a person typed is that long.
-fn next_line(log: &mut impl BufRead, max: usize, line: &mut Vec<u8>) -> io::Result<bool> {
+pub(crate) fn next_line(log: &mut impl BufRead, max: usize, line: &mut Vec<u8>) -> io::Result<bool> {
     line.clear();
     let (mut any, mut over) = (false, false);
     loop {
@@ -226,19 +228,22 @@ fn reply(line: &Line) -> Option<String> {
 
 /// Names the folder a turn ran in: the repo's folder inside a harness worktree of it, the folder's last segment
 /// otherwise. A folder is written with `\` on Windows, so both separators count on every system. One walk that holds
-/// three segments at a time: a log's folder can be any length, and nothing here grows with it.
-fn project(cwd: &str) -> &str {
-    let (mut before, mut last) = ([""; 3], "");
+/// three segments at a time: a log's folder can be any length, and nothing here grows with it. With the name comes
+/// the folder that carries it: the start of `cwd` up to the end of that segment.
+fn place(cwd: &str) -> (&str, &str) {
+    let (mut before, mut last, mut at) = ([("", 0); 3], ("", 0), 0);
     for segment in cwd.split(['/', '\\']) {
-        if !before[0].is_empty() && before[1] == ".claude" && before[2] == "worktrees" {
-            return before[0];
+        if !before[0].0.is_empty() && before[1].0 == ".claude" && before[2].0 == "worktrees" {
+            return (before[0].0, &cwd[..before[0].1]);
         }
-        before = [before[1], before[2], segment];
+        let end = at + segment.len();
+        before = [before[1], before[2], (segment, end)];
         if !segment.is_empty() {
-            last = segment;
+            last = (segment, end);
         }
+        at = end + 1; // both separators are one byte
     }
-    last
+    (last.0, &cwd[..last.1])
 }
 
 /// Whether a folder is switched off: it contains one of the names, character for character. White space around a
@@ -290,9 +295,17 @@ mod tests {
             ("/work/beta/.claude/worktrees", "worktrees"),
             ("", ""),
         ];
+        fn project(cwd: &str) -> &str {
+            place(cwd).0
+        }
         for (cwd, want) in names {
             assert_eq!(project(cwd), want, "{cwd}");
         }
+        assert_eq!(place("/work/beta/.claude/worktrees/fix-login/web").1, "/work/beta");
+        assert_eq!(
+            (place("/work/alpha/").1, place(r"C:\work\beta").1, place("").1),
+            ("/work/alpha", r"C:\work\beta", "")
+        );
         let slashes = "/".repeat(1 << 20);
         let start = std::time::Instant::now();
         assert_eq!(project(&slashes), "");

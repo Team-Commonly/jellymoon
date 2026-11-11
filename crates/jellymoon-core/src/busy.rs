@@ -26,6 +26,13 @@ pub(crate) fn in_use(error: &io::Error) -> bool {
     busy(error.kind(), error.raw_os_error(), cfg!(windows))
 }
 
+/// A wait or a limit, shorter for a test: the variable holds milliseconds, and is read only by a build with debug
+/// assertions, which a release is not.
+pub(crate) fn or_test(real: Duration, variable: &str) -> Duration {
+    let short = std::env::var(variable).ok().filter(|_| cfg!(debug_assertions));
+    short.and_then(|ms| ms.parse().ok()).map_or(real, Duration::from_millis)
+}
+
 /// Does `step`, again every 10 ms while it fails with a file in use and [`WAIT`] has not passed.
 pub(crate) fn retried<T>(step: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     retrying(WAIT, in_use, step)

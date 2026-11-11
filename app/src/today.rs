@@ -273,7 +273,8 @@ fn words(error: &Error) -> String {
         | Error::Tap(_)
         | Error::Command(_)
         | Error::Copy(_)
-        | Error::Wish(_) => {
+        | Error::Wish(_)
+        | Error::Run(_) => {
             format!("{error}.")
         }
     }

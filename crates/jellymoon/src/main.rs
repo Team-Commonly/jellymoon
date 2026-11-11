@@ -11,7 +11,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, Error, Outcome, PageOptions, ReaderDay, UninstallOptions, user_home};
+use jellymoon_core::{DayOptions, Error, Outcome, PageOptions, ReaderDay, RunOptions, UninstallOptions, user_home};
 use lexopt::prelude::*;
 
 const USAGE: &str = "usage:
@@ -21,6 +21,7 @@ const USAGE: &str = "usage:
   jellymoon hook                                 (run by Claude Code: hands waiting rulings to the session on stdin)
   jellymoon settle --date <YYYY-MM-DD> --clash <n> --option <1|2>   (a tap on a clash of the kept page: that statement stands)
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]   (keeps a wish you make on the day's page; starts nothing)
+  jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
@@ -47,6 +48,7 @@ enum Command {
     InstallHook { settings: Option<PathBuf>, installed: bool },
     Settle { date: String, clash: usize, option: usize },
     Wish { date: Option<String>, say: String, project: String },
+    Run(RunOptions),
     RemoveHook,
     HookStatus,
     Uninstall,
@@ -135,6 +137,7 @@ fn run() -> Result<String, Failure> {
         Command::Wish { date, say, project } => {
             Ok(format!("{}\n", jellymoon_core::wish(&home()?, date.as_deref(), &say, &project).map_err(failed)?))
         }
+        Command::Run(options) => Ok(format!("{}\n", jellymoon_core::run(&home()?, &options).map_err(failed)?)),
         Command::HookStatus => {
             let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));
             Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))
@@ -165,6 +168,7 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         Some(Value(command)) if command == "rule" => return parse_rule(parser),
         Some(Value(command)) if command == "settle" => return parse_settle(parser),
         Some(Value(command)) if command == "wish" => return parse_wish(parser),
+        Some(Value(command)) if command == "run" => return parse_run(parser),
         Some(Value(command)) if command == "hook" => return parse_hook(parser),
         Some(Value(command)) if command == "copy" => return parse_copy(parser),
         Some(Long("help") | Short('h')) => return Ok(Command::Help),
@@ -252,6 +256,25 @@ fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         (Some(say), Some(project)) => Ok(Command::Wish { date, say, project }),
         _ => Err(Failure::Usage("wish takes --say and --project".to_string())),
     }
+}
+
+/// `run`. The logs are read only when no repo is named, to find the one folder of the wish's project.
+fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
+    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
+    let logs = harness_folder().ok().map(|folder| folder.join("projects"));
+    let mut options = RunOptions { logs, harness: named("JELLYMOON_CLAUDE"), ..RunOptions::default() };
+    let mut wish = None;
+    while let Some(arg) = parser.next().map_err(usage)? {
+        match arg {
+            Long("help") | Short('h') => return Ok(Command::Help),
+            Long("wish") => wish = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("date") => options.day = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("repo") => options.repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
+            other => return Err(usage(other.unexpected())),
+        }
+    }
+    options.wish = wish.ok_or_else(|| Failure::Usage("run takes --wish".to_string()))?;
+    Ok(Command::Run(options))
 }
 
 fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {

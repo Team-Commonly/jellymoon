@@ -1,5 +1,5 @@
-//! The two ways a copy's command could be left waiting or doubled: a git that never returns, and two `copy clean`
-//! of one run at once. The git that never returns is the made-up `fake-git`, first on the `PATH` these runs are
+//! The ways a copy's command could be left waiting or doubled: a git that never returns, copies made at once, and
+//! two `copy clean` of one run at once. The git that never returns is the made-up `fake-git`, first on the `PATH` these runs are
 //! given. It runs the real git, then sleeps for a minute holding a lock of the system's.
 
 use std::env::consts::EXE_SUFFIX;
@@ -109,6 +109,32 @@ fn the_run_that_just_failed_is_kept_whatever_the_clock_says_and_kept_is_said_aft
     assert!(kept && last.folder.is_dir(), "the run that just failed is one of the newest five");
     assert!(!old[0].folder.exists() && old[1..].iter().all(|made| made.folder.is_dir()), "the oldest went");
     assert_eq!(w.listed(&repo), 6);
+}
+
+// git looks at every working tree of a repo while it adds one, and one half made, or half removed, stops it. So
+// copies of one repo are made one at a time, and never while one is cleaned: eight at once, with the round
+// before's eight cleaned at the same moment, are each made.
+#[test]
+fn copies_made_at_once_in_one_repo_while_others_are_cleaned_are_each_made() {
+    let w = world();
+    let repo = w.repo("alpha");
+    let mut before: Vec<String> = Vec::new();
+    for round in 0..5 {
+        let make = || w.run(&["copy", "make", "--repo", repo.to_str().unwrap()]);
+        let (made, cleaned) = thread::scope(|all| {
+            let made: Vec<_> = (0..8).map(|_| all.spawn(make)).collect();
+            let cleaned: Vec<_> = before.iter().map(|run| all.spawn(|| w.clean(run, "completed"))).collect();
+            let ended = |going: Vec<thread::ScopedJoinHandle<Ran>>| -> Vec<Ran> {
+                going.into_iter().map(|one| one.join().unwrap()).collect()
+            };
+            (ended(made), ended(cleaned))
+        });
+        for ran in made.iter().chain(&cleaned) {
+            assert_eq!((ran.code, ran.stderr.as_str()), (0, ""), "round {round}");
+        }
+        before = made.iter().map(|ran| said(ran).run).collect();
+        assert_eq!(w.listed(&repo), 9, "round {round}: the checkout and this round's eight copies");
+    }
 }
 
 #[test]

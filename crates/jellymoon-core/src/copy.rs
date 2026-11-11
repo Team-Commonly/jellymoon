@@ -80,7 +80,7 @@ impl Places {
         self.runs.join(run).join("copy.json")
     }
 
-    /// The file a clean holds the system's lock on while it works.
+    /// The file a clean, and a copy being made, holds the system's lock on while it works.
     fn lock(&self) -> PathBuf {
         self.runs.join("clean.lock")
     }
@@ -167,7 +167,10 @@ fn make(home: &Path, repo: &Path, run: Option<&str>, found: bool) -> Result<RunC
     let person = git.open(Path::new(own)).map_err(refused)?;
     let base = person.ask(None, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).map_err(refused)?;
     let base = base.ok_or_else(|| refused("--repo has no commit yet, so there is nothing to copy"))?;
-    OpenOptions::new().append(true).create(true).open(at.lock()).map_err(Error::Store)?;
+    // git reads every worktree of the repo while it adds one, and fails on one half made or half removed. So a
+    // copy is made behind the lock a clean holds: one at a time, and never while another is removed.
+    let held = OpenOptions::new().write(true).create(true).truncate(false).open(at.lock()).map_err(Error::Store)?;
+    held.lock().map_err(Error::Store)?;
     let run = claim(&at.runs, run)?;
     let made = add(&git, &person, &at, &run, Path::new(shared), &base);
     if made.is_err() {

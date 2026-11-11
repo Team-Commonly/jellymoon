@@ -21,7 +21,7 @@ In Jellymoon's home (`JELLYMOON_HOME`, or `.jellymoon` in the home directory), b
 - `runs/<run>/copy.json` is core's record of the copy, written when it is made: the repo's git folder, the copy's
   own git folder inside it, and when the run failed. It is outside the copy, where a run cannot write.
 - `runs/no-hooks` is an empty folder: git is started in it and told to look for hooks in it.
-- `runs/clean.lock` is an empty file, made with the first copy: a clean holds the system's lock on it.
+- `runs/clean.lock` is an empty file, made with the first copy: a clean, and a copy being made, holds the system's lock on it.
 
 A run id is `r` and sixteen of `0-9a-f`. Core makes it; one given with `--run` is taken only in that shape, so a
 name with a dot, a separator or a full path never reaches a path. An id is taken by making `runs/<run>`, which only
@@ -52,6 +52,10 @@ new thing in their repo is the run's branch (and git's own registration of the w
 **Two cleans at once.** One clean works at a time, of any run: it holds the system's lock on `runs/clean.lock`,
 which the system drops when the process ends, however it ends. A second `copy clean` of the same run waits, then
 finds what the first left: `no copy is kept for run <run>` after a completed one, exit 1, and nothing done twice.
+
+**Copies made at once.** A copy is made behind the same lock. git reads every worktree of a repo while it adds
+one, and fails on one that is half made or half removed (`failed to read .../commondir`), so copies are made one at
+a time and never while one is cleaned or taken back. A `make` waits for the lock; it is not refused for it.
 
 **A git that never returns.** Each git child has five minutes. One still running then is killed by its process id,
 and the command exits 1 with `git did not finish in 300 seconds and was stopped`. A `make` stopped so takes its

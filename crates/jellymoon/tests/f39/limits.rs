@@ -225,22 +225,27 @@ fn an_agent_deaf_to_the_stop_signal_is_killed_after_its_five_seconds() {
     assert!(w.agent_came_and_went(), "the deaf agent is still running");
 }
 
+// Four at once, for each of the eight wishes a day holds: whichever comes first runs, and each of the others is
+// refused in the one line, also when its copy was being made in the same repo at the same moment as another's.
 #[test]
-fn two_runs_started_at_once_for_one_wish_are_one_run() {
+fn runs_started_at_once_for_one_wish_are_one_run() {
     let w = world();
     let repo = w.repo("alpha");
-    for round in 0..4 {
+    for round in 0..8 {
         let wish = w.wish("alpha");
         let start = || w.start(&wish, &repo);
-        let (one, two) = thread::scope(|both| {
-            let (one, two) = (both.spawn(start), both.spawn(start));
-            (one.join().unwrap(), two.join().unwrap())
+        let ended: Vec<_> = thread::scope(|all| {
+            let going: Vec<_> = (0..4).map(|_| all.spawn(start)).collect();
+            going.into_iter().map(|one| one.join().unwrap()).collect()
         });
-        let (done, late) = if one.code == 0 { (one, two) } else { (two, one) };
-        let (run, said) = ran(&done);
+        let (done, late): (Vec<_>, Vec<_>) = ended.iter().partition(|ended| ended.code == 0);
+        assert_eq!((done.len(), late.len()), (1, 3), "round {round}");
+        let (run, said) = ran(done[0]);
         assert_eq!((&said["outcome"], &said["star"]), (&json!("completed"), &json!(STAR)), "round {round}");
-        assert!(refused(&late).contains("has had its run"), "round {round}: {}", late.stderr);
-        // One agent was started, one branch is new, and no copy or record of the other is left.
+        for late in late {
+            assert!(refused(late).contains("has had its run"), "round {round}: {}", late.stderr);
+        }
+        // One agent was started, one branch is new, and no copy or record of the others is left.
         assert_eq!((w.starts(), w.branches(&repo).len(), w.copies()), (round + 1, round + 1, vec![]), "round {round}");
         assert_eq!(w.kept(&wish)["run"], json!(run), "round {round}");
         let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());

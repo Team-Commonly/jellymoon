@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/jellymoon-core", "crates/jellymoon", "crates/xtask"]
+members = ["crates/jellymoon-core", "crates/jellymoon", "crates/xtask", "crates/sticker-kit", "app"]
 
 [workspace.package]
 edition = "2024"
@@ -16,6 +16,14 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tempfile = "3.27.0"
 toml = { version = "1.2.1", default-features = false, features = ["parse", "serde", "std"] }
+
+# The shell's side (docs/adr/0013-the-shell-dependencies.md). GPUI has no versioned release: it is one commit of the
+# Zed repository, and the three lines move together.
+sticker-kit = { path = "crates/sticker-kit", default-features = false }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "f0d896f2c18a543335eb155f729d36b624695591" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "f0d896f2c18a543335eb155f729d36b624695591" }
+gpui_apple = { git = "https://github.com/zed-industries/zed", rev = "f0d896f2c18a543335eb155f729d36b624695591" }
+ttf-parser = { version = "0.25.1", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

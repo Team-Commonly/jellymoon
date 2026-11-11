@@ -24,7 +24,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # GPUI is some 700 crates; a build with a cold cache takes most of this.
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -43,14 +44,28 @@ jobs:
             target
           key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-
+      - name: What GPUI links against on Linux (the build's share of Zed's script/linux at the pinned commit)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libfontconfig-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev
+      - name: Long paths on Windows, which the checkout of the Zed repository needs (Zed's docs/src/development/windows.md)
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+      - name: The draw tests render without a window, on the Mac only (the Makefile makes the same choice)
+        if: runner.os == 'macOS'
+        run: |
+          features=sticker-kit/headless
+          xcrun -f metal >/dev/null 2>&1 || features=$features,sticker-kit/runtime_shaders
+          echo "FEATURES=--features $features" >> "$GITHUB_ENV"
       - name: Format
         run: cargo fmt --all --check
       - name: Lints
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets $FEATURES -- -D warnings
       - name: The repo's own rules (file size, LOC budgets, portable paths, crate direction)
         run: cargo xtask check
       - name: Tests
-        run: cargo test --workspace
+        run: cargo test --workspace $FEATURES
 
   secrets:
     runs-on: ubuntu-latest

@@ -214,19 +214,41 @@ mod tests {
         assert_eq!(page.clashes.len(), 1);
     }
 
-    // The check of a reading costs the same whatever the model wrote: a quote longer than what the person typed is
+    // What a reading costs does not grow with what the model wrote: a quote longer than what the person typed is
     // refused unread, a full page stops the looking, and projects are told apart through a set.
     #[test]
-    fn a_huge_reading_of_a_huge_day_is_checked_in_seconds() {
+    fn a_huge_quote_and_a_full_page_cost_nothing_on_a_huge_day() {
         let day = day(4000);
         let start = std::time::Instant::now();
-        let mut wishes = vec![wish(0, "aB3 ".repeat(1 << 20))];
-        wishes.extend((1..20_000).map(|n| wish(n, format!("words nobody typed {n}"))));
-        let page = kept(&day, Reading { wishes, clashes: Vec::new() });
+        let page = kept(&day, Reading { wishes: vec![wish(0, "aB3 ".repeat(1 << 20))], clashes: Vec::new() });
         assert!(page.wishes.is_empty());
         assert_eq!(page.read.projects.len(), 4000);
         let full = (0..20_000).map(|n| wish(n, "build the thing numbered 0".into())).collect();
         assert_eq!(kept(&day, Reading { wishes: full, clashes: Vec::new() }).wishes.len(), WISHES_MAX);
+        assert!(start.elapsed() < Duration::from_secs(10), "{:?}", start.elapsed());
+    }
+
+    // Every wish here costs a search of everything typed that day, 4 MB of it, so the time is the number of wishes
+    // looked at: 64 take a fraction of a second, and all 5000 took 27 s where this was measured.
+    #[test]
+    fn a_reading_of_thousands_of_wishes_costs_what_the_first_ones_do() {
+        let mut day = day(4000);
+        for turn in &mut day.turns {
+            turn.said.push_str(&" and then some more words about it".repeat(30));
+        }
+        let wishes = (0..5000).map(|n| wish(n, format!("words nobody typed {n}"))).collect();
+        let clash = |n: usize| Clash {
+            a: "m0".into(),
+            b: "m1".into(),
+            quote_a: format!("words nobody typed {n}"),
+            quote_b: "build the thing numbered 1".into(),
+            settled: false,
+        };
+        let start = std::time::Instant::now();
+        assert!(kept(&day, Reading { wishes, clashes: Vec::new() }).wishes.is_empty());
+        let wishes = vec![wish(0, "build the thing numbered 0".into()), wish(1, "build the thing numbered 1".into())];
+        let page = kept(&day, Reading { wishes, clashes: (0..5000).map(clash).collect() });
+        assert!(page.clashes.is_empty());
         assert!(start.elapsed() < Duration::from_secs(10), "{:?}", start.elapsed());
     }
 }

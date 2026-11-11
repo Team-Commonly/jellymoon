@@ -174,7 +174,9 @@ fn output_that_is_not_page_data_gives_an_error_and_no_page() {
     }
     // Neither error quotes what the model or the harness wrote as it came: no escape, no key, one line.
     let hostile = format!("\u{1b}[2J\u{202e}{}\nsecond line", support::hub_key());
-    let state = json!({"wishes": [{"id": "a", "label": "x", "said": "add a retry", "project": "alpha", "state": hostile, "stars": []}], "clashes": []});
+    // Keys in alphabetical order, so the text is the same whether or not another crate in the build has turned on
+    // serde_json's `preserve_order` (GPUI does).
+    let state = json!({"clashes": [], "wishes": [{"id": "a", "label": "x", "project": "alpha", "said": "add a retry", "stars": [], "state": hostile}]});
     let reported = json!({"type": "result", "is_error": true, "result": hostile});
     for (name, reply) in [("the model's text", result(&state.to_string())), ("the harness's", reported.to_string())] {
         let ran = w.run(&reply, 0, "page", DAY);

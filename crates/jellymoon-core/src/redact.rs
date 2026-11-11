@@ -3,6 +3,7 @@
 //! what is shaped like a key or a password; [`string`], which it runs first, shortens Jellymoon's own tokens and drops
 //! control and invisible characters, so a text can neither leak a token nor move a terminal's cursor nor reorder a line.
 
+use std::ops::Range;
 use std::sync::LazyLock;
 
 use regex::{Captures, Regex};
@@ -47,7 +48,8 @@ static LONG_RUN: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+/=_-]{4
 static LONG_SEGMENT: LazyLock<Regex> = LazyLock::new(|| pattern(r"[A-Za-z0-9+=_-]{40,}"));
 
 /// Where a word turns into a path or a link. At its start, after any opening quotes and brackets: `/`, `./`, `../`,
-/// `~/` or a Windows drive (`C:\` or `C:/`). Anywhere in it: a URL scheme (`https://`), as in a markdown link.
+/// `~/` or a Windows drive (`C:\` or `C:/`). Anywhere in it, any number of times: a URL scheme (`https://`), as in a
+/// markdown link or a JSON value.
 static PATH_START: LazyLock<Regex> =
     LazyLock::new(|| pattern(r#"^["'`(\[{<]*(?:\.{0,2}/|~/|[A-Za-z]:[\\/])|[A-Za-z][A-Za-z0-9+.-]*://"#));
 
@@ -91,13 +93,14 @@ fn credentials(text: &str) -> String {
     let mut shown = String::with_capacity(text.len());
     for piece in text.split_inclusive(char::is_whitespace) {
         let word = piece.trim_end();
-        let path = PATH_START.find(word).map_or(word.len()..word.len(), |start| {
-            let end = word[start.end()..].find(PATH_END).map_or(word.len(), |at| start.end() + at);
-            start.start()..end
-        });
+        let (paths, mut next) = (paths(word), 0);
         shown.push_str(&LONG_RUN.replace_all(word, |run: &Captures| {
             let (at, run) = run.get(0).map_or((0, ""), |run| (run.start(), run.as_str()));
-            if !path.contains(&at) {
+            // Runs come in order, and so do the paths: the ones that ended before this run are done with.
+            while paths.get(next).is_some_and(|path| path.end <= at) {
+                next += 1;
+            }
+            if !paths.get(next).is_some_and(|path| path.contains(&at)) {
                 return mixed(run).to_string();
             }
             LONG_SEGMENT.replace_all(run, |segment: &Captures| mixed(&segment[0]).to_string()).into_owned()
@@ -105,6 +108,17 @@ fn credentials(text: &str) -> String {
         shown.push_str(&piece[word.len()..]);
     }
     shown
+}
+
+/// Every path and link in a word, in order: each from its [`PATH_START`] to the next [`PATH_END`] or the word's end.
+/// The search for the next one goes on from where the last ended, so the word is read once.
+fn paths(word: &str) -> Vec<Range<usize>> {
+    let (mut found, mut from) = (Vec::new(), 0);
+    while let Some(start) = PATH_START.find_at(word, from) {
+        from = word[start.end()..].find(PATH_END).map_or(word.len(), |at| start.end() + at);
+        found.push(start.start()..from);
+    }
+    found
 }
 
 /// Replaces a run that has digits and both letter cases.

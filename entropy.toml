@@ -4,20 +4,26 @@
 # The most lines a Rust file may have.
 max_file_lines = 400
 
-# The most lines of Rust each crate may hold, tests included. Every crate under crates/ needs one.
+# The most lines of Rust each crate may hold, tests included. Every crate needs one.
 [budget]
-"crates/jellymoon-core" = 1641
-"crates/jellymoon" = 1104
-"crates/xtask" = 392
+"crates/jellymoon-core" = 1691
+"crates/jellymoon" = 1106
+"crates/xtask" = 421
+"crates/sticker-kit" = 4825
+"app" = 1572
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]
 jellymoon-core = []
 jellymoon = ["jellymoon-core"]
 xtask = []
+# The kit knows nothing of Jellymoon; the app is the only crate that joins the kit and core.
+sticker-kit = []
+jellymoon-app = ["jellymoon-core", "sticker-kit"]
 
 # The outside packages a crate may never list: in any dependency table, under any [target.*], or renamed with
-# `package = "..."`. Core and the binary never depend on GPUI, so every rule can be proved with no display.
+# `package = "..."`. A name ending in `*` bars every package that starts so. Core and the binary never depend on GPUI
+# or any of its `gpui_*` packages, so every rule can be proved with no display.
 [forbidden]
-jellymoon-core = ["gpui", "gpui_platform"]
-jellymoon = ["gpui", "gpui_platform"]
+jellymoon-core = ["gpui*"]
+jellymoon = ["gpui*"]

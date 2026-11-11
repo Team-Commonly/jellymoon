@@ -62,7 +62,7 @@ fn dependencies(manifest: &Table, workspace: &Table) -> Vec<String> {
     found
 }
 
-/// The crates under `crates/`, by the manifests that are tracked.
+/// Every crate in the repo, wherever its folder is (`crates/<name>`, and `app`): each tracked manifest below the root.
 fn crates(root: &Path, files: &[String]) -> Vec<Crate> {
     let workspace = text(root, "Cargo.toml").and_then(|manifest| manifest.parse::<Table>().ok());
     let workspace = workspace
@@ -71,9 +71,7 @@ fn crates(root: &Path, files: &[String]) -> Vec<Crate> {
         .cloned()
         .unwrap_or_default();
     let one = |file: &String| {
-        let folder = file
-            .strip_suffix("/Cargo.toml")
-            .filter(|folder| folder.starts_with("crates/") && folder.matches('/').count() == 1)?;
+        let folder = file.strip_suffix("/Cargo.toml")?;
         let manifest: Table = fs::read_to_string(root.join(file)).ok()?.parse().ok()?;
         Some(Crate { folder: folder.to_string(), dependencies: dependencies(&manifest, &workspace), manifest })
     };
@@ -166,8 +164,8 @@ fn lists(table: &Table) -> BTreeMap<&str, Vec<&str>> {
 }
 
 /// Every crate is listed under `[depends]` with the workspace crates it may depend on, and depends on no other. A crate
-/// under `[forbidden]` lists none of the outside packages named there. Both look at what a manifest lists, so neither
-/// sees what a dependency brings in with it.
+/// under `[forbidden]` lists none of the outside packages named there; a name that ends in `*` bars every package that
+/// starts with what is before it. Both look at what a manifest lists, so neither sees what a dependency brings in.
 fn wrong_dependencies(crates: &[Crate], depends: &Table, forbidden: &Table) -> Vec<String> {
     let (allowed, forbidden) = (lists(depends), lists(forbidden));
     let mut found = Vec::new();
@@ -184,7 +182,10 @@ fn wrong_dependencies(crates: &[Crate], depends: &Table, forbidden: &Table) -> V
         for dependency in one.dependencies.iter().map(String::as_str) {
             let against = if crates.iter().any(|other| other.name() == dependency) && !allowed.contains(&dependency) {
                 "depends"
-            } else if barred.contains(&dependency) {
+            } else if barred.iter().any(|name| match name.strip_suffix('*') {
+                Some(start) => dependency.starts_with(start),
+                None => *name == dependency,
+            }) {
                 "forbidden"
             } else {
                 continue;
@@ -203,7 +204,7 @@ fn wrong_dependencies(crates: &[Crate], depends: &Table, forbidden: &Table) -> V
 mod tests {
     use super::*;
 
-    const ENTROPY: &str = "max_file_lines = 400\n[budget]\n\"crates/core\" = 500\n\"crates/bin\" = 500\n[depends]\ncore = []\nbin = [\"core\"]\n[forbidden]\ncore = [\"gpui\", \"gpui_platform\"]\n";
+    const ENTROPY: &str = "max_file_lines = 400\n[budget]\n\"crates/core\" = 500\n\"crates/bin\" = 500\n[depends]\ncore = []\nbin = [\"core\"]\n[forbidden]\ncore = [\"gpui*\", \"tokio\"]\n";
 
     /// A small repo that breaks no rule, then `change` applied to it: its files by name, and what `check` finds.
     fn found(change: &[(&str, &str)]) -> Vec<String> {
@@ -329,11 +330,39 @@ mod tests {
             let found = found(&[("crates/core/Cargo.toml", &core), ("Cargo.toml", workspace)]);
             assert_one(&found, "crates/core/Cargo.toml: core may not depend on gpui (entropy.toml [forbidden])");
         }
-        let second = "[package]\nname = \"core\"\n[dependencies]\ngpui_platform = \"1\"\n";
-        assert_one(&found(&[("crates/core/Cargo.toml", second)]), "core may not depend on gpui_platform");
+        // `gpui*` bars every package that starts so; a name with no star bars that package alone.
+        for package in ["gpui_platform", "gpui_wgpu", "tokio"] {
+            let other = format!("[package]\nname = \"core\"\n[dependencies]\n{package} = \"1\"\n");
+            assert_one(&found(&[("crates/core/Cargo.toml", &other)]), &format!("core may not depend on {package}"));
+        }
+        for package in ["gpu", "wgpui", "tokio-util"] {
+            let other = format!("[package]\nname = \"core\"\n[dependencies]\n{package} = \"1\"\n");
+            assert_eq!(found(&[("crates/core/Cargo.toml", &other)]), Vec::<String>::new(), "{package}");
+        }
         // Only the crates the table names: the binary of this small repo is not one of them.
         let bin = "[package]\nname = \"bin\"\n[dependencies]\ncore = { path = \"../core\" }\ngpui = \"1\"\n";
         assert_eq!(found(&[("crates/bin/Cargo.toml", bin)]), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_crate_outside_the_crates_folder_is_held_to_the_same_rules() {
+        let shell =
+            ("app/Cargo.toml", "[package]\nname = \"shell\"\n[dependencies]\ncore = { path = \"../crates/core\" }\n");
+        let unlisted = found(&[shell]);
+        assert!(unlisted.iter().any(|line| line.contains("app: no budget")), "{unlisted:?}");
+        assert!(unlisted.iter().any(|line| line.contains("may depend on")), "{unlisted:?}");
+        let entropy = |depends: &str| {
+            let listed = format!("\"app\" = 10\n[depends]\nshell = [{depends}]");
+            ENTROPY.replace("[depends]", &listed)
+        };
+        assert_one(&found(&[shell, ("entropy.toml", &entropy(""))]), "shell may not depend on core");
+        let allowed = entropy("\"core\"");
+        assert_eq!(found(&[shell, ("entropy.toml", &allowed)]), Vec::<String>::new());
+        let long = "// line\n".repeat(11);
+        assert_one(
+            &found(&[shell, ("entropy.toml", &allowed), ("app/src/main.rs", &long)]),
+            "app: 11 lines of Rust, over its budget of 10",
+        );
     }
 
     #[test]

@@ -1,0 +1,36 @@
+[package]
+name = "jellymoon-app"
+version = "0.1.0"
+description = "The shell: turns page data into the kit's scene, prints where each piece goes, and draws it in a window."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = ["window"]
+# The window, and with it GPUI. Without it the crate is the scene and the layout command only.
+window = ["sticker-kit/gpui", "dep:gpui", "dep:gpui_platform"]
+# Compile Metal shaders at run time, for a Mac without the full Xcode toolchain.
+runtime_shaders = ["window", "sticker-kit/runtime_shaders"]
+# Windowless rendering, for the snapshot example.
+headless = ["window", "sticker-kit/headless"]
+
+[dependencies]
+jellymoon-core.workspace = true
+sticker-kit.workspace = true
+jiff.workspace = true
+lexopt.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+gpui = { workspace = true, optional = true }
+gpui_platform = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+[[example]]
+name = "snapshot"
+required-features = ["headless"]

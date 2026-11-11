@@ -31,9 +31,9 @@ nothing on stdout.
 
 With no `--page` the app shows a day: today in the computer's time zone, or `--date`. It calls core's `day` and `page`
 itself, with what the `jellymoon` command would use: the logs under `CLAUDE_CONFIG_DIR` or `~/.claude` (or `--logs`),
-the harness `JELLYMOON_CLAUDE` names or `claude` on `PATH`, `--model` (default `sonnet`), a 180 s limit. It never runs
+the harness `JELLYMOON_CLAUDE` names or `claude` on `PATH` or in a well-known place (`page.md`), `--model` (default `sonnet`), a 180 s limit. It never runs
 the `jellymoon` binary. Core's rules are core's: only the day goes to the call, with every tool off. The user's home
-is the `HOME` variable (`USERPROFILE` on Windows) and nothing else: with neither that nor `--logs` and
+is the `HOME` variable (`USERPROFILE` on Windows), a full path, and nothing else: with neither that nor `--logs` and
 `JELLYMOON_HOME`, the app exits 2 and reads nothing, so a test run with an empty environment cannot reach real logs.
 A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that is not absolute exits 2.
 

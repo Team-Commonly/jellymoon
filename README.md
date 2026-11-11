@@ -24,8 +24,10 @@ script before running it, open [`install.sh`](install.sh), or download it first:
 ## Status: early
 
 Open the app and it shows today's page: it reads the day with one call through your own Claude Code, keeps the page
-in `~/.jellymoon`, and reads again only when you have typed more. An app opened from the Finder may not find Claude
-Code yet (it does not see your shell's `PATH`); until that is fixed, start it from a terminal:
+in `~/.jellymoon`, and reads again only when you have typed more. An app opened from the Finder does not see your
+shell's `PATH`, so it also looks for Claude Code where its installers put it (`~/.local/bin`, `~/.claude/local`,
+Homebrew, `/usr/local/bin`). Installed somewhere else (under nvm, for one), it is found when you start the app from a
+terminal where `claude` runs:
 
 ```sh
 ~/Applications/Jellymoon.app/Contents/MacOS/jellymoon-app
@@ -52,7 +54,7 @@ If you already have rustup, skip both: `cargo` reads `rust-toolchain.toml` and f
 ```sh
 cargo run -p jellymoon -- day                      # today's typed turns, as JSON
 cargo run -p jellymoon -- day --date 2026-11-09 --skip private-notes
-cargo run -p jellymoon -- page                     # today's page data; makes one call to `claude` on your PATH
+cargo run -p jellymoon -- page                     # today's page data; makes one call to your own `claude`
 ```
 
 [`docs/development/reader.md`](docs/development/reader.md) and [`page.md`](docs/development/page.md) say exactly what

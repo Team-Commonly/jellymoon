@@ -10,7 +10,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, PageOptions, UninstallOptions};
+use jellymoon_core::{DayOptions, PageOptions, UninstallOptions, user_home};
 use lexopt::prelude::*;
 
 const USAGE: &str = "usage:
@@ -176,10 +176,6 @@ fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {
 /// The path a variable names, when it is set to something.
 fn named(variable: &str) -> Option<PathBuf> {
     env::var_os(variable).filter(|path| !path.is_empty()).map(PathBuf::from)
-}
-
-fn user_home() -> Option<PathBuf> {
-    env::home_dir().filter(|home| !home.as_os_str().is_empty())
 }
 
 /// Claude Code's own folder, which holds its `projects` and its `settings.json`: `CLAUDE_CONFIG_DIR`, its own setting

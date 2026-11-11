@@ -9,11 +9,11 @@ mod checks;
 mod support;
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-use std::{env, fs};
+use std::fs;
+use std::path::PathBuf;
 
 use serde_json::{Value, json};
-use support::{A, C, Ran, ZONE, reply, said, scratch, write_log};
+use support::{A, C, Ran, ZONE, install, reply, said, scratch, write_log};
 use tempfile::TempDir;
 
 /// Typed by the person, and reads like flags and like an instruction to the model.
@@ -28,18 +28,6 @@ struct World {
     home: PathBuf,
     rec: PathBuf,
     vars: Vec<(&'static str, OsString)>,
-}
-
-/// Puts the made-up harness in `dir` under `name`. On Linux it is a link: a program file that was just written cannot
-/// be started there while a child of another test still holds it open ("text file busy"). Elsewhere it is a copy: a Mac
-/// now and then kills a signed program started through a fresh link.
-fn install(dir: &Path, name: &str) -> PathBuf {
-    fs::create_dir_all(dir).unwrap();
-    let (built, program) = (env!("CARGO_BIN_EXE_fake-claude"), dir.join(format!("{name}{}", env::consts::EXE_SUFFIX)));
-    if !cfg!(target_os = "linux") || fs::hard_link(built, &program).is_err() {
-        fs::copy(built, &program).unwrap();
-    }
-    program
 }
 
 fn world() -> World {
@@ -61,6 +49,7 @@ fn world() -> World {
         ("USERPROFILE", at("user").into()),
         ("JELLYMOON_HOME", at("jm").into()),
         ("PATH", at("bin").into()),
+        ("JELLYMOON_SYSTEM_BIN", OsString::new()), // no folder of this machine is looked in
     ];
     World { home: at("jm"), rec: at("bin"), vars, dir }
 }

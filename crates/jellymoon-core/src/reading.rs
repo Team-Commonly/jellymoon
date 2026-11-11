@@ -35,7 +35,7 @@ pub struct PageOptions {
     pub dir: PathBuf,
     /// How long the call may take before it is stopped.
     pub limit: Duration,
-    /// The harness program. None is `claude`, found on `PATH`.
+    /// The harness program. None is `claude`, found on `PATH` or in a well-known place (`find.rs`).
     pub harness: Option<PathBuf>,
 }
 

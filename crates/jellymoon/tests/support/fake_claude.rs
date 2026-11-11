@@ -1,14 +1,25 @@
 //! A made-up harness for the black-box tests. It leaves what it was given in the folder its own program file is in (the
 //! one place a test can name, since `jellymoon` passes it no argument or variable of the test's): one file per argument,
 //! then the folder it ran in, what was there, its environment and its input. It answers with the `reply` and the `exit`
-//! code the test left in that folder.
+//! code the test left in that folder. When the test left a `needs` file there, it first starts the program that file
+//! names, by name alone, as a script that begins `env node` would; started with `--helper`, it is that program.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::io::{Read, Write};
 use std::{env, fs, io, process};
 
 fn main() {
+    if env::args().nth(1).as_deref() == Some("--helper") {
+        return;
+    }
     let rec = env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    if let Ok(helper) = fs::read_to_string(rec.join("needs")) {
+        let started = process::Command::new(helper.trim()).arg("--helper").status();
+        if !started.is_ok_and(|status| status.success()) {
+            eprintln!("the helper {helper} was not found on PATH");
+            process::exit(9);
+        }
+    }
     for (n, arg) in env::args().skip(1).enumerate() {
         fs::write(rec.join(format!("arg{n}")), arg).unwrap();
     }

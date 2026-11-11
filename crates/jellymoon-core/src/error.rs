@@ -14,8 +14,8 @@ pub enum Error {
     Logs(io::Error),
     /// The model's name is not a name: it could be read as a flag by the harness.
     Model,
-    /// No `claude` program is on `PATH`.
-    NoHarness,
+    /// No `claude` program is on `PATH` or in a well-known place. It holds the places looked in, as a person names them.
+    NoHarness(String),
     /// The reading call could not be started, or its folder could not be made.
     Call(io::Error),
     /// The reading call ran past its time limit and was stopped.
@@ -51,7 +51,10 @@ impl fmt::Display for Error {
             Error::Date => write!(f, "--date must be a day as YYYY-MM-DD"),
             Error::Logs(e) => write!(f, "reading the session logs: {e}"),
             Error::Model => write!(f, "--model must be a model's name: letters, digits, dot, dash and underscore"),
-            Error::NoHarness => write!(f, "finding Claude Code: no `claude` program on PATH"),
+            Error::NoHarness(looked) => write!(
+                f,
+                "finding Claude Code: no `claude` program in {looked}; install Claude Code, or name the program with JELLYMOON_CLAUDE"
+            ),
             Error::Call(e) => write!(f, "the reading call could not run: {e}"),
             Error::TooLong(limit) => write!(f, "the reading call took longer than {} seconds", limit.as_secs_f32()),
             Error::Failed { status, said } => {

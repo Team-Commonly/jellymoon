@@ -4,7 +4,7 @@
 
 use std::ffi::OsStr;
 use std::io::{Read, Seek, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 use std::{fs, thread};
@@ -34,17 +34,26 @@ pub fn scratch() -> TempDir {
 /// Runs `jellymoon` with only the variables given. A run still going after 20 seconds (a reader stuck on a pipe would be)
 /// is stopped and fails the test. Output goes to files, so a full pipe can never be what holds it up.
 pub fn jellymoon(vars: &[(&str, &OsStr)], args: &[&str]) -> Ran {
-    jellymoon_fed(vars, args, "")
+    started(Path::new("."), vars, args, "")
 }
 
 /// The same, with `input` as the program's input.
 pub fn jellymoon_fed(vars: &[(&str, &OsStr)], args: &[&str], input: &str) -> Ran {
+    started(Path::new("."), vars, args, input)
+}
+
+/// The same, started in `folder`.
+pub fn jellymoon_in(folder: &Path, vars: &[(&str, &OsStr)], args: &[&str]) -> Ran {
+    started(folder, vars, args, "")
+}
+
+fn started(folder: &Path, vars: &[(&str, &OsStr)], args: &[&str], input: &str) -> Ran {
     let (mut out, mut err) = (tempfile::tempfile().unwrap(), tempfile::tempfile().unwrap());
     let mut fed = tempfile::tempfile().unwrap();
     fed.write_all(input.as_bytes()).unwrap();
     fed.rewind().unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
-    cmd.args(args).env_clear().envs(vars.iter().copied()).stdin(Stdio::from(fed));
+    cmd.args(args).current_dir(folder).env_clear().envs(vars.iter().copied()).stdin(Stdio::from(fed));
     cmd.stdout(out.try_clone().unwrap()).stderr(err.try_clone().unwrap());
     if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
         cmd.env("SystemRoot", root); // a Windows program needs it to start
@@ -68,6 +77,22 @@ pub fn jellymoon_fed(vars: &[(&str, &OsStr)], args: &[&str], input: &str) -> Ran
         text
     };
     Ran { stdout: read(&mut out), stderr: read(&mut err), code: status.code().unwrap_or(-1) }
+}
+
+/// Puts the made-up harness in `dir` under `name`. On Linux it is a link: a program file that was just written cannot
+/// be started there while a child of another test still holds it open ("text file busy"). Elsewhere it is a copy: a Mac
+/// now and then kills a signed program started through a fresh link.
+pub fn install(dir: &Path, name: &str) -> PathBuf {
+    fs::create_dir_all(dir).unwrap();
+    let (built, program) =
+        (env!("CARGO_BIN_EXE_fake-claude"), dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)));
+    if !cfg!(target_os = "linux") || fs::hard_link(built, &program).is_err() {
+        fs::copy(built, &program).unwrap();
+    }
+    // A copy takes the mode the build left, which the group can write to where files are made so (a umask of 002).
+    #[cfg(unix)]
+    fs::set_permissions(&program, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    program
 }
 
 /// One session log line. `origin` is the origin kind; "" leaves origin out, as a prompt sent by another program has none.

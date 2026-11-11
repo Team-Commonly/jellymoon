@@ -8,8 +8,6 @@ jellymoon-app [layout] [--date <YYYY-MM-DD>] [--fresh] [--logs <dir>] [--skip <n
               [--theme <theme>] [--size <W>x<H>]
 jellymoon-app [layout] --waiting [--date <YYYY-MM-DD>] [--theme <theme>] [--size <W>x<H>]
 jellymoon-app [layout] --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]
-jellymoon-app tap [--date <YYYY-MM-DD>] --clash <n> --option <1|2>
-jellymoon-app tap --delivery-on
 ```
 
 These are all the flags, with `--help`. `--logs`, `--skip` and `--model` are `jellymoon page`'s; `--waiting` shows
@@ -74,35 +72,41 @@ A tap in the window is one line on stderr, the piece's id and the option's numbe
 
 ## Taps (`app/src/taps.rs`)
 
-A tap on an option of a day's page does one of two things, both by calling core, never by running `jellymoon`.
-The window's handler and the `tap` command both call `Today::tapped`; the command reads the day's kept page first
-and prints one line of JSON. A page drawn from `--page` has no day, and a tap on it does nothing.
+The rules of a tap are core's (`crates/jellymoon-core/src/tap.rs`, [delivery.md](delivery.md#a-tap-on-a-clash)):
+which statement stands, when a tap makes no ruling, what is kept and in which order, and which `jellymoon` command
+the hook may name. They are proved at `jellymoon settle` and `jellymoon hook install --installed`. The app has no
+`tap` command. It draws what core says and carries a tap to core by calling it, never by running `jellymoon`. A page
+drawn from `--page` has no day, and a tap on it does nothing.
 
-- **A clash's option makes a ruling.** The option tapped stands and the other is what it replaces. Both statements
-  are the clash's `quote_a` and `quote_b` in the page data on show, handed to `jellymoon_core::rule` as they are:
-  core makes each one line, replaces credential shapes and cuts it ([delivery.md](delivery.md)). The app adds no
-  word of its own, and one tap makes at most one ruling. `tap` prints `{"ruling":{"id","stands","over"}}`.
-- **The page shows it settled at once.** The note's title becomes "you chose". The statement that stands is drawn
-  second and the one it replaced first, struck in the theme's own way: the kit strikes the first option of a choice
-  and no other, so the order of the two is how the app says which stands (`scene::order`). No reading is made.
-- **It stays settled.** Which side stands is kept beside the day's page, in `<home>/pages/<YYYY-MM-DD>.ruled.json`:
-  the day, and for each clash ruled on its two statements and `"stands": "a"` or `"b"`. It is written like the kept
-  page (a file of the process's own, 0600, moved into place) and read back through a door: at most 64 KiB, exactly
-  this shape, this day, at most 8 clashes; anything else is no rulings. A clash is known by its two statements, so
-  a later reading that words it differently shows that clash open again. The file is never sent anywhere.
-- **The other way.** A tap on the struck statement makes a new ruling with the two the other way round, and the page
-  turns over. A tap on the statement that already stands by the person's own ruling makes none: `{"ruling":null}`.
-  A clash the reading found settled has no ruling of the person's yet, so a tap on either side makes one.
-- **Refusals write nothing.** No kept page for the day, a clash that is not on it, an option that is not 1 or 2:
-  one line on stderr, exit 1, no ruling, no file. In the window the page gets a first note, "That tap did nothing."
-- **Delivery.** A ruling reaches a session only through the hook. A tap on a clash never touches Claude Code's
-  settings. While the hook is not installed (`jellymoon_core::hook_installed`), a page with a clash carries one
-  note before its clashes: "your sessions are not told yet", with one option, "Turn on delivery". That tap, or
-  `tap --delivery-on`, calls `jellymoon_core::install_hook`, the function behind `jellymoon hook install`, with
-  the settings file that command would take (`settings.json` under `CLAUDE_CONFIG_DIR` or `~/.claude`) and the
-  `jellymoon` command where `install.sh` puts it (`JELLYMOON_BIN_DIR` or `~/.local/bin`). When no file is there the
-  app cannot name a program for the hook to run, so the note is plain text that says to run `jellymoon hook install`
-  in a terminal, and `tap --delivery-on` exits 1. Once the hook is in, the note is gone.
+- **What is drawn.** For each clash core gives its two statements in the exact words a ruling would carry
+  (`jellymoon_core::standing`), and the side that stands by the person's own ruling. The app puts each between
+  quotation marks and adds nothing. A clash's note on a day's page is a whole choice: the kit draws every word of
+  both options, smaller when it must, or leaves the note out and counts it in "+N more". So a statement that is
+  cut is never on a page that can be tapped. A ruling carries at most 200 characters, and what is drawn is those
+  200. A page drawn from `--page` cannot be tapped and keeps its quotes cut to fit.
+- **What fits.** One clash of two statements of 200 characters is drawn whole at 960x640 and at 1440x900, in words
+  and in a script of wide characters with no spaces. The page scales with its window, so a larger window gives no
+  more room. A clash the person has not chosen on is placed before one they have, so when two long clashes do not
+  fit together the open one is drawn, and the other when the first is settled. Past that (four statements of 200
+  wide characters) neither is drawn: both are counted, and `jellymoon settle` is the way to rule on them. A
+  settled clash that is counted cannot be turned over in the window either.
+- **A tap acts on what was drawn.** The window keeps the scene on show (`OnShow`). A tap names a note and an option.
+  The note's id must be exactly `clash-<n>` for a clash of the page. The option's drawn text must be one of the
+  two statements core gives now; that side is asked of `jellymoon_core::settle`. When it is neither (the page
+  changed under the scene) nothing is sent.
+- **Settled at once.** The note's title becomes "you chose". The statement that stands is drawn second and the one
+  it replaced first, struck in the theme's own way: the kit strikes the first option of a choice and no other, so
+  the order of the two is how the app says which stands (`scene::order`). No reading is made.
+- **A tap that did nothing** puts a first note on the page, "That tap did nothing.", with core's reason. A ruling
+  that was made but that the page could not keep puts "This page could not keep your choice." there: the choice
+  stands, waits for the sessions, and is drawn as chosen while it waits.
+- **Delivery.** While the hook is not installed (`jellymoon_core::hook_installed`), a page with a clash carries one
+  note before its clashes. When core takes the installed command (`jellymoon_core::installed_command`) and the
+  settings file has a full path, the note is "your sessions are not told yet" with one option, "Turn on delivery",
+  whose tap calls `jellymoon_core::turn_on_delivery`. Otherwise it is plain text that says to run
+  `jellymoon hook install` in a terminal. Once the hook is in, the note is gone.
+
+`after_tap` and `OnShow::tap` need no window; `app/tests/f35.rs` follows them.
 
 Not covered: a ruling made while delivery is off waits its 24 hours like any other and is told if the hook goes in
 before then; the page does not say afterwards whether a session heard it. The note of the delivery state sits before
@@ -115,7 +119,7 @@ the clashes, so on a page too full for all its notes it is a clash that falls in
 | a wish | a character with the wish's label, in page order; the kit places let-go ones last |
 | its state | working: busy bubble; done: idle; needs you: badge; let go: dimmed, label struck |
 | each star | a star on its wish's character (the kit draws at most 4) and a row in the list note "came true today" |
-| a clash | a choice note `clash-<n>` with both quotes; `settled` strikes the first |
+| a clash | a choice note `clash-<n>` with both quotes, each drawn whole; `settled` strikes the first |
 | `read` | the footer: how many things were typed, in which projects, and that the reading is unedited |
 | no wish, and nothing set aside | one plain note: "Nothing wished for yet today." |
 | more than the app draws | the first note, "not everything is drawn", with the counts (next section) |

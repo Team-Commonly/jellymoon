@@ -47,9 +47,25 @@ pub enum Mood {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Note {
-    List { title: String, rows: Vec<(String, String)> },
-    Choice { id: String, title: String, options: Vec<String>, footer: String, struck_first: bool },
-    Plain { title: String, body: String },
+    List {
+        title: String,
+        rows: Vec<(String, String)>,
+    },
+    /// With `whole`, every option is drawn to its last word, on as many lines as that takes: the note is left out
+    /// and counted when it does not fit, and never drawn with an option cut short.
+    Choice {
+        id: String,
+        title: String,
+        options: Vec<String>,
+        footer: String,
+        struck_first: bool,
+        #[serde(default)]
+        whole: bool,
+    },
+    Plain {
+        title: String,
+        body: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

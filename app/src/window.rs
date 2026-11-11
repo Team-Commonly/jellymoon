@@ -16,33 +16,27 @@ use gpui_platform::application;
 use sticker_kit::draw::{Page, Tap, load_fonts};
 use sticker_kit::{Scene, Theme, Viewport};
 
-use crate::read;
-use crate::today::{Later, Today};
+use crate::taps::OnShow;
+use crate::today::Later;
 
-/// A day on show: where its files are, the page data now on show (what a tap acts on), and the work that gives the
-/// next scene.
-pub struct Day {
-    pub today: Today,
-    pub page: Option<read::Page>,
-    pub later: Later,
-}
-
-/// The day and the page data on show, which the tap handler reads and the reading replaces. Both run on the
-/// window's thread.
-type Shown = Rc<RefCell<Option<(Today, Option<read::Page>)>>>;
+/// The day's page on show, which the tap handler acts on and the reading replaces. Both run on the window's thread.
+type Shown = Rc<RefCell<Option<OnShow>>>;
 
 /// Opens the window on `scene` and runs until it is closed, or until `quit_after` has passed. A day's `later` is
 /// started at once, off the window's thread; each scene it gives replaces the one shown, and the work after it
 /// starts. A page-data file has no day: it is drawn, and a tap on it does nothing.
-pub fn open(scene: Scene, theme: Theme, viewport: Viewport, quit_after: Option<Duration>, day: Option<Day>) {
+pub fn open(
+    scene: Scene,
+    theme: Theme,
+    viewport: Viewport,
+    quit_after: Option<Duration>,
+    day: Option<(OnShow, Later)>,
+) {
     application().run(move |cx: &mut App| {
         if let Err(error) = load_fonts(cx) {
             say(&format!("the bundled fonts did not load: {error}"));
         }
-        let (shown, later) = match day {
-            Some(day) => (Some((day.today, day.page)), Some(day.later)),
-            None => (None, None),
-        };
+        let (shown, later) = day.unzip();
         let shown: Shown = Rc::new(RefCell::new(shown));
         let window = match page(scene, theme, viewport, shown.clone(), cx) {
             Ok(window) => window,
@@ -62,8 +56,8 @@ pub fn open(scene: Scene, theme: Theme, viewport: Viewport, quit_after: Option<D
             let mut later = later;
             while let Some(work) = later.take() {
                 let Some(next) = cx.background_executor().spawn(async move { work() }).await else { break };
-                if let Some((_, page)) = shown.borrow_mut().as_mut() {
-                    *page = next.page;
+                if let Some(shown) = shown.borrow_mut().as_mut() {
+                    shown.show(&next);
                 }
                 let _ = window.update(cx, |page, _, cx| page.set_scene(next.scene, cx));
                 later = next.later;
@@ -95,10 +89,7 @@ fn page(
     let tapped = move |tap: &Tap, _: &mut gpui::Window, cx: &mut App| {
         received(tap);
         let (Tap::Option { note_id, index }, Some(window)) = (tap, handle.get()) else { return };
-        let after = match shown.borrow().as_ref() {
-            Some((today, Some(page))) => today.after_tap(page, note_id, *index),
-            _ => return,
-        };
+        let Some(after) = shown.borrow_mut().as_mut().and_then(|shown| shown.tap(note_id, *index)) else { return };
         // The view is in the middle of handling the tap: it takes the new scene once that is done.
         cx.defer(move |cx| {
             let _ = window.update(cx, |page, _, cx| page.set_scene(after, cx));

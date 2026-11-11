@@ -215,7 +215,12 @@ fn without_comments(text: &str) -> String {
 /// the old one. A link is followed first, so the link stays and what it points at is replaced. When a step fails the
 /// new file is removed and the old one is as it was. A run that is killed in between leaves the new file there.
 fn replace(path: &Path, text: &str) -> io::Result<()> {
-    let target = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    put(&fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()), text, true)
+}
+
+/// [`replace`] with no link followed: what is at `target` is replaced. With `as_old` the new file takes the old
+/// file's mode; without it the file is the person's alone.
+pub(crate) fn put(target: &Path, text: &str, as_old: bool) -> io::Result<()> {
     let mut name = target.file_name().ok_or(ErrorKind::InvalidInput)?.to_os_string();
     name.push(format!(".jellymoon-{}", process::id()));
     let new = target.with_file_name(name);
@@ -224,19 +229,19 @@ fn replace(path: &Path, text: &str) -> io::Result<()> {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
     let file = open.open(&new)?;
-    let filled = fill(file, text, &target).and_then(|()| fs::rename(&new, &target));
+    let filled = fill(file, text, as_old.then_some(target)).and_then(|()| fs::rename(&new, target));
     if filled.is_err() {
         let _ = fs::remove_file(&new);
     }
     filled
 }
 
-fn fill(mut file: File, text: &str, target: &Path) -> io::Result<()> {
+fn fill(mut file: File, text: &str, target: Option<&Path>) -> io::Result<()> {
     file.write_all(text.as_bytes())?;
     // Only where a mode says who may read: elsewhere it is the read-only mark, which would keep a new file that
     // could not be renamed from being removed.
     #[cfg(unix)]
-    if let Ok(old) = fs::metadata(target) {
+    if let Some(old) = target.and_then(|target| fs::metadata(target).ok()) {
         file.set_permissions(old.permissions())?;
     }
     #[cfg(not(unix))]

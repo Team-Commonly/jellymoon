@@ -160,6 +160,22 @@
         "F29",
         "F34"
       ]
+    },
+    {
+      "id": "F36",
+      "category": "journal",
+      "description": "The tap's rules live in core and are proved at the `jellymoon` command",
+      "steps": [
+        "`jellymoon settle --date <day> --clash <n> --option <1|2>` is the tap: it makes one ruling of that clash's two statements from the day's kept page by core's `settle`, prints `{ruling, stands, replaces, unkept}` as one line of JSON, and `jellymoon hook` then tells a session that ruling once; the app's window calls the same core function and `jellymoon-app` has no `tap` command",
+        "a tap on the statement that stands makes no ruling, read from the waiting rulings as well as the settlement; a ruling whose settlement could not be written exits 0 with the ruling and the reason, and the same tap again makes no second ruling; two taps at once on two clashes both keep theirs",
+        "the kept page is used only as a plain file of the day asked for that neither group nor others can write to; a settlement of another day, of another shape, with an unknown field or over 64 KiB says nothing about what stands; what a tap writes is 0600 in folders set to 0700; every refusal is one line and writes nothing",
+        "`jellymoon hook install --installed` installs the hook only for an installed `jellymoon` command that is a regular, runnable, non-empty file only its owner can write to, in a folder not everyone can write to, by an absolute path, with a link followed and its target checked; a relative `CLAUDE_CONFIG_DIR` is refused by every `hook install`"
+      ],
+      "test": "cargo test -p jellymoon --test f35",
+      "passes": true,
+      "blockedBy": [
+        "F35"
+      ]
     }
   ]
 }

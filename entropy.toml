@@ -22,7 +22,8 @@ max_file_lines = 400
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
-"crates/sticker-kit" = 5363
+# A whole choice (F35: every word of an option, or the note left out) raised the kit by 110: 84 are `tests/whole.rs`.
+"crates/sticker-kit" = 5473
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.

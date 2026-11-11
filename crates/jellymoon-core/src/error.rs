@@ -53,6 +53,10 @@ pub enum Error {
     Elsewhere,
     /// The text that was installed is no longer in the settings file as it was written.
     Changed,
+    /// A tap on a clash was refused, and nothing was written. It holds why, in one line with no word of the page.
+    Tap(String),
+    /// The installed `jellymoon` command is not a file the hook may name. It holds why.
+    Command(String),
 }
 
 impl fmt::Display for Error {
@@ -98,6 +102,8 @@ impl fmt::Display for Error {
             Error::Changed => {
                 write!(f, "the installed hook entry cannot be taken out safely; remove it by hand. Nothing was changed")
             }
+            Error::Tap(why) => write!(f, "{why}"),
+            Error::Command(why) => write!(f, "the installed jellymoon command is not used: {why}"),
         }
     }
 }

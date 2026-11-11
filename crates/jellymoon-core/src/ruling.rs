@@ -21,6 +21,9 @@ const WAIT: Duration = Duration::from_secs(24 * 60 * 60);
 /// The most rulings handed over in one call, oldest first; the rest come at the session's next step. This keeps what
 /// the hook prints far under the 10,000 characters Claude Code shows of it.
 const TOLD_MAX: usize = 8;
+/// The most rulings looked at to see which side of a clash stands, newest first, and the most bytes read of each.
+const SEEN_MAX: usize = 256;
+const RULING_MAX: u64 = 8 * 1024;
 /// The most of the harness's input that is read.
 const INPUT_MAX: u64 = 1 << 20;
 /// The hook events whose output may carry context for the model in the shape [`deliver`] prints.
@@ -38,7 +41,7 @@ struct Step {
 /// A statement as it is kept and handed over: cleaned and cut as the reader does it, on one line (a line break, a
 /// tab and any run of spaces become one space), with each `"` made `'`. So a statement cannot end its own quote in
 /// what the hook prints, or start a line that reads as another ruling.
-fn words(text: &str) -> String {
+pub(crate) fn words(text: &str) -> String {
     line(text, WORDS_MAX).replace('"', "'")
 }
 
@@ -50,6 +53,31 @@ pub(crate) fn private_dir(path: &Path) -> io::Result<()> {
     #[cfg(unix)]
     std::os::unix::fs::DirBuilderExt::mode(&mut make, 0o700);
     make.create(path)
+}
+
+/// [`private_dir`] for a folder that holds what is put into sessions or onto the page: one that was there already,
+/// open to others, is made the person's alone.
+pub(crate) fn own_dir(path: &Path) -> io::Result<()> {
+    private_dir(path)?;
+    #[cfg(unix)]
+    fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(0o700))?;
+    Ok(())
+}
+
+/// The rulings that still wait, oldest first, at most the newest [`SEEN_MAX`]. Each file is read as untrusted.
+pub(crate) fn waiting(home: &Path) -> Vec<Ruling> {
+    let (dir, now) = (home.join("rulings"), millis(SystemTime::now()));
+    let ids = fs::read_dir(&dir).into_iter().flatten().flatten();
+    let ids = ids.filter_map(|entry| made(entry.file_name().to_str()?.strip_suffix(".json")?));
+    let mut ids: Vec<u64> = ids.filter(|made| waits(*made, now)).collect();
+    ids.sort_unstable();
+    let read = |id: &u64| {
+        let mut text = String::new();
+        fs::File::open(dir.join(format!("{id}.json"))).ok()?.take(RULING_MAX).read_to_string(&mut text).ok()?;
+        let ruling: Ruling = serde_json::from_str(&text).ok()?;
+        Some(Ruling { stands: words(&ruling.stands), over: words(&ruling.over), ..ruling })
+    };
+    ids[ids.len().saturating_sub(SEEN_MAX)..].iter().filter_map(read).collect()
 }
 
 fn millis(now: SystemTime) -> u64 {
@@ -68,7 +96,7 @@ fn rule_at(home: &Path, stands: &str, over: &str, now: u64) -> Result<Ruling, Er
         return Err(Error::Ruling);
     }
     let dir = home.join("rulings");
-    private_dir(&dir).map_err(Error::Store)?;
+    own_dir(&dir).map_err(Error::Store)?;
     forget(&dir, now);
     // The id is the time it was made, moved on until no ruling has it. The file appears whole or not at all.
     let mut id = now;

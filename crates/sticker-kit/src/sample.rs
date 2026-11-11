@@ -50,6 +50,7 @@ impl Scene {
                     ],
                     footer: "the lake was let go".into(),
                     struck_first: true,
+                    whole: false,
                 },
             ],
             legend: vec![

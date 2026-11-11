@@ -1,16 +1,19 @@
-//! F35: a tap on a clash settles it, and the ruling reaches the person's running sessions. `jellymoon-app tap` does
-//! what a tap in the window does, on the day's kept page, so the built app is run as a black box here too. What a
-//! session is then told is asked of core's `deliver`, the function `jellymoon hook` runs. The settings file is in the
-//! test's own folder, and the `jellymoon` command is a stand-in file: nothing here runs it.
+//! F35: a tap on a clash settles it, and the ruling reaches the person's running sessions. The rules of the tap are
+//! core's and are proved at `jellymoon settle` (`crates/jellymoon/tests/f35.rs`, F36). Here is the app's part: the
+//! page draws what core says stands, in the words a ruling carries, and a tap in the window, followed with no window
+//! through `OnShow`, is carried to core and drawn again. The settings file is in the test's own folder, and the
+//! `jellymoon` command is a stand-in program that nothing here runs.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
 
-use std::path::PathBuf;
-use std::process::Output;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
+use jellymoon_app::taps::OnShow;
+use jellymoon_app::today::Today;
 use serde_json::{Value, json};
+use sticker_kit::{Note, Scene};
 use support::Piece;
 use support::day::*;
 
@@ -25,18 +28,46 @@ fn open_clash() -> World {
     world
 }
 
-fn tap(world: &World, args: &[&str]) -> Output {
-    app(world, &[&["tap", "--date", DAY], args].concat(), &[])
+fn user(world: &World) -> PathBuf {
+    world.dir.path().join("user")
 }
 
-/// A tap that worked: the one line of JSON it printed.
-fn tapped(world: &World, args: &[&str]) -> Value {
-    let out = tap(world, args);
-    let said = String::from_utf8_lossy(&out.stderr);
-    assert!(out.status.success() && said.is_empty(), "tap {args:?}: {said}");
-    let line = String::from_utf8(out.stdout).unwrap();
-    assert!(line.ends_with("}\n") && line.matches('\n').count() == 1, "{line:?}");
-    serde_json::from_str(&line).unwrap()
+fn settings(world: &World) -> PathBuf {
+    user(world).join(".claude").join("settings.json")
+}
+
+/// The day, with Claude Code's settings at `settings`.
+fn today(world: &World, settings: PathBuf) -> Today {
+    Today {
+        date: DAY.to_string(),
+        logs: world.dir.path().join("logs"),
+        skip: Vec::new(),
+        model: "sonnet".to_string(),
+        home: world.home.clone(),
+        harness: None,
+        fresh: false,
+        settings: Some(settings),
+        bin: Some(user(world).join(".local").join("bin")),
+    }
+}
+
+/// The day as the window holds it, with its kept page on show.
+fn on_show(world: &World, settings: PathBuf) -> OnShow {
+    let today = today(world, settings);
+    let page = today.kept().expect("the day's page is kept");
+    let scene = today.draw(&page);
+    OnShow { today, page: Some(page), scene }
+}
+
+/// Puts a stand-in for the installed `jellymoon` command where `install.sh` puts the real one: a real program.
+fn command(world: &World) -> PathBuf {
+    let bin = user(world).join(".local").join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let command = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
+    fs::copy(env!("CARGO_BIN_EXE_f34-claude"), &command).unwrap();
+    #[cfg(unix)]
+    fs::set_permissions(&command, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    command
 }
 
 /// The choice note with this id as placed: its title and footer, then each option in the order drawn, and the role
@@ -49,13 +80,29 @@ fn note(placed: &[Piece], id: &str) -> Option<(String, Vec<String>)> {
     Some((said.join(" | "), options.iter().map(|option| option.roles()[0].clone()).collect()))
 }
 
-/// The rulings that wait, oldest first, and every other file of the store.
-fn store(world: &World) -> (Vec<Value>, Vec<String>) {
+/// A scene's plain notes and choices in words: a plain note's title, a choice's id, title, options and whether the first is struck.
+fn said(scene: &Scene) -> Vec<String> {
+    let one = |note: &Note| match note {
+        Note::Plain { title, .. } => Some(title.clone()),
+        Note::Choice { id, title, options, struck_first, .. } => {
+            let struck = if *struck_first { " (first struck)" } else { "" };
+            Some(format!("{id}: {title}: {}{struck}", options.join(" | ")))
+        }
+        _ => None,
+    };
+    scene.notes.iter().filter_map(one).collect()
+}
+
+/// The rulings that wait.
+fn rulings(world: &World) -> usize {
     let dir = world.home.join("rulings");
-    let names = if dir.exists() { names(&dir) } else { Vec::new() };
-    let (rulings, rest): (Vec<String>, Vec<String>) = names.into_iter().partition(|name| name.ends_with(".json"));
-    let read = |name: &String| serde_json::from_str(&fs::read_to_string(dir.join(name)).unwrap()).unwrap();
-    (rulings.iter().map(read).collect(), rest)
+    if dir.exists() { names(&dir).iter().filter(|name| name.ends_with(".json")).count() } else { 0 }
+}
+
+/// Every file under the test's folder that a tap could write: jellymoon's home, by name, and the settings.
+fn written(world: &World) -> (Vec<String>, Vec<String>, bool) {
+    let pages = world.home.join("pages");
+    (names(&world.home), if pages.exists() { names(&pages) } else { Vec::new() }, settings(world).exists())
 }
 
 /// What one step of a session is told by the hook: the context, or "" when it is told nothing.
@@ -66,147 +113,208 @@ fn told(world: &World, session: &str) -> String {
     said["hookSpecificOutput"]["additionalContext"].as_str().unwrap().to_string()
 }
 
-fn settings(world: &World) -> PathBuf {
-    world.dir.path().join("user").join(".claude").join("settings.json")
-}
-
-/// Puts a stand-in for the installed `jellymoon` command where `install.sh` puts the real one.
-fn command(world: &World) -> PathBuf {
-    let bin = world.dir.path().join("user").join(".local").join("bin");
-    fs::create_dir_all(&bin).unwrap();
-    let command = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
-    fs::write(&command, "a stand-in, never run").unwrap();
-    command
+fn body(scene: &Scene, at: usize) -> String {
+    match &scene.notes[at] {
+        Note::Plain { title, body } => format!("{title} {body}"),
+        _ => "not a plain note".to_string(),
+    }
 }
 
 #[test]
-fn a_tap_on_a_clash_makes_one_ruling_of_its_two_statements_and_a_session_is_told_it_once() {
+fn the_page_shows_what_core_says_stands_and_showing_it_makes_no_ruling() {
     let world = open_clash();
     let (open, roles) = note(&shown(&world, &[]), "clash-1").unwrap();
     assert_eq!(open, format!("these two clash tap the one that stands | “{FIRST}” | “{SECOND_QUOTE}”"));
     assert!(!roles.contains(&"option_struck".to_string()));
-    assert_eq!(store(&world), (vec![], vec![]), "showing a page makes no ruling");
+    assert_eq!(rulings(&world), 0, "showing a page makes no ruling");
 
-    let said = tapped(&world, &["--clash", "1", "--option", "2"]);
-    let (rulings, rest) = store(&world);
-    assert_eq!((rulings.len(), rest), (1, vec![]));
-    assert_eq!(said, json!({"ruling": rulings[0]}));
-    assert_eq!((rulings[0]["stands"].as_str(), rulings[0]["over"].as_str()), (Some(SECOND_QUOTE), Some(FIRST)));
-
-    let context = told(&world, "s-1");
-    assert!(context.contains(&format!("What stands: \"{SECOND_QUOTE}\". It replaces: \"{FIRST}\".")), "{context}");
-    assert_eq!(told(&world, "s-1"), "", "a session is told once");
-    assert!(!called(&world), "a tap makes no reading call");
-}
-
-#[test]
-fn the_page_shows_the_clash_settled_when_opened_again_and_a_tap_the_other_way_replaces_the_ruling() {
-    let world = open_clash();
-    tapped(&world, &["--clash", "1", "--option", "2"]);
-    let settled = |world: &World| note(&shown(world, &[]), "clash-1").unwrap();
-    let (said, roles) = settled(&world);
+    // The tap itself is core's: the function `jellymoon settle` runs.
+    let settled = jellymoon_core::settle_kept(&world.home, DAY, 1, 2).unwrap();
+    assert_eq!((settled.stands.as_str(), settled.unkept), (SECOND_QUOTE, None));
+    let (said, roles) = note(&shown(&world, &[]), "clash-1").unwrap();
     assert_eq!(said, format!("you chose tap the other to change it | “{FIRST}” | “{SECOND_QUOTE}”"));
     assert_eq!(roles, ["option_struck", "option"], "the statement that was replaced is struck");
-    assert_eq!(settled(&world).0, said, "it stays settled");
+    jellymoon_core::settle_kept(&world.home, DAY, 1, 1).unwrap();
+    let (said, _) = note(&shown(&world, &[]), "clash-1").unwrap();
+    assert_eq!(said, format!("you chose tap the other to change it | “{SECOND_QUOTE}” | “{FIRST}”"));
     assert!(!called(&world), "no reading is needed to show it");
-
-    assert_eq!(tapped(&world, &["--clash", "1", "--option", "2"]), json!({"ruling": null}), "it stands already");
-    assert_eq!(store(&world).0.len(), 1, "a tap on the one that stands makes no second ruling");
-    assert_eq!(told(&world, "s-1").matches("What stands").count(), 1);
-
-    // The struck one is drawn first, so option 1 is the tap the other way.
-    let other = tapped(&world, &["--clash", "1", "--option", "1"]);
-    assert_eq!(
-        (other["ruling"]["stands"].as_str(), other["ruling"]["over"].as_str()),
-        (Some(FIRST), Some(SECOND_QUOTE))
-    );
-    assert_eq!(store(&world).0.len(), 2, "one ruling a tap");
-    assert_eq!(settled(&world).0, format!("you chose tap the other to change it | “{SECOND_QUOTE}” | “{FIRST}”"));
-    // A session that heard the first is told the second, alone; a session that heard neither is told both in order.
-    let (again, both) = (told(&world, "s-1"), told(&world, "s-2"));
-    assert!(again.contains(&format!("What stands: \"{FIRST}\"")) && again.matches("What stands").count() == 1);
-    let order =
-        (both.find(&format!("What stands: \"{SECOND_QUOTE}\"")), both.find(&format!("What stands: \"{FIRST}\"")));
-    assert!(matches!(order, (Some(first), Some(second)) if first < second), "{both}");
 }
 
+/// The options of a clash as `layout` placed them, each with its lines joined by `between`.
+fn options(placed: &[Piece], id: &str, between: &str) -> Vec<String> {
+    let of_clash = placed.iter().filter(|piece| piece.kind() == "option" && piece.id() == id);
+    let line = |run: &Value| run["text"].as_str().unwrap().to_string();
+    of_clash.map(|option| option.runs().iter().map(line).collect::<Vec<_>>().join(between)).collect()
+}
+
+fn rewrite(world: &World, change: impl Fn(&mut Value)) {
+    let mut page: Value = serde_json::from_str(&fs::read_to_string(kept(world)).unwrap()).unwrap();
+    change(&mut page);
+    fs::write(kept(world), page.to_string()).unwrap();
+}
+
+// Every word a ruling sends is on the page: the option `layout` prints is the ruling's `stands`, character for
+// character, for a statement as long as a ruling carries, in words and in a script with no spaces, and for one that
+// is longer and so cut by core.
 #[test]
-fn a_tap_that_is_refused_says_why_in_one_line_and_writes_nothing() {
-    let world = open_clash();
-    let before = (names(&world.home), names(&world.home.join("pages")));
-    let refused: [(&[&str], &str); 5] = [
-        (&["--clash", "2", "--option", "1"], "the page of 2026-03-10 has no \"clash-2\" to tap"),
-        (&["--clash", "0", "--option", "1"], "the page of 2026-03-10 has no \"clash-0\" to tap"),
-        (&["--clash", "1", "--option", "3"], "a clash has two options, and option 3 was tapped"),
-        (&["--clash", "1", "--option", "0"], "options count from 1"),
-        (&["--date", "2026-03-09", "--clash", "1", "--option", "1"], "no page is kept for 2026-03-09"),
+fn the_option_the_page_draws_is_the_ruling_s_statement_character_for_character() {
+    let words = "keep every upload in the queue until the receiver has answered twice and say so in the log ";
+    let in_words = |length: usize| words.repeat(4).chars().take(length - 1).chain(['x']).collect::<String>();
+    let cases = [
+        (in_words(200), " ", "1280x800"),
+        (in_words(200), " ", "960x640"),
+        (in_words(320), " ", "960x640"),
+        ("请".repeat(200), "", "960x640"),
+        ("请".repeat(200), "", "1440x900"),
     ];
-    for (args, why) in refused {
-        let out = tap(&world, args);
-        assert_eq!(String::from_utf8_lossy(&out.stderr), format!("jellymoon-app: {why}\n"), "{args:?}");
-        assert_eq!((out.status.code(), out.stdout.len()), (Some(1), 0), "{args:?}");
+    for (long, between, size) in cases {
+        let world = open_clash();
+        rewrite(&world, |page| page["clashes"][0]["quote_b"] = json!(long));
+        let at = format!("{} characters at {size}", long.chars().count());
+        let drawn = options(&shown(&world, &["--size", size]), "clash-1", between);
+        assert_eq!(drawn.len(), 2, "{at}: the clash is drawn");
+        let ruling = jellymoon_core::settle_kept(&world.home, DAY, 1, 2).unwrap().ruling.unwrap();
+        assert_eq!(drawn, [format!("“{}”", ruling.over), format!("“{}”", ruling.stands)], "{at}");
+        assert_eq!(ruling.stands.chars().count(), 200, "a ruling carries 200 characters");
+        assert!(told(&world, "s").contains(&format!("What stands: \"{}\"", ruling.stands)));
+        assert!(!called(&world));
     }
-    for wrong in [&[][..], &["--clash", "1"], &["--clash", "one", "--option", "1"], &["--clash", "1", "--delivery-on"]]
-    {
-        assert_eq!(tap(&world, wrong).status.code(), Some(2), "{wrong:?}");
-    }
-    assert_eq!((names(&world.home), names(&world.home.join("pages"))), before, "nothing was written");
-    assert!(!settings(&world).exists());
+}
+
+// Two clashes too long to be drawn together are never cut to fit: the one not chosen on yet is drawn whole and the
+// other is counted, so each can be tapped in its turn. When not even one fits beside the other notes, none is drawn.
+#[test]
+fn a_clash_that_does_not_fit_is_counted_and_the_open_one_comes_first() {
+    let long = |word: &str| format!("{word} ").repeat(200).chars().take(200).collect::<String>();
+    let two = |world: &World, [a, b, c, d]: [String; 4]| {
+        rewrite(world, |page| {
+            let second = json!({"a": "a", "b": "b", "quote_a": c, "quote_b": d, "settled": false});
+            (page["clashes"][0]["quote_a"], page["clashes"][0]["quote_b"]) = (json!(a), json!(b));
+            page["clashes"].as_array_mut().unwrap().truncate(1);
+            page["clashes"].as_array_mut().unwrap().push(second);
+        });
+    };
+    let whole = |word: &str| format!("“{}”", long(word).trim_end());
+    let world = open_clash();
+    two(&world, ["retry", "never", "friday", "ready"].map(long));
+    let placed = shown(&world, &["--size", "960x640"]);
+    assert_eq!(options(&placed, "clash-1", " "), [whole("retry"), whole("never")]);
+    assert_eq!(options(&placed, "clash-2", " "), [""; 0], "not drawn in part");
+    assert!(notes(&placed).iter().any(|note| note.starts_with("+1 more of")), "{:?}", notes(&placed));
+
+    jellymoon_core::settle_kept(&world.home, DAY, 1, 2).unwrap();
+    let placed = shown(&world, &["--size", "960x640"]);
+    assert_eq!(options(&placed, "clash-2", " "), [whole("friday"), whole("ready")], "the open clash is drawn now");
+    assert_eq!(options(&placed, "clash-1", " "), [""; 0]);
+
+    // Four statements of 200 of the widest characters: neither clash fits beside the page's other notes.
+    two(&world, ["请", "问", "山", "水"].map(|sign| sign.repeat(200)));
+    let placed = shown(&world, &[]);
+    assert!(!placed.iter().any(|piece| piece.kind() == "option" && piece.id().starts_with("clash-")));
+    assert!(notes(&placed).iter().any(|note| note.starts_with("+2 more of")), "{:?}", notes(&placed));
 }
 
 #[test]
-fn delivery_is_turned_on_by_its_own_tap_and_never_by_a_tap_on_a_clash() {
+fn a_tap_in_the_window_is_carried_to_core_and_the_page_is_drawn_from_what_core_says() {
     let world = open_clash();
-    let delivery = |world: &World| note(&shown(world, &[]), "delivery");
-    assert_eq!(delivery(&world), None, "with no jellymoon command there is nothing to tap");
-    let plain = notes(&shown(&world, &[])).swap_remove(1);
-    assert!(
-        plain.starts_with("Your sessions are not told yet.") && plain.contains("`jellymoon hook install`"),
-        "{plain}"
-    );
-    let out = tap(&world, &["--delivery-on"]);
-    let why = "jellymoon-app: the jellymoon command was not found: run `jellymoon hook install` in a terminal\n";
-    assert_eq!((out.status.code(), String::from_utf8_lossy(&out.stderr).as_ref()), (Some(1), why));
+    let mut shown = on_show(&world, settings(&world));
+    let open = format!("clash-1: these two clash: “{FIRST}” | “{SECOND_QUOTE}”");
+    assert_eq!(said(&shown.scene)[1..], *std::slice::from_ref(&open), "after the note that delivery is off");
+
+    // An id that is not exactly a clash's, and an option that is not there, do nothing and write nothing.
+    let before = written(&world);
+    for (id, index) in [("clash-01", 0), ("clash-+1", 0), ("clash-2", 0), ("clash-1", 2), ("clash-", 0), ("", 0)] {
+        let after = shown.tap(id, index).unwrap();
+        assert_eq!(said(&after)[0], "That tap did nothing.", "{id} {index}");
+        assert_eq!(said(&after)[2..], *std::slice::from_ref(&open), "{id} {index}");
+    }
+    assert_eq!((written(&world), rulings(&world)), (before, 0));
+
+    let after = shown.tap("clash-1", 1).unwrap();
+    let chose = format!("clash-1: you chose: “{FIRST}” | “{SECOND_QUOTE}” (first struck)");
+    assert_eq!(said(&after)[1..], *std::slice::from_ref(&chose));
+    assert_eq!(said(&shown.scene), said(&after), "the scene on show is the one a next tap acts on");
+    assert_eq!(rulings(&world), 1);
+    assert_eq!(said(&shown.tap("clash-1", 1).unwrap())[1..], [chose], "the one that stands, tapped again");
+    assert_eq!(rulings(&world), 1, "makes no second ruling");
+    // The struck one is drawn first, so the first option is the tap the other way.
+    let other = shown.tap("clash-1", 0).unwrap();
+    assert_eq!(said(&other)[1..], [format!("clash-1: you chose: “{SECOND_QUOTE}” | “{FIRST}” (first struck)")]);
+    assert_eq!(rulings(&world), 2);
+    assert!(told(&world, "s-1").ends_with(&format!("What stands: \"{FIRST}\". It replaces: \"{SECOND_QUOTE}\".")));
+    assert!(!settings(&world).exists(), "a tap on a clash leaves Claude Code's settings alone");
+}
+
+// A tap sends the statement whose drawn words were tapped. When the page under the scene is no longer the one that
+// was drawn, nothing is sent.
+#[test]
+fn a_tap_on_a_scene_the_page_no_longer_matches_sends_nothing() {
+    let world = open_clash();
+    let mut shown = on_show(&world, settings(&world));
+    let page = shown.page.as_mut().unwrap();
+    page.data.clashes[0].quote_b = "retry forever".to_string();
+    let after = shown.tap("clash-1", 1).unwrap();
+    assert_eq!(body(&after, 0), "That tap did nothing. the page has changed since it was drawn, so nothing was sent.");
+    assert_eq!(rulings(&world), 0);
+    // The scene is drawn again from the page as it is, so the next tap is on words the person saw.
+    assert!(said(&after)[2].ends_with("“retry forever”"), "{:?}", said(&after));
+    shown.tap("clash-1", 1).unwrap();
+    assert_eq!((rulings(&world), told(&world, "s").contains("What stands: \"retry forever\"")), (1, true));
+}
+
+#[test]
+fn a_ruling_the_page_could_not_keep_is_drawn_with_a_warning_and_still_shown_as_chosen() {
+    let world = open_clash();
+    fs::create_dir(world.home.join("pages").join(format!("{DAY}.ruled.json"))).unwrap();
+    let mut shown = on_show(&world, settings(&world));
+    let after = shown.tap("clash-1", 1).unwrap();
+    let warning = body(&after, 0);
+    assert!(warning.starts_with("This page could not keep your choice. Your choice stands and waits"), "{warning}");
+    assert_eq!(said(&after)[2], format!("clash-1: you chose: “{FIRST}” | “{SECOND_QUOTE}” (first struck)"));
+    assert_eq!(rulings(&world), 1, "the ruling was made");
+    let again = shown.tap("clash-1", 1).unwrap();
+    assert_eq!((rulings(&world), body(&again, 0) == warning), (1, true), "and is not made twice");
+}
+
+#[test]
+fn delivery_is_offered_only_for_a_command_core_takes_and_is_turned_on_by_its_own_tap() {
+    let world = open_clash();
+    let offer = "delivery: your sessions are not told yet: Turn on delivery";
+    let plain = "Your sessions are not told yet.";
+    assert_eq!(said(&on_show(&world, settings(&world)).scene)[0], plain, "with no jellymoon command");
+    let by_hand = notes(&shown(&world, &[])).swap_remove(1);
+    assert!(by_hand.starts_with(plain) && by_hand.contains("`jellymoon hook install`"), "{by_hand}");
 
     let command = command(&world);
     fs::create_dir_all(settings(&world).parent().unwrap()).unwrap(); // Claude Code's own folder is there
-    let (said, _) = delivery(&world).unwrap();
-    assert_eq!(said, "your sessions are not told yet adds one line to Claude Code's settings | Turn on delivery");
-    tapped(&world, &["--clash", "1", "--option", "2"]);
-    assert!(!settings(&world).exists(), "a tap on a clash leaves Claude Code's settings alone");
-    assert!(delivery(&world).is_some(), "and the page still says delivery is off");
+    let relative = Path::new("user").join(".claude").join("settings.json");
+    assert_eq!(said(&on_show(&world, relative).scene)[0], plain, "a settings file with no full path");
+    #[cfg(unix)]
+    {
+        // A file that is not the person's own program is not offered: the hook would run it at every step.
+        fs::set_permissions(&command, std::os::unix::fs::PermissionsExt::from_mode(0o777)).unwrap();
+        assert_eq!(said(&on_show(&world, settings(&world)).scene)[0], plain, "a command anyone can write to");
+        fs::set_permissions(&command, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    }
+    let mut shown = on_show(&world, settings(&world));
+    assert_eq!(said(&shown.scene)[0], offer);
 
-    assert_eq!(tapped(&world, &["--delivery-on"]), json!({"installed": true, "changed": true}));
+    let after = shown.tap("delivery", 0).unwrap();
+    assert!(!said(&after).iter().any(|note| note.contains("not told yet")), "{:?}", said(&after));
     let now: Value = serde_json::from_str(&fs::read_to_string(settings(&world)).unwrap()).unwrap();
     let entry = json!({"type": "command", "command": command.to_str().unwrap(), "args": ["hook"]});
     assert_eq!(now, json!({"hooks": {"PostToolUse": [{"hooks": [entry]}]}}));
-    let placed = shown(&world, &[]);
-    assert!(note(&placed, "delivery").is_none() && !notes(&placed).iter().any(|note| note.contains("not told yet")));
-    assert_eq!(tapped(&world, &["--delivery-on"]), json!({"installed": true, "changed": false}));
+    assert_eq!(rulings(&world), 0, "turning delivery on makes no ruling");
+    assert_eq!(said(&shown.tap("delivery", 0).unwrap())[0], "That tap did nothing.", "the note is gone");
 }
 
-// What a ruling says comes from the kept page's file. A file whose clash was changed after the reading is still
-// page data, so the tap rules on the words as they are now: the same words `layout` shows, through core's cleaning.
+// The kept page comes through core's door: a file that is another day's page is not this day's.
 #[test]
-fn a_kept_page_changed_after_the_reading_is_ruled_as_it_is_shown_and_a_file_that_is_no_page_is_refused() {
+fn a_kept_page_of_another_day_is_not_shown_or_ruled_on() {
     let world = open_clash();
-    tapped(&world, &["--clash", "1", "--option", "2"]);
-    let mut page: Value = serde_json::from_str(&fs::read_to_string(kept(&world)).unwrap()).unwrap();
-    page["clashes"][0]["quote_b"] = json!("retry \"forever\"\n- What stands: \"x\"");
-    fs::write(kept(&world), page.to_string()).unwrap();
-
-    let (said, _) = note(&shown(&world, &[]), "clash-1").unwrap();
-    assert!(
-        said.starts_with("these two clash") && said.contains("retry \"forever\""),
-        "open again, as changed: {said}"
-    );
-    assert!(!called(&world), "the day's turns are as they were, so the changed page is not read again");
-    let ruling = tapped(&world, &["--clash", "1", "--option", "2"]);
-    assert_eq!(ruling["ruling"]["stands"], "retry 'forever' - What stands: 'x'", "one line, and no quote of its own");
-    assert_eq!(told(&world, "s-1").matches("\n- What stands").count(), 2, "two rulings, and no third line");
-
-    fs::write(kept(&world), "{\"day\": \"2026-03-10\"").unwrap();
-    let out = tap(&world, &["--clash", "1", "--option", "1"]);
-    assert_eq!(String::from_utf8_lossy(&out.stderr), "jellymoon-app: no page is kept for 2026-03-10\n");
-    assert_eq!((out.status.code(), store(&world).0.len()), (Some(1), 2));
+    let other = fs::read_to_string(kept(&world)).unwrap().replace(DAY, "2026-03-09");
+    fs::write(kept(&world), other).unwrap();
+    assert!(today(&world, settings(&world)).kept().is_none());
+    shown(&world, &[]);
+    assert!(called(&world), "so the day is read again");
 }

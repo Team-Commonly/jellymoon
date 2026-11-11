@@ -30,7 +30,7 @@ pub const STEPS: &[Step] = &[
     Step { name: "rule", only: Only::Synthetic, run: rule },
     Step { name: "hook-told", only: Only::Synthetic, run: hook_told },
     Step { name: "hook-again", only: Only::Synthetic, run: hook_again },
-    // The join (F35): a tap in the app is a ruling, the session hears it, and the page shows the clash settled.
+    // The join (F35): a tap on a clash is a ruling, the session hears it, and the page shows the clash settled.
     Step { name: "tap", only: Only::Synthetic, run: tap },
     Step { name: "tap-told", only: Only::Synthetic, run: tap_told },
     Step { name: "today-settled", only: Only::Synthetic, run: today_settled },
@@ -292,14 +292,15 @@ fn hook_again(world: &World) -> Result<String, String> {
 /// The statement of the made-up day's clash that the tap chooses: its second.
 const TAPPED: &str = "never retry uploads";
 
-/// `jellymoon-app tap` on the second option of the kept page's clash makes one ruling, which waits beside the first.
+/// `jellymoon settle`, the tap, on the second statement of the kept page's clash makes one ruling, which waits beside
+/// the first, and the page keeps it.
 fn tap(world: &World) -> Result<String, String> {
-    let mut args = world.day("tap");
-    args.extend(["--clash", "1", "--option", "2"].map(str::to_string));
-    let said = world.json("jellymoon-app", &args)?;
+    let args = ["settle", "--date", DAY, "--clash", "1", "--option", "2"].map(str::to_string);
+    let said = world.json("jellymoon", &args)?;
     let waiting = fs::read_dir(world.at("jm").join("rulings")).into_iter().flatten().flatten();
     let waiting = waiting.filter(|entry| entry.path().extension().is_some_and(|kind| kind == "json")).count();
-    if said["ruling"]["stands"] != TAPPED || said["ruling"]["over"] != "add a retry" || waiting != 2 {
+    let ruled = said["ruling"]["stands"] == TAPPED && said["ruling"]["over"] == "add a retry";
+    if !ruled || said["stands"] != TAPPED || !said["unkept"].is_null() || waiting != 2 {
         return Err(format!("{waiting} rulings in the store, not 2: {said}"));
     }
     Ok("a tap on the clash made 1 ruling, and it waits".to_string())

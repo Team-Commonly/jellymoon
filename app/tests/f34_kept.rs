@@ -44,7 +44,7 @@ fn a_kept_page_is_shown_before_the_logs_are_opened_and_stays_with_a_note_while_t
         harness: Some(world.rec.join(format!("claude{}", env::consts::EXE_SUFFIX))),
         fresh: true,
         settings: None,
-        command: None,
+        bin: None,
     };
     let title = |scene: &Scene| match &scene.notes[0] {
         Note::Plain { title, .. } => title.clone(),

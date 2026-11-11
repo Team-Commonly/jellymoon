@@ -1,12 +1,14 @@
-# Delivery: `jellymoon rule` and `jellymoon hook`
+# Delivery: `jellymoon rule`, `jellymoon settle` and `jellymoon hook`
 
 A ruling made on a page reaches each running Claude Code session once, at its next step (ADR 0011, section 5). Core
-holds all of it (`ruling.rs`, `hook.rs`); the commands only parse arguments and print JSON.
+holds all of it (`ruling.rs`, `tap.rs`, `hook.rs`); the commands only parse arguments and print JSON.
 
 ```
 jellymoon rule --stands <the words that stand> --over <the words they replace>
+jellymoon settle --date <YYYY-MM-DD> --clash <n> --option <1|2>     (a tap on a clash of that day's kept page)
 jellymoon hook                                   (run by Claude Code, with the step on stdin)
 jellymoon hook install [--settings <file>]
+jellymoon hook install --installed               (for the installed command, checked: "Turn on delivery")
 jellymoon hook uninstall
 jellymoon hook status                            (prints whether the entry is in the settings now; writes nothing)
 ```
@@ -21,42 +23,84 @@ statements are cleaned before they are stored and again when they are handed ove
 removed, cut to 200 characters. Each is also made one line: a line break, a tab and any run of spaces become one
 space, and every `"` becomes `'`. So a statement cannot close its own quote in what the hook prints or start a line
 that reads as another ruling. A ruling without both statements is refused. The file is written under another name
-and then renamed, so a hook never reads half of one. The folders Jellymoon makes are for the person alone (0700) on
-a system with such modes.
+and then renamed, so a hook never reads half of one. The `rulings` folder is set to the person alone (0700) each
+time a ruling is made, also when it was there before and open to others, on a system with such modes.
 
 A ruling waits for 24 hours. After that no session is told, and the next `jellymoon rule` removes its files.
 
-## A tap in the app
+## A tap on a clash
 
-The app makes a ruling when the person taps an option of a clash ([app.md](app.md#taps-appsrctapsrs)). This is the
-only way text gets from a page into a running session, so what is trusted is stated here exactly.
+`jellymoon settle --date <day> --clash <n> --option <1|2>` is the tap (`jellymoon_core::settle`): clash `n` of the
+day's kept page, counted from 1 among the first eight, and its `quote_a` (1) or `quote_b` (2) as the one that
+stands. The app's window calls the same function with the page data on show. It prints one line and exits 0:
 
-- **What is sent.** The two statements of one clash, `quote_a` and `quote_b`, of the page data the tap was made on,
-  one as what stands and the other as what it replaces. They go through `jellymoon_core::rule` and nothing else:
-  one line each, credential shapes replaced, 200 characters, `"` made `'`, and cleaned again when handed over. The
-  app adds no text, sends no label, wish, star or project, and one tap makes at most one ruling.
-- **Where that page data comes from.** In the window it is the page data on show: the reading the app just made
-  and checked, or the day's kept page as it was read at the door when the window opened. For `jellymoon-app tap` it
-  is the kept page as it is on disk at that moment.
-- **What is trusted.** The kept page, `<home>/pages/<day>.json`, in a folder for the person alone (0700, the file
-  0600). It is held to the door's shape and size, and it must be of the day asked for. It is not checked again
-  against the session logs, and it carries no mark that it is the page the reading wrote. So whoever can write
-  that file as the person can choose the words of the next ruling the person taps, within core's cleaning; the same
-  account can write `rulings/` itself, so this gives them nothing they did not have. A kept page that was changed
-  after the reading is ruled on as it is drawn: the words in the ruling are the words on the page, and a ruling
-  made on the old words no longer marks the clash as settled. A kept file that is not page data is not drawn and
-  cannot be tapped.
-- **What is not trusted.** The settlement file `<day>.ruled.json` says only which side stands, for the page to
-  draw. No ruling is ever made from it. A model's reading reaches a ruling only as the two quotes of a clash. Core
-  kept each only as an exact, whole-word piece of something the person typed that day ([page.md](page.md)). The
-  model chose which piece, and a piece can mean other than the whole ("delete the database" out of "do not delete
-  the database"), so what protects the person is that both statements are on the page, in full, where they tap.
-- **Changing one's mind.** A tap on the other side makes a second ruling with the statements the other way round.
-  The first is not removed. A session that was told the first is told the second at its next step, as a newer
-  decision that replaces what was said before. A session that was told neither is told both in one step, oldest
-  first, so the later one is last. Whether a model always follows the last of two opposite rulings is unproved.
-- **Delivery is never turned on by a tap on a clash.** Only the "Turn on delivery" tap installs the hook, with
-  the same function as `jellymoon hook install`, for the installed `jellymoon` command.
+```json
+{"ruling":{"id":"…","stands":"…","over":"…"},"stands":"…","replaces":"…","unkept":null}
+```
+
+`stands` and `replaces` are the exact words of the ruling. `ruling` is null when that statement stands already.
+This is the only way text gets from a page into a running session, so what is checked is stated here exactly.
+
+- **What is sent.** The two statements of one clash, one as what stands and the other as what it replaces. They go
+  through `jellymoon_core::rule` and nothing else: one line each, credential shapes replaced, 200 characters, `"`
+  made `'`, and cleaned again when handed over. No label, wish, star or project is sent, and one tap makes at most
+  one ruling.
+- **The person sees every word that is sent.** The page draws the statements in those same cleaned words, whole
+  ([app.md](app.md#taps-appsrctapsrs)), and a tap sends the statement whose drawn words were tapped.
+- **The kept page**, `<home>/pages/<day>.json`, is used only when it is a plain file, not a link, that neither its
+  group nor others can write to (no modes are checked on Windows), at most 1 MiB, and page data whose `day` is the
+  day asked for with clashes of core's shape. Anything else is refused in one line and nothing is written. That is
+  all that is checked: the file is not compared with the session logs again and carries no mark that the reading
+  wrote it, and the modes of the folders above it are not looked at. Whoever can write that file as the person can
+  choose the words of the next ruling the person taps, within core's cleaning; the same account can write
+  `rulings/` itself. A kept page changed after the reading is ruled on in the words it is drawn in.
+- **The settlement**, `<home>/pages/<day>.ruled.json`, says which side of each clash stands: the day, and for each
+  clash ruled on its two cleaned statements and `"stands": "a"` or `"b"`. No ruling is ever made from it. It is
+  believed only when it is a plain file the group and others cannot write to, at most 64 KiB, of exactly this shape
+  with no other field, of this day, with at most eight clashes; anything else is no settlement. A clash is known by
+  its two statements, so a reading that words it differently shows it open again. The file is never sent anywhere.
+- **What stands** is asked of the ruling store first: the newest waiting ruling of these two statements, either way
+  round. Only when none waits is the settlement asked. A tap on the statement that stands makes no ruling; a tap on
+  the other makes a new one with the two the other way round. A clash the reading found settled has no ruling of
+  the person's, so a tap on either side makes one.
+- **The order of writes** is the lock, the ruling, the settlement. `pages` is made the person's alone (0700). A lock
+  file, `<day>.ruled.lock`, made with create-new, is held from reading what stands to the last write, so two taps
+  at once on two clashes both keep theirs and two on one statement make one ruling. A tap waits 3 seconds for it and
+  is then refused; a lock older than 30 seconds is one a crash left and is removed. The settlement is written to a
+  file of the process's own, made with create-new and 0600, and moved into place; a link waiting at either name is
+  replaced, never followed, and a failed write removes its temporary file.
+- **When the settlement cannot be written** the ruling stands: exit 0, the ruling in the JSON, the reason in
+  `unkept`, and one line on stderr, "the ruling was made, but the page could not keep it". The same holds after a
+  crash between the two writes. For the 24 hours the ruling waits it says what stands, so the same tap again makes
+  no second ruling and writes the settlement if it now can. After those 24 hours a settlement that was never
+  written is forgotten: the clash is drawn open, and a tap makes a ruling again.
+- **A refusal writes nothing**: no kept page, a clash that is not on it, an option that is not 1 or 2, a statement
+  that is empty once cleaned. One line on stderr, exit 1.
+- **What is not trusted.** A model's reading reaches a ruling only as the two quotes of a clash. Core kept each only
+  as an exact, whole-word piece of something the person typed that day ([page.md](page.md)). The model chose which
+  piece, and a piece can mean other than the whole ("delete the database" out of "do not delete the database"), so
+  what protects the person is that both statements are on the page, in full, where they tap.
+- **Changing one's mind.** The first ruling is not removed. A session that was told the first is told the second at
+  its next step, as a newer decision that replaces what was said before. A session that was told neither is told
+  both in one step, oldest first, so the later one is last. Whether a model always follows the last of two opposite
+  rulings is unproved.
+
+### Turning delivery on from the app
+
+A tap on a clash never changes Claude Code's settings. `jellymoon hook install --installed`, and the app's "Turn on
+delivery" (`jellymoon_core::turn_on_delivery`), install the hook for the `jellymoon` command in the folder
+`install.sh` uses (`JELLYMOON_BIN_DIR` or `~/.local/bin`). Claude Code runs that file at every step of every
+session, so it is named only when (`jellymoon_core::installed_command`):
+
+- the folder is an absolute path, and so is the settings file's (`CLAUDE_CONFIG_DIR`; a relative one is refused by
+  the plain `jellymoon hook install` as well, in one line);
+- the file, with a link followed to its end, is a regular file still named `jellymoon`, not empty;
+- it can be run, and neither its group nor others can write to it;
+- neither the folder it is named in nor the folder the link ends in can be written to by everyone.
+
+The entry names the path in the install folder, not where a link ends. On Windows there are no such modes: the file
+must be a regular, non-empty `jellymoon.exe` in an absolute folder, and who may write there is the system's rule for
+that folder. Every refusal is one line, exit 1, and writes nothing.
 
 ## The hook
 

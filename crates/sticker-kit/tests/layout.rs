@@ -176,14 +176,14 @@ fn a_long_list_gives_up_rows_to_the_notes_after_it_and_says_how_many() {
     }
 }
 
+fn choice(id: &str, title: &str, options: Vec<String>) -> Note {
+    let (footer, struck_first, whole) = ("a footer".into(), false, false);
+    Note::Choice { id: id.into(), title: title.into(), options, footer, struck_first, whole }
+}
+
 fn tall(id: &str) -> Note {
-    Note::Choice {
-        id: id.into(),
-        title: "four long options".into(),
-        options: vec!["an option that runs on for three whole lines of text, and then some more words".repeat(2); 4],
-        footer: "a footer".into(),
-        struck_first: false,
-    }
+    let option = "an option that runs on for three whole lines of text, and then some more words".repeat(2);
+    choice(id, "four long options", vec![option; 4])
 }
 
 /// The notes placed, by id, and what the last sheet says when notes were left out.
@@ -225,13 +225,7 @@ fn notes_that_do_not_fit_are_counted_on_a_last_sheet_in_both_themes() {
 #[test]
 fn options_give_up_their_third_line_and_the_gaps_a_third_before_a_note_is_counted() {
     let long = "an option that runs on for three whole lines of text, and then some more words".repeat(2);
-    let choice = |id: &str| Note::Choice {
-        id: id.into(),
-        title: "pick one".into(),
-        options: vec![long.clone(); 2],
-        footer: "a footer".into(),
-        struck_first: false,
-    };
+    let choice = |id: &str| choice(id, "pick one", vec![long.clone(); 2]);
     let rows: Vec<(String, String)> = (0..9).map(|i| (format!("row {i}"), "of nine".to_string())).collect();
     let list = Note::List { title: "a list".into(), rows };
     let lines = |placed: &[Placed]| of(placed, PieceKind::Option).iter().map(|o| o.text.len()).max();

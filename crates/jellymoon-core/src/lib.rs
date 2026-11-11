@@ -1,7 +1,8 @@
 //! The journal app without a screen (ADR 0011). [`day`] is the reader: one local day of what a person typed to Claude
 //! Code. [`page`] turns that day into page data with one reading call to the person's own harness and keeps only what the
 //! person said. [`rule`] keeps the person's choice on a clash; [`deliver`], run by the hook that [`install_hook`] adds
-//! to the harness settings, hands it to each running session once. [`uninstall`] takes off a machine what the install
+//! to the harness settings, hands it to each running session once. [`settle`] is a tap on a clash: the ruling, and
+//! which side stands. [`uninstall`] takes off a machine what the install
 //! script put there. A session log and a model's answer are both untrusted input: nothing here panics on either.
 
 mod call;
@@ -14,6 +15,7 @@ mod redact;
 mod ruling;
 mod session;
 mod shapes;
+mod tap;
 mod uninstall;
 
 pub use error::Error;
@@ -23,4 +25,8 @@ pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};
 pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, ReaderTurn, Ruling, Wish, WishState};
+pub use tap::{
+    CLASHES_MAX, Settled, Side, Standing, installed_command, keep_private, kept_page, settle, settle_kept, standing,
+    turn_on_delivery,
+};
 pub use uninstall::{UninstallOptions, Uninstalled, uninstall};

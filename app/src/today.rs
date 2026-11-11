@@ -7,10 +7,10 @@
 //! else. Nothing is printed here: the scenes go to the window, or to `layout`, which prints the page's own words on
 //! stdout as it does for any page.
 
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::Read;
+use std::path::PathBuf;
 use std::time::Duration;
-use std::{env, fs, io, process};
+use std::{env, fs, io};
 
 use jellymoon_core::{DayOptions, Error, PageData, PageOptions, ReaderDay};
 use sticker_kit::{Note, Scene};
@@ -51,8 +51,8 @@ pub struct Today {
     pub fresh: bool,
     /// Claude Code's settings file, where "Turn on delivery" adds the hook. None when no folder of its is known.
     pub settings: Option<PathBuf>,
-    /// The installed `jellymoon` command, which the hook runs. None when it is not where an install puts it.
-    pub command: Option<PathBuf>,
+    /// The folder `install.sh` puts the `jellymoon` command in, which the hook runs. None when there is no home.
+    pub bin: Option<PathBuf>,
 }
 
 /// What was asked for on the command line; what is left out comes from the environment, as for `jellymoon`.
@@ -99,7 +99,6 @@ impl Today {
         let logs = asked.logs.or_else(|| Some(config()?.join("projects")));
         // The folder `install.sh` puts the command in, under the name it gives it.
         let bin = named("JELLYMOON_BIN_DIR").or_else(|| Some(user()?.join(".local").join("bin")));
-        let command = bin.map(|bin| bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX)));
         Ok(Today {
             date: date(asked.date.as_deref()).ok_or("--date must be a day as YYYY-MM-DD")?,
             logs: logs.ok_or("finding the session logs: no home directory; name them with --logs")?,
@@ -109,7 +108,7 @@ impl Today {
             harness: named("JELLYMOON_CLAUDE"),
             fresh: asked.fresh,
             settings: config().map(|config| config.join("settings.json")),
-            command: command.filter(|command| command.is_absolute() && command.is_file()),
+            bin,
         })
     }
 
@@ -118,11 +117,11 @@ impl Today {
         self.home.join("pages").join(format!("{}.json", self.date))
     }
 
-    /// The kept page of the day, when there is one that reads as page data of that day. It comes through the same
-    /// door as any page file.
+    /// The kept page of the day, when there is one that reads as page data of that day. Core says whether the file
+    /// may be used (a plain file only this user can write to, of a page's size); then it comes through the same door
+    /// as any page file.
     pub fn kept(&self) -> Option<Page> {
-        let mut bytes = Vec::new();
-        fs::File::open(self.file()).ok()?.take(read::MAX_PAGE_BYTES as u64 + 1).read_to_end(&mut bytes).ok()?;
+        let bytes = jellymoon_core::kept_page(&self.home, &self.date).ok()?;
         read::bytes(bytes).ok().filter(|page| page.data.day == self.date)
     }
 
@@ -204,8 +203,7 @@ impl Today {
     /// It is written beside its place, in a file of this process's own that only this user can read, and moved
     /// there, so a kept page is never half a page and two apps open at once never write the same file.
     fn keep(&self, data: &PageData) -> io::Result<()> {
-        let file = self.file();
-        write_private(&file, &format!("{data}\n"))
+        jellymoon_core::keep_private(&self.file(), &format!("{data}\n"))
     }
 
     /// The page when the day could not be read: one plain note that says why, on the kept page when there is one.
@@ -252,41 +250,16 @@ fn words(error: &Error) -> String {
              {error}."
         ),
         Error::Date | Error::Model | Error::Home | Error::NotAbsolute | Error::Uninstall(_) => format!("{error}."),
-        // The app makes no ruling and installs no hook yet; these say what core says.
+        // A tap's errors are put into words in `taps.rs`; these say what core says.
         Error::Ruling
         | Error::Store(_)
         | Error::Settings(_)
         | Error::NotSettings
         | Error::Elsewhere
-        | Error::Changed => {
+        | Error::Changed
+        | Error::Tap(_)
+        | Error::Command(_) => {
             format!("{error}.")
         }
     }
-}
-
-/// Writes a file of the pages folder, which is made for this user only. The text goes into a file of this process's
-/// own beside its place, readable by this user alone, and is moved there: the file is whole or it is not there.
-pub(crate) fn write_private(file: &Path, text: &str) -> io::Result<()> {
-    if let Some(folder) = file.parent() {
-        private_dir(folder)?;
-    }
-    let beside = file.with_extension(format!("{}.new", process::id()));
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    options.open(&beside)?.write_all(text.as_bytes())?;
-    fs::rename(&beside, file)
-}
-
-/// Makes a folder for this user only where the system has file modes, as core does for its own.
-fn private_dir(dir: &Path) -> io::Result<()> {
-    let mut builder = fs::DirBuilder::new();
-    builder.recursive(true);
-    #[cfg(unix)]
-    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
-    builder.create(dir)?;
-    #[cfg(unix)]
-    fs::set_permissions(dir, std::os::unix::fs::PermissionsExt::from_mode(0o700))?;
-    Ok(())
 }

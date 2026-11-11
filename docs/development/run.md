@@ -77,13 +77,27 @@ folder still there, and take the run for one cut off; on Linux, where files go i
 stayed locked, the wish still names the run. The next page or `jellymoon run` that finds a wish naming a run
 whose record says `not_started` (the child that record names is killed first, as a cut-off run's is, and its copy
 is then taken back), or of which nothing is kept, not even its folder
-in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
+in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. If
+the lock a copy is taken back behind stays held for that look's 3 seconds, the wish is not written: where it is
+kept it goes on naming the run, so the copy, its branch and the run's folder are not left with nothing naming
+them, and the next look tries again. That look draws the wish as it was, with no run, and never as one going; a
+`jellymoon run` asked for then is refused, as the wish has its run still, before any copy is made. If
+the copy cannot be taken back for any other reason (the repo was moved away, git fails, the copy's place is not a
+folder), it never will be: the look removes what Jellymoon's home holds of the run, as `jellymoon run` does below,
+and makes the wish as it was, so a wish is never refused for a run it is not drawn with. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
 started again without the flag.
 
 If the repo was moved away while the harness ran, git cannot take the copy back, and `jellymoon run` exits 1 with
 git's reason: the copy's folder and the run's folder in `runs` are removed all the same and the wish is as it was,
 but the branch `jellymoon/run-<id>` and git's registration of the copy are in the moved repo, which Jellymoon
 cannot find, and stay there (`git worktree prune` and `git branch -D` in that repo remove them).
+
+A moved repo is one case of it. What Jellymoon's home holds of the run is removed so (`remove_ours`) after any
+take-back that failed twice, the second time with the run's lock let go: a copy record that cannot be read, a git
+that fails or runs past its limit, a copy's place that is no longer a folder Jellymoon made (then that place is
+left as it is). `jellymoon run` exits 1 with the reason of the second failure. The branch and git's registration
+of the copy then stay in the repo, where it still is, and nothing in Jellymoon's home records them any more: the
+run's id is in that one line, and in the branch's name.
 
 ## What is read of the stream
 
@@ -178,12 +192,17 @@ run. The system drops that lock when the process ends, however it ends. So a wis
 a run whose record has no end, and whose run nothing holds was cut off. The next `jellymoon page`, app page or
 `jellymoon run` for that wish that finds it so:
 
-1. writes the wish down, behind the day's lock and only if it still says `working` there: the wish is
-   `needs_you` and its `why` says the run was cut off;
-2. kills the harness child the run left, if it can be told to be the same process (below): at once, with no
+1. kills the harness child the run left, if it can be told to be the same process (below): at once, with no
    `SIGTERM` and no wait, so a page is not kept waiting for an agent nobody reads;
-3. marks the copy failed, so it is kept, and writes `failed` in the record;
-4. draws the wish as `needs_you`, written down or not. A `jellymoon run` is then refused like any second run.
+2. marks the copy failed, so it is kept. That is done behind `runs/clean.lock` ([copy.md](copy.md)), which a
+   `copy make`, a `copy clean` or another `run` may hold for as long as its git children take. A look waits for
+   it 3 seconds and no more (a build with debug assertions reads a shorter wait from
+   `JELLYMOON_TEST_COPY_WAIT_MS`). If it is still held then, nothing more is written, and the next look, which
+   finds the wish as this one did, does the rest;
+3. writes the wish down, behind the day's lock and only if it still says `working` there: the wish is
+   `needs_you` and its `why` says the run was cut off;
+4. writes `failed` in the record;
+5. draws the wish as `needs_you`, written down or not. A `jellymoon run` is then refused like any second run.
 
 A pid is given out again once its process is gone, so the pid alone is never signalled. The record keeps the
 child's **mark**, when the process started, and the pid is signalled only while its mark is the recorded one; it

@@ -204,6 +204,100 @@ fn a_run_that_finished_over_made_wishes_that_cannot_be_used_says_so_and_not_that
     assert_eq!(w.copies(), Vec::<String>::new());
 }
 
+// A record says its run was never started, and the copy cannot be taken back now: the lock a copy is taken back
+// behind is held. The wish goes on naming the run, so the copy, its branch and the run's folder are not left with
+// nothing naming them, and the next look takes them back. It is drawn as it was, never as a run going.
+#[test]
+fn a_never_started_run_whose_copy_cannot_be_taken_back_is_still_named_by_its_wish_for_the_next_look() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let before = w.kept(&wish);
+    w.play("slow", 0);
+    let mut command = w.start_going(&wish, &repo);
+    wait_for(&w.at("rec").join("started"));
+    let going = w.kept(&wish);
+    let run = going["run"].as_str().unwrap().to_string();
+    command.kill().unwrap();
+    command.wait().unwrap();
+    let mut record = w.record(&run);
+    record["outcome"] = json!("not_started");
+    fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
+
+    let held = fs::File::options().write(true).open(w.jm("runs").join("clean.lock")).unwrap();
+    held.lock().unwrap();
+    let (logs, short) = (w.at("logs"), [("JELLYMOON_TEST_COPY_WAIT_MS", OsString::from("100"))]);
+    let page = printed(&w.run_with(&short, &["page", "--date", DAY, "--logs", logs.to_str().unwrap()]));
+    assert_eq!((&page["wishes"][0]["state"], &page["wishes"][0]["run"]), (&json!("working"), &json!(null)));
+    assert_eq!(w.kept(&wish), going, "the wish still names the run");
+    assert_eq!((w.copies(), w.branches(&repo).len()), (vec![run.clone()], 1), "and its copy is still there");
+    // A run asked for now is refused for the run the wish names before any copy is made: it does not wait for the
+    // lock a copy is made behind, and leaves no new name in the home and no new branch or worktree in the repo.
+    let (tree_before, args) =
+        (in_runs(&w.jm("runs")), ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    let (asked, in_time) = thread::scope(|scope| {
+        let (from, asking) = (Instant::now(), scope.spawn(|| w.run_with(&short, &args)));
+        while !asking.is_finished() && from.elapsed() < Duration::from_secs(10) {
+            thread::sleep(Duration::from_millis(10));
+        }
+        let in_time = asking.is_finished();
+        held.unlock().unwrap(); // a run that waited to make a copy ends now, and the test with it
+        (asking.join().unwrap(), in_time)
+    });
+    assert!(in_time && refused(&asked).contains("has had its run"), "it waited to make a copy: {}", asked.stderr);
+    assert_eq!((w.kept(&wish), w.copies(), w.branches(&repo).len()), (going, vec![run.clone()], 1));
+    assert!(in_runs(&w.jm("runs")) == tree_before, "something was written in `runs`");
+    assert_eq!(w.git(&repo, &["worktree", "list", "--porcelain"]).matches("worktree ").count(), 2);
+
+    w.let_end("go"); // where nothing stops the agent the run left, it ends here: a folder it stands in cannot go
+    assert_eq!((&w.on_page(&wish)["run"], w.kept(&wish)), (&json!(null), before), "the next look took it back");
+    assert_eq!((w.copies(), w.branches(&repo), w.jm("runs").join(&run).exists()), (vec![], vec![], false));
+}
+
+/// Every name in `runs`, and all that is in each folder there with its bytes. The files of `runs` itself are named
+/// and not read: one is the lock this test holds, and where a held lock is the system's own (Windows) no other
+/// handle may read the file.
+fn in_runs(runs: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut names: Vec<PathBuf> = fs::read_dir(runs).unwrap().map(|entry| entry.unwrap().path()).collect();
+    names.sort();
+    let all = |path: PathBuf| {
+        let inside = if path.is_dir() { tree(&path) } else { Vec::new() };
+        std::iter::once((path, Vec::new())).chain(inside)
+    };
+    names.into_iter().flat_map(all).collect()
+}
+
+// The same record, over a repo that was moved away since: git can never take that copy back. The look removes what
+// Jellymoon's home holds of the run and makes the wish as it was, so it is not refused for a run it is not drawn
+// with: it runs where the repo is now.
+#[test]
+fn a_never_started_run_whose_repo_was_moved_away_is_cleared_by_a_look_and_its_wish_can_be_run_again() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let before = w.kept(&wish);
+    w.play("slow", 0);
+    let mut command = w.start_going(&wish, &repo);
+    wait_for(&w.at("rec").join("started"));
+    let run = w.kept(&wish)["run"].as_str().unwrap().to_string();
+    command.kill().unwrap();
+    command.wait().unwrap();
+    let mut record = w.record(&run);
+    record["outcome"] = json!("not_started");
+    fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
+    w.let_end("go"); // the agent the run left stands in the copy, and is gone before the repo is moved
+    let moved = w.at("work").join("moved").join("alpha");
+    fs::create_dir(moved.parent().unwrap()).unwrap();
+    if let (Err(why), true) = (fs::rename(&repo, &moved), cfg!(windows)) {
+        return skipped(&format!("the repo could not be moved: {why}"));
+    }
+
+    assert_eq!((&w.on_page(&wish)["run"], w.kept(&wish)), (&json!(null), before), "the wish is as it was");
+    let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
+    let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
+    assert_eq!((w.copies(), runs), (vec![], Vec::<String>::new()), "nothing of the run is left in the home");
+    w.play("edits", 0);
+    assert_eq!(ran(&w.start(&wish, &moved)).1["star"], json!(STAR), "and it runs where the repo is now");
+}
+
 // A dead run's agent has nobody to report to: it is not asked and waited for, it is killed.
 #[test]
 fn a_page_does_not_wait_for_the_agent_a_dead_run_left() {

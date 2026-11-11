@@ -13,7 +13,8 @@ max_file_lines = 400
 "crates/xtask" = 961
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
-"crates/sticker-kit" = 5116
+# The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
+"crates/sticker-kit" = 5363
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words.
 "app" = 2231
 

@@ -118,77 +118,77 @@ fn bundled_advances_run_a_little_wider_than_shaped_text() {
     });
 }
 
-/// Art as heavy as the door lets through: the largest size, the most elements and depth, the largest numbers and
-/// strokes, and as many paths of the longest `d` as the file's size has room for. Every shape covers the whole
-/// picture. `nth` moves every point, so no two files are the same picture.
+/// One of five art files that together are as heavy as the door lets a theme be: both counts spent to the last
+/// unit, on what costs the most to draw. Every shape covers the whole picture with see-through paint, the circles are
+/// far larger than it with strokes as wide, and each number is a line as tall as the picture under a thin stroke.
+/// `nth` moves every point, so no two files are the same picture.
 fn heaviest_art(nth: usize) -> String {
-    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_PATH_BYTES, MAX_ART_SIDE};
-    const PATHS: usize = 13;
+    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_SIDE, MIN_ART_VIEW};
+    let side = MAX_ART_SIDE as u64;
+    let (shapes, numbers) = (MAX_ART_PAINT / (side * side), MAX_ART_NUMBERS / 2);
+    // A fifth of each count, and the remainder to the first files.
+    let share = |all: u64| (all / 5 + u64::from((nth as u64) < all % 5)) as usize;
     let mut svg = format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{MAX_ART_SIDE}" height="{MAX_ART_SIDE}" viewBox="0 0 1 1">"#
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{side}" height="{side}" viewBox="0 0 {MIN_ART_VIEW} {MIN_ART_VIEW}">"#
     );
     for _ in 1..MAX_ART_DEPTH {
         svg += r#"<g transform="translate(4096 -4096) rotate(4096)">"#;
     }
-    for path in 0..PATHS {
-        let mut d = String::from("M0 0");
-        for i in 0.. {
-            let line = format!("L{} {}", ((i + nth + path) * 37) % 4096, (i * 91) % 4096);
-            if d.len() + line.len() > MAX_ART_PATH_BYTES {
-                break;
-            }
-            d += &line;
-        }
-        svg +=
-            &format!(r##"<path d="{d}" fill="none" stroke="#123456" stroke-width="4096" stroke-linejoin="round"/>"##);
-    }
-    for i in 0..MAX_ART_ELEMENTS - MAX_ART_DEPTH - PATHS {
-        svg += &format!(
-            r##"<circle cx="{}" cy="4096" r="4096" fill="#abcdef" fill-opacity="0.2" stroke="#000" stroke-width="4096"/>"##,
-            i * 3 + nth
-        );
+    let paint = r##"fill="#abcdef" fill-opacity="0.2" stroke="#123456" stroke-opacity="0.3""##;
+    let lines: String = (1..share(numbers as u64)).map(|i| format!("L{} {}", (i * 3 + nth) % 8, (i % 2) * 8)).collect();
+    svg += &format!(r#"<path d="M0 0{lines}" {paint} stroke-width="0.03" stroke-linejoin="round"/>"#);
+    for i in 1..share(shapes) {
+        svg += &format!(r#"<circle cx="{}" cy="4096" r="4096" {paint} stroke-width="4096"/>"#, i * 3 + nth);
     }
     svg + &"</g>".repeat(MAX_ART_DEPTH - 1) + "</svg>"
 }
 
-/// Draws the sample scene headless and holds the draw under a minute.
-fn drawn_in_seconds(theme: Theme, name: &str) {
+/// Draws the sample scene headless. What bounds the time is counted elsewhere, in numbers that are the same on every
+/// machine; `backstop` is ten times what the draw took in a debug build on a Mac, so only a hang trips it.
+fn drawn(theme: Theme, name: &str, backstop: u64) {
     let out = std::env::temp_dir().join(format!("sticker-kit-{name}-{}.png", std::process::id()));
     let started = std::time::Instant::now();
     sticker_kit::draw::headless::snapshot(Scene::sample(), theme, 1440.0, 900.0, &out).expect("it is drawn");
     let took = started.elapsed();
     eprintln!("{name}: {took:?}");
-    assert!(out.is_file() && took.as_secs() < 60, "{name} took {took:?}");
+    assert!(out.is_file() && took.as_secs() < backstop, "{name} took {took:?}");
     let _ = std::fs::remove_file(&out);
 }
 
 #[test]
-fn five_different_art_files_at_the_door_s_limits_are_drawn_in_seconds() {
+fn the_heaviest_art_a_theme_may_hold_is_counted_to_the_door_s_two_limits_and_drawn() {
+    use sticker_kit::theme::{ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, art_cost};
     let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{}", std::process::id()));
     std::fs::create_dir_all(&folder).unwrap();
-    let mut theme = String::from("[art]\n");
+    let (mut theme, mut all) = (String::from("[art]\n"), ArtCost::default());
     for (nth, piece) in ["hero", "character", "star", "bubble", "badge"].into_iter().enumerate() {
         let art = heaviest_art(nth);
-        let room = sticker_kit::theme::MAX_ART_BYTES as usize - art.len();
-        assert!(room < 4096, "{room} bytes of the file's size are unused: a heavier file would pass the door");
+        let cost = art_cost(&art).expect("each file is inside the door");
+        all = ArtCost { numbers: all.numbers + cost.numbers, paint: all.paint + cost.paint };
         std::fs::write(folder.join(format!("{piece}.svg")), &art).unwrap();
         theme += &format!("{piece} = \"{piece}.svg\"\n");
     }
+    assert_eq!(all, ArtCost { numbers: MAX_ART_NUMBERS, paint: MAX_ART_PAINT }, "nothing heavier passes the door");
     std::fs::write(folder.join("theme.toml"), theme).unwrap();
     let loaded = Theme::load(&folder.join("theme.toml")).expect("the art is inside the door");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
-    drawn_in_seconds(loaded.theme, "heaviest art");
+    drawn(loaded.theme, "heaviest art", 40);
+
+    let one_more = heaviest_art(4).replacen("<circle", r#"<circle r="1"/><circle"#, 1);
+    std::fs::write(folder.join("badge.svg"), one_more).unwrap();
+    let refused = Theme::load(&folder.join("theme.toml")).expect_err("one shape over the count");
+    assert!(refused.to_string().starts_with("the SVG for art.badge is refused: with the art before it, paint"));
     let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// The largest sizes a theme may ask for, on the smallest canvas at the largest scale: the hero comes out 3600 px
-/// wide and is drawn from an image of 800.
+/// wide. A unit test beside `Sprites` holds what it is drawn from: an image of 800 at most.
 #[test]
-fn a_theme_at_the_top_of_its_size_ranges_is_drawn_in_seconds() {
+fn a_theme_at_the_top_of_its_size_ranges_is_drawn() {
     let mut theme = Theme::sticker();
     let m = &mut theme.metrics;
     (m.width, m.height, m.max_scale) = (200.0, 200.0, 10.0);
     (m.hero_size, m.character_size, m.rim) = (800.0, 400.0, 40.0);
     assert_eq!(theme.check(), Ok(()));
-    drawn_in_seconds(theme, "largest sizes");
+    drawn(theme, "largest sizes", 110);
 }

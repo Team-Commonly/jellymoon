@@ -77,10 +77,8 @@ impl Sprites {
             return (image.clone(), piece.rect);
         }
         let width = piece.rect.w.max(1.0);
-        // A piece wider than the largest size is drawn from that size, scaled up: no theme or window buys more pixels.
-        let size = SIZES.iter().copied().find(|s| *s >= width).unwrap_or(SIZES[SIZES.len() - 1]);
+        let (size, half_rims) = raster(width, rim);
         let grow = size / width;
-        let half_rims = (rim * grow * 2.0).round().clamp(1.0, MOST_HALF_RIMS) as u32;
         let who = match piece.piece {
             PieceKind::Hero => scene.hero.as_ref(),
             PieceKind::Character => scene.characters.get(piece.index),
@@ -104,6 +102,13 @@ impl Sprites {
     }
 }
 
+/// The size a piece `width` wide is rasterised at, and its rim there in half pixels. A piece wider than the largest
+/// size is drawn from that size, scaled up: no theme or window buys more pixels than 800 a side and a rim of 64.
+fn raster(width: f32, rim: f32) -> (f32, u32) {
+    let size = SIZES.iter().copied().find(|s| *s >= width).unwrap_or(SIZES[SIZES.len() - 1]);
+    (size, (rim * size / width * 2.0).round().clamp(1.0, MOST_HALF_RIMS) as u32)
+}
+
 fn draw(key: Key, who: Option<&Character>, theme: &Theme, size: f32, rim: f32) -> String {
     let palette = &theme.palette;
     match key.kind {
@@ -114,5 +119,21 @@ fn draw(key: Key, who: Option<&Character>, theme: &Theme, size: f32, rim: f32) -
         PieceKind::Star => art::star(palette, size / 2.0, rim),
         PieceKind::Bubble => art::bubble(palette, size / 2.0, rim),
         _ => art::badge(palette, size / 2.0, rim),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::raster;
+
+    /// What bounds the cost of the kit's own art, counted: the pixels of one image, whatever is asked for.
+    #[test]
+    fn no_piece_is_rasterised_larger_than_800_with_a_rim_of_64() {
+        assert_eq!(raster(92.0, 5.0), (96.0, 10));
+        assert_eq!(raster(800.0, 64.0), (800.0, 128));
+        for (width, rim) in [(801.0, 5.0), (3600.0, 180.0), (163_840.0, 400_000.0), (f32::MAX, f32::MAX), (1.0, 1e9)] {
+            let (size, half_rims) = raster(width, rim);
+            assert!(size <= 800.0 && half_rims <= 128, "{width} {rim}: {size} {half_rims}");
+        }
     }
 }

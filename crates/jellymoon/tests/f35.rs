@@ -58,10 +58,13 @@ impl World {
         self.home().join("pages").join(format!("{DAY}.ruled.json"))
     }
 
-    /// Keeps a page of the day with these clashes, as the app would have.
+    /// Keeps a page of the day with these clashes, as the app would have: for its owner alone to write, whatever
+    /// the umask the tests run under.
     fn keep(&self, clashes: &[(&str, &str)]) {
         fs::create_dir_all(self.kept().parent().unwrap()).unwrap();
         fs::write(self.kept(), page(DAY, clashes).to_string()).unwrap();
+        #[cfg(unix)]
+        chmod(&self.kept(), 0o644);
     }
 
     pub fn fed(&self, args: &[&str], input: &str) -> Ran {
@@ -282,6 +285,8 @@ fn a_settlement_of_another_day_or_shape_or_size_says_nothing_about_what_stands()
     let w = world();
     w.keep(&[(A, B)]);
     fs::write(w.ruled(), good.to_string()).unwrap();
+    #[cfg(unix)]
+    chmod(&w.ruled(), 0o644);
     assert_eq!(w.tap("1", "2")["ruling"], Value::Null, "a settlement that is sound is believed");
     assert_eq!(w.rulings().len(), 0);
 

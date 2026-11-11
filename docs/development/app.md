@@ -90,8 +90,8 @@ drawn from `--page` has no day, and a tap on it does nothing.
 - **What fits.** One clash of two statements of 200 characters is drawn whole at 960x640 and at 1440x900, in words
   and in a script of wide characters with no spaces. At 1440x900 an option is written at 14 pixels. At 960x640 it
   is 11, or 9.35 when the page needs the room (the kit's 0.85 step; the last step, 0.72, is 7.9), which is under
-  the 11 pixels every other text keeps. The page scales with its window, so a larger window gives no
-  more room. A clash the person has not chosen on is placed before one they have, so when two long clashes do not
+  the 11 pixels every other text keeps. `layout` prints each run's `size`, so the step taken can be read. The
+  page scales with its window, so a larger window gives no more room. A clash the person has not chosen on is placed before one they have, so when two long clashes do not
   fit together the open one is drawn, and the other when the first is settled. Past that (four statements of 200
   wide characters) neither is drawn: both are counted, and `jellymoon settle` is the way to rule on them. A
   settled clash that is counted cannot be turned over in the window either.
@@ -176,7 +176,8 @@ The kit has its own door for scenes and theme files (`crates/sticker-kit/README.
 ## `layout` output
 
 One JSON object a line, in the kit's order: `kind`, `id`, `index`, `x`, `y`, `w`, `h` (logical pixels, two decimals),
-`tilt` (degrees), `state` on a character, and `text`, a list of runs with `role`, `text` and their own box. Any text
+`tilt` (degrees), `state` on a character, and `text`, a list of runs with `role`, `text`, `size` (the font size the
+run is drawn at) and their own box. Any text
 that is longer than its place is cut with an ellipsis: a label to the theme's width and length, a row of the list note
 to the note's width (the star's text gets up to 64% of the row, the wish's label what is left), a quote to three
 lines, or to two when the notes need the room. A quote breaks at a space. A word too long for a line of its own (an

@@ -59,10 +59,15 @@ fn on_show(world: &World, settings: PathBuf) -> OnShow {
     OnShow { today, page: Some(page), scene }
 }
 
-/// Puts a stand-in for the installed `jellymoon` command where `install.sh` puts the real one: a real program.
+/// Puts a stand-in for the installed `jellymoon` command where `install.sh` puts the real one: a real program, in
+/// folders for their owner alone to write whatever the umask.
 fn command(world: &World) -> PathBuf {
     let bin = user(world).join(".local").join("bin");
     fs::create_dir_all(&bin).unwrap();
+    #[cfg(unix)]
+    for folder in bin.ancestors().take(4) {
+        fs::set_permissions(folder, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    }
     let command = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
     fs::copy(env!("CARGO_BIN_EXE_f34-claude"), &command).unwrap();
     #[cfg(unix)]
@@ -171,8 +176,16 @@ fn the_option_the_page_draws_is_the_ruling_s_statement_character_for_character()
         let world = open_clash();
         rewrite(&world, |page| page["clashes"][0]["quote_b"] = json!(long));
         let at = format!("{} characters at {size}", long.chars().count());
-        let drawn = options(&shown(&world, &["--size", size]), "clash-1", between);
+        let placed = shown(&world, &["--size", size]);
+        let drawn = options(&placed, "clash-1", between);
         assert_eq!(drawn.len(), 2, "{at}: the clash is drawn");
+        if (between, size) == ("", "960x640") {
+            // Wide characters at the smallest window need the room: every line of both options says it is drawn
+            // at the kit's 0.85 step of an option's 11 pixels, in the sticker theme.
+            let runs = placed.iter().filter(|piece| piece.kind() == "option").flat_map(Piece::runs);
+            let sizes: Vec<f64> = runs.map(|run| run["size"].as_f64().unwrap()).collect();
+            assert_eq!(sizes, vec![9.35; 9], "{at}");
+        }
         let ruling = jellymoon_core::settle_kept(&world.home, DAY, 1, 2).unwrap().ruling.unwrap();
         assert_eq!(drawn, [format!("“{}”", ruling.over), format!("“{}”", ruling.stands)], "{at}");
         assert_eq!(ruling.stands.chars().count(), 200, "a ruling carries 200 characters");
@@ -296,6 +309,9 @@ fn delivery_is_offered_only_for_a_command_core_takes_and_is_turned_on_by_its_own
         fs::set_permissions(&command, std::os::unix::fs::PermissionsExt::from_mode(0o777)).unwrap();
         assert_eq!(said(&on_show(&world, settings(&world)).scene)[0], plain, "a command anyone can write to");
         fs::set_permissions(&command, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    }
+    if support::open_above(world.dir.path()).is_some() {
+        return;
     }
     let mut shown = on_show(&world, settings(&world));
     assert_eq!(said(&shown.scene)[0], offer);

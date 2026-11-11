@@ -122,6 +122,12 @@ the person and the system's administrator. On Windows there are no such modes an
 file must be a plain, non-empty `jellymoon.exe`, not a link, in an absolute folder, and who may write there is the
 system's rule for that folder. Every refusal is one line, exit 1, and writes nothing.
 
+`install.sh` makes the folders it has to make for the person alone to write (0755), whatever the umask, so the
+command it places passes. A bin folder that was already there keeps its mode; when its group or everyone can write
+to it the installer's closing lines say that the app will not offer the tap, and why. The plain
+`jellymoon hook install` from a terminal names the program that is running and makes none of these checks. On a
+Mac the system itself follows 32 links and no more, so there a longer chain ends as "it was not found".
+
 ## The hook
 
 Checked against <https://code.claude.com/docs/en/hooks> on 2026-11-10.

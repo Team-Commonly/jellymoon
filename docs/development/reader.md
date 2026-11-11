@@ -39,7 +39,8 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
   else is looked for. White space around a name is dropped first, so a tab or a line break at a name's end is
   honoured. A name that holds one of them stops the run when it is in `skip.txt`, and in `--skip` is an argument
   error, exit 2, that names the name by its place in the value (`--skip: name 2 holds …`), never by its text. A
-  folder whose own name holds such a character is switched off by naming a part of its name without it.
+  folder whose own name holds such a character is switched off by naming a part of its name without it, and both
+  stop lines end by saying so.
 - **No session logs.** When the projects directory is not there (Claude Code was never used, or keeps its files
   elsewhere), the command says so in one line that names the folder it looked for, and exits 1. When the folder is
   the one nobody named, the line adds what to do. A directory that is there with no session in it is a day with no

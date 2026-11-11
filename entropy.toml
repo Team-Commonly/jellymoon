@@ -17,8 +17,11 @@ max_file_lines = 400
 # installed command, 105; the rest is `hook_installed`, the waiting rulings and the create-new write)
 # and the binary by 786 (`settle`, `hook status` and `hook install --installed`; nearly all of it their tests at the binary:
 # `tests/f35.rs`, `tests/f35/delivery.rs` and `tests/f35/lock.rs`).
-"crates/jellymoon-core" = 3090
-"crates/jellymoon" = 3576
+# The tidy before the first release raised them by 43 and 194, all but 4 lines of it tests: core's walk of the whole
+# table of unseen characters and its case of an empty statement; the binary's `tests/f33/modes.rs` (the installer
+# under a umask of 002), the cases of no home and of 32 links, and the helper that finds an open folder above a test.
+"crates/jellymoon-core" = 3133
+"crates/jellymoon" = 3770
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -35,7 +38,9 @@ max_file_lines = 400
 # The app's test of a `--skip` name that is refused: 6 lines.
 # F35 raised the app by 560: `taps.rs` (a tap carried to core and drawn), its cases in `tests/f35.rs`, and the
 # scene, the window and the day drawing what core says stands.
-"app" = 2994
+# The tidy raised the app by 47: a run's `size` in `layout` (9 lines), its assertion, and the test helper that
+# finds an open folder above a test.
+"app" = 3041
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

@@ -107,7 +107,7 @@ fn switched_off(home: &Path) -> Result<Vec<String>, String> {
             return Err(format!("line {} holds {what}", at + 1));
         }
         if hidden(line) {
-            return Err(format!("line {} holds a character that cannot be seen", at + 1));
+            return Err(format!("line {} holds a character that cannot be seen; {WAY_OUT}", at + 1));
         }
     }
     Ok(text.lines().map(str::to_string).collect())
@@ -131,6 +131,9 @@ fn unseen(c: char) -> bool {
     c.is_control() || single.contains(c) || ranges.iter().any(|range| range.contains(&c))
 }
 
+/// What to do about a name with such a character: the rest of the folder's name still matches it.
+const WAY_OUT: &str = "name a part of the folder's name without it";
+
 /// Whether a name holds a character that cannot be seen, once the white space around it is dropped as the match
 /// drops it.
 fn hidden(name: &str) -> bool {
@@ -142,7 +145,7 @@ fn hidden(name: &str) -> bool {
 pub fn skip_names(value: &str) -> Result<Vec<String>, String> {
     let names: Vec<String> = value.split(',').map(str::to_string).collect();
     match names.iter().position(|name| hidden(name)) {
-        Some(at) => Err(format!("--skip: name {} holds a character that cannot be seen", at + 1)),
+        Some(at) => Err(format!("--skip: name {} holds a character that cannot be seen; {WAY_OUT}", at + 1)),
         None => Ok(names),
     }
 }
@@ -239,6 +242,31 @@ mod tests {
             ..DayOptions::default()
         };
         assert_eq!(read(&options, &TimeZone::UTC, LINE_MAX).unwrap().turns[0].said, "caf\u{fffd} au lait");
+    }
+
+    // The table, written out a second time: every character of every range, not only its ends, and each single one.
+    #[test]
+    fn every_character_of_the_table_is_refused_inside_a_name_in_the_flag_and_in_the_list() {
+        let ranges = [0x0..=0x1f, 0x7f..=0x9f, 0x200b..=0x200f, 0x202a..=0x202e, 0x2060..=0x206f, 0xfe00..=0xfe0f];
+        let (tags, more) = (0xe0000..=0xe007f, 0xe0100..=0xe01ef);
+        let single = [0xad, 0x61c, 0x115f, 0x1160, 0x180e, 0x2028, 0x2029, 0x3164, 0xfeff, 0xffa0];
+        let table: Vec<char> =
+            ranges.into_iter().chain([tags, more]).flatten().chain(single).filter_map(char::from_u32).collect();
+        assert_eq!(table.len(), 32 + 33 + 5 + 5 + 16 + 16 + 128 + 240 + 10);
+        let home = tempfile::tempdir().unwrap();
+        for c in table {
+            let flag = skip_names(&format!("alpha,be{c}ta")).unwrap_err();
+            assert!(flag.starts_with("--skip: name 2 holds a character that cannot be seen"), "{c:?}: {flag}");
+            if c == '\n' {
+                continue; // in the list a line break parts two names
+            }
+            fs::write(home.path().join("skip.txt"), format!("alpha\nbe{c}ta\n")).unwrap();
+            let list = switched_off(home.path()).unwrap_err();
+            assert!(list.starts_with("line 2 holds a "), "{c:?}: {list}");
+        }
+        // The neighbours of each range are ordinary characters, and so is white space at a name's edge.
+        let seen = "\u{a0}\u{ae}\u{200a}\u{2010}\u{202f}\u{205f}\u{2070}\u{fdff}\u{fe10}\u{e0080}\u{e00ff}\u{e01f0}";
+        assert_eq!(skip_names(&format!(" al{seen}pha\t, beta ")).unwrap().len(), 2);
     }
 
     #[test]

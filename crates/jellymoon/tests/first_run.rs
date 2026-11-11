@@ -20,6 +20,8 @@ const SKIP_LINE: &str = "jellymoon: the list of folders you switched off (skip.t
 const UNSEEN: &str = "\u{7}\u{ad}\u{61c}\u{115f}\u{1160}\u{180e}\u{2028}\u{2029}\u{3164}\u{feff}\u{ffa0}\
                       \u{200b}\u{200f}\u{202a}\u{202e}\u{2060}\u{2065}\u{206f}\u{fe00}\u{fe0f}\
                       \u{e0000}\u{e007f}\u{e0100}\u{e01ef}";
+/// How both stop lines for such a character end: with what to do.
+const CANNOT_BE_SEEN: &str = "a character that cannot be seen; name a part of the folder's name without it";
 const NO_LOGS: &str = "jellymoon: no Claude Code session logs were found: there is no folder ";
 
 /// One test's logs (a turn in `alpha`, one in `private-notes`), scratch home and harness.
@@ -194,12 +196,12 @@ fn a_skip_txt_that_is_not_a_whole_plain_list_stops_both_commands_with_one_line_a
     // run, in `--skip` it is an argument error that names the name by its place.
     for unseen in UNSEEN.chars() {
         fs::write(w.skip_txt(), format!("alpha\n\nprivate-{unseen}notes\n")).unwrap();
-        let what = if unseen == '\u{feff}' { "a byte order mark" } else { "a character that cannot be seen" };
+        let what = if unseen == '\u{feff}' { "a byte order mark" } else { CANNOT_BE_SEEN };
         w.refused(&format!("line 3 holds {what}"));
         fs::remove_file(w.skip_txt()).unwrap();
         let ran = w.over_logs("day", &["--skip", &format!("alpha, private-{unseen}notes")]);
-        let line = "jellymoon: --skip: name 2 holds a character that cannot be seen\nusage:";
-        assert!(ran.code == 2 && ran.stdout.is_empty() && ran.stderr.starts_with(line), "{unseen:?}: {}", ran.stderr);
+        let line = format!("jellymoon: --skip: name 2 holds {CANNOT_BE_SEEN}\nusage:");
+        assert!(ran.code == 2 && ran.stdout.is_empty() && ran.stderr.starts_with(&line), "{unseen:?}: {}", ran.stderr);
         assert!(!ran.stderr.contains("private"), "{unseen:?}: {}", ran.stderr);
     }
     assert_eq!(w.over_logs("page", &["--skip", "al\u{200b}pha"]).code, 2);

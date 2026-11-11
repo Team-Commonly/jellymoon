@@ -109,6 +109,29 @@ pub fn tree(folder: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     held
 }
 
+/// The first folder above `path`, links followed, that its group or everyone can write to and that is not sticky.
+/// Core takes no installed command under one, so there a test of a command that is taken says why and leaves that
+/// half out (Cargo's target folder under a umask of 002). None where the system has no modes.
+pub fn open_above(path: &Path) -> Option<PathBuf> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let open = |folder: &&Path| {
+            fs::metadata(folder).is_ok_and(|meta| meta.mode() & 0o022 != 0 && meta.mode() & 0o1000 == 0)
+        };
+        let found = fs::canonicalize(path).unwrap().ancestors().skip(1).find(open).map(Path::to_path_buf);
+        if let Some(open) = &found {
+            eprintln!("left out: the half where the command is taken, since others can write to {}", open.display());
+        }
+        found
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        None
+    }
+}
+
 /// One session log line. `origin` is the origin kind; "" leaves origin out, as a prompt sent by another program has none.
 pub fn line(kind: &str, at: &str, cwd: &str, origin: &str, content: Value, extra: Value) -> String {
     let mut o = json!({"type": kind, "timestamp": at, "cwd": cwd, "sessionId": "s", "message": {"role": kind, "content": content}});

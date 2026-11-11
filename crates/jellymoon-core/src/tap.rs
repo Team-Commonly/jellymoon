@@ -272,3 +272,18 @@ impl Drop for Lock {
         let _ = fs::remove_file(&self.0);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A clash with a statement that is empty once cleaned is no choice, whichever side it is on.
+    #[test]
+    fn two_statements_are_a_choice_only_when_neither_is_empty_and_they_differ() {
+        let standing = |a: &str, b: &str| Standing { a: a.to_string(), b: b.to_string(), stands: None };
+        assert!(standing("retry", "never retry").is_choice());
+        for (a, b) in [("", "never retry"), ("retry", ""), ("", ""), ("retry", "retry")] {
+            assert!(!standing(a, b).is_choice(), "{a:?} and {b:?}");
+        }
+    }
+}

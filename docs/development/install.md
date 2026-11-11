@@ -21,6 +21,13 @@ Before it downloads anything it refuses, with one line, a Mac older than macOS 1
    moved in, and the old one is deleted. Running it again is how to update.
 5. It says in one line if `~/.local/bin` is not on `PATH`, and prints what to run next.
 
+A folder the script has to make (`~/Applications`, `~/.local`, `~/.local/bin`) is made for you alone to write, mode
+0755, whatever the umask: the app turns delivery on only for a command nobody else could replace
+([delivery.md](delivery.md)). A folder that was there is never changed. If the bin folder was there and its group or
+everyone can write to it (and it is not sticky), one closing line says the app will not offer to turn delivery on
+and gives the two ways out: `jellymoon hook install` from a terminal, or `chmod go-w` on the folder. Only the bin
+folder is looked at; an open folder above it has the same effect and is not said.
+
 The temp folder and anything half placed are removed on every exit, a failure or an interrupt included. An update
 that stops between its two moves puts the old bundle back on that same exit; if the script was killed outright, the
 next run puts it back before doing anything else. For the moment between the two moves there is no `Jellymoon.app`.

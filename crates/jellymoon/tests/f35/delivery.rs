@@ -8,15 +8,19 @@ use std::{env, fs};
 use serde_json::{Value, json};
 
 use super::{World, tree, world};
-use crate::support::jellymoon_in;
+use crate::support::{jellymoon_in, open_above};
+
+const TAKEN: &str = "{\"installed\":true,\"changed\":true}\n";
 
 fn name() -> String {
     format!("jellymoon{}", env::consts::EXE_SUFFIX)
 }
 
-/// Puts a runnable program in `folder` under `name`, for its owner alone to write.
+/// Puts a runnable program in `folder` under `name`, both for their owner alone to write whatever the umask.
 fn program(folder: &Path, name: &str) -> PathBuf {
     fs::create_dir_all(folder).unwrap();
+    #[cfg(unix)]
+    super::chmod(folder, 0o755);
     let program = folder.join(name);
     fs::copy(env!("CARGO_BIN_EXE_jellymoon"), &program).unwrap();
     #[cfg(unix)]
@@ -27,6 +31,14 @@ fn program(folder: &Path, name: &str) -> PathBuf {
 impl World {
     fn bin(&self) -> PathBuf {
         self.dir.path().join("user").join(".local").join("bin")
+    }
+
+    /// Makes the folder the command goes in, it and the test's folders above it for their owner alone to write.
+    fn made_bin(&self) -> PathBuf {
+        fs::create_dir_all(self.bin()).unwrap();
+        #[cfg(unix)]
+        self.bin().ancestors().take(4).for_each(|folder| super::chmod(folder, 0o755));
+        self.bin()
     }
 
     fn settings(&self) -> PathBuf {
@@ -61,7 +73,7 @@ const NOT_USED: &str = "the installed jellymoon command is not used: ";
 #[test]
 fn delivery_is_turned_on_for_the_installed_command_and_for_no_other_file() {
     let w = world();
-    fs::create_dir_all(w.settings().parent().unwrap()).unwrap();
+    w.made_bin();
     w.refused(&[], &format!("{NOT_USED}it was not found"), "no command");
     fs::create_dir_all(w.bin().join(name())).unwrap();
     w.refused(&[], &format!("{NOT_USED}it is not a program"), "a folder at its place");
@@ -81,12 +93,12 @@ fn delivery_is_turned_on_for_the_installed_command_and_for_no_other_file() {
     );
     let config = "CLAUDE_CONFIG_DIR must be an absolute path; nothing was changed";
     w.refused(&[("CLAUDE_CONFIG_DIR", "user/.claude")], config, "a relative settings folder");
+    if open_above(w.dir.path()).is_some() {
+        return;
+    }
 
     let ran = w.turn_on(&[]);
-    assert_eq!(
-        (ran.code, ran.stdout.as_str(), ran.stderr.as_str()),
-        (0, "{\"installed\":true,\"changed\":true}\n", "")
-    );
+    assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (0, TAKEN, ""));
     let now: Value = serde_json::from_str(&fs::read_to_string(w.settings()).unwrap()).unwrap();
     let entry = json!({"type": "command", "command": command.to_str().unwrap(), "args": ["hook"]});
     assert_eq!(now, json!({"hooks": {"PostToolUse": [{"hooks": [entry]}]}}), "the entry names the installed command");
@@ -115,7 +127,7 @@ type Case = (&'static str, &'static str, fn(&World));
 fn each_is_refused(cases: &[Case]) {
     for (case, why, make) in cases {
         let w = world();
-        fs::create_dir_all(w.bin()).unwrap();
+        w.made_bin();
         make(&w);
         w.refused(&[], &format!("{NOT_USED}{why}"), case);
     }
@@ -136,7 +148,6 @@ fn a_command_that_is_a_link_or_cannot_be_run_or_that_others_can_change_is_never_
         ("a program anyone can write to", "others can write to it", |w| chmod(&program(&w.bin(), &name()), 0o777)),
         ("a program its group can write to", "others can write to it", |w| chmod(&program(&w.bin(), &name()), 0o775)),
         ("a setuid program", "it is setuid or setgid", |w| chmod(&program(&w.bin(), &name()), 0o4755)),
-        ("a setgid program", "it is setuid or setgid", |w| chmod(&program(&w.bin(), &name()), 0o2755)),
         ("a link to another program", "it is a link", |w| {
             let other = program(&w.dir.path().join("other"), "another-program");
             symlink(other, w.bin().join(name())).unwrap();
@@ -146,9 +157,19 @@ fn a_command_that_is_a_link_or_cannot_be_run_or_that_others_can_change_is_never_
             symlink(program(&w.dir.path().join("cellar"), &name()), w.bin().join(name())).unwrap();
         }),
     ]);
+    use std::os::unix::fs::MetadataExt;
+    // A system drops the setgid bit of a file whose group the person is not in, as under `/tmp` on a Mac, where a
+    // file takes its folder's group. There is no setgid program to refuse there.
+    let w = world();
+    let setgid = program(&w.made_bin(), &name());
+    chmod(&setgid, 0o2755);
+    if fs::metadata(&setgid).unwrap().mode() & 0o2000 != 0 {
+        w.refused(&[], &format!("{NOT_USED}it is setuid or setgid"), "a setgid program");
+    } else {
+        eprintln!("left out: a setgid program, since this system did not keep the bit on {}", setgid.display());
+    }
     // The owner of the command is compared with the owner of the person's home. With the root folder as the home,
     // a file of the test's own is someone else's (unless the tests run as the owner of the root folder).
-    use std::os::unix::fs::MetadataExt;
     let w = world();
     program(&w.bin(), &name());
     if fs::metadata("/").unwrap().uid() != fs::metadata(w.bin()).unwrap().uid() {
@@ -159,6 +180,48 @@ fn a_command_that_is_a_link_or_cannot_be_run_or_that_others_can_change_is_never_
             ("CLAUDE_CONFIG_DIR", config.to_str().unwrap()),
         ];
         w.refused(&more, &format!("{NOT_USED}it is not a file of your own"), "a home of another owner");
+    }
+    // With no home there is no one the command could belong to: never is it taken for the person's own. A home
+    // that is not set, is empty or is not a full path is no home.
+    for home in [None, Some(""), Some("user")] {
+        let mut w = world();
+        program(&w.made_bin(), &name());
+        w.vars.retain(|(name, _)| !matches!(*name, "HOME" | "USERPROFILE"));
+        w.vars.extend(home.map(|home| ("HOME", home.into())));
+        let (bin, config) = (w.bin(), w.settings().parent().unwrap().to_path_buf());
+        let more = [("JELLYMOON_BIN_DIR", bin.to_str().unwrap()), ("CLAUDE_CONFIG_DIR", config.to_str().unwrap())];
+        w.refused(&more, &format!("{NOT_USED}it is not a file of your own"), &format!("the home {home:?}"));
+    }
+}
+
+// A folder that is a link is followed, and so is the folder it leads to: 32 links on the whole way, and no more.
+#[cfg(unix)]
+#[test]
+fn links_on_the_way_to_the_command_are_followed_32_times_and_no_further() {
+    use std::os::unix::fs::symlink;
+    // The folder the command goes in is the last of `links` links, each to the one before it by name.
+    let chain = |links: usize| {
+        let w = world();
+        let local = w.made_bin().parent().unwrap().to_path_buf();
+        fs::remove_dir(w.bin()).unwrap();
+        program(&local.join("hop-0"), &name());
+        for hop in 1..links {
+            symlink(format!("hop-{}", hop - 1), local.join(format!("hop-{hop}"))).unwrap();
+        }
+        symlink(format!("hop-{}", links - 1), w.bin()).unwrap();
+        w
+    };
+    // A Mac itself follows 32 links and no more, so there the command is not found before core counts.
+    let why =
+        if cfg!(target_os = "macos") { "it was not found" } else { "the links on the way to it could not be followed" };
+    chain(33).refused(&[], &format!("{NOT_USED}{why}"), "33 links");
+    // A link above the test's own folder is followed and counted too, so there the last one taken is not the 32nd.
+    let w = world();
+    let plain = fs::canonicalize(w.dir.path()).unwrap() == w.dir.path();
+    let w = chain(if plain { 32 } else { 31 });
+    if open_above(w.dir.path()).is_none() {
+        assert_eq!(w.turn_on(&[]).stdout, TAKEN, "32 links, or 31 under a folder that is itself a link");
+        assert!(fs::read_to_string(w.settings()).unwrap().contains(w.bin().join(name()).to_str().unwrap()));
     }
 }
 
@@ -214,11 +277,14 @@ fn a_folder_on_the_way_to_the_command_that_others_can_write_to_is_refused_unless
             symlink(&cellar, w.bin()).unwrap();
         }),
     ];
+    if open_above(world().dir.path()).is_some() {
+        return;
+    }
     for (case, make) in sound {
         let w = world();
-        fs::create_dir_all(w.bin()).unwrap();
+        w.made_bin();
         make(&w);
-        assert_eq!(w.turn_on(&[]).stdout, "{\"installed\":true,\"changed\":true}\n", "{case}");
+        assert_eq!(w.turn_on(&[]).stdout, TAKEN, "{case}");
         assert!(fs::read_to_string(w.settings()).unwrap().contains(w.bin().join(name()).to_str().unwrap()), "{case}");
     }
 }

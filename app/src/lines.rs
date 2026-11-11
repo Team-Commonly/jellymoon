@@ -2,7 +2,7 @@
 //! the kit's bundled font files, never by the operating system, so the numbers are the same on every machine.
 
 use serde::Serialize;
-use sticker_kit::{BundledMeasure, PieceKind, Placed, Rect, Role, Scene, State, Theme, Viewport, layout};
+use sticker_kit::{BundledMeasure, PieceKind, Placed, Rect, Role, Scene, State, TextRun, Theme, Viewport, layout};
 
 /// One placed piece. `x`, `y`, `w` and `h` are logical pixels from the window's top left; `tilt` is degrees clockwise.
 #[derive(Serialize)]
@@ -24,6 +24,8 @@ struct Line<'a> {
 struct Run<'a> {
     role: Role,
     text: &'a str,
+    /// The font size the run is drawn at, in logical pixels: smaller than its role's own where the kit made room.
+    size: f64,
     #[serde(flatten)]
     at: At,
 }
@@ -51,8 +53,12 @@ fn line<'a>(piece: &'a Placed, scene: &Scene) -> Line<'a> {
         at: at(piece.rect),
         tilt: hundredths(piece.tilt_degrees),
         state: who.map(|who| who.state),
-        text: piece.text.iter().map(|run| Run { role: run.role, text: &run.text, at: at(run.rect) }).collect(),
+        text: piece.text.iter().map(run).collect(),
     }
+}
+
+fn run(run: &TextRun) -> Run<'_> {
+    Run { role: run.role, text: &run.text, size: hundredths(run.size), at: at(run.rect) }
 }
 
 fn at(rect: Rect) -> At {

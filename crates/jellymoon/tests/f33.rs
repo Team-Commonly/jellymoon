@@ -96,6 +96,10 @@ fn the_install_script_refuses_a_system_that_is_not_a_mac() {
 }
 
 #[cfg(target_os = "macos")]
+#[path = "f33/modes.rs"]
+mod modes;
+
+#[cfg(target_os = "macos")]
 mod mac {
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -108,7 +112,7 @@ mod mac {
 
     const QUARANTINE: &str = "com.apple.quarantine";
 
-    fn repo() -> PathBuf {
+    pub fn repo() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
     }
 
@@ -136,7 +140,7 @@ mod mac {
 
     /// A release folder as the workflow makes one: an archive for each chip and SHA256SUMS. This Mac's archive
     /// carries `version`; the other chip's carries 9.9.9, so installing the wrong one shows.
-    fn release(root: &Path, name: &str, version: &str) -> PathBuf {
+    pub fn release(root: &Path, name: &str, version: &str) -> PathBuf {
         let release = root.join(name);
         let (this, other) = chips();
         for (chip, version) in [(this, version), (other, "9.9.9")] {
@@ -151,28 +155,28 @@ mod mac {
     }
 
     /// A made-up machine: a home and a temp folder, both empty, and the paths the install uses by default.
-    struct Mac {
-        root: TempDir,
+    pub struct Mac {
+        pub root: TempDir,
     }
 
     impl Mac {
-        fn new() -> Mac {
+        pub fn new() -> Mac {
             let root = scratch();
             fs::create_dir(root.path().join("home")).unwrap();
             fs::create_dir(root.path().join("tmp")).unwrap();
             Mac { root }
         }
-        fn home(&self) -> PathBuf {
+        pub fn home(&self) -> PathBuf {
             self.root.path().join("home")
         }
         fn app(&self) -> PathBuf {
             self.home().join("Applications/Jellymoon.app")
         }
-        fn binary(&self) -> PathBuf {
+        pub fn binary(&self) -> PathBuf {
             self.home().join(".local/bin/jellymoon")
         }
         /// Every variable is set here: the real home, the real `PATH` and the real release address are never seen.
-        fn command(&self, program: &Path, path: &str) -> Command {
+        pub fn command(&self, program: &Path, path: &str) -> Command {
             let mut command = Command::new(program);
             command.env_clear().env("HOME", self.home()).env("TMPDIR", self.root.path().join("tmp")).env("PATH", path);
             command
@@ -204,7 +208,7 @@ mod mac {
         }
     }
 
-    fn text(bytes: &[u8]) -> String {
+    pub fn text(bytes: &[u8]) -> String {
         String::from_utf8_lossy(bytes).into_owned()
     }
 

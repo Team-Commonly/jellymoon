@@ -90,7 +90,9 @@ download() {
 # deleted. If the script stops between the two moves, by a failure or an interrupt, `cleanup` moves the old bundle
 # back; if it is killed outright, the next run does, before anything else.
 place() {
-  mkdir -p "$app_dir" "$bin_dir"
+  # A folder made here is for you alone to write, whatever the umask: the app turns delivery on only for a command
+  # no one else could replace. A folder that was there keeps its mode.
+  (umask 022 && mkdir -p "$app_dir" "$bin_dir")
   new_app=$app_dir/.Jellymoon.app.new new_bin=$bin_dir/.jellymoon.new
   rm -rf "$new_app"
   cp -R "$tmp/unpacked/Jellymoon.app" "$new_app"
@@ -102,6 +104,17 @@ place() {
   mv "$new_app" "$app_dir/Jellymoon.app"
   settle
   mv -f "$new_bin" "$bin_dir/jellymoon"
+}
+
+# Whether the folder the command is in can be written to by its group or by everyone, and is not sticky. Only a
+# folder that was there before can be: the app does not offer to turn delivery on for a command in one.
+open_bin() {
+  mode=$(stat -L -f '%Mp%Lp' "$bin_dir" 2>/dev/null || true)
+  case "$mode" in
+    [1357]???) return 1 ;;
+    *[2367]? | *[2367]) return 0 ;;
+  esac
+  return 1
 }
 
 # Refuses, before anything is downloaded, a Mac the app cannot start on and a target that is not ours to replace.
@@ -145,6 +158,10 @@ main() {
     *":$bin_dir:"*) ;;
     *) say "  $bin_dir is not on your PATH yet: add  export PATH=\"$bin_dir:\$PATH\"  to your shell profile." ;;
   esac
+  if open_bin; then
+    say "  $bin_dir can be written to by others, who could replace the command, so the app will not offer to turn" \
+      "delivery on: run  jellymoon hook install  from a terminal, or  chmod go-w \"$bin_dir\"  first."
+  fi
   say ""
   say "Next:"
   say "  open \"$app_dir/Jellymoon.app\"    shows today's page, read with one call through your own Claude Code"

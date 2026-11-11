@@ -338,6 +338,11 @@ is opened: what is at the name is asked first, and then it is opened, as the pag
 The question and the opening are two steps, so a file changed between them is not covered. `tests/f40/pipe.rs`
 puts a named pipe at each of these, and at the other files of the home, and gives `run stop` and `page` ten seconds.
 
+What a look or a stop writes, it writes into a file it makes new and then moves to its name (`hook::put`): the
+run's record, the copy's record and the day's wishes. Nothing that is at a name already is opened to be written,
+so a pipe or a link left beside a record, at `runs/<id>/copy.new` where the copy's record was once written
+through, is neither waited on nor written through.
+
 ## What is refused
 
 One line on stderr, exit 1. No copy is left, no branch is made and the wish is as it was. The first refusal past

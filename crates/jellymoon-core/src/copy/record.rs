@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::refused;
 use crate::Error;
+use crate::hook::put;
 
 /// The git folder the repo's checkouts share, the copy's own git folder inside it, when the run failed, in
 /// nanoseconds, if it did, and whether the repo's folder was read from a session log: then nothing git says of it
@@ -49,11 +50,11 @@ pub(super) fn read(file: &Path) -> Result<Option<Record>, Error> {
     }
 }
 
-/// Writes the record whole: beside its place first, then moved there.
+/// Writes the record whole, as a run's record is written: into a file made new beside its place, then moved
+/// there. Nothing that is at a name already is opened, so a named pipe or a link left there is not written through.
 pub(super) fn write(file: &Path, record: &Record) -> Result<(), Error> {
     let text = serde_json::to_string(record).map_err(|_| refused("the repo's path is not text"))?;
-    let new = file.with_extension("new");
-    fs::write(&new, text + "\n").and_then(|()| fs::rename(&new, file)).map_err(Error::Store)
+    put(file, &(text + "\n"), false).map_err(Error::Store)
 }
 
 /// The copy is gone, so its record goes, and the run's folder in `runs` when nothing else is kept there.

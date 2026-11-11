@@ -1,22 +1,28 @@
 //! A named pipe where a file of the home is expected. Opening one waits for whoever is at its other end, and there
 //! is nobody: a look or a stop that opened it before asking what kind of file it is would wait for ever
 //! (`docs/development/run.md`, "A file of the home that is not a plain file"). Every command here runs under a
-//! time limit of its own.
+//! time limit of its own. A link where a file is written is the same question: nothing is written through it.
 
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+#[cfg(windows)]
+use std::os::windows::fs::symlink_file as symlink;
 use std::path::Path;
 use std::process::Command;
 
 use serde_json::json;
 
 use super::{DAY, World, grows, printed, within, world};
-use crate::support::{Ran, skipped};
+use crate::support::{Ran, skipped, tree};
 
-/// Every file of the home that a page or a stop opens for a run that was cut off. `RUN` stands for the run's id.
-const PLACES: [&str; 12] = [
+/// Every file of the home that a page or a stop opens for a run that was cut off, and the name beside the copy's
+/// record that it was once written through. `RUN` stands for the run's id.
+const PLACES: [&str; 13] = [
     "runs/RUN/run.lock",
     "runs/RUN/run.json",
     "runs/RUN/copy.json",
+    "runs/RUN/copy.new",
     "runs/RUN/stop",
     "runs/clean.lock",
     "pages/2026-03-10.wishes.json",
@@ -88,4 +94,32 @@ fn a_named_pipe_at_any_file_of_the_home_keeps_neither_a_stop_nor_a_page_waiting(
         assert!(w.freed("held"), "{place}: the agent was never ended");
     }
     assert_eq!(waited, Vec::<String>::new(), "these waited on a named pipe for longer than ten seconds");
+}
+
+// A look marks the copy of a cut-off run failed, which writes the copy's record. A link beside the record, at the
+// name it was once written through, leads to a file outside the home: that file is as it was.
+#[test]
+fn a_link_beside_the_copys_record_to_a_file_outside_the_home_leaves_that_file_as_it_was() {
+    for command in ["run stop", "page"] {
+        let w = world();
+        let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+        let (run, _) = w.cut_off(&wish, &repo);
+        let outside = w.at("outside");
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("theirs.txt"), "the person's own file\n").unwrap();
+        let before = tree(&outside);
+        let made = symlink(outside.join("theirs.txt"), w.jm("runs").join(&run).join("copy.new")).is_ok();
+        if made {
+            let ran = look(&w, command, &wish).expect("it waited for longer than ten seconds");
+            assert_eq!(ran.stdout.lines().count() + ran.stderr.lines().count(), 1, "{command}");
+            assert_eq!(tree(&outside), before, "{command}: a file outside the home was written");
+            let copy = fs::read_to_string(w.jm("runs").join(&run).join("copy.json")).unwrap();
+            let copy: serde_json::Value = serde_json::from_str(&copy).unwrap();
+            assert!(copy["failed"].is_u64(), "{command}: the copy is not marked failed: {copy}");
+        } else {
+            skipped("a link cannot be made here");
+        }
+        fs::write(w.at("rec").join("stop"), "").unwrap();
+        assert!(w.freed("held"), "{command}: the agent was never ended");
+    }
 }

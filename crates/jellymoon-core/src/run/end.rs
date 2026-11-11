@@ -117,9 +117,12 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
         // Its `jellymoon run` said so and then could not take the copy back, or tell the wish. A record is a file
         // anyone who can write the home can write: the child it names is stopped before its copy goes.
         kill();
-        if copy::take_back(home, &run, soon()).is_err() {
-            // The copy, its branch and the run's folder are still there. The wish goes on naming the run where it
-            // is kept, so the next look tries again; it is drawn as it was, with no run, and never as one going.
+        // With the lock not had in time nothing is written: the wish goes on naming the run where it is kept, so
+        // the next look tries again, and it is drawn as it was, with no run, never as one going. A copy that cannot
+        // be taken back for any other reason (its repo is gone, git fails) never will be: what the home holds of
+        // the run goes, as after a `jellymoon run` that could not take it back, and the wish can be run again.
+        let taken = copy::take_back(home, &run, soon());
+        if taken.is_err_and(|e| copy::timed_out(&e) || !copy::remove_ours(home, &run, soon())) {
             return MadeWish { run: None, why: None, ..wish };
         }
         return unstarted(home, day, wish, &run);

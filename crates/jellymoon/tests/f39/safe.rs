@@ -237,6 +237,38 @@ fn a_never_started_run_whose_copy_cannot_be_taken_back_is_still_named_by_its_wis
     assert_eq!((w.copies(), w.branches(&repo), w.jm("runs").join(&run).exists()), (vec![], vec![], false));
 }
 
+// The same record, over a repo that was moved away since: git can never take that copy back. The look removes what
+// Jellymoon's home holds of the run and makes the wish as it was, so it is not refused for a run it is not drawn
+// with: it runs where the repo is now.
+#[test]
+fn a_never_started_run_whose_repo_was_moved_away_is_cleared_by_a_look_and_its_wish_can_be_run_again() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let before = w.kept(&wish);
+    w.play("slow", 0);
+    let mut command = w.start_going(&wish, &repo);
+    wait_for(&w.at("rec").join("started"));
+    let run = w.kept(&wish)["run"].as_str().unwrap().to_string();
+    command.kill().unwrap();
+    command.wait().unwrap();
+    let mut record = w.record(&run);
+    record["outcome"] = json!("not_started");
+    fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
+    w.let_end("go"); // the agent the run left stands in the copy, and is gone before the repo is moved
+    let moved = w.at("work").join("moved").join("alpha");
+    fs::create_dir(moved.parent().unwrap()).unwrap();
+    if let (Err(why), true) = (fs::rename(&repo, &moved), cfg!(windows)) {
+        return skipped(&format!("the repo could not be moved: {why}"));
+    }
+
+    assert_eq!((&w.on_page(&wish)["run"], w.kept(&wish)), (&json!(null), before), "the wish is as it was");
+    let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
+    let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
+    assert_eq!((w.copies(), runs), (vec![], Vec::<String>::new()), "nothing of the run is left in the home");
+    w.play("edits", 0);
+    assert_eq!(ran(&w.start(&wish, &moved)).1["star"], json!(STAR), "and it runs where the repo is now");
+}
+
 // A dead run's agent has nobody to report to: it is not asked and waited for, it is killed.
 #[test]
 fn a_page_does_not_wait_for_the_agent_a_dead_run_left() {

@@ -242,18 +242,20 @@ pub(crate) fn take_back(home: &Path, run: &str, wait: Option<Duration>) -> Resul
 
 /// What is left to do for a copy [`take_back`] could not undo, because git could not be asked (the repo was moved
 /// away): the copy's folder and everything kept for the run go, so nothing of it stays in Jellymoon's home. Its
-/// branch and git's registration of it are in the repo, wherever that is now, and are not reached.
-pub(crate) fn remove_ours(home: &Path, run: &str) {
+/// branch and git's registration of it are in the repo, wherever that is now, and are not reached. False: the lock
+/// was not had, within `wait` when there is one, and nothing was removed.
+pub(crate) fn remove_ours(home: &Path, run: &str, wait: Option<Duration>) -> bool {
     let at = Places::of(home);
-    let held = hold::held(&at.lock(), false, None);
+    let held = hold::held(&at.lock(), false, wait);
     if known(run).is_err() || held.is_err() {
-        return;
+        return false;
     }
     let folder = at.root.join(run);
     if standing(&at.root, &folder).is_ok_and(|there| there) {
         let _ = fs::remove_dir_all(&folder);
     }
     let _ = gone::remove(&at.runs, run);
+    true
 }
 
 /// Whether the run's folder is there to be removed: a real folder directly inside a real `copies`. A link under that

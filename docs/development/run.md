@@ -78,11 +78,12 @@ stayed locked, the wish still names the run. The next page or `jellymoon run` th
 whose record says `not_started` (the child that record names is killed first, as a cut-off run's is, and its copy
 is then taken back), or of which nothing is kept, not even its folder
 in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. If
-that look cannot take the copy back (git fails, the copy's place is not a folder, or the lock a copy is taken back
-behind stays held for the look's 3 seconds), the wish is not written: where it is kept it goes on naming the run,
-so the copy, its branch and the run's folder are never left with nothing naming them, and the next look tries
-again. That look draws the wish as it was, with no run, and never as one going; a `jellymoon run` is refused,
-since the wish still has its run, until a look has taken the copy back. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
+the lock a copy is taken back behind stays held for that look's 3 seconds, the wish is not written: where it is
+kept it goes on naming the run, so the copy, its branch and the run's folder are not left with nothing naming
+them, and the next look tries again. That look draws the wish as it was, with no run, and never as one going. If
+the copy cannot be taken back for any other reason (the repo was moved away, git fails, the copy's place is not a
+folder), it never will be: the look removes what Jellymoon's home holds of the run, as `jellymoon run` does below,
+and makes the wish as it was, so a wish is never refused for a run it is not drawn with. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
 started again without the flag.
 
 If the repo was moved away while the harness ran, git cannot take the copy back, and `jellymoon run` exits 1 with

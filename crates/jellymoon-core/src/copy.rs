@@ -292,7 +292,7 @@ pub(crate) fn remove_ours(home: &Path, run: &str) {
     if standing(&at.root, &folder).is_ok_and(|there| there) {
         let _ = fs::remove_dir_all(&folder);
     }
-    let _ = fs::remove_dir_all(at.runs.join(run));
+    let _ = gone::remove(&at.runs, run);
 }
 
 /// Whether the run's folder is there to be removed: a real folder directly inside a real `copies`. A link under that

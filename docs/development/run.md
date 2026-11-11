@@ -230,8 +230,10 @@ The 65 seconds are the two times five of the sequence, two more waits of five fo
 40 a run waits for the day's lock, and five. The request stays, so the run still stops. A build with debug
 assertions reads a shorter wait from `JELLYMOON_TEST_STOP_WAIT_MS`. A run that ended is printed from its record
 when the record's end is core's ("The end is written in the record first") and is the end the wish has; the star
-is the wish's. Of any other record nothing is printed: the end is the wish's, `completed` or `failed`, and
-`denied` is 0, since the count in a record whose end is not believed can have been written by hand too.
+is the wish's. Of any other record nothing is printed: the end is the wish's, `completed` for a wish that is
+done, `cancelled` for one whose `why` is the one line of a cancelled run, and `failed` for any other, so `run
+stop` and the run's own `jellymoon run` print one line for one end. `denied` is then 0, since the count in a
+record whose end is not believed can have been written by hand too.
 
 ## What is kept
 

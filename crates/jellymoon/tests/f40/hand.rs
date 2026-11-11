@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 
-use super::{STAR, World, cancelled, grows, ms, printed, ran, refused, said_cancelled, world};
+use super::{STAR, World, cancelled, ended, grows, ms, printed, ran, refused, said_cancelled, world};
 use crate::support::tree;
 
 fn cut(run: &str) -> String {
@@ -79,6 +79,19 @@ fn a_stop_prints_nothing_of_a_record_whose_end_it_does_not_believe() {
         json!({"run": run, "wish": done, "outcome": "completed", "star": STAR, "denied": 0, "why": first["why"]});
     assert_eq!(printed(&w.stop(&done)), said);
     assert_eq!((&w.kept(&done)["state"], &w.kept(&done)["stars"]), (&json!("done"), &json!([STAR])));
+}
+
+// A cancelled run whose record is then made to name another wish: its end is not believed, and a stop prints what
+// the wish itself says, which is the line its own `jellymoon run` printed.
+#[test]
+fn a_stop_prints_a_cancelled_run_as_its_own_command_did_when_its_record_is_not_believed() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let (going, run) = w.run_going(("lingers", 0), &[], &wish, &repo);
+    assert_eq!(printed(&w.stop(&wish)), said_cancelled(&run, &wish, 0));
+    let first = printed(&ended(going));
+    w.edit_record(&run, |record| record["wish"] = json!("m7"));
+    assert_eq!((printed(&w.stop(&wish)), &first), (said_cancelled(&run, &wish, 0), &first));
 }
 
 // The day's wishes changed by hand, so that a second wish names the first wish's run. A run is stopped, and is

@@ -14,7 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::end::{bury, of_another, recorded};
-use super::{Ran, RunOutcome, STAR, cut, no_wish, record, refused};
+use super::{Ran, RunOutcome, STAR, cancelled, cut, no_wish, record, refused};
 use crate::busy::or_test;
 use crate::wish::{self, MadeWish};
 use crate::{Error, WishState, copy};
@@ -79,8 +79,9 @@ pub fn stop_run(home: &Path, wish: &str, day: Option<&str>) -> Result<Ran, Error
 }
 
 /// A run that has ended, as `jellymoon run` printed it: the end in its record when that is core's and fits the
-/// wish, else what the wish says. The star is the wish's. The count of what was denied is the record's only with
-/// its end: of a record whose end is not believed, nothing is printed.
+/// wish, else what the wish says, whose line names a cancelled run in core's one line for it. The star is the
+/// wish's. The count of what was denied is the record's only with its end: of a record whose end is not
+/// believed, nothing is printed.
 fn ended(home: &Path, day: &str, wish: &MadeWish, run: &str) -> Ran {
     let kept = record::kept(home, run);
     let done = wish.state == WishState::Done;
@@ -88,8 +89,10 @@ fn ended(home: &Path, day: &str, wish: &MadeWish, run: &str) -> Ran {
     let end = end.filter(|(outcome, _)| (*outcome == RunOutcome::Completed) == done);
     let denied = end.as_ref().and(kept).map_or(0, |kept| kept.denied);
     let (outcome, why) = end.unwrap_or_else(|| {
+        let why = wish.why.clone().unwrap_or_else(|| cut(run));
+        let stopped = !done && why == cancelled(run);
         let outcome = if done { RunOutcome::Completed } else { RunOutcome::Failed };
-        (outcome, wish.why.clone().unwrap_or_else(|| cut(run)))
+        (if stopped { RunOutcome::Cancelled } else { outcome }, why)
     });
     let star = done.then(|| STAR.to_string());
     Ran { run: Some(run.to_string()), wish: wish.id.clone(), outcome, star, denied, why }

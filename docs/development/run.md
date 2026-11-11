@@ -248,7 +248,8 @@ the record names no repo. The denials counted are the first result's.
 
 Believed or not, the child the record names is killed, if it is still that process ("A run that was cut off"):
 nothing holds the run, so nobody reads that child any more, and a record that says the run ended can have been
-written by hand over one that was cut off.
+written by hand over one that was cut off. For the same reason the copy of a run whose believed end is `failed`
+or `cancelled` is marked failed then, if it is not marked yet, so that it is one of the five kept for a look.
 
 **A wish that names another wish's run.** The day's wishes are a file too. A run is another wish's when its
 record names another wish, or another day, and that wish names the run. (A record that names a wish which does

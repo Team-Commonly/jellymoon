@@ -140,6 +140,11 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     if let Some((pid, mark)) = record.and_then(|record| Some((record.pid?, record.mark?))) {
         dead::kill(pid, &mark);
     }
+    if told.is_ok() && ended.is_some() && outcome != RunOutcome::Completed {
+        // An end that is believed can have been written by hand too, over a run whose own command never marked
+        // its copy. A copy that is marked already, or gone, is left as it is.
+        let _ = copy::clean_copy(home, &run, Outcome::Failed);
+    }
     if ended.is_none() {
         told = told.and_then(|told| note(home, &run, outcome, (0, 0), &why).map(|()| told));
     }

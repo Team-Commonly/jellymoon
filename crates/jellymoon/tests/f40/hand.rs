@@ -38,6 +38,11 @@ fn a_cut_off_run_whose_record_was_made_to_say_cancelled_has_its_agent_ended_what
         assert_eq!(said, if words.is_empty() { said_cancelled(&run, &wish, 0) } else { cut_off }, "{outcome}");
         assert_eq!((&w.kept(&wish)["state"], &w.kept(&wish)["why"]), (&json!("needs_you"), &said["why"]), "{outcome}");
         the_agent_is_gone(&w, &file);
+        // The copy is marked failed, as a cancelled run's is by its own command: only so is it one of the five
+        // that are kept for a look.
+        let copy = std::fs::read_to_string(w.jm("runs").join(&run).join("copy.json")).unwrap();
+        let copy: Value = serde_json::from_str(&copy).unwrap();
+        assert!(copy["failed"].is_u64(), "{outcome}: the copy is not marked failed: {copy}");
         // A record that has an end is never written again, believed or not.
         assert_eq!((&w.record(&run)["outcome"], &w.record(&run)["why"]), (&json!("cancelled"), &json!(why)));
     }

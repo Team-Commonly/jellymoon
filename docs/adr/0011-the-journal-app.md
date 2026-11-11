@@ -6,6 +6,8 @@ change it. This note decides the shape of a new local app so the features that f
 build. The measurements below come from throwaway tests kept outside the repo; "Still open" names what they did not cover.
 Reworded on 2026-11-10 by [ADR 0012](0012-restart-as-the-journal-app-in-rust.md), which made the repo Rust only: names of
 removed code changed, and three facts about starting an agent moved into section 7. No measurement or decision changed.
+Section 7 was changed on 2026-11-10 by [ADR 0014](0014-a-run-is-started-headless.md): a run is started headless, and
+its work stays on its branch.
 
 All logic lives in core (`crates/jellymoon-core`) and is checked at the commands of the `jellymoon` binary. The shell only
 draws page data, so it can be replaced without touching a rule.
@@ -143,19 +145,22 @@ harness already has.
 ### 7. A run the app starts works in its own copy of the repo
 
 When a wish starts a run (F30), core gives that run its own working copy, so two wishes in one repo never write over
-each other: a git worktree of the person's repo on a branch of its own, removed with its branch when the run completes.
+each other: a git worktree of the person's repo on a branch of its own. When the run completes, core commits what is in
+the copy, with git's hooks off, and removes the folder; the branch is kept, since it is the work.
 A failed run's copy is kept for a look, the newest five only. Cleanup removes only a folder directly inside its own
 root, runs no hook, and reads no file from the run's folder, since the agent could have rewritten them. The work stays
 in the person's repo, where they already look for it.
 
-How the agent is started and stopped, carried over from the Go program this repo used to hold (tag `harness-final`):
+How the agent is started and stopped ([ADR 0014](0014-a-run-is-started-headless.md) says why it is not ACP):
 
-- **A child over ACP, with an allow-listed environment.** The agent is a child process speaking ACP on stdio. It gets a
-  short list of variables (`PATH`, `HOME` and the like) and never inherits the parent's environment.
-- **Cancel, then signal, then kill.** A stop sends `session/cancel` first and waits; an agent deaf to that is signalled,
-  and one deaf to the signal is killed.
-- **A permission request is refused by default.** Where the person has turned allowing on, the answer is for that one
-  call. It is never "always": a remembered allow could not be taken back.
+- **A headless child, with an allow-listed environment.** The agent is the person's own harness, started headless the
+  way the reading call is, and core reads its stream. It gets a short list of variables (`PATH`, `HOME` and the like)
+  and never inherits the parent's environment.
+- **Interrupt, then signal, then kill.** A stop interrupts first and waits; an agent deaf to that is signalled, and one
+  deaf to the signal is killed.
+- **What a run may do is a list fixed at its start.** Nothing is asked or answered while it goes: anything not on the
+  list is denied by the harness and counted. No allow is remembered, and the person's own allow rules, MCP servers and
+  project hooks never apply to a run.
 
 LayerFS, a filesystem that gives each agent a writable copy over shared committed history, was evaluated for the same
 seam. Its macOS support ran here from an unreleased branch with no installer and no extra permission, which is

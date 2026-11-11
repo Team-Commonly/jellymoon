@@ -176,6 +176,65 @@
       "blockedBy": [
         "F35"
       ]
+    },
+    {
+      "id": "F37",
+      "category": "journal",
+      "description": "A typed wish is kept on today's page in the person's exact words",
+      "steps": [
+        "`jellymoon wish --say <words> --project <name>` keeps a made wish for today in the working state, in the person's exact words after core's cleaning, and prints `{wish: {id, said, project, state, stars}, run: null, why}` as one line of JSON",
+        "the page draws the made wish with no reading call: `jellymoon page` for a kept day and the app's today show it with the reading's wishes, under an id the reading can never give, and a reading that rewrites the kept page does not lose it",
+        "with no run, `why` says in fixed words that nothing was started",
+        "a wish that is empty once cleaned, too long, one too many for the day, or for a project name that is not one plain name is refused in one line and writes nothing"
+      ],
+      "test": "cargo test -p jellymoon --test f37",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F38",
+      "category": "journal",
+      "description": "A run gets its own copy of the repo",
+      "steps": [
+        "`jellymoon copy make` gives a run a git worktree of the person's repo on a branch of its own and prints `{run, folder, branch, kept}` as one line of JSON; the person's working tree, `HEAD` and index are unchanged",
+        "`jellymoon copy clean` removes only a folder directly inside the copies' own root, runs no hook and reads no file from the run's folder: a run id of `..`, a link inside the root, a rewritten `.git` file and a repo with `post-checkout` and `fsmonitor` set leave everything outside byte for byte as it was, and a marker file is never written",
+        "a failed run's copy is kept, the newest five only"
+      ],
+      "test": "cargo test -p jellymoon --test f38",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F39",
+      "category": "journal",
+      "description": "A wish starts a run with the person's harness, and its star appears when the run reports it finished",
+      "steps": [
+        "`jellymoon run --wish <id>` starts the person's harness headless in the run's copy and prints `{run, wish, outcome, star, denied, why}` as one line of JSON, `outcome` being `completed`, `failed` or `not_started`",
+        "the harness gets only the allow-listed environment (`PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM`) and the arguments that fix what the run may do: a planted token variable is absent, and the person's allow rules, MCP servers and project hooks are shut out",
+        "a result that is a success with exit 0 adds one star, in fixed words, to the wish; after the run the person's working tree, `HEAD` and index are unchanged and only the run's branch is new",
+        "with no harness the wish stays and `why` names the places looked; a project name that matches two folders is refused with nothing written"
+      ],
+      "test": "cargo test -p jellymoon --test f39",
+      "passes": false,
+      "blockedBy": [
+        "F37",
+        "F38"
+      ]
+    },
+    {
+      "id": "F40",
+      "category": "journal",
+      "description": "A run can be stopped, and nothing it asks for is allowed unless listed",
+      "steps": [
+        "`jellymoon run stop` interrupts the run, then signals it, then kills it, and the outcome is `cancelled`; an agent deaf to the interrupt and to the signal is gone all the same",
+        "what the agent asks for outside its list is denied and counted in `denied`, never allowed",
+        "a stopped run keeps its copy"
+      ],
+      "test": "cargo test -p jellymoon --test f40",
+      "passes": false,
+      "blockedBy": [
+        "F39"
+      ]
     }
   ]
 }

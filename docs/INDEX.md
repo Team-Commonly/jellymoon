@@ -8,6 +8,7 @@ Every file under `docs/` is listed here with one line. A PR that adds, moves or 
 | `adr/0011-the-journal-app.md` | The design: a local app that reads agent sessions into one page per day; the reader, the reading call, the kit, the GPUI shell, how a ruling reaches a running session, and a run's own copy of the repo |
 | `adr/0012-restart-as-the-journal-app-in-rust.md` | Why the repo is Rust only and this small: what the restart decided, what it removed and where the old code remains |
 | `adr/0013-the-shell-dependencies.md` | What the kit and the shell depend on: GPUI's pinned commit and how to move it, `ttf-parser` and what was rejected, the build features, and the one test that runs `sh` |
+| `adr/0014-a-run-is-started-headless.md` | How a run is started: headless with the person's harness and not over ACP, what it may do fixed at its start, its work committed by core and kept on its branch; F30 cut into F37 to F40; what is not confirmed |
 | `development/workflow.md` | How Jellymoon is built: the loop, the size rules, the fresh-context review and its verdict lines, and how a PR lands |
 | `development/reader.md` | `jellymoon day`: usage, what counts as typed by a person, what is cut and replaced, which files are skipped |
 | `development/page.md` | `jellymoon page`: usage, the exact harness command line, what goes in on stdin, and every check code makes on what the model returns |

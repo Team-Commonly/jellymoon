@@ -120,10 +120,10 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 /// ended while the day was locked: the wish is given that end, its star included. Any other was cut off, and is
 /// written down as failed: its copy is marked, then the wish is told, and only for a wish that took it the record.
 /// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`), and
-/// the copy of a run that did not finish is marked. A run whose record says it was never started has the child
-/// it names killed the same way, then its copy taken back, and only then is its wish made as it was. A wish that
-/// names another wish's run is returned as needing the person, in one fixed line, with nothing written or killed
-/// ([`of_another`]).
+/// the copy of a run that did not finish is marked. A run whose record says it was never started, and names no
+/// child, has its copy taken back, and only then is its wish made as it was; one that names a child did start,
+/// and was cut off. A wish that names another wish's run is returned as needing the person, in one fixed line,
+/// with nothing written or killed ([`of_another`]).
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     let Some(run) = wish.run.clone().filter(|_| wish.state == WishState::Working) else { return wish };
     // Asked first, and whether the run is held or not: the run is not this wish's to wait for.
@@ -145,10 +145,11 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
             dead::kill(pid, mark);
         }
     };
-    if record.as_ref().is_some_and(|record| record.outcome == Some(RunOutcome::NotStarted)) {
-        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish. A record is a file
-        // anyone who can write the home can write: the child it names is stopped before its copy goes.
-        kill();
+    // A record is a file anyone who can write the home can write, and one that names a child is of a run that did
+    // start: its copy can hold work, and is not removed on the record's word. That run was cut off (below).
+    let never = |record: &Record| record.outcome == Some(RunOutcome::NotStarted) && record.pid.is_none();
+    if record.as_ref().is_some_and(never) {
+        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
         // With the lock not had in time nothing is written: the wish goes on naming the run where it is kept, so
         // the next look tries again, and it is drawn as it was, with no run, never as one going. A copy that cannot
         // be taken back for any other reason (its repo is gone, git fails) never will be: what the home holds of

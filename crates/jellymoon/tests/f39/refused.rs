@@ -360,11 +360,10 @@ fn the_run_that_finds_a_wish_naming_a_run_never_started_starts_one() {
     command.wait().unwrap();
     let cut = w.kept(wish)["run"].as_str().unwrap().to_string();
     let mut record = w.record(&cut);
-    record["outcome"] = json!("not_started");
+    // As `jellymoon run` writes it: a run that was never started names no child.
+    (record["outcome"], record["pid"], record["mark"]) = (json!("not_started"), json!(null), json!(null));
     fs::write(w.jm("runs").join(&cut).join("run.json"), record.to_string()).unwrap();
-    if cfg!(windows) {
-        w.let_end("go"); // there the agent is not stopped, and a copy a command stands in cannot be taken back
-    }
+    w.let_end("go"); // the agent the run left stands in the copy, and nothing stops it: it ends first
     assert_eq!((&w.on_page(wish)["state"], &w.kept(wish)["run"]), (&json!("working"), &json!(null)));
     assert_eq!((w.copies(), w.branches(&repo)), (vec![], vec![]), "the copy of a run never started is taken back");
     fs::write(w.at("rec").join("go"), "").unwrap();

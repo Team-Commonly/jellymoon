@@ -53,9 +53,11 @@ pub(super) fn kept(home: &Path, run: &str) -> Option<Record> {
 }
 
 /// Writes down that the run was never started: an end of its own kind, which no look takes for a run cut off.
+/// It names no child: a harness that was started to find it too old is gone by now. Only so is the copy removed
+/// on the record's word (`end::bury`).
 pub(super) fn unstarted(home: &Path, run: &str) {
     if let Some(mut record) = kept(home, run) {
-        record.outcome = Some(RunOutcome::NotStarted);
+        (record.outcome, record.pid, record.mark) = (Some(RunOutcome::NotStarted), None, None);
         let _ = write(home, run, &record);
     }
 }

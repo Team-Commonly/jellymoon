@@ -163,24 +163,36 @@ fn the_agent_a_killed_run_left_editing_is_stopped_by_the_next_page() {
     assert_eq!((w.copies(), w.starts()), (vec![run], 1));
 }
 
-// A record is a file that whoever can write the home can write. One that says a cut-off run was never started has
-// its copy taken back, so the agent that run left is stopped first: no agent outlives its copy, and no second run
-// is started beside it.
+// A record is a file that whoever can write the home can write. One that names a child was written for a run that
+// did start, and when it is made to say the run was never started a look does not take its word: the copy, with
+// the work in it, is not removed. The run was cut off: its agent is stopped and its copy is kept as a failed run's.
 #[test]
-fn the_agent_of_a_cut_off_run_whose_record_says_never_started_is_stopped_with_its_copy_taken_back() {
-    if !cfg!(unix) {
-        return skipped(NO_SIGNAL);
-    }
+fn the_copy_of_a_cut_off_run_whose_record_was_made_to_say_never_started_is_kept_and_its_agent_stopped() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    let (run, _) = left_editing(&w, &wish, &repo);
+    let (run, file) = left_editing(&w, &wish, &repo);
     let mut record = w.record(&run);
+    assert!(record["pid"].is_u64(), "the record names no child: {record}");
     record["outcome"] = json!("not_started");
     fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
 
-    assert_eq!((&w.on_page(&wish)["state"], &w.kept(&wish)["run"]), (&json!("working"), &json!(null)));
-    assert!(w.freed("held"), "the agent is still running after its copy was taken back");
-    assert_eq!((w.copies(), w.branches(&repo), w.starts()), (vec![], vec![], 1));
+    let why = format!("run {run} was cut off before it ended: its copy is kept and no star was added");
+    let on_page = w.on_page(&wish);
+    assert_eq!(
+        (&on_page["state"], &w.kept(&wish)["run"], &w.kept(&wish)["why"]),
+        (&json!("needs_you"), &json!(run), &json!(why))
+    );
+    if cfg!(unix) {
+        assert!(w.freed("held"), "the agent is still running after the page");
+    } else {
+        w.let_end("stop"); // there is no signal there, and nothing is stopped
+    }
+    assert!(file.is_file(), "the work in the copy was removed");
+    assert_eq!((w.copies(), w.branches(&repo).len(), w.starts()), (vec![run.clone()], 1, 1));
+    let copy: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(w.jm("runs").join(&run).join("copy.json")).unwrap()).unwrap();
+    assert!(copy["failed"].is_u64(), "the copy is not marked failed: {copy}");
+    assert!(refused(&w.start(&wish, &repo)).contains("has had its run"));
 }
 
 // A pid is given out again. One whose process did not start when the record says is another process: never signalled.

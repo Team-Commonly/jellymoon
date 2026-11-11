@@ -55,10 +55,11 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   until `--fresh`. A day with nothing typed makes no call.
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
   no command line. Core reads the file (`reader.md`), for the app and for `jellymoon day` and `page` alike, so the
-  three leave out the same folders. A name matches exactly, and case matters: `reader.md` has the rule, and the
-  footer names the projects that were read. No `skip.txt` is no names. Anything else under that name that is not a
-  whole, plain list (`reader.md` lists what is refused) stops the reading with a plain note and no call, so a folder
-  switched off never reaches the call because its list was damaged. A byte order mark at its start is dropped.
+  three leave out the same folders. A name matches exactly, and case matters, and a `--skip` name with a character
+  that cannot be seen is an argument error: `reader.md` has the rules, and the footer names the projects that were
+  read. No `skip.txt` is no names. Anything else under that name that is not a whole, plain list (`reader.md` lists
+  what is refused) stops the reading with a plain note and no call, so a folder switched off never reaches the call
+  because its list was damaged. A byte order mark at its start is dropped.
 - **When the reading cannot run** the page is one plain note, "Today could not be read.", that says why: Claude Code
   was not found, no session logs (the note names the folder looked for, as the command's line does), the call failed
   or took too long (core's own line follows), or the model's answer was not a page. With a kept page, that page

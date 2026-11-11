@@ -177,6 +177,12 @@ fn with_no_home_in_the_environment_the_app_stops_before_it_reads_anything() {
     assert_eq!(out.status.code(), Some(2), "{said}");
     assert!(said.starts_with("jellymoon-app: no home directory: set JELLYMOON_HOME to an absolute path"), "{said}");
     assert!(out.stdout.is_empty() && !called(&world) && !world.dir.path().join("rel").exists());
+    // A `--skip` name with a character that cannot be seen is refused by core's own check, by its place.
+    let out = run(&world, &["--skip", "alpha,private-\u{200d}notes"], &[]);
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "{said}");
+    assert!(said.starts_with("jellymoon-app: --skip: name 2 holds a character that cannot be seen"), "{said}");
+    assert!(!said.contains("private") && out.stdout.is_empty() && !called(&world), "{said}");
 }
 
 #[test]

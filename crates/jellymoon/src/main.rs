@@ -144,7 +144,8 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         Some(logs) => logs,
         None => harness_folder()?.join("projects"),
     };
-    let options = DayOptions { logs, date, skip: skip.split(',').map(str::to_string).collect(), home: own_folder()? };
+    let skip = jellymoon_core::skip_names(&skip).map_err(Failure::Usage)?;
+    let options = DayOptions { logs, date, skip, home: own_folder()? };
     Ok(if command == "day" { Command::Day(options) } else { Command::Page(options, model) })
 }
 

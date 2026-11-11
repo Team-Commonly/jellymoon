@@ -1,10 +1,10 @@
 //! The reading call: one run of the person's own Claude Code that can return text and do nothing else. Every tool, MCP
 //! server, slash command, saved session and user-level setting is off. The day goes in on stdin and nowhere else; the
 //! arguments are fixed but for the model's name; the environment is a short list of this process's (the harness's own
-//! sign-in is under the home or its config dir); the folder is new, empty and removed afterwards.
+//! sign-in is under the home or its config dir), with a longer `PATH` when the harness was not found on it (`find.rs`); the folder is new, empty and removed afterwards.
 
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
@@ -12,6 +12,7 @@ use std::{env, fs, io, path, thread};
 
 use serde::Deserialize;
 
+use crate::find::{self, Found};
 use crate::redact::line;
 use crate::{Error, PageOptions, ReaderDay};
 
@@ -39,9 +40,6 @@ const ENVIRONMENT: &[&str] = &[
     "CLAUDE_CONFIG_DIR",
 ];
 
-/// The harness's file names, in the order tried in each folder of `PATH`. On Windows it is a program or a command script.
-const PROGRAMS: &[&str] = if cfg!(windows) { &["claude.exe", "claude.cmd", "claude"] } else { &["claude"] };
-
 /// How long a stopped or finished harness's output is waited for: something it started may still hold the pipe.
 const DRAIN: Duration = Duration::from_secs(1);
 
@@ -65,12 +63,12 @@ struct Output {
 /// Makes the reading call and returns the model's text.
 pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, Error> {
     let harness = match &options.harness {
-        Some(harness) => path::absolute(harness).map_err(Error::Call)?,
-        None => on_path()?,
+        Some(harness) => Found { program: path::absolute(harness).map_err(Error::Call)?, path: None },
+        None => find::harness(options)?,
     };
     private_dir(&options.dir).map_err(Error::Call)?;
     let folder = tempfile::Builder::new().prefix("call-").tempdir_in(&options.dir).map_err(Error::Call)?;
-    let mut command = Command::new(harness);
+    let mut command = Command::new(harness.program);
     command.args(["-p", "--model", &options.model, "--tools", "", "--strict-mcp-config", "--disable-slash-commands"]);
     command.args([
         "--no-session-persistence",
@@ -83,6 +81,7 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
     ]);
     command.current_dir(folder.path()).env_clear();
     command.envs(ENVIRONMENT.iter().filter_map(|name| Some((name, env::var_os(name)?))));
+    command.envs(harness.path.map(|path| ("PATH", path)));
     let output = run(command, format!("{day}\n").into_bytes(), options.limit)?;
     if !output.status.success() {
         return Err(Error::Failed {
@@ -95,28 +94,6 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
         Ok(reply) => Ok(reply.result),
         Err(_) => Err(Error::NotAResult),
     }
-}
-
-/// Finds `claude` in the folders of `PATH`.
-fn on_path() -> Result<PathBuf, Error> {
-    let folders = env::var_os("PATH").unwrap_or_default();
-    let found = env::split_paths(&folders)
-        .filter(|folder| !folder.as_os_str().is_empty())
-        .flat_map(|folder| PROGRAMS.iter().map(move |name| folder.join(name)))
-        .find(|program| fs::metadata(program).is_ok_and(|meta| meta.is_file() && runnable(&meta)));
-    // The child starts in another folder, so a relative entry of PATH must not be read from there.
-    path::absolute(found.ok_or(Error::NoHarness)?).map_err(Error::Call)
-}
-
-#[cfg(unix)]
-fn runnable(meta: &fs::Metadata) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    meta.permissions().mode() & 0o111 != 0
-}
-
-#[cfg(not(unix))]
-fn runnable(_: &fs::Metadata) -> bool {
-    true
 }
 
 /// Makes the folder the call folders go in, for this user only where the system has file modes; one that is already

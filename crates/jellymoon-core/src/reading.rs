@@ -35,8 +35,12 @@ pub struct PageOptions {
     pub dir: PathBuf,
     /// How long the call may take before it is stopped.
     pub limit: Duration,
-    /// The harness program. None is `claude`, found on `PATH`.
+    /// The harness program. None is `claude`, found on `PATH` or in a well-known place (`find.rs`).
     pub harness: Option<PathBuf>,
+    /// The person's home folder, where Claude Code's own installers put `claude`.
+    pub home: Option<PathBuf>,
+    /// The folders looked in after the home's. None is the system's usual ones.
+    pub system: Option<Vec<PathBuf>>,
 }
 
 /// What the model proposes: wishes and clashes under ids of its own. A missing field, a wrong type or an unknown state

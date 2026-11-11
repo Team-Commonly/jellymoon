@@ -67,7 +67,11 @@ fn run() -> Result<String, Failure> {
         Command::Page(options, model) => {
             let day = jellymoon_core::day(&options).map_err(failed)?;
             let harness = named("JELLYMOON_CLAUDE");
-            let options = PageOptions { model, dir: home()?.join("reading"), limit: READING_LIMIT, harness };
+            // The folders looked in after the home's, in place of the system's usual ones: what the tests set.
+            let system = env::var_os("JELLYMOON_SYSTEM_BIN")
+                .map(|folders| env::split_paths(&folders).filter(|folder| !folder.as_os_str().is_empty()).collect());
+            let (dir, home) = (home()?.join("reading"), user_home());
+            let options = PageOptions { model, dir, limit: READING_LIMIT, harness, home, system };
             Ok(format!("{}\n", jellymoon_core::page(&day, &options).map_err(failed)?))
         }
         Command::Uninstall => {

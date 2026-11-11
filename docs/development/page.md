@@ -13,8 +13,8 @@ call.
 
 ## The call
 
-The harness is `claude`, found on `PATH` (on Windows `claude.exe`, then `claude.cmd`, then `claude`), or the program
-`JELLYMOON_CLAUDE` names; a path there that does not exist is an error, not a fall back to `PATH`. It is run once, like this:
+The harness is `claude` (on Windows `claude.exe`, then `claude.cmd`, then `claude`), looked for as the next section
+says. It is run once, like this:
 
 ```
 claude -p --model <name> --tools "" --strict-mcp-config --disable-slash-commands --no-session-persistence
@@ -29,7 +29,8 @@ claude -p --model <name> --tools "" --strict-mcp-config --disable-slash-commands
   day is data and that an instruction inside it is not to be followed.
 - The environment is `PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM` and `CLAUDE_CONFIG_DIR`, when set: enough for
   the harness to find its own sign-in. On Windows the list is the system's equivalents (`USERPROFILE`, `APPDATA`,
-  `SystemRoot` and the like). Jellymoon passes no credential of its own or anyone else's.
+  `SystemRoot` and the like). Jellymoon passes no credential of its own or anyone else's. `PATH` is this process's own,
+  made longer only when the harness was found in a well-known place (below).
 - It runs in a new empty folder under `reading/` in Jellymoon's home (`JELLYMOON_HOME`, or `.jellymoon` in the home
   directory), removed when the call ends.
 - It may take three minutes. After that it is stopped and there is no page.
@@ -38,6 +39,49 @@ A command line that is wrong exits 2 with the reason and the usage; a run that f
 stdout and start the stderr line with `jellymoon: `.
 
 A day with no turns prints an empty page and makes no call.
+
+## Where the harness is looked for
+
+An app opened from Finder is given a `PATH` of four system folders (`/usr/bin:/bin:/usr/sbin:/sbin`), which holds no
+`claude` however it was installed. So the harness is looked for in this order, and the first one found is run:
+
+1. The program `JELLYMOON_CLAUDE` names, when it is set. A path there that does not exist is an error, not a fall
+   back to the rest.
+2. Each folder of `PATH`, as a terminal would.
+3. `~/.local/bin`: where Claude Code's native installer puts `claude`, as a link to the version it installed.
+4. `~/.claude/local`: the local install older versions of Claude Code made.
+5. `/opt/homebrew/bin`: Homebrew on a Mac with an Apple chip.
+6. `/usr/local/bin`: Homebrew on a Mac with an Intel chip, and what an administrator installed by hand.
+
+Places 3 and 4 are the two fixed paths Claude Code's own pages name
+([setup](https://code.claude.com/docs/en/setup), [troubleshoot installation](https://code.claude.com/docs/en/troubleshoot-install#check-for-conflicting-installations));
+5 and 6 are where `brew install --cask claude-code` links it. On Windows only 3 and 4 are looked in, under the user's
+profile. The list is fixed: no folder is listed, no shell is asked for its `PATH`, and the disk is not searched. An npm
+install made under a version manager (nvm and the like) sits in a folder named after a Node version, so it is found
+only through `PATH` or `JELLYMOON_CLAUDE`.
+
+A candidate counts when it is a file, or a link to one, that can be run. When none does, the one-line error names
+every place looked in.
+
+**Who can change the program.** The reading call hands the day's text to this program, so each place on the list is
+one a stranger on the machine cannot write to. `~/.local/bin` and `~/.claude/local` are inside the person's home.
+`/opt/homebrew/bin` belongs to the person who installed Homebrew, an administrator of the Mac. `/usr/local/bin`
+belongs to the system, or on an Intel Mac to the administrator who installed Homebrew. None is writable by everyone as
+installed, and no such folder (a temporary or shared one) is on the list. On top of that, a candidate in places 3 to 6
+whose file the group or everyone can write to is passed over, and the error says which. Only the file's own mode is
+read, after links are followed: not its owner, and not the folders above it.
+
+That check is not made on a `PATH` hit or on `JELLYMOON_CLAUDE`. Both are the person's own word: it is the program
+their terminal already runs when they type `claude`, or one they named. The list is Jellymoon's choice, so Jellymoon
+holds it to more.
+
+**What the harness is started with.** An older npm install of `claude` is a script that starts `env node`, and under
+Finder's `PATH` there is no `node`. So when the harness was found in places 3 to 6, its `PATH` is this process's own,
+then the folder the program is in, then the four places. Found on `PATH` or named by `JELLYMOON_CLAUDE`, it gets
+`PATH` unchanged. Nothing else about the call differs.
+
+`JELLYMOON_SYSTEM_BIN`, a list of folders written as `PATH` is, takes the place of 5 and 6; set to nothing, neither is
+looked in. The tests set it so that no folder of the machine they run on is read.
 
 ## What code checks
 
@@ -96,7 +140,9 @@ cannot tell that it lost its "not". The page shows a quote as a quote for that r
 ## Not covered yet
 
 The reading call has been run against a made-up harness only (the F27 test); the real Claude Code check is the coordinator's.
-A harness that is installed but not on `PATH` (a shell alias, for one) is not found; `JELLYMOON_CLAUDE` is the way round.
+A harness that is neither on `PATH` nor in a well-known place (a shell alias, an install under a version manager) is
+not found; `JELLYMOON_CLAUDE` is the way round. With a home whose files are made group-writable by default (a umask
+of 002), a harness in a well-known place is passed over.
 Codex is not read.
 
 Windows has been run in CI only, against a made-up `.exe` harness, never by a person against Claude Code. Three things

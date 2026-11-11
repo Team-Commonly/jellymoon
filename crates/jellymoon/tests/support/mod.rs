@@ -4,7 +4,7 @@
 
 use std::ffi::OsStr;
 use std::io::{Read, Seek, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 use std::{fs, thread};
@@ -68,6 +68,19 @@ pub fn jellymoon_fed(vars: &[(&str, &OsStr)], args: &[&str], input: &str) -> Ran
         text
     };
     Ran { stdout: read(&mut out), stderr: read(&mut err), code: status.code().unwrap_or(-1) }
+}
+
+/// Puts the made-up harness in `dir` under `name`. On Linux it is a link: a program file that was just written cannot
+/// be started there while a child of another test still holds it open ("text file busy"). Elsewhere it is a copy: a Mac
+/// now and then kills a signed program started through a fresh link.
+pub fn install(dir: &Path, name: &str) -> PathBuf {
+    fs::create_dir_all(dir).unwrap();
+    let (built, program) =
+        (env!("CARGO_BIN_EXE_fake-claude"), dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)));
+    if !cfg!(target_os = "linux") || fs::hard_link(built, &program).is_err() {
+        fs::copy(built, &program).unwrap();
+    }
+    program
 }
 
 /// One session log line. `origin` is the origin kind; "" leaves origin out, as a prompt sent by another program has none.

@@ -52,7 +52,7 @@ If you already have rustup, skip both: `cargo` reads `rust-toolchain.toml` and f
 ```sh
 cargo run -p jellymoon -- day                      # today's typed turns, as JSON
 cargo run -p jellymoon -- day --date 2026-11-09 --skip private-notes
-cargo run -p jellymoon -- page                     # today's page data; makes one call to `claude` on your PATH
+cargo run -p jellymoon -- page                     # today's page data; makes one call to your own `claude`
 ```
 
 [`docs/development/reader.md`](docs/development/reader.md) and [`page.md`](docs/development/page.md) say exactly what

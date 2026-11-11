@@ -94,7 +94,7 @@ impl Today {
         Ok(Today {
             date: date(asked.date.as_deref()).ok_or("--date must be a day as YYYY-MM-DD")?,
             logs: logs.ok_or("finding the session logs: no home directory; name them with --logs")?,
-            skip: asked.skip.split(',').map(str::to_string).collect(),
+            skip: jellymoon_core::skip_names(&asked.skip)?,
             model: asked.model.unwrap_or_else(|| "sonnet".to_string()),
             home: home.ok_or("no home directory: set JELLYMOON_HOME")?,
             harness: named("JELLYMOON_CLAUDE"),

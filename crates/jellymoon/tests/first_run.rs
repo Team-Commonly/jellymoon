@@ -15,6 +15,11 @@ use tempfile::TempDir;
 
 const SKIP_LINE: &str = "jellymoon: the list of folders you switched off (skip.txt in Jellymoon's folder) could not be \
                          read, so nothing was read: ";
+/// Every single character of core's table of characters that cannot be seen, both ends of each of its ranges, and
+/// one control character: the table cannot lose an entry with this green.
+const UNSEEN: &str = "\u{7}\u{ad}\u{61c}\u{115f}\u{1160}\u{180e}\u{2028}\u{2029}\u{3164}\u{feff}\u{ffa0}\
+                      \u{200b}\u{200f}\u{202a}\u{202e}\u{2060}\u{2065}\u{206f}\u{fe00}\u{fe0f}\
+                      \u{e0000}\u{e007f}\u{e0100}\u{e01ef}";
 const NO_LOGS: &str = "jellymoon: no Claude Code session logs were found: there is no folder ";
 
 /// One test's logs (a turn in `alpha`, one in `private-notes`), scratch home and harness.
@@ -185,13 +190,24 @@ fn a_skip_txt_that_is_not_a_whole_plain_list_stops_both_commands_with_one_line_a
     w.refused("line 1 holds a byte order mark");
     fs::write(w.skip_txt(), "private-notes\ralpha\r").unwrap(); // old Mac line ends: one line to every reader since
     w.refused("line 1 holds a carriage return that does not end it");
-    // A character nobody can see would make a name that matches nothing and looks right.
-    for unseen in ['\u{200b}', '\u{202e}', '\u{ad}', '\u{2066}', '\u{7}'] {
+    // A character nobody can see would make a name that matches nothing and looks right: in the list it stops the
+    // run, in `--skip` it is an argument error that names the name by its place.
+    for unseen in UNSEEN.chars() {
         fs::write(w.skip_txt(), format!("alpha\n\nprivate-{unseen}notes\n")).unwrap();
-        w.refused("line 3 holds a character that cannot be seen");
+        let what = if unseen == '\u{feff}' { "a byte order mark" } else { "a character that cannot be seen" };
+        w.refused(&format!("line 3 holds {what}"));
+        fs::remove_file(w.skip_txt()).unwrap();
+        let ran = w.over_logs("day", &["--skip", &format!("alpha, private-{unseen}notes")]);
+        let line = "jellymoon: --skip: name 2 holds a character that cannot be seen\nusage:";
+        assert!(ran.code == 2 && ran.stdout.is_empty() && ran.stderr.starts_with(line), "{unseen:?}: {}", ran.stderr);
+        assert!(!ran.stderr.contains("private"), "{unseen:?}: {}", ran.stderr);
     }
-    fs::write(w.skip_txt(), "private-notes\t\n").unwrap();
-    assert_eq!(typed(&w.over_logs("day", &[]).stdout), ["add a retry"], "a tab at a name's end is white space");
+    assert_eq!(w.over_logs("page", &["--skip", "al\u{200b}pha"]).code, 2);
+    assert_eq!(w.sent(), None);
+    // White space around a name is dropped before the look, in both, so what an editor or a shell leaves is honoured.
+    fs::write(w.skip_txt(), "private-notes\t\u{c}\n").unwrap();
+    assert_eq!(typed(&w.over_logs("day", &[]).stdout), ["add a retry"]);
+    assert_eq!(typed(&w.over_logs("day", &["--skip", "\talpha\u{2028}\n"]).stdout), [""; 0]);
 
     // A folder under the list's name cannot be read as a list on any system.
     fs::remove_file(w.skip_txt()).unwrap();

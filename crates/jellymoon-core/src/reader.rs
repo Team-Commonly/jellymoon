@@ -106,20 +106,45 @@ fn switched_off(home: &Path) -> Result<Vec<String>, String> {
         if let Some((_, what)) = odd.iter().find(|(odd, _)| line.contains(*odd)) {
             return Err(format!("line {} holds {what}", at + 1));
         }
-        if line.contains(|c| c != '\t' && unseen(c)) {
+        if hidden(line) {
             return Err(format!("line {} holds a character that cannot be seen", at + 1));
         }
     }
     Ok(text.lines().map(str::to_string).collect())
 }
 
-/// A character that draws nothing or moves what is drawn: a control character, or one of the invisible format
-/// characters (soft hyphen, zero-width spaces and joiners, direction marks and overrides, the byte order mark). In a
-/// line for the person it becomes a space; in a list name it could not be told from the name without it.
+/// A character that draws nothing or moves what is drawn: a control character, or one of this closed list. The soft
+/// hyphen, the Arabic letter mark, the Hangul fillers, the Mongolian vowel separator, the line and paragraph
+/// separators, the byte order mark; the zero-width spaces, joiners and direction marks, the direction overrides, the
+/// invisible operators and isolates, the variation selectors and the tag characters. In a line for the person it
+/// becomes a space; in a name of a folder it could not be told from the name without it.
 fn unseen(c: char) -> bool {
-    let format = ['\u{ad}', '\u{61c}', '\u{180e}', '\u{feff}'];
-    let ranges = ['\u{200b}'..='\u{200f}', '\u{202a}'..='\u{202e}', '\u{2060}'..='\u{2064}', '\u{2066}'..='\u{206f}'];
-    c.is_control() || format.contains(&c) || ranges.iter().any(|range| range.contains(&c))
+    let single = "\u{ad}\u{61c}\u{115f}\u{1160}\u{180e}\u{2028}\u{2029}\u{3164}\u{feff}\u{ffa0}";
+    let ranges = [
+        '\u{200b}'..='\u{200f}',
+        '\u{202a}'..='\u{202e}',
+        '\u{2060}'..='\u{206f}',
+        '\u{fe00}'..='\u{fe0f}',
+        '\u{e0000}'..='\u{e007f}',
+        '\u{e0100}'..='\u{e01ef}',
+    ];
+    c.is_control() || single.contains(c) || ranges.iter().any(|range| range.contains(&c))
+}
+
+/// Whether a name holds a character that cannot be seen, once the white space around it is dropped as the match
+/// drops it.
+fn hidden(name: &str) -> bool {
+    name.trim().contains(unseen)
+}
+
+/// The names in a `--skip` value, which commas part. A name with a character that cannot be seen would match nothing
+/// and look right, so the value is refused: the error names the name by its place, never by its text.
+pub fn skip_names(value: &str) -> Result<Vec<String>, String> {
+    let names: Vec<String> = value.split(',').map(str::to_string).collect();
+    match names.iter().position(|name| hidden(name)) {
+        Some(at) => Err(format!("--skip: name {} holds a character that cannot be seen", at + 1)),
+        None => Ok(names),
+    }
 }
 
 /// A calendar day written exactly YYYY-MM-DD.

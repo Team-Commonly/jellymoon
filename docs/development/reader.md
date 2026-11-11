@@ -31,9 +31,15 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
   reading call: a damaged list is never an empty list. Only nothing at all under the name `skip.txt` is no names.
   Refused: a link to nothing, a folder, a pipe, a file that cannot be read, one over 64 KiB or not UTF-8, and a line
   that holds a NUL, a byte order mark (one at the very start of the file is dropped), a carriage return that does
-  not end it, as UTF-16 text and old Mac line ends do, or any other character that cannot be seen: a control
-  character but a tab, a soft hyphen, a zero-width space or joiner, a direction mark or override. The line is named
-  by its number, never by its text.
+  not end it, as UTF-16 text and old Mac line ends do, or a character that cannot be seen. The line is named by its
+  number, never by its text.
+- **Characters that cannot be seen** are a closed list, in one function of core (`unseen` in `reader.rs`): every
+  control character, and U+00AD, U+061C, U+115F, U+1160, U+180E, U+2028, U+2029, U+3164, U+FEFF, U+FFA0, U+200B to
+  U+200F, U+202A to U+202E, U+2060 to U+206F, U+FE00 to U+FE0F, U+E0000 to U+E007F and U+E0100 to U+E01EF. Nothing
+  else is looked for. White space around a name is dropped first, so a tab or a line break at a name's end is
+  honoured. A name that holds one of them stops the run when it is in `skip.txt`, and in `--skip` is an argument
+  error, exit 2, that names the name by its place in the value (`--skip: name 2 holds …`), never by its text. A
+  folder whose own name holds such a character is switched off by naming a part of its name without it.
 - **No session logs.** When the projects directory is not there (Claude Code was never used, or keeps its files
   elsewhere), the command says so in one line that names the folder it looked for, and exits 1. When the folder is
   the one nobody named, the line adds what to do. A directory that is there with no session in it is a day with no

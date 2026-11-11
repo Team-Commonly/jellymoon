@@ -184,7 +184,8 @@ stopped.
 **A stop against the run's own finish.** The `jellymoon run` asks whether its child has ended before it looks
 for the request. A child that ended by itself has ended: the run is `completed`, with its star, or `failed`, by
 its stream, and the request is never read. A child that was still going when the request was found is
-`cancelled`, also when it ends by itself during the five seconds. The end is written once, by the one process
+`cancelled`, also when it ends by itself during the five seconds, and also when it prints past the stream's cap
+in them: the stop came first. The end is written once, by the one process
 that owns the child, so there is always exactly one, and `run stop` prints that one.
 
 **The request is a file, and anyone who can write Jellymoon's home can leave one.** It is made as a new file

@@ -91,7 +91,9 @@ pub(super) fn run(
     let head = head.recv_timeout(DRAIN).unwrap_or_default();
     let unknown = head.contains("unknown option") && head.contains("--restricted");
     let old = end == End::Exited && !exit_0 && whole.is_some() && read.lines == 0 && unknown;
-    Ok(Ended { end: if read.over { End::Over } else { end }, exit_0, read, old })
+    // A child the person stopped was stopped, whatever it printed while it was being ended.
+    let end = if read.over && end != End::Stopped { End::Over } else { end };
+    Ok(Ended { end, exit_0, read, old })
 }
 
 /// The start of what the child said on stderr, as text; the rest is read and dropped, so the child never waits.

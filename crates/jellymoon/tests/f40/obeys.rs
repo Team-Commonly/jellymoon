@@ -22,3 +22,16 @@ fn an_agent_that_reports_a_success_and_exits_0_at_the_interrupt_is_cancelled_wit
         w.never_says_the_agent(&stopped);
     }
 }
+
+// At the interrupt the agent prints more than Jellymoon reads of a run, 72 MiB where 64 are read. The stop came
+// first: the run is cancelled, and is not a run that failed by printing too much.
+#[test]
+fn a_stopped_run_that_then_prints_past_the_cap_is_cancelled_and_has_not_failed() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let Some((going, run)) = w.minded(("floods", 0), 2000, &wish, &repo) else { return };
+    assert_eq!(printed(&w.stop(&wish)), said_cancelled(&run, &wish, 0));
+    assert_eq!(printed(&ended(going)), said_cancelled(&run, &wish, 0));
+    assert!(w.rec("heard").is_some() && w.agent_came_and_went(), "the agent never printed past the cap");
+    w.is_cancelled(&wish, &run, &repo, 0);
+}

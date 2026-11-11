@@ -1,6 +1,6 @@
 //! The `jellymoon` command. `day` prints one local day of what the person typed to Claude Code; `page` prints that
 //! day's page data, made with one reading call through their own Claude Code. Each prints one line of JSON on stdout,
-//! or an error on stderr and nothing on stdout. Neither talks to a server.
+//! or an error on stderr and nothing on stdout. Neither talks to a server. `uninstall` removes what `install.sh` added.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -8,12 +8,13 @@ use std::process::ExitCode;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, PageOptions};
+use jellymoon_core::{DayOptions, PageOptions, UninstallOptions};
 use lexopt::prelude::*;
 
 const USAGE: &str = "usage:
   jellymoon day [--date <YYYY-MM-DD>] [--logs <Claude Code projects dir>] [--skip <folder names, comma separated>]
   jellymoon page [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <names>] [--model <name>]   (one reading call through your own Claude Code)
+  jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay)
 ";
 
 /// How long the reading call may take. One measured day took 9 seconds.
@@ -29,6 +30,7 @@ enum Command {
     Help,
     Day(DayOptions),
     Page(DayOptions, String),
+    Uninstall,
 }
 
 fn main() -> ExitCode {
@@ -58,6 +60,17 @@ fn run() -> Result<String, Failure> {
             let options = PageOptions { model, dir: home()?.join("reading"), limit: READING_LIMIT, harness };
             Ok(format!("{}\n", jellymoon_core::page(&day, &options).map_err(failed)?))
         }
+        Command::Uninstall => {
+            // The same two folders, under the same two names, that install.sh puts the pieces in.
+            let app = named("JELLYMOON_APP_DIR").or_else(|| Some(user_home()?.join("Applications")));
+            let bin = named("JELLYMOON_BIN_DIR").or_else(|| Some(user_home()?.join(".local").join("bin")));
+            let (Some(app), Some(bin)) = (app, bin) else {
+                return Err(Failure::Run("no home directory: set JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR".to_string()));
+            };
+            let binary = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
+            let options = UninstallOptions { app: app.join("Jellymoon.app"), binary };
+            Ok(format!("{}\n", jellymoon_core::uninstall(&options).map_err(failed)?))
+        }
     }
 }
 
@@ -67,6 +80,13 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let command = match parser.next().map_err(usage)? {
         Some(Value(command)) if command == "day" || command == "page" || command == "help" => command,
+        Some(Value(command)) if command == "uninstall" => {
+            return match parser.next().map_err(usage)? {
+                None => Ok(Command::Uninstall),
+                Some(Long("help") | Short('h')) => Ok(Command::Help),
+                Some(other) => Err(usage(other.unexpected())),
+            };
+        }
         Some(Long("help") | Short('h')) => return Ok(Command::Help),
         Some(other) => return Err(usage(other.unexpected())),
         None => return Err(Failure::Usage("no command".to_string())),

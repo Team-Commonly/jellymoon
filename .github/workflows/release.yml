@@ -54,12 +54,14 @@ jobs:
           set -euo pipefail
           # Shaders are compiled at build time when Xcode's `metal` is there (ADR 0013, point 5); when it is not,
           # the app compiles them as it starts. The log says which this release got.
-          features=()
+          # A plain string, not an array: the Mac's bash 3.2 calls an empty array unbound under `set -u`.
+          features=""
           if ! xcrun -f metal >/dev/null 2>&1; then
             echo "::warning::no Xcode metal on this runner: the app is built with runtime_shaders"
-            features=(--features jellymoon-app/runtime_shaders)
+            features="--features jellymoon-app/runtime_shaders"
           fi
-          cargo build --release --locked --target "$TARGET" -p jellymoon -p jellymoon-app "${features[@]}"
+          # shellcheck disable=SC2086
+          cargo build --release --locked --target "$TARGET" -p jellymoon -p jellymoon-app $features
       - name: Wrap, sign ad hoc and pack
         env:
           TARGET: ${{ matrix.target }}

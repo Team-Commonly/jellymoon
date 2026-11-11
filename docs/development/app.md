@@ -54,11 +54,12 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   so a day whose turns changed but not their number (a folder switched off and one more turn typed) keeps its page
   until `--fresh`. A day with nothing typed makes no call.
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
-  no command line. Both go to core's `skip`. No `skip.txt` is no names. One that cannot be read, is over 64 KiB or is
+  no command line. Core reads the file (`reader.md`), for the app and for `jellymoon day` and `page` alike, so the
+  three leave out the same folders. No `skip.txt` is no names. One that cannot be read, is over 64 KiB or is
   not UTF-8 stops the reading with a plain note and no call, so a folder switched off never reaches the call because
   its list was damaged. A byte order mark at its start is dropped.
 - **When the reading cannot run** the page is one plain note, "Today could not be read.", that says why: Claude Code
-  was not found, no session logs, the call failed or took too long (core's own line follows), or the model's answer
+  was not found, no session logs (the note names the folder looked for, as the command's line does), the call failed or took too long (core's own line follows), or the model's answer
   was not a page. With a kept page, that page stays and the note is its first, "This page is from an earlier
   reading." A page that could not be written to its file is shown with a first note that says so. `layout` prints
   these pages and exits 0: they are what the window shows.

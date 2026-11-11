@@ -87,7 +87,10 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
     );
     let nowhere = world.dir.path().join("nowhere");
     let none = one(&world, &["--logs", nowhere.to_str().unwrap()]);
-    assert!(none.starts_with("Today could not be read. No Claude Code sessions were found on this computer"), "{none}");
+    assert!(
+        none.starts_with("Today could not be read. No Claude Code session logs were found on this computer"),
+        "{none}"
+    );
 
     fs::remove_file(world.rec.join(format!("claude{}", env::consts::EXE_SUFFIX))).unwrap();
     let missing = one(&world, &[]);

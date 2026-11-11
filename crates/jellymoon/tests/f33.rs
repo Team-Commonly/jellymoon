@@ -11,7 +11,7 @@ use std::ffi::OsStr;
 use std::fs;
 
 use serde_json::{Value, json};
-use support::{jellymoon, scratch};
+use support::{jellymoon, jellymoon_in, scratch};
 
 #[test]
 fn uninstall_removes_the_app_and_the_binary_and_nothing_else() {
@@ -41,6 +41,26 @@ fn uninstall_removes_the_app_and_the_binary_and_nothing_else() {
     let refused = jellymoon(&vars, &["uninstall", apps.to_str().unwrap()]);
     assert_eq!((refused.code, refused.stdout.as_str()), (2, ""));
     assert!(apps.join("Other.app").exists());
+}
+
+// A relative folder would name whatever is under the folder the command was started in.
+#[test]
+fn uninstall_refuses_a_folder_that_is_not_a_full_path_and_touches_nothing() {
+    let dir = scratch();
+    let (app, binary) =
+        (dir.path().join("Applications").join("Jellymoon.app"), dir.path().join("bin").join("jellymoon"));
+    fs::create_dir_all(&app).unwrap();
+    fs::create_dir_all(binary.parent().unwrap()).unwrap();
+    fs::write(binary.with_extension(std::env::consts::EXE_EXTENSION), "made up").unwrap();
+    let (apps, bin) = (dir.path().join("Applications"), dir.path().join("bin"));
+    for (app_dir, bin_dir) in [(OsStr::new("Applications"), bin.as_os_str()), (apps.as_os_str(), OsStr::new("bin"))] {
+        let vars = [("JELLYMOON_APP_DIR", app_dir), ("JELLYMOON_BIN_DIR", bin_dir)];
+        let ran = jellymoon_in(dir.path(), &vars, &["uninstall"]);
+        let line = "jellymoon: uninstalling: JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR must be full paths, from the \
+                    root; nothing was removed\n";
+        assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (1, "", line));
+        assert!(app.exists() && binary.with_extension(std::env::consts::EXE_EXTENSION).exists());
+    }
 }
 
 /// Anywhere but a Mac the script says it is for the Mac, fails, and installs nothing.

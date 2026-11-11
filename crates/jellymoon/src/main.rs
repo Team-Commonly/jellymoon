@@ -138,7 +138,7 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         Some(logs) => logs,
         None => harness_folder()?.join("projects"),
     };
-    let options = DayOptions { logs, date, skip: skip.split(',').map(str::to_string).collect() };
+    let options = DayOptions { logs, date, skip: skip.split(',').map(str::to_string).collect(), home: own_folder() };
     Ok(if command == "day" { Command::Day(options) } else { Command::Page(options, model) })
 }
 
@@ -188,7 +188,10 @@ fn harness_folder() -> Result<PathBuf, Failure> {
 }
 
 /// Where jellymoon keeps its own files: `JELLYMOON_HOME`, or `.jellymoon` in the user's home.
+fn own_folder() -> Option<PathBuf> {
+    named("JELLYMOON_HOME").or_else(|| Some(user_home()?.join(".jellymoon")))
+}
+
 fn home() -> Result<PathBuf, Failure> {
-    let home = named("JELLYMOON_HOME").or_else(|| Some(user_home()?.join(".jellymoon")));
-    home.ok_or_else(|| Failure::Run("no home directory: set JELLYMOON_HOME".to_string()))
+    own_folder().ok_or_else(|| Failure::Run("no home directory: set JELLYMOON_HOME".to_string()))
 }

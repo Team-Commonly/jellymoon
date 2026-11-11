@@ -14,6 +14,14 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
 - `--skip`: folders the person switched off. A turn whose working directory contains one of the names contributes nothing.
   Spaces around a name are dropped, and an empty name is ignored. A line with no working directory is matched by the name of
   the folder its session file is in.
+- **`skip.txt`.** The names in `<home>/skip.txt`, one a line, are switched off as well, joined with `--skip`: it is
+  the list the app keeps, so a folder switched off there is not read by `day` or `page` either. `<home>` is
+  `JELLYMOON_HOME`, or `.jellymoon` in the home directory; with neither there is no such file. No file is no names.
+  One that cannot be read, is over 64 KiB or is not UTF-8 stops the command with one line, exit 1, before a log is
+  opened and before any reading call: a damaged list is never an empty list. A byte order mark at its start is dropped.
+- **No session logs.** When the projects directory is not there (Claude Code was never used, or keeps its files
+  elsewhere), the command says so in one line that names the folder it looked for, and exits 1. A directory that is
+  there with no session in it is a day with no turns.
 
 Only a regular `.jsonl` file in a real folder of the projects directory is opened. A link is never followed, to a file or to a
 folder, and a pipe or anything else that is not a file is left alone.

@@ -22,6 +22,7 @@ cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build argument
 | `today-again` | the same run again prints the same pieces from the kept page, and `fake-claude` is not called |
 | `broken-page` | a file that is not page data is refused in one line, exit 1, nothing on stdout |
 | `empty-day` | a day nobody typed in is an empty page, made with no reading call, and the app draws it |
+| `no-logs` | `jellymoon day` over a logs folder that is not there says in one line that no session logs were found, and exits 1 |
 | `hook-install` | `jellymoon hook install` puts its entry into made-up harness settings in the temporary home |
 | `rule` | `jellymoon rule` keeps a ruling, and one waits in the store |
 | `hook-told`, `hook-again` | `jellymoon hook`, given a made-up step, hands the session the ruling; its next step is told nothing |
@@ -38,10 +39,13 @@ A made-up run starts each program with no variable of the caller's: a scratch `H
 - **`--window`** adds the window step. It needs a display, so that step alone sees the caller's variables. CI runs
   it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
-  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`, the
-  delivery steps and `uninstall` are left out;
+  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`,
+  `no-logs`, the delivery steps and `uninstall` are left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what.
+
+The first `--real` run was made by a maintainer before the tag `v0.1.0-rc1`, when the chain with `--real` had five
+steps, and it passed. No run with `--real` has been made since the chain grew.
 
 ## What it does not prove
 

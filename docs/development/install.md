@@ -65,16 +65,22 @@ as a pre-release. Run by hand from the Actions tab, from a branch or from a tag,
 workflow artifacts and publishes nothing, which is the way to rehearse. `install.sh` reads `releases/latest`, which
 GitHub points at the newest release that is neither a draft nor a pre-release.
 
-## Not proved yet
+## What was proved, and what was not
 
-- **The release workflow has never run.** The Intel build is cross-compiled on an Apple-chip runner; whether GPUI
-  builds that way, and whether the runner has Xcode's `metal`, shows on the first run.
-- **A clean Mac.** The tests show no quarantine flag on what was installed and a valid ad-hoc signature. That the app
-  then opens with no Gatekeeper prompt, on a Mac that has never seen it, only a person can see.
-- **Opening from the Finder.** Opened with nothing, the app reads today with one call through the person's own
-  Claude Code and shows the page (`app.md`, "Today's page"). The script's closing lines say to open the app, and
-  name the app's own program to start from a terminal. The Finder gives the app no shell `PATH`, so Claude Code is
-  also looked for in the places `page.md` lists; tests prove that with a made-up harness. That a double click ends
-  on a page was seen by nobody yet.
+All of this is from the maintainers' own runs, on one Mac.
+
+- **The release.** The release workflow ran on the tag `v0.1.0-rc1`. Both chips built, the Intel one cross-compiled
+  on an Apple-chip runner, and it published a pre-release with two archives and `SHA256SUMS`.
+- **The install.** `install.sh`, pointed at that release with `JELLYMOON_RELEASE_URL`, installed into scratch
+  folders. A second run said "updated" and left no old bundle. The signature verified, nothing carried the quarantine
+  flag, and the bundle's version was `0.1.0-rc1`. `jellymoon uninstall` then left both folders empty.
+- **Opening the app.** The installed app, started through LaunchServices (`open`), which gives it no shell `PATH`,
+  found Claude Code in one of the places `page.md` lists, read the day with one call and kept the page.
+
+Not proved yet:
+
+- **A Mac that has never seen the app.** That it opens with no Gatekeeper prompt there, only a person can see.
+- **A person's own double click.** `open` takes the same road, and nobody has yet clicked.
+- **The Intel archive on an Intel Mac.** It was built and published, and never run.
+- **An older macOS.** `LSMinimumSystemVersion` is 11.0, a guess: the app ran on one, current, macOS only.
 - **No icon.** The repo holds none, so the bundle has the system's plain one.
-- **`LSMinimumSystemVersion` is 11.0**, a guess: nobody has run the app on an older macOS.

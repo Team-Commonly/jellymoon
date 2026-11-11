@@ -24,6 +24,7 @@ pub const STEPS: &[Step] = &[
     Step { name: "today-again", only: Only::Synthetic, run: today_again },
     Step { name: "broken-page", only: Only::Any, run: broken_page },
     Step { name: "empty-day", only: Only::Synthetic, run: empty_day },
+    Step { name: "no-logs", only: Only::Synthetic, run: no_logs },
     // Delivery, never with --real: these would write the person's own harness settings and tell their sessions.
     Step { name: "hook-install", only: Only::Synthetic, run: hook_install },
     Step { name: "rule", only: Only::Synthetic, run: rule },
@@ -198,6 +199,17 @@ fn broken_page(world: &World) -> Result<String, String> {
         return Err(world.printed(&ran));
     }
     Ok("refused in one line, exit 1".to_string())
+}
+
+/// A person who has not used Claude Code yet: no logs folder is one plain line, never the system's own error.
+fn no_logs(world: &World) -> Result<String, String> {
+    let args = ["day", "--date", DAY, "--logs", &text(&world.at("no-logs-here"))].map(str::to_string);
+    let ran = world.run("jellymoon", &args)?;
+    let plain = ran.stderr.starts_with("jellymoon: no Claude Code session logs were found: there is no folder ");
+    if ran.code != 1 || !ran.stdout.is_empty() || !plain || ran.stderr.lines().count() != 1 {
+        return Err(world.printed(&ran));
+    }
+    Ok("no session logs said in one line, exit 1".to_string())
 }
 
 /// A day nobody typed in is an empty page, made with no reading call, and the app draws it.

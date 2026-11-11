@@ -236,7 +236,7 @@ fn a_theme_or_art_file_over_its_size_or_not_a_regular_file_is_refused() {
     let padded = format!("{PICTURE}<!-- {} -->", "x".repeat(MAX_ART_BYTES as usize));
     folder.write("star.svg", &padded);
     fs::create_dir_all(folder.0.join("badge.svg")).unwrap();
-    for (key, why) in [("star", "it is over 1024 KiB"), ("badge", "it is not a regular file")] {
+    for (key, why) in [("star", "it is over 64 KiB"), ("badge", "it is not a regular file")] {
         let path = folder.write("theme.toml", &format!("[art]\n{key} = \"{key}.svg\"\n"));
         match Theme::load(&path) {
             Err(ThemeError::RefusedSvg { key: named, reason }) => {

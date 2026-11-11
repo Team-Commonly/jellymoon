@@ -81,6 +81,12 @@ pub const MAX_ART_SIDE: f32 = 256.0;
 /// The largest number anywhere else in a picture: a coordinate, a radius, a stroke's width, a move.
 pub const MAX_ART_NUMBER: f32 = 4096.0;
 
+/// The longest `d` or `points` value, in bytes: 4 KiB.
+pub const MAX_ART_PATH_BYTES: usize = 4096;
+
+/// The letters a `d` may hold: the path commands, in lower case. No other number may stand beside a letter.
+const PATH_COMMANDS: &str = "mlhvcsqtaz";
+
 /// Why the SVG is refused, or `None` when it is only a picture.
 pub fn svg_refusal(svg: &str) -> Option<String> {
     let text = svg.to_ascii_lowercase();
@@ -165,6 +171,9 @@ fn attributes<'a>(mut rest: &'a str, element: &str) -> Result<(&'a str, bool), S
         if value.split("url").skip(1).any(|after| !after.starts_with("(#")) {
             return Err("it refers to something outside the file".into());
         }
+        if matches!(name, "d" | "points") && value.len() > MAX_ART_PATH_BYTES {
+            return Err(format!("the value of `{name}` is over {MAX_ART_PATH_BYTES} bytes"));
+        }
         if place >= WORDS {
             numbers(name, value, element == "svg" && name != "version")?;
         }
@@ -172,9 +181,9 @@ fn attributes<'a>(mut rest: &'a str, element: &str) -> Result<(&'a str, bool), S
     }
 }
 
-/// Holds an attribute's numbers to plain digits with no exponent, of at most [`MAX_ART_NUMBER`]. A transform may
-/// only be `translate` and `rotate`. On the `<svg` itself (`root`) the most is [`MAX_ART_SIDE`], and `width`, `height`
-/// and the last two of `viewBox` are sizes: 1 or more, with no unit but `px`.
+/// Holds an attribute's numbers to plain digits with no exponent, unit or `%`, of at most [`MAX_ART_NUMBER`]. A
+/// transform may only be `translate` and `rotate`. On the `<svg` itself (`root`) the most is [`MAX_ART_SIDE`], and
+/// `width`, `height` and the last two of `viewBox` are sizes: 1 or more, where alone `px` may follow.
 fn numbers(name: &str, value: &str, root: bool) -> Result<(), String> {
     let most = if root { MAX_ART_SIDE } else { MAX_ART_NUMBER };
     let digits = |text: &str| text.len() - text.trim_start_matches(|c: char| c.is_ascii_digit()).len();
@@ -203,5 +212,16 @@ fn numbers(name: &str, value: &str, root: bool) -> Result<(), String> {
         "width" | "height" => size(value.strip_suffix("px").unwrap_or(value)),
         _ => true,
     };
-    if fine { Ok(()) } else { Err(format!("`{name}=\"{value}\"` is not a size from 1 to {most}")) }
+    if !fine {
+        return Err(format!("`{name}=\"{value}\"` is not a size from 1 to {most}"));
+    }
+    let lettered = match name {
+        "d" => !words.chars().all(|c| PATH_COMMANDS.contains(c)),
+        "width" | "height" if root => false,
+        _ => !name.ends_with("transform") && !words.is_empty(),
+    };
+    if lettered || value.contains('%') {
+        return Err(format!("`{name}` holds a unit or `%`: a number is plain digits"));
+    }
+    Ok(())
 }

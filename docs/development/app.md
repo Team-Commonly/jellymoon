@@ -4,11 +4,18 @@ The shell (`app/`) draws page data with the kit. It makes no reading call, opens
 file; `jellymoon page` makes the page data (`page.md`).
 
 ```sh
-jellymoon-app layout --page <file, or - for stdin> [--theme sticker|plain] [--size <W>x<H>]
-jellymoon-app --page <file, or - for stdin> [--theme sticker|plain] [--size <W>x<H>]
+jellymoon-app layout --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]
+jellymoon-app --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]
 ```
 
-The first prints where every piece goes. The second opens a window (default 1440x900); `t` switches the theme, and
+`--theme` is `sticker` (the default), `plain`, or the path of a theme file; the two names win over a file called the
+same. A theme changes how the page looks and never which pieces are on it. A theme file is TOML in which every key
+is optional (the kit's README has the keys and the bounds it is held to). A key the kit does not know and an art file
+that is not there fall back to the sticker theme's, each said in one `jellymoon-app: theme: ` line on stderr, the
+first 8 of them. A theme file that cannot be read or that the kit refuses (a number out of its range, art that is
+more than a flat picture, a path out of the theme's folder) exits 1 with one line that names the key and the reason.
+
+The first prints where every piece goes. The second opens a window (default 1440x900); `t` switches between the two built-in themes, and
 `JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. `--size` is from 960x640 to 16384x16384, each side a whole
 number of pixels: 960x640 is the smallest size a page is drawn at, and the window is asked not to shrink below it
 (a unit test holds what is asked; that the system obeys was seen by hand on the Mac only). A wrong command line exits 2 with the usage on stderr; a file

@@ -279,7 +279,7 @@ fn a_wrong_command_line_exits_2_with_the_usage_and_prints_nothing() {
         &[],
         &["layout"],
         &["draw", "--page", "-"],
-        &["layout", "--page", "-", "--theme", "neon"],
+        &["layout", "--page", "-", "--theme"],
         &["layout", "--page", "-", "--size", "960"],
         &["layout", "--page", "-", "--size", "0x640"],
         &["layout", "--page", "-", "--size", "959x640"],

@@ -53,3 +53,20 @@ fn a_spring_overshoots_then_settles_on_its_target() {
     assert!(highest > 100.0, "springy, not eased");
     assert_eq!(spring, Spring::at(100.0));
 }
+
+/// A step is 1/240 s (`h`), so a spring is stable while `h * h * stiffness + 2 * h * damping` is under 4. Every pair
+/// the theme door lets through is far inside that.
+#[test]
+fn a_spring_at_the_ends_of_the_theme_s_ranges_never_runs_away() {
+    for (stiffness, damping) in [(10_000.0, 200.0), (260.0, 200.0), (10_000.0, 14.0), (0.5, 200.0)] {
+        let mut theme = Theme::sticker();
+        (theme.motion.stiffness, theme.motion.damping) = (stiffness, damping);
+        assert!(theme.check().is_ok());
+        let motion = theme.motion;
+        let mut spring = Spring::at(0.0);
+        for _ in 0..600 {
+            spring.step(100.0, &motion, 1.0 / 60.0);
+            assert!((-1.0..=200.0).contains(&spring.value), "{stiffness} {damping}: {}", spring.value);
+        }
+    }
+}

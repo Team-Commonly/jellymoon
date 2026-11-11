@@ -17,7 +17,7 @@ pub use bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, RANGES};
 pub use load::{Loaded, ThemeError};
 pub use svg_check::{
     ATTRIBUTES as SVG_ATTRIBUTES, ELEMENTS as SVG_ELEMENTS, MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_NUMBER,
-    MAX_ART_SIDE, svg_refusal,
+    MAX_ART_PATH_BYTES, MAX_ART_SIDE, svg_refusal,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

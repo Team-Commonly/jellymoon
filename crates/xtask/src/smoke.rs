@@ -5,6 +5,7 @@
 //! By default every log is made up and the harness is the made-up `fake-claude`. `--real` runs the same steps over
 //! the person's own logs and their own Claude Code, and then prints counts, states and exit codes only.
 
+mod copy;
 mod steps;
 
 use std::ffi::OsString;

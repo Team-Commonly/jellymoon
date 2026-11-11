@@ -34,6 +34,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "tap", only: Only::Synthetic, run: tap },
     Step { name: "tap-told", only: Only::Synthetic, run: tap_told },
     Step { name: "today-settled", only: Only::Synthetic, run: today_settled },
+    // A run's copy (F38). Not with --real: it makes a repo of its own, and that is all it reads.
+    Step { name: "copy", only: Only::Synthetic, run: super::copy::copy },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
     Step { name: "window", only: Only::Window, run: window },
 ];

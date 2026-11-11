@@ -54,10 +54,10 @@ struct Reply {
     result: String,
 }
 
-struct Output {
-    status: ExitStatus,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
+pub(crate) struct Output {
+    pub status: ExitStatus,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
 }
 
 /// Makes the reading call and returns the model's text.
@@ -98,7 +98,7 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
 
 /// Makes the folder the call folders go in, for this user only where the system has file modes; one that is already
 /// there is closed to others too. On Windows the folder is under the user's profile, which other users cannot read.
-fn private_dir(dir: &Path) -> io::Result<()> {
+pub(crate) fn private_dir(dir: &Path) -> io::Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]
@@ -110,7 +110,7 @@ fn private_dir(dir: &Path) -> io::Result<()> {
 }
 
 /// Runs the command with `input` on its stdin and returns what it printed. One still running at `limit` is stopped.
-fn run(mut command: Command, input: Vec<u8>, limit: Duration) -> Result<Output, Error> {
+pub(crate) fn run(mut command: Command, input: Vec<u8>, limit: Duration) -> Result<Output, Error> {
     let mut child =
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(Error::Call)?;
     let stdin = child.stdin.take();

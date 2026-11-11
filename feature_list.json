@@ -201,7 +201,7 @@
         "a failed run's copy is kept, the newest five only"
       ],
       "test": "cargo test -p jellymoon --test f38",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {

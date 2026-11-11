@@ -18,6 +18,20 @@ path = "tests/support/fake_claude.rs"
 test = false
 doc = false
 
+# A made-up program for git to run as a hook, a filter or `core.fsmonitor` (F38). It leaves a mark beside itself.
+[[bin]]
+name = "fake-hook"
+path = "tests/support/fake_hook.rs"
+test = false
+doc = false
+
+# A made-up `git` that runs the real one and then never returns, for the time limit on a git child (F38).
+[[bin]]
+name = "fake-git"
+path = "tests/support/fake_git.rs"
+test = false
+doc = false
+
 [dependencies]
 jellymoon-core.workspace = true
 lexopt.workspace = true

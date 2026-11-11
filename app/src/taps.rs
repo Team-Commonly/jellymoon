@@ -48,12 +48,14 @@ impl OnShow {
 }
 
 impl Today {
-    /// The page as it is shown: each clash in the words a ruling would carry, with the side that stands by the
+    /// The page as it is shown: the day's made wishes with the reading's, each clash in the words a ruling would carry, with the side that stands by the
     /// person's own ruling, and, when the page has a clash and delivery is off, one note before the clashes that
     /// says so.
     pub fn draw(&self, page: &Page) -> Scene {
         let standing = jellymoon_core::standing(&self.home, &self.date, &page.data.clashes);
-        let mut shown = scene::ruled(page, &standing);
+        // The day's made wishes stand after the reading's. They are on the drawing only: a tap acts on `page`.
+        let data = jellymoon_core::with_made(&self.home, page.data.clone());
+        let mut shown = scene::ruled(&Page { data, ..page.clone() }, &standing);
         if !page.data.clashes.is_empty() && !jellymoon_core::hook_installed(&self.home) {
             // Before the clashes, so a full page never shows a clash to tap and hides that no session would hear.
             let clash = |note: &Note| matches!(note, Note::Choice { id, .. } if id.starts_with("clash-"));

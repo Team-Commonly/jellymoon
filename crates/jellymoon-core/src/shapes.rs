@@ -51,13 +51,13 @@ pub struct PageData {
 /// Something a person wants to exist or be true, worked out from what they typed to their agents.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Wish {
-    /// The wish's id on this page: w1 to w8, in page order.
+    /// The wish's id on this page: w1 to w8, in page order. A made wish's is m1 to m8 (`wish.rs`).
     pub id: String,
     /// A short name for the wish, in the model's words, at most 40 characters.
     pub label: String,
     /// The person's own words for it, copied from one thing they typed that day.
     pub said: String,
-    /// The project the wish came from: one of the page's `read.projects`.
+    /// The project the wish came from: one of the page's `read.projects`, or the folder a made wish names.
     pub project: String,
     pub state: WishState,
     /// One short text for each finished job an agent reported for the wish, at most 4.

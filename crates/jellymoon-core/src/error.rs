@@ -60,6 +60,8 @@ pub enum Error {
     /// A run's copy of a repo could not be made or cleaned. It holds why, in one line. What git said is in it made
     /// one line and cut short, with credential shapes replaced.
     Copy(String),
+    /// A made wish was refused, and nothing was written. It holds why, in one line with no word of the wish.
+    Wish(String),
 }
 
 impl fmt::Display for Error {
@@ -105,7 +107,7 @@ impl fmt::Display for Error {
             Error::Changed => {
                 write!(f, "the installed hook entry cannot be taken out safely; remove it by hand. Nothing was changed")
             }
-            Error::Tap(why) | Error::Copy(why) => write!(f, "{why}"),
+            Error::Tap(why) | Error::Copy(why) | Error::Wish(why) => write!(f, "{why}"),
             Error::Command(why) => write!(f, "the installed jellymoon command is not used: {why}"),
         }
     }

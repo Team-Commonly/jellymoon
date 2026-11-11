@@ -105,7 +105,7 @@ fn refused(why: impl Into<String>) -> Error {
 
 /// A file of the pages folder as it may be used: a plain file, never a link, that only its owner can write to, of
 /// at most `most` bytes.
-fn plain(file: &Path, most: usize) -> io::Result<Vec<u8>> {
+pub(crate) fn plain(file: &Path, most: usize) -> io::Result<Vec<u8>> {
     let not = |why: &str| io::Error::new(ErrorKind::InvalidData, why.to_string());
     let meta = fs::symlink_metadata(file)?;
     if !meta.is_file() {
@@ -197,11 +197,7 @@ pub fn settle(home: &Path, day: &str, clashes: &[Clash], clash: usize, option: u
         let why = "are the same once cleaned, so there is nothing to choose";
         return Err(refused(format!("the two statements of clash {clash} of {day} {why}")));
     }
-    let pages = home.join("pages");
-    private_dir(&pages).map_err(Error::Store)?;
-    let _lock = Lock::take(pages.join(format!("{day}.ruled.lock"))).map_err(Error::Store)?;
-    // Only behind the lock is the folder made the person's alone: a tap refused for the lock changes nothing.
-    own_dir(&pages).map_err(Error::Store)?;
+    let _lock = locked(home, day).map_err(Error::Store)?;
     let mut kept = ruled(home, day);
     let now = stands(&waiting(home), &kept, &a, &b);
     let (stands, replaces) = if side == Side::A { (&a, &b) } else { (&b, &a) };
@@ -235,8 +231,18 @@ pub fn keep_private(file: &Path, text: &str) -> io::Result<()> {
     put(file, text, false)
 }
 
-/// One tap at a time on a day: a file only one caller can create, removed when the tap is done.
-struct Lock(PathBuf);
+/// The day's lock, taken: what a tap and a made wish write behind. The pages folder is made when it is missing.
+pub(crate) fn locked(home: &Path, day: &str) -> io::Result<Lock> {
+    let pages = home.join("pages");
+    private_dir(&pages)?;
+    let lock = Lock::take(pages.join(format!("{day}.ruled.lock")))?;
+    // Only behind the lock is the folder made the person's alone: a change refused for the lock changes nothing.
+    own_dir(&pages)?;
+    Ok(lock)
+}
+
+/// One change at a time on a day: a file only one caller can create, removed when the change is done.
+pub(crate) struct Lock(PathBuf);
 
 impl Lock {
     /// Waits [`LOCK_WAIT`], by the clock, for the name to be free. A lock that is stale is removed and taken. A

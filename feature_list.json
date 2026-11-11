@@ -188,7 +188,7 @@
         "a wish that is empty once cleaned, too long, one too many for the day, or for a project name that is not one plain name is refused in one line and writes nothing"
       ],
       "test": "cargo test -p jellymoon --test f37",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {

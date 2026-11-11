@@ -11,11 +11,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, Error, PageData, PageOptions, ReaderDay};
+use jellymoon_core::{DayOptions, Error, PageData, PageOptions, PageRead, ReaderDay};
 use sticker_kit::{Note, Scene};
 
 use crate::read::{self, LeftOut, Page};
-use crate::scene::bare;
+use crate::scene::{bare, scene};
 
 /// How long the reading call may take: the `jellymoon` command's own limit.
 const READING_LIMIT: Duration = Duration::from_secs(180);
@@ -74,10 +74,13 @@ pub fn date(asked: Option<&str>) -> Option<String> {
     (day == asked).then_some(day)
 }
 
+/// What the page says while the day is being read for the first time.
+const WAITING: (&str, &str) =
+    ("Reading your day…", "This takes a few seconds: your own Claude Code is reading what you typed today.");
+
 /// The scene shown while the day is being read for the first time.
 pub fn waiting(date: &str) -> Scene {
-    let body = "This takes a few seconds: your own Claude Code is reading what you typed today.";
-    bare(date, vec![Note::Plain { title: "Reading your day…".to_string(), body: body.to_string() }])
+    bare(date, vec![Note::Plain { title: WAITING.0.to_string(), body: WAITING.1.to_string() }])
 }
 
 impl Today {
@@ -129,7 +132,7 @@ impl Today {
     pub fn first(&self) -> (Scene, Option<Page>) {
         match self.kept() {
             Some(page) => (self.draw(&page), Some(page)),
-            None => (waiting(&self.date), None),
+            None => (self.unread(WAITING.0, WAITING.1), None),
         }
     }
 
@@ -165,7 +168,7 @@ impl Today {
             Some(page) => {
                 noted(self.draw(page), "Reading your day again…", "This page will change when the reading is done.")
             }
-            None => waiting(&self.date),
+            None => self.unread(WAITING.0, WAITING.1),
         };
         let page = kept.clone();
         let call: Later = Box::new(move || Some(self.call(&day, kept)));
@@ -209,11 +212,21 @@ impl Today {
     fn failed(&self, kept: Option<&Page>, why: &str) -> Scene {
         match kept {
             Some(page) => noted(self.draw(page), "This page is from an earlier reading.", why),
-            None => bare(
-                &self.date,
-                vec![Note::Plain { title: "Today could not be read.".to_string(), body: why.to_string() }],
-            ),
+            None => self.unread("Today could not be read.", why),
         }
+    }
+
+    /// A day with no reading to show: one plain note, over the day's made wishes when it has any.
+    fn unread(&self, title: &str, body: &str) -> Scene {
+        let wishes = jellymoon_core::made(&self.home, &self.date);
+        if wishes.is_empty() {
+            return bare(&self.date, vec![Note::Plain { title: title.to_string(), body: body.to_string() }]);
+        }
+        let read = PageRead { turns: 0, projects: Vec::new() };
+        let data = PageData { day: self.date.clone(), wishes, clashes: Vec::new(), read };
+        let shown = scene(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() });
+        // Nothing was read, so the line that says what the page was read from is left out.
+        noted(Scene { footer: String::new(), ..shown }, title, body)
     }
 }
 
@@ -258,7 +271,8 @@ fn words(error: &Error) -> String {
         | Error::Changed
         | Error::Tap(_)
         | Error::Command(_)
-        | Error::Copy(_) => {
+        | Error::Copy(_)
+        | Error::Wish(_) => {
             format!("{error}.")
         }
     }

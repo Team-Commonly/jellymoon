@@ -10,7 +10,7 @@ use serde_json::json;
 
 use super::limits::wait_for;
 use super::{DAY, STAR, World, printed, ran, refused, world, world_in};
-use crate::support::{said, tree, write_log};
+use crate::support::{said, skipped, tree, write_log};
 
 impl World {
     /// `jellymoon run` for a wish of the day, with no repo named: the folder is found in the day's session logs.
@@ -200,6 +200,38 @@ fn a_harness_too_old_while_the_day_is_locked_leaves_the_wish_as_it_was_and_no_co
         w.play("edits", 0);
         assert_eq!(ran(&w.start(&wish, &repo)).1["star"], json!(STAR), "{wait:?}: and can be run again");
     }
+}
+
+// The repo is moved away while a harness that turns out too old runs, so git cannot be asked to take the copy back.
+// What is in Jellymoon's own home goes all the same; the branch and git's note of the copy are in the repo, wherever
+// it is now. The wish is as it was, and runs where the repo went.
+#[test]
+fn a_repo_moved_away_under_a_harness_too_old_leaves_nothing_of_the_run_in_jellymoon_s_home() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let before = w.kept(&wish);
+    w.play("old-late", 0);
+    let moved = w.at("work").join("moved").join("alpha");
+    fs::create_dir(moved.parent().unwrap()).unwrap();
+    let (ended, renamed) = thread::scope(|scope| {
+        let going = scope.spawn(|| w.start(&wish, &repo));
+        wait_for(&w.at("rec").join("started"));
+        let renamed = fs::rename(&repo, &moved);
+        fs::write(w.at("rec").join("go"), "").unwrap();
+        (going.join().unwrap(), renamed)
+    });
+    if let (Err(why), true) = (&renamed, cfg!(windows)) {
+        return skipped(&format!("the repo could not be moved while a run had its copy: {why}"));
+    }
+    renamed.unwrap();
+    // The one line is git's reason: the run was not started, and its branch could not be taken back.
+    let why = refused(&ended);
+    let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
+    let runs: Vec<String> = runs.filter(|name| name.starts_with('r')).collect();
+    assert_eq!((w.copies(), runs), (vec![], Vec::<String>::new()), "no copy and no folder of the run: {why}");
+    assert_eq!((w.kept(&wish), w.starts()), (before, 1), "the wish is as it was");
+    w.play("edits", 0);
+    assert_eq!(ran(&w.start(&wish, &moved)).1["star"], json!(STAR), "and can be run where the repo is now");
 }
 
 // A record is a file anyone who can write the home can write. An end in it is believed only when it is one core

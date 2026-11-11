@@ -157,6 +157,26 @@ fn the_agent_a_killed_run_left_editing_is_stopped_by_the_next_page() {
     assert_eq!((w.copies(), w.starts()), (vec![run], 1));
 }
 
+// A record is a file that whoever can write the home can write. One that says a cut-off run was never started has
+// its copy taken back, so the agent that run left is stopped first: no agent outlives its copy, and no second run
+// is started beside it.
+#[test]
+fn the_agent_of_a_cut_off_run_whose_record_says_never_started_is_stopped_with_its_copy_taken_back() {
+    if !cfg!(unix) {
+        return skipped(NO_SIGNAL);
+    }
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let (run, _) = left_editing(&w, &wish, &repo);
+    let mut record = w.record(&run);
+    record["outcome"] = json!("not_started");
+    fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
+
+    assert_eq!((&w.on_page(&wish)["state"], &w.kept(&wish)["run"]), (&json!("working"), &json!(null)));
+    assert!(w.freed("held"), "the agent is still running after its copy was taken back");
+    assert_eq!((w.copies(), w.branches(&repo), w.starts()), (vec![], vec![], 1));
+}
+
 // A pid is given out again. One whose process did not start when the record says is another process: never signalled.
 #[test]
 fn a_pid_that_is_another_process_by_now_is_never_signalled() {
@@ -205,22 +225,27 @@ fn an_agent_deaf_to_the_stop_signal_is_killed_after_its_five_seconds() {
     assert!(w.agent_came_and_went(), "the deaf agent is still running");
 }
 
+// Four at once, for each of the eight wishes a day holds: whichever comes first runs, and each of the others is
+// refused in the one line, also when its copy was being made in the same repo at the same moment as another's.
 #[test]
-fn two_runs_started_at_once_for_one_wish_are_one_run() {
+fn runs_started_at_once_for_one_wish_are_one_run() {
     let w = world();
     let repo = w.repo("alpha");
-    for round in 0..4 {
+    for round in 0..8 {
         let wish = w.wish("alpha");
         let start = || w.start(&wish, &repo);
-        let (one, two) = thread::scope(|both| {
-            let (one, two) = (both.spawn(start), both.spawn(start));
-            (one.join().unwrap(), two.join().unwrap())
+        let ended: Vec<_> = thread::scope(|all| {
+            let going: Vec<_> = (0..4).map(|_| all.spawn(start)).collect();
+            going.into_iter().map(|one| one.join().unwrap()).collect()
         });
-        let (done, late) = if one.code == 0 { (one, two) } else { (two, one) };
-        let (run, said) = ran(&done);
+        let (done, late): (Vec<_>, Vec<_>) = ended.iter().partition(|ended| ended.code == 0);
+        assert_eq!((done.len(), late.len()), (1, 3), "round {round}");
+        let (run, said) = ran(done[0]);
         assert_eq!((&said["outcome"], &said["star"]), (&json!("completed"), &json!(STAR)), "round {round}");
-        assert!(refused(&late).contains("has had its run"), "round {round}: {}", late.stderr);
-        // One agent was started, one branch is new, and no copy or record of the other is left.
+        for late in late {
+            assert!(refused(late).contains("has had its run"), "round {round}: {}", late.stderr);
+        }
+        // One agent was started, one branch is new, and no copy or record of the others is left.
         assert_eq!((w.starts(), w.branches(&repo).len(), w.copies()), (round + 1, round + 1, vec![]), "round {round}");
         assert_eq!(w.kept(&wish)["run"], json!(run), "round {round}");
         let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());

@@ -75,9 +75,15 @@ in `runs`, which holds its lock and its record, goes in one step: it is moved to
 for a run, and removed there. Removed file by file, a look could find it with the lock and the record gone and the
 folder still there, and take the run for one cut off; on Linux, where files go in no set order, one did. If the day
 stayed locked, the wish still names the run. The next page or `jellymoon run` that finds a wish naming a run
-whose record says `not_started` (its copy is then taken back), or of which nothing is kept, not even its folder
+whose record says `not_started` (the child that record names is killed first, as a cut-off run's is, and its copy
+is then taken back), or of which nothing is kept, not even its folder
 in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
 started again without the flag.
+
+If the repo was moved away while the harness ran, git cannot take the copy back, and `jellymoon run` exits 1 with
+git's reason: the copy's folder and the run's folder in `runs` are removed all the same and the wish is as it was,
+but the branch `jellymoon/run-<id>` and git's registration of the copy are in the moved repo, which Jellymoon
+cannot find, and stay there (`git worktree prune` and `git branch -D` in that repo remove them).
 
 ## What is read of the stream
 
@@ -152,6 +158,9 @@ the day's lock. Another change to the day may hold that lock, so it is waited fo
 a lock can be held (one older than 30 seconds is taken as left behind). A build with debug assertions reads a
 shorter wait from `JELLYMOON_TEST_END_WAIT_MS`. If the day stays locked even so, `jellymoon run` exits 1 with one
 line that says the run has ended, that its record says how, and that the page shows it when it is next drawn.
+When the wish could not be told for any other reason (the made wishes were changed while the run worked and
+cannot be used, or the wish no longer names this run as going), the line says instead that the made wishes of the
+day could not be used, so the wish does not show it. The record has the end in both cases.
 
 Whoever next finds the wish still `working` with nothing holding its run (below) reads the record. With an end in
 it that is core's, the wish is given that end, star included: `done` with its star, or `needs_you`. A record is

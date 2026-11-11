@@ -201,8 +201,10 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
         record::unstarted(home, &copy.run);
         let taken = copy::take_back(home, &copy.run);
         drop(lock);
-        // Where a file that is open cannot be removed, it can be now.
-        taken.or_else(|_| copy::take_back(home, &copy.run))?;
+        // Where a file that is open cannot be removed, it can be now. Where git cannot be asked (the repo was moved
+        // away), what Jellymoon's own home holds of the run goes all the same.
+        let taken = taken.or_else(|_| copy::take_back(home, &copy.run));
+        taken.inspect_err(|_| copy::remove_ours(home, &copy.run))?;
         undone?;
         return ended.and_then(|_| not_started(OLD.to_string()));
     }

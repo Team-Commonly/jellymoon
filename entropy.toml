@@ -59,8 +59,18 @@ max_file_lines = 400
 # removed, raised the binary by 6 (`tests/f39/refused.rs`).
 # A run's folder removed in one step (`copy/gone.rs`, 62 lines, 39 of them its test of a look during a removal)
 # raised core by 63.
-"crates/jellymoon-core" = 5474
-"crates/jellymoon" = 7215
+# The child a never-started record names, killed before its copy is taken back, raised core by 6 (`run/end.rs`)
+# and the binary by 20 (its test, `tests/f39/limits.rs`).
+# What Jellymoon's home holds of a run, removed when git cannot take its copy back, raised core by 18 (`copy.rs`,
+# `run.rs`) and the binary by 32 (its test, `tests/f39/refused.rs`).
+# The tests for the mutations the reviews found alive in rulings and taps raised core by 15 (`tap.rs`) and the
+# binary by 32 (`tests/f35/lock.rs`, 26; `tests/f35/still.rs`, 6).
+# A copy made behind the lock a clean holds, so two `git worktree add` never meet in one repo, raised core by 3
+# (`copy.rs`) and the binary by 31 (`tests/f38/limits.rs`, 26; four runs at once in `tests/f39/limits.rs`, 5).
+# A run's end that says the made wishes could not be used, where it said the page was busy, raised core by 9
+# (`wish.rs`, `run/end.rs`) and the binary by 29 (its test, `tests/f39/safe.rs`).
+"crates/jellymoon-core" = 5525
+"crates/jellymoon" = 7359
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -81,7 +81,7 @@ impl Places {
         self.runs.join(run).join("copy.json")
     }
 
-    /// The file a clean holds the system's lock on while it works.
+    /// The file a clean, and a copy being made, holds the system's lock on while it works.
     fn lock(&self) -> PathBuf {
         self.runs.join("clean.lock")
     }
@@ -168,7 +168,10 @@ fn make(home: &Path, repo: &Path, run: Option<&str>, found: bool) -> Result<RunC
     let person = git.open(Path::new(own)).map_err(refused)?;
     let base = person.ask(None, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).map_err(refused)?;
     let base = base.ok_or_else(|| refused("--repo has no commit yet, so there is nothing to copy"))?;
-    OpenOptions::new().append(true).create(true).open(at.lock()).map_err(Error::Store)?;
+    // git reads every worktree of the repo while it adds one, and fails on one half made or half removed. So a
+    // copy is made behind the lock a clean holds: one at a time, and never while another is removed.
+    let held = OpenOptions::new().write(true).create(true).truncate(false).open(at.lock()).map_err(Error::Store)?;
+    held.lock().map_err(Error::Store)?;
     let run = claim(&at.runs, run)?;
     let made = add(&git, &person, &at, &run, Path::new(shared), &base);
     if made.is_err() {
@@ -274,6 +277,22 @@ pub(crate) fn take_back(home: &Path, run: &str) -> Result<(), Error> {
         git.open(&record.repo).and_then(|repo| repo.run(None, &[], &["update-ref", "-d", &name])).map_err(refused)?;
     }
     gone::remove(&at.runs, run).map_err(Error::Store)
+}
+
+/// What is left to do for a copy [`take_back`] could not undo, because git could not be asked (the repo was moved
+/// away): the copy's folder and everything kept for the run go, so nothing of it stays in Jellymoon's home. Its
+/// branch and git's registration of it are in the repo, wherever that is now, and are not reached.
+pub(crate) fn remove_ours(home: &Path, run: &str) {
+    let at = Places::of(home);
+    let held = OpenOptions::new().write(true).open(at.lock()).and_then(|held| held.lock().map(|()| held));
+    if known(run).is_err() || held.is_err() {
+        return;
+    }
+    let folder = at.root.join(run);
+    if standing(&at.root, &folder).is_ok_and(|there| there) {
+        let _ = fs::remove_dir_all(&folder);
+    }
+    let _ = gone::remove(&at.runs, run);
 }
 
 /// Whether the run's folder is there to be removed: a real folder directly inside a real `copies`. A link under that

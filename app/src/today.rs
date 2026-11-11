@@ -1,17 +1,18 @@
 //! A day's page for the app that was opened with no page file. The page is kept per day in the user's own folder,
 //! shown from there at once, and read again through core when the day has turns the kept page did not see. No GPUI:
-//! the window only shows the scenes this hands it.
+//! the window only shows the scenes this hands it, each when the work before it is done ([`Next`]).
 //!
 //! Only core's `day` and `page` are called, with the folders and the harness the `jellymoon` command would use, so
 //! core's rules hold unchanged. What is kept is the checked page data, as `jellymoon page` prints it, and nothing
-//! else. Nothing of a day is printed.
+//! else. Nothing is printed here: the scenes go to the window, or to `layout`, which prints the page's own words on
+//! stdout as it does for any page.
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use std::{env, fs, io};
+use std::{env, fs, io, process};
 
-use jellymoon_core::{DayOptions, Error, PageData, PageOptions};
+use jellymoon_core::{DayOptions, Error, PageData, PageOptions, ReaderDay};
 use sticker_kit::{Note, Scene};
 
 use crate::read::{self, LeftOut, Page};
@@ -19,6 +20,19 @@ use crate::scene::{bare, scene};
 
 /// How long the reading call may take: the `jellymoon` command's own limit.
 const READING_LIMIT: Duration = Duration::from_secs(180);
+
+/// The most bytes of `skip.txt` that are read: far more than a list of folder names needs.
+const MAX_SKIP_BYTES: usize = 64 * 1024;
+
+/// A scene to show, and the work that gives the one after it.
+pub struct Next {
+    pub scene: Scene,
+    pub later: Option<Later>,
+}
+
+/// Work that gives what to show next, or none when what is shown stays. Counting a day's turns can take seconds and
+/// a reading call minutes, so the window runs it off its own thread.
+pub type Later = Box<dyn FnOnce() -> Option<Next> + Send>;
 
 /// One day to show, and where everything it needs is.
 #[derive(Debug, Clone)]
@@ -67,12 +81,16 @@ pub fn waiting(date: &str) -> Scene {
 impl Today {
     /// The folders `jellymoon` uses: the logs under `CLAUDE_CONFIG_DIR` or `.claude` in the user's home, jellymoon's
     /// own files under `JELLYMOON_HOME` or `.jellymoon` there, the harness `JELLYMOON_CLAUDE` names or `claude`. The
-    /// user's home is `HOME` (`USERPROFILE` on Windows).
+    /// user's home is `HOME` (`USERPROFILE` on Windows). A home that is not an absolute path is no home: where it
+    /// led would depend on the folder the app was started in.
     pub fn from_env(asked: Asked) -> Result<Today, String> {
         let named = |variable: &str| env::var_os(variable).filter(|path| !path.is_empty()).map(PathBuf::from);
         // The home is the variable and nothing else. The system's own record of it is not asked, so a run with an
         // empty environment (a test's) is refused here and can never reach a real person's logs.
-        let user = || named(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
+        let user = || named(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).filter(|home| home.is_absolute());
+        if named("JELLYMOON_HOME").is_some_and(|home| !home.is_absolute()) {
+            return Err("no home directory: set JELLYMOON_HOME to an absolute path".to_string());
+        }
         let config = || named("CLAUDE_CONFIG_DIR").or_else(|| Some(user()?.join(".claude")));
         let logs = asked.logs.or_else(|| Some(config()?.join("projects")));
         let home = named("JELLYMOON_HOME").or_else(|| Some(user()?.join(".jellymoon")));
@@ -100,7 +118,8 @@ impl Today {
         read::bytes(bytes).ok().filter(|page| page.data.day == self.date)
     }
 
-    /// What the window shows at once: the kept page, or the waiting scene. The kept page goes on to [`Today::read`].
+    /// What the window shows at once, before a log is opened: the kept page, or the waiting scene. The kept page goes
+    /// on to [`Today::later`].
     pub fn first(&self) -> (Scene, Option<Page>) {
         match self.kept() {
             Some(page) => (scene(&page), Some(page)),
@@ -110,33 +129,76 @@ impl Today {
 
     /// What the window shows in the end, for `layout`: the kept page when it is current, else what reading gave.
     pub fn last(&self) -> Scene {
-        let (first, kept) = self.first();
-        self.read(kept.as_ref()).unwrap_or(first)
+        let (mut shown, kept) = self.first();
+        let mut later = Some(self.clone().later(kept));
+        while let Some(next) = later.take().and_then(|work| work()) {
+            (shown, later) = (next.scene, next.later);
+        }
+        shown
     }
 
-    /// Reads the day, which can take as long as a reading call. None when the kept page saw every turn the day has
-    /// and nobody asked for a new reading: what is shown stays. Otherwise the new page, which is kept, or why there
-    /// is none.
-    pub fn read(&self, kept: Option<&Page>) -> Option<Scene> {
+    /// The work after the first scene, in two steps. The first counts the day's turns: none when the kept page saw
+    /// every one and nobody asked for a new reading, so what is shown stays. Otherwise it gives the kept page with a
+    /// note that it is being read again (or the waiting scene), and the second step: the reading call, which gives
+    /// the new page, now kept, or why there is none.
+    pub fn later(self, kept: Option<Page>) -> Later {
+        Box::new(move || self.count(kept))
+    }
+
+    fn count(self, kept: Option<Page>) -> Option<Next> {
         let mut skip = self.skip.clone();
-        skip.extend(fs::read_to_string(self.home.join("skip.txt")).unwrap_or_default().lines().map(str::to_string));
+        match self.switched_off() {
+            Ok(names) => skip.extend(names),
+            Err(why) => {
+                let why = format!(
+                    "The list of folders you switched off (skip.txt in Jellymoon's folder) could not be read, so \
+                     nothing was read: {why}."
+                );
+                return Some(Next { scene: self.failed(kept.as_ref(), &why), later: None });
+            }
+        }
         let day = DayOptions { logs: self.logs.clone(), date: Some(self.date.clone()), skip };
         let day = match jellymoon_core::day(&day) {
             Ok(day) => day,
-            Err(error) => return Some(self.failed(kept, &words(&error))),
+            Err(error) => return Some(Next { scene: self.failed(kept.as_ref(), &words(&error)), later: None }),
         };
-        if !self.fresh && kept.is_some_and(|kept| kept.data.read.turns == day.turns.len()) {
+        if !self.fresh && kept.as_ref().is_some_and(|kept| kept.data.read.turns == day.turns.len()) {
             return None;
         }
+        let scene = match &kept {
+            Some(page) => noted(page, "Reading your day again…", "This page will change when the reading is done."),
+            None => waiting(&self.date),
+        };
+        let call: Later = Box::new(move || Some(Next { scene: self.call(&day, kept.as_ref()), later: None }));
+        Some(Next { scene, later: Some(call) })
+    }
+
+    /// The folder names in `skip.txt`, one a line. No file is no names. A file that cannot be read, is too large or
+    /// is not UTF-8 is an error and never an empty list: a folder the person switched off must not reach the call.
+    fn switched_off(&self) -> Result<Vec<String>, String> {
+        let mut bytes = Vec::new();
+        match fs::File::open(self.home.join("skip.txt")) {
+            Ok(file) => file.take(MAX_SKIP_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.to_string()),
+        };
+        if bytes.len() > MAX_SKIP_BYTES {
+            return Err(format!("it is over {MAX_SKIP_BYTES} bytes"));
+        }
+        let text = String::from_utf8(bytes).map_err(|_| "it is not UTF-8 text".to_string())?;
+        Ok(text.strip_prefix('\u{feff}').unwrap_or(&text).lines().map(str::to_string).collect())
+    }
+
+    fn call(&self, day: &ReaderDay, kept: Option<&Page>) -> Scene {
         let options = PageOptions {
             model: self.model.clone(),
             dir: self.home.join("reading"),
             limit: READING_LIMIT,
             harness: self.harness.clone(),
         };
-        let data = match jellymoon_core::page(&day, &options) {
+        let data = match jellymoon_core::page(day, &options) {
             Ok(data) => data,
-            Err(error) => return Some(self.failed(kept, &words(&error))),
+            Err(error) => return self.failed(kept, &words(&error)),
         };
         let unkept = self.keep(&data).err();
         let mut shown = scene(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() });
@@ -144,31 +206,41 @@ impl Today {
             let body = format!("It will be read again the next time Jellymoon opens ({error}).");
             shown.notes.insert(0, Note::Plain { title: "This page could not be kept.".to_string(), body });
         }
-        Some(shown)
+        shown
     }
 
     /// Keeps the checked page data, one line of JSON as `jellymoon page` prints it, in a folder for this user only.
-    /// It is written beside its place and moved there, so a kept page is never half a page.
+    /// It is written beside its place, in a file of this process's own that only this user can read, and moved
+    /// there, so a kept page is never half a page and two apps open at once never write the same file.
     fn keep(&self, data: &PageData) -> io::Result<()> {
         let file = self.file();
         private_dir(&self.home.join("pages"))?;
-        let beside = file.with_extension("json.new");
-        fs::write(&beside, format!("{data}\n"))?;
+        let beside = file.with_extension(format!("json.{}.new", process::id()));
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        options.open(&beside)?.write_all(format!("{data}\n").as_bytes())?;
         fs::rename(&beside, &file)
     }
 
     /// The page when the day could not be read: one plain note that says why, on the kept page when there is one.
     fn failed(&self, kept: Option<&Page>, why: &str) -> Scene {
-        let note = |title: &str| Note::Plain { title: title.to_string(), body: why.to_string() };
         match kept {
-            Some(page) => {
-                let mut shown = scene(page);
-                shown.notes.insert(0, note("This page is from an earlier reading."));
-                shown
-            }
-            None => bare(&self.date, vec![note("Today could not be read.")]),
+            Some(page) => noted(page, "This page is from an earlier reading.", why),
+            None => bare(
+                &self.date,
+                vec![Note::Plain { title: "Today could not be read.".to_string(), body: why.to_string() }],
+            ),
         }
     }
+}
+
+/// The page with one plain note before its own.
+fn noted(page: &Page, title: &str, body: &str) -> Scene {
+    let mut shown = scene(page);
+    shown.notes.insert(0, Note::Plain { title: title.to_string(), body: body.to_string() });
+    shown
 }
 
 /// Why there is no reading, for the person the page is for. Core's own line follows only where it tells them more.

@@ -3,6 +3,7 @@
 //! go through `World::made_up`, so `--real` runs the same step without them and never prints the person's words.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 use std::{env, fs};
@@ -17,6 +18,9 @@ pub const STEPS: &[Step] = &[
     Step { name: "page", only: Only::Any, run: page },
     Step { name: "layout-sticker", only: Only::Any, run: |world| layout(world, "sticker") },
     Step { name: "layout-plain", only: Only::Any, run: |world| layout(world, "plain") },
+    // Not with --real: these keep a page of the day, and a second reading call would spend the person's plan.
+    Step { name: "today", only: Only::Synthetic, run: today },
+    Step { name: "today-again", only: Only::Synthetic, run: today_again },
     Step { name: "broken-page", only: Only::Any, run: broken_page },
     Step { name: "empty-day", only: Only::Synthetic, run: empty_day },
     // Delivery, never with --real: these would write the person's own harness settings and tell their sessions.
@@ -101,11 +105,17 @@ fn layout(world: &World, theme: &str) -> Result<String, String> {
 }
 
 fn placed(world: &World, file: &str, theme: &str) -> Result<String, String> {
-    let page = fs::read_to_string(world.at(file)).map_err(|e| format!("{file}: {e}"))?;
-    let page: Value = serde_json::from_str(&page).map_err(|e| format!("{file}: {e}"))?;
-    let (wishes, clashes) = held(&page)?;
     let args = ["layout", "--page", &text(&world.at(file)), "--theme", theme].map(str::to_string);
-    let pieces = world.lines("jellymoon-app", &args)?;
+    Ok(drawn(world, &args, &world.at(file))?.0)
+}
+
+/// Runs `jellymoon-app` and checks what it placed against the page data in `file`, which the run may have written.
+/// Returns the step's words and the pieces.
+fn drawn(world: &World, args: &[String], file: &Path) -> Result<(String, Vec<Value>), String> {
+    let pieces = world.lines("jellymoon-app", args)?;
+    let page = fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let page: Value = serde_json::from_str(&page).map_err(|e| format!("{}: {e}", file.display()))?;
+    let (wishes, clashes) = held(&page)?;
     let ids = |kind: &str, start: &str| -> BTreeSet<&str> {
         let of_kind = pieces.iter().filter(|piece| piece["kind"] == kind).filter_map(|piece| piece["id"].as_str());
         of_kind.filter(|id| id.starts_with(start)).collect()
@@ -116,7 +126,36 @@ fn placed(world: &World, file: &str, theme: &str) -> Result<String, String> {
     if characters != wishes || notes.len() != clashes.len() {
         return Err(format!("{found}, for a page of {} wishes and {} clashes", wishes.len(), clashes.len()));
     }
-    Ok(found)
+    Ok((found, pieces))
+}
+
+/// Where the app keeps the day's page, and what the made-up harness leaves when it is called.
+fn kept_and_seen(world: &World) -> (PathBuf, PathBuf) {
+    (world.at("jm").join("pages").join(format!("{DAY}.json")), world.harness().with_file_name("stdin"))
+}
+
+/// `jellymoon-app layout` with no `--page` reads the day itself, through the harness, draws it and keeps the page.
+fn today(world: &World) -> Result<String, String> {
+    let (kept, seen) = kept_and_seen(world);
+    let _ = fs::remove_file(&seen);
+    let (found, pieces) = drawn(world, &world.day("layout"), &kept)?;
+    if !seen.exists() {
+        return Err("a page came out with no reading call".to_string());
+    }
+    write(&world.at("today.json"), &Value::Array(pieces).to_string())?;
+    Ok(format!("read with one call and kept; {found}"))
+}
+
+/// Opened again, the app draws the kept page: the same pieces, and the harness is not called.
+fn today_again(world: &World) -> Result<String, String> {
+    let (kept, seen) = kept_and_seen(world);
+    fs::remove_file(&seen).map_err(|e| format!("what the harness saw of the today step: {e}"))?;
+    let (_, pieces) = drawn(world, &world.day("layout"), &kept)?;
+    let first = fs::read_to_string(world.at("today.json")).map_err(|e| format!("today.json: {e}"))?;
+    if serde_json::from_str::<Value>(&first).ok() != Some(Value::Array(pieces)) || seen.exists() {
+        return Err(format!("not the kept page with no call (a call was made: {})", seen.exists()));
+    }
+    Ok("the same pieces from the kept page, and no call".to_string())
 }
 
 /// A file that is not page data is refused in one line, with exit 1 and nothing on stdout.
@@ -135,7 +174,7 @@ fn broken_page(world: &World) -> Result<String, String> {
 /// A day nobody typed in is an empty page, made with no reading call, and the app draws it.
 fn empty_day(world: &World) -> Result<String, String> {
     let seen = world.harness().with_file_name("stdin");
-    fs::remove_file(&seen).map_err(|e| format!("what the harness saw of the page step: {e}"))?;
+    let _ = fs::remove_file(&seen); // the last call was the today step's, and the step after it made none
     let args = ["page", "--date", "2026-03-11", "--logs", &text(&world.at("logs"))].map(str::to_string);
     let page = world.json("jellymoon", &args)?;
     let (wishes, clashes) = held(&page)?;

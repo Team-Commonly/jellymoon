@@ -1,141 +1,15 @@
 //! F34: opening the app shows today's page. The built `jellymoon-app` is run as a black box with `layout` and no
-//! `--page`, which prints what the window would show once the day is read. The harness is the made-up program of
-//! F27's tests, put on PATH as `claude`: it records what it was given and prints the reply the test chose. Every log
-//! line and every reply is made up here. Nothing here runs the real Claude Code.
+//! `--page`, which prints what the window would show once the day is read. The made-up day and harness are in
+//! `support/day.rs`. Every log line and every reply is made up. Nothing here runs the real Claude Code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
 
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::{env, fs};
 
 use serde_json::{Value, json};
 use support::Piece;
-use tempfile::TempDir;
-
-const DAY: &str = "2026-03-10";
-const FIRST: &str = "add a retry to the uploader";
-const SECOND: &str = "actually never retry uploads, fail fast";
-
-/// One test's logs, jellymoon home and made-up harness. `rec` is the folder the harness is in, where it leaves what
-/// it saw.
-struct World {
-    dir: TempDir,
-    home: PathBuf,
-    rec: PathBuf,
-    vars: Vec<(&'static str, OsString)>,
-}
-
-/// One line of a session log, as Claude Code writes what a person typed.
-fn said(at: &str, cwd: &str, text: &str) -> String {
-    json!({"type": "user", "timestamp": at, "cwd": cwd, "sessionId": "s", "origin": {"kind": "human"},
-        "message": {"role": "user", "content": text}})
-    .to_string()
-}
-
-fn write_log(world: &World, name: &str, lines: &[String]) {
-    let path = world.dir.path().join("logs").join(name);
-    fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path, lines.join("\n") + "\n").unwrap();
-}
-
-/// The harness's reply for a model that answered with `text`.
-fn result(text: &str) -> String {
-    json!({"type": "result", "is_error": false, "result": text}).to_string()
-}
-
-/// A reading of the day: two wishes in the person's words and the clash between them.
-fn reading() -> String {
-    json!({
-        "wishes": [
-            {"id": "a", "label": "Retry uploads", "said": FIRST, "project": "alpha", "state": "let_go", "stars": []},
-            {"id": "b", "label": "Fail fast", "said": SECOND, "project": "alpha", "state": "done", "stars": ["no retry left"]},
-        ],
-        "clashes": [{"a": "a", "b": "b", "quote_a": FIRST, "quote_b": "never retry uploads", "settled": true}],
-    })
-    .to_string()
-}
-
-/// A day of two things typed in `alpha` and one in `private-notes`, and a harness on PATH that answers [`reading`].
-fn world() -> World {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
-    let at = |name: &str| dir.path().join(name);
-    let bin = at("bin");
-    fs::create_dir_all(&bin).unwrap();
-    let (built, program) = (env!("CARGO_BIN_EXE_f34-claude"), bin.join(format!("claude{}", env::consts::EXE_SUFFIX)));
-    // A link on Linux and a copy elsewhere, for the reasons F27's tests give.
-    if !cfg!(target_os = "linux") || fs::hard_link(built, &program).is_err() {
-        fs::copy(built, &program).unwrap();
-    }
-    fs::create_dir(at("user")).unwrap();
-    let vars = vec![
-        ("TZ", "America/Los_Angeles".into()),
-        ("HOME", at("user").into()),
-        ("USERPROFILE", at("user").into()),
-        ("JELLYMOON_HOME", at("jm").into()),
-        ("PATH", bin.clone().into()),
-    ];
-    let world = World { home: at("jm"), rec: bin, vars, dir };
-    let lines = [
-        said("2026-03-10T16:00:00.000Z", "/work/alpha", FIRST),
-        said("2026-03-10T17:00:00.000Z", "/work/alpha", SECOND),
-    ];
-    write_log(&world, "-work-alpha/s1.jsonl", &lines);
-    write_log(
-        &world,
-        "-work-private-notes/s2.jsonl",
-        &[said("2026-03-10T18:00:00.000Z", "/work/private-notes", "dear diary")],
-    );
-    answer(&world, &result(&reading()), 0);
-    world
-}
-
-fn answer(world: &World, reply: &str, exit: i32) {
-    fs::write(world.rec.join("reply"), reply).unwrap();
-    fs::write(world.rec.join("exit"), exit.to_string()).unwrap();
-}
-
-/// Runs `jellymoon-app layout` on the day with the world's logs. It must exit 0 and say nothing on stderr.
-fn shown(world: &World, args: &[&str]) -> Vec<Piece> {
-    let logs = world.dir.path().join("logs");
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon-app"));
-    cmd.args(["layout", "--date", DAY, "--logs"]).arg(logs).args(args);
-    cmd.env_clear().envs(world.vars.iter().map(|(name, value)| (name, value))).stdin(Stdio::null());
-    if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-        cmd.env("SystemRoot", root);
-    }
-    let out = cmd.output().unwrap();
-    let said = String::from_utf8_lossy(&out.stderr);
-    assert!(out.status.success() && said.is_empty(), "layout {args:?}: {said}");
-    let lines = String::from_utf8(out.stdout).unwrap();
-    lines.lines().map(|line| Piece(serde_json::from_str(line).expect(line))).collect()
-}
-
-fn notes(placed: &[Piece]) -> Vec<String> {
-    placed.iter().filter(|piece| piece.kind() == "note").map(Piece::said).collect()
-}
-
-fn labels(placed: &[Piece]) -> Vec<String> {
-    placed.iter().filter(|piece| piece.kind() == "label").map(Piece::said).collect()
-}
-
-/// Whether the harness was called since the last look. Its record of the call is removed.
-fn called(world: &World) -> bool {
-    fs::remove_file(world.rec.join("stdin")).is_ok()
-}
-
-fn kept(world: &World) -> PathBuf {
-    world.home.join("pages").join(format!("{DAY}.json"))
-}
-
-fn names(folder: &Path) -> Vec<String> {
-    let mut names: Vec<String> =
-        fs::read_dir(folder).unwrap().map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned()).collect();
-    names.sort();
-    names
-}
+use support::day::*;
 
 #[test]
 fn the_waiting_state_is_a_page_with_one_note_and_the_day_s_page_follows_it() {
@@ -256,6 +130,24 @@ fn only_the_day_goes_to_the_call_with_every_tool_off_and_only_the_checked_page_i
     assert_eq!(names(&world.home), ["pages", "reading", "skip.txt"]);
     assert_eq!(names(&world.home.join("pages")), [format!("{DAY}.json")]);
     assert!(names(&world.home.join("reading")).is_empty(), "the call's folder is gone");
+}
+
+// A list of switched-off folders that cannot be read is never an empty list: nothing goes to the call.
+#[test]
+fn a_skip_file_that_cannot_be_read_stops_the_reading_and_one_with_a_byte_order_mark_is_honoured() {
+    let world = world();
+    fs::create_dir_all(&world.home).unwrap();
+    fs::write(world.home.join("skip.txt"), [b'p', 0xff, 0xfe, b'\n']).unwrap();
+    let said = notes(&shown(&world, &[]));
+    assert_eq!(said.len(), 1);
+    assert!(said[0].starts_with("Today could not be read. The list of folders you switched off (skip.txt"), "{said:?}");
+    assert!(said[0].ends_with("it is not UTF-8 text."), "{said:?}");
+    assert!(!called(&world) && !kept(&world).exists(), "no call and no kept page");
+
+    fs::write(world.home.join("skip.txt"), "\u{feff}private-notes\r\n").unwrap();
+    shown(&world, &[]);
+    let day: Value = serde_json::from_str(&fs::read_to_string(world.rec.join("stdin")).unwrap()).unwrap();
+    assert_eq!(day["turns"].as_array().unwrap().len(), 2, "the first name is the folder's, not a mark and a name");
 }
 
 // With an empty environment the system could still say where the user's home is. The app does not ask it, so a run

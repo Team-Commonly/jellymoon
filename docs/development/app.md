@@ -4,9 +4,14 @@ The shell (`app/`) draws page data with the kit. Opened with nothing, it shows t
 page-data file with `--page`, it draws that and does nothing else: no reading call, no file written.
 
 ```sh
-jellymoon-app [layout] [--date <YYYY-MM-DD>] [--fresh] [--theme <theme>] [--size <W>x<H>]
+jellymoon-app [layout] [--date <YYYY-MM-DD>] [--fresh] [--logs <dir>] [--skip <names>] [--model <name>]
+              [--theme <theme>] [--size <W>x<H>]
+jellymoon-app [layout] --waiting [--date <YYYY-MM-DD>] [--theme <theme>] [--size <W>x<H>]
 jellymoon-app [layout] --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]
 ```
+
+These are all the flags, with `--help`. `--logs`, `--skip` and `--model` are `jellymoon page`'s; `--waiting` shows
+the waiting page and reads nothing; with `--page` the flags of a day are taken and do nothing.
 
 `--theme` is `sticker` (the default), `plain`, or the path of a theme file; the two names win over a file called the
 same. A theme changes how the page looks and never which pieces are on it. A theme file is TOML in which every key
@@ -30,20 +35,28 @@ the harness `JELLYMOON_CLAUDE` names or `claude` on `PATH`, `--model` (default `
 the `jellymoon` binary. Core's rules are core's: only the day goes to the call, with every tool off. The user's home
 is the `HOME` variable (`USERPROFILE` on Windows) and nothing else: with neither that nor `--logs` and
 `JELLYMOON_HOME`, the app exits 2 and reads nothing, so a test run with an empty environment cannot reach real logs.
+A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that is not absolute exits 2.
 
 - **Where pages are kept.** `<home>/pages/<YYYY-MM-DD>.json`, where `<home>` is `JELLYMOON_HOME` or `~/.jellymoon`.
   The file is the checked page data, one line as `jellymoon page` prints it, and nothing else, in a folder for this
-  user only. It is written beside its place and moved there. It is read back through the same door as any page file.
+  user only (0700; the file 0600). It is written beside its place, in a file named for the process, and moved there.
+  It is read back through the same door as any page file, so a kept file that is not page data, is over 1 MiB or is
+  of another day is not drawn: the day is read again.
 - **What is shown first.** The kept page, when there is one. Otherwise a waiting page: the date, the hero and one
-  note, "Reading your day…". The window opens on it at once; the day is read off the window's thread and the page
-  replaces it. `layout --waiting` prints the waiting page; `layout` alone prints what the window ends on.
+  note, "Reading your day…". The window opens on it at once, before a log is opened: reading the logs alone can take
+  seconds. The rest runs off the window's thread in two steps, each of which may give the next page to show
+  (`today::Next`): the count of the day's turns, then the reading call. While a kept page is read again it stays on
+  show under one note, "Reading your day again…", and never gives way to the waiting page. `layout --waiting` prints
+  the waiting page; `layout` alone runs the same steps and prints what the window ends on.
 - **When the day is read again.** Each time the app opens it reads the session logs (no model) and compares the day's
   count of turns with `read.turns` of the kept page. The same count: the kept page stays and no call is made. Any
   other count, no kept page, or `--fresh`: one reading call, and the new page is kept. The count is the whole test,
   so a day whose turns changed but not their number (a folder switched off and one more turn typed) keeps its page
   until `--fresh`. A day with nothing typed makes no call.
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
-  no command line. Both go to core's `skip`.
+  no command line. Both go to core's `skip`. No `skip.txt` is no names. One that cannot be read, is over 64 KiB or is
+  not UTF-8 stops the reading with a plain note and no call, so a folder switched off never reaches the call because
+  its list was damaged. A byte order mark at its start is dropped.
 - **When the reading cannot run** the page is one plain note, "Today could not be read.", that says why: Claude Code
   was not found, no session logs, the call failed or took too long (core's own line follows), or the model's answer
   was not a page. With a kept page, that page stays and the note is its first, "This page is from an earlier

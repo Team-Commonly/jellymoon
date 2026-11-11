@@ -67,11 +67,10 @@ jobs:
       - name: Tests
         run: cargo test --workspace $FEATURES
       - name: Smoke, the built programs run together on made-up logs (docs/development/smoke.md); it builds nothing new
+        if: runner.os != 'macOS'
         run: cargo xtask smoke -- $FEATURES
-      # Here to learn whether a hosted runner can open a GPUI window. Until that is known, a failure does not fail the job.
-      - name: Smoke with the window
+      - name: Smoke on the Mac, where the app also opens its window and closes it
         if: runner.os == 'macOS'
-        continue-on-error: true
         run: cargo xtask smoke --window -- $FEATURES
 
   secrets:

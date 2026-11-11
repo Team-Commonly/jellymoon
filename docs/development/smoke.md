@@ -17,6 +17,8 @@ cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build argument
 | `day` | `jellymoon day` reads them: 3 turns in 2 projects |
 | `page` | `jellymoon page`, through `fake-claude`, prints page data with the 3 wishes, one of them done, and the clash |
 | `layout-sticker`, `layout-plain` | `jellymoon-app layout` on that page, in each built-in theme: every wish is a character and the clash is a choice note |
+| `today` | `jellymoon-app layout` with no `--page` reads the made-up day itself, through `fake-claude`: every wish is drawn, and the page is kept in the temporary home |
+| `today-again` | the same run again prints the same pieces from the kept page, and `fake-claude` is not called |
 | `broken-page` | a file that is not page data is refused in one line, exit 1, nothing on stdout |
 | `empty-day` | a day nobody typed in is an empty page, made with no reading call, and the app draws it |
 | `hook-install` | `jellymoon hook install` puts its entry into made-up harness settings in the temporary home |
@@ -32,10 +34,11 @@ A made-up run starts each program with no variable of the caller's: a scratch `H
 ## The three modes
 
 - **Default.** Made-up logs and `fake-claude`. CI runs it on macOS, Linux and Windows after the tests.
-- **`--window`** adds the window step. It needs a display, so that step alone sees the caller's variables. CI tries
-  it on macOS without failing the job, to learn whether a hosted runner can open a GPUI window.
+- **`--window`** adds the window step. It needs a display, so that step alone sees the caller's variables. CI runs
+  it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
-  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `empty-day`, the delivery steps and `uninstall` are left out;
+  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `today`, `today-again`, `empty-day`, the
+  delivery steps and `uninstall` are left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what.
 

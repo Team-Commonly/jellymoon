@@ -1,7 +1,7 @@
 use std::time::Duration;
 use std::{fmt, io};
 
-/// Why there is no day or no page. Each prints as one line for the person. None holds text from a session log or from
+/// Why there is no day or no page, or why an uninstall stopped. Each prints as one line for the person. None holds text from a session log or from
 /// the model's reading: a reading that is not page data is named by the place it went wrong, never quoted. The two that
 /// hold what the harness itself printed ([`Error::Failed`], [`Error::Harness`]) hold it made one line, with control and
 /// invisible characters removed, credential shapes replaced, and cut short (`redact::line`). An `io::Error` is the
@@ -29,6 +29,8 @@ pub enum Error {
     /// The model's text is not page data. Only where it stopped being so is kept: the parser's own message would quote
     /// the model.
     NotPageData { line: usize, column: usize },
+    /// A piece of the install, or the delivery hook, could not be removed.
+    Uninstall(io::Error),
 }
 
 impl fmt::Display for Error {
@@ -48,6 +50,7 @@ impl fmt::Display for Error {
             Error::NotPageData { line, column } => {
                 write!(f, "the reading is not page data (line {line}, column {column} of the model's JSON)")
             }
+            Error::Uninstall(e) => write!(f, "uninstalling: {e}"),
         }
     }
 }
@@ -55,7 +58,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Error::Logs(e) | Error::Call(e) => Some(e),
+            Error::Logs(e) | Error::Call(e) | Error::Uninstall(e) => Some(e),
             _ => None,
         }
     }

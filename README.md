@@ -9,14 +9,32 @@ things you said cannot both stand. Tapping that note settles it, and the answer 
 It needs no account and no server. Your session logs stay on your computer; the one model call that reads a day goes
 through the harness you already use, under your own sign-in, with every tool turned off.
 
+## Install (Mac)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Team-Commonly/jellymoon/main/install.sh | sh
+```
+
+That puts `Jellymoon.app` in `~/Applications` and the `jellymoon` command in `~/.local/bin`. It asks for no password,
+checks the download against its checksum, and running it again updates. `jellymoon uninstall` removes it. To read the
+script before running it, open [`install.sh`](install.sh), or download it first:
+`curl -fsSL -o install.sh https://raw.githubusercontent.com/Team-Commonly/jellymoon/main/install.sh`, read it, then
+`sh install.sh`. [`docs/development/install.md`](docs/development/install.md) says what it does and what it trusts.
+
 ## Status: early
 
-There is no app to install yet. What exists is the `jellymoon` command-line binary, which holds the logic the app will
-draw: `day` collects what you typed, `page` turns a day into page data. Each step of the plan is a test in
-[`feature_list.json`](feature_list.json), and `./init.sh` prints which ones pass. The design is
-[ADR 0011](docs/adr/0011-the-journal-app.md). The Mac comes first and Windows after.
+The app draws a page it is handed and cannot yet make one by itself, so opening it from the Finder shows nothing:
 
-## Build and run
+```sh
+jellymoon page > ~/jellymoon-today.json                              # one call through your own Claude Code
+open ~/Applications/Jellymoon.app --args --page ~/jellymoon-today.json
+```
+
+The `jellymoon` command-line binary holds the logic the app draws: `day` collects what you typed, `page` turns a day
+into page data. Each step of the plan is a test in [`feature_list.json`](feature_list.json), and `./init.sh` prints
+which ones pass. The design is [ADR 0011](docs/adr/0011-the-journal-app.md). The Mac comes first and Windows after.
+
+## Build and run from source
 
 ```sh
 ./init.sh        # installs the pinned Rust and gitleaks into .tools/, runs the checks, prints the scoreboard

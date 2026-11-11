@@ -123,7 +123,7 @@
         "an uninstall command removes everything it added and the delivery hook"
       ],
       "test": "cargo test -p jellymoon --test f33",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F28"
       ]

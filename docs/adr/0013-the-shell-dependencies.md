@@ -31,6 +31,12 @@ note lists what that choice and the `layout` command brought into the workspace,
    `cargo test --workspace` gives core and the binary a `serde_json` with GPUI's `preserve_order` on, and
    `cargo test -p jellymoon` one without. Nothing in core or the binary may depend on which: they use their own types,
    not `serde_json::Value`, and a test that writes JSON with `json!` lists its keys in alphabetical order.
+7. **One test runs `sh`, on the Mac only.** The repo keeps `sh` out of tests so they pass on Windows. Installing on a
+   Mac is a shell script by its nature (`install.sh`, and `app/macos/bundle.sh`, which makes the app bundle), so
+   F33's tests of them are compiled for macOS only, with one more for other Unix systems that checks the script
+   refuses them. `jellymoon uninstall` is Rust and its test runs everywhere. This is the only exception; a Windows
+   installer gets its own test in its own language. F33 adds no package: the release is built by a workflow, and
+   the script uses only what every Mac has (`curl`, `shasum`, `tar`, `xattr`).
 
 ## Not decided here
 

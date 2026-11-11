@@ -39,20 +39,24 @@ Read `.agents/skills/<name>/SKILL.md` before the stage. Detail: `docs/developmen
 - **A model returns data.** The reading call runs with every tool off. Text from a model or a log is drawn as text,
   checked by code, and never run.
 - **Every system.** macOS, Linux and Windows: build paths with `Path`, spawn test helpers as binaries, no `sh` in tests.
+  On Windows a folder a live process stands in cannot be removed: a test ends its helper before it removes one.
 - **Portable repo.** Tracked files name repo-relative paths only. Tools install into `.tools/`, never globally.
 - **Landing.** A PR is squash-merged as soon as `make preflight` passed locally and CI is green on its head. The
   fresh-context review runs after the merge, once, and its blocking findings are the next PR. Only a PR that changes
-  what leaves the machine (the reader, redaction, the reading call, delivery) or comes from outside the maintainers
-  waits for `GATE: PASS` first. Only the coordinator merges.
+  what leaves the machine (the reader, redaction, the reading call, delivery) or what an agent may do on it (a run),
+  or comes from outside the maintainers, waits for `GATE: PASS` first, and for green CI on the head the gate read.
+  Only the coordinator merges.
 - **Outside code is read, never run** on a maintainer's machine, until a maintainer has reviewed it.
 - **Workers** (subagents) commit with `git commit -s` on their own branch; the coordinator pushes, rebases and merges.
   A new worktree runs `./init.sh`, then `make hooks fence=1`.
 - **Lessons** land in the same PR as a test, lint or doc.
 
 ## Map
-- `crates/jellymoon-core`: the reader, redaction, page types and their checks, the reading call, rulings, the hook and a run's copy.
-- `crates/jellymoon`: the binary. `day`, `page`, `rule`, `hook`, `copy` and `uninstall` today: parse arguments, call core, print JSON
-  (`docs/development/reader.md`, `page.md`, `delivery.md`, `copy.md`, `install.md`; `install.sh` is the Mac installer). Feature tests are `crates/jellymoon/tests/f<nn>.rs`.
+- `crates/jellymoon-core`: the reader, redaction, page types and their checks, the reading call, rulings and taps, made
+  wishes, the door a kept text is cleaned at (`still.rs`), the hook, a run and its copy.
+- `crates/jellymoon`: the binary. `day`, `page`, `rule`, `settle`, `wish`, `run`, `hook`, `copy` and `uninstall` today:
+  parse arguments, call core, print JSON (`docs/development/reader.md`, `page.md`, `delivery.md`, `wish.md`, `copy.md`,
+  `run.md`, `install.md`; `install.sh` is the Mac installer). Feature tests are `crates/jellymoon/tests/f<nn>.rs`.
 - `crates/xtask`: `cargo xtask check`, the repo's own rules, with budgets in `entropy.toml`; `cargo xtask smoke`.
 - `crates/sticker-kit`: a GPUI kit that knows nothing of Jellymoon. `app/`: the shell, `jellymoon-app` (`docs/development/app.md`).
   Direction: core, then the binary; the kit, then the app, which also uses core. Core and the binary never depend on GPUI.

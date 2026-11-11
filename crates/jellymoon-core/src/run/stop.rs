@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::end::{bury, recorded};
+use super::end::{bury, of_another, recorded};
 use super::{Ran, RunOutcome, STAR, cut, no_wish, record, refused};
 use crate::busy::or_test;
 use crate::wish::{self, MadeWish};
@@ -48,7 +48,7 @@ fn ask(home: &Path, run: &str) -> Result<(), Error> {
 }
 
 /// Stops the run of a made wish, and returns how that run ended, once it has. Refused, with nothing written: a
-/// wish that is not there, and one that names no run. A run that had ended is returned as it ended, and nothing is
+/// wish that is not there, one that names no run, and one that names a run whose record names another wish. A run that had ended is returned as it ended, and nothing is
 /// changed. A run that was cut off is written down as one, with the child it left killed (`end::bury`). A run that
 /// is going is asked to stop, and waited for: one that has not ended when the wait is over is refused in one line,
 /// with the request left for it.
@@ -62,6 +62,10 @@ pub fn stop_run(home: &Path, wish: &str, day: Option<&str>) -> Result<Ran, Error
         let Some(run) = made.run.clone() else {
             return Err(refused(format!("wish {wish} has no run going, so nothing was stopped")));
         };
+        if of_another(record::kept(home, &run).as_ref(), &day, wish) {
+            let why = "which is another wish's run, so nothing was stopped";
+            return Err(refused(format!("wish {wish} names run {run}, {why}")));
+        }
         if made.state != WishState::Working {
             return Ok(ended(home, &day, &made, &run));
         }

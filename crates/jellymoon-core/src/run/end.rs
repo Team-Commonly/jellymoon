@@ -81,6 +81,13 @@ pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &R
     ours.into_iter().find(|ours| ours == said && line(ours, 200) == *ours).map(|why| (outcome, why))
 }
 
+/// Whether a run's record says the run is another wish's. The day's wishes are a file that can be changed by hand,
+/// and a wish made to name the run of another is given no say over it: that run is stopped, and written down, on
+/// the word of its own wish only.
+pub(super) fn of_another(record: Option<&Record>, day: &str, wish: &str) -> bool {
+    record.is_some_and(|record| record.wish != wish || record.day != day)
+}
+
 /// A wish that names a run of which nothing is kept, not even its folder in `runs`: the run was never started
 /// and its copy was taken back while the day was locked (`run`). The wish is made as it was, to be run again.
 fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
@@ -97,7 +104,8 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 /// returned as it is then drawn, written down or not, never as working for ever. A run whose record has its end
 /// ended while the day was locked: the wish is given that end, its star included. Any other was cut off, and is
 /// written down as failed, the wish first, so that nothing is written for a wish that no longer says working.
-/// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`).
+/// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`). A wish
+/// that names another wish's run is returned as it is, with nothing written or killed ([`of_another`]).
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     let cut_off = |run: &String| wish.state == WishState::Working && !held(home, run);
     let Some(run) = wish.run.clone().filter(cut_off) else { return wish };
@@ -105,6 +113,9 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
         return unstarted(home, day, wish, &run);
     }
     let record = record::kept(home, &run);
+    if of_another(record.as_ref(), day, &wish.id) {
+        return wish;
+    }
     if record.as_ref().is_some_and(|record| record.outcome == Some(RunOutcome::NotStarted)) {
         // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
         let _ = copy::take_back(home, &run);

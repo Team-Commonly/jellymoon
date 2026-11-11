@@ -4,7 +4,8 @@
 
 use serde_json::{Value, json};
 
-use super::{STAR, World, cancelled, grows, printed, ran, said_cancelled, world};
+use super::{STAR, World, cancelled, grows, ms, printed, ran, refused, said_cancelled, world};
+use crate::support::tree;
 
 fn cut(run: &str) -> String {
     format!("run {run} was cut off before it ended: its copy is kept and no star was added")
@@ -75,7 +76,53 @@ fn a_stop_prints_nothing_of_a_record_whose_end_it_does_not_believe() {
     assert_eq!((&w.kept(&done)["state"], &w.kept(&done)["stars"]), (&json!("done"), &json!([STAR])));
 }
 
+// The day's wishes changed by hand, so that a second wish names the first wish's run. A run is stopped, and is
+// written down, on the word of its own wish only: nothing asked for the second wish reaches it.
+#[test]
+fn a_wish_made_to_name_another_wishs_run_stops_nothing_and_writes_nothing() {
+    let w = world();
+    let repo = w.repo("alpha");
+    let (one, two) = (w.wish("alpha"), w.wish("alpha"));
+    let (mut going, run) = w.run_going(("scribble", 0), &[], &one, &repo);
+    let file = w.jm("copies").join(&run).join("scribble.txt");
+    w.edit_wish(&two, |wish| (wish["state"], wish["run"]) = (json!("working"), json!(run)));
+    let kept = || (tree(&w.jm("runs")), tree(&w.jm("pages")));
+    let before = kept();
+    let not_its_own =
+        format!("jellymoon: wish {two} names run {run}, which is another wish's run, so nothing was stopped\n");
+    let stop = || w.stop_with(&[ms("JELLYMOON_TEST_STOP_WAIT_MS", 2000)], &two);
+
+    // While the run goes: no request is left, and the run goes on.
+    assert_eq!(refused(&stop()), not_its_own);
+    assert_eq!(kept(), before);
+    assert!(going.try_wait().unwrap().is_none() && grows(&file), "the first wish's run was stopped");
+
+    // Once its `jellymoon run` was cut off: it is not written down for the second wish, and its agent is left.
+    going.kill().unwrap();
+    going.wait().unwrap();
+    let before = kept();
+    assert_eq!(refused(&stop()), not_its_own);
+    assert!(refused(&w.start(&two, &repo)).contains("has had its run"));
+    assert_eq!(kept(), before);
+    assert!(grows(&file), "the agent of the first wish's run was ended on the second wish's word");
+
+    // A page writes it down on the first wish's word, as cut off, and ends the agent. The second wish is drawn as
+    // it was written by hand.
+    assert_eq!((&w.on_page(&one)["state"], &w.on_page(&two)["state"]), (&json!("needs_you"), &json!("working")));
+    the_agent_is_gone(&w, &file);
+    assert_eq!((&w.kept(&one)["why"], &w.record(&run)["wish"]), (&json!(cut(&run)), &json!(one)));
+    assert_eq!((w.kept(&two)["run"].clone(), w.starts()), (json!(run), 1));
+}
+
 impl World {
+    /// Changes a made wish by hand.
+    pub fn edit_wish(&self, wish: &str, change: impl FnOnce(&mut Value)) {
+        let file = self.jm("pages").join(format!("{}.wishes.json", super::DAY));
+        let mut kept: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        change(kept["wishes"].as_array_mut().unwrap().iter_mut().find(|kept| kept["id"] == wish).unwrap());
+        std::fs::write(file, format!("{kept}\n")).unwrap();
+    }
+
     /// Changes a run's record by hand.
     pub fn edit_record(&self, run: &str, change: impl FnOnce(&mut Value)) {
         let mut record = self.record(run);

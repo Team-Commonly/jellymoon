@@ -46,7 +46,7 @@ pub struct Today {
     pub model: String,
     /// Where jellymoon keeps its own files.
     pub home: PathBuf,
-    /// The harness program. None is `claude`, found on `PATH`.
+    /// The harness program. None is `claude`, found on `PATH` or in a well-known place.
     pub harness: Option<PathBuf>,
     /// Read again even when the kept page saw every turn.
     pub fresh: bool,
@@ -85,9 +85,9 @@ impl Today {
     /// led would depend on the folder the app was started in.
     pub fn from_env(asked: Asked) -> Result<Today, String> {
         let named = |variable: &str| env::var_os(variable).filter(|path| !path.is_empty()).map(PathBuf::from);
-        // The home is the variable and nothing else. The system's own record of it is not asked, so a run with an
-        // empty environment (a test's) is refused here and can never reach a real person's logs.
-        let user = || named(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).filter(|home| home.is_absolute());
+        // The home is core's: the variable as a full path and nothing else, so a run with an empty environment (a
+        // test's) is refused here and can never reach a real person's logs.
+        let user = jellymoon_core::user_home;
         if named("JELLYMOON_HOME").is_some_and(|home| !home.is_absolute()) {
             return Err("no home directory: set JELLYMOON_HOME to an absolute path".to_string());
         }
@@ -247,11 +247,10 @@ fn noted(page: &Page, title: &str, body: &str) -> Scene {
 fn words(error: &Error) -> String {
     let again = "Open Jellymoon again to try once more.";
     match error {
-        Error::NoHarness => {
-            "Claude Code was not found on this computer. Jellymoon reads your day with your own Claude \
-                             Code: install it, or open Jellymoon from a terminal where `claude` runs."
-                .to_string()
-        }
+        Error::NoHarness(looked) => format!(
+            "Claude Code was not found on this computer. Jellymoon reads your day with your own Claude Code: install \
+             it, or open Jellymoon from a terminal where `claude` runs. It was looked for in {looked}."
+        ),
         Error::Logs(_) => {
             format!("No Claude Code sessions were found on this computer, so there is nothing to read yet ({error}).")
         }

@@ -63,13 +63,21 @@ only through `PATH` or `JELLYMOON_CLAUDE`.
 A candidate counts when it is a file, or a link to one, that can be run. When none does, the one-line error names
 every place looked in.
 
+The home is `HOME` (`USERPROFILE` on Windows) and nothing else, and only when it names a full path. The system's own
+record of the account is not asked. With no such home, places 3 and 4 are not looked in, and the error says so. Core
+reads the variable itself, so the command and the app cannot differ.
+
 **Who can change the program.** The reading call hands the day's text to this program, so each place on the list is
 one a stranger on the machine cannot write to. `~/.local/bin` and `~/.claude/local` are inside the person's home.
-`/opt/homebrew/bin` belongs to the person who installed Homebrew, an administrator of the Mac. `/usr/local/bin`
-belongs to the system, or on an Intel Mac to the administrator who installed Homebrew. None is writable by everyone as
-installed, and no such folder (a temporary or shared one) is on the list. On top of that, a candidate in places 3 to 6
-whose file the group or everyone can write to is passed over, and the error says which. Only the file's own mode is
-read, after links are followed: not its owner, and not the folders above it.
+Any administrator of the Mac can write to `/opt/homebrew/bin`: Homebrew makes it writable by the administrators'
+group. `/usr/local/bin` belongs to the system, or on an Intel Mac with Homebrew to its administrators likewise. None
+is writable by everyone as installed, and no such folder (a temporary or shared one) is on the list.
+
+On top of that, on a Mac and on Linux a candidate in places 3 to 6 is passed over when the group or everyone can write
+to its file, or when everyone can write to the folder it is in. A folder the group can write to is accepted, as
+Homebrew's are. The look goes on to the next place, so a later place's harness can be the one run with nothing said;
+only when no place has one does the error name what was passed over and why. The file's mode is read after links are
+followed, and the folder is the one on the list: not their owners, and not the folders above.
 
 That check is not made on a `PATH` hit or on `JELLYMOON_CLAUDE`. Both are the person's own word: it is the program
 their terminal already runs when they type `claude`, or one they named. The list is Jellymoon's choice, so Jellymoon
@@ -80,8 +88,13 @@ Finder's `PATH` there is no `node`. So when the harness was found in places 3 to
 then the folder the program is in, then the four places. Found on `PATH` or named by `JELLYMOON_CLAUDE`, it gets
 `PATH` unchanged. Nothing else about the call differs.
 
-`JELLYMOON_SYSTEM_BIN`, a list of folders written as `PATH` is, takes the place of 5 and 6; set to nothing, neither is
-looked in. The tests set it so that no folder of the machine they run on is read.
+Those added folders are where a script harness gets its `node`, and nothing about that `node` is checked: not its
+mode, and not its folder's. They come after this process's own `PATH`, so they are used only for what it lacks. A
+folder whose name cannot be written in a `PATH` (a home with a colon in it) is left out of the longer one: a harness
+there that is a program by itself still runs, and a script there finds `node` only in the other folders.
+
+`JELLYMOON_SYSTEM_BIN`, a list of folders written as `PATH` is, takes the place of 5 and 6, for the command and the
+app alike; set to nothing, neither is looked in. The tests set it so that no folder of the machine they run on is read.
 
 ## What code checks
 

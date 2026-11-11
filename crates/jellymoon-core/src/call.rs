@@ -64,7 +64,7 @@ struct Output {
 pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, Error> {
     let harness = match &options.harness {
         Some(harness) => Found { program: path::absolute(harness).map_err(Error::Call)?, path: None },
-        None => find::harness(options)?,
+        None => find::harness()?,
     };
     private_dir(&options.dir).map_err(Error::Call)?;
     let folder = tempfile::Builder::new().prefix("call-").tempdir_in(&options.dir).map_err(Error::Call)?;

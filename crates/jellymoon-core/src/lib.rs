@@ -17,6 +17,7 @@ mod shapes;
 mod uninstall;
 
 pub use error::Error;
+pub use find::user_home;
 pub use hook::{install_hook, remove_hook};
 pub use reader::{DayOptions, day};
 pub use reading::{PageOptions, page};

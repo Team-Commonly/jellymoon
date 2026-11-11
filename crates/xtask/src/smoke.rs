@@ -154,6 +154,7 @@ impl World {
             command.env_clear().env("TZ", ZONE).env("PATH", self.at("bin")).env("JELLYMOON_CLAUDE", self.harness());
             command.env("HOME", self.at("user")).env("USERPROFILE", self.at("user"));
             command.env("CLAUDE_CONFIG_DIR", self.at("harness")); // where the delivery hook's settings are
+            command.env("JELLYMOON_SYSTEM_BIN", ""); // no folder of this machine is looked in for a harness
             if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
                 command.env("SystemRoot", root); // a Windows program needs it to start
             }

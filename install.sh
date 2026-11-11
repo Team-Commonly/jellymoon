@@ -149,7 +149,7 @@ main() {
   say "Next:"
   say "  open \"$app_dir/Jellymoon.app\"    shows today's page, read with one call through your own Claude Code"
   say "  \"$app_dir/Jellymoon.app/Contents/MacOS/jellymoon-app\"    the same from this terminal, if the opened app"
-  say "                                     cannot find Claude Code yet"
+  say "                                     says Claude Code was not found"
   say "  jellymoon uninstall                takes Jellymoon off this Mac again"
 }
 

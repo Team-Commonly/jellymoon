@@ -92,6 +92,7 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
     fs::remove_file(world.rec.join(format!("claude{}", env::consts::EXE_SUFFIX))).unwrap();
     let missing = one(&world, &[]);
     assert!(missing.starts_with("Today could not be read. Claude Code was not found on this computer."), "{missing}");
+    assert!(missing.ends_with("It was looked for in PATH, ~/.local/bin, ~/.claude/local."), "{missing}");
 }
 
 #[test]

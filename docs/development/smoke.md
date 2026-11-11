@@ -16,6 +16,7 @@ cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build argument
 | `logs` | writes a made-up day: two projects, a wish and the change of mind that clashes with it, a wish that finished |
 | `day` | `jellymoon day` reads them: 3 turns in 2 projects |
 | `page` | `jellymoon page`, through `fake-claude`, prints page data with the 3 wishes, one of them done, and the clash |
+| `found-off-path` | as in an app opened from the Finder: with an empty `PATH` and no harness named, `jellymoon page` finds `fake-claude` in the temporary home's `.local/bin` and runs it |
 | `layout-sticker`, `layout-plain` | `jellymoon-app layout` on that page, in each built-in theme: every wish is a character and the clash is a choice note |
 | `today` | `jellymoon-app layout` with no `--page` reads the made-up day itself, through `fake-claude`: every wish is drawn, and the page is kept in the temporary home |
 | `today-again` | the same run again prints the same pieces from the kept page, and `fake-claude` is not called |
@@ -37,7 +38,7 @@ A made-up run starts each program with no variable of the caller's: a scratch `H
 - **`--window`** adds the window step. It needs a display, so that step alone sees the caller's variables. CI runs
   it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
-  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `today`, `today-again`, `empty-day`, the
+  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`, the
   delivery steps and `uninstall` are left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what.

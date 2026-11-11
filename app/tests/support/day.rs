@@ -72,6 +72,7 @@ pub fn world() -> World {
         ("USERPROFILE", at("user").into()),
         ("JELLYMOON_HOME", at("jm").into()),
         ("PATH", bin.clone().into()),
+        ("JELLYMOON_SYSTEM_BIN", OsString::new()), // no folder of this machine is looked in for a harness
     ];
     let world = World { home: at("jm"), rec: bin, vars, dir };
     let lines = [

@@ -59,10 +59,12 @@ impl World {
         program
     }
 
+    /// Runs `jellymoon <command>` over the day, started in the world's own folder.
     fn run(&self, command: &str) -> Ran {
         let vars: Vec<_> = self.vars.iter().map(|(name, value)| (*name, value.as_os_str())).collect();
         let logs = self.dir.path().join("logs");
-        support::jellymoon(&vars, &[command, "--logs", logs.to_str().unwrap(), "--date", "2026-03-10"])
+        let args = [command, "--logs", logs.to_str().unwrap(), "--date", "2026-03-10"];
+        support::jellymoon_in(self.dir.path(), &vars, &args)
     }
 
     /// Runs `jellymoon page`, which must print a page, and says which place's harness was the one run.
@@ -167,6 +169,63 @@ fn nothing_found_is_one_line_that_names_where_it_looked() {
         assert!(ran.stderr.contains(said), "{said:?} is not in {}", ran.stderr);
     }
     assert!(!ran.stderr.contains("passed over"), "{}", ran.stderr);
+}
+
+// The home is the variable and nothing else. PATH and the system folder stay scratch folders here, so a lookup that
+// fell back to the account's own home would be the only way to a real harness, and this test is what forbids it.
+#[test]
+fn a_home_that_is_empty_unset_or_not_a_full_path_is_no_home() {
+    for home in [Some(""), None, Some("user"), Some(".")] {
+        let mut w = world();
+        // Where a home read from the folder the command runs in would find one: `user` and `.` are both under it.
+        w.harness_at("native");
+        let beside = w.dir.path().join(".local").join("bin");
+        install(&beside, "claude");
+        w.vars.retain(|(name, _)| !["HOME", "USERPROFILE"].contains(name));
+        for name in ["HOME", "USERPROFILE"] {
+            w.vars.extend(home.map(|home| (name, home.into())));
+        }
+        let ran = w.run("page");
+        assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.lines().count()), (1, "", 1), "{home:?}: {}", ran.stderr);
+        assert!(ran.stderr.contains("were not looked in, as there is no home directory"), "{home:?}: {}", ran.stderr);
+        assert!(!w.place("native").join("arg0").exists() && !beside.join("arg0").exists(), "{home:?}: a harness ran");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_file_in_a_folder_everyone_can_write_to_is_passed_over_and_one_the_group_can_is_not() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = world();
+    w.harness_at("native");
+    let open = |mode: u32| fs::set_permissions(w.place("native"), fs::Permissions::from_mode(mode)).unwrap();
+    open(0o777);
+    let ran = w.run("page");
+    assert_eq!((ran.code, ran.stdout.as_str()), (1, ""), "{}", ran.stderr);
+    assert!(ran.stderr.contains("passed over ~/.local/bin/claude: everyone can write to its folder"), "{}", ran.stderr);
+    open(0o1777);
+    assert_eq!(w.run("page").code, 1, "a sticky folder is still one everyone can add to");
+    open(0o775);
+    assert_eq!(w.ran_at(), ["native"]);
+}
+
+// A home whose name cannot be written in a PATH: the harness there still runs, with that folder left out of its PATH.
+#[cfg(unix)]
+#[test]
+fn a_harness_under_a_home_with_a_colon_in_its_name_still_runs() {
+    let mut w = world();
+    let home = w.dir.path().join("us:er");
+    let place = home.join(".local").join("bin");
+    w.harness_at("native");
+    fs::create_dir_all(place.parent().unwrap()).unwrap();
+    fs::rename(w.place("native"), &place).unwrap();
+    w.vars.retain(|(name, _)| *name != "HOME");
+    w.vars.push(("HOME", home.into()));
+    let ran = w.run("page");
+    assert_eq!((ran.code, ran.stderr.as_str()), (0, ""));
+    let env = fs::read_to_string(place.join("env")).unwrap();
+    let path = env.lines().find_map(|line| line.strip_prefix("PATH=")).unwrap();
+    assert_eq!(std::env::split_paths(path).collect::<Vec<_>>(), [w.place("path"), w.place("sys")]);
 }
 
 #[cfg(unix)]

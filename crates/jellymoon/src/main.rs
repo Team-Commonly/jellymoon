@@ -10,7 +10,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, PageOptions, UninstallOptions};
+use jellymoon_core::{DayOptions, PageOptions, UninstallOptions, user_home};
 use lexopt::prelude::*;
 
 const USAGE: &str = "usage:
@@ -67,11 +67,7 @@ fn run() -> Result<String, Failure> {
         Command::Page(options, model) => {
             let day = jellymoon_core::day(&options).map_err(failed)?;
             let harness = named("JELLYMOON_CLAUDE");
-            // The folders looked in after the home's, in place of the system's usual ones: what the tests set.
-            let system = env::var_os("JELLYMOON_SYSTEM_BIN")
-                .map(|folders| env::split_paths(&folders).filter(|folder| !folder.as_os_str().is_empty()).collect());
-            let (dir, home) = (home()?.join("reading"), user_home());
-            let options = PageOptions { model, dir, limit: READING_LIMIT, harness, home, system };
+            let options = PageOptions { model, dir: home()?.join("reading"), limit: READING_LIMIT, harness };
             Ok(format!("{}\n", jellymoon_core::page(&day, &options).map_err(failed)?))
         }
         Command::Uninstall => {
@@ -180,10 +176,6 @@ fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {
 /// The path a variable names, when it is set to something.
 fn named(variable: &str) -> Option<PathBuf> {
     env::var_os(variable).filter(|path| !path.is_empty()).map(PathBuf::from)
-}
-
-fn user_home() -> Option<PathBuf> {
-    env::home_dir().filter(|home| !home.as_os_str().is_empty())
 }
 
 /// Claude Code's own folder, which holds its `projects` and its `settings.json`: `CLAUDE_CONFIG_DIR`, its own setting

@@ -89,13 +89,13 @@ fn run() -> Result<String, Failure> {
 /// replaces the scene. `JELLYMOON_QUIT_AFTER=<seconds>` closes the window by itself, for checks.
 #[cfg(feature = "window")]
 fn window(options: Options) -> Result<(), Failure> {
-    use jellymoon_app::window::{Later, open};
+    use jellymoon_app::{today::Later, window::open};
     let (scene, later): (_, Option<Later>) = match options.page {
         Source::File(file) => (scene::scene(&page(&file)?), None),
         Source::Waiting(date) => (today::waiting(&date), None),
         Source::Day(day) => {
             let (first, kept) = day.first();
-            (first, Some(Box::new(move || day.read(kept.as_ref()))))
+            (first, Some(day.later(kept)))
         }
     };
     let seconds = std::env::var("JELLYMOON_QUIT_AFTER").ok().and_then(|seconds| seconds.parse::<f32>().ok());

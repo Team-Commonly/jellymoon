@@ -62,7 +62,8 @@ points at the newest release that is neither a draft nor a pre-release.
   builds that way, and whether the runner has Xcode's `metal`, shows on the first run.
 - **A clean Mac.** The tests show no quarantine flag on what was installed and a valid ad-hoc signature. That the app
   then opens with no Gatekeeper prompt, on a Mac that has never seen it, only a person can see.
-- **Opening from the Finder.** `jellymoon-app` needs `--page <file>`, so a double click starts it and it exits at
-  once. The script prints the two commands that draw today's page.
+- **Opening from the Finder.** Opened with nothing, the app reads today with one call through the person's own
+  Claude Code and shows the page (`app.md`, "Today's page"). The script's closing lines say to open the app, and
+  name the app's own program to start from a terminal. That a double click ends on a page was seen by nobody yet.
 - **No icon.** The repo holds none, so the bundle has the system's plain one.
 - **`LSMinimumSystemVersion` is 11.0**, a guess: nobody has run the app on an older macOS.

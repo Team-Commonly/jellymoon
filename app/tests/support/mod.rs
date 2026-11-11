@@ -1,6 +1,8 @@
 //! What the F28 tests share: made-up page data, running the built `jellymoon-app`, and reading the pieces it prints.
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
+pub mod day;
+
 use std::fs;
 use std::io::Write;
 use std::process::{Command, Output, Stdio};

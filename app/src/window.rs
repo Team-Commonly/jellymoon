@@ -12,12 +12,10 @@ use gpui_platform::application;
 use sticker_kit::draw::{Page, Tap, load_fonts};
 use sticker_kit::{Scene, Theme, Viewport};
 
-/// Work that gives the scene to show next, or none when what is shown stays. It may take as long as a reading call,
-/// so it runs off the window's thread.
-pub type Later = Box<dyn FnOnce() -> Option<Scene> + Send>;
+use crate::today::Later;
 
 /// Opens the window on `scene` and runs until it is closed, or until `quit_after` has passed. `later` is started at
-/// once, and the scene it gives replaces the first.
+/// once, off the window's thread; each scene it gives replaces the one shown, and the work after it starts.
 pub fn open(scene: Scene, theme: Theme, viewport: Viewport, quit_after: Option<Duration>, later: Option<Later>) {
     application().run(move |cx: &mut App| {
         if let Err(error) = load_fonts(cx) {
@@ -37,14 +35,15 @@ pub fn open(scene: Scene, theme: Theme, viewport: Viewport, quit_after: Option<D
             }
         })
         .detach();
-        if let Some(later) = later {
-            cx.spawn(async move |cx| {
-                if let Some(scene) = cx.background_executor().spawn(async move { later() }).await {
-                    let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
-                }
-            })
-            .detach();
-        }
+        cx.spawn(async move |cx| {
+            let mut later = later;
+            while let Some(work) = later.take() {
+                let Some(next) = cx.background_executor().spawn(async move { work() }).await else { break };
+                let _ = window.update(cx, |page, _, cx| page.set_scene(next.scene, cx));
+                later = next.later;
+            }
+        })
+        .detach();
         if let Some(limit) = quit_after {
             cx.spawn(async move |cx| {
                 cx.background_executor().timer(limit).await;

@@ -340,7 +340,7 @@ is opened: what is at the name is asked first, and then it is opened, as the pag
 
 | At the name | Not a plain file |
 |---|---|
-| `runs/<id>/run.lock` | nothing holds the run, so it was cut off: it is written down as failed, and the child it left is killed ("A run that was cut off") |
+| `runs/<id>/run.lock` | nothing holds the run, so it was cut off: it is written down as failed, and the child it left is killed ("A run that was cut off"). So is a run whose lock is a plain file that cannot be opened: a lock that cannot be asked about is no lock |
 | `runs/<id>/copy.json` | the copy's record cannot be read: the copy is left as it is, and the run's end is written all the same |
 | `runs/clean.lock` | no copy is ended or cleaned while it is so: a run that finishes then has failed, as its work could not be committed |
 | `runs/<id>/run.json`, the day's wishes, the day's page | not read, as before: a run with no record that can be used was cut off, and wishes that cannot be used are none |

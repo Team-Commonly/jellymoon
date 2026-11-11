@@ -60,7 +60,7 @@ pub(super) fn lock_file(home: &Path, run: &str) -> PathBuf {
 fn held(home: &Path, run: &str) -> bool {
     let lock = lock_file(home, run);
     let plain = fs::symlink_metadata(&lock).is_ok_and(|meta| meta.is_file());
-    plain && !File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_ok())
+    plain && File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_err())
 }
 
 /// The end in a run's record, when it is one core wrote for this wish: the words are made here again, and the

@@ -5,9 +5,12 @@
 //! is asked meanwhile; `f40/nothing.rs` a stop with nothing going, a stop left by hand and a locked day;
 //! `f40/races.rs` a stop against the run's own finish; `f40/denied.rs` what is counted as denied; `f40/obeys.rs`
 //! an agent that ends by itself at the interrupt; `f40/hand.rs` a record and a wish changed by hand;
-//! `f40/request.rs` a request that is no plain file; `f40/pipe.rs` a named pipe at a file of the home.
+//! `f40/request.rs` a request that is no plain file; `f40/pipe.rs` a named pipe at a file of the home;
+//! `f40/closed.rs` a lock nobody can open; `f40/theirs.rs` wishes made to name each other's live runs.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f40/closed.rs"]
+mod closed;
 #[path = "f40/deaf.rs"]
 mod deaf;
 #[path = "f40/denied.rs"]

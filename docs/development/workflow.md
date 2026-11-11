@@ -33,9 +33,11 @@ package under `[forbidden]` (GPUI, for core and the binary) listed in a crate's 
   obsolete, and was it deleted?
 
 ## The fresh-context review
-Every PR head that is to merge gets one review by a subagent that never saw the builder's reasoning, on a different
-model from the builder where possible. It is given the PR number and head SHA, the feature from `feature_list.json`
-(or the unit's brief), the diff, and this file. In order:
+Every feature gets one review by a subagent that never saw the builder's reasoning, on a different model from the
+builder where possible. It runs after the merge, at the merged head, and the features after it do not wait for it.
+Two kinds of PR are reviewed before they merge instead: one that changes what leaves the machine (the reader,
+redaction, the reading call, delivery), and one from outside the maintainers. The reviewer is given the PR number and
+head SHA, the feature from `feature_list.json` (or the unit's brief), the diff, and this file. In order:
 
 1. **Trust.** For a PR from outside the maintainers, read the code with `git show`, `git diff` or on GitHub. Never
    check it out and run `make`, `cargo` or `./init.sh`: a build script and a test are code. A maintainer's PR may be run.
@@ -57,14 +59,23 @@ GATE: PASS | GATE: FAIL
 `GATE: PASS` requires zero blocking findings. The reviewer never pushes or merges. The coordinator posts the report as
 a PR comment whose first line is `Review at <full head SHA>`, changing nothing in it.
 
-## Landing
-A PR is squash-merged when both hold at its current head:
-- CI is green: `check` on macOS, Linux and Windows, `secrets`, and `dco`;
-- a review comment for that exact head ends in `GATE: PASS`.
+What a review costs is bounded, because PR 109 took three rounds and one of them nearly took down the machine:
+- **One round.** Blocking findings are fixed in the next PR and proved by its tests, not by a second review. Only
+  the two kinds of PR reviewed before merging get a new review of the fix.
+- **Blocking means reachable.** A fault in code that no command reaches yet (a loader nothing calls, a file kind
+  nothing opens) is non-blocking: it is the first work of the feature that opens that door.
+- **Every run has a time limit**, one test binary at a time. A mutation changes a cap by one and never removes or
+  widens a loop, size or allocation cap: with the cap gone, the test that reaches the loop does not fail, it grows.
 
-A blocking finding gets a fix, which is a new head, and a new review of it. A head that only merges `main` needs CI
-again and a review of what the merge changed. Only the coordinator merges. Workers commit on their own branch with
-`git commit -s`, in a worktree fenced by `make hooks fence=1`; the coordinator pushes and opens the PR.
+## Landing
+A PR is squash-merged as soon as both hold at its current head:
+- `make preflight` passed on the builder's machine;
+- CI is green: `check` on macOS, Linux and Windows, `secrets`, and `dco`.
+
+Nothing waits on CI but the merge itself: the next feature starts from the branch while the checks run. A PR that
+changes what leaves the machine, or comes from outside the maintainers, also needs a review comment for its exact
+head ending in `GATE: PASS`. Only the coordinator merges. Workers commit on their own branch with `git commit -s`, in
+a worktree fenced by `make hooks fence=1`; the coordinator pushes and opens the PR.
 
 ## Entropy
 After every few features, one PR removes and adds nothing: `deslop` plus `improve-codebase-architecture`, a check of

@@ -77,6 +77,11 @@ is then taken back), or of which nothing is kept, not even its folder
 in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
 started again without the flag.
 
+If the repo was moved away while the harness ran, git cannot take the copy back, and `jellymoon run` exits 1 with
+git's reason: the copy's folder and the run's folder in `runs` are removed all the same and the wish is as it was,
+but the branch `jellymoon/run-<id>` and git's registration of the copy are in the moved repo, which Jellymoon
+cannot find, and stay there (`git worktree prune` and `git branch -D` in that repo remove them).
+
 ## What is read of the stream
 
 The stream is untrusted. A line is read up to 1 MiB with its line break; the whole stream up to 64 MiB. A line that

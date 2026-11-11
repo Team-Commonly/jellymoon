@@ -5,6 +5,7 @@ description = "The shell: turns page data into the kit's scene, prints where eac
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+default-run = "jellymoon-app"
 
 [features]
 default = ["window"]
@@ -27,6 +28,14 @@ gpui_platform = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
+
+# The made-up harness the F34 tests run in place of Claude Code: the same source file as the `jellymoon` package's,
+# declared again because Cargo hands a test the path of a binary of its own package only. Never shipped.
+[[bin]]
+name = "f34-claude"
+path = "../crates/jellymoon/tests/support/fake_claude.rs"
+test = false
+doc = false
 
 [lints]
 workspace = true

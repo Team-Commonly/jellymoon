@@ -1,20 +1,29 @@
 //! The `jellymoon-app` command. With `layout` it prints where the kit puts every piece of a page, one line of JSON
-//! each; without, it opens the page in a window. Both draw page data they are given: no reading call, no network and
-//! no file written.
+//! each; without, it opens the page in a window. With `--page` both draw the page data they are given and nothing
+//! else happens. With no `--page` the page is the day's own (`today.rs`): kept in the user's folder, and read through
+//! core when the day has moved on.
 
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 use std::{fs, io};
 
+use jellymoon_app::today::{self, Asked, Today};
 use jellymoon_app::{lines, read, scene};
 use lexopt::prelude::*;
 use sticker_kit::{Theme, Viewport};
 
 const USAGE: &str = "usage:
-  jellymoon-app layout --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]   (prints each placed piece)
-  jellymoon-app --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]          (opens a window; t switches the theme)
-a theme is sticker, plain, or a theme file
+  jellymoon-app [layout] [--theme <theme>] [--size <W>x<H>] <which page>
+      opens a window (t switches the theme); with `layout`, prints each placed piece instead
+  a theme is sticker, plain, or a theme file
+  which page:
+    (nothing)                       today, kept in your jellymoon folder and read with your own Claude Code
+    --date <YYYY-MM-DD>             another day
+    --fresh                         read the day again even when its kept page is up to date
+    --logs <dir> --skip <names> --model <name>    as for `jellymoon page`
+    --waiting                       what is shown while a day is read
+    --page <file, or - for stdin>   a page-data file: nothing is read and nothing is kept
 ";
 
 /// The size a page is designed at, and the window's first size.
@@ -33,9 +42,16 @@ enum Command {
 }
 
 struct Options {
-    page: String,
+    page: Source,
     theme: Theme,
     size: Viewport,
+}
+
+/// Which page: a page-data file, a day, or the scene shown while a day is read.
+enum Source {
+    File(String),
+    Day(Box<Today>),
+    Waiting(String),
 }
 
 fn main() -> ExitCode {
@@ -58,42 +74,62 @@ fn run() -> Result<String, Failure> {
     match parse(lexopt::Parser::from_env())? {
         Command::Help => Ok(USAGE.to_string()),
         Command::Layout(options) => {
-            Ok(lines::lines(&scene::scene(&page(&options.page)?), &options.theme, options.size))
+            let scene = match &options.page {
+                Source::File(file) => scene::scene(&page(file)?),
+                Source::Day(day) => day.last(),
+                Source::Waiting(date) => today::waiting(date),
+            };
+            Ok(lines::lines(&scene, &options.theme, options.size))
         }
-        Command::Window(options) => {
-            let scene = scene::scene(&page(&options.page)?);
-            window(scene, options).map(|()| String::new())
-        }
+        Command::Window(options) => window(options).map(|()| String::new()),
     }
 }
 
-/// Opens the window. `JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself, for checks.
+/// Opens the window on the first scene there is. A day is then read off the window's thread, and what that gives
+/// replaces the scene. `JELLYMOON_QUIT_AFTER=<seconds>` closes the window by itself, for checks.
 #[cfg(feature = "window")]
-fn window(scene: sticker_kit::Scene, options: Options) -> Result<(), Failure> {
+fn window(options: Options) -> Result<(), Failure> {
+    use jellymoon_app::window::{Later, open};
+    let (scene, later): (_, Option<Later>) = match options.page {
+        Source::File(file) => (scene::scene(&page(&file)?), None),
+        Source::Waiting(date) => (today::waiting(&date), None),
+        Source::Day(day) => {
+            let (first, kept) = day.first();
+            (first, Some(Box::new(move || day.read(kept.as_ref()))))
+        }
+    };
     let seconds = std::env::var("JELLYMOON_QUIT_AFTER").ok().and_then(|seconds| seconds.parse::<f32>().ok());
     let quit_after = seconds.and_then(|seconds| std::time::Duration::try_from_secs_f32(seconds).ok());
-    jellymoon_app::window::open(scene, options.theme, options.size, quit_after);
+    open(scene, options.theme, options.size, quit_after, later);
     Ok(())
 }
 
 #[cfg(not(feature = "window"))]
-fn window(_: sticker_kit::Scene, _: Options) -> Result<(), Failure> {
+fn window(_: Options) -> Result<(), Failure> {
     Err(Failure::Run("this build has no window: it was built without the `window` feature".to_string()))
 }
 
 fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let (mut layout, mut first) = (false, true);
+    let text = |parser: &mut lexopt::Parser| parser.value().and_then(|v| v.string()).map_err(usage);
+    let (mut layout, mut first, mut waiting) = (false, true, false);
     let (mut page, mut theme, mut size) = (None, String::from("sticker"), DEFAULT_SIZE);
+    let mut asked = Asked::default();
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(command) if first && command == "help" => return Ok(Command::Help),
             Value(command) if first && command == "layout" => layout = true,
-            Long("page") => page = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("theme") => theme = parser.value().and_then(|v| v.string()).map_err(usage)?,
+            Long("page") => page = Some(text(&mut parser)?),
+            Long("date") => asked.date = Some(text(&mut parser)?),
+            Long("logs") => asked.logs = Some(parser.value().map_err(usage)?.into()),
+            Long("skip") => asked.skip = text(&mut parser)?,
+            Long("model") => asked.model = Some(text(&mut parser)?),
+            Long("fresh") => asked.fresh = true,
+            Long("waiting") => waiting = true,
+            Long("theme") => theme = text(&mut parser)?,
             Long("size") => {
-                let given = parser.value().and_then(|v| v.string()).map_err(usage)?;
+                let given = text(&mut parser)?;
                 size = viewport(&given).ok_or_else(|| {
                     Failure::Usage(format!(
                         "--size must be <W>x<H> in pixels, from 960x640 to 16384x16384, not {given:?}"
@@ -104,7 +140,14 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         }
         first = false;
     }
-    let page = page.ok_or_else(|| Failure::Usage("no page: name a page-data file with --page".to_string()))?;
+    let page = match page {
+        Some(file) => Source::File(file),
+        None if waiting => {
+            let date = today::date(asked.date.as_deref());
+            Source::Waiting(date.ok_or_else(|| Failure::Usage("--date must be a day as YYYY-MM-DD".to_string()))?)
+        }
+        None => Source::Day(Box::new(Today::from_env(asked).map_err(Failure::Usage)?)),
+    };
     let options = Options { page, theme: named(&theme)?, size };
     Ok(if layout { Command::Layout(options) } else { Command::Window(options) })
 }

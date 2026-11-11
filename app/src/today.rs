@@ -86,7 +86,7 @@ impl Today {
         // test's) is refused here and can never reach a real person's logs.
         let user = jellymoon_core::user_home;
         let home = jellymoon_core::own_folder().map_err(|e| e.to_string())?;
-        if asked.logs.as_ref().is_some_and(|logs| logs.as_os_str().is_empty()) {
+        if asked.logs.as_ref().is_some_and(|logs| logs.to_string_lossy().trim().is_empty()) {
             return Err("--logs needs a folder".to_string());
         }
         let config = || named("CLAUDE_CONFIG_DIR").or_else(|| Some(user()?.join(".claude")));

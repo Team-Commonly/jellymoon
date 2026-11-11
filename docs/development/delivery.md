@@ -51,7 +51,9 @@ Checked against <https://code.claude.com/docs/en/hooks> on 2026-11-10.
 - **It never stops a session.** Input that is not a hook step, a session id that is not a plain name (letters,
   digits, dash, underscore, at most 64), an unknown event or a store that cannot be read all print nothing and exit 0.
   So does a home that is missing: with `JELLYMOON_HOME` unset and no home directory, or with the folder not there,
-  the hook prints nothing, exits 0 and makes no folder.
+  the hook prints nothing, exits 0 and makes no folder. A `JELLYMOON_HOME` that is not a full path is no home for
+  the hook either: it says nothing, exits 0 and hands over nothing, where every other command refuses it in one line
+  (`reader.md`). An error printed by a hook would show at every step of a session.
   Exit code 2 is never used for a delivery. `PreToolUse` and `UserPromptSubmit` are answered in the same shape, for a
   person who wires the hook to those by hand.
 

@@ -47,7 +47,8 @@ pub fn jellymoon_in(folder: &Path, vars: &[(&str, &OsStr)], args: &[&str]) -> Ra
     started(folder, vars, args, "")
 }
 
-fn started(folder: &Path, vars: &[(&str, &OsStr)], args: &[&str], input: &str) -> Ran {
+/// Started in `folder`, with `input` as the program's input.
+pub fn started(folder: &Path, vars: &[(&str, &OsStr)], args: &[&str], input: &str) -> Ran {
     let (mut out, mut err) = (tempfile::tempfile().unwrap(), tempfile::tempfile().unwrap());
     let mut fed = tempfile::tempfile().unwrap();
     fed.write_all(input.as_bytes()).unwrap();

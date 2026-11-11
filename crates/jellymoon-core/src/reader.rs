@@ -55,7 +55,7 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
     }
     match fs::metadata(&options.logs) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            return Err(Error::NoLogs(options.logs.display().to_string().replace(char::is_control, " ")));
+            return Err(Error::NoLogs(options.logs.display().to_string().replace(unseen, " ")));
         }
         found => found.map_err(Error::Logs)?,
     };
@@ -76,8 +76,8 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
 /// The folder names in `<home>/skip.txt`, one a line. Nothing at all under that name is no names. Anything else that
 /// is not a whole, plain list is an error and never an empty list, since a folder the person switched off must not
 /// reach the reading call: a link to nothing, a folder, a pipe, a file that cannot be read, is too large or is not
-/// UTF-8, or a line with a character no folder name holds (which says the file is not the list it looks like). An
-/// error names a line by its number, never by its text.
+/// UTF-8, or a line with a character no folder name holds or nobody can see (which says the file is not the list it
+/// looks like). An error names a line by its number, never by its text.
 fn switched_off(home: &Path) -> Result<Vec<String>, String> {
     let path = home.join("skip.txt");
     match fs::symlink_metadata(&path) {
@@ -106,8 +106,20 @@ fn switched_off(home: &Path) -> Result<Vec<String>, String> {
         if let Some((_, what)) = odd.iter().find(|(odd, _)| line.contains(*odd)) {
             return Err(format!("line {} holds {what}", at + 1));
         }
+        if line.contains(|c| c != '\t' && unseen(c)) {
+            return Err(format!("line {} holds a character that cannot be seen", at + 1));
+        }
     }
     Ok(text.lines().map(str::to_string).collect())
+}
+
+/// A character that draws nothing or moves what is drawn: a control character, or one of the invisible format
+/// characters (soft hyphen, zero-width spaces and joiners, direction marks and overrides, the byte order mark). In a
+/// line for the person it becomes a space; in a list name it could not be told from the name without it.
+fn unseen(c: char) -> bool {
+    let format = ['\u{ad}', '\u{61c}', '\u{180e}', '\u{feff}'];
+    let ranges = ['\u{200b}'..='\u{200f}', '\u{202a}'..='\u{202e}', '\u{2060}'..='\u{2064}', '\u{2066}'..='\u{206f}'];
+    c.is_control() || format.contains(&c) || ranges.iter().any(|range| range.contains(&c))
 }
 
 /// A calendar day written exactly YYYY-MM-DD.

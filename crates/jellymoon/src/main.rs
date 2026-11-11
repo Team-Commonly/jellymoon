@@ -86,8 +86,10 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::rule(&home()?, &stands, &over).map_err(failed)?))
         }
         Command::Hook => {
-            // With no home there is no ruling, and a hook that fails would show an error at every step of a session.
-            let told = own_folder()?.and_then(|home| jellymoon_core::deliver(&home, io::stdin().lock()));
+            // With no home there is no ruling, and a hook that fails would show an error at every step of a session:
+            // a home that is refused is no home here, and nothing is said.
+            let home = jellymoon_core::own_folder().ok().flatten();
+            let told = home.and_then(|home| jellymoon_core::deliver(&home, io::stdin().lock()));
             Ok(told.map(|told| told + "\n").unwrap_or_default())
         }
         Command::InstallHook(settings) => {
@@ -136,7 +138,9 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         return Ok(Command::Help);
     }
     let logs = match logs {
-        Some(logs) if logs.as_os_str().is_empty() => return Err(Failure::Usage("--logs needs a folder".to_string())),
+        Some(logs) if logs.to_string_lossy().trim().is_empty() => {
+            return Err(Failure::Usage("--logs needs a folder".to_string()));
+        }
         Some(logs) => logs,
         None => harness_folder()?.join("projects"),
     };

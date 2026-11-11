@@ -226,6 +226,8 @@ fn litters(rec: &Path) -> ! {
 /// across the start of a program, and `perl` can ask for that. Where that cannot be done it leaves `cannot`. By its
 /// number it is deaf to the stop signal (0), to the interrupt (1) or to both (2).
 fn deafen(rec: &Path, number: usize) -> ! {
+    #[cfg(not(unix))]
+    let _ = number; // nothing here can be made deaf
     #[cfg(unix)]
     if Path::new("/usr/bin/perl").is_file() {
         let deaf = ["$SIG{TERM}", "$SIG{INT}", "$SIG{TERM} = $SIG{INT}"][number.min(2)];

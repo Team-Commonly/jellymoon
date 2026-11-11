@@ -148,6 +148,16 @@ fn cut(run: &str) -> String {
     format!("run {run} was cut off before it ended: its copy is kept and no star was added")
 }
 
+/// The line of a run that was cut off with its copy gone: after it was committed and before the end was in the
+/// record, or removed by hand, with nothing committed. It says no more than holds for both.
+fn cut_late(run: &str) -> String {
+    let branch = copy::branch(run);
+    format!(
+        "run {run} was cut off before it ended: no copy of it is kept, what was committed of it is on the branch \
+         {branch}, and no star was added"
+    )
+}
+
 fn finished(copy: &RunCopy, changed: bool) -> String {
     let (run, branch) = (&copy.run, &copy.branch);
     if changed {
@@ -302,7 +312,7 @@ mod tests {
         };
         let long = failed(run, "it did not start with the tools, servers and permission mode of a run");
         let texts = [going(run), cut(run), long, finished(&copy, true), finished(&copy, false), STAR.to_string()];
-        for text in texts.into_iter().chain([cancelled(run)]) {
+        for text in texts.into_iter().chain([cancelled(run), cut_late(run)]) {
             assert_eq!(line(&text, 200), text);
             assert!(copy::is_run_id(run) && text.chars().count() <= 200);
         }

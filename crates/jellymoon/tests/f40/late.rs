@@ -1,0 +1,67 @@
+//! A look that comes after a finished run's copy went and before the end is in the run's record
+//! (`docs/development/run.md`, "The end is written in the record first"). The run is made to wait there.
+
+use std::time::{Duration, Instant};
+use std::{fs, thread};
+
+use serde_json::json;
+
+use super::closed::closed;
+use super::{DAY, STAR, World, ended, ms, world};
+use crate::support::skipped;
+
+/// How long a build with debug assertions waits between the end of its copy and the end in its record.
+const NOTE: &str = "JELLYMOON_TEST_NOTE_WAIT_MS";
+
+/// Lets the agent of a run finish, and returns once the run's copy is gone: the run waits then, its end unwritten.
+fn copy_gone(w: &World, run: &str) {
+    fs::write(w.at("rec").join("go"), "").unwrap();
+    let from = Instant::now();
+    while w.jm("runs").join(run).join("copy.json").exists() || w.jm("copies").join(run).exists() {
+        assert!(from.elapsed() < Duration::from_secs(20), "the copy of the run never went");
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(w.record(run)["outcome"].is_null(), "the run did not wait before it wrote its end");
+}
+
+// The run's lock is closed by hand, so a look takes the run for one nothing holds while it still goes.
+#[test]
+fn a_look_that_finds_the_copy_gone_and_no_end_yet_waits_for_the_end_the_run_writes() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let (going, run) = w.run_going(("slow", 0), &[ms(NOTE, 700)], &wish, &repo);
+    if !closed(&w.jm("runs").join(&run).join("run.lock")) {
+        skipped("no mode keeps this user from opening a file here: the system has none, or the user is root");
+        fs::write(w.at("rec").join("go"), "").unwrap();
+        ended(going);
+        return;
+    }
+    copy_gone(&w, &run);
+    let drawn = w.on_page(&wish);
+    assert_eq!((&drawn["state"], &drawn["stars"]), (&json!("done"), &json!([STAR])), "the look drew {drawn}");
+    ended(going); // it or the look told the wish, whichever came first: the other changed nothing
+    let (kept, record) = (w.kept(&wish), w.record(&run));
+    assert_eq!((&kept["state"], &kept["stars"], &kept["why"]), (&json!("done"), &json!([STAR]), &record["why"]));
+    assert_eq!(record["outcome"], "completed");
+}
+
+#[test]
+fn a_run_cut_off_after_its_copy_went_is_written_down_in_a_line_that_does_not_say_the_copy_is_kept() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let (mut going, run) = w.run_going(("slow", 0), &[ms(NOTE, 60_000)], &wish, &repo);
+    copy_gone(&w, &run);
+    going.kill().unwrap();
+    going.wait().unwrap();
+    let why = format!(
+        "run {run} was cut off before it ended: no copy of it is kept, what was committed of it is on the branch \
+         jellymoon/run-{run}, and no star was added"
+    );
+    let drawn = w.on_page(&wish);
+    assert_eq!((&drawn["state"], &drawn["stars"]), (&json!("needs_you"), &json!([])), "the look drew {drawn}");
+    let (kept, record) = (w.kept(&wish), w.record(&run));
+    assert_eq!((&kept["state"], &kept["why"]), (&json!("needs_you"), &json!(why)));
+    assert_eq!((&record["outcome"], &record["why"]), (&json!("failed"), &json!(why)));
+    assert!(w.copies().is_empty() && w.branches(&repo) == [format!("jellymoon/run-{run}")]);
+    assert_eq!((&w.on_page(&wish)["state"], w.kept(&wish)), (&json!("needs_you"), kept), "on {DAY}'s next look");
+}

@@ -8,11 +8,11 @@
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::child::{End, Ended};
 use super::record::Record;
-use super::{Ran, RunOutcome, STAR, cancelled, cut, dead, failed, finished, record, refused};
+use super::{Ran, RunOutcome, STAR, cancelled, cut, cut_late, dead, failed, finished, record, refused};
 use crate::busy::{self, or_test};
 use crate::copy::{self, Outcome, RunCopy};
 use crate::reading::STARS_MAX;
@@ -46,6 +46,11 @@ const KINDS: [&str; 8] = [
     "Claude Code exited with a failure after its result",
     "its work could not be committed",
 ];
+
+/// How long a look that finds a run's copy gone and no end in its record reads the record again. A run that
+/// finished writes its end right after its copy went, with nothing between but that one file's write (the commit
+/// is over by then, behind the copies' lock the look waited for): a second is many times that, and a third of a look.
+const LATE: Duration = Duration::from_secs(1);
 
 fn at_limit(limit: Duration) -> String {
     format!("it was stopped at its time limit of {} seconds", limit.as_secs())
@@ -173,7 +178,9 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
 /// believed, and else that the run was cut off.
 fn written(home: &Path, day: &str, wish: MadeWish, run: &str, record: Option<&Record>) -> MadeWish {
     let end = |record: Option<&Record>| record.and_then(|record| recorded(home, day, &wish.id, run, record));
-    let cut_off = || (RunOutcome::Failed, cut(run));
+    let again = || end(record::kept(home, run).as_ref());
+    // A copy that is gone is not said to be kept: its work was committed, and the run cut off after that.
+    let cut_off = || (RunOutcome::Failed, if copy::is_gone(home, run) { cut_late(run) } else { cut(run) });
     let drawn = |mut wish: MadeWish, (outcome, why): &(RunOutcome, String)| {
         apply(&mut wish, *outcome, why);
         wish
@@ -189,7 +196,13 @@ fn written(home: &Path, day: &str, wish: MadeWish, run: &str, record: Option<&Re
     }
     // A run whose lock could not be asked about may have been going still, and have ended since its record was
     // read: the record is read again, behind the mark, and the wish is given the end it has by now.
-    let ended = first.or_else(|| end(record::kept(home, run).as_ref()));
+    let (mut ended, until) = (first.or_else(again), Instant::now() + LATE);
+    // With its copy gone as a finished run's is, the run may be about to write its end: it is waited for, by
+    // the rule every end is believed by. A run that never writes one was cut off there, and is written so.
+    while ended.is_none() && copy::is_gone(home, run) && Instant::now() < until {
+        thread::sleep(Duration::from_millis(10));
+        ended = again();
+    }
     let (outcome, why) = ended.clone().unwrap_or_else(cut_off);
     let mut told = tell(home, day, &wish.id, run, outcome, &why, Duration::ZERO);
     if ended.is_none() {
@@ -237,6 +250,8 @@ pub(super) fn settle(
     if outcome != RunOutcome::Completed {
         mark(home, run, None);
     }
+    // A test's build can wait here, with a finished run's copy gone and its end not yet in its record.
+    thread::sleep(or_test(Duration::ZERO, "JELLYMOON_TEST_NOTE_WAIT_MS"));
     // A record that could not be written does not keep the wish from being told.
     let noted = note(home, run, outcome, (read.denied, read.skipped), &why);
     let told = tell(home, day, wish, run, outcome, &why, wait()).map_err(|e| match e {

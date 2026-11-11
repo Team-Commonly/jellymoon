@@ -12,12 +12,12 @@ use crate::support::{said, tree, write_log};
 
 impl World {
     /// `jellymoon run` for a wish of the day, with no repo named: the folder is found in the day's session logs.
-    fn start_found(&self, wish: &str) -> crate::Ran {
+    pub fn start_found(&self, wish: &str) -> crate::Ran {
         self.run(&["run", "--wish", wish, "--date", DAY])
     }
 
     /// A session log, in the harness's own folder, of one thing typed in `folder` on the day.
-    fn typed_in(&self, session: &str, folder: &Path) {
+    pub fn typed_in(&self, session: &str, folder: &Path) {
         let line = said("2026-03-10T16:00:00.000Z", folder.to_str().unwrap(), "look at the uploader");
         write_log(&self.at("harness").join("projects"), &format!("{session}/s.jsonl"), &[line]);
     }

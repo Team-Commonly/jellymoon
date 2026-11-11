@@ -79,6 +79,11 @@ An agent could have rewritten every file in its copy, the `.git` file too, or le
 - The variables git takes a repo from (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_CONFIG_COUNT` and the
   rest) do not reach git. It gets `PATH`, the home, the temporary folder, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`
   and `GIT_CONFIG_NOSYSTEM` (which config files are read is the person's choice), and what a Windows program needs.
+  Of these only full paths are passed on, by the function a run's harness gets its variables from
+  ([run.md](run.md)): the folders of `PATH` named by a full path, and a home, temporary folder or config path only
+  when it is one.
+- For a run whose repo was found in a session log, nothing git says is put in an error, at `make` or at `clean`:
+  git's words name the folder. The copy's record keeps that as `found`.
 - The one time git is asked from inside a copy is in `make`, before anything has run there: where the copy's own
   git folder is. The answer goes in the record.
 - **Submodule paths are left out of the commit.** A repo inside the copy is never opened (why is under "What is

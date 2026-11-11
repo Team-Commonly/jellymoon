@@ -31,6 +31,13 @@ pub fn scratch() -> TempDir {
     tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap()
 }
 
+/// Says why a test left a part out, where a person running the tests reads it: straight to stderr, which the test
+/// runner does not keep back as it does what a passing test prints.
+pub fn skipped(why: &str) {
+    let test = thread::current().name().unwrap_or("a test").to_string();
+    let _ = writeln!(std::io::stderr(), "skipped in {test}: {why}");
+}
+
 /// Runs `jellymoon` with only the variables given. A run still going after 20 seconds (a reader stuck on a pipe would be)
 /// is stopped and fails the test. Output goes to files, so a full pipe can never be what holds it up.
 pub fn jellymoon(vars: &[(&str, &OsStr)], args: &[&str]) -> Ran {

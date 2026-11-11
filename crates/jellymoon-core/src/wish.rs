@@ -10,6 +10,7 @@
 use std::fmt;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -149,7 +150,7 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
         Err(why) => Err(refused(format!("the made wishes of {day} are not used: {why}; this wish was not kept"))),
     };
     room()?;
-    let _lock = behind(home, &day, "this wish was not kept")?;
+    let _lock = behind(home, &day, Duration::ZERO, "this wish was not kept")?;
     let mut wishes = room()?;
     let (id, project) = (format!("m{}", wishes.len() + 1), project.to_string());
     let wish = MadeWish { id, said, project, state: WishState::Working, stars: Vec::new(), run: None, why: None };
@@ -166,12 +167,20 @@ pub(crate) fn day_of(day: Option<&str>) -> Result<String, Error> {
     }
 }
 
-/// The day's lock, taken. A day that stays locked is a refusal that says what was not done.
-fn behind(home: &Path, day: &str, undone: &str) -> Result<Lock, Error> {
-    locked(home, day).map_err(|e| match e.kind() {
-        ErrorKind::TimedOut => refused(format!("another change to the page of {day} has not finished, so {undone}")),
-        _ => Error::Store(e),
-    })
+/// The day's lock, taken. A day that stays locked is a refusal that says what was not done. The lock's own wait
+/// is three seconds; it is asked for again until `wait` has passed.
+fn behind(home: &Path, day: &str, wait: Duration, undone: &str) -> Result<Lock, Error> {
+    let started = Instant::now();
+    loop {
+        match locked(home, day) {
+            Ok(lock) => return Ok(lock),
+            Err(e) if e.kind() != ErrorKind::TimedOut => return Err(Error::Store(e)),
+            Err(_) if started.elapsed() < wait => {}
+            Err(_) => {
+                return Err(refused(format!("another change to the page of {day} has not finished, so {undone}")));
+            }
+        }
+    }
 }
 
 fn write(home: &Path, day: &str, wishes: Vec<MadeWish>) -> Result<(), Error> {
@@ -184,15 +193,16 @@ pub(crate) fn kept_of(home: &Path, day: &str) -> Result<Vec<MadeWish>, Error> {
     kept(home, day).map_err(|why| refused(format!("the made wishes of {day} are not used: {why}")))
 }
 
-/// Changes one made wish of the day behind the day's lock, and returns it as it is kept then. A change that is
-/// refused, a wish that is not there and made wishes that cannot be used write nothing.
+/// Changes one made wish of the day behind the day's lock, waited for `wait` at least, and returns it as it is
+/// kept then. A change that is refused, a wish that is not there and made wishes that cannot be used write nothing.
 pub(crate) fn change(
     home: &Path,
     day: &str,
     id: &str,
+    wait: Duration,
     change: impl FnOnce(&mut MadeWish) -> Result<(), Error>,
 ) -> Result<MadeWish, Error> {
-    let _lock = behind(home, day, "the wish was not changed")?;
+    let _lock = behind(home, day, wait, "the wish was not changed")?;
     let mut wishes = kept_of(home, day)?;
     let wish = wishes.iter_mut().find(|wish| wish.id == id);
     let wish = wish.ok_or_else(|| refused(format!("the page of {day} has no made wish of that id")))?;
@@ -203,18 +213,15 @@ pub(crate) fn change(
 }
 
 /// The day's made wishes, as a page draws them. None when the day has none, or when what is kept cannot be used.
-/// A wish whose run was cut off, so that nothing wrote down how it ended, is drawn as needing the person, never as
-/// working for ever: the agent it left is stopped and the run is written down as failed (`run::bury`). Nothing
-/// else is written.
+/// A wish whose run no longer goes, and which nothing told how the run ended, is never drawn as working for ever:
+/// it is drawn, and written down, as its run's own record says it ended, or else as cut off, with the agent it
+/// left stopped (`run::bury`). Nothing else is written.
 pub fn made(home: &Path, day: &str) -> Vec<Wish> {
     let kept = if parse(day).is_ok() { kept(home, day).unwrap_or_default() } else { Vec::new() };
-    let drawn = |wish: MadeWish| Wish {
-        label: line(&wish.said, LABEL_MAX),
-        state: if run::bury(home, day, &wish) { WishState::NeedsYou } else { wish.state },
-        id: wish.id,
-        said: wish.said,
-        project: wish.project,
-        stars: wish.stars,
+    let drawn = |wish: MadeWish| {
+        let wish = run::bury(home, day, wish);
+        let label = line(&wish.said, LABEL_MAX);
+        Wish { label, state: wish.state, id: wish.id, said: wish.said, project: wish.project, stars: wish.stars }
     };
     kept.into_iter().map(drawn).collect()
 }

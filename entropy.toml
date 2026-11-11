@@ -42,8 +42,14 @@ max_file_lines = 400
 # its change behind the day's lock, the folders of a day, taking a copy back, and the examples of what a run prints)
 # and the binary by 1118 (`run` and its parsing are 23; the rest is its tests at the binary, `tests/f39.rs` and
 # `tests/f39/`, and the made-up agent they start, `tests/support/fake_agent.rs`).
-"crates/jellymoon-core" = 5031
-"crates/jellymoon" = 6131
+# The gate review of F39 raised the binary by 497, all of it tests and the made-up agent: `tests/f39/safe.rs`, 202
+# (a log's folder never printed, only full paths in the environment, nothing left going, an end found in the
+# record), `tests/f39/stream.rs`, 102 (the star rule and the checked start), and the scripts they start. It raised
+# core by 230: the checked start of a stream and the stricter star (`run/stream.rs`, 132), an end written in the
+# record before the wish is told and found there later (`run/end.rs`, 171, of which 100 came out of `run.rs`), and
+# the one function that passes on only full paths (`call.rs`, 46).
+"crates/jellymoon-core" = 5261
+"crates/jellymoon" = 6628
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

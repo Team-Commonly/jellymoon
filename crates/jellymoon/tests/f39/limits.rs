@@ -12,16 +12,32 @@ use std::{fs, thread};
 use serde_json::json;
 
 use super::{DAY, SAID, STAR, World, ran, refused, world};
+use crate::support::skipped;
+
+const NO_SIGNAL: &str = "this system has no signal to stop another command's child with, and nothing is stopped";
 
 impl World {
     /// Whether the made-up agent got as far as its wait, and is gone now.
-    fn agent_came_and_went(&self) -> bool {
-        let rec = self.at("rec");
-        rec.join("started").is_file() && fs::File::open(rec.join("held")).unwrap().try_lock().is_ok()
+    pub fn agent_came_and_went(&self) -> bool {
+        self.at("rec").join("started").is_file() && self.free("held")
+    }
+
+    /// Whether nothing holds the system's lock on a file the made-up agent, or what it left, locks while it lives.
+    pub fn free(&self, held: &str) -> bool {
+        fs::File::open(self.at("rec").join(held)).unwrap().try_lock().is_ok()
+    }
+
+    /// Waits for a lock of the made-up agent's to be free, five seconds at most: a kill is not felt at once.
+    pub fn freed(&self, held: &str) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !self.free(held) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        self.free(held)
     }
 
     /// Starts `jellymoon run` and returns at once, with the command still going.
-    fn start_going(&self, wish: &str, repo: &Path) -> Child {
+    pub fn start_going(&self, wish: &str, repo: &Path) -> Child {
         let mut command = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
         command.args(["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
         command.current_dir(self.dir.path()).env_clear().envs(self.vars.iter().map(|(name, value)| (name, value)));
@@ -33,7 +49,7 @@ impl World {
 }
 
 /// Waits for a file the made-up agent leaves, half a minute at most.
-fn wait_for(file: &Path) {
+pub fn wait_for(file: &Path) {
     let deadline = Instant::now() + Duration::from_secs(30);
     while !file.exists() {
         assert!(Instant::now() < deadline, "{} never came", file.display());
@@ -108,7 +124,7 @@ fn left_editing(w: &World, wish: &str, repo: &Path) -> (String, std::path::PathB
     (run, file)
 }
 
-fn grows(file: &Path) -> bool {
+pub fn grows(file: &Path) -> bool {
     let size = || fs::metadata(file).map_or(0, |meta| meta.len());
     let before = size();
     thread::sleep(Duration::from_millis(400));
@@ -118,8 +134,7 @@ fn grows(file: &Path) -> bool {
 #[test]
 fn the_agent_a_killed_run_left_editing_is_stopped_by_the_next_page() {
     if !cfg!(unix) {
-        println!("skipped: this system has no signal to stop another command's child with, and nothing is stopped");
-        return;
+        return skipped(NO_SIGNAL);
     }
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
@@ -129,7 +144,7 @@ fn the_agent_a_killed_run_left_editing_is_stopped_by_the_next_page() {
 
     assert_eq!(w.on_page(&wish)["state"], "needs_you");
     // The agent's process is gone, by the lock it held, and the file it was writing has stopped changing.
-    assert!(w.agent_came_and_went(), "the agent is still running after the page");
+    assert!(w.freed("held"), "the agent is still running after the page");
     assert!(!grows(&file), "the copy is still being edited");
     let why = format!("run {run} was cut off before it ended: its copy is kept and no star was added");
     let kept = json!({"id": wish, "said": SAID, "project": "alpha", "state": "needs_you", "stars": [], "run": run, "why": why});
@@ -141,8 +156,7 @@ fn the_agent_a_killed_run_left_editing_is_stopped_by_the_next_page() {
 #[test]
 fn a_pid_that_is_another_process_by_now_is_never_signalled() {
     if !cfg!(unix) {
-        println!("skipped: this system has no signal to stop another command's child with, and nothing is stopped");
-        return;
+        return skipped(NO_SIGNAL);
     }
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
@@ -173,21 +187,21 @@ fn an_agent_deaf_to_the_stop_signal_is_killed_after_its_five_seconds() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
     w.play("deaf", 0);
-    let short = [("JELLYMOON_TEST_RUN_LIMIT_MS", OsString::from("1000"))];
+    // Three seconds, so that the agent has made itself deaf before it is asked, also on a machine that is busy.
+    let short = [("JELLYMOON_TEST_RUN_LIMIT_MS", OsString::from("3000"))];
     let from = Instant::now();
     let stopped = w.run_with(&short, &["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
     let took = from.elapsed();
-    if w.at("rec").join("cannot").exists() {
-        println!("skipped: nothing here starts a program deaf to the stop signal (no signals, or no /usr/bin/perl)");
-        return;
+    if let Some(why) = w.rec("cannot") {
+        return skipped(&why);
     }
     let (run, said) = ran(&stopped);
     let why = format!(
-        "run {run} did not finish (it was stopped at its time limit of 1 seconds): its copy is kept and no star was added"
+        "run {run} did not finish (it was stopped at its time limit of 3 seconds): its copy is kept and no star was added"
     );
     assert_eq!((&said["outcome"], &said["why"]), (&json!("failed"), &json!(why)));
     // It was asked, was given its five seconds, and was then killed: the agent sleeps for a minute.
-    assert!(took >= Duration::from_secs(6) && took < Duration::from_secs(30), "{took:?}");
+    assert!(took >= Duration::from_secs(8) && took < Duration::from_secs(30), "{took:?}");
     assert!(w.agent_came_and_went(), "the deaf agent is still running");
 }
 

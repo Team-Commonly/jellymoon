@@ -40,13 +40,63 @@ fn success() -> String {
     result("success", "false", 0, 0)
 }
 
-fn starts() {
-    line(
-        r#"{"type":"system","subtype":"init","tools":["Edit","Glob","Grep","Read","Write"],"mcp_servers":[],"permissionMode":"acceptEdits"}"#,
-    );
+const TOOLS: &str = r#"["Edit","Glob","Grep","Read","Write"]"#;
+const MODE: &str = r#""acceptEdits""#;
+
+/// The stream's first line as it was measured, but for the three parts given, each as JSON.
+fn init(tools: &str, servers: &str, mode: &str) {
+    let parts = format!(r#""tools":{tools},"mcp_servers":{servers},"permissionMode":{mode}"#);
+    line(&format!(r#"{{"type":"system","subtype":"init","cwd":"{MARKER}",{parts}}}"#));
+}
+
+fn says() {
     line(&format!(
         r#"{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"text","text":"{MARKER} I will edit a.txt"}}]}}}}"#
     ));
+}
+
+fn starts() {
+    init(TOOLS, "[]", MODE);
+    says();
+}
+
+/// `first`: a stream whose start is not the measured one, by `number`; the measured start then comes too late, and
+/// the agent never ends by itself (`waits`). 13 and 14 are two such that end at once, with the work and a success.
+/// From 15 on the start is fine: the work follows, and a success.
+fn first(number: usize, rec: &Path) -> i32 {
+    let hook = r#"{"type":"system","subtype":"hook_started"}"#;
+    let less = |part: &str| line(&format!(r#"{{"type":"system","subtype":"init",{part}}}"#));
+    match number {
+        0 | 13 => init(r#"["Bash","Edit","Glob","Grep","Read","Write"]"#, "[]", MODE),
+        1 => init(TOOLS, r#"[{"name":"files","status":"connected"}]"#, MODE),
+        2 => init(TOOLS, "[]", r#""bypassPermissions""#),
+        3 => init(r#"["Edit","Glob","Grep","Read"]"#, "[]", MODE),
+        4 => less(&format!(r#""tools":{TOOLS},"mcp_servers":[]"#)),
+        5 => less(&format!(r#""tools":{TOOLS},"permissionMode":{MODE}"#)),
+        6 => less(&format!(r#""mcp_servers":[],"permissionMode":{MODE}"#)),
+        7 => says(),
+        8 => line(&format!("{MARKER} is not JSON")),
+        9 => line(&result("error_during_execution", "true", 0, 0)),
+        10 => init(r#"["Edit","Glob","Grep","Read","Write","Write"]"#, "[]", MODE),
+        11 => {
+            line(hook);
+            init(TOOLS, "[]", r#""default""#);
+        }
+        12 => line(&"j".repeat(1 << 20)),
+        14 => {}
+        // Fine: a line of the harness's own before it, the tools in another order, and parts nobody measured.
+        _ => {
+            line(hook);
+            init(r#"["Write","Read","Grep","Glob","Edit"],"model":"m","slash_commands":["x"]"#, "[]", MODE);
+        }
+    }
+    if number < 13 {
+        starts();
+        return waits(false, rec);
+    }
+    says();
+    work();
+    ends_with(&success())
 }
 
 /// The work: one file edited, one new, one removed, in the folder it was started in.
@@ -75,7 +125,10 @@ fn garbage() {
 /// Junk lines, then the result, `total` bytes in all.
 fn fill(total: usize) {
     let (last, chunk) = (success() + "\n", 64 * 1024);
-    let mut left = total - last.len();
+    let first =
+        format!(r#"{{"type":"system","subtype":"init","tools":{TOOLS},"mcp_servers":[],"permissionMode":{MODE}}}"#);
+    line(&first);
+    let mut left = total - last.len() - first.len() - 1;
     while left > 0 {
         let size = if left >= 2 * chunk { chunk } else { left };
         out(format!("{}\n", "j".repeat(size - 1)).as_bytes());
@@ -137,6 +190,32 @@ fn scribbles(rec: &Path) -> i32 {
     0
 }
 
+/// `litter` leaves a program of its own going, in the agent's process group and with none of its pipes, then ends as
+/// the number says: 0 with a success, any other with that exit and no result. The program it leaves is this one,
+/// started with `litters`: it holds the lock on `litter-held` and writes `litter.txt`, for half a minute.
+#[allow(clippy::zombie_processes, reason = "the program left going is the point: it must outlive this one")]
+fn litter(rec: &Path, code: usize) -> i32 {
+    let mut left = process::Command::new(env::current_exe().unwrap());
+    left.arg("litters").arg(rec).stdin(process::Stdio::null()).stdout(process::Stdio::null());
+    left.stderr(process::Stdio::null()).spawn().unwrap();
+    while !rec.join("litter.txt").exists() {
+        thread::sleep(Duration::from_millis(10));
+    }
+    edits();
+    if code == 0 { ends_with(&success()) } else { i32::try_from(code).unwrap() }
+}
+
+fn litters(rec: &Path) -> ! {
+    let held = fs::File::create(rec.join("litter-held")).unwrap();
+    held.lock().unwrap();
+    for _ in 0..3000 {
+        let mut file = fs::OpenOptions::new().append(true).create(true).open(rec.join("litter.txt")).unwrap();
+        file.write_all(b"more\n").unwrap();
+        thread::sleep(Duration::from_millis(10));
+    }
+    process::exit(0)
+}
+
 /// `deaf` starts this program again as one that the stop signal does not reach: the system keeps a signal ignored
 /// across the start of a program, and `perl` can ask for that. Where that cannot be done it leaves `cannot`.
 fn deafen(rec: &Path) -> ! {
@@ -148,7 +227,8 @@ fn deafen(rec: &Path) -> ! {
         let failed = std::os::unix::process::CommandExt::exec(&mut perl);
         eprintln!("perl could not be started: {failed}");
     }
-    fs::write(rec.join("cannot"), "").unwrap();
+    let why = if cfg!(unix) { "there is no /usr/bin/perl to start one with" } else { "this system has no signals" };
+    fs::write(rec.join("cannot"), format!("nothing here starts a program deaf to the stop signal: {why}")).unwrap();
     process::exit(1)
 }
 
@@ -161,6 +241,10 @@ fn record(rec: &Path) {
     let mut names: Vec<String> = env::vars_os().map(|(name, _)| name.to_string_lossy().into_owned()).collect();
     names.sort();
     fs::write(rec.join("env"), names.join("\n")).unwrap();
+    for name in ["PATH", "HOME", "TMPDIR", "CLAUDE_CONFIG_DIR", "USERPROFILE"] {
+        let value = env::var_os(name).unwrap_or_default();
+        fs::write(rec.join(format!("var-{name}")), value.to_string_lossy().as_bytes()).unwrap();
+    }
     fs::write(rec.join("cwd"), env::current_dir().unwrap().to_string_lossy().as_bytes()).unwrap();
     let mut input = Vec::new();
     io::stdin().read_to_end(&mut input).unwrap();
@@ -168,6 +252,9 @@ fn record(rec: &Path) {
 }
 
 fn main() {
+    if env::args().nth(1).as_deref() == Some("litters") {
+        litters(Path::new(&env::args().nth(2).unwrap()));
+    }
     let play = fs::read_to_string(env::current_exe().unwrap().with_file_name("play")).unwrap();
     let play: Vec<&str> = play.lines().collect();
     let (script, rec, number) = (play[0], Path::new(play[1]), play[2].parse::<usize>().unwrap());
@@ -202,12 +289,6 @@ fn main() {
             line(r#"{"type":"system","subtype":"permission_denied","tool_name":"Write"}"#);
             ends_with(&result("success", "false", number, 0))
         }
-        // The last line is a result written as a list, which is no line of the stream either.
-        "garbage" => {
-            garbage();
-            ends(&success(), 0);
-            ends_with(r#"["result","error_during_execution",true,[]]"#)
-        }
         // One junk line of `number` bytes with its line break, then the result.
         "long-line" => {
             edits();
@@ -228,7 +309,50 @@ fn main() {
         }
         "forever" | "deaf" | "slow" => waits(script == "slow", rec),
         "scribble" => scribbles(rec),
-        other => panic!("no script {other}"),
+        other => gate(other, number, rec),
     };
     process::exit(code);
+}
+
+/// The scripts of the gate review's tests (`tests/f39/stream.rs`, `tests/f39/safe.rs`).
+fn gate(script: &str, number: usize, rec: &Path) -> i32 {
+    match script {
+        // What may not come after a success: 0 a line that is not the stream's, 1 one over the line cap, 2 a second
+        // success, 3 a result that is not one, 4 the list. 5 is a success after a result that was not one.
+        "after" => {
+            edits();
+            let (fine, not) = (success(), result("error_during_execution", "true", 0, 0));
+            line(if number == 5 { &not } else { &fine });
+            match number {
+                0 => line(&format!("{MARKER} is not JSON")),
+                1 => line(&"j".repeat(1 << 20)),
+                2 | 5 => line(&fine),
+                3 => line(&not),
+                _ => line(r#"["result","success",false,[]]"#),
+            }
+            0
+        }
+        // A result that does not say whether it is an error: 0 leaves the part out, 1 has it as nothing.
+        "unsaid" => {
+            let said = if number == 0 { "" } else { r#""is_error":null,"# };
+            ends(&format!(r#"{{"type":"result","subtype":"success",{said}"permission_denials":[]}}"#), 0)
+        }
+        // Before the result, a result written as a list, which is no line of the stream either.
+        "garbage" => {
+            starts();
+            garbage();
+            work();
+            line(r#"["result","error_during_execution",true,[]]"#);
+            ends_with(&success())
+        }
+        "first" => first(number, rec),
+        "litter" => litter(rec, number),
+        // A harness that did its work and then fails in the words of one too old.
+        "worked-old" => {
+            edits();
+            eprintln!("error: unknown option '--restricted'");
+            1
+        }
+        other => panic!("no script {other}"),
+    }
 }

@@ -1,7 +1,9 @@
 //! The harness child of a `jellymoon run` that was cut off (`docs/development/run.md`, "A run that was cut off").
 //! Nobody waits for that child any more, so all that is known of it is the pid in the run's record, and a pid is
 //! given out again once its process is gone. [`mark`] is what tells the two apart: when the process started, as the
-//! system says it. [`stop`] signals the pid only while its mark is the one recorded.
+//! system says it. [`kill`] signals the pid only while its mark is the one recorded, and does not wait: a dead run's
+//! agent has nobody to report to, and a page is not kept waiting for it. [`stop`] is the one stop sequence, which
+//! the limit inside a live `jellymoon run` uses with its five seconds (`child.rs`).
 //!
 //! Where the system has no signals (Windows) there is no mark and nothing is stopped.
 
@@ -12,10 +14,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-
-/// How long a child that was asked to stop is given before it is killed, and how long the kill is given.
-#[cfg(unix)]
-const WAITS: (Duration, Duration) = (Duration::from_secs(5), Duration::from_secs(2));
 
 /// When the process of that pid started. None when there is no such process, when it has ended and only waits to be
 /// collected, or when the system cannot be asked. Linux says it in `/proc`; elsewhere `ps` is asked, by its full path
@@ -36,23 +34,31 @@ pub(super) fn mark(pid: u32) -> Option<String> {
     (!state.starts_with('Z')).then(|| format!("ps {}", started.trim()))
 }
 
-/// Stops the process of that pid, and what it started, if it is still the one that was recorded: asked first
-/// (`SIGTERM`), then killed. The mark is read again just before each signal, so a pid that is another process by
-/// then is not signalled. The child was started in a process group of its own, so the signal goes to the group.
+/// The one stop sequence. The child was started in a process group of its own, named by its pid, so each signal
+/// goes to the group, and only while `same` says the pid is still that child. With a `grace` the group is asked
+/// first (`SIGTERM`) and given that long, or until the child is `gone`. Then it is killed, gone or not: what the
+/// child started is in the group too.
 #[cfg(unix)]
-pub(super) fn stop(pid: u32, recorded: &str) {
+pub(super) fn stop(pid: u32, grace: Duration, same: impl Fn() -> bool, mut gone: impl FnMut() -> bool) {
     use rustix::process::{Pid, Signal, kill_process_group};
-    let same = || mark(pid).as_deref() == Some(recorded);
     let Some(group) = i32::try_from(pid).ok().filter(|pid| *pid > 1).and_then(Pid::from_raw) else { return };
-    for (signal, wait) in [(Signal::TERM, WAITS.0), (Signal::KILL, WAITS.1)] {
-        if !same() || kill_process_group(group, signal).is_err() {
-            return;
-        }
-        let deadline = Instant::now() + wait;
-        while Instant::now() < deadline && same() {
-            thread::sleep(Duration::from_millis(50));
+    if !grace.is_zero() && same() && kill_process_group(group, Signal::TERM).is_ok() {
+        let deadline = Instant::now() + grace;
+        while Instant::now() < deadline && !gone() {
+            thread::sleep(Duration::from_millis(10));
         }
     }
+    if same() {
+        let _ = kill_process_group(group, Signal::KILL);
+    }
+}
+
+/// Kills the process of that pid, and what it started, if it is still the one that was recorded: at once, with
+/// nothing asked and nothing waited for. The mark is read just before the signal, so a pid that is another process
+/// by then is not signalled.
+#[cfg(unix)]
+pub(super) fn kill(pid: u32, recorded: &str) {
+    stop(pid, Duration::ZERO, || mark(pid).as_deref() == Some(recorded), || true);
 }
 
 #[cfg(not(unix))]
@@ -61,4 +67,4 @@ pub(super) fn mark(_pid: u32) -> Option<String> {
 }
 
 #[cfg(not(unix))]
-pub(super) fn stop(_pid: u32, _recorded: &str) {}
+pub(super) fn kill(_pid: u32, _recorded: &str) {}

@@ -8,6 +8,7 @@
 //! outside the copy, and the folder and the branch come from the run id alone.
 
 mod git;
+mod record;
 
 use std::collections::hash_map::RandomState;
 use std::ffi::OsStr;
@@ -19,7 +20,8 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use git::{Git, Repo};
-use serde::{Deserialize, Serialize};
+use record::{Record, forget, read, write};
+use serde::Serialize;
 
 use crate::Error;
 use crate::call::private_dir;
@@ -60,15 +62,6 @@ impl fmt::Display for RunCopy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&serde_json::to_string(self).map_err(|_| fmt::Error)?)
     }
-}
-
-/// What core knows of a copy, written when it is made: the git folder the repo's checkouts share, the copy's own
-/// git folder inside it, and when the run failed, in nanoseconds, if it did.
-#[derive(Serialize, Deserialize)]
-struct Record {
-    repo: PathBuf,
-    own: PathBuf,
-    failed: Option<u64>,
 }
 
 /// The two folders in Jellymoon's own: `copies` holds each copy under its run id and nothing else, and `runs` holds
@@ -141,6 +134,16 @@ fn claim(runs: &Path, given: Option<&str>) -> Result<String, Error> {
 /// Makes a copy of the repo at `repo` for a run: a worktree of the commit the person's checkout is on, on the new
 /// branch `jellymoon/run-<id>`. Nothing of the person's checkout, index or `HEAD` is written.
 pub fn make_copy(home: &Path, repo: &Path, run: Option<&str>) -> Result<RunCopy, Error> {
+    make(home, repo, run, false)
+}
+
+/// [`make_copy`] for a run. A folder that was not `typed` by the person was read from a session log: no refusal,
+/// now or when the copy is ended, repeats what git says of it, since git's words name the folder.
+pub(crate) fn copy_of(home: &Path, repo: &Path, typed: bool) -> Result<RunCopy, Error> {
+    make(home, repo, None, !typed)
+}
+
+fn make(home: &Path, repo: &Path, run: Option<&str>, found: bool) -> Result<RunCopy, Error> {
     if !repo.is_absolute() {
         return Err(refused("--repo must be a full path, from the root"));
     }
@@ -149,7 +152,7 @@ pub fn make_copy(home: &Path, repo: &Path, run: Option<&str>) -> Result<RunCopy,
     for folder in [&at.root, &at.runs] {
         private_dir(folder).map_err(Error::Store)?;
     }
-    let git = Git::find(&at.runs).map_err(refused)?;
+    let git = Git::find(&at.runs, found).map_err(refused)?;
     let found =
         git.discover(repo).map_err(|said| refused(format!("--repo is not a git repo git could open: {said}")))?;
     let [bare, inside, below, own, shared] = &found[..] else {
@@ -204,7 +207,7 @@ fn note(git: &Git, at: &Places, run: &str, shared: &Path, folder: &Path) -> Resu
         [_, inside, below, own, _] if inside == "true" && below.is_empty() => PathBuf::from(own),
         _ => PathBuf::new(), // git found no repo there, or one above the copy
     };
-    let record = Record { repo: shared.to_path_buf(), own, failed: None };
+    let record = Record { repo: shared.to_path_buf(), own, failed: None, found: git.quiet };
     if record.own.is_absolute() { write(&at.record(run), &record) } else { Err(refused("git lost the copy")) }
 }
 
@@ -242,7 +245,7 @@ pub(crate) fn end_copy(home: &Path, run: &str, outcome: Outcome) -> Result<(RunC
     }
     let folder = at.root.join(run);
     let there = standing(&at.root, &folder)?;
-    let git = Git::find(&at.runs).map_err(refused)?;
+    let git = Git::find(&at.runs, record.found).map_err(refused)?;
     let made = there && commit(&git.open(&record.own).map_err(refused)?, &folder, run)?;
     gone(&git, &record, &folder, there)?;
     forget(&file);
@@ -258,7 +261,7 @@ pub(crate) fn take_back(home: &Path, run: &str) -> Result<(), Error> {
     held.lock().map_err(Error::Store)?;
     if let Some(record) = read(&at.record(run))? {
         let folder = at.root.join(run);
-        let git = Git::find(&at.runs).map_err(refused)?;
+        let git = Git::find(&at.runs, record.found).map_err(refused)?;
         gone(&git, &record, &folder, standing(&at.root, &folder)?)?;
         let name = format!("refs/heads/{}", branch(run));
         git.open(&record.repo).and_then(|repo| repo.run(None, &[], &["update-ref", "-d", &name])).map_err(refused)?;
@@ -347,7 +350,7 @@ fn unlist(repo: &Repo, folder: &Path) -> Result<String, String> {
 fn prune(at: &Places) {
     let mut failed = failed(at);
     failed.sort_by(|a, b| (b.0, &b.1).cmp(&(a.0, &a.1)));
-    let Some(git) = Git::find(&at.runs).ok().filter(|_| failed.len() > KEPT) else { return };
+    let Some(git) = Git::find(&at.runs, true).ok().filter(|_| failed.len() > KEPT) else { return };
     for (_, run, record) in failed.into_iter().skip(KEPT) {
         let folder = at.root.join(&run);
         let removed = standing(&at.root, &folder).and_then(|there| gone(&git, &record, &folder, there));
@@ -366,28 +369,4 @@ fn failed(at: &Places) -> Vec<(u64, String, Record)> {
         Some((record.failed?, run, record))
     };
     runs.filter_map(failed).collect()
-}
-
-fn read(file: &Path) -> Result<Option<Record>, Error> {
-    match fs::read(file) {
-        Ok(text) => {
-            let record = serde_json::from_slice(&text);
-            record.map(Some).map_err(|_| refused("the record of that run's copy cannot be read; nothing was done"))
-        }
-        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(Error::Store(e)),
-    }
-}
-
-/// Writes the record whole: beside its place first, then moved there.
-fn write(file: &Path, record: &Record) -> Result<(), Error> {
-    let text = serde_json::to_string(record).map_err(|_| refused("the repo's path is not text"))?;
-    let new = file.with_extension("new");
-    fs::write(&new, text + "\n").and_then(|()| fs::rename(&new, file)).map_err(Error::Store)
-}
-
-/// The copy is gone, so its record goes, and the run's folder in `runs` when nothing else is kept there.
-fn forget(file: &Path) {
-    let _ = fs::remove_file(file);
-    let _ = file.parent().map(fs::remove_dir);
 }

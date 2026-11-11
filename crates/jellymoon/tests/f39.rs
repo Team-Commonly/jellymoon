@@ -3,8 +3,8 @@
 //! `fake-agent` (`support/fake_agent.rs`), first on a `PATH` whose only other folder holds git alone, so the real
 //! Claude Code is never started. Every repo is made here with the real `git`, under an empty global config, and both
 //! homes and the harness's folder are scratch folders. `f39/failed.rs` holds the runs that do not finish and the
-//! caps on the stream, `f39/refused.rs` what is refused or not started, `f39/limits.rs` the time limit, a run cut
-//! off, and two runs at once.
+//! caps on the stream, `f39/stream.rs` the star's rule and the stream's first line, `f39/refused.rs` what is refused
+//! or not started, `f39/limits.rs` the time limit, a run cut off and two runs at once, `f39/safe.rs` what never leaks.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f39/failed.rs"]
@@ -13,6 +13,10 @@ mod failed;
 mod limits;
 #[path = "f39/refused.rs"]
 mod refused;
+#[path = "f39/safe.rs"]
+mod safe;
+#[path = "f39/stream.rs"]
+mod stream;
 mod support;
 
 use std::env::consts::EXE_SUFFIX;

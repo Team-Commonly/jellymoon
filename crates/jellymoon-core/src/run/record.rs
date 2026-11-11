@@ -1,5 +1,6 @@
-//! A run's own record, `runs/<id>/run.json`: the one place the repo's folder is written down, and where the harness
-//! child's pid is kept with what tells that process from a later one of the same pid (`dead.rs`).
+//! A run's own record, `runs/<id>/run.json`: how the run ended, which is written here before the wish is told,
+//! and the harness child's pid with what tells that process from a later one of the same pid (`dead.rs`). The
+//! repo's folder is not in it: the copy's record names the repo (`copy/record.rs`).
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -18,11 +19,13 @@ const RECORD_MAX: usize = 64 * 1024;
 pub(super) struct Record {
     pub wish: String,
     pub day: String,
-    pub repo: PathBuf,
     /// When it was started, in seconds since 1970.
     pub started: u64,
     /// None while it is going.
     pub outcome: Option<RunOutcome>,
+    /// How it ended, in the fixed words the wish is then given. None while it is going.
+    #[serde(default)]
+    pub why: Option<String>,
     pub denied: usize,
     pub skipped: usize,
     /// The harness child. None before it is started.

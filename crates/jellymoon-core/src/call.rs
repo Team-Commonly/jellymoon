@@ -3,8 +3,9 @@
 //! arguments are fixed but for the model's name; the environment is a short list of this process's (the harness's own
 //! sign-in is under the home or its config dir), with a longer `PATH` when the harness was not found on it (`find.rs`); the folder is new, empty and removed afterwards.
 
+use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
@@ -40,6 +41,23 @@ const ENVIRONMENT: &[&str] = &[
     "CLAUDE_CONFIG_DIR",
 ];
 
+/// The variables that name one folder or one file, here and in git's list (`copy/git.rs`).
+const PLACES: &[&str] = &[
+    "HOME",
+    "TMPDIR",
+    "CLAUDE_CONFIG_DIR",
+    "XDG_CONFIG_HOME",
+    "GIT_CONFIG_GLOBAL",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "ProgramData",
+    "TEMP",
+    "TMP",
+];
+const NO_PATH: &str =
+    "PATH names no folder by its full path, and a folder named any other way is not passed on to Claude Code";
+
 /// How long a stopped or finished harness's output is waited for: something it started may still hold the pipe.
 const DRAIN: Duration = Duration::from_secs(1);
 
@@ -65,8 +83,16 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
     let harness = find::named_or_found(options.harness.as_deref())?;
     private_dir(&options.dir).map_err(Error::Call)?;
     let folder = tempfile::Builder::new().prefix("call-").tempdir_in(&options.dir).map_err(Error::Call)?;
-    let mut command = harness_in(harness, folder.path());
-    command.args(["-p", "--model", &options.model, "--tools", "", "--strict-mcp-config", "--disable-slash-commands"]);
+    let mut command = harness_of(harness).map_err(Error::Call)?;
+    command.current_dir(folder.path()).args([
+        "-p",
+        "--model",
+        &options.model,
+        "--tools",
+        "",
+        "--strict-mcp-config",
+        "--disable-slash-commands",
+    ]);
     command.args([
         "--no-session-persistence",
         "--setting-sources",
@@ -90,14 +116,38 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
     }
 }
 
-/// The harness, started in `folder` with the short list of this process's variables and nothing else: the one way
-/// Jellymoon starts a harness, for the reading call and for a run.
-pub(crate) fn harness_in(harness: Found, folder: &Path) -> Command {
+/// The harness, with the short list of this process's variables and nothing else: the one way Jellymoon starts a
+/// harness, for the reading call and for a run. The caller names the folder it starts in. With no folder of `PATH`
+/// that is a full path there is no command: the harness would look for its programs in the folder it starts in.
+pub(crate) fn harness_of(harness: Found) -> io::Result<Command> {
     let mut command = Command::new(harness.program);
-    command.current_dir(folder).env_clear();
-    command.envs(ENVIRONMENT.iter().filter_map(|name| Some((name, env::var_os(name)?))));
-    command.envs(harness.path.map(|path| ("PATH", path)));
-    command
+    command.env_clear().envs(passed_on(ENVIRONMENT));
+    let path = harness.path.or_else(|| env::var_os("PATH")).unwrap_or_default();
+    let path = env::join_paths(full_folders(&path)).ok().filter(|path| !path.is_empty());
+    command.env("PATH", path.ok_or_else(|| io::Error::other(NO_PATH))?);
+    Ok(command)
+}
+
+/// The folders of a `PATH` that are named by a full path, in their order.
+pub(crate) fn full_folders(path: &OsStr) -> Vec<PathBuf> {
+    env::split_paths(path).filter(|folder| folder.is_absolute()).collect()
+}
+
+/// This process's variables of the names given, for a child that starts in another folder. A path that is not a
+/// full one would be read from that folder, which for a run is a copy the agent writes: of `PATH` only the folders
+/// named by a full path are passed on, and a variable that names one folder or file ([`PLACES`]) only when it is one.
+pub(crate) fn passed_on(names: &[&'static str]) -> Vec<(&'static str, OsString)> {
+    let full = |name: &&'static str| {
+        let value = env::var_os(name)?;
+        if *name == "PATH" {
+            return env::join_paths(full_folders(&value))
+                .ok()
+                .filter(|path| !path.is_empty())
+                .map(|path| (*name, path));
+        }
+        (!PLACES.contains(name) || Path::new(&value).is_absolute()).then_some((*name, value))
+    };
+    names.iter().filter_map(full).collect()
 }
 
 /// Makes the folder the call folders go in, for this user only where the system has file modes; one that is already

@@ -20,6 +20,8 @@ mod obeys;
 mod pipe;
 #[path = "f40/races.rs"]
 mod races;
+#[path = "f40/request.rs"]
+mod request;
 mod support;
 #[path = "f39/world.rs"]
 mod world;

@@ -234,6 +234,30 @@ fn a_repo_moved_away_under_a_harness_too_old_leaves_nothing_of_the_run_in_jellym
     assert_eq!(ran(&w.start(&wish, &moved)).1["star"], json!(STAR), "and can be run where the repo is now");
 }
 
+// The copy's record is written over while a harness that turns out too old runs, so the copy cannot be taken back
+// at all: its folder is still there when that is given up. It goes with the run's folder, and the wish is as it was.
+#[test]
+fn a_copy_whose_record_cannot_be_read_under_a_harness_too_old_has_its_folder_removed_all_the_same() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let before = w.kept(&wish);
+    w.play("old-late", 0);
+    let ended = thread::scope(|scope| {
+        let going = scope.spawn(|| w.start(&wish, &repo));
+        wait_for(&w.at("rec").join("started"));
+        let run = w.kept(&wish)["run"].as_str().unwrap().to_string();
+        assert_eq!(w.copies(), vec![run.clone()], "the copy is there while the agent waits");
+        fs::write(w.jm("runs").join(&run).join("copy.json"), "not a record\n").unwrap();
+        fs::write(w.at("rec").join("go"), "").unwrap();
+        going.join().unwrap()
+    });
+    assert!(refused(&ended).contains("the record of that run's copy cannot be read"), "{}", ended.stderr);
+    let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
+    let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
+    assert_eq!((w.copies(), runs), (vec![], Vec::<String>::new()), "no copy and no folder of the run");
+    assert_eq!((w.kept(&wish), w.starts()), (before, 1), "the wish is as it was");
+}
+
 // A record is a file anyone who can write the home can write. An end in it is believed only when it is one core
 // writes, for this wish, and, for a finished run, when the copy is gone as a finished run's is.
 #[test]

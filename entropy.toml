@@ -73,7 +73,9 @@ max_file_lines = 400
 # The test of a copy's folder removed when its record cannot be read raised the binary by 24 (`tests/f39/refused.rs`).
 # A look's bounded wait for the lock a copy is cleaned behind raised core by 52 (`copy/hold.rs`, 32, which took the
 # lock's lines out of `copy.rs`; `run/end.rs`) and the binary by 36 (its test, `tests/f39/limits.rs`).
-"crates/jellymoon-core" = 5577
+# What is in the way at `gone-<id>` removed before a run's folder is moved there raised core by 48 (`copy/gone.rs`:
+# 36 are its test of a folder, a file and a link there).
+"crates/jellymoon-core" = 5625
 "crates/jellymoon" = 7423
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no

@@ -178,7 +178,7 @@ fn make(home: &Path, repo: &Path, run: Option<&str>, found: bool) -> Result<RunC
     let run = claim(&at.runs, run)?;
     let made = add(&git, &person, &at, &run, Path::new(shared), &base);
     if made.is_err() {
-        let _ = fs::remove_dir_all(at.runs.join(&run));
+        let _ = gone::remove(&at.runs, &run);
     }
     made
 }

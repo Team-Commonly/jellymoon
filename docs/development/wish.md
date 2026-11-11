@@ -59,7 +59,17 @@ own words. The kept page itself never holds a made wish.
 - The same words made twice are two wishes.
 - With eight wishes read and eight made, a page holds sixteen. How many of them the kit shows is the kit's layout.
 - A made wish's little one carries a short label, cut. Its words are in the note "wished here today", whole or
-  counted (`+N more`), and that note comes after the clashes and the delivery note, so it never pushes one out. On
-  a full page the note has little room: beside the list, the delivery note and one clash, 960x640 in the sticker
-  theme draws no wish of 200 characters, and counts it. `layout` prints the note's lines and one `mark` piece a
-  wish drawn.
+  counted (`+N more`). `layout` prints the note's lines and one `mark` piece a wish drawn.
+- **A made wish never moves or shrinks what a person rules on.** The clashes and the delivery note are placed as
+  on the same page with no made wish, at the same size, and the note takes the room they leave. On a full page
+  that is little. Beside the list "came true today", the delivery note and one clash, with one made wish of 200
+  characters and the rest short:
+
+  | Made wishes | sticker, 960x640 and 1440x900 | plain, 960x640 and 1440x900 |
+  |---|---|---|
+  | 1 | none drawn, 1 counted | 1 drawn |
+  | 2 | none drawn, 2 counted | 2 drawn |
+  | 8 | none drawn, 8 counted | 2 drawn, 6 counted (the long one is passed over) |
+
+  So a full page in the sticker theme says only how many made wishes there are, in the note and in the footer.
+  Their words are drawn where there is room, as on a page with no clash and no delivery note.

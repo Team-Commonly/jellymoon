@@ -1,6 +1,7 @@
 //! Notes stack down the right-hand side, each under a strip of tape, in the scene's order. A list gives up rows to
 //! the notes after it. When the notes do not all fit, the first that does not and every one after it are left out,
-//! and a last small sheet says how many: no note goes without a word.
+//! and a last small sheet says how many: no note goes without a word. A whole list is the one exception to the
+//! order: it comes below every other note and takes only the room they leave, so it never moves or shrinks one.
 
 use super::{Ctx, PieceKind, Placed, TextRun, line_height, piece, run};
 use crate::geom::Rect;
@@ -13,8 +14,6 @@ const MAX_OPTIONS: usize = 4;
 /// a note in design units, and how large the options of a `whole` choice are written. A list gives up rows before any
 /// of them is tried. The scene keeps the whole text. A choice that is `whole` gives up no line: its sheet is as wide
 /// as the column, its options are written smaller when that places more notes, and it is drawn in full or left out.
-/// A `Whole` list is written at that same size, gives up rows down to the one line that counts them, and takes a
-/// tighter way when that draws more of its rows.
 const TIGHTER: [Way; 5] = [(3, 48.0, 1.0), (2, 48.0, 1.0), (2, 32.0, 1.0), (2, 32.0, 0.85), (2, 32.0, 0.72)];
 
 /// One way to make room: an option's lines, the gap under a note, the size of a whole choice's options.
@@ -29,6 +28,13 @@ pub const MORE_NOTES_ID: &str = "more";
 /// How many rows of a whole list are laid out at most. The ones after are only counted.
 const MAX_WHOLE_ROWS: usize = 12;
 
+/// The ways a whole list makes room for itself alone: the gap above it in design units, never wider than the gap
+/// under the other notes, and how large its rows are written. A later one is taken only when it draws more rows.
+const WHOLE_WAYS: [(f32, f32); 5] = [(48.0, 1.0), (32.0, 1.0), (32.0, 0.85), (32.0, 0.72), (16.0, 0.72)];
+
+/// A note of the scene with its place there, which its id and its colours come from.
+type At<'a> = (usize, &'a Note);
+
 /// A note being filled from the top down.
 struct Sheet {
     rect: Rect,
@@ -42,66 +48,81 @@ struct Sheet {
 
 pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
     let bottom = cx.paper().bottom() - cx.px(26.0);
-    let top = cx.y(cx.theme.metrics.note_top);
-    let total = scene.notes.len();
-    let seen = &scene.notes[..total.min(MAX_NOTES)];
-    let whole = seen.iter().any(|note| matches!(note, Note::Whole { .. }));
+    let mut top = cx.y(cx.theme.metrics.note_top);
+    let all = scene.notes.len();
+    let is_whole = |(_, note): &At| matches!(note, Note::Whole { .. });
+    let (wholes, seen): (Vec<At>, Vec<At>) = scene.notes.iter().enumerate().take(MAX_NOTES).partition(is_whole);
+    // The other notes are planned as if the scene had no whole list: the same notes placed, in the same way.
+    let total = all - wholes.len();
     // Room is made in this order: lists give up rows, options their third line, the gaps a third; then notes are
-    // counted. A tighter way is taken only when it places more notes, or as many and more rows of a whole list.
-    let mut best = lay(cx, seen, total, plan(cx, seen, total, TIGHTER[0], bottom - top), (top, bottom));
+    // counted. A tighter way is taken only when it places more notes.
+    let mut plan = plan(cx, &seen, total, TIGHTER[0], bottom - top);
     for way in &TIGHTER[1..] {
-        let plan = plan(cx, seen, total, *way, bottom - top);
-        if plan.placed > best.placed || (whole && plan.placed == best.placed) {
-            let tighter = lay(cx, seen, total, plan, (top, bottom));
-            if (tighter.placed, tighter.rows) > (best.placed, best.rows) {
-                best = tighter;
-            }
+        let tighter = self::plan(cx, &seen, total, *way, bottom - top);
+        if plan.placed < total && tighter.placed > plan.placed {
+            plan = tighter;
         }
     }
-    cx.out.extend(best.pieces);
-}
-
-/// The notes of one plan, laid out: how many it placed, and how many rows of whole lists it drew.
-struct Laid {
-    pieces: Vec<Placed>,
-    placed: usize,
-    rows: usize,
-}
-
-fn lay(cx: &Ctx, seen: &[Note], total: usize, plan: Plan, (mut top, bottom): (f32, f32)) -> Laid {
     let Plan { way, gap, more, needs, placed, used } = plan;
     let kept = if placed < total { more } else { 0.0 };
-    let (mut after, mut drawn, mut pieces) = (used, 0, Vec::new());
-    for (index, note) in seen.iter().enumerate().take(placed) {
-        after -= needs[index];
+    let (mut after, mut drawn) = (used, 0);
+    for (at, (index, note)) in seen.iter().enumerate().take(placed) {
+        after -= needs[at];
         // A list is as long as the room it is given: what the notes after it and the count do not need.
-        let gives = matches!(note, Note::List { .. } | Note::Whole { .. });
-        let room = if gives { bottom - top - after - kept } else { f32::INFINITY };
-        let Some((sheet, id, tilt)) = fill(cx, note, index, top, room, way) else {
+        let room = if matches!(note, Note::List { .. }) { bottom - top - after - kept } else { f32::INFINITY };
+        let Some((sheet, id, tilt)) = fill(cx, note, *index, top, room, way) else {
             break;
         };
         drawn += 1;
-        let mut paper = piece(PieceKind::Note, &id, index, sheet.rect);
-        paper.tilt_degrees = cx.theme.tilted(tilt);
-        paper.text = sheet.runs;
-        let tape_width = cx.px(104.0);
-        let tape_left = sheet.rect.x + (sheet.rect.w - tape_width) / 2.0;
-        let tape_rect = Rect::new(tape_left, sheet.rect.y - cx.px(14.0), tape_width, cx.px(28.0));
-        let mut tape = piece(PieceKind::Tape, &id, index, tape_rect);
-        tape.tilt_degrees = cx.theme.tilted(cx.theme.tilt.note_tape);
-        top = sheet.rect.bottom() + gap;
-        pieces.push(paper);
-        pieces.extend(sheet.options);
-        pieces.push(tape);
+        top = stick(cx, sheet, (&id, *index), tilt) + gap;
     }
-    if drawn < total {
-        let sheet = more_sheet(cx, total - drawn, total, top);
-        let mut paper = piece(PieceKind::Note, MORE_NOTES_ID, total, sheet.rect);
-        paper.text = sheet.runs;
-        pieces.push(paper);
+    // A whole list takes what every other note left, when every one of them is drawn.
+    for (index, note) in wholes.iter().take(if drawn == total { MAX_NOTES } else { 0 }) {
+        let Note::Whole { title, rows } = note else { continue };
+        let sized = |(above, scale): &(f32, f32)| {
+            let top = top - gap + cx.px(*above).min(gap);
+            whole(cx, title, rows, (top, bottom - top), *scale)
+        };
+        let most = |best: Option<Sheet>, sheet: Sheet| match best {
+            Some(best) if best.options.len() >= sheet.options.len() => Some(best),
+            _ => Some(sheet),
+        };
+        let Some(sheet) = WHOLE_WAYS.iter().filter_map(sized).fold(None, most) else {
+            break;
+        };
+        drawn += 1;
+        top = stick(cx, sheet, (&format!("note-{index}"), *index), cx.theme.tilt.list_note) + gap;
     }
-    let rows = pieces.iter().filter(|piece| piece.piece == PieceKind::Mark).count();
-    Laid { pieces, placed, rows }
+    if drawn < all {
+        let sheet = more_sheet(cx, all - drawn, all, top);
+        // Room was kept for the count of the other notes. The count of whole lists alone is drawn where it fits.
+        if drawn < total || sheet.rect.bottom() <= bottom {
+            let mut paper = piece(PieceKind::Note, MORE_NOTES_ID, all, sheet.rect);
+            paper.text = sheet.runs;
+            cx.out.push(paper);
+        }
+    }
+}
+
+/// Puts a filled sheet on the page under its strip of tape. Returns its bottom edge.
+fn stick(cx: &mut Ctx, sheet: Sheet, (id, index): (&str, usize), tilt: f32) -> f32 {
+    let mut paper = piece(PieceKind::Note, id, index, sheet.rect);
+    paper.tilt_degrees = cx.theme.tilted(tilt);
+    paper.text = sheet.runs;
+    let tape_width = cx.px(104.0);
+    let tape_left = sheet.rect.x + (sheet.rect.w - tape_width) / 2.0;
+    let tape_rect = Rect::new(tape_left, sheet.rect.y - cx.px(14.0), tape_width, cx.px(28.0));
+    let mut tape = piece(PieceKind::Tape, id, index, tape_rect);
+    tape.tilt_degrees = cx.theme.tilted(cx.theme.tilt.note_tape);
+    cx.out.push(paper);
+    cx.out.extend(sheet.options.into_iter().map(|mut mark| {
+        if mark.piece == PieceKind::Mark {
+            mark.id = id.to_string();
+        }
+        mark
+    }));
+    cx.out.push(tape);
+    sheet.rect.bottom()
 }
 
 /// Which notes are placed when room is made in one way.
@@ -117,11 +138,10 @@ struct Plan {
 }
 
 /// The notes placed are the first ones that fit `room`, with room kept for the count when any is left out.
-fn plan(cx: &Ctx, seen: &[Note], total: usize, way: Way, room: f32) -> Plan {
+fn plan(cx: &Ctx, seen: &[At], total: usize, way: Way, room: f32) -> Plan {
     let gap = cx.px(way.1);
     let more = gap + more_sheet(cx, 0, total, 0.0).rect.h;
-    let needs: Vec<f32> =
-        seen.iter().enumerate().map(|(index, note)| height_needed(cx, note, index, way) + gap).collect();
+    let needs: Vec<f32> = seen.iter().map(|(index, note)| height_needed(cx, note, *index, way) + gap).collect();
     let (mut placed, mut used) = (0, 0.0);
     for (index, need) in needs.iter().enumerate() {
         let kept = if index + 1 < total { more } else { 0.0 };
@@ -141,14 +161,10 @@ fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
     sheet
 }
 
-/// The height a note takes. A list is measured with two rows: one of its own and the line that counts the rest. A
-/// whole list is measured with the one line that counts its rows.
+/// The height a note takes. A list is measured with two rows: one of its own and the line that counts the rest.
 fn height_needed(cx: &Ctx, note: &Note, index: usize, way: Way) -> f32 {
     let least = match note {
         Note::List { title, rows } => list(cx, title, &rows[..rows.len().min(2)], 0.0, f32::INFINITY),
-        Note::Whole { title, .. } => {
-            whole(cx, (index, title), &[(Mark::Star, String::new())], (0.0, f32::INFINITY), way)
-        }
         _ => fill(cx, note, index, 0.0, f32::INFINITY, way).map(|(sheet, ..)| sheet),
     };
     least.map_or(0.0, |sheet| sheet.rect.h)
@@ -173,10 +189,8 @@ fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32, way: Way) -> O
             paragraph(cx, &mut sheet, footer, Role::ChoiceFooter, 1);
             close(cx, sheet, 18.0, room).map(|sheet| (sheet, id.clone(), tilt.choice_note))
         }
-        Note::Whole { title, rows } => {
-            let sheet = whole(cx, (index, title), rows, (top, room), way)?;
-            Some((sheet, fallback, tilt.list_note))
-        }
+        // A whole list is not one of the planned notes: `notes` gives it the room they leave.
+        Note::Whole { .. } => None,
         Note::Plain { title, body } => {
             let mut sheet = open(cx, top, cx.px(14.0), 330.0, (26.0, 22.0));
             heading(cx, &mut sheet, title, Role::NoteTitle);
@@ -294,16 +308,10 @@ fn list(cx: &Ctx, title: &str, rows: &[(String, String)], top: f32, room: f32) -
 
 /// A titled list drawn whole: each row after its mark, to its last word, or left out and counted in the last line.
 /// A row that does not fit the room is passed over for the shorter ones after it.
-fn whole(
-    cx: &Ctx,
-    (index, title): (usize, &str),
-    rows: &[(Mark, String)],
-    (top, room): (f32, f32),
-    way: Way,
-) -> Option<Sheet> {
+fn whole(cx: &Ctx, title: &str, rows: &[(Mark, String)], (top, room): (f32, f32), scale: f32) -> Option<Sheet> {
     let mut sheet = open(cx, top, 0.0, cx.theme.metrics.note_width, (26.0, 24.0));
     heading(cx, &mut sheet, title, Role::NoteTitle);
-    let (role, size) = (Role::RowMain, cx.size(Role::RowMain) * way.2);
+    let (role, size) = (Role::RowMain, cx.size(Role::RowMain) * scale);
     let (height, gap, indent) = (line_height(size), cx.px(10.0), cx.px(30.0));
     let bottom = top + room - cx.px(20.0 - 9.0);
     let seen = &rows[..rows.len().min(MAX_WHOLE_ROWS)];
@@ -319,7 +327,7 @@ fn whole(
             continue;
         }
         let at = Rect::new(sheet.left, sheet.cursor, cx.px(20.0), height);
-        let mut sign = piece(PieceKind::Mark, &format!("note-{index}"), row, at);
+        let mut sign = piece(PieceKind::Mark, "", row, at);
         if *mark == Mark::Star {
             let star = cx.size(Role::Bullet);
             let width = cx.measure.width("★", Role::Bullet, star);

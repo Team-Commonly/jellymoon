@@ -42,9 +42,9 @@ max_file_lines = 400
 # A text run's own size, which the drawing paints at, raised the kit by 80: 77 are the two tests that hold it
 # (`tests/whole.rs` by measure, `tests/draw.rs` by what is painted).
 # A whole list (F37: a made wish's words after its mark, each row drawn to its last word or counted) raised the kit
-# by 139: 42 are its test in `tests/whole.rs`; the rest is its layout, the mark's piece and its drawing, and the
-# notes laid out once per way, so that a tighter way can be taken when it draws more rows.
-"crates/sticker-kit" = 5692
+# by 156: 51 are its test in `tests/whole.rs`; the rest is its layout below the other notes, in the room they leave
+# and at its own step, the mark's piece and its drawing.
+"crates/sticker-kit" = 5709
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -53,9 +53,9 @@ max_file_lines = 400
 # The tidy raised the app by 47: a run's `size` in `layout` (9 lines), its assertion, and the test helper that
 # finds an open folder above a test.
 # F38 raised the app by 1: the arm for core's new error where it puts an error into words.
-# F37 raised the app by 207: 160 are `tests/f37.rs`; the rest draws the day's made wishes, their note and the
+# F37 raised the app by 218: 171 are `tests/f37.rs`; the rest draws the day's made wishes, their note and the
 # footer's count of them, also on a day not read yet.
-"app" = 3249
+"app" = 3260
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

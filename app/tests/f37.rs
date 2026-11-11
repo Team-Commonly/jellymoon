@@ -135,6 +135,16 @@ fn every_made_wish_is_drawn_whole_in_its_note_or_counted_there_at_both_sizes_in_
     let words = "write the changelog for the release and name every change a person would see ";
     let long: String = words.repeat(3).chars().take(199).chain(['x']).collect();
     let typed = [long.as_str(), "ship it", "a third", "a fourth", "a fifth", "a sixth", "a seventh", "the eighth"];
+    let cases = [("sticker", "960x640"), ("sticker", "1440x900"), ("plain", "960x640"), ("plain", "1440x900")];
+    // Every piece of the clash's note and of the delivery note: its place, its size and its words.
+    let ruled_on = |placed: &[support::Piece]| -> Vec<String> {
+        let told = placed.iter().find(|piece| piece.said().starts_with("Your sessions are not told yet."));
+        let ids = ["clash-1", told.expect("the delivery note").id()];
+        placed.iter().filter(|piece| ids.contains(&piece.id())).map(|piece| piece.0.to_string()).collect()
+    };
+    let draw = |theme: &str, size: &str| shown(&world, &["--theme", theme, "--size", size]);
+    let before = cases.map(|(theme, size)| ruled_on(&draw(theme, size)));
+    assert!(before.iter().all(|pieces| pieces.len() == 6), "two notes, two tapes, two options: {before:?}");
     let mut made = Vec::new();
     for (count, typed) in typed.iter().enumerate() {
         let said = jellymoon_core::wish(&world.home, Some(DAY), typed, "alpha").unwrap().wish.said;
@@ -143,16 +153,17 @@ fn every_made_wish_is_drawn_whole_in_its_note_or_counted_there_at_both_sizes_in_
         if ![1, 2, 8].contains(&(count + 1)) {
             continue;
         }
-        for (theme, size) in
-            [("sticker", "960x640"), ("sticker", "1440x900"), ("plain", "960x640"), ("plain", "1440x900")]
-        {
+        for ((theme, size), before) in cases.iter().zip(&before) {
             let at = format!("{} made, {theme} at {size}", made.len());
-            let placed = shown(&world, &["--theme", theme, "--size", size]);
+            let placed = draw(theme, size);
+            assert_eq!(ruled_on(&placed), *before, "{at}: a made wish moves and shrinks nothing a person rules on");
             let (drawn, counted) = in_note(&placed, &made, &at);
             assert_eq!(drawn.len() + counted, made.len(), "{at}: drawn {drawn:?}, and {counted} counted");
-            // Beside the list, the delivery note and the clash, the smallest window has no room for 200 characters.
-            assert!(size == "960x640" || made.len() > 1 || drawn == made, "{at}: it is drawn whole: {drawn:?}");
-            assert!(made.len() < 8 || (!drawn.is_empty() && counted > 0), "{at}: {drawn:?} and {counted}");
+            // Beside the list, the delivery note and the clash, the sticker theme has room for the count alone. The
+            // plain theme draws one or two whole, and of eight passes over the long one for the short ones after it.
+            let few = made.len() <= 2;
+            let fits = if few { drawn == made } else { !drawn.is_empty() && !drawn.contains(&made[0]) };
+            assert!(if *theme == "plain" { fits } else { drawn.is_empty() }, "{at}: {drawn:?} and {counted}");
             assert!(notes(&placed).iter().any(|note| note.starts_with("you changed your mind")), "{at}: the clash");
         }
     }

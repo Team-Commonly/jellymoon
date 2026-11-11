@@ -16,6 +16,9 @@ case "$arch" in arm64 | x86_64) ;; *) die "the architecture is arm64 or x86_64, 
 case "$version" in '' | *[!0-9A-Za-z.-]*) die "the version may hold letters, digits, dots and dashes only" ;; esac
 [ -f "$app_binary" ] || die "no file at $app_binary"
 [ -f "$cli" ] || die "no file at $cli"
+# The oldest macOS the app runs on is written once, in install.sh, which refuses an older Mac before it downloads.
+min_macos=$(sed -n 's/^MIN_MACOS=//p' "$(dirname "$0")/../../install.sh")
+case "$min_macos" in '' | *[!0-9.]*) die "install.sh has no MIN_MACOS=<number> line" ;; esac
 
 stage=$(mktemp -d "${TMPDIR:-/tmp}/jellymoon-bundle.XXXXXX")
 trap 'rm -rf "$stage"' EXIT
@@ -39,7 +42,7 @@ cat >"$bundle/Contents/Info.plist" <<EOF
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleVersion</key><string>$version</string>
-  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>LSMinimumSystemVersion</key><string>$min_macos</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>

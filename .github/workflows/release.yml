@@ -1,7 +1,8 @@
 name: Release
 # Builds what install.sh downloads: one archive per Mac chip, each holding Jellymoon.app and the `jellymoon` binary,
 # and a SHA256SUMS file (docs/development/install.md). Pushing a tag `v<version>` builds and publishes a release.
-# Running it by hand builds the same archives and keeps them as workflow artifacts only: a rehearsal, no release.
+# Running it by hand builds the same archives and keeps them as workflow artifacts only: a rehearsal, no release,
+# even when the run is started from a tag.
 
 on:
   workflow_dispatch:
@@ -38,15 +39,15 @@ jobs:
         run: |
           rustup toolchain install
           rustup target add "$TARGET"
+      # Downloaded sources are cached; `target` is not. What a release ships is compiled in this run, and no object
+      # file an earlier run left behind goes into it.
       - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: |
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            target
-          key: release-${{ matrix.target }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: release-${{ matrix.target }}-
+          key: release-sources-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
       - name: Build both programs in release mode
         env:
           TARGET: ${{ matrix.target }}
@@ -82,7 +83,7 @@ jobs:
 
   # The only job that can write to the repo, and it runs no code from it: it sums the two archives and attaches them.
   release:
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -93,7 +94,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: SHA256SUMS, then the release
+      - name: SHA256SUMS, a draft release with every file, then publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -103,5 +104,12 @@ jobs:
           cd dist
           sha256sum jellymoon-macos-arm64.tar.gz jellymoon-macos-x86_64.tar.gz > SHA256SUMS
           cat SHA256SUMS
-          gh release create "$TAG" --verify-tag --generate-notes --title "Jellymoon $TAG" \
+          # A version with a dash (v0.2.0-rc1) is a pre-release, which `releases/latest` never points at.
+          kind=""
+          case "$TAG" in *-*) kind=--prerelease ;; esac
+          # A draft first, with every file attached, and only then published: `releases/latest` never points at a
+          # release that has an archive and no SHA256SUMS.
+          # shellcheck disable=SC2086
+          gh release create "$TAG" --draft $kind --verify-tag --generate-notes --title "Jellymoon $TAG" \
             jellymoon-macos-arm64.tar.gz jellymoon-macos-x86_64.tar.gz SHA256SUMS
+          gh release edit "$TAG" --draft=false

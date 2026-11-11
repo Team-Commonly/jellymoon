@@ -7,16 +7,23 @@ curl -fsSL https://raw.githubusercontent.com/Team-Commonly/jellymoon/main/instal
 `install.sh` is for the Mac only; on any other system it says so, fails, and installs nothing. It uses only what every
 Mac has (`curl`, `shasum`, `tar`, `xattr`), never `sudo`, and edits no shell profile.
 
+Before it downloads anything it refuses, with one line, a Mac older than macOS 11 (`MIN_MACOS` in `install.sh`, which
+`bundle.sh` reads into the bundle's `Info.plist`) and a `jellymoon` in the bin folder that is a folder or a link to one.
+
 1. It picks the archive for the Mac's chip, `jellymoon-macos-arm64.tar.gz` or `jellymoon-macos-x86_64.tar.gz`. A
    shell running under Rosetta on an Apple chip still gets `arm64`.
 2. It downloads that archive and `SHA256SUMS` from the latest GitHub release, over https only, into a temp folder.
 3. It hashes the archive and compares. A mismatch, or a `SHA256SUMS` that does not list the archive, stops it with
    nothing installed. Nothing downloaded is unpacked or run before this.
 4. It copies `Jellymoon.app` next to where it goes in `~/Applications` and `jellymoon` next to where it goes in
-   `~/.local/bin`, then renames each over the old one. Running it again is how to update.
+   `~/.local/bin`. The command is renamed over the old one. The app takes three steps, since a folder cannot be
+   renamed over a folder: the old bundle is moved aside as `.Jellymoon.app.old` in the same folder, the new one is
+   moved in, and the old one is deleted. Running it again is how to update.
 5. It says in one line if `~/.local/bin` is not on `PATH`, and prints what to run next.
 
-The temp folder and anything half placed are removed on every exit, a failure or an interrupt included.
+The temp folder and anything half placed are removed on every exit, a failure or an interrupt included. An update
+that stops between its two moves puts the old bundle back on that same exit; if the script was killed outright, the
+next run puts it back before doing anything else. For the moment between the two moves there is no `Jellymoon.app`.
 
 | Variable | What it sets | Default |
 |---|---|---|
@@ -50,11 +57,13 @@ removes it ([delivery.md](delivery.md)).
 
 ## Cutting a release
 
-`.github/workflows/release.yml` runs on a tag `v<version>`: it builds `jellymoon` and `jellymoon-app` for both chips
-on a Mac runner, runs `app/macos/bundle.sh` (the bundle, its `Info.plist`, the ad-hoc signatures, the archive), writes
-`SHA256SUMS` and publishes the release. Run by hand from the Actions tab it builds the same archives as workflow
-artifacts and publishes nothing, which is the way to rehearse. `install.sh` reads `releases/latest`, which GitHub
-points at the newest release that is neither a draft nor a pre-release.
+`.github/workflows/release.yml` runs when a tag `v<version>` is pushed: it builds `jellymoon` and `jellymoon-app` for
+both chips on a Mac runner, with no `target` folder restored from an earlier run, and runs `app/macos/bundle.sh` (the
+bundle, its `Info.plist`, the ad-hoc signatures, the archive). It then writes `SHA256SUMS`, creates the release as a
+draft with all three files attached, and only then publishes it. A tag with a dash in it (`v0.2.0-rc1`) is published
+as a pre-release. Run by hand from the Actions tab, from a branch or from a tag, it builds the same archives as
+workflow artifacts and publishes nothing, which is the way to rehearse. `install.sh` reads `releases/latest`, which
+GitHub points at the newest release that is neither a draft nor a pre-release.
 
 ## Not proved yet
 

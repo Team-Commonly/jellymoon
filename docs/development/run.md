@@ -90,6 +90,13 @@ git's reason: the copy's folder and the run's folder in `runs` are removed all t
 but the branch `jellymoon/run-<id>` and git's registration of the copy are in the moved repo, which Jellymoon
 cannot find, and stay there (`git worktree prune` and `git branch -D` in that repo remove them).
 
+A moved repo is one case of it. What Jellymoon's home holds of the run is removed so (`remove_ours`) after any
+take-back that failed twice, the second time with the run's lock let go: a copy record that cannot be read, a git
+that fails or runs past its limit, a copy's place that is no longer a folder Jellymoon made (then that place is
+left as it is). `jellymoon run` exits 1 with the reason of the second failure. The branch and git's registration
+of the copy then stay in the repo, where it still is, and nothing in Jellymoon's home records them any more: the
+run's id is in that one line, and in the branch's name.
+
 ## What is read of the stream
 
 The stream is untrusted. A line is read up to 1 MiB with its line break; the whole stream up to 64 MiB. A line that

@@ -57,8 +57,15 @@ max_file_lines = 400
 # `tests/support/mod.rs`, 11; `tests/f37/refused.rs`, 2).
 # Two of F39's tests letting the made-up agent end first on Windows, where a folder a command stands in cannot be
 # removed, raised the binary by 6 (`tests/f39/refused.rs`).
-"crates/jellymoon-core" = 5411
-"crates/jellymoon" = 7215
+# F40, a stop, raised core by 139: `run/stop.rs`, the request a stop leaves and what `run stop` prints, is 90; the
+# child's wait looking for the request, 17; the interrupt before the signal in the one stop sequence, 11; the
+# fourth outcome and its fixed words in `run.rs`, `run/end.rs` and the example's row, 21.
+# It raised the binary by 592: its tests at the binary are 528 (`tests/f40.rs`, 151, and `tests/f40/`: `deaf.rs`
+# 102, `denied.rs` 52, `nothing.rs` 164, `races.rs` 59); the made-up agent that lingers and the one deaf to the
+# interrupt, 23; `run stop` and its parsing, 7; and 34 are what moving F39's test folder into `tests/f39/world.rs`,
+# so that F40 starts runs in it too, added to it (a run started and left going, and its end read).
+"crates/jellymoon-core" = 5550
+"crates/jellymoon" = 7807
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -66,7 +73,8 @@ max_file_lines = 400
 # F37's step, `wish`, raised it by 25.
 # F39's step, `run` (`smoke/run.rs`, 82 lines: the wish's file on the run's branch and the checkout unchanged are 10 of them), and
 # the repo command it shares with `copy`, raised it by 94.
-"crates/xtask" = 1279
+# F40's step, `stop` (`smoke/stop.rs`, 69 lines), and the run command it shares with `run`, raised it by 80.
+"crates/xtask" = 1359
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

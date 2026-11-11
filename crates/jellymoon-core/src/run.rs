@@ -3,7 +3,8 @@
 //! harness there with a fixed command line and the wish's kept words on its input, and waits. A run has finished
 //! only when its stream starts as a run's does and gives one result, which says success and no error, with nothing
 //! unread after it, and the harness exited with 0 (`stream.rs`, `end.rs`); then its work is one commit on its
-//! branch and the wish has one more star. Every other end is a failed run: the copy is kept, no star.
+//! branch and the wish has one more star. Every other end is a failed run: the copy is kept, no star. A run the
+//! person stopped with [`stop_run`] is a cancelled one: the copy is kept, no star (`stop.rs`).
 //!
 //! A made wish gets one run. Its id and how it stands are kept with the wish, in fixed words; the run's own record
 //! is `runs/<id>/run.json`. While `jellymoon run` lives it holds the system's lock on `runs/<id>/run.lock`, which
@@ -15,6 +16,7 @@ mod child;
 mod dead;
 mod end;
 mod record;
+mod stop;
 mod stream;
 
 use std::fmt;
@@ -26,6 +28,7 @@ pub(crate) use end::bury;
 use end::{lock_file, settle};
 use record::Record;
 use serde::{Deserialize, Serialize};
+pub use stop::stop_run;
 
 use crate::busy::or_test;
 use crate::call::harness_of;
@@ -90,11 +93,13 @@ pub enum RunOutcome {
     Completed,
     /// The run ended any other way: its copy is kept, and the wish needs the person.
     Failed,
+    /// The person stopped the run: its copy is kept, no star is added, and the wish needs the person.
+    Cancelled,
     /// No run was started and nothing was made: there is no harness, or it is too old.
     NotStarted,
 }
 
-/// What `jellymoon run` prints. No word here is the agent's, a session log's or the wish's.
+/// What `jellymoon run` and `jellymoon run stop` print. No word here is the agent's, a session log's or the wish's.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Ran {
     /// The run's id. None when no run was started.
@@ -131,6 +136,14 @@ fn failed(run: &str, kind: &str) -> String {
     format!("run {run} did not finish ({kind}): its copy is kept and no star was added")
 }
 
+fn cancelled(run: &str) -> String {
+    format!("run {run} was cancelled by a stop: its copy is kept and no star was added")
+}
+
+fn no_wish(day: &str) -> Error {
+    refused(format!("the page of {day} has no made wish of that id; a made wish's id is m1 to m8"))
+}
+
 fn cut(run: &str) -> String {
     format!("run {run} was cut off before it ended: its copy is kept and no star was added")
 }
@@ -149,8 +162,8 @@ fn finished(copy: &RunCopy, changed: bool) -> String {
 /// folder that is not a checkout git can copy. With no harness, or one too old, nothing is started either.
 pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     let day = wish::day_of(options.day.as_deref())?;
-    let none = || refused(format!("the page of {day} has no made wish of that id; a made wish's id is m1 to m8"));
-    let wish = wish::kept_of(home, &day)?.into_iter().find(|wish| wish.id == options.wish).ok_or_else(none)?;
+    let wish = wish::kept_of(home, &day)?.into_iter().find(|wish| wish.id == options.wish);
+    let wish = wish.ok_or_else(|| no_wish(&day))?;
     // A wish whose run was never started comes back with no run, and this call goes on to start one.
     let wish = bury(home, &day, wish);
     if let Some(run) = &wish.run {
@@ -187,7 +200,8 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     };
     command.current_dir(&copy.folder).args(ARGS).arg(PROMPT);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
-    let ended = child::run(command, format!("{}\n", wish.said), limit, |pid| record::child(home, &copy.run, pid));
+    let (told, stop) = (|pid| record::child(home, &copy.run, pid), || stop::asked(home, &copy.run));
+    let ended = child::run(command, format!("{}\n", wish.said), limit, told, stop);
     let ended = ended.map_err(|e| refused(format!("nothing was started: Claude Code could not be started: {e}")));
     if !ended.as_ref().is_ok_and(|ended| !ended.old) {
         // Nothing ran: the wish is as it was, and can be run again. The day is waited for as a run's end waits.
@@ -283,7 +297,7 @@ mod tests {
         };
         let long = failed(run, "it did not start with the tools, servers and permission mode of a run");
         let texts = [going(run), cut(run), long, finished(&copy, true), finished(&copy, false), STAR.to_string()];
-        for text in texts {
+        for text in texts.into_iter().chain([cancelled(run)]) {
             assert_eq!(line(&text, 200), text);
             assert!(copy::is_run_id(run) && text.chars().count() <= 200);
         }

@@ -8,13 +8,12 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::limits::wait_for;
-use super::{DAY, STAR, World, printed, ran, refused, world, world_in};
+use super::{DAY, STAR, World, printed, ran, refused, wait_for, world, world_in};
 use crate::support::{said, tree, write_log};
 
 impl World {
     /// `jellymoon run` for a wish of the day, with no repo named: the folder is found in the day's session logs.
-    pub fn start_found(&self, wish: &str) -> crate::Ran {
+    pub fn start_found(&self, wish: &str) -> crate::support::Ran {
         self.run(&["run", "--wish", wish, "--date", DAY])
     }
 

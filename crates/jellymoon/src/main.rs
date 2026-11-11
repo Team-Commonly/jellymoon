@@ -22,6 +22,7 @@ const USAGE: &str = "usage:
   jellymoon settle --date <YYYY-MM-DD> --clash <n> --option <1|2>   (a tap on a clash of the kept page: that statement stands)
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]   (keeps a wish you make on the day's page; starts nothing)
   jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
+  jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]   (stops that run: its copy is kept, and no star is added)
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
@@ -49,6 +50,7 @@ enum Command {
     Settle { date: String, clash: usize, option: usize },
     Wish { date: Option<String>, say: String, project: String },
     Run(RunOptions),
+    Stop(RunOptions),
     RemoveHook,
     HookStatus,
     Uninstall,
@@ -138,6 +140,9 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::wish(&home()?, date.as_deref(), &say, &project).map_err(failed)?))
         }
         Command::Run(options) => Ok(format!("{}\n", jellymoon_core::run(&home()?, &options).map_err(failed)?)),
+        Command::Stop(RunOptions { wish, day, .. }) => {
+            Ok(format!("{}\n", jellymoon_core::stop_run(&home()?, &wish, day.as_deref()).map_err(failed)?))
+        }
         Command::HookStatus => {
             let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));
             Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))
@@ -258,23 +263,25 @@ fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     }
 }
 
-/// `run`. The logs are read only when no repo is named, to find the one folder of the wish's project.
+/// `run` and `run stop`. The logs are read only when no repo is named, to find the one folder of the wish's project.
 fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let logs = harness_folder().ok().map(|folder| folder.join("projects"));
     let mut options = RunOptions { logs, harness: named("JELLYMOON_CLAUDE"), ..RunOptions::default() };
-    let mut wish = None;
+    let (mut wish, mut stop, mut first) = (None, false, true);
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
+            Value(word) if first && word == "stop" => stop = true,
             Long("wish") => wish = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("date") => options.day = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("repo") => options.repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
+            Long("repo") if !stop => options.repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
             other => return Err(usage(other.unexpected())),
         }
+        first = false;
     }
     options.wish = wish.ok_or_else(|| Failure::Usage("run takes --wish".to_string()))?;
-    Ok(Command::Run(options))
+    Ok(if stop { Command::Stop(options) } else { Command::Run(options) })
 }
 
 fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {

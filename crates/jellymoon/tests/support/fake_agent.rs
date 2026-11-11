@@ -223,13 +223,15 @@ fn litters(rec: &Path) -> ! {
 }
 
 /// `deaf` starts this program again as one that the stop signal does not reach: the system keeps a signal ignored
-/// across the start of a program, and `perl` can ask for that. Where that cannot be done it leaves `cannot`.
-fn deafen(rec: &Path) -> ! {
+/// across the start of a program, and `perl` can ask for that. Where that cannot be done it leaves `cannot`. By its
+/// number it is deaf to the stop signal (0), to the interrupt (1) or to both (2).
+fn deafen(rec: &Path, number: usize) -> ! {
     #[cfg(unix)]
     if Path::new("/usr/bin/perl").is_file() {
-        let ignore = "$SIG{TERM} = 'IGNORE'; exec @ARGV; exit 9";
+        let deaf = ["$SIG{TERM}", "$SIG{INT}", "$SIG{TERM} = $SIG{INT}"][number.min(2)];
+        let ignore = format!("{deaf} = 'IGNORE'; exec @ARGV; exit 9");
         let mut perl = process::Command::new("/usr/bin/perl");
-        perl.args(["-e", ignore]).arg(env::current_exe().unwrap()).arg("now");
+        perl.args(["-e", &ignore]).arg(env::current_exe().unwrap()).arg("now");
         let failed = std::os::unix::process::CommandExt::exec(&mut perl);
         eprintln!("perl could not be started: {failed}");
     }
@@ -265,7 +267,7 @@ fn main() {
     let play: Vec<&str> = play.lines().collect();
     let (script, rec, number) = (play[0], Path::new(play[1]), play[2].parse::<usize>().unwrap());
     if script == "deaf" && env::args().nth(1).as_deref() != Some("now") {
-        deafen(rec);
+        deafen(rec, number);
     }
     record(rec);
     let code = match script {

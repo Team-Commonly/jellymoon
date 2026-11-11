@@ -5,67 +5,15 @@
 
 use std::ffi::OsString;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, SAID, STAR, World, ran, refused, world};
+use super::{DAY, SAID, STAR, World, grows, ran, refused, wait_for, world};
 use crate::support::skipped;
 
 const NO_SIGNAL: &str = "this system has no signal to stop another command's child with, and nothing is stopped";
-
-impl World {
-    /// Whether the made-up agent got as far as its wait, and is gone now.
-    pub fn agent_came_and_went(&self) -> bool {
-        self.at("rec").join("started").is_file() && self.free("held")
-    }
-
-    /// Whether nothing holds the system's lock on a file the made-up agent, or what it left, locks while it lives.
-    pub fn free(&self, held: &str) -> bool {
-        fs::File::open(self.at("rec").join(held)).unwrap().try_lock().is_ok()
-    }
-
-    /// Waits for a lock of the made-up agent's to be free, five seconds at most: a kill is not felt at once.
-    pub fn freed(&self, held: &str) -> bool {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while !self.free(held) && Instant::now() < deadline {
-            thread::sleep(Duration::from_millis(10));
-        }
-        self.free(held)
-    }
-
-    /// Leaves the file the made-up agent waits for, and waits until the agent is gone, half a minute at most.
-    pub fn let_end(&self, file: &str) {
-        fs::write(self.at("rec").join(file), "").unwrap();
-        let deadline = Instant::now() + Duration::from_secs(30);
-        while !self.agent_came_and_went() {
-            assert!(Instant::now() < deadline, "the agent left behind never ended");
-            thread::sleep(Duration::from_millis(10));
-        }
-    }
-
-    /// Starts `jellymoon run` and returns at once, with the command still going.
-    pub fn start_going(&self, wish: &str, repo: &Path) -> Child {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
-        command.args(["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
-        command.current_dir(self.dir.path()).env_clear().envs(self.vars.iter().map(|(name, value)| (name, value)));
-        if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-            command.env("SystemRoot", root); // a Windows program needs it to start
-        }
-        command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap()
-    }
-}
-
-/// Waits for a file the made-up agent leaves, half a minute at most.
-pub fn wait_for(file: &Path) {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !file.exists() {
-        assert!(Instant::now() < deadline, "{} never came", file.display());
-        thread::sleep(Duration::from_millis(10));
-    }
-}
 
 #[test]
 fn a_run_that_never_ends_is_stopped_at_its_limit_and_has_failed() {
@@ -127,13 +75,6 @@ fn left_editing(w: &World, wish: &str, repo: &Path) -> (String, std::path::PathB
     let file = w.jm("copies").join(&run).join("scribble.txt");
     assert!(grows(&file) && !w.agent_came_and_went(), "the agent was to be left editing");
     (run, file)
-}
-
-pub fn grows(file: &Path) -> bool {
-    let size = || fs::metadata(file).map_or(0, |meta| meta.len());
-    let before = size();
-    thread::sleep(Duration::from_millis(400));
-    size() > before
 }
 
 #[test]

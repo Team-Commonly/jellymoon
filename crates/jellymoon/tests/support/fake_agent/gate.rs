@@ -56,9 +56,10 @@ pub fn play(script: &str, number: usize, rec: &Path) -> i32 {
 const OLD: &str = "error: unknown option '--restricted'";
 
 /// `holds`: the measured start and the work, then a program of its own left going in another process group with
-/// this one's output open, then the words of a harness too old and a failure.
-fn holds(rec: &Path, silent: bool) -> i32 {
-    if !silent {
+/// this one's output open, then the words of a harness too old and a failure. 1: with no line printed at all. 2: it
+/// does not end by itself after that, and holds the lock while it lives.
+fn holds(rec: &Path, number: usize) -> i32 {
+    if number != 1 {
         edits();
     }
     let mut left = process::Command::new(env::current_exe().unwrap());
@@ -69,11 +70,25 @@ fn holds(rec: &Path, silent: bool) -> i32 {
     while !rec.join("litter.txt").exists() {
         thread::sleep(Duration::from_millis(10));
     }
+    if number == 2 {
+        return lingers(rec, 0);
+    }
     eprintln!("{OLD}");
     1
 }
 
-/// The scripts of the gate's second round (`tests/f39/stream.rs`, `tests/f39/refused.rs`).
+/// The end of `lingers`: a result that says success and counts `denials`, when there are any, and then a minute's
+/// sleep with the lock held, which only a stop ends early.
+fn lingers(rec: &Path, denials: usize) -> i32 {
+    if denials > 0 {
+        line(&result("success", "false", denials, 0));
+    }
+    let _held = held(rec);
+    thread::sleep(Duration::from_secs(60));
+    1
+}
+
+/// The scripts of the gate's second round (`tests/f39/stream.rs`, `tests/f39/refused.rs`), and F40's.
 fn round_2(script: &str, number: usize, rec: &Path) -> i32 {
     match script {
         // Too old, but only once the test leaves `go`: it holds the lock while it lives.
@@ -88,8 +103,14 @@ fn round_2(script: &str, number: usize, rec: &Path) -> i32 {
             eprintln!("{OLD}");
             1
         }
-        // 1: with no line printed at all.
-        "holds" => holds(rec, number == 1),
+        "holds" => holds(rec, number),
+        // F40. The measured start and the work, and then it does not end by itself.
+        "lingers" => {
+            edits();
+            lingers(rec, number)
+        }
+        // The work, and a result that is no success and counts `number` denials.
+        "denied-failed" => ends(&result("error_during_execution", "true", number, 0), 0),
         // The words of one too old, and no failure.
         "old-0" => {
             eprintln!("{OLD}");

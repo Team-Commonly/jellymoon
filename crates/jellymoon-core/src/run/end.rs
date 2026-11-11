@@ -2,7 +2,8 @@
 //! `jellymoon run` saw end gets its end in its own record first ([`note`]), and only then is its wish told
 //! ([`tell`]), behind the day's lock, which another change to the day may hold. So a run that ended is never
 //! taken for one cut off: whoever next finds the wish still working, with nothing holding the run, gives the wish
-//! the end its record has, and only a run whose record has none was cut off ([`bury`]).
+//! the end its record has, and only a run whose record has none was cut off ([`bury`]). A run the person stopped
+//! (`stop.rs`) ends as cancelled, by the same steps.
 
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ use std::time::Duration;
 
 use super::child::{End, Ended};
 use super::record::Record;
-use super::{Ran, RunOutcome, STAR, cut, dead, failed, finished, record, refused};
+use super::{Ran, RunOutcome, STAR, cancelled, cut, dead, failed, finished, record, refused};
 use crate::busy::or_test;
 use crate::copy::{self, Outcome, RunCopy};
 use crate::reading::STARS_MAX;
@@ -48,7 +49,7 @@ pub(super) fn lock_file(home: &Path, run: &str) -> PathBuf {
 }
 
 /// Whether a `jellymoon run` that still lives holds the run. A lock that cannot be asked about is no lock.
-fn held(home: &Path, run: &str) -> bool {
+pub(super) fn held(home: &Path, run: &str) -> bool {
     let free = File::open(lock_file(home, run)).is_ok_and(|lock| lock.try_lock_shared().is_ok());
     !free && lock_file(home, run).is_file()
 }
@@ -56,7 +57,7 @@ fn held(home: &Path, run: &str) -> bool {
 /// The end in a run's record, when it is one core wrote for this wish: the words are made here again, and the
 /// record's are used only to choose among them. A record is a file, and anyone who can write the home can write
 /// it: a finished run is believed only when its copy is gone as a finished run's is, with its work on its branch.
-fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> Option<(RunOutcome, String)> {
+pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> Option<(RunOutcome, String)> {
     let (outcome, said) = (record.outcome?, record.why.as_deref()?);
     if record.wish != wish || record.day != day {
         return None;
@@ -71,6 +72,7 @@ fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> O
             let limit = seconds.map(|seconds| failed(run, &at_limit(Duration::from_secs(seconds))));
             KINDS.iter().map(|kind| failed(run, kind)).chain(limit).collect()
         }
+        RunOutcome::Cancelled => vec![cancelled(run)],
         _ => Vec::new(),
     };
     ours.into_iter().find(|ours| ours == said && line(ours, 200) == *ours).map(|why| (outcome, why))
@@ -123,7 +125,8 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
 
 /// What a child that is gone comes to: the copy is ended as completed or failed, and the record and the wish say
 /// so. Finished is all of: the stream started as a run's does, one result line came, it says success and no
-/// error, nothing that could not be read came after it, and the harness exited with 0.
+/// error, nothing that could not be read came after it, and the harness exited with 0. A child that was stopped
+/// for the person is a cancelled run whatever its stream holds: its copy is kept as a failed run's is.
 pub(super) fn settle(
     home: &Path,
     (day, wish): (&str, &str),
@@ -134,6 +137,7 @@ pub(super) fn settle(
     let read = &ended.read;
     let at_limit = at_limit(limit);
     let kind = match (ended.end, read.results, read.fine, read.unread, ended.exit_0) {
+        (End::Stopped, ..) => Some(""),
         (End::Limit, ..) => Some(at_limit.as_str()),
         (End::Over, ..) => Some(KINDS[0]),
         (End::Exited, ..) if read.lines == 0 => Some(KINDS[1]),
@@ -152,6 +156,7 @@ pub(super) fn settle(
     };
     let (outcome, why) = match committed {
         Ok((ended, changed)) => (RunOutcome::Completed, finished(&ended, changed)),
+        Err(_) if ended.end == End::Stopped => (RunOutcome::Cancelled, cancelled(run)),
         Err(kind) => (RunOutcome::Failed, failed(run, kind)),
     };
     // A record that could not be written does not keep the wish from being told.
@@ -167,7 +172,8 @@ pub(super) fn settle(
     Ok(Ran { run: Some(run.clone()), wish: wish.to_string(), outcome, star, denied: read.denied, why })
 }
 
-/// The run's own record takes its end, once, and a failed run's copy is marked failed, so that it is kept.
+/// The run's own record takes its end, once, and the copy of a run that did not finish is marked failed, so that
+/// it is kept.
 fn note(
     home: &Path,
     run: &str,

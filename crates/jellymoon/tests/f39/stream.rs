@@ -7,8 +7,7 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::limits::wait_for;
-use super::{DAY, STAR, printed, ran, world};
+use super::{DAY, STAR, printed, ran, wait_for, world};
 use crate::support::skipped;
 
 const NOT_A_RUN: &str = "it did not start with the tools, servers and permission mode of a run";

@@ -5,6 +5,7 @@
 //! prints the outcome, counts and yes or no, and nothing a harness wrote.
 
 use std::path::Path;
+use std::process::Command;
 use std::time::Duration;
 use std::{env, fs};
 
@@ -17,6 +18,20 @@ use super::{DAY, World, text, write};
 const WISH: &str = "add a file named HELLO.txt that holds the one word hello";
 /// With `--real`: the run is stopped after four minutes, and the step after five.
 const REAL_LIMIT_MS: &str = "240000";
+
+/// A program started in the step's repo, with the harness a run finds there: the made-up agent, named, or with
+/// `--real` the person's own.
+pub fn in_wished(world: &World, program: &Path, args: &[&str]) -> Result<Command, String> {
+    let agent = world.at("agent").join(format!("claude{}", env::consts::EXE_SUFFIX));
+    let mut command = in_repo(world, &world.at("wished"), program, args, !world.real)?;
+    if world.real {
+        command.env("JELLYMOON_TEST_RUN_LIMIT_MS", REAL_LIMIT_MS);
+    } else {
+        command.env("JELLYMOON_CLAUDE", &agent).env("JELLYMOON_SYSTEM_BIN", "");
+        command.env("CLAUDE_CONFIG_DIR", world.at("harness"));
+    }
+    Ok(command)
+}
 
 pub fn run(world: &World) -> Result<String, String> {
     let (repo, agent) = (world.at("wished"), world.at("agent").join(format!("claude{}", env::consts::EXE_SUFFIX)));
@@ -31,14 +46,7 @@ pub fn run(world: &World) -> Result<String, String> {
         fs::copy(world.program("fake-agent"), &agent).map_err(|e| format!("copying fake-agent: {e}"))?;
     }
     let started = |program: &Path, args: &[&str], seconds: u64| {
-        let mut command = in_repo(world, &repo, program, args, !world.real)?;
-        if world.real {
-            command.env("JELLYMOON_TEST_RUN_LIMIT_MS", REAL_LIMIT_MS);
-        } else {
-            command.env("JELLYMOON_CLAUDE", &agent).env("JELLYMOON_SYSTEM_BIN", "");
-            command.env("CLAUDE_CONFIG_DIR", world.at("harness"));
-        }
-        let ran = world.wait(command, Duration::from_secs(seconds))?;
+        let ran = world.wait(in_wished(world, program, args)?, Duration::from_secs(seconds))?;
         if ran.code == 0 { Ok(ran.stdout) } else { Err(world.printed(&ran)) }
     };
     let git = |args: &[&str]| {

@@ -233,7 +233,7 @@ fn a_tap_that_is_refused_says_why_in_one_line_and_writes_nothing() {
 fn a_kept_page_that_is_of_another_day_or_not_a_page_or_not_the_person_s_own_file_is_refused() {
     let not_used = "jellymoon: the kept page of 2026-03-10 is not used: ";
     let not_page = "it is not page data of that day";
-    let mut bad: Vec<(&str, Spoil, &str)> = vec![
+    let bad: Vec<(&str, Spoil, &str)> = vec![
         ("another day", |w| fs::write(w.kept(), page("2026-03-09", &[(A, B)]).to_string()).unwrap(), not_page),
         ("not page data", |w| fs::write(w.kept(), "{\"day\": \"2026-03-10\"").unwrap(), not_page),
         ("no clash", |w| fs::write(w.kept(), json!({"day": DAY, "clashes": [7]}).to_string()).unwrap(), not_page),
@@ -243,11 +243,16 @@ fn a_kept_page_that_is_of_another_day_or_not_a_page_or_not_the_person_s_own_file
             "it is too large",
         ),
     ];
+    // Where the system has modes and links, two more. The list is made anew, so nothing is changed on Windows.
     #[cfg(unix)]
-    bad.extend([
-        ("a file others can write to", (|w| chmod(&w.kept(), 0o666)) as Spoil, "others can write to it"),
-        ("a link", link_it as Spoil, "it is not a plain file"),
-    ]);
+    let bad = [
+        bad,
+        vec![
+            ("a file others can write to", (|w| chmod(&w.kept(), 0o666)) as Spoil, "others can write to it"),
+            ("a link", link_it as Spoil, "it is not a plain file"),
+        ],
+    ]
+    .concat();
     for (what, spoil, why) in bad {
         let w = world();
         w.keep(&[(A, B)]);

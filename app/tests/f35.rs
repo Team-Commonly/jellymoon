@@ -286,6 +286,7 @@ fn delivery_is_offered_only_for_a_command_core_takes_and_is_turned_on_by_its_own
     assert!(by_hand.starts_with(plain) && by_hand.contains("`jellymoon hook install`"), "{by_hand}");
 
     let command = command(&world);
+    assert!(command.is_file(), "the stand-in for the installed command is there");
     fs::create_dir_all(settings(&world).parent().unwrap()).unwrap(); // Claude Code's own folder is there
     let relative = Path::new("user").join(".claude").join("settings.json");
     assert_eq!(said(&on_show(&world, relative).scene)[0], plain, "a settings file with no full path");

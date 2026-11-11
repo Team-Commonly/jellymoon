@@ -247,6 +247,7 @@ fn cannot(rec: &Path) -> ! {
 }
 
 /// What `perl` is told for [`minded`]. It starts the program as a child of its own, in its process group.
+#[cfg(unix)]
 const MINDS: &str = r#"my ($rec, $sig, $last, $flood) = splice(@ARGV, 0, 4);
 $SIG{INT} = 'IGNORE' if $sig eq 'TERM';
 my $pid = fork;

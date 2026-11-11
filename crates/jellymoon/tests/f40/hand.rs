@@ -85,9 +85,17 @@ fn a_wish_made_to_name_another_wishs_run_stops_nothing_and_writes_nothing() {
     let (one, two) = (w.wish("alpha"), w.wish("alpha"));
     let (mut going, run) = w.run_going(("scribble", 0), &[], &one, &repo);
     let file = w.jm("copies").join(&run).join("scribble.txt");
+    w.on_page(&one); // the day's page is kept from here on
     w.edit_wish(&two, |wish| (wish["state"], wish["run"]) = (json!("working"), json!(run)));
-    let kept = || (tree(&w.jm("runs")), tree(&w.jm("pages")));
+    // Every file of Jellymoon's home but the one the agent is writing.
+    let kept = || tree(&w.at("jm")).into_iter().filter(|(path, _)| *path != file).collect::<Vec<_>>();
     let before = kept();
+    let drawn = |wish: &str| w.on_page(wish)["state"].clone();
+    // It has no run of its own, and is not drawn as working: not on the first look, and not on the next.
+    for look in 0..2 {
+        assert_eq!((drawn(&one), drawn(&two)), (json!("working"), json!("needs_you")), "look {look}");
+    }
+    assert_eq!(kept(), before, "a page wrote something for a wish that names another wish's run");
     let not_its_own =
         format!("jellymoon: wish {two} names run {run}, which is another wish's run, so nothing was stopped\n");
     let stop = || w.stop_with(&[ms("JELLYMOON_TEST_STOP_WAIT_MS", 2000)], &two);
@@ -107,11 +115,15 @@ fn a_wish_made_to_name_another_wishs_run_stops_nothing_and_writes_nothing() {
     assert!(grows(&file), "the agent of the first wish's run was ended on the second wish's word");
 
     // A page writes it down on the first wish's word, as cut off, and ends the agent. The second wish is drawn as
-    // it was written by hand.
-    assert_eq!((&w.on_page(&one)["state"], &w.on_page(&two)["state"]), (&json!("needs_you"), &json!("working")));
+    // before, now that the run has ended too, and is kept as it was written by hand.
+    let written = w.kept(&two);
+    assert_eq!((drawn(&one), drawn(&two)), (json!("needs_you"), json!("needs_you")));
     the_agent_is_gone(&w, &file);
     assert_eq!((&w.kept(&one)["why"], &w.record(&run)["wish"]), (&json!(cut(&run)), &json!(one)));
-    assert_eq!((w.kept(&two)["run"].clone(), w.starts()), (json!(run), 1));
+    assert_eq!((drawn(&two), w.kept(&two), w.starts()), (json!("needs_you"), written, 1));
+    assert_eq!((&w.kept(&two)["state"], &w.kept(&two)["run"]), (&json!("working"), &json!(run)));
+    assert!(refused(&w.start(&two, &repo)).contains("has had its run"));
+    assert_eq!(w.starts(), 1, "a wish changed by hand started a second agent");
 }
 
 impl World {

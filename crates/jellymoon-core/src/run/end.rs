@@ -109,17 +109,24 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 /// ended while the day was locked: the wish is given that end, its star included. Any other was cut off, and is
 /// written down as failed, the wish first, so that nothing is written for a wish that no longer says working.
 /// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`). A wish
-/// that names another wish's run is returned as it is, with nothing written or killed ([`of_another`]).
+/// that names another wish's run is returned as needing the person, in one fixed line, with nothing written or
+/// killed ([`of_another`]).
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
-    let cut_off = |run: &String| wish.state == WishState::Working && !held(home, run);
-    let Some(run) = wish.run.clone().filter(cut_off) else { return wish };
+    let Some(run) = wish.run.clone().filter(|_| wish.state == WishState::Working) else { return wish };
+    // Asked first, and whether the run is held or not: the run is not this wish's to wait for.
+    if of_another(home, &run, record::kept(home, &run).as_ref(), day, &wish.id) {
+        // It has no run of its own that could ever end, so it is not drawn as working. Nothing is written.
+        let why = format!("run {run} is another wish's run: this wish has had no run of its own");
+        return MadeWish { state: WishState::NeedsYou, why: Some(why), ..wish };
+    }
+    if held(home, &run) {
+        return wish;
+    }
     if fs::symlink_metadata(copy::kept_at(home, &run)).is_err() {
         return unstarted(home, day, wish, &run);
     }
+    // The record is read once nothing holds the run: one read before that could miss the end the run wrote.
     let record = record::kept(home, &run);
-    if of_another(home, &run, record.as_ref(), day, &wish.id) {
-        return wish;
-    }
     if record.as_ref().is_some_and(|record| record.outcome == Some(RunOutcome::NotStarted)) {
         // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
         let _ = copy::take_back(home, &run);

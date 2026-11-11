@@ -256,8 +256,10 @@ not name the run is the file that was changed: the run is this wish's, and was c
 to name another wish's run is given no say over that run: `run stop` for it is refused and
 leaves no request, `jellymoon run` for it is refused as for any wish that names a run, and neither they nor a
 page write the run down or kill its child on that wish's word. The run is stopped, and written down when it was
-cut off, for its own wish only. The wish that was changed is left as it was written: one made to say `working`
-is drawn as `working` until it is changed again, since no run of its own will ever end.
+cut off, for its own wish only. The wish that was changed is kept as it was written, and nothing is written for
+it. One made to say `working` is never drawn so, since no run of its own will ever end: every look draws it as
+`needs_you`, with the one line `run <id> is another wish's run: this wish has had no run of its own`, while the
+other wish's run goes and after it has ended.
 
 ## A run that was cut off
 

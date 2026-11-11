@@ -3,9 +3,11 @@
 //! the first one that fails ends the run with its name and what the program printed. Nothing here runs `sh`.
 //!
 //! By default every log is made up and the harness is the made-up `fake-claude`. `--real` runs the same steps over
-//! the person's own logs and their own Claude Code, and then prints counts, states and exit codes only.
+//! the person's own logs and their own Claude Code, and then prints counts, states and exit codes only. The `run`
+//! step (`smoke/run.rs`) then starts their Claude Code on a harmless wish, in a repo the chain makes.
 
 mod copy;
+mod run;
 mod steps;
 
 use std::ffi::OsString;
@@ -257,6 +259,6 @@ mod tests {
         names.dedup();
         assert_eq!(names.len(), STEPS.len());
         let real = |name: &str| STEPS.iter().any(|step| step.name == name && matches!(step.only, Only::Any));
-        assert!(real("day") && real("page") && !real("logs") && !real("uninstall"));
+        assert!(real("day") && real("page") && real("run") && !real("logs") && !real("uninstall"));
     }
 }

@@ -40,6 +40,26 @@ pub fn day(options: &DayOptions) -> Result<ReaderDay, Error> {
 }
 
 fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<ReaderDay, Error> {
+    let (date, turns) = typed_on(options, zone, line_max)?;
+    Ok(ReaderDay { day: date.to_string(), turns: turns.into_iter().map(|(_, turn, _)| turn).collect() })
+}
+
+/// The folders of one name that something was typed in on the day, for a run to find its wish's repo (F39). They are
+/// the log's own text: what is done with one is up to the caller, and none is ever printed.
+pub(crate) fn folders(options: &DayOptions, name: &str) -> Result<Vec<PathBuf>, Error> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    for (_, _, folder) in typed_on(options, &TimeZone::system(), LINE_MAX)?.1 {
+        let folder = PathBuf::from(folder).components().collect::<PathBuf>();
+        let named = folder.is_absolute() && folder.file_name().is_some_and(|last| last == name);
+        if named && folder.as_os_str().len() <= session::FOLDER_MAX && !found.contains(&folder) {
+            found.push(folder);
+        }
+    }
+    Ok(found)
+}
+
+/// The day, and every turn typed on it, oldest first.
+fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(Date, Vec<session::Typed>), Error> {
     let date = match &options.date {
         Some(date) => parse(date)?,
         None => Zoned::now().with_time_zone(zone.clone()).date(),
@@ -62,15 +82,15 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
     let mut seen = HashSet::new();
     let mut turns = Vec::new();
     for file in session_files(&options.logs, start) {
-        for (typed, mut turn) in session::turns(&file, &skip, &mut seen, line_max) {
-            if let Some(typed) = typed.filter(|at| (start..end).contains(at)) {
-                turn.at = typed.to_zoned(zone.clone()).strftime("%H:%M").to_string();
-                turns.push((typed, turn));
+        for (typed, mut turn, folder) in session::turns(&file, &skip, &mut seen, line_max) {
+            if let Some(at) = typed.filter(|at| (start..end).contains(at)) {
+                turn.at = at.to_zoned(zone.clone()).strftime("%H:%M").to_string();
+                turns.push((typed, turn, folder));
             }
         }
     }
-    turns.sort_by_key(|(typed, _)| *typed);
-    Ok(ReaderDay { day: date.to_string(), turns: turns.into_iter().map(|(_, turn)| turn).collect() })
+    turns.sort_by_key(|(typed, ..)| *typed);
+    Ok((date, turns))
 }
 
 /// The folder names in `<home>/skip.txt`, one a line. Nothing at all under that name is no names. Anything else that

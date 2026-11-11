@@ -5,7 +5,7 @@
 //! A made wish is kept in the words a page draws: on one line, with nothing that cannot be seen and no credential,
 //! as a clash's statement is. Its id is `m1` to `m8`, by its place in the file; a reading's are `w1` to `w8`. The
 //! file is written behind the day's lock, the one a tap takes, and is used only when every part of it is what
-//! [`wish`] would have written.
+//! [`wish`] or a run (`run.rs`) would have written. A run changes its wish through [`change`], behind the same lock.
 
 use std::fmt;
 use std::io::{self, ErrorKind};
@@ -18,8 +18,8 @@ use crate::reader::parse;
 use crate::reading::{LABEL_MAX, STAR_MAX, STARS_MAX};
 use crate::redact::line;
 use crate::ruling::words_of;
-use crate::tap::{locked, plain};
-use crate::{Error, PageData, Wish, WishState};
+use crate::tap::{Lock, locked, plain};
+use crate::{Error, PageData, Wish, WishState, copy, run};
 
 /// The most made wishes one day holds.
 pub const MADE_MAX: usize = 8;
@@ -30,7 +30,9 @@ const TYPED_MAX: usize = 4096;
 const PROJECT_MAX: usize = 100;
 /// The most bytes of a day's made wishes that are read. Eight wishes with their stars are far less.
 const MADE_BYTES: usize = 64 * 1024;
-/// What a made wish says while no run can be started for it.
+/// The most characters of what a wish says of its run.
+const WHY_MAX: usize = 200;
+/// What a made wish says while no run was started for it.
 const WHY: &str = "nothing was started: `jellymoon wish` keeps a wish and starts no run";
 
 /// A wish the person made, as it is kept and printed.
@@ -46,6 +48,12 @@ pub struct MadeWish {
     pub state: WishState,
     /// One fixed text for each run that finished for the wish, at most 4.
     pub stars: Vec<String>,
+    /// The one run started for the wish (F39). Left out when none was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<String>,
+    /// How that run stands, in core's fixed words. Left out when no run was started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
 }
 
 /// The made wishes of one day, `pages/<day>.wishes.json`.
@@ -101,6 +109,8 @@ fn own(at: usize, wish: &MadeWish) -> bool {
         && named(&wish.project)
         && wish.stars.len() <= STARS_MAX
         && wish.stars.iter().all(star)
+        && wish.run.as_deref().is_none_or(copy::is_run_id)
+        && wish.why.as_ref().is_none_or(|why| !why.is_empty() && line(why, WHY_MAX) == *why)
 }
 
 /// The day's made wishes: none when there is no file. A file that is a link, that others can write to, that is too
@@ -121,10 +131,7 @@ fn kept(home: &Path, day: &str) -> Result<Vec<MadeWish>, String> {
 /// is started. A refusal has written nothing: words that are empty once cleaned or over 200 characters, a project
 /// that is not one folder's name, a day that has its eight, made wishes that cannot be used, a day that is locked.
 pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Result<Wished, Error> {
-    let day = match day {
-        Some(day) => parse(day)?.to_string(),
-        None => jiff::Zoned::now().date().to_string(),
-    };
+    let day = day_of(day)?;
     let said = cleaned(typed).ok_or_else(|| refused("a wish is at most 200 characters, and this one is longer"))?;
     if said.is_empty() {
         return Err(refused("a wish needs words, and nothing is left of these once cleaned"));
@@ -142,31 +149,71 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
         Err(why) => Err(refused(format!("the made wishes of {day} are not used: {why}; this wish was not kept"))),
     };
     room()?;
-    let _lock = locked(home, &day).map_err(|e| match e.kind() {
-        ErrorKind::TimedOut => {
-            refused(format!("another change to the page of {day} has not finished, so this wish was not kept"))
-        }
-        _ => Error::Store(e),
-    })?;
+    let _lock = behind(home, &day, "this wish was not kept")?;
     let mut wishes = room()?;
-    let id = format!("m{}", wishes.len() + 1);
-    let wish = MadeWish { id, said, project: project.to_string(), state: WishState::Working, stars: Vec::new() };
+    let (id, project) = (format!("m{}", wishes.len() + 1), project.to_string());
+    let wish = MadeWish { id, said, project, state: WishState::Working, stars: Vec::new(), run: None, why: None };
     wishes.push(wish.clone());
-    let text = serde_json::to_string(&Made { day: day.clone(), wishes }).map_err(io::Error::from);
-    text.and_then(|text| put(&file(home, &day), &format!("{text}\n"), false)).map_err(Error::Store)?;
+    write(home, &day, wishes)?;
     Ok(Wished { wish, run: None, why: WHY.to_string() })
 }
 
+/// The day asked for, or today in the computer's time zone.
+pub(crate) fn day_of(day: Option<&str>) -> Result<String, Error> {
+    match day {
+        Some(day) => Ok(parse(day)?.to_string()),
+        None => Ok(jiff::Zoned::now().date().to_string()),
+    }
+}
+
+/// The day's lock, taken. A day that stays locked is a refusal that says what was not done.
+fn behind(home: &Path, day: &str, undone: &str) -> Result<Lock, Error> {
+    locked(home, day).map_err(|e| match e.kind() {
+        ErrorKind::TimedOut => refused(format!("another change to the page of {day} has not finished, so {undone}")),
+        _ => Error::Store(e),
+    })
+}
+
+fn write(home: &Path, day: &str, wishes: Vec<MadeWish>) -> Result<(), Error> {
+    let text = serde_json::to_string(&Made { day: day.to_string(), wishes }).map_err(io::Error::from);
+    text.and_then(|text| put(&file(home, day), &format!("{text}\n"), false)).map_err(Error::Store)
+}
+
+/// The day's made wishes as they are kept, for a run to find its wish in. Nothing is written.
+pub(crate) fn kept_of(home: &Path, day: &str) -> Result<Vec<MadeWish>, Error> {
+    kept(home, day).map_err(|why| refused(format!("the made wishes of {day} are not used: {why}")))
+}
+
+/// Changes one made wish of the day behind the day's lock, and returns it as it is kept then. A change that is
+/// refused, a wish that is not there and made wishes that cannot be used write nothing.
+pub(crate) fn change(
+    home: &Path,
+    day: &str,
+    id: &str,
+    change: impl FnOnce(&mut MadeWish) -> Result<(), Error>,
+) -> Result<MadeWish, Error> {
+    let _lock = behind(home, day, "the wish was not changed")?;
+    let mut wishes = kept_of(home, day)?;
+    let wish = wishes.iter_mut().find(|wish| wish.id == id);
+    let wish = wish.ok_or_else(|| refused(format!("the page of {day} has no made wish of that id")))?;
+    change(wish)?;
+    let changed = wish.clone();
+    write(home, day, wishes)?;
+    Ok(changed)
+}
+
 /// The day's made wishes, as a page draws them. None when the day has none, or when what is kept cannot be used.
-/// Nothing is written.
+/// A wish whose run was cut off, so that nothing wrote down how it ended, is drawn as needing the person, never as
+/// working for ever: the agent it left is stopped and the run is written down as failed (`run::bury`). Nothing
+/// else is written.
 pub fn made(home: &Path, day: &str) -> Vec<Wish> {
     let kept = if parse(day).is_ok() { kept(home, day).unwrap_or_default() } else { Vec::new() };
     let drawn = |wish: MadeWish| Wish {
         label: line(&wish.said, LABEL_MAX),
+        state: if run::bury(home, day, &wish) { WishState::NeedsYou } else { wish.state },
         id: wish.id,
         said: wish.said,
         project: wish.project,
-        state: wish.state,
         stars: wish.stars,
     };
     kept.into_iter().map(drawn).collect()

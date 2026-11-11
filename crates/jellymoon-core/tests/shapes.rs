@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use jellymoon_core::{Harness, HookState, PageData, ReaderDay, Ruling, WishState, Wished};
+use jellymoon_core::{Harness, HookState, PageData, Ran, ReaderDay, Ruling, RunOutcome, WishState, Wished};
 
 fn fixture(name: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
@@ -55,6 +55,21 @@ fn what_a_made_wish_prints_round_trips_byte_for_byte() {
     assert_eq!((wished.wish.id.as_str(), wished.wish.state, wished.run), ("m1", WishState::Working, None));
     let more = example.replace("\"stars\":[]", "\"stars\":[],\"label\":\"x\"");
     assert!(serde_json::from_str::<Wished>(&more).is_err(), "a made wish with a field nobody knows is refused");
+}
+
+#[test]
+fn what_a_run_prints_round_trips_byte_for_byte_for_each_outcome() {
+    let outcomes = [
+        ("ran-completed.json", RunOutcome::Completed, true, true),
+        ("ran-failed.json", RunOutcome::Failed, true, false),
+        ("ran-not-started.json", RunOutcome::NotStarted, false, false),
+    ];
+    for (name, outcome, started, star) in outcomes {
+        let example = fixture(name);
+        let ran: Ran = serde_json::from_str(&example).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(format!("{ran}\n"), example, "{name}");
+        assert_eq!((ran.outcome, ran.run.is_some(), ran.star.is_some()), (outcome, started, star), "{name}");
+    }
 }
 
 #[test]

@@ -32,6 +32,14 @@ path = "tests/support/fake_git.rs"
 test = false
 doc = false
 
+# A made-up agent that `jellymoon run` starts in place of Claude Code (F39): it records how it was started and plays
+# a scripted stream.
+[[bin]]
+name = "fake-agent"
+path = "tests/support/fake_agent.rs"
+test = false
+doc = false
+
 [dependencies]
 jellymoon-core.workspace = true
 lexopt.workspace = true

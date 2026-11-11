@@ -1,7 +1,7 @@
 //! A run's own copy of the person's repo (ADR 0011, section 7; ADR 0014, decision 4; `docs/development/copy.md`): a
 //! git worktree on a branch of its own, directly inside `copies` in Jellymoon's folder. [`make_copy`] makes one.
 //! [`clean_copy`] ends one: a completed run's files are committed onto its branch and the folder is removed; a failed
-//! run's copy is kept for a look, the newest [`KEPT`] only.
+//! run's copy is kept for a look, the newest [`KEPT`] only. [`take_back`] undoes one that no run was started in.
 //!
 //! An agent could have rewritten every file in its copy, the `.git` file too. So once a copy is made nothing in it is
 //! read to decide anything: where the repo is comes from the record written when the copy was made, kept in `runs`,
@@ -109,10 +109,18 @@ fn branch(run: &str) -> String {
 /// A run id is `r` and sixteen of `0-9a-f`: a name with no dot or separator in it, so `copies/<id>` is always
 /// directly inside `copies`. One a caller gives is taken only in that shape.
 fn known(run: &str) -> Result<(), Error> {
-    let hex = |byte: u8| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte);
-    let shaped = run.strip_prefix('r').is_some_and(|rest| rest.len() == 16 && rest.bytes().all(hex));
     let why = "a run id is `r` and sixteen of 0-9 and a-f, as `copy make` prints it; nothing was done";
-    if shaped { Ok(()) } else { Err(refused(why)) }
+    if is_run_id(run) { Ok(()) } else { Err(refused(why)) }
+}
+
+pub(crate) fn is_run_id(run: &str) -> bool {
+    let hex = |byte: u8| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte);
+    run.strip_prefix('r').is_some_and(|rest| rest.len() == 16 && rest.bytes().all(hex))
+}
+
+/// Where a run's own files are kept, beside its copy's record. The id is one in a run id's shape.
+pub(crate) fn kept_at(home: &Path, run: &str) -> PathBuf {
+    Places::of(home).runs.join(run)
 }
 
 /// Takes a run id by making its folder in `runs`, which only one caller can: the one given, or a new one.
@@ -203,6 +211,11 @@ fn note(git: &Git, at: &Places, run: &str, shared: &Path, folder: &Path) -> Resu
 /// Ends a run's copy. Completed: what is in the copy is committed onto the run's branch, the folder is removed and
 /// the branch is kept. Failed: the copy stays, and of all failed copies only the newest [`KEPT`] do.
 pub fn clean_copy(home: &Path, run: &str, outcome: Outcome) -> Result<RunCopy, Error> {
+    end_copy(home, run, outcome).map(|(copy, _)| copy)
+}
+
+/// [`clean_copy`], which also says whether a completed run's commit was made: false when the copy held nothing new.
+pub(crate) fn end_copy(home: &Path, run: &str, outcome: Outcome) -> Result<(RunCopy, bool), Error> {
     known(run)?;
     let at = Places::of(home);
     let file = at.record(run);
@@ -225,17 +238,32 @@ pub fn clean_copy(home: &Path, run: &str, outcome: Outcome) -> Result<RunCopy, E
         record.failed = Some(u64::try_from(now).unwrap_or(u64::MAX).max(after));
         write(&file, &record)?;
         prune(&at);
-        return Ok(at.printed(run, at.root.join(run).exists()));
+        return Ok((at.printed(run, at.root.join(run).exists()), false));
     }
     let folder = at.root.join(run);
     let there = standing(&at.root, &folder)?;
     let git = Git::find(&at.runs).map_err(refused)?;
-    if there {
-        commit(&git.open(&record.own).map_err(refused)?, &folder, run)?;
-    }
+    let made = there && commit(&git.open(&record.own).map_err(refused)?, &folder, run)?;
     gone(&git, &record, &folder, there)?;
     forget(&file);
-    Ok(at.printed(run, false))
+    Ok((at.printed(run, false), made))
+}
+
+/// Undoes a copy no run was started in (F39: the harness was too old, or another run took the wish first): its
+/// folder, git's registration of it, its branch, which is where the checkout was, and everything kept for the run.
+pub(crate) fn take_back(home: &Path, run: &str) -> Result<(), Error> {
+    known(run)?;
+    let at = Places::of(home);
+    let held = OpenOptions::new().write(true).open(at.lock()).map_err(Error::Store)?;
+    held.lock().map_err(Error::Store)?;
+    if let Some(record) = read(&at.record(run))? {
+        let folder = at.root.join(run);
+        let git = Git::find(&at.runs).map_err(refused)?;
+        gone(&git, &record, &folder, standing(&at.root, &folder)?)?;
+        let name = format!("refs/heads/{}", branch(run));
+        git.open(&record.repo).and_then(|repo| repo.run(None, &[], &["update-ref", "-d", &name])).map_err(refused)?;
+    }
+    fs::remove_dir_all(at.runs.join(run)).map_err(Error::Store)
 }
 
 /// Whether the run's folder is there to be removed: a real folder directly inside a real `copies`. A link under that
@@ -265,8 +293,8 @@ fn sweep(at: &Places) {
 /// Commits what is in the copy onto the run's branch, with git told the copy's git folder and its work tree. The
 /// paths that hold another repo are left out: adding one makes git start a second git inside that folder, under a
 /// config the agent could have written. No hook can start: the tree and the commit are written with git's plumbing,
-/// which has none, and the one hook of a ref update is off with the rest (`git.rs`).
-fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<(), Error> {
+/// which has none, and the one hook of a ref update is off with the rest (`git.rs`). False: there was nothing new.
+fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<bool, Error> {
     let failed = |said: String| refused(format!("git could not commit the copy, which is kept: {said}"));
     let git = |tree: Option<&Path>, vars: &[(&str, &str)], args: &[&str]| repo.run(tree, vars, args).map_err(failed);
     let staged = git(None, &[], &["ls-files", "-z", "--stage"])?;
@@ -278,7 +306,7 @@ fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<(), Error> {
     let name = format!("refs/heads/{}", branch(run));
     let tip = git(None, &[], &["rev-parse", "--verify", &format!("{name}^{{commit}}")])?;
     if git(None, &[], &["rev-parse", "--verify", &format!("{tip}^{{tree}}")])? == tree {
-        return Ok(());
+        return Ok(false);
     }
     // The person's own name and address, as git reads them for this repo; Jellymoon's when either is missing.
     let own = |key: &str| repo.ask(None, &[], &["config", "--get", key]).map_err(failed);
@@ -293,7 +321,7 @@ fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<(), Error> {
         ("GIT_COMMITTER_EMAIL", address.as_str()),
     ];
     let made = git(None, &who, &["commit-tree", "-p", &tip, "-m", &format!("Jellymoon run {run}"), &tree])?;
-    git(None, &[], &["update-ref", &name, &made, &tip]).map(|_| ())
+    git(None, &[], &["update-ref", &name, &made, &tip]).map(|_| true)
 }
 
 /// Removes the copy's folder, then the repo's registration of it. The folder goes first, by core and not by git, so

@@ -215,7 +215,7 @@
         "with no harness the wish stays and `why` names the places looked; a project name that matches two folders is refused with nothing written"
       ],
       "test": "cargo test -p jellymoon --test f39",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F37",
         "F38"

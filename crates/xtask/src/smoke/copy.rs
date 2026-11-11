@@ -12,24 +12,32 @@ use serde_json::Value;
 
 use super::{World, text, write};
 
-pub fn copy(world: &World) -> Result<String, String> {
-    let (repo, config) = (world.at("repo"), world.at("gitconfig"));
-    write(&repo.join("a.txt"), "as it was\n")?;
+/// A program to start in a repo the chain made. It sees the caller's `PATH`, Jellymoon's temporary home and an
+/// empty git config. `alone`: no other variable of this process, and the temporary home as the person's.
+pub fn in_repo(world: &World, repo: &Path, program: &Path, args: &[&str], alone: bool) -> Result<Command, String> {
+    let config = world.at("gitconfig");
     write(&config, "")?;
-    let started = |program: &Path, args: &[&str]| {
-        let mut command = Command::new(program);
-        command.args(args).current_dir(&repo).env_clear().env("PATH", env::var_os("PATH").unwrap_or_default());
-        command
-            .env("HOME", world.at("user"))
-            .env("USERPROFILE", world.at("user"))
-            .env("JELLYMOON_HOME", world.at("jm"));
-        command.env("GIT_CONFIG_GLOBAL", &config).env("GIT_CONFIG_NOSYSTEM", "1");
-        // git looks for a repo no higher than the one made here: the temporary home is inside this repo's checkout.
-        command.envs(repo.parent().map(|above| ("GIT_CEILING_DIRECTORIES", above)));
+    let mut command = Command::new(program);
+    command.args(args).current_dir(repo);
+    if alone {
+        command.env_clear().env("PATH", env::var_os("PATH").unwrap_or_default());
+        command.env("HOME", world.at("user")).env("USERPROFILE", world.at("user"));
         if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
             command.env("SystemRoot", root); // a Windows program needs it to start
         }
-        let ran = world.wait(command, Duration::from_secs(20))?;
+    }
+    command.env("JELLYMOON_HOME", world.at("jm"));
+    command.env("GIT_CONFIG_GLOBAL", &config).env("GIT_CONFIG_NOSYSTEM", "1");
+    // git looks for a repo no higher than the one made here: the temporary home is inside this repo's checkout.
+    command.envs(repo.parent().map(|above| ("GIT_CEILING_DIRECTORIES", above)));
+    Ok(command)
+}
+
+pub fn copy(world: &World) -> Result<String, String> {
+    let repo = world.at("repo");
+    write(&repo.join("a.txt"), "as it was\n")?;
+    let started = |program: &Path, args: &[&str]| {
+        let ran = world.wait(in_repo(world, &repo, program, args, true)?, Duration::from_secs(20))?;
         if ran.code == 0 { Ok(ran.stdout) } else { Err(world.printed(&ran)) }
     };
     let git = |args: &[&str]| {

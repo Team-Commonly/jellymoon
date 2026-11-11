@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
-use std::{env, fs, io, path, thread};
+use std::{env, fs, io, thread};
 
 use serde::Deserialize;
 
@@ -62,13 +62,10 @@ pub(crate) struct Output {
 
 /// Makes the reading call and returns the model's text.
 pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, Error> {
-    let harness = match &options.harness {
-        Some(harness) => Found { program: path::absolute(harness).map_err(Error::Call)?, path: None },
-        None => find::harness()?,
-    };
+    let harness = find::named_or_found(options.harness.as_deref())?;
     private_dir(&options.dir).map_err(Error::Call)?;
     let folder = tempfile::Builder::new().prefix("call-").tempdir_in(&options.dir).map_err(Error::Call)?;
-    let mut command = Command::new(harness.program);
+    let mut command = harness_in(harness, folder.path());
     command.args(["-p", "--model", &options.model, "--tools", "", "--strict-mcp-config", "--disable-slash-commands"]);
     command.args([
         "--no-session-persistence",
@@ -79,9 +76,6 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
         "--system-prompt",
         PROMPT,
     ]);
-    command.current_dir(folder.path()).env_clear();
-    command.envs(ENVIRONMENT.iter().filter_map(|name| Some((name, env::var_os(name)?))));
-    command.envs(harness.path.map(|path| ("PATH", path)));
     let output = run(command, format!("{day}\n").into_bytes(), options.limit)?;
     if !output.status.success() {
         return Err(Error::Failed {
@@ -94,6 +88,16 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
         Ok(reply) => Ok(reply.result),
         Err(_) => Err(Error::NotAResult),
     }
+}
+
+/// The harness, started in `folder` with the short list of this process's variables and nothing else: the one way
+/// Jellymoon starts a harness, for the reading call and for a run.
+pub(crate) fn harness_in(harness: Found, folder: &Path) -> Command {
+    let mut command = Command::new(harness.program);
+    command.current_dir(folder).env_clear();
+    command.envs(ENVIRONMENT.iter().filter_map(|name| Some((name, env::var_os(name)?))));
+    command.envs(harness.path.map(|path| ("PATH", path)));
+    command
 }
 
 /// Makes the folder the call folders go in, for this user only where the system has file modes; one that is already

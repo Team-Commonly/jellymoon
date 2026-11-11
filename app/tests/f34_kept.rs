@@ -24,7 +24,7 @@ fn a_kept_page_comes_out_when_the_logs_cannot_be_read_with_a_note_that_says_so()
         said[0].starts_with("This page is from an earlier reading. No Claude Code session logs were found"),
         "{said:?}"
     );
-    assert_eq!(said[1..], first[..]);
+    assert_eq!(said[1..3], first[..2], "the page under the note; its last note no longer fits");
     assert!(!called(&world));
 }
 
@@ -43,6 +43,8 @@ fn a_kept_page_is_shown_before_the_logs_are_opened_and_stays_with_a_note_while_t
         home: world.home.clone(),
         harness: Some(world.rec.join(format!("claude{}", env::consts::EXE_SUFFIX))),
         fresh: true,
+        settings: None,
+        command: None,
     };
     let title = |scene: &Scene| match &scene.notes[0] {
         Note::Plain { title, .. } => title.clone(),

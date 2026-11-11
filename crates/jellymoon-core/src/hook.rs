@@ -92,16 +92,26 @@ fn sound(text: &str, program: &str) -> bool {
     text.trim().is_empty() || named(&without_comments(text), program, false) == Some(false)
 }
 
+/// Whether the settings text holds what the record says was installed: the recorded text, or an entry that runs the
+/// recorded program however it is laid out.
+fn has(record: &Record, text: &str) -> bool {
+    let kept = !record.inserted.is_empty() && without_comments(text).contains(&record.inserted);
+    kept || holds(text, &record.program)
+}
+
+/// Whether the hook is installed now: there is a record of it, and the settings file it names still holds the
+/// entry. Nothing is written.
+pub fn hook_installed(home: &Path) -> bool {
+    let installed = |record: Record| fs::read_to_string(&record.settings).is_ok_and(|text| has(&record, &text));
+    record(&home.join("hook.json")).is_some_and(installed)
+}
+
 /// Adds one entry to `settings` that runs `program hook` with no shell. A missing or empty file becomes one object
 /// holding the entry. A file that is not a JSON object (comments are allowed) is refused and left as it was, and so is
 /// one whose `hooks` are not shaped as Claude Code shapes them. A file that already holds the entry is left alone.
 pub fn install_hook(settings: &Path, home: &Path, program: &Path) -> Result<HookState, Error> {
     let settings = absolute(settings).map_err(Error::Settings)?;
     let kept = home.join("hook.json");
-    let has = |record: &Record, text: &str| {
-        let kept = !record.inserted.is_empty() && without_comments(text).contains(&record.inserted);
-        kept || holds(text, &record.program)
-    };
     if let Some(record) = record(&kept)
         && fs::read_to_string(&record.settings).is_ok_and(|text| has(&record, &text))
     {

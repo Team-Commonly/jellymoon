@@ -20,6 +20,7 @@ const USAGE: &str = "usage:
   jellymoon hook                                 (run by Claude Code: hands waiting rulings to the session on stdin)
   jellymoon hook install [--settings <Claude Code settings file>]
   jellymoon hook uninstall
+  jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
   jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay)
 ";
 
@@ -40,6 +41,7 @@ enum Command {
     Hook,
     InstallHook(Option<PathBuf>),
     RemoveHook,
+    HookStatus,
     Uninstall,
 }
 
@@ -99,6 +101,10 @@ fn run() -> Result<String, Failure> {
             };
             let program = env::current_exe().map_err(|e| Failure::Run(format!("finding this program: {e}")))?;
             Ok(format!("{}\n", jellymoon_core::install_hook(&settings, &home()?, &program).map_err(failed)?))
+        }
+        Command::HookStatus => {
+            let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));
+            Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))
         }
         Command::RemoveHook => Ok(format!("{}\n", jellymoon_core::remove_hook(&home()?).map_err(failed)?)),
     }
@@ -171,6 +177,7 @@ fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(word) if matches!(action, Command::Hook) && word == "install" => action = Command::InstallHook(None),
             Value(word) if matches!(action, Command::Hook) && word == "uninstall" => action = Command::RemoveHook,
+            Value(word) if matches!(action, Command::Hook) && word == "status" => action = Command::HookStatus,
             Long("settings") if matches!(action, Command::InstallHook(_)) => {
                 settings = Some(PathBuf::from(parser.value().map_err(usage)?));
             }

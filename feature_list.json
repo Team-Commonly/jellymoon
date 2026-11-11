@@ -143,6 +143,23 @@
       "blockedBy": [
         "F28"
       ]
+    },
+    {
+      "id": "F35",
+      "category": "journal",
+      "description": "A tap on a clash settles it, and the ruling reaches the person's running sessions",
+      "steps": [
+        "a tap on one of a clash's two options makes one ruling by calling core's `rule` (never by running the `jellymoon` binary): the option tapped stands and the other is what it replaces, both being that clash's statements in the day's page data; `jellymoon-app tap --clash <n> --option <k>` does the same on the kept page and prints the ruling as JSON, and `jellymoon hook` then tells a session that ruling once",
+        "the page shows the clash settled at once, the statement that stands as text and the replaced one struck, with no reading; it stays settled when the app is opened again; a tap on the struck statement makes a new ruling the other way round, and a tap on the one that already stands makes none",
+        "a tap on a clash never changes Claude Code's settings; while the hook is not installed a page with a clash carries one note with one option, `Turn on delivery`, whose tap (`tap --delivery-on`) installs core's hook for the installed `jellymoon` command; when that command is not found the note says how to do it from a terminal; when the hook is installed the note is gone",
+        "a tap on a clash that is not on the kept page, an option out of range or a day with no kept page is refused in one line and writes nothing; the only text a tap can put into a ruling is the two statements of the page data, through core's cleaning, also when the kept page was changed after the reading"
+      ],
+      "test": "cargo test -p jellymoon-app --test f35",
+      "passes": true,
+      "blockedBy": [
+        "F29",
+        "F34"
+      ]
     }
   ]
 }

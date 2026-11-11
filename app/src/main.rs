@@ -1,13 +1,14 @@
 //! The `jellymoon-app` command. With `layout` it prints where the kit puts every piece of a page, one line of JSON
 //! each; without, it opens the page in a window. With `--page` both draw the page data they are given and nothing
 //! else happens. With no `--page` the page is the day's own (`today.rs`): kept in the user's folder, and read through
-//! core when the day has moved on.
+//! core when the day has moved on. `tap` does what a tap in the window does, on the day's kept page (`taps.rs`).
 
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 use std::{fs, io};
 
+use jellymoon_app::taps::What;
 use jellymoon_app::today::{self, Asked, Today};
 use jellymoon_app::{lines, read, scene};
 use lexopt::prelude::*;
@@ -17,6 +18,8 @@ const USAGE: &str = "usage:
   jellymoon-app [layout] [--theme <theme>] [--size <W>x<H>] <which page>
       opens a window (t switches the theme); with `layout`, prints each placed piece instead
   a theme is sticker, plain, or a theme file
+  jellymoon-app tap [--date <YYYY-MM-DD>] --clash <n> --option <1|2>   what a tap on that option does: a ruling
+  jellymoon-app tap --delivery-on                                      what a tap on \"Turn on delivery\" does
   which page:
     (nothing)                       today, kept in your jellymoon folder and read with your own Claude Code
     --date <YYYY-MM-DD>             another day
@@ -39,6 +42,7 @@ enum Command {
     Help,
     Layout(Options),
     Window(Options),
+    Tap(Box<Today>, What),
 }
 
 struct Options {
@@ -82,6 +86,7 @@ fn run() -> Result<String, Failure> {
             Ok(lines::lines(&scene, &options.theme, options.size))
         }
         Command::Window(options) => window(options).map(|()| String::new()),
+        Command::Tap(day, what) => day.act(&what).map_err(Failure::Run),
     }
 }
 
@@ -89,18 +94,18 @@ fn run() -> Result<String, Failure> {
 /// replaces the scene. `JELLYMOON_QUIT_AFTER=<seconds>` closes the window by itself, for checks.
 #[cfg(feature = "window")]
 fn window(options: Options) -> Result<(), Failure> {
-    use jellymoon_app::{today::Later, window::open};
-    let (scene, later): (_, Option<Later>) = match options.page {
+    use jellymoon_app::window::{Day, open};
+    let (scene, day) = match options.page {
         Source::File(file) => (scene::scene(&page(&file)?), None),
         Source::Waiting(date) => (today::waiting(&date), None),
         Source::Day(day) => {
             let (first, kept) = day.first();
-            (first, Some(day.later(kept)))
+            (first, Some(Day { today: (*day).clone(), page: kept.clone(), later: day.later(kept) }))
         }
     };
     let seconds = std::env::var("JELLYMOON_QUIT_AFTER").ok().and_then(|seconds| seconds.parse::<f32>().ok());
     let quit_after = seconds.and_then(|seconds| std::time::Duration::try_from_secs_f32(seconds).ok());
-    open(scene, options.theme, options.size, quit_after, later);
+    open(scene, options.theme, options.size, quit_after, day);
     Ok(())
 }
 
@@ -113,6 +118,8 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let text = |parser: &mut lexopt::Parser| parser.value().and_then(|v| v.string()).map_err(usage);
     let (mut layout, mut first, mut waiting) = (false, true, false);
+    let (mut tap, mut clash, mut option, mut delivery) = (false, None, None, false);
+    let number = |given: String| given.parse::<usize>().map_err(|_| Failure::Usage(format!("not a number: {given:?}")));
     let (mut page, mut theme, mut size) = (None, String::from("sticker"), DEFAULT_SIZE);
     let mut asked = Asked::default();
     while let Some(arg) = parser.next().map_err(usage)? {
@@ -120,6 +127,10 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(command) if first && command == "help" => return Ok(Command::Help),
             Value(command) if first && command == "layout" => layout = true,
+            Value(command) if first && command == "tap" => tap = true,
+            Long("clash") if tap => clash = Some(number(text(&mut parser)?)?),
+            Long("option") if tap => option = Some(number(text(&mut parser)?)?),
+            Long("delivery-on") if tap => delivery = true,
             Long("page") => page = Some(text(&mut parser)?),
             Long("date") => asked.date = Some(text(&mut parser)?),
             Long("logs") => asked.logs = Some(parser.value().map_err(usage)?.into()),
@@ -139,6 +150,14 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             other => return Err(usage(other.unexpected())),
         }
         first = false;
+    }
+    if tap {
+        let what = match (clash, option, delivery) {
+            (Some(clash), Some(option), false) => What::Clash { clash, option },
+            (None, None, true) => What::DeliveryOn,
+            _ => return Err(Failure::Usage("tap takes --clash and --option, or --delivery-on".to_string())),
+        };
+        return Ok(Command::Tap(Box::new(Today::from_env(asked).map_err(Failure::Usage)?), what));
     }
     let page = match page {
         Some(file) => Source::File(file),

@@ -8,6 +8,7 @@ jellymoon rule --stands <the words that stand> --over <the words they replace>
 jellymoon hook                                   (run by Claude Code, with the step on stdin)
 jellymoon hook install [--settings <file>]
 jellymoon hook uninstall
+jellymoon hook status                            (prints whether the entry is in the settings now; writes nothing)
 ```
 
 ## The ruling store
@@ -24,6 +25,38 @@ and then renamed, so a hook never reads half of one. The folders Jellymoon makes
 a system with such modes.
 
 A ruling waits for 24 hours. After that no session is told, and the next `jellymoon rule` removes its files.
+
+## A tap in the app
+
+The app makes a ruling when the person taps an option of a clash ([app.md](app.md#taps-appsrctapsrs)). This is the
+only way text gets from a page into a running session, so what is trusted is stated here exactly.
+
+- **What is sent.** The two statements of one clash, `quote_a` and `quote_b`, of the page data the tap was made on,
+  one as what stands and the other as what it replaces. They go through `jellymoon_core::rule` and nothing else:
+  one line each, credential shapes replaced, 200 characters, `"` made `'`, and cleaned again when handed over. The
+  app adds no text, sends no label, wish, star or project, and one tap makes at most one ruling.
+- **Where that page data comes from.** In the window it is the page data on show: the reading the app just made
+  and checked, or the day's kept page as it was read at the door when the window opened. For `jellymoon-app tap` it
+  is the kept page as it is on disk at that moment.
+- **What is trusted.** The kept page, `<home>/pages/<day>.json`, in a folder for the person alone (0700, the file
+  0600). It is held to the door's shape and size, and it must be of the day asked for. It is not checked again
+  against the session logs, and it carries no mark that it is the page the reading wrote. So whoever can write
+  that file as the person can choose the words of the next ruling the person taps, within core's cleaning; the same
+  account can write `rulings/` itself, so this gives them nothing they did not have. A kept page that was changed
+  after the reading is ruled on as it is drawn: the words in the ruling are the words on the page, and a ruling
+  made on the old words no longer marks the clash as settled. A kept file that is not page data is not drawn and
+  cannot be tapped.
+- **What is not trusted.** The settlement file `<day>.ruled.json` says only which side stands, for the page to
+  draw. No ruling is ever made from it. A model's reading reaches a ruling only as the two quotes of a clash. Core
+  kept each only as an exact, whole-word piece of something the person typed that day ([page.md](page.md)). The
+  model chose which piece, and a piece can mean other than the whole ("delete the database" out of "do not delete
+  the database"), so what protects the person is that both statements are on the page, in full, where they tap.
+- **Changing one's mind.** A tap on the other side makes a second ruling with the statements the other way round.
+  The first is not removed. A session that was told the first is told the second at its next step, as a newer
+  decision that replaces what was said before. A session that was told neither is told both in one step, oldest
+  first, so the later one is last. Whether a model always follows the last of two opposite rulings is unproved.
+- **Delivery is never turned on by a tap on a clash.** Only the "Turn on delivery" tap installs the hook, with
+  the same function as `jellymoon hook install`, for the installed `jellymoon` command.
 
 ## The hook
 

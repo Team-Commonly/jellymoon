@@ -18,7 +18,7 @@ mod uninstall;
 
 pub use error::Error;
 pub use find::{own_folder, user_home};
-pub use hook::{install_hook, remove_hook};
+pub use hook::{hook_installed, install_hook, remove_hook};
 pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};

@@ -3,6 +3,7 @@
 //! as text only.
 
 use jellymoon_core::{Clash, PageRead, Wish, WishState};
+use serde::{Deserialize, Serialize};
 use sticker_kit::text::clean;
 use sticker_kit::{Character, LegendItem, Mark, Mood, Note, Scene, State};
 
@@ -11,10 +12,30 @@ use crate::read::{LeftOut, Page};
 /// The longest id a piece carries. Core's are `w1` to `w8`; a file may hold anything.
 const MAX_ID_CHARS: usize = 40;
 
+/// One of a clash's two statements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Side {
+    A,
+    B,
+}
+
+/// The sides of a clash in the order its options are drawn. The one the person chose is drawn last, under the one
+/// it replaced, which is struck: the kit strikes the first option of a choice and no other.
+pub fn order(stands: Option<Side>) -> [Side; 2] {
+    if stands == Some(Side::A) { [Side::B, Side::A] } else { [Side::A, Side::B] }
+}
+
+/// [`ruled`] for a page nobody ruled on.
+pub fn scene(page: &Page) -> Scene {
+    ruled(page, &[])
+}
+
 /// The page as the kit's pieces: a hero, one little one per wish in page order with one star per finished job, a list
 /// of what came true, one choice note per clash, and a plain note for each thing the app has no piece for. When the
-/// file held more than the app draws, the first note says how much was left out.
-pub fn scene(page: &Page) -> Scene {
+/// file held more than the app draws, the first note says how much was left out. `stands` holds, clash by clash,
+/// the side the person chose with a tap.
+pub fn ruled(page: &Page, stands: &[Option<Side>]) -> Scene {
     let data = &page.data;
     let mut notes: Vec<Note> = left_out(page.left_out).into_iter().collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
@@ -28,7 +49,8 @@ pub fn scene(page: &Page) -> Scene {
     if !came_true.is_empty() {
         notes.push(Note::List { title: "came true today".to_string(), rows: came_true });
     }
-    notes.extend(data.clashes.iter().enumerate().map(|(index, clash)| choice(index, clash)));
+    let chosen = |index: usize| stands.get(index).copied().flatten();
+    notes.extend(data.clashes.iter().enumerate().map(|(index, clash)| choice(index, clash, chosen(index))));
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
@@ -92,19 +114,21 @@ fn little_one(index: usize, wish: &Wish) -> Character {
     }
 }
 
-/// A clash as an ask: both statements as options. A settled clash strikes the first, which the second replaced.
-fn choice(index: usize, clash: &Clash) -> Note {
-    let (title, footer) = if clash.settled {
-        ("you changed your mind", "the first one was let go")
-    } else {
-        ("these two clash", "tap the one that stands")
+/// A clash as an ask: both statements as options, in [`order`]. A settled clash strikes the first, which the second
+/// replaced: by the person's own tap (`stands`), or as the reading found it.
+fn choice(index: usize, clash: &Clash, stands: Option<Side>) -> Note {
+    let (title, footer) = match (stands, clash.settled) {
+        (Some(_), _) => ("you chose", "tap the other to change it"),
+        (None, true) => ("you changed your mind", "the first one was let go"),
+        (None, false) => ("these two clash", "tap the one that stands"),
     };
+    let quote = |side: Side| format!("“{}”", if side == Side::A { &clash.quote_a } else { &clash.quote_b });
     Note::Choice {
         id: format!("clash-{}", index + 1),
         title: title.to_string(),
-        options: vec![format!("“{}”", clash.quote_a), format!("“{}”", clash.quote_b)],
+        options: order(stands).map(quote).to_vec(),
         footer: footer.to_string(),
-        struck_first: clash.settled,
+        struck_first: stands.is_some() || clash.settled,
     }
 }
 

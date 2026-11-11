@@ -249,6 +249,10 @@ fn runs_started_at_once_for_one_wish_are_one_run() {
         assert_eq!((w.starts(), w.branches(&repo).len(), w.copies()), (round + 1, round + 1, vec![]), "round {round}");
         assert_eq!(w.kept(&wish)["run"], json!(run), "round {round}");
         let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
-        assert_eq!(runs.filter(|name| name.starts_with('r')).count(), round + 1, "round {round}");
+        assert_eq!(
+            runs.filter(|name| name != "no-hooks" && !name.contains("lock")).count(),
+            round + 1,
+            "round {round}"
+        );
     }
 }

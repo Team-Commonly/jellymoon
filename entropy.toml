@@ -69,8 +69,9 @@ max_file_lines = 400
 # (`copy.rs`) and the binary by 31 (`tests/f38/limits.rs`, 26; four runs at once in `tests/f39/limits.rs`, 5).
 # A run's end that says the made wishes could not be used, where it said the page was busy, raised core by 9
 # (`wish.rs`, `run/end.rs`) and the binary by 29 (its test, `tests/f39/safe.rs`).
+# Two F39 tests counting every name left in `runs`, a `gone-<id>` too, raised the binary by 4 (the longer filter).
 "crates/jellymoon-core" = 5525
-"crates/jellymoon" = 7359
+"crates/jellymoon" = 7363
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

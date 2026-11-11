@@ -227,7 +227,7 @@ fn a_repo_moved_away_under_a_harness_too_old_leaves_nothing_of_the_run_in_jellym
     // The one line is git's reason: the run was not started, and its branch could not be taken back.
     let why = refused(&ended);
     let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
-    let runs: Vec<String> = runs.filter(|name| name.starts_with('r')).collect();
+    let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
     assert_eq!((w.copies(), runs), (vec![], Vec::<String>::new()), "no copy and no folder of the run: {why}");
     assert_eq!((w.kept(&wish), w.starts()), (before, 1), "the wish is as it was");
     w.play("edits", 0);

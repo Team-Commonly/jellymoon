@@ -114,7 +114,9 @@ pub fn tree(folder: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     let mut held = Vec::new();
     for path in paths {
         let inside = if path.is_dir() { tree(&path) } else { Vec::new() };
-        held.push((path.clone(), if path.is_file() { fs::read(&path).unwrap() } else { Vec::new() }));
+        // Windows reads nothing of a file another process holds its lock on (a live run's `run.lock`): the error stands in.
+        let bytes = |file: &Path| fs::read(file).unwrap_or_else(|locked| locked.to_string().into_bytes());
+        held.push((path.clone(), if path.is_file() { bytes(&path) } else { Vec::new() }));
         held.extend(inside);
     }
     held

@@ -103,7 +103,8 @@ max_file_lines = 400
 # The fixes after F40's gate, round 2, raised core by 12 and the binary by 176, nearly all of it tests at the binary.
 # The copies' lock opened for writing again, which Windows needs before it gives a lock, raised core by 1 (a comment).
 "crates/jellymoon-core" = 5871
-"crates/jellymoon" = 8779
+# A test's reading of the home past a file Windows holds locked raised the binary by 2.
+"crates/jellymoon" = 8781
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

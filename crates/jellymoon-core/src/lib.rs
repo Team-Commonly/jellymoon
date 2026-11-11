@@ -6,6 +6,7 @@
 //! [`uninstall`] takes off a machine what the install
 //! script put there. [`make_copy`] gives a run its own copy of a repo and [`clean_copy`] ends it. A session log and a model's answer are both untrusted input: nothing here panics on either.
 
+mod busy;
 mod call;
 mod command;
 mod copy;

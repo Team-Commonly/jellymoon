@@ -75,6 +75,16 @@ This is the only way text gets from a page into a running session, so what is ch
   is not ruled out. `pages` is made the person's alone (0700) only once the lock is held. The settlement is written to a
   file of the process's own, made with create-new and 0600, and moved into place; a link waiting at either name is
   replaced, never followed, and a failed write removes its temporary file.
+- **On Windows** a file another process is using at that moment cannot be made, opened, removed or renamed over:
+  the step fails with "Access is denied" or a sharing violation, where unix lets it through. Between two changes
+  to one day that happens at four steps: making the lock while the last holder's is being removed, removing the
+  lock while a waiter looks at it, reading a kept file while it is replaced, and moving a new file over one being
+  read. So on Windows only, each of the four is tried again every 10 ms for the same 3 seconds (`busy.rs`), and a
+  lock that still cannot be made is "another tap on this day has not finished", as on unix. The cost: a folder
+  nobody may write in gives the same error, so there a refusal takes 3 seconds, and then says the system's own
+  words. Seen once in three CI runs before this, in eight wishes made at once; that test now runs 12 rounds and the
+  taps' 24. A run's `runs/clean.lock` is not of this kind: it is the system's lock on a file that is never
+  removed or renamed, and a copy's record is read only behind it.
 - **When the settlement cannot be written** the ruling stands: exit 0, the ruling in the JSON, the reason in
   `unkept`, and one line on stderr, "the ruling was made, but the page could not keep it". The same holds after a
   crash between the two writes. For the 24 hours the ruling waits it says what stands, so the same tap again makes

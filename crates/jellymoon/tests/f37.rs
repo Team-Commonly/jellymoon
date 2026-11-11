@@ -180,10 +180,12 @@ fn a_kept_page_written_again_does_not_lose_the_made_wishes() {
     assert_eq!(w.wish("one more", "alpha")["wish"]["id"], "m2");
 }
 
-// Eight at once, which is a day's fill, three times over: a write outside the lock would lose one of them.
+// Eight at once, which is a day's fill, twelve times over: a write outside the lock would lose one of them. Twelve
+// because Windows refuses a step on a file another process is using at that moment, which three rounds showed in
+// one CI run of three: each of the eight must still exit 0 and say nothing on stderr.
 #[test]
 fn wishes_made_at_once_are_all_kept_each_under_its_own_id() {
-    for round in 0..3 {
+    for round in 0..12 {
         let (w, start) = (world(), std::sync::Barrier::new(8));
         std::thread::scope(|scope| {
             for n in 1..=8 {

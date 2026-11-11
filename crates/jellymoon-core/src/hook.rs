@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
 
+use crate::busy::retried;
 use crate::ruling::{EVENTS, private_dir};
 use crate::{Error, HookState};
 
@@ -229,7 +230,9 @@ pub(crate) fn put(target: &Path, text: &str, as_old: bool) -> io::Result<()> {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
     let file = open.open(&new)?;
-    let filled = fill(file, text, as_old.then_some(target)).and_then(|()| fs::rename(&new, target));
+    // Windows refuses a rename over a file another process is reading at that moment: tried again (`busy.rs`).
+    let moved = || retried(|| fs::rename(&new, target));
+    let filled = fill(file, text, as_old.then_some(target)).and_then(|()| moved());
     if filled.is_err() {
         let _ = fs::remove_file(&new);
     }

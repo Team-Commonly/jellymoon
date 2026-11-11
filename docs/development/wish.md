@@ -25,7 +25,8 @@ overrides.
   itself whatever the model called them, so the two never meet.
 - **The write.** Behind the day's lock, `pages/<day>.ruled.lock`, which is the tap's
   ([delivery.md](delivery.md), "A tap on a clash"): one change to a day at a time. The file is written beside its
-  place and moved there, 0600 in a folder set to 0700.
+  place and moved there, 0600 in a folder set to 0700. What Windows does differently when two changes meet is in
+  delivery.md, "On Windows".
 
 ## What is refused
 

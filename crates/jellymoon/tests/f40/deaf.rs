@@ -34,11 +34,15 @@ fn an_agent_deaf_to_the_stop_signal_is_gone_at_the_interrupt_which_comes_first()
 fn an_agent_deaf_to_the_interrupt_is_given_its_time_and_is_gone_at_the_stop_signal() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    let Some((going, run)) = deaf(&w, 1, 1500, &wish, &repo) else { return };
+    let Some((going, run)) = deaf(&w, 3, 2000, &wish, &repo) else { return };
     let from = Instant::now();
     assert_eq!(printed(&w.stop(&wish)), said_cancelled(&run, &wish, 0));
     let took = from.elapsed();
-    assert!(took >= Duration::from_millis(1500), "it was not given its time after the interrupt: {took:?}");
+    assert!(took >= Duration::from_secs(2), "it was not given its time after the interrupt: {took:?}");
+    // It was the stop signal that ended it, and not the kill, which comes a second wait later: the agent says
+    // that the signal reached it, which no kill lets it say.
+    assert!(took < Duration::from_secs(4), "it was not gone at the stop signal: {took:?}");
+    assert!(w.rec("heard").is_some(), "the stop signal never reached the agent: only the kill ended it");
     assert_eq!(printed(&ended(going)), said_cancelled(&run, &wish, 0));
     assert!(w.agent_came_and_went());
 }

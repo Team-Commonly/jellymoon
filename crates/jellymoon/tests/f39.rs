@@ -296,8 +296,11 @@ fn the_agent_is_started_with_the_measured_command_line_in_the_copy_and_the_wish_
     assert_eq!(args, ARGS, "the arguments, in order");
     assert_eq!(w.rec("stdin").unwrap(), format!("{SAID}\n"), "the wish's words go in on the input");
     assert!(args.iter().all(|arg| !arg.contains(SAID) && !arg.contains("uploader")), "and in no argument");
-    let copy = fs::canonicalize(w.jm("copies")).unwrap().join(&run);
-    assert_eq!(fs::canonicalize(w.rec("cwd").unwrap()).unwrap_or_else(|_| w.rec("cwd").unwrap().into()), copy);
+    // The copy is gone by now, so both are named from the folder that held it, each by that folder's real path:
+    // the same folder is then the same text on every system.
+    let cwd = PathBuf::from(w.rec("cwd").unwrap());
+    let held = |folder: &Path| fs::canonicalize(folder).unwrap();
+    assert_eq!(held(cwd.parent().unwrap()).join(cwd.file_name().unwrap()), held(&w.jm("copies")).join(&run));
     assert_eq!(w.starts(), 1);
 }
 

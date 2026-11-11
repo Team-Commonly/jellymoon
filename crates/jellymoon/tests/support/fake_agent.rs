@@ -177,6 +177,12 @@ fn main() {
     record(rec);
     let code = match script {
         "edits" => ends(&success(), 0),
+        // The smoke chain's wish, done: one new file that holds the one word.
+        "hello" => {
+            starts();
+            fs::write("HELLO.txt", "Hello\n").unwrap();
+            ends_with(&success())
+        }
         "nothing" => {
             starts();
             line(&success());

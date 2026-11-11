@@ -31,7 +31,7 @@ cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build argument
 | `today-settled` | `jellymoon-app layout` draws the clash settled, the replaced statement struck, and no delivery note |
 | `wish` | `jellymoon wish` keeps a made wish as `m1`, working, with no run, and `jellymoon-app layout` draws it on the kept page with no reading call |
 | `copy` | with the real `git` on the caller's `PATH` and no git config of this machine: a repo the chain makes, `jellymoon copy make` on it, an edit in the copy, and `jellymoon copy clean` leaving one commit on the run's branch, the folder gone and the checkout as it was |
-| `run` | a repo the chain makes and a wish made for it: `jellymoon run`, through `fake-agent`, ends as completed with one commit on the run's branch, and `jellymoon page` shows the wish done with one star. With `--real` the harness is the person's own Claude Code, on one harmless fixed wish |
+| `run` | a repo the chain makes and a wish made for it: `jellymoon run`, through `fake-agent`, ends as completed with one commit on the run's branch, which holds `HELLO.txt` with the one word `hello` (trimmed, in any case), the checkout has no changed file, and `jellymoon page` shows the wish done with one star. With `--real` the harness is the person's own Claude Code, on one harmless fixed wish |
 | `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty; the hook is out and the settings are as they were |
 | `window` (with `--window`) | `jellymoon-app --page` opens a window and, with `JELLYMOON_QUIT_AFTER=3`, exits 0 within 30 seconds with no panic |
 
@@ -53,7 +53,8 @@ step names its harness, a copy of `fake-agent`, with `JELLYMOON_CLAUDE`, so no h
   and exit codes only: a failed run says how many bytes a program printed, never what. Its sixth step is `run`
   (F39): one real run of the person's Claude Code, in a repo the chain makes in the temporary home, on the fixed
   wish "add a file named HELLO.txt that holds the one word hello". The run is stopped after four minutes and the
-  step after five, and it prints the outcome, how many stars the page shows and how many things were denied.
+  step after five, and it prints the outcome, how many stars the page shows, how many things were denied, and yes
+  or no for the file on the branch and for the checkout being unchanged: never what a file holds.
 
 A maintainer ran `--real` on the commit the tag `v0.1.0-rc1` points at, and its five steps passed. The `run` step
 was added since, and nobody has run it with `--real` yet: no agent may.

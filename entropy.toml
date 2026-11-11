@@ -40,17 +40,18 @@ max_file_lines = 400
 # child, the caps on its stream and its stop, 184; `run/record.rs`, a run's record, 59; `run/dead.rs`, the child a
 # cut-off run left, told from a later process of its pid and stopped, 64; the rest is a wish's `run` and `why` and
 # its change behind the day's lock, the folders of a day, taking a copy back, and the examples of what a run prints)
-# and the binary by 1109 (`run` and its parsing are 23; the rest is its tests at the binary, `tests/f39.rs` and
+# and the binary by 1118 (`run` and its parsing are 23; the rest is its tests at the binary, `tests/f39.rs` and
 # `tests/f39/`, and the made-up agent they start, `tests/support/fake_agent.rs`).
 "crates/jellymoon-core" = 5031
-"crates/jellymoon" = 6122
+"crates/jellymoon" = 6131
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
 # F38's step (`copy`, in `smoke/copy.rs`: it makes a repo with the real git) raised it by 69.
 # F37's step, `wish`, raised it by 25.
-# F39's step, `run` (`smoke/run.rs`, 72 lines), and the repo command it shares with `copy` raised it by 84.
-"crates/xtask" = 1269
+# F39's step, `run` (`smoke/run.rs`, 82 lines: the wish's file on the run's branch and the checkout unchanged are 10 of them), and
+# the repo command it shares with `copy`, raised it by 94.
+"crates/xtask" = 1279
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

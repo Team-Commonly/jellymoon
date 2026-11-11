@@ -147,5 +147,7 @@ One line on stderr, exit 1, nothing made and nothing written.
 - The test of a child deaf to `SIGTERM` needs `/usr/bin/perl` to start one, and says so where it is skipped.
 - What the real harness does with the command line is measured once, on a Mac (ADR 0014, "Measured"). A repo with
   its own `CLAUDE.md`, settings or hooks, Windows, and an older Claude Code's exact words were not measured.
+- A run does not follow a project's own rules: on the measured Claude Code the restricted command line does not
+  run a repo's own hooks and does not read its `CLAUDE.md`. Measured on one version only (2.1.322).
 - Denials are counted and nothing is done about them. A run cannot be stopped by the person. Both are F40.
 - The app does not start a run yet. The 30 minutes are one number for every wish.

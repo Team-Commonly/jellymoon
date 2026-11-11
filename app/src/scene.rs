@@ -51,12 +51,13 @@ pub fn scene(page: &Page) -> Scene {
 /// The note that counts what the file held beyond what is drawn, when it held any.
 fn left_out(left_out: LeftOut) -> Option<Note> {
     let counts = [
-        (left_out.wishes, "wishes"),
-        (left_out.clashes, "clashes"),
-        (left_out.stars, "stars"),
-        (left_out.unknown, "things in parts this app does not know"),
+        (left_out.wishes, "wish", "wishes"),
+        (left_out.clashes, "clash", "clashes"),
+        (left_out.stars, "star", "stars"),
+        (left_out.unknown, "thing in a part this app does not know", "things in parts this app does not know"),
     ];
-    let said: Vec<String> = counts.iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
+    let word = |(n, one, many): &(usize, &str, &str)| format!("{n} {}", if *n == 1 { one } else { many });
+    let said: Vec<String> = counts.iter().filter(|count| count.0 > 0).map(word).collect();
     (!said.is_empty()).then(|| Note::Plain {
         title: "not everything is drawn".to_string(),
         body: format!("Left out of this page: {}.", said.join(", ")),
@@ -223,7 +224,7 @@ mod tests {
         page.left_out = LeftOut { wishes: 3, stars: 1, ..LeftOut::default() };
         let first = Note::Plain {
             title: "not everything is drawn".to_string(),
-            body: "Left out of this page: 3 wishes, 1 stars.".to_string(),
+            body: "Left out of this page: 3 wishes, 1 star.".to_string(),
         };
         let notes = scene(&page).notes;
         assert_eq!((notes.len(), notes.first()), (3, Some(&first)));

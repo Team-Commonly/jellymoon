@@ -8,6 +8,9 @@
 /// The smallest size a page is drawn at. The fullest page core can write fits it; below it the text is too small.
 pub const SMALLEST: sticker_kit::Viewport = sticker_kit::Viewport { w: 960.0, h: 640.0 };
 
+/// The longest side `--size` takes, in pixels.
+pub const LARGEST_SIDE: f32 = 16384.0;
+
 pub mod lines;
 pub mod read;
 pub mod scene;

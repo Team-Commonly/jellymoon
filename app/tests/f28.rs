@@ -4,6 +4,8 @@
 #[path = "f28/door.rs"]
 mod door;
 mod support;
+#[path = "f28/words.rs"]
+mod words;
 
 use serde_json::{Value, json};
 use support::{Piece, clash, layout, page, pieces, refused, wish};
@@ -235,7 +237,10 @@ fn a_kind_the_app_does_not_know_falls_back_to_a_plain_note() {
     let said: Vec<String> = plain.iter().map(|note| note.said()).collect();
     assert_eq!(
         said,
-        ["Faster search A wish in a state this app cannot draw yet: paused", "reminders Water the plants"]
+        [
+            "Faster search A wish in a state this app cannot draw yet: paused. Its 3 stars are not drawn.",
+            "reminders Water the plants"
+        ]
     );
     for note in plain {
         assert_eq!(note.roles()[0], "note_title", "a plain note: a title and a body, nothing to tap");

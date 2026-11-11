@@ -28,7 +28,7 @@ pub struct Page {
     pub left_out: LeftOut,
 }
 
-/// How many of each thing the file held beyond what is drawn. `stars` counts those of the wishes that are kept.
+/// How many of each thing the file held beyond what is drawn. `stars` counts those cut from the first 24 wishes.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct LeftOut {
     pub wishes: usize,
@@ -111,7 +111,13 @@ fn unknown_state(wish: &Value) -> Option<Unknown> {
     let mut known = wish.clone();
     *known.get_mut("state")? = Value::String("working".to_string());
     let wish: Wish = serde_json::from_value(known).ok()?;
-    Some(Unknown { title: wish.label, body: format!("A wish in a state this app cannot draw yet: {state}") })
+    // Its stars are in no list and on no character, so the note counts them.
+    let stars = match wish.stars.len() {
+        0 => String::new(),
+        1 => " Its 1 star is not drawn.".to_string(),
+        n => format!(" Its {n} stars are not drawn."),
+    };
+    Some(Unknown { title: wish.label, body: format!("A wish in a state this app cannot draw yet: {state}.{stars}") })
 }
 
 /// The words of an item of an unknown part: the item itself when it is text, else its `label` or `text`.
@@ -158,7 +164,7 @@ mod tests {
         file["wishes"].as_array_mut().unwrap().push(paused);
         let read = read(&file).unwrap();
         assert_eq!(read.data.wishes.iter().map(|wish| wish.id.as_str()).collect::<Vec<_>>(), ["w1"]);
-        let body = "A wish in a state this app cannot draw yet: paused".to_string();
+        let body = "A wish in a state this app cannot draw yet: paused.".to_string();
         assert_eq!(read.unknown, [Unknown { title: "Faster search".to_string(), body }]);
     }
 

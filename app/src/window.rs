@@ -7,7 +7,7 @@
 use std::io::Write;
 use std::time::Duration;
 
-use gpui::{App, Bounds, TitlebarOptions, WindowBounds, WindowHandle, WindowOptions, prelude::*, px, size};
+use gpui::{App, Bounds, Pixels, TitlebarOptions, WindowBounds, WindowHandle, WindowOptions, prelude::*, px, size};
 use gpui_platform::application;
 use sticker_kit::draw::{Page, Tap, load_fonts};
 use sticker_kit::{Scene, Theme, Viewport};
@@ -45,13 +45,17 @@ pub fn open(scene: Scene, theme: Theme, viewport: Viewport, quit_after: Option<D
 
 fn page(scene: Scene, theme: Theme, viewport: Viewport, cx: &mut App) -> gpui::Result<WindowHandle<Page>> {
     let bounds = Bounds::centered(None, size(px(viewport.w), px(viewport.h)), cx);
-    let options = WindowOptions {
+    cx.open_window(options(bounds), |_, cx| cx.new(|_| Page::new(scene, theme).on_tap(|tap, _, _| received(tap))))
+}
+
+/// What the window is asked for: its first place, a title, and never to be smaller than a page is drawn at.
+fn options(bounds: Bounds<Pixels>) -> WindowOptions {
+    WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         window_min_size: Some(size(px(crate::SMALLEST.w), px(crate::SMALLEST.h))),
         titlebar: Some(TitlebarOptions { title: Some("Jellymoon".into()), ..Default::default() }),
         ..Default::default()
-    };
-    cx.open_window(options, |_, cx| cx.new(|_| Page::new(scene, theme).on_tap(|tap, _, _| received(tap))))
+    }
 }
 
 fn switch_theme(page: &mut Page, cx: &mut Context<Page>) {
@@ -69,4 +73,17 @@ fn received(tap: &Tap) {
 
 fn say(line: &str) {
     let _ = std::io::stderr().write_all(format!("jellymoon-app: {line}\n").as_bytes());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// This holds what the window is asked for. That the system honours it was seen by hand on the Mac only.
+    #[test]
+    fn the_window_is_asked_never_to_be_smaller_than_the_smallest_page() {
+        let asked = options(Bounds::default());
+        assert_eq!(asked.window_min_size, Some(size(px(960.0), px(640.0))));
+        assert_eq!((crate::SMALLEST.w, crate::SMALLEST.h), (960.0, 640.0));
+    }
 }

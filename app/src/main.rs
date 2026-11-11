@@ -97,7 +97,9 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Long("size") => {
                 let given = parser.value().and_then(|v| v.string()).map_err(usage)?;
                 size = viewport(&given).ok_or_else(|| {
-                    Failure::Usage(format!("--size must be <W>x<H> in pixels, 960x640 or larger, not {given:?}"))
+                    Failure::Usage(format!(
+                        "--size must be <W>x<H> in pixels, from 960x640 to 16384x16384, not {given:?}"
+                    ))
                 })?;
             }
             other => return Err(usage(other.unexpected())),
@@ -109,11 +111,12 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     Ok(if layout { Command::Layout(options) } else { Command::Window(options) })
 }
 
-/// `960x640` as a viewport. Each side is a whole number of pixels, from the smallest size a page is drawn at to 16384.
+/// `960x640` as a viewport. Each side is a whole number of pixels, from the smallest size a page is drawn at to
+/// [`jellymoon_app::LARGEST_SIDE`].
 fn viewport(given: &str) -> Option<Viewport> {
     let (w, h) = given.split_once('x')?;
     let side = |text: &str, least: f32| {
-        text.parse::<u16>().ok().map(f32::from).filter(|side| (least..=16384.0).contains(side))
+        text.parse::<u16>().ok().map(f32::from).filter(|side| (least..=jellymoon_app::LARGEST_SIDE).contains(side))
     };
     Some(Viewport { w: side(w, jellymoon_app::SMALLEST.w)?, h: side(h, jellymoon_app::SMALLEST.h)? })
 }

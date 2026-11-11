@@ -5,6 +5,8 @@
 
 #[path = "f37/refused.rs"]
 mod refused;
+#[path = "f37/still.rs"]
+mod still;
 mod support;
 
 use std::ffi::OsString;

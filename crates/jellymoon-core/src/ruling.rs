@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::redact::line;
+use crate::still::statement;
 use crate::{Error, Ruling};
 
 /// The most characters of a statement kept: what a quote on a page may hold.
@@ -40,14 +40,10 @@ struct Step {
 
 /// A statement as it is kept and handed over: cleaned and cut as the reader does it, on one line (a line break, a
 /// tab and any run of spaces become one space), with each `"` made `'`. So a statement cannot end its own quote in
-/// what the hook prints, or start a line that reads as another ruling.
+/// what the hook prints, or start a line that reads as another ruling. It is cleaned until cleaning changes nothing
+/// ([`crate::still`]), so the words of a statement that was kept are the words of that statement read back.
 pub(crate) fn words(text: &str) -> String {
-    words_of(text, WORDS_MAX)
-}
-
-/// [`words`] cut to `most` characters: a made wish asks for one more than it may have, to tell that it is over.
-pub(crate) fn words_of(text: &str, most: usize) -> String {
-    line(text, most).replace('"', "'")
+    statement(text, WORDS_MAX)
 }
 
 /// Makes a folder of Jellymoon's own, and the folders above it that are missing, for the person alone (0700) where

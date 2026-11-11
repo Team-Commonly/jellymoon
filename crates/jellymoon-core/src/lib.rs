@@ -21,6 +21,7 @@ mod ruling;
 mod run;
 mod session;
 mod shapes;
+mod still;
 mod tap;
 mod uninstall;
 mod wish;

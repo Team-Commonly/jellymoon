@@ -27,15 +27,16 @@ max_file_lines = 400
 # F37, a made wish, raised core by 229 (`wish.rs`, its rules, its kept file and one test, is 203; the day's lock as one
 # function for the tap and the wish; the example of what it prints, round-tripped) and the binary by 411 (`wish`
 # and its parsing are 24; the rest is its tests at the binary, `tests/f37.rs` and `tests/f37/refused.rs`).
-# The fixes after the reviews of F38 and F37 raised core by 191 and the binary by 120. Core: `redact/twice.rs`, 102,
-# is the test that a text cleaned twice is the text cleaned once, over twenty thousand built texts; cleaning in the
-# order that makes it so is 26; a copy's repo taken only at its top, its failed runs in their own order and the
-# folder nobody stands for are 27; each transport the config names switched off, with its test, is 36. The binary:
-# all of it tests of those cases (`tests/f38/hostile.rs`, `tests/f38/limits.rs`, `tests/f37/refused.rs`,
-# `tests/f35/lock.rs`).
-# A file in use on Windows raised core by 119: `busy.rs`, 105, of which 56 are its two tests (which errors are a
-# file in use, and how long a step is tried again), and its four callers in the day's lock, read and write, 14.
-# The binary by 2, the comment on the wishes made at once, now twelve rounds.
+# The fixes after the reviews of F38 and F37 raised core by 322 and the binary by 275. Core: `still.rs`, 138, is the
+# one door a kept text goes through, cleaned until cleaning changes nothing (60 lines, and 78 of tests: every pair
+# and triple of the shapes cleaning knows, the text that never stands still, the cut); its callers are 2; a copy's
+# repo taken only at its top, its failed runs in their own order and the folder nobody stands for are 27; each
+# transport the config names switched off, with its test, is 36; `busy.rs`, a file in use on Windows, is 105, of
+# which 56 are its two tests, and its four callers in the day's lock, read and write, 14. The binary: all of it
+# tests. `tests/f37/still.rs`, `tests/f35/still.rs` and the texts they share in `tests/support/mod.rs` are 174 (words
+# one cleaning is not done with, through `wish`, `rule` and `settle`, and files kept before the door); the cases of
+# a copy in `tests/f38/hostile.rs` and `tests/f38/limits.rs` are 81; `tests/f37/refused.rs` is 18, and 2 are the
+# comment on the wishes made at once, now twelve rounds.
 # F39, a run, raised core by 835 (`run.rs`, a run's order and its fixed words, is 387; `run/child.rs`, the harness
 # child, the caps on its stream and its stop, 184; `run/record.rs`, a run's record, 59; `run/dead.rs`, the child a
 # cut-off run left, told from a later process of its pid and stopped, 64; the rest is a wish's `run` and `why` and
@@ -48,8 +49,10 @@ max_file_lines = 400
 # core by 230: the checked start of a stream and the stricter star (`run/stream.rs`, 132), an end written in the
 # record before the wish is told and found there later (`run/end.rs`, 171, of which 100 came out of `run.rs`), and
 # the one function that passes on only full paths (`call.rs`, 46).
-"crates/jellymoon-core" = 5261
-"crates/jellymoon" = 6628
+# Merged with the door a kept text goes through (`still.rs`): one more test of a run, 24 lines in
+# `tests/f39/safe.rs`, that a run's start and end write an earlier build's wish as it stands still and drop none.
+"crates/jellymoon-core" = 5277
+"crates/jellymoon" = 6807
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

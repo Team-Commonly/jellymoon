@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 
 use super::limits::{grows, wait_for};
 use super::{DAY, SAID, STAR, printed, ran, refused, world, world_in};
-use crate::support::{skipped, tree};
+use crate::support::{pay_key, shows, skipped, tree};
 
 /// In the name of every folder a session log names here. No output and no file of Jellymoon's may hold it.
 const FOLDER: &str = "walrus-nickel-in-a-folder-name";
@@ -199,4 +199,30 @@ fn a_page_does_not_wait_for_the_agent_a_dead_run_left() {
     assert_eq!(w.on_page(&wish)["state"], "needs_you");
     assert!(from.elapsed() < Duration::from_secs(3), "the page waited {:?}", from.elapsed());
     assert!(w.freed("held"), "the deaf agent is still going after the page");
+}
+
+// A run writes the day's wishes back, at its start and at its end, through the door they are read through: a wish
+// a build before that door kept, cleaned once, is written as it stands still, and is not dropped.
+#[test]
+fn a_run_s_start_and_end_keep_a_wish_of_an_earlier_build_and_write_it_as_it_stands_still() {
+    let w = world();
+    let (repo, first) = (w.repo("alpha"), w.wish("alpha"));
+    let file = w.jm("pages").join(format!("{DAY}.wishes.json"));
+    let made =
+        |id: &str, said: &str| json!({"id": id, "said": said, "project": "alpha", "state": "working", "stars": []});
+    let once = format!("use [redacted]{} here", pay_key());
+    let left = json!({"day": DAY, "wishes": [made(&first, &once), made("m2", SAID)]});
+    fs::write(&file, left.to_string()).unwrap();
+    w.play("edits", 0);
+    let (_, said) = ran(&w.start("m2", &repo));
+    assert_eq!((&said["outcome"], &said["star"]), (&json!("completed"), &json!(STAR)));
+    let (old, new) = (w.on_page(&first), w.on_page("m2"));
+    let still = "use [redacted][redacted] here";
+    assert_eq!((&old["said"], &old["state"], &old["stars"]), (&json!(still), &json!("working"), &json!([])));
+    assert_eq!((&new["said"], &new["state"], &new["stars"]), (&json!(SAID), &json!("done"), &json!([STAR])));
+    let kept = fs::read_to_string(&file).unwrap();
+    assert!(!shows(&kept, &pay_key()), "the key an earlier build kept is in the file no more");
+    assert_eq!((w.kept(&first), &w.kept("m2")["state"]), (made(&first, still), &json!("done")));
+    let wishes: Value = serde_json::from_str(&kept).unwrap();
+    assert_eq!(wishes["wishes"].as_array().unwrap().len(), 2, "no wish was dropped");
 }

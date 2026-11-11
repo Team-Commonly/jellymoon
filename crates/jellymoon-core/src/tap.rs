@@ -140,11 +140,13 @@ fn ruled_file(home: &Path, day: &str) -> PathBuf {
 }
 
 /// The day's settlement. A file that is missing, a link, writable by others, too large, not of this exact shape, of
-/// another day or of more clashes than a page has is no settlement.
+/// another day or of more clashes than a page has is no settlement. Each statement is read as the page's are, through
+/// [`words`]: one kept before a statement was cleaned to its end is still the page's.
 fn ruled(home: &Path, day: &str) -> Vec<One> {
     let kept = plain(&ruled_file(home, day), RULED_MAX).ok();
     let kept = kept.and_then(|bytes| serde_json::from_slice::<Ruled>(&bytes).ok()).filter(|kept| kept.day == day);
-    kept.map(|kept| kept.clashes).filter(|clashes| clashes.len() <= CLASHES_MAX).unwrap_or_default()
+    let kept = kept.map(|kept| kept.clashes).filter(|clashes| clashes.len() <= CLASHES_MAX).unwrap_or_default();
+    kept.into_iter().map(|one| One { a: words(&one.a), b: words(&one.b), ..one }).collect()
 }
 
 /// The side that stands for the clash of `a` and `b`: by the newest ruling of those two statements that still

@@ -127,7 +127,8 @@ fn spoiled() -> Vec<(&'static str, Spoil, &'static str)> {
         ("a field nobody knows", text(json!({"day": DAY, "wishes": [], "more": 1}).to_string()), shape),
         ("an id of the reading's", wishes(DAY, json!([made("w1", SAID, "alpha")])), shape),
         ("an id out of its place", wishes(DAY, json!([made("m2", SAID, "alpha")])), shape),
-        ("words that are not clean", wishes(DAY, json!([made("m1", "two\nlines", "alpha")])), shape),
+        ("words with nothing left once cleaned", wishes(DAY, json!([made("m1", " \u{2065}", "alpha")])), shape),
+        ("words over their length", wishes(DAY, json!([made("m1", &"x".repeat(201), "alpha")])), shape),
         ("a project that is a path", wishes(DAY, json!([made("m1", SAID, "../alpha")])), shape),
         (
             "nine of them",

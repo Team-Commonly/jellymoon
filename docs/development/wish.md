@@ -22,6 +22,12 @@ overrides.
   the kept page `pages/<day>.json`, because every reading writes that file again.
 - **The words.** What is kept is what a page draws, by the rule of a clash's statement: one line, each run of
   spaces made one, nothing that cannot be seen, credential shapes replaced by `[redacted]`, each `"` made `'`.
+- **Cleaned until nothing changes.** Cleaning once is not always cleaning twice: a private key's first line with a
+  tab in it is one only once it is on one line, and a key straight after another is found only once the first is
+  `[redacted]`. So the words are cleaned again, at most 8 times, until a cleaning changes nothing, and that is
+  what is kept (`still.rs` in core, the same door a clash's statement goes through). What is kept is therefore
+  unchanged by one more cleaning, which is what reading the file back does. The cleaning itself is the reader's,
+  unchanged ([reader.md](reader.md)); a session log's turn is still cleaned once.
 - **The id.** `m1` to `m8`, by the wish's place in the file. A reading's ids are `w1` to `w8`, which core writes
   itself whatever the model called them, so the two never meet.
 - **The write.** Behind the day's lock, `pages/<day>.ruled.lock`, which is the tap's
@@ -36,7 +42,8 @@ Each is one line on stderr, exit 1, and nothing is written.
 | Refused | Why |
 |---|---|
 | Words that are empty once cleaned | There is nothing to draw |
-| Words over 200 characters once cleaned, or over 4096 bytes as typed | A wish is never cut: cut words would not be the person's |
+| Words over 200 characters once cleaned to the end, or over 4096 bytes as typed | A wish is never cut: cut words would not be the person's |
+| Words a cleaning still changes after 8 times (nine keys or more with nothing between them) | They would be kept half cleaned |
 | A ninth made wish for one day | A day holds eight |
 | A project that is not one folder's name: empty, over 100 characters, a path, `.` or `..`, or anything cleaning would change (a line break, a character that cannot be seen, a credential shape, which a name of 40 letters and digits with no break is) | F39 finds the folder by this name |
 | Made wishes that cannot be used (below) | They are never written over |
@@ -44,8 +51,14 @@ Each is one line on stderr, exit 1, and nothing is written.
 
 The file of made wishes is used only when it is a plain file, never a link, that its group and others cannot write
 to, of at most 64 KiB, of this exact shape with no other field, of the day asked for, with at most eight wishes whose
-ids are `m1`, `m2` and so on in order and whose every text is what cleaning would leave. Otherwise no made wish of
-that day is drawn, and a new wish is refused until the person moves the file away.
+ids are `m1`, `m2` and so on in order, whose every project and star is what cleaning would leave, and whose words
+are a wish's: not empty, and not refused above. Otherwise no made wish of that day is drawn, and a new wish is
+refused until the person moves the file away.
+
+**Words read back are cleaned again, through the same door.** A build before the rule above kept words cleaned
+once, so a file may hold words one more cleaning changes. Such a wish is not refused and the day is not lost: it
+is drawn as its words stand once cleaned to the end, and the next wish made that day writes the file so. Drawing a
+page writes nothing. The same holds for a statement in a day's settlement and in a ruling that waits.
 
 ## On the page
 

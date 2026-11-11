@@ -22,7 +22,10 @@ statements are cleaned before they are stored and again when they are handed ove
 ([what is printed](reader.md#what-is-printed)): credential shapes replaced, control and invisible characters
 removed, cut to 200 characters. Each is also made one line: a line break, a tab and any run of spaces become one
 space, and every `"` becomes `'`. So a statement cannot close its own quote in what the hook prints or start a line
-that reads as another ruling. A ruling without both statements is refused. The file is written under another name
+that reads as another ruling. A statement is cleaned again, at most 8 times, until a cleaning changes nothing, and
+cut only then (`still.rs` in core; why is in [wish.md](wish.md), "What is kept"): the words a ruling carries are the
+words the next tap compares. A statement a cleaning still changes after 8 times, or of over 4096 bytes, is kept as
+`[redacted]` and nothing else. A ruling without both statements is refused. The file is written under another name
 and then renamed, so a hook never reads half of one. The `rulings` folder is set to the person alone (0700) each
 time a ruling is made, also when it was there before and open to others, on a system with such modes.
 

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde_json::{Value, json};
 
 use super::{A, B, DAY, World, tree, world};
-use crate::support::{hub_key, key_header, model_key};
+use crate::support::{hub_key, model_key};
 
 impl World {
     fn lock(&self) -> std::path::PathBuf {
@@ -78,24 +78,6 @@ fn a_lock_left_behind_long_ago_or_dated_ahead_is_taken_over() {
         assert!(started.elapsed() < Duration::from_secs(2), "{case}: with no wait for it");
         assert!(!w.lock().exists() && w.rulings().len() == 1, "{case}: and the lock is gone");
     }
-}
-
-// A statement is cleaned as it will be read, on one line: a private key's first line with a tab for one of its
-// spaces is replaced before a session is told it, and the same tap again finds the ruling it made.
-#[test]
-fn a_statement_that_only_looks_like_a_key_once_on_one_line_is_replaced_and_ruled_once() {
-    let w = world();
-    w.keep(&[(&format!("use {} here", key_header("\t")), B)]);
-    let said = w.tap("1", "1");
-    assert_eq!(
-        (said["stands"].as_str(), said["ruling"]["stands"].as_str()),
-        (Some("use [redacted]"), Some("use [redacted]"))
-    );
-    assert_eq!(w.tap("1", "1")["ruling"], Value::Null, "the cleaned words are what is compared the next time");
-    let told = w.told("s-1");
-    assert!(w.rulings().len() == 1 && told.contains("What stands: \"use [redacted]\"") && !told.contains("PRIVATE"));
-    let settlement: Value = serde_json::from_str(&fs::read_to_string(w.ruled()).unwrap()).unwrap();
-    assert_eq!(settlement["clashes"], json!([{"a": "use [redacted]", "b": B, "stands": "a"}]), "as it is drawn");
 }
 
 // A lock that is fresh, and a folder at the lock's name, are waited for and then refused: 3 seconds by the clock.

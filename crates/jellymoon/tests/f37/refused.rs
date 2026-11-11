@@ -36,12 +36,14 @@ fn a_wish_with_no_words_too_many_words_or_no_plain_project_is_refused_and_writes
     let (fits, key_name) = ("word ".repeat(39) + "words", hub_key());
     let long = format!("{fits}x");
     let many = "é".repeat(5000);
-    let cases: [(&str, &str, &str, &str); 12] = [
+    let bytes = format!("x{}", " ".repeat(4096));
+    let cases: [(&str, &str, &str, &str); 13] = [
         ("no words", "", "alpha", EMPTY),
         ("only spaces", " \n\t ", "alpha", EMPTY),
         ("only what cannot be seen", "\u{2065}\u{200b}\u{feff}", "alpha", EMPTY),
         ("201 characters", &long, "alpha", LONG),
         ("far too long", &many, "alpha", LONG),
+        ("4097 bytes as typed", &bytes, "alpha", LONG),
         ("no project", SAID, "", NAME),
         ("a path", SAID, "work/alpha", NAME),
         ("a Windows path", SAID, "work\\alpha", NAME),

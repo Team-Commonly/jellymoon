@@ -193,23 +193,34 @@ pub fn map_key(fill: &str) -> String {
 pub fn pay_key() -> String {
     format!("sk{}{}", "_live_", "qRsTuVwX".repeat(2))
 }
+/// A cloud key id's shape. It is one only where no capital or digit follows it.
+pub fn key_id() -> String {
+    format!("AK{}{}", "IA", "Q7".repeat(8))
+}
 /// Whether any 8 characters in a row of `secret` can be read in `text`.
 pub fn shows(text: &str, secret: &str) -> bool {
     secret.as_bytes().windows(8).any(|run| text.contains(std::str::from_utf8(run).unwrap()))
 }
 /// Words that cleaning once leaves changed by cleaning again, each with what is kept of it and what was planted in
 /// it: a private key's first line with a tab in it; two keys and three with nothing between; two keys where a cut
-/// made before the second was found would show half of it; twelve keys, more than a text is cleaned for, which have
-/// no words to keep.
+/// made before the second was found would show half of it; seven keys and eight, which eight cleanings are done
+/// with; nine, which they are not, so it has no words to keep.
 pub fn restless() -> Vec<(String, String, Vec<String>)> {
     let (one, two, pay) = (map_key("kLmNo"), map_key("pQrSt"), pay_key());
-    let (words, twelve, marks) = ("word ".repeat(33), map_key("dEfGh").repeat(12), "[redacted]".repeat(3));
+    let (words, many, marks) = ("word ".repeat(33), map_key("dEfGh"), "[redacted]".repeat(8));
+    let row = |keys: usize| format!("use {} here", many.repeat(keys));
     vec![
         (format!("paste {} and go on", key_header("\t")), "paste [redacted]".into(), vec![key_header(" ")]),
         (format!("use {one}{pay} here"), format!("use {} here", &marks[..20]), vec![one.clone(), pay.clone()]),
-        (format!("use {one}{two}{pay} here"), format!("use {marks} here"), vec![one.clone(), two.clone(), pay]),
+        (
+            format!("use {one}{two}{pay} here"),
+            format!("use {} here", &marks[..30]),
+            vec![one.clone(), two.clone(), pay],
+        ),
         (format!("{words}{one}{two}"), format!("{words}{}", &marks[..20]), vec![one, two]),
-        (twelve, String::new(), vec![map_key("dEfGh")]),
+        (row(7), format!("use {} here", &marks[..70]), vec![many.clone()]),
+        (row(8), format!("use {marks} here"), vec![many.clone()]),
+        (row(9), String::new(), vec![many]),
     ]
 }
 pub fn unknown_key() -> String {

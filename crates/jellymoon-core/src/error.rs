@@ -53,7 +53,8 @@ pub enum Error {
     Elsewhere,
     /// The text that was installed is no longer in the settings file as it was written.
     Changed,
-    /// A tap on a clash was refused, and nothing was written. It holds why, in one line with no word of the page.
+    /// A tap on a clash, or a ruling of a statement that cannot be cleaned, was refused, and nothing was written. It
+    /// holds why, in one line with no word of the page.
     Tap(String),
     /// The installed `jellymoon` command is not a file the hook may name. It holds why.
     Command(String),

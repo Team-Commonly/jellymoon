@@ -49,8 +49,14 @@ max_file_lines = 400
 # 85, `limits.rs` 229, `refused.rs` 309, `safe.rs` 228, `stream.rs` 194), the made-up agent they start is 440
 # (`tests/support/fake_agent.rs`, 321, and `fake_agent/gate.rs`, 119), and the other 74 are `run` and its parsing,
 # 23, the reading call's test of full paths in `tests/harness.rs`, and a skipped test saying why.
-"crates/jellymoon-core" = 5373
-"crates/jellymoon" = 7125
+# The gate's finding on the door's limit, which landed beside F39, raised core by 38 and the binary by 84. Core: 26
+# are tests in `still.rs` (eight changing cleanings kept and a ninth refused at any length, 4096 bytes and 4097, a
+# cut text cleaned again); 12 are the count of changing cleanings only and the refusal of a ruling of a statement
+# that cannot be cleaned. The binary: the same limits at `rule`, `settle` and `wish`, and a ruling and a
+# settlement's second statement kept by an earlier build (`tests/f35/still.rs`, 71; the texts in
+# `tests/support/mod.rs`, 11; `tests/f37/refused.rs`, 2).
+"crates/jellymoon-core" = 5411
+"crates/jellymoon" = 7209
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -82,7 +88,8 @@ max_file_lines = 400
 # footer's count of them, also on a day not read yet.
 # The case of a clash on a page with no wish read, which a made wish moves up, raised it by 36 (`tests/f37.rs`).
 # F39 raised the app by 1: the arm for core's new error where it puts an error into words.
-"app" = 3297
+# The tap on a clash whose statement cannot be cleaned, which says why, raised it by 15 (`tests/f35.rs`).
+"app" = 3312
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

@@ -355,3 +355,18 @@ fn a_clash_with_nothing_to_choose_is_a_plain_note_and_cannot_be_tapped() {
     assert_eq!(body(&after, 0), format!("That tap did nothing. the page of {DAY} has no \"clash-1\" to tap."));
     assert_eq!((rulings(&world), written(&world)), (0, before));
 }
+
+// A statement that eight cleanings are not done with is drawn as the mark. Core refuses its tap, and the page says so.
+#[test]
+fn a_tap_on_a_clash_with_a_statement_that_cannot_be_cleaned_says_why_and_makes_no_ruling() {
+    let world = open_clash();
+    let keys = format!("AI{}{}", "za", "kLmNo".repeat(7)).repeat(9);
+    rewrite(&world, |page| page["clashes"][0]["quote_a"] = json!(keys));
+    let mut on = on_show(&world, settings(&world));
+    assert!(options(&shown(&world, &[]), "clash-1", " ").iter().any(|option| option.contains("[redacted]")));
+    let before = written(&world);
+    let after = on.tap("clash-1", 0).unwrap();
+    let why = "a statement of over 4096 bytes, or one that cleaning still changes after 8 times, cannot be ruled on";
+    assert_eq!(body(&after, 0), format!("That tap did nothing. {why}."));
+    assert_eq!((rulings(&world), written(&world)), (0, before));
+}

@@ -7,8 +7,8 @@
 
 use crate::redact::line;
 
-/// The most makings of one text.
-const MAKINGS: usize = 8;
+/// The most makings of one text that change it. One more follows, which must change nothing.
+const CHANGES: usize = 8;
 /// The most bytes of a text that is made at all: twenty times what is kept.
 const LOOKED: usize = 4096;
 /// The most characters a text may come to while it is made: far more than it can.
@@ -21,39 +21,43 @@ const MARK: &str = "[redacted]";
 pub(crate) enum Unkept {
     /// Over its length, or too long to be made.
     Long,
-    /// Still changing after the last making.
+    /// Changed by a ninth making.
     Changing,
 }
 
 /// `text` made until a making changes nothing, of at most `most` characters. A text is cut only once it stands
 /// still: cut sooner, half of a key not yet found could be what is left at the cut. `cut` says whether it is cut
-/// then (a statement), and made again as cut, or refused as long (a made wish, which is never cut).
+/// then (a statement), and made again as cut, or refused as long (a made wish, which is never cut). The cut is no
+/// making and is not counted: a text has its [`CHANGES`] whatever its length.
 pub(crate) fn still(text: &str, most: usize, cut: bool) -> Result<String, Unkept> {
     if text.len() > LOOKED {
         return Err(Unkept::Long);
     }
-    let (mut words, mut room) = (text.to_string(), ROOM);
-    for _ in 0..MAKINGS {
-        let made = line(&words, room).replace('"', "'");
+    let make = |words: &str, room: usize| line(words, room).replace('"', "'");
+    let (mut words, mut room, mut changes) = (text.to_string(), ROOM, 0);
+    loop {
+        let made = make(&words, room);
         let size = made.chars().count();
         if room == ROOM && size >= ROOM {
             return Err(Unkept::Long);
         }
         if made != words {
-            words = made;
+            if changes == CHANGES {
+                return Err(Unkept::Changing);
+            }
+            (words, changes) = (made, changes + 1);
         } else if size <= most {
             return Ok(words);
         } else if cut {
-            room = most;
+            (words, room) = (make(&words, most), most);
         } else {
             return Err(Unkept::Long);
         }
     }
-    Err(Unkept::Changing)
 }
 
-/// A statement as it is kept and handed over. One that cannot be made is the mark and nothing else: it cannot be
-/// refused, since a page is drawn and a ruling file read whatever they hold.
+/// A statement as it is drawn and handed over. One that cannot be made is the mark and nothing else: it cannot be
+/// refused here, since a page is drawn and a ruling file read whatever they hold. No ruling is made of one.
 pub(crate) fn statement(text: &str, most: usize) -> String {
     still(text, most, true).unwrap_or_else(|_| MARK.to_string())
 }
@@ -114,16 +118,38 @@ mod tests {
         two.flat_map(move |(a, b)| joins.iter().map(move |join| (a, b, *join)))
     }
 
-    // Each making finds one more of these keys, since a key is found only when the one before it is the mark.
+    // Each making finds one more of these keys, since a key is found only when the one before it is the mark:
+    // eight keys are eight makings that change the text and a ninth that changes nothing. Words before them that
+    // are cut away afterwards take none of the eight.
     #[test]
-    fn a_text_still_changing_after_eight_makings_is_not_kept_and_a_statement_of_it_is_the_mark() {
-        let key = format!("AI{}{}", "za", "kLmNo".repeat(7));
-        for (keys, wish, said) in [(3, Ok(MARK.repeat(3)), MARK.repeat(3)), (12, Err(Unkept::Changing), MARK.into())] {
-            assert_eq!((still(&key.repeat(keys), 200, false), statement(&key.repeat(keys), 200)), (wish, said));
+    fn eight_makings_may_change_a_text_and_a_ninth_refuses_it_whatever_its_length() {
+        let (key, words) = (format!("AI{}{}", "za", "kLmNo".repeat(7)), "word ".repeat(45));
+        for keys in [7, 8] {
+            let text = key.repeat(keys);
+            assert_eq!(still(&text, 200, false), Ok(MARK.repeat(keys)));
+            assert_eq!(statement(&format!("{words}{text}"), 200), format!("{}…", &words[..199]));
         }
-        let long = "x".repeat(LOOKED + 1);
-        assert_eq!((still(&long, 200, true), statement(&long, 200)), (Err(Unkept::Long), MARK.to_string()));
+        let nine = key.repeat(9);
+        assert_eq!((still(&nine, 200, false), statement(&nine, 200)), (Err(Unkept::Changing), MARK.to_string()));
+        assert_eq!(statement(&format!("{words}{nine}"), 200), MARK);
         assert_eq!(statement(&key, 200), MARK, "the mark is what cleaning leaves");
+    }
+
+    #[test]
+    fn a_text_of_4096_bytes_is_made_and_one_of_4097_is_not() {
+        let fits = format!("x{}", " ".repeat(LOOKED - 1));
+        assert_eq!((still(&fits, 200, false), still(&fits, 200, true)), (Ok("x".into()), Ok("x".into())));
+        let over = format!("{fits} ");
+        assert_eq!((still(&over, 200, false), still(&over, 200, true)), (Err(Unkept::Long), Err(Unkept::Long)));
+        assert_eq!(statement(&over, 200), MARK);
+    }
+
+    // The cut can end a key id that had more capitals after it, so the cut text is made again.
+    #[test]
+    fn a_text_that_was_cut_is_made_again() {
+        let id = format!("AK{}{}", "IA", "Q7".repeat(8));
+        let text = format!("{}{id}ZZ and {}", "w".repeat(178) + " ", "more ".repeat(9));
+        assert_eq!(statement(&text, 200), format!("{} {MARK}…", "w".repeat(178)));
     }
 
     // The second key is found by the second making. Cut at the first, 25 characters of it would be kept.

@@ -29,11 +29,12 @@ fn not_plain(file: &Path) -> bool {
 }
 
 /// Opens the file a clean holds the system's lock on, making it first when `make` says so.
+/// For writing, never to append only: Windows gives no lock on a file opened that way ("Access is denied").
 pub(super) fn lock_of(file: &Path, make: bool) -> io::Result<File> {
     if not_plain(file) {
         return Err(io::Error::new(ErrorKind::InvalidData, "the lock of the copies is not a plain file"));
     }
-    OpenOptions::new().append(true).create(make).open(file)
+    OpenOptions::new().write(true).create(make).truncate(false).open(file)
 }
 
 pub(super) fn read(file: &Path) -> Result<Option<Record>, Error> {

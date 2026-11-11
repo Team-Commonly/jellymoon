@@ -26,6 +26,7 @@ pub fn scene(page: &Page) -> Scene {
 /// of what came true, one choice note per clash, and a plain note for each thing the app has no piece for. When the
 /// file held more than the app draws, the first note says how much was left out. `standing` holds, clash by clash,
 /// what core says of it: its two statements as a ruling would carry them, and the side the person chose with a tap.
+/// A clash core says is no choice (its statements are the same once cleaned, or one is empty) is a plain note.
 pub fn ruled(page: &Page, standing: &[Standing]) -> Scene {
     let data = &page.data;
     let mut notes: Vec<Note> = left_out(page.left_out).into_iter().collect();
@@ -45,7 +46,14 @@ pub fn ruled(page: &Page, standing: &[Standing]) -> Scene {
     let chosen = |index: &usize| standing.get(*index).is_some_and(|standing| standing.stands.is_some());
     let (open, settled): (Vec<usize>, Vec<usize>) = (0..data.clashes.len()).partition(|index| !chosen(index));
     let clashes = open.into_iter().chain(settled);
-    notes.extend(clashes.map(|index| choice(index, &data.clashes[index], standing.get(index))));
+    notes.extend(clashes.map(|index| match standing.get(index) {
+        // Nothing to choose, so nothing to tap: the clash is said, and neither statement is drawn.
+        Some(standing) if !standing.is_choice() => Note::Plain {
+            title: "two things you said clash".to_string(),
+            body: "Their words cannot be told apart here, so there is nothing to choose.".to_string(),
+        },
+        standing => choice(index, &data.clashes[index], standing),
+    }));
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),

@@ -63,6 +63,25 @@ fn main() -> ExitCode {
     ExitCode::from(code)
 }
 
+/// `hook install`: for this program, or with `--installed` for the checked command in the install folder.
+fn install_hook(settings: Option<PathBuf>, installed: bool) -> Result<jellymoon_core::HookState, Failure> {
+    let settings = match settings {
+        Some(settings) => settings,
+        None => harness_folder()?.join("settings.json"),
+    };
+    if !settings.is_absolute() && named("CLAUDE_CONFIG_DIR").is_some_and(|folder| settings.starts_with(folder)) {
+        return Err(Failure::Run("CLAUDE_CONFIG_DIR must be an absolute path; nothing was changed".to_string()));
+    }
+    let state = if installed {
+        let bin = bin().ok_or_else(|| Failure::Run("no home directory: set JELLYMOON_BIN_DIR".to_string()))?;
+        jellymoon_core::turn_on_delivery(&settings, &home()?, &bin)
+    } else {
+        let program = env::current_exe().map_err(|e| Failure::Run(format!("finding this program: {e}")))?;
+        jellymoon_core::install_hook(&settings, &home()?, &program)
+    };
+    state.map_err(|e| Failure::Run(e.to_string()))
+}
+
 /// Runs the command and returns what it prints.
 fn run() -> Result<String, Failure> {
     let failed = |e: jellymoon_core::Error| Failure::Run(e.to_string());
@@ -96,26 +115,7 @@ fn run() -> Result<String, Failure> {
             let told = home.and_then(|home| jellymoon_core::deliver(&home, io::stdin().lock()));
             Ok(told.map(|told| told + "\n").unwrap_or_default())
         }
-        Command::InstallHook { settings, installed } => {
-            let settings = match settings {
-                Some(settings) => settings,
-                None => harness_folder()?.join("settings.json"),
-            };
-            if !settings.is_absolute() && named("CLAUDE_CONFIG_DIR").is_some_and(|folder| settings.starts_with(folder))
-            {
-                return Err(Failure::Run(
-                    "CLAUDE_CONFIG_DIR must be an absolute path; nothing was changed".to_string(),
-                ));
-            }
-            let state = if installed {
-                let bin = bin().ok_or_else(|| Failure::Run("no home directory: set JELLYMOON_BIN_DIR".to_string()))?;
-                jellymoon_core::turn_on_delivery(&settings, &home()?, &bin)
-            } else {
-                let program = env::current_exe().map_err(|e| Failure::Run(format!("finding this program: {e}")))?;
-                jellymoon_core::install_hook(&settings, &home()?, &program)
-            };
-            Ok(format!("{}\n", state.map_err(failed)?))
-        }
+        Command::InstallHook { settings, installed } => Ok(format!("{}\n", install_hook(settings, installed)?)),
         Command::Settle { date, clash, option } => {
             let settled = jellymoon_core::settle_kept(&home()?, &date, clash, option).map_err(failed)?;
             if let Some(why) = &settled.unkept {
@@ -196,7 +196,13 @@ fn parse_rule(mut parser: lexopt::Parser) -> Result<Command, Failure> {
 fn parse_settle(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut date, mut clash, mut option) = (None, None, None);
-    let number = |parser: &mut lexopt::Parser| parser.value().and_then(|v| v.parse::<usize>()).map_err(usage);
+    // Digits and nothing else: `+1` is not a number here, though it would parse as one.
+    let number = |parser: &mut lexopt::Parser| {
+        let value = parser.value().and_then(|v| v.string()).map_err(usage)?;
+        let digits = !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
+        let number = digits.then(|| value.parse::<usize>().ok()).flatten();
+        number.ok_or_else(|| Failure::Usage(format!("--clash and --option take a number, and {value:?} is not one")))
+    };
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),

@@ -108,13 +108,26 @@ fn a_relative_claude_config_dir_is_refused_by_hook_install() {
 }
 
 #[cfg(unix)]
+type Case = (&'static str, &'static str, fn(&World));
+
+/// Each case is made in a world of its own, and the install is refused in one line with nothing written.
+#[cfg(unix)]
+fn each_is_refused(cases: &[Case]) {
+    for (case, why, make) in cases {
+        let w = world();
+        fs::create_dir_all(w.bin()).unwrap();
+        make(&w);
+        w.refused(&[], &format!("{NOT_USED}{why}"), case);
+    }
+}
+
+#[cfg(unix)]
 #[test]
-fn a_command_that_cannot_be_run_or_that_others_can_change_is_never_named_by_the_hook() {
+fn a_command_that_is_a_link_or_cannot_be_run_or_that_others_can_change_is_never_named_by_the_hook() {
     use std::os::unix::fs::symlink;
 
     use super::chmod;
-    type Case = (&'static str, &'static str, fn(&World));
-    let cases: [Case; 7] = [
+    each_is_refused(&[
         ("a text file that cannot be run", "it cannot be run", |w| {
             fs::write(w.bin().join(name()), "not a program").unwrap();
             chmod(&w.bin().join(name()), 0o644);
@@ -122,30 +135,90 @@ fn a_command_that_cannot_be_run_or_that_others_can_change_is_never_named_by_the_
         ("a program that cannot be run", "it cannot be run", |w| chmod(&program(&w.bin(), &name()), 0o644)),
         ("a program anyone can write to", "others can write to it", |w| chmod(&program(&w.bin(), &name()), 0o777)),
         ("a program its group can write to", "others can write to it", |w| chmod(&program(&w.bin(), &name()), 0o775)),
-        ("a folder anyone can write to", "everyone can write to its folder", |w| {
-            program(&w.bin(), &name());
-            chmod(&w.bin(), 0o777);
-        }),
-        ("a link to another program", "it is a link to another program", |w| {
+        ("a setuid program", "it is setuid or setgid", |w| chmod(&program(&w.bin(), &name()), 0o4755)),
+        ("a setgid program", "it is setuid or setgid", |w| chmod(&program(&w.bin(), &name()), 0o2755)),
+        ("a link to another program", "it is a link", |w| {
             let other = program(&w.dir.path().join("other"), "another-program");
             symlink(other, w.bin().join(name())).unwrap();
         }),
-        ("a link to a program in a folder anyone can write to", "everyone can write to its folder", |w| {
-            let open = w.dir.path().join("open");
-            symlink(program(&open, &name()), w.bin().join(name())).unwrap();
-            chmod(&open, 0o777);
+        // The installer copies a plain file, so even a link to a sound `jellymoon` is not what it put there.
+        ("a link to a sound jellymoon elsewhere", "it is a link", |w| {
+            symlink(program(&w.dir.path().join("cellar"), &name()), w.bin().join(name())).unwrap();
+        }),
+    ]);
+    // The owner of the command is compared with the owner of the person's home. With the root folder as the home,
+    // a file of the test's own is someone else's (unless the tests run as the owner of the root folder).
+    use std::os::unix::fs::MetadataExt;
+    let w = world();
+    program(&w.bin(), &name());
+    if fs::metadata("/").unwrap().uid() != fs::metadata(w.bin()).unwrap().uid() {
+        let (bin, config) = (w.bin(), w.settings().parent().unwrap().to_path_buf());
+        let more = [
+            ("HOME", "/"),
+            ("JELLYMOON_BIN_DIR", bin.to_str().unwrap()),
+            ("CLAUDE_CONFIG_DIR", config.to_str().unwrap()),
+        ];
+        w.refused(&more, &format!("{NOT_USED}it is not a file of your own"), "a home of another owner");
+    }
+}
+
+// Whoever can write to a folder on the way to the command can put another program in its place.
+#[cfg(unix)]
+#[test]
+fn a_folder_on_the_way_to_the_command_that_others_can_write_to_is_refused_unless_it_is_sticky() {
+    use std::os::unix::fs::symlink;
+
+    use super::chmod;
+    let open = "others can write to a folder on the way to it";
+    each_is_refused(&[
+        ("a folder anyone can write to", open, |w| {
+            program(&w.bin(), &name());
+            chmod(&w.bin(), 0o777);
+        }),
+        ("a folder its group can write to", open, |w| {
+            program(&w.bin(), &name());
+            chmod(&w.bin(), 0o775);
+        }),
+        ("a folder above it that anyone can write to", open, |w| {
+            program(&w.bin(), &name());
+            chmod(w.bin().parent().unwrap(), 0o777);
+        }),
+        ("a folder that is a link into a folder anyone can write to", open, |w| {
+            fs::remove_dir(w.bin()).unwrap();
+            let real = w.dir.path().join("open").join("real");
+            program(&real, &name());
+            symlink(&real, w.bin()).unwrap();
+            chmod(real.parent().unwrap(), 0o777);
+        }),
+        ("two links in a row whose middle folder anyone can write to", open, |w| {
+            fs::remove_dir(w.bin()).unwrap();
+            let (cellar, middle) = (w.dir.path().join("cellar"), w.dir.path().join("middle"));
+            program(&cellar, &name());
+            fs::create_dir(&middle).unwrap();
+            symlink(&cellar, middle.join("hop")).unwrap();
+            symlink(middle.join("hop"), w.bin()).unwrap();
+            chmod(&middle, 0o777);
+        }),
+    ]);
+    // What is still taken: a sticky folder above it (only a file's owner can replace it there), and a folder that is
+    // a link to a sound one. The entry names the command as the install named it.
+    let sound: [(&str, super::Spoil); 2] = [
+        ("a sticky folder above it", |w| {
+            program(&w.bin(), &name());
+            chmod(w.bin().parent().unwrap(), 0o1777);
+        }),
+        ("a folder that is a link to a sound folder", |w| {
+            fs::remove_dir(w.bin()).unwrap();
+            let cellar = w.dir.path().join("cellar");
+            program(&cellar, &name());
+            symlink(&cellar, w.bin()).unwrap();
         }),
     ];
-    for (case, why, make) in cases {
+    for (case, make) in sound {
         let w = world();
         fs::create_dir_all(w.bin()).unwrap();
         make(&w);
-        w.refused(&[], &format!("{NOT_USED}{why}"), case);
+        assert_eq!(w.turn_on(&[]).stdout, "{\"installed\":true,\"changed\":true}\n", "{case}");
+        assert!(fs::read_to_string(w.settings()).unwrap().contains(w.bin().join(name()).to_str().unwrap()), "{case}");
     }
-    // A link to a sound `jellymoon` elsewhere is taken, and the entry names the link the install made.
-    let w = world();
-    fs::create_dir_all(w.bin()).unwrap();
-    symlink(program(&w.dir.path().join("cellar"), &name()), w.bin().join(name())).unwrap();
-    assert_eq!(w.turn_on(&[]).stdout, "{\"installed\":true,\"changed\":true}\n");
-    assert!(fs::read_to_string(w.settings()).unwrap().contains(w.bin().join(name()).to_str().unwrap()));
 }

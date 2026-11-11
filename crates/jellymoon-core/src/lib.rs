@@ -6,6 +6,7 @@
 //! script put there. A session log and a model's answer are both untrusted input: nothing here panics on either.
 
 mod call;
+mod command;
 mod error;
 mod find;
 mod hook;
@@ -18,6 +19,7 @@ mod shapes;
 mod tap;
 mod uninstall;
 
+pub use command::{installed_command, turn_on_delivery};
 pub use error::Error;
 pub use find::{own_folder, user_home};
 pub use hook::{hook_installed, install_hook, remove_hook};
@@ -25,8 +27,5 @@ pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};
 pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, ReaderTurn, Ruling, Wish, WishState};
-pub use tap::{
-    CLASHES_MAX, Settled, Side, Standing, installed_command, keep_private, kept_page, settle, settle_kept, standing,
-    turn_on_delivery,
-};
+pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};
 pub use uninstall::{UninstallOptions, Uninstalled, uninstall};

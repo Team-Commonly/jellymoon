@@ -225,7 +225,7 @@ impl Page {
                 art.push(sticker.w(px(rect.w)).h(px(rect.h)).into_any_element());
             }
             for (n, run) in piece.text.iter().enumerate().filter(|(_, r)| !r.text.is_empty()) {
-                text.push(text_element(&self.theme, k, piece, n, run, pose));
+                text.push(text_element(&self.theme, piece, n, run, pose));
             }
             if matches!(piece.piece, PieceKind::Hero | PieceKind::Character | PieceKind::Option) {
                 taps.push(self.tap_target(i, piece, pose, cx));
@@ -237,7 +237,7 @@ impl Page {
     }
 }
 
-fn text_element(theme: &Theme, k: f32, piece: &Placed, n: usize, run: &TextRun, pose: Pose) -> AnyElement {
+fn text_element(theme: &Theme, piece: &Placed, n: usize, run: &TextRun, pose: Pose) -> AnyElement {
     let p = &theme.palette;
     let color = match run.role {
         Role::LabelStruck | Role::Body | Role::Legend => p.soft,
@@ -258,7 +258,7 @@ fn text_element(theme: &Theme, k: f32, piece: &Placed, n: usize, run: &TextRun, 
         .whitespace_nowrap()
         .font_family(family(theme, run.role))
         .font_weight(weight(theme, run.role))
-        .text_size(px(run.role.size(theme, k)))
+        .text_size(px(run.size))
         .text_color(hsla(color));
     if matches!(run.role, Role::LabelStruck | Role::OptionStruck) {
         element = element.line_through();

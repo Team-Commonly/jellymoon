@@ -103,7 +103,6 @@ impl Today {
         // The statement that stands is the one whose drawn words were tapped, as core words it now.
         let now = jellymoon_core::standing(&self.home, &self.date, &clashes[clash - 1..clash]);
         let option = match now.first() {
-            Some(now) if now.a == now.b => None,
             Some(now) if *tapped == scene::quoted(&now.a) => Some(1),
             Some(now) if *tapped == scene::quoted(&now.b) => Some(2),
             _ => None,

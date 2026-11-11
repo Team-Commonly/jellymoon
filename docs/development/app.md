@@ -40,8 +40,9 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
 - **Where pages are kept.** `<home>/pages/<YYYY-MM-DD>.json`, where `<home>` is `JELLYMOON_HOME` or `~/.jellymoon`.
   The file is the checked page data, one line as `jellymoon page` prints it, and nothing else, in a folder for this
   user only (0700; the file 0600). It is written beside its place, in a file named for the process, and moved there.
-  It is read back through the same door as any page file, so a kept file that is not page data, is over 1 MiB or is
-  of another day is not drawn: the day is read again.
+  It is read back through the same door as any page file, and first through core's door for a kept page
+  (`jellymoon_core::kept_page`), so a kept file that is not page data, is over 1 MiB, is of another day, is a link,
+  or can be written to by its group or by others is not drawn: the day is read again.
 - **What is shown first.** The kept page, when there is one. Otherwise a waiting page: the date, the hero and one
   note, "Reading your day…". The window opens on it at once, before a log is opened: reading the logs alone can take
   seconds. The rest runs off the window's thread in two steps, each of which may give the next page to show
@@ -72,7 +73,7 @@ A tap in the window is one line on stderr, the piece's id and the option's numbe
 
 ## Taps (`app/src/taps.rs`)
 
-The rules of a tap are core's (`crates/jellymoon-core/src/tap.rs`, [delivery.md](delivery.md#a-tap-on-a-clash)):
+The rules of a tap are core's (`crates/jellymoon-core/src/tap.rs` and `command.rs`, [delivery.md](delivery.md#a-tap-on-a-clash)):
 which statement stands, when a tap makes no ruling, what is kept and in which order, and which `jellymoon` command
 the hook may name. They are proved at `jellymoon settle` and `jellymoon hook install --installed`. The app has no
 `tap` command. It draws what core says and carries a tap to core by calling it, never by running `jellymoon`. A page
@@ -83,9 +84,13 @@ drawn from `--page` has no day, and a tap on it does nothing.
   quotation marks and adds nothing. A clash's note on a day's page is a whole choice: the kit draws every word of
   both options, smaller when it must, or leaves the note out and counts it in "+N more". So a statement that is
   cut is never on a page that can be tapped. A ruling carries at most 200 characters, and what is drawn is those
-  200. A page drawn from `--page` cannot be tapped and keeps its quotes cut to fit.
+  200. A page drawn from `--page` cannot be tapped and keeps its quotes cut to fit. A clash with nothing to choose
+  (its two statements are the same once cleaned, or one is empty: `Standing::is_choice`) is not offered: it is one
+  plain note, "two things you said clash", with neither statement and nothing to tap, since core would refuse it.
 - **What fits.** One clash of two statements of 200 characters is drawn whole at 960x640 and at 1440x900, in words
-  and in a script of wide characters with no spaces. The page scales with its window, so a larger window gives no
+  and in a script of wide characters with no spaces. At 1440x900 an option is written at 14 pixels. At 960x640 it
+  is 11, or 9.35 when the page needs the room (the kit's 0.85 step; the last step, 0.72, is 7.9), which is under
+  the 11 pixels every other text keeps. The page scales with its window, so a larger window gives no
   more room. A clash the person has not chosen on is placed before one they have, so when two long clashes do not
   fit together the open one is drawn, and the other when the first is settled. Past that (four statements of 200
   wide characters) neither is drawn: both are counted, and `jellymoon settle` is the way to rule on them. A

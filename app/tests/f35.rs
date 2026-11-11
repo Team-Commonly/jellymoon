@@ -318,3 +318,23 @@ fn a_kept_page_of_another_day_is_not_shown_or_ruled_on() {
     shown(&world, &[]);
     assert!(called(&world), "so the day is read again");
 }
+
+// Two statements that are one once cleaned are no choice. The clash is said in a plain note, with neither statement,
+// and there is nothing to tap: core would refuse the tap, and the page never offers it.
+#[test]
+fn a_clash_with_nothing_to_choose_is_a_plain_note_and_cannot_be_tapped() {
+    let world = open_clash();
+    rewrite(&world, |page| {
+        page["clashes"][0]["quote_a"] = json!("never  retry\n\"uploads\"");
+        page["clashes"][0]["quote_b"] = json!("never retry 'uploads'");
+    });
+    let mut on = on_show(&world, settings(&world));
+    let notes = said(&on.scene);
+    assert!(notes.contains(&"two things you said clash".to_string()), "{notes:?}");
+    assert!(!notes.iter().any(|note| note.starts_with("clash-1")), "{notes:?}");
+    assert!(options(&shown(&world, &[]), "clash-1", " ").is_empty(), "layout places no option for it");
+    let before = written(&world);
+    let after = on.tap("clash-1", 0).unwrap();
+    assert_eq!(body(&after, 0), format!("That tap did nothing. the page of {DAY} has no \"clash-1\" to tap."));
+    assert_eq!((rulings(&world), written(&world)), (0, before));
+}

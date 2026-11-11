@@ -11,15 +11,15 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind, Read};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
-use std::{env, fmt, thread};
+use std::time::{Duration, Instant};
+use std::{fmt, thread};
 
 use serde::{Deserialize, Serialize};
 
-use crate::hook::{install_hook, put};
+use crate::hook::put;
 use crate::reader::parse;
-use crate::ruling::{own_dir, rule, waiting, words};
-use crate::{Clash, Error, HookState, Ruling};
+use crate::ruling::{own_dir, private_dir, rule, waiting, words};
+use crate::{Clash, Error, Ruling};
 
 /// The most bytes of a kept page that are read: what the app's own door takes.
 const PAGE_MAX: usize = 1024 * 1024;
@@ -28,7 +28,7 @@ const RULED_MAX: usize = 64 * 1024;
 /// The most clashes of a page that can be tapped: the first eight, which are the ones the app draws.
 pub const CLASHES_MAX: usize = 8;
 /// How long a tap waits for another tap on the same day, and how old a lock is before it is taken for one left by a
-/// run that was killed.
+/// run that was killed. A lock whose age cannot be read, or that is dated ahead of now, is taken for one too.
 const LOCK_WAIT: Duration = Duration::from_secs(3);
 const LOCK_STALE: Duration = Duration::from_secs(30);
 
@@ -47,6 +47,14 @@ pub struct Standing {
     pub a: String,
     pub b: String,
     pub stands: Option<Side>,
+}
+
+impl Standing {
+    /// Whether there is anything to choose: two statements that are not the same once cleaned, neither empty. A
+    /// clash that is not a choice is never drawn as one, and [`settle`] refuses it.
+    pub fn is_choice(&self) -> bool {
+        !self.a.is_empty() && !self.b.is_empty() && self.a != self.b
+    }
 }
 
 /// What a tap on a clash did, as `jellymoon settle` prints it.
@@ -185,9 +193,15 @@ pub fn settle(home: &Path, day: &str, clashes: &[Clash], clash: usize, option: u
     if a.is_empty() || b.is_empty() {
         return Err(Error::Ruling);
     }
+    if a == b {
+        let why = "are the same once cleaned, so there is nothing to choose";
+        return Err(refused(format!("the two statements of clash {clash} of {day} {why}")));
+    }
     let pages = home.join("pages");
-    own_dir(&pages).map_err(Error::Store)?;
+    private_dir(&pages).map_err(Error::Store)?;
     let _lock = Lock::take(pages.join(format!("{day}.ruled.lock"))).map_err(Error::Store)?;
+    // Only behind the lock is the folder made the person's alone: a tap refused for the lock changes nothing.
+    own_dir(&pages).map_err(Error::Store)?;
     let mut kept = ruled(home, day);
     let now = stands(&waiting(home), &kept, &a, &b);
     let (stands, replaces) = if side == Side::A { (&a, &b) } else { (&b, &a) };
@@ -225,24 +239,31 @@ pub fn keep_private(file: &Path, text: &str) -> io::Result<()> {
 struct Lock(PathBuf);
 
 impl Lock {
+    /// Waits [`LOCK_WAIT`], by the clock, for the name to be free. A lock that is stale is removed and taken. A
+    /// folder at the name is never removed: the tap is refused after the same wait.
     fn take(path: PathBuf) -> io::Result<Lock> {
-        let pause = Duration::from_millis(10);
-        for _ in 0..LOCK_WAIT.as_millis() / pause.as_millis() {
-            match OpenOptions::new().write(true).create_new(true).open(&path) {
-                Ok(_) => return Ok(Lock(path)),
-                Err(e) if e.kind() == ErrorKind::AlreadyExists => {
-                    let age =
-                        fs::metadata(&path).and_then(|meta| meta.modified()).ok().and_then(|at| at.elapsed().ok());
-                    if age.is_some_and(|age| age > LOCK_STALE) {
-                        let _ = fs::remove_file(&path);
-                    } else {
-                        thread::sleep(pause);
-                    }
-                }
-                Err(e) => return Err(e),
+        let started = Instant::now();
+        loop {
+            let taken = OpenOptions::new().write(true).create_new(true).open(&path);
+            let Err(e) = taken else { return Ok(Lock(path)) };
+            let there = fs::symlink_metadata(&path);
+            if e.kind() != ErrorKind::AlreadyExists && !there.as_ref().is_ok_and(fs::Metadata::is_dir) {
+                return Err(e);
             }
+            if started.elapsed() >= LOCK_WAIT {
+                return Err(io::Error::new(ErrorKind::TimedOut, "another tap on this day has not finished"));
+            }
+            let age = |meta: fs::Metadata| meta.modified().ok().and_then(|at| at.elapsed().ok());
+            let stale = match there {
+                Ok(meta) if meta.is_dir() => false,
+                Ok(meta) => age(meta).is_none_or(|age| age > LOCK_STALE),
+                Err(_) => true,
+            };
+            if stale {
+                let _ = fs::remove_file(&path);
+            }
+            thread::sleep(Duration::from_millis(10));
         }
-        Err(io::Error::new(ErrorKind::TimedOut, "another tap on this day has not finished"))
     }
 }
 
@@ -250,53 +271,4 @@ impl Drop for Lock {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.0);
     }
-}
-
-/// The installed `jellymoon` command in `bin`, the folder `install.sh` puts it in, when the hook may name it: Claude
-/// Code runs that file at every step of every session. The folder is an absolute path. The file, with a link
-/// followed to its end, is a regular file named `jellymoon` that is not empty, can be run, and that only its owner
-/// can write to; neither its folder nor the link's can be written to by everyone. Windows has no such modes: there
-/// it is a file of that name in that folder, and who may write to it is the system's rule for the folder.
-pub fn installed_command(bin: &Path) -> Result<PathBuf, Error> {
-    let not = |why: &str| Error::Command(why.to_string());
-    let name = format!("jellymoon{}", env::consts::EXE_SUFFIX);
-    if !bin.is_absolute() {
-        return Err(not("its folder is not an absolute path"));
-    }
-    let named = bin.join(&name);
-    let program = fs::canonicalize(&named).map_err(|_| not("it was not found"))?;
-    if program.file_name().and_then(|at| at.to_str()) != Some(name.as_str()) {
-        return Err(not("it is a link to another program"));
-    }
-    let meta = fs::metadata(&program).ok().filter(|meta| meta.is_file() && meta.len() > 0);
-    let meta = meta.ok_or_else(|| not("it is not a program"))?;
-    #[cfg(unix)]
-    {
-        let mode = |meta: &fs::Metadata| std::os::unix::fs::PermissionsExt::mode(&meta.permissions());
-        if mode(&meta) & 0o111 == 0 {
-            return Err(not("it cannot be run"));
-        }
-        if mode(&meta) & 0o022 != 0 {
-            return Err(not("others can write to it"));
-        }
-        let open =
-            |folder: Option<&Path>| folder.and_then(|at| fs::metadata(at).ok()).is_none_or(|at| mode(&at) & 0o002 != 0);
-        if open(named.parent()) || open(program.parent()) {
-            return Err(not("everyone can write to its folder"));
-        }
-    }
-    #[cfg(not(unix))]
-    let _ = meta;
-    Ok(named)
-}
-
-/// The tap on "Turn on delivery", and `jellymoon hook install --installed`: [`install_hook`] for the checked
-/// [`installed_command`]. The settings file is named by an absolute path, since where a relative one led would
-/// depend on the folder the program was started in.
-pub fn turn_on_delivery(settings: &Path, home: &Path, bin: &Path) -> Result<HookState, Error> {
-    if !settings.is_absolute() {
-        let why = "its folder is not an absolute path (CLAUDE_CONFIG_DIR)";
-        return Err(Error::Settings(io::Error::new(ErrorKind::InvalidInput, why)));
-    }
-    install_hook(settings, home, &installed_command(bin)?)
 }

@@ -5,6 +5,8 @@
 
 #[path = "f35/delivery.rs"]
 mod delivery;
+#[path = "f35/lock.rs"]
+mod lock;
 mod support;
 
 use std::ffi::OsString;
@@ -218,6 +220,8 @@ fn a_tap_that_is_refused_says_why_in_one_line_and_writes_nothing() {
         &["settle"][..],
         &["settle", "--date", DAY, "--clash", "1"],
         &["settle", "--date", DAY, "--clash", "x", "--option", "1"],
+        &["settle", "--date", DAY, "--clash", "+1", "--option", "1"],
+        &["settle", "--date", DAY, "--clash", "1", "--option", "+2"],
     ] {
         assert_eq!(w.fed(wrong, "").code, 2, "{wrong:?}");
     }

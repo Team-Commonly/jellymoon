@@ -1,6 +1,6 @@
 //! A whole choice: every word of its options is drawn, or the note is left out and counted. Never a cut option.
 
-use sticker_kit::{FixedAdvance, MORE_NOTES_ID, Note, PieceKind, Placed, Scene, Theme, Viewport, layout};
+use sticker_kit::{FixedAdvance, MORE_NOTES_ID, Measure, Note, PieceKind, Placed, Scene, Theme, Viewport, layout};
 
 const DEFAULT: Viewport = Viewport { w: 1440.0, h: 900.0 };
 const SMALL: Viewport = Viewport { w: 960.0, h: 640.0 };
@@ -79,6 +79,49 @@ fn two_options_of_200_wide_characters_are_drawn_in_full_beside_other_notes() {
                 .map(|option| option.text.iter().map(|run| run.text.as_str()).collect())
                 .collect();
             assert_eq!(drawn, options, "every character, in order");
+        }
+    }
+}
+
+// The bubble of an option is drawn from the option's own box, and its words from their runs: at every size the
+// layout writes them in, each line measured at its run's own size ends inside the bubble's padding, and the bubble
+// lies inside its sheet. Open and settled, both themes, both sizes.
+#[test]
+fn every_line_of_a_whole_option_lies_inside_its_bubble_and_the_bubble_inside_its_sheet() {
+    let measure = FixedAdvance(0.56);
+    let words = "please add a retry to the uploader so that a file which fails is sent again ";
+    let options = vec![words.repeat(3).chars().take(200).collect::<String>(), "请".repeat(200)];
+    let rows = (0..3).map(|i| (format!("row {i}"), "of three".to_string())).collect();
+    let mut scene = Scene::sample();
+    for (theme, viewport, struck_first) in [Theme::sticker(), Theme::plain()]
+        .into_iter()
+        .flat_map(|theme| [DEFAULT, SMALL].map(|viewport| (theme.clone(), viewport)))
+        .flat_map(|(theme, viewport)| [false, true].map(|struck| (theme.clone(), viewport, struck)))
+    {
+        let (title, footer, options) = ("pick one".to_string(), "a footer".to_string(), options.clone());
+        scene.notes = vec![
+            Note::List { title: "a list".into(), rows: Vec::clone(&rows) },
+            Note::Plain { title: "a plain note".into(), body: "with a line of its own".into() },
+            Note::Choice { id: "a".into(), title, options, footer, struck_first, whole: true },
+        ];
+        let placed = place(&scene, &theme, viewport);
+        let at = format!("{}x{}, struck {struck_first}", viewport.w, viewport.h);
+        let sheet = placed.iter().find(|piece| piece.piece == PieceKind::Note && piece.id == "a").expect(&at);
+        let pad = 14.0 * (viewport.w / 1440.0).min(viewport.h / 900.0);
+        let bubbles = of(&placed, PieceKind::Option);
+        assert_eq!(bubbles.len(), 2, "{at}");
+        for bubble in bubbles {
+            let (left, right) = (bubble.rect.x, bubble.rect.x + bubble.rect.w);
+            assert!(left >= sheet.rect.x && right <= sheet.rect.x + sheet.rect.w, "{at}: the bubble is in the sheet");
+            for run in &bubble.text {
+                let end = run.rect.x + measure.width(&run.text, run.role, run.size);
+                assert!(
+                    run.rect.x >= left + pad - 0.01 && end <= right - pad + 0.01,
+                    "{at}: {:?} ends at {end}",
+                    run.text
+                );
+                assert!((run.rect.w - (end - run.rect.x)).abs() < 0.01, "{at}: the run is as wide as its words");
+            }
         }
     }
 }

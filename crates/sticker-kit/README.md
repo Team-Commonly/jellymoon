@@ -159,7 +159,11 @@ more notes. Text that is cut ends in `…`; the scene keeps the whole text.
 A choice with `whole: true` is for options a person acts on by what they
 read: no option of it is ever cut. Its sheet is as wide as the note column,
 its options take the lines they need, and after the gaps close they are
-written at 0.85 and then 0.72 of their size when that places more notes. A
+written at 0.85 and then 0.72 of their size when that places more notes.
+That can go under the theme's `min_font_size`, which holds for every other
+text: 9.35 pixels at 960x640 where the smallest is 11. Each text run carries
+the `size` it was measured at, and the drawing paints it at that size, so a
+line always ends inside its option. A
 whole choice that still does not fit is left out and counted, never drawn in
 part. Last, the first note that does not fit and every
 note after it are left out together, and a level sheet (a `Note` piece, id

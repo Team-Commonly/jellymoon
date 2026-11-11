@@ -7,10 +7,9 @@
 //! else. Nothing is printed here: the scenes go to the window, or to `layout`, which prints the page's own words on
 //! stdout as it does for any page.
 
-use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
-use std::{env, fs, io};
+use std::{env, io};
 
 use jellymoon_core::{DayOptions, Error, PageData, PageOptions, ReaderDay};
 use sticker_kit::{Note, Scene};
@@ -104,7 +103,7 @@ impl Today {
             logs: logs.ok_or("finding the session logs: no home directory; name them with --logs")?,
             skip: jellymoon_core::skip_names(&asked.skip)?,
             model: asked.model.unwrap_or_else(|| "sonnet".to_string()),
-            home,
+            home: home.ok_or("no home directory: set JELLYMOON_HOME")?,
             harness: named("JELLYMOON_CLAUDE"),
             fresh: asked.fresh,
             settings: config().map(|config| config.join("settings.json")),

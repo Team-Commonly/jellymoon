@@ -1,7 +1,7 @@
 # Delivery: `jellymoon rule`, `jellymoon settle` and `jellymoon hook`
 
 A ruling made on a page reaches each running Claude Code session once, at its next step (ADR 0011, section 5). Core
-holds all of it (`ruling.rs`, `tap.rs`, `hook.rs`); the commands only parse arguments and print JSON.
+holds all of it (`ruling.rs`, `tap.rs`, `command.rs`, `hook.rs`); the commands only parse arguments and print JSON.
 
 ```
 jellymoon rule --stands <the words that stand> --over <the words they replace>
@@ -60,22 +60,32 @@ This is the only way text gets from a page into a running session, so what is ch
   with no other field, of this day, with at most eight clashes; anything else is no settlement. A clash is known by
   its two statements, so a reading that words it differently shows it open again. The file is never sent anywhere.
 - **What stands** is asked of the ruling store first: the newest waiting ruling of these two statements, either way
-  round. Only when none waits is the settlement asked. A tap on the statement that stands makes no ruling; a tap on
-  the other makes a new one with the two the other way round. A clash the reading found settled has no ruling of
-  the person's, so a tap on either side makes one.
-- **The order of writes** is the lock, the ruling, the settlement. `pages` is made the person's alone (0700). A lock
-  file, `<day>.ruled.lock`, made with create-new, is held from reading what stands to the last write, so two taps
-  at once on two clashes both keep theirs and two on one statement make one ruling. A tap waits 3 seconds for it and
-  is then refused; a lock older than 30 seconds is one a crash left and is removed. The settlement is written to a
+  round, from any day and whether a tap or `jellymoon rule` made it. So a ruling made on the day before's page with
+  the same two statements draws today's clash as chosen. Only the newest 256 waiting rulings are looked at, each up
+  to 8 KiB. Only when none of them is of this clash is the settlement asked. A tap on the statement that stands
+  makes no ruling; a tap on the other makes a new one with the two the other way round. A clash the reading found
+  settled has no ruling of the person's, so a tap on either side makes one.
+- **The order of writes** is the lock, the ruling, the settlement. A lock file, `<day>.ruled.lock`, made with
+  create-new, is held from reading what stands to the last write, so two taps at once on two clashes both keep
+  theirs and two on one statement make one ruling. A tap waits 3 seconds by the clock for it, trying every 10 ms,
+  and is then refused in one line with nothing changed. A lock is one a crash left, and is removed and taken, when
+  it is older than 30 seconds, when it is dated ahead of now, or when its age cannot be read. A folder at the
+  lock's name is never removed: every tap on that day is refused after the same 3 seconds until it is taken away.
+  Two taps that both find a stale lock can each remove it and take it in turn; this was not seen in 80 rounds and
+  is not ruled out. `pages` is made the person's alone (0700) only once the lock is held. The settlement is written to a
   file of the process's own, made with create-new and 0600, and moved into place; a link waiting at either name is
   replaced, never followed, and a failed write removes its temporary file.
 - **When the settlement cannot be written** the ruling stands: exit 0, the ruling in the JSON, the reason in
   `unkept`, and one line on stderr, "the ruling was made, but the page could not keep it". The same holds after a
   crash between the two writes. For the 24 hours the ruling waits it says what stands, so the same tap again makes
-  no second ruling and writes the settlement if it now can. After those 24 hours a settlement that was never
-  written is forgotten: the clash is drawn open, and a tap makes a ruling again.
+  no second ruling and writes the settlement if it now can, as long as the ruling is among the newest 256 that
+  wait: behind more than that it is no longer seen, and the same tap makes a second ruling. After those 24 hours a
+  settlement that was never written is forgotten: the clash is drawn open, and a tap makes a ruling again.
 - **A refusal writes nothing**: no kept page, a clash that is not on it, an option that is not 1 or 2, a statement
-  that is empty once cleaned. One line on stderr, exit 1.
+  that is empty once cleaned, two statements that are the same once cleaned (they differ only in spacing or quote
+  marks, or each is a credential shape that was replaced: a ruling of a statement over itself says nothing, and the
+  same tap again could not be told from the first), a lock that was not freed. One line on stderr, exit 1.
+  `--clash` and `--option` take digits only (`+1` is an argument error, exit 2).
 - **What is not trusted.** A model's reading reaches a ruling only as the two quotes of a clash. Core kept each only
   as an exact, whole-word piece of something the person typed that day ([page.md](page.md)). The model chose which
   piece, and a piece can mean other than the whole ("delete the database" out of "do not delete the database"), so
@@ -94,13 +104,23 @@ session, so it is named only when (`jellymoon_core::installed_command`):
 
 - the folder is an absolute path, and so is the settings file's (`CLAUDE_CONFIG_DIR`; a relative one is refused by
   the plain `jellymoon hook install` as well, in one line);
-- the file, with a link followed to its end, is a regular file still named `jellymoon`, not empty;
-- it can be run, and neither its group nor others can write to it;
-- neither the folder it is named in nor the folder the link ends in can be written to by everyone.
+- the file is a plain file named `jellymoon`, not empty, and not a link: `install.sh` copies a file, so a link at
+  that name is not what it put there, wherever it leads;
+- it can be run, neither its group nor others can write to it, and it is not setuid or setgid;
+- its owner is the owner of the person's home folder (`HOME`). That is how "the person's own file" is told with no
+  call of the system's own: the two owner ids are read from the two files and compared;
+- no folder on the way to it can be written to by its group or by everyone, unless it is sticky (as `/tmp` is:
+  there only a file's owner can replace it). Every folder is looked at, from the root down to the install folder.
+  A folder that is a link is allowed; the link is read and the path it gives is walked the same way, at most 32
+  links, so a folder that only a link passes through is looked at too. `~/.local/bin` under an ordinary home passes.
 
-The entry names the path in the install folder, not where a link ends. On Windows there are no such modes: the file
-must be a regular, non-empty `jellymoon.exe` in an absolute folder, and who may write there is the system's rule for
-that folder. Every refusal is one line, exit 1, and writes nothing.
+What is not looked at: who owns the folders (a folder owned by another account that only that account can write to
+passes); access lists and file flags beyond the mode bits; whether the file is a `jellymoon` at all, beyond its
+name. The check is made once, just before the entry is written, and the file and folders are not held open
+between the two: whoever can change them in that gap, or later, is not seen. The check narrows who that can be to
+the person and the system's administrator. On Windows there are no such modes and none of this is looked at: the
+file must be a plain, non-empty `jellymoon.exe`, not a link, in an absolute folder, and who may write there is the
+system's rule for that folder. Every refusal is one line, exit 1, and writes nothing.
 
 ## The hook
 

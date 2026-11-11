@@ -156,6 +156,11 @@ How the agent is started and stopped ([ADR 0014](0014-a-run-is-started-headless.
 - **A headless child, with an allow-listed environment.** The agent is the person's own harness, started headless the
   way the reading call is, and core reads its stream. It gets a short list of variables (`PATH`, `HOME` and the like)
   and never inherits the parent's environment.
+- **Every harness sits behind the same two seams** (decided 2026-11-11). Jellymoon reads a harness's session logs
+  from disk, and starts the person's own installed program headless: one reader and one starter per harness, Claude
+  Code first and Codex next. A harness that speaks ACP itself can get one starter that speaks it, when one is asked
+  for. Jellymoon never stands between a harness and its model provider: there is no proxy, and no login of the
+  person's is held or carried.
 - **Interrupt, then signal, then kill.** A stop interrupts first and waits; an agent deaf to that is signalled, and one
   deaf to the signal is killed.
 - **What a run may do is a list fixed at its start.** Nothing is asked or answered while it goes: anything not on the

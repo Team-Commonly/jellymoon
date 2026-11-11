@@ -11,7 +11,7 @@ use std::path::{Component, Path, PathBuf};
 use toml::{Table, Value};
 
 use super::bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, check};
-use super::{Theme, svg_refusal};
+use super::{ArtCost, Theme, art_cost};
 
 /// A theme, and what the loader ignored on the way.
 #[derive(Clone, Debug, PartialEq)]
@@ -96,13 +96,22 @@ impl Theme {
         {
             loaded.theme.name = stem.to_string_lossy().into_owned();
         }
+        let mut all = ArtCost::default();
         for (key, name) in loaded.theme.art.clone().entries() {
             if name.is_empty() {
                 continue;
             }
-            if read_art(&folder, key, name)?.is_none() {
+            let Some(svg) = read_art(&folder, key, name)? else {
                 loaded.warnings.push(format!("art.{key}: `{name}` was not found; the built-in art is used"));
                 loaded.theme.art.clear(key);
+                continue;
+            };
+            // Each file is inside the two counts by itself; a theme's files together are held to the same two.
+            let one = art_cost(&svg).unwrap_or_default();
+            all = ArtCost { numbers: all.numbers + one.numbers, paint: all.paint + one.paint };
+            if let Some(reason) = all.refusal() {
+                let reason = format!("with the art before it, {}", reason.trim_start_matches("its "));
+                return Err(ThemeError::RefusedSvg { key: format!("art.{key}"), reason });
             }
         }
         loaded.theme.folder = Some(folder);
@@ -184,10 +193,7 @@ fn read_art(folder: &Path, key: &str, name: &str) -> Result<Option<String>, Them
     }
     let refuse = |reason: String| ThemeError::RefusedSvg { key: format!("art.{key}"), reason };
     let text = read_capped(&real, MAX_ART_BYTES).map_err(refuse)?;
-    match svg_refusal(&text) {
-        Some(reason) => Err(refuse(reason)),
-        None => Ok(Some(text)),
-    }
+    art_cost(&text).map(|_| Some(text)).map_err(refuse)
 }
 
 fn over(max: u64) -> String {

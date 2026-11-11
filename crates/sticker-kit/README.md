@@ -107,18 +107,34 @@ and a file that has gone bad since is left out for the kit's own art:
   The letters `url` may only start `url(#`, a paint server in the same file.
 - At most 100 elements (`MAX_ART_ELEMENTS`), nested at most 12 deep
   (`MAX_ART_DEPTH`), the `<svg` counted in both.
-- `width`, `height` and the size in `viewBox` are 1 to 256
-  (`MAX_ART_SIDE`); `px` may follow the picture's own `width` and `height`.
+- `width` and `height` are 1 to 256 (`MAX_ART_SIDE`) and the size in `viewBox`
+  is 8 to 256 (`MIN_ART_VIEW`); `px` may follow the picture's own `width` and `height`.
   Every other number is plain digits with no exponent, no unit and no `%`, at
   most 4096 (`MAX_ART_NUMBER`). The only letters beside numbers are the path
   commands in a `d` and the two names in a transform.
 - A `d` or `points` value is at most 4096 bytes (`MAX_ART_PATH_BYTES`).
 - A transform is only `translate` and `rotate`.
+- The `d` and `points` values of a file hold at most 1024 numbers together
+  (`MAX_ART_NUMBERS`).
+- A file's paint is at most 4194304 (`MAX_ART_PAINT`, 64 shapes on 256 by
+  256): its shapes (`path`, `rect`, `circle`, `ellipse`, `line`, `polyline`,
+  `polygon`) times its width times its height, and four times that in a file
+  with a gradient. The size is `width` and `height`, else the `viewBox`'s,
+  else 256.
+- A theme's art files together are held to the same two counts, so five files
+  cost no more than one. The refusal names the file that went over.
 
-What a file costs to draw grows with its bytes, so its size is the bound: 64
-KiB a file, five files a theme. A draw test (`tests/draw.rs`) fills five
-different files to these limits (13 paths of the longest `d`, 75 circles, every
-stroke 4096 wide, 11 nested groups) and holds the draw under a minute. Behind
+Those two counts are what a file costs to draw (`theme::art_cost`): a shape may
+paint the whole picture however small it is written, and every number is a
+line the renderer walks on each row of pixels. Before them the bound was the
+file's size, and five files at it took 38 s to draw in a debug build on a Mac.
+`tests/cost.rs` holds each count at its edge, and `tests/draw.rs` builds five
+files that spend both to the last unit on the dearest paint (see-through fills
+and strokes far larger than the picture, lines as tall as it) and draws them:
+1.4 s more than the page with no art, in the same build. Its clock is a
+backstop against a hang, ten times that. The kit's own art, counted the same
+way at the built-in themes' sizes, is 368 numbers and 1728164 paint: 36% and
+41% of the counts. Behind
 the ranges, the view rasterises the kit's own art at no more than 800 pixels a
 side with a rim of no more than 64, whatever a theme and a window multiply out
 to; a larger piece is that image scaled up. The kit's own art

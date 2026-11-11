@@ -327,7 +327,7 @@ fn an_svg_is_held_to_a_size_of_its_own_and_a_flat_picture_passes() {
         let said = svg_refusal(&sized(size)).unwrap_or_else(|| panic!("{size} was accepted"));
         assert!(said.contains("256"), "{size}: {said}");
     }
-    for size in ["", r#"width="256" height="256px""#, r#"viewBox="-128 -128.5 256 1""#] {
+    for size in ["", r#"width="256" height="256px""#, r#"viewBox="-128 -128.5 256 8""#] {
         assert_eq!(svg_refusal(&sized(size)), None, "{size}");
     }
     let fine = r##"<title>a &amp; b</title><desc>curl</desc><defs>

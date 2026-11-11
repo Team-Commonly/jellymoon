@@ -18,12 +18,14 @@ impl World {
         self.fed(&["rule", "--stands", stands, "--over", over], "")
     }
 
-    /// `rule` and a tap on either statement, each refused in the one line, with nothing written.
+    /// `rule` and a tap on either statement, each refused in the one line, with nothing written: of a clash whose
+    /// first statement it is, and of one whose second it is.
     fn unmade(&self, typed: &str) {
-        self.keep(&[(typed, B)]);
+        self.keep(&[(typed, B), (B, typed)]);
         let before = tree(self.dir.path());
-        let ran = [self.rule(typed, B), self.rule(B, typed), self.settle(DAY, "1", "1"), self.settle(DAY, "1", "2")];
-        for ran in ran {
+        let taps =
+            [("1", "1"), ("1", "2"), ("2", "1"), ("2", "2")].map(|(clash, option)| self.settle(DAY, clash, option));
+        for ran in [self.rule(typed, B), self.rule(B, typed)].into_iter().chain(taps) {
             assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (1, "", UNMADE));
         }
         assert!(tree(self.dir.path()) == before && self.told("s-1").is_empty(), "no ruling is kept or told");
@@ -103,19 +105,23 @@ fn a_settlement_kept_after_one_cleaning_still_says_what_stands() {
     }
 }
 
-// A ruling that waits from a build before this rule holds a statement cleaned once. A tap finds it standing, and a
-// session is told it once, in the words it has once cleaned to the end.
+// A ruling that waits from a build before this rule holds a statement cleaned once: the one that stands, or the one
+// it replaces. A tap finds it standing, and a session is told it once, in the words it has once cleaned to the end.
 #[test]
 fn a_ruling_kept_after_one_cleaning_is_found_by_a_tap_and_told_once_as_it_stands_still() {
-    let w = world();
-    w.keep(&[(&format!("use {} here", key_header("\t")), B)]);
-    let id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
-    let once = json!({"id": id.to_string(), "stands": format!("use {} here", key_header(" ")), "over": B});
-    fs::create_dir_all(w.home().join("rulings")).unwrap();
-    fs::write(w.home().join("rulings").join(format!("{id}.json")), once.to_string()).unwrap();
-    assert_eq!(w.tap("1", "1")["ruling"], Value::Null, "the ruling that waits is this clash's");
-    assert_eq!(w.rulings().len(), 1);
-    let told = w.told("s-1");
-    assert!(told.contains(&format!("- What stands: \"use [redacted]\". It replaces: \"{B}\".")), "{told}");
-    assert!(!told.contains("PRIVATE") && w.told("s-1").is_empty(), "once, and no word of the key's line");
+    let (once, still) = (format!("use {} here", key_header(" ")), "use [redacted]");
+    for (kept, option, told_as) in [((once.as_str(), B), "1", (still, B)), ((B, once.as_str()), "2", (B, still))] {
+        let w = world();
+        w.keep(&[(&format!("use {} here", key_header("\t")), B)]);
+        let id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let once = json!({"id": id.to_string(), "stands": kept.0, "over": kept.1});
+        fs::create_dir_all(w.home().join("rulings")).unwrap();
+        fs::write(w.home().join("rulings").join(format!("{id}.json")), once.to_string()).unwrap();
+        assert_eq!(w.tap("1", option)["ruling"], Value::Null, "the ruling that waits is this clash's");
+        assert_eq!(w.rulings().len(), 1);
+        let told = w.told("s-1");
+        let said = format!("- What stands: \"{}\". It replaces: \"{}\".", told_as.0, told_as.1);
+        assert!(told.contains(&said), "{told}");
+        assert!(!told.contains("PRIVATE") && w.told("s-1").is_empty(), "once, and no word of the key's line");
+    }
 }

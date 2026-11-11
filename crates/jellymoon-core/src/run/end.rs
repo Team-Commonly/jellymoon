@@ -12,7 +12,7 @@ use std::time::Duration;
 use super::child::{End, Ended};
 use super::record::Record;
 use super::{Ran, RunOutcome, STAR, cancelled, cut, dead, failed, finished, record, refused};
-use crate::busy::or_test;
+use crate::busy::{self, or_test};
 use crate::copy::{self, Outcome, RunCopy};
 use crate::reading::STARS_MAX;
 use crate::redact::line;
@@ -26,6 +26,12 @@ const WAIT: Duration = Duration::from_secs(40);
 /// The wait for the day's lock of a `jellymoon run` that has something to write down.
 pub(super) fn wait() -> Duration {
     or_test(WAIT, "JELLYMOON_TEST_END_WAIT_MS")
+}
+
+/// How long a look waits for the lock a copy is made and cleaned behind, which another command may hold for as
+/// long as its git children take: the day's lock's own wait. A page never waits behind another command for more.
+fn soon() -> Option<Duration> {
+    Some(or_test(busy::WAIT, "JELLYMOON_TEST_COPY_WAIT_MS"))
 }
 
 /// Why a run did not finish, in every fixed form but the time limit's, which names its seconds ([`at_limit`]).
@@ -107,10 +113,12 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 /// What a `jellymoon run` or a page does with a wish that still says working while nothing holds its run. It is
 /// returned as it is then drawn, written down or not, never as working for ever. A run whose record has its end
 /// ended while the day was locked: the wish is given that end, its star included. Any other was cut off, and is
-/// written down as failed, the wish first, so that nothing is written for a wish that no longer says working.
-/// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`). A wish
-/// that names another wish's run is returned as needing the person, in one fixed line, with nothing written or
-/// killed ([`of_another`]).
+/// written down as failed: its copy is marked, then the wish is told, and only for a wish that took it the record.
+/// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`), and
+/// the copy of a run that did not finish is marked. A run whose record says it was never started has the child
+/// it names killed the same way, then its copy taken back, and only then is its wish made as it was. A wish that
+/// names another wish's run is returned as needing the person, in one fixed line, with nothing written or killed
+/// ([`of_another`]).
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     let Some(run) = wish.run.clone().filter(|_| wish.state == WishState::Working) else { return wish };
     // Asked first, and whether the run is held or not: the run is not this wish's to wait for.
@@ -127,32 +135,46 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     }
     // The record is read once nothing holds the run: one read before that could miss the end the run wrote.
     let record = record::kept(home, &run);
+    let kill = || {
+        if let Some((pid, mark)) = record.as_ref().and_then(|record| Some((record.pid?, record.mark.as_deref()?))) {
+            dead::kill(pid, mark);
+        }
+    };
     if record.as_ref().is_some_and(|record| record.outcome == Some(RunOutcome::NotStarted)) {
-        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
-        let _ = copy::take_back(home, &run);
+        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish. A record is a file
+        // anyone who can write the home can write: the child it names is stopped before its copy goes.
+        kill();
+        // With the lock not had in time nothing is written: the wish goes on naming the run where it is kept, so
+        // the next look tries again, and it is drawn as it was, with no run, never as one going. A copy that cannot
+        // be taken back for any other reason (its repo is gone, git fails) never will be: what the home holds of
+        // the run goes, as after a `jellymoon run` that could not take it back, and the wish can be run again.
+        let taken = copy::take_back(home, &run, soon());
+        if taken.is_err_and(|e| copy::timed_out(&e) || !copy::remove_ours(home, &run, soon())) {
+            return MadeWish { run: None, why: None, ..wish };
+        }
         return unstarted(home, day, wish, &run);
     }
     let ended = record.as_ref().and_then(|record| recorded(home, day, &wish.id, &run, record));
     let (outcome, why) = ended.clone().unwrap_or_else(|| (RunOutcome::Failed, cut(&run)));
-    let mut told = tell(home, day, &wish.id, &run, outcome, &why, Duration::ZERO);
+    let drawn = |mut wish: MadeWish| {
+        apply(&mut wish, outcome, &why);
+        wish
+    };
     // Nothing holds the run, so nobody reads its child any more, whatever the record says of an end: a record
     // can be written by hand. A child that ended is not that process any more, and is not signalled.
-    if let Some((pid, mark)) = record.and_then(|record| Some((record.pid?, record.mark?))) {
-        dead::kill(pid, &mark);
+    kill();
+    // The copy is marked before anything is written. With its lock not had in time nothing is written at all:
+    // the wish is drawn as it will be kept, and the next look, which finds it as this one did, does the rest.
+    // An end that is believed and is not a finished run's can have been written by hand too, over a run whose
+    // own command never marked its copy, so its copy is marked as a cut off run's is.
+    if outcome != RunOutcome::Completed && !mark(home, &run, soon()) {
+        return drawn(wish);
     }
-    if told.is_ok() && ended.is_some() && outcome != RunOutcome::Completed {
-        // An end that is believed can have been written by hand too, over a run whose own command never marked
-        // its copy. A copy that is marked already, or gone, is left as it is.
-        let _ = copy::clean_copy(home, &run, Outcome::Failed);
-    }
+    let mut told = tell(home, day, &wish.id, &run, outcome, &why, Duration::ZERO);
     if ended.is_none() {
         told = told.and_then(|told| note(home, &run, outcome, (0, 0), &why).map(|()| told));
     }
-    told.unwrap_or_else(|_| {
-        let mut drawn = wish;
-        apply(&mut drawn, outcome, &why);
-        drawn
-    })
+    told.unwrap_or_else(|_| drawn(wish))
 }
 
 /// What a child that is gone comes to: the copy is ended as completed or failed, and the record and the wish say
@@ -183,7 +205,7 @@ pub(super) fn settle(
     };
     let run = &copy.run;
     let committed = match kind {
-        None => copy::end_copy(home, run, Outcome::Completed).map_err(|_| KINDS[7]),
+        None => copy::end_copy(home, run, Outcome::Completed, None).map_err(|_| KINDS[7]),
         Some(kind) => Err(kind),
     };
     let (outcome, why) = match committed {
@@ -191,12 +213,18 @@ pub(super) fn settle(
         Err(_) if ended.end == End::Stopped => (RunOutcome::Cancelled, cancelled(run)),
         Err(kind) => (RunOutcome::Failed, failed(run, kind)),
     };
+    if outcome != RunOutcome::Completed {
+        mark(home, run, None);
+    }
     // A record that could not be written does not keep the wish from being told.
     let noted = note(home, run, outcome, (read.denied, read.skipped), &why);
     let told = tell(home, day, wish, run, outcome, &why, wait()).map_err(|e| match e {
         Error::Store(e) => Error::Store(e),
-        _ => refused(format!(
+        e if wish::was_locked(&e) => refused(format!(
             "run {run} has ended and its record says how; the page of {day} was busy, and shows it when it is next drawn"
+        )),
+        _ => refused(format!(
+            "run {run} has ended and its record says how; the made wishes of {day} could not be used, so the wish does not show it"
         )),
     });
     told.and(noted)?;
@@ -204,8 +232,13 @@ pub(super) fn settle(
     Ok(Ran { run: Some(run.clone()), wish: wish.to_string(), outcome, star, denied: read.denied, why })
 }
 
-/// The run's own record takes its end, once, and the copy of a run that did not finish is marked failed, so that
-/// it is kept.
+/// The copy of a run that did not finish is marked failed, so that it is kept. One marked already, or gone, is
+/// left as it is. False: the lock a copy is cleaned behind was not had within `wait`, and nothing was done.
+fn mark(home: &Path, run: &str, wait: Option<Duration>) -> bool {
+    !copy::end_copy(home, run, Outcome::Failed, wait).is_err_and(|e| copy::timed_out(&e))
+}
+
+/// The run's own record takes its end, once.
 fn note(
     home: &Path,
     run: &str,
@@ -213,10 +246,6 @@ fn note(
     (denied, skipped): (usize, usize),
     why: &str,
 ) -> Result<(), Error> {
-    if outcome != RunOutcome::Completed {
-        // A copy that is marked already, or gone, is left as it is.
-        let _ = copy::clean_copy(home, run, Outcome::Failed);
-    }
     let Some(mut record) = record::kept(home, run).filter(|record| record.outcome.is_none()) else { return Ok(()) };
     (record.outcome, record.why, record.denied, record.skipped) =
         (Some(outcome), Some(why.to_string()), denied, skipped);

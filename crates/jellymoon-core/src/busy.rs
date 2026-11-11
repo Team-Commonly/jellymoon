@@ -38,6 +38,11 @@ pub(crate) fn retried<T>(step: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     retrying(WAIT, in_use, step)
 }
 
+/// [`retried`] for a wait of the caller's, where the other process is done in less than the day's own wait.
+pub(crate) fn retried_for<T>(wait: Duration, step: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    retrying(wait, in_use, step)
+}
+
 /// [`retried`] with the wait and the question given. Any other error, and the last one once the wait is over, is
 /// returned as it is.
 fn retrying<T>(

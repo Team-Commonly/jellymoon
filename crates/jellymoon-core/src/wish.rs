@@ -181,11 +181,17 @@ fn behind(home: &Path, day: &str, wait: Duration, undone: &str) -> Result<Lock, 
             Ok(lock) => return Ok(lock),
             Err(e) if e.kind() != ErrorKind::TimedOut => return Err(Error::Store(e)),
             Err(_) if started.elapsed() < wait => {}
-            Err(_) => {
-                return Err(refused(format!("another change to the page of {day} has not finished, so {undone}")));
-            }
+            Err(_) => return Err(refused(format!("{LOCKED}{day} has not finished, so {undone}"))),
         }
     }
+}
+
+/// How the refusal for a day that stayed locked starts.
+const LOCKED: &str = "another change to the page of ";
+
+/// Whether a change was refused for the day's lock, and for nothing in the made wishes.
+pub(crate) fn was_locked(refusal: &Error) -> bool {
+    matches!(refusal, Error::Wish(why) if why.starts_with(LOCKED))
 }
 
 fn write(home: &Path, day: &str, wishes: Vec<MadeWish>) -> Result<(), Error> {

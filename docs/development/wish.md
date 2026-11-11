@@ -62,7 +62,10 @@ refused until the person moves the file away.
 **Words read back are cleaned again, through the same door.** A build before the rule above kept words cleaned
 once, so a file may hold words one more cleaning changes. Such a wish is not refused and the day is not lost: it
 is drawn as its words stand once cleaned to the end, and the next wish made that day writes the file so. Drawing a
-page writes nothing. The same holds for a statement in a day's settlement and in a ruling that waits.
+page writes nothing. The same holds for a statement in a day's settlement and in a ruling that waits. It holds
+only for words the door brings to rest: a file holding a wish the door refuses (no words left, over 200
+characters, or still changing after the eighth cleaning) is not used at all, as the paragraph above says, so
+`page` draws no made wish of that day and `wish` and `run` refuse the day until the file is moved away.
 
 ## On the page
 

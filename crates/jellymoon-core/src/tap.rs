@@ -305,4 +305,19 @@ mod tests {
             assert!(!standing(a, b).is_choice(), "{a:?} and {b:?}");
         }
     }
+
+    // No `jellymoon` command draws a clash, so this is held here: a clash is drawn in the words its ruling carries.
+    #[test]
+    fn a_clash_is_drawn_in_the_cleaned_words_a_tap_on_it_rules_on() {
+        let (home, day) = (tempfile::tempdir().unwrap(), "2026-03-10");
+        // A private key's first line, joined here so no scanner reads one in this file.
+        let key = format!("{0}BEGIN\tRSA PRIVATE {1}{0}", "-".repeat(5), "KEY");
+        let (quote_a, quote_b) = (format!("use {key} here"), "never  retry\n\"uploads\"".to_string());
+        let clash = [Clash { a: "w1".into(), b: "w2".into(), quote_a, quote_b, settled: false }];
+        let drawn = standing(home.path(), day, &clash).remove(0);
+        assert_eq!((drawn.a.as_str(), drawn.b.as_str()), ("use [redacted]", "never retry 'uploads'"));
+        let tapped = settle(home.path(), day, &clash, 1, 2).unwrap();
+        assert_eq!((tapped.replaces, tapped.stands), (drawn.a, drawn.b));
+        assert_eq!(standing(home.path(), day, &clash)[0].stands, Some(Side::B));
+    }
 }

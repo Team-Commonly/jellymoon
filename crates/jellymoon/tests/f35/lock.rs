@@ -1,5 +1,5 @@
-//! What a tap does when there is nothing to choose, and when the day's lock is in the way: a lock left behind is
-//! taken over, and a tap that is refused has changed nothing.
+//! What a tap does when there is nothing to choose, when another clash shares a statement, and when the day's lock
+//! is in the way: a lock left behind is taken over, and a tap that is refused has changed nothing.
 
 use std::fs;
 use std::time::{Duration, Instant, SystemTime};
@@ -62,6 +62,32 @@ fn the_settlement_holds_the_cleaned_statements_and_never_a_credential() {
     assert_eq!(kept, json!({"day": DAY, "clashes": [{"a": clean, "b": B, "stands": "a"}]}));
     assert_eq!(w.tap("1", "1")["ruling"], Value::Null, "the same tap again makes no ruling");
     assert_eq!(w.rulings().len(), 1);
+}
+
+// A ruling, and a settlement, is of one clash: of both its statements, each on its own side. A clash that shares
+// one statement with it, on either side, is still to be chosen: a tap on it makes its own ruling.
+#[test]
+fn a_ruling_or_a_settlement_of_one_clash_says_nothing_of_a_clash_that_shares_a_statement() {
+    const C: &str = "retry uploads once";
+    // Of the first clash, A stands over B. The tap on the other is for the statement that would stand if the first
+    // clash's ruling were taken for its own.
+    let others = [((A, C), "1"), ((C, B), "1"), ((C, A), "2"), ((B, C), "2")];
+    for (by_ruling, (other, option)) in [true, false].into_iter().flat_map(|by| others.map(|other| (by, other))) {
+        let w = world();
+        w.keep(&[(A, B), other]);
+        if by_ruling {
+            w.tap("1", "1");
+        } else {
+            let first = json!({"day": DAY, "clashes": [{"a": A, "b": B, "stands": "a"}]});
+            fs::write(w.ruled(), first.to_string()).unwrap();
+            #[cfg(unix)]
+            super::chmod(&w.ruled(), 0o644);
+        }
+        let made = w.tap("2", option)["ruling"].clone();
+        let (stands, over) = if option == "1" { other } else { (other.1, other.0) };
+        let case = format!("{other:?}, by a ruling: {by_ruling}");
+        assert_eq!((made["stands"].as_str(), made["over"].as_str()), (Some(stands), Some(over)), "{case}");
+    }
 }
 
 // A run that was killed leaves its lock. One older than 30 seconds, or dated ahead of now, is nobody's.

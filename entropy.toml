@@ -84,7 +84,9 @@ max_file_lines = 400
 # `copy.rs`) and the binary by 32 (its test, `tests/f39/safe.rs`).
 # A run refused for the run its wish still names, before any copy is made, raised core by 3 (`run.rs`) and the
 # binary by 16 (in the test of a copy that cannot be taken back, `tests/f39/safe.rs`).
-"crates/jellymoon-core" = 5656
+# The move of a run's folder tried again for 200 ms, not the day's three seconds, raised core by 12 (`busy.rs`,
+# `copy/gone.rs`): on Windows every run that was never started waited those three seconds under its own lock.
+"crates/jellymoon-core" = 5668
 # The same filter in `nothing_is_left` raised the binary by 1 (`tests/f39/refused.rs`). Reading `runs` without the
 # bytes of the lock a test holds, which Windows lets no other handle read, raised it by 13 (`tests/f39/safe.rs`).
 "crates/jellymoon" = 7518

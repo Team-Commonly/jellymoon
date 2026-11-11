@@ -128,6 +128,36 @@ fn every_line_of_a_whole_option_lies_inside_its_bubble_and_the_bubble_inside_its
     }
 }
 
+// The one state where a note goes without a word in the notes: every other note is drawn and what they leave holds
+// neither the whole list's count line nor the sheet that counts notes. Nothing is drawn there, nothing else moves,
+// and the page's footer, which the scene's maker counts the rows in, is the one place that still says them.
+#[test]
+fn a_whole_list_with_no_room_for_even_a_count_draws_nothing_moves_nothing_and_the_footer_is_drawn() {
+    let (mut scene, mut reached) = (Scene::sample(), 0);
+    scene.footer = "2 made wishes are in your own words.".into();
+    let rows = vec![(Mark::Busy, "a first".to_string()), (Mark::Busy, "a second".to_string())];
+    for (theme, viewport) in
+        [Theme::sticker(), Theme::plain()].into_iter().flat_map(|t| [(t.clone(), DEFAULT), (t, SMALL)])
+    {
+        for (plain, words) in (1..=8).flat_map(|plain| (1..=60).map(move |words| (plain, words))) {
+            let note = |i| Note::Plain { title: format!("note {i}"), body: "word ".repeat(words) };
+            scene.notes = (0..plain).map(note).collect();
+            let without = place(&scene, &theme, viewport);
+            scene.notes.push(Note::Whole { title: "a whole list".into(), rows: rows.clone() });
+            let placed = place(&scene, &theme, viewport);
+            let (drawn, count) = notes_and_count(&placed);
+            if drawn.len() != plain || count.is_some() {
+                continue;
+            }
+            reached += 1;
+            assert!(placed == without, "{plain} notes of {words} words: a piece moved or was added");
+            let footer = of(&placed, PieceKind::Footer);
+            assert_eq!(footer[0].text[0].text, scene.footer, "{plain} notes of {words} words");
+        }
+    }
+    assert!(reached >= 4, "the state was reached {reached} times");
+}
+
 // A whole list is the same promise for a row: drawn after its mark to its last word, or passed over and counted in
 // the list's own last line. It comes below the other notes, in the room they leave, and never moves or shrinks one.
 #[test]

@@ -174,6 +174,10 @@ pub fn model_key() -> String {
 pub fn run_token() -> String {
     format!("jm{}{}", "r_", "Q7".repeat(20))
 }
+/// The first line of a private key, with `gap` where the space after its first word goes.
+pub fn key_header(gap: &str) -> String {
+    format!("{0}BEGIN{gap}RSA PRIVATE {1}{0}", "-".repeat(5), "KEY")
+}
 pub fn unknown_key() -> String {
     "Ab3/dE+9".repeat(6)
 }

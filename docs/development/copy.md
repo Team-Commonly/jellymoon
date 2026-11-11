@@ -29,9 +29,12 @@ one caller can do.
 
 ## Make
 
-`--repo` is a full path to the top of a checkout. git looks in that folder and no higher
-(`GIT_CEILING_DIRECTORIES`), so a plain folder that happens to sit inside another repo is refused, like a bare repo,
-a repo with no commit, and a folder that is no repo. The copy is of the commit the checkout is on. What the person
+`--repo` is a full path to the top of a checkout. git is stopped from looking above the folder as it was named
+(`GIT_CEILING_DIRECTORIES`), and is asked where the folder is in the repo it found: anything but its top is refused.
+git goes by a folder's real path, so both are needed. A plain folder that sits inside another repo is refused under
+every name: given directly, as `sub/..`, or through a link to it. So is a folder the repo tracks, a bare repo, a
+repo with no commit, and a folder that is no repo. A link to a repo's top is that repo, as is any other name whose
+real path is the top: the copy is of the repo, not of the name. The copy is of the commit the checkout is on. What the person
 has not committed is not in it, and their working tree, index, `HEAD`, stash and branches are not written; the one
 new thing in their repo is the run's branch (and git's own registration of the worktree).
 
@@ -41,7 +44,10 @@ new thing in their repo is the run's branch (and git's own registration of the w
   drop the worktree's registration. The branch is kept: it is the work. Nothing to commit is not an error, and
   neither is a folder already gone. The commit is one commit, `Jellymoon run <run>`, on top of the branch.
 - **failed.** The copy stays for a look. Of all failed copies, of every repo, the newest five stay; older ones are
-  removed with their registration, and what was not committed in them is lost. Their branches stay.
+  removed with their registration, and what was not committed in them is lost. Their branches stay. Newest is the
+  order the runs failed in, which the records hold: each is dated later than every failed run before it, so the run
+  that just failed always stays, whatever the clock says. `kept` is read after the old ones went. A clock set back
+  makes the dates run ahead of it, one nanosecond a run, until it catches up; the order is unchanged.
 
 **Two cleans at once.** One clean works at a time, of any run: it holds the system's lock on `runs/clean.lock`,
 which the system drops when the process ends, however it ends. A second `copy clean` of the same run waits, then
@@ -50,7 +56,12 @@ finds what the first left: `no copy is kept for run <run>` after a completed one
 **A git that never returns.** Each git child has five minutes. One still running then is killed by its process id,
 and the command exits 1 with `git did not finish in 300 seconds and was stopped`. A `make` stopped so takes its
 half-made copy back: the folder, git's registration of it, its new branch and its record. A `clean` stopped so
-keeps the copy and its record, and can be run again. A test shortens the limit with `JELLYMOON_TEST_GIT_LIMIT_MS`,
+keeps the copy and its record, and can be run again. Only the git child is killed, not the programs it started:
+the standard library has no call for a whole process group, and core has no unsafe code. One of those can write
+into `copies/<run>` after the folder was taken back. So the folder is removed once more after the calls that take
+the rest back, and every clean, under its lock, removes each real folder in `copies` under a run id that has no
+folder in `runs` (a copy being made has one before its folder is there; a link is left). What git itself still
+lists of such a folder is left to git's own `worktree prune`. A test shortens the limit with `JELLYMOON_TEST_GIT_LIMIT_MS`,
 which only a build with debug assertions reads: a release does not.
 
 The commit is by the person: `user.name` and `user.email` as git resolves them for that repo. When either is
@@ -89,7 +100,7 @@ On the command line of every git call, where it wins over every config file:
 | `filter.<name>.clean`, `.smudge` and `.process` set to nothing, `.required=false` | every filter the repo's config names (Git LFS is one). They are read from the config first. A filter whose name holds `=` cannot be named on a command line, and then git is not run |
 | `commit.gpgSign=false` | the signing program |
 | `submodule.recurse=false` | git commands run inside submodules on checkout |
-| `protocol.allow=never`, `GIT_NO_LAZY_FETCH=1`, `GIT_TERMINAL_PROMPT=0` | every transport, so a missing object of a partial clone is an error and never a fetch through ssh, a credential helper or a remote helper |
+| `protocol.allow=never`, each `protocol.<name>.allow` the config names set to `never` (git lets one win over the first; they are read from the config like the filters, and a name that holds `=` is refused the same way), `GIT_NO_LAZY_FETCH=1`, `GIT_TERMINAL_PROMPT=0` | every transport, so a missing object of a partial clone is an error and never a fetch through ssh, a credential helper or a remote helper |
 | `--no-pager` | the pager |
 
 Two more things are done by how git is called:
@@ -121,7 +132,7 @@ Two more things are done by how git is called:
 - The folder is checked once, just before the commit. An agent still running could put a link there afterwards:
   whoever calls `clean_copy` ends the run first.
 - Only the git child itself is killed at the limit. A program it started would go on, though every setting that
-  starts one is off. A git killed while it writes can leave its own lock file (`index.lock`, a ref's `.lock`) in
+  starts one is off; what it writes into a copy that was taken back goes at the next clean. A git killed while it writes can leave its own lock file (`index.lock`, a ref's `.lock`) in
   the repo; the next call then fails in git's words until a person removes it.
 - A `make` whose every git call is stopped waits three limits: the one that failed and two that take it back.
 - A clean of one run waits for a clean of another. The newest-five rule is applied under the same lock.

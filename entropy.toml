@@ -27,8 +27,14 @@ max_file_lines = 400
 # F37, a made wish, raised core by 229 (`wish.rs`, its rules, its kept file and one test, is 203; the day's lock as one
 # function for the tap and the wish; the example of what it prints, round-tripped) and the binary by 411 (`wish`
 # and its parsing are 24; the rest is its tests at the binary, `tests/f37.rs` and `tests/f37/refused.rs`).
-"crates/jellymoon-core" = 3886
-"crates/jellymoon" = 4891
+# The fixes after the reviews of F38 and F37 raised core by 191 and the binary by 120. Core: `redact/twice.rs`, 102,
+# is the test that a text cleaned twice is the text cleaned once, over twenty thousand built texts; cleaning in the
+# order that makes it so is 26; a copy's repo taken only at its top, its failed runs in their own order and the
+# folder nobody stands for are 27; each transport the config names switched off, with its test, is 36. The binary:
+# all of it tests of those cases (`tests/f38/hostile.rs`, `tests/f38/limits.rs`, `tests/f37/refused.rs`,
+# `tests/f35/lock.rs`).
+"crates/jellymoon-core" = 4077
+"crates/jellymoon" = 5011
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -44,7 +50,8 @@ max_file_lines = 400
 # A whole list (F37: a made wish's words after its mark, each row drawn to its last word or counted) raised the kit
 # by 156: 51 are its test in `tests/whole.rs`; the rest is its layout below the other notes, in the room they leave
 # and at its own step, the mark's piece and its drawing.
-"crates/sticker-kit" = 5709
+# The test of the one state where a whole list is not said among the notes raised it by 30 (`tests/whole.rs`).
+"crates/sticker-kit" = 5739
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -55,7 +62,8 @@ max_file_lines = 400
 # F38 raised the app by 1: the arm for core's new error where it puts an error into words.
 # F37 raised the app by 218: 171 are `tests/f37.rs`; the rest draws the day's made wishes, their note and the
 # footer's count of them, also on a day not read yet.
-"app" = 3260
+# The case of a clash on a page with no wish read, which a made wish moves up, raised it by 36 (`tests/f37.rs`).
+"app" = 3296
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

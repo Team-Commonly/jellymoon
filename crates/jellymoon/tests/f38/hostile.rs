@@ -108,6 +108,43 @@ fn a_link_where_a_copy_was_is_never_followed() {
     assert_eq!(w.commit(&repo, &made.branch), base, "something outside was committed");
 }
 
+// git looks for a repo from the folder it is in by its real path, whatever name the folder was given by: a plain
+// folder inside a repo is never that repo, and no worktree or branch is made in it.
+#[test]
+fn a_folder_that_is_not_the_top_of_its_repo_is_refused_under_every_name_and_a_link_to_a_top_is_that_repo() {
+    let w = world();
+    let outer = w.repo("outer");
+    let (plain, tracked) = (outer.join("plain"), outer.join("tracked"));
+    fs::create_dir_all(plain.join("sub")).unwrap();
+    fs::create_dir(&tracked).unwrap();
+    fs::write(tracked.join("t.txt"), "in the repo\n").unwrap();
+    w.git(&outer, &["add", "tracked"]);
+    w.git(&outer, &["commit", "-q", "-m", "a folder of the repo"]);
+    let before = w.persons(&outer, &[]);
+    let (to_plain, to_top) = (w.at("to-plain"), w.at("to-top"));
+    let mut named = vec![plain.clone(), plain.join("sub"), plain.join("sub").join(".."), tracked];
+    let linked = link(&plain, &to_plain) && link(&outer, &to_top);
+    if linked {
+        named.push(to_plain);
+    } else {
+        eprintln!("skipped in part: this system did not let the test make a link to a folder");
+    }
+    for name in &named {
+        let ran = w.run(&["copy", "make", "--repo", name.to_str().unwrap()]);
+        assert!(refused(&ran).starts_with("jellymoon: --repo is not "), "{name:?}: {}", ran.stderr);
+    }
+    let copies = fs::read_dir(w.at("jm").join("copies")).map_or(0, Iterator::count);
+    assert_eq!((copies, w.listed(&outer), w.git(&outer, &["branch", "--list"]).as_str()), (0, 1, "* main"));
+    assert_eq!(w.persons(&outer, &[]), before);
+
+    // The folder above a folder of the repo, and a link to the repo's top, are the repo: its top by its real path.
+    for name in [Some(plain.join("..")), linked.then_some(to_top)].into_iter().flatten() {
+        let made = w.make(&name);
+        assert_eq!((w.listed(&outer), w.commit(&outer, &made.branch)), (2, w.commit(&outer, "HEAD")), "{name:?}");
+        assert!(!said(&w.clean(&made.run, "completed")).kept);
+    }
+}
+
 #[test]
 fn a_rewritten_dot_git_file_sends_nothing_to_another_repo() {
     let w = world();

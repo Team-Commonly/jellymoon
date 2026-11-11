@@ -98,35 +98,47 @@ impl Git {
         command
     }
 
-    /// What git finds at a folder: whether the repo is bare, whether the folder is inside a checkout, the git
-    /// folder of that checkout and the git folder the repo's checkouts share, the last two as full paths. git looks
-    /// in that folder and no higher: a plain folder inside some other repo is not that repo.
+    /// What git finds at a folder: whether the repo is bare, whether the folder is inside a checkout, where the
+    /// folder is below the checkout's top (an empty line at the top), the git folder of that checkout and the git
+    /// folder the repo's checkouts share, the last two as full paths. The ceiling stops git looking above the folder
+    /// as it was named. git goes by the folder's real path, so under another name (a link, `sub/..`) it can still
+    /// find a repo above: the caller refuses whatever is not a top.
     pub fn discover(&self, folder: &Path) -> Result<Vec<String>, String> {
         let mut command = self.command();
         command.envs(folder.parent().map(|above| ("GIT_CEILING_DIRECTORIES", above)));
         command.arg("-C").arg(folder).args(["rev-parse", "--path-format=absolute", "--is-bare-repository"]);
-        command.args(["--is-inside-work-tree", "--git-dir", "--git-common-dir"]);
+        command.args(["--is-inside-work-tree", "--show-prefix", "--git-dir", "--git-common-dir"]);
         Ok(printed(command, self.limit)?.unwrap_or_default().lines().map(str::to_string).collect())
     }
 
-    /// Names a repo by its git folder and reads which filters its config holds, so each call can blank them: a
-    /// filter is a program git starts for every file it adds or checks out. One whose name holds `=` cannot be
-    /// named on a command line, and then git is not run at all.
+    /// Names a repo by its git folder and reads which filters and which transports its config names, so each call
+    /// can switch them off ([`blanks`]).
     pub fn open(&self, dir: &Path) -> Result<Repo<'_>, String> {
         let mut repo = Repo { git: self, dir: dir.to_path_buf(), blanks: Vec::new() };
-        let filters = r"^filter\..*\.(clean|smudge|process)$";
-        let named = repo.ask(None, &[], &["config", "-z", "--name-only", "--get-regexp", filters])?.unwrap_or_default();
-        for key in named.split('\0').filter(|key| !key.is_empty()) {
-            let Some((filter, _)) = key.rsplit_once('.').filter(|_| !key.contains('=')) else {
-                return Err(format!(
-                    "the repo's git config names a filter that cannot be switched off: {}",
-                    line(key, 80)
-                ));
-            };
-            repo.blanks.extend([format!("{key}="), format!("{filter}.required=false")]);
-        }
+        let keys = r"^(filter\..*\.(clean|smudge|process)|protocol\..*\.allow)$";
+        let named = repo.ask(None, &[], &["config", "-z", "--name-only", "--get-regexp", keys])?.unwrap_or_default();
+        repo.blanks = blanks(&named)?;
         Ok(repo)
     }
+}
+
+/// The settings that switch off what a repo's config names, from the names as `git config -z` prints them. A filter
+/// is a program git starts for every file it adds or checks out: its command is set to nothing. A transport's own
+/// `protocol.<name>.allow` wins over `protocol.allow`, so each one named is set to `never` itself. A name that holds
+/// `=` cannot be given on a command line, and then git is not run at all.
+fn blanks(named: &str) -> Result<Vec<String>, String> {
+    let mut blanks = Vec::new();
+    for key in named.split('\0').filter(|key| !key.is_empty()) {
+        match key.rsplit_once('.').filter(|_| !key.contains('=')) {
+            Some((_, "allow")) => blanks.push(format!("{key}=never")),
+            Some((filter, _)) => blanks.extend([format!("{key}="), format!("{filter}.required=false")]),
+            None => {
+                let what = "the repo's git config names a filter or a transport that cannot be switched off";
+                return Err(format!("{what}: {}", line(key, 80)));
+            }
+        }
+    }
+    Ok(blanks)
 }
 
 impl Repo<'_> {
@@ -177,5 +189,29 @@ fn printed(command: Command, limit: Duration) -> Result<Option<String>, String> 
         },
         (false, Some(1)) if said.is_empty() => Ok(None),
         _ => Err(said),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::blanks;
+
+    #[test]
+    fn every_filter_and_every_transport_the_config_names_is_switched_off_by_its_name() {
+        let named = "filter.lfs.clean\0protocol.file.allow\0filter.a.b.process\0protocol.Ext\nX.allow\0";
+        let off = [
+            "filter.lfs.clean=",
+            "filter.lfs.required=false",
+            "protocol.file.allow=never",
+            "filter.a.b.process=",
+            "filter.a.b.required=false",
+            "protocol.Ext\nX.allow=never",
+        ];
+        assert_eq!(blanks(named).unwrap(), off);
+        assert_eq!(blanks("").unwrap(), Vec::<String>::new());
+        for unnamed in ["protocol.a=b.allow", "filter.x=y.smudge"] {
+            let said = blanks(&format!("filter.ok.clean\0{unnamed}\0")).unwrap_err();
+            assert!(said.ends_with(&format!("cannot be switched off: {unnamed}")), "{said}");
+        }
     }
 }

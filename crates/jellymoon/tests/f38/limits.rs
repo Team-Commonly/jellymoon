@@ -7,6 +7,8 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::{env, fs, thread};
 
+use serde_json::{Value, json};
+
 use super::{World, refused, said, world};
 use crate::support::{Ran, plant};
 
@@ -65,6 +67,48 @@ fn a_git_that_never_returns_is_killed_and_no_half_made_copy_is_left() {
     assert!(made.folder.join("a.txt").is_file() && w.commit(&repo, &made.branch) == base);
     assert!(!said(&w.clean(&made.run, "completed")).kept && !made.folder.exists());
     assert_eq!(w.git(&repo, &["rev-list", "--count", &format!("main..{}", made.branch)]), "1");
+}
+
+// A git stopped at its limit can leave a child of its own still writing the copy's files after core removed them.
+#[test]
+fn a_copies_folder_no_run_stands_for_is_removed_by_the_next_clean_and_one_being_made_is_not() {
+    let w = world();
+    let made = w.make(&w.repo("alpha"));
+    let (copies, runs) = (w.at("jm").join("copies"), w.at("jm").join("runs"));
+    let (late, making, other) = ("r00000000000000a1", "r00000000000000a2", "notes");
+    for name in [late, making, other] {
+        fs::create_dir_all(copies.join(name).join("deep")).unwrap();
+        fs::write(copies.join(name).join("deep").join("f.txt"), "written late\n").unwrap();
+    }
+    fs::create_dir(runs.join(making)).unwrap(); // a `make` that has taken its id and not yet written its record
+    assert!(said(&w.clean(&made.run, "failed")).kept);
+    let mut left = vec![making.to_string(), other.to_string(), made.run.clone()];
+    left.sort();
+    assert_eq!(names(&copies), left, "only the folder under a run id that no run stands for is removed");
+    assert!(copies.join(making).join("deep").join("f.txt").is_file());
+}
+
+// "Newest" is the order the runs failed in, which the records hold: a clock set back does not make the run that
+// just failed the oldest. Here the five before it say they failed far in the future.
+#[test]
+fn the_run_that_just_failed_is_kept_whatever_the_clock_says_and_kept_is_said_after_the_old_ones_went() {
+    let w = world();
+    let repo = w.repo("alpha");
+    let failed = |w: &World| {
+        let made = w.make(&repo);
+        (said(&w.clean(&made.run, "failed")).kept, made)
+    };
+    let old: Vec<_> = (0..5).map(|_| failed(&w).1).collect();
+    for (n, made) in old.iter().enumerate() {
+        let file = w.at("jm").join("runs").join(&made.run).join("copy.json");
+        let mut record: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        record["failed"] = json!(u64::MAX / 2 + n as u64);
+        fs::write(&file, record.to_string()).unwrap();
+    }
+    let (kept, last) = failed(&w);
+    assert!(kept && last.folder.is_dir(), "the run that just failed is one of the newest five");
+    assert!(!old[0].folder.exists() && old[1..].iter().all(|made| made.folder.is_dir()), "the oldest went");
+    assert_eq!(w.listed(&repo), 6);
 }
 
 #[test]

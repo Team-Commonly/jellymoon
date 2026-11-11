@@ -144,11 +144,14 @@ pub fn make_copy(home: &Path, repo: &Path, run: Option<&str>) -> Result<RunCopy,
     let git = Git::find(&at.runs).map_err(refused)?;
     let found =
         git.discover(repo).map_err(|said| refused(format!("--repo is not a git repo git could open: {said}")))?;
-    let [bare, inside, own, shared] = &found[..] else {
+    let [bare, inside, below, own, shared] = &found[..] else {
         return Err(refused("git did not say where the repo is; git 2.31 or newer is needed"));
     };
     if bare == "true" || inside != "true" {
         return Err(refused("--repo is a bare repo or a repo's own git folder: a run needs a checkout to copy"));
+    }
+    if !below.is_empty() {
+        return Err(refused("--repo is not the top of a git repo: by its real path it is a folder inside one"));
     }
     let person = git.open(Path::new(own)).map_err(refused)?;
     let base = person.ask(None, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).map_err(refused)?;
@@ -180,6 +183,7 @@ fn add(git: &Git, person: &Repo, at: &Places, run: &str, shared: &Path, base: &s
         let _ = fs::remove_dir_all(&folder);
         let _ = unlist(person, &folder);
         let _ = person.run(None, &[], &["update-ref", "-d", &name]);
+        let _ = fs::remove_dir_all(&folder); // again: a child of the stopped git had those calls' time to write
         return Err(e);
     }
     Ok(at.printed(run, true))
@@ -188,8 +192,11 @@ fn add(git: &Git, person: &Repo, at: &Places, run: &str, shared: &Path, base: &s
 /// Writes the copy's record. This once, when nothing has run in the copy yet, git is asked from inside it where the
 /// copy's own git folder is; the answer is kept in the record and never asked for again.
 fn note(git: &Git, at: &Places, run: &str, shared: &Path, folder: &Path) -> Result<(), Error> {
-    let own = git.discover(folder).ok().and_then(|found| found.into_iter().nth(2)).map(PathBuf::from);
-    let record = Record { repo: shared.to_path_buf(), own: own.unwrap_or_default(), failed: None };
+    let own = match &git.discover(folder).unwrap_or_default()[..] {
+        [_, inside, below, own, _] if inside == "true" && below.is_empty() => PathBuf::from(own),
+        _ => PathBuf::new(), // git found no repo there, or one above the copy
+    };
+    let record = Record { repo: shared.to_path_buf(), own, failed: None };
     if record.own.is_absolute() { write(&at.record(run), &record) } else { Err(refused("git lost the copy")) }
 }
 
@@ -206,16 +213,19 @@ pub fn clean_copy(home: &Path, run: &str, outcome: Outcome) -> Result<RunCopy, E
     let held = OpenOptions::new().write(true).open(at.lock());
     let held = held.map_err(|e| if e.kind() == ErrorKind::NotFound { none() } else { Error::Store(e) })?;
     held.lock().map_err(Error::Store)?;
+    sweep(&at);
     let mut record = read(&file)?.ok_or_else(none)?;
     if record.failed.is_some() {
         return Err(refused(format!("run {run} has ended: its copy is one of the failed copies kept for a look")));
     }
     if outcome == Outcome::Failed {
+        // Later than every run that failed before it, whatever the clock says: the records hold the order.
         let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_nanos());
-        record.failed = Some(u64::try_from(now).unwrap_or(u64::MAX));
+        let after = failed(&at).iter().map(|before| before.0.saturating_add(1)).max().unwrap_or(0);
+        record.failed = Some(u64::try_from(now).unwrap_or(u64::MAX).max(after));
         write(&file, &record)?;
         prune(&at);
-        return Ok(at.printed(run, true));
+        return Ok(at.printed(run, at.root.join(run).exists()));
     }
     let folder = at.root.join(run);
     let there = standing(&at.root, &folder)?;
@@ -237,6 +247,18 @@ fn standing(root: &Path, folder: &Path) -> Result<bool, Error> {
         (Ok(true), Ok(true)) => Ok(true),
         (Ok(true), Err(e)) if e.kind() == ErrorKind::NotFound => Ok(false),
         _ => Err(refused("the copy's place is not a folder Jellymoon made (a link, or a file); nothing was removed")),
+    }
+}
+
+/// Removes what a git stopped at its limit, or a child of it, wrote after its copy was taken back: a real folder in
+/// `copies` under a run id that has no folder in `runs`. A copy being made has one from before its folder is there.
+fn sweep(at: &Places) {
+    let names = fs::read_dir(&at.root).into_iter().flatten().flatten();
+    let names = names.filter_map(|entry| entry.file_name().into_string().ok()).filter(|run| known(run).is_ok());
+    for run in names.filter(|run| fs::symlink_metadata(at.runs.join(run)).is_err()) {
+        if standing(&at.root, &at.root.join(&run)).is_ok_and(|there| there) {
+            let _ = fs::remove_dir_all(at.root.join(&run));
+        }
     }
 }
 
@@ -295,13 +317,7 @@ fn unlist(repo: &Repo, folder: &Path) -> Result<String, String> {
 /// Removes every failed copy but the newest [`KEPT`], with its registration. What cannot be removed now (a link
 /// where the copy was, a repo that will not answer) stays on the books and is tried at the next failed run.
 fn prune(at: &Places) {
-    let runs = fs::read_dir(&at.runs).into_iter().flatten().flatten();
-    let runs = runs.filter_map(|entry| entry.file_name().into_string().ok()).filter(|run| known(run).is_ok());
-    let failed = |run: String| {
-        let record = read(&at.record(&run)).ok()??;
-        Some((record.failed?, run, record))
-    };
-    let mut failed: Vec<(u64, String, Record)> = runs.filter_map(failed).collect();
+    let mut failed = failed(at);
     failed.sort_by(|a, b| (b.0, &b.1).cmp(&(a.0, &a.1)));
     let Some(git) = Git::find(&at.runs).ok().filter(|_| failed.len() > KEPT) else { return };
     for (_, run, record) in failed.into_iter().skip(KEPT) {
@@ -311,6 +327,17 @@ fn prune(at: &Places) {
             forget(&at.record(&run));
         }
     }
+}
+
+/// Every failed run on the books: when it failed, its id and its record.
+fn failed(at: &Places) -> Vec<(u64, String, Record)> {
+    let runs = fs::read_dir(&at.runs).into_iter().flatten().flatten();
+    let runs = runs.filter_map(|entry| entry.file_name().into_string().ok()).filter(|run| known(run).is_ok());
+    let failed = |run: String| {
+        let record = read(&at.record(&run)).ok()??;
+        Some((record.failed?, run, record))
+    };
+    runs.filter_map(failed).collect()
 }
 
 fn read(file: &Path) -> Result<Option<Record>, Error> {

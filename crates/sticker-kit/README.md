@@ -168,7 +168,11 @@ scene had no whole list, and it comes below them in the room they leave. It
 makes room for itself alone, by a closer gap above it (32, then 16) and rows
 written at 0.85 and 0.72, taking a step only when it draws more rows. With no
 room for even its count line it is counted with the notes left out, where
-that sheet fits. `layout` returns one `mark` piece a row drawn.
+that sheet fits. Where that sheet does not fit either, and every other note
+is drawn, nothing is drawn for the list: it is the one note that can go
+without a word, since a word for it would move another note. A scene's maker
+that must have its rows counted says the count elsewhere, as in the footer.
+`layout` returns one `mark` piece a row drawn.
 That can go under the theme's `min_font_size`, which holds for every other
 text: 9.35 pixels at 960x640 where the smallest is 11. Each text run carries
 the `size` it was measured at, and the drawing paints it at that size, so a

@@ -22,13 +22,15 @@ pub(crate) fn pattern(source: &str) -> Regex {
 static TOKEN: LazyLock<Regex> = LazyLock::new(|| pattern(r"(jm[ucr]_|\bcm_)[A-Za-z0-9_-]*…?"));
 
 /// The vendor key shapes worth naming: model provider, Google, GitLab, Hugging Face, Stripe and GitHub keys, Slack
-/// tokens and AWS key ids. Every branch is a prefix and a counted run, so one that has started either matches or ends
-/// within 40 characters: none stays open across a later match of another, which would make the pass rescan the text.
+/// tokens and AWS key ids. An AWS key id is replaced with the rest of its word: were it one only when the word ends
+/// there, a longer word cut after its twentieth character would become one. Every branch is a prefix and a counted
+/// run, so one that has started either matches or ends within 40 characters: none stays open across a later match of
+/// another, which would make the pass rescan the text.
 static KEY: LazyLock<Regex> = LazyLock::new(|| {
     pattern(concat!(
         r"\bsk-[A-Za-z0-9_-]{16,}|\bAIza[A-Za-z0-9_-]{35}|\bglpat-[A-Za-z0-9_-]{20,}|\bhf_[A-Za-z0-9]{30,}",
         r"|\b[sr]k_live_[A-Za-z0-9]{16,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}",
-        r"|\bxox[a-z]-[A-Za-z0-9-]{10,}|\bAKIA[0-9A-Z]{16}\b",
+        r"|\bxox[a-z]-[A-Za-z0-9-]{10,}|\bAKIA[0-9A-Z]{16}[A-Za-z0-9_-]*",
     ))
 });
 
@@ -85,12 +87,20 @@ fn string(text: &str) -> String {
 /// mixes digits with both letter cases. A git hash (one case) is left alone. A base64 secret has slashes too, so a
 /// slash or a dot inside a word does not make it a path: only its [`PATH_START`] does, and from there on each segment
 /// is judged alone, so a long folder path survives and a long mixed segment inside it does not.
-fn credentials(text: &str) -> String {
+///
+/// `tidy` is how the caller lays the text out: [`shown`] drops the spaces around it, [`line`] also makes every run of
+/// white space one space. It is done here, before a key shape is looked for, so the shapes are looked for in the text
+/// as it will be kept: a key's first line whose words a tab or a line break kept apart is one once it is on one
+/// line. Were the laying out done afterwards, the cleaned text could hold a shape and cleaning it again would change
+/// it. Only a URL's password is looked for before: a space of any kind ends one, and laying out makes more of them.
+/// The second value says whether the text ended in a space before it was laid out, so that its last word is whole.
+fn cleaned(text: &str, tidy: fn(&str) -> String) -> (String, bool) {
     let text = string(text);
+    let ended = text.ends_with(char::is_whitespace);
+    let text = tidy(&URL_PASSWORD.replace_all(&text, format!("${{1}}{REPLACED}@")));
     let text = PEM.replace_all(&text, REPLACED);
     let text = JWT.replace_all(&text, REPLACED);
     let text = KEY.replace_all(&text, REPLACED);
-    let text = URL_PASSWORD.replace_all(&text, format!("${{1}}{REPLACED}@"));
     let mut shown = String::with_capacity(text.len());
     for piece in text.split_inclusive(char::is_whitespace) {
         let word = piece.trim_end();
@@ -108,7 +118,13 @@ fn credentials(text: &str) -> String {
         }));
         shown.push_str(&piece[word.len()..]);
     }
-    shown
+    (shown, ended)
+}
+
+/// [`cleaned`] with the text laid out as it came.
+#[cfg(test)]
+fn credentials(text: &str) -> String {
+    cleaned(text, |text| text.to_string()).0
 }
 
 /// Every path and link in a word, in order: each from its [`PATH_START`] to the next [`PATH_END`] or the word's end.
@@ -116,7 +132,16 @@ fn credentials(text: &str) -> String {
 fn paths(word: &str) -> Vec<Range<usize>> {
     let (mut found, mut from) = (Vec::new(), 0);
     while let Some(start) = PATH_START.find_at(word, from) {
-        from = word[start.end()..].find(PATH_END).map_or(word.len(), |at| start.end() + at);
+        from = start.end();
+        // The bracket that closes the mark left for a segment ends no path: what follows is still that path's, as it
+        // was before the segment was replaced, so a cleaned path cleaned again is judged as it was the first time.
+        while let Some(at) = word[from..].find(PATH_END).map(|at| from + at) {
+            if !word[..=at].ends_with(REPLACED) {
+                break;
+            }
+            from = at + 1;
+        }
+        from = word[from..].find(PATH_END).map_or(word.len(), |at| from + at);
         found.push(start.start()..from);
     }
     found
@@ -168,19 +193,20 @@ pub(crate) fn line(text: &str, limit: usize) -> String {
 
 fn bounded(text: &str, limit: usize, tidy: fn(&str) -> String) -> String {
     let (window, whole) = start(text, limit + WINDOW);
-    let cleaned = credentials(window);
-    let tidied = tidy(&cleaned);
+    let (cleaned, ended) = cleaned(window, tidy);
     if whole {
-        return cut(&tidied, limit);
+        return cut(&cleaned, limit);
     }
     // The window cut the text, and its last word may be the head of a secret whose rest was never read. That word is
     // far past the cut unless cleaning took out or squeezed most of the window; then only what stands before it is
     // kept. A last word that is the mark and nothing more (a PEM key's replacement) shows nothing, so it stays.
     let marked = cleaned.split_whitespace().next_back() == Some(REPLACED);
-    let reaches = marked || tidied.chars().count() >= limit + SECRET_MAX;
-    let kept = if reaches { tidied } else { tidy(cleaned.rfind(char::is_whitespace).map_or("", |at| &cleaned[..at])) };
+    let reaches = marked || ended || cleaned.chars().count() >= limit + SECRET_MAX;
+    let kept = if reaches { cleaned } else { tidy(cleaned.rfind(char::is_whitespace).map_or("", |at| &cleaned[..at])) };
     if kept.is_empty() { kept } else { cut(&format!("{kept}…"), limit) }
 }
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod twice;

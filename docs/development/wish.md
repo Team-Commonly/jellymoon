@@ -61,8 +61,10 @@ own words. The kept page itself never holds a made wish.
 - A made wish's little one carries a short label, cut. Its words are in the note "wished here today", whole or
   counted (`+N more`). `layout` prints the note's lines and one `mark` piece a wish drawn.
 - **A made wish never moves or shrinks what a person rules on.** The clashes and the delivery note are placed as
-  on the same page with no made wish, at the same size, and the note takes the room they leave. On a full page
-  that is little. Beside the list "came true today", the delivery note and one clash, with one made wish of 200
+  on the same page with no made wish, at the same size, and the note takes the room they leave. One page is not
+  so: a page whose reading holds a clash and no wish says "Nothing wished for yet today." above the clash, and a
+  made wish is a wish, so that note goes and the clash stands where it was, higher, at the same size. On a full page
+  the room left is little. Beside the list "came true today", the delivery note and one clash, with one made wish of 200
   characters and the rest short:
 
   | Made wishes | sticker, 960x640 and 1440x900 | plain, 960x640 and 1440x900 |
@@ -72,4 +74,7 @@ own words. The kept page itself never holds a made wish.
   | 8 | none drawn, 8 counted | 2 drawn, 6 counted (the long one is passed over) |
 
   So a full page in the sticker theme says only how many made wishes there are, in the note and in the footer.
-  Their words are drawn where there is room, as on a page with no clash and no delivery note.
+  Their words are drawn where there is room, as on a page with no clash and no delivery note. When the other notes
+  leave no room for even a count (neither the note's `+N more` line nor the kit's `+N more of M notes` sheet fits
+  under them), nothing of the made wishes is drawn among the notes: counting them there would move or push out a
+  clash. Their little ones and the footer's count, "N made wishes are in your own words.", are what says them then.

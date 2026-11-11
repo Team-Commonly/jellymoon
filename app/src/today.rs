@@ -191,7 +191,7 @@ fn words(error: &Error) -> String {
             "Claude Code could not do the reading. Check that `claude` answers in a terminal. {again} What happened: \
              {error}."
         ),
-        Error::Date | Error::Model => format!("{error}."),
+        Error::Date | Error::Model | Error::Uninstall(_) => format!("{error}."),
     }
 }
 

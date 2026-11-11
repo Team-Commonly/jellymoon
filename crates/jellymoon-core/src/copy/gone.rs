@@ -6,13 +6,16 @@ use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::Path;
 
+use crate::busy::retried;
+
 /// Moves `runs/<run>` to a name no look takes for a run, then removes it. What is at that name already goes first,
 /// or the move would fail every time: a folder left by a removal that failed half way, where a file still open
-/// keeps its folder, or anything else put there.
+/// keeps its folder, or anything else put there. On Windows the move is refused while another process has a file
+/// of the folder open, as a look has the run's lock for a moment: it is tried again for the day's own wait (`busy.rs`).
 pub(super) fn remove(runs: &Path, run: &str) -> io::Result<()> {
     let gone = runs.join(format!("gone-{run}"));
     clear(&gone)?;
-    absent(fs::rename(runs.join(run), &gone))?;
+    absent(retried(|| fs::rename(runs.join(run), &gone)))?;
     clear(&gone)
 }
 

@@ -23,9 +23,11 @@ overrides.
   spaces made one, nothing that cannot be seen, credential shapes replaced by `[redacted]`, each `"` made `'`.
 - **Cleaned until nothing changes.** Cleaning once is not always cleaning twice: a private key's first line with a
   tab in it is one only once it is on one line, and a key straight after another is found only once the first is
-  `[redacted]`. So the words are cleaned again, at most 8 times, until a cleaning changes nothing, and that is
-  what is kept (`still.rs` in core, the same door a clash's statement goes through). What is kept is therefore
-  unchanged by one more cleaning, which is what reading the file back does. The cleaning itself is the reader's,
+  `[redacted]`. So the words are cleaned again until a cleaning changes nothing, and that is what is kept
+  (`still.rs` in core, the same door a clash's statement goes through). Up to 8 cleanings may change the words;
+  the one after them must change nothing. Each cleaning finds one more key of a row with nothing between them, so
+  eight such keys are kept, each as `[redacted]`, and nine are refused. What is kept is therefore unchanged by one
+  more cleaning, which is what reading the file back does. The cleaning itself is the reader's,
   unchanged ([reader.md](reader.md)); a session log's turn is still cleaned once.
 - **The id.** `m1` to `m8`, by the wish's place in the file. A reading's ids are `w1` to `w8`, which core writes
   itself whatever the model called them, so the two never meet.
@@ -42,7 +44,7 @@ Each is one line on stderr, exit 1, and nothing is written.
 |---|---|
 | Words that are empty once cleaned | There is nothing to draw |
 | Words over 200 characters once cleaned to the end, or over 4096 bytes as typed | A wish is never cut: cut words would not be the person's |
-| Words a cleaning still changes after 8 times (nine keys or more with nothing between them) | They would be kept half cleaned |
+| Words a ninth cleaning still changes: nine keys or more with nothing between them (eight are kept) | They would be kept half cleaned |
 | A ninth made wish for one day | A day holds eight |
 | A project that is not one folder's name: empty, over 100 characters, a path, `.` or `..`, or anything cleaning would change (a line break, a character that cannot be seen, a credential shape, which a name of 40 letters and digits with no break is) | F39 finds the folder by this name |
 | Made wishes that cannot be used (below) | They are never written over |

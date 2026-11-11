@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::still::statement;
+use crate::still::{statement, still};
 use crate::{Error, Ruling};
 
 /// The most characters of a statement kept: what a quote on a page may hold.
@@ -44,6 +44,16 @@ struct Step {
 /// ([`crate::still`]), so the words of a statement that was kept are the words of that statement read back.
 pub(crate) fn words(text: &str) -> String {
     statement(text, WORDS_MAX)
+}
+
+/// What refuses a ruling of a statement that cannot be cleaned: its mark says nothing a session could follow, and
+/// two such statements could not be told apart.
+const UNMADE: &str =
+    "a statement of over 4096 bytes, or one that cleaning still changes after 8 times, cannot be ruled on";
+
+/// [`words`] for a statement a ruling is made of: one that cannot be cleaned is refused, never ruled on as the mark.
+pub(crate) fn ruled_on(text: &str) -> Result<String, Error> {
+    still(text, WORDS_MAX, true).map_err(|_| Error::Tap(UNMADE.to_string()))
 }
 
 /// Makes a folder of Jellymoon's own, and the folders above it that are missing, for the person alone (0700) where
@@ -92,7 +102,7 @@ pub fn rule(home: &Path, stands: &str, over: &str) -> Result<Ruling, Error> {
 }
 
 fn rule_at(home: &Path, stands: &str, over: &str, now: u64) -> Result<Ruling, Error> {
-    let (stands, over) = (words(stands), words(over));
+    let (stands, over) = (ruled_on(stands)?, ruled_on(over)?);
     if stands.is_empty() || over.is_empty() {
         return Err(Error::Ruling);
     }

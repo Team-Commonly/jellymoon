@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::busy::{in_use, retried};
 use crate::hook::put;
 use crate::reader::parse;
-use crate::ruling::{own_dir, private_dir, rule, waiting, words};
+use crate::ruling::{own_dir, private_dir, rule, ruled_on, waiting, words};
 use crate::{Clash, Error, Ruling};
 
 /// The most bytes of a kept page that are read: what the app's own door takes.
@@ -186,7 +186,8 @@ pub fn settle_kept(home: &Path, day: &str, clash: usize, option: usize) -> Resul
 
 /// A tap on statement `option` of clash `clash` of these clashes, which are the day's page data. The statement tapped
 /// stands and the other is what it replaces; both go through the ruling's own cleaning and no other text is added.
-/// A refusal has written nothing. A tap on the statement that already stands makes no ruling.
+/// A refusal has written nothing: so is a tap on a clash with a statement that cannot be cleaned, which the page
+/// draws as the mark. A tap on the statement that already stands makes no ruling.
 pub fn settle(home: &Path, day: &str, clashes: &[Clash], clash: usize, option: usize) -> Result<Settled, Error> {
     parse(day)?;
     let found = clash.checked_sub(1).filter(|at| *at < CLASHES_MAX).and_then(|at| clashes.get(at));
@@ -196,7 +197,7 @@ pub fn settle(home: &Path, day: &str, clashes: &[Clash], clash: usize, option: u
         2 => Side::B,
         _ => return Err(refused(format!("a clash has two statements, 1 and 2, and {option} was asked for"))),
     };
-    let (a, b) = (words(&found.quote_a), words(&found.quote_b));
+    let (a, b) = (ruled_on(&found.quote_a)?, ruled_on(&found.quote_b)?);
     if a.is_empty() || b.is_empty() {
         return Err(Error::Ruling);
     }

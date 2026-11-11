@@ -153,7 +153,10 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     let wish = wish::kept_of(home, &day)?.into_iter().find(|wish| wish.id == options.wish).ok_or_else(none)?;
     // A wish whose run was never started comes back with no run, and this call goes on to start one.
     let wish = bury(home, &day, wish);
-    if let Some(run) = &wish.run {
+    // Read again: a look that could not take a never-started run's copy back answers with no run and leaves the
+    // wish naming that run. It has its run still, and no copy is made to find that out at the claim (`start`).
+    let named = wish::kept_of(home, &day)?.into_iter().find(|kept| kept.id == wish.id).and_then(|kept| kept.run);
+    if let Some(run) = wish.run.as_ref().or(named.as_ref()) {
         return Err(had(&wish.id, run));
     }
     let not_started = |why: String| {

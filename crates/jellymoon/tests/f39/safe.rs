@@ -230,7 +230,23 @@ fn a_never_started_run_whose_copy_cannot_be_taken_back_is_still_named_by_its_wis
     assert_eq!((&page["wishes"][0]["state"], &page["wishes"][0]["run"]), (&json!("working"), &json!(null)));
     assert_eq!(w.kept(&wish), going, "the wish still names the run");
     assert_eq!((w.copies(), w.branches(&repo).len()), (vec![run.clone()], 1), "and its copy is still there");
-    held.unlock().unwrap();
+    // A run asked for now is refused for the run the wish names before any copy is made: it does not wait for the
+    // lock a copy is made behind, and leaves no new name in the home and no new branch or worktree in the repo.
+    let (tree_before, args) =
+        (tree(&w.jm("runs")), ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    let (asked, in_time) = thread::scope(|scope| {
+        let (from, asking) = (Instant::now(), scope.spawn(|| w.run_with(&short, &args)));
+        while !asking.is_finished() && from.elapsed() < Duration::from_secs(10) {
+            thread::sleep(Duration::from_millis(10));
+        }
+        let in_time = asking.is_finished();
+        held.unlock().unwrap(); // a run that waited to make a copy ends now, and the test with it
+        (asking.join().unwrap(), in_time)
+    });
+    assert!(in_time && refused(&asked).contains("has had its run"), "it waited to make a copy: {}", asked.stderr);
+    assert_eq!((w.kept(&wish), w.copies(), w.branches(&repo).len()), (going, vec![run.clone()], 1));
+    assert!(tree(&w.jm("runs")) == tree_before, "something was written in `runs`");
+    assert_eq!(w.git(&repo, &["worktree", "list", "--porcelain"]).matches("worktree ").count(), 2);
 
     w.let_end("go"); // where nothing stops the agent the run left, it ends here: a folder it stands in cannot go
     assert_eq!((&w.on_page(&wish)["run"], w.kept(&wish)), (&json!(null), before), "the next look took it back");

@@ -221,6 +221,9 @@ fn an_end_written_into_a_cut_off_run_s_record_by_hand_gives_no_star() {
         record["why"] = json!(if edit == 0 { "words nobody but the editor wrote" } else { &fine });
         // 0: words that are not core's. 1: the copy still stands. 2: the record is another wish's.
         record["wish"] = json!(if edit == 2 { "m2" } else { &wish });
+        if cfg!(windows) {
+            w.let_end("go"); // there the agent is not stopped, and the folder a command stands in cannot be removed
+        }
         if edit != 1 {
             fs::remove_dir_all(w.jm("copies").join(&run)).unwrap();
             fs::remove_file(w.jm("runs").join(&run).join("copy.json")).unwrap();
@@ -303,6 +306,9 @@ fn the_run_that_finds_a_wish_naming_a_run_never_started_starts_one() {
     let mut record = w.record(&cut);
     record["outcome"] = json!("not_started");
     fs::write(w.jm("runs").join(&cut).join("run.json"), record.to_string()).unwrap();
+    if cfg!(windows) {
+        w.let_end("go"); // there the agent is not stopped, and a copy a command stands in cannot be taken back
+    }
     assert_eq!((&w.on_page(wish)["state"], &w.kept(wish)["run"]), (&json!("working"), &json!(null)));
     assert_eq!((w.copies(), w.branches(&repo)), (vec![], vec![]), "the copy of a run never started is taken back");
     fs::write(w.at("rec").join("go"), "").unwrap();

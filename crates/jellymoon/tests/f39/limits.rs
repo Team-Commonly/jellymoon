@@ -36,6 +36,16 @@ impl World {
         self.free(held)
     }
 
+    /// Leaves the file the made-up agent waits for, and waits until the agent is gone, half a minute at most.
+    pub fn let_end(&self, file: &str) {
+        fs::write(self.at("rec").join(file), "").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !self.agent_came_and_went() {
+            assert!(Instant::now() < deadline, "the agent left behind never ended");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     /// Starts `jellymoon run` and returns at once, with the command still going.
     pub fn start_going(&self, wish: &str, repo: &Path) -> Child {
         let mut command = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
@@ -94,12 +104,7 @@ fn a_run_cut_off_with_its_command_is_not_shown_as_going() {
     assert_eq!(w.kept(&wish), going);
     assert_eq!(w.on_page(&wish)["state"], "needs_you");
     // The agent it left behind is stopped by that page where the system can; elsewhere it ends when it next prints.
-    fs::write(w.at("rec").join("go"), "").unwrap();
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !w.agent_came_and_went() {
-        assert!(Instant::now() < deadline, "the agent left behind never ended");
-        thread::sleep(Duration::from_millis(10));
-    }
+    w.let_end("go");
 
     // The wish has had its run. Asking again says so, and writes down that the run was cut off.
     let again = w.start(&wish, &repo);
@@ -174,12 +179,7 @@ fn a_pid_that_is_another_process_by_now_is_never_signalled() {
     fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
     assert!(refused(&w.start(&wish, &repo)).contains("has had its run"));
     assert!(grows(&file) && !w.agent_came_and_went());
-    fs::write(w.at("rec").join("stop"), "").unwrap();
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !w.agent_came_and_went() {
-        assert!(Instant::now() < deadline, "the agent never ended");
-        thread::sleep(Duration::from_millis(10));
-    }
+    w.let_end("stop");
 }
 
 #[test]

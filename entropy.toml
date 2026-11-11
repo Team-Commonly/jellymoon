@@ -81,7 +81,8 @@ max_file_lines = 400
 # `copy.rs` split, its cleaning moved to `copy/clean.rs` with no change in what it does, raised core by 15: the new
 # file's header and imports.
 "crates/jellymoon-core" = 5648
-"crates/jellymoon" = 7456
+# The same filter in `nothing_is_left` raised the binary by 1 (`tests/f39/refused.rs`).
+"crates/jellymoon" = 7457
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

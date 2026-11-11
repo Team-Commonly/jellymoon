@@ -26,8 +26,9 @@ impl World {
 
     /// Nothing of a run is left in Jellymoon's home or in the repo, and the agent was started `starts` times.
     fn nothing_is_left(&self, repo: &Path, starts: usize) {
-        let runs = fs::read_dir(self.jm("runs")).into_iter().flatten().map(|entry| entry.unwrap().file_name());
-        let runs: Vec<_> = runs.filter(|name| name.to_string_lossy().starts_with('r')).collect();
+        let runs = fs::read_dir(self.jm("runs")).into_iter().flatten();
+        let runs = runs.map(|entry| entry.unwrap().file_name().into_string().unwrap());
+        let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
         assert_eq!((self.copies(), runs, self.branches(repo)), (vec![], vec![], Vec::<String>::new()));
         assert_eq!(self.git(repo, &["worktree", "list", "--porcelain"]).matches("worktree ").count(), 1);
         assert_eq!(self.starts(), starts);

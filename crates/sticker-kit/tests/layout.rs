@@ -266,11 +266,12 @@ fn a_scene_of_any_size_is_laid_out_in_a_time_that_does_not_grow_with_its_notes()
     let placed = place(&crowd, &Theme::sticker(), DEFAULT);
     assert_eq!(placed.len(), MAX_PIECES, "the backstop: no layout returns more pieces than this");
 
-    // A theme built in code is not checked by the loader. Layout still ends, and punches no more holes than it may.
-    let mut endless = Theme::sticker();
-    endless.metrics.height = f32::INFINITY;
-    let placed = place(&Scene::sample(), &endless, DEFAULT);
-    assert_eq!(of(&placed, PieceKind::Hole).len(), 160);
+    // The tallest page a theme may ask for has room for 151 holes, and 150 are punched. One with no end is refused.
+    let mut tall = Theme::sticker();
+    (tall.metrics.height, tall.metrics.margin_y) = (10_000.0, 0.0);
+    assert_eq!(of(&place(&Scene::sample(), &tall, DEFAULT), PieceKind::Hole).len(), 150);
+    tall.metrics.height = f32::INFINITY;
+    assert!(place(&Scene::sample(), &tall, DEFAULT).is_empty());
 }
 
 #[test]

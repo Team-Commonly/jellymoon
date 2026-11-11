@@ -12,7 +12,7 @@ pub(crate) const BODY_TOP: f32 = 14.0;
 pub(crate) const BODY_BOTTOM: f32 = 154.0;
 
 /// The most holes punched down the paper's edge, whatever height a theme gives the page.
-const MAX_HOLES: usize = 160;
+const MAX_HOLES: usize = 150;
 
 pub(crate) fn header(cx: &mut Ctx, scene: &Scene) {
     cx.out.push(piece(PieceKind::Paper, "paper", 0, cx.paper()));

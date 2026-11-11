@@ -4,7 +4,10 @@
 use std::fs;
 use std::path::PathBuf;
 
-use sticker_kit::theme::{MAX_ART_BYTES, MAX_THEME_BYTES, svg_refusal};
+use sticker_kit::theme::{
+    MAX_ART_BYTES, MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_NUMBER, MAX_THEME_BYTES, SVG_ATTRIBUTES, SVG_ELEMENTS,
+    svg_refusal,
+};
 use sticker_kit::{Color, Scene, Theme, ThemeError, art};
 
 const PICTURE: &str =
@@ -136,12 +139,12 @@ fn an_svg_that_could_run_code_is_refused() {
             other => panic!("case {i} was not refused: {other:?}"),
         }
     }
-    let inner = r##"<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"/></defs><rect fill="url(#g)"/><use href="#g"/></svg>"##;
+    let inner = r##"<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"/></defs><rect fill="url(#g)"/></svg>"##;
     assert_eq!(svg_refusal(inner), None, "references inside the file are fine");
 }
 
 #[test]
-fn the_kit_s_own_art_passes_its_own_check() {
+fn the_kit_s_own_art_is_small_and_is_not_what_a_theme_file_may_hold() {
     for theme in [Theme::sticker(), Theme::plain()] {
         let p = &theme.palette;
         let pieces = [
@@ -151,7 +154,9 @@ fn the_kit_s_own_art_passes_its_own_check() {
             art::badge(p, 15.0, 5.0),
         ];
         for svg in pieces {
-            assert_eq!(svg_refusal(&svg), None);
+            let elements = svg.matches('<').count() - svg.matches("</").count();
+            assert!(elements < 40, "{elements} elements");
+            assert_eq!(svg_refusal(&svg).as_deref(), Some("it contains the element `<filter`"), "only the kit blurs");
         }
     }
 }
@@ -248,4 +253,101 @@ fn a_bare_file_name_loads_from_the_folder_the_program_runs_in() {
     let loaded = Theme::load(std::path::Path::new("Cargo.toml")).expect("loads");
     assert_eq!(loaded.theme.folder(), Some(std::path::Path::new(".")));
     assert_eq!(loaded.theme.name, "Cargo");
+}
+
+/// One picture with `inside` as its content.
+fn svg(inside: &str) -> String {
+    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">{inside}</svg>"#)
+}
+
+#[test]
+fn an_svg_may_hold_only_what_the_built_in_art_is_made_of() {
+    let refused = [
+        (r##"<defs><circle id="a" r="4"/></defs><use href="#a"/>"##, "the element `<use`"),
+        (r#"<symbol id="a"><circle r="4"/></symbol>"#, "the element `<symbol`"),
+        (r#"<pattern id="p" width="1" height="1"><circle r="4"/></pattern>"#, "the element `<pattern`"),
+        (r#"<mask id="m"><circle r="4"/></mask>"#, "the element `<mask`"),
+        (r#"<clipPath id="c"><circle r="4"/></clipPath>"#, "the element `<clippath`"),
+        (r#"<image width="4" height="4"/>"#, "the element `<image`"),
+        (r#"<foreignObject><p>hi</p></foreignObject>"#, "the element `<foreignobject`"),
+        (r#"<text x="1" y="1">hi</text>"#, "the element `<text`"),
+        (r#"<svg width="4" height="4"><circle r="4"/></svg>"#, "a second `<svg`"),
+        (r#"<filter id="f"><feGaussianBlur stdDeviation="2"/></filter>"#, "the element `<filter`"),
+        (r#"<feTurbulence baseFrequency="0.9"/>"#, "the element `<feturbulence`"),
+        (r#"<g filter="url(#f)"/>"#, "the attribute `filter`"),
+        (r#"<g opacity="0.5"/>"#, "the attribute `opacity`"),
+        (r#"<path d="M0 0L4 4" stroke-miterlimit="4000"/>"#, "the attribute `stroke-miterlimit`"),
+        (r#"<circle r="1e3"/>"#, "plain digits of at most 4096"),
+        (r#"<circle r="4097"/>"#, "plain digits of at most 4096"),
+        (r#"<path d="M0 0L-99999 4"/>"#, "plain digits of at most 4096"),
+        (r#"<path d="M0 0L4 4" stroke-width="5E2"/>"#, "plain digits of at most 4096"),
+        (r#"<g transform="scale(2)"/>"#, "more than `translate` and `rotate`"),
+        (r#"<g transform="matrix(1 0 0 1 0 0)"/>"#, "more than `translate` and `rotate`"),
+        (r#"<linearGradient id="g" gradientTransform="skewX(3)"/>"#, "more than `translate` and `rotate`"),
+        (r#"<style>circle { fill: red }</style>"#, "the element `<style`"),
+        (r#"<style>@\69mport 'x.css';</style>"#, "the element `<style`"),
+        (r#"<style>circle { fill: \75rl(x.svg#a) }</style>"#, "the element `<style`"),
+        (r#"<circle r="4" style="fill: red"/>"#, "the attribute `style`"),
+        (r#"<circle r="4" style="fill: url/**/(x.svg#a)"/>"#, "the attribute `style`"),
+        (r#"<circle r="4" fill="&#117;rl(x.svg#a)"/>"#, "a character reference"),
+        (r#"<title>&#64;import</title>"#, "a character reference"),
+        (r#"<circle r="4" fill="\75rl(x.svg#a)"/>"#, "a backslash"),
+        (r#"<circle r="4" fill="url/**/(x.svg#a)"/>"#, "outside the file"),
+        (r#"<circle r="4" fill="url( x.svg#a)"/>"#, "outside the file"),
+        (r#"<circle r="4" fill="url(x.svg#a)"/>"#, "outside the file"),
+        (r##"<linearGradient id="g" href="#h"/>"##, "the attribute `href`"),
+        (r##"<linearGradient id="g" xlink:href="#h"/>"##, "the attribute `xlink:href`"),
+        (r##"<path d="M0 0 H40" stroke="#000" stroke-dasharray="0.001"/>"##, "the attribute `stroke-dasharray`"),
+        (r#"<circle r=4 />"#, "is not in quotes"),
+        (r#"<circle r="4" fill/>"#, "has no value"),
+        (r#"<circle r="4"#, "does not end"),
+    ];
+    for (inside, why) in refused {
+        let said = svg_refusal(&svg(inside)).unwrap_or_else(|| panic!("{inside} was accepted"));
+        assert!(said.contains(why), "{inside}: {said}");
+    }
+}
+
+#[test]
+fn an_svg_is_held_to_a_size_of_its_own_and_a_flat_picture_passes() {
+    let sized = |size: &str| format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {size}><circle r="4"/></svg>"#);
+    for size in [
+        r#"width="257" height="40""#,
+        r#"width="40" height="100000""#,
+        r#"width="100%" height="40""#,
+        r#"width="1e3" height="40""#,
+        r#"width="0" height="40""#,
+        r#"width="-40" height="40""#,
+        r#"viewBox="0 0 -40 40""#,
+        r#"width="40" height="40" x="2000""#,
+        r#"viewBox="0 0 40 257""#,
+        r#"viewBox="0 0 40""#,
+        r#"width="40" height="40" viewBox="0 0 1e9 1e9""#,
+    ] {
+        let said = svg_refusal(&sized(size)).unwrap_or_else(|| panic!("{size} was accepted"));
+        assert!(said.contains("256"), "{size}: {said}");
+    }
+    for size in ["", r#"width="256" height="256px""#, r#"viewBox="-128 -128.5 256 1""#] {
+        assert_eq!(svg_refusal(&sized(size)), None, "{size}");
+    }
+    let fine = r##"<title>a &amp; b</title><desc>curl</desc><defs>
+<radialGradient id="g" cx="0.5" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#fff" stop-opacity="0.5"/></radialGradient></defs>
+<g transform="translate(4096 -4096) rotate(-30 4.5 .5)"><path d="M0 0L4 4.5.5-3Z" fill="url(#g)" fill-rule="evenodd"/><line x1="0" y1="0" x2="4" y2="4" stroke="#1e90ff" stroke-width="3"/>
+<polyline points="0,0 1,1"/><polygon points="0,0 1,1 2,0"/><ellipse rx="2" ry="1"/><rect x="1" y="1" width="2" height="2" rx="1"/></g>"##;
+    assert_eq!(svg_refusal(&svg(fine)), None);
+    assert_eq!((SVG_ELEMENTS.len(), SVG_ATTRIBUTES.len()), (15, 33));
+}
+
+#[test]
+fn an_svg_is_held_to_a_number_of_elements_and_a_depth() {
+    assert_eq!((MAX_ART_ELEMENTS, MAX_ART_DEPTH, MAX_ART_NUMBER), (100, 12, 4096.0));
+    // The `<svg` is one element and one level.
+    let many = |count: usize| svg(&r#"<circle r="4"/>"#.repeat(count - 1));
+    assert_eq!(svg_refusal(&many(100)), None);
+    assert_eq!(svg_refusal(&many(101)).as_deref(), Some("it has more than 100 elements"));
+    let deep = |levels: usize| svg(&format!("{}{}", "<g>".repeat(levels - 1), "</g>".repeat(levels - 1)));
+    assert_eq!(svg_refusal(&deep(12)), None);
+    assert_eq!(svg_refusal(&deep(13)).as_deref(), Some("its elements are nested more than 12 deep"));
+    let side_by_side = svg(&"<g><g><g></g></g></g>".repeat(30));
+    assert_eq!(svg_refusal(&side_by_side), None, "depth is how far in, not how many");
 }

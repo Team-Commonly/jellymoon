@@ -109,6 +109,13 @@ impl Theme {
         Ok(loaded)
     }
 
+    /// Holds this theme's numbers to the ranges a theme file is held to (`bounds.rs`): the one check, whether the
+    /// theme was read from a file or built in code. `layout` runs it and places nothing for a theme it refuses.
+    pub fn check(&self) -> Result<(), ThemeError> {
+        let table = Table::try_from(self).map_err(|e| ThemeError::Parse(e.to_string()))?;
+        check(&table, "")
+    }
+
     pub fn to_toml(&self) -> Result<String, ThemeError> {
         toml::to_string(self).map_err(|e| ThemeError::Parse(e.to_string()))
     }

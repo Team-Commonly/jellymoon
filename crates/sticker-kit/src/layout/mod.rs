@@ -68,7 +68,12 @@ pub fn page_scale(theme: &Theme, viewport: Viewport) -> f32 {
     fit.clamp(0.0, m.max_scale.max(0.1))
 }
 
+/// Where every piece goes. A theme that [`Theme::check`] refuses gets no piece at all: its numbers drive the loops
+/// here and in the view, and the view draws only what is placed.
 pub fn layout(scene: &Scene, theme: &Theme, viewport: Viewport, measure: &dyn Measure) -> Vec<Placed> {
+    if theme.check().is_err() {
+        return Vec::new();
+    }
     let k = page_scale(theme, viewport);
     let m = &theme.metrics;
     let mut cx = Ctx {

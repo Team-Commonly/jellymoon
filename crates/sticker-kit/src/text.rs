@@ -110,7 +110,11 @@ pub fn clean(text: &str, max_chars: usize) -> String {
         }
         let needed = if pending_space { 2 } else { 1 };
         if count + needed > max_chars {
-            trim_joiners(&mut out);
+            // The character that does not fit may be the rest of the last one kept: then that one goes too.
+            let mut with = out.clone();
+            with.push(c);
+            out.truncate(ends(&with).iter().rev().nth(1).copied().unwrap_or(0).min(out.len()));
+            out.truncate(out.trim_end_matches([' ', '\u{200C}', '\u{200D}']).len());
             out.push(ELLIPSIS);
             return out;
         }
@@ -124,15 +128,35 @@ pub fn clean(text: &str, max_chars: usize) -> String {
     out
 }
 
-/// A cut must not leave half of a joined emoji or a dangling space.
-fn trim_joiners(text: &mut String) {
-    while text.chars().last().is_some_and(|c| matches!(c as u32, 0x200D | 0xFE0F | 0x20) || is_modifier(c)) {
-        text.pop();
-    }
+/// What is drawn onto the character before it: the combining marks of Latin, Greek and Cyrillic and of symbols, the
+/// two kana voicing marks, the variation selectors, the two joiners and the emoji skin tones.
+fn is_mark(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x0300..=0x036F | 0x0483..=0x0489 | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x200C | 0x200D | 0x20D0..=0x20FF
+            | 0x3099 | 0x309A | 0xFE00..=0xFE0F | 0xFE20..=0xFE2F | 0x1F3FB..=0x1F3FF | 0xE0100..=0xE01EF
+    )
 }
 
-fn is_modifier(c: char) -> bool {
-    matches!(c as u32, 0x0300..=0x036F | 0x1F3FB..=0x1F3FF)
+/// Where each character a reader sees ends, in bytes. No cut or line break falls anywhere else. A character is a
+/// base with every [`is_mark`] after it, whatever U+200D joins to it, or two regional indicators (a flag). This is
+/// not all of Unicode's rule, which needs tables the kit does not carry: the marks of other scripts (Hebrew, Arabic,
+/// Indic, Thai) and Hangul's jamo each count as a character of their own.
+fn ends(text: &str) -> Vec<usize> {
+    let mut ends: Vec<usize> = Vec::new();
+    let (mut before, mut flags) = ('\0', 0);
+    for (at, c) in text.char_indices() {
+        let flag = matches!(c as u32, 0x1F1E6..=0x1F1FF);
+        flags = if flag { flags + 1 } else { 0 };
+        if at > 0 && !(is_mark(c) || before == '\u{200D}' || (flag && flags % 2 == 0)) {
+            ends.push(at);
+        }
+        before = c;
+    }
+    if !text.is_empty() {
+        ends.push(text.len());
+    }
+    ends
 }
 
 /// The longest prefix of `text` that fits `max_width`, with an ellipsis when
@@ -142,29 +166,19 @@ pub fn fit(text: &str, max_width: f32, role: Role, size: f32, measure: &dyn Meas
     if full <= max_width {
         return (text.to_string(), full);
     }
-    let starts: Vec<usize> = text.char_indices().map(|(i, _)| i).collect();
-    let mut best = (String::new(), 0.0);
-    let (mut low, mut high) = (0, starts.len().saturating_sub(1));
-    while low <= high {
-        let mid = (low + high) / 2;
-        let mut candidate = text[..starts[mid]].to_string();
-        trim_joiners(&mut candidate);
-        candidate.push(ELLIPSIS);
-        let width = measure.width(&candidate, role, size);
-        if width <= max_width {
-            best = (candidate, width);
-            low = mid + 1;
-        } else if mid == 0 {
-            break;
-        } else {
-            high = mid - 1;
-        }
+    let cut = |end: usize| format!("{}{ELLIPSIS}", text[..end].trim_end_matches(' '));
+    let mut cuts = vec![0];
+    cuts.extend(ends(text));
+    let fitting = cuts.partition_point(|end| measure.width(&cut(*end), role, size) <= max_width);
+    match fitting.checked_sub(1) {
+        Some(last) => (cut(cuts[last]), measure.width(&cut(cuts[last]), role, size)),
+        None => (String::new(), 0.0),
     }
-    best
 }
 
-/// Breaks `text` at spaces into at most `max_lines` lines that fit `max_width`. When text is left over, the last line
-/// ends with an ellipsis after the last word that fits; a single word too long for a line is cut inside.
+/// Breaks `text` into at most `max_lines` lines that fit `max_width`: at a space, and inside a word only when the
+/// word is too long for a line of its own (a long address, or text in a script written without spaces), never inside
+/// a character ([`ends`]). When text is left over, the last line ends with an ellipsis.
 pub fn wrap(
     text: &str,
     max_width: f32,
@@ -174,27 +188,45 @@ pub fn wrap(
     measure: &dyn Measure,
 ) -> Vec<(String, f32)> {
     let fits = |line: &str| measure.width(line, role, size) <= max_width;
-    let words: Vec<&str> = text.split(' ').filter(|w| !w.is_empty()).collect();
     let mut lines: Vec<String> = Vec::new();
-    let mut at = 0;
-    while at < words.len() {
-        let last_line = lines.len() + 1 >= max_lines;
-        let mut line = words[at].to_string();
-        at += 1;
-        while at < words.len() {
-            let joined = format!("{line} {}", words[at]);
-            // The last line keeps room for the ellipsis unless the word is the last one.
-            let whole = if last_line && at + 1 < words.len() { format!("{joined}{ELLIPSIS}") } else { joined.clone() };
-            if !fits(&whole) {
-                break;
-            }
-            (line, at) = (joined, at + 1);
-        }
-        if last_line && at < words.len() {
-            line.push(ELLIPSIS);
-            at = words.len();
-        }
-        lines.push(line);
+    let mut rest = text.trim_matches(' ');
+    while !rest.is_empty() && lines.len() < max_lines {
+        let tail = if lines.len() + 1 == max_lines { "…" } else { "" };
+        let end = line_end(rest, tail, &fits);
+        let cut = rest[..end].trim_end_matches(' ');
+        lines.push(if end < rest.len() { format!("{cut}{tail}") } else { cut.to_string() });
+        rest = rest[end..].trim_start_matches(' ');
     }
     lines.iter().map(|line| fit(line, max_width, role, size, measure)).filter(|(line, _)| !line.is_empty()).collect()
+}
+
+/// How much of `rest` goes on one line that ends with `tail` when text is left over. Never nothing.
+fn line_end(rest: &str, tail: &str, fits: &dyn Fn(&str) -> bool) -> usize {
+    if fits(rest) {
+        return rest.len();
+    }
+    let with_tail = |end: usize| fits(&format!("{}{tail}", &rest[..end]));
+    // Whole words first: `end` is after the last one that fits, `word` is the one that does not.
+    let (mut end, mut word) = (0, 0);
+    let word_end = loop {
+        let word_end = rest[word..].find(' ').map_or(rest.len(), |space| word + space);
+        if !with_tail(word_end) {
+            break word_end;
+        }
+        end = word_end;
+        word = word_end + rest[word_end..].len() - rest[word_end..].trim_start_matches(' ').len();
+        if word >= rest.len() {
+            return end;
+        }
+    };
+    if end == 0 || !fits(&rest[word..word_end]) {
+        let inside: Vec<usize> = ends(&rest[word..word_end]).iter().map(|at| word + at).collect();
+        let fitting = inside.partition_point(|at| with_tail(*at));
+        end = match fitting.checked_sub(1) {
+            Some(last) => inside[last],
+            None if end == 0 => inside.first().copied().unwrap_or(rest.len()),
+            None => end,
+        };
+    }
+    end
 }

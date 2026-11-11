@@ -117,3 +117,48 @@ fn bundled_advances_run_a_little_wider_than_shaped_text() {
         assert!(gap("AVATAR WAVE Type To Yo") > 10.0, "kerned capitals now agree: one measurer could serve both");
     });
 }
+
+/// Art as heavy as the door lets through: the largest size, the most elements and depth, the largest numbers, and
+/// a path of many thousand segments. Every shape covers the whole picture.
+fn heaviest_art() -> String {
+    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_SIDE};
+    let mut svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{MAX_ART_SIDE}" height="{MAX_ART_SIDE}" viewBox="0 0 1 1">"#
+    );
+    let zigzag: String = (0..60_000).map(|i| format!("L{} {}", (i * 37) % 4096, (i * 91) % 4096)).collect();
+    svg +=
+        &format!(r##"<path d="M0 0{zigzag}" fill="none" stroke="#123456" stroke-width="3" stroke-linejoin="round"/>"##);
+    for _ in 1..MAX_ART_DEPTH {
+        svg += r#"<g transform="translate(4096 -4096) rotate(4096)">"#;
+    }
+    for i in 0..MAX_ART_ELEMENTS - MAX_ART_DEPTH - 1 {
+        svg += &format!(
+            r##"<circle cx="{}" cy="4096" r="4096" fill="#abcdef" fill-opacity="0.2" stroke="#000" stroke-width="4096"/>"##,
+            i * 3
+        );
+    }
+    svg + &"</g>".repeat(MAX_ART_DEPTH - 1) + "</svg>"
+}
+
+#[test]
+fn art_at_the_door_s_limits_is_drawn_in_seconds() {
+    let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let art = heaviest_art();
+    assert!(art.len() < 1024 * 1024);
+    let mut theme = String::from("[art]\n");
+    for piece in ["hero", "character", "star", "bubble", "badge"] {
+        std::fs::write(folder.join(format!("{piece}.svg")), &art).unwrap();
+        theme += &format!("{piece} = \"{piece}.svg\"\n");
+    }
+    std::fs::write(folder.join("theme.toml"), theme).unwrap();
+    let loaded = Theme::load(&folder.join("theme.toml")).expect("the art is inside the door");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    let started = std::time::Instant::now();
+    let out = folder.join("heavy.png");
+    sticker_kit::draw::headless::snapshot(Scene::sample(), loaded.theme, 1440.0, 900.0, &out).expect("it is drawn");
+    let took = started.elapsed();
+    eprintln!("heaviest art: {took:?}");
+    assert!(out.is_file() && took.as_secs() < 60, "it took {took:?}");
+    let _ = std::fs::remove_dir_all(&folder);
+}

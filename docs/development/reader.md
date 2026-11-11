@@ -110,39 +110,18 @@ any length (a PEM header, a JWT's first part) has a pass of its own, so it canno
 
 1. The token shapes of the product this repo used to hold (`jmu_`, `jmc_`, `jmr_`, `cm_`) are shortened to their prefix,
    `jmr_…`.
-2. The password in `scheme://user:password@host`, the password only.
-3. The text is laid out as it will be kept: the spaces around it dropped, and, for a text that is kept on one line (a
-   statement of a ruling, a made wish, an error), every run of white space made one space. Every shape after this is
-   looked for in the text as laid out. So a text that was cleaned is not changed by cleaning it again: a key's first
-   line whose words a tab or a line break kept apart is one once it is on one line, and is replaced.
-4. PEM private keys, from the BEGIN line to the END mark, or to the end of what was read when there is none; the
-   words of either line may stand apart by any white space. Then JWTs. Then named keys: model provider, GitHub,
-   GitLab, Hugging Face, Google (`AIza`), Stripe live and Slack keys and AWS key ids. A named key is replaced with
-   the rest of its run: every base64 character after it, and a dot with more of them after it. What stands straight
-   after a key is a second key or the rest of the same secret, and a piece of it under 40 characters would be shown.
-5. Keys of unknown make. The text is split into words at white space. In each word, a run of 40 or more base64
+2. PEM private keys, from the BEGIN line to the END mark, or to the end of what was read when there is none. Then
+   JWTs. Then named keys: model provider, GitHub, GitLab, Hugging Face, Google (`AIza`), Stripe live and Slack keys
+   and AWS key ids.
+3. The password in `scheme://user:password@host`, the password only.
+4. Keys of unknown make. The text is split into words at white space. In each word, a run of 40 or more base64
    characters (letters, digits, `+`, `/`, `=`, `_`, `-`) is replaced when it mixes digits with both letter cases.
-
-Steps 1 to 5 are run again until a run changes nothing, so a text that was cleaned is not changed by cleaning it
-again. A mark can make what follows it a shape: a second key that had no word boundary until the first was replaced,
-or the rest of a word after the path it started with has ended. Each run that changes the text hides characters that
-were showing and shows none again, so the runs end.
-
-Every shape is looked for as if the joiners U+200C and U+200D were not there, and the mark goes over everything from
-the shape's first character to its last, joiners included. A joiner outside every shape stays where it was typed,
-so an emoji or a word written with one is not changed.
-
-What holds, and what `redact/twice.rs` and `redact/planted.rs` test over forty thousand built texts: cleaning twice
-is cleaning once; no credential shape is left; no eight characters in a row of a secret planted whole can be read;
-a sentence with no shape in it comes back as typed. Everything hidden in a URL or a path stays hidden: a password
-with a secret in the path, the query, the fragment, or two of them.
 
 A word is a path only by how it starts: `/`, `./`, `../`, `~/` or a Windows drive (`C:\` or `C:/`), after any opening
 quotes or brackets (`"`, `'`, `` ` ``, `(`, `[`, `{`, `<`). A link starts at its URL scheme (`https://`) wherever that
 is in the word, so a markdown link, `[the notes](https://…)`, and a JSON value, `"url":"https://…"`, are links from
 the scheme on. A path or a link ends at the next closing quote, closing bracket or comma (`"`, `'`, `` ` ``, `)`, `]`,
-`}`, `>`, `,`), or with its word. The `]` of a `[redacted]` ends it like any other, so what follows a replaced
-password or segment is judged whole. Inside it a `/` ends a run, so each segment is judged alone: a long folder path
+`}`, `>`, `,`), or with its word. Inside it a `/` ends a run, so each segment is judged alone: a long folder path
 survives, and a segment of 40 or more mixed characters inside it is replaced. A run outside every path and link is
 judged whole, so the next value of a JSON object is. A word can hold any number of links, each from its own scheme to
 its own end, so both links of `{"html":"https://…","diff":"https://…"}` are kept. It holds at most one path, the one

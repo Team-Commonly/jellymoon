@@ -5,7 +5,7 @@
 //! A made wish is kept in the words a page draws: on one line, with nothing that cannot be seen and no credential,
 //! as a clash's statement is. Its id is `m1` to `m8`, by its place in the file; a reading's are `w1` to `w8`. The
 //! file is written behind the day's lock, the one a tap takes, and is used only when every part of it is what
-//! [`wish`] would have written.
+//! [`wish`] would have written. Its words are read through the door they were written through ([`still`]).
 
 use std::fmt;
 use std::io::{self, ErrorKind};
@@ -17,7 +17,7 @@ use crate::hook::put;
 use crate::reader::parse;
 use crate::reading::{LABEL_MAX, STAR_MAX, STARS_MAX};
 use crate::redact::line;
-use crate::ruling::words_of;
+use crate::still::{Unkept, still};
 use crate::tap::{locked, plain};
 use crate::{Error, PageData, Wish, WishState};
 
@@ -25,11 +25,11 @@ use crate::{Error, PageData, Wish, WishState};
 pub const MADE_MAX: usize = 8;
 /// The most characters of a made wish, once cleaned: a statement's length. A longer one is refused, never cut.
 const SAID_MAX: usize = 200;
-/// The most bytes of what was typed that are looked at: 200 characters are never more.
-const TYPED_MAX: usize = 4096;
 const PROJECT_MAX: usize = 100;
 /// The most bytes of a day's made wishes that are read. Eight wishes with their stars are far less.
 const MADE_BYTES: usize = 64 * 1024;
+/// What refuses words that cleaning still changes after its last time: they are never kept half cleaned.
+const CHANGING: &str = "a wish is kept as cleaning leaves it, and cleaning was not done with these words after 8 times";
 /// What a made wish says while no run can be started for it.
 const WHY: &str = "nothing was started: `jellymoon wish` keeps a wish and starts no run";
 
@@ -80,10 +80,9 @@ fn file(home: &Path, day: &str) -> PathBuf {
     home.join("pages").join(format!("{day}.wishes.json"))
 }
 
-/// The words of a wish as they are kept, or none when they are over the length.
-fn cleaned(typed: &str) -> Option<String> {
-    let said = if typed.len() > TYPED_MAX { None } else { Some(words_of(typed, SAID_MAX + 1)) };
-    said.filter(|said| said.chars().count() <= SAID_MAX)
+/// The words of a wish as they are kept: cleaned until cleaning changes nothing, and never cut.
+fn cleaned(typed: &str) -> Result<String, Unkept> {
+    still(typed, SAID_MAX, false)
 }
 
 /// Whether a project is one folder's name: no path, and nothing that cleaning would change.
@@ -92,15 +91,16 @@ fn named(project: &str) -> bool {
     !project.is_empty() && !path && project.chars().count() <= PROJECT_MAX && line(project, PROJECT_MAX) == project
 }
 
-/// Whether a wish read from the file is what [`wish`] would have written at that place.
-fn own(at: usize, wish: &MadeWish) -> bool {
+/// A wish read from the file, when it is what [`wish`] would have written at that place. Its words are cleaned as
+/// typed words are, so words kept before they were cleaned to their end are used as they stand still.
+fn own(at: usize, wish: MadeWish) -> Option<MadeWish> {
     let star = |star: &String| !star.is_empty() && line(star, STAR_MAX) == *star;
-    wish.id == format!("m{}", at + 1)
-        && !wish.said.is_empty()
-        && cleaned(&wish.said).as_ref() == Some(&wish.said)
+    let said = cleaned(&wish.said).ok().filter(|said| !said.is_empty())?;
+    let own = wish.id == format!("m{}", at + 1)
         && named(&wish.project)
         && wish.stars.len() <= STARS_MAX
-        && wish.stars.iter().all(star)
+        && wish.stars.iter().all(star);
+    own.then_some(MadeWish { said, ..wish })
 }
 
 /// The day's made wishes: none when there is no file. A file that is a link, that others can write to, that is too
@@ -111,10 +111,10 @@ fn kept(home: &Path, day: &str) -> Result<Vec<MadeWish>, String> {
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e.to_string()),
     };
-    let made = serde_json::from_slice::<Made>(&bytes).ok().filter(|made| {
-        made.day == day && made.wishes.len() <= MADE_MAX && made.wishes.iter().enumerate().all(|(at, w)| own(at, w))
-    });
-    made.map(|made| made.wishes).ok_or_else(|| "they are not the made wishes of that day".to_string())
+    let made = serde_json::from_slice::<Made>(&bytes).ok();
+    let made = made.filter(|made| made.day == day && made.wishes.len() <= MADE_MAX);
+    let own = made.and_then(|made| made.wishes.into_iter().enumerate().map(|(at, w)| own(at, w)).collect());
+    own.ok_or_else(|| "they are not the made wishes of that day".to_string())
 }
 
 /// Keeps a wish the person made for `project` on `day` (today when none is named), in the working state. Nothing
@@ -125,7 +125,10 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
         Some(day) => parse(day)?.to_string(),
         None => jiff::Zoned::now().date().to_string(),
     };
-    let said = cleaned(typed).ok_or_else(|| refused("a wish is at most 200 characters, and this one is longer"))?;
+    let said = cleaned(typed).map_err(|why| match why {
+        Unkept::Long => refused("a wish is at most 200 characters, and this one is longer"),
+        Unkept::Changing => refused(CHANGING),
+    })?;
     if said.is_empty() {
         return Err(refused("a wish needs words, and nothing is left of these once cleaned"));
     }

@@ -7,6 +7,8 @@
 mod delivery;
 #[path = "f35/lock.rs"]
 mod lock;
+#[path = "f35/still.rs"]
+mod still;
 mod support;
 
 use std::ffi::OsString;

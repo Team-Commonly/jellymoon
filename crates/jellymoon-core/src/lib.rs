@@ -19,6 +19,7 @@ mod redact;
 mod ruling;
 mod session;
 mod shapes;
+mod still;
 mod tap;
 mod uninstall;
 mod wish;

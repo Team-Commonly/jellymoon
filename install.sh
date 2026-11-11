@@ -15,7 +15,9 @@
 set -eu
 
 RELEASE_URL=https://github.com/Team-Commonly/jellymoon/releases/latest/download
-tmp="" new_app="" new_bin=""
+# The oldest macOS the app is built for. app/macos/bundle.sh reads this line into the bundle's Info.plist.
+MIN_MACOS=11.0
+tmp="" new_app="" new_bin="" old_app=""
 
 say() { printf '%s\n' "$*"; }
 die() {
@@ -23,8 +25,17 @@ die() {
   exit 1
 }
 
-# Runs on every exit: the download folder and anything half placed go, whether the install worked or not.
+# The bundle an update moved aside. With no bundle in its place the update stopped half way, and the old one goes
+# back; with one in place the update is done, and the old one is deleted.
+settle() {
+  [ -n "$old_app" ] && [ -e "$old_app" ] || return 0
+  if [ -e "$app_dir/Jellymoon.app" ]; then rm -rf "$old_app"; else mv "$old_app" "$app_dir/Jellymoon.app"; fi
+}
+
+# Runs on every exit: the old app goes back if the new one is not in place, and the download folder and anything
+# half placed go, whether the install worked or not.
 cleanup() {
+  settle || true
   [ -z "$tmp" ] || rm -rf "$tmp"
   [ -z "$new_app" ] || rm -rf "$new_app"
   [ -z "$new_bin" ] || rm -f "$new_bin"
@@ -73,8 +84,11 @@ download() {
   xattr -dr com.apple.quarantine "$tmp/unpacked" 2>/dev/null || true
 }
 
-# Each piece is copied next to where it goes and then renamed over the old one, so a copy that stops half way
-# leaves the old install as it was.
+# Each piece is copied next to where it goes, so a copy that stops half way changes nothing. The command is then
+# renamed over the old one. A folder cannot be renamed over a folder that holds files, so the app takes three steps:
+# the old bundle is moved aside under a name of ours in the same folder, the new one is moved in, and the old one is
+# deleted. If the script stops between the two moves, by a failure or an interrupt, `cleanup` moves the old bundle
+# back; if it is killed outright, the next run does, before anything else.
 place() {
   mkdir -p "$app_dir" "$bin_dir"
   new_app=$app_dir/.Jellymoon.app.new new_bin=$bin_dir/.jellymoon.new
@@ -82,9 +96,26 @@ place() {
   cp -R "$tmp/unpacked/Jellymoon.app" "$new_app"
   cp "$tmp/unpacked/jellymoon" "$new_bin"
   chmod 755 "$new_bin"
-  rm -rf "$app_dir/Jellymoon.app"
+  if [ -e "$app_dir/Jellymoon.app" ] || [ -L "$app_dir/Jellymoon.app" ]; then
+    mv "$app_dir/Jellymoon.app" "$old_app"
+  fi
   mv "$new_app" "$app_dir/Jellymoon.app"
+  settle
   mv -f "$new_bin" "$bin_dir/jellymoon"
+}
+
+# Refuses, before anything is downloaded, a Mac the app cannot start on and a target that is not ours to replace.
+refuse_odd_targets() {
+  macos=$(sw_vers -productVersion 2>/dev/null || true)
+  case "${macos%%.*}" in
+    '' | *[!0-9]*) die "could not read this Mac's macOS version; nothing was installed" ;;
+  esac
+  # Only the first number is compared: the minimum is a whole release.
+  [ "${macos%%.*}" -ge "${MIN_MACOS%%.*}" ] ||
+    die "Jellymoon needs macOS $MIN_MACOS or newer and this Mac has $macos; nothing was installed"
+  # `mv` would put the new command inside a folder of that name, or inside the folder a link of that name points at.
+  [ ! -d "$bin_dir/jellymoon" ] ||
+    die "$bin_dir/jellymoon is a folder, not the jellymoon command: move it away and run this again; nothing was installed"
 }
 
 main() {
@@ -94,11 +125,14 @@ main() {
   base=${JELLYMOON_RELEASE_URL:-$RELEASE_URL}
   app_dir=${JELLYMOON_APP_DIR:-$HOME/Applications}
   bin_dir=${JELLYMOON_BIN_DIR:-$HOME/.local/bin}
-  did=installed
-  [ ! -e "$app_dir/Jellymoon.app" ] || did=updated
-
   trap cleanup EXIT
   trap 'exit 1' HUP INT TERM
+  # First of all, an old bundle that a killed run left moved aside goes back where it was.
+  old_app=$app_dir/.Jellymoon.app.old
+  settle
+  did=installed
+  [ ! -e "$app_dir/Jellymoon.app" ] || did=updated
+  refuse_odd_targets
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/jellymoon-install.XXXXXX")
   download
   place

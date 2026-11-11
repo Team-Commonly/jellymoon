@@ -140,8 +140,19 @@ mod mac {
             command
         }
         fn install(&self, release: &Path) -> Output {
-            let mut sh = self.command(Path::new("/bin/sh"), "/usr/bin:/bin:/usr/sbin");
+            self.install_on(release, "/usr/bin:/bin:/usr/sbin")
+        }
+        fn install_on(&self, release: &Path, path: &str) -> Output {
+            let mut sh = self.command(Path::new("/bin/sh"), path);
             run(sh.arg(repo().join("install.sh")).env("JELLYMOON_RELEASE_URL", format!("file://{}", release.display())))
+        }
+        /// Installs with a program of this name first on the script's `PATH`, standing in for the system's.
+        fn install_with(&self, release: &Path, name: &str, body: &str) -> Output {
+            let shims = self.root.path().join("shims");
+            fs::create_dir_all(&shims).unwrap();
+            fs::write(shims.join(name), format!("#!/bin/sh\n{body}\n")).unwrap();
+            ok(Command::new("chmod").arg("755").arg(shims.join(name)));
+            self.install_on(release, &format!("{}:/usr/bin:/bin:/usr/sbin", shims.display()))
         }
         fn version(&self) -> String {
             let plist = fs::read_to_string(self.app().join("Contents/Info.plist")).unwrap();
@@ -170,6 +181,9 @@ mod mac {
         assert!(ran.status.success(), "{}", text(&ran.stderr));
 
         assert_eq!(mac.version(), "1.0.0", "the archive for this Mac's chip, not the other one");
+        // The bundle states the minimum system that install.sh checks for, read from the script's own line.
+        let plist = fs::read_to_string(mac.app().join("Contents/Info.plist")).unwrap();
+        assert!(plist.contains("<key>LSMinimumSystemVersion</key><string>11.0</string>"), "{plist}");
         assert_eq!(mac.names("home/Applications"), ["Jellymoon.app"]);
         assert_eq!(mac.names("home/.local/bin"), ["jellymoon"]);
         assert_eq!(mac.names("tmp"), Vec::<String>::new(), "the download folder is gone");
@@ -254,6 +268,50 @@ mod mac {
         assert_eq!(mac.names("home/Applications"), ["Jellymoon.app"]);
         assert_eq!(mac.names("home/.local/bin"), ["jellymoon"]);
         ok(Command::new("codesign").args(["--verify", "--strict"]).arg(mac.app()));
+    }
+
+    #[test]
+    fn an_update_that_stops_between_its_two_moves_leaves_the_old_app_in_place() {
+        let mac = Mac::new();
+        assert!(mac.install(&release(mac.root.path(), "one", "1.0.0")).status.success());
+        let two = release(mac.root.path(), "two", "2.0.0");
+
+        // An `mv` that fails when asked to move the new bundle in, after the old one was moved aside.
+        let fails = "case \"$1\" in */.Jellymoon.app.new) exit 1 ;; esac\nexec /bin/mv \"$@\"";
+        let stopped = mac.install_with(&two, "mv", fails);
+        assert_eq!(stopped.status.code(), Some(1), "{}", text(&stopped.stdout));
+        assert_eq!(mac.version(), "1.0.0");
+        assert_eq!(mac.names("home/Applications"), ["Jellymoon.app"], "the old app is back, the new copy is gone");
+        assert_eq!((mac.names("home/.local/bin"), mac.names("tmp")), (vec!["jellymoon".to_string()], Vec::new()));
+        ok(Command::new("codesign").args(["--verify", "--strict"]).arg(mac.app()));
+
+        // Killed outright between the moves, only the copy moved aside is left. The next run puts it back first,
+        // even a run that then finds nothing to install.
+        fs::rename(mac.app(), mac.home().join("Applications/.Jellymoon.app.old")).unwrap();
+        assert!(!mac.install(&mac.root.path().join("no-release")).status.success());
+        assert_eq!(
+            (mac.names("home/Applications"), mac.version().as_str()),
+            (vec!["Jellymoon.app".to_string()], "1.0.0")
+        );
+    }
+
+    #[test]
+    fn an_old_mac_and_a_folder_where_the_command_goes_are_refused_before_any_download() {
+        let mac = Mac::new();
+        let nowhere = mac.root.path().join("no-release");
+        let old = mac.install_with(&nowhere, "sw_vers", "echo 10.15.7");
+        assert!(
+            text(&old.stderr).contains("needs macOS 11.0 or newer and this Mac has 10.15.7"),
+            "{}",
+            text(&old.stderr)
+        );
+        assert_eq!((old.status.code(), mac.names("home")), (Some(1), Vec::new()));
+
+        fs::create_dir_all(mac.binary().join("kept")).unwrap();
+        let folder = mac.install(&nowhere);
+        assert!(text(&folder.stderr).contains("is a folder, not the jellymoon command"), "{}", text(&folder.stderr));
+        let left = (mac.names("home/.local/bin/jellymoon"), mac.names("home/Applications"));
+        assert_eq!(left, (vec!["kept".to_string()], Vec::new()));
     }
 
     #[test]

@@ -67,9 +67,9 @@ max_file_lines = 400
 # interrupt, 23; `run stop` and its parsing, 7; and 34 are what moving F39's test folder into `tests/f39/world.rs`,
 # so that F40 starts runs in it too, added to it (a run started and left going, and its end read).
 # The made-up agent's number named where nothing can be made deaf, for Windows, raised the binary by 2.
-# The fixes after F40's gate, round 1, raised core by 57 and the binary by 470, nearly all of it tests at the binary.
+# The fixes after F40's gate, round 1, raised core by 57 and the binary by 482, nearly all of it tests at the binary.
 "crates/jellymoon-core" = 5670
-"crates/jellymoon" = 8279
+"crates/jellymoon" = 8291
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

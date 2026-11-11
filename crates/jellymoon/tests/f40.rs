@@ -12,6 +12,8 @@ mod deaf;
 mod denied;
 #[path = "f40/nothing.rs"]
 mod nothing;
+#[path = "f40/obeys.rs"]
+mod obeys;
 #[path = "f40/pipe.rs"]
 mod pipe;
 #[path = "f40/races.rs"]
@@ -69,6 +71,25 @@ impl World {
         let going = self.going(more, &["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
         wait_for(&self.at("rec").join("started"));
         (going, self.kept(wish)["run"].as_str().unwrap().to_string())
+    }
+
+    /// A run whose agent has done something about signals first: a script of the made-up agent's that starts it
+    /// again through `perl`. None where no such agent can be started, with the reason said.
+    pub fn minded(&self, script: (&str, usize), grace: u64, wish: &str, repo: &Path) -> Option<(Child, String)> {
+        self.play(script.0, script.1);
+        let args = ["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
+        let going = self.going(&[ms(GRACE, grace)], &args);
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !self.at("rec").join("started").exists() {
+            if let Some(why) = self.rec("cannot") {
+                assert_eq!(printed(&ended(going))["outcome"], "failed");
+                support::skipped(&why);
+                return None;
+            }
+            assert!(Instant::now() < deadline, "the agent never started");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Some((going, self.kept(wish)["run"].as_str().unwrap().to_string()))
     }
 
     /// A run that was cut off: its `jellymoon run` is killed while the made-up agent goes on writing a file in the

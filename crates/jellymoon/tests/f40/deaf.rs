@@ -9,25 +9,12 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, GRACE, World, ended, ms, printed, refused, said_cancelled, wait_for, world};
-use crate::support::skipped;
+use super::{World, ended, printed, refused, said_cancelled, wait_for, world};
 
-/// A run whose agent has made itself deaf, by `number`: to the stop signal (0), the interrupt (1) or both (2). None
-/// where no such agent can be started, with the reason said.
+/// A run whose agent has made itself deaf, by `number`: to the stop signal (0), the interrupt (1) or both (2). 3
+/// is deaf to the interrupt and leaves `heard` when the stop signal reaches it.
 fn deaf(w: &World, number: usize, grace: u64, wish: &str, repo: &Path) -> Option<(Child, String)> {
-    w.play("deaf", number);
-    let going = w.going(&[ms(GRACE, grace)], &["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !w.at("rec").join("started").exists() {
-        if let Some(why) = w.rec("cannot") {
-            assert_eq!(printed(&ended(going))["outcome"], "failed");
-            skipped(&why);
-            return None;
-        }
-        assert!(Instant::now() < deadline, "the deaf agent never started");
-        thread::sleep(Duration::from_millis(10));
-    }
-    Some((going, w.kept(wish)["run"].as_str().unwrap().to_string()))
+    w.minded(("deaf", number), grace, wish, repo)
 }
 
 #[test]

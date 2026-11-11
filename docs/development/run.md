@@ -319,7 +319,9 @@ a run whose record has no end, and whose run nothing holds was cut off. The next
 
 A pid is given out again once its process is gone, so the pid alone is never signalled. The record keeps the
 child's **mark**, when the process started, and the pid is signalled only while its mark is the recorded one; it
-is read just before the signal. A record with no pid or no mark kills nothing.
+is read just before the signal. A record with no pid or no mark kills nothing. That is the whole boundary: a
+process is signalled when its pid and its start mark are the record's, whatever that process is, and whoever can
+write the home, and so the record, can already signal it.
 
 | | What is guaranteed | What is not |
 |---|---|---|
@@ -392,8 +394,9 @@ empty `runs/no-hooks`), and they stay.
   hear it is signalled and killed all the same.
 - A stop asked before `jellymoon run` has named its run on the wish (while it finds the harness and makes the
   copy) is refused, since the wish has no run yet, and the run then starts. Asking again stops it.
-- A stop that finds its request before the child is started ends the run as cancelled with no child: no test
-  reaches that moment, which lasts from the wish naming its run to the child's start.
+- A stop that finds its request before the child is started ends the run as cancelled with no child. That moment
+  lasts from the wish naming its run to the child's start; `tests/f40/request.rs` reaches it by leaving the
+  request as soon as the run's folder is there.
 - A run whose `jellymoon run` is alive and stuck is not ended by `run stop` over its head: the stop says the run
   has not ended yet. Killing that `jellymoon run` makes it a cut-off run, which the next stop or page ends.
 - A cancelled run's `denied` is 0 when the stop came before the result line: what was denied until then is in

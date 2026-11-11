@@ -71,9 +71,23 @@ fn groups(clean: &str) -> Option<Vec<(Range<usize>, Value)>> {
     list.iter().map(placed).collect()
 }
 
-/// Whether `text` already holds an entry that runs `program hook`, however it is laid out.
+/// Whether settings with no comments name `program` in a handler under any event; with `whole`, as `program hook`.
+/// None when the text is not a JSON object.
+fn named(clean: &str, program: &str, whole: bool) -> Option<bool> {
+    let top: HashMap<String, Value> = serde_json::from_str(clean).ok()?;
+    let Some(events) = top.get("hooks").and_then(Value::as_object) else { return Some(false) };
+    Some(events.values().filter_map(Value::as_array).flatten().any(|group| runs(group, program, whole)))
+}
+
+/// Whether `text` already holds an entry that runs `program hook`, however it is laid out and under any event.
 fn holds(text: &str, program: &str) -> bool {
-    groups(&without_comments(text)).is_some_and(|groups| groups.iter().any(|(_, group)| runs(group, program, true)))
+    named(&without_comments(text), program, true) == Some(true)
+}
+
+/// Whether `text` can be written as settings once the entry is out: it is empty or a JSON object, and no handler
+/// names `program` any more.
+fn sound(text: &str, program: &str) -> bool {
+    text.trim().is_empty() || named(&without_comments(text), program, false) == Some(false)
 }
 
 /// Adds one entry to `settings` that runs `program hook` with no shell. A missing or empty file becomes one object
@@ -184,15 +198,19 @@ fn without_comments(text: &str) -> String {
 }
 
 /// Puts `text` in the file at `path`, whole or not at all. It is written to a new file beside it (made new, never
-/// over a file that is there), synced, given the old file's permissions, and renamed over the old one. A link is
-/// followed first, so the link stays and what it points at is replaced. On any failure the new file is removed and
-/// the old one is as it was.
+/// over a file that is there, and for the person alone until it has the old file's mode), synced, and renamed over
+/// the old one. A link is followed first, so the link stays and what it points at is replaced. When a step fails the
+/// new file is removed and the old one is as it was. A run that is killed in between leaves the new file there.
 fn replace(path: &Path, text: &str) -> io::Result<()> {
     let target = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let mut name = target.file_name().ok_or(ErrorKind::InvalidInput)?.to_os_string();
     name.push(format!(".jellymoon-{}", process::id()));
     let new = target.with_file_name(name);
-    let file = OpenOptions::new().write(true).create_new(true).open(&new)?;
+    let mut open = OpenOptions::new();
+    open.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
+    let file = open.open(&new)?;
     let filled = fill(file, text, &target).and_then(|()| fs::rename(&new, &target));
     if filled.is_err() {
         let _ = fs::remove_file(&new);
@@ -202,30 +220,43 @@ fn replace(path: &Path, text: &str) -> io::Result<()> {
 
 fn fill(mut file: File, text: &str, target: &Path) -> io::Result<()> {
     file.write_all(text.as_bytes())?;
+    // Only where a mode says who may read: elsewhere it is the read-only mark, which would keep a new file that
+    // could not be renamed from being removed.
+    #[cfg(unix)]
     if let Ok(old) = fs::metadata(target) {
         file.set_permissions(old.permissions())?;
     }
+    #[cfg(not(unix))]
+    let _ = target;
     file.sync_all()
 }
 
-/// Takes out the text [`install_hook`] put in, and nothing else. With nothing installed, or with the settings file or
-/// the entry gone, it changes nothing. When the exact text is gone but one group in the file is exactly the entry
-/// (the file was laid out anew), that group is cut out. Otherwise the program is still named in the file in some
-/// other shape: the file is left alone and the person is told to remove the entry.
+/// Takes out the entry [`install_hook`] put in, and nothing else. With nothing installed, or with the settings file
+/// or the entry gone, it changes nothing. The recorded text is removed when that leaves sound settings; otherwise
+/// (the file was laid out anew, or something was added beside the entry) the one group that is exactly the entry is
+/// cut out. A file that would not be a JSON object afterwards, or would still name the program, is never written:
+/// the file is left alone, the record is kept and the person is told to remove the entry.
 pub fn remove_hook(home: &Path) -> Result<HookState, Error> {
     let kept = home.join("hook.json");
     let Some(record) = record(&kept) else {
         return Ok(HookState { installed: false, changed: false });
     };
+    let exact = |text: &str| {
+        let once = !record.inserted.is_empty() && text.matches(&record.inserted).count() == 1;
+        Some(text.replacen(&record.inserted, "", 1)).filter(|rest| once && sound(rest, &record.program))
+    };
     let rest = match fs::read_to_string(&record.settings) {
-        Ok(text) if !record.inserted.is_empty() && text.matches(&record.inserted).count() == 1 => {
-            Some(text.replacen(&record.inserted, "", 1))
-        }
-        Ok(text) => cut(&text, &record.program)?,
+        Ok(text) => match exact(&text) {
+            Some(rest) => Some(rest),
+            None => cut(&text, &record.program)?,
+        },
         Err(e) if e.kind() == ErrorKind::NotFound => None,
         Err(e) => return Err(Error::Settings(e)),
     };
     if let Some(rest) = &rest {
+        if !sound(rest, &record.program) {
+            return Err(Error::Changed);
+        }
         let done = if record.created && rest.is_empty() {
             fs::remove_file(&record.settings)
         } else {
@@ -237,23 +268,28 @@ pub fn remove_hook(home: &Path) -> Result<HookState, Error> {
     Ok(HookState { installed: false, changed: rest.is_some() })
 }
 
-/// `text` without the one group that is exactly the entry, cut out with the comma and the space up to its neighbour.
-/// None when no group names the program at all: the entry is gone already.
+/// `text` without the one group of the event's list that is exactly the entry. The group goes with one comma and the
+/// blank space beside it: the comma after it, or the one before it when it is last. A comment is never removed, so a
+/// comment between the group and its comma leaves text that is not JSON, which the caller refuses. None when no
+/// handler under any event names the program: the entry is gone already.
 fn cut(text: &str, program: &str) -> Result<Option<String>, Error> {
     if text.trim().is_empty() {
         return Ok(None);
     }
-    let groups = groups(&without_comments(text)).ok_or(Error::Changed)?;
-    let exact: Vec<usize> = (0..groups.len()).filter(|at| groups[*at].1 == entry(program)).collect();
-    let [at] = exact[..] else {
-        let named = groups.iter().any(|(_, group)| runs(group, program, false));
-        return if named { Err(Error::Changed) } else { Ok(None) };
+    let clean = without_comments(text);
+    let groups = groups(&clean).unwrap_or_default();
+    let exact: Vec<&Range<usize>> = groups.iter().filter(|(_, group)| *group == entry(program)).map(|g| &g.0).collect();
+    let [place] = exact[..] else {
+        return if named(&clean, program, false) == Some(false) { Ok(None) } else { Err(Error::Changed) };
     };
-    let place = &groups[at].0;
-    let span = match (at.checked_sub(1).and_then(|before| groups.get(before)), groups.get(at + 1)) {
-        (_, Some((next, _))) => place.start..next.start,
-        (Some((before, _)), None) => before.end..place.end,
-        (None, None) => place.clone(),
+    let blank = |c: char| c.is_ascii_whitespace();
+    let (before, after) = (text[..place.start].trim_end_matches(blank), text[place.end..].trim_start_matches(blank));
+    let span = if let Some(next) = after.strip_prefix(',') {
+        place.start..text.len() - next.trim_start_matches(blank).len()
+    } else if before.ends_with(',') {
+        before.len() - 1..place.end
+    } else {
+        place.clone()
     };
     let mut rest = text.to_string();
     rest.replace_range(span, "");

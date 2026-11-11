@@ -5,6 +5,8 @@
 
 #[path = "f29/edges.rs"]
 mod edges;
+#[path = "f29/removal.rs"]
+mod removal;
 mod support;
 
 use std::ffi::OsString;

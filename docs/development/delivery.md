@@ -80,22 +80,38 @@ byte stays: comments, key order, spacing, line ends. The text, the program and t
 along with anything the person changed elsewhere in between. Both print `{"installed","changed"}`.
 
 **The file is replaced whole.** The new content is written to a new file beside the settings,
-`<name>.jellymoon-<process id>`, opened create-new so a file that is there is never written over. It is synced,
-given the old file's permissions, and renamed over the old one. A link is resolved first, so the link stays and the
-file it points at is replaced. If any step fails the new file is removed, the settings are as they were, and the
-command exits 1; an install that failed leaves no record, and a removal that failed keeps its record to try again.
+`<name>.jellymoon-<process id>`, opened create-new so a file that is there is never written over, and readable by the
+person alone (0600) on Unix until it is given the old file's mode. It is synced and renamed over the old one. A link
+is resolved first, so the link stays and the file it points at is replaced; a link that points at nothing is itself
+replaced by a regular file. A read-only settings file is replaced too, with its mode kept (on Windows such a
+file may refuse the rename; then the command fails and the file is as it was). Hard links to the old file and its extended attributes are not carried over. When a step
+fails the new file is removed, the settings are as they were, and the command exits 1; an install that failed leaves
+no record, and a removal that failed keeps its record to try again. A run that is killed between making the new file
+and renaming it leaves that file there. Nothing sweeps it; the settings themselves are whole either way.
 
 - A missing file is made, and removed again by uninstall. An empty file gets one object and is emptied again.
 - A file that is not a JSON object (`//` and `/* */` comments allowed), or whose `hooks` or `PostToolUse` are not an
   object and a list, is refused with exit 1 and left as it was.
-- A file that already holds an entry running this program with `["hook"]`, in any layout, is left alone: install
+- A file that already holds an entry running this program with `["hook"]`, in any layout and under any event, is
+  left alone: install
   records it and prints `"changed":false`. So a file another program laid out anew never gets a second entry.
   Installing into a second settings file while the first holds the entry is refused.
-- When the exact text is gone (the file was laid out anew), uninstall looks for a `PostToolUse` group that is exactly
-  the entry and cuts it out with its comma. The `"hooks"` and `"PostToolUse"` keys install added stay, empty:
-  nothing says they were not the person's. When the program is named in some other shape (the person edited the
-  entry), uninstall changes nothing and says to remove it by hand.
-- With the settings file gone, or no group naming the program, uninstall forgets the record and exits 0.
+
+**Removal never writes a file that is not a JSON object**, or one that still names the program. In order:
+
+1. With no record, or with the settings file gone, nothing is changed and it exits 0.
+2. The recorded text is removed when it is in the file exactly once and what is left is sound. This is the usual
+   case, and it works wherever the person moved the text.
+3. Otherwise (the file was laid out anew, or something was added beside the entry so that removing the text would
+   orphan a comma) uninstall looks for the one `PostToolUse` group that is exactly the entry and cuts it out with
+   one comma and the blank space beside it: the comma after it, or the one before it when it is last. A comment is
+   never removed. The `"hooks"` and `"PostToolUse"` keys install added stay, empty: nothing says they were not the
+   person's.
+4. When no handler under any event names the program (the person took the entry out, or `hooks` is no longer an
+   object), there is nothing to remove: the record is forgotten and it exits 0 with `"changed":false`.
+5. Anything else is left for the person: the file is not touched, the record is kept, and it exits 1 saying to
+   remove the entry by hand. That is an entry edited into another shape, one moved under another event and laid out
+   anew, a second copy of it, a comment between the entry and its comma, or a file that is not JSON.
 
 `jellymoon uninstall` ([install.md](install.md)) removes the hook the same way before the app and the binary. An
 entry the person edited is left for them, the rest is still removed, and the JSON says `"hook_by_hand":true`.
@@ -118,6 +134,4 @@ JELLYMOON_HARNESS_REAL=1 cargo test -p jellymoon --test f29 -- --ignored harness
   at every tool call. The version that added `args` is not in the documentation.
 - **A ruling goes to every session**, whatever project it runs in. Whether it should go only to the clash's project
   is not decided.
-- **Windows and Codex.** The tests are written to pass on Windows; no real session there has been tried, and a
-  settings file marked read-only there cannot be renamed over, so install fails and can leave its new file beside
-  it. Codex has no hook yet.
+- **Windows and Codex.** The tests are written to pass on Windows; no real session there has been tried. Codex has no hook yet.

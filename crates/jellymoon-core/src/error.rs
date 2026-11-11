@@ -71,7 +71,7 @@ impl fmt::Display for Error {
                 write!(f, "the hook is installed in another settings file; uninstall it first. Nothing was changed")
             }
             Error::Changed => {
-                write!(f, "the installed hook entry was edited since; remove it by hand. Nothing was changed")
+                write!(f, "the installed hook entry cannot be taken out safely; remove it by hand. Nothing was changed")
             }
         }
     }

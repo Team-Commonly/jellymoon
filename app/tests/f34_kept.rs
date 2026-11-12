@@ -29,21 +29,11 @@ fn a_kept_page_comes_out_when_the_logs_cannot_be_read_with_a_note_that_says_so()
 }
 
 // The order the window follows, step by step: the kept page before any log is opened, then the count, then the call.
-// These steps run in this process, whose time zone a test cannot set. So the day's lines are stamped at noon of the
-// day in this system's zone, whichever it is, and the program that keeps the first page is run in that zone too
-// and not in the world's: at noon UTC the test read nothing from twelve hours ahead of UTC on.
+// These steps run in this process, whose time zone a test cannot set: the world's day is typed at noon in this
+// system's zone, and the program that keeps the first page is run in that zone too (`support/day.rs`).
 #[test]
 fn a_kept_page_is_shown_before_the_logs_are_opened_and_stays_with_a_note_while_the_day_is_read_again() {
-    let mut world = world();
-    world.vars.retain(|(name, _)| *name != "TZ");
-    world.vars.extend(env::var_os("TZ").map(|zone| ("TZ", zone)));
-    let noon = |second: i8, project: &str, text: &str| {
-        let day: jiff::civil::Date = DAY.parse().unwrap();
-        let at = day.at(12, 0, second, 0).to_zoned(jiff::tz::TimeZone::system()).unwrap().timestamp();
-        said(&at.to_string(), &format!("/work/{project}"), text)
-    };
-    write_log(&world, "-work-alpha/s1.jsonl", &[noon(0, "alpha", FIRST), noon(1, "alpha", SECOND)]);
-    write_log(&world, "-work-private-notes/s2.jsonl", &[noon(2, "private-notes", "dear diary")]);
+    let world = world();
     shown(&world, &[]);
     assert!(called(&world));
     let logs = world.dir.path().join("logs");

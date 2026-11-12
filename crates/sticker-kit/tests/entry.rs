@@ -18,10 +18,12 @@ fn made(text: &str, option: Option<usize>) -> Option<Made> {
 }
 
 #[test]
-fn enter_gives_the_text_and_the_chosen_option_and_clears_the_entry() {
+fn enter_gives_the_text_and_the_chosen_option_and_the_entry_is_empty_once_they_are_kept() {
     let mut entry = typed("  water the basil ");
     entry.next_option();
     assert_eq!(entry.enter(), made("water the basil", Some(1)));
+    assert_eq!(entry.text(), "  water the basil ", "the words stay until they are kept");
+    entry.answer(true);
     assert_eq!((entry.text(), entry.caret(), entry.chosen()), ("", 0, Some(1)), "the option stays chosen");
     assert_eq!(entry.enter(), None, "nothing typed is nothing entered");
     entry.replace(None, "   ");
@@ -212,6 +214,29 @@ fn a_scene_s_entry_is_held_to_a_count_of_options_and_a_cap() {
     composing.mark(None, "cd", None);
     composing.fit(&entry(3, 3));
     assert_eq!((composing.text(), composing.marked(), composing.caret()), ("abc", None, 3));
+}
+
+#[test]
+fn the_chosen_option_is_kept_by_its_name_when_the_options_change() {
+    let names = |names: &[&str]| names.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+    let named =
+        |options: &[String]| Entry { id: "wish".into(), hint: String::new(), options: options.to_vec(), most: 80 };
+    let was = names(&["garden", "kitchen", "letters"]);
+    let mut state = EntryState::of(&named(&was));
+    state.choose(1);
+    let now = names(&["letters", "garden", "kitchen"]);
+    state.keep_option(&was, &now);
+    state.fit(&named(&now));
+    assert_eq!(state.chosen(), Some(2), "kitchen is still chosen, where it now stands");
+    let fewer = names(&["letters", "garden"]);
+    state.keep_option(&now, &fewer);
+    state.fit(&named(&fewer));
+    assert_eq!(state.chosen(), Some(1), "a name that is gone leaves the place, held to the options there are");
+    // A name past the six that are offered is not offered, so it is not chosen.
+    let many = names(&["a", "b", "c", "d", "e", "f", "garden"]);
+    state.keep_option(&fewer, &many);
+    state.fit(&named(&many));
+    assert_eq!(state.chosen(), Some(1));
 }
 
 fn of(placed: &[Placed], kind: PieceKind) -> Vec<&Placed> {

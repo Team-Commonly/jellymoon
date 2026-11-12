@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use std::{fs, io};
 
 use jellymoon_app::today::{self, Asked, Today};
-use jellymoon_app::{lines, read, scene, wishing};
+use jellymoon_app::{lines, read, scene};
 use lexopt::prelude::*;
 use sticker_kit::{Theme, Viewport};
 
@@ -78,7 +78,7 @@ fn run() -> Result<String, Failure> {
                 Source::File(file) => (scene::scene(&page(file)?), None),
                 Source::Day(day) => {
                     let (scene, page) = day.last();
-                    (scene, wishing::entry(page.as_ref()))
+                    (day.with_stops(scene), day.entry(page.as_ref()))
                 }
                 Source::Waiting(date) => (today::waiting(date), None),
             };

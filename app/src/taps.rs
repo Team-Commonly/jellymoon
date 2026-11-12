@@ -37,9 +37,12 @@ pub struct OnShow {
 }
 
 impl OnShow {
-    /// The reading gave something new to show.
-    pub fn show(&mut self, next: &Next) {
-        (self.page, self.scene) = (next.page.clone(), next.scene.clone());
+    /// The reading gave something new to show: the scene to show, which is the reading's under the notes on show
+    /// that are about a wish or a stop.
+    pub fn show(&mut self, next: &Next) -> Scene {
+        self.scene = self.today.under(&self.scene, next.scene.clone());
+        self.page = next.page.clone();
+        self.scene.clone()
     }
 
     /// A tap on option `index` (from 0) of the note `note`: the scene to show now. None when no page is on show.

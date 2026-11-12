@@ -110,6 +110,12 @@ max_file_lines = 400
 # `run/never.rs`, a wish told that its run was never started, 70; `run/place.rs` grew by 22 over the folder
 # rules it took out of `run.rs` (a log's folder resolved once); the start lock and the careful take-back in
 # `copy.rs` and `copy/hold.rs` are 58; the asker's wait for the harness to begin, in `run/apart.rs`, 36.
+# F43 and the review of F42 raised core by 43: `wishable`, the projects of a page a wish can be made for (a name
+# `--project` takes, not switched off), and `going`, the made wishes whose run is going, with their unit test.
+# The gate on F43 raised core by 74: a chip and a wish from a page asked of the reader's own lookup
+# (`reader::typed_in`, `wish_offered`), the start of a wish cleaned for its note, and their unit tests.
+# The second gate on F43 raised it by 14: a log read no further than its length when opened (7, 5 of them its
+# comment), and the test that a folder counts only as a full path, by its last name (7).
 # The third pass on F41 raised core by 146: tests' seams that do not need an idle machine are 39 (`busy.rs`
 # 22, a limit counted from a file in `call.rs`, `copy/git.rs` and `run/child.rs`); the wish asked and named
 # behind the lock the runs are counted behind, 28 (`run.rs`, `run/cap.rs`); the careful take-back's three rules
@@ -118,7 +124,7 @@ max_file_lines = 400
 # last name that is no link, in `run/place.rs`, 5.
 # A copy's `gitdir` file read as git reads a path from the copy's git folder, and git told to write a whole
 # path, raised core by 12 (`copy/record.rs`, `copy/git.rs`) and the binary by 21 (its test, `tests/f41/left.rs`).
-"crates/jellymoon-core" = 6612
+"crates/jellymoon-core" = 6743
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -137,12 +143,14 @@ max_file_lines = 400
 # The fixes after F41's gate raised the binary by 419, all but 4 of them tests at the binary:
 # `tests/f41/left.rs` 139, `line.rs` 78, `named.rs` 65,
 # `never.rs` 64, 30 in `refused.rs`, and what the made-up asker and agent take and leave for them.
+# The second gate on F43 raised it by 114, all of it the test that a day comes back from a log that grows:
+# `tests/growing_log.rs` (72) and the made-up session that goes on typing, `tests/support/fake_writer.rs` (42).
 # The third pass on F41 raised the binary by 216, all of it tests: `tests/f41/left.rs` 98 (the start lock
 # asked again, a run's own lock held, a link at the copy's name, a record that names another repo),
 # `named.rs` 45 (another spelling, a link led elsewhere after the lookup), `cap.rs` 39 (four commands for one
 # wish), `tests/f41.rs` 14 (the asker's wait, long and short), and 20 over F38, F39 and F40 where a wait on the
 # clock became a wait on a file.
-"crates/jellymoon" = 10201
+"crates/jellymoon" = 10315
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -184,6 +192,13 @@ max_file_lines = 400
 # The door reading art only as the renderer does raised it by 366: 149 are `tests/alike.rs` and 135 are
 # `theme/path_cost.rs` (a path followed command by command: its reach, each kind's count, an arc's flags); the
 # rest is a name's case, the form of a `viewBox`, a size stated once, and the roots `tests/draw.rs` rasterises.
+# The review of F42 raised it by 129: 69 are tests; the chosen option kept by its name and refused words put back
+# (27), and a picture of a page with its entry, typed in or not (`src/draw/headless.rs`, 33).
+# The gate on F43 raised it by 98: 76 are tests (`tests/entry_waits.rs`, `tests/entry_draw.rs`); the entry that
+# waits with its words for its answer and gives the chosen option by its name is 22.
+# The second gate on F43 raised it by 117: 93 are tests in `tests/entry_draw.rs` (an entry taken away with its
+# words, an answer's words, Escape while it waits, a page with no handler); an entry that holds words staying on
+# its page until it is empty, and no key while it waits, are 24.
 # The door reading art with the renderer's parser (ADR 0015) lowered it by 67: the tag scanner and
 # `theme/path_cost.rs` are gone (`src` lost 297), and the tests hold the tree's limits and `tests/art_draw.rs`.
 # The seven findings of that change's review raised it by 607, 384 of them tests. `theme/svg_text.rs` (126) holds what
@@ -194,7 +209,7 @@ max_file_lines = 400
 # at their edges (`tests/limits.rs`, 144), the rows and the review's four slow pictures (`tests/cost.rs`, 141), the
 # worst files read and drawn on a small stack (`tests/art_draw.rs`, 59) and five heaviest themes where there were
 # two (`tests/draw.rs`, 28).
-"crates/sticker-kit" = 8020
+"crates/sticker-kit" = 8364
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -214,8 +229,16 @@ max_file_lines = 400
 # start, `tests/support/wisher.rs`); the rest is `wishing.rs` (155: a wish carried to core, the asking for its run,
 # the look), the window's entry, asking and look (66), and the entry in `layout`.
 # The kept page's test stamping its day at noon in the system's zone, and run in that zone, raised it by 8.
+# F43 and the review of F42 raised the app by 735: 443 are tests (`tests/f43.rs`, `tests/f42/notes.rs`, and the
+# made-up window's world moved out of `f42/run.rs` into `tests/support/wished.rs`); `stopping.rs`, the tap that
+# stops a run, is 149; the wish carried to core off the window's thread, its notes kept and its chips asked of
+# core, 75 in `wishing.rs` and 42 in the window; the example's picture of the entry, 22.
+# The gate on F43 raised it by 265: 226 are tests (`tests/f43/notes.rs` is 123, `tests/f42/notes.rs` grew by
+# 54); the entry asked of core off the window's thread and answered, and a tap on a choice that is gone, are 39.
+# The second gate on F43 raised it by 16: the test of every folder switched off under typed words (20), and the
+# made-up day typed at noon in the system's zone for every world, less what the kept page's test did alone.
 # The line in `tests/bundle.rs` saying why the script is started as a program, on a Mac only, raised it by 1.
-"app" = 4207
+"app" = 5223
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

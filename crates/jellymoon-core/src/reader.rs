@@ -47,11 +47,21 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
 /// The folders of one name that something was typed in on the day, for a run to find its wish's repo (F39). They are
 /// the log's own text: what is done with one is up to the caller, and none is ever printed.
 pub(crate) fn folders(options: &DayOptions, name: &str) -> Result<Vec<PathBuf>, Error> {
+    Ok(typed_in(options)?.into_iter().filter(|folder| is_named(folder, name)).collect())
+}
+
+/// Whether a folder's last name is `name`: the one way a folder is matched to a project's name.
+pub(crate) fn is_named(folder: &Path, name: &str) -> bool {
+    folder.file_name().is_some_and(|last| last == name)
+}
+
+/// Every folder something was typed in on the day, each once: the ones no name switches off, as the reader
+/// switches a folder off, by its whole path.
+pub(crate) fn typed_in(options: &DayOptions) -> Result<Vec<PathBuf>, Error> {
     let mut found: Vec<PathBuf> = Vec::new();
     for (_, _, folder) in typed_on(options, &TimeZone::system(), LINE_MAX)?.1 {
         let folder = PathBuf::from(folder).components().collect::<PathBuf>();
-        let named = folder.is_absolute() && folder.file_name().is_some_and(|last| last == name);
-        if named && folder.as_os_str().len() <= session::FOLDER_MAX && !found.contains(&folder) {
+        if folder.is_absolute() && folder.as_os_str().len() <= session::FOLDER_MAX && !found.contains(&folder) {
             found.push(folder);
         }
     }

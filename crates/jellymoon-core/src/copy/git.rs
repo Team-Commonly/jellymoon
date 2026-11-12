@@ -41,7 +41,7 @@ const ENVIRONMENT: &[&str] = &[
 /// Settings given on every command line, where they win over every config file: no file-system monitor program, no
 /// signing program, no command run in a submodule on checkout, and no transport, so no fetch of a missing object can
 /// start ssh, a credential helper or a remote helper. `core.hooksPath` is given beside them, as an empty folder.
-/// And a copy's `gitdir` file is written as a whole path, which is how a look knows the copy (`record::ours`).
+/// And a copy's `gitdir` file is written as a whole path, which is how a look knows the copy (`record::asked`).
 const OFF: &[&str] = &[
     "core.fsmonitor=false",
     "commit.gpgSign=false",

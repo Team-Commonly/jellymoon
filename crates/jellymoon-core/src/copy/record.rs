@@ -20,26 +20,52 @@ pub(super) struct Record {
     pub failed: Option<u64>,
     #[serde(default)]
     pub found: bool,
+    /// When a look first could not take the left copy back, in nanoseconds (`take_back_left`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unasked: Option<u64>,
 }
 
-/// Whether the repo a record names lists the copy `root/<run>` as a worktree of its own: the copy's git folder is
-/// inside the repo's, and its `gitdir` file, which git wrote when it made the worktree, names the copy's `.git`.
-/// A record is a file anyone who can write the home can write, so one that names another repo is not acted on
-/// in that repo. The file is read only when it is a plain file no longer than a path. A path in it that does not
+/// What a look learns of a left copy from the repo its record names.
+#[derive(PartialEq, Eq)]
+pub(super) enum Listed {
+    /// The repo lists the copy `root/<run>` as a worktree of its own.
+    Ours,
+    /// The repo answers and does not list it: nothing is done in that repo.
+    Not,
+    /// The repo could not be asked: it is not where the record says, or cannot be read.
+    Unasked,
+}
+
+/// Asks the repo a record names whether it lists the copy `root/<run>` as a worktree of its own: the copy's git
+/// folder is inside the repo's, and its `gitdir` file, which git wrote when it made the worktree, names the copy's
+/// `.git`. A record is a file anyone who can write the home can write, so one that names another repo is not acted
+/// on in that repo. The file is read only when it is a plain file no longer than a path. A path in it that does not
 /// start at a root is read from the copy's git folder, as git reads one it wrote with `worktree.useRelativePaths`.
 /// "Inside" is asked of the two folders as the system resolves them, links and `..` followed, and never of
 /// their names: a name can lead out of the repo it starts in.
-pub(super) fn ours(record: &Record, root: &Path, run: &str) -> bool {
+///
+/// A repo that resolves and holds no such git folder, or no such file, has answered. One that does not resolve,
+/// and anything on the way that cannot be read for another reason than not being there, has not been asked.
+pub(super) fn asked(record: &Record, root: &Path, run: &str) -> Listed {
+    let (Ok(repo), Ok(root)) = (fs::canonicalize(&record.repo), fs::canonicalize(root)) else {
+        return Listed::Unasked;
+    };
     let file = record.own.join("gitdir");
-    let plain = fs::symlink_metadata(&file).is_ok_and(|meta| meta.is_file() && meta.len() <= 8192);
-    let named = if plain { fs::read_to_string(&file).unwrap_or_default() } else { String::new() };
-    let named = record.own.join(named.trim_end_matches(['\r', '\n']));
-    let copy = named.parent().filter(|_| plain);
-    let same = |one: &Path| fs::canonicalize(one).is_ok_and(|one| fs::canonicalize(root).is_ok_and(|root| one == root));
-    let here = |copy: &Path| copy.file_name().is_some_and(|last| last == run) && copy.parent().is_some_and(same);
-    let inside = fs::canonicalize(&record.own)
-        .is_ok_and(|own| fs::canonicalize(&record.repo).is_ok_and(|repo| own.starts_with(repo)));
-    inside && copy.is_some_and(here)
+    let named = match (fs::canonicalize(&record.own), fs::symlink_metadata(&file)) {
+        (Ok(own), _) if !own.starts_with(&repo) => return Listed::Not,
+        (Ok(_), Ok(meta)) if meta.is_file() && meta.len() <= 8192 => fs::read(&file),
+        (Ok(_), Ok(_)) => return Listed::Not,
+        (Err(e), _) | (_, Err(e)) => Err(e),
+    };
+    let named = match named.map(String::from_utf8) {
+        Ok(Ok(named)) => record.own.join(named.trim_end_matches(['\r', '\n'])),
+        Ok(Err(_)) => return Listed::Not,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Listed::Not,
+        Err(_) => return Listed::Unasked,
+    };
+    let copy = named.parent().filter(|copy| copy.file_name().is_some_and(|last| last == run));
+    let here = copy.and_then(Path::parent).and_then(|above| fs::canonicalize(above).ok()) == Some(root);
+    if here { Listed::Ours } else { Listed::Not }
 }
 
 /// Whether something that is not a plain file is at the name. Such a thing is never opened: a named pipe would

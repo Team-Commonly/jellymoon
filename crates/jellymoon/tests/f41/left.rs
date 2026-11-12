@@ -14,26 +14,31 @@ use super::{DAY, World, ended, found_world, grows, made, printed, silent_world, 
 use crate::support::skipped;
 
 impl World {
-    /// Starts `jellymoon run` for a wish and holds it inside the claim, with its copy made and its wish not yet
-    /// naming the run, until the test leaves the file `claimed` in `rec`. Returns the command and the run.
-    fn held_in_the_claim(&self, wish: &str, repo: &Path) -> (super::Going, String) {
+    /// Starts `jellymoon run` for a wish and holds it at a `place` a test's build can wait at (`busy::pause`),
+    /// until the test leaves the file `claimed` in `rec`. The command says when it has come there, in
+    /// `claimed.at`: its copy's folder alone says too little, since git makes it before the copy's record is
+    /// whole. Returns the command and the run.
+    pub(super) fn held_at(&self, place: &'static str, wish: &str, repo: &Path) -> (super::Going, String) {
         let args = ["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
-        let held = [
-            ("JELLYMOON_TEST_CLAIM_WAIT_MS", "60000".into()),
-            ("JELLYMOON_TEST_GO", self.at("rec").join("claimed").into()),
-        ];
-        let going = self.going(&held, &args);
+        let (go, there) = (self.at("rec").join("claimed"), self.at("rec").join("claimed.at"));
+        let _ = fs::remove_file(&there);
+        let going = self.going(&[(place, "60000".into()), ("JELLYMOON_TEST_GO", go.into())], &args);
         let from = Instant::now();
-        while !self.jm("runs").join("going.lock").exists() || self.copies().is_empty() {
-            assert!(from.elapsed() < Duration::from_secs(30), "the run never came to its claim");
+        while !there.is_file() {
+            assert!(from.elapsed() < Duration::from_secs(30), "the run never came to {place}");
             std::thread::sleep(Duration::from_millis(10));
         }
         (going, self.copies().remove(0))
     }
 
+    /// Held inside the claim: its copy is made, and its wish does not yet name the run.
+    fn held_in_the_claim(&self, wish: &str, repo: &Path) -> (super::Going, String) {
+        self.held_at("JELLYMOON_TEST_CLAIM_WAIT_MS", wish, repo)
+    }
+
     /// A `jellymoon run` killed inside the claim: its copy, its branch and its folder in `runs` are left, and no
     /// wish names the run.
-    fn killed_in_the_claim(&self, wish: &str, repo: &Path) -> String {
+    pub(super) fn killed_in_the_claim(&self, wish: &str, repo: &Path) -> String {
         let (mut going, run) = self.held_in_the_claim(wish, repo);
         going.kill().unwrap();
         going.wait().unwrap();
@@ -42,18 +47,18 @@ impl World {
         run
     }
 
-    fn kept_for(&self, run: &str) -> bool {
+    pub(super) fn kept_for(&self, run: &str) -> bool {
         self.jm("runs").join(run).exists()
     }
 
     /// The copy's own git folder, as its record names it.
-    fn own_of(&self, run: &str) -> PathBuf {
+    pub(super) fn own_of(&self, run: &str) -> PathBuf {
         let record = fs::read_to_string(self.jm("runs").join(run).join("copy.json")).unwrap();
         serde_json::from_str::<Value>(&record).unwrap()["own"].as_str().unwrap().into()
     }
 
     /// Writes a copy's record again, naming another repo's git folder and a git folder of the copy's own.
-    fn renamed(&self, run: &str, repo: &str, own: &Path) {
+    pub(super) fn renamed(&self, run: &str, repo: &str, own: &Path) {
         let file = self.jm("runs").join(run).join("copy.json");
         let mut record: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
         (record["repo"], record["own"]) = (json!(repo), json!(own));
@@ -61,7 +66,7 @@ impl World {
     }
 
     /// What a left run leaves, all there or all gone.
-    fn left_of(&self, run: &str, repo: &Path) -> (Vec<String>, Vec<String>, bool) {
+    pub(super) fn left_of(&self, run: &str, repo: &Path) -> (Vec<String>, Vec<String>, bool) {
         (self.copies(), self.branches(repo), self.kept_for(run))
     }
 }

@@ -348,7 +348,7 @@ first read of the record for `JELLYMOON_TEST_LOOK_WAIT_MS`.
 
 **A test does not depend on an idle machine.** Each such wait (`busy::pause`: those two, and
 `JELLYMOON_TEST_CLAIM_WAIT_MS`, `JELLYMOON_TEST_NAME_WAIT_MS` and `JELLYMOON_TEST_PLACE_WAIT_MS` in a run's
-start) ends early when the file `JELLYMOON_TEST_GO` names is there, and leaves a file of that name ending in
+start, and `JELLYMOON_TEST_MADE_WAIT_MS` once git has made a copy) ends early when the file `JELLYMOON_TEST_GO` names is there, and leaves a file of that name ending in
 `.at` when the command has come to it: a test holds a command at a place until it has done what it came to do,
 and no longer. A short limit under test is counted from when a file is there that the made-up program leaves
 once it has stalled (`JELLYMOON_TEST_RUN_LIMIT_FROM`, `JELLYMOON_TEST_GIT_LIMIT_FROM`), so nothing else has to
@@ -435,31 +435,69 @@ it counts the runs going, goes over those runs (`run/left.rs`):
 | Its record is there and cannot be used | nothing: it does not say who names the run |
 | Its record names a child | the child is killed, if the pid is still that process ("A run that was cut off"), whichever wish names the run |
 | A wish names it: one of the day looked at, or the wish and day its record names | no more than that: it is the look at that wish that writes it down |
-| No wish names it, and it has no record, or one that names no child | **taken back**: the copy's folder, git's registration of it, and `runs/<id>`. Nothing ran there, so the branch `jellymoon/run-<id>` is where the checkout was, and is removed. A link at `copies/<id>` is removed as itself, and what it leads to is not touched |
+| No wish names it, and it has no record, or one that names no child | **taken back**, once the repo has been asked (below): the copy's folder, the branch `jellymoon/run-<id>`, git's registration of the copy, and `runs/<id>`, in that order. Nothing ran there, so the branch is where the checkout was. A link at `copies/<id>` is removed as itself, and what it leads to is not touched |
 | No wish names it, and its record names a child and has no end | **kept**, as a cut-off run's copy is: the copy is marked failed and the record says the run was cut off. No wish is changed |
 
-**What is kept.** A branch that holds a commit no other branch, no tag and not the checkout itself has is
-someone's work, whoever made it: it stays, and so it does when git cannot be asked. The copy's folder goes all
-the same; the commit is on the branch. A copy an agent may have written in is never removed. Nothing outside
-Jellymoon's home is touched but that one branch and git's registration of the copy, in the repo the copy's own
-record names, as any take-back reaches them ([copy.md](copy.md)). A record is a file anyone who can write the
-home can write, so that repo is acted on only when it lists this copy as a worktree of its own: the copy's git
-folder is inside the repo's, and its `gitdir` file, which git wrote, names `copies/<id>/.git`. Inside is asked
-of the two folders as the system resolves them, never of their names: a record that reaches the copy's git
-folder by `..` out of another repo's, or through a link put in another repo's, names a folder that is not
-inside that repo. A link or a plain file at `copies/<id>` is removed as itself, and the rest is taken back. Jellymoon's git calls switch
-`worktree.useRelativePaths` off, so the file holds a whole path; one that holds a path from the copy's git
-folder, as a git of 2.48 or later writes with that setting on, is read from that folder. For a record
-that names any other repo nothing is asked of git and no branch is removed there; what the home holds of the
-run goes, and the branch and registration in the repo the copy was really made of stay, for `git worktree
-prune` and `git branch -D`. The person's checkout, index and other branches are as they were
-(`tests/f41/left.rs`).
+**The repo is asked first.** A copy's record is a file anyone who can write the home can write, so what a look
+does in a repo goes by what that repo holds (`record::asked`, `copy/back.rs`):
 
-**What is not closed.** A command killed while git was still making the copy has written no record of it:
-the run's folder goes, the copy's folder goes at the next `copy clean`, and the branch and git's registration
-stay in the repo (`git worktree prune` and `git branch -D` remove them). A run made by a build older than the
-start lock has none and is not found. The lock a copy is taken back behind is waited for 3 seconds, and what
-could not be done is left for the next look.
+| The repo the record names | What is done |
+|---|---|
+| lists the copy as a worktree of its own: the copy's git folder is inside the repo's, and its `gitdir` file, which git wrote, names `copies/<id>/.git` | the take-back above |
+| answers and does not list it: the repo's git folder resolves, and the copy's git folder or its `gitdir` file is not there, is outside the repo, or names another place | nothing in that repo: no git is asked and no branch is removed. What the home holds of the run goes |
+| could not be asked: its git folder does not resolve (moved away, on a volume that is not mounted, below a folder that cannot be read), or the copy's git folder or `gitdir` file cannot be read for another reason than not being there | nothing at all. The copy and its record are kept for the next look |
+
+Inside is asked of the two folders as the system resolves them, never of their names: a record that reaches
+the copy's git folder by `..` out of another repo's, or through a link put in another repo's, names a folder
+that is not inside that repo, and a record that names its own repo through a link is still that repo's.
+Jellymoon's git calls switch `worktree.useRelativePaths` off, so the `gitdir` file holds a whole path; one that
+holds a path from the copy's git folder, as a git of 2.48 or later writes with that setting on, is read from
+that folder.
+
+**The branch goes before the registration.** The registration is the only thing in the repo that says the
+branch is Jellymoon's: once it is gone, a branch of the run's name has nothing but the record's word, and no
+look removes a branch on that. So every take-back removes the branch first and the registration last. A look
+cut off after any git step is finished by the next: cut off before the registration went, the repo still lists
+the copy; cut off after, there is no branch left to remove (`tests/f41/asked.rs`). The same order holds for the
+command that takes its own never-started copy back, and for a copy that could not be made.
+
+**What is kept.** A branch that holds a commit no other ref of the repo and not its checkout has is someone's
+work, whoever made it: it stays, and the copy's folder, the registration and the record go all the same; the
+commit is on the branch. A copy an agent may have written in is never removed. Nothing outside Jellymoon's
+home is touched but that one branch and git's registration of the copy, as any take-back reaches them
+([copy.md](copy.md)). The person's checkout, index and other branches are as they were (`tests/f41/left.rs`).
+
+**For thirty days.** A take-back that could not be done (the repo could not be asked, git failed or ran past
+its limit, `copies/<id>` could not be removed) puts the time in the copy's record, `unasked`, the first time,
+and is tried again at every look. A repo that was away and is back has its copy taken back whole. At the first
+look more than thirty days after that time the repo is taken to be gone for good: the copy's folder and
+`runs/<id>` go, and nothing is done in any repo. A repo that comes back later than that keeps the branch and
+the registration (`git worktree prune` and `git branch -D` remove them). The bound is time, and not the
+repo's folder being gone, because a look cannot tell a repo that was removed from one that was moved, or from
+a volume that is not mounted.
+
+**A command killed while its copy is made.** The copy's record is written before git is called, naming the
+git folder git is about to make, so a command killed while git makes the copy, or before the record is written
+again with what git said, leaves a record: the repo lists the copy by then, or does not yet.
+
+**What is not closed.**
+- A branch of the run's name in a repo that answers and does not list the copy is never removed. A look cut
+  off no longer leaves that, but the person can: `git worktree prune`, or git's own `gc`, run between a look
+  that removed the copy's folder and the look that would have finished, drops the registration and leaves
+  the branch. Nothing left in the repo or the home then proves the branch is Jellymoon's, since whoever can
+  write the home can write all the home holds: it stays for `git branch -D`.
+- git makes the branch and the copy's git folder in one call. A command killed between those two, inside git,
+  leaves the branch with no registration, as above.
+- A git child killed with its command goes on by itself: one still writing the copy's folder after a look
+  took the copy back leaves a folder, which the next `copy clean` removes.
+- A record that is there and cannot be read is never taken back and never removed: it holds no time.
+- `copies` itself removed, or made a link: its copies cannot be told the repo's own, and are kept for thirty
+  days like a repo that cannot be asked.
+- On Windows a folder is resolved by a call some drives do not answer (some RAM disks and mapped drives). A
+  repo or a home there cannot be asked, so its left copies are kept for thirty days and then leave the home,
+  and their branches and registrations stay. Read, not run.
+- A run made by a build older than the start lock has none and is not found. The lock a copy is taken back
+  behind is waited for 3 seconds, and what could not be done is left for the next look.
 
 ## A run started apart
 

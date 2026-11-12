@@ -1,12 +1,14 @@
 //! A run's own copy of the person's repo (ADR 0011, section 7; ADR 0014, decision 4; `docs/development/copy.md`): a
 //! git worktree on a branch of its own, directly inside `copies` in Jellymoon's folder. [`make_copy`] makes one.
 //! [`clean_copy`] ends one: a completed run's files are committed onto its branch and the folder is removed; a failed
-//! run's copy is kept for a look, the newest [`KEPT`] only. [`take_back`] undoes one that no run was started in.
+//! run's copy is kept for a look, the newest [`KEPT`] only. [`take_back`] undoes one that no run was started in
+//! (`copy/back.rs`).
 //!
 //! An agent could have rewritten every file in its copy, the `.git` file too. So once a copy is made nothing in it is
 //! read to decide anything: where the repo is comes from the record written when the copy was made, kept in `runs`,
 //! outside the copy, and the folder and the branch come from the run id alone.
 
+mod back;
 mod clean;
 mod git;
 mod gone;
@@ -20,17 +22,17 @@ use std::fs::{self, File};
 use std::hash::{BuildHasher, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
+pub(crate) use back::{remove_ours, take_back, take_back_left};
 pub use clean::clean_copy;
 pub(crate) use clean::end_copy;
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
-use record::{Record, read, write};
+use record::{Record, write};
 use serde::Serialize;
 
-use crate::Error;
 use crate::call::private_dir;
+use crate::{Error, busy};
 
 /// How many failed copies are kept for a look.
 pub const KEPT: usize = 5;
@@ -208,13 +210,18 @@ fn add(git: &Git, person: &Repo, at: &Places, run: &str, shared: &Path, base: &s
             "run {run} has its branch already, {branch}: an earlier run's work is kept there"
         )));
     }
+    // A command killed while git makes the copy leaves this record, so a look can take back what git made by
+    // then: git keeps a worktree's own git folder under the folder's name, which `note` then reads from git.
+    let own = shared.join("worktrees").join(run);
+    write(&at.record(run), &Record { repo: shared.to_path_buf(), own, failed: None, found: git.quiet, unasked: None })?;
     let args = ["worktree", "add", "--quiet", "-b", &branch].map(OsStr::new);
     let args = [&args[..], &[folder.as_os_str(), OsStr::new(base)]].concat();
     let made = person.run(None, &[], &args).map_err(|said| refused(format!("git could not make the copy: {said}")));
+    busy::pause("JELLYMOON_TEST_MADE_WAIT_MS");
     if let Err(e) = made.and_then(|_| note(git, at, run, shared, &folder)) {
         let _ = fs::remove_dir_all(&folder);
-        let _ = unlist(person, &folder);
         let _ = person.run(None, &[], &["update-ref", "-d", &name]);
+        let _ = unlist(person, &folder);
         let _ = fs::remove_dir_all(&folder); // again: a child of the stopped git had those calls' time to write
         return Err(e);
     }
@@ -228,7 +235,7 @@ fn note(git: &Git, at: &Places, run: &str, shared: &Path, folder: &Path) -> Resu
         [_, inside, below, own, _] if inside == "true" && below.is_empty() => PathBuf::from(own),
         _ => PathBuf::new(), // git found no repo there, or one above the copy
     };
-    let record = Record { repo: shared.to_path_buf(), own, failed: None, found: git.quiet };
+    let record = Record { repo: shared.to_path_buf(), own, failed: None, found: git.quiet, unasked: None };
     if record.own.is_absolute() { write(&at.record(run), &record) } else { Err(refused("git lost the copy")) }
 }
 
@@ -236,76 +243,6 @@ fn note(git: &Git, at: &Places, run: &str, shared: &Path, folder: &Path) -> Resu
 pub(crate) fn is_gone(home: &Path, run: &str) -> bool {
     let at = Places::of(home);
     known(run).is_ok() && !at.record(run).exists() && fs::symlink_metadata(at.root.join(run)).is_err()
-}
-
-/// Undoes a copy no run was started in (F39: the harness was too old, or another run took the wish first): its
-/// folder, git's registration of it, its branch, which is where the checkout was, and everything kept for the run.
-pub(crate) fn take_back(home: &Path, run: &str, wait: Option<Duration>) -> Result<(), Error> {
-    undo(home, run, wait, false)
-}
-
-/// [`take_back`] for a copy whose command was killed before any run was started in it (`run/left.rs`). Nothing
-/// ran there, so its branch is where the checkout was, and goes. A branch that holds a commit no other branch,
-/// tag or the checkout itself has is someone's work, whoever made it: it is kept, and so it is when git cannot
-/// be asked. The copy's folder, git's registration of it and what is kept for the run go all the same.
-///
-/// Three things differ from [`take_back`], since what is taken back here was found, not made by the caller.
-/// Nothing is done when the run's start lock is held once the copies' lock is had: its command lives. A link at
-/// the copy's name is removed as itself, and what it leads to is not touched. And a record whose repo does not
-/// list this copy as a worktree of its own (`record::ours`) was written by hand: nothing is asked of git in
-/// that repo, no branch is removed there, and only what Jellymoon's home holds of the run goes.
-pub(crate) fn take_back_left(home: &Path, run: &str, wait: Option<Duration>) -> Result<(), Error> {
-    undo(home, run, wait, true)
-}
-
-fn undo(home: &Path, run: &str, wait: Option<Duration>, careful: bool) -> Result<(), Error> {
-    known(run)?;
-    let at = Places::of(home);
-    let _held = hold::held(&at.lock(), false, wait).map_err(Error::Store)?;
-    if careful && !hold::let_go(home, run) {
-        return Ok(());
-    }
-    if let Some(record) = read(&at.record(run))? {
-        let folder = at.root.join(run);
-        let there = match standing(&at.root, &folder) {
-            Err(_) if careful && gone::unlink(&at.root, &folder) => false,
-            there => there?,
-        };
-        if careful && !record::ours(&record, &at.root, run) {
-            if there {
-                fs::remove_dir_all(&folder).map_err(Error::Store)?;
-            }
-            return gone::remove(&at.runs, run).map_err(Error::Store);
-        }
-        let git = Git::find(&at.runs, record.found).map_err(refused)?;
-        gone(&git, &record, &folder, there)?;
-        let name = format!("refs/heads/{}", branch(run));
-        let repo = git.open(&record.repo).map_err(refused)?;
-        // The first commit of the branch that nothing else of the repo reaches. None: it has no such commit.
-        let only = ["rev-list", "--max-count=1", &name, "--not", &format!("--exclude={name}"), "--all", "HEAD"];
-        if !careful || repo.run(None, &[], &only).is_ok_and(|only| only.is_empty()) {
-            repo.run(None, &[], &["update-ref", "-d", &name]).map_err(refused)?;
-        }
-    }
-    gone::remove(&at.runs, run).map_err(Error::Store)
-}
-
-/// What is left to do for a copy [`take_back`] could not undo, because git could not be asked (the repo was moved
-/// away): the copy's folder and everything kept for the run go, so nothing of it stays in Jellymoon's home. Its
-/// branch and git's registration of it are in the repo, wherever that is now, and are not reached. False: the lock
-/// was not had, within `wait` when there is one, and nothing was removed.
-pub(crate) fn remove_ours(home: &Path, run: &str, wait: Option<Duration>) -> bool {
-    let at = Places::of(home);
-    let held = hold::held(&at.lock(), false, wait);
-    if known(run).is_err() || held.is_err() {
-        return false;
-    }
-    let folder = at.root.join(run);
-    if standing(&at.root, &folder).is_ok_and(|there| there) {
-        let _ = fs::remove_dir_all(&folder);
-    }
-    let _ = gone::remove(&at.runs, run);
-    true
 }
 
 /// Whether the run's folder is there to be removed: a real folder directly inside a real `copies`. A link under that

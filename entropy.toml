@@ -131,7 +131,16 @@ max_file_lines = 400
 # the claim); what ends with a test, by a panic too, 177: `tests/f39/guard.rs` 82, its proof
 # `tests/f39/panics.rs` 58, the made-up agent's half 20, and 17 over `world.rs`, `support/mod.rs` (the one
 # limit of a test's command) and the suites.
-"crates/jellymoon-core" = 6743
+# The fifth pass on F41 raised core by 97 and the binary by 234. Core: the take-back moved out of `copy.rs`
+# into `copy/back.rs` (135, 76 of them moved), where it gained the repo asked before anything is done, the
+# branch removed before the registration by a step of its own, and the thirty days a copy that could not be
+# taken back is kept; `copy/record.rs` 26 (the three answers of a repo, the time of the first look that could
+# not ask); `copy.rs` 13 (the record written before git makes the copy). The binary, all of it tests:
+# `tests/f41/asked.rs` 220 (a look cut off after each git step, a repo moved away, shut for one look and gone
+# for good, a record made by hand for a copy no longer listed, `copies` a link, a repo named through a link,
+# a command killed while its copy was made), 8 over `left.rs` and `tests/f41.rs` (a command held at a named
+# place, known by the file it leaves) and 6 in `tests/f39/panics.rs` (a command only the world's wait covers).
+"crates/jellymoon-core" = 6840
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -157,7 +166,7 @@ max_file_lines = 400
 # `named.rs` 45 (another spelling, a link led elsewhere after the lookup), `cap.rs` 39 (four commands for one
 # wish), `tests/f41.rs` 14 (the asker's wait, long and short), and 20 over F38, F39 and F40 where a wait on the
 # clock became a wait on a file.
-"crates/jellymoon" = 10589
+"crates/jellymoon" = 10823
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

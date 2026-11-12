@@ -43,6 +43,12 @@ fn exit_of(w: &World) -> String {
     fs::read_to_string(w.at("rec").join("exit")).unwrap()
 }
 
+/// What a failed test says of a run: the exit its command left, if it has ended, and the run's record.
+fn seen(w: &World, run: &str) -> String {
+    let exit = fs::read_to_string(w.at("rec").join("exit")).unwrap_or_else(|_| "none yet".to_string());
+    format!("the command's exit: {exit}, the record: {}", w.record(run))
+}
+
 fn repo_typed_in(w: &World) -> std::path::PathBuf {
     let repo = w.repo("alpha");
     w.typed_in("-work-alpha", &repo);
@@ -85,7 +91,7 @@ fn the_command_of_a_run_started_apart_exits_0_when_the_run_completes_after_its_a
     let asked = w.asked(&wish);
     let run = w.run_of(&wish);
     assert_eq!((asked.code, asked.stdout), (0, format!("run {run}\nrun {run} is going, in a copy of the repo\n")));
-    assert!(!w.at("rec").join("exit").exists(), "the run's command ended before its asker");
+    assert!(!w.at("rec").join("exit").exists(), "the run's command ended before its asker: {}", seen(&w, &run));
     fs::write(w.at("rec").join("go"), "").unwrap();
     assert_eq!(exit_of(&w), "0");
     let (kept, record) = (w.kept(&wish), w.record(&run));
@@ -144,7 +150,7 @@ fn a_run_started_apart_and_cut_off_is_written_down_by_the_next_look_and_its_agen
     let run = w.run_of(&wish);
     let file: &Path = &w.jm("copies").join(&run).join("scribble.txt");
     wait_for(file);
-    assert!(grows(file), "the agent was to be editing");
+    assert!(grows(file), "the agent was to be editing: {}", seen(&w, &run));
     fs::write(w.at("rec").join("cut"), "").unwrap(); // `fake-asker` kills the command it started
     assert_ne!(exit_of(&w), "0");
     assert_eq!(w.on_page(&wish)["state"], "needs_you");

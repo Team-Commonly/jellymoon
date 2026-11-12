@@ -27,7 +27,7 @@ use crate::{Error, PageData, Wish, WishState, copy, run};
 /// The most made wishes one day holds.
 pub const MADE_MAX: usize = 8;
 /// The most characters of a made wish, once cleaned: a statement's length. A longer one is refused, never cut.
-const SAID_MAX: usize = 200;
+pub const MADE_SAID_MAX: usize = 200;
 const PROJECT_MAX: usize = 100;
 /// The most bytes of a day's made wishes that are read. Eight wishes with their stars are far less.
 const MADE_BYTES: usize = 64 * 1024;
@@ -93,7 +93,7 @@ fn file(home: &Path, day: &str) -> PathBuf {
 
 /// The words of a wish as they are kept: cleaned until cleaning changes nothing, and never cut.
 fn cleaned(typed: &str) -> Result<String, Unkept> {
-    still(typed, SAID_MAX, false)
+    still(typed, MADE_SAID_MAX, false)
 }
 
 /// Whether a project is one folder's name: no path, and nothing that cleaning would change.

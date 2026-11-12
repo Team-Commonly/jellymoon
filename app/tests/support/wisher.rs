@@ -1,0 +1,52 @@
+//! A made-up window for the F42 tests: what `window.rs` does with Enter in the entry, with no window. It is a
+//! program of its own so that core's `run_apart` is called with a test's variables and none of the caller's: the
+//! command core starts inherits them. Arguments: Jellymoon's home, the logs, the folder of the installed command,
+//! the harness, the day, the option's number, the words, and what to do after the asking (`watch` looks, as the
+//! window does, until a look gives a scene; anything else ends at once). Each scene the window would show is one
+//! line of JSON on stdout.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+use std::io::Write;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+use std::{env, io, thread};
+
+use jellymoon_app::taps::OnShow;
+use jellymoon_app::today::Today;
+use sticker_kit::Scene;
+
+fn show(scene: &Scene) {
+    let mut stdout = io::stdout().lock();
+    stdout.write_all(format!("{}\n", serde_json::to_string(scene).unwrap()).as_bytes()).unwrap();
+    stdout.flush().unwrap();
+}
+
+fn main() {
+    let args: Vec<String> = env::args().skip(1).collect();
+    let [home, logs, bin, harness, day, option, typed, then] = &args[..] else { panic!("eight arguments") };
+    let today = Today {
+        date: day.clone(),
+        logs: PathBuf::from(logs),
+        skip: Vec::new(),
+        model: "sonnet".to_string(),
+        home: PathBuf::from(home),
+        harness: Some(PathBuf::from(harness)),
+        fresh: false,
+        settings: None,
+        bin: Some(PathBuf::from(bin)),
+    };
+    let (scene, page) = today.first();
+    let mut shown = OnShow { today, page, scene };
+    let (scene, asking) = shown.wished(typed, option.parse().ok());
+    show(&scene);
+    if let Some(scene) = asking.and_then(|asking| shown.asked(asking())) {
+        show(&scene);
+    }
+    let until = Instant::now() + Duration::from_secs(30);
+    while then == "watch" && Instant::now() < until {
+        if let Some(scene) = (shown.look())().and_then(|seen| shown.seen(seen)) {
+            return show(&scene);
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}

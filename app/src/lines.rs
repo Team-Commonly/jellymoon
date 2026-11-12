@@ -2,7 +2,9 @@
 //! the kit's bundled font files, never by the operating system, so the numbers are the same on every machine.
 
 use serde::Serialize;
-use sticker_kit::{BundledMeasure, PieceKind, Placed, Rect, Role, Scene, State, TextRun, Theme, Viewport, layout};
+use sticker_kit::{
+    BundledMeasure, Entry, PieceKind, Placed, Rect, Role, Scene, State, TextRun, Theme, Viewport, layout, layout_entry,
+};
 
 /// One placed piece. `x`, `y`, `w` and `h` are logical pixels from the window's top left; `tilt` is degrees clockwise.
 #[derive(Serialize)]
@@ -38,9 +40,12 @@ struct At {
     h: f64,
 }
 
-/// Every placed piece as one line of JSON, in the order the kit placed them.
-pub fn lines(scene: &Scene, theme: &Theme, viewport: Viewport) -> String {
-    let placed = layout(scene, theme, viewport, &BundledMeasure::new(theme));
+/// Every placed piece as one line of JSON, in the order the kit placed them: the scene's, then the entry's field
+/// and a chip for each of its options, when the page has an entry.
+pub fn lines(scene: &Scene, entry: Option<&Entry>, theme: &Theme, viewport: Viewport) -> String {
+    let measure = BundledMeasure::new(theme);
+    let mut placed = layout(scene, theme, viewport, &measure);
+    placed.extend(entry.into_iter().flat_map(|entry| layout_entry(entry, theme, viewport, &measure)));
     placed.iter().filter_map(|piece| Some(format!("{}\n", serde_json::to_string(&line(piece, scene)).ok()?))).collect()
 }
 

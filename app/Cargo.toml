@@ -37,6 +37,27 @@ path = "../crates/jellymoon/tests/support/fake_claude.rs"
 test = false
 doc = false
 
+# What the F42 tests start, for the same reason: the `jellymoon` command, which core starts as a wish's run; the
+# made-up agent that run starts in place of Claude Code; and a made-up window, which enters one wish through
+# `wishing.rs` in a process of its own with no variable of the caller's. Never shipped.
+[[bin]]
+name = "f42-jellymoon"
+path = "../crates/jellymoon/src/main.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f42-agent"
+path = "../crates/jellymoon/tests/support/fake_agent.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f42-wisher"
+path = "tests/support/wisher.rs"
+test = false
+doc = false
+
 [lints]
 workspace = true
 

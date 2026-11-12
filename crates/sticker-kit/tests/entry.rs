@@ -295,6 +295,23 @@ fn the_hint_and_the_options_are_cut_to_their_room_and_the_options_counted() {
     assert_eq!(layout_entry(&entry(2, 80), &refused, SIZES[0], &MEASURE), [], "a refused theme places nothing");
 }
 
+// A theme whose notes begin early leaves the entry a narrow row. A chip is then held to its share of it, under the
+// width a chip would otherwise have at least, so that six of them still end where the field ends.
+#[test]
+fn a_chip_is_never_wider_than_its_share_of_a_narrow_row() {
+    let mut narrow = Theme::sticker();
+    narrow.metrics.note_left = narrow.metrics.content_left + 254.0 + 24.0 + 170.0;
+    assert_eq!(narrow.check(), Ok(()));
+    for viewport in SIZES {
+        let placed = layout_entry(&entry(6, 80), &narrow, viewport, &MEASURE);
+        let field = of(&placed, PieceKind::Entry)[0].rect;
+        let chips = of(&placed, PieceKind::Chip);
+        assert_eq!(chips.len(), 6, "{viewport:?}");
+        assert!(chips[5].rect.right() <= field.right() + 0.5, "{viewport:?}: {:?} ends past {field:?}", chips[5]);
+        assert!(chips.iter().all(|chip| chip.rect.w < 1.5 * chip.rect.h), "the row was to be narrow: {chips:?}");
+    }
+}
+
 #[test]
 fn both_themes_colour_the_entry_and_a_theme_file_without_its_keys_falls_back() {
     for theme in [Theme::sticker(), Theme::plain()] {

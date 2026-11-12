@@ -136,14 +136,15 @@ impl Today {
         }
     }
 
-    /// What the window shows in the end, for `layout`: the kept page when it is current, else what reading gave.
-    pub fn last(&self) -> Scene {
-        let (mut shown, kept) = self.first();
-        let mut later = Some(self.clone().later(kept));
+    /// What the window shows in the end, for `layout`: the kept page when it is current, else what reading gave,
+    /// and the page data that scene shows.
+    pub fn last(&self) -> (Scene, Option<Page>) {
+        let (mut shown, mut page) = self.first();
+        let mut later = Some(self.clone().later(page.clone()));
         while let Some(next) = later.take().and_then(|work| work()) {
-            (shown, later) = (next.scene, next.later);
+            (shown, page, later) = (next.scene, next.page, next.later);
         }
-        shown
+        (shown, page)
     }
 
     /// The work after the first scene, in two steps. The first counts the day's turns: none when the kept page saw
@@ -218,16 +219,21 @@ impl Today {
 
     /// A day with no reading to show: one plain note, over the day's made wishes when it has any.
     fn unread(&self, title: &str, body: &str) -> Scene {
+        noted(self.made_alone(), title, body)
+    }
+
+    /// The day's made wishes with no reading under them, and no note over them.
+    pub(crate) fn made_alone(&self) -> Scene {
         let wishes = jellymoon_core::made(&self.home, &self.date);
         if wishes.is_empty() {
-            return bare(&self.date, vec![Note::Plain { title: title.to_string(), body: body.to_string() }]);
+            return bare(&self.date, Vec::new());
         }
         let read = PageRead { turns: 0, projects: Vec::new() };
         let made = wishes.len();
         let data = PageData { day: self.date.clone(), wishes, clashes: Vec::new(), read };
         let shown = ruled(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() }, &[], made);
         // Nothing was read, so the footer says nothing of a reading: only whose words the made wishes are.
-        noted(Scene { footer: own(made), ..shown }, title, body)
+        Scene { footer: own(made), ..shown }
     }
 }
 

@@ -14,6 +14,9 @@ use crate::today::{Next, Today};
 /// The id of the note that turns delivery on. A clash's note is `clash-<n>`.
 pub const DELIVERY: &str = "delivery";
 
+/// The title of the note that says how to turn delivery on from a terminal.
+pub const UNTOLD: &str = "Your sessions are not told yet.";
+
 /// How to turn delivery on when the app cannot do it.
 const BY_HAND: &str = "run `jellymoon hook install` in a terminal";
 
@@ -81,7 +84,7 @@ impl Today {
             };
         }
         let body = format!("To turn delivery on, {BY_HAND}.");
-        Note::Plain { title: "Your sessions are not told yet.".to_string(), body }
+        Note::Plain { title: UNTOLD.to_string(), body }
     }
 
     /// What a tap on option `index` (from 0) of the note `note` of the scene `drawn` does. A refusal has written

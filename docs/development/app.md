@@ -71,7 +71,8 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   file is shown with a first note that says so. `layout` prints these pages and exits 0: they are what the window
   shows.
 
-The window does not look again while it is open, and closing it while a call runs leaves that call to end by itself.
+The window makes no second reading while it is open, and closing it while a call runs leaves that call to end by
+itself. It does look again at what core keeps of the day's made wishes ("A wish in the window").
 A tap in the window is one line on stderr, the piece's id and the option's number, never a word of the page.
 
 ## Taps (`app/src/taps.rs`)
@@ -119,6 +120,53 @@ drawn from `--page` has no day, and a tap on it does nothing.
 Not covered: a ruling made while delivery is off waits its 24 hours like any other and is told if the hook goes in
 before then; the page does not say afterwards whether a session heard it. The note of the delivery state sits before
 the clashes, so on a page too full for all its notes it is a clash that falls into "+1 more", not the note.
+
+## A wish in the window (`app/src/wishing.rs`)
+
+A day's page has one entry (the kit's, `crates/sticker-kit/README.md`): a field to type a wish in, and under it a
+chip for each project of the page's reading (`read.projects`), of which one is always chosen. The rules are core's
+([wish.md](wish.md), [run.md](run.md#a-run-started-apart)) and are proved at `jellymoon wish` and
+`jellymoon wish --run`. The app carries the words and a project's name to core, and draws what core keeps.
+
+- **When there is an entry.** On a day's page whose reading names a project. A day with no page (still being
+  read, or not readable), a page that read no project, the waiting page and a `--page` file have none: a wish
+  needs a project, and the app names none of its own. The kit offers the first six projects. The entry takes at
+  most 200 characters, core's cap on a wish (`jellymoon_core::MADE_SAID_MAX`). `layout` prints the field as one
+  `entry` piece, its hint as text, and a `chip` piece for each option, after the scene's pieces.
+- **Keys.** A click on the field gives it the keys; Escape, or a click elsewhere, gives them back. Tab chooses
+  the next project and Shift-Tab the one before; a click on a chip chooses it. Enter enters the text. While an
+  input method is composing, Enter confirms the composition and enters nothing. While the field has the keys, `t`
+  is a letter and does not switch the theme. The window says one line on stderr for an entry, the entry's id and
+  how many characters were entered, never a word of them.
+- **Enter.** The words and the chosen project's name go to `jellymoon_core::wish`. The project is one of the
+  page's own, by its place among the chips: the app passes a name, never a path. A wish core keeps is drawn at
+  once, in the working state, from what core keeps of it: no reading is made. Words core refuses write nothing:
+  the page's first note is "That wish was not kept.", with core's reason.
+- **The run.** For a kept wish the app asks core for a run, off the window's thread. Core checks the installed
+  `jellymoon` command (`jellymoon_core::installed_command`, in the folder `install.sh` puts it in) and starts it
+  with `jellymoon_core::run_apart` as `jellymoon run --wish <id> --date <day> --logs <the app's logs>`, with the
+  app's `--skip` names, in a process and a process group of its own. No run is ever in the app's process, and
+  the app starts no other program. `jellymoon run` finds the project's folder in the day's logs as it does for
+  `jellymoon wish --run`. Closing the window leaves the run going.
+- **When no run was started** the wish is kept and stays as it is, and the page's first note is "Your wish is
+  kept, and no run was started for it.", with why in core's words: the command was not found or is not one core
+  takes, no harness was found, the folder is not one a run can copy, three runs are going, or the first line
+  `jellymoon run` said. `jellymoon run --wish <id>` in a terminal runs it later.
+- **The look.** Once a second, off the window's thread, the app draws the day again from what core keeps
+  (`jellymoon_core::made`, and the page's rulings) and shows it when it differs from what is shown. So a run's end
+  is drawn with no tap and without opening the app again: the star, or the wish needing the person. A wish made
+  or run in a terminal shows up the same way. A look can end a run that was cut off, as any look does
+  ([run.md](run.md#a-run-that-was-cut-off)), which can take a few seconds; the next look waits for it.
+- **A look never takes a note away.** The plain notes the app put over the page (a reading that is going or
+  failed, a tap that did nothing, a wish that was not kept or has no run) stay over what a look draws. They go
+  with the next wish, tap or reading. A look made from a scene that is no longer on show is dropped.
+
+`OnShow::wished`, `asked`, `look` and `seen` need no window; `app/tests/f42.rs` follows them, and
+`app/tests/f42/run.rs` the run, through a made-up window that is a program of its own.
+
+Not covered: the app cannot stop a run (F43). A note of a wish is replaced when a reading that was going ends,
+which draws its own page. A wish for a project past the sixth is made with `jellymoon wish`. What only a person at
+a window can see is not tested: the input method's candidate window, the caret, and which piece has the keys.
 
 ## From page data to pieces (`app/src/scene.rs`)
 

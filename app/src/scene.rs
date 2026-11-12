@@ -20,6 +20,9 @@ pub fn order(stands: Option<Side>) -> [Side; 2] {
 /// The title of the note that holds the day's made wishes, each in the person's exact words.
 pub const MADE: &str = "wished here today";
 
+/// The title of the one note of a page with no wish on it.
+pub const NOTHING: &str = "Nothing wished for yet today.";
+
 /// [`ruled`] for a page nobody ruled on, with no made wish on it.
 pub fn scene(page: &Page) -> Scene {
     ruled(page, &[], 0)
@@ -38,7 +41,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let mut notes: Vec<Note> = left_out(page.left_out).into_iter().collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
         notes.push(Note::Plain {
-            title: "Nothing wished for yet today.".to_string(),
+            title: NOTHING.to_string(),
             body: "Ask one of your agents for something and it will show up here.".to_string(),
         });
     }

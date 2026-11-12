@@ -33,6 +33,24 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      # A tag pushed from a branch by mistake would ship code no PR landed. Asked of GitHub, not of the checkout,
+      # which holds one commit. `ahead` and `identical` are main's standing against the tagged commit.
+      - name: A release is built only from a commit that is on main
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          standing=$(gh api "repos/$REPO/compare/$SHA...main" --jq .status)
+          case "$standing" in
+            ahead|identical) ;;
+            *)
+              echo "::error::the tagged commit $SHA is not on main (main is $standing against it): nothing is built"
+              exit 1
+              ;;
+          esac
       - name: The toolchain rust-toolchain.toml pins, and the target
         env:
           TARGET: ${{ matrix.target }}

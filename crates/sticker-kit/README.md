@@ -25,9 +25,14 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 A page may hold one `Entry` (`src/scene.rs`) beside its scene: an id, a hint, a
 few options of which one is always chosen, and a cap on its characters. It has
 a spot of its own: in the left column, under the title, from the content's
-left edge to short of the big character's place, the chips under the field,
-each as wide as its name: in one row when that holds them, else in two, a name
-too long for its share of a row cut. Every page keeps that band free, whether or not it has an entry (a page
+left edge to 24 design pixels short of the big character's place, the chips
+under the field: in one row when that holds them, else in two. A chip is as
+wide as its name, and at least one and a half times its height, while its row
+has the room. In a row too narrow for its names the short ones keep their
+width and the long ones share what is left; those are cut in the middle with
+an ellipsis ("kitc…ntend"), so no name is cut while its row has room and two
+names that begin alike are told apart by their ends (`tests/entry_layout.rs`).
+Every page keeps that band free, whether or not it has an entry (a page
 with no big character begins its small ones under it), so an entry that comes
 or goes moves no piece. `layout_entry(entry, theme, viewport, &measure)` places
 the field (`PieceKind::Entry`) and a chip for each option (`PieceKind::Chip`),
@@ -39,7 +44,32 @@ a key of the theme's `[palette]`: the hint is a grey (`entry_hint`, also the
 words of an entry that waits), the chosen chip is filled (`chip_chosen`, its
 name in `chip_chosen_ink`), and the field that has the keys has a ring, a
 line darker than that fill (`entry_ring`; `entry_edge` without the keys).
-`tests/entry.rs` holds both built-in themes to it.
+
+Each of the three is held to a least contrast on its ground (WCAG 2's ratio
+of relative luminance, `Color::contrast`):
+
+| Text | On | Floor | sticker | plain |
+|---|---|---|---|---|
+| the chosen chip's name | `chip_chosen` | 4.5 (`CHOSEN_INK_FLOOR`) | 9.99 | 4.57 |
+| the hint, and words that wait | `entry` | 2.5 (`HINT_FLOOR`) | 2.80 | 3.06 |
+| the ring | `paper` | 3.0 (`RING_FLOOR`) | 5.35 | 15.80 |
+
+A theme file is held to them at the door (`src/theme/own.rs`), and is never
+refused for them: a colour under its floor is replaced by the first of the
+file's own that is over it (`soft` then `ink` for the name; `quiet`, `soft`,
+`ink` for the hint; `caret`, `accent_dark`, `ink` for the ring), or by black
+or white, and one warning names the key.
+
+A key of the entry that a theme file does not set is the file's own colour,
+when the file sets one for it: `chip_chosen_ink` is its `soft`, `entry_hint`
+its `quiet`, `entry_ring` its `caret`; and `entry` is its `option`,
+`entry_edge` its `bubble_ring`, `caret` its `accent_dark`, `chip` its
+`dimmed.light`, `chip_chosen` its `star`. So a file written before a key was
+is drawn in its own palette. A file that sets neither a key nor the colour it
+is taken from is the sticker theme there, and the floors hold what is left. When the chosen chip's fill is close to the other chips' (no
+channel 48 apart), a line in the colour of its name is drawn round it;
+otherwise, as in both built-in themes, its fill alone tells it.
+`tests/colours.rs` holds the built-in themes and theme files to all of this.
 
 ```rust
 Page::new(scene, theme)
@@ -71,6 +101,10 @@ Page::new(scene, theme)
   is text: a window that acts on a bare key asks first. `page.entry()` is what
   is typed now; `set_entry` changes or removes the entry, and keeps the chosen
   option by its name when that name is still offered (`EntryState::keep_option`).
+- **Words are text with a character a person sees** (`text::has_visible`).
+  Spaces of any kind, a joiner or a variation selector with nothing beside
+  it, a Hangul filler and the blank braille pattern are none: Enter gives
+  nothing for them, and the hint stays while they are all the entry holds.
 - **An entry that holds words is not removed.** `set_entry(None)` takes an
   empty entry off the page at once, and one that holds only spaces, which
   are no words: Enter gives nothing for them. One that holds words, or waits

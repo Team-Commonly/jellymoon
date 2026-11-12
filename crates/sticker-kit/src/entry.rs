@@ -8,7 +8,7 @@ use std::ops::Range;
 
 use crate::layout::MAX_TEXT_CHARS;
 use crate::scene::Entry;
-use crate::text::{ends, is_unseen};
+use crate::text::{ends, has_visible, is_unseen};
 
 /// How many options of an entry are offered: the first ones. The rest are not drawn and cannot be chosen.
 pub const MAX_ENTRY_OPTIONS: usize = 6;
@@ -74,11 +74,12 @@ impl EntryState {
         self.chosen = at.unwrap_or(self.chosen);
     }
 
-    /// Whether the entry holds words of the person's, a composition among them. Spaces alone are none, as Enter
-    /// gives nothing for them. An entry that waits always does: only words are entered. One that does is never
-    /// taken off its page ([`crate::draw::Page::set_entry`]).
+    /// Whether the entry holds words of the person's, a composition among them: text with a character a person
+    /// sees ([`has_visible`]). Spaces alone are none, nor a joiner or a filler alone, as Enter gives nothing for
+    /// them and the hint stays while they are all there is. An entry that waits always does: only words are
+    /// entered. One that does is never taken off its page ([`crate::draw::Page::set_entry`]).
     pub fn holds(&self) -> bool {
-        !self.text.trim().is_empty()
+        has_visible(&self.text)
     }
 
     /// Whether Enter gave the words and no answer has come. While it waits the entry takes no key: no text, no
@@ -228,10 +229,10 @@ impl EntryState {
     }
 
     /// What was entered. The words stay in the entry, which waits for [`answer`](Self::answer). Nothing while a
-    /// composition is marked (that Enter belongs to the input method, to confirm it), nothing for text that is
-    /// only spaces, and nothing while the entry waits.
+    /// composition is marked (that Enter belongs to the input method, to confirm it), nothing for text that
+    /// [`holds`](Self::holds) no words, and nothing while the entry waits.
     pub fn enter(&mut self) -> Option<Made> {
-        if self.marked.is_some() || self.waiting || self.text.trim().is_empty() {
+        if self.marked.is_some() || self.waiting || !self.holds() {
             return None;
         }
         self.waiting = true;

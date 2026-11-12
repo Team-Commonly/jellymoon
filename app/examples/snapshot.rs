@@ -1,6 +1,7 @@
 //! Renders a page-data file under both built-in themes, with no window, for looking at:
 //! `cargo run -p jellymoon-app --example snapshot --features headless -- <page file> <folder> <name> [width height
-//! [words [option]]]` writes `<name>-sticker.png` and `<name>-plain.png` into the folder. The page has the entry
+//! [words [option [theme file]]]]` writes `<name>-sticker.png` and `<name>-plain.png` into the folder, and with a
+//! theme file a third picture named after that theme. The page has the entry
 //! the window gives a day's page, with a chip for each of the page's first six projects: a picture reads no logs,
 //! so it does not ask which of them a wish can be made for. With `words` the
 //! entry holds them, with the caret after them, and the chip of place `option` (from 0) is the chosen one.
@@ -15,7 +16,7 @@ use sticker_kit::draw::headless::{Typing, snapshot_typing};
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [file, folder, name, more @ ..] = args.as_slice() else {
-        eprintln!("usage: snapshot <page file> <folder> <name> [width height [words [option]]]");
+        eprintln!("usage: snapshot <page file> <folder> <name> [width height [words [option [theme file]]]]");
         return ExitCode::from(2);
     };
     let side = |at: usize, fallback: f32| more.get(at).and_then(|side| side.parse().ok()).unwrap_or(fallback);
@@ -29,7 +30,21 @@ fn main() -> ExitCode {
     let typed = more.get(2).map(|words| (words.clone(), more.get(3).and_then(|at| at.parse().ok()).unwrap_or(0)));
     // A picture reads no logs: every project of the page has a chip, the first six.
     let entry = wishing::entry_of(page.data.read.projects.iter().take(6).cloned().collect());
-    for theme in [Theme::sticker(), Theme::plain()] {
+    let mut themes = vec![Theme::sticker(), Theme::plain()];
+    // A theme file, to look at what its own colours make of the page: its picture is named after the theme.
+    if let Some(file) = more.get(4) {
+        match Theme::load(std::path::Path::new(file)) {
+            Ok(loaded) => {
+                loaded.warnings.iter().for_each(|warning| eprintln!("snapshot: {file}: {warning}"));
+                themes.push(loaded.theme);
+            }
+            Err(why) => {
+                eprintln!("snapshot: {file}: {why}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    for theme in themes {
         let out = PathBuf::from(folder).join(format!("{name}-{}.png", theme.name));
         let typing = entry.clone().map(|entry| Typing { entry, typed: typed.clone() });
         if let Err(error) = snapshot_typing(scene::scene(&page), theme, typing, side(0, 1440.0), side(1, 900.0), &out) {

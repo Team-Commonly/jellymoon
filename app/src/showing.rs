@@ -1,7 +1,7 @@
 //! What the window does with a key, a tap, Enter, a step of the reading and a look, with no window: each act is a
 //! call here that gives work for another thread, and a second call that takes what the work gave and says what to
 //! show. `window.rs` only runs the work off its thread and hands each scene to the kit's view, so the app's tests
-//! make the same calls in the same order (`tests/showing.rs`). No GPUI.
+//! make the same calls in the same order (`tests/f43/showing.rs`). No GPUI.
 
 use std::cell::RefCell;
 use std::rc::Rc;

@@ -7,7 +7,13 @@ use crate::geom::Rect;
 use crate::layout::{PieceKind, Placed};
 use crate::scene::{Mark, Note, Scene};
 use crate::text::Role;
-use crate::theme::{Stripe, Theme};
+use crate::theme::{Palette, Stripe, Theme};
+
+/// The colour the words typed in the entry are painted in: the ink, and pale as the hint is while they wait for
+/// their answer.
+pub(crate) fn words(palette: &Palette, waiting: bool) -> Color {
+    if waiting { palette.entry_hint } else { palette.ink }
+}
 
 pub(crate) struct Brush<'a> {
     pub theme: &'a Theme,
@@ -97,11 +103,12 @@ impl Brush<'_> {
                 }
             }
             // The three are told apart by more than a shade: the field with the keys has a ring, the chosen chip
-            // is filled, and the hint is grey ([`Brush::ink`]).
+            // is filled, with a line round it when its fill is close to the other chips', and the hint is grey
+            // ([`Brush::ink`]).
             PieceKind::Entry if self.lit => out.push(self.pill(rect, p.entry, p.entry_ring)),
             PieceKind::Entry => out.push(self.pill(rect, p.entry, p.entry_edge)),
             PieceKind::Chip if self.chosen == Some(piece.index) => {
-                out.push(self.pill(rect, p.chip_chosen, p.chip_chosen));
+                out.push(self.pill(rect, p.chip_chosen, p.chosen_edge()));
             }
             PieceKind::Chip => out.push(self.pill(rect, p.chip, p.chip)),
             _ => {}
@@ -198,6 +205,17 @@ mod tests {
             let chosen = (p.chip_chosen, p.chip_chosen, p.chip_chosen_ink);
             assert_eq!(painted(&theme, true), [(p.entry, p.entry_ring, p.entry_hint), chip, chosen, chip]);
             assert_eq!(painted(&theme, false)[0], (p.entry, p.entry_edge, p.entry_hint), "no ring without the keys");
+            // Words that wait for their answer are drawn pale, as the hint is; words being typed in the ink.
+            assert_eq!((words(p, true), words(p, false)), (p.entry_hint, p.ink));
         }
+    }
+
+    #[test]
+    fn a_chosen_chip_filled_like_the_others_has_an_edge_in_the_colour_of_its_name() {
+        let mut theme = Theme::plain();
+        theme.palette.chip_chosen = Color::rgb(0xE0E1E3);
+        theme.palette.chip_chosen_ink = Color::rgb(0x1F2328);
+        let p = &theme.palette;
+        assert_eq!(painted(&theme, true)[2], (p.chip_chosen, p.chip_chosen_ink, p.chip_chosen_ink));
     }
 }

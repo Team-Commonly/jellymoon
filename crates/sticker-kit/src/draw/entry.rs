@@ -56,8 +56,7 @@ impl EntryView {
         window: &Window,
     ) -> (Option<ShapedLine>, Pixels, f32) {
         let (state, font_size) = (&self.state, Role::RowMain.size(theme, k));
-        // Words that wait for their answer are drawn pale, as the hint is.
-        let ink = hsla(if state.waiting() { theme.palette.entry_hint } else { theme.palette.ink });
+        let ink = hsla(super::shapes::words(&theme.palette, state.waiting()));
         let under = UnderlineStyle { thickness: px(1.0), color: Some(ink), wavy: false };
         let marked = state.marked().unwrap_or(0..0);
         let runs: Vec<TextRun> =

@@ -102,6 +102,15 @@ fn layout_prints_one_entry_on_a_day_s_page_with_a_chip_for_each_project_read() {
         let last = placed.len() - 3;
         assert!(placed[last..].iter().all(|piece| ["entry", "chip"].contains(&piece.kind())), "they are printed last");
     }
+    // The hint is whole at the smallest page, the design's size and one between, in both themes, as `layout`
+    // measures it: by the advances of the bundled Nunito, which also stands in for the plain theme's system font.
+    for (theme, size) in
+        ["sticker", "plain"].iter().flat_map(|theme| ["960x640", "1200x760", "1440x900"].map(|s| (theme, s)))
+    {
+        let placed = shown(&world, &["--theme", theme, "--size", size]);
+        let said = entries(&placed)[0].said();
+        assert_eq!(said, "Type a wish: Tab for its project, Enter", "{theme} at {size}: the hint, whole");
+    }
     // A folder switched off was not read, so no wish can be made for it.
     assert_eq!(chips(&shown(&world, &["--fresh", "--skip", "private-notes"])), ["alpha"]);
 }

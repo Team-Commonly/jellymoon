@@ -29,6 +29,11 @@ gpui_platform = { workspace = true, optional = true }
 [dev-dependencies]
 tempfile.workspace = true
 
+# The window's test (`tests/f43/window.rs`) opens the page on GPUI's test platform, with no window on a screen, as
+# the kit's draw tests do: on the Mac only, as they are.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+sticker-kit = { workspace = true, features = ["headless"] }
+
 # The made-up harness the F34 tests run in place of Claude Code: the same source file as the `jellymoon` package's,
 # declared again because Cargo hands a test the path of a binary of its own package only. Never shipped.
 [[bin]]

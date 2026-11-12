@@ -6,14 +6,13 @@
 //! Once a second the day is looked at again, so a run's end is drawn with no tap.
 //!
 //! This file is wiring. What each act does is `showing.rs`, which a test calls with no window: here its work is
-//! run off the window's thread, and each scene it gives is handed to the kit's view. No test opens this window.
+//! run off the window's thread, and each scene it gives is handed to the kit's view. No test opens this window on
+//! a screen: `tests/f43/window.rs` opens [`page`] on GPUI's test platform and presses Enter in it.
 //!
 //! The view measures text with GPUI's shaped glyphs, not with the bundled advances the `layout` command uses: shaping
 //! kerns, and the plain theme draws in the system's font (`docs/development/app.md` has the measured gap).
 
-use std::cell::Cell;
 use std::io::Write;
-use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{App, Bounds, Pixels, TitlebarOptions, WindowBounds, WindowHandle, WindowOptions, prelude::*, px, size};
@@ -164,7 +163,9 @@ fn chose(note: &str, index: usize, shown: &Showing, window: WindowHandle<Page>, 
     .detach();
 }
 
-fn page(
+/// The window of one page, its taps and its Enter wired to `shown`. [`open`] opens it on the screen; a test opens
+/// it on GPUI's test platform, where there is no screen.
+pub fn page(
     scene: Scene,
     theme: Theme,
     viewport: Viewport,
@@ -172,33 +173,31 @@ fn page(
     cx: &mut App,
 ) -> gpui::Result<WindowHandle<Page>> {
     let bounds = Bounds::centered(None, size(px(viewport.w), px(viewport.h)), cx);
-    // The handler is made before the window it will redraw, so the window's handle reaches it through this.
-    let opened: Rc<Cell<Option<WindowHandle<Page>>>> = Rc::default();
-    let (handle, on_show) = (opened.clone(), shown.clone());
-    let tapped = move |tap: &Tap, _: &mut gpui::Window, cx: &mut App| {
+    let on_show = shown.clone();
+    let tapped = move |tap: &Tap, window: &mut gpui::Window, cx: &mut App| {
         let (id, option) = match tap {
             Tap::Character { id } => (id, None),
             Tap::Option { note_id, index } => (note_id, Some(*index)),
         };
         say(&tap_line(id, option));
-        let Some(window) = handle.get() else { return };
         match option {
-            None => poked(id, &on_show, window, cx),
-            Some(index) => chose(id, index, &on_show, window, cx),
+            None => poked(id, &on_show, own(window), cx),
+            Some(index) => chose(id, index, &on_show, own(window), cx),
         }
     };
-    let handle = opened.clone();
-    let made = move |made: &EntryMade, _: &mut gpui::Window, cx: &mut App| {
-        if let Some(window) = handle.get() {
-            entered(made, &shown, window, cx);
-        }
+    let made = move |made: &EntryMade, window: &mut gpui::Window, cx: &mut App| {
+        entered(made, &shown, own(window), cx);
     };
     // The entry comes with the first answer of `reads`.
     let view =
         move |_: &mut gpui::Window, cx: &mut App| cx.new(|_| Page::new(scene, theme).on_tap(tapped).on_entry(made));
-    let window = cx.open_window(options(bounds), view)?;
-    opened.set(Some(window));
-    Ok(window)
+    cx.open_window(options(bounds), view)
+}
+
+/// The handle of the window a handler of the page was called in. The page is that window's root view, and a
+/// handler is given its window: there is no handle to wait for or to miss, so an Enter is always answered.
+fn own(window: &gpui::Window) -> WindowHandle<Page> {
+    WindowHandle::new(window.window_handle().window_id())
 }
 
 /// What the window is asked for: its first place, a title, and never to be smaller than a page is drawn at.

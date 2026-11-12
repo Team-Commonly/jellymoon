@@ -127,7 +127,11 @@ A day's page has one entry (the kit's, `crates/sticker-kit/README.md`): a field 
 chip for each project of the page's reading (`read.projects`) a wish can be made for, of which one is always
 chosen. It stands in the left column, under the title "what I wished for today", where the wishes are listed. The chips
 stand in one row when their names fit it and in two when they do not; the hint is "Type a wish: Tab for its project,
-Enter", short enough to be read whole in both themes. The rules are core's ([wish.md](wish.md), [run.md](run.md#a-run-started-apart)) and are proved at
+Enter". It is whole in both themes from the smallest page (960x640) up as `layout` measures it, by the advances of
+the bundled Nunito at the kit's small size (13 design pixels, never under 11), which also stands in for the plain
+theme's system font (`app/tests/f42.rs`, at three sizes); and as the window shapes it on a Mac, in Nunito and in the
+system's font (headless pictures at 960x640 and 1440x900). A wider font cuts it with an ellipsis at the
+smallest page: one whose every character advances by 0.56 of its size, as the kit's layout tests measure, does. The rules are core's ([wish.md](wish.md), [run.md](run.md#a-run-started-apart)) and are proved at
 `jellymoon wish` and `jellymoon wish --run`. The app carries the words and a project's name to core, and draws
 what core keeps.
 
@@ -224,11 +228,16 @@ for ever. The entry is told its words were kept only when core kept the wish. `a
 calls in the window's order, the work run on the test's thread; the two lines the window says on stderr
 (`tap_line`, `entry_line`) are there too.
 
-What stays in `window.rs`, and is run by no test: opening the window and its options (a unit test holds what is
-asked), which thread each piece of work runs on, the one-second timer, the `defer` that lets the view finish a tap
-before it takes a new scene, and the calls on the kit's view (`set_entry`, `set_scene`, `answer_entry`,
-`set_theme`, `entry_focused`). All of it needs GPUI's application running, which the app's tests do not start.
-A person's walk at a real window is still owed for it.
+One piece of the wiring is run by a test, on the Mac, with no window on a screen: `app/tests/f43/window.rs` opens
+`window::page` on GPUI's test platform, clicks the field, pastes words and presses Enter. It holds that the window
+tells the entry what core said (not kept: the words stay; kept: the entry is empty), and that an Enter on a page
+with no day is answered. A handler is given the window it was called in, so there is no handle of the window to
+wait for: no Enter can go unanswered for want of one.
+
+What stays in `window.rs`, and is run by no test: opening the window on a screen and its options (a unit test
+holds what is asked), the one-second timer, the order of the reading's steps, which call a tap is carried to, the
+`defer` that lets the view finish a tap before it takes a new scene, and the calls `set_theme` and
+`entry_focused`. A person's walk at a real window is still owed for it.
 
 Not covered: a wish for a project past the sixth, or for one nothing was typed in today, is made with
 `jellymoon wish`. What only a person at a window can see is not tested: the input method's candidate window,
@@ -354,11 +363,12 @@ GPUI compiles its Metal shaders with Xcode's `metal`. On a Mac without it, `make
 with cargo directly, pass `--features runtime_shaders`. The headless draw tests and the picture example run on the Mac:
 
 ```sh
-cargo run -p jellymoon-app --example snapshot --features headless -- <page file> <folder> <name> [<width> <height> [<words> [<option>]]]
+cargo run -p jellymoon-app --example snapshot --features headless -- <page file> <folder> <name> [<width> <height> [<words> [<option> [<theme file>]]]]
 ```
 
 It writes `<name>-sticker.png` and `<name>-plain.png`. The page has the entry a day's page has, with a chip for
 each of the file's first six projects (a picture reads no logs) and its hint in the field. With `<words>` the field holds
-them, with the caret after them, and the chip of place `<option>` (from 0; 0 when left out) is the chosen one.
+them, with the caret after them, and the chip of place `<option>` (from 0; 0 when left out) is the chosen one. With `<theme file>` a third picture is
+written, named after that theme, and the file's warnings are said on stderr.
 
 Linux needs the packages the CI job installs. The dependencies and GPUI's pin are in `docs/adr/0013-the-shell-dependencies.md`.

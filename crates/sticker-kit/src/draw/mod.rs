@@ -217,7 +217,7 @@ impl Page {
         let motion = self.theme.motion;
         let k = page_scale(&self.theme, viewport);
         let rim = self.theme.metrics.rim * k;
-        let typed = !self.entry.state.text().is_empty();
+        let typed = self.entry.state.holds();
         let brush =
             Brush { theme: &self.theme, scene: &self.scene, k, chosen: self.entry.state.chosen(), lit: self.entry.lit };
         let mut order: Vec<usize> = (0..self.placed.len()).collect();
@@ -234,7 +234,7 @@ impl Page {
                 let sticker = img(image).absolute().left(px(rect.x)).top(px(rect.y));
                 art.push(sticker.w(px(rect.w)).h(px(rect.h)).into_any_element());
             }
-            // The hint gives way to what is typed.
+            // The hint gives way to words: not to spaces, or to other text nobody sees.
             let hidden = typed && piece.piece == PieceKind::Entry;
             for (n, run) in piece.text.iter().enumerate().filter(|(_, r)| !r.text.is_empty() && !hidden) {
                 text.push(text_element(&brush, piece, n, run, pose));

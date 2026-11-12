@@ -88,7 +88,7 @@ which is to say when it holds no commit that another branch, a tag or the checko
 with such a commit is kept, and so is one git could not be asked about. A take-back by the command that made
 the copy removes the branch without asking, as nothing but that command has had the copy. Three more things
 hold only for a copy that was found: nothing is done when its start lock is held once the copies' lock is had;
-a link at `copies/<run>` is removed as itself, and what it leads to is not touched; and a record whose repo
+a link or a plain file at `copies/<run>` is removed as itself, and what a link leads to is not touched; and a record whose repo
 does not list the copy as its own worktree (the copy's git folder inside the repo's, its `gitdir` file naming
 `copies/<run>/.git`) has nothing done in that repo, and only Jellymoon's own files of the run go.
 

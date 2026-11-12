@@ -27,6 +27,8 @@ pub(super) struct Record {
 /// A record is a file anyone who can write the home can write, so one that names another repo is not acted on
 /// in that repo. The file is read only when it is a plain file no longer than a path. A path in it that does not
 /// start at a root is read from the copy's git folder, as git reads one it wrote with `worktree.useRelativePaths`.
+/// "Inside" is asked of the two folders as the system resolves them, links and `..` followed, and never of
+/// their names: a name can lead out of the repo it starts in.
 pub(super) fn ours(record: &Record, root: &Path, run: &str) -> bool {
     let file = record.own.join("gitdir");
     let plain = fs::symlink_metadata(&file).is_ok_and(|meta| meta.is_file() && meta.len() <= 8192);
@@ -35,7 +37,9 @@ pub(super) fn ours(record: &Record, root: &Path, run: &str) -> bool {
     let copy = named.parent().filter(|_| plain);
     let same = |one: &Path| fs::canonicalize(one).is_ok_and(|one| fs::canonicalize(root).is_ok_and(|root| one == root));
     let here = |copy: &Path| copy.file_name().is_some_and(|last| last == run) && copy.parent().is_some_and(same);
-    record.own.starts_with(&record.repo) && copy.is_some_and(here)
+    let inside = fs::canonicalize(&record.own)
+        .is_ok_and(|own| fs::canonicalize(&record.repo).is_ok_and(|repo| own.starts_with(repo)));
+    inside && copy.is_some_and(here)
 }
 
 /// Whether something that is not a plain file is at the name. Such a thing is never opened: a named pipe would

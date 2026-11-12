@@ -39,7 +39,6 @@ mod world;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Child;
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
@@ -85,7 +84,7 @@ impl World {
         more: &[(&'static str, OsString)],
         wish: &str,
         repo: &Path,
-    ) -> (Child, String) {
+    ) -> (Going, String) {
         self.play(script.0, script.1);
         let going = self.going(more, &["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
         wait_for(&self.at("rec").join("started"));
@@ -94,7 +93,7 @@ impl World {
 
     /// A run whose agent has done something about signals first: a script of the made-up agent's that starts it
     /// again through `perl`. None where no such agent can be started, with the reason said.
-    pub fn minded(&self, script: (&str, usize), grace: u64, wish: &str, repo: &Path) -> Option<(Child, String)> {
+    pub fn minded(&self, script: (&str, usize), grace: u64, wish: &str, repo: &Path) -> Option<(Going, String)> {
         self.play(script.0, script.1);
         let args = ["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
         let going = self.going(&[ms(GRACE, grace)], &args);
@@ -141,7 +140,7 @@ impl World {
 }
 
 /// What a command that is still going printed, if it ends within `seconds`. One that does not is killed: None.
-pub fn within(mut going: Child, seconds: u64) -> Option<Ran> {
+pub fn within(mut going: Going, seconds: u64) -> Option<Ran> {
     let deadline = Instant::now() + Duration::from_secs(seconds);
     while going.try_wait().unwrap().is_none() {
         if Instant::now() > deadline {
@@ -160,7 +159,9 @@ fn a_stop_ends_the_run_as_cancelled_with_no_star_and_its_copy_kept() {
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
     w.work_in_progress(&repo);
     let before = w.persons(&repo);
-    // A minute after each asking: an agent that is gone sooner heard the first one, the interrupt.
+    // A minute after each asking: an agent that is gone sooner heard the first asking. This agent ends at
+    // the interrupt and at the stop signal alike, so that the interrupt is the first is not shown here:
+    // `deaf::an_agent_deaf_to_the_stop_signal_is_gone_at_the_interrupt_which_comes_first` shows it.
     let (going, run) = w.run_going(("lingers", 0), &[ms(GRACE, 60_000)], &wish, &repo);
     assert_eq!(w.kept(&wish)["state"], "working");
 
@@ -172,7 +173,7 @@ fn a_stop_ends_the_run_as_cancelled_with_no_star_and_its_copy_kept() {
     assert_eq!(printed(&ended(going)), said_cancelled(&run, &wish, 0));
     assert!(w.agent_came_and_went(), "the agent is still going after the stop");
     if cfg!(unix) {
-        assert!(took < Duration::from_secs(40), "the agent was not interrupted: {took:?}");
+        assert!(took < Duration::from_secs(40), "the agent was not gone at the first asking: {took:?}");
     }
 
     w.is_cancelled(&wish, &run, &repo, 0);

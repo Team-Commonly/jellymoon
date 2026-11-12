@@ -26,13 +26,12 @@ pub(super) fn remove(runs: &Path, run: &str) -> io::Result<()> {
     clear(&gone)
 }
 
-/// Removes a link that stands at a copy's name, as itself: what it leads to is never touched. False when
-/// `copies` is not a real folder, when no link is at the name, or when the link could not be removed.
+/// Removes what stands at a copy's name and is no real folder, as itself: a link, and what it leads to is never
+/// touched, or a plain file. False when `copies` is not a real folder, when a real folder or nothing is at the
+/// name, or when it could not be removed.
 pub(super) fn unlink(root: &Path, folder: &Path) -> bool {
-    let is = |path: &Path, link: bool| {
-        fs::symlink_metadata(path).is_ok_and(|meta| if link { meta.is_symlink() } else { meta.file_type().is_dir() })
-    };
-    is(root, false) && is(folder, true) && fs::remove_file(folder).or_else(|_| fs::remove_dir(folder)).is_ok()
+    let real = |path: &Path, real: bool| fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_dir() == real);
+    real(root, true) && real(folder, false) && fs::remove_file(folder).or_else(|_| fs::remove_dir(folder)).is_ok()
 }
 
 fn absent(done: io::Result<()>) -> io::Result<()> {

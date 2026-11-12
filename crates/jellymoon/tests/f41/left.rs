@@ -2,7 +2,7 @@
 //! names"), and the agent a killed command left at work when the next run is asked for.
 
 use std::fs::{self, File};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -16,7 +16,7 @@ use crate::support::skipped;
 impl World {
     /// Starts `jellymoon run` for a wish and holds it inside the claim, with its copy made and its wish not yet
     /// naming the run, until the test leaves the file `claimed` in `rec`. Returns the command and the run.
-    fn held_in_the_claim(&self, wish: &str, repo: &Path) -> (std::process::Child, String) {
+    fn held_in_the_claim(&self, wish: &str, repo: &Path) -> (super::Going, String) {
         let args = ["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
         let held = [
             ("JELLYMOON_TEST_CLAIM_WAIT_MS", "60000".into()),
@@ -44,6 +44,20 @@ impl World {
 
     fn kept_for(&self, run: &str) -> bool {
         self.jm("runs").join(run).exists()
+    }
+
+    /// The copy's own git folder, as its record names it.
+    fn own_of(&self, run: &str) -> PathBuf {
+        let record = fs::read_to_string(self.jm("runs").join(run).join("copy.json")).unwrap();
+        serde_json::from_str::<Value>(&record).unwrap()["own"].as_str().unwrap().into()
+    }
+
+    /// Writes a copy's record again, naming another repo's git folder and a git folder of the copy's own.
+    fn renamed(&self, run: &str, repo: &str, own: &Path) {
+        let file = self.jm("runs").join(run).join("copy.json");
+        let mut record: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        (record["repo"], record["own"]) = (json!(repo), json!(own));
+        fs::write(&file, record.to_string()).unwrap();
     }
 
     /// What a left run leaves, all there or all gone.
@@ -182,6 +196,67 @@ fn a_left_copy_whose_gitdir_file_is_a_path_from_its_git_folder_is_taken_back_who
     fs::write(own.join("gitdir"), up.chain(down).collect::<Vec<_>>().join("/") + "/.git\n").unwrap();
     w.on_page(&wish);
     assert_eq!(w.left_of(&run, &repo), (vec![], vec![], false));
+}
+
+// Two records made by hand that name another repo and still reach the copy's real git folder: by `..` out of
+// that repo's git folder, and by a link put inside it. Read by their names alone both are inside the other repo.
+// Nothing is done there, its branch of the run's name stays, and what the home holds of the run goes.
+#[test]
+fn a_record_that_reaches_the_copy_s_git_folder_by_dots_from_another_repo_has_nothing_done_there() {
+    let w = found_world();
+    let (repo, beta, wish) = (w.repo("alpha"), w.repo("beta"), w.wish("alpha"));
+    let run = w.killed_in_the_claim(&wish, &repo);
+    let (git, before) = (w.git(&beta, &["rev-parse", "--absolute-git-dir"]), w.persons(&beta));
+    w.renamed(&run, &git, Path::new(&format!("{git}/../../alpha/.git/worktrees/{run}")));
+    assert!(w.own_of(&run).join("gitdir").is_file(), "the record does not reach the copy's git folder");
+    w.on_page(&wish);
+    assert_eq!(w.persons(&beta), before, "a repo a record named was changed");
+    assert_eq!((w.copies(), w.kept_for(&run)), (vec![], false), "what the home held of the run stayed");
+}
+
+#[test]
+fn a_link_in_another_repo_s_git_folder_to_the_copy_s_own_removes_no_branch_there() {
+    let w = found_world();
+    let (repo, beta, wish) = (w.repo("alpha"), w.repo("beta"), w.wish("alpha"));
+    let run = w.killed_in_the_claim(&wish, &repo);
+    let (git, branch) = (w.git(&beta, &["rev-parse", "--absolute-git-dir"]), format!("jellymoon/run-{run}"));
+    w.git(&beta, &["branch", &branch]);
+    let at = Path::new(&git).join("worktrees");
+    fs::create_dir(&at).unwrap();
+    if !link(&w.own_of(&run), &at.join(&run)) {
+        return skipped("no link to a folder can be made here");
+    }
+    w.renamed(&run, &git, &at.join(&run));
+    w.on_page(&wish);
+    assert_eq!(w.branches(&beta), [branch], "a branch of the repo a record named was removed");
+    assert_eq!((w.copies(), w.kept_for(&run)), (vec![], false), "what the home held of the run stayed");
+}
+
+// The record's repo is the copy's own, and the `gitdir` file in the copy's git folder names another place: the
+// repo does not list this copy, so nothing is done in it.
+#[test]
+fn a_record_whose_gitdir_file_names_another_place_has_nothing_done_in_its_repo() {
+    let w = found_world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let run = w.killed_in_the_claim(&wish, &repo);
+    let other = w.at("elsewhere").join(&run).join(".git");
+    fs::write(w.own_of(&run).join("gitdir"), format!("{}\n", other.display())).unwrap();
+    w.on_page(&wish);
+    assert_eq!(w.left_of(&run, &repo), (vec![], vec![format!("jellymoon/run-{run}")], false));
+}
+
+// A plain file at the copy's name is no copy: it is removed as a link there is, and the rest is taken back.
+#[test]
+fn a_plain_file_at_a_left_copy_s_name_is_removed_and_the_rest_is_taken_back() {
+    let w = found_world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let run = w.killed_in_the_claim(&wish, &repo);
+    let copy = w.jm("copies").join(&run);
+    fs::remove_dir_all(&copy).unwrap();
+    fs::write(&copy, "no copy\n").unwrap();
+    w.on_page(&wish);
+    assert_eq!(w.left_of(&run, &repo), (vec![], vec![], false));
+    assert_eq!(w.git(&repo, &["worktree", "list", "--porcelain"]).matches("worktree ").count(), 1);
 }
 
 #[test]

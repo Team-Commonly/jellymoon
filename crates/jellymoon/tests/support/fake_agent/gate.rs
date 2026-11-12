@@ -3,12 +3,29 @@
 
 use std::path::Path;
 use std::time::Duration;
-use std::{env, process, thread};
+use std::{env, fs, process, thread};
 
 use super::{
     MARKER, MODE, TOOLS, edits, ends, ends_with, first, garbage, held, init, line, litter, result, starts, success,
     work,
 };
+
+/// Every made-up agent, and the program one leaves going, is minded by the test that started it. It holds the
+/// system's lock on a file of its own in `rec` while it lives, and ends when the file `over` is left there: the
+/// test's world leaves it as it is dropped, and waits for these locks (`tests/f39/guard.rs`). So a test that
+/// ended, by a panic too, leaves no agent, on a system with no signals as well.
+pub fn minded(rec: &Path) {
+    let live = fs::File::create(rec.join(format!("live-{}", process::id()))).unwrap();
+    live.lock().unwrap();
+    let over = rec.join("over");
+    thread::spawn(move || {
+        let _live = live;
+        while !over.exists() {
+            thread::sleep(Duration::from_millis(20));
+        }
+        process::exit(3)
+    });
+}
 
 /// The scripts of the gate review's tests (`tests/f39/stream.rs`, `tests/f39/safe.rs`).
 pub fn play(script: &str, number: usize, rec: &Path) -> i32 {

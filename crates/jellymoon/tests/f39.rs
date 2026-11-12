@@ -5,13 +5,16 @@
 //! homes and the harness's folder are scratch folders. `f39/failed.rs` holds the runs that do not finish and the
 //! caps on the stream, `f39/stream.rs` the star's rule and the stream's first line, `f39/refused.rs` what is refused
 //! or not started, `f39/limits.rs` the time limit, a run cut off and two runs at once, `f39/safe.rs` what never leaks,
-//! and `f39/world.rs` the test's folder, which F40's tests use too.
+//! `f39/world.rs` the test's folder, which F40's tests use too, and `f39/guard.rs` what ends with a test, which
+//! `f39/panics.rs` proves.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f39/failed.rs"]
 mod failed;
 #[path = "f39/limits.rs"]
 mod limits;
+#[path = "f39/panics.rs"]
+mod panics;
 #[path = "f39/refused.rs"]
 mod refused;
 #[path = "f39/safe.rs"]

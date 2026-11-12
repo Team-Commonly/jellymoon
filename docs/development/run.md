@@ -356,6 +356,13 @@ be done within it. A test that expects an asker to be told of a run that never s
 for a silent harness to a minute (`JELLYMOON_TEST_APART_QUIET_MS`), and one whose agent says nothing by design
 sets it to a tenth of a second. None of these is read by a release.
 
+**One limit ends a test's command that hangs:** `LIMIT` in `tests/support/mod.rs`, 90 seconds, for a command a
+test waits for and for one it started and left going (`ended`). It stands above every bound a test states of
+its own, of which the longest is a minute, so a bound that is passed is what fails. **A test that ends leaves
+nothing going**, a test that panics too: a command it started and did not see end is killed, every made-up
+agent ends itself when the test's folder is given up, and the folder is removed only once no agent and no
+`jellymoon run` of it is left (`tests/f39/guard.rs`, proved by `tests/f39/panics.rs`).
+
 **A wish that names another wish's run.** The day's wishes are a file too. A run is another wish's when its
 record names another wish, or another day, and either that wish names the run or a `jellymoon run` still holds
 it: while its command lives a run is stopped on the word of the wish its record names and no other, whatever the
@@ -437,7 +444,10 @@ the same; the commit is on the branch. A copy an agent may have written in is ne
 Jellymoon's home is touched but that one branch and git's registration of the copy, in the repo the copy's own
 record names, as any take-back reaches them ([copy.md](copy.md)). A record is a file anyone who can write the
 home can write, so that repo is acted on only when it lists this copy as a worktree of its own: the copy's git
-folder is inside the repo's, and its `gitdir` file, which git wrote, names `copies/<id>/.git`. Jellymoon's git calls switch
+folder is inside the repo's, and its `gitdir` file, which git wrote, names `copies/<id>/.git`. Inside is asked
+of the two folders as the system resolves them, never of their names: a record that reaches the copy's git
+folder by `..` out of another repo's, or through a link put in another repo's, names a folder that is not
+inside that repo. A link or a plain file at `copies/<id>` is removed as itself, and the rest is taken back. Jellymoon's git calls switch
 `worktree.useRelativePaths` off, so the file holds a whole path; one that holds a path from the copy's git
 folder, as a git of 2.48 or later writes with that setting on, is read from that folder. For a record
 that names any other repo nothing is asked of git and no branch is removed there; what the home holds of the

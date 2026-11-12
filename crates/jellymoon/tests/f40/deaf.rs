@@ -3,17 +3,16 @@
 //! a minute. Also here: what is asked while a stop goes on, and an agent that moved a program of its own away.
 
 use std::path::Path;
-use std::process::Child;
 use std::time::{Duration, Instant};
 use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{World, ended, printed, refused, said_cancelled, wait_for, world};
+use super::{Going, World, ended, printed, refused, said_cancelled, wait_for, world};
 
 /// A run whose agent has made itself deaf, by `number`: to the stop signal (0), the interrupt (1) or both (2). 3
 /// is deaf to the interrupt and leaves `heard` when the stop signal reaches it.
-fn deaf(w: &World, number: usize, grace: u64, wish: &str, repo: &Path) -> Option<(Child, String)> {
+fn deaf(w: &World, number: usize, grace: u64, wish: &str, repo: &Path) -> Option<(Going, String)> {
     w.minded(("deaf", number), grace, wish, repo)
 }
 

@@ -25,10 +25,12 @@ build. `-p`, `--workspace` and `--no-default-features` are not on the list: noth
 away from what is built.
 
 The build is started without `CARGO_BUILD_TARGET` and `CARGO_BUILD_TARGET_DIR`, which move it as `--target` does.
-A relative `CARGO_TARGET_DIR` is read against the repo's root, where the build runs and cargo reads it, wherever
-the command was started. The programs' times are not compared with the build's start: cargo leaves a program that
-is up to date as it was. Not held: a `build.target` or `build.target-dir` in a `.cargo/config.toml` above the repo
-also moves the build, and the chain then runs what `target/debug` holds. The repo has no such file.
+The target folder is the one cargo names: the chain asks `cargo metadata`, started in the repo's root as the build
+is, for its `target_directory`. So a `CARGO_TARGET_DIR`, relative or not, and a `build.target-dir` in the cargo
+home's `config.toml` or in a `.cargo/config.toml` above the repo are each followed, where the chain once read the
+variable alone and ran what `target/debug` held. The programs' times are not compared with the build's start:
+cargo leaves a program that is up to date as it was. Not held: a `build.target` in such a config puts the programs
+in a folder named for the triple, and the chain looks in `debug`. The repo has no such file.
 
 Each run works in `target/smoke-home-<pid>-<nanoseconds>`, named for its process and for when it started, and
 removes it at its end. A run that was stopped leaves its home, and with `--real` that home holds the person's

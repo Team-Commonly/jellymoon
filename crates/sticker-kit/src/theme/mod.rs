@@ -6,6 +6,7 @@ mod bounds;
 mod builtin;
 mod load;
 mod svg_check;
+mod svg_text;
 
 use std::path::{Path, PathBuf};
 
@@ -17,8 +18,10 @@ pub use bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, RANGES};
 pub use load::{Loaded, ThemeError};
 pub use svg_check::{
     ATTRIBUTES as SVG_ATTRIBUTES, ArtCost, ELEMENTS as SVG_ELEMENTS, MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_NUMBERS,
-    MAX_ART_PAINT, MAX_ART_PATH_BYTES, MAX_ART_REACH, MAX_ART_SIDE, MIN_ART_STROKE, art_cost, svg_refusal,
+    MAX_ART_PAINT, MAX_ART_PATH_BYTES, MAX_ART_REACH, MAX_ART_SIDE, MIN_ART_SIDE, MIN_ART_STROKE, ROW_PAINT, art_cost,
+    svg_refusal,
 };
+pub use svg_text::{MAX_ART_COMMANDS, MAX_ART_FLAT, MAX_ART_IDLE, MAX_ART_WRITTEN};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

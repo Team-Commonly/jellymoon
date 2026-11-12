@@ -3,12 +3,12 @@
 //! it. A list of refused ones was tried first, and twice an argument nobody had thought of passed it: `--help`
 //! made cargo print its help and build nothing, and the chain then passed over programs of an earlier build.
 
-use std::ffi::OsString;
+use std::env;
+use std::ffi::{OsStr, OsString};
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{env, path};
 
 /// The build arguments that stand alone. Each builds the same programs in the same place.
 const ALONE: [&str; 8] = ["--locked", "--offline", "--frozen", "-v", "-vv", "--verbose", "-q", "--quiet"];
@@ -47,21 +47,40 @@ pub fn taken(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// Cargo, started in the root as the build is: without the variables that move a build.
+fn cargo(root: &Path) -> Command {
+    let mut cargo = Command::new(env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo")));
+    cargo.current_dir(root);
+    for name in MOVING {
+        cargo.env_remove(name);
+    }
+    cargo
+}
+
 /// The build of the two programs, with the arguments [`taken`] passed.
 pub fn command(root: &Path, args: &[String]) -> Command {
-    let mut build = Command::new(env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo")));
-    build.current_dir(root).args(["build", "-p", "jellymoon", "-p", "jellymoon-app"]).args(args);
-    for name in MOVING {
-        build.env_remove(name);
-    }
+    let mut build = cargo(root);
+    build.args(["build", "-p", "jellymoon", "-p", "jellymoon-app"]).args(args);
     build
 }
 
-/// The folder the build writes to. The build runs in `root`, and cargo reads a relative `CARGO_TARGET_DIR`
-/// against the folder it runs in: so is it read here, wherever `cargo xtask` was started.
-pub fn target(root: &Path, named: Option<OsString>) -> Result<PathBuf, String> {
-    let target = named.map_or_else(|| root.join("target"), |named| root.join(named));
-    path::absolute(target).map_err(|e| format!("build: the target folder: {e}"))
+/// The folder the build writes to, as cargo itself says it: `cargo metadata`, started where the build is and as it
+/// is. A `CARGO_TARGET_DIR`, relative or not, and a `build.target-dir` in the cargo home's `config.toml` or in a
+/// `.cargo/config.toml` above the repo each move the build, and each is in cargo's answer. `set` is for the tests:
+/// a name set to nothing is taken out, so a test is not moved by the variables of the build that runs it.
+pub fn target(root: &Path, set: &[(&str, &OsStr)]) -> Result<PathBuf, String> {
+    let mut asked = cargo(root);
+    asked.args(["metadata", "--format-version", "1", "--no-deps"]);
+    for (name, value) in set {
+        let _ = if value.is_empty() { asked.env_remove(name) } else { asked.env(name, value) };
+    }
+    let said = asked.output().map_err(|e| format!("build: cargo metadata: {e}"))?;
+    let read: Option<serde_json::Value> = serde_json::from_slice(&said.stdout).ok();
+    let target = read.as_ref().and_then(|read| read["target_directory"].as_str());
+    target.map(PathBuf::from).ok_or_else(|| {
+        let why = String::from_utf8_lossy(&said.stderr);
+        format!("build: cargo metadata names no target folder: {}", why.lines().next().unwrap_or_default())
+    })
 }
 
 /// A run's temporary home, named for its process and for when it started: `smoke-home-<pid>-<nanoseconds>`. A
@@ -103,8 +122,9 @@ pub fn sweep(target: &Path) {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use super::{MARKER, command, home_name, lock_beside, make_home, sweep, taken, target};
 
@@ -131,6 +151,10 @@ mod tests {
             assert!(taken(&args(&["--features", value])).is_err(), "a value is not a way round: {value}");
             assert!(taken(&args(&["-j", value])).is_err(), "{value}");
         }
+        // With its value too, what is not on the list is refused: the chain names its own packages.
+        for pair in [["-p", "xtask"], ["--package", "xtask"], ["--target-dir", "t"], ["--profile", "dev"]] {
+            assert!(taken(&args(&pair)).is_err(), "{pair:?}");
+        }
         let all = ["--locked", "--offline", "--frozen", "-v", "-vv", "--verbose", "-q", "--quiet", "--jobs", "4"];
         let valued = ["--jobs=4", "-j", "4", "-j4", "--features", "release", "--features=a/b,c", "-F", "x/y", "-Fx/y"];
         assert_eq!(taken(&args(&[&all[..], &valued].concat())), Ok(()));
@@ -146,15 +170,33 @@ mod tests {
         assert_eq!(args, ["build", "-p", "jellymoon", "-p", "jellymoon-app", "--locked"]);
     }
 
-    // The build runs in the root, and cargo reads a relative target folder against where it runs.
+    // Whatever moves the build is in cargo's own answer: a variable, relative or not, the cargo home's
+    // `config.toml`, and a `.cargo/config.toml` above the repo. A made-up package stands in for the repo.
     #[test]
-    fn a_relative_target_folder_is_read_against_the_root_as_the_build_reads_it() {
-        let root = tempfile::tempdir().unwrap();
-        let at = |named: Option<&str>| target(root.path(), named.map(Into::into)).unwrap();
-        assert_eq!(at(None), root.path().join("target"));
-        assert_eq!(at(Some("t")), root.path().join("t"));
-        let elsewhere = tempfile::tempdir().unwrap();
-        assert_eq!(at(elsewhere.path().to_str()), elsewhere.path(), "one that is absolute is taken as it is");
+    fn the_target_folder_is_the_one_cargo_names_whatever_moved_it() {
+        let above = tempfile::tempdir().unwrap();
+        // Windows resolves a folder to its `\\?\` form, and cargo answers in the plain one.
+        let above = PathBuf::from(above.path().canonicalize().unwrap().to_string_lossy().trim_start_matches(r"\\?\"));
+        let (root, cargo_home, moved) = (above.join("repo"), above.join("cargo-home"), above.join("moved"));
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src").join("lib.rs"), "").unwrap();
+        fs::write(root.join("Cargo.toml"), "[package]\nname = \"made-up\"\nversion = \"0.0.0\"\nedition = \"2021\"\n")
+            .unwrap();
+        fs::create_dir_all(&cargo_home).unwrap();
+        let home = [("CARGO_HOME", cargo_home.as_os_str()), ("CARGO_TARGET_DIR", OsStr::new(""))];
+        let at = |set: &[(&str, &OsStr)]| target(&root, &[&home[..], set].concat());
+        assert_eq!(at(&[]), Ok(root.join("target")));
+        assert_eq!(at(&[("CARGO_TARGET_DIR", OsStr::new("t"))]), Ok(root.join("t")), "relative: against the root");
+        assert_eq!(at(&[("CARGO_TARGET_DIR", moved.as_os_str())]), Ok(moved.clone()));
+        let config = format!("[build]\ntarget-dir = {:?}\n", moved.to_str().unwrap());
+        fs::write(cargo_home.join("config.toml"), &config).unwrap();
+        assert_eq!(at(&[]), Ok(moved.clone()), "the cargo home's own config moves the build");
+        fs::remove_file(cargo_home.join("config.toml")).unwrap();
+        fs::create_dir_all(above.join(".cargo")).unwrap();
+        fs::write(above.join(".cargo").join("config.toml"), &config).unwrap();
+        assert_eq!(at(&[]), Ok(moved), "and so does a config above the repo");
+        let nowhere = target(&above.join("no-repo"), &[]).unwrap_err();
+        assert!(nowhere.starts_with("build: cargo metadata") && !nowhere.contains('\n'), "{nowhere}");
     }
 
     // A stale home and a living one never share a name, so whoever holds the lock beside a name may remove it.

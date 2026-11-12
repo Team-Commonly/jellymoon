@@ -166,21 +166,41 @@ Three things are held, in this order:
      and is refused.
    - At most 100 elements (`MAX_ART_ELEMENTS`), each at most 12 deep (`MAX_ART_DEPTH`), the `<svg` counted in both.
    - The `d` and `points` values hold at most 16 KiB together (`MAX_ART_PATH_BYTES`).
+   - What the paths and shapes write, walked with the parser library's own tokenizer before the parser makes a
+     picture of it (`theme/svg_text.rs`). The parser does three things by the length of a value, and one of them
+     ends the program:
+     - at most 2048 commands in the paths of a file, a pair of `points` being one (`MAX_ART_COMMANDS`);
+     - at most 32 closes or arcs in a row in a path with nothing else between them (`MAX_ART_IDLE`). The parser
+       calls itself once for each segment it draws nothing for, which is a close after a close and an arc too flat
+       to be a curve, and a path of a few thousand `z` overflowed its stack. The first close of a run and an arc
+       straight after a close are drawn, and not counted. Every other arc is, flat or not;
+     - no number in a `d` or in `points`, and no `x` `y` `x1` `y1` `x2` `y2` `cx` `cy` `r` `rx` `ry` `width`
+       `height`, is over 1000000 (`MAX_ART_WRITTEN`). An arc, a circle and a rounded corner are made of more
+       curves the larger they are written, all at once: `r="3e38"` was four million;
+     - an arc's two radii are within 1000 times of each other (`MAX_ART_FLAT`): the parser makes the smaller
+       as much larger as the other is, so a flat arc between far ends is a very large one.
 3. **The tree.**
    - Groups and paths only. A group that is faded, clipped, masked, filtered or blended is refused, and so is a
      dashed stroke, a pattern, text and an image. The two lists keep each of these out already; the tree is judged
      all the same, since it is what is drawn.
    - The picture is at most 256 a side (`MAX_ART_SIDE`), at the size the renderer gives it: its `width` and
      `height`, else its `viewBox`'s, else as large as what is in it. A unit (`1in`) is what the renderer takes it for.
-   - Every path's box, with its stroke and after every transform, is within 4096 of the picture's edges
-     (`MAX_ART_REACH`), in the picture's own pixels.
+     And at least 0.5 a side (`MIN_ART_SIDE`): it is drawn at twice its size cut to whole pixels, and the renderer
+     refuses a picture that comes to none.
+   - Every path's box after every transform, and twice its stroke's drawn width past it, is within 4096 of the
+     picture's edges (`MAX_ART_REACH`), in the picture's own pixels. Twice the width is as far as a mitre's point
+     goes. The renderer's own box of a stroke is not used: under a slant it is the path's box and no more.
    - A stroke is drawn at least 0.51 wide (`MIN_ART_STROKE`), in the picture's own pixels: just over one drawn
      pixel. A group that makes a picture smaller makes its strokes thinner, and that is the width held.
    - The paths hold at most 3072 numbers (`MAX_ART_NUMBERS`): two for every point, once the renderer has made
      each shape a path. A `rect` is 8, a `circle` or an `ellipse` 26, a rounded `rect` 34, an arc as many as the
      curves it is drawn as. 99 circles are 2574.
-   - The paint is at most 4194304 (`MAX_ART_PAINT`, 64 fills of 256 by 256): the picture's width times its
-     height for every fill and every stroke, and four times that for one painted with a gradient.
+   - The paint is at most 4194304 (`MAX_ART_PAINT`, 64 fills of 256 by 256). Every fill and every stroke is the
+     picture's width times its height, and 16 (`ROW_PAINT`) for every row of the picture an edge of the path
+     crosses, each edge after the last and back to where a piece began; a stroke's rows count twice, for its two
+     sides. One painted with a gradient is four times all of that. A curve's edges are counted through the
+     points that pull it. So a fill that covers a picture of 256 is 73728, and 56 of them fit; a line down the
+     whole picture is 4096 under a fill.
 - A theme's art files together are held to the same two counts, so five files
   cost no more than one. The refusal names the file that went over.
 - The files are read again when the theme is drawn (`Theme::art_svgs`: one pass, each file read
@@ -203,32 +223,52 @@ What an address in a value does: nothing. The renderer has no network, and a pai
 (`fill="url(https://…)"`) is painted as a plain colour, which is how the door counts it.
 
 Those two counts are what a file costs to draw (`theme::art_cost`): a shape may paint the whole picture however
-small it is written, and every point is a line or a curve the renderer walks. Before them the bound was the file's
-size, and five files at it took 38 s to draw in a debug build on a Mac. `tests/cost.rs` holds each count, the
-reach and the stroke at its edge. Measured in a debug build on one busy Mac, where the renderer is about ten times
-slower than in a release:
+small it is written, every point is a line or a curve the renderer walks, and every edge is walked down every row
+it crosses, the picture being painted in the pieces the edges cut a row into. Before the counts the bound was the
+file's size, and five files at it took 38 s to draw in a debug build on a Mac. `tests/cost.rs` holds each count,
+the reach and the stroke at its edge. Measured on one Mac, in a debug build and in a release:
 
-- **The heaviest theme the door takes** (`tests/draw.rs`): five files that spend both counts to the last unit
-  on the dearest paint, see-through fills under see-through strokes wider than the picture, with every point left
-  a line as tall as the picture under the thinnest stroke. The door reads the five in 17 ms (32 ms with the points
-  spent on curves) and the renderer rasterises them in 1.9 to 2.3 s, either way. About two thirds of that is the paint:
-  a see-through fill of 256 by 256 is 14 to 19 ms, an opaque one 1.5 ms, a gradient 45 to 49 ms.
+- **The heaviest themes the kit knows how to write** (`tests/draw.rs`): five ways to spend both counts to the last
+  unit over five files, each read at the door and rasterised. They are the dearest of what was measured, and not
+  a proof that nothing dearer is inside the counts.
+
+  | All the paint and every point spent on | debug | release |
+  |---|---|---|
+  | 52 see-through fills that cover the picture, the rest a ragged fill | 1.30 s | 56 ms |
+  | one ragged see-through fill a file, 241664 rows under its edges | 1.10 s | 80 ms |
+  | the same under a see-through gradient, 45056 rows | 0.64 s | 24 ms |
+  | the same under a fill and a round stroke 2.6 wide, 73728 rows | 0.77 s | 35 ms |
+  | the same written as curves, under a fill and the thinnest stroke | 0.84 s | 32 ms |
+
+  The door reads the five files in 3 to 16 ms (0.4 to 0.9 ms in a release). The heaviest is the first in a debug
+  build and the second in a release: 1.3 s and 80 ms. One paint of 256 by 256 with no edge in it: an opaque
+  fill 1.5 ms in a debug build, a see-through one 14 to 19 ms, a gradient 45 to 49 ms.
+- **What a row costs.** Before a row was counted, a fill cost its area and no more, and a review found eight
+  ragged shapes of 192 points, each edge as tall as the picture, under a see-through gradient and a gradient
+  stroke: all the paint of a file and no more, and 7.6 s to draw in a debug build (14 s on a busy
+  machine, 0.46 s in a release). It is now 19 times the paint of a file and refused, with its three neighbours
+  (`tests/cost.rs`). One ragged fill of 1535 points took 0.78 s opaque and 1.4 s under a see-through gradient, and
+  the time followed the points; the same points along the rows took 30 ms. A gradient stroke on such edges was
+  the dearest thing measured, 4.6 s for the eight.
 - **The worst file to read**: 64 KiB of arcs took the parser 0.36 s before its points could be counted. The 16 KiB
-  held for `d` and `points` refuses it before that parse (`tests/limits.rs`). Elements nested 9000 deep overflow
-  the parser's stack; the count of 100 refuses them first.
+  held for `d` and `points` refuses it before that parse (`tests/limits.rs`). **What ends the program** is refused
+  before the parse too. In a debug build the parser overflows a stack of 2 MiB on elements nested 700 deep (600 are
+  read), and one of 256 KiB on 80 deep or on a run of 96 closes; at 1024 deep it refuses a file itself. The door
+  takes 12 deep and a run of 32, and `tests/art_draw.rs` reads and draws the worst it takes on a stack of 256 KiB.
 - **What a review measured at seconds each** is refused (`tests/art_draw.rs`): 99 ellipses of a radius of 4096
   under a thin stroke (4.5 to 6.5 s), circles and a rounded `rect` as large, a line under a stroke 4096 wide,
   each for its reach; 511 lines under a stroke of 0.015 or thinner on a picture of 8 drawn 256 (1.6 s), for the
-  stroke. Their nearest kin that pass: 511 lines at 0.016, 0.17 s; one ellipse of 100, 36 to 41 ms; 50 of them
-  filled see-through on 204 by 204, the whole paint of a file, 1.2 s.
+  stroke. Their nearest kin that pass: 504 lines as tall as the picture at 0.016, the whole paint of a file,
+  0.21 s (17 ms in a release); one ellipse of 100, 36 to 53 ms; 40 of them filled see-through on 204 by 204, the
+  whole paint of a file, 1.1 s (32 ms in a release).
 - **Reach**: 30 circles under a thin stroke took 0.42 s at a radius of 8, 64 and 512 (16384 pixels past the
   picture) alike, and 0.75 s at 4096. The reach held is a quarter of the largest that cost nothing.
 - **A stroke under a drawn pixel** is a hairline to the renderer: 511 lines took 64 ms at 0.016 and 0.74 s at
   0.015, the same at 0.0001.
 
 The kit's own art, counted the same
-way at the built-in themes' sizes, is 2260 numbers and 2388256 paint: 74% and
-57% of the counts. Behind
+way at the built-in themes' sizes, is 2260 numbers and 2551696 paint: 74% and
+61% of the counts. 163440 of that paint is the rows its edges cross. Behind
 the ranges, the view rasterises the kit's own art at no more than 800 pixels a
 side with a rim of no more than 64, whatever a theme and a window multiply out
 to; a larger piece is that image scaled up. The kit's own art

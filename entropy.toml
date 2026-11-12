@@ -175,7 +175,11 @@ max_file_lines = 400
 # The build's arguments taken from a list, and a home known by the file a run writes in it, raised it by 76
 # (`smoke/build.rs`, 198 lines, 94 of them its tests; `smoke.rs` lost 122): the list of what is taken and how a
 # value follows is longer than the list of what was refused, and a relative target folder is read against the root.
-"crates/xtask" = 1661
+# The target folder asked of cargo itself raised it by 37 (`smoke/build.rs`): `cargo metadata` says where the build
+# writes, whatever moved it, and its test makes a package and a cargo home of its own to move one four ways.
+# That test taking `CARGO_TARGET_DIR` out of what it asks with, so the build that runs it does not move it: 4.
+# And its folder named in the plain form cargo answers in on Windows: 1.
+"crates/xtask" = 1703
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -205,7 +209,15 @@ max_file_lines = 400
 # its page until it is empty, and no key while it waits, are 24.
 # The door reading art with the renderer's parser (ADR 0015) lowered it by 67: the tag scanner and
 # `theme/path_cost.rs` are gone (`src` lost 297), and the tests hold the tree's limits and `tests/art_draw.rs`.
-"crates/sticker-kit" = 7757
+# The seven findings of that change's review raised it by 607, 384 of them tests. `theme/svg_text.rs` (126) holds what
+# a path and a shape write before the parser reads it: a run of segments it draws nothing for, a count of commands,
+# the size of a number, an arc's two radii (ADR 0015, "What the parser does by the length of a value"). `theme/svg_check.rs` grew by
+# 94: the rows an edge crosses counted as paint, a stroke's reach as the path's box and its width, a smallest
+# side, and the test of the tree's arm for an image. The tests are the table of every path segment and the limits
+# at their edges (`tests/limits.rs`, 144), the rows and the review's four slow pictures (`tests/cost.rs`, 141), the
+# worst files read and drawn on a small stack (`tests/art_draw.rs`, 59) and five heaviest themes where there were
+# two (`tests/draw.rs`, 28).
+"crates/sticker-kit" = 8364
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.

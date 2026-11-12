@@ -1,7 +1,7 @@
 //! The door reads a picture with the renderer's parser, so there is one reading of a file and not two. Each case
 //! here is a picture the door's own reading once took another way than the renderer. It is held against `usvg`
 //! called as GPUI calls it: whatever the door takes, it counted at the renderer's size and point for point. No
-//! GPUI: `tests/draw.rs` rasterises the same and compares the sizes.
+//! GPUI: `tests/art_draw.rs` rasterises the same and compares the sizes.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use sticker_kit::theme::{ArtCost, MAX_ART_SIDE, art_cost};
@@ -28,10 +28,15 @@ fn door(svg: &str) -> Result<ArtCost, String> {
         let (wide, high, points) = renderer(svg).expect("the renderer reads what the door takes");
         assert!(wide <= MAX_ART_SIDE && high <= MAX_ART_SIDE, "{svg}: taken at {wide} by {high}");
         assert_eq!(cost.numbers, 2 * points, "{svg}");
-        assert_eq!(cost.paint % (wide.ceil() as u64 * high.ceil() as u64), 0, "{svg}: paint on another size");
+        let area = wide.ceil() as u64 * high.ceil() as u64;
+        assert!(cost.paint == 0 || cost.paint >= area, "{svg}: paint on another size");
     }
     cost
 }
+
+/// What a fill of 8 by 8 costs on a picture of 8 by 8: its 64 pixels, and 16 for each of the 16 rows its two
+/// sides cross. A triangle on the same picture crosses as many.
+const RECT: u64 = 64 + 16 * 16;
 
 fn rooted(root: &str) -> String {
     format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {root}><circle cx="4096" cy="4096" r="4096"/></svg>"#)
@@ -62,7 +67,7 @@ fn a_picture_inside_a_processing_instruction_is_not_the_one_the_door_reads() {
         let inside = format!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><?{name} x ?><rect width="8" height="8"/></svg>"#
         );
-        assert_eq!(door(&inside).map(|cost| cost.paint).ok(), renderer(&inside).map(|_| 64), "{name}");
+        assert_eq!(door(&inside).map(|cost| cost.paint).ok(), renderer(&inside).map(|_| RECT), "{name}");
     }
 }
 
@@ -87,7 +92,7 @@ fn a_name_in_another_case_than_svg_writes_it_is_refused() {
     let units = r#"<radialGradient id="g" gradientunits="userSpaceOnUse"/>"#;
     assert_eq!(inside(units), Err("it contains the attribute `gradientunits`".into()));
     let own = r##"<linearGradient id="g" gradientUnits="userSpaceOnUse" gradientTransform="rotate(4)" x2="8"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient><path d="M0 0L8 8H0Z" fill="url(#g)"/>"##;
-    assert_eq!(inside(own), Ok(ArtCost { numbers: 6, paint: 4 * 64 }), "the names with a capital");
+    assert_eq!(inside(own), Ok(ArtCost { numbers: 6, paint: 4 * RECT }), "the names with a capital");
 }
 
 // The renderer takes a `viewBox` it cannot read for none at all, and then sizes the picture to what is in it. The
@@ -98,15 +103,16 @@ fn a_view_box_however_written_is_sized_as_the_renderer_sizes_it() {
     for view in odd {
         let said = door(&rooted(&format!(r#"viewBox="{view}""#))).unwrap_err();
         let sized = said.starts_with("the renderer sizes it 8192 by 8192") || said.contains("the renderer reads");
-        // The renderer reads `0 0.256.256 8 8` as four numbers, the second and third under 1: a picture 0.256 wide.
-        assert!(sized || said.starts_with("a shape reaches"), "{view}: {said}");
+        // The renderer reads `0 0.256.256 8 8` as four numbers, the second and third under 1: a picture 0.256 wide,
+        // which it has no pixel for.
+        assert!(sized || said.ends_with("a picture is at least 0.5 a side"), "{view}: {said}");
     }
     let read =
         ["0 0 8 8", "0,0,8,8", "0, 0, 8, 8", "0 0  8 8", " 0 0 8 8 ", "0 0 8. 8", "0 0 .8e1 8", "+0 0 8 8", "0\t0 8 8"];
     for view in read {
         let svg =
             format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}"><rect width="8" height="8"/></svg>"#);
-        assert_eq!(door(&svg), Ok(ArtCost { numbers: 8, paint: 64 }), "{view}");
+        assert_eq!(door(&svg), Ok(ArtCost { numbers: 8, paint: RECT }), "{view}");
     }
     // A file that states an attribute twice is not XML, to the renderer or to the door.
     for root in [r#"viewBox="0 0 256 256" viewBox="0 0 8 8""#, r#"width="8" height="8" width="9""#] {
@@ -167,7 +173,7 @@ fn a_file_with_a_dtd_is_refused_though_the_renderer_would_read_it() {
     // A character reference is read by the one parser, so it is what the renderer reads too.
     let referred =
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="&#56;" height="8"/></svg>"#;
-    assert_eq!(door(referred).map(|cost| cost.paint), Ok(64));
+    assert_eq!(door(referred).map(|cost| cost.paint), Ok(RECT));
 }
 
 // The door's parser is the renderer's only while the two are one package. The kit asks for the version GPUI builds
@@ -183,4 +189,6 @@ fn the_door_and_the_renderer_build_one_version_of_the_parser() {
     };
     assert_eq!(versions("usvg"), ["version = \"0.46.0\""], "one parser, the one the door was measured on");
     assert_eq!(versions("resvg"), versions("usvg"), "the renderer draws with the parser's own version");
+    // The door walks a path with the library the parser reads one with, before the parser does (`svg_text.rs`).
+    assert_eq!(versions("svgtypes"), ["version = \"0.16.2\""], "one reader of a path, the one whose calls were read");
 }

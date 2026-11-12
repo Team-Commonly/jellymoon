@@ -5,11 +5,17 @@
 
 use std::fs;
 
-use sticker_kit::theme::{ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_REACH, MIN_ART_STROKE, art_cost};
+use sticker_kit::theme::{
+    ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_REACH, MIN_ART_SIDE, MIN_ART_STROKE, ROW_PAINT, art_cost,
+};
 use sticker_kit::{Mood, Theme, ThemeError, art};
 
-/// One fill, and the 13 points the renderer draws a circle with.
-const CIRCLE: &str = r#"<circle r="4"/>"#;
+/// One fill, and the 13 points the renderer draws a circle with. It is above the picture, so no edge of it crosses
+/// a row: it costs its fill and nothing more.
+const CIRCLE: &str = r#"<circle cy="-9" r="4"/>"#;
+
+/// How the door says what paint is.
+const PAINT: &str = "fills and strokes x width x height, and 16 for each row an edge crosses; x 4 for a gradient";
 
 /// A picture `side` wide and high.
 fn sized(side: u32, inside: &str) -> String {
@@ -33,17 +39,28 @@ fn an_art_file_is_held_to_its_fills_and_strokes_times_its_size() {
     assert_eq!(MAX_ART_PAINT, 64 * 256 * 256);
     assert_eq!(art_cost(&sized(256, &CIRCLE.repeat(64))), Ok(ArtCost { numbers: 64 * 26, paint: MAX_ART_PAINT }));
     let said = art_cost(&sized(256, &CIRCLE.repeat(65))).unwrap_err();
-    assert_eq!(said, "its paint (fills and strokes x width x height, x 4 for a gradient) is 4259840, over 4194304");
+    assert_eq!(said, format!("its paint ({PAINT}) is 4259840, over 4194304"));
     assert_eq!(art_cost(&sized(128, &CIRCLE.repeat(99))).map(|cost| cost.paint), Ok(99 * 128 * 128));
     // A stroke is painted as a fill is, and a shape with neither is not painted.
-    let both = r##"<circle r="4" stroke="#123456" stroke-width="2"/>"##;
+    let both = r##"<circle cy="-9" r="4" stroke="#123456" stroke-width="2"/>"##;
     assert_eq!(art_cost(&sized(256, &both.repeat(32))).map(|cost| cost.paint), Ok(MAX_ART_PAINT));
     assert!(art_cost(&sized(256, &both.repeat(33))).is_err());
     assert_eq!(art_cost(&sized(256, r#"<circle r="4" fill="none"/>"#)), Ok(ArtCost { numbers: 26, paint: 0 }));
+    // A side is at least half a pixel: under it the renderer has no pixel to draw, and refuses the picture.
+    assert_eq!(MIN_ART_SIDE, 0.5);
+    let tiny = |side: &str| {
+        let root = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="{side}" height="30">"#);
+        art_cost(&format!(r#"{root}<rect y="-9" width="30" height="2"/></svg>"#)).map(|cost| cost.paint)
+    };
+    assert_eq!(tiny("0.5"), Ok(30));
+    for side in ["0.49", "1e-9"] {
+        let said = tiny(side).unwrap_err();
+        assert!(said.ends_with(" by 30: a picture is at least 0.5 a side"), "{said}");
+    }
 
     let stops = r##"<stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/>"##;
     let gradient = |shapes: usize| {
-        let filled = r#"<circle r="4" fill="url(#g)"/>"#.repeat(shapes);
+        let filled = r#"<circle cy="-9" r="4" fill="url(#g)"/>"#.repeat(shapes);
         sized(256, &format!(r#"<linearGradient id="g">{stops}</linearGradient>{CIRCLE}{filled}"#))
     };
     let paint = |shapes: usize| art_cost(&gradient(shapes)).map(|cost| cost.paint);
@@ -51,7 +68,9 @@ fn an_art_file_is_held_to_its_fills_and_strokes_times_its_size() {
     assert!(paint(15).is_ok() && paint(16).is_err());
 
     let rooted = |root: &str| {
-        format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {root}>{CIRCLE}<g><rect width="1" height="1"/></g></svg>"#)
+        format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" {root}>{CIRCLE}<g><rect y="-2" width="1" height="1"/></g></svg>"#
+        )
     };
     for (root, paint) in [
         (r#"width="10" height="20.5""#, 2 * 10 * 21),
@@ -99,40 +118,127 @@ fn a_shape_stays_within_reach_of_its_picture_with_its_stroke() {
         r#"<circle cx="4" cy="4" r="137"/>"#.to_string(),
         r#"<g transform="translate(140 0)"><circle cx="4" cy="4" r="4"/></g>"#.to_string(),
         r#"<g transform="scale(40)"><circle cx="4" cy="4" r="4"/></g>"#.to_string(),
-        r#"<path d="M0 0L1e30 4"/>"#.to_string(),
+        r#"<path d="M0 0L137 4"/>"#.to_string(),
+        // Past the bottom alone, and past the top alone.
+        r#"<rect y="130" width="8" height="7"/>"#.to_string(),
+        r#"<rect y="-129" width="8" height="7"/>"#.to_string(),
     ] {
         assert_eq!(scaled(&inside), far, "{inside}");
     }
+    // A stroke reaches as far as the path's box and its drawn width, whatever a group does to it. Under a slant
+    // the renderer's own box of a stroke is the path's and no more, and this was taken: 64 short lines under a
+    // stroke a million pixels wide.
+    for slant in ["matrix(1000 0.0001 0 1000 0 0)", "matrix(1000 0 0.0001 1000 0 0)", "rotate(0.001) scale(1000)"] {
+        let slanted = sized(256, &format!(r#"<g transform="{slant}">{}</g>"#, WIDE.repeat(64)));
+        assert_eq!(art_cost(&slanted), far, "{slant}");
+    }
+    // A mitre's point is as far from the path as two of the stroke's widths, and no farther.
+    let wide = |width: u32| {
+        scaled(&format!(r##"<path d="M0 0L8 8" fill="none" stroke="#000" stroke-width="{width}"/>"##)).is_ok()
+    };
+    assert!(wide(64) && !wide(65));
+    assert!(scaled(r#"<rect y="129" width="8" height="7"/>"#).is_ok());
     for near in [r#"<circle cx="4" cy="4" r="132"/>"#, r#"<g transform="translate(-120 130)"><circle r="4"/></g>"#] {
         assert!(scaled(near).is_ok(), "{near}: {:?}", scaled(near));
     }
 }
 
+/// A short line under a stroke a thousand wide.
+const WIDE: &str = r##"<path d="M0.1 0.1L0.15 0.15" fill="none" stroke="#123456" stroke-opacity="0.3" stroke-width="1000" stroke-linecap="round"/>"##;
+
 // A stroke drawn a pixel wide or under is a hairline to the renderer, ten times slower by the line: 511 lines under
-// a stroke of 0.016 on this picture took 0.07 s, and 1.64 s under one of 0.015.
+// a stroke of 0.016 on this picture took 0.07 s, and 1.64 s under one of 0.015. (504 lines as tall as the picture
+// are now all the paint of a file.)
 #[test]
 fn a_stroke_is_no_thinner_than_a_drawn_pixel() {
     assert_eq!(MIN_ART_STROKE, 0.51);
-    let lines: String = (1..512).map(|i| format!("L{} {}", (i * 3) % 8, (i % 2) * 8)).collect();
+    let lines: String = (1..505).map(|i| format!("L{} {}", (i * 3) % 8, (i % 2) * 8)).collect();
     let stroked = |width: &str, inside: &str| {
         let path = format!(r##"<path d="M0 0{inside}" fill="none" stroke="#123456" stroke-width="{width}"/>"##);
         scaled(&path).map(|cost| cost.numbers)
     };
     for width in ["0.016", "0.03", "1", "8"] {
-        assert_eq!(stroked(width, &lines), Ok(1024), "{width}");
+        assert_eq!(stroked(width, &lines), Ok(1010), "{width}");
     }
     for width in ["0.015", "0.01", "0.0001", "1e-9"] {
         let said = stroked(width, &lines).unwrap_err();
         assert!(said.starts_with("a stroke is dashed, or drawn ") && said.ends_with(", thinner than 0.51"), "{said}");
     }
     assert!(stroked("0.01", &"C1 1 2 2 3 3".repeat(170)).is_err());
-    assert_eq!(stroked("0", &lines), Ok(1024), "a stroke of no width is not drawn");
+    assert_eq!(stroked("0", &lines), Ok(1010), "a stroke of no width is not drawn");
     // The width is the drawn one: a group that makes the picture smaller makes its strokes thinner.
     let grouped = |scale: &str| {
         let line = r##"<path d="M0 0L8 8" stroke="#000" stroke-width="1"/>"##;
         scaled(&format!(r#"<g transform="scale({scale})">{line}</g>"#))
     };
     assert!(grouped("0.02").is_ok() && grouped("0.01").is_err() && grouped("1 0.01").is_err());
+    // The edge itself, on a picture drawn a pixel to a unit.
+    let line = |width: &str| {
+        art_cost(&sized(64, &format!(r##"<path d="M0 0L8 8" stroke="#000" stroke-width="{width}"/>"##))).is_ok()
+    };
+    assert_eq!(["0.51", "0.509", "0.5", "0.49"].map(line), [true, false, false, false]);
+}
+
+/// The stops of a gradient named `g`.
+const GRADIENT: &str = r##"<linearGradient id="g" x2="0.02" gradientTransform="rotate(33)"><stop offset="0" stop-color="#f00"/><stop offset="0.5" stop-color="#0f0"/><stop offset="1" stop-color="#00f"/></linearGradient>"##;
+
+/// `points` points from the left of a picture of 256 to its right, each at the top or the bottom in turn: every
+/// edge crosses every row.
+fn ragged(points: usize) -> String {
+    (0..points).map(|i| format!("{:.2},{} ", i as f32 * 256.0 / points as f32, (i % 2) * 256)).collect()
+}
+
+// The renderer walks every edge of a shape down every row it crosses, and paints a row in the pieces the edges
+// cut it into. A fill was counted by the picture's area alone, so eight ragged shapes as tall as the picture were
+// all the paint of a file and no more, and took 7.6 s to draw. An edge is counted by the rows it crosses.
+#[test]
+fn a_fill_and_a_stroke_are_counted_by_the_rows_their_edges_cross() {
+    assert_eq!(ROW_PAINT, 16);
+    let area = 256 * 256;
+    let paint = |inside: &str| art_cost(&sized(256, &format!("{GRADIENT}{inside}"))).map(|cost| cost.paint);
+    // Down 256 rows, up 256, and no row to close it.
+    assert_eq!(paint(r#"<path d="M0 0L8 256L16 0z"/>"#), Ok(area + 16 * 512));
+    assert_eq!(paint(r#"<path d="M0 0L8 256L16 0"/>"#), Ok(area + 16 * 512));
+    assert_eq!(paint(r#"<path d="M0 0L8 256"/>"#), Ok(area + 16 * 512), "a fill closes what is left open");
+    let along = r##"<path d="M0 9h200" fill="none" stroke="#123"/>"##;
+    assert_eq!(paint(along), Ok(area), "an edge along a row crosses none");
+    // A stroke has two sides, a gradient is four times a colour, and both are eight.
+    let stroked = |paint: &str| format!(r#"<path d="M0 0L8 256L16 0z" fill="none" stroke="{paint}"/>"#);
+    assert_eq!(paint(&stroked("#123")), Ok(area + 2 * 16 * 512));
+    assert_eq!(paint(r#"<path d="M0 0L8 256L16 0z" fill="url(#g)"/>"#), Ok(4 * (area + 16 * 512)));
+    assert_eq!(paint(&stroked("url(#g)")), Ok(4 * (area + 2 * 16 * 512)));
+    // Only the rows of the picture are counted, where the path is drawn, and a curve by the points that pull it.
+    assert_eq!(paint(r#"<path d="M0 -100L8 356L16 -100z"/>"#), Ok(area + 16 * 512));
+    assert_eq!(paint(r#"<path d="M0 -100L8 -1L16 -100z"/>"#), Ok(area));
+    assert_eq!(paint(r#"<g transform="scale(2)"><path d="M0 0L4 128L8 0z"/></g>"#), Ok(area + 16 * 512));
+    assert_eq!(paint(r#"<g transform="rotate(90)"><path d="M0 0L8 -256L16 0z"/></g>"#), Ok(area + 16 * 32));
+    assert_eq!(paint(r#"<path d="M0 0Q8 256 16 0z"/>"#), Ok(area + 16 * 512));
+    assert_eq!(paint(r#"<path d="M0 0L8 256L16 0zM20 0L28 100z"/>"#), Ok(area + 16 * 712), "every piece of a path");
+
+    // The picture a review measured at 7.6 s in a debug build (14 s on a busy machine), and its three neighbours.
+    let shapes = |count: usize, points: usize, paint: &str| {
+        sized(
+            256,
+            &format!("{GRADIENT}{}", format!(r#"<polyline points="{}" {paint}/>"#, ragged(points)).repeat(count)),
+        )
+    };
+    let see_through = r##"fill="#123456" fill-opacity="0.5""##;
+    let slow = [
+        shapes(8, 192, r#"fill="url(#g)" fill-opacity="0.5" fill-rule="evenodd" stroke="url(#g)" stroke-opacity="0.5" stroke-width="0.52""#),
+        shapes(8, 192, r#"fill="url(#g)" fill-opacity="0.5" fill-rule="evenodd" stroke="url(#g)" stroke-opacity="0.5" stroke-width="3""#)
+            .replace("linearGradient", "radialGradient"),
+        shapes(32, 48, &format!(r##"{see_through} stroke="#123456" stroke-opacity="0.5" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round""##)),
+        shapes(1, 1535, see_through),
+    ];
+    for (nth, svg) in slow.iter().enumerate() {
+        let said = art_cost(svg).unwrap_err();
+        assert!(said.starts_with(&format!("its paint ({PAINT}) is ")), "{nth}: {said}");
+    }
+    // What is left of the last one inside the count: 1008 edges, each down every row, and that is all of it.
+    let whole = art_cost(&shapes(1, 1008, see_through)).map(|cost| cost.paint);
+    assert_eq!(whole, Ok(area + 16 * 256 * 1008));
+    assert_eq!(whole, Ok(MAX_ART_PAINT));
+    assert!(art_cost(&shapes(1, 1010, see_through)).is_err());
 }
 
 #[test]
@@ -153,7 +259,7 @@ fn a_theme_s_art_files_together_are_held_to_the_same_two_counts() {
     let half = sized(256, &CIRCLE.repeat(32));
     let small = |shapes: usize| sized(16, &CIRCLE.repeat(shapes));
     assert_eq!(write(&half, &small(0), &half), Ok(()));
-    let paint = "with the art before it, paint (fills and strokes x width x height, x 4 for a gradient) is 4194560, over 4194304";
+    let paint = format!("with the art before it, paint ({PAINT}) is 4194560, over 4194304");
     assert_eq!(write(&half, &small(1), &half), Err(format!("art.badge: {paint}")));
     assert_eq!(write(&half, &half, &small(1)), Err(format!("art.badge: {paint}")));
 
@@ -187,18 +293,49 @@ fn a_theme_s_art_files_together_are_held_to_the_same_two_counts() {
 }
 
 /// The same two counts for the kit's own art, which is built in code and does not come through the door (it blurs).
-/// Counted here as the door counts, on the renderer's tree: every point, and every fill and stroke.
+/// Counted here as the door counts, on the renderer's tree: every point, every fill and stroke, and every row an
+/// edge crosses.
 fn counted(svg: &str) -> ArtCost {
-    fn walk(group: &usvg::Group, cost: &mut ArtCost) {
+    use usvg::tiny_skia_path::PathSegment;
+    fn rows(path: &usvg::Path, high: f32) -> u64 {
+        let to = path.abs_transform();
+        let row = |point: usvg::tiny_skia_path::Point| (to.ky * point.x + to.sy * point.y + to.ty).clamp(0.0, high);
+        let (mut began, mut on, mut rows) = (0.0_f32, 0.0_f32, 0.0_f32);
+        for segment in path.data().segments() {
+            let through = match segment {
+                PathSegment::MoveTo(point) => {
+                    rows += (began - on).abs();
+                    (began, on) = (row(point), row(point));
+                    continue;
+                }
+                PathSegment::LineTo(point) => [point; 3],
+                PathSegment::QuadTo(pull, point) => [pull, point, point],
+                PathSegment::CubicTo(one, two, point) => [one, two, point],
+                PathSegment::Close => {
+                    rows += (began - on).abs();
+                    on = began;
+                    continue;
+                }
+            };
+            for point in through {
+                rows += (row(point) - on).abs();
+                on = row(point);
+            }
+        }
+        (rows + (began - on).abs()).ceil() as u64
+    }
+    fn walk(group: &usvg::Group, area: u64, high: f32, cost: &mut ArtCost) {
         for node in group.children() {
             match node {
-                usvg::Node::Group(group) => walk(group, cost),
+                usvg::Node::Group(group) => walk(group, area, high, cost),
                 usvg::Node::Path(path) => {
                     cost.numbers += 2 * path.data().points().len();
-                    let fill = path.fill().map(usvg::Fill::paint);
-                    let paints = fill.into_iter().chain(path.stroke().map(usvg::Stroke::paint));
-                    cost.paint +=
-                        paints.map(|paint| if matches!(paint, usvg::Paint::Color(_)) { 1 } else { 4 }).sum::<u64>();
+                    let fill = path.fill().map(|fill| (fill.paint(), 1));
+                    let paints = fill.into_iter().chain(path.stroke().map(|stroke| (stroke.paint(), 2)));
+                    for (paint, sides) in paints {
+                        let times = if matches!(paint, usvg::Paint::Color(_)) { 1 } else { 4 };
+                        cost.paint += times * (area + ROW_PAINT * sides * rows(path, high));
+                    }
                 }
                 _ => {}
             }
@@ -206,13 +343,16 @@ fn counted(svg: &str) -> ArtCost {
     }
     let tree = usvg::Tree::from_str(svg, &usvg::Options::default()).unwrap();
     let mut cost = ArtCost::default();
-    walk(tree.root(), &mut cost);
     let area = tree.size().width().ceil() as u64 * tree.size().height().ceil() as u64;
-    ArtCost { numbers: cost.numbers, paint: cost.paint * area }
+    walk(tree.root(), area, tree.size().height(), &mut cost);
+    cost
 }
 
 #[test]
 fn the_kit_s_own_art_is_inside_each_count() {
+    let both =
+        sized(256, r##"<path d="M0 0Q8 300 16 0zM20 9C1 1 2 2 30 40" stroke="url(#none) #123" stroke-width="3"/>"##);
+    assert_eq!(Ok(counted(&both)), art_cost(&both), "counted here as the door counts");
     for theme in [Theme::sticker(), Theme::plain()] {
         let (p, m) = (&theme.palette, &theme.metrics);
         let pieces = [
@@ -226,8 +366,9 @@ fn the_kit_s_own_art_is_inside_each_count() {
             numbers: all.numbers + one.numbers,
             paint: all.paint + one.paint,
         });
-        // A theme that draws what the kit draws, without its blur, is one the door takes: 74% and 57% of the counts.
-        assert_eq!(all, ArtCost { numbers: 2260, paint: 2_388_256 }, "{}", theme.name);
+        // A theme that draws what the kit draws, without its blur, is one the door takes: 74% and 61% of the counts.
+        // The rows its edges cross are 163440 of that paint.
+        assert_eq!(all, ArtCost { numbers: 2260, paint: 2_551_696 }, "{}", theme.name);
         assert!(all.numbers < MAX_ART_NUMBERS && all.paint < MAX_ART_PAINT);
     }
 }

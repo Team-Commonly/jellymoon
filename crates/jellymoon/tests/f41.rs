@@ -7,7 +7,7 @@
 //! starts no run; `f41/cap.rs` the three runs that may go at once; `f41/named.rs` the folder a name leads to;
 //! `f41/never.rs` a harness that never begins a run; `f41/left.rs` what a killed command left; `f41/asked.rs` a
 //! left copy whose repo cannot be asked, or is asked and cut off; `f41/shapes.rs` the records, repos and
-//! checkouts a look tells apart before it removes a branch; `f41/line.rs` the command a run is started
+//! checkouts a look tells apart before it removes a branch; `f41/stood.rs` whose a left copy's branch is; `f41/line.rs` the command a run is started
 //! with, and what an asker is told of one that started none.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -29,6 +29,8 @@ mod never;
 mod refused;
 #[path = "f41/shapes.rs"]
 mod shapes;
+#[path = "f41/stood.rs"]
+mod stood;
 mod support;
 #[path = "f39/world.rs"]
 mod world;

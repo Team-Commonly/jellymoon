@@ -11,24 +11,24 @@ use super::{DAY, World, found_world, printed};
 use crate::support::skipped;
 
 /// What is left of a run in the home: its copies, and whether anything is kept for it.
-type Home = (Vec<String>, bool);
-const NONE: Home = (Vec::new(), false);
+pub(super) type Home = (Vec<String>, bool);
+pub(super) const NONE: Home = (Vec::new(), false);
 
 impl World {
     /// A copy of a repo that a killed command left, and its branch.
-    fn left_copy(&self, repo: &Path) -> (String, String) {
+    pub(super) fn left_copy(&self, repo: &Path) -> (String, String) {
         let made = printed(&self.run(&["copy", "make", "--repo", repo.to_str().unwrap()]));
         let run = made["run"].as_str().unwrap().to_string();
         fs::write(self.jm("runs").join(&run).join("start.lock"), "").unwrap();
         (format!("jellymoon/run-{run}"), run)
     }
 
-    fn home_of(&self, run: &str) -> Home {
+    pub(super) fn home_of(&self, run: &str) -> Home {
         (self.copies(), self.kept_for(run))
     }
 
     /// A commit on the copy's branch that nothing else has, made in the copy.
-    fn commit_of_its_own(&self, repo: &Path, run: &str) -> String {
+    pub(super) fn commit_of_its_own(&self, repo: &Path, run: &str) -> String {
         self.git(&self.jm("copies").join(run), &["commit", "-q", "--allow-empty", "-m", "the person's own"]);
         self.commit(repo, &format!("jellymoon/run-{run}"))
     }
@@ -88,6 +88,20 @@ fn a_record_whose_repo_is_a_worktree_s_git_folder_removes_no_branch() {
     fs::create_dir(own.parent().unwrap()).unwrap();
     fs::rename(w.own_of(&run), &own).unwrap();
     w.renamed(&run, within.to_str().unwrap(), &own);
+    assert_eq!(w.look(&[]), 0);
+    assert_eq!((w.branches(&repo), w.home_of(&run)), (vec![branch], NONE));
+}
+
+// The copy's git folder put one folder deeper in the repo's `worktrees`: git keeps none there.
+#[test]
+fn a_record_whose_own_is_deeper_in_the_repo_s_worktrees_removes_no_branch() {
+    let w = found_world();
+    let repo = w.repo("alpha");
+    let (branch, run) = w.left_copy(&repo);
+    let own = repo.join(".git").join("worktrees").join("deep").join(&run);
+    fs::create_dir(own.parent().unwrap()).unwrap();
+    fs::rename(w.own_of(&run), &own).unwrap();
+    w.renamed(&run, repo.join(".git").to_str().unwrap(), &own);
     assert_eq!(w.look(&[]), 0);
     assert_eq!((w.branches(&repo), w.home_of(&run)), (vec![branch], NONE));
 }
@@ -168,10 +182,11 @@ fn a_branch_another_ref_is_a_name_for_is_kept() {
 
 // The `gitdir` file in the copy's git folder must name this run's copy, and be a plain file no longer than a
 // path. One that names another run's place in `copies`, one with the right path and nine thousand line breaks
-// after it, and a link to a file that holds the right path: the repo does not list this copy.
+// after it, a link to a file that holds the right path, and one that names a folder of the run's name in a
+// folder that is there and is not the home's `copies`: the repo does not list this copy.
 #[test]
 fn a_gitdir_file_that_names_another_run_or_is_too_long_or_is_a_link_has_nothing_done_in_its_repo() {
-    for shape in ["another run", "too long", "a link"] {
+    for shape in ["another run", "too long", "a link", "another folder"] {
         let w = found_world();
         let repo = w.repo("alpha");
         let (branch, run) = w.left_copy(&repo);
@@ -180,6 +195,10 @@ fn a_gitdir_file_that_names_another_run_or_is_too_long_or_is_a_link_has_nothing_
         match shape {
             "another run" => fs::write(&file, wrote.replace(&run, "r00000000000000aa")).unwrap(),
             "too long" => fs::write(&file, wrote + &"\n".repeat(9000)).unwrap(),
+            "another folder" => {
+                let named = w.at("work").join(&run).join(".git");
+                fs::write(&file, format!("{}\n", named.display())).unwrap();
+            }
             _ => {
                 let real = file.with_extension("real");
                 fs::rename(&file, &real).unwrap();

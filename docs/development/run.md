@@ -446,7 +446,7 @@ does in a repo goes by what that repo holds (`record::asked`, `copy/back.rs`):
 |---|---|
 | lists the copy as a worktree of its own: the copy's git folder is directly in the `worktrees` folder of the repo's git folder, which is a repo's own, and its `gitdir` file, which git wrote, names `copies/<id>/.git` | the take-back above |
 | answers and does not list it: the repo's git folder resolves, and the copy's git folder or its `gitdir` file is not there, is anywhere else than directly in that `worktrees`, or names another place; or the folder named as the repo is a worktree's git folder | nothing in that repo: no git is asked and no branch is removed. What the home holds of the run goes |
-| could not be asked: its git folder does not resolve (moved away, on a volume that is not mounted, below a folder that cannot be read), or the copy's git folder or `gitdir` file cannot be read for another reason than not being there | nothing at all. The copy and its record are kept for the next look |
+| could not be asked: its git folder does not resolve (moved away, on a volume that is not mounted, below a folder that cannot be read), or the copy's git folder or `gitdir` file cannot be read for another reason than not being there, or the record names the repo or the copy's git folder by a path that does not start at a root, which this process and git would read from two different folders | nothing at all. The copy and its record are kept for the next look |
 
 Where the two folders are is asked of them as the system resolves them, never of their names: a record that
 reaches the copy's git folder by `..` out of another repo's, or through a link put in another repo's, names a
@@ -476,15 +476,30 @@ command that takes its own never-started copy back, and for a copy that could no
 **What is kept.** A left copy's branch that is someone's by now, whoever made it so, stays, and the copy's
 folder, the registration and the record go all the same (`back::theirs`). It is someone's when any of these
 holds:
-- a checkout stands on it: `HEAD` is that branch in the repo's own checkout, or in any worktree of the repo
-  other than the copy (`git symbolic-ref HEAD`, asked through each git folder in `worktrees`). The copy's own
-  `HEAD` is that branch because the copy was made so, and is not counted. A commit made in such a checkout is
-  reached by its `HEAD`, so the next rule alone would not keep it;
+- a checkout stands on it, in the repo's own checkout or in any worktree of the repo other than the copy
+  (asked through each git folder in `worktrees`; the copy's own `HEAD` is that branch because the copy was
+  made so, and is not counted). A checkout stands on a branch when its `HEAD` is that branch (`git
+  symbolic-ref HEAD`), and when its `HEAD` is detached by a rebase or a bisect that goes back to the branch:
+  git keeps the branch's name in `rebase-merge/head-name`, `rebase-apply/head-name` or `BISECT_START` in that
+  checkout's git folder, and itself refuses to delete a branch one of them names. Each is read only as a
+  plain file no longer than a path, in a real folder: anything else at those names, and a worktree whose
+  `HEAD` git cannot read, is a checkout that could not be asked, and the take-back is put off;
 - another ref is a name for it, a symbolic ref (`git for-each-ref --format=%(symref)`), which would be left
   naming nothing;
-- it holds a commit no other ref of the repo and not its checkout has. The checkout's `HEAD` is asked only
-  when it names a commit (`git rev-parse --verify --quiet HEAD^{commit}`): on a branch with no commit yet,
-  as after `git checkout --orphan`, git fails on the name, and that checkout reaches nothing.
+- it holds a commit no other ref of the repo has (`git rev-list <branch> --not --exclude=<branch>
+  --glob=refs/*`: every ref, tags and remote branches too). **A detached `HEAD` holds nothing**, and no
+  `HEAD` is in the question: one that names a branch adds nothing to the refs, and one that names none is no
+  ref. So a commit that only this branch and a checkout detached at it have is the branch's own, and the
+  branch stays (`tests/f41/stood.rs`).
+
+**A branch that has not moved since the copy was made has nothing of its own.** The copy's record keeps the
+commit the copy was made at (`base`, asked of git before it makes the copy). A branch still at that commit
+goes, once nothing stands on it and no ref names it, without the last question: a copy made of a checkout
+detached at a commit no ref has would else leave its branch for good, since that commit is one "no other ref
+has". The commit is a word from a file, so it is used only for that and only last: it never removes a branch
+a checkout stands on, and a record that lies can at most remove a branch whose tip is exactly the commit it
+names, in the repo that lists the copy. A record with no `base`, as a build before this wrote, falls to the
+question of the refs alone, and keeps the branch of such a copy.
 
 A copy an agent may have written in is never removed. Nothing outside Jellymoon's
 home is touched but that one branch and git's registration of the copy, as any take-back reaches them
@@ -493,15 +508,15 @@ home is touched but that one branch and git's registration of the copy, as any t
 **For thirty days.** A take-back that could not be done (the repo could not be asked, git failed or ran past
 its limit, `copies/<id>` could not be removed) puts the time in the copy's record, `put_off`, the first time,
 and is tried again at every look. A time there that is later than now, written by hand or before a clock was
-set back, would keep the copy for ever: it is taken as now, and written so. A repo that was away and is back has its copy taken back whole. At the first
-look more than thirty days after that time the repo is taken to be gone for good: the copy's folder and
+set back, would keep the copy for ever: it is taken as now, and written so. A repo that was away and is back
+has its copy taken back whole. At the first look more than thirty days after that time the repo is taken to be gone for good: the copy's folder and
 `runs/<id>` go, and nothing is done in any repo. The copy's folder goes only as a real folder in a real
 `copies`, never through a link. That look says so, once, in one line on stderr of `jellymoon page`, and is no
 failure: `jellymoon: the copy of run <id> could not be taken back for thirty days and is given up: what
 Jellymoon kept of it is removed, and its branch jellymoon/run-<id> may still be in its repo`. A page has no
 place for a run no wish names, so the line is not on it: core hands it back beside the page
-(`with_made_said`), and the app, which calls `with_made`, and a `jellymoon run` do not say it. A repo that comes back later than that keeps the branch and
-the registration (`git worktree prune` and `git branch -D` remove them). The bound is time, and not the
+(`with_made_said`), and the app, which calls `with_made`, and a `jellymoon run` do not say it. A repo that
+comes back later than that keeps the branch and the registration (`git worktree prune` and `git branch -D` remove them). The bound is time, and not the
 repo's folder being gone, because a look cannot tell a repo that was removed from one that was moved, or from
 a volume that is not mounted.
 
@@ -513,8 +528,27 @@ again with what git said, leaves a record: the repo lists the copy by then, or d
 - Another folder at the repo's path reads as a repo that answers and does not list the copy. A repo moved
   away, with another repo, or any folder that resolves, put where it was: the record and the copy go at the
   first look, not after thirty days, and the repo moved back keeps its branch and its registration.
-- A worktree of the repo whose `HEAD` cannot be read (a git folder in `worktrees` that is damaged) makes the
-  question fail: the branch and the registration stay, for thirty days, as for any git step that failed.
+- A worktree of the repo whose `HEAD` cannot be read (a git folder in `worktrees` that is damaged), or with
+  something other than a plain file where git keeps a rebase's or a bisect's branch, makes the question fail:
+  the branch and the registration stay, for thirty days, as for any git step that failed.
+- A copy made of a checkout detached at a commit no ref has, by a build that kept no `base` in the record,
+  leaves its branch: the refs alone cannot tell that commit from one made on the branch.
+- A record that lies about `base` removes a branch whose tip is the commit it names, with a commit of the
+  person's on it, when nothing stands on the branch and no ref names it. It takes someone who can write the
+  home and knows the branch's tip, and reaches only `jellymoon/run-<id>` in the repo that lists the copy. The
+  commit stays in the repo until git's own `gc`, with no ref.
+- A branch a person stands on in a way git keeps no file for is not known as stood on: a checkout detached
+  at the branch's commit by hand, with no commit of its own on the branch, loses the branch's name and no
+  commit. A `git bisect` started from a detached `HEAD` names no branch.
+- A copy the person locked (`git worktree lock`): the branch goes, git refuses to drop the registration, and
+  the record waits thirty days, then the line. The registration stays for `git worktree unlock` and `remove`.
+- At the give-up, a link at `copies/<id>` is not followed and not removed: it stays in `copies` with no
+  record.
+- A record made by hand that names a second repo, with a git folder for the copy put in that repo's
+  `worktrees` and a `gitdir` file copied there: that repo lists the copy by every sign a look has. Its branch
+  of the run's name goes if nothing of its own is on it, and the real repo keeps its branch and registration
+  with no record. Whoever can do that can write that repo's git folder, and could delete the branch there.
+- A commit made in the copy and reset away again is lost with the branch's reflog, as the person left it.
 - A branch of the run's name in a repo that answers and does not list the copy is never removed. A look cut
   off no longer leaves that, but the person can: `git worktree prune`, or git's own `gc`, run between a look
   that removed the copy's folder and the look that would have finished, drops the registration and leaves

@@ -66,7 +66,7 @@ fn shut(_: &Path, _: bool) -> bool {
     false
 }
 
-// A look does its git steps in this order: is the branch's commit its own, the branch, the repo's listing of the
+// A look does its git steps in this order: is the branch someone's, the branch, the repo's listing of the
 // copy. Cut off after any of them, by a git that never returns from it, the next look finishes: no branch stays
 // that a later look cannot take back. A third look finds nothing.
 #[test]
@@ -75,7 +75,7 @@ fn a_look_cut_off_after_any_of_its_git_steps_is_finished_by_the_next_look() {
     let (repo, wish, vars) = (w.repo("alpha"), w.wish("alpha"), w.fake_git());
     let fake = w.at("fake");
     // What the cut-off look leaves in the repo: the branch, and how many working trees it lists.
-    for (step, branch, listed) in [("rev-list", true, 2), ("update-ref", false, 2), ("remove", false, 1)] {
+    for (step, branch, listed) in [("for-each-ref", true, 2), ("update-ref", false, 2), ("remove", false, 1)] {
         let run = w.killed_in_the_claim(&wish, &repo);
         fs::write(fake.join("on"), step).unwrap();
         assert_eq!(w.look(&vars), 0, "{step}");

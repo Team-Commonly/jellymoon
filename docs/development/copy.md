@@ -85,17 +85,18 @@ taken back by the next page or run ([run.md](run.md), "A copy nothing names"), b
 for 3 seconds: the folder, its branch, git's registration of it and its record go, in that order (`copy/back.rs`).
 The order is every take-back's: the registration is how a look knows the copy as the repo's own, so it goes
 last, and a take-back cut off before it is finished by the next look. Its branch is removed only when no
-checkout of the repo but the copy stands on it, no other ref is a symbolic ref to it, and
-`git rev-list --max-count=1 <branch> --not --exclude=<branch> --glob=refs/* HEAD` prints nothing, which is to
-say when it holds no commit that another ref of the repo or its checkout does not have (`HEAD` is left out
-when it names no commit). `--all` is not asked: it counts the copy's own `HEAD`, which is this branch. A
-branch that is someone's in one of those ways is kept. A take-back by the
+checkout of the repo but the copy stands on it (by its `HEAD`, or by a rebase or a bisect stopped there), no
+other ref is a symbolic ref to it, and either it is still at the commit the record says the copy was made at
+(`base`) or `git rev-list --max-count=1 <branch> --not --exclude=<branch> --glob=refs/*` prints nothing,
+which is to say it holds no commit that another ref of the repo does not have. No `HEAD` is asked: a detached
+one is no ref. `--all` is not asked either: it counts the copy's own `HEAD`, which is this branch. A branch
+that is someone's in one of those ways is kept. A take-back by the
 command that made the copy removes the branch without asking, as nothing but that command has had the copy.
 Three more things hold only for a copy that was found: nothing is done when its start lock is held once the
 copies' lock is had; a link or a plain file at `copies/<run>` is removed as itself, and what a link leads to is
 not touched; and the repo its record names is asked first whether it lists the copy as its own worktree (the
 copy's git folder directly in the `worktrees` of the repo's own git folder, its `gitdir` file naming
-`copies/<run>/.git`). A repo that answers and does not list it has nothing done in it, and only Jellymoon's
+`copies/<run>/.git`, both named in the record by paths from the root). A repo that answers and does not list it has nothing done in it, and only Jellymoon's
 own files of the run go. A repo that could not be asked (it is not where the record says, or cannot be read)
 leaves the copy and its record for the next look. A git step that failed or ran past its limit leaves the
 record, and whatever of the branch and the registration it had not reached; the copy's folder is gone by
@@ -103,8 +104,8 @@ then, since it is removed before any git step. Either is tried again for thirty 
 copy nothing names").
 
 **The record is written before the copy is made.** `runs/<run>/copy.json` first names the git folder git is
-about to make for the copy, `worktrees/<run>` in the repo's shared git folder, and is written again once git
-has said where it put it. A command killed while git makes the copy so leaves a record a look takes the copy
+about to make for the copy, `worktrees/<run>` in the repo's shared git folder, and the commit the copy is made
+at (`base`), and is written again once git has said where it put it. A command killed while git makes the copy so leaves a record a look takes the copy
 back by.
 
 The commit is by the person: `user.name` and `user.email` as git resolves them for that repo. When either is

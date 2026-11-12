@@ -65,11 +65,15 @@ fn back(at: &Places, run: &str, careful: bool) -> Result<(), Error> {
             let git = Git::find(&at.runs, record.found).map_err(refused)?;
             let repo = git.open(&record.repo).map_err(refused)?;
             let name = format!("refs/heads/{}", branch(run));
-            let there = repo.ask(None, &[], &["rev-parse", "--verify", "--quiet", &name]).map_err(refused)?.is_some();
+            let tip = repo.ask(None, &[], &["rev-parse", "--verify", "--quiet", &name]).map_err(refused)?;
             // The branch goes before the repo's listing of the copy does: the listing is how the next look knows
             // the copy as the repo's own, so a look cut off here is finished by the next, and no branch is left
             // that nothing but a record's word says is Jellymoon's.
-            if there && !(careful && theirs(&repo, &record, &name).map_err(refused)?) {
+            let goes = match &tip {
+                Some(tip) if careful => !theirs(&repo, &record, &name, tip).map_err(refused)?,
+                tip => tip.is_some(),
+            };
+            if goes {
                 repo.run(None, &[], &["update-ref", "-d", &name]).map_err(refused)?;
             }
             if record.own.exists() {
@@ -80,16 +84,20 @@ fn back(at: &Places, run: &str, careful: bool) -> Result<(), Error> {
     gone::remove(&at.runs, run).map_err(Error::Store)
 }
 
-/// Whether a left copy's branch is someone's by now, whoever made it so, and is kept:
-/// - a checkout stands on it: `HEAD` is this branch in the repo's own checkout or in a worktree of it other than
-///   the copy, whose own `HEAD` is this branch because the copy was made so;
+/// Whether a left copy's branch, which is at `tip`, is someone's by now, whoever made it so, and is kept:
+/// - a checkout stands on it ([`stands`]): the repo's own, or a worktree of it other than the copy, whose own
+///   `HEAD` is this branch because the copy was made so;
 /// - another ref is a name for it (a symbolic ref), and would be left naming nothing;
-/// - it holds a commit of its own, one that no other ref of the repo reaches, nor its checkout. Every ref is
-///   named by `--glob`, since `--all` would count the copy's own `HEAD`. The checkout's `HEAD` is left out when
-///   it names no commit, as on a branch with none yet: git fails on such a name.
-fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
-    let on =
-        |repo: &Repo| repo.ask(None, &[], &["symbolic-ref", "--quiet", "HEAD"]).map(|on| on.as_deref() == Some(name));
+/// - it has moved since the copy was made, and holds a commit of its own, one that no other ref of the repo
+///   reaches. Every ref is named by `--glob`, since `--all` would count the copy's own `HEAD`. No `HEAD` is
+///   asked: one that names a branch adds nothing to the refs, and a detached one is no ref, so a commit only
+///   this branch and a detached `HEAD` hold is the branch's own.
+///
+/// A branch still at the commit its record says the copy was made at has nothing of its own, whatever the refs
+/// say: a copy made of a checkout detached at a commit no ref has would else keep its branch for good. That
+/// commit is a word from a file, and is asked last: it never undoes that a branch is stood on or named. It is
+/// compared whole with what git printed for the branch, so nothing shorter than a full hash is equal to it.
+fn theirs(repo: &Repo, record: &Record, name: &str, tip: &str) -> Result<bool, String> {
     let own = fs::canonicalize(&record.own).ok();
     let kept = match fs::read_dir(record.repo.join("worktrees")) {
         Ok(kept) => kept.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?,
@@ -97,18 +105,52 @@ fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
         Err(e) => return Err(e.to_string()),
     };
     let others = kept.iter().map(|kept| kept.path()).filter(|kept| kept.is_dir() && fs::canonicalize(kept).ok() != own);
-    let mut stood_on = on(repo)?;
+    let mut stood_on = stands(repo, &record.repo, name)?;
     for other in others {
-        stood_on |= on(&repo.through(&other))?;
+        stood_on |= stands(&repo.through(&other), &other, name)?;
     }
     let named = repo.run(None, &[], &["for-each-ref", "--format=%(symref)"])?;
     if stood_on || named.lines().any(|named| named == name) {
         return Ok(true);
     }
-    let head = repo.ask(None, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])?.map(|_| "HEAD");
+    if record.base.as_deref() == Some(tip) {
+        return Ok(false);
+    }
     let only = ["rev-list", "--max-count=1", name, "--not", &format!("--exclude={name}"), "--glob=refs/*"];
-    let only: Vec<&str> = only.into_iter().chain(head).collect();
     Ok(!repo.run(None, &[], &only)?.is_empty())
+}
+
+/// Whether the checkout a git folder is of stands on a branch: its `HEAD` is that branch, or `HEAD` is detached
+/// by a rebase or a bisect that goes back to it, as git says in the files it keeps for those, by the branch's
+/// whole name or its short one. git itself refuses to delete such a branch.
+fn stands(repo: &Repo, folder: &Path, name: &str) -> Result<bool, String> {
+    let mut on = repo.ask(None, &[], &["symbolic-ref", "--quiet", "HEAD"])?.as_deref() == Some(name);
+    for file in [&["rebase-merge", "head-name"][..], &["rebase-apply", "head-name"], &["BISECT_START"]] {
+        let held = state(folder, file)?;
+        on |= held.is_some_and(|held| held == name || name.strip_prefix("refs/heads/") == Some(&held));
+    }
+    Ok(on)
+}
+
+/// The line of a file git keeps in a git folder while something is going on there. None when it is not there.
+/// Each name on the way is a real folder and the last a plain file no longer than a path, or the folder cannot
+/// be asked: nothing is read through a link, which could lead out of the git folder.
+fn state(folder: &Path, file: &[&str]) -> Result<Option<String>, String> {
+    let mut at = folder.to_path_buf();
+    for (nth, part) in file.iter().enumerate() {
+        at.push(part);
+        let meta = match fs::symlink_metadata(&at) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.to_string()),
+        };
+        let last = nth + 1 == file.len();
+        if !(if last { meta.is_file() && meta.len() <= 8192 } else { meta.is_dir() }) {
+            return Err(format!("{} is not a file git keeps", at.display()));
+        }
+    }
+    let held = fs::read_to_string(&at).map_err(|e| e.to_string())?;
+    Ok(Some(held.trim_end().to_string()))
 }
 
 /// A left copy that could not be taken back at this look. The first time, the time is put in its record; a time

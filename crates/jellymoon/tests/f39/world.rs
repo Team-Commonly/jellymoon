@@ -169,6 +169,13 @@ impl World {
     /// Runs the real `git` in `folder`, as the person, and returns what it printed. git looks for a repo no higher
     /// than the test's folder, which is itself inside this repo's checkout.
     pub fn git(&self, folder: &Path, args: &[&str]) -> String {
+        let ran = self.git_ran(folder, args);
+        assert!(ran.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&ran.stderr));
+        String::from_utf8(ran.stdout).unwrap().trim_end().to_string()
+    }
+
+    /// The same, whatever git's exit: for a command that is meant to stop half way.
+    pub fn git_ran(&self, folder: &Path, args: &[&str]) -> std::process::Output {
         let mut git = Command::new("git");
         git.args(args).current_dir(folder).env_clear().envs(self.vars.iter().map(|(name, value)| (name, value)));
         git.env("GIT_CEILING_DIRECTORIES", self.dir.path());
@@ -178,9 +185,7 @@ impl World {
         if let Some(root) = env::var_os("SystemRoot") {
             git.env("SystemRoot", root); // a Windows program needs it to start
         }
-        let ran = git.output().unwrap();
-        assert!(ran.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&ran.stderr));
-        String::from_utf8(ran.stdout).unwrap().trim_end().to_string()
+        git.output().unwrap()
     }
 
     /// A repo of three files and one commit, on `main`, at `work/<path>`.

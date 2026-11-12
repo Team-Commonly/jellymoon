@@ -24,6 +24,10 @@ pub(super) struct Record {
     /// its repo, or could not finish (`back.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub put_off: Option<u64>,
+    /// The commit the copy was made at, as git named it before it made the copy. A record of an older build
+    /// has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<String>,
 }
 
 /// What a look learns of a left copy from the repo its record names.
@@ -48,7 +52,12 @@ pub(super) enum Listed {
 ///
 /// A repo that resolves and holds no such git folder, or no such file, has answered. One that does not resolve,
 /// and anything on the way that cannot be read for another reason than not being there, has not been asked.
+/// Neither has one a record names by a path that does not start at a root: this process would read it from the
+/// folder it was started in, and git from another.
 pub(super) fn asked(record: &Record, root: &Path, run: &str) -> Listed {
+    if !(record.repo.is_absolute() && record.own.is_absolute()) {
+        return Listed::Unasked;
+    }
     let (Ok(repo), Ok(root)) = (fs::canonicalize(&record.repo), fs::canonicalize(root)) else {
         return Listed::Unasked;
     };

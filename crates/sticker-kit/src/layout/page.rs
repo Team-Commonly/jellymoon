@@ -1,6 +1,7 @@
 //! The page itself: paper, punched holes, the dated tape, the title, the
 //! big character, the legend and the footer line.
 
+use super::entry::band_bottom;
 use super::{Ctx, PieceKind, line_height, piece, run};
 use crate::geom::Rect;
 use crate::scene::{Mark, Scene};
@@ -57,18 +58,22 @@ fn title(cx: &mut Ctx, scene: &Scene) {
     let left = cx.x(m.content_left);
     let (text, width) = cx.line(&scene.title, Role::Title, cx.content_right() - left);
     let height = line_height(size);
-    let top = cx.y(m.margin_y + 78.0);
+    let top = title_bottom(cx) - height;
     let mut title = piece(PieceKind::Title, "title", 0, Rect::new(left, top, width, height));
     title.text = vec![run(text, Role::Title, left, top + height / 2.0, width, size)];
     cx.out.push(title);
 }
 
+pub(crate) fn title_bottom(cx: &Ctx) -> f32 {
+    cx.y(cx.theme.metrics.margin_y + 78.0) + line_height(cx.size(Role::Title))
+}
+
 /// Places the big character and returns the top of the space left for the
-/// small ones.
+/// small ones, which is never above the band an entry stands in.
 pub(crate) fn hero(cx: &mut Ctx, scene: &Scene) -> f32 {
     let m = cx.theme.metrics;
     let Some(hero) = &scene.hero else {
-        return cx.y(m.margin_y + 78.0) + line_height(cx.size(Role::Title)) + cx.px(24.0);
+        return band_bottom(cx);
     };
     let unit = cx.px(m.hero_size) / 200.0;
     let rect = Rect::new(
@@ -78,7 +83,7 @@ pub(crate) fn hero(cx: &mut Ctx, scene: &Scene) -> f32 {
         (BODY_TOP + BODY_BOTTOM) * unit,
     );
     cx.out.push(piece(PieceKind::Hero, &hero.id, 0, rect));
-    rect.bottom() + cx.px(50.0)
+    (rect.bottom() + cx.px(50.0)).max(band_bottom(cx))
 }
 
 /// The design line the legend sits on; the grid of characters stops above it.

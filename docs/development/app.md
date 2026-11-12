@@ -125,7 +125,9 @@ the clashes, so on a page too full for all its notes it is a clash that falls in
 
 A day's page has one entry (the kit's, `crates/sticker-kit/README.md`): a field to type a wish in, and under it a
 chip for each project of the page's reading (`read.projects`) a wish can be made for, of which one is always
-chosen. The rules are core's ([wish.md](wish.md), [run.md](run.md#a-run-started-apart)) and are proved at
+chosen. It stands in the left column, under the title "what I wished for today", where the wishes are listed. The chips
+stand in one row when their names fit it and in two when they do not; the hint is "Type a wish: Tab for its project,
+Enter", short enough to be read whole in both themes. The rules are core's ([wish.md](wish.md), [run.md](run.md#a-run-started-apart)) and are proved at
 `jellymoon wish` and `jellymoon wish --run`. The app carries the words and a project's name to core, and draws
 what core keeps.
 
@@ -167,8 +169,9 @@ what core keeps.
 - **An entry with words in it is never taken away.** The window gives the page the entry of each reading step,
   and none when no project is offered any more (every folder switched off in `skip.txt` while the reading runs,
   logs that cannot be read). The kit keeps an entry that holds words, or waits, on the page as it was, with the
-  chips it had, until it is empty and answered (`Page::set_entry`). So a refusal always has the words to leave,
-  and words that were typed and not entered stay. Enter on a chip that is still drawn is asked of core like any
+  chips it had, until it holds no words and is answered (`Page::set_entry`). So a refusal always has the words to
+  leave, and words that were typed and not entered stay. Spaces alone are no words: an entry that holds only them
+  goes as an empty one does. Enter on a chip that is still drawn is asked of core like any
   other, and core refuses a project it no longer offers.
 - **A wish's note** names its wish: its body is the start of the words between quotation marks, at most 40
   characters, then core's reason. Core cleans and cuts that start (`jellymoon_core::wish_start`), as it cleans
@@ -199,6 +202,33 @@ what core keeps.
 `OnShow::offering`, `wishing`, `answered`, `asked`, `look` and `seen` need no window (`wished` is two of them in
 one, for a caller with none); `app/tests/f42.rs` and `f42/notes.rs` follow them, and `f42/run.rs` the run, through
 a made-up window that is a program of its own.
+
+## What the window does, with no window (`app/src/showing.rs`)
+
+`window.rs` is wiring: it opens the window, runs work off the window's thread, and hands each scene to the kit's
+view. What each act does is `Showing`, the day on show behind the calls the window makes, with no GPUI in it:
+
+| Act | The window calls | Then, with what the work gave |
+|---|---|---|
+| a key | `switches_theme(key, entry has the keys)`, `other_theme(name)` | |
+| the first page | `offering()` | the entry is set |
+| a step of the reading | `reading(step)` | `read(&next)`: the scene, and the step's entry |
+| once a second | `look()` | `seen(seen)`: the scene, or none for a look of a scene that is gone |
+| Enter | `wishing(words, chip's name)` | `answered(answer)`: what the entry is told, the scene, the asking |
+| the asking's end | | `asked(said)`: the scene, when there is something to say |
+| a tap on a character | `poked(id)` | `seen(seen)` |
+| a tap on an option | `chose(note, index)`: the scene at once, and a stop | `stopped(stopped)` |
+
+A page-data file has no day: every call gives nothing, and an Enter is still answered, not kept, so no entry waits
+for ever. The entry is told its words were kept only when core kept the wish. `app/tests/f43/showing.rs` makes these
+calls in the window's order, the work run on the test's thread; the two lines the window says on stderr
+(`tap_line`, `entry_line`) are there too.
+
+What stays in `window.rs`, and is run by no test: opening the window and its options (a unit test holds what is
+asked), which thread each piece of work runs on, the one-second timer, the `defer` that lets the view finish a tap
+before it takes a new scene, and the calls on the kit's view (`set_entry`, `set_scene`, `answer_entry`,
+`set_theme`, `entry_focused`). All of it needs GPUI's application running, which the app's tests do not start.
+A person's walk at a real window is still owed for it.
 
 Not covered: a wish for a project past the sixth, or for one nothing was typed in today, is made with
 `jellymoon wish`. What only a person at a window can see is not tested: the input method's candidate window,

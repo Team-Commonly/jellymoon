@@ -198,7 +198,9 @@ max_file_lines = 400
 # writes, whatever moved it, and its test makes a package and a cargo home of its own to move one four ways.
 # That test taking `CARGO_TARGET_DIR` out of what it asks with, so the build that runs it does not move it: 4.
 # And its folder named in the plain form cargo answers in on Windows: 1.
-"crates/xtask" = 1703
+# The sweep's test asking more than one pass once a lock is let go, since a command another test starts holds a
+# copy of the lock for a moment: 9.
+"crates/xtask" = 1712
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -236,7 +238,11 @@ max_file_lines = 400
 # at their edges (`tests/limits.rs`, 144), the rows and the review's four slow pictures (`tests/cost.rs`, 141), the
 # worst files read and drawn on a small stack (`tests/art_draw.rs`, 59) and five heaviest themes where there were
 # two (`tests/draw.rs`, 28).
-"crates/sticker-kit" = 8364
+# The entry moved under the title, with its three colours, raised it by 186: 109 are tests (`tests/entry.rs`,
+# `tests/entry_band.rs`, `tests/entry_draw.rs` and the unit test of what is painted in `src/draw/shapes.rs`); the
+# rest is the chips in one row or two and the band every page keeps free (`src/layout/entry.rs`, `layout/page.rs`),
+# and the hint's grey, the filled chosen chip and the ring as keys of a theme.
+"crates/sticker-kit" = 8550
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -265,7 +271,9 @@ max_file_lines = 400
 # The second gate on F43 raised it by 16: the test of every folder switched off under typed words (20), and the
 # made-up day typed at noon in the system's zone for every world, less what the kept page's test did alone.
 # The line in `tests/bundle.rs` saying why the script is started as a program, on a Mac only, raised it by 1.
-"app" = 5223
+# What the window does, taken out of the window so that it is tested with no window, raised it by 199:
+# `tests/f43/showing.rs` is 101 and `showing.rs` 123, of which `window.rs` lost 29.
+"app" = 5422
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

@@ -172,10 +172,14 @@ fn an_address_in_a_value_is_followed_nowhere_and_is_painted_as_a_plain_colour() 
     {
         let svg = picture(&format!(r#"<rect width="8" height="8" fill="{fill}"/>"#));
         let cost = sticker_kit::theme::art_cost(&svg).unwrap_or_else(|why| panic!("{fill}: {why}"));
-        assert_eq!(cost.paint, 64, "{fill}: one fill, and no gradient or pattern");
+        assert_eq!(cost.paint, 64 + 16 * 16, "{fill}: one fill, and no gradient or pattern");
     }
     let inner = r##"<defs><linearGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset="1"/></linearGradient></defs><rect width="8" height="8" fill="url(#g)"/><?php echo 1 ?>"##;
-    assert_eq!(sticker_kit::theme::art_cost(&picture(inner)).map(|cost| cost.paint), Ok(4 * 64), "inside the file");
+    assert_eq!(
+        sticker_kit::theme::art_cost(&picture(inner)).map(|cost| cost.paint),
+        Ok(4 * (64 + 16 * 16)),
+        "inside the file"
+    );
 }
 
 #[test]

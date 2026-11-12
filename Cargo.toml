@@ -27,6 +27,9 @@ ttf-parser = { version = "0.25.1", default-features = false, features = ["std"] 
 # The parser GPUI draws art with, so the kit's art door reads a picture as the renderer will: pinned to the one
 # version GPUI builds (docs/adr/0015-the-art-door-reads-with-the-renderers-parser.md).
 usvg = { version = "=0.46.0", default-features = false }
+# The library that parser reads a path with. The door walks a path with its plain tokenizer before the parser does
+# (the same ADR): pinned to the one version the parser builds.
+svgtypes = "=0.16.2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

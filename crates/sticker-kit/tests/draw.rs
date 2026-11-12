@@ -119,54 +119,85 @@ fn bundled_advances_run_a_little_wider_than_shaped_text() {
     });
 }
 
-/// One of five art files that together are as heavy as the door lets a theme be: both counts spent to the last
-/// unit, on what costs the most to draw. Every circle covers the whole picture with a see-through fill and a
-/// see-through stroke wider than the picture, and reaches about as far past it as a shape may. Every point left is
-/// a line as tall as the picture, under the thinnest stroke the door takes. `nth` moves every point, so no two
-/// files are the same picture. `curved`: the points are spent on curves that swing far out of the picture, one kind
-/// of command to a file, as many as the count takes, and what is left over on lines.
-fn heaviest_art(nth: usize, curved: bool) -> String {
-    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_SIDE, art_cost};
-    let side = MAX_ART_SIDE as u64;
+/// One way to spend all that a theme's art may cost, over its five files.
+struct Heavy {
+    name: &'static str,
+    /// See-through fills over the whole picture, in the five files together: four points each.
+    covers: u64,
+    /// How the ragged shape in each file is painted.
+    paint: &'static str,
+    /// How many fills and strokes of the picture that is, a gradient being four, and what the door counts for a row
+    /// under one of the shape's edges.
+    areas: u64,
+    row: u64,
+    /// The shape is written as curves.
+    curved: bool,
+}
+
+/// What a review and the kit's own measuring found dearest, a count's worth of each: paint that covers the picture,
+/// and edges that cross its rows under each kind of paint. The second is the one a review measured at 7.6 s when a
+/// row cost nothing.
+const HEAVY: [Heavy; 5] = [
+    Heavy { name: "see-through fills", covers: 52, paint: SEE_THROUGH, areas: 1, row: 16, curved: false },
+    Heavy { name: "a ragged fill", covers: 0, paint: SEE_THROUGH, areas: 1, row: 16, curved: false },
+    Heavy {
+        name: "a ragged gradient",
+        covers: 0,
+        paint: r#"fill="url(#g)" fill-opacity="0.5" fill-rule="evenodd""#,
+        areas: 4,
+        row: 64,
+        curved: false,
+    },
+    Heavy {
+        name: "a ragged fill under a round stroke",
+        covers: 0,
+        paint: r##"fill="#abcdef" fill-opacity="0.2" stroke="#123456" stroke-opacity="0.3" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round""##,
+        areas: 2,
+        row: 48,
+        curved: false,
+    },
+    Heavy {
+        name: "ragged curves under the thinnest stroke",
+        covers: 0,
+        paint: r##"fill="#abcdef" fill-opacity="0.2" stroke="#123456" stroke-opacity="0.3" stroke-width="0.51""##,
+        areas: 2,
+        row: 48,
+        curved: true,
+    },
+];
+
+const SEE_THROUGH: &str = r##"fill="#abcdef" fill-opacity="0.2""##;
+
+/// One of five art files that together cost all the door lets a theme's art cost: both counts are spent to the last
+/// unit. Each file holds its share of the fills that cover the picture, and one ragged shape that takes every point
+/// left and every row left: it climbs from the top of the picture and comes back, as many times as it has points
+/// for. `nth` moves every point, so no two files are the same picture.
+fn heaviest_art(heavy: &Heavy, nth: u64) -> String {
+    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_NUMBERS, MAX_ART_PAINT, ROW_PAINT};
+    let area = 256 * 256;
     // A fifth of each count, and the remainder to the first files.
-    let share = |all: u64| (all / 5 + u64::from((nth as u64) < all % 5)) as usize;
-    let (paints, numbers) = (share(MAX_ART_PAINT / (side * side)), 2 * share(MAX_ART_NUMBERS as u64 / 2));
-    let root = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="{side}" height="{side}" viewBox="0 0 8 8">"#);
-    let (open, close) = (root + &"<g>".repeat(MAX_ART_DEPTH - 2), "</g>".repeat(MAX_ART_DEPTH - 2) + "</svg>");
-    let fill = r##"fill="#abcdef" fill-opacity="0.2""##;
-    let stroke = r##"stroke="#123456" stroke-opacity="0.3""##;
-    // The path's stroke is one paint. A circle is two, and one of a fill alone takes a paint that is left.
-    let both =
-        |i: usize| format!(r#"<circle cx="{}" cy="4" r="60" {fill} {stroke} stroke-width="130"/>"#, (i + nth) % 8);
-    let mut shapes: String = (0..(paints - 1) / 2).map(both).collect();
-    if paints.is_multiple_of(2) {
-        shapes += &format!(r#"<circle cx="4" cy="4" r="130" {fill}/>"#);
+    let share = |all: u64| all / 5 + u64::from(nth < all % 5);
+    // A cover's two sides cross every row.
+    let covered = heavy.covers * (area + ROW_PAINT * 512);
+    let rows = (MAX_ART_PAINT - covered - 5 * heavy.areas * area) / heavy.row;
+    let (points, climb) = (share(MAX_ART_NUMBERS as u64 / 2 - 4 * heavy.covers), share(rows / 2));
+    let x = |point: u64| format!("{:.2}", nth as f32 * 0.3 + point as f32 * 250.0 / points as f32);
+    let spikes = (points - 1) / 2;
+    let mut d = format!("M{} 0", x(0));
+    for spike in 0..spikes {
+        let (tip, high, base) =
+            (x(2 * spike + 1), climb / spikes + u64::from(spike < climb % spikes), x(2 * spike + 2));
+        d += &if heavy.curved { format!("Q{tip} {high} {base} 0") } else { format!("L{tip} {high}L{base} 0") };
     }
-    let whole = |d: &str| {
-        let path = format!(r#"<path d="M0 0{d}" fill="none" {stroke} stroke-width="0.016" stroke-linejoin="round"/>"#);
-        format!("{open}{path}{shapes}{close}")
-    };
-    let counted = |d: &str| match art_cost(&whole(d)) {
-        Ok(cost) => cost.numbers,
-        Err(why) if why.ends_with("numbers") => usize::MAX,
-        Err(why) => panic!("{why}"),
-    };
-    let end = |i: usize| format!("{} {}", (i * 3 + nth) % 8, (i % 2) * 8);
-    let curve = |i: usize| match nth {
-        0 => format!("A55 55 {} 1 1 {}", i % 90, end(i)),
-        1 => format!("C100 -100 -100 100 {}", end(i)),
-        2 => format!("S100 {} {}", if i.is_multiple_of(2) { "100" } else { "-100" }, end(i)),
-        3 => format!("Q-100 100 {}", end(i)),
-        _ => format!("Q100 -100 {}T{}", end(i), end(i + 1)),
-    };
-    // The renderer says how many points a curve is, so curves are taken away until the door takes the file.
-    let curves = |count: usize| (1..=count).map(curve).collect::<String>() + "L4 4";
-    let mut count = if curved { numbers / 4 } else { 0 };
-    while counted(&curves(count)) > numbers {
-        count -= count / 16 + 1;
+    if points.is_multiple_of(2) {
+        d += &format!("L{} 0", x(points));
     }
-    let lines = (numbers - counted(&curves(count))) / 2;
-    whole(&(curves(count) + &(1..=lines).map(|i| format!("L{}", end(i))).collect::<String>()))
+    let cover = |i: u64| format!(r#"<rect x="-{}" y="-1" width="300" height="258" {SEE_THROUGH}/>"#, 1 + i + nth);
+    let covers: String = (0..share(heavy.covers)).map(cover).collect();
+    let gradient = r##"<linearGradient id="g" x2="0.02" gradientTransform="rotate(33)"><stop offset="0" stop-color="#f00"/><stop offset="0.5" stop-color="#0f0"/><stop offset="1" stop-color="#00f"/></linearGradient>"##;
+    let root = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">{gradient}"#);
+    let (open, close) = ("<g>".repeat(MAX_ART_DEPTH - 2), "</g>".repeat(MAX_ART_DEPTH - 2));
+    format!(r#"{root}{open}{covers}<path d="{d}z" {}/>{close}</svg>"#, heavy.paint)
 }
 
 /// Draws the sample scene headless. What bounds the time is counted elsewhere, in numbers that are the same on every
@@ -181,29 +212,26 @@ fn drawn(theme: Theme, name: &str, backstop: u64) {
     let _ = std::fs::remove_file(&out);
 }
 
+// Whatever a theme's art is made of, it costs no more to draw than this: each way of spending the two counts is
+// read and drawn, and the time of each is printed (`README.md` states them).
 #[test]
 fn the_heaviest_art_a_theme_may_hold_is_counted_to_the_door_s_two_limits_and_drawn() {
-    heaviest(false);
+    HEAVY.iter().for_each(heaviest);
 }
 
-/// The same with the numbers spent on curves, which a thin stroke walks all along: arcs in one file, then `C`, `S`,
-/// `Q` and `T`.
-#[test]
-fn the_heaviest_curved_art_a_theme_may_hold_is_counted_to_the_same_limits_and_drawn() {
-    heaviest(true);
-}
-
-fn heaviest(curved: bool) {
+fn heaviest(heavy: &Heavy) {
     use sticker_kit::theme::{ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, art_cost};
-    let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{curved}-{}", std::process::id()));
+    let name = format!("heaviest art, {}", heavy.name);
+    let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{}-{}", heavy.row, std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
     std::fs::create_dir_all(&folder).unwrap();
     let (mut theme, mut all) = (String::from("[art]\n"), ArtCost::default());
     // What the five cost by themselves: the door's reading of each, and the renderer's drawing of it at its own size.
     let (cx, mut read, mut rasterised) = (context(), Duration::ZERO, Duration::ZERO);
     for (nth, piece) in ["hero", "character", "star", "bubble", "badge"].into_iter().enumerate() {
-        let art = heaviest_art(nth, curved);
+        let art = heaviest_art(heavy, nth as u64);
         let started = Instant::now();
-        let cost = art_cost(&art).expect("each file is inside the door");
+        let cost = art_cost(&art).unwrap_or_else(|why| panic!("{name}: {why}"));
         read += started.elapsed();
         all = all.with(cost);
         let image = gpui::Image::from_bytes(gpui::ImageFormat::Svg, art.clone().into_bytes());
@@ -213,15 +241,15 @@ fn heaviest(curved: bool) {
         std::fs::write(folder.join(format!("{piece}.svg")), &art).unwrap();
         theme += &format!("{piece} = \"{piece}.svg\"\n");
     }
-    let name = if curved { "heaviest curved art" } else { "heaviest art" };
     eprintln!("{name}: read at the door in {read:?}, rasterised in {rasterised:?}");
-    assert_eq!(all, ArtCost { numbers: MAX_ART_NUMBERS, paint: MAX_ART_PAINT }, "nothing heavier passes the door");
+    let spent = ArtCost { numbers: MAX_ART_NUMBERS, paint: MAX_ART_PAINT };
+    assert_eq!(all, spent, "{name}: both counts are spent to the last unit");
     std::fs::write(folder.join("theme.toml"), theme).unwrap();
     let loaded = Theme::load(&folder.join("theme.toml")).expect("the art is inside the door");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
-    drawn(loaded.theme, name, 40);
+    drawn(loaded.theme, &name, 40);
 
-    let one_more = heaviest_art(4, curved).replacen("<circle", r#"<circle r="1"/><circle"#, 1);
+    let one_more = heaviest_art(heavy, 4).replacen("<path", r#"<circle r="1"/><path"#, 1);
     std::fs::write(folder.join("badge.svg"), one_more).unwrap();
     let refused = Theme::load(&folder.join("theme.toml")).expect_err("one shape over the counts");
     assert!(refused.to_string().starts_with("the SVG for art.badge is refused: with the art before it, "));

@@ -22,6 +22,7 @@ serde.workspace = true
 toml = { workspace = true, features = ["display"] }
 ttf-parser.workspace = true
 usvg.workspace = true
+svgtypes.workspace = true
 gpui = { workspace = true, optional = true }
 gpui_platform = { workspace = true, optional = true, features = ["font-kit"] }
 

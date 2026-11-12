@@ -89,7 +89,7 @@ pub struct Ran {
 /// Builds, then runs the chain. The error starts with the name of the step that failed.
 pub fn run(root: &Path, options: &Options) -> Result<(), String> {
     // Before the build, so that a build that fails still removes what a stopped `--real` run left.
-    let target = build::target(root, env::var_os("CARGO_TARGET_DIR"))?;
+    let target = build::target(root, &[])?;
     build::sweep(&target);
     // A build that succeeds leaves all three programs as the sources stand: its arguments are from a list that
     // cannot make it build fewer, elsewhere, or nothing. Their times are not checked, since cargo leaves a program

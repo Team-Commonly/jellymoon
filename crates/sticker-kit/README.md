@@ -24,9 +24,22 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 
 A page may hold one `Entry` (`src/scene.rs`) beside its scene: an id, a hint, a
 few options of which one is always chosen, and a cap on its characters. It has
-a spot of its own, right of the dated tape and above the title, so it moves no
-other piece: `layout_entry(entry, theme, viewport, &measure)` places the field
-(`PieceKind::Entry`) and a chip for each option (`PieceKind::Chip`).
+a spot of its own: in the left column, under the title, from the content's
+left edge to short of the big character's place, the chips under the field,
+each as wide as its name: in one row when that holds them, else in two, a name
+too long for its share of a row cut. Every page keeps that band free, whether or not it has an entry (a page
+with no big character begins its small ones under it), so an entry that comes
+or goes moves no piece. `layout_entry(entry, theme, viewport, &measure)` places
+the field (`PieceKind::Entry`) and a chip for each option (`PieceKind::Chip`),
+and nothing for a theme whose big character leaves the field under 160 design
+pixels.
+
+Three things about an entry are told apart by more than a shade, and each is
+a key of the theme's `[palette]`: the hint is a grey (`entry_hint`, also the
+words of an entry that waits), the chosen chip is filled (`chip_chosen`, its
+name in `chip_chosen_ink`), and the field that has the keys has a ring, a
+line darker than that fill (`entry_ring`; `entry_edge` without the keys).
+`tests/entry.rs` holds both built-in themes to it.
 
 ```rust
 Page::new(scene, theme)
@@ -46,7 +59,7 @@ Page::new(scene, theme)
   `cx.defer`.
 - **The entry then waits** for the handler's answer,
   `page.answer_entry(kept, window, cx)`, which every handler gives. Until then
-  the words stay in the field, drawn in the theme's quiet colour with no caret,
+  the words stay in the field, drawn in the hint's grey with no caret,
   and the entry takes no key, Escape included, no click on a chip, no second
   Enter and no composition (`accepts_text_input` is false). It keeps the keys. A key pressed while it waits is
   dropped, not kept for later. Kept: the entry is empty and keeps its option.
@@ -59,9 +72,11 @@ Page::new(scene, theme)
   is typed now; `set_entry` changes or removes the entry, and keeps the chosen
   option by its name when that name is still offered (`EntryState::keep_option`).
 - **An entry that holds words is not removed.** `set_entry(None)` takes an
-  empty entry off the page at once. One that holds words, or waits for its
-  answer, stays as it is, with its options, and goes when it is empty: after
-  an answer that kept the words, or when the person has deleted them. Words a
+  empty entry off the page at once, and one that holds only spaces, which
+  are no words: Enter gives nothing for them. One that holds words, or waits
+  for its answer, stays as it is, with its options, and goes when it holds
+  none: after an answer that kept the words, or when the person has deleted
+  them, whatever spaces are left. Words a
   person typed never go with the entry, and an answer always finds the words
   it is for: an entry cannot go and come back empty while it waits. An entry
   set meanwhile takes its place and keeps the words.

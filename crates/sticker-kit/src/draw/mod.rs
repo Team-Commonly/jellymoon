@@ -237,7 +237,7 @@ impl Page {
             // The hint gives way to what is typed.
             let hidden = typed && piece.piece == PieceKind::Entry;
             for (n, run) in piece.text.iter().enumerate().filter(|(_, r)| !r.text.is_empty() && !hidden) {
-                text.push(text_element(&self.theme, piece, n, run, pose));
+                text.push(text_element(&brush, piece, n, run, pose));
             }
             if matches!(piece.piece, PieceKind::Hero | PieceKind::Character | PieceKind::Option) {
                 taps.push(self.tap_target(i, piece, pose, cx));
@@ -249,16 +249,8 @@ impl Page {
     }
 }
 
-fn text_element(theme: &Theme, piece: &Placed, n: usize, run: &TextRun, pose: Pose) -> AnyElement {
-    let p = &theme.palette;
-    let color = match run.role {
-        Role::LabelStruck | Role::Body | Role::Legend => p.soft,
-        Role::RowSub | Role::OptionStruck | Role::Footer => p.quiet,
-        Role::ChoiceTitle => p.choice_title,
-        Role::ChoiceFooter => p.choice_footer,
-        Role::Bullet => p.star,
-        _ => p.ink,
-    };
+fn text_element(brush: &Brush, piece: &Placed, n: usize, run: &TextRun, pose: Pose) -> AnyElement {
+    let (theme, color) = (brush.theme, brush.ink(piece, run.role));
     let selector = format!("{:?}:{}:{}:{n}", piece.piece, piece.id, piece.index);
     let mut element = div()
         .debug_selector(move || selector)

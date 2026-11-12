@@ -89,13 +89,18 @@ pub struct Palette {
     pub choice_footer: Color,
     pub option: Color,
     pub option_edge: Color,
-    /// An entry's field and its edge; the edge is the caret's colour while the entry has the keys.
+    /// An entry's field and its edge.
     pub entry: Color,
     pub entry_edge: Color,
-    /// The caret, and the edge of the chosen chip.
+    /// The field's edge while the entry has the keys: a line, darker than the chosen chip.
+    pub entry_ring: Color,
+    /// The hint, and words that wait for their answer: a grey.
+    pub entry_hint: Color,
     pub caret: Color,
     pub chip: Color,
+    /// The chosen chip, filled, and the colour of the name on it.
     pub chip_chosen: Color,
+    pub chip_chosen_ink: Color,
     pub hues: Vec<Hue>,
 }
 

@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -12,7 +12,7 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::redact::{pattern, shown};
-use crate::{Harness, ReaderTurn};
+use crate::{Harness, ReaderTurn, busy};
 
 /// The lengths `said`, `reply` and `project` are cleaned and cut to, in characters (`redact::shown`).
 const SAID_MAX: usize = 700;
@@ -100,23 +100,39 @@ enum Prompt {
 /// A turn, when it was typed, and the folder its project is named after: the log's own text, which is never printed.
 pub(crate) type Typed = (Option<Timestamp>, ReaderTurn, String);
 
-/// Returns one log's turns, on any day, each with when it was typed. A line that is not valid JSON is skipped; a file
-/// that cannot be read gives what was read before the error. A log is read no further than its length when it was
-/// opened: one that is written to as fast as it is read would have no end, and a line cut off there is not valid
-/// JSON. `seen` holds the uuid of every typed line so far: a resumed
-/// or forked session repeats earlier lines in a new file, and the first one read is the one kept.
+/// Returns one log's turns, on any day, each with when it was typed. A file that cannot be opened gives none. A log
+/// is read no further than its length when it was opened ([`length`]): one that is written to as fast as it is read
+/// would have no end. A test's build can be held here, the length asked and nothing read yet (`busy::pause`).
 pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, line_max: usize) -> Vec<Typed> {
-    let Ok(log) = File::open(file) else {
+    let Ok(mut log) = File::open(file) else {
         return Vec::new();
     };
     let folder =
         file.parent().and_then(Path::file_name).map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-    let len = log.metadata().map_or(0, |held| held.len());
+    let len = length(log.metadata().map(|held| held.len()), &mut log);
+    busy::pause("JELLYMOON_TEST_OPEN_WAIT_MS");
+    read(log, len, &folder, skip, seen, line_max)
+}
+
+/// The turns in the first `len` bytes of a log, and not a byte more is asked of it. A line that is not valid JSON is
+/// skipped, as is one cut off at `len`; a log that cannot be read further gives what was read before the error. A
+/// byte-order mark before the first line is not part of it. `seen` holds the uuid of every typed line so far: a
+/// resumed or forked session repeats earlier lines in a new file, and the first one read is the one kept. `folder`
+/// is the name of the log's own folder.
+fn read(
+    log: impl Read,
+    len: u64,
+    folder: &str,
+    skip: &[String],
+    seen: &mut HashSet<String>,
+    line_max: usize,
+) -> Vec<Typed> {
     let (mut log, mut raw) = (BufReader::with_capacity(1 << 16, log.take(len)), Vec::new());
     let mut turns: Vec<Typed> = Vec::new();
     let mut open = false; // whether the last turn can still take a reply
+    let mut mark = Some(b"\xef\xbb\xbf".as_slice()); // a byte-order mark, which only a log's first line can begin with
     while let Ok(true) = next_line(&mut log, line_max, &mut raw) {
-        let Some(line) = decode(&raw, open) else {
+        let Some(line) = decode(mark.take().and_then(|mark| raw.strip_prefix(mark)).unwrap_or(&raw), open) else {
             continue;
         };
         let uuid = line.uuid.as_deref().unwrap_or_default();
@@ -127,7 +143,7 @@ pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, li
                 seen.insert(uuid.to_string());
                 let cwd = line.cwd.as_deref().unwrap_or_default();
                 // A line with no folder is skipped by its session's folder name.
-                open = !said.is_empty() && !skipped(if cwd.is_empty() { &folder } else { cwd }, skip);
+                open = !said.is_empty() && !skipped(if cwd.is_empty() { folder } else { cwd }, skip);
                 if open {
                     // A folder's name is the log's text too: it is printed, and the model reads it.
                     let (project, folder) = place(cwd);
@@ -150,6 +166,17 @@ pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, li
         }
     }
     turns
+}
+
+/// How far a log is read: its length when it was opened. `asked` is what the system said of it; when it would not
+/// say, the length is where the log's end is found, and the log is left at its start again. Only a log that cannot
+/// be sought either is read to its end, as every log was before there was a bound: it is never taken for an empty one.
+fn length(asked: io::Result<u64>, log: &mut impl Seek) -> u64 {
+    let sought = |log: &mut dyn Seek| {
+        let end = log.seek(SeekFrom::End(0));
+        log.rewind().and(end)
+    };
+    asked.or_else(|_| sought(log)).unwrap_or(u64::MAX)
 }
 
 /// Reads the next line into `line` and reports whether there was one. A line longer than `max` bytes is read past and
@@ -262,58 +289,4 @@ fn skipped(place: &str, skip: &[String]) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // The blocks are cut out of the whole prompt, before anything bounds it, so this step has to grow with its length.
-    #[test]
-    fn a_megabyte_of_block_starts_with_whole_blocks_between_them_is_cut_in_seconds() {
-        let shapes = [
-            "<system-reminder><artifact-content-authored-by-others/>",
-            "<artifact-view-context(The JSON line above)",
-            "(The JSON line above<system-reminder>x</system-reminder>",
-            "<system-reminder></artifact-view-context><artifact-view-context</system-reminder>",
-        ];
-        for shape in shapes {
-            let text = shape.repeat((1 << 20) / shape.len());
-            let start = std::time::Instant::now();
-            let _ = without_blocks(&text);
-            assert!(start.elapsed() < std::time::Duration::from_secs(5), "{shape}: {:?}", start.elapsed());
-        }
-        let said = "a <system-reminder>LEAK\n</system-reminder>b <artifact-view-context x>LEAK</artifact-view-context>c \
-                    <artifact-content-authored-by-others />d (The JSON line above is LEAK)e";
-        assert_eq!(without_blocks(said), "a b c d e");
-    }
-
-    // A folder of a megabyte of slashes is walked once, three segments in hand, with no list of them made.
-    #[test]
-    fn a_project_is_named_from_a_folder_of_any_length_in_one_walk() {
-        let names = [
-            ("/work/alpha", "alpha"),
-            ("/work/alpha/", "alpha"),
-            ("/work/beta/.claude/worktrees/fix-login/web", "beta"),
-            (r"C:\work\beta\.claude\worktrees\fix", "beta"),
-            ("/a/.claude/worktrees/x/b/.claude/worktrees/y", "a"),
-            ("/.claude/worktrees/x", "x"),
-            ("/work/beta/.claude/worktrees", "worktrees"),
-            ("", ""),
-        ];
-        fn project(cwd: &str) -> &str {
-            place(cwd).0
-        }
-        for (cwd, want) in names {
-            assert_eq!(project(cwd), want, "{cwd}");
-        }
-        assert_eq!(place("/work/beta/.claude/worktrees/fix-login/web").1, "/work/beta");
-        assert_eq!(
-            (place("/work/alpha/").1, place(r"C:\work\beta").1, place("").1),
-            ("/work/alpha", r"C:\work\beta", "")
-        );
-        let slashes = "/".repeat(1 << 20);
-        let start = std::time::Instant::now();
-        assert_eq!(project(&slashes), "");
-        assert_eq!(project(&format!("{slashes}gamma{slashes}")), "gamma");
-        assert_eq!(project(&format!("{slashes}beta/.claude/worktrees/x{slashes}")), "beta");
-        assert!(start.elapsed() < std::time::Duration::from_secs(20), "{:?}", start.elapsed());
-    }
-}
+mod tests;

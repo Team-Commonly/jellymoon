@@ -180,14 +180,16 @@ fn a_branch_another_worktree_of_the_repo_stands_on_is_kept() {
 // Another ref is a name for the branch: it reaches whatever the branch holds, and would be left naming nothing.
 #[test]
 fn a_branch_another_ref_is_a_name_for_is_kept() {
-    let w = found_world();
-    let repo = w.repo("alpha");
-    let (branch, run) = w.left_copy(&repo);
-    let mine = w.commit_of_its_own(&repo, &run);
-    w.git(&repo, &["symbolic-ref", "refs/heads/also", &format!("refs/heads/{branch}")]);
-    assert_eq!(w.look(&[]), 0);
-    assert_eq!((w.commit(&repo, &branch), w.commit(&repo, "also")), (mine.clone(), mine), "the commit was lost");
-    assert_eq!((w.listed(&repo), w.home_of(&run)), (1, NONE));
+    for also in ["refs/heads/also", "refs/remotes/origin/also"] {
+        let w = found_world();
+        let repo = w.repo("alpha");
+        let (branch, run) = w.left_copy(&repo);
+        let mine = w.commit_of_its_own(&repo, &run);
+        w.git(&repo, &["symbolic-ref", also, &format!("refs/heads/{branch}")]);
+        assert_eq!(w.look(&[]), 0);
+        assert_eq!((w.commit(&repo, &branch), w.commit(&repo, also)), (mine.clone(), mine), "{also}: lost");
+        assert_eq!((w.listed(&repo), w.home_of(&run)), (1, NONE), "{also}");
+    }
 }
 
 // The `gitdir` file in the copy's git folder must name this run's copy, and be a plain file no longer than a

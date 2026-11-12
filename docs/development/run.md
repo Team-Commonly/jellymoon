@@ -486,18 +486,24 @@ holds:
   `HEAD` git cannot read, is a checkout that could not be asked, and the take-back is put off (`tests/f41/stood.rs`);
 - another ref is a name for it, a symbolic ref (`git for-each-ref --format=%(symref)`), which would be left
   naming nothing;
+- the run's name is itself a symbolic ref by now (`git symbolic-ref --quiet <name>` answers): it is a name
+  for another branch, no longer the run's, and stays as it is (`tests/f41/pointed.rs`);
 - it holds a commit that nothing lasting else holds, by the one rule below.
 
 **The one rule: a run's branch is removed only when every commit on it is also on another branch, a tag or a
-remote-tracking branch.** The question is `git rev-list <branch> --not --exclude=<branch> --glob=refs/heads/*
---glob=refs/tags/* --glob=refs/remotes/*`, asked after the two above, and a branch it prints a commit for
-stays (`tests/f41/held.rs`). Nothing else is in it:
+remote-tracking branch.** The question is `git --no-replace-objects rev-list --max-count=1 <branch> --not
+--exclude=<branch> --glob=refs/heads/* --glob=refs/tags/* --glob=refs/remotes/*`, asked after the three
+above, and a branch it prints a commit for stays (`tests/f41/held.rs`). A question git cannot answer puts the
+take-back off. Nothing else is in it:
 - **No `HEAD` counts, wherever it stands.** One that names a branch adds nothing to the branches, and a
   detached one is no ref: git drops its commit at the next switch. So a commit that only this branch and a
   checkout detached at it have keeps the branch, and so does one the person made on a detached `HEAD` before
   the run and has since switched away from.
 - **No other ref counts.** `refs/stash` and `refs/bisect/*` go when the stash is taken out or the bisect
   ends, and what a tool keeps under `refs/notes` or a name of its own is not where a person looks for work.
+- **No replace ref and no graft counts.** Either can give a commit a parent it does not have and be removed
+  tomorrow. Replace refs are off by `--no-replace-objects`. git has no option for grafts, so that one call
+  is given `GIT_GRAFT_FILE` as a name in the empty folder it is started in, and `info/grafts` is not read.
 - **Nothing a record says counts.** The record once kept the commit the copy was made at (`base`), and a
   branch still at that commit went: that removed the last ref of a commit made on a detached `HEAD`. The
   field is gone. A record that still has it, written by a build of that time, is read as any record, and the
@@ -514,7 +520,9 @@ other side is a commit with no ref and no warning from git.
 
 A copy an agent may have written in is never removed. Nothing outside Jellymoon's
 home is touched but that one branch and git's registration of the copy, as any take-back reaches them
-([copy.md](copy.md)). The person's checkout, index and other branches are as they were (`tests/f41/left.rs`).
+([copy.md](copy.md)). The branch is deleted as the run's own name and never as what a name points at, and
+only while it is at the commit the look asked about (`git update-ref --no-deref -d <name> <commit>`): a
+commit that lands in between makes git refuse, the take-back is put off, and the next look asks again. The person's checkout, index and other branches are as they were (`tests/f41/left.rs`).
 
 **For thirty days.** A take-back that could not be done (the repo could not be asked, git failed or ran past
 its limit, `copies/<id>` could not be removed) puts the time in the copy's record, `put_off`, the first time,
@@ -546,6 +554,9 @@ again with what git said, leaves a record: the repo lists the copy by then, or d
 - A tag or a remote-tracking branch that holds the branch's commit at the look can itself be removed later
   (`git tag -d`, `git fetch --prune`), and the commit then has no ref. A remote-tracking branch that a
   fetch prunes is the nearest of these to a ref that comes and goes.
+- A never-started run's own take-back removes its branch without asking. If that branch was the other
+  branch that let a left copy's branch go a moment before, a commit made on a detached `HEAD` loses both
+  names: two runs on one such commit, and a switch away, within milliseconds. Reasoned, not run.
 - A rebase or a bisect of the run's branch that starts between a look's question and its removal of the
   branch, three git calls later, is not seen: git then ends it with a ref it cannot lock, on a detached
   `HEAD`. Reasoned, not run.

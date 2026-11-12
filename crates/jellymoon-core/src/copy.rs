@@ -222,7 +222,7 @@ fn add(git: &Git, person: &Repo, at: &Places, run: &str, shared: &Path, base: &s
     if let Err(e) = made.and_then(|_| note(git, at, run, &mut record, &folder)) {
         // The order of every take-back (`back.rs`): the branch, then the repo's listing of the copy.
         let _ = fs::remove_dir_all(&folder);
-        let _ = person.run(None, &[], &["update-ref", "-d", &name]);
+        let _ = person.run(None, &[], &["update-ref", "--no-deref", "-d", &name, base]);
         busy::pause("JELLYMOON_TEST_UNMADE_WAIT_MS");
         let _ = unlist(person, &folder);
         let _ = fs::remove_dir_all(&folder); // again: a child of the stopped git had those calls' time to write

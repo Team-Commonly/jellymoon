@@ -3,6 +3,7 @@
 //! the real git with its own arguments. When one of them is that word it first takes the system's lock on the file
 //! `held` there, and after the real git has ended it leaves the file `stalled` and sleeps for a minute. A test that
 //! can then take the lock itself knows this program is gone: the system drops a lock only when its holder ends.
+//! A file `first` there is something that happens just before that step: the real git is run with its lines.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::ffi::OsString;
@@ -20,6 +21,9 @@ fn main() {
         held.lock().unwrap();
         held
     });
+    if let (true, Ok(first)) = (held.is_some(), fs::read_to_string(dir.join("first"))) {
+        Command::new(read("real")).args(first.lines()).status().unwrap();
+    }
     let status = Command::new(read("real")).args(&args).status().unwrap();
     if held.is_some() {
         fs::write(dir.join("stalled"), "").unwrap();

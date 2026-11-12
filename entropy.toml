@@ -172,7 +172,10 @@ max_file_lines = 400
 # copy's branch goes, and the commit a record kept is gone. `copy/back.rs` lost 10 (the rule on that commit and
 # its account, less the three kinds of ref the question names), `copy/record.rs` 4 (the field) and `copy.rs` 2
 # (where it was written).
-"crates/jellymoon-core" = 7017
+# The fourth gate on F41 raised core by 9, all in `copy/back.rs`: the run's name deleted as itself and only
+# where it was asked about, a name that is a symbolic ref kept, and the question asked with replace refs and
+# grafts off.
+"crates/jellymoon-core" = 7026
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -209,7 +212,11 @@ max_file_lines = 400
 # `shapes.rs` (the person's checkout on a branch that has not moved, alone and beside another worktree) and 2
 # in `tests/f41.rs`. `stood.rs` lost the two tests of the record's commit and gained a linked folder and a
 # file that cannot be read where git keeps a branch's name, and counts the same.
-"crates/jellymoon" = 11538
+# The fourth gate on F41 raised the binary by 148, all of it tests: `tests/f41/pointed.rs` is 140 (the run's
+# name made a symbolic ref, a commit that lands before the delete, a replace ref and a graft, a question git
+# cannot answer, a `worktrees` folder that cannot be listed, the command's own take-back), 4 are what the
+# made-up git does just before a step (`tests/support/fake_git.rs`), 2 in `shapes.rs` and 2 in `tests/f41.rs`.
+"crates/jellymoon" = 11686
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

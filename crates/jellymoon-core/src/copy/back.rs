@@ -14,6 +14,10 @@ use crate::Error;
 /// How long a left copy that could not be taken back is kept for a later look to try: thirty days.
 const PUT_OFF: Duration = Duration::from_secs(30 * 24 * 3600);
 
+/// Where git is told its grafts are for the one question of [`theirs`]: a name in the folder git is started in,
+/// which Jellymoon keeps empty, so the repo's `info/grafts` is not read.
+const NO_GRAFTS: &str = "no-grafts";
+
 /// Undoes a copy no run was started in (F39: the harness was too old, or another run took the wish first): its
 /// folder, git's registration of it, its branch, which is where the checkout was, and everything kept for the run.
 pub(crate) fn take_back(home: &Path, run: &str, wait: Option<Duration>) -> Result<(), Error> {
@@ -68,10 +72,11 @@ fn back(at: &Places, run: &str, careful: bool) -> Result<(), Error> {
             let tip = repo.ask(None, &[], &["rev-parse", "--verify", "--quiet", &name]).map_err(refused)?;
             // The branch goes before the repo's listing of the copy does: the listing is how the next look knows
             // the copy as the repo's own, so a look cut off here is finished by the next, and no branch is left
-            // that nothing but a record's word says is Jellymoon's.
-            let goes = tip.is_some() && !(careful && theirs(&repo, &record, &name).map_err(refused)?);
-            if goes {
-                repo.run(None, &[], &["update-ref", "-d", &name]).map_err(refused)?;
+            // that nothing but a record's word says is Jellymoon's. What goes is the name itself, never what a
+            // name points at, and only while it is where it was asked about: git refuses one that has moved.
+            let kept = careful && tip.is_some() && theirs(&repo, &record, &name).map_err(refused)?;
+            if let Some(tip) = tip.filter(|_| !kept) {
+                repo.run(None, &[], &["update-ref", "--no-deref", "-d", &name, &tip]).map_err(refused)?;
             }
             if record.own.exists() {
                 unlist(&repo, &folder).map_err(|said| refused(format!("git still lists the copy: {said}")))?;
@@ -84,11 +89,13 @@ fn back(at: &Places, run: &str, careful: bool) -> Result<(), Error> {
 /// Whether a left copy's branch is someone's by now, whoever made it so, and is kept:
 /// - a checkout stands on it ([`stands`]): the repo's own, or a worktree of it other than the copy, whose own
 ///   `HEAD` is this branch because the copy was made so;
-/// - another ref is a name for it (a symbolic ref), and would be left naming nothing;
+/// - another ref is a name for it (a symbolic ref), and would be left naming nothing, or it is itself a name
+///   for another branch by now, and no longer the run's;
 /// - it holds a commit that no other branch, no tag and no remote-tracking branch of the repo reaches. That is
 ///   the one rule for a branch nothing stands on or names, and nothing a record says is in it. No `HEAD` is
 ///   asked: a detached one is no ref, and its commit is lost at the next switch. No other ref is: `refs/stash`
 ///   and `refs/bisect/*` go when the stash or the bisect ends. `--exclude` holds for the one `--glob` after it.
+///   Replace refs and grafts are off for the question: they too can be gone tomorrow.
 fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
     let own = fs::canonicalize(&record.own).ok();
     let kept = match fs::read_dir(record.repo.join("worktrees")) {
@@ -102,12 +109,14 @@ fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
         stood_on |= stands(&repo.through(&other), &other, name)?;
     }
     let named = repo.run(None, &[], &["for-each-ref", "--format=%(symref)"])?;
-    if stood_on || named.lines().any(|named| named == name) {
+    let symbolic = repo.ask(None, &[], &["symbolic-ref", "--quiet", name])?.is_some();
+    if stood_on || symbolic || named.lines().any(|named| named == name) {
         return Ok(true);
     }
-    let held = ["--glob=refs/heads/*", "--glob=refs/tags/*", "--glob=refs/remotes/*"];
-    let only = ["rev-list", "--max-count=1", name, "--not", &format!("--exclude={name}"), held[0], held[1], held[2]];
-    Ok(!repo.run(None, &[], &only)?.is_empty())
+    let (less, held) =
+        (format!("--exclude={name}"), ["--glob=refs/heads/*", "--glob=refs/tags/*", "--glob=refs/remotes/*"]);
+    let only = ["--no-replace-objects", "rev-list", "--max-count=1", name, "--not", &less, held[0], held[1], held[2]];
+    Ok(!repo.run(None, &[("GIT_GRAFT_FILE", NO_GRAFTS)], &only)?.is_empty())
 }
 
 /// Whether the checkout a git folder is of stands on a branch: its `HEAD` is that branch, or `HEAD` is detached

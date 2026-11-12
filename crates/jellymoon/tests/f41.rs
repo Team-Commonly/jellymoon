@@ -27,6 +27,8 @@ mod line;
 mod named;
 #[path = "f41/never.rs"]
 mod never;
+#[path = "f41/pointed.rs"]
+mod pointed;
 #[path = "f41/refused.rs"]
 mod refused;
 #[path = "f41/shapes.rs"]

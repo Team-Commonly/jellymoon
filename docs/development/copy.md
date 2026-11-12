@@ -86,7 +86,7 @@ for 3 seconds: the folder, its branch, git's registration of it and its record g
 The order is every take-back's: the registration is how a look knows the copy as the repo's own, so it goes
 last, and a take-back cut off before it is finished by the next look. Its branch is removed only when no
 checkout of the repo but the copy stands on it (by its `HEAD`, or by a rebase or a bisect stopped there), no
-other ref is a symbolic ref to it, and `git rev-list --max-count=1 <branch> --not --exclude=<branch>
+other ref is a symbolic ref to it, it is not one itself, and `git --no-replace-objects rev-list --max-count=1 <branch> --not --exclude=<branch>
 --glob=refs/heads/* --glob=refs/tags/* --glob=refs/remotes/*` prints nothing, which is to say every commit on
 it is also on another branch, a tag or a remote-tracking branch. That is the one rule: no `HEAD` is asked,
 since a detached one is no ref, no other ref is (`refs/stash` and `refs/bisect/*` come and go), and nothing

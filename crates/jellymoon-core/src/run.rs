@@ -149,11 +149,12 @@ fn cut(run: &str) -> String {
 }
 
 /// The line of a run that was cut off with its copy gone: after it was committed and before the end was in the
-/// record, or removed by hand, with nothing committed. It says no more than holds for both.
+/// record, or removed by hand, with nothing committed. It says no more than holds for both, and of the branch
+/// only where the work was put: a branch can be removed by hand, and a look asks git nothing.
 fn cut_late(run: &str) -> String {
     let branch = copy::branch(run);
     format!(
-        "run {run} was cut off before it ended: no copy of it is kept, what was committed of it is on the branch \
+        "run {run} was cut off before it ended: no copy of it is kept, what was committed of it was on the branch \
          {branch}, and no star was added"
     )
 }

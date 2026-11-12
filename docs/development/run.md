@@ -266,7 +266,11 @@ shorter wait from `JELLYMOON_TEST_END_WAIT_MS`. If the day stays locked even so,
 line that says the run has ended, that its record says how, and that the page shows it when it is next drawn.
 When the wish could not be told for any other reason (the made wishes were changed while the run worked and
 cannot be used, or the wish no longer names this run as going), the line says instead that the made wishes of the
-day could not be used, so the wish does not show it. The record has the end in both cases.
+day could not be used, so the wish does not show it. The record has the end in both cases. One case has words
+of its own: the wish names this run and no longer says `working`, because a look that took the run for one
+nothing holds told it first (below). The line then says `run <id> has ended; a look had taken it for cut off
+and told its wish first, so the wish shows what that look wrote`, the exit is 1 as before, and nothing is
+changed.
 
 Whoever next finds the wish still `working` with nothing holding its run (below) reads the record. With an end in
 it that is core's, the wish is given that end, star included: `done` with its star, or `needs_you` (a failed
@@ -292,8 +296,11 @@ again, every 10 ms for one second at most, and gives the wish the end it finds, 
 second is many times the single file write between the two (the commit is over by then, since the look waited
 for its lock), and a third of what a look waits for anything. A run whose record has no end even then was cut
 off after its work was committed, or its copy was removed by hand, and its `why` does not say a copy is kept:
-`run <id> was cut off before it ended: no copy of it is kept, what was committed of it is on the branch
-jellymoon/run-<id>, and no star was added`. A build with
+`run <id> was cut off before it ended: no copy of it is kept, what was committed of it was on the branch
+jellymoon/run-<id>, and no star was added`. The branch is named as where the work was put: a look asks git
+nothing, and a branch can be removed by hand. The end is written in the record only after the wish took it,
+so while the day's wishes cannot be written the one-second wait is paid again on every look, once for each
+such run. A build with
 debug assertions waits before the run writes its end for `JELLYMOON_TEST_NOTE_WAIT_MS`, and after a look's
 first read of the record for `JELLYMOON_TEST_LOOK_WAIT_MS`.
 

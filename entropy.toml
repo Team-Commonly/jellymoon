@@ -140,7 +140,17 @@ max_file_lines = 400
 # for good, a record made by hand for a copy no longer listed, `copies` a link, a repo named through a link,
 # a command killed while its copy was made), 8 over `left.rs` and `tests/f41.rs` (a command held at a named
 # place, known by the file it leaves) and 6 in `tests/f39/panics.rs` (a command only the world's wait covers).
-"crates/jellymoon-core" = 6840
+# The fixes after that pass's gate raised core by 57 and the binary by 276. Core: `copy/back.rs` 23 (a branch a
+# checkout stands on or another ref names is kept, `HEAD` left out where it names no commit, a time in the
+# future taken as now, the line of a copy given up), `copy/record.rs` 12 (a copy's git folder directly in the
+# `worktrees` of a repo's own git folder), `wish.rs` 11 and `run/left.rs` 3 (that line handed back beside the
+# page), `copy/git.rs` 5 (a repo asked through a worktree's git folder), `copy.rs` 2 and `lib.rs` 1. The
+# binary: 6 in `src/main.rs` (the line said on stderr), the rest tests: `tests/f41/shapes.rs` 241 (a record
+# naming the copy's own git folder, a worktree's, an enclosing repo's; a repo that is a worktree, or inside
+# another's git folder; a checkout with no commit; a branch stood on or named; the `gitdir` file's shapes;
+# `copies` a link at the thirty days; a command killed taking back a copy it could not make) and 29 in
+# `asked.rs` (the line, a time in the future).
+"crates/jellymoon-core" = 6897
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -166,7 +176,7 @@ max_file_lines = 400
 # `named.rs` 45 (another spelling, a link led elsewhere after the lookup), `cap.rs` 39 (four commands for one
 # wish), `tests/f41.rs` 14 (the asker's wait, long and short), and 20 over F38, F39 and F40 where a wait on the
 # clock became a wait on a file.
-"crates/jellymoon" = 10823
+"crates/jellymoon" = 11099
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

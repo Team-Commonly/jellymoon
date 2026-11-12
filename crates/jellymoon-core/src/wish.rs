@@ -260,15 +260,19 @@ pub(crate) fn change(
 /// it is drawn, and written down, as its run's own record says it ended, or else as cut off, with the agent it
 /// left stopped (`run::bury`). Nothing else is written.
 pub fn made(home: &Path, day: &str) -> Vec<Wish> {
+    made_said(home, day).0
+}
+
+fn made_said(home: &Path, day: &str) -> (Vec<Wish>, Vec<String>) {
     let kept = if parse(day).is_ok() { kept(home, day).unwrap_or_default() } else { Vec::new() };
     // What a `jellymoon run` that was killed left with no wish to name it is taken back (`run/left.rs`).
-    run::tidy(home, &kept);
+    let said = run::tidy(home, &kept);
     let drawn = |wish: MadeWish| {
         let wish = run::bury(home, day, wish);
         let label = line(&wish.said, LABEL_MAX);
         Wish { label, state: wish.state, id: wish.id, said: wish.said, project: wish.project, stars: wish.stars }
     };
-    kept.into_iter().map(drawn).collect()
+    (kept.into_iter().map(drawn).collect(), said)
 }
 
 /// The ids of the day's made wishes whose run is going: working, and naming a run, once a run that nothing holds
@@ -284,13 +288,20 @@ pub fn going(home: &Path, day: &str) -> Vec<String> {
 
 /// The page with the day's made wishes after the reading's. A wish whose id is on the page already is not added,
 /// so a page that was merged once is the same merged twice.
-pub fn with_made(home: &Path, mut page: PageData) -> PageData {
-    for wish in made(home, &page.day) {
+pub fn with_made(home: &Path, page: PageData) -> PageData {
+    with_made_said(home, page).0
+}
+
+/// [`with_made`], and what this look has to say that is no part of a page: a line for each copy a killed command
+/// left that was given up, and may have left a branch in its repo (`copy/back.rs`).
+pub fn with_made_said(home: &Path, mut page: PageData) -> (PageData, Vec<String>) {
+    let (made, said) = made_said(home, &page.day);
+    for wish in made {
         if page.wishes.iter().all(|on| on.id != wish.id) {
             page.wishes.push(wish);
         }
     }
-    page
+    (page, said)
 }
 
 #[cfg(test)]

@@ -20,9 +20,10 @@ pub(super) struct Record {
     pub failed: Option<u64>,
     #[serde(default)]
     pub found: bool,
-    /// When a look first could not take the left copy back, in nanoseconds (`take_back_left`).
+    /// Since when the taking back of this left copy is put off, in nanoseconds: the first look that could not ask
+    /// its repo, or could not finish (`back.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub unasked: Option<u64>,
+    pub put_off: Option<u64>,
 }
 
 /// What a look learns of a left copy from the repo its record names.
@@ -37,11 +38,12 @@ pub(super) enum Listed {
 }
 
 /// Asks the repo a record names whether it lists the copy `root/<run>` as a worktree of its own: the copy's git
-/// folder is inside the repo's, and its `gitdir` file, which git wrote when it made the worktree, names the copy's
-/// `.git`. A record is a file anyone who can write the home can write, so one that names another repo is not acted
-/// on in that repo. The file is read only when it is a plain file no longer than a path. A path in it that does not
-/// start at a root is read from the copy's git folder, as git reads one it wrote with `worktree.useRelativePaths`.
-/// "Inside" is asked of the two folders as the system resolves them, links and `..` followed, and never of
+/// folder is one the repo keeps for a worktree ([`kept_by`]), and its `gitdir` file, which git wrote when it made
+/// the worktree, names the copy's `.git`. A record is a file anyone who can write the home can write, so one that
+/// names another repo is not acted on in that repo. The file is read only when it is a plain file no longer than a
+/// path. A path in it that does not start at a root is read from the copy's git folder, as git reads one it wrote
+/// with `worktree.useRelativePaths`.
+/// Where the folders are is asked of them as the system resolves them, links and `..` followed, and never of
 /// their names: a name can lead out of the repo it starts in.
 ///
 /// A repo that resolves and holds no such git folder, or no such file, has answered. One that does not resolve,
@@ -52,7 +54,7 @@ pub(super) fn asked(record: &Record, root: &Path, run: &str) -> Listed {
     };
     let file = record.own.join("gitdir");
     let named = match (fs::canonicalize(&record.own), fs::symlink_metadata(&file)) {
-        (Ok(own), _) if !own.starts_with(&repo) => return Listed::Not,
+        (Ok(own), _) if !kept_by(&own, &repo) => return Listed::Not,
         (Ok(_), Ok(meta)) if meta.is_file() && meta.len() <= 8192 => fs::read(&file),
         (Ok(_), Ok(_)) => return Listed::Not,
         (Err(e), _) | (_, Err(e)) => Err(e),
@@ -66,6 +68,16 @@ pub(super) fn asked(record: &Record, root: &Path, run: &str) -> Listed {
     let copy = named.parent().filter(|copy| copy.file_name().is_some_and(|last| last == run));
     let here = copy.and_then(Path::parent).and_then(|above| fs::canonicalize(above).ok()) == Some(root);
     if here { Listed::Ours } else { Listed::Not }
+}
+
+/// Whether a git folder is one a repo keeps for a worktree of its own: directly in the `worktrees` of the repo's
+/// git folder, which is a repo's own. Anywhere inside is not enough: a worktree's git folder is inside itself,
+/// and inside every repo whose git folder encloses its repo's, as a submodule's is. And a worktree's git folder
+/// named as the repo is taken by git for one, with that worktree's `HEAD`: such a folder holds a `commondir`
+/// file, and a repo's own holds none.
+fn kept_by(own: &Path, repo: &Path) -> bool {
+    let own_repo = fs::symlink_metadata(repo.join("commondir")).is_err_and(|e| e.kind() == ErrorKind::NotFound);
+    own_repo && own.parent() == Some(&repo.join("worktrees"))
 }
 
 /// Whether something that is not a plain file is at the name. Such a thing is never opened: a named pipe would

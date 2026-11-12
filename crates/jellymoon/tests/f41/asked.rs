@@ -15,18 +15,18 @@ use crate::support::{plant, skipped};
 
 impl World {
     /// A look: `jellymoon page` of the day, with `more` variables after the world's.
-    fn look(&self, more: &[(&'static str, OsString)]) -> i32 {
+    pub(super) fn look(&self, more: &[(&'static str, OsString)]) -> i32 {
         let logs = self.at("logs");
         self.run_with(more, &["page", "--date", DAY, "--logs", logs.to_str().unwrap()]).code
     }
 
     /// How many working trees a repo lists, its own checkout among them.
-    fn listed(&self, repo: &Path) -> usize {
+    pub(super) fn listed(&self, repo: &Path) -> usize {
         self.git(repo, &["worktree", "list", "--porcelain"]).matches("worktree ").count()
     }
 
     /// One field of a copy's record, set by hand.
-    fn noted(&self, run: &str, field: &str, value: Value) {
+    pub(super) fn noted(&self, run: &str, field: &str, value: Value) {
         let file = self.jm("runs").join(run).join("copy.json");
         let mut record: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
         record[field] = value;
@@ -35,7 +35,7 @@ impl World {
 
     /// The variables that put `fake-git` first on `PATH` and give a git child one second from when the made-up
     /// git has left `stalled`.
-    fn fake_git(&self) -> Vec<(&'static str, OsString)> {
+    pub(super) fn fake_git(&self) -> Vec<(&'static str, OsString)> {
         let (folder, name) = (self.at("fake"), format!("git{EXE_SUFFIX}"));
         fs::create_dir(&folder).unwrap();
         plant(env!("CARGO_BIN_EXE_fake-git"), &folder.join(&name));
@@ -138,18 +138,45 @@ fn a_left_copy_whose_repo_is_gone_for_good_is_kept_for_thirty_days_and_then_leav
         assert_eq!(w.look(&[]), 0);
         assert_eq!((w.copies(), w.kept_for(&run)), (vec![run.clone()], true), "kept for less than thirty days");
         let record = fs::read_to_string(w.jm("runs").join(&run).join("copy.json")).unwrap();
-        serde_json::from_str::<Value>(&record).unwrap()["unasked"].clone()
+        serde_json::from_str::<Value>(&record).unwrap()["put_off"].clone()
     };
     let noted = first(&w);
     assert!(noted.as_u64().is_some_and(|at| at > 0), "the first look that could not ask was not noted: {noted}");
     assert_eq!(first(&w), noted, "a later look moved the time of the first");
     // Thirty days, less a minute and more a minute, in nanoseconds before the look.
     let ago = |seconds: u64| json!(noted.as_u64().unwrap() - seconds * 1_000_000_000);
-    w.noted(&run, "unasked", ago(30 * 24 * 3600 - 60));
+    w.noted(&run, "put_off", ago(30 * 24 * 3600 - 60));
     assert_eq!(first(&w), ago(30 * 24 * 3600 - 60));
-    w.noted(&run, "unasked", ago(30 * 24 * 3600 + 60));
-    assert_eq!(w.look(&[]), 0);
+    w.noted(&run, "put_off", ago(30 * 24 * 3600 + 60));
+    // The look that gives the copy up says so, in one line, and is no failure.
+    let logs = w.at("logs");
+    let gave_up = w.run(&["page", "--date", DAY, "--logs", logs.to_str().unwrap()]);
+    let line = format!(
+        "jellymoon: the copy of run {run} could not be taken back for thirty days and is given up: what Jellymoon \
+         kept of it is removed, and its branch jellymoon/run-{run} may still be in its repo\n"
+    );
+    assert_eq!((gave_up.code, gave_up.stderr), (0, line));
     assert_eq!((w.copies(), w.kept_for(&run)), (vec![], false), "a repo gone for good kept its record for ever");
+}
+
+// A time later than now, in a record written by hand or before the clock was set back, would keep the copy for
+// ever. It is taken as now, and written so.
+#[test]
+fn a_time_in_the_future_in_a_left_copy_s_record_is_taken_as_now() {
+    let w = found_world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let run = w.killed_in_the_claim(&wish, &repo);
+    fs::remove_dir_all(&repo).unwrap();
+    assert_eq!(w.look(&[]), 0);
+    let noted = |w: &World| {
+        let record = fs::read_to_string(w.jm("runs").join(&run).join("copy.json")).unwrap();
+        serde_json::from_str::<Value>(&record).unwrap()["put_off"].as_u64().unwrap()
+    };
+    let (now, far) = (noted(&w), u64::MAX / 2);
+    w.noted(&run, "put_off", json!(far));
+    assert_eq!(w.look(&[]), 0);
+    assert!((now..far).contains(&noted(&w)), "a time in the future was kept: {}", noted(&w));
+    assert_eq!((w.copies(), w.kept_for(&run)), (vec![run.clone()], true));
 }
 
 // A record made by hand names another repo, and a git folder of the copy's inside it that is not there, as a

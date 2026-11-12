@@ -113,7 +113,12 @@ fn run() -> Result<String, Failure> {
             let harness = named("JELLYMOON_CLAUDE");
             let options = PageOptions { model, dir: home()?.join("reading"), limit: READING_LIMIT, harness };
             let page = jellymoon_core::page(&day, &options).map_err(failed)?;
-            Ok(format!("{}\n", jellymoon_core::with_made(&home()?, page)))
+            let (page, said) = jellymoon_core::with_made_said(&home()?, page);
+            // A copy a killed command left that is given up is said once, here, and is no failure of the look.
+            for said in said {
+                let _ = io::stderr().write_all(format!("jellymoon: {said}\n").as_bytes());
+            }
+            Ok(format!("{page}\n"))
         }
         Command::Uninstall => {
             // The same two folders, under the same two names, that install.sh puts the pieces in.

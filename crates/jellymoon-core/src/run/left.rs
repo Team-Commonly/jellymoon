@@ -27,7 +27,9 @@ use crate::wish::{self, MadeWish};
 /// A run a wish names is left to the look at that wish, and so is one whose record is there and cannot be used.
 /// A run that has its end is done with, and its start lock
 /// is removed. Nothing is waited for longer than a look waits, and what could not be done is left for the next.
-pub(crate) fn tidy(home: &Path, wishes: &[MadeWish]) {
+/// Returned is what the look has to say: a line for each copy given up after thirty days (`copy/back.rs`).
+pub(crate) fn tidy(home: &Path, wishes: &[MadeWish]) -> Vec<String> {
+    let mut said = Vec::new();
     for run in copy::left(home) {
         // The command lets go of its start lock just before its run's own: a run still held is still ending.
         if held(home, &run) {
@@ -58,9 +60,10 @@ pub(crate) fn tidy(home: &Path, wishes: &[MadeWish]) {
                 let _ = note(home, &run, RunOutcome::Failed, (0, 0), &why);
             }
         } else {
-            let _ = copy::take_back_left(home, &run, soon());
+            said.extend(copy::take_back_left(home, &run, soon()));
         }
     }
+    said
 }
 
 /// Whether the wish a record names, on the day it names, names the run. The day in a record is a word from a

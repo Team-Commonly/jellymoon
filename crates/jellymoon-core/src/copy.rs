@@ -213,14 +213,17 @@ fn add(git: &Git, person: &Repo, at: &Places, run: &str, shared: &Path, base: &s
     // A command killed while git makes the copy leaves this record, so a look can take back what git made by
     // then: git keeps a worktree's own git folder under the folder's name, which `note` then reads from git.
     let own = shared.join("worktrees").join(run);
-    write(&at.record(run), &Record { repo: shared.to_path_buf(), own, failed: None, found: git.quiet, unasked: None })?;
+    let mut record = Record { repo: shared.to_path_buf(), own, failed: None, found: git.quiet, put_off: None };
+    write(&at.record(run), &record)?;
     let args = ["worktree", "add", "--quiet", "-b", &branch].map(OsStr::new);
     let args = [&args[..], &[folder.as_os_str(), OsStr::new(base)]].concat();
     let made = person.run(None, &[], &args).map_err(|said| refused(format!("git could not make the copy: {said}")));
     busy::pause("JELLYMOON_TEST_MADE_WAIT_MS");
-    if let Err(e) = made.and_then(|_| note(git, at, run, shared, &folder)) {
+    if let Err(e) = made.and_then(|_| note(git, at, run, &mut record, &folder)) {
+        // The order of every take-back (`back.rs`): the branch, then the repo's listing of the copy.
         let _ = fs::remove_dir_all(&folder);
         let _ = person.run(None, &[], &["update-ref", "-d", &name]);
+        busy::pause("JELLYMOON_TEST_UNMADE_WAIT_MS");
         let _ = unlist(person, &folder);
         let _ = fs::remove_dir_all(&folder); // again: a child of the stopped git had those calls' time to write
         return Err(e);
@@ -228,15 +231,14 @@ fn add(git: &Git, person: &Repo, at: &Places, run: &str, shared: &Path, base: &s
     Ok(at.printed(run, true))
 }
 
-/// Writes the copy's record. This once, when nothing has run in the copy yet, git is asked from inside it where the
-/// copy's own git folder is; the answer is kept in the record and never asked for again.
-fn note(git: &Git, at: &Places, run: &str, shared: &Path, folder: &Path) -> Result<(), Error> {
-    let own = match &git.discover(folder).unwrap_or_default()[..] {
+/// Writes the copy's record again. This once, when nothing has run in the copy yet, git is asked from inside it
+/// where the copy's own git folder is; the answer is kept in the record and never asked for again.
+fn note(git: &Git, at: &Places, run: &str, record: &mut Record, folder: &Path) -> Result<(), Error> {
+    record.own = match &git.discover(folder).unwrap_or_default()[..] {
         [_, inside, below, own, _] if inside == "true" && below.is_empty() => PathBuf::from(own),
         _ => PathBuf::new(), // git found no repo there, or one above the copy
     };
-    let record = Record { repo: shared.to_path_buf(), own, failed: None, found: git.quiet, unasked: None };
-    if record.own.is_absolute() { write(&at.record(run), &record) } else { Err(refused("git lost the copy")) }
+    if record.own.is_absolute() { write(&at.record(run), record) } else { Err(refused("git lost the copy")) }
 }
 
 /// Whether nothing of a run's copy is kept: a finished run's copy is gone, with its record, and its branch stays.

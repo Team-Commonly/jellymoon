@@ -150,6 +150,11 @@ fn blanks(named: &str) -> Result<Vec<String>, String> {
 }
 
 impl Repo<'_> {
+    /// The same repo asked through the git folder of one of its worktrees, where `HEAD` is that worktree's.
+    pub fn through(&self, dir: &Path) -> Repo<'_> {
+        Repo { git: self.git, dir: dir.to_path_buf(), blanks: self.blanks.clone() }
+    }
+
     /// Runs git on this repo, with `tree` as the work tree when the command reads or writes files, and returns
     /// what it printed with the last line break cut. None when git exited 1 and said nothing: its way of saying a
     /// setting or a name is not there.

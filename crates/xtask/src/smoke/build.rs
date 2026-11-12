@@ -66,10 +66,14 @@ pub fn command(root: &Path, args: &[String]) -> Command {
 
 /// The folder the build writes to, as cargo itself says it: `cargo metadata`, started where the build is and as it
 /// is. A `CARGO_TARGET_DIR`, relative or not, and a `build.target-dir` in the cargo home's `config.toml` or in a
-/// `.cargo/config.toml` above the repo each move the build, and each is in cargo's answer. `set` is for the tests.
+/// `.cargo/config.toml` above the repo each move the build, and each is in cargo's answer. `set` is for the tests:
+/// a name set to nothing is taken out, so a test is not moved by the variables of the build that runs it.
 pub fn target(root: &Path, set: &[(&str, &OsStr)]) -> Result<PathBuf, String> {
     let mut asked = cargo(root);
-    asked.args(["metadata", "--format-version", "1", "--no-deps"]).envs(set.iter().copied());
+    asked.args(["metadata", "--format-version", "1", "--no-deps"]);
+    for (name, value) in set {
+        let _ = if value.is_empty() { asked.env_remove(name) } else { asked.env(name, value) };
+    }
     let said = asked.output().map_err(|e| format!("build: cargo metadata: {e}"))?;
     let read: Option<serde_json::Value> = serde_json::from_slice(&said.stdout).ok();
     let target = read.as_ref().and_then(|read| read["target_directory"].as_str());
@@ -178,7 +182,7 @@ mod tests {
         fs::write(root.join("Cargo.toml"), "[package]\nname = \"made-up\"\nversion = \"0.0.0\"\nedition = \"2021\"\n")
             .unwrap();
         fs::create_dir_all(&cargo_home).unwrap();
-        let home = [("CARGO_HOME", cargo_home.as_os_str())];
+        let home = [("CARGO_HOME", cargo_home.as_os_str()), ("CARGO_TARGET_DIR", OsStr::new(""))];
         let at = |set: &[(&str, &OsStr)]| target(&root, &[&home[..], set].concat());
         assert_eq!(at(&[]), Ok(root.join("target")));
         assert_eq!(at(&[("CARGO_TARGET_DIR", OsStr::new("t"))]), Ok(root.join("t")), "relative: against the root");

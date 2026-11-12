@@ -162,7 +162,8 @@ max_file_lines = 400
 # value follows is longer than the list of what was refused, and a relative target folder is read against the root.
 # The target folder asked of cargo itself raised it by 37 (`smoke/build.rs`): `cargo metadata` says where the build
 # writes, whatever moved it, and its test makes a package and a cargo home of its own to move one four ways.
-"crates/xtask" = 1698
+# That test taking `CARGO_TARGET_DIR` out of what it asks with, so the build that runs it does not move it: 4.
+"crates/xtask" = 1702
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

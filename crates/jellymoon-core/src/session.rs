@@ -2,7 +2,7 @@
 //! is untrusted and mostly not the person's words: only a line the log itself marks as typed by a person starts a turn.
 
 use std::collections::HashSet;
-use std::fs::File;
+use std::fs::{File, Metadata};
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::Path;
 use std::sync::LazyLock;
@@ -103,7 +103,7 @@ pub(crate) type Typed = (Option<Timestamp>, ReaderTurn, String);
 /// Returns one log's turns, on any day, each with when it was typed. A line that is not valid JSON is skipped; a file
 /// that cannot be read gives what was read before the error. A log is read no further than its length when it was
 /// opened: one that is written to as fast as it is read would have no end, and a line cut off there is not valid
-/// JSON. `seen` holds the uuid of every typed line so far: a resumed
+/// JSON. A byte-order mark before the first line is not part of it. `seen` holds the uuid of every typed line so far: a resumed
 /// or forked session repeats earlier lines in a new file, and the first one read is the one kept.
 pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, line_max: usize) -> Vec<Typed> {
     let Ok(log) = File::open(file) else {
@@ -111,12 +111,13 @@ pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, li
     };
     let folder =
         file.parent().and_then(Path::file_name).map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-    let len = log.metadata().map_or(0, |held| held.len());
+    let len = length(log.metadata());
     let (mut log, mut raw) = (BufReader::with_capacity(1 << 16, log.take(len)), Vec::new());
     let mut turns: Vec<Typed> = Vec::new();
     let mut open = false; // whether the last turn can still take a reply
+    let mut mark = Some(b"\xef\xbb\xbf".as_slice()); // a byte-order mark, which only a log's first line can begin with
     while let Ok(true) = next_line(&mut log, line_max, &mut raw) {
-        let Some(line) = decode(&raw, open) else {
+        let Some(line) = decode(mark.take().and_then(|mark| raw.strip_prefix(mark)).unwrap_or(&raw), open) else {
             continue;
         };
         let uuid = line.uuid.as_deref().unwrap_or_default();
@@ -150,6 +151,12 @@ pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, li
         }
     }
     turns
+}
+
+/// How far a log is read: its length when it was opened. One whose length cannot be asked is read to its end, as
+/// every log was before there was a bound: it is never taken for an empty one.
+fn length(held: io::Result<Metadata>) -> u64 {
+    held.map_or(u64::MAX, |held| held.len())
 }
 
 /// Reads the next line into `line` and reports whether there was one. A line longer than `max` bytes is read past and
@@ -283,6 +290,14 @@ mod tests {
         let said = "a <system-reminder>LEAK\n</system-reminder>b <artifact-view-context x>LEAK</artifact-view-context>c \
                     <artifact-content-authored-by-others />d (The JSON line above is LEAK)e";
         assert_eq!(without_blocks(said), "a b c d e");
+    }
+
+    #[test]
+    fn a_log_whose_length_cannot_be_asked_is_read_to_its_end_and_never_taken_for_an_empty_one() {
+        assert_eq!(length(Err(io::Error::other("no length"))), u64::MAX);
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("log"), "abc").unwrap();
+        assert_eq!(length(std::fs::metadata(dir.path().join("log"))), 3);
     }
 
     // A folder of a megabyte of slashes is walked once, three segments in hand, with no list of them made.

@@ -49,7 +49,7 @@ test = false
 doc = false
 
 # A made-up session that goes on typing into a log, for the test that a reading ends on a log that grows. It ends
-# itself after 20 seconds or 20 MB.
+# when the test's file says so, and by itself after 60 seconds or 200 MB.
 [[bin]]
 name = "fake-writer"
 path = "tests/support/fake_writer.rs"

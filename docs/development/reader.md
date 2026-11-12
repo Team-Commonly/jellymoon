@@ -144,7 +144,9 @@ name, so a repo and its worktrees are one project.
 A line that is not valid JSON is skipped. A line over 64 MiB is read past without being kept. A log is read no
 further than its length when it was opened: what a session writes after that is in the next reading, and a line
 that was half written at that length is cut off there, is not valid JSON, and is skipped, as the unfinished last
-line of a log always was. So a log that is written to as fast as it is read still ends. Decoding a line takes
+line of a log always was. So a log that is written to as fast as it is read still ends. A log whose length the
+system will not give is read to its end, with no bound, and never taken for an empty one. A byte-order mark at a
+log's start is not part of its first line. Decoding a line takes
 memory many times its size (about 27 times for a line that is one long list), so the largest line kept can take
 well over a gigabyte while it is read. A session file whose modification time is before the start of the requested local day is not opened, since it can hold no turn of that day; the one consequence is that a file copied or restored with an old modification time is skipped. Reading a busy day on a
 computer with gigabytes of logs takes around ten seconds.

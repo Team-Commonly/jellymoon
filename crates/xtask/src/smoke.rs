@@ -14,6 +14,8 @@ mod run;
 mod steps;
 mod stop;
 
+use std::collections::BTreeMap;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -72,10 +74,11 @@ pub struct Step {
     pub run: fn(&World) -> Result<String, String>,
 }
 
-/// Where a run happens: the temporary home everything is written in, and the folder the built programs are in.
+/// Where a run happens: the temporary home everything is written in, and the built programs, each where cargo
+/// said it is.
 pub struct World {
     home: PathBuf,
-    bin: PathBuf,
+    programs: BTreeMap<String, PathBuf>,
     pub real: bool,
     skip: String,
 }
@@ -86,21 +89,29 @@ pub struct Ran {
     pub stderr: String,
 }
 
-/// Builds, then runs the chain. The error starts with the name of the step that failed.
-pub fn run(root: &Path, options: &Options) -> Result<(), String> {
+/// Builds the packages and makes a run's world of the programs that build named, with the lock held beside its
+/// home. `needed` are the programs the chain runs: one the build did not name ends the run here.
+fn world(root: &Path, packages: &[&str], needed: &[&str], options: &Options) -> Result<(World, File), String> {
     // Before the build, so that a build that fails still removes what a stopped `--real` run left.
     let target = build::target(root, &[])?;
     build::sweep(&target);
-    // A build that succeeds leaves all three programs as the sources stand: its arguments are from a list that
-    // cannot make it build fewer, elsewhere, or nothing. Their times are not checked, since cargo leaves a program
-    // that is up to date as it was, older than this build's start.
-    if !build::command(root, &options.build).status().is_ok_and(|status| status.success()) {
-        return Err("build: cargo build failed".to_string());
+    // A build that succeeds names every program as the sources stand: its arguments are from a list that cannot
+    // make it build fewer, or nothing. Their times are not checked, since cargo leaves a program that is up to
+    // date as it was, older than this build's start.
+    let programs = build::built(root, packages, &options.build)?;
+    if let Some(missing) = needed.iter().find(|name| !programs.contains_key(**name)) {
+        return Err(format!("build: cargo built no program named `{missing}`"));
     }
     let home = target.join(build::home_name());
     let held = build::lock_beside(&home).ok_or("home: the lock beside the temporary home could not be taken")?;
-    let world = World { home, bin: target.join("debug"), real: options.real, skip: options.skip.clone() };
+    let world = World { home, programs, real: options.real, skip: options.skip.clone() };
     build::make_home(&world.home)?;
+    Ok((world, held))
+}
+
+/// Builds, then runs the chain. The error starts with the name of the step that failed.
+pub fn run(root: &Path, options: &Options) -> Result<(), String> {
+    let (world, held) = world(root, &build::PACKAGES, &build::PROGRAMS, options)?;
     let started = Instant::now();
     let chain = steps::STEPS.iter().filter(|step| match step.only {
         Only::Any => true,
@@ -128,9 +139,9 @@ impl World {
         self.home.join(name)
     }
 
-    /// A built program.
+    /// A built program, where cargo said it is. One it never named is no path, and starts nothing.
     pub fn program(&self, name: &str) -> PathBuf {
-        self.bin.join(format!("{name}{}", env::consts::EXE_SUFFIX))
+        self.programs.get(name).cloned().unwrap_or_default()
     }
 
     /// The made-up harness's place in the temporary home.
@@ -244,7 +255,11 @@ pub fn write(path: &Path, text: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Only, Options, steps::STEPS};
+    use std::path::PathBuf;
+    use std::process::Command;
+    use std::{env, fs};
+
+    use super::{Only, Options, build, steps::STEPS, world};
 
     fn parse(args: &[&str]) -> Result<Options, Option<String>> {
         Options::parse(&args.iter().map(|arg| (*arg).to_string()).collect::<Vec<_>>())
@@ -273,5 +288,36 @@ mod tests {
         // maintainer has read for what it writes and prints there.
         let real = STEPS.iter().filter(|step| matches!(step.only, Only::Any)).map(|step| step.name);
         assert_eq!(real.collect::<Vec<_>>(), ["day", "page", "layout-sticker", "layout-plain", "broken-page", "run"]);
+    }
+
+    // A `build.target` in a config puts the programs in a folder named for the triple, and the chain once looked in
+    // `debug` and ran what an earlier build had left there. A made-up package stands in for the repo.
+    #[test]
+    fn the_chain_runs_the_programs_cargo_says_it_built_and_not_what_lies_in_the_debug_folder() {
+        let above = tempfile::tempdir().unwrap();
+        // Windows resolves a folder to its `\\?\` form, and cargo answers in the plain one.
+        let root = PathBuf::from(above.path().canonicalize().unwrap().to_string_lossy().trim_start_matches(r"\\?\"));
+        let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+        let said = Command::new(cargo).arg("-vV").output().unwrap();
+        let said = String::from_utf8(said.stdout).unwrap();
+        let host = said.lines().find_map(|line| line.strip_prefix("host: ")).unwrap();
+        let file = |name: &str, text: &str| super::write(&root.join(name), text).unwrap();
+        file("Cargo.toml", "[package]\nname = \"made-up\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[workspace]\n");
+        file("src/main.rs", "fn main() {\n    println!(\"{{\\\"made\\\":1}}\");\n}\n");
+        file(".cargo/config.toml", &format!("[build]\ntarget = \"{host}\"\n"));
+        let name = format!("made-up{}", env::consts::EXE_SUFFIX);
+        let target = build::target(&root, &[]).unwrap();
+        file(&format!("stale/{name}"), "what an earlier build left");
+        fs::create_dir_all(target.join("debug")).unwrap();
+        fs::copy(root.join("stale").join(&name), target.join("debug").join(&name)).unwrap();
+
+        let (made, held) = world(&root, &["made-up"], &["made-up"], &Options::default()).unwrap();
+        assert_eq!(made.program("made-up"), target.join(host).join("debug").join(&name));
+        assert_eq!(made.json("made-up", &[]).unwrap()["made"], 1, "and it is the program that runs");
+        assert_eq!(made.program("other"), PathBuf::new(), "a program cargo never named is no path");
+        let _ = fs::remove_dir_all(made.at(""));
+        drop(held);
+        let missing = world(&root, &["made-up"], &["made-up", "other"], &Options::default()).map(|_| ());
+        assert_eq!(missing, Err("build: cargo built no program named `other`".to_string()));
     }
 }

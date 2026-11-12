@@ -11,7 +11,7 @@ make smoke                    # the features the Makefile picks for this machine
 cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build arguments>]
 ```
 
-The chain runs the programs of the debug build in the target folder, so the build takes its arguments from a list
+The chain runs the programs its own build says it made, so the build takes its arguments from a list
 (`crates/xtask/src/smoke/build.rs`). Any other is refused with one line, before anything is built:
 
 - alone: `--locked`, `--offline`, `--frozen`, `-v`, `-vv`, `--verbose`, `-q`, `--quiet`;
@@ -28,9 +28,12 @@ The build is started without `CARGO_BUILD_TARGET` and `CARGO_BUILD_TARGET_DIR`, 
 The target folder is the one cargo names: the chain asks `cargo metadata`, started in the repo's root as the build
 is, for its `target_directory`. So a `CARGO_TARGET_DIR`, relative or not, and a `build.target-dir` in the cargo
 home's `config.toml` or in a `.cargo/config.toml` above the repo are each followed, where the chain once read the
-variable alone and ran what `target/debug` held. The programs' times are not compared with the build's start:
-cargo leaves a program that is up to date as it was. Not held: a `build.target` in such a config puts the programs
-in a folder named for the triple, and the chain looks in `debug`. The repo has no such file.
+variable alone and ran what `target/debug` held. The target folder is where a run's home is made. The programs are not looked
+for in it: the build is started with `--message-format=json-render-diagnostics`, and the chain runs each program at
+the `executable` path cargo's message names for it, so a `build.target` in such a config, which puts the programs in
+a folder named for the triple, is followed too. A program the chain needs and no message named ends the run before
+its first step (`build: cargo built no program named ...`). The programs' times are not compared with the build's
+start: cargo leaves a program that is up to date as it was, and names it all the same.
 
 Each run works in `target/smoke-home-<pid>-<nanoseconds>`, named for its process and for when it started, and
 removes it at its end. A run that was stopped leaves its home, and with `--real` that home holds the person's

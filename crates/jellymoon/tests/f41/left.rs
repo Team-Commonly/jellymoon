@@ -163,6 +163,27 @@ fn a_left_copy_whose_record_names_another_repo_removes_no_branch_there() {
     assert_eq!((w.copies(), w.kept_for(&run)), (vec![], false));
 }
 
+// With `worktree.useRelativePaths` (git 2.48) git writes a copy's `gitdir` file as a path from the copy's git
+// folder. Jellymoon's git calls switch that off, and the file is written so by hand, as an older copy's is.
+#[test]
+fn a_left_copy_whose_gitdir_file_is_a_path_from_its_git_folder_is_taken_back_whole() {
+    let w = found_world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    w.git(&repo, &["config", "worktree.useRelativePaths", "true"]);
+    let run = w.killed_in_the_claim(&wish, &repo);
+    let record = fs::read_to_string(w.jm("runs").join(&run).join("copy.json")).unwrap();
+    let own = fs::canonicalize(serde_json::from_str::<Value>(&record).unwrap()["own"].as_str().unwrap()).unwrap();
+    let copy = fs::canonicalize(w.jm("copies").join(&run)).unwrap();
+    let wrote = fs::read_to_string(own.join("gitdir")).unwrap();
+    assert!(Path::new(wrote.trim_end()).is_absolute(), "git wrote {wrote:?} for a copy of Jellymoon's");
+    let same = own.components().zip(copy.components()).take_while(|(one, other)| one == other).count();
+    let up = own.components().skip(same).map(|_| "..".to_string());
+    let down = copy.components().skip(same).map(|name| name.as_os_str().to_str().unwrap().to_string());
+    fs::write(own.join("gitdir"), up.chain(down).collect::<Vec<_>>().join("/") + "/.git\n").unwrap();
+    w.on_page(&wish);
+    assert_eq!(w.left_of(&run, &repo), (vec![], vec![], false));
+}
+
 #[test]
 fn a_branch_that_holds_a_commit_of_its_own_is_kept_when_its_copy_is_taken_back() {
     let w = found_world();

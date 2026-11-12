@@ -25,12 +25,14 @@ pub(super) struct Record {
 /// Whether the repo a record names lists the copy `root/<run>` as a worktree of its own: the copy's git folder is
 /// inside the repo's, and its `gitdir` file, which git wrote when it made the worktree, names the copy's `.git`.
 /// A record is a file anyone who can write the home can write, so one that names another repo is not acted on
-/// in that repo. The file is read only when it is a plain file no longer than a path.
+/// in that repo. The file is read only when it is a plain file no longer than a path. A path in it that does not
+/// start at a root is read from the copy's git folder, as git reads one it wrote with `worktree.useRelativePaths`.
 pub(super) fn ours(record: &Record, root: &Path, run: &str) -> bool {
     let file = record.own.join("gitdir");
     let plain = fs::symlink_metadata(&file).is_ok_and(|meta| meta.is_file() && meta.len() <= 8192);
     let named = if plain { fs::read_to_string(&file).unwrap_or_default() } else { String::new() };
-    let copy = Path::new(named.trim_end_matches(['\r', '\n'])).parent();
+    let named = record.own.join(named.trim_end_matches(['\r', '\n']));
+    let copy = named.parent().filter(|_| plain);
     let same = |one: &Path| fs::canonicalize(one).is_ok_and(|one| fs::canonicalize(root).is_ok_and(|root| one == root));
     let here = |copy: &Path| copy.file_name().is_some_and(|last| last == run) && copy.parent().is_some_and(same);
     record.own.starts_with(&record.repo) && copy.is_some_and(here)

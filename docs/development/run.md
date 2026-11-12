@@ -437,7 +437,9 @@ the same; the commit is on the branch. A copy an agent may have written in is ne
 Jellymoon's home is touched but that one branch and git's registration of the copy, in the repo the copy's own
 record names, as any take-back reaches them ([copy.md](copy.md)). A record is a file anyone who can write the
 home can write, so that repo is acted on only when it lists this copy as a worktree of its own: the copy's git
-folder is inside the repo's, and its `gitdir` file, which git wrote, names `copies/<id>/.git`. For a record
+folder is inside the repo's, and its `gitdir` file, which git wrote, names `copies/<id>/.git`. Jellymoon's git calls switch
+`worktree.useRelativePaths` off, so the file holds a whole path; one that holds a path from the copy's git
+folder, as a git of 2.48 or later writes with that setting on, is read from that folder. For a record
 that names any other repo nothing is asked of git and no branch is removed there; what the home holds of the
 run goes, and the branch and registration in the repo the copy was really made of stay, for `git worktree
 prune` and `git branch -D`. The person's checkout, index and other branches are as they were

@@ -56,7 +56,7 @@ wishes, six projects) at 1440x900 and 960x640, with the hint and with typed word
 in a made-up dark theme without the three keys. Looked at: the dark theme's chosen chip is read and has its
 line, every name is whole at both sizes, the hint is whole. None is kept in the repo.
 
-**Lines.** 26 files: about 890 added, 230 removed. Deleted: the cell that carried the window's handle to its
+**Lines.** 26 files with this note: about 910 added, 230 removed. Deleted: the cell that carried the window's handle to its
 handlers and both branches that did nothing when it was empty; the test of colours by channel sums; a chip's
 cap at an equal share of its row.
 

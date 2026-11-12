@@ -110,20 +110,28 @@ and a file that has gone bad since is left out for the kit's own art:
   (`MAX_ART_DEPTH`), the `<svg` counted in both.
 - `width` and `height` are 1 to 256 (`MAX_ART_SIDE`) and the size in `viewBox`
   is 8 to 256 (`MIN_ART_VIEW`); `px` may follow the picture's own `width` and `height`.
+  A picture states its size: a `viewBox`, or both a `width` and a `height`. With no
+  `viewBox` the renderer draws a picture that leaves a side out as large as what is in
+  it (up to 8192 pixels a side, measured), whatever the other side says, so it is refused.
   Every other number is plain digits with no exponent, no unit and no `%`, at
   most 4096 (`MAX_ART_NUMBER`). The only letters beside numbers are the path
   commands in a `d` and the two names in a transform.
 - A `d` or `points` value is at most 4096 bytes (`MAX_ART_PATH_BYTES`).
 - A transform is only `translate` and `rotate`.
 - The `d` and `points` values of a file hold at most 1024 numbers together
-  (`MAX_ART_NUMBERS`).
+  (`MAX_ART_NUMBERS`). Each number of an arc (an `a` or `A` command) counts as four
+  (`ARC_NUMBERS`): an arc is drawn as several curves.
 - A file's paint is at most 4194304 (`MAX_ART_PAINT`, 64 shapes on 256 by
   256): its shapes (`path`, `rect`, `circle`, `ellipse`, `line`, `polyline`,
   `polygon`) times its width times its height, and four times that in a file
-  with a gradient. The size is `width` and `height`, else the `viewBox`'s,
-  else 256.
+  with a gradient. A side is the picture's `width` or `height`, else the
+  `viewBox`'s, which is how the renderer sizes it (`tests/draw.rs` holds the two together).
 - A theme's art files together are held to the same two counts, so five files
   cost no more than one. The refusal names the file that went over.
+- The files are read again when the theme is drawn (`Theme::art_svg`), and are held
+  together to the two counts again, in the same order: a file changed since the load
+  that is refused, or would take the files before it past a count, is not drawn, and
+  the kit's own art is drawn for its piece.
 
 Those two counts are what a file costs to draw (`theme::art_cost`): a shape may
 paint the whole picture however small it is written, and every number is a
@@ -133,7 +141,11 @@ file's size, and five files at it took 38 s to draw in a debug build on a Mac.
 files that spend both to the last unit on the dearest paint (see-through fills
 and strokes far larger than the picture, lines as tall as it) and draws them:
 1.4 s more than the page with no art, in the same build. Its clock is a
-backstop against a hang, ten times that. The kit's own art, counted the same
+backstop against a hang, ten times that. A second set of five spends the numbers
+on arcs of the largest radius under a thin stroke. Counted one for one, 1024 such
+numbers in one picture took 7.4 s to rasterise against 0.2 s for lines (and 1.3 s for
+cubic curves with far control points, which are still counted one for one); counted
+four for one, the five curved files draw in about the time of the five with lines. The kit's own art, counted the same
 way at the built-in themes' sizes, is 368 numbers and 1728164 paint: 36% and
 41% of the counts. Behind
 the ranges, the view rasterises the kit's own art at no more than 800 pixels a

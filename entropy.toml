@@ -121,7 +121,9 @@ max_file_lines = 400
 # F39's step, `run` (`smoke/run.rs`, 82 lines: the wish's file on the run's branch and the checkout unchanged are 10 of them), and
 # the repo command it shares with `copy`, raised it by 94.
 # F40's step, `stop` (`smoke/stop.rs`, 69 lines), and the run command it shares with `run`, raised it by 80.
-"crates/xtask" = 1359
+# The leftovers of the smoke chain's review raised it by 88: the refusal of a build argument that puts the
+# programs elsewhere, the removal of the homes stopped runs left, with their lock, and the tests of both.
+"crates/xtask" = 1447
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -132,7 +134,9 @@ max_file_lines = 400
 # by 156: 51 are its test in `tests/whole.rs`; the rest is its layout below the other notes, in the room they leave
 # and at its own step, the mark's piece and its drawing.
 # The test of the one state where a whole list is not said among the notes raised it by 30 (`tests/whole.rs`).
-"crates/sticker-kit" = 5739
+# The leftovers of the art cost's review raised it by 121: a picture that states no size is refused, an arc's
+# numbers count four times, the costs are summed again where the draw reads the art, and the tests of the three.
+"crates/sticker-kit" = 5860
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -146,7 +150,9 @@ max_file_lines = 400
 # The case of a clash on a page with no wish read, which a made wish moves up, raised it by 36 (`tests/f37.rs`).
 # F39 raised the app by 1: the arm for core's new error where it puts an error into words.
 # The tap on a clash whose statement cannot be cleaned, which says why, raised it by 15 (`tests/f35.rs`).
-"app" = 3312
+# The test that `bundle.sh` refuses a minimum macOS that is not a whole release (`tests/bundle.rs`), and the kept
+# page's test asserting the call, raised it by 51.
+"app" = 3363
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

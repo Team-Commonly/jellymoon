@@ -121,9 +121,10 @@ fn bundled_advances_run_a_little_wider_than_shaped_text() {
 /// One of five art files that together are as heavy as the door lets a theme be: both counts spent to the last
 /// unit, on what costs the most to draw. Every shape covers the whole picture with see-through paint, the circles are
 /// far larger than it with strokes as wide, and each number is a line as tall as the picture under a thin stroke.
-/// `nth` moves every point, so no two files are the same picture.
-fn heaviest_art(nth: usize) -> String {
-    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_SIDE, MIN_ART_VIEW};
+/// `nth` moves every point, so no two files are the same picture. `curved`: the numbers are spent on arcs of the
+/// largest radius, each number counted as the door counts an arc's, and what is left over on short lines.
+fn heaviest_art(nth: usize, curved: bool) -> String {
+    use sticker_kit::theme::{ARC_NUMBERS, MAX_ART_DEPTH, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_SIDE, MIN_ART_VIEW};
     let side = MAX_ART_SIDE as u64;
     let (shapes, numbers) = (MAX_ART_PAINT / (side * side), MAX_ART_NUMBERS / 2);
     // A fifth of each count, and the remainder to the first files.
@@ -135,7 +136,13 @@ fn heaviest_art(nth: usize) -> String {
         svg += r#"<g transform="translate(4096 -4096) rotate(4096)">"#;
     }
     let paint = r##"fill="#abcdef" fill-opacity="0.2" stroke="#123456" stroke-opacity="0.3""##;
-    let lines: String = (1..share(numbers as u64)).map(|i| format!("L{} {}", (i * 3 + nth) % 8, (i % 2) * 8)).collect();
+    let points = share(numbers as u64);
+    let (arcs, left) = ((points * 2 - 2) / (7 * ARC_NUMBERS), (points * 2 - 2) % (7 * ARC_NUMBERS));
+    let arc = |i: usize| format!("A4096 4096 {} 1 1 {} {}", i % 90, (i * 3 + nth) % 8, (i % 2) * 8);
+    let lines: String = match curved {
+        true => (1..=arcs).map(arc).collect::<String>() + &"h1".repeat(left),
+        false => (1..points).map(|i| format!("L{} {}", (i * 3 + nth) % 8, (i % 2) * 8)).collect(),
+    };
     svg += &format!(r#"<path d="M0 0{lines}" {paint} stroke-width="0.03" stroke-linejoin="round"/>"#);
     for i in 1..share(shapes) {
         svg += &format!(r#"<circle cx="{}" cy="4096" r="4096" {paint} stroke-width="4096"/>"#, i * 3 + nth);
@@ -157,14 +164,24 @@ fn drawn(theme: Theme, name: &str, backstop: u64) {
 
 #[test]
 fn the_heaviest_art_a_theme_may_hold_is_counted_to_the_door_s_two_limits_and_drawn() {
+    heaviest(false);
+}
+
+/// The same with the numbers spent on arcs, which the renderer makes curves of and a thin stroke walks all along.
+#[test]
+fn the_heaviest_curved_art_a_theme_may_hold_is_counted_to_the_same_limits_and_drawn() {
+    heaviest(true);
+}
+
+fn heaviest(curved: bool) {
     use sticker_kit::theme::{ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, art_cost};
-    let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{}", std::process::id()));
+    let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{curved}-{}", std::process::id()));
     std::fs::create_dir_all(&folder).unwrap();
     let (mut theme, mut all) = (String::from("[art]\n"), ArtCost::default());
     for (nth, piece) in ["hero", "character", "star", "bubble", "badge"].into_iter().enumerate() {
-        let art = heaviest_art(nth);
+        let art = heaviest_art(nth, curved);
         let cost = art_cost(&art).expect("each file is inside the door");
-        all = ArtCost { numbers: all.numbers + cost.numbers, paint: all.paint + cost.paint };
+        all = all.with(cost);
         std::fs::write(folder.join(format!("{piece}.svg")), &art).unwrap();
         theme += &format!("{piece} = \"{piece}.svg\"\n");
     }
@@ -172,9 +189,9 @@ fn the_heaviest_art_a_theme_may_hold_is_counted_to_the_door_s_two_limits_and_dra
     std::fs::write(folder.join("theme.toml"), theme).unwrap();
     let loaded = Theme::load(&folder.join("theme.toml")).expect("the art is inside the door");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
-    drawn(loaded.theme, "heaviest art", 40);
+    drawn(loaded.theme, if curved { "heaviest curved art" } else { "heaviest art" }, 40);
 
-    let one_more = heaviest_art(4).replacen("<circle", r#"<circle r="1"/><circle"#, 1);
+    let one_more = heaviest_art(4, curved).replacen("<circle", r#"<circle r="1"/><circle"#, 1);
     std::fs::write(folder.join("badge.svg"), one_more).unwrap();
     let refused = Theme::load(&folder.join("theme.toml")).expect_err("one shape over the count");
     assert!(refused.to_string().starts_with("the SVG for art.badge is refused: with the art before it, paint"));
@@ -224,5 +241,40 @@ fn a_whole_option_written_smaller_is_painted_at_the_size_it_was_measured_at() {
                 assert!(left + width <= bubble.rect.x + bubble.rect.w, "the line ends inside its bubble");
             }
         }
+    }
+}
+
+/// The size the renderer rasterises a picture at is the size the door counted its paint on, at the renderer's own
+/// two pixels a unit: whichever of `width`, `height` and `viewBox` the picture states.
+#[test]
+fn a_picture_is_rasterised_at_the_size_its_paint_was_counted_on() {
+    use gpui::{Image, ImageFormat};
+    use sticker_kit::theme::art_cost;
+    let cx = context();
+    for (root, wide, high) in [
+        (r#"width="256" viewBox="0 0 8 256""#, 256, 256),
+        (r#"height="256" viewBox="0 0 256 8""#, 256, 256),
+        (r#"width="100px" viewBox="0 0 64 32""#, 100, 32),
+        (r#"viewBox="0 0 64 32""#, 64, 32),
+        (r#"width="10" height="20.5""#, 10, 21),
+        // With no `viewBox` a side left out is as large as what is in the picture: 8192 by 8192 here, the
+        // renderer's own cap. The door refuses these, so the count is never asked for them (0 here).
+        (r#"width="10""#, 0, 0),
+        (r#"height="10""#, 0, 0),
+        ("", 0, 0),
+    ] {
+        let svg =
+            format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {root}><circle cx="4096" cy="4096" r="4096"/></svg>"#);
+        if wide == 0 {
+            assert!(art_cost(&svg).is_err_and(|said| said.starts_with("it states no size")), "{root}");
+            continue;
+        }
+        assert_eq!(art_cost(&svg).map(|cost| cost.paint), Ok(wide * high), "{root}");
+        let image = Image::from_bytes(ImageFormat::Svg, svg.into_bytes());
+        let drawn = cx.update(|cx| image.to_image_data(cx.svg_renderer()));
+        let size = drawn.expect("it is drawn").size(0);
+        let (w, h) = (i32::from(size.width) as u64, i32::from(size.height) as u64);
+        // A side with a fraction is counted whole and drawn to the pixel: 20.5 is counted as 21 and drawn 41 high.
+        assert!(w == 2 * wide && (h == 2 * high || h == 2 * high - 1), "{root}: drawn {w} by {h} at two a unit");
     }
 }

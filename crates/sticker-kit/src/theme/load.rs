@@ -101,14 +101,13 @@ impl Theme {
             if name.is_empty() {
                 continue;
             }
-            let Some(svg) = read_art(&folder, key, name)? else {
+            let Some((_, one)) = read_art(&folder, key, name)? else {
                 loaded.warnings.push(format!("art.{key}: `{name}` was not found; the built-in art is used"));
                 loaded.theme.art.clear(key);
                 continue;
             };
             // Each file is inside the two counts by itself; a theme's files together are held to the same two.
-            let one = art_cost(&svg).unwrap_or_default();
-            all = ArtCost { numbers: all.numbers + one.numbers, paint: all.paint + one.paint };
+            all = all.with(one);
             if let Some(reason) = all.refusal() {
                 let reason = format!("with the art before it, {}", reason.trim_start_matches("its "));
                 return Err(ThemeError::RefusedSvg { key: format!("art.{key}"), reason });
@@ -129,15 +128,23 @@ impl Theme {
         toml::to_string(self).map_err(|e| ThemeError::Parse(e.to_string()))
     }
 
-    /// The checked SVG text replacing a piece's art (`hero`, `character`,
-    /// `star`, `bubble` or `badge`), when the theme names one.
+    /// The checked SVG text replacing a piece's art (`hero`, `character`, `star`, `bubble` or `badge`), when the
+    /// theme names one. The files are read again here, when the theme is drawn, and may have changed since
+    /// [`Theme::load`]: so they are held together to the two counts again, in the order `load` reads them. A file
+    /// that is refused, or would take the files before it past a count, is not given and not counted, and the
+    /// kit's own art is drawn for its piece.
     pub fn art_svg(&self, key: &str) -> Option<String> {
         let folder = self.folder.as_deref()?;
-        let name = self.art.entries().iter().find(|e| e.0 == key)?.1;
-        if name.is_empty() {
-            return None;
+        let mut all = ArtCost::default();
+        for (piece, name) in self.art.entries() {
+            let read = if name.is_empty() { None } else { read_art(folder, piece, name).ok().flatten() };
+            let kept = read.filter(|(_, one)| all.with(*one).refusal().is_none());
+            all = kept.as_ref().map_or(all, |(_, one)| all.with(*one));
+            if piece == key {
+                return kept.map(|(svg, _)| svg);
+            }
         }
-        read_art(folder, key, name).ok().flatten()
+        None
     }
 }
 
@@ -178,9 +185,9 @@ fn escapes_by_shape(name: &str) -> bool {
     Path::new(name).components().any(|part| !matches!(part, Component::Normal(_) | Component::CurDir))
 }
 
-/// The art file's text, `None` when the file is missing. Symlinks are
+/// The art file's text and what it costs to draw, `None` when the file is missing. Symlinks are
 /// resolved first, so a link that points out of the folder is an escape.
-fn read_art(folder: &Path, key: &str, name: &str) -> Result<Option<String>, ThemeError> {
+fn read_art(folder: &Path, key: &str, name: &str) -> Result<Option<(String, ArtCost)>, ThemeError> {
     if escapes_by_shape(name) {
         return Err(escape(key, name));
     }
@@ -193,7 +200,7 @@ fn read_art(folder: &Path, key: &str, name: &str) -> Result<Option<String>, Them
     }
     let refuse = |reason: String| ThemeError::RefusedSvg { key: format!("art.{key}"), reason };
     let text = read_capped(&real, MAX_ART_BYTES).map_err(refuse)?;
-    art_cost(&text).map(|_| Some(text)).map_err(refuse)
+    art_cost(&text).map(|cost| Some((text, cost))).map_err(refuse)
 }
 
 fn over(max: u64) -> String {

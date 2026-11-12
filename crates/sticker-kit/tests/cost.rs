@@ -36,9 +36,13 @@ fn an_art_file_is_held_to_its_shapes_times_its_size() {
         (r#"width="10" height="20.5""#, 2 * 10 * 21),
         (r#"viewBox="0 0 64 32""#, 2 * 64 * 32),
         (r#"width="100px" viewBox="0 0 64 32""#, 2 * 100 * 32),
-        ("", 2 * 256 * 256),
     ] {
         assert_eq!(art_cost(&rooted(root)).map(|cost| cost.paint), Ok(paint), "{root}");
+    }
+    // With no `viewBox` and a side not stated, the renderer draws the picture as large as what is in it.
+    for root in ["", r#"width="10""#, r#"height="10""#] {
+        let said = art_cost(&rooted(root)).unwrap_err();
+        assert_eq!(said, "it states no size: a picture needs a `viewBox`, or a `width` and a `height`", "{root}");
     }
 }
 
@@ -51,6 +55,13 @@ fn an_art_file_is_held_to_the_numbers_in_its_paths_and_a_view_box_to_a_least_siz
     let over = art_cost(&two(r#"<polygon points="1,1 2 2 3"/>"#)).unwrap_err();
     assert_eq!(over, "its paths hold more than 1024 numbers");
     assert!(art_cost(&two(r#"<circle cx="1" cy="2" r="3"/><rect x="1"/>"#)).is_ok(), "only paths and points count");
+    // An arc is drawn as several curves: each of its numbers counts four times, in either case of its letter.
+    let arcs = |d: &str| art_cost(&sized(64, &format!(r#"<path d="{d}"/>"#))).map(|cost| cost.numbers);
+    assert_eq!(arcs("M0 0a4 4 0 1 1 2 2L1 1"), Ok(2 + 7 * 4 + 2));
+    assert_eq!(arcs("M0 0A4 4 0 1 1 2 2 4.5.5 0 1 1 3 3h1"), Ok(2 + 14 * 4 + 1), "an arc goes on until a letter");
+    let most = format!("M0 0{}{}", "a4 4 0 1 1 2 2".repeat(36), "h1".repeat(14));
+    assert_eq!(arcs(&most), Ok(MAX_ART_NUMBERS));
+    assert_eq!(arcs(&format!("{most}h1")), Err("its paths hold more than 1024 numbers".to_string()));
 
     let viewed = |view: &str| format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}">{CIRCLE}</svg>"#);
     assert!(art_cost(&viewed("0 0 8 8")).is_ok());
@@ -87,6 +98,22 @@ fn a_theme_s_art_files_together_are_held_to_the_same_two_counts() {
     let numbers = "with the art before it, paths hold more than 1024 numbers";
     assert_eq!(write(&paths(512), &paths(500), &paths(13)), Err(format!("art.badge: {numbers}")));
     assert_eq!(write(&paths(512), &paths(513), &small(1)), Err(format!("art.star: {numbers}")));
+
+    // Files changed after the theme was loaded are read again when it is drawn, and held to the same total: a
+    // file that would take the theme past it is not given, so the kit's own art is drawn in its place.
+    assert_eq!(write(&small(1), &small(1), &small(1)), Ok(()));
+    let loaded = Theme::load(&theme).unwrap().theme;
+    let given = |loaded: &Theme| ["hero", "star", "badge"].map(|key| loaded.art_svg(key).is_some());
+    assert_eq!(given(&loaded), [true, true, true]);
+    let full = sized(256, &CIRCLE.repeat(64));
+    for name in ["hero", "star"] {
+        fs::write(folder.join(format!("{name}.svg")), &full).unwrap();
+    }
+    assert_eq!(given(&loaded), [true, false, false], "each alone is inside the counts; together they are not");
+    fs::write(folder.join("hero.svg"), paths(1024)).unwrap();
+    assert_eq!(given(&loaded), [true, false, true], "a file past the total is passed over, not counted");
+    fs::write(folder.join("badge.svg"), paths(2)).unwrap();
+    assert_eq!(given(&loaded), [true, false, false], "the numbers are summed as the paint is");
     let _ = fs::remove_dir_all(folder);
 }
 

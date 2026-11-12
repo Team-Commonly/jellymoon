@@ -75,10 +75,30 @@ it did not start, and `rustix::process::kill_process_group` is that call without
 `cargo xtask check` asks nothing more of a new dependency than `entropy.toml`'s `[depends]` and `[forbidden]`,
 which it passes; this note is the rule's.
 
+## The stop (2026-11-11, F40)
+
+Decision 3 is built as `jellymoon run stop --wish <id>` (`docs/development/run.md`, "A stop the person asks for").
+
+- **The stop is a request, and the run stops itself.** The child belongs to the `jellymoon run` that started it.
+  `run stop` leaves an empty file, `runs/<id>/stop`, and that `jellymoon run` finds it while it waits for its
+  child. This works the same on every system, and only one process ever ends the child and writes the end, so a
+  stop against the run's own finish gives one end. Signalling the child from `run stop` was not chosen: two
+  processes would then race to write the end, and Windows has no signal to send.
+- **Only the file's being there is read.** A request left by hand stops the run whose folder it is in and does
+  nothing else. It needs no lock.
+- **The interrupt is `SIGINT`** to the child's group, then five seconds, then `SIGTERM`, then five seconds, then
+  `SIGKILL`. On Windows the child is ended at once.
+- **`cancelled` is a fourth outcome.** The wish needs the person, has no star and has had its one run; the copy
+  is kept as a failed run's is. A stop decides the end even after a result that said success.
+- **A run that was cut off is not cancelled by a stop.** `run stop` writes it down as cut off, as a page does.
+- **Denials are counted and never decide anything.** The list is fixed by the command line and checked on every
+  init line; the measured stream shows nothing else of what was allowed, so no other check was invented.
+
 ## Still open
 
 - **Interrupting.** Whether the stream mode takes a supported interrupt message on its input was not measured, nor
-  how a child is interrupted on Windows. Until it is, a stop is the signal and then the kill; on Windows, the kill.
+  whether Claude Code ends its work cleanly at `SIGINT`, nor how a child is interrupted on Windows. A stop sends
+  `SIGINT`, then the signal, then the kill; on Windows, the kill.
 - **A repo with its own instructions.** A run in a repo that has its own `CLAUDE.md`, settings or hooks was not
   measured, nor the harness's exact list of protected paths, and so whether `.git` inside the copy is covered by
   the edit allow.

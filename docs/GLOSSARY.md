@@ -26,6 +26,7 @@ The words below mean exactly this in code, docs and tests. A new term is added h
 | **pack** | Extra pieces added to the kit as data and art only | a plugin, which would run code |
 | **made wish** | A wish the person made in the app or with `jellymoon wish`, kept in their exact words beside the day's page and drawn with the reading's wishes | a wish the reading call worked out; a ruling |
 | **run** | One agent session Jellymoon starts itself for a made wish: the person's harness, headless, in its own copy of the repo (ADR 0011, section 7; ADR 0014) | a session the person started, which Jellymoon only reads; the reading call, which has every tool off |
+| **cancelled** | How a run ended that the person stopped with `jellymoon run stop`: no star, the copy kept, and the wish needs the person. A made wish gets one run, and that was it | failed, which is a run that ended badly by itself or was cut off |
 | **copy** | A run's own working copy of the person's repo: a git worktree on a branch of its own. The folder is removed when the run ends; the branch, with the work on it, is kept | the person's checkout, which a run never touches |
 | **feature** | One entry of `feature_list.json`: a test at the binary's boundary that defines done | an issue |
 | **unit** | One piece of work given to one worker: usually one feature, and one file in `progress/` | a feature, though often one-to-one |

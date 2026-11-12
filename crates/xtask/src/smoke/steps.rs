@@ -40,6 +40,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "copy", only: Only::Synthetic, run: super::copy::copy },
     // A run (F39), in a repo it makes. With --real it starts the person's own Claude Code on one harmless wish.
     Step { name: "run", only: Only::Any, run: super::run::run },
+    // A stop (F40), of a second run in that repo. Not with --real: only a made-up agent is sure to be still going.
+    Step { name: "stop", only: Only::Synthetic, run: super::stop::stop },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
     Step { name: "window", only: Only::Window, run: window },
 ];

@@ -34,7 +34,7 @@ pub use hook::{hook_installed, install_hook, remove_hook};
 pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};
-pub use run::{Ran, RunOptions, RunOutcome, run};
+pub use run::{Ran, RunOptions, RunOutcome, run, stop_run};
 pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, ReaderTurn, Ruling, Wish, WishState};
 pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};
 pub use uninstall::{UninstallOptions, Uninstalled, uninstall};

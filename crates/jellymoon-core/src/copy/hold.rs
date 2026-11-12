@@ -3,7 +3,7 @@
 //! time. The system drops the lock when the process that holds it ends, however it ends, and no git child outlasts
 //! its limit (`git.rs`), so a wait for it ends.
 
-use std::fs::{File, OpenOptions, TryLockError};
+use std::fs::{File, TryLockError};
 use std::io::{self, ErrorKind};
 use std::path::Path;
 use std::thread;
@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 /// long as it is held, which is as long as the git children of the command that holds it take. With one it is
 /// asked for every 10 ms until the wait has passed, and then the error is one that timed out ([`timed_out`]).
 pub(super) fn held(file: &Path, made: bool, wait: Option<Duration>) -> io::Result<File> {
-    let held = OpenOptions::new().write(true).create(made).truncate(false).open(file)?;
+    let held = super::record::lock_of(file, made)?;
     let Some(wait) = wait else { return held.lock().map(|()| held) };
     let started = Instant::now();
     loop {

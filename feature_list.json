@@ -231,7 +231,7 @@
         "a stopped run keeps its copy"
       ],
       "test": "cargo test -p jellymoon --test f40",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F39"
       ]

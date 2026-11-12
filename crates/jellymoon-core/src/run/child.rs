@@ -1,6 +1,7 @@
 //! The harness child of a run (`docs/development/run.md`). The wish's words go in on its input and nowhere else.
 //! What it prints is untrusted, and read by `stream.rs`. A child still going at its limit, or one that prints past
-//! the cap, is asked to stop and then killed; one whose stream does not start as a run's is killed at once. Where
+//! the cap, is asked to stop and then killed; one whose stream does not start as a run's is killed at once; one the
+//! person stopped (`stop.rs`) is interrupted first, then asked, then killed. Where
 //! there are process groups the child is started in one of its own, and when it has ended, however it ended, that
 //! group is killed: nothing the harness started outlives the run.
 
@@ -11,6 +12,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::stream::{self, Stream};
+use crate::busy::or_test;
 
 /// How much of what the child said on stderr is looked at, for the one fixed sign of a harness that is too old.
 const STDERR_HEAD: u64 = 4096;
@@ -19,7 +21,7 @@ const GRACE: Duration = Duration::from_secs(5);
 /// How long a child's output is waited for once it is gone: a program it moved to another group may hold the pipe.
 const DRAIN: Duration = Duration::from_secs(5);
 
-/// Why the wait for the child ended. F40's stop is one more of these, and ends the child with [`stop`] too.
+/// Why the wait for the child ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum End {
     Exited,
@@ -29,6 +31,8 @@ pub(super) enum End {
     Over,
     /// Its stream did not start as a run's does, and it was killed.
     NotARun,
+    /// The person asked for the run to stop while the child was still going, or before there was one.
+    Stopped,
 }
 
 /// What is known of a child that is gone.
@@ -43,8 +47,19 @@ pub(super) struct Ended {
 }
 
 /// Starts the command with `said` as its whole input, and waits for it to end, `limit` at most. `started` is told
-/// the child's pid as soon as there is one.
-pub(super) fn run(mut command: Command, said: String, limit: Duration, started: impl FnOnce(u32)) -> io::Result<Ended> {
+/// the child's pid as soon as there is one. `stop` says whether the person has asked for the run to stop: it is
+/// asked before the child is started, which then never is, and every 10 ms while the child goes. A child that has
+/// ended by itself when it is asked has ended, and was not stopped.
+pub(super) fn run(
+    mut command: Command,
+    said: String,
+    limit: Duration,
+    started: impl FnOnce(u32),
+    stop: impl Fn() -> bool,
+) -> io::Result<Ended> {
+    if stop() {
+        return Ok(Ended { end: End::Stopped, exit_0: false, read: Stream::default(), old: false });
+    }
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
     let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
@@ -53,7 +68,7 @@ pub(super) fn run(mut command: Command, said: String, limit: Duration, started: 
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(said.as_bytes())));
     let ((stream, so_far), head) = (stream::reader(child.stdout.take()), stderr_head(child.stderr.take()));
-    let deadline = Instant::now() + limit;
+    let (deadline, grace) = (Instant::now() + limit, or_test(GRACE, "JELLYMOON_TEST_GRACE_MS"));
     let mut read = None;
     let (end, grace) = loop {
         if gone(&mut child) {
@@ -61,13 +76,14 @@ pub(super) fn run(mut command: Command, said: String, limit: Duration, started: 
         }
         read = read.or_else(|| stream.try_recv().ok());
         match read {
-            Some(Stream { over: true, .. }) => break (End::Over, GRACE),
+            Some(Stream { over: true, .. }) => break (End::Over, grace),
             Some(Stream { start: Some(false), .. }) => break (End::NotARun, Duration::ZERO),
-            _ if Instant::now() >= deadline => break (End::Limit, GRACE),
+            _ if stop() => break (End::Stopped, grace),
+            _ if Instant::now() >= deadline => break (End::Limit, grace),
             _ => thread::sleep(Duration::from_millis(10)),
         }
     };
-    let status = stop(&mut child, grace);
+    let status = halt(&mut child, end == End::Stopped, grace);
     // A reader that does not finish has read what it has so far: its stream is never taken for an empty one.
     let whole = read.or_else(|| stream.recv_timeout(DRAIN).ok());
     let read = whole.or_else(|| so_far.lock().ok().map(|so_far| *so_far)).unwrap_or_default();
@@ -75,7 +91,9 @@ pub(super) fn run(mut command: Command, said: String, limit: Duration, started: 
     let head = head.recv_timeout(DRAIN).unwrap_or_default();
     let unknown = head.contains("unknown option") && head.contains("--restricted");
     let old = end == End::Exited && !exit_0 && whole.is_some() && read.lines == 0 && unknown;
-    Ok(Ended { end: if read.over { End::Over } else { end }, exit_0, read, old })
+    // A child the person stopped was stopped, whatever it printed while it was being ended.
+    let end = if read.over && end != End::Stopped { End::Over } else { end };
+    Ok(Ended { end, exit_0, read, old })
 }
 
 /// The start of what the child said on stderr, as text; the rest is read and dropped, so the child never waits.
@@ -93,7 +111,7 @@ fn stderr_head(pipe: Option<impl Read + Send + 'static>) -> Receiver<String> {
 }
 
 /// Whether the child has ended. Where there are process groups it is not collected yet, so its pid, and the group
-/// of that number, stay its own until [`stop`] has killed the group. A child that cannot be asked about has ended.
+/// of that number, stay its own until [`halt`] has killed the group. A child that cannot be asked about has ended.
 fn gone(child: &mut Child) -> bool {
     #[cfg(unix)]
     {
@@ -106,12 +124,13 @@ fn gone(child: &mut Child) -> bool {
 }
 
 /// Ends the child and collects it. Where there are process groups the group, which is the child's own and named by
-/// its pid, is asked first (`SIGTERM`) when there is a `grace`, given that long, and then killed (`dead::stop`): so
-/// is the group of a child that has ended by itself, with what it left going. Windows has no such asking and no
-/// group: the child alone is ended at once (`TerminateProcess`), and what it started goes on.
-fn stop(child: &mut Child, grace: Duration) -> Option<ExitStatus> {
+/// its pid, is asked first when there is a `grace` (`SIGINT` when the person stopped it, each time `SIGTERM`), given
+/// that long after each, and then killed (`dead::stop`): so is the group of a child that has ended by itself, with
+/// what it left going. Windows has no such asking and no group: the child alone is ended at once
+/// (`TerminateProcess`), and what it started goes on.
+fn halt(child: &mut Child, interrupt: bool, grace: Duration) -> Option<ExitStatus> {
     #[cfg(unix)]
-    super::dead::stop(child.id(), grace, || true, || gone(child));
-    let _ = (grace, child.kill());
+    super::dead::stop(child.id(), interrupt, grace, || true, || gone(child));
+    let _ = (interrupt, grace, child.kill());
     child.wait().ok()
 }

@@ -62,6 +62,7 @@ fn what_a_run_prints_round_trips_byte_for_byte_for_each_outcome() {
     let outcomes = [
         ("ran-completed.json", RunOutcome::Completed, true, true),
         ("ran-failed.json", RunOutcome::Failed, true, false),
+        ("ran-cancelled.json", RunOutcome::Cancelled, true, false),
         ("ran-not-started.json", RunOutcome::NotStarted, false, false),
     ];
     for (name, outcome, started, star) in outcomes {

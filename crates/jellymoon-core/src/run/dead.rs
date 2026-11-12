@@ -3,7 +3,8 @@
 //! given out again once its process is gone. [`mark`] is what tells the two apart: when the process started, as the
 //! system says it. [`kill`] signals the pid only while its mark is the one recorded, and does not wait: a dead run's
 //! agent has nobody to report to, and a page is not kept waiting for it. [`stop`] is the one stop sequence, which
-//! the limit inside a live `jellymoon run` uses with its five seconds (`child.rs`).
+//! the limit inside a live `jellymoon run` uses with its five seconds, and a stop the person asked for with an
+//! interrupt before them (`child.rs`).
 //!
 //! Where the system has no signals (Windows) there is no mark and nothing is stopped.
 
@@ -36,16 +37,26 @@ pub(super) fn mark(pid: u32) -> Option<String> {
 
 /// The one stop sequence. The child was started in a process group of its own, named by its pid, so each signal
 /// goes to the group, and only while `same` says the pid is still that child. With a `grace` the group is asked
-/// first (`SIGTERM`) and given that long, or until the child is `gone`. Then it is killed, gone or not: what the
-/// child started is in the group too.
+/// first and given that long, or until the child is `gone`: with `interrupt` as Ctrl-C asks (`SIGINT`), and then,
+/// if it is still there, as the system asks a program to stop (`SIGTERM`), with the same wait again. Then it is
+/// killed, gone or not: what the child started is in the group too.
 #[cfg(unix)]
-pub(super) fn stop(pid: u32, grace: Duration, same: impl Fn() -> bool, mut gone: impl FnMut() -> bool) {
+pub(super) fn stop(
+    pid: u32,
+    interrupt: bool,
+    grace: Duration,
+    same: impl Fn() -> bool,
+    mut gone: impl FnMut() -> bool,
+) {
     use rustix::process::{Pid, Signal, kill_process_group};
     let Some(group) = i32::try_from(pid).ok().filter(|pid| *pid > 1).and_then(Pid::from_raw) else { return };
-    if !grace.is_zero() && same() && kill_process_group(group, Signal::TERM).is_ok() {
-        let deadline = Instant::now() + grace;
-        while Instant::now() < deadline && !gone() {
-            thread::sleep(Duration::from_millis(10));
+    let asks = [Signal::INT, Signal::TERM].into_iter().skip(usize::from(!interrupt));
+    for ask in asks.filter(|_| !grace.is_zero()) {
+        if !gone() && same() && kill_process_group(group, ask).is_ok() {
+            let deadline = Instant::now() + grace;
+            while Instant::now() < deadline && !gone() {
+                thread::sleep(Duration::from_millis(10));
+            }
         }
     }
     if same() {
@@ -58,7 +69,7 @@ pub(super) fn stop(pid: u32, grace: Duration, same: impl Fn() -> bool, mut gone:
 /// by then is not signalled.
 #[cfg(unix)]
 pub(super) fn kill(pid: u32, recorded: &str) {
-    stop(pid, Duration::ZERO, || mark(pid).as_deref() == Some(recorded), || true);
+    stop(pid, false, Duration::ZERO, || mark(pid).as_deref() == Some(recorded), || true);
 }
 
 #[cfg(not(unix))]

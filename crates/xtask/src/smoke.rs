@@ -9,6 +9,7 @@
 mod copy;
 mod run;
 mod steps;
+mod stop;
 
 use std::ffi::OsString;
 use std::path::{self, Path, PathBuf};

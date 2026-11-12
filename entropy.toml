@@ -86,10 +86,25 @@ max_file_lines = 400
 # binary by 16 (in the test of a copy that cannot be taken back, `tests/f39/safe.rs`).
 # The move of a run's folder tried again for 200 ms, not the day's three seconds, raised core by 12 (`busy.rs`,
 # `copy/gone.rs`): on Windows every run that was never started waited those three seconds under its own lock.
-"crates/jellymoon-core" = 5668
 # The same filter in `nothing_is_left` raised the binary by 1 (`tests/f39/refused.rs`). Reading `runs` without the
 # bytes of the lock a test holds, which Windows lets no other handle read, raised it by 13 (`tests/f39/safe.rs`).
-"crates/jellymoon" = 7518
+# A test's wait for a lock to be free taking the first yes, not asking again, raised it by 8 (`tests/f39/world.rs`):
+# a command another test starts at that moment keeps the lock the test just let go.
+# F40, a stop, raised core by 139: `run/stop.rs`, the request a stop leaves and what `run stop` prints, is 90; the
+# child's wait looking for the request, 17; the interrupt before the signal in the one stop sequence, 11; the
+# fourth outcome and its fixed words in `run.rs`, `run/end.rs` and the example's row, 21.
+# It raised the binary by 592: its tests at the binary are 528 (`tests/f40.rs`, 151, and `tests/f40/`: `deaf.rs`
+# 102, `denied.rs` 52, `nothing.rs` 164, `races.rs` 59); the made-up agent that lingers and the one deaf to the
+# interrupt, 23; `run stop` and its parsing, 7; and 34 are what moving F39's test folder into `tests/f39/world.rs`,
+# so that F40 starts runs in it too, added to it (a run started and left going, and its end read).
+# The made-up agent's number named where nothing can be made deaf, for Windows, raised the binary by 2.
+# The fixes after F40's gate, round 1, raised core by 51 and the binary by 482, nearly all of it tests at the binary.
+# The made-up agent's `perl` script kept to the systems that use it, for Windows's lint, raised the binary by 1.
+# The fixes after F40's gate, round 2, raised core by 12 and the binary by 176, nearly all of it tests at the binary.
+# The copies' lock opened for writing again, which Windows needs before it gives a lock, raised core by 1 (a comment).
+"crates/jellymoon-core" = 5871
+# A test's reading of the home past a file Windows holds locked raised the binary by 2.
+"crates/jellymoon" = 8781
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -97,7 +112,8 @@ max_file_lines = 400
 # F37's step, `wish`, raised it by 25.
 # F39's step, `run` (`smoke/run.rs`, 82 lines: the wish's file on the run's branch and the checkout unchanged are 10 of them), and
 # the repo command it shares with `copy`, raised it by 94.
-"crates/xtask" = 1279
+# F40's step, `stop` (`smoke/stop.rs`, 69 lines), and the run command it shares with `run`, raised it by 80.
+"crates/xtask" = 1359
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

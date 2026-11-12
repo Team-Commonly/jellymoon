@@ -223,19 +223,82 @@ fn litters(rec: &Path) -> ! {
 }
 
 /// `deaf` starts this program again as one that the stop signal does not reach: the system keeps a signal ignored
-/// across the start of a program, and `perl` can ask for that. Where that cannot be done it leaves `cannot`.
-fn deafen(rec: &Path) -> ! {
+/// across the start of a program, and `perl` can ask for that. Where that cannot be done it leaves `cannot`. By its
+/// number it is deaf to the stop signal (0), to the interrupt (1) or to both (2). 3 is [`minded`].
+fn deafen(rec: &Path, number: usize) -> ! {
+    #[cfg(not(unix))]
+    let _ = number; // nothing here can be made deaf
     #[cfg(unix)]
     if Path::new("/usr/bin/perl").is_file() {
-        let ignore = "$SIG{TERM} = 'IGNORE'; exec @ARGV; exit 9";
+        let deaf = ["$SIG{TERM}", "$SIG{INT}", "$SIG{TERM} = $SIG{INT}"][number.min(2)];
+        let ignore = format!("{deaf} = 'IGNORE'; exec @ARGV; exit 9");
         let mut perl = process::Command::new("/usr/bin/perl");
-        perl.args(["-e", ignore]).arg(env::current_exe().unwrap()).arg("now");
+        perl.args(["-e", &ignore]).arg(env::current_exe().unwrap()).arg("now");
         let failed = std::os::unix::process::CommandExt::exec(&mut perl);
         eprintln!("perl could not be started: {failed}");
     }
+    cannot(rec)
+}
+
+fn cannot(rec: &Path) -> ! {
     let why = if cfg!(unix) { "there is no /usr/bin/perl to start one with" } else { "this system has no signals" };
     fs::write(rec.join("cannot"), format!("nothing here starts a program deaf to the stop signal: {why}")).unwrap();
     process::exit(1)
+}
+
+/// What `perl` is told for [`minded`]. It starts the program as a child of its own, in its process group.
+#[cfg(unix)]
+const MINDS: &str = r#"my ($rec, $sig, $last, $flood) = splice(@ARGV, 0, 4);
+$SIG{INT} = 'IGNORE' if $sig eq 'TERM';
+my $pid = fork;
+if (!$pid) { exec @ARGV; exit 9 }
+$SIG{$sig} = sub {
+    open(my $heard, '>', "$rec/heard"); close $heard;
+    $| = 1;
+    print(('j' x 65535) . "\n") for 1 .. $flood;
+    print "$last\n" if length $last;
+    exit 0
+};
+waitpid($pid, 0);
+exit 1"#;
+
+/// `deaf` 3, `obeys` and `floods` start this program again below a `perl` that minds one signal. At that signal
+/// the `perl` leaves `heard`, prints `flood` lines of junk and then `last`, when there is one, and exits 0, while
+/// the signal ends this program. One that minds the stop signal is deaf to the interrupt, and so is this program
+/// below it. Where that cannot be done it leaves `cannot`.
+fn minded(rec: &Path, signal: &str, last: &str, flood: usize) -> ! {
+    #[cfg(not(unix))]
+    let _ = (signal, last, flood); // nothing here can be made to mind a signal
+    #[cfg(unix)]
+    if Path::new("/usr/bin/perl").is_file() {
+        let mut perl = process::Command::new("/usr/bin/perl");
+        perl.args(["-e", MINDS]).arg(rec).args([signal, last, &flood.to_string()]);
+        let failed = std::os::unix::process::CommandExt::exec(perl.arg(env::current_exe().unwrap()).arg("now"));
+        eprintln!("perl could not be started: {failed}");
+    }
+    cannot(rec)
+}
+
+/// The scripts that start this program a second time, with something done about signals first.
+fn again(script: &str, rec: &Path, number: usize) {
+    match script {
+        "deaf" if number < 3 => deafen(rec, number),
+        "deaf" => minded(rec, "TERM", "", 0),
+        "obeys" => minded(rec, "INT", &if number == 1 { success() } else { String::new() }, 0),
+        "floods" => minded(rec, "INT", "", 1100),
+        _ => {}
+    }
+}
+
+/// `obeys` and `floods`, started the second time: the work, the result too when it comes `first`, and then a wait
+/// that the `perl` above ends at the interrupt. There `obeys` reports a success (1) or has already (0), and
+/// `floods` prints more than is read of a run.
+fn obeys(first: bool, rec: &Path) -> i32 {
+    edits();
+    if first {
+        line(&success());
+    }
+    waits(false, rec)
 }
 
 fn record(rec: &Path) {
@@ -264,8 +327,8 @@ fn main() {
     let play = fs::read_to_string(env::current_exe().unwrap().with_file_name("play")).unwrap();
     let play: Vec<&str> = play.lines().collect();
     let (script, rec, number) = (play[0], Path::new(play[1]), play[2].parse::<usize>().unwrap());
-    if script == "deaf" && env::args().nth(1).as_deref() != Some("now") {
-        deafen(rec);
+    if env::args().nth(1).as_deref() != Some("now") {
+        again(script, rec, number);
     }
     record(rec);
     let code = match script {
@@ -314,6 +377,7 @@ fn main() {
             1
         }
         "forever" | "deaf" | "slow" => waits(script == "slow", rec),
+        "obeys" | "floods" => obeys(script == "obeys" && number == 0, rec),
         "scribble" => scribbles(rec),
         other => gate::play(other, number, rec),
     };

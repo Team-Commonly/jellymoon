@@ -2,7 +2,8 @@
 //! `jellymoon run` saw end gets its end in its own record first ([`note`]), and only then is its wish told
 //! ([`tell`]), behind the day's lock, which another change to the day may hold. So a run that ended is never
 //! taken for one cut off: whoever next finds the wish still working, with nothing holding the run, gives the wish
-//! the end its record has, and only a run whose record has none was cut off ([`bury`]).
+//! the end its record has, and only a run whose record has none was cut off ([`bury`]). A run the person stopped
+//! (`stop.rs`) ends as cancelled, by the same steps.
 
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ use std::time::Duration;
 
 use super::child::{End, Ended};
 use super::record::Record;
-use super::{Ran, RunOutcome, STAR, cut, dead, failed, finished, record, refused};
+use super::{Ran, RunOutcome, STAR, cancelled, cut, dead, failed, finished, record, refused};
 use crate::busy::{self, or_test};
 use crate::copy::{self, Outcome, RunCopy};
 use crate::reading::STARS_MAX;
@@ -53,16 +54,19 @@ pub(super) fn lock_file(home: &Path, run: &str) -> PathBuf {
     copy::kept_at(home, run).join("run.lock")
 }
 
-/// Whether a `jellymoon run` that still lives holds the run. A lock that cannot be asked about is no lock.
+/// Whether a `jellymoon run` that still lives holds the run. A lock that cannot be asked about is no lock, and
+/// neither is anything but a plain file at its name, which is not opened: a named pipe would keep whoever opens it
+/// waiting for ever. A run with such a lock is held by nothing, so it was cut off.
 fn held(home: &Path, run: &str) -> bool {
-    let free = File::open(lock_file(home, run)).is_ok_and(|lock| lock.try_lock_shared().is_ok());
-    !free && lock_file(home, run).is_file()
+    let lock = lock_file(home, run);
+    let plain = fs::symlink_metadata(&lock).is_ok_and(|meta| meta.is_file());
+    plain && File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_err())
 }
 
 /// The end in a run's record, when it is one core wrote for this wish: the words are made here again, and the
 /// record's are used only to choose among them. A record is a file, and anyone who can write the home can write
 /// it: a finished run is believed only when its copy is gone as a finished run's is, with its work on its branch.
-fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> Option<(RunOutcome, String)> {
+pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> Option<(RunOutcome, String)> {
     let (outcome, said) = (record.outcome?, record.why.as_deref()?);
     if record.wish != wish || record.day != day {
         return None;
@@ -77,9 +81,26 @@ fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> O
             let limit = seconds.map(|seconds| failed(run, &at_limit(Duration::from_secs(seconds))));
             KINDS.iter().map(|kind| failed(run, kind)).chain(limit).collect()
         }
+        RunOutcome::Cancelled => vec![cancelled(run)],
         _ => Vec::new(),
     };
     ours.into_iter().find(|ours| ours == said && line(ours, 200) == *ours).map(|why| (outcome, why))
+}
+
+/// Whether a run is another wish's: its record names another wish, or another day, and either that wish names the
+/// run or a `jellymoon run` still holds it. The day's wishes are a file that can be changed by hand, and a wish
+/// made to name the run of another is given no say over it: that run is stopped, and written down, on the word of
+/// its own wish only. While its command lives the run is that command's, whatever the wishes say by then. Once
+/// nothing holds it, a record that names a wish which does not name the run is the one that was changed, and the
+/// run is this wish's, cut off ([`recorded`]).
+pub(super) fn of_another(home: &Path, run: &str, record: Option<&Record>, day: &str, wish: &str) -> bool {
+    let Some(record) = record.filter(|record| record.wish != wish || record.day != day) else { return false };
+    if held(home, run) {
+        return true;
+    }
+    // The day in a record is a word from a file: it is a day, or no file is looked for.
+    let theirs = wish::day_of(Some(&record.day)).and_then(|day| wish::kept_of(home, &day)).unwrap_or_default();
+    theirs.iter().any(|theirs| theirs.id == record.wish && theirs.run.as_deref() == Some(run))
 }
 
 /// A wish that names a run of which nothing is kept, not even its folder in `runs`: the run was never started
@@ -96,27 +117,39 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 
 /// What a `jellymoon run` or a page does with a wish that still says working while nothing holds its run. It is
 /// returned as it is then drawn, written down or not, never as working for ever. A run whose record has its end
-/// ended while the day was locked: the wish is given that end, its star included. Any other was cut off: the
-/// harness child it left is killed, if the pid in the record is still that process (`dead.rs`), and the run is
+/// ended while the day was locked: the wish is given that end, its star included. Any other was cut off, and is
 /// written down as failed: its copy is marked, then the wish is told, and only for a wish that took it the record.
-/// A run whose record says it was never started has the child it names killed the same way, then its copy taken
-/// back, and only then is its wish made as it was.
+/// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`), and
+/// the copy of a run that did not finish is marked. A run whose record says it was never started, and names no
+/// child, has its copy taken back, and only then is its wish made as it was; one that names a child did start,
+/// and was cut off. A wish that names another wish's run is returned as needing the person, in one fixed line,
+/// with nothing written or killed ([`of_another`]).
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
-    let cut_off = |run: &String| wish.state == WishState::Working && !held(home, run);
-    let Some(run) = wish.run.clone().filter(cut_off) else { return wish };
+    let Some(run) = wish.run.clone().filter(|_| wish.state == WishState::Working) else { return wish };
+    // Asked first, and whether the run is held or not: the run is not this wish's to wait for.
+    if of_another(home, &run, record::kept(home, &run).as_ref(), day, &wish.id) {
+        // It has no run of its own that could ever end, so it is not drawn as working. Nothing is written.
+        let why = format!("run {run} is another wish's run: this wish has had no run of its own");
+        return MadeWish { state: WishState::NeedsYou, why: Some(why), ..wish };
+    }
+    if held(home, &run) {
+        return wish;
+    }
     if fs::symlink_metadata(copy::kept_at(home, &run)).is_err() {
         return unstarted(home, day, wish, &run);
     }
+    // The record is read once nothing holds the run: one read before that could miss the end the run wrote.
     let record = record::kept(home, &run);
     let kill = || {
         if let Some((pid, mark)) = record.as_ref().and_then(|record| Some((record.pid?, record.mark.as_deref()?))) {
             dead::kill(pid, mark);
         }
     };
-    if record.as_ref().is_some_and(|record| record.outcome == Some(RunOutcome::NotStarted)) {
-        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish. A record is a file
-        // anyone who can write the home can write: the child it names is stopped before its copy goes.
-        kill();
+    // A record is a file anyone who can write the home can write, and one that names a child is of a run that did
+    // start: its copy can hold work, and is not removed on the record's word. That run was cut off (below).
+    let never = |record: &Record| record.outcome == Some(RunOutcome::NotStarted) && record.pid.is_none();
+    if record.as_ref().is_some_and(never) {
+        // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
         // With the lock not had in time nothing is written: the wish goes on naming the run where it is kept, so
         // the next look tries again, and it is drawn as it was, with no run, never as one going. A copy that cannot
         // be taken back for any other reason (its repo is gone, git fails) never will be: what the home holds of
@@ -133,13 +166,15 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
         apply(&mut wish, outcome, &why);
         wish
     };
-    if ended.is_none() {
-        kill();
-        // The copy is marked before anything is written. With its lock not had in time nothing is written at all:
-        // the wish is drawn as it will be kept, and the next look, which finds it as this one did, does the rest.
-        if !mark(home, &run, soon()) {
-            return drawn(wish);
-        }
+    // Nothing holds the run, so nobody reads its child any more, whatever the record says of an end: a record
+    // can be written by hand. A child that ended is not that process any more, and is not signalled.
+    kill();
+    // The copy is marked before anything is written. With its lock not had in time nothing is written at all:
+    // the wish is drawn as it will be kept, and the next look, which finds it as this one did, does the rest.
+    // An end that is believed and is not a finished run's can have been written by hand too, over a run whose
+    // own command never marked its copy, so its copy is marked as a cut off run's is.
+    if outcome != RunOutcome::Completed && !mark(home, &run, soon()) {
+        return drawn(wish);
     }
     let mut told = tell(home, day, &wish.id, &run, outcome, &why, Duration::ZERO);
     if ended.is_none() {
@@ -150,7 +185,8 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
 
 /// What a child that is gone comes to: the copy is ended as completed or failed, and the record and the wish say
 /// so. Finished is all of: the stream started as a run's does, one result line came, it says success and no
-/// error, nothing that could not be read came after it, and the harness exited with 0.
+/// error, nothing that could not be read came after it, and the harness exited with 0. A child that was stopped
+/// for the person is a cancelled run whatever its stream holds: its copy is kept as a failed run's is.
 pub(super) fn settle(
     home: &Path,
     (day, wish): (&str, &str),
@@ -161,6 +197,7 @@ pub(super) fn settle(
     let read = &ended.read;
     let at_limit = at_limit(limit);
     let kind = match (ended.end, read.results, read.fine, read.unread, ended.exit_0) {
+        (End::Stopped, ..) => Some(""),
         (End::Limit, ..) => Some(at_limit.as_str()),
         (End::Over, ..) => Some(KINDS[0]),
         (End::Exited, ..) if read.lines == 0 => Some(KINDS[1]),
@@ -179,6 +216,7 @@ pub(super) fn settle(
     };
     let (outcome, why) = match committed {
         Ok((ended, changed)) => (RunOutcome::Completed, finished(&ended, changed)),
+        Err(_) if ended.end == End::Stopped => (RunOutcome::Cancelled, cancelled(run)),
         Err(kind) => (RunOutcome::Failed, failed(run, kind)),
     };
     if outcome != RunOutcome::Completed {
@@ -200,8 +238,8 @@ pub(super) fn settle(
     Ok(Ran { run: Some(run.clone()), wish: wish.to_string(), outcome, star, denied: read.denied, why })
 }
 
-/// A failed run's copy is marked failed, so that it is kept. One marked already, or gone, is left as it is. False:
-/// the lock a copy is cleaned behind was not had within `wait`, and nothing was done.
+/// The copy of a run that did not finish is marked failed, so that it is kept. One marked already, or gone, is
+/// left as it is. False: the lock a copy is cleaned behind was not had within `wait`, and nothing was done.
 fn mark(home: &Path, run: &str, wait: Option<Duration>) -> bool {
     !copy::end_copy(home, run, Outcome::Failed, wait).is_err_and(|e| copy::timed_out(&e))
 }

@@ -9,8 +9,7 @@ use std::{env, fs, thread};
 
 use serde_json::{Value, json};
 
-use super::limits::{grows, wait_for};
-use super::{DAY, SAID, STAR, printed, ran, refused, world, world_in};
+use super::{DAY, SAID, STAR, grows, printed, ran, refused, wait_for, world, world_in};
 use crate::support::{pay_key, shows, skipped, tree};
 
 /// In the name of every folder a session log names here. No output and no file of Jellymoon's may hold it.
@@ -220,7 +219,8 @@ fn a_never_started_run_whose_copy_cannot_be_taken_back_is_still_named_by_its_wis
     command.kill().unwrap();
     command.wait().unwrap();
     let mut record = w.record(&run);
-    record["outcome"] = json!("not_started");
+    // As `jellymoon run` writes it: a run that was never started names no child.
+    (record["outcome"], record["pid"], record["mark"]) = (json!("not_started"), json!(null), json!(null));
     fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
 
     let held = fs::File::options().write(true).open(w.jm("runs").join("clean.lock")).unwrap();
@@ -281,7 +281,8 @@ fn a_never_started_run_whose_repo_was_moved_away_is_cleared_by_a_look_and_its_wi
     command.kill().unwrap();
     command.wait().unwrap();
     let mut record = w.record(&run);
-    record["outcome"] = json!("not_started");
+    // As `jellymoon run` writes it: a run that was never started names no child.
+    (record["outcome"], record["pid"], record["mark"]) = (json!("not_started"), json!(null), json!(null));
     fs::write(w.jm("runs").join(&run).join("run.json"), format!("{record}\n")).unwrap();
     w.let_end("go"); // the agent the run left stands in the copy, and is gone before the repo is moved
     let moved = w.at("work").join("moved").join("alpha");

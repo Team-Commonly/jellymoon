@@ -90,6 +90,36 @@ fn a_folder_found_in_a_log_that_is_not_the_person_s_own_starts_no_run() {
     assert_eq!(printed(&ran)["outcome"], "completed");
 }
 
+// The lock runs are counted behind is opened only when it is a plain file: a folder at its name, or a link that
+// would have another file opened and written, starts no run and is left as it is.
+#[test]
+fn a_folder_or_a_link_where_the_runs_are_counted_starts_no_run_and_is_left_as_it_is() {
+    let why = "nothing was started: the lock runs are counted behind is not a plain file";
+    let w = found_world();
+    let repo = w.repo("alpha");
+    w.typed_in("-work-alpha", &repo);
+    fs::create_dir_all(w.jm("runs").join("going.lock")).unwrap();
+    kept_with_no_run(&w, &printed(&w.run(&RUN)), why);
+    assert!(w.jm("runs").join("going.lock").is_dir() && w.branches(&repo).is_empty());
+
+    let w = found_world();
+    let repo = w.repo("alpha");
+    w.typed_in("-work-alpha", &repo);
+    fs::create_dir_all(w.jm("runs")).unwrap();
+    let (door, elsewhere) = (w.jm("runs").join("going.lock"), w.at("elsewhere.txt"));
+    fs::write(&elsewhere, "the person's own\n").unwrap();
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(&elsewhere, &door);
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_file(&elsewhere, &door);
+    if linked.is_err() {
+        return skipped("this system makes no link for this user");
+    }
+    kept_with_no_run(&w, &printed(&w.run(&RUN)), why);
+    assert!(fs::symlink_metadata(&door).unwrap().file_type().is_symlink() && w.branches(&repo).is_empty());
+    assert_eq!(fs::read_to_string(&elsewhere).unwrap(), "the person's own\n");
+}
+
 #[test]
 fn a_folder_switched_off_is_not_found_by_a_run() {
     let w = found_world();

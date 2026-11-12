@@ -16,7 +16,7 @@ mod record;
 use std::collections::hash_map::RandomState;
 use std::ffi::OsStr;
 use std::fmt;
-use std::fs;
+use std::fs::{self, File};
 use std::hash::{BuildHasher, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -25,7 +25,7 @@ use std::time::Duration;
 pub use clean::clean_copy;
 pub(crate) use clean::end_copy;
 use git::{Git, Repo};
-pub(crate) use hold::timed_out;
+pub(crate) use hold::{left, start_lock, timed_out};
 use record::{Record, read, write};
 use serde::Serialize;
 
@@ -140,16 +140,26 @@ fn claim(runs: &Path, given: Option<&str>) -> Result<String, Error> {
 /// Makes a copy of the repo at `repo` for a run: a worktree of the commit the person's checkout is on, on the new
 /// branch `jellymoon/run-<id>`. Nothing of the person's checkout, index or `HEAD` is written.
 pub fn make_copy(home: &Path, repo: &Path, run: Option<&str>) -> Result<RunCopy, Error> {
-    make(home, repo, run, false)
+    make(home, repo, run, false, false).map(|(copy, _)| copy)
 }
 
 /// [`make_copy`] for a run. A folder that was not `typed` by the person was read from a session log: no refusal,
-/// now or when the copy is ended, repeats what git says of it, since git's words name the folder.
-pub(crate) fn copy_of(home: &Path, repo: &Path, typed: bool) -> Result<RunCopy, Error> {
-    make(home, repo, None, !typed)
+/// now or when the copy is ended, repeats what git says of it, since git's words name the folder. With the copy
+/// comes the system's lock on `runs/<id>/start.lock`, taken before anything of the copy was made: the command
+/// holds it for as long as it lives, so what a command that was killed left is known from what one still at
+/// work has (`hold.rs`, `run/left.rs`).
+pub(crate) fn copy_of(home: &Path, repo: &Path, typed: bool) -> Result<(RunCopy, File), Error> {
+    let (copy, held) = make(home, repo, None, !typed, true)?;
+    held.map(|held| (copy, held)).ok_or_else(|| refused("the copy's own lock was not taken"))
 }
 
-fn make(home: &Path, repo: &Path, run: Option<&str>, found: bool) -> Result<RunCopy, Error> {
+fn make(
+    home: &Path,
+    repo: &Path,
+    run: Option<&str>,
+    found: bool,
+    of_run: bool,
+) -> Result<(RunCopy, Option<File>), Error> {
     if !repo.is_absolute() {
         return Err(refused("--repo must be a full path, from the root"));
     }
@@ -176,7 +186,11 @@ fn make(home: &Path, repo: &Path, run: Option<&str>, found: bool) -> Result<RunC
     // git reads every worktree of a repo while it adds one, and fails on one half made or half removed (`hold.rs`).
     let _held = hold::held(&at.lock(), true, None).map_err(Error::Store)?;
     let run = claim(&at.runs, run)?;
-    let made = add(&git, &person, &at, &run, Path::new(shared), &base);
+    let held = if of_run { hold::start(&at.runs, &run).map(Some) } else { Ok(None) };
+    let made = held
+        .map_err(Error::Store)
+        .and_then(|held| add(&git, &person, &at, &run, Path::new(shared), &base).map(|copy| (copy, held)));
+    // The lock is let go of by then: where a file that is open keeps its folder, the folder can go.
     if made.is_err() {
         let _ = gone::remove(&at.runs, &run);
     }
@@ -227,6 +241,18 @@ pub(crate) fn is_gone(home: &Path, run: &str) -> bool {
 /// Undoes a copy no run was started in (F39: the harness was too old, or another run took the wish first): its
 /// folder, git's registration of it, its branch, which is where the checkout was, and everything kept for the run.
 pub(crate) fn take_back(home: &Path, run: &str, wait: Option<Duration>) -> Result<(), Error> {
+    undo(home, run, wait, false)
+}
+
+/// [`take_back`] for a copy whose command was killed before any run was started in it (`run/left.rs`). Nothing
+/// ran there, so its branch is where the checkout was, and goes. A branch that holds a commit no other branch,
+/// tag or the checkout itself has is someone's work, whoever made it: it is kept, and so it is when git cannot
+/// be asked. The copy's folder, git's registration of it and what is kept for the run go all the same.
+pub(crate) fn take_back_left(home: &Path, run: &str, wait: Option<Duration>) -> Result<(), Error> {
+    undo(home, run, wait, true)
+}
+
+fn undo(home: &Path, run: &str, wait: Option<Duration>, careful: bool) -> Result<(), Error> {
     known(run)?;
     let at = Places::of(home);
     let _held = hold::held(&at.lock(), false, wait).map_err(Error::Store)?;
@@ -235,7 +261,12 @@ pub(crate) fn take_back(home: &Path, run: &str, wait: Option<Duration>) -> Resul
         let git = Git::find(&at.runs, record.found).map_err(refused)?;
         gone(&git, &record, &folder, standing(&at.root, &folder)?)?;
         let name = format!("refs/heads/{}", branch(run));
-        git.open(&record.repo).and_then(|repo| repo.run(None, &[], &["update-ref", "-d", &name])).map_err(refused)?;
+        let repo = git.open(&record.repo).map_err(refused)?;
+        // The first commit of the branch that nothing else of the repo reaches. None: it has no such commit.
+        let only = ["rev-list", "--max-count=1", &name, "--not", &format!("--exclude={name}"), "--all", "HEAD"];
+        if !careful || repo.run(None, &[], &only).is_ok_and(|only| only.is_empty()) {
+            repo.run(None, &[], &["update-ref", "-d", &name]).map_err(refused)?;
+        }
     }
     gone::remove(&at.runs, run).map_err(Error::Store)
 }

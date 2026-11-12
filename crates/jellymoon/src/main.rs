@@ -91,7 +91,11 @@ fn wish(date: Option<String>, say: &str, project: &str, apart: Option<RunOptions
             Err(e) => Err(format!("nothing was started: this program could not be found: {e}")),
         };
         (wished.run, wished.why) = match started {
-            Ok(started) => (started.run, started.why),
+            Ok(started) => {
+                // A run that was never started leaves the wish needing the person: it is printed as it is kept.
+                wished.wish.state = started.state;
+                (started.run, started.why)
+            }
             Err(why) => (None, why),
         };
     }

@@ -315,6 +315,8 @@ fn record(rec: &Path) {
         fs::write(rec.join(format!("var-{name}")), value.to_string_lossy().as_bytes()).unwrap();
     }
     fs::write(rec.join("cwd"), env::current_dir().unwrap().to_string_lossy().as_bytes()).unwrap();
+    #[cfg(unix)] // the command that started it, for a test that reads that command's line
+    fs::write(rec.join("parent"), std::os::unix::process::parent_id().to_string()).unwrap();
     let mut input = Vec::new();
     io::stdin().read_to_end(&mut input).unwrap();
     fs::write(rec.join("stdin"), input).unwrap();

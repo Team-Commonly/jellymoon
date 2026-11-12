@@ -4,13 +4,23 @@
 //! The repo is found by its name in a session log typed here, so every world is in the system's own temporary
 //! folder: Cargo's may be inside a harness worktree of this repo, and a folder there is read as the repo's own.
 //! `f41/apart.rs` holds the run that outlives its asker, its end, a stop and a run cut off; `f41/refused.rs` what
-//! starts no run; `f41/cap.rs` the three runs that may go at once.
+//! starts no run; `f41/cap.rs` the three runs that may go at once; `f41/named.rs` the folder a name leads to;
+//! `f41/never.rs` a harness that never begins a run; `f41/left.rs` what a killed command left; `f41/line.rs`
+//! the command a run is started with, and what an asker is told of one that started none.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f41/apart.rs"]
 mod apart;
 #[path = "f41/cap.rs"]
 mod cap;
+#[path = "f41/left.rs"]
+mod left;
+#[path = "f41/line.rs"]
+mod line;
+#[path = "f41/named.rs"]
+mod named;
+#[path = "f41/never.rs"]
+mod never;
 #[path = "f41/refused.rs"]
 mod refused;
 mod support;

@@ -8,7 +8,7 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, STAR, World, printed, ran, refused, wait_for, world, world_in};
+use super::{DAY, OLD, STAR, UNTOLD, World, never, printed, ran, refused, wait_for, world, world_in};
 use crate::support::{said, skipped, tree, write_log};
 
 impl World {
@@ -58,14 +58,14 @@ fn a_harness_too_old_to_know_restricted_starts_no_run_and_the_wish_can_be_run_ag
     w.play("old", 0);
     let old = w.start(&wish, &repo);
     let said = printed(&old);
-    let why = "nothing was started: this Claude Code is too old for runs, as it does not know --restricted; \
-               update Claude Code and run the wish again";
-    let want = json!({"run": null, "wish": wish, "outcome": "not_started", "star": null, "denied": 0, "why": why});
+    let want = json!({"run": null, "wish": wish, "outcome": "not_started", "star": null, "denied": 0, "why": OLD});
     assert_eq!(said, want);
     // It was asked once, with the flag, and never again without it.
     assert_eq!(w.rec("arg1").as_deref(), Some("--restricted"));
     w.nothing_is_left(&repo, 1);
-    assert_eq!((w.kept(&wish), w.persons(&repo)), (kept, before));
+    // The wish names no run, keeps the same line and needs the person: no page draws it as at work.
+    assert_eq!((w.kept(&wish), w.persons(&repo)), (never(kept, OLD), before));
+    assert_eq!(w.on_page(&wish)["state"], "needs_you");
 
     w.play("edits", 0);
     let (_, said) = ran(&w.start(&wish, &repo));
@@ -167,9 +167,10 @@ fn a_repo_of_another_name_no_repo_a_second_run_and_a_wish_that_is_not_there_are_
 }
 
 // The harness turns out too old while another change holds the day. Held for a while, the day is waited for; held
-// past the wait, the copy is taken back all the same, and the next look finds a wish whose run left nothing.
+// past the wait, the copy is taken back all the same, and the next look finds a wish whose run left nothing: it
+// tells the wish, in the line that does not say which of the two reasons it was.
 #[test]
-fn a_harness_too_old_while_the_day_is_locked_leaves_the_wish_as_it_was_and_no_copy() {
+fn a_harness_too_old_while_the_day_is_locked_leaves_no_copy_and_a_wish_that_says_no_run_was_started() {
     for (wait, held) in [(None, 4), (Some("300"), 5)] {
         let w = world();
         let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
@@ -191,12 +192,13 @@ fn a_harness_too_old_while_the_day_is_locked_leaves_the_wish_as_it_was_and_no_co
             assert_eq!(printed(&ended)["outcome"], "not_started");
         } else {
             assert_eq!((ended.code, ended.stdout.as_str()), (1, ""), "{}", ended.stderr);
-            assert_eq!((&w.on_page(&wish)["state"], &w.on_page(&wish)["stars"]), (&json!("working"), &json!([])));
+            assert_eq!((&w.on_page(&wish)["state"], &w.on_page(&wish)["stars"]), (&json!("needs_you"), &json!([])));
         }
         let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
         let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
         assert_eq!((w.copies(), w.branches(&repo), runs), (vec![], vec![], Vec::<String>::new()), "{wait:?}");
-        assert_eq!(w.kept(&wish), before, "{wait:?}: the wish is as it was");
+        let why = if wait.is_none() { OLD } else { UNTOLD };
+        assert_eq!(w.kept(&wish), never(before, why), "{wait:?}: the wish names no run and says why");
         w.play("edits", 0);
         assert_eq!(ran(&w.start(&wish, &repo)).1["star"], json!(STAR), "{wait:?}: and can be run again");
     }
@@ -204,7 +206,7 @@ fn a_harness_too_old_while_the_day_is_locked_leaves_the_wish_as_it_was_and_no_co
 
 // The repo is moved away while a harness that turns out too old runs, so git cannot be asked to take the copy back.
 // What is in Jellymoon's own home goes all the same; the branch and git's note of the copy are in the repo, wherever
-// it is now. The wish is as it was, and runs where the repo went.
+// it is now. The wish names no run and says why, and runs where the repo went.
 #[test]
 fn a_repo_moved_away_under_a_harness_too_old_leaves_nothing_of_the_run_in_jellymoon_s_home() {
     let w = world();
@@ -229,13 +231,13 @@ fn a_repo_moved_away_under_a_harness_too_old_leaves_nothing_of_the_run_in_jellym
     let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
     let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
     assert_eq!((w.copies(), runs), (vec![], Vec::<String>::new()), "no copy and no folder of the run: {why}");
-    assert_eq!((w.kept(&wish), w.starts()), (before, 1), "the wish is as it was");
+    assert_eq!((w.kept(&wish), w.starts()), (never(before, OLD), 1), "the wish names no run and says why");
     w.play("edits", 0);
     assert_eq!(ran(&w.start(&wish, &moved)).1["star"], json!(STAR), "and can be run where the repo is now");
 }
 
 // The copy's record is written over while a harness that turns out too old runs, so the copy cannot be taken back
-// at all: its folder is still there when that is given up. It goes with the run's folder, and the wish is as it was.
+// at all: its folder is still there when that is given up. It goes with the run's folder, and the wish says why.
 #[test]
 fn a_copy_whose_record_cannot_be_read_under_a_harness_too_old_has_its_folder_removed_all_the_same() {
     let w = world();
@@ -255,7 +257,7 @@ fn a_copy_whose_record_cannot_be_read_under_a_harness_too_old_has_its_folder_rem
     let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
     let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
     assert_eq!((w.copies(), runs), (vec![], Vec::<String>::new()), "no copy and no folder of the run");
-    assert_eq!((w.kept(&wish), w.starts()), (before, 1), "the wish is as it was");
+    assert_eq!((w.kept(&wish), w.starts()), (never(before, OLD), 1), "the wish names no run and says why");
 }
 
 // A record is a file anyone who can write the home can write. An end in it is believed only when it is one core
@@ -304,7 +306,7 @@ fn let_go(lock: &Path) -> bool {
 // The day stays locked for the whole of the wait, and a page is drawn the moment the run's lock is let go. There
 // is no moment at which that run looks cut off: it holds its lock until nothing of it is kept.
 #[test]
-fn a_look_the_moment_a_run_that_never_started_lets_go_finds_the_wish_as_it_was() {
+fn a_look_the_moment_a_run_that_never_started_lets_go_finds_no_run_going_and_tells_the_wish() {
     let round = |_| {
         let w = world();
         let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
@@ -328,8 +330,8 @@ fn a_look_the_moment_a_run_that_never_started_lets_go_finds_the_wish_as_it_was()
             (going.join().unwrap(), seen)
         });
         assert_eq!((ended.code, ended.stdout.as_str()), (1, ""), "{}", ended.stderr);
-        assert_eq!((&seen["state"], &seen["stars"]), (&json!("working"), &json!([])));
-        assert_eq!((w.kept(&wish), w.copies(), w.branches(&repo)), (before, vec![], vec![]));
+        assert_eq!((&seen["state"], &seen["stars"], &seen["run"]), (&json!("needs_you"), &json!([]), &json!(null)));
+        assert_eq!((w.kept(&wish), w.copies(), w.branches(&repo)), (never(before, UNTOLD), vec![], vec![]));
         w.play("edits", 0);
         assert_eq!(ran(&w.start(&wish, &repo)).1["star"], json!(STAR), "and can be run again");
     };
@@ -367,7 +369,7 @@ fn the_run_that_finds_a_wish_naming_a_run_never_started_starts_one() {
     (record["outcome"], record["pid"], record["mark"]) = (json!("not_started"), json!(null), json!(null));
     fs::write(w.jm("runs").join(&cut).join("run.json"), record.to_string()).unwrap();
     w.let_end("go"); // the agent the run left stands in the copy, and nothing stops it: it ends first
-    assert_eq!((&w.on_page(wish)["state"], &w.kept(wish)["run"]), (&json!("working"), &json!(null)));
+    assert_eq!((&w.on_page(wish)["state"], &w.kept(wish)["run"]), (&json!("needs_you"), &json!(null)));
     assert_eq!((w.copies(), w.branches(&repo)), (vec![], vec![]), "the copy of a run never started is taken back");
     fs::write(w.at("rec").join("go"), "").unwrap();
 }

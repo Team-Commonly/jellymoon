@@ -3,7 +3,8 @@
 A run is the person's own Claude Code, started headless on one made wish, in a copy of the wish's repo (F39,
 [ADR 0014](../adr/0014-a-run-is-started-headless.md)). The rules are core's, in `crates/jellymoon-core/src/run.rs`
 and `run/` (`child.rs` the child, `stream.rs` what is read, `end.rs` how an end is written down, `dead.rs` the
-stop sequence, `stop.rs` a stop the person asks for). The copy is [copy.md](copy.md)'s, and the wish is
+stop sequence, `stop.rs` a stop the person asks for, `place.rs` the folder, `never.rs` a run never started,
+`left.rs` what a killed command left, `apart.rs` and `cap.rs` F41). The copy is [copy.md](copy.md)'s, and the wish is
 [wish.md](wish.md)'s.
 
 ```
@@ -42,6 +43,13 @@ and its branch in them.
    when the copy is ended: the refusal has fixed words in their place (the copy's record keeps `found`). A
    `--repo` the person typed may be named back to them. The folder must be the top of its repo, as `copy make`
    asks: for one inside a repo, no folder above it is tried.
+   **A folder found in a log is resolved once** (`run/place.rs`): every link and every `..` in its path is
+   followed, and the folder that comes out must have the project as its last name, as the page names a
+   folder's project by the last name of its path. A link named `alpha` that leads to a repo named `secrets`
+   is refused; one that leads to a repo named `alpha` runs there; one that leads nowhere is refused. The
+   owner is asked of that resolved folder, and the same resolved path is what the copy is made of: the log's
+   own path is not looked up a second time, so a link put in its place afterwards is not followed. A git
+   worktree in a folder named for the project is a folder of that name, and runs as before.
 4. **The copy.** `make_copy`, as `jellymoon copy make` does it. The harness is started in the copy.
 5. **The run.** Below.
 6. **The end.** Finished: `clean_copy` as completed, so the work is one commit on `jellymoon/run-<id>` and the
@@ -71,12 +79,31 @@ with none left nothing is started, and one line says so. A variable that names o
 `TMP`) is dropped unless it is a full path. The reading call and every git child of a copy use the same function
 (`call::passed_on`).
 
+## A run that was never started
+
 A Claude Code that answers this command line with an unknown option, naming `--restricted`, is too old. That is
 read from all of: no line at all on its output, an exit with a failure, and those two fixed pieces in the first
 4 KiB of what it said on stderr. A harness that printed anything first has worked, and is a failed run; so is
 one whose output something it left still holds open, so that its reader never finishes: what was read so far is
-what counts, and a reader that did not finish is never the reader of a harness too old. For the wish to be as it
-was, the day's lock is waited for as a run's end waits for it. Whatever came of that, and in this order: the
+what counts, and a reader that did not finish is never the reader of a harness too old. A harness the system
+refuses to start at all is the other run that was never started.
+
+By then the wish names the run. It is told (`run/never.rs`), behind the day's lock, which is waited for as a
+run's end waits for it: it names no run, its state is `needs_you`, and its `why` is one of three fixed lines.
+
+| `why` | Written by |
+|---|---|
+| `nothing was started: this Claude Code is too old for runs, as it does not know --restricted; update Claude Code and run the wish again` | `jellymoon run`, which prints the same line as its own `why`, with `not_started` |
+| `nothing was started: Claude Code could not be started` | `jellymoon run`, which exits 1 with this line and the system's reason after it; the wish keeps the fixed part only |
+| `nothing was started: Claude Code is too old for runs or could not be started; run the wish again when that is mended` | a look, for a run whose command could not tell its wish: the day stayed locked, or the command was killed |
+
+The wish is not left as it was made. A made wish says `working`, and a page is drawn from the wish: left so, it
+would show work that nothing is doing, and whoever asked for the run apart would have nothing to read the
+reason from. The wish can be run again: `jellymoon run` asks only whether a wish names a run, and the run that
+starts makes it `working` again. (With no harness found at all nothing was made and the wish is as it was
+made: "The order", 2.)
+
+Whatever came of telling the wish, and in this order: the
 record takes `not_started` as its outcome, an end of its own kind; the copy is taken back; and only then is the
 run's lock let go. So at no moment does a look find a run that nothing holds and that has no end. The run's folder
 in `runs`, which holds its lock and its record, goes in one step: it is moved to `gone-<id>`, a name no look takes
@@ -85,15 +112,15 @@ folder still there, and take the run for one cut off; on Linux, where files go i
 stayed locked, the wish still names the run. The next page or `jellymoon run` that finds a wish naming a run
 whose record says `not_started` and names no child (its copy
 is then taken back), or of which nothing is kept, not even its folder
-in `runs`, makes the wish as it was, with no run; a `jellymoon run` that finds it so goes on and starts one. If
+in `runs`, tells the wish, in the third line; a `jellymoon run` that finds it so goes on and starts one. If
 the lock a copy is taken back behind stays held for that look's 3 seconds, the wish is not written: where it is
 kept it goes on naming the run, so the copy, its branch and the run's folder are not left with nothing naming
-them, and the next look tries again. That look draws the wish as it was, with no run, and never as one going; a
+them, and the next look tries again. That look draws the wish as it will be kept, `needs_you` with no run, and never as one going; a
 `jellymoon run` asked for then is refused, as the wish has its run still, before any copy is made. If
 the copy cannot be taken back for any other reason (the repo was moved away, git fails, the copy's place is not a
 folder), it never will be: the look removes what Jellymoon's home holds of the run, as `jellymoon run` does below,
-and makes the wish as it was, so a wish is never refused for a run it is not drawn with. The copy is taken back, branch and all, the wish is as it was, and the outcome is `not_started`. It is never
-started again without the flag.
+and tells the wish, so a wish is never refused for a run it is not drawn with. The copy is taken back, branch
+and all, and the outcome is `not_started`. The harness is never started again without the flag.
 
 A record that says `not_started` is written with no child named: a harness that was started and found too old is
 gone by then. One that says so and names a child is a record changed by hand, of a run that did start, and a
@@ -103,7 +130,7 @@ hand to say `not_started` with no child named has its copy removed, work and all
 one still goes, is not stopped: nothing in the home says otherwise.
 
 If the repo was moved away while the harness ran, git cannot take the copy back, and `jellymoon run` exits 1 with
-git's reason: the copy's folder and the run's folder in `runs` are removed all the same and the wish is as it was,
+git's reason: the copy's folder and the run's folder in `runs` are removed all the same and the wish is told,
 but the branch `jellymoon/run-<id>` and git's registration of the copy are in the moved repo, which Jellymoon
 cannot find, and stay there (`git worktree prune` and `git branch -D` in that repo remove them).
 
@@ -358,6 +385,43 @@ that outlives its `jellymoon run` and still prints is ended by the system at its
 harness is in a group of its own, Ctrl-C in the terminal of `jellymoon run` ends `jellymoon run` and not the
 harness: that is a cut-off run like any other.
 
+## A copy nothing names
+
+A wish names its run only after the run's copy is made and its lock is claimed, and a run that was never
+started has its wish told before its copy is taken back. A `jellymoon run` killed in either gap leaves a copy,
+a branch and a folder in `runs` that no wish names, so no look at a wish finds them. They are found by a
+second lock (`copy/hold.rs`): every `jellymoon run` holds the system's lock on `runs/<id>/start.lock` from the
+moment the run's id is taken, before the copy is made, until it ends, when it removes the file and only then
+lets its run's lock go. A plain file there that nothing holds is of a command that is gone. `jellymoon copy
+make` writes none, so a copy made by hand is never looked at here.
+
+Every page drawn of a day's made wishes (`jellymoon page`, the app's page) and every `jellymoon run`, before
+it counts the runs going, goes over those runs (`run/left.rs`):
+
+| The run | What is done |
+|---|---|
+| Its start lock or its run's lock is held | nothing: its command lives |
+| Something other than a plain file is at `start.lock` | nothing, and it is never opened |
+| Its record has an end, other than `not_started` | the start lock is removed: the run is done with |
+| Its record is there and cannot be used | nothing: it does not say who names the run |
+| Its record names a child | the child is killed, if the pid is still that process ("A run that was cut off"), whichever wish names the run |
+| A wish names it: one of the day looked at, or the wish and day its record names | no more than that: it is the look at that wish that writes it down |
+| No wish names it, and it has no record, or one that names no child | **taken back**: the copy's folder, git's registration of it, and `runs/<id>`. Nothing ran there, so the branch `jellymoon/run-<id>` is where the checkout was, and is removed |
+| No wish names it, and its record names a child and has no end | **kept**, as a cut-off run's copy is: the copy is marked failed and the record says the run was cut off. No wish is changed |
+
+**What is kept.** A branch that holds a commit no other branch, no tag and not the checkout itself has is
+someone's work, whoever made it: it stays, and so it does when git cannot be asked. The copy's folder goes all
+the same; the commit is on the branch. A copy an agent may have written in is never removed. Nothing outside
+Jellymoon's home is touched but that one branch and git's registration of the copy, in the repo the copy's own
+record names, as any take-back reaches them ([copy.md](copy.md)). The person's checkout, index and other
+branches are as they were (`tests/f41/left.rs`).
+
+**What is not closed.** A command killed while git was still making the copy has written no record of it:
+the run's folder goes, the copy's folder goes at the next `copy clean`, and the branch and git's registration
+stay in the repo (`git worktree prune` and `git branch -D` remove them). A run made by a build older than the
+start lock has none and is not found. The lock a copy is taken back behind is waited for 3 seconds, and what
+could not be done is left for the next look.
+
 ## A run started apart
 
 `jellymoon wish --run` keeps the wish and starts its run (F41). The run is never in the asking process: core's
@@ -372,9 +436,21 @@ outlive whoever asked for it. The app asks the same way for a wish entered in it
   own (`current_exe`). A name that is no full path is refused.
 - **Before anything is started** the wish must be there and name no run, and a harness must be found, as the run
   itself would find it. With none, nothing is started and `why` is core's line with the places looked in.
-- **What is waited for.** The asker is answered once the wish names its run, or once the command has ended
-  without that: at most 120 seconds, after which the command is left at work and `why` says no run has been
-  started yet.
+- **What is waited for.** The asker is answered once the wish names its run and the harness has shown that it
+  knows a run's command line, or once the command has ended: at most 120 seconds, after which the command is
+  left at work and `why` says no run has been started yet. A wish names its run before the harness is
+  started, so the name alone is not a run going: a harness too old for runs, or one that cannot be started,
+  takes the name away again within a moment. So the run is said to be going when its record says the stream
+  began as a run's (`began`, written at the stream's first line that passes the start check), or when the
+  wish has named the run for 3 seconds with the command alive (a harness that is slow to say anything is not
+  waited for longer; `JELLYMOON_TEST_APART_QUIET_MS` shortens this in a build with debug assertions), or when
+  the wish no longer says `working`, as the run has ended already.
+- **A run that was never started is said so.** When the command ends and the wish names no run, `run` is null,
+  `why` is the line the wish keeps ("A run that was never started") and the wish is printed as it is kept,
+  `needs_you`: the asker's answer, the kept wish and the page agree. A line the wish had before this command
+  is an earlier command's, and is used only when this one said nothing on stderr.
+- **The arguments** are `run --wish <id> --date <day>`, then `--repo`, `--logs` and `--skip` only as the asker
+  was given them: with no name switched off there is no `--skip` at all (an empty `--skip` names nothing).
 - **What is read of the command.** Its stdin and stdout are null, so nothing it prints is waited on. Its stderr is
   a pipe read only until the answer: 4 KiB at most, of which the first line, without `jellymoon: `, goes through
   `redact::line` and is cut at 300 characters. That line is the refusal `jellymoon run` gives ("What is
@@ -390,7 +466,10 @@ outlive whoever asked for it. The app asks the same way for a wish entered in it
   starting one holds as inheritable, and the asker's own output is one. So a program that reads what
   `jellymoon wish --run` prints through a pipe, to the pipe's end, waits until the run has ended. Sent to a file
   or a terminal, the command returns as on Unix. Core does not close this: it would take `unsafe` or another
-  crate, as the stop's limits on Windows do.
+  crate, as the stop's limits on Windows do. On Unix only the three standard streams are replaced: any other
+  descriptor the asker was handed open and inheritable reaches the command, and through it the run's agent.
+  Rust's own files are opened close-on-exec, so this is what the asker's starter left open in it; closing the
+  rest would take a step in the child before it starts (`pre_exec`), which is `unsafe`, so core does not.
 
 What `jellymoon wish --run` prints is the wish's line with `run` and `why` filled in, and it exits 0 whether or
 not a run was started: the wish is kept either way ([wish.md](wish.md)).
@@ -413,6 +492,14 @@ that passes there and is refused at the claim takes its copy back, as any run th
 `going.lock` is held for the count and the claim only, is waited for 3 seconds, and is not opened when something
 other than a plain file is at its name. A run's lock that cannot be opened (one whose mode lets nobody read it)
 is counted as not held. A cut-off run holds nothing and is not counted, whether or not a look has written it down.
+
+The cap counts commands, and an agent can outlive its command ("A run that was cut off"). So before it
+counts, `jellymoon run` ends the agents that killed commands left ("A copy nothing names"): the child each
+such run's record names is killed, by pid and start mark, whichever wish names the run. On Linux and macOS no
+agent of a dead command is then at work beside the three that may go (`tests/f41/left.rs`). On Windows
+nothing is stopped either way, as there is no mark and no signal: three commands killed there leave three
+agents at work, and three more runs may start. A run cut off by a build older than the start lock is ended
+by the look at its wish, as before, and not here.
 
 ## A file of the home that is not a plain file
 
@@ -450,6 +537,9 @@ empty `runs/no-hooks`), and they stay.
 | No `--repo`, and no folder of the name typed in that day, or two of them | how many, and to name one with `--repo` |
 | No `--repo`, and no session logs | the reader's own line |
 | No `--repo`, and the one folder is not owned by the person (Unix) | that it is not a folder of their own, and to name the folder with `--repo` |
+| No `--repo`, and the one folder is a link that leads to a folder of another name | that it leads to a folder of another name, and to name the folder with `--repo` |
+| No `--repo`, and the one folder is not there, or leads nowhere | that it is not one a run can copy: it is not there, or cannot be reached |
+| Something other than a plain file at `runs/going.lock` | nothing was started: the lock runs are counted behind is not a plain file |
 | Three runs going | that three are going and no more go at once ("Three runs at once") |
 | A `PATH` with no folder named by its full path | nothing was started, and why |
 | No `--repo`, and the one folder is inside a repo, or is no repo | that it is not one a run can copy, and `copy make`'s reason, with fixed words where git's own would be |
@@ -459,6 +549,12 @@ empty `runs/no-hooks`), and they stay.
 
 - A `jellymoon run` that is killed leaves its harness editing its copy until the next page or run ("A run that
   was cut off"), and on Windows for as long as that harness goes.
+- A folder found in a log is resolved and then copied by its resolved path: a folder on that path swapped
+  for a link between the two is still followed by git. Only a `--repo` the person typed is taken unresolved.
+- With no harness found at all, a wish made with `--run` is kept as it was made, `working`, with the reason
+  in what was printed only: nothing was started for it, and nothing says so on the page.
+- A harness too old for runs that takes more than 3 seconds to refuse its command line is said to be going
+  to its asker; the wish and the page are right as soon as it has refused.
 - The test of a child deaf to `SIGTERM` needs `/usr/bin/perl` to start one, and says so where it is skipped.
 - A process the harness moved to another process group, or to another session, is not reached by any kill.
 - On Windows nothing the harness started is ended with it. A full path is told by `Path::is_absolute`, which

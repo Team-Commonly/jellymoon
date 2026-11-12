@@ -231,6 +231,8 @@ pub(crate) fn change(
 /// left stopped (`run::bury`). Nothing else is written.
 pub fn made(home: &Path, day: &str) -> Vec<Wish> {
     let kept = if parse(day).is_ok() { kept(home, day).unwrap_or_default() } else { Vec::new() };
+    // What a `jellymoon run` that was killed left with no wish to name it is taken back (`run/left.rs`).
+    run::tidy(home, &kept);
     let drawn = |wish: MadeWish| {
         let wish = run::bury(home, day, wish);
         let label = line(&wish.said, LABEL_MAX);

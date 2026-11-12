@@ -6,6 +6,7 @@
 //! the person's own logs and their own Claude Code, and then prints counts, states and exit codes only. The `run`
 //! step (`smoke/run.rs`) then starts their Claude Code on a harmless wish, in a repo the chain makes.
 
+mod apart;
 mod copy;
 mod off_path;
 mod run;

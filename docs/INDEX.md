@@ -13,10 +13,10 @@ Every file under `docs/` is listed here with one line. A PR that adds, moves or 
 | `development/reader.md` | `jellymoon day`: usage, what counts as typed by a person, what is cut and replaced, which files are skipped |
 | `development/page.md` | `jellymoon page`: usage, the exact harness command line, what goes in on stdin, and every check code makes on what the model returns |
 | `development/delivery.md` | `jellymoon rule` and `jellymoon hook`: the ruling store, the Claude Code hook event and output used and why, how exactly-once is kept, install and uninstall, and what is unproved |
-| `development/wish.md` | `jellymoon wish`: a made wish, where and how it is kept, every refusal, and how it comes onto the page |
+| `development/wish.md` | `jellymoon wish`: a made wish, where and how it is kept, every refusal, how it comes onto the page, and `--run`, which starts its run |
 | `development/app.md` | `jellymoon-app`: usage, which piece each part of page data becomes, the `layout` output, the two ways text is measured, and how to build with and without GPUI |
 | `development/copy.md` | `jellymoon copy make` and `copy clean`: where a run's copy and its record are, what cleanup never looks at, every git setting switched off and what could not be, who the commit is by, and the limits |
-| `development/run.md` | `jellymoon run`: the order of a run, the harness's exact command line and variables, what is read of its stream and when a run has finished, the time limit and the stop, what is kept, a run that was cut off, and every refusal |
+| `development/run.md` | `jellymoon run`: the order of a run, the harness's exact command line and variables, what is read of its stream and when a run has finished, the time limit and the stop, what is kept, a run that was cut off, a run started apart by `jellymoon wish --run`, the three runs that go at once, and every refusal |
 | `development/install.md` | Installing on a Mac: what `install.sh` does and trusts, why Gatekeeper does not ask, `jellymoon uninstall`, how a release is cut, and what only a person on a clean Mac can prove |
 | `development/smoke.md` | `cargo xtask smoke`: the chain that runs the built programs together, its three modes, what it does not prove, how a feature adds a step, and the checklist before a release |
 | `runbooks/old-hosted-instance.md` | The hosted instance of the removed product, which may still be running: what it is, what this repo no longer does to it, and how to stop it |

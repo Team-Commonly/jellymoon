@@ -7,7 +7,7 @@ use std::{fs, thread};
 use serde_json::json;
 
 use super::closed::closed;
-use super::{DAY, STAR, World, ended, ms, printed, refused, world};
+use super::{DAY, STAR, World, ended, ms, printed, refused, until, world};
 use crate::support::skipped;
 
 /// How long a build with debug assertions waits between the end of its copy and the end in its record.
@@ -29,7 +29,7 @@ fn copy_gone(w: &World, run: &str) {
 fn a_look_that_finds_the_copy_gone_and_no_end_yet_waits_for_the_end_the_run_writes() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    let (going, run) = w.run_going(("slow", 0), &[ms(NOTE, 700)], &wish, &repo);
+    let (going, run) = w.run_going(("slow", 0), &[ms(NOTE, 60_000), until(&w, "noted")], &wish, &repo);
     if !closed(&w.jm("runs").join(&run).join("run.lock")) {
         skipped("no mode keeps this user from opening a file here: the system has none, or the user is root");
         fs::write(w.at("rec").join("go"), "").unwrap();
@@ -39,6 +39,9 @@ fn a_look_that_finds_the_copy_gone_and_no_end_yet_waits_for_the_end_the_run_writ
     copy_gone(&w, &run);
     let look = w.going(&[], &["page", "--date", DAY, "--logs", w.at("logs").to_str().unwrap()]);
     assert!(w.record(&run)["outcome"].is_null(), "the run had written its end when the look was started");
+    // The run writes its end a little after the look was started: a look that has found no end by then waits.
+    thread::sleep(Duration::from_millis(300));
+    fs::write(w.at("rec").join("noted"), "").unwrap();
     let drawn = printed(&ended(look))["wishes"][0].clone();
     assert_eq!((&drawn["state"], &drawn["stars"]), (&json!("done"), &json!([STAR])), "the look drew {drawn}");
     ended(going); // it or the look told the wish, whichever came first: the other changed nothing
@@ -52,8 +55,8 @@ fn a_look_that_finds_the_copy_gone_and_no_end_yet_waits_for_the_end_the_run_writ
 fn a_run_that_ends_after_a_look_told_its_wish_says_that_a_look_told_it_first() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    // Four seconds: the look waits one, and a busy machine has three to start the page in.
-    let (going, run) = w.run_going(("slow", 0), &[ms(NOTE, 4000)], &wish, &repo);
+    // The run waits until the look has told the wish, however long a busy machine takes to draw the page.
+    let (going, run) = w.run_going(("slow", 0), &[ms(NOTE, 60_000), until(&w, "noted")], &wish, &repo);
     if !closed(&w.jm("runs").join(&run).join("run.lock")) {
         skipped("no mode keeps this user from opening a file here: the system has none, or the user is root");
         fs::write(w.at("rec").join("go"), "").unwrap();
@@ -63,6 +66,7 @@ fn a_run_that_ends_after_a_look_told_its_wish_says_that_a_look_told_it_first() {
     copy_gone(&w, &run);
     assert_eq!(w.on_page(&wish)["state"], "needs_you", "the look waited longer than a second for the end");
     let kept = w.kept(&wish);
+    fs::write(w.at("rec").join("noted"), "").unwrap();
     let said = format!(
         "jellymoon: run {run} has ended; a look had taken it for cut off and told its wish first, so the wish \
          shows what that look wrote\n"

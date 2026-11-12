@@ -76,7 +76,9 @@ into `copies/<run>` after the folder was taken back. So the folder is removed on
 the rest back, and every clean, under its lock, removes each real folder in `copies` under a run id that has no
 folder in `runs` (a copy being made has one before its folder is there; a link is left). What git itself still
 lists of such a folder is left to git's own `worktree prune`. A test shortens the limit with `JELLYMOON_TEST_GIT_LIMIT_MS`,
-which only a build with debug assertions reads: a release does not.
+which only a build with debug assertions reads: a release does not. With `JELLYMOON_TEST_GIT_LIMIT_FROM` the
+short limit is counted from when the file it names is there, which the made-up git leaves once it has stalled:
+no git call that is not meant to stall has to end within it.
 
 **A copy a killed `jellymoon run` left.** One whose `start.lock` nothing holds, and that no wish names, is
 taken back by the next page or run ([run.md](run.md), "A copy nothing names"), behind the same lock, waited
@@ -84,7 +86,11 @@ for 3 seconds: the folder, git's registration of it and its record go as in any 
 removed only when `git rev-list --max-count=1 <branch> --not --exclude=<branch> --all HEAD` prints nothing,
 which is to say when it holds no commit that another branch, a tag or the checkout does not have; a branch
 with such a commit is kept, and so is one git could not be asked about. A take-back by the command that made
-the copy removes the branch without asking, as nothing but that command has had the copy.
+the copy removes the branch without asking, as nothing but that command has had the copy. Three more things
+hold only for a copy that was found: nothing is done when its start lock is held once the copies' lock is had;
+a link at `copies/<run>` is removed as itself, and what it leads to is not touched; and a record whose repo
+does not list the copy as its own worktree (the copy's git folder inside the repo's, its `gitdir` file naming
+`copies/<run>/.git`) has nothing done in that repo, and only Jellymoon's own files of the run go.
 
 The commit is by the person: `user.name` and `user.email` as git resolves them for that repo. When either is
 missing it is by `Jellymoon <jellymoon@localhost>`.

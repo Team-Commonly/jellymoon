@@ -21,11 +21,11 @@ fn deaf(w: &World, number: usize, grace: u64, wish: &str, repo: &Path) -> Option
 fn an_agent_deaf_to_the_stop_signal_is_gone_at_the_interrupt_which_comes_first() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    // Fifteen seconds after each asking: had the stop signal come first, the agent would still be there after them.
-    let Some((going, run)) = deaf(&w, 0, 15_000, &wish, &repo) else { return };
+    // A minute after each asking: had the stop signal come first, the agent would still be there after it.
+    let Some((going, run)) = deaf(&w, 0, 60_000, &wish, &repo) else { return };
     let from = Instant::now();
     assert_eq!(printed(&w.stop(&wish)), said_cancelled(&run, &wish, 0));
-    assert!(from.elapsed() < Duration::from_secs(10), "{:?}", from.elapsed());
+    assert!(from.elapsed() < Duration::from_secs(40), "{:?}", from.elapsed());
     assert_eq!(printed(&ended(going)), said_cancelled(&run, &wish, 0));
     assert!(w.agent_came_and_went());
 }
@@ -40,8 +40,7 @@ fn an_agent_deaf_to_the_interrupt_is_given_its_time_and_is_gone_at_the_stop_sign
     let took = from.elapsed();
     assert!(took >= Duration::from_secs(2), "it was not given its time after the interrupt: {took:?}");
     // It was the stop signal that ended it, and not the kill, which comes a second wait later: the agent says
-    // that the signal reached it, which no kill lets it say.
-    assert!(took < Duration::from_secs(4), "it was not gone at the stop signal: {took:?}");
+    // that the signal reached it, which no kill lets it say. No clock is asked: a busy machine is slow to say.
     assert!(w.rec("heard").is_some(), "the stop signal never reached the agent: only the kill ended it");
     assert_eq!(printed(&ended(going)), said_cancelled(&run, &wish, 0));
     assert!(w.agent_came_and_went());

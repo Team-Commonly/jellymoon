@@ -45,12 +45,16 @@ pub(super) fn start(runs: &Path, run: &str) -> io::Result<File> {
 pub(crate) fn left(home: &Path) -> Vec<String> {
     let runs = fs::read_dir(home.join("runs")).into_iter().flatten().flatten();
     let runs = runs.filter_map(|entry| entry.file_name().into_string().ok()).filter(|run| super::is_run_id(run));
-    let free = |run: &String| {
-        let lock = start_lock(home, run);
-        let plain = fs::symlink_metadata(&lock).is_ok_and(|meta| meta.is_file());
-        plain && File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_ok())
-    };
-    runs.filter(free).collect()
+    runs.filter(|run| let_go(home, run)).collect()
+}
+
+/// Whether a run's start lock is a plain file that nothing holds. It is asked a second time once the copies'
+/// lock is had (`take_back_left`): a command makes the file and takes its lock in two steps, behind the copies'
+/// lock, so one that was between the two when the runs left were listed holds its lock by then.
+pub(super) fn let_go(home: &Path, run: &str) -> bool {
+    let lock = start_lock(home, run);
+    let plain = fs::symlink_metadata(&lock).is_ok_and(|meta| meta.is_file());
+    plain && File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_ok())
 }
 
 /// Whether an error is the lock not had within its wait, and nothing wrong with the copy.

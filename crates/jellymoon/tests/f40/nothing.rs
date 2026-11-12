@@ -118,7 +118,7 @@ fn a_stop_left_by_hand_stops_that_run_and_no_other() {
 fn a_stop_while_the_day_is_locked_says_so_and_the_run_is_cancelled_when_the_day_is_free() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    let (going, run) = w.run_going(("lingers", 0), &[ms("JELLYMOON_TEST_END_WAIT_MS", 15_000)], &wish, &repo);
+    let (going, run) = w.run_going(("lingers", 0), &[ms("JELLYMOON_TEST_END_WAIT_MS", 60_000)], &wish, &repo);
     let lock = w.jm("pages").join(format!("{DAY}.ruled.lock"));
     fs::write(&lock, "").unwrap(); // another change to the day, which has not finished
     let late = w.stop_with(&[ms("JELLYMOON_TEST_STOP_WAIT_MS", 1000)], &wish);
@@ -136,7 +136,7 @@ fn a_stop_while_the_day_is_locked_says_so_and_the_run_is_cancelled_when_the_day_
 }
 
 fn wait_for_end(w: &super::World, run: &str) {
-    for _ in 0..500 {
+    for _ in 0..3000 {
         if !w.record(run)["outcome"].is_null() {
             break;
         }

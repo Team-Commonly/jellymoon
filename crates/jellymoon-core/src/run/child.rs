@@ -12,7 +12,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::stream::{self, Stream};
-use crate::busy::or_test;
+use crate::busy::{or_test, test_file};
 
 /// How much of what the child said on stderr is looked at, for the one fixed sign of a harness that is too old.
 const STDERR_HEAD: u64 = 4096;
@@ -70,7 +70,9 @@ pub(super) fn run(
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(said.as_bytes())));
     let ((stream, so_far), head) = (stream::reader(child.stdout.take()), stderr_head(child.stderr.take()));
-    let (deadline, grace) = (Instant::now() + limit, or_test(GRACE, "JELLYMOON_TEST_GRACE_MS"));
+    let (mut deadline, grace) = (Instant::now() + limit, or_test(GRACE, "JELLYMOON_TEST_GRACE_MS"));
+    // A test's limit is counted from when its made-up agent has left its mark (`busy::test_file`).
+    let from = test_file("JELLYMOON_TEST_RUN_LIMIT_FROM");
     let (mut read, mut began) = (None, Some(began));
     let (end, grace) = loop {
         if let Some(began) = began.take_if(|_| so_far.lock().is_ok_and(|so_far| so_far.start == Some(true))) {
@@ -80,6 +82,9 @@ pub(super) fn run(
             break (End::Exited, Duration::ZERO);
         }
         read = read.or_else(|| stream.try_recv().ok());
+        if from.as_ref().is_some_and(|from| !from.exists()) {
+            deadline = Instant::now() + limit;
+        }
         match read {
             Some(Stream { over: true, .. }) => break (End::Over, grace),
             Some(Stream { start: Some(false), .. }) => break (End::NotARun, Duration::ZERO),

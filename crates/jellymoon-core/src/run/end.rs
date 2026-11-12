@@ -135,7 +135,7 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     // The record is read once nothing holds the run: one read before that could miss the end the run wrote.
     let record = record::kept(home, &run);
     // A test's build can wait here, with the record read, for a run to finish meanwhile ([`written`]).
-    thread::sleep(or_test(Duration::ZERO, "JELLYMOON_TEST_LOOK_WAIT_MS"));
+    busy::pause("JELLYMOON_TEST_LOOK_WAIT_MS");
     let kill = || {
         if let Some((pid, mark)) = record.as_ref().and_then(|record| Some((record.pid?, record.mark.as_deref()?))) {
             dead::kill(pid, mark);
@@ -239,7 +239,7 @@ pub(super) fn settle(
         mark(home, run, None);
     }
     // A test's build can wait here, with a finished run's copy gone and its end not yet in its record.
-    thread::sleep(or_test(Duration::ZERO, "JELLYMOON_TEST_NOTE_WAIT_MS"));
+    busy::pause("JELLYMOON_TEST_NOTE_WAIT_MS");
     // A record that could not be written does not keep the wish from being told.
     let noted = note(home, run, outcome, (read.denied, read.skipped), &why);
     let told = tell(home, day, wish, run, outcome, &why, wait()).map_err(|e| match e {

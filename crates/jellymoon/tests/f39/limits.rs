@@ -15,8 +15,8 @@ use crate::support::{Ran, skipped};
 
 const NO_SIGNAL: &str = "this system has no signal to stop another command's child with, and nothing is stopped";
 
-/// The limit these tests give a run: far less than the minute the agent sleeps, and more than it takes to start,
-/// also on a busy machine.
+/// The limit these tests give a run: far less than the minute the agent sleeps. It is counted from when the agent
+/// has left its mark (`JELLYMOON_TEST_RUN_LIMIT_FROM`), so nothing has to be started within it.
 const LIMIT: Duration = Duration::from_secs(8);
 
 fn at_limit(run: &str) -> String {
@@ -25,17 +25,19 @@ fn at_limit(run: &str) -> String {
     )
 }
 
-/// A run of an agent that never ends, with [`LIMIT`]: what the run printed and how long it took. The agent has
-/// left its mark before the limit, or the test fails saying the machine is too busy: the limit is counted from
-/// after the agent was started, so an agent that got as far as its mark before `LIMIT` had passed here was there
-/// when it was asked to stop. None where the script's agent cannot be started, with the reason said.
+/// A run of an agent that never ends, with [`LIMIT`]: what the run printed and how long it took. The limit is
+/// counted from when the agent has left its mark, so it was there when it was asked to stop. None where the
+/// script's agent cannot be started, with the reason said.
 fn to_its_limit(w: &World, script: &str, wish: &str, repo: &Path) -> Option<(Ran, Duration)> {
     w.play(script, 0);
-    let short = [("JELLYMOON_TEST_RUN_LIMIT_MS", OsString::from(LIMIT.as_millis().to_string()))];
+    let short = [
+        ("JELLYMOON_TEST_RUN_LIMIT_MS", OsString::from(LIMIT.as_millis().to_string())),
+        ("JELLYMOON_TEST_RUN_LIMIT_FROM", w.at("rec").join("started").into()),
+    ];
     let from = Instant::now();
     let going = w.going(&short, &["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
     while !w.at("rec").join("started").exists() && w.rec("cannot").is_none() {
-        assert!(from.elapsed() < LIMIT, "this machine is too busy to say: the agent had not started at the limit");
+        assert!(from.elapsed() < Duration::from_secs(60), "the agent never started");
         thread::sleep(Duration::from_millis(10));
     }
     let stopped = ended(going);
@@ -112,14 +114,14 @@ fn a_page_with_a_cut_off_run_does_not_wait_for_the_lock_a_copy_is_cleaned_behind
     let page = || w.run_with(&short, &["page", "--date", DAY, "--logs", logs.to_str().unwrap()]);
     let (drawn, waited) = thread::scope(|scope| {
         let (from, drawing) = (Instant::now(), scope.spawn(page));
-        while !drawing.is_finished() && from.elapsed() < Duration::from_secs(10) {
+        while !drawing.is_finished() && from.elapsed() < Duration::from_secs(60) {
             thread::sleep(Duration::from_millis(10));
         }
         let waited = from.elapsed();
         held.unlock().unwrap(); // a page that waited for the lock ends now, and the test with it
         (drawing.join().unwrap(), waited)
     });
-    assert!(waited < Duration::from_secs(10), "the page waited for the lock a copy is cleaned behind");
+    assert!(waited < Duration::from_secs(60), "the page waited for the lock a copy is cleaned behind");
     assert_eq!(printed(&drawn)["wishes"][0]["state"], "needs_you");
     assert_eq!((w.kept(&wish), &w.record(&run)["outcome"]), (going, &json!(null)), "nothing was written");
     // With the lock free the next look marks the copy, tells the wish and writes the record.

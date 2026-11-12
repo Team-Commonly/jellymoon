@@ -37,7 +37,7 @@ use record::Record;
 use serde::{Deserialize, Serialize};
 pub use stop::stop_run;
 
-use crate::busy::or_test;
+use crate::busy::{self, or_test};
 use crate::call::harness_of;
 use crate::copy::{self, RunCopy};
 use crate::wish;
@@ -200,13 +200,16 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     };
     // Before anything is made: a harness that would look for its programs in the copy is not started.
     let mut command = harness_of(harness).map_err(|e| refused(format!("nothing was started: {e}")))?;
+    // First what killed commands left: their agents are ended before the runs going are counted, so none is at
+    // work beside this run's own, and a copy no wish names is taken back (`left.rs`). It is done before the
+    // folder is looked up, so none of its waits stands between that lookup and git opening the folder.
+    tidy(home, &wish::kept_of(home, &day)?);
     let repo = place::folder(home, &day, &wish, options)?;
+    // A test's build can wait here, with the folder looked up and nothing yet asked of git.
+    busy::pause("JELLYMOON_TEST_PLACE_WAIT_MS");
+    cap::room(home)?;
     // A folder read from the logs that is not a repo's top is refused with copy's own reason, in fixed words: no
     // folder above it is tried, and nothing git says of it is repeated.
-    // First what killed commands left: their agents are ended before the runs going are counted, so none is at
-    // work beside this run's own, and a copy no wish names is taken back (`left.rs`).
-    tidy(home, &wish::kept_of(home, &day)?);
-    cap::room(home)?;
     let made = copy::copy_of(home, &repo, options.repo.is_some()).map_err(|e| match (e, &options.repo) {
         (Error::Copy(why), None) => {
             let why = why.replacen("--repo", "it", 1);
@@ -249,10 +252,19 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     ran
 }
 
-/// Takes the run's lock, when fewer than three runs go (`cap.rs`), writes its record, and has the wish name the
-/// run, behind the day's lock. A wish that names a run already has had its run: this one is refused.
+/// Takes the run's lock, when fewer than three runs go, writes its record, and has the wish name the run, behind
+/// the day's lock: all of it behind the lock the runs are counted behind (`cap.rs`). A wish that names a run
+/// already has had its run: this one is refused, and before it is counted as a run.
 fn start(home: &Path, day: &str, wish: &str, run: &str) -> Result<File, Error> {
-    let lock = cap::claim(home, run)?;
+    let free = || match wish::kept_of(home, day)?.into_iter().find(|kept| kept.id == wish).and_then(|kept| kept.run) {
+        Some(first) => Err(had(wish, &first)),
+        None => Ok(()),
+    };
+    cap::claim(home, run, free, || name(home, day, wish, run))
+}
+
+/// Writes the run's record and has the wish name the run, with the run's lock held.
+fn name(home: &Path, day: &str, wish: &str, run: &str) -> Result<(), Error> {
     let started = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
     let record = Record {
         wish: wish.to_string(),
@@ -278,7 +290,7 @@ fn start(home: &Path, day: &str, wish: &str, run: &str) -> Result<File, Error> {
             Ok(())
         }
     })?;
-    Ok(lock)
+    Ok(())
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@
 //! So there, and only there, a step that fails so is tried again for the day's own wait, and then its error stands.
 
 use std::io::{self, ErrorKind};
+use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -31,6 +32,27 @@ pub(crate) fn in_use(error: &io::Error) -> bool {
 pub(crate) fn or_test(real: Duration, variable: &str) -> Duration {
     let short = std::env::var(variable).ok().filter(|_| cfg!(debug_assertions));
     short.and_then(|ms| ms.parse().ok()).map_or(real, Duration::from_millis)
+}
+
+/// The file a test's build names in `variable`, and none in a release. A limit that is under test is counted
+/// from the moment that file is there: the made-up program the limit is tested on leaves it when it has got to
+/// where it stalls, so nothing it does before that has to be done within the short limit.
+pub(crate) fn test_file(variable: &str) -> Option<PathBuf> {
+    std::env::var_os(variable).filter(|_| cfg!(debug_assertions)).map(PathBuf::from)
+}
+
+/// A place a test's build can hold a command at: for the milliseconds in `variable`, or until the file that
+/// `JELLYMOON_TEST_GO` names is there, whichever is first. The variable's name is left in a file of that name
+/// with `.at` for its ending, so the test knows that the command has come to the place. A release never waits.
+pub(crate) fn pause(variable: &str) {
+    let (wait, from) = (or_test(Duration::ZERO, variable), Instant::now());
+    let go = test_file("JELLYMOON_TEST_GO").filter(|_| !wait.is_zero());
+    if let Some(go) = &go {
+        let _ = std::fs::write(go.with_extension("at"), variable);
+    }
+    while from.elapsed() < wait && !go.as_ref().is_some_and(|go| go.exists()) {
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 /// Does `step`, again every 10 ms while it fails with a file in use and [`WAIT`] has not passed.

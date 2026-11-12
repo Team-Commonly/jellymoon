@@ -102,7 +102,7 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
         "--system-prompt",
         PROMPT,
     ]);
-    let output = run(command, format!("{day}\n").into_bytes(), options.limit)?;
+    let output = run(command, format!("{day}\n").into_bytes(), options.limit, None)?;
     if !output.status.success() {
         return Err(Error::Failed {
             status: output.status.to_string(),
@@ -164,17 +164,21 @@ pub(crate) fn private_dir(dir: &Path) -> io::Result<()> {
 }
 
 /// Runs the command with `input` on its stdin and returns what it printed. One still running at `limit` is stopped.
-pub(crate) fn run(mut command: Command, input: Vec<u8>, limit: Duration) -> Result<Output, Error> {
+/// With `from`, a file of a test's (`busy::test_file`), the limit is counted from when that file is there.
+pub(crate) fn run(mut command: Command, input: Vec<u8>, limit: Duration, from: Option<&Path>) -> Result<Output, Error> {
     let mut child =
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(Error::Call)?;
     let stdin = child.stdin.take();
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(&input)));
     let (stdout, stderr) = (collect(child.stdout.take()), collect(child.stderr.take()));
-    let deadline = Instant::now() + limit;
+    let mut deadline = Instant::now() + limit;
     let status = loop {
         if let Some(status) = child.try_wait().map_err(Error::Call)? {
             break status;
+        }
+        if from.is_some_and(|from| !from.exists()) {
+            deadline = Instant::now() + limit;
         }
         if Instant::now() >= deadline {
             let _ = child.kill();
@@ -224,16 +228,20 @@ mod tests {
         let mut command = this_test_program("call::tests::a_child_that_never_answers");
         command.env("JELLYMOON_TEST_NEVER_ANSWERS", "1");
         let start = Instant::now();
-        let stopped = run(command, b"the day\n".to_vec(), Duration::from_millis(300));
+        let stopped = run(command, b"the day\n".to_vec(), Duration::from_millis(300), None);
         assert!(matches!(stopped, Err(Error::TooLong(_))), "want the call stopped at its limit");
         assert!(start.elapsed() < Duration::from_secs(10), "stopped only after {:?}", start.elapsed());
     }
 
     #[test]
     fn a_call_that_ends_in_time_gives_its_exit_and_what_it_printed() {
-        let ended =
-            run(this_test_program("call::tests::a_child_that_never_answers"), Vec::new(), Duration::from_secs(30))
-                .unwrap();
+        let ended = run(
+            this_test_program("call::tests::a_child_that_never_answers"),
+            Vec::new(),
+            Duration::from_secs(30),
+            None,
+        )
+        .unwrap();
         assert!(ended.status.success() && String::from_utf8_lossy(&ended.stdout).contains("1 passed"));
     }
 

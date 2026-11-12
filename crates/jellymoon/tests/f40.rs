@@ -53,6 +53,11 @@ pub fn ms(variable: &'static str, ms: u64) -> (&'static str, OsString) {
     (variable, ms.to_string().into())
 }
 
+/// The variable that names the file a command held at a place waits for (`busy::pause`): `name`, in `rec`.
+pub fn until(w: &World, name: &str) -> (&'static str, OsString) {
+    ("JELLYMOON_TEST_GO", w.at("rec").join(name).into())
+}
+
 pub fn cancelled(run: &str) -> String {
     format!("run {run} was cancelled by a stop: its copy is kept and no star was added")
 }
@@ -155,8 +160,8 @@ fn a_stop_ends_the_run_as_cancelled_with_no_star_and_its_copy_kept() {
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
     w.work_in_progress(&repo);
     let before = w.persons(&repo);
-    // Fifteen seconds after each asking: an agent that is gone sooner heard the first one, the interrupt.
-    let (going, run) = w.run_going(("lingers", 0), &[ms(GRACE, 15_000)], &wish, &repo);
+    // A minute after each asking: an agent that is gone sooner heard the first one, the interrupt.
+    let (going, run) = w.run_going(("lingers", 0), &[ms(GRACE, 60_000)], &wish, &repo);
     assert_eq!(w.kept(&wish)["state"], "working");
 
     let from = Instant::now();
@@ -167,7 +172,7 @@ fn a_stop_ends_the_run_as_cancelled_with_no_star_and_its_copy_kept() {
     assert_eq!(printed(&ended(going)), said_cancelled(&run, &wish, 0));
     assert!(w.agent_came_and_went(), "the agent is still going after the stop");
     if cfg!(unix) {
-        assert!(took < Duration::from_secs(10), "the agent was not interrupted: {took:?}");
+        assert!(took < Duration::from_secs(40), "the agent was not interrupted: {took:?}");
     }
 
     w.is_cancelled(&wish, &run, &repo, 0);

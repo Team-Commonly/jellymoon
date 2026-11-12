@@ -234,7 +234,16 @@ mod tests {
         let kept = ["debug", "smoke-home-2", "smoke-home-2.lock", "smoke-home-4", "smoke-home-5", "smoke-home-9"];
         assert_eq!(left, kept);
         drop(living);
-        sweep(target.path());
-        assert!(!at("smoke-home-2").exists() && !at("smoke-home-2.lock").exists() && at("smoke-home-4").is_dir());
+        // A command another test starts holds a copy of every file open here until it becomes its own program, and
+        // the lock with it (seen on Linux): the sweep leaves that home for its next pass, so more than one is asked.
+        let gone = || !at("smoke-home-2").exists() && !at("smoke-home-2.lock").exists();
+        for _ in 0..500 {
+            sweep(target.path());
+            if gone() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(gone() && at("smoke-home-4").is_dir());
     }
 }

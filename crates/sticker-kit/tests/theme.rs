@@ -1,6 +1,8 @@
 //! Themes are data: defaults, ignored keys, and the two refusals.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod support;
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -76,10 +78,10 @@ fn a_missing_piece_uses_the_built_in_art() {
     let folder = Folder::new("missing");
     folder.write("star.svg", PICTURE);
     let path = folder.write("theme.toml", "[art]\nstar = \"star.svg\"\nbadge = \"not-there.svg\"\n");
-    let loaded = Theme::load(&path).expect("loads");
+    let (loaded, art) = support::tried(&path).expect("loads");
     assert_eq!(loaded.theme.name, "theme");
     let only = vec![("star", PICTURE.to_string())];
-    assert_eq!(loaded.theme.art_svgs(), only, "not `badge`, a named file that is absent, nor a piece not named");
+    assert_eq!(support::given(&art), only, "not `badge`, a named file that is absent, nor a piece not named");
     assert!(loaded.warnings.iter().any(|w| w.starts_with("art.badge:")), "{:?}", loaded.warnings);
 }
 
@@ -155,7 +157,7 @@ fn an_svg_that_could_run_code_is_refused() {
         let folder = Folder::new(&format!("scripted-{i}"));
         folder.write("star.svg", &svg);
         let path = folder.write("theme.toml", "[art]\nstar = \"star.svg\"\n");
-        match Theme::load(&path) {
+        match support::tried(&path) {
             Err(ThemeError::RefusedSvg { key, reason }) => assert_eq!((key.as_str(), &reason), ("art.star", &said)),
             other => panic!("case {i} was not refused: {other:?}"),
         }

@@ -243,7 +243,16 @@ max_file_lines = 400
 # stated numbers; `tests/entry.rs` the characters nobody sees). The rest is a file's own colours and the floors at
 # the door (`src/theme/own.rs`, 91), contrast in `src/color.rs` (26), one rule for a character a person sees and a
 # cut in the middle (`src/text.rs`, 40), and a row's spare width given to its long chips (`src/layout/entry.rs`).
-"crates/sticker-kit" = 9001
+# A picture tried before it is trusted (ADR 0016) raised it by 1081: 626 are tests. The trial is `theme/trial.rs`
+# (255, the parent's half: the child started, its one line, the limit, the kept answers) and `theme/stand.rs` (71,
+# the child's half); `Theme::load` lost its parse of every picture and `Theme::art_svgs` is gone, and
+# `Theme::try_art` and an accepted picture came (28 more); the drawing half takes accepted pictures only (32). The
+# rules grew by 65: `stroke-width` and the `viewBox` as written numbers, no percent, a count of attributes, and
+# only an arc that goes nowhere counted. The tests are `tests/trial.rs` (322: each picture four reviews found, given
+# to a child that holds it to no rule; a child that overflows, fails, floods, never ends or cannot start; kept
+# answers; no side door), the made-up children they start and how every test tries a theme (`tests/support/`,
+# 134), the rules at their edges (`tests/limits.rs`, 121) and a sixth heaviest theme, a review's (`tests/draw.rs`, 40).
+"crates/sticker-kit" = 10082
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -277,7 +286,10 @@ max_file_lines = 400
 # The review of the entry under the title raised it by 97: the window's passing of core's answer, tested on GPUI's
 # test platform, is 71 (`tests/f43/window.rs`); a theme file's picture in the example, 16; the hint whole at three
 # sizes in both themes (`tests/f42.rs`), 8.
-"app" = 5519
+# A theme's picture tried by the app started again (ADR 0016) raised it by 105: 58 are its test at the binary
+# (`tests/f32.rs`); the rest is how the trial is started and its line said (`lib.rs`), `main` standing as the
+# trial first, `layout` trying the art, and the window trying it off its thread.
+"app" = 5624
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

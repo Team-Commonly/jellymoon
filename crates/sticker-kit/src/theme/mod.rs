@@ -6,8 +6,10 @@ mod bounds;
 mod builtin;
 mod load;
 mod own;
+mod stand;
 mod svg_check;
 mod svg_text;
+mod trial;
 
 use std::path::{Path, PathBuf};
 
@@ -16,14 +18,16 @@ use serde::{Deserialize, Serialize};
 use crate::color::Color;
 
 pub use bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, RANGES};
-pub use load::{Loaded, ThemeError};
+pub use load::{Accepted, Loaded, ThemeError, Tried};
 pub use own::{CHOSEN_INK_FLOOR, HINT_FLOOR, RING_FLOOR};
+pub use stand::stand_trial;
 pub use svg_check::{
-    ATTRIBUTES as SVG_ATTRIBUTES, ArtCost, ELEMENTS as SVG_ELEMENTS, MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_NUMBERS,
-    MAX_ART_PAINT, MAX_ART_PATH_BYTES, MAX_ART_REACH, MAX_ART_SIDE, MIN_ART_SIDE, MIN_ART_STROKE, ROW_PAINT, art_cost,
-    svg_refusal,
+    ATTRIBUTES as SVG_ATTRIBUTES, ArtCost, ELEMENTS as SVG_ELEMENTS, MAX_ART_ATTRIBUTES, MAX_ART_DEPTH,
+    MAX_ART_ELEMENTS, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_PATH_BYTES, MAX_ART_REACH, MAX_ART_SIDE, MIN_ART_SIDE,
+    MIN_ART_STROKE, ROW_PAINT, art_cost, svg_refusal,
 };
 pub use svg_text::{MAX_ART_COMMANDS, MAX_ART_FLAT, MAX_ART_IDLE, MAX_ART_WRITTEN};
+pub use trial::{TRIAL_LIMIT, Trial, USVG};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

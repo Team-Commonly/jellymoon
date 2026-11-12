@@ -3,7 +3,10 @@
 //! reported (`own.rs`).
 //! Refused, because they would make a theme more than data or more than a page can hold: a file over its size
 //! (`bounds.rs`), a number that is not finite or is outside its range, a path that leaves the theme's folder, and an
-//! SVG that is not a regular file of pictures only.
+//! SVG that is not a regular file of text within its size.
+//!
+//! No picture is parsed here. What a picture holds is judged by a trial (`trial.rs`), in another process, when
+//! [`Theme::try_art`] is asked: only what that gives back is ever drawn.
 
 use std::fmt;
 use std::fs;
@@ -13,7 +16,7 @@ use std::path::{Component, Path, PathBuf};
 use toml::{Table, Value};
 
 use super::bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, check};
-use super::{ArtCost, Theme, art_cost};
+use super::{ArtCost, Theme, Trial};
 
 /// A theme, and what the loader ignored on the way.
 #[derive(Clone, Debug, PartialEq)]
@@ -89,7 +92,8 @@ impl Theme {
         Ok(Loaded { theme, warnings })
     }
 
-    /// Reads a theme file and checks every art file it names.
+    /// Reads a theme file, and each art file it names as bytes: that it is there, inside the folder, a regular
+    /// file of text and within its size. What the pictures hold is [`Theme::try_art`]'s to say.
     pub fn load(path: &Path) -> Result<Loaded, ThemeError> {
         let text = read_capped(path, MAX_THEME_BYTES).map_err(ThemeError::Read)?;
         let mut loaded = Theme::from_toml(&text)?;
@@ -101,21 +105,10 @@ impl Theme {
         {
             loaded.theme.name = stem.to_string_lossy().into_owned();
         }
-        let mut all = ArtCost::default();
         for (key, name) in loaded.theme.art.clone().entries() {
-            if name.is_empty() {
-                continue;
-            }
-            let Some((_, one)) = read_art(&folder, key, name)? else {
+            if !name.is_empty() && read_art(&folder, key, name)?.is_none() {
                 loaded.warnings.push(format!("art.{key}: `{name}` was not found; the built-in art is used"));
                 loaded.theme.art.clear(key);
-                continue;
-            };
-            // Each file is inside the two counts by itself; a theme's files together are held to the same two.
-            all = all.with(one);
-            if let Some(reason) = all.refusal() {
-                let reason = format!("with the art before it, {}", reason.trim_start_matches("its "));
-                return Err(ThemeError::RefusedSvg { key: format!("art.{key}"), reason });
             }
         }
         loaded.theme.folder = Some(folder);
@@ -133,26 +126,62 @@ impl Theme {
         toml::to_string(self).map_err(|e| ThemeError::Parse(e.to_string()))
     }
 
-    /// The checked SVG text replacing each piece's art (`hero`, `character`, `star`, `bubble`, `badge`), for the
-    /// pieces the theme names one for. The files are read again here, when the theme is drawn, and may have changed
-    /// since [`Theme::load`]: so they are held together to the two counts again, in the order `load` reads them. A
-    /// file that is refused, or would take the files before it past a count, is not given and not counted, and the
-    /// kit's own art is drawn for its piece. Each file is read once and there is one sum, so what is given is
-    /// inside the counts together, whatever is written to the folder meanwhile.
-    pub fn art_svgs(&self) -> Vec<(&'static str, String)> {
-        let (mut all, mut given) = (ArtCost::default(), Vec::new());
-        for (piece, name) in self.art.entries() {
-            let read = match &self.folder {
-                Some(folder) if !name.is_empty() => read_art(folder, piece, name).ok().flatten(),
-                _ => None,
+    /// Tries the art replacing each piece (`hero`, `character`, `star`, `bubble`, `badge`), for the pieces the
+    /// theme names a file for, one after another. Each file is read once, here, and the text a trial accepted is
+    /// the text given back, whatever is written to the folder meanwhile. A file a trial refuses, or one that
+    /// takes the files before it past a count ([`ArtCost`]), is named in `refused` with its one line, and the
+    /// kit's own art is drawn for its piece.
+    ///
+    /// This waits for every trial that has no kept answer: call it off the window's thread.
+    pub fn try_art(&self, trial: &Trial) -> Tried {
+        let (mut all, mut tried) = (ArtCost::default(), Tried::default());
+        let Some(folder) = &self.folder else { return tried };
+        for (piece, name) in self.art.entries().into_iter().filter(|(_, name)| !name.is_empty()) {
+            let refuse = |reason: String| ThemeError::RefusedSvg { key: format!("art.{piece}"), reason };
+            let judged = match read_art(folder, piece, name) {
+                Ok(Some(svg)) => trial.judge(&svg).map(|one| (svg, one)).map_err(refuse),
+                Ok(None) => continue,
+                Err(refused) => Err(refused),
             };
-            if let Some((svg, one)) = read.filter(|(_, one)| all.with(*one).refusal().is_none()) {
-                all = all.with(one);
-                given.push((piece, svg));
+            let together = judged.and_then(|(svg, one)| match all.with(one).refusal() {
+                Some(reason) => Err(refuse(format!("with the art before it, {}", reason.trim_start_matches("its ")))),
+                None => Ok((svg, one)),
+            });
+            match together {
+                Ok((svg, one)) => {
+                    all = all.with(one);
+                    tried.accepted.push(Accepted { piece, svg });
+                }
+                Err(refused) => tried.refused.push(refused),
             }
         }
-        given
+        tried
     }
+}
+
+/// A picture a trial accepted, for one piece: the only text of a theme's that the drawing half takes. There is
+/// no other way to make one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Accepted {
+    piece: &'static str,
+    svg: String,
+}
+
+impl Accepted {
+    pub fn piece(&self) -> &'static str {
+        self.piece
+    }
+
+    pub fn svg(&self) -> &str {
+        &self.svg
+    }
+}
+
+/// What [`Theme::try_art`] found: the pictures to draw, and why each of the others is not drawn.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Tried {
+    pub accepted: Vec<Accepted>,
+    pub refused: Vec<ThemeError>,
 }
 
 /// Drops every key the kit does not know and records its dotted name.
@@ -192,9 +221,9 @@ fn escapes_by_shape(name: &str) -> bool {
     Path::new(name).components().any(|part| !matches!(part, Component::Normal(_) | Component::CurDir))
 }
 
-/// The art file's text and what it costs to draw, `None` when the file is missing. Symlinks are
-/// resolved first, so a link that points out of the folder is an escape.
-fn read_art(folder: &Path, key: &str, name: &str) -> Result<Option<(String, ArtCost)>, ThemeError> {
+/// The art file's text, `None` when the file is missing. Symlinks are resolved first, so a link that points out
+/// of the folder is an escape.
+fn read_art(folder: &Path, key: &str, name: &str) -> Result<Option<String>, ThemeError> {
     if escapes_by_shape(name) {
         return Err(escape(key, name));
     }
@@ -206,8 +235,7 @@ fn read_art(folder: &Path, key: &str, name: &str) -> Result<Option<(String, ArtC
         return Err(escape(key, name));
     }
     let refuse = |reason: String| ThemeError::RefusedSvg { key: format!("art.{key}"), reason };
-    let text = read_capped(&real, MAX_ART_BYTES).map_err(refuse)?;
-    art_cost(&text).map(|cost| Some((text, cost))).map_err(refuse)
+    read_capped(&real, MAX_ART_BYTES).map(Some).map_err(refuse)
 }
 
 fn over(max: u64) -> String {

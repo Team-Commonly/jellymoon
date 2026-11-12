@@ -55,6 +55,8 @@ enum Source {
 }
 
 fn main() -> ExitCode {
+    // Started as the trial of a theme's picture, this process is that and nothing else, and ends in there.
+    sticker_kit::theme::stand_trial(jellymoon_app::TRIAL);
     let failed = match run() {
         Ok(text) => {
             return if io::stdout().write_all(text.as_bytes()).is_ok() { ExitCode::SUCCESS } else { ExitCode::FAILURE };
@@ -82,6 +84,12 @@ fn run() -> Result<String, Failure> {
                 }
                 Source::Waiting(date) => (today::waiting(date), None),
             };
+            // No picture is drawn here, and the theme's art is tried all the same: `layout` is where a theme is
+            // looked at before a window is opened on it.
+            for refused in options.theme.try_art(&jellymoon_app::trial()).refused {
+                let line = format!("jellymoon-app: {}\n", jellymoon_app::refused_art(&refused));
+                let _ = io::stderr().write_all(line.as_bytes());
+            }
             Ok(lines::lines(&scene, entry.as_ref(), &options.theme, options.size))
         }
         Command::Window(options) => window(options).map(|()| String::new()),

@@ -172,7 +172,7 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | `motion.damping` | 0 to 200 (14); the spring is stable all the way | |
 | `labels.max_chars` | 1 to 200 | |
 | every angle under `tilt` | -45 to 45 | |
-| an art file's SVG | a flat picture, as the renderer's parser reads it, held to the lists below | `svg_refusal` |
+| an art file's SVG | tried in a process of its own before it is read or drawn here; there, a flat picture held to the lists below and drawn within a limit of time | `Theme::try_art`, `theme::Trial` |
 | notes in a scene | the first 12 are laid out, the rest only counted | `MAX_NOTES` |
 | options of a choice note | the first 4 | |
 | rows of a whole list | the first 12 are laid out, the rest only counted | |
@@ -188,13 +188,45 @@ a theme it refuses, and the view draws only what is placed. Behind that,
 `layout` returns at most `MAX_PIECES` pieces and punches at most 150 holes,
 and the view draws at most 1000 grid lines each way and 64 stripes on a tape.
 
-**An art file is read with the renderer's own parser, and its tree is judged by an allow-list**
-(`src/theme/svg_check.rs`, `docs/adr/0015-the-art-door-reads-with-the-renderers-parser.md`), so what a file costs
-to draw is bounded at the door and not left to the renderer. The parser is `usvg`, at the version GPUI draws
-with; the tree it makes is the tree that is drawn. A size, a shape, a stroke's width and where a transform puts a
-thing are what that tree says, so the door has no reading of its own for the renderer to differ from. A file with
-anything not named here refuses the whole theme, with the key and the reason. It is read through the door again
-when it is drawn, and a file that has gone bad since is left out for the kit's own art.
+**A picture is tried before it is trusted** (`src/theme/trial.rs`, `src/theme/stand.rs`,
+`docs/adr/0016-a-picture-is-tried-before-it-is-trusted.md`). `Theme::load` reads a theme file and looks at each art
+file only as a file: inside the theme's folder, regular, at most 64 KiB. It parses none. `Theme::try_art(&trial)`
+then has each picture read and drawn by another process, the caller's own program started again, and gives back
+the pictures that process answered for (`Accepted`) and one line for each of the others. Only an `Accepted`
+picture can be handed to the drawing half (`Page::set_art`, `headless::snapshot_with`); the kit's own art is drawn
+for every other piece.
+
+```rust
+fn main() {
+    // First thing: started as a trial, this process is that and ends in there.
+    sticker_kit::theme::stand_trial("--try-art");
+    // ...
+    let trial = Trial::new(std::env::current_exe().unwrap_or_default(), "--try-art", Some(kept_folder));
+    let tried = theme.try_art(&trial); // waits for the trials: off the window's thread
+}
+```
+
+- **The child** gets the picture on its standard input, an empty environment and nothing else. It holds the
+  picture to the rules below and draws it with the call GPUI makes for an SVG image, at twice its size. It answers
+  with one line.
+- **The limit** is `TRIAL_LIMIT`: 2 s in a release, 20 s in a debug build, some 15 times the heaviest trial
+  measured below. A trial that runs over is ended
+  and waited for. So is one that crashes, overflows its stack, ends with a code, or says anything but an answer:
+  each is a refusal with one line, and costs the caller that one child.
+- **Memory** is limited to 2 GiB in the child on Linux. macOS and Windows have no such limit a process can put on
+  itself without `unsafe`: there the time is the bound.
+- **An answer is kept** in the folder the caller names, under the kit's version, the parser's and the picture's
+  own bytes, so a picture is tried once and not at every start. A trial that ran over or could not start is not
+  kept. A kept file that is not exactly an answer for this picture and this kit is ignored.
+- **When no child can be started** the picture is refused. It is never read in the caller's process instead.
+
+**Inside the trial the picture is read with the renderer's own parser, and its tree is judged by an allow-list**
+(`src/theme/svg_check.rs`, `docs/adr/0015-the-art-door-reads-with-the-renderers-parser.md`). These rules are the
+cheap first filter, each with a line that says what is wrong. They are not what makes a picture safe to draw:
+four reviews in a row found a picture they took and the renderer choked on, and the trial is what holds the next.
+The parser is `usvg`, at the version GPUI draws with; the tree it makes is the tree that is drawn. A size, a
+shape, a stroke's width and where a transform puts a thing are what that tree says, so the rules have no reading
+of their own for the renderer to differ from.
 
 Three things are held, in this order:
 
@@ -214,20 +246,28 @@ Three things are held, in this order:
      group, `on…` handler, `xml:base`, dashes or mitre limit. A name in another case (`viewbox`) is another name,
      and is refused.
    - At most 100 elements (`MAX_ART_ELEMENTS`), each at most 12 deep (`MAX_ART_DEPTH`), the `<svg` counted in both.
+   - At most 40 attributes and namespace declarations on one element (`MAX_ART_ATTRIBUTES`), counted on the text
+     as the `=` between one `<` and the next, before the XML parser reads it: that parser compares each with
+     every other.
    - The `d` and `points` values hold at most 16 KiB together (`MAX_ART_PATH_BYTES`).
    - What the paths and shapes write, walked with the parser library's own tokenizer before the parser makes a
-     picture of it (`theme/svg_text.rs`). The parser does three things by the length of a value, and one of them
+     picture of it (`theme/svg_text.rs`). The parser does these by the length or size of a value, and one of them
      ends the program:
      - at most 2048 commands in the paths of a file, a pair of `points` being one (`MAX_ART_COMMANDS`);
-     - at most 32 closes or arcs in a row in a path with nothing else between them (`MAX_ART_IDLE`). The parser
-       calls itself once for each segment it draws nothing for, which is a close after a close and an arc too flat
-       to be a curve, and a path of a few thousand `z` overflowed its stack. The first close of a run and an arc
-       straight after a close are drawn, and not counted. Every other arc is, flat or not;
-     - no number in a `d` or in `points`, and no `x` `y` `x1` `y1` `x2` `y2` `cx` `cy` `r` `rx` `ry` `width`
-       `height`, is over 1000000 (`MAX_ART_WRITTEN`). An arc, a circle and a rounded corner are made of more
-       curves the larger they are written, all at once: `r="3e38"` was four million;
+     - at most 32 closes, or arcs that go nowhere, in a row in a path with nothing else between them
+       (`MAX_ART_IDLE`). The parser calls itself once for each segment it draws nothing for, which is a close
+       after a close and an arc too flat to be a curve, and a path of a few thousand `z` overflowed its stack. The
+       first close of a run and an arc straight after a close are drawn, and not counted. An arc is counted only
+       when its ends are closer than a millionth of its larger radius: a scalloped edge of forty arcs is taken;
+     - no number in a `d`, in `points` or in the `viewBox`, and no `x` `y` `x1` `y1` `x2` `y2` `cx` `cy` `r` `rx`
+       `ry` `width` `height` `stroke-width`, is over 1000000 (`MAX_ART_WRITTEN`). An arc, a circle and a rounded
+       corner are made of more curves the larger they are written, all at once: `r="3e38"` was four million. And
+       the stroker does not end soon under a stroke thousands of times wider than its curve;
+     - none of those is a percent, which is a part of the `viewBox` and not of the number written. The picture's
+       own `width` and `height` may be one, up to 100%;
      - an arc's two radii are within 1000 times of each other (`MAX_ART_FLAT`): the parser makes the smaller
-       as much larger as the other is, so a flat arc between far ends is a very large one.
+       as much larger as the other is, so a flat arc between far ends is a very large one. This is no count of
+       an arc's curves: one arc between ends that moves had taken 2e9 apart was 80.
 3. **The tree.**
    - Groups and paths only. A group that is faded, clipped, masked, filtered or blended is refused, and so is a
      dashed stroke, a pattern, text and an image. The two lists keep each of these out already; the tree is judged
@@ -240,7 +280,9 @@ Three things are held, in this order:
      picture's edges (`MAX_ART_REACH`), in the picture's own pixels. Twice the width is as far as a mitre's point
      goes. The renderer's own box of a stroke is not used: under a slant it is the path's box and no more.
    - A stroke is drawn at least 0.51 wide (`MIN_ART_STROKE`), in the picture's own pixels: just over one drawn
-     pixel. A group that makes a picture smaller makes its strokes thinner, and that is the width held.
+     pixel on a picture of whole sides, and a little under one on a side with a fraction, which is drawn at twice
+     its size cut to whole pixels (19.99 is 39 wide). A group that makes a picture smaller makes its strokes
+     thinner, and that is the width held.
    - The paths hold at most 3072 numbers (`MAX_ART_NUMBERS`): two for every point, once the renderer has made
      each shape a path. A `rect` is 8, a `circle` or an `ellipse` 26, a rounded `rect` 34, an arc as many as the
      curves it is drawn as. 99 circles are 2574.
@@ -252,11 +294,8 @@ Three things are held, in this order:
      whole picture is 4096 under a fill.
 - A theme's art files together are held to the same two counts, so five files
   cost no more than one. The refusal names the file that went over.
-- The files are read again when the theme is drawn (`Theme::art_svgs`: one pass, each file read
-  once, one sum), and are held
-  together to the two counts again, in the same order: a file changed since the load
-  that is refused, or would take the files before it past a count, is not drawn, and
-  the kit's own art is drawn for its piece.
+- Each file is read once, in `try_art`, and the text a trial accepted is the text drawn, whatever is written to
+  the folder meanwhile.
 
 **What stays different between the door's parse and the renderer's** is only what the door turns off, each so
 that less is done and never so that a file is read another way. The renderer allows a DTD and expands its
@@ -277,9 +316,10 @@ it crosses, the picture being painted in the pieces the edges cut a row into. Be
 file's size, and five files at it took 38 s to draw in a debug build on a Mac. `tests/cost.rs` holds each count,
 the reach and the stroke at its edge. Measured on one Mac, in a debug build and in a release:
 
-- **The heaviest themes the kit knows how to write** (`tests/draw.rs`): five ways to spend both counts to the last
+- **The heaviest themes the kit knows how to write** (`tests/draw.rs`): six ways to spend both counts to the last
   unit over five files, each read at the door and rasterised. They are the dearest of what was measured, and not
-  a proof that nothing dearer is inside the counts.
+  a proof that nothing dearer is inside the counts: the last row is one a review found after the first five were
+  called the heaviest. The trial's limit is what holds the next.
 
   | All the paint and every point spent on | debug | release |
   |---|---|---|
@@ -288,10 +328,14 @@ the reach and the stroke at its edge. Measured on one Mac, in a debug build and 
   | the same under a see-through gradient, 45056 rows | 0.64 s | 24 ms |
   | the same under a fill and a round stroke 2.6 wide, 73728 rows | 0.77 s | 35 ms |
   | the same written as curves, under a fill and the thinnest stroke | 0.84 s | 32 ms |
+  | 64 see-through round strokes 600 wide, each of 12 dots (a review's; a dot crosses no row) | 2.65 s | 105 ms |
 
-  The door reads the five files in 3 to 16 ms (0.4 to 0.9 ms in a release). The heaviest is the first in a debug
-  build and the second in a release: 1.3 s and 80 ms. One paint of 256 by 256 with no edge in it: an opaque
-  fill 1.5 ms in a debug build, a see-through one 14 to 19 ms, a gradient 45 to 49 ms.
+  The rules read the five files in 3 to 16 ms (0.4 to 0.9 ms in a release). The heaviest is the last: 2.65 s and
+  105 ms as its review measured it in one process, about twice the first row. Tried, child by child, on a Mac busy
+  with other work (a load of 10 to 18 on ten cores): its five trials took 6.5 s in a debug build and 0.55 s in a
+  release, the heaviest one of them about 1.4 s and 0.11 s; the five trials of each other row took 0.95 to 3.1 s
+  and 64 to 121 ms. One paint of 256 by 256 with no edge in it: an opaque fill 1.5 ms in a debug build, a
+  see-through one 14 to 19 ms, a gradient 45 to 49 ms.
 - **What a row costs.** Before a row was counted, a fill cost its area and no more, and a review found eight
   ragged shapes of 192 points, each edge as tall as the picture, under a see-through gradient and a gradient
   stroke: all the paint of a file and no more, and 7.6 s to draw in a debug build (14 s on a busy

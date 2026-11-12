@@ -21,7 +21,7 @@ use crate::geom::Viewport;
 use crate::layout::{PieceKind, Placed, TextRun, layout, layout_entry, page_scale};
 use crate::scene::Scene;
 use crate::text::Role;
-use crate::theme::Theme;
+use crate::theme::{Accepted, Theme};
 
 pub use entry::EntryMade;
 use entry::EntryView;
@@ -60,6 +60,7 @@ pub struct FrameStats {
 pub struct Page {
     scene: Scene,
     theme: Theme,
+    art: Vec<Accepted>,
     reduce_motion: bool,
     on_tap: Option<TapHandler>,
     entry: EntryView,
@@ -81,6 +82,7 @@ impl Page {
         Self {
             scene,
             theme,
+            art: Vec::new(),
             reduce_motion: false,
             on_tap: None,
             entry: EntryView::default(),
@@ -115,8 +117,24 @@ impl Page {
         cx.notify();
     }
 
+    /// The theme's own art, as [`Theme::try_art`] accepted it. Until this is given, and for every piece it does
+    /// not hold, the kit's own art is drawn: the page reads no art file itself.
+    pub fn with_art(mut self, art: Vec<Accepted>) -> Self {
+        self.art = art;
+        self
+    }
+
+    /// [`Page::with_art`] for a page that is already drawn: the trials were run off the window's thread.
+    pub fn set_art(&mut self, art: Vec<Accepted>, cx: &mut Context<Self>) {
+        self.art = art;
+        self.themed = false;
+        cx.notify();
+    }
+
+    /// The new theme is drawn with the kit's own art until [`Page::set_art`] gives its own.
     pub fn set_theme(&mut self, theme: Theme, cx: &mut Context<Self>) {
         self.theme = theme;
+        self.art.clear();
         self.themed = false;
         self.stale = Stale::Spring;
         cx.notify();
@@ -275,7 +293,7 @@ impl Render for Page {
         let size = window.viewport_size();
         let viewport = Viewport { w: size.width.into(), h: size.height.into() };
         if !self.themed {
-            self.sprites.reset(&self.theme, cx);
+            self.sprites.reset(&self.art, cx);
             self.themed = true;
         }
         self.relayout(viewport, window);

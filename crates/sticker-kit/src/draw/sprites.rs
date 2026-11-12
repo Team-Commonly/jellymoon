@@ -10,7 +10,7 @@ use crate::art;
 use crate::geom::Rect;
 use crate::layout::{PieceKind, Placed};
 use crate::scene::{Character, Mood, Scene, State};
-use crate::theme::Theme;
+use crate::theme::{Accepted, Theme};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Key {
@@ -25,7 +25,7 @@ struct Key {
 #[derive(Default)]
 pub(crate) struct Sprites {
     drawn: HashMap<Key, Arc<Image>>,
-    /// Art the theme supplies from its own folder, by piece name.
+    /// Art the theme supplies from its own folder, by piece name: only what a trial accepted.
     supplied: HashMap<&'static str, Arc<Image>>,
 }
 
@@ -51,14 +51,15 @@ fn piece_name(kind: PieceKind) -> &'static str {
 }
 
 impl Sprites {
-    /// Forgets every image and reads the theme's own art afresh.
-    pub fn reset(&mut self, theme: &Theme, cx: &mut App) {
+    /// Forgets every image and takes the theme's own art afresh. A picture is an [`Accepted`] one or it is not
+    /// given to the renderer: this reads no file.
+    pub fn reset(&mut self, art: &[Accepted], cx: &mut App) {
         self.forget(cx);
         for image in self.supplied.drain().map(|entry| entry.1) {
             image.remove_asset(cx);
         }
-        for (name, svg) in theme.art_svgs() {
-            self.supplied.insert(name, svg_image(svg));
+        for accepted in art {
+            self.supplied.insert(accepted.piece(), svg_image(accepted.svg().to_string()));
         }
     }
 

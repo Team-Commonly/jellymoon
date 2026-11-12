@@ -17,8 +17,17 @@ the waiting page and reads nothing; with `--page` the flags of a day are taken a
 same. A theme changes how the page looks and never which pieces are on it. A theme file is TOML in which every key
 is optional (the kit's README has the keys and the bounds it is held to). A key the kit does not know and an art file
 that is not there fall back to the sticker theme's, each said in one `jellymoon-app: theme: ` line on stderr, the
-first 8 of them. A theme file that cannot be read or that the kit refuses (a number out of its range, art that is
-more than a flat picture, a path out of the theme's folder) exits 1 with one line that names the key and the reason.
+first 8 of them. A theme file that cannot be read or that the kit refuses (a number out of its range, a path out of
+the theme's folder) exits 1 with one line that names the key and the reason.
+
+A theme's picture is tried before it is trusted (ADR 0016). The app starts itself again as `jellymoon-app --try-art`,
+which reads the picture from its standard input, holds it to the kit's rules, draws it and answers with one line;
+the app that owns the window reads and draws only a picture that answer accepted. One that is refused, or whose
+trial ran over its limit or ended badly, is one line on stderr (`jellymoon-app: theme: the SVG for art.star is
+refused: <why>; the built-in art is drawn`) and the page goes on with the kit's own art for that piece: the exit
+code is 0. Answers are kept in `art-trials` in Jellymoon's own folder, so a picture is tried once. In a window the
+trials run off the window's thread, and the kit's art is drawn until they are done. `layout` tries the art too,
+though it draws none, so a theme can be looked at before a window is opened on it.
 
 With `layout` it prints where every piece goes. Without, it opens a window (default 1440x900); `t` switches between the two built-in themes, and
 `JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. `--size` is from 960x640 to 16384x16384, each side a whole

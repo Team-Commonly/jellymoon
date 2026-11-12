@@ -43,7 +43,7 @@ pub fn open(
         }
         let (shown, later) = day.unzip();
         let shown = Showing::of(shown);
-        let window = match page(scene, theme, viewport, shown.clone(), cx) {
+        let window = match page(scene, theme.clone(), viewport, shown.clone(), cx) {
             Ok(window) => window,
             Err(error) => {
                 say(&format!("no window: {error}"));
@@ -52,6 +52,7 @@ pub fn open(
         };
         cx.on_window_closed(|cx, _| cx.quit()).detach();
         cx.observe_keystrokes(move |event, _, cx| key(&event.keystroke.key, window, cx)).detach();
+        cx.spawn(async move |cx| arts(theme, window, cx).await).detach();
         let reading = shown.clone();
         cx.spawn(async move |cx| reads(reading, later, window, cx).await).detach();
         cx.spawn(async move |cx| looks(shown, window, cx).await).detach();
@@ -71,6 +72,27 @@ fn key(key: &str, window: WindowHandle<Page>, cx: &mut App) {
     let _ = window.update(cx, |page, window, cx| {
         if switches_theme(key, page.entry_focused(window)) {
             page.set_theme(other_theme(&page.theme().name), cx);
+        }
+    });
+}
+
+/// The theme's own art, each picture tried in a process of its own, off the window's thread (ADR 0016). The page
+/// is drawn with the kit's art from the start, and with each picture that passed once all have been tried: at
+/// once when their answers are kept, after the trials the first time a picture is seen. A picture that is refused
+/// is said on stderr and the kit's art stays.
+async fn arts(theme: Theme, window: WindowHandle<Page>, cx: &mut gpui::AsyncApp) {
+    if theme.folder().is_none() {
+        return;
+    }
+    let trying = theme.clone();
+    let tried = cx.background_executor().spawn(async move { trying.try_art(&crate::trial()) }).await;
+    for refused in &tried.refused {
+        say(&crate::refused_art(refused));
+    }
+    // The art is the theme's it was tried for: `t` may have put another on show meanwhile.
+    let _ = window.update(cx, |page, _, cx| {
+        if *page.theme() == theme {
+            page.set_art(tried.accepted, cx);
         }
     });
 }

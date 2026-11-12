@@ -7,7 +7,7 @@ use gpui::{AppContext as _, HeadlessAppContext, PlatformTextSystem, px, size};
 
 use super::{Page, load_fonts};
 use crate::scene::{Entry, Scene};
-use crate::theme::Theme;
+use crate::theme::{Accepted, Theme};
 
 /// The platform's real text system, safe to build off the main thread.
 pub fn text_system() -> Arc<dyn PlatformTextSystem> {
@@ -42,12 +42,25 @@ pub fn snapshot_typing(
     height: f32,
     out: &Path,
 ) -> gpui::Result<()> {
+    snapshot_with(scene, (theme, Vec::new()), typing, width, height, out)
+}
+
+/// [`snapshot_typing`] of a theme with the art a trial accepted for it ([`Theme::try_art`]). A picture is drawn
+/// from no other art of a theme's, with a window or without.
+pub fn snapshot_with(
+    scene: Scene,
+    (theme, art): (Theme, Vec<Accepted>),
+    typing: Option<Typing>,
+    width: f32,
+    height: f32,
+    out: &Path,
+) -> gpui::Result<()> {
     let mut cx =
         HeadlessAppContext::with_platform(text_system(), Arc::new(()), gpui_platform::current_headless_renderer);
     cx.update(|cx| load_fonts(cx))?;
     let (entry, typed) = typing.map(|typing| (typing.entry, typing.typed)).unzip();
     let window = cx.open_window(size(px(width), px(height)), |_, cx| {
-        let page = Page::new(scene, theme).reduce_motion(true);
+        let page = Page::new(scene, theme).with_art(art).reduce_motion(true);
         cx.new(|_| entry.into_iter().fold(page, Page::with_entry))
     })?;
     if let Some((text, option)) = typed.flatten() {

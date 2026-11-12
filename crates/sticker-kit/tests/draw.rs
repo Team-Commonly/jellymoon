@@ -1,6 +1,8 @@
 //! The drawing half, headless: no window is shown.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod support;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -203,9 +205,15 @@ fn heaviest_art(heavy: &Heavy, nth: u64) -> String {
 /// Draws the sample scene headless. What bounds the time is counted elsewhere, in numbers that are the same on every
 /// machine; `backstop` is ten times what the draw took in a debug build on a Mac, so only a hang trips it.
 fn drawn(theme: Theme, name: &str, backstop: u64) {
+    drawn_with(theme, Vec::new(), name, backstop);
+}
+
+/// [`drawn`] with the art a trial accepted for the theme.
+fn drawn_with(theme: Theme, art: Vec<sticker_kit::theme::Accepted>, name: &str, backstop: u64) {
+    use sticker_kit::draw::headless::snapshot_with;
     let out = std::env::temp_dir().join(format!("sticker-kit-{name}-{}.png", std::process::id()));
     let started = std::time::Instant::now();
-    sticker_kit::draw::headless::snapshot(Scene::sample(), theme, 1440.0, 900.0, &out).expect("it is drawn");
+    snapshot_with(Scene::sample(), (theme, art), None, 1440.0, 900.0, &out).expect("it is drawn");
     let took = started.elapsed();
     eprintln!("{name}: {took:?}");
     assert!(out.is_file() && took.as_secs() < backstop, "{name} took {took:?}");
@@ -245,14 +253,46 @@ fn heaviest(heavy: &Heavy) {
     let spent = ArtCost { numbers: MAX_ART_NUMBERS, paint: MAX_ART_PAINT };
     assert_eq!(all, spent, "{name}: both counts are spent to the last unit");
     std::fs::write(folder.join("theme.toml"), theme).unwrap();
-    let loaded = Theme::load(&folder.join("theme.toml")).expect("the art is inside the door");
+    let started = Instant::now();
+    let (loaded, art) = support::tried(&folder.join("theme.toml")).expect("the art is inside the door");
+    eprintln!("{name}: five trials in {:?}", started.elapsed());
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
-    drawn(loaded.theme, &name, 40);
+    assert_eq!(art.len(), 5, "{name}: every piece's picture is drawn");
+    drawn_with(loaded.theme, art, &name, 40);
 
     let one_more = heaviest_art(heavy, 4).replacen("<path", r#"<circle r="1"/><path"#, 1);
     std::fs::write(folder.join("badge.svg"), one_more).unwrap();
-    let refused = Theme::load(&folder.join("theme.toml")).expect_err("one shape over the counts");
+    let refused = support::tried(&folder.join("theme.toml")).expect_err("one shape over the counts");
     assert!(refused.to_string().starts_with("the SVG for art.badge is refused: with the art before it, "));
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+// The dearest theme a review found inside both counts (PR 147): 64 see-through round strokes 600 wide, each of
+// 12 dots. A dot crosses no row, so each stroke is priced as one paint of the picture, and covers it twelve times.
+#[test]
+fn the_dearest_art_a_review_found_inside_the_counts_is_tried_and_drawn() {
+    use sticker_kit::theme::{ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, art_cost};
+    let folder = std::env::temp_dir().join(format!("sticker-kit-dots-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    let (mut theme, mut all) = (String::from("[art]\n"), ArtCost::default());
+    let paint = r##"fill="none" stroke="#123456" stroke-opacity="0.3" stroke-width="600" stroke-linecap="round""##;
+    for (nth, piece) in ["hero", "character", "star", "bubble", "badge"].into_iter().enumerate() {
+        let dots =
+            |path: usize| -> String { (0..12).map(|dot| format!("M{} {}h0", 20 * dot + nth, 4 * path)).collect() };
+        let paths: String = (0..13 - nth / 4).map(|path| format!(r#"<path d="{}" {paint}/>"#, dots(path))).collect();
+        let art = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">{paths}</svg>"#);
+        all = all.with(art_cost(&art).expect("inside the door"));
+        std::fs::write(folder.join(format!("{piece}.svg")), &art).unwrap();
+        theme += &format!("{piece} = \"{piece}.svg\"\n");
+    }
+    assert_eq!(all, ArtCost { numbers: MAX_ART_NUMBERS, paint: MAX_ART_PAINT }, "both counts to the last unit");
+    std::fs::write(folder.join("theme.toml"), theme).unwrap();
+    let started = Instant::now();
+    let (loaded, art) = support::tried(&folder.join("theme.toml")).expect("the art is inside the door");
+    eprintln!("heaviest art, round dots: five trials in {:?}", started.elapsed());
+    assert_eq!(art.len(), 5);
+    drawn_with(loaded.theme, art, "heaviest art, round dots", 40);
     let _ = std::fs::remove_dir_all(&folder);
 }
 

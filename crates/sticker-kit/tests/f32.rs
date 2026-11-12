@@ -2,6 +2,8 @@
 //! `Theme::from_toml` and `layout`. No GPUI.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod support;
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -72,7 +74,7 @@ fn an_unknown_key_or_a_missing_piece_falls_back_to_the_default() {
     expected.name = "dusk".into();
     expected.palette.ink = sticker_kit::Color::rgb(0x102030);
     assert_eq!(loaded.theme.to_toml().unwrap(), expected.to_toml().unwrap(), "every other piece is the default");
-    assert!(loaded.theme.art_svgs().is_empty(), "the kit's own star is drawn");
+    assert_eq!(loaded.theme.try_art(&support::trial()), Default::default(), "the kit's own star is drawn");
     for key in ["sparkle", "palette.glitter", "motion.wobble", "art.star"] {
         assert!(loaded.warnings.iter().any(|w| w.starts_with(&format!("{key}:"))), "{key}: {:?}", loaded.warnings);
     }
@@ -90,7 +92,7 @@ fn a_theme_file_with_a_script_or_a_path_outside_its_folder_is_refused() {
     ];
     for svg in scripts {
         let dir = folder("script", &[("star.svg", svg), ("theme.toml", "[art]\nstar = \"star.svg\"\n")]);
-        match Theme::load(&dir.join("theme.toml")) {
+        match support::tried(&dir.join("theme.toml")) {
             Err(ThemeError::RefusedSvg { key, .. }) => assert_eq!(key, "art.star"),
             other => panic!("{svg} was not refused: {other:?}"),
         }

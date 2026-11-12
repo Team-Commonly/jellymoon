@@ -1,9 +1,15 @@
+//! The written rules a picture is held to, inside its trial (`stand.rs`): nothing in the process that owns a window
+//! calls this file on a picture nobody has tried. The rules say what a picture may not be whatever it costs (a
+//! script, a reference outside the file, an image, text), and refuse cheaply, with a line that says why, the
+//! shapes known to cost dear. That a picture is cheap enough to draw is the trial's to prove, not theirs.
+//!
 //! A theme's SVG may only be a flat picture: shapes, colours and gradients. The door reads it with the renderer's own
 //! parser (`usvg`, at the version GPUI draws with: `docs/adr/0015-the-art-door-reads-with-the-renderers-parser.md`)
 //! and judges the tree that parser makes, which is the tree the renderer draws. So there is no second reading of a
 //! file for the two to differ in: a size, a shape and a stroke are what `usvg` says they are.
 //!
-//! Three things are checked, each an allow-list. The file's bytes, before any parse (`load.rs`). The XML document:
+//! Three things are checked, each an allow-list. The file's bytes, before any parse (`load.rs`, and here the most
+//! attributes one element may write, on the raw text). The XML document:
 //! every element is one of [`ELEMENTS`] and every attribute one of [`ATTRIBUTES`], which bounds what the parser is
 //! asked to build and leaves out what it would load (`image`, the fonts of `text`); and what its paths and shapes
 //! write, which bounds what the parser does by the length of a value (`svg_text.rs`). Then the tree: groups and
@@ -35,6 +41,12 @@ const SVG: &str = "http://www.w3.org/2000/svg";
 /// The most elements in one art file, the `<svg` counted. The kit's largest piece has under 40.
 pub const MAX_ART_ELEMENTS: usize = 100;
 
+/// The most `=` between one `<` and the next: an element's attributes and namespace declarations, each of which
+/// writes one, and no `<` may stand inside a value. The XML parser compares every attribute of an element with
+/// every other, so 64 KiB of them on one element took it a third of a second with nothing to count afterwards. The
+/// list of attributes has 33 names.
+pub const MAX_ART_ATTRIBUTES: usize = 40;
+
 /// How deep elements may nest, the `<svg` counted. The kit's own art goes 5 deep.
 pub const MAX_ART_DEPTH: usize = 12;
 
@@ -54,8 +66,10 @@ pub const MIN_ART_SIDE: f32 = 0.5;
 /// larger than its picture is walked all along for the little of it that shows.
 pub const MAX_ART_REACH: f32 = 4096.0;
 
-/// The thinnest stroke, in the picture's own pixels: just over half of one, which is one drawn pixel. At a drawn
-/// pixel or under the renderer draws a hairline, ten times slower by the line (measured).
+/// The thinnest stroke, in the picture's own pixels: just over half of one. A picture is drawn at twice its size
+/// cut to whole pixels, so this is just over one drawn pixel on a picture of whole sides, and a little under one
+/// on a side with a fraction (19.99 is drawn 39 wide, at 1.95 times). At a drawn pixel or under the renderer
+/// draws a hairline, ten times slower by the line where it was measured, on whole sides.
 pub const MIN_ART_STROKE: f32 = 0.51;
 
 /// The most numbers in the paths of one art file, and of a theme's art files together: 1536 points. Every shape is
@@ -113,6 +127,9 @@ pub fn svg_refusal(svg: &str) -> Option<String> {
 
 /// What the SVG costs to draw, or why it is refused: for what it holds, or for costing too much.
 pub fn art_cost(svg: &str) -> Result<ArtCost, String> {
+    if svg.split('<').any(|element| element.bytes().filter(|byte| *byte == b'=').count() > MAX_ART_ATTRIBUTES) {
+        return Err(format!("an element writes more than {MAX_ART_ATTRIBUTES} attributes"));
+    }
     // The renderer allows a DTD. A file with one is refused here, so that no entity is ever expanded.
     let xml = ParsingOptions { allow_dtd: false, ..ParsingOptions::default() };
     let document =
@@ -146,12 +163,14 @@ fn counted(tree: &Tree) -> Result<ArtCost, String> {
 /// Holds the document to the two lists, a count and a depth, before the parser builds a picture from it.
 fn listed(document: &Document) -> Result<(), String> {
     let (mut path_bytes, mut written) = (0, Written::default());
+    let (elements, attributes): (Vec<&str>, Vec<&str>) =
+        (ELEMENTS.split(' ').collect(), ATTRIBUTES.split(' ').collect());
     for (nth, element) in document.descendants().filter(|node| node.is_element()).enumerate() {
         let name = element.tag_name();
         if name.namespace() != Some(SVG) {
             return Err(format!("its `<{}` is not in SVG's namespace", name.name()));
         }
-        if !ELEMENTS.split(' ').any(|known| known == name.name()) {
+        if !elements.contains(&name.name()) {
             return Err(format!("it contains the element `<{}`", name.name()));
         }
         if nth >= MAX_ART_ELEMENTS {
@@ -166,14 +185,14 @@ fn listed(document: &Document) -> Result<(), String> {
         }
         for attribute in element.attributes() {
             let name = attribute.name();
-            if attribute.namespace().is_some() || !ATTRIBUTES.split_whitespace().any(|known| known == name) {
+            if attribute.namespace().is_some() || !attributes.contains(&name) {
                 return Err(format!("it contains the attribute `{name}`"));
             }
             path_bytes += if matches!(name, "d" | "points") { attribute.value().len() } else { 0 };
             if path_bytes > MAX_ART_PATH_BYTES {
                 return Err(format!("its `d` and `points` values are over {MAX_ART_PATH_BYTES} bytes together"));
             }
-            written.attribute(name, attribute.value())?;
+            written.attribute(name, attribute.value(), nth == 0)?;
         }
     }
     Ok(())

@@ -61,6 +61,11 @@ A file the door takes holds none of the four, so the two parses make the same tr
 
 ## What the parser does by the length of a value (added 2026-11-12, after the review of PR 145)
 
+**Superseded in part by [ADR 0016](0016-a-picture-is-tried-before-it-is-trusted.md), after the review of PR 147.**
+The rules below are kept as the cheap first filter, with a line a person can act on. They are no longer what makes
+a picture safe to read and draw: that review found three more shapes the table did not hold, and a fourth review
+would find a fifth. A picture is now tried in a process of its own, and these rules run inside it.
+
 Sharing the parser closes every difference between the door and the renderer. It does not make the parser safe to
 call. The door calls it on a file nobody has judged yet, and a parse that ends the program cannot be judged
 afterwards: `M0 0L1 1` followed by a few thousand `z` overflowed the stack inside `Tree::from_xmltree`, in the
@@ -73,25 +78,28 @@ value, and each is held at the door before the parse (`crates/sticker-kit/src/th
 | What the parser does | Where | Held by |
 |---|---|---|
 | Calls itself once for every path segment it draws nothing for: a close after a close | `svgtypes` `SimplifyingPathParser::next` | at most 32 in a row (`MAX_ART_IDLE`) |
-| The same for an arc `kurbo` makes no curve of (its ends closer than about 1e-16 of its radius), unless it follows a close | the same, and `kurbo` 0.13.1 `Arc::append_iter` | counted in the same run: every arc that does not follow a close, since the door does no arc's sums |
-| Makes an arc of a number of curves that grows with its radius, all at once: 1.5 million at a radius of 1e36 | the same | a written number is at most 1000000 (`MAX_ART_WRITTEN`), and an arc's radii are within 1000 times of each other (`MAX_ART_FLAT`), since the parser makes the smaller as much larger as the other is: 64 curves an arc at most. Radii of 1000000 and 1 between far ends were 81 |
+| The same for an arc `kurbo` makes no curve of (its ends closer than about 1e-16 of its radius), unless it follows a close | the same, and `kurbo` 0.13.1 `Arc::append_iter` | counted in the same run when its ends are closer than a millionth of its larger radius and it does not follow a close. The door first counted every arc, which refused a scalloped edge of forty honest ones (the review of PR 147) |
+| Makes an arc of a number of curves that grows with its radius, all at once: 1.5 million at a radius of 1e36 | the same | a written number is at most 1000000 (`MAX_ART_WRITTEN`), and an arc's radii are within 1000 times of each other (`MAX_ART_FLAT`), since the parser makes the smaller as much larger as the other is. Radii of 1000000 and 1 between far ends were 81 curves. This is no count of an arc's curves: relative moves add up to a place near 2e9, and an arc from there was 80 (`tests/limits.rs` pins it). What a path comes to is held by the count of commands, the count of numbers on the tree, and the trial |
 | Takes those curves from the front of a list one at a time | `svgtypes`, `buffer.remove(0)` | the same |
-| Makes a `circle`, an `ellipse` and a rounded `rect` of the same arcs by their written size: four million curves at `r="3e38"` | `usvg` `shapes.rs` | the same limit on `x y x1 y1 x2 y2 cx cy r rx ry width height`: 32 curves a circle |
+| Makes a `circle`, an `ellipse` and a rounded `rect` of the same arcs by their written size: four million curves at `r="3e38"` | `usvg` `shapes.rs` | the same limit on `x y x1 y1 x2 y2 cx cy r rx ry width height`, and none of them a percent, which is a part of the `viewBox` and not of the number written: `rx="100%"` of a `viewBox` of 1e36 was a second an ellipse (the review of PR 147). The `viewBox`'s four numbers are held to the same limit |
 | Walks every command of every `d` and every pair of `points` | `svgtypes` `PathParser`, `PointsParser` | at most 2048 commands a file (`MAX_ART_COMMANDS`), within the 16 KiB of `MAX_ART_PATH_BYTES` |
-| Runs the stroker over each stroked path while the tree is built, twice under a slant | `usvg` `Path::calculate_stroke_bbox` | the same counts: it is linear in the path's segments |
+| Runs the stroker over each stroked path while the tree is built, twice under a slant | `usvg` `Path::calculate_stroke_bbox` | the same counts, and `stroke-width` held as a written number. The stroker is not linear in the path's segments under a stroke thousands of times wider than its curve: 60 cubics at `stroke-width="2e9"` under `scale(1e-6)` took 3.1 s and 1.5 GB in a release (the review of PR 147). Whether it ends soon on every width the limit allows was not read: the trial holds it |
 | Calls itself once for each level of nesting, 3.2 KiB a level in a debug build | `usvg` svgtree and converter | 12 levels (`MAX_ART_DEPTH`), counted before the parse |
 | Compares every stop of a gradient with every other | `usvg` `convert_stops` | 100 elements a file |
+| Compares every attribute and namespace declaration of an element with every other | `roxmltree` | at most 40 `=` between one `<` and the next (`MAX_ART_ATTRIBUTES`), counted on the text before the XML is read. 64 KiB of declarations on one root was 0.3 s to read in a debug build (the review of PR 147) |
 
 Read and found to be plain loops over the value, bounded by the file's 64 KiB: numbers and lengths, a transform
 list, a colour, a paint and its `url(`, a `viewBox`. Not reachable: the loops that follow an `href`, which is not
-on the list of attributes. Not read: `roxmltree` itself, the text modules (no `text` passes), and whether the
-stroker's own loops always end on the largest numbers the door lets through.
+on the list of attributes. Not read: `roxmltree` itself beyond what a review measured, the text modules (no `text` passes), and whether the
+stroker's own loops always end on the largest numbers the door lets through. What was not read is why the rules
+are not the proof (ADR 0016).
 
 The door walks a `d` with `svgtypes::PathParser`, the library's plain tokenizer, which the parser itself reads a
 path with and which is a loop. So there is still one reading of a path: the door asks the same library what the
-segments are, and counts them. It compares an arc's two radii and does no other arithmetic on one, which is why it counts every arc that might be
-one the parser draws nothing for. A path of more than 32 arcs in a row with nothing between them is refused, though
-it may be an honest one; a line of no length between two arcs ends the run.
+segments are, and counts them. It compares an arc's two radii, and the distance between its ends with the larger of them, and does no other
+arithmetic on one: an arc whose ends are closer than a millionth of its radius is taken for one the parser draws
+nothing for, ten orders above where `kurbo` in fact makes no curve. A run of arcs that go somewhere is not counted,
+however long.
 
 This is a second dependency by name and none by weight: `svgtypes = "=0.16.2"` is the version `usvg` 0.46.0
 builds, already in `Cargo.lock`, and the lock file gains one line. `usvg` does not hand it on, so the kit names

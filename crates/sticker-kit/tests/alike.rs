@@ -188,6 +188,8 @@ fn the_door_and_the_renderer_build_one_version_of_the_parser() {
         packages.filter_map(|mut lines| (lines.next()? == named).then(|| lines.next()).flatten()).collect()
     };
     assert_eq!(versions("usvg"), ["version = \"0.46.0\""], "one parser, the one the door was measured on");
+    // A kept answer is for the parser it was given by: another version tries every picture again.
+    assert_eq!(versions("usvg"), [format!("version = \"{}\"", sticker_kit::theme::USVG)]);
     assert_eq!(versions("resvg"), versions("usvg"), "the renderer draws with the parser's own version");
     // The door walks a path with the library the parser reads one with, before the parser does (`svg_text.rs`).
     assert_eq!(versions("svgtypes"), ["version = \"0.16.2\""], "one reader of a path, the one whose calls were read");

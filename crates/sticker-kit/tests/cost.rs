@@ -3,6 +3,8 @@
 //! theme's files together. No GPUI: the counts are the same everywhere.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod support;
+
 use std::fs;
 
 use sticker_kit::theme::{
@@ -251,7 +253,7 @@ fn a_theme_s_art_files_together_are_held_to_the_same_two_counts() {
         for (name, svg) in [("hero", hero), ("star", star), ("badge", badge)] {
             fs::write(folder.join(format!("{name}.svg")), svg).unwrap();
         }
-        Theme::load(&theme).map(|_| ()).map_err(|refused| match refused {
+        support::tried(&theme).map(|_| ()).map_err(|refused| match refused {
             ThemeError::RefusedSvg { key, reason } => format!("{key}: {reason}"),
             other => panic!("{other:?}"),
         })
@@ -269,14 +271,15 @@ fn a_theme_s_art_files_together_are_held_to_the_same_two_counts() {
     assert_eq!(write(&paths(1536), &paths(1500), &paths(38)), Err(format!("art.badge: {numbers}")));
     assert_eq!(write(&paths(1536), &paths(1538), &small(1)), Err(format!("art.star: {numbers}")));
 
-    // Files changed after the theme was loaded are read again when it is drawn, and held to the same total: a
+    // Files changed after the theme was loaded are read when its art is tried, and held to the same total: a
     // file that would take the theme past it is not given, so the kit's own art is drawn in its place.
     assert_eq!(write(&small(1), &small(1), &small(1)), Ok(()));
     let loaded = Theme::load(&theme).unwrap().theme;
     // One pass gives every piece: each file is read once and there is one sum, so no file can be changed between
     // the reading of one piece and the summing of the next.
     let given = |loaded: &Theme| {
-        let pieces: Vec<&str> = loaded.art_svgs().into_iter().map(|(piece, _)| piece).collect();
+        let tried = loaded.try_art(&support::trial());
+        let pieces: Vec<&str> = tried.accepted.iter().map(|accepted| accepted.piece()).collect();
         ["hero", "star", "badge"].map(|key| pieces.contains(&key))
     };
     assert_eq!(given(&loaded), [true, true, true]);

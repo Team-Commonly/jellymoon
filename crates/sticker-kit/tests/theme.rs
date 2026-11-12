@@ -14,12 +14,13 @@ use sticker_kit::{Color, Scene, Theme, ThemeError, art};
 const PICTURE: &str =
     r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle r="4" fill="#123456"/></svg>"##;
 
-/// A fresh folder under the system's temporary folder, removed on drop.
+/// A fresh folder under the target folder's place for tests, removed on drop.
 struct Folder(PathBuf);
 
 impl Folder {
     fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!("sticker-kit-{name}-{}", std::process::id()));
+        let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+            .join(format!("sticker-kit-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).expect("temporary folder");
         Folder(path)

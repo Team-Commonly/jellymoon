@@ -25,14 +25,18 @@ usvg.workspace = true
 svgtypes.workspace = true
 gpui = { workspace = true, optional = true }
 gpui_platform = { workspace = true, optional = true, features = ["font-kit"] }
+# What a trial's child asks of the memory it holds itself (ADR 0016): the one crate in `Cargo.lock` that says it on
+# macOS, Linux and Windows with no unsafe code of ours. Only its `system` half is built.
+sysinfo = { version = "0.31.4", default-features = false, features = ["system"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 gpui_apple = { workspace = true, optional = true, features = ["font-kit"] }
 
-# The one call a trial's child makes to limit its own memory, where the system has such a limit (ADR 0016). The
-# version core already builds.
-[target.'cfg(target_os = "linux")'.dependencies]
-rustix = { version = "1.1.6", default-features = false, features = ["std", "process"] }
+# The two calls a trial's child makes of the system (ADR 0016): the processor time it has used itself (`time`,
+# every Unix), and the limit it puts on its own memory where the system has one (`process`, Linux). The version
+# core already builds.
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1.6", default-features = false, features = ["std", "process", "time"] }
 
 [lints]
 workspace = true

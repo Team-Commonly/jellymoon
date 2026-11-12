@@ -21,13 +21,17 @@ first 8 of them. A theme file that cannot be read or that the kit refuses (a num
 the theme's folder) exits 1 with one line that names the key and the reason.
 
 A theme's picture is tried before it is trusted (ADR 0016). The app starts itself again as `jellymoon-app --try-art`,
-which reads the picture from its standard input, holds it to the kit's rules, draws it and answers with one line;
-the app that owns the window reads and draws only a picture that answer accepted. One that is refused, or whose
+which reads the picture from its standard input, holds it to the kit's rules, draws it on a stack of the page's
+size, measures the processor time and memory that took, and answers with one line; the app that owns the window
+reads and draws only a picture that answer accepted. One that is refused, by a rule or for what it cost, or whose
 trial ran over its limit or ended badly, is one line on stderr (`jellymoon-app: theme: the SVG for art.star is
 refused: <why>; the built-in art is drawn`) and the page goes on with the kit's own art for that piece: the exit
-code is 0. Answers are kept in `art-trials` in Jellymoon's own folder, so a picture is tried once. In a window the
-trials run off the window's thread, and the kit's art is drawn until they are done. `layout` tries the art too,
-though it draws none, so a theme can be looked at before a window is opened on it.
+code is 0. Answers are kept in `art-trials` in Jellymoon's own folder, for this version of the app, so a picture is
+tried once: an accepted one, and one a rule or its cost refused. A trial that ran over or ended badly is not kept
+and is tried again at the next start. The folder is made for its owner alone, and a link in its place is not
+followed. In a window the trials run off the window's thread, and the kit's art is drawn until they are done.
+`layout` tries the art too, though it draws none, so a theme can be looked at before a window is opened on it. So
+`layout --theme <file>` is not read-only: it makes `art-trials` and writes the kept answers there.
 
 With `layout` it prints where every piece goes. Without, it opens a window (default 1440x900); `t` switches between the two built-in themes, and
 `JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. `--size` is from 960x640 to 16384x16384, each side a whole

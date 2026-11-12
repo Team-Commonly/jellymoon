@@ -9,48 +9,16 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use sticker_kit::theme::{TRIAL_LIMIT, Trial, art_cost};
-use sticker_kit::{Theme, ThemeError};
-use support::{given, trial, trial_as};
+use sticker_kit::Theme;
+use sticker_kit::theme::{TRIAL_LIMIT, art_cost};
+use support::{Folder, HONEST, OUTER, given, sized, trial, trial_as};
 
-const HONEST: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#123456"/></svg>"##;
-
-/// How much longer than its limit a trial may be seen to take, on a machine that is busy with other tests.
-const OUTER: Duration = Duration::from_secs(20);
-
-/// A fresh folder under the system's temporary folder, removed on drop.
-struct Folder(PathBuf);
-
-impl Folder {
-    fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!("sticker-kit-trial-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&path);
-        fs::create_dir_all(&path).expect("temporary folder");
-        Folder(path)
-    }
-
-    /// A theme whose star is `svg`, and what a trial says of it: the picture given, or the refusal's reason.
-    fn star(&self, svg: &str, trial: &Trial) -> Result<String, String> {
-        fs::write(self.0.join("star.svg"), svg).unwrap();
-        fs::write(self.0.join("theme.toml"), "[art]\nstar = \"star.svg\"\n").unwrap();
-        let mut tried = Theme::load(&self.0.join("theme.toml")).expect("the theme loads").theme.try_art(trial);
-        match (tried.accepted.pop(), tried.refused.pop()) {
-            (Some(accepted), None) => Ok(accepted.svg().to_string()),
-            (None, Some(ThemeError::RefusedSvg { key, reason })) if key == "art.star" => Err(reason),
-            other => panic!("one picture has one answer: {other:?}"),
-        }
-    }
-}
-
-impl Drop for Folder {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
-fn sized(side: u32, inside: &str) -> String {
-    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="{side}" height="{side}">{inside}</svg>"#)
-}
+/// The first line of a kept answer: what it is for besides the picture.
+const KEY: &str = if cfg!(debug_assertions) {
+    "sticker-kit 0.1.0, usvg 0.46.0, read and drawn at twice its size, rules 2, debug, for tests"
+} else {
+    "sticker-kit 0.1.0, usvg 0.46.0, read and drawn at twice its size, rules 2, release, for tests"
+};
 
 /// The pictures four reviews found that a door of written rules took and the renderer choked on. Each is typed
 /// here as its review gave it.
@@ -156,7 +124,9 @@ fn a_child_that_never_ends_or_never_stops_writing_is_ended_at_the_limit_and_noth
             let started = Instant::now();
             let said = folder.star(HONEST, &slow).expect_err(which);
             let took = started.elapsed();
-            assert_eq!(said, format!("its trial took longer than {ms} ms and was ended"), "{which}");
+            let ended =
+                format!("its trial took longer than {ms} ms and was ended, and is tried again at the next start");
+            assert_eq!(said, ended, "{which}");
             assert!(took >= slow.limit && took < slow.limit + OUTER, "{which}: {took:?}");
             let free = fs::File::open(&lock).and_then(|held| Ok(held.try_lock()?));
             assert!(free.is_ok(), "{which}: the child is gone when the answer is given: {free:?}");
@@ -200,17 +170,29 @@ fn a_kept_answer_is_given_with_no_child_started_and_only_for_its_own_picture_and
     // none: the picture is tried again, and the answer kept afresh.
     let file = kept_files().into_iter().find(|file| fs::read_to_string(file).unwrap().ends_with(HONEST)).unwrap();
     let good = fs::read_to_string(&file).unwrap();
-    assert!(good.starts_with("sticker-kit ") && good.contains("\naccepted 26 356 400\n"), "{good}");
+    // The answer's line: what the rules count, the pixels drawn, and what the draw cost, which is not the same twice.
+    let line = good.lines().nth(1).unwrap().to_string();
+    let steady = |kept: &str| {
+        let mut lines: Vec<String> = kept.lines().map(str::to_string).collect();
+        lines[1] = lines[1].split(' ').take(4).collect::<Vec<_>>().join(" ");
+        lines.join("\n")
+    };
+    assert_eq!(good.lines().next(), Some(KEY), "{good}");
+    assert!(line.split(' ').count() == 6 && steady(&good).contains("\naccepted 26 356 400\n"), "{good}");
+    let with = |answer: &str| good.replacen(&line, answer, 1);
     let spoiled = [
         good.replacen("sticker-kit 0.", "sticker-kit 9.", 1),
         good.replacen("usvg 0.46.0", "usvg 0.47.0", 1),
         good[..good.len() - 1].to_string(),
-        good.replacen("\naccepted 26 ", "\naccepted many ", 1),
-        good.replacen("\naccepted 26 ", "\nrefused: \n", 1),
+        with(&line.replacen("accepted 26 ", "accepted many ", 1)),
+        with("refused: "),
+        with(&format!("{line} 7")),
         good.replace(HONEST, &scripted),
         format!("{good}<!-- more -->"),
-        good.replacen(" 356 400\n", " 356 0\n", 1),
-        good.replacen(" 356 400\n", " 356\n", 1),
+        with(&line.replacen(" 356 400 ", " 356 0 ", 1)),
+        with(&line.replacen(" 356 400 ", " 356 ", 1)),
+        good.replacen(if cfg!(debug_assertions) { ", debug, " } else { ", release, " }, ", another build, ", 1),
+        good.replacen(", for tests\n", ", for another caller\n", 1),
         String::new(),
     ];
     for (nth, spoiled) in spoiled.iter().enumerate() {
@@ -218,7 +200,7 @@ fn a_kept_answer_is_given_with_no_child_started_and_only_for_its_own_picture_and
         fs::write(&file, spoiled).unwrap();
         assert_eq!(folder.star(HONEST, &counted), Ok(HONEST.to_string()), "case {nth}");
         assert_eq!(starts(&count), 3 + nth, "case {nth}: tried again");
-        assert_eq!(fs::read_to_string(&file).unwrap(), good, "case {nth}: kept afresh");
+        assert_eq!(steady(&fs::read_to_string(&file).unwrap()), steady(&good), "case {nth}: kept afresh");
     }
     // What the kept answer says is what is given, with nothing started: so it is as trusted as the theme's own
     // folder, and whoever can write one can write the other.

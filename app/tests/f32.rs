@@ -5,6 +5,9 @@
 #![allow(clippy::unwrap_used)]
 
 mod support;
+#[cfg(all(target_os = "macos", feature = "window"))]
+#[path = "f32/window.rs"]
+mod window;
 
 use std::fs;
 use std::path::Path;
@@ -41,12 +44,17 @@ fn a_theme_s_picture_is_tried_by_this_program_started_again_and_its_answer_is_ke
     // A trial that is given no time is ended, the page is laid out with the kit's own art, and nothing is kept.
     fs::write(dir.path().join("star.svg"), HONEST).unwrap();
     let ended = "jellymoon-app: theme: the SVG for art.star is refused: its trial took longer than 0 ms and was \
-                 ended; the built-in art is drawn\n";
+                 ended, and is tried again at the next start; the built-in art is drawn\n";
     assert_eq!(tried(&theme, &home, &[("STICKER_KIT_TEST_TRIAL_MS", "0")]), (true, ended.to_string()));
     assert_eq!(kept(), 0);
 
     assert_eq!(tried(&theme, &home, &[]), (true, String::new()), "an honest picture is accepted and nothing is said");
     assert_eq!(kept(), 1, "its answer is kept in Jellymoon's own folder");
+    // The answer is for this app at this version, and for this build of it.
+    let answer = fs::read_dir(home.join("art-trials")).unwrap().next().unwrap().unwrap().path();
+    let key = fs::read_to_string(answer).unwrap().lines().next().unwrap().to_string();
+    let build = if cfg!(debug_assertions) { "debug" } else { "release" };
+    assert!(key.ends_with(&format!(", {build}, for jellymoon-app {}", env!("CARGO_PKG_VERSION"))), "{key}");
     // With the answer kept no child is started: a limit of no time at all would have ended one.
     assert_eq!(tried(&theme, &home, &[("STICKER_KIT_TEST_TRIAL_MS", "0")]), (true, String::new()));
 
@@ -65,7 +73,7 @@ fn a_theme_s_picture_is_tried_by_this_program_started_again_and_its_answer_is_ke
     assert_eq!(said, "refused: it is not XML the renderer reads: the document does not have a root node\n");
     // It answers for the pixels it drew, at twice the picture's size, and reads no more than a picture may be.
     let said = |given: &str| String::from_utf8(support::run(&["--try-art"], Some(given)).stdout).unwrap();
-    assert_eq!(said(HONEST), "accepted 26 356 400\n");
+    assert!(said(HONEST).starts_with("accepted 26 356 400 "), "{}", said(HONEST));
     assert_eq!(said(&format!("{HONEST}{}", " ".repeat(64 * 1024))), "refused: it is over 64 KiB\n");
 }
 

@@ -12,9 +12,10 @@ use sticker_kit::{FixedAdvance, PieceKind, Scene, Theme, ThemeError, Viewport, l
 
 const SIZES: [Viewport; 2] = [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 960.0, h: 640.0 }];
 
-/// A theme folder of its own under the system's temporary folder, holding `files`.
+/// A theme folder of its own under the target folder's place for tests, holding `files`.
 fn folder(name: &str, files: &[(&str, &str)]) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("sticker-kit-f32-{name}-{}", std::process::id()));
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("sticker-kit-f32-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&path);
     fs::create_dir_all(&path).unwrap();
     for (file, text) in files {

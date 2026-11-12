@@ -201,24 +201,51 @@ fn main() {
     // First thing: started as a trial, this process is that and ends in there.
     sticker_kit::theme::stand_trial("--try-art");
     // ...
-    let trial = Trial::new(std::env::current_exe().unwrap_or_default(), "--try-art", Some(kept_folder));
+    let me = std::env::current_exe().unwrap_or_default();
+    let trial = Trial::new(me, "--try-art", Some(kept_folder), "my-app 1.2.0");
     let tried = theme.try_art(&trial); // waits for the trials: off the window's thread
 }
 ```
 
-- **The child** gets the picture on its standard input, an empty environment and nothing else. It holds the
-  picture to the rules below and draws it with the call GPUI makes for an SVG image, at twice its size. It answers
-  with one line.
-- **The limit** is `TRIAL_LIMIT`: 2 s in a release, 20 s in a debug build, some 15 times the heaviest trial
-  measured below. A trial that runs over is ended
-  and waited for. So is one that crashes, overflows its stack, ends with a code, or says anything but an answer:
-  each is a refusal with one line, and costs the caller that one child.
-- **Memory** is limited to 2 GiB in the child on Linux. macOS and Windows have no such limit a process can put on
-  itself without `unsafe`: there the time is the bound.
-- **An answer is kept** in the folder the caller names, under the kit's version, the parser's and the picture's
-  own bytes, so a picture is tried once and not at every start. A trial that ran over or could not start is not
-  kept. A kept file that is not exactly an answer for this picture and this kit is ignored.
+- **The child** gets the picture on its standard input, an empty environment, and its limit as its last argument.
+  It holds the picture to the rules below and draws it with the call GPUI makes for an SVG image, at twice its
+  size, on a stack of 512 KiB (`PAGE_STACK`): the smallest any system gives the thread that draws a page's
+  pictures. It answers with one line.
+- **The cost.** The child measures the processor time and the memory its reading and drawing took, and accepts
+  only under `MOST_PROCESSOR` (100 ms in a release, 2 s in a debug build) and `MOST_MEMORY` (32 MiB). What is over
+  is refused with a line that says which. Neither moves with how busy the machine is. A child that cannot measure
+  refuses.
+- **The limit** is `TRIAL_LIMIT`: 4 s in a release, 20 s in a debug build. The child ends itself at it, whoever
+  is or is not watching, and the caller ends it and waits for it. So is one that crashes, overflows its stack,
+  ends with a code, or says anything but an answer: each is a refusal with one line, and costs the caller that
+  one child.
+- **Memory** is also limited to 2 GiB by the system in the child on Linux.
+- **An answer is kept** in the folder the caller names, under the kit's version, the parser's, the build, the
+  caller's own stamp and the picture's own bytes, so a picture is tried once and not at every start. Kept is what
+  was said of the picture: accepted, or refused by a rule, the renderer or the cost. A trial a clock ended, one
+  that could not start or measure, and a child that ended badly are not kept, and are tried again at the next
+  start. A kept file that is not exactly an answer for this picture, this kit and this caller is ignored. The
+  folder is the person's alone: made 0700 on Unix, its files 0600, and a link in its place is not followed.
 - **When no child can be started** the picture is refused. It is never read in the caller's process instead.
+
+**The ordinary set** (`tests/ordinary.rs`) is ten pictures as drawing programs write them: a gradient with its
+ends in percent, a rectangle of `100%`, a comment full of `=`, a scalloped edge of arcs, a star in round strokes and
+the like. Each is accepted through the real child. Every later change to a rule or a cost must accept all of
+them, with room: the test fails when one takes more than a quarter of either cost. What they and the dear pictures
+cost, on one Mac (processor time, memory over what the child held before):
+
+| picture | debug build | release | answer |
+|---|---|---|---|
+| each of the ordinary ten | at most 10 ms, 3.5 MiB | under 1 ms, at most 1.2 MiB | accepted |
+| the heaviest the kit's tests know inside the rules | 551 ms, 4.6 MiB | 8 ms, 2.5 MiB | accepted |
+| 30 pairs of curves under a stroke far wider than they are long | 9474 ms, 75 MiB | 381 ms, 87 MiB | refused for cost |
+| 60 pairs | 17878 ms, 125 MiB | 759 ms, 210 MiB | refused for cost |
+| 100 pairs | over the 20 s clock | 1256 ms, 278 MiB | refused for cost |
+| 120 pairs | over the 20 s clock | 1543 ms, 418 MiB | refused for cost |
+
+The numbers of the last four rows were measured with the costs off. With them on, each is refused as soon as it
+passes one: 60 and 100 pairs in about two seconds each in a debug build, a tenth of the clock, and in under
+0.2 s in a release.
 
 **Inside the trial the picture is read with the renderer's own parser, and its tree is judged by an allow-list**
 (`src/theme/svg_check.rs`, `docs/adr/0015-the-art-door-reads-with-the-renderers-parser.md`). These rules are the
@@ -248,7 +275,7 @@ Three things are held, in this order:
    - At most 100 elements (`MAX_ART_ELEMENTS`), each at most 12 deep (`MAX_ART_DEPTH`), the `<svg` counted in both.
    - At most 40 attributes and namespace declarations on one element (`MAX_ART_ATTRIBUTES`), counted on the text
      as the `=` between one `<` and the next, before the XML parser reads it: that parser compares each with
-     every other.
+     every other. A comment that ends before the next `<` holds no attribute, and its `=` are not counted.
    - The `d` and `points` values hold at most 16 KiB together (`MAX_ART_PATH_BYTES`).
    - What the paths and shapes write, walked with the parser library's own tokenizer before the parser makes a
      picture of it (`theme/svg_text.rs`). The parser does these by the length or size of a value, and one of them
@@ -258,13 +285,19 @@ Three things are held, in this order:
        (`MAX_ART_IDLE`). The parser calls itself once for each segment it draws nothing for, which is a close
        after a close and an arc too flat to be a curve, and a path of a few thousand `z` overflowed its stack. The
        first close of a run and an arc straight after a close are drawn, and not counted. An arc is counted only
-       when its ends are closer than a millionth of its larger radius: a scalloped edge of forty arcs is taken;
+       when its ends are closer than a millionth of its larger radius: a scalloped edge of forty arcs is taken.
+       The parser stays where it stood at an arc it draws nothing for, so the rule holds how far from its own
+       place the parser may stand, and counts an arc that may go nowhere from there: 1022 arcs written to one
+       place are a run of 1022 (`tests/idle.rs`). It counts some arcs the parser would draw, and none it would
+       not;
      - no number in a `d`, in `points` or in the `viewBox`, and no `x` `y` `x1` `y1` `x2` `y2` `cx` `cy` `r` `rx`
        `ry` `width` `height` `stroke-width`, is over 1000000 (`MAX_ART_WRITTEN`). An arc, a circle and a rounded
        corner are made of more curves the larger they are written, all at once: `r="3e38"` was four million. And
        the stroker does not end soon under a stroke thousands of times wider than its curve;
-     - none of those is a percent, which is a part of the `viewBox` and not of the number written. The picture's
-       own `width` and `height` may be one, up to 100%;
+     - a percent is taken wherever a length is placed, from 0% to 100%, as drawing programs write a line's or
+       a gradient's ends and a rectangle's size (`x2="100%"`). It is a part of the `viewBox`, which is held to
+       the same most, so it is never more than the number a picture may write. A percent outside 0 to 100 is
+       refused by name;
      - an arc's two radii are within 1000 times of each other (`MAX_ART_FLAT`): the parser makes the smaller
        as much larger as the other is, so a flat arc between far ends is a very large one. This is no count of
        an arc's curves: one arc between ends that moves had taken 2e9 apart was 80.

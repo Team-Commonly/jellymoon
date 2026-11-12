@@ -22,7 +22,8 @@ fn padded(text: &str, open: &str, close: &str, bytes: u64) -> String {
 #[test]
 fn a_theme_file_and_an_art_file_are_read_up_to_their_size_and_not_one_byte_over() {
     assert_eq!((MAX_THEME_BYTES, MAX_ART_BYTES), (256 * 1024, 64 * 1024));
-    let folder = std::env::temp_dir().join(format!("sticker-kit-limits-{}", std::process::id()));
+    let folder =
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("sticker-kit-limits-{}", std::process::id()));
     fs::create_dir_all(&folder).unwrap();
     let theme = folder.join("theme.toml");
     for (over, fine) in [(0, true), (1, false)] {
@@ -265,7 +266,7 @@ fn what_a_path_or_a_shape_writes_is_held_to_a_size_and_a_count() {
 // A `viewBox` is what every percent is a part of, and what the picture is scaled by. PR 147's review: a `viewBox`
 // of 1e36 with `rx="100%"` was a second for one ellipse, and no written number of it was over the limit.
 #[test]
-fn a_view_box_is_four_written_numbers_and_no_shape_is_a_part_of_it() {
+fn a_view_box_is_four_written_numbers_and_a_shape_is_a_part_of_it_up_to_the_whole() {
     let large = Some("it writes a number over 1000000".to_string());
     // One the parser cannot read is none to it.
     let view = |view: &str| {
@@ -275,23 +276,34 @@ fn a_view_box_is_four_written_numbers_and_no_shape_is_a_part_of_it() {
         assert_eq!(view(over), large, "{over}");
     }
     assert_eq!((view("-1e6 1e6 1e6 1e6"), view("1e7 0 8"), view("0 0 1e7 -8")), (None, None, None));
-    // Only the picture's own size may be a percent, up to all of what holds it.
-    for (inside, name) in [
-        (r#"<ellipse rx="100%" ry="1"/>"#, "rx"),
-        (r#"<ellipse rx="1" ry="1%"/>"#, "ry"),
-        (r#"<rect width="9" height="9" rx="50%"/>"#, "rx"),
-        (r#"<rect width="50%" height="9"/>"#, "width"),
-        (r#"<circle cx="50%" r="1"/>"#, "cx"),
-        (r##"<path d="M0 0h9" stroke="#123" stroke-width="1%"/>"##, "stroke-width"),
+    // With the `viewBox` held, a part of it is held too: a percent from 0 to 100 is taken wherever a length is
+    // placed, as drawing programs write a gradient and a background. The gate on PR 154 found each refused.
+    for inside in [
+        r#"<ellipse rx="100%" ry="1"/>"#,
+        r#"<ellipse rx="1" ry="1%"/>"#,
+        r#"<rect width="9" height="9" rx="50%"/>"#,
+        r#"<rect width="100%" height="100%"/>"#,
+        r#"<circle cx="50%" cy="0%" r="1"/>"#,
+        r##"<path d="M0 0h9" stroke="#123" stroke-width="50%"/>"##,
+        r##"<linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0" stop-color="#123"/></linearGradient>"##,
+        r##"<radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#123"/></radialGradient>"##,
     ] {
-        assert_eq!(svg_refusal(&svg(inside)), Some(format!("its `{name}` is a percent")), "{inside}");
+        assert_eq!(svg_refusal(&svg(inside)), None, "{inside}");
+    }
+    for (inside, name) in [
+        (r#"<ellipse rx="100.5%" ry="1"/>"#, "rx"),
+        (r#"<rect width="9" height="1e3%"/>"#, "height"),
+        (r#"<circle cx="-1%" r="1"/>"#, "cx"),
+        (r##"<path d="M0 0h9" stroke="#123" stroke-width="101%"/>"##, "stroke-width"),
+        (r#"<linearGradient id="g" x2="1e36%"/>"#, "x2"),
+    ] {
+        assert_eq!(svg_refusal(&svg(inside)), Some(format!("its `{name}` is a percent outside 0 to 100")), "{inside}");
     }
     let whole =
         |size: &str| svg_refusal(&format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {size} viewBox="0 0 8 8"/>"#));
     assert_eq!(whole(r#"width="100%" height="50%""#), None, "the picture's own size is a part of what holds it");
-    assert_eq!(svg_refusal(&svg(r#"<g width="100%"/>"#)), Some("its `width` is a percent".into()), "and no other");
-    assert_eq!(whole(r#"width="101%" height="8""#), Some("its `width` is a percent".into()));
-    assert_eq!(whole(r#"width="8" height="-1%""#), Some("its `height` is a percent".into()));
+    assert_eq!(whole(r#"width="101%" height="8""#), Some("its `width` is a percent outside 0 to 100".into()));
+    assert_eq!(whole(r#"width="8" height="-1%""#), Some("its `height` is a percent outside 0 to 100".into()));
 }
 
 // The parser makes a radius larger until the arc reaches its end, by as much as the other radius is larger than
@@ -348,7 +360,15 @@ fn the_attributes_one_element_writes_are_held_to_a_count_before_the_xml_is_read(
     assert_eq!(svg_refusal(&svg(&every.repeat(3))), None);
     // A `=` in a value or in a title is counted with its element's: the count errs to the refusal.
     let title = |signs: usize| svg_refusal(&svg(&format!("<title>{}</title>", "=".repeat(signs))));
-    assert_eq!((title(MAX_ART_ATTRIBUTES), title(MAX_ART_ATTRIBUTES + 1)), (None, crowded));
+    assert_eq!((title(MAX_ART_ATTRIBUTES), title(MAX_ART_ATTRIBUTES + 1)), (None, crowded.clone()));
+    // A comment that ends is no element: a drawing program's line of signs above the picture is not counted.
+    let line = format!("<!-- {} -->", "=".repeat(50));
+    assert_eq!(svg_refusal(&format!("{line}\n{}", svg(&format!("{line}<rect width=\"1\" height=\"1\"/>")))), None);
+    // What follows the comment's end is counted, and so is a comment that does not end before the next `<`.
+    let after = format!("<!-- -->{}", "=".repeat(MAX_ART_ATTRIBUTES + 1));
+    assert_eq!(svg_refusal(&svg(&format!("<title>{after}</title>"))), crowded);
+    let open = format!("<![CDATA[<!-- ]]><rect{}/>", " a=\"1\"".repeat(MAX_ART_ATTRIBUTES + 1));
+    assert_eq!(svg_refusal(&svg(&format!("<title>{open}</title>"))), crowded);
 }
 
 // The renderer draws a picture at twice its size cut to whole pixels: each side by itself has to come to one.

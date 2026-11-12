@@ -4,7 +4,9 @@
 
 mod bounds;
 mod builtin;
+mod kept;
 mod load;
+mod meter;
 mod own;
 mod stand;
 mod svg_check;
@@ -19,8 +21,9 @@ use crate::color::Color;
 
 pub use bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, RANGES};
 pub use load::{Accepted, Loaded, ThemeError, Tried};
+pub use meter::{MOST_MEMORY, MOST_PROCESSOR};
 pub use own::{CHOSEN_INK_FLOOR, HINT_FLOOR, RING_FLOOR};
-pub use stand::stand_trial;
+pub use stand::{PAGE_STACK, stand_trial};
 pub use svg_check::{
     ATTRIBUTES as SVG_ATTRIBUTES, ArtCost, ELEMENTS as SVG_ELEMENTS, MAX_ART_ATTRIBUTES, MAX_ART_DEPTH,
     MAX_ART_ELEMENTS, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_PATH_BYTES, MAX_ART_REACH, MAX_ART_SIDE, MIN_ART_SIDE,

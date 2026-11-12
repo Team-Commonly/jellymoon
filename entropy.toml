@@ -252,7 +252,15 @@ max_file_lines = 400
 # to a child that holds it to no rule; a child that overflows, fails, floods, never ends or cannot start; kept
 # answers; no side door), the made-up children they start and how every test tries a theme (`tests/support/`,
 # 134), the rules at their edges (`tests/limits.rs`, 121) and a sixth heaviest theme, a review's (`tests/draw.rs`, 40).
-"crates/sticker-kit" = 10082
+# The gate on PR 154 raised it by 993: 601 are tests. The child measures what a picture costs (`theme/meter.rs`,
+# 174, a quarter of it its test), the kept answers moved to a file of their own with whose folder it is
+# (`theme/kept.rs`, 113, of which `trial.rs` gave most and so grew by 8 only), the child got its own clock, the
+# page's stack and its three lines (`theme/stand.rs`, 54), and the rules a percent in its place, a comment not
+# counted and how far the parser may stand from the path (35). The tests are the standing set of ordinary
+# pictures and the dear ones (`tests/ordinary.rs`, 120), the two clocks and the pipes (`tests/trial_clock.rs`,
+# 122), what is kept, for whom and in whose folder (`tests/trial_kept.rs`, 122), the arcs (`tests/idle.rs`, 49),
+# the made-up children and how a test starts one unwatched (`tests/support/`, 177), and 11 in the tests there were.
+"crates/sticker-kit" = 11075
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -289,7 +297,9 @@ max_file_lines = 400
 # A theme's picture tried by the app started again (ADR 0016) raised it by 105: 58 are its test at the binary
 # (`tests/f32.rs`); the rest is how the trial is started and its line said (`lib.rs`), `main` standing as the
 # trial first, `layout` trying the art, and the window trying it off its thread.
-"app" = 5624
+# The gate on PR 154 raised it by 57: 46 are the test of what the window does with the art its trials accepted
+# (`tests/f32/window.rs`), 8 the key and the lines in `tests/f32.rs`, and 3 the stamp an answer is kept for.
+"app" = 5681
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

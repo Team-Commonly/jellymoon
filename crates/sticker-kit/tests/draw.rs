@@ -211,7 +211,8 @@ fn drawn(theme: Theme, name: &str, backstop: u64) {
 /// [`drawn`] with the art a trial accepted for the theme.
 fn drawn_with(theme: Theme, art: Vec<sticker_kit::theme::Accepted>, name: &str, backstop: u64) {
     use sticker_kit::draw::headless::snapshot_with;
-    let out = std::env::temp_dir().join(format!("sticker-kit-{name}-{}.png", std::process::id()));
+    let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("sticker-kit-{name}-{}.png", std::process::id()));
     let started = std::time::Instant::now();
     snapshot_with(Scene::sample(), (theme, art), None, 1440.0, 900.0, &out).expect("it is drawn");
     let took = started.elapsed();
@@ -230,7 +231,11 @@ fn the_heaviest_art_a_theme_may_hold_is_counted_to_the_door_s_two_limits_and_dra
 fn heaviest(heavy: &Heavy) {
     use sticker_kit::theme::{ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, art_cost};
     let name = format!("heaviest art, {}", heavy.name);
-    let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{}-{}", heavy.row, std::process::id()));
+    let folder = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
+        "sticker-kit-heavy-{}-{}",
+        heavy.row,
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&folder);
     std::fs::create_dir_all(&folder).unwrap();
     let (mut theme, mut all) = (String::from("[art]\n"), ArtCost::default());
@@ -272,7 +277,8 @@ fn heaviest(heavy: &Heavy) {
 #[test]
 fn the_dearest_art_a_review_found_inside_the_counts_is_tried_and_drawn() {
     use sticker_kit::theme::{ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, art_cost};
-    let folder = std::env::temp_dir().join(format!("sticker-kit-dots-{}", std::process::id()));
+    let folder =
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("sticker-kit-dots-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
     std::fs::create_dir_all(&folder).unwrap();
     let (mut theme, mut all) = (String::from("[art]\n"), ArtCost::default());

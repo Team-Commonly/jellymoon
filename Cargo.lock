@@ -5059,6 +5059,7 @@ dependencies = [
  "rustix",
  "serde",
  "svgtypes",
+ "sysinfo",
  "toml 1.2.1+spec-1.1.0",
  "ttf-parser",
  "usvg",

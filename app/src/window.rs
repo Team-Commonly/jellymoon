@@ -18,6 +18,7 @@ use std::time::Duration;
 use gpui::{App, Bounds, Pixels, TitlebarOptions, WindowBounds, WindowHandle, WindowOptions, prelude::*, px, size};
 use gpui_platform::application;
 use sticker_kit::draw::{EntryMade, Page, Tap, load_fonts};
+use sticker_kit::theme::Trial;
 use sticker_kit::{Scene, Theme, Viewport};
 
 use crate::showing::{Entered, Showing, entry_line, other_theme, switches_theme, tap_line};
@@ -52,7 +53,7 @@ pub fn open(
         };
         cx.on_window_closed(|cx, _| cx.quit()).detach();
         cx.observe_keystrokes(move |event, _, cx| key(&event.keystroke.key, window, cx)).detach();
-        cx.spawn(async move |cx| arts(theme, window, cx).await).detach();
+        cx.spawn(async move |cx| arts(theme, crate::trial(), window, cx).await).detach();
         let reading = shown.clone();
         cx.spawn(async move |cx| reads(reading, later, window, cx).await).detach();
         cx.spawn(async move |cx| looks(shown, window, cx).await).detach();
@@ -80,12 +81,12 @@ fn key(key: &str, window: WindowHandle<Page>, cx: &mut App) {
 /// is drawn with the kit's art from the start, and with each picture that passed once all have been tried: at
 /// once when their answers are kept, after the trials the first time a picture is seen. A picture that is refused
 /// is said on stderr and the kit's art stays.
-async fn arts(theme: Theme, window: WindowHandle<Page>, cx: &mut gpui::AsyncApp) {
+pub async fn arts(theme: Theme, trial: Trial, window: WindowHandle<Page>, cx: &mut gpui::AsyncApp) {
     if theme.folder().is_none() {
         return;
     }
     let trying = theme.clone();
-    let tried = cx.background_executor().spawn(async move { trying.try_art(&crate::trial()) }).await;
+    let tried = cx.background_executor().spawn(async move { trying.try_art(&trial) }).await;
     for refused in &tried.refused {
         say(&crate::refused_art(refused));
     }

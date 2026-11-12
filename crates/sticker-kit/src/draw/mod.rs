@@ -124,6 +124,11 @@ impl Page {
         self
     }
 
+    /// The theme's own art the page was given.
+    pub fn art(&self) -> &[Accepted] {
+        &self.art
+    }
+
     /// [`Page::with_art`] for a page that is already drawn: the trials were run off the window's thread.
     pub fn set_art(&mut self, art: Vec<Accepted>, cx: &mut Context<Self>) {
         self.art = art;

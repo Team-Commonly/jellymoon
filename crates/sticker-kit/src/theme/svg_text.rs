@@ -52,8 +52,8 @@ pub(super) struct Written {
 }
 
 impl Written {
-    /// Holds one attribute's value, or says why the file is refused. `root`: the attribute is the `<svg`'s own.
-    pub(super) fn attribute(&mut self, name: &str, value: &str, root: bool) -> Result<(), String> {
+    /// Holds one attribute's value, or says why the file is refused.
+    pub(super) fn attribute(&mut self, name: &str, value: &str) -> Result<(), String> {
         match name {
             "d" => self.path(value)?,
             "points" => {
@@ -67,7 +67,7 @@ impl Written {
                 let read = ViewBox::from_str(value).map_or([0.0; 4], |view| [view.x, view.y, view.w, view.h]);
                 within(&read)?;
             }
-            _ if PLACED.contains(&name) => placed(name, value, root)?,
+            _ if PLACED.contains(&name) => placed(name, value)?,
             _ => {}
         }
         if self.commands > MAX_ART_COMMANDS {
@@ -78,14 +78,18 @@ impl Written {
 
     fn path(&mut self, d: &str) -> Result<(), String> {
         // `closed`: the last thing drawn was a close, as the parser remembers it. `at` and `began`: where the
-        // path is, and where its piece began, as the parser adds the relative commands up.
+        // path is, and where its piece began, when every segment so far was drawn. `off`: how far from `at`
+        // the parser may stand, since it stays where it stood at an arc it draws nothing for; `began_off` is
+        // that for `began`.
         let (mut idle, mut closed) = (0, false);
         let (mut at, mut began) = ((0.0, 0.0), (0.0, 0.0));
+        let (mut off, mut began_off) = (0.0, 0.0);
         // The parser draws what came before a segment it cannot read, and stops there.
         for segment in PathParser::from(d).map_while(Result::ok) {
             self.commands += 1;
             within(&numbers(segment))?;
             let to = end(segment, at, began);
+            let chord = (to.0 - at.0).hypot(to.1 - at.1);
             let nothing = match segment {
                 PathSegment::ClosePath { .. } => closed,
                 PathSegment::EllipticalArc { rx, ry, .. } => {
@@ -94,16 +98,27 @@ impl Written {
                     if small > 0.0 && large > MAX_ART_FLAT * small {
                         return Err(format!("an arc's radii are more than {MAX_ART_FLAT} times apart"));
                     }
-                    // An arc to the very place it starts at is a line to the parser, and drawn.
-                    let chord = (to.0 - at.0).hypot(to.1 - at.1);
-                    !closed && chord > 0.0 && chord <= IDLE_ARC * large
+                    // An arc to the very place the parser stands at is a line to it, and drawn. Where it
+                    // may stand elsewhere, an arc to here may be one that goes nowhere from there.
+                    !closed && chord <= IDLE_ARC * large + off && (chord > 0.0 || off > 0.0)
                 }
                 _ => false,
             };
             idle = if nothing { idle + 1 } else { 0 };
             closed = matches!(segment, PathSegment::ClosePath { .. });
+            off = match segment {
+                PathSegment::ClosePath { .. } => began_off,
+                // The parser is at this arc's end or where it stood: the gate on PR 154 wrote 1022 arcs to one
+                // place, and a door that only moved on took each after the first for an arc that is drawn.
+                // Twice the chord and a part of the place: a sum of two numbers is rounded.
+                PathSegment::EllipticalArc { .. } if nothing => {
+                    off + 2.0 * chord + f64::EPSILON * (to.0.abs() + to.1.abs())
+                }
+                _ if lands(segment) => 0.0,
+                _ => off,
+            };
             if matches!(segment, PathSegment::MoveTo { .. }) {
-                began = to;
+                (began, began_off) = (to, off);
             }
             at = to;
             if idle > MAX_ART_IDLE {
@@ -117,14 +132,28 @@ impl Written {
     }
 }
 
-/// A shape's place, size or stroke: a number within the limit, and not a part of the `viewBox`, which the limit
-/// on a written number would not hold. A length the parser cannot read is none to it, and a unit makes one at
-/// most 96 times larger. The `<svg`'s own size may be all of its `viewBox` or less.
-fn placed(name: &str, value: &str, root: bool) -> Result<(), String> {
+/// Whether a segment ends at a place it writes whole, wherever the path stood before it.
+fn lands(segment: PathSegment) -> bool {
+    matches!(
+        segment,
+        PathSegment::MoveTo { abs: true, .. }
+            | PathSegment::LineTo { abs: true, .. }
+            | PathSegment::CurveTo { abs: true, .. }
+            | PathSegment::SmoothCurveTo { abs: true, .. }
+            | PathSegment::Quadratic { abs: true, .. }
+            | PathSegment::SmoothQuadratic { abs: true, .. }
+            | PathSegment::EllipticalArc { abs: true, .. }
+    )
+}
+
+/// A shape's place, size or stroke: a number within the limit, or a part of what holds it from none to all of
+/// it, as drawing programs write a gradient's ends, a background and a round corner. What holds it is the
+/// `viewBox`, whose four numbers are within the limit themselves, so the part is. A length the parser cannot
+/// read is none to it, and a unit makes one at most 96 times larger.
+fn placed(name: &str, value: &str) -> Result<(), String> {
     let Ok(length) = Length::from_str(value) else { return Ok(()) };
-    let whole = root && matches!(name, "width" | "height") && (0.0..=100.0).contains(&length.number);
-    if length.unit == LengthUnit::Percent && !whole {
-        return Err(format!("its `{name}` is a percent"));
+    if length.unit == LengthUnit::Percent && !(0.0..=100.0).contains(&length.number) {
+        return Err(format!("its `{name}` is a percent outside 0 to 100"));
     }
     within(&[length.number])
 }

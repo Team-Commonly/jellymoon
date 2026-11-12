@@ -127,7 +127,13 @@ pub fn svg_refusal(svg: &str) -> Option<String> {
 
 /// What the SVG costs to draw, or why it is refused: for what it holds, or for costing too much.
 pub fn art_cost(svg: &str) -> Result<ArtCost, String> {
-    if svg.split('<').any(|element| element.bytes().filter(|byte| *byte == b'=').count() > MAX_ART_ATTRIBUTES) {
+    // A comment that ends before the next `<` writes no attribute, whatever it holds: a drawing program's line
+    // of signs above the picture is not counted. What follows its end is.
+    let written = |piece: &str| {
+        let comment = piece.strip_prefix("!--").and_then(|comment| comment.split_once("-->"));
+        comment.map_or(piece, |(_, after)| after).bytes().filter(|byte| *byte == b'=').count()
+    };
+    if svg.split('<').any(|piece| written(piece) > MAX_ART_ATTRIBUTES) {
         return Err(format!("an element writes more than {MAX_ART_ATTRIBUTES} attributes"));
     }
     // The renderer allows a DTD. A file with one is refused here, so that no entity is ever expanded.
@@ -192,7 +198,7 @@ fn listed(document: &Document) -> Result<(), String> {
             if path_bytes > MAX_ART_PATH_BYTES {
                 return Err(format!("its `d` and `points` values are over {MAX_ART_PATH_BYTES} bytes together"));
             }
-            written.attribute(name, attribute.value(), nth == 0)?;
+            written.attribute(name, attribute.value())?;
         }
     }
     Ok(())

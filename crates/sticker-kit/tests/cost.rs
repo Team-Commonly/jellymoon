@@ -245,7 +245,8 @@ fn a_fill_and_a_stroke_are_counted_by_the_rows_their_edges_cross() {
 
 #[test]
 fn a_theme_s_art_files_together_are_held_to_the_same_two_counts() {
-    let folder = std::env::temp_dir().join(format!("sticker-kit-cost-{}", std::process::id()));
+    let folder =
+        std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("sticker-kit-cost-{}", std::process::id()));
     fs::create_dir_all(&folder).unwrap();
     let theme = folder.join("theme.toml");
     fs::write(&theme, "[art]\nhero = \"hero.svg\"\nstar = \"star.svg\"\nbadge = \"badge.svg\"\n").unwrap();

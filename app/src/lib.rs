@@ -19,12 +19,14 @@ pub const LARGEST_SIDE: f32 = 16384.0;
 /// the app: `main` hands it to the kit before it does anything else.
 pub const TRIAL: &str = "--try-art";
 
-/// How the kit starts a trial of a theme's picture: this very program again, and the folder its answers are
-/// kept in, `art-trials` in Jellymoon's own folder. With no such folder every start tries the pictures again; with
-/// no path to this program no trial starts, and the kit draws its own art.
+/// How the kit starts a trial of a theme's picture: this very program again, the folder its answers are kept
+/// in, `art-trials` in Jellymoon's own folder, and this app's version, which an answer is kept for. With no such
+/// folder every start tries the pictures again; with no path to this program no trial starts, and the kit draws
+/// its own art.
 pub fn trial() -> sticker_kit::theme::Trial {
     let kept = jellymoon_core::own_folder().ok().flatten().map(|home| home.join("art-trials"));
-    sticker_kit::theme::Trial::new(std::env::current_exe().unwrap_or_default(), TRIAL, kept)
+    let stamp = concat!("jellymoon-app ", env!("CARGO_PKG_VERSION"));
+    sticker_kit::theme::Trial::new(std::env::current_exe().unwrap_or_default(), TRIAL, kept, stamp)
 }
 
 /// The line that says a picture of the theme's is not drawn, and why.

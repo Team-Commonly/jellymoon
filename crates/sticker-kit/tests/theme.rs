@@ -5,8 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use sticker_kit::theme::{
-    MAX_ART_BYTES, MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_NUMBER, MAX_THEME_BYTES, SVG_ATTRIBUTES, SVG_ELEMENTS,
-    svg_refusal,
+    MAX_ART_BYTES, MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_THEME_BYTES, SVG_ATTRIBUTES, SVG_ELEMENTS, svg_refusal,
 };
 use sticker_kit::{Color, Scene, Theme, ThemeError, art};
 
@@ -108,38 +107,75 @@ fn a_symlink_out_of_the_theme_folder_is_refused() {
     assert!(matches!(Theme::load(&path), Err(ThemeError::PathEscapes { .. })));
 }
 
+// Each picture states a size and holds a shape, so it is refused for what it names and for nothing else.
 #[test]
 fn an_svg_that_could_run_code_is_refused() {
+    let xml = "it is not XML the renderer reads: ";
     let scripted = [
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><circle r="4"/></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><circle r="4" OnClick = "x()"/></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/a.png"/></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><use xlink:href="other.svg#a"/></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><rect fill="url(https://example.com/p)"/></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:x()"><circle r="4"/></a></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><p>hi</p></foreignObject></svg>"#,
-        r#"<!DOCTYPE svg [<!ENTITY a SYSTEM "file:///etc/hosts">]><svg>&a;</svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><style>@import url(x.css);</style></svg>"#,
-        r#"<svg/onload=alert(1)><circle r="4"/></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"onclick="x()"/></svg>"#,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" xml:base="https://example.com/"><circle r="4"/></svg>"#,
-        r#"<!DOCTYPE svg SYSTEM "https://example.com/svg.dtd"><svg><circle r="4"/></svg>"#,
-        r##"<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"><set attributeName="r" to="9"/></circle></svg>"##,
-        r#"<svg xmlns="http://www.w3.org/2000/svg"><?php echo 1 ?><circle r="4"/></svg>"#,
+        (r#"<script>alert(1)</script>"#, "it contains the element `<script`"),
+        (r#"<circle r="4" onload="alert(1)"/>"#, "it contains the attribute `onload`"),
+        (r#"<circle r="4" OnClick = "x()"/>"#, "it contains the attribute `OnClick`"),
+        (r#"<image href="https://example.com/a.png"/>"#, "it contains the element `<image`"),
+        (
+            r#"<use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="other.svg#a"/>"#,
+            "it contains the element `<use`",
+        ),
+        (r#"<use xlink:href="other.svg#a"/>"#, xml),
+        (r#"<a href="javascript:x()"><circle r="4"/></a>"#, "it contains the element `<a`"),
+        (r#"<foreignObject><p>hi</p></foreignObject>"#, "it contains the element `<foreignObject`"),
+        (r#"<style>@import url(x.css);</style>"#, "it contains the element `<style`"),
+        (r#"<circle r="4"onclick="x()"/>"#, xml),
+        (r#"<circle r="4" xml:base="https://example.com/"/>"#, "it contains the attribute `base`"),
+        (r##"<circle r="4"><set attributeName="r" to="9"/></circle>"##, "it contains the element `<set`"),
+        (r#"<p xmlns="http://www.w3.org/1999/xhtml">hi</p>"#, "its `<p` is not in SVG's namespace"),
     ];
-    for (i, svg) in scripted.iter().enumerate() {
-        assert!(svg_refusal(svg).is_some(), "case {i} was accepted");
+    let whole = [
+        (
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" onload="alert(1)"><circle r="4"/></svg>"#,
+            "it contains the attribute `onload`",
+        ),
+        (
+            r#"<!DOCTYPE svg [<!ENTITY a SYSTEM "file:///etc/hosts">]><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><circle r="4"/>&a;</svg>"#,
+            xml,
+        ),
+        (
+            r#"<!DOCTYPE svg SYSTEM "https://example.com/svg.dtd"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><circle r="4"/></svg>"#,
+            xml,
+        ),
+        (r#"<svg/onload=alert(1) viewBox="0 0 8 8"><circle r="4"/></svg>"#, xml),
+        (r#"<svg viewBox="0 0 8 8"><circle r="4"/></svg>"#, "its `<svg` is not in SVG's namespace"),
+    ];
+    let scripted = scripted.map(|(inside, why)| {
+        (format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><circle r="4"/>{inside}</svg>"#), why)
+    });
+    let all = scripted.into_iter().chain(whole.map(|(svg, why)| (svg.to_string(), why)));
+    for (i, (svg, why)) in all.enumerate() {
+        let said = svg_refusal(&svg).unwrap_or_else(|| panic!("case {i} was accepted"));
+        assert!(said.starts_with(why) && (why != xml || !said.contains('\n')), "case {i}: {said}");
         let folder = Folder::new(&format!("scripted-{i}"));
-        folder.write("star.svg", svg);
+        folder.write("star.svg", &svg);
         let path = folder.write("theme.toml", "[art]\nstar = \"star.svg\"\n");
         match Theme::load(&path) {
-            Err(ThemeError::RefusedSvg { key, .. }) => assert_eq!(key, "art.star"),
+            Err(ThemeError::RefusedSvg { key, reason }) => assert_eq!((key.as_str(), &reason), ("art.star", &said)),
             other => panic!("case {i} was not refused: {other:?}"),
         }
     }
-    let inner = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><defs><linearGradient id="g"/></defs><rect fill="url(#g)"/></svg>"##;
-    assert_eq!(svg_refusal(inner), None, "references inside the file are fine");
+}
+
+// The renderer follows nothing out of a file: it has no network, and the only element that names a file to load is
+// `image`, which is not on the list. A paint that is an address is a paint it cannot find in the file, and it
+// paints a plain colour for it. So the picture is counted as it is drawn: one fill.
+#[test]
+fn an_address_in_a_value_is_followed_nowhere_and_is_painted_as_a_plain_colour() {
+    let picture = |inside: &str| format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">{inside}</svg>"#);
+    for fill in ["url(https://example.com/p)", "url(x.svg#a)", "&#117;rl(x.svg#a)", "url( x.svg#a)", r"\75rl(x.svg#a)"]
+    {
+        let svg = picture(&format!(r#"<rect width="8" height="8" fill="{fill}"/>"#));
+        let cost = sticker_kit::theme::art_cost(&svg).unwrap_or_else(|why| panic!("{fill}: {why}"));
+        assert_eq!(cost.paint, 64, "{fill}: one fill, and no gradient or pattern");
+    }
+    let inner = r##"<defs><linearGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset="1"/></linearGradient></defs><rect width="8" height="8" fill="url(#g)"/><?php echo 1 ?>"##;
+    assert_eq!(sticker_kit::theme::art_cost(&picture(inner)).map(|cost| cost.paint), Ok(4 * 64), "inside the file");
 }
 
 #[test]
@@ -266,40 +302,34 @@ fn an_svg_may_hold_only_what_the_built_in_art_is_made_of() {
         (r#"<symbol id="a"><circle r="4"/></symbol>"#, "the element `<symbol`"),
         (r#"<pattern id="p" width="1" height="1"><circle r="4"/></pattern>"#, "the element `<pattern`"),
         (r#"<mask id="m"><circle r="4"/></mask>"#, "the element `<mask`"),
-        (r#"<clipPath id="c"><circle r="4"/></clipPath>"#, "the element `<clippath`"),
+        (r#"<clipPath id="c"><circle r="4"/></clipPath>"#, "the element `<clipPath`"),
         (r#"<image width="4" height="4"/>"#, "the element `<image`"),
-        (r#"<foreignObject><p>hi</p></foreignObject>"#, "the element `<foreignobject`"),
+        (r#"<foreignObject><p>hi</p></foreignObject>"#, "the element `<foreignObject`"),
         (r#"<text x="1" y="1">hi</text>"#, "the element `<text`"),
         (r#"<svg width="4" height="4"><circle r="4"/></svg>"#, "a second `<svg`"),
         (r#"<filter id="f"><feGaussianBlur stdDeviation="2"/></filter>"#, "the element `<filter`"),
-        (r#"<feTurbulence baseFrequency="0.9"/>"#, "the element `<feturbulence`"),
+        (r#"<feTurbulence baseFrequency="0.9"/>"#, "the element `<feTurbulence`"),
         (r#"<g filter="url(#f)"/>"#, "the attribute `filter`"),
         (r#"<g opacity="0.5"/>"#, "the attribute `opacity`"),
+        (r#"<g clip-path="url(#c)"/>"#, "the attribute `clip-path`"),
+        (r#"<g mask="url(#m)"/>"#, "the attribute `mask`"),
         (r#"<path d="M0 0L4 4" stroke-miterlimit="4000"/>"#, "the attribute `stroke-miterlimit`"),
-        (r#"<circle r="1e3"/>"#, "plain digits of at most 4096"),
-        (r#"<circle r="4097"/>"#, "plain digits of at most 4096"),
-        (r#"<path d="M0 0L-99999 4"/>"#, "plain digits of at most 4096"),
-        (r#"<path d="M0 0L4 4" stroke-width="5E2"/>"#, "plain digits of at most 4096"),
-        (r#"<g transform="scale(2)"/>"#, "more than `translate` and `rotate`"),
-        (r#"<g transform="matrix(1 0 0 1 0 0)"/>"#, "more than `translate` and `rotate`"),
-        (r#"<linearGradient id="g" gradientTransform="skewX(3)"/>"#, "more than `translate` and `rotate`"),
+        (r#"<circle r="5000"/>"#, "reaches more than 4096 past the picture's edge"),
+        (r#"<path d="M0 0L-99999 4L0 4"/>"#, "reaches more than 4096 past the picture's edge"),
+        (
+            r##"<path d="M0 0L4 4" stroke="#000" stroke-width="5E4"/>"##,
+            "reaches more than 4096 past the picture's edge",
+        ),
         (r#"<style>circle { fill: red }</style>"#, "the element `<style`"),
         (r#"<style>@\69mport 'x.css';</style>"#, "the element `<style`"),
-        (r#"<style>circle { fill: \75rl(x.svg#a) }</style>"#, "the element `<style`"),
         (r#"<circle r="4" style="fill: red"/>"#, "the attribute `style`"),
         (r#"<circle r="4" style="fill: url/**/(x.svg#a)"/>"#, "the attribute `style`"),
-        (r#"<circle r="4" fill="&#117;rl(x.svg#a)"/>"#, "a character reference"),
-        (r#"<title>&#64;import</title>"#, "a character reference"),
-        (r#"<circle r="4" fill="\75rl(x.svg#a)"/>"#, "a backslash"),
-        (r#"<circle r="4" fill="url/**/(x.svg#a)"/>"#, "outside the file"),
-        (r#"<circle r="4" fill="url( x.svg#a)"/>"#, "outside the file"),
-        (r#"<circle r="4" fill="url(x.svg#a)"/>"#, "outside the file"),
         (r##"<linearGradient id="g" href="#h"/>"##, "the attribute `href`"),
-        (r##"<linearGradient id="g" xlink:href="#h"/>"##, "the attribute `xlink:href`"),
+        (r##"<linearGradient id="g" xlink:href="#h"/>"##, "it is not XML the renderer reads"),
         (r##"<path d="M0 0 H40" stroke="#000" stroke-dasharray="0.001"/>"##, "the attribute `stroke-dasharray`"),
-        (r#"<circle r=4 />"#, "is not in quotes"),
-        (r#"<circle r="4" fill/>"#, "has no value"),
-        (r#"<circle r="4"#, "does not end"),
+        (r#"<circle r=4 />"#, "it is not XML the renderer reads"),
+        (r#"<circle r="4" fill/>"#, "it is not XML the renderer reads"),
+        (r#"<circle r="4"#, "it is not XML the renderer reads"),
     ];
     for (inside, why) in refused {
         let said = svg_refusal(&svg(inside)).unwrap_or_else(|| panic!("{inside} was accepted"));
@@ -308,43 +338,41 @@ fn an_svg_may_hold_only_what_the_built_in_art_is_made_of() {
 }
 
 #[test]
-fn an_svg_is_held_to_a_size_of_its_own_and_a_flat_picture_passes() {
+fn an_svg_is_held_to_the_size_the_renderer_gives_it_and_a_flat_picture_passes() {
     let sized = |size: &str| format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {size}><circle r="4"/></svg>"#);
-    for size in [
-        r#"width="257" height="40""#,
-        r#"width="40" height="100000""#,
-        r#"width="100%" height="40""#,
-        r#"width="1e3" height="40""#,
-        r#"width="0" height="40""#,
-        r#"width="-40" height="40""#,
-        r#"viewBox="0 0 -40 40""#,
-        r#"width="40" height="40" x="2000""#,
-        r#"viewBox="0 0 40 257""#,
-        r#"viewBox="0 0 40""#,
-        r#"width="40" height="40" viewBox="0 0 1e9 1e9""#,
+    for (size, why) in [
+        (r#"width="257" height="40""#, "the renderer sizes it 257 by 40: a picture is at most 256 a side"),
+        (r#"width="40" height="100000""#, "the renderer sizes it 40 by 100000: a picture is at most 256 a side"),
+        (r#"width="1e3" height="40""#, "the renderer sizes it 1000 by 40: a picture is at most 256 a side"),
+        (r#"viewBox="0 0 40 257""#, "the renderer sizes it 40 by 257: a picture is at most 256 a side"),
+        (r#"width="0" height="40""#, "it is not a picture the renderer reads: "),
+        (r#"width="-40" height="40""#, "it is not a picture the renderer reads: "),
     ] {
         let said = svg_refusal(&sized(size)).unwrap_or_else(|| panic!("{size} was accepted"));
-        assert!(said.contains("256"), "{size}: {said}");
+        assert!(said.starts_with(why), "{size}: {said}");
     }
-    for size in [r#"width="256" height="256px""#, r#"viewBox="-128 -128.5 256 8""#, r#"width="9" viewBox="0 0 8 8""#] {
+    for size in [
+        r#"width="256" height="256px""#,
+        r#"viewBox="-128 -128.5 256 8""#,
+        r#"width="9" viewBox="0 0 8 8""#,
+        // With no `viewBox`, a side left out is as large as what the picture holds: it is counted at that size.
+        "",
+        r#"width="40""#,
+        r#"height="40px""#,
+    ] {
         assert_eq!(svg_refusal(&sized(size)), None, "{size}");
     }
-    // A size is stated: with no `viewBox`, a side left out would be as large as what the picture holds.
-    for size in ["", r#"width="40""#, r#"height="40px""#] {
-        let said = svg_refusal(&sized(size)).unwrap_or_else(|| panic!("{size} was accepted"));
-        assert_eq!(said, "it states no size: a picture needs a `viewBox`, or a `width` and a `height`", "{size}");
-    }
     let fine = r##"<title>a &amp; b</title><desc>curl</desc><defs>
-<radialGradient id="g" cx="0.5" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#fff" stop-opacity="0.5"/></radialGradient></defs>
-<g transform="translate(4096 -4096) rotate(-30 4.5 .5)"><path d="M0 0L4 4.5.5-3Z" fill="url(#g)" fill-rule="evenodd"/><line x1="0" y1="0" x2="4" y2="4" stroke="#1e90ff" stroke-width="3"/>
-<polyline points="0,0 1,1"/><polygon points="0,0 1,1 2,0"/><ellipse rx="2" ry="1"/><rect x="1" y="1" width="2" height="2" rx="1"/></g>"##;
+<radialGradient id="g" cx="0.5" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="1" stop-color="#000"/></radialGradient></defs>
+<g transform="translate(40 -40) rotate(-30 4.5 .5) scale(2)"><path d="M0 0L4 4.5.5-3Z" fill="url(#g)" fill-rule="evenodd"/><line x1="0" y1="0" x2="4" y2="4" stroke="#1e90ff" stroke-width="3"/>
+<polyline points="0,0 1,1 0,1"/><polygon points="0,0 1,1 2,0"/><ellipse rx="2" ry="1"/><rect x="1" y="1" width="2" height="2" rx="1"/></g>"##;
     assert_eq!(svg_refusal(&svg(fine)), None);
-    assert_eq!((SVG_ELEMENTS.len(), SVG_ATTRIBUTES.len()), (15, 33));
+    assert_eq!((SVG_ELEMENTS.split(' ').count(), SVG_ATTRIBUTES.split_whitespace().count()), (15, 32));
 }
 
 #[test]
 fn an_svg_is_held_to_a_number_of_elements_and_a_depth() {
-    assert_eq!((MAX_ART_ELEMENTS, MAX_ART_DEPTH, MAX_ART_NUMBER), (100, 12, 4096.0));
+    assert_eq!((MAX_ART_ELEMENTS, MAX_ART_DEPTH), (100, 12));
     // The `<svg` is one element and one level.
     let many = |count: usize| svg(&r#"<circle r="4"/>"#.repeat(count - 1));
     assert_eq!(svg_refusal(&many(100)), None);

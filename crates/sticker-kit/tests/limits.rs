@@ -3,7 +3,7 @@
 
 use std::fs;
 
-use sticker_kit::theme::{MAX_ART_BYTES, MAX_ART_PATH_BYTES, MAX_THEME_BYTES, svg_refusal};
+use sticker_kit::theme::{MAX_ART_BYTES, MAX_ART_PATH_BYTES, MAX_THEME_BYTES, art_cost, svg_refusal};
 use sticker_kit::{Theme, ThemeError};
 
 fn svg(inside: &str) -> String {
@@ -60,47 +60,40 @@ fn each_range_of_its_own_holds_at_both_ends() {
     }
 }
 
+// The door has no reading of a number of its own. A unit, a `%` or an exponent is what the renderer takes it for,
+// and the picture is held at the size that comes of it.
 #[test]
-fn no_number_in_art_carries_a_unit_or_a_percent_sign() {
-    let refused = [
-        r#"<circle r="4in"/>"#,
-        r#"<circle r="50%"/>"#,
-        r#"<circle r="4" cx="1em"/>"#,
-        r#"<rect width="4mm" height="4"/>"#,
-        r#"<rect width="4px" height="4"/>"#,
-        r#"<path d="M5 5h1" stroke-width="4096in"/>"#,
-        r#"<path d="M5 5h1" stroke-width="2pc"/>"#,
-        r#"<path d="M0 0L4in 4"/>"#,
-        r#"<path d="M0 0L50% 4"/>"#,
-        r#"<polyline points="0,0 1pt,1"/>"#,
-        r#"<linearGradient id="g"><stop offset="50%"/></linearGradient>"#,
-        r#"<circle r="4" fill-opacity="50%"/>"#,
-        r#"<g transform="translate(4px 4)"/>"#,
-        r#"<g transform="rotate(30deg)"/>"#,
-    ];
-    for inside in refused {
-        assert!(svg_refusal(&svg(inside)).is_some(), "{inside} was accepted");
-    }
-    let said = svg_refusal(&svg(refused[0])).unwrap();
-    assert_eq!(said, "`r` holds a unit or `%`: a number is plain digits");
+fn a_number_with_a_unit_is_what_the_renderer_takes_it_for() {
+    let sized = |size: &str| {
+        let rect = r#"<rect width="50%" height="1e1"/>"#;
+        art_cost(&format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {size}>{rect}</svg>"#)).map(|cost| cost.paint)
+    };
+    assert_eq!(sized(r#"width="1in" height="2in""#), Ok(96 * 192), "an inch is 96 pixels to the renderer");
+    assert_eq!(sized(r#"width="40px" height="1e1""#), Ok(400));
+    assert_eq!(
+        sized(r#"width="3in" height="1in""#),
+        Err("the renderer sizes it 288 by 96: a picture is at most 256 a side".into())
+    );
     let commands =
         r#"<path d="M1 1L2 2H3V4C1 1 2 2 3 3S1 1 2 2Q1 1 2 2T3 3A4 4 0 0 1 5 5Zm1 1l1 1h1v1c1 1 1 1 1 1z"/>"#;
-    assert_eq!(svg_refusal(&svg(commands)), None, "every path command is a letter a `d` may hold");
-    let root = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40px" height="40px"><circle r="4"/></svg>"#;
-    assert_eq!(svg_refusal(root), None, "`px` may follow the picture's own width and height, and nothing else");
+    assert_eq!(svg_refusal(&svg(commands)), None, "every path command");
 }
 
+// What the parser spends on a file before its points can be counted is bounded by the bytes its paths are written
+// in: 64 KiB of arcs took it 0.36 s.
 #[test]
-fn a_path_or_a_list_of_points_is_held_to_a_length() {
-    assert_eq!(MAX_ART_PATH_BYTES, 4096);
+fn the_paths_and_lists_of_points_of_a_file_are_held_to_a_length_together() {
+    assert_eq!(MAX_ART_PATH_BYTES, 16 * 1024);
     for over in [0, 1] {
-        let d = format!("M0 0{}  ", "h0.00".repeat((MAX_ART_PATH_BYTES - 4) / 5)) + &" ".repeat(over);
-        let points = "100,100 ".repeat(MAX_ART_PATH_BYTES / 8) + &" ".repeat(over);
-        assert_eq!((d.len(), points.len()), (MAX_ART_PATH_BYTES + over, MAX_ART_PATH_BYTES + over));
-        let shapes = [("d", format!(r#"<path d="{d}"/>"#)), ("points", format!(r#"<polygon points="{points}"/>"#))];
-        for (name, shape) in shapes {
-            let want = (over == 1).then(|| format!("the value of `{name}` is over 4096 bytes"));
-            assert_eq!(svg_refusal(&svg(&shape)), want, "{name}, {over} over");
-        }
+        let d = format!("M0 0h9v9{}", " ".repeat(MAX_ART_PATH_BYTES / 2 - 8));
+        let points = format!("1,1 9,9 1,9{}", " ".repeat(MAX_ART_PATH_BYTES / 2 - 11 + over));
+        assert_eq!(d.len() + points.len(), MAX_ART_PATH_BYTES + over);
+        let shapes = format!(r#"<path d="{d}"/><polygon points="{points}"/>"#);
+        let want = (over == 1).then(|| "its `d` and `points` values are over 16384 bytes together".to_string());
+        assert_eq!(svg_refusal(&svg(&shapes)), want, "{over} over");
     }
+    let arcs = format!(r##"<path d="M0 0{}" stroke="#000"/>"##, "a4096 4096 0 1 1 1 1".repeat(3200));
+    let started = std::time::Instant::now();
+    assert!(svg_refusal(&svg(&arcs)).is_some());
+    assert!(started.elapsed().as_millis() < 100, "refused before it is parsed as a picture: {:?}", started.elapsed());
 }

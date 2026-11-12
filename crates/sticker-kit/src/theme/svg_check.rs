@@ -1,80 +1,32 @@
-//! A theme's SVG may only be a flat picture: shapes, colours and gradients. The check is an allow-list, so that what
-//! a file costs to draw is bounded here and not left to the renderer. Every element must be one of [`ELEMENTS`] and
-//! every attribute one of [`ATTRIBUTES`], which leaves out whatever runs code, reaches outside the file, holds a
-//! stylesheet, or multiplies drawing work (`use`, `pattern`, `mask`, `filter`, a group's `opacity`, dashes). Every
-//! number is plain and small, a transform only moves or turns, and the file is held to a number of elements, a depth
-//! and a size.
+//! A theme's SVG may only be a flat picture: shapes, colours and gradients. The door reads it with the renderer's own
+//! parser (`usvg`, at the version GPUI draws with: `docs/adr/0015-the-art-door-reads-with-the-renderers-parser.md`)
+//! and judges the tree that parser makes, which is the tree the renderer draws. So there is no second reading of a
+//! file for the two to differ in: a size, a shape and a stroke are what `usvg` says they are.
 //!
-//! The check accepts only what it reads the way the renderer does, and refuses the rest. The renderer passes over a
-//! name in another case and takes a `viewBox` it cannot read for none; either would leave the picture counted at one
-//! size and drawn at another. So a name is written as SVG writes it, a size is plain digits, and the `<svg` states
-//! each of its sizes once.
+//! Three things are checked, each an allow-list. The file's bytes, before any parse (`load.rs`). The XML document:
+//! every element is one of [`ELEMENTS`] and every attribute one of [`ATTRIBUTES`], which bounds what the parser is
+//! asked to build and leaves out what it would load (`image`, the fonts of `text`). Then the tree: groups and paths
+//! only, no layer, each path near the picture and its stroke no thinner than a drawn pixel, and the two counts of
+//! [`ArtCost`].
 //!
 //! The kit's own art (`art.rs`) is built in code from numbers and colours and does not come through here. It alone
 //! blurs a shadow, scales and fades a group: the renderer panics on a blurred group whose box overflows and keeps a
 //! layer of memory for every faded group, and a file could ask for either.
 
-use super::path_cost::path_cost;
+use usvg::roxmltree::{Document, ParsingOptions};
+use usvg::{Group, ImageHrefResolver, Node, Options, Paint, Path, Tree};
 
-/// The elements a picture is made of. Any other element is refused.
-pub const ELEMENTS: [&str; 15] = [
-    "svg",
-    "g",
-    "defs",
-    "title",
-    "desc",
-    "path",
-    "rect",
-    "circle",
-    "ellipse",
-    "line",
-    "polyline",
-    "polygon",
-    "lineargradient",
-    "radialgradient",
-    "stop",
-];
+/// The elements a picture is made of, as SVG writes them. Any other element is refused.
+pub const ELEMENTS: &str =
+    "svg g defs title desc path rect circle ellipse line polyline polygon linearGradient radialGradient stop";
 
-/// The attributes an element may carry, in lower case. Any other attribute is refused: `style`, `href`, `filter`,
-/// `opacity`, every `on…` handler, `xml:base`, `stroke-dasharray` and `stroke-miterlimit` among them.
-pub const ATTRIBUTES: [&str; 33] = [
-    "xmlns",
-    "id",
-    "fill",
-    "stroke",
-    "stop-color",
-    "fill-rule",
-    "stroke-linecap",
-    "stroke-linejoin",
-    "gradientunits",
-    "version",
-    "width",
-    "height",
-    "viewbox",
-    "x",
-    "y",
-    "x1",
-    "y1",
-    "x2",
-    "y2",
-    "cx",
-    "cy",
-    "r",
-    "rx",
-    "ry",
-    "d",
-    "points",
-    "transform",
-    "gradienttransform",
-    "fill-opacity",
-    "stroke-width",
-    "stroke-opacity",
-    "offset",
-    "stop-opacity",
-];
+/// The attributes an element may carry. Any other is refused: `style`, `href`, `filter`, `opacity`, every `on…`
+/// handler, `xml:base`, `stroke-dasharray` and `stroke-miterlimit` among them.
+pub const ATTRIBUTES: &str = "id fill stroke stop-color fill-rule stroke-linecap stroke-linejoin gradientUnits version \
+     width height viewBox x y x1 y1 x2 y2 cx cy r rx ry d points transform gradientTransform fill-opacity \
+     stroke-width stroke-opacity offset stop-opacity";
 
-/// How many of [`ATTRIBUTES`], from the start, hold words and colours. The rest hold numbers.
-const WORDS: usize = 9;
+const SVG: &str = "http://www.w3.org/2000/svg";
 
 /// The most elements in one art file, the `<svg` counted. The kit's largest piece has under 40.
 pub const MAX_ART_ELEMENTS: usize = 100;
@@ -82,39 +34,37 @@ pub const MAX_ART_ELEMENTS: usize = 100;
 /// How deep elements may nest, the `<svg` counted. The kit's own art goes 5 deep.
 pub const MAX_ART_DEPTH: usize = 12;
 
-/// The largest width and height of a picture, in its own pixels. It is drawn at twice that.
+/// The most bytes in the `d` and `points` values of one file together: 16 KiB. It bounds what the parser spends on
+/// a file before its numbers can be counted.
+pub const MAX_ART_PATH_BYTES: usize = 16 * 1024;
+
+/// The largest width and height of a picture, as the renderer sizes it. It is drawn at twice that.
 pub const MAX_ART_SIDE: f32 = 256.0;
 
-/// The largest number anywhere else in a picture: a coordinate, a radius, a stroke's width, a move.
-pub const MAX_ART_NUMBER: f32 = 4096.0;
+/// How far past the picture's edges a path may reach with its stroke, in the picture's own pixels. A shape far
+/// larger than its picture is walked all along for the little of it that shows.
+pub const MAX_ART_REACH: f32 = 4096.0;
 
-/// The longest `d` or `points` value, in bytes: 4 KiB.
-pub const MAX_ART_PATH_BYTES: usize = 4096;
+/// The thinnest stroke, in the picture's own pixels: just over half of one, which is one drawn pixel. At a drawn
+/// pixel or under the renderer draws a hairline, ten times slower by the line (measured).
+pub const MIN_ART_STROKE: f32 = 0.51;
 
-/// The letters a `d` may hold: the path commands, in lower case. No other number may stand beside a letter.
-const PATH_COMMANDS: &str = "mlhvcsqtaz";
+/// The most numbers in the paths of one art file, and of a theme's art files together: 1536 points. Every shape is
+/// counted as the path it is drawn as, so 99 circles are 2574 of them. See [`ArtCost`].
+pub const MAX_ART_NUMBERS: usize = 3072;
 
-/// The smallest width and height of a `viewBox`. A smaller one draws every unit hundreds of pixels wide.
-pub const MIN_ART_VIEW: f32 = 8.0;
-
-/// The most numbers in the `d` and `points` values of one art file, and of a theme's art files together. A number is
-/// at most one line, or a share of one curve, for the renderer to walk on every row of pixels it crosses. A `d`'s
-/// numbers are counted command by command, each kind at its own count (`path_cost.rs`).
-pub const MAX_ART_NUMBERS: usize = 1024;
-
-/// The most paint in one art file, and in a theme's art files together: 64 shapes on 256 by 256. See [`ArtCost`].
+/// The most paint in one art file, and in a theme's art files together: 64 fills of 256 by 256. See [`ArtCost`].
 pub const MAX_ART_PAINT: u64 = 64 * 256 * 256;
 
-/// The elements that are painted. The others group, name or colour them.
-const SHAPES: [&str; 7] = ["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"];
-
-/// What an art file costs to draw, counted from its text. Drawing time follows these two and nothing else the door
-/// lets through: a shape is painted over as much of the picture as it likes, and a gradient costs about four fills.
+/// What an art file costs to draw, counted on the tree the renderer draws. Drawing time follows these two and
+/// nothing else the door lets through.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ArtCost {
-    /// The numbers in every `d` and `points`.
+    /// Two for every point of every path, once the parser has made each shape a path: a `rect` is 4 points, a
+    /// `circle` 13, an arc as many as the curves it is drawn as.
     pub numbers: usize,
-    /// The shapes times the picture's width times its height, and four times that in a file with a gradient.
+    /// The picture's width times its height, for every fill and every stroke: a shape may paint all of the picture
+    /// however small it is written. A gradient counts as four.
     pub paint: u64,
 }
 
@@ -131,106 +81,11 @@ impl ArtCost {
         }
         let paint = self.paint;
         (paint > MAX_ART_PAINT).then(|| {
-            format!("its paint (shapes x width x height, x 4 with a gradient) is {paint}, over {MAX_ART_PAINT}")
+            format!(
+                "its paint (fills and strokes x width x height, x 4 for a gradient) is {paint}, over {MAX_ART_PAINT}"
+            )
         })
     }
-}
-
-/// What is counted while the tags are walked.
-#[derive(Default)]
-struct Tally<'a> {
-    /// The file as it was written. The walk reads it in lower case, byte for byte the same length.
-    written: &'a str,
-    lowered: &'a str,
-    numbers: usize,
-    shapes: u64,
-    gradient: bool,
-    /// The picture's `width` and `height`, and the size in its `viewBox`.
-    size: [Option<f32>; 2],
-    view: [Option<f32>; 2],
-}
-
-impl Tally<'_> {
-    /// A stretch of the lower-case text, as the file wrote it.
-    fn as_written(&self, part: &str) -> &str {
-        let at = part.as_ptr() as usize - self.lowered.as_ptr() as usize;
-        &self.written[at..at + part.len()]
-    }
-
-    /// Holds a name to the case SVG writes it in. The renderer reads a name in that case only and passes over any
-    /// other, so the check would count a `viewbox`, or a `WIDTH`, that the renderer never reads.
-    fn named(&self, name: &str) -> Result<(), String> {
-        let (written, svg) = (self.as_written(name), as_svg_writes(name));
-        if written == svg {
-            return Ok(());
-        }
-        Err(format!("it writes `{written}` for `{svg}`: the renderer reads a name only as SVG writes it"))
-    }
-
-    /// Keeps the sizes the `<svg` states, each once. They were checked as sizes already.
-    fn root(&mut self, name: &str, value: &str) -> Result<(), String> {
-        let stated = match name {
-            "width" | "height" => plain(value.trim_end_matches("px")).map(|side| [side; 2]),
-            "viewbox" => view(value).map(|view| [view[2], view[3]]),
-            _ => return Ok(()),
-        };
-        let sides = match name {
-            "width" => &mut self.size[..1],
-            "height" => &mut self.size[1..],
-            _ => &mut self.view[..],
-        };
-        if sides[0].is_some() {
-            return Err(format!("its `<svg` states `{}` twice", as_svg_writes(name)));
-        }
-        for (side, said) in sides.iter_mut().zip(stated.into_iter().flatten()) {
-            *side = Some(said);
-        }
-        Ok(())
-    }
-
-    /// A side the picture does not state is its `viewBox`'s, as the renderer has it. With no `viewBox` the renderer
-    /// draws a picture that leaves a side out as large as what is in it, whatever the other side says: that is no
-    /// size to count on, and it is refused.
-    fn cost(&self) -> Result<ArtCost, String> {
-        let side = |i: usize| self.size[i].or(self.view[i]).map(|side| side.ceil() as u64);
-        let (Some(wide), Some(high)) = (side(0), side(1)) else {
-            return Err("it states no size: a picture needs a `viewBox`, or a `width` and a `height`".into());
-        };
-        let fills = if self.gradient { 4 } else { 1 };
-        Ok(ArtCost { numbers: self.numbers, paint: self.shapes * fills * wide * high })
-    }
-}
-
-/// A name of [`ELEMENTS`] or [`ATTRIBUTES`] in the case SVG writes it in: five have a capital, the rest have none.
-fn as_svg_writes(name: &str) -> &str {
-    match name {
-        "viewbox" => "viewBox",
-        "lineargradient" => "linearGradient",
-        "radialgradient" => "radialGradient",
-        "gradientunits" => "gradientUnits",
-        "gradienttransform" => "gradientTransform",
-        lower => lower,
-    }
-}
-
-/// A number written as digits with at most one `.` among them, the one way every reader takes alike.
-fn plain(text: &str) -> Option<f32> {
-    let digit = |byte: Option<&u8>| byte.is_some_and(u8::is_ascii_digit);
-    let digits = digit(text.as_bytes().first()) && digit(text.as_bytes().last());
-    (digits && text.bytes().all(|b| b.is_ascii_digit() || b == b'.')).then(|| text.parse().ok()).flatten()
-}
-
-/// The four numbers of a `viewBox`: each [`plain`], the first two with a `-` before them or none, and between two
-/// of them one space, one comma, or a comma and a space. The renderer takes a `viewBox` it cannot read for none at
-/// all, and then sizes the picture to what is in it, so any other way of writing one is refused.
-fn view(value: &str) -> Option<[f32; 4]> {
-    let spaced = value.replace(", ", " ").replace(',', " ");
-    let (mut parts, mut four) = (spaced.split(' '), [0.0; 4]);
-    for (nth, number) in four.iter_mut().enumerate() {
-        let part = parts.next()?;
-        *number = plain(if nth < 2 { part.strip_prefix('-').unwrap_or(part) } else { part })?;
-    }
-    parts.next().is_none().then_some(four)
 }
 
 /// Why the SVG is refused, or `None` when it is only a picture.
@@ -240,159 +95,144 @@ pub fn svg_refusal(svg: &str) -> Option<String> {
 
 /// What the SVG costs to draw, or why it is refused: for what it holds, or for costing too much.
 pub fn art_cost(svg: &str) -> Result<ArtCost, String> {
-    let text = svg.to_ascii_lowercase();
-    // With no character reference, what the checks below read is what the renderer reads.
-    let banned = [("<!doctype", "a DOCTYPE"), ("<!entity", "an entity declaration"), ("&#", "a character reference")];
-    for (needle, what) in banned {
-        if text.contains(needle) {
-            return Err(format!("it contains {what}"));
-        }
-    }
-    let cost = tags(Tally { written: svg, lowered: &text, ..Tally::default() })?;
-    cost.refusal().map_or(Ok(cost), Err)
+    // The renderer allows a DTD. A file with one is refused here, so that no entity is ever expanded.
+    let xml = ParsingOptions { allow_dtd: false, ..ParsingOptions::default() };
+    let document =
+        Document::parse_with_options(svg, xml).map_err(|e| format!("it is not XML the renderer reads: {e}"))?;
+    listed(&document)?;
+    // The renderer loads the image an `<image` names and the fonts a `<text` asks for. Neither element passes
+    // `listed`, so nothing is asked of either; an image is refused here all the same.
+    let resolver = ImageHrefResolver { resolve_data: Box::new(|_, _, _| None), resolve_string: Box::new(|_, _| None) };
+    let options = Options { image_href_resolver: resolver, ..Options::default() };
+    let read = Tree::from_xmltree(&document, &options);
+    counted(&read.map_err(|e| format!("it is not a picture the renderer reads: {e}"))?)
 }
 
-/// Walks every tag once and stops at the first thing a picture has no use for.
-fn tags(mut tally: Tally) -> Result<ArtCost, String> {
-    let (mut elements, mut depth) = (0, 0);
-    let mut rest = tally.lowered;
-    while let Some(at) = rest.find('<') {
-        rest = &rest[at + 1..];
-        if let Some(inside) = rest.strip_prefix("!--") {
-            rest = inside.split_once("-->").map_or("", |(_, after)| after);
-        } else if let Some(inside) = rest.strip_prefix("![cdata[") {
-            rest = inside.split_once("]]>").map_or("", |(_, after)| after);
-        } else if rest.starts_with('/') {
-            depth = usize::saturating_sub(depth, 1);
-        } else if !rest.starts_with("?xml ") {
-            let name_end = rest.find(|c: char| c.is_whitespace() || c == '>' || c == '/').unwrap_or(rest.len());
-            let name = &rest[..name_end];
-            if !ELEMENTS.contains(&name) {
-                return Err(format!("it contains the element `<{name}`"));
-            }
-            tally.named(name)?;
-            elements += 1;
-            if elements > MAX_ART_ELEMENTS {
-                return Err(format!("it has more than {MAX_ART_ELEMENTS} elements"));
-            }
-            if name == "svg" && elements > 1 {
-                return Err("it contains a second `<svg`".into());
-            }
-            tally.shapes += u64::from(SHAPES.contains(&name));
-            tally.gradient |= name.ends_with("gradient");
-            let (after, open) = attributes(&rest[name_end..], name, &mut tally)?;
-            depth += usize::from(open);
-            if depth > MAX_ART_DEPTH {
-                return Err(format!("its elements are nested more than {MAX_ART_DEPTH} deep"));
-            }
-            rest = after;
-        }
+/// Judges the tree the renderer draws, and counts it.
+fn counted(tree: &Tree) -> Result<ArtCost, String> {
+    let (wide, high) = (tree.size().width(), tree.size().height());
+    if wide > MAX_ART_SIDE || high > MAX_ART_SIDE {
+        return Err(format!("the renderer sizes it {wide} by {high}: a picture is at most {MAX_ART_SIDE} a side"));
     }
-    tally.cost()
+    let mut tally = Tally { area: wide.ceil() as u64 * high.ceil() as u64, wide, high, cost: ArtCost::default() };
+    tally.group(tree.root())?;
+    tally.cost.refusal().map_or(Ok(tally.cost), Err)
 }
 
-/// Reads one tag's attributes: the text after the tag, and whether the element stays open.
-fn attributes<'a>(mut rest: &'a str, element: &str, tally: &mut Tally) -> Result<(&'a str, bool), String> {
-    loop {
-        rest = rest.trim_start();
-        if let Some(after) = rest.strip_prefix("/>") {
-            return Ok((after, false));
+/// Holds the document to the two lists, a count and a depth, before the parser builds a picture from it.
+fn listed(document: &Document) -> Result<(), String> {
+    let mut path_bytes = 0;
+    for (nth, element) in document.descendants().filter(|node| node.is_element()).enumerate() {
+        let name = element.tag_name();
+        if name.namespace() != Some(SVG) {
+            return Err(format!("its `<{}` is not in SVG's namespace", name.name()));
         }
-        if let Some(after) = rest.strip_prefix('>') {
-            return Ok((after, true));
+        if !ELEMENTS.split(' ').any(|known| known == name.name()) {
+            return Err(format!("it contains the element `<{}`", name.name()));
         }
-        let end = rest.find(|c: char| c.is_whitespace() || matches!(c, '=' | '>' | '/')).unwrap_or(rest.len());
-        let name = &rest[..end];
-        if rest.is_empty() {
-            return Err(format!("the tag `<{element}` does not end"));
+        if nth >= MAX_ART_ELEMENTS {
+            return Err(format!("it has more than {MAX_ART_ELEMENTS} elements"));
         }
-        let Some(place) = ATTRIBUTES.iter().position(|known| *known == name) else {
-            return Err(format!("it contains the attribute `{name}`"));
-        };
-        tally.named(name)?;
-        let Some(after) = rest[end..].trim_start().strip_prefix('=') else {
-            return Err(format!("the attribute `{name}` has no value"));
-        };
-        let after = after.trim_start();
-        let Some(quote) = after.chars().next().filter(|quote| matches!(quote, '"' | '\'')) else {
-            return Err(format!("the value of `{name}` is not in quotes"));
-        };
-        let Some((value, after)) = after[1..].split_once(quote) else {
-            return Err(format!("the value of `{name}` does not end"));
-        };
-        if value.contains('\\') {
-            return Err(format!("the value of `{name}` holds a backslash"));
+        if name.name() == "svg" && nth > 0 {
+            return Err("it contains a second `<svg`".into());
         }
-        // The letters `url` are an address wherever they stand, so they may only start `url(#`.
-        if value.split("url").skip(1).any(|after| !after.starts_with("(#")) {
-            return Err("it refers to something outside the file".into());
+        // Counted after the elements are, so the walk up is over a hundred of them at most.
+        if element.ancestors().filter(|node| node.is_element()).count() > MAX_ART_DEPTH {
+            return Err(format!("its elements are nested more than {MAX_ART_DEPTH} deep"));
         }
-        if matches!(name, "d" | "points") && value.len() > MAX_ART_PATH_BYTES {
-            return Err(format!("the value of `{name}` is over {MAX_ART_PATH_BYTES} bytes"));
-        }
-        if place >= WORDS {
-            let count = numbers(name, value, element == "svg" && name != "version")?;
-            if matches!(name, "d" | "points") {
-                tally.numbers += if name == "d" { path_cost(tally.as_written(value))? } else { count };
+        for attribute in element.attributes() {
+            let name = attribute.name();
+            if attribute.namespace().is_some() || !ATTRIBUTES.split_whitespace().any(|known| known == name) {
+                return Err(format!("it contains the attribute `{name}`"));
             }
-            // Said here and not at the end, so that no file is walked far past what it may hold.
-            if tally.numbers > MAX_ART_NUMBERS {
-                return Err(format!("its paths hold more than {MAX_ART_NUMBERS} numbers"));
-            }
-            if element == "svg" {
-                tally.root(name, value)?;
+            path_bytes += if matches!(name, "d" | "points") { attribute.value().len() } else { 0 };
+        }
+    }
+    if path_bytes > MAX_ART_PATH_BYTES {
+        return Err(format!("its `d` and `points` values are over {MAX_ART_PATH_BYTES} bytes together"));
+    }
+    Ok(())
+}
+
+/// What is counted while the tree is walked.
+struct Tally {
+    area: u64,
+    wide: f32,
+    high: f32,
+    cost: ArtCost,
+}
+
+impl Tally {
+    /// Groups and paths only. A group that fades, clips, masks, filters or blends is a layer of memory to the
+    /// renderer, and whatever is neither a group nor a path is text or an image.
+    fn group(&mut self, group: &Group) -> Result<(), String> {
+        for node in group.children() {
+            match node {
+                Node::Group(inner) if inner.should_isolate() => {
+                    return Err("it holds a group that is faded, clipped, masked, filtered or blended".into());
+                }
+                Node::Group(inner) => self.group(inner)?,
+                Node::Path(path) => self.path(path)?,
+                _ => return Err("it holds text or an image".into()),
             }
         }
-        rest = after;
+        Ok(())
+    }
+
+    fn path(&mut self, path: &Path) -> Result<(), String> {
+        self.cost.numbers += 2 * path.data().points().len();
+        let mut paints = Vec::from_iter(path.fill().map(usvg::Fill::paint));
+        if let Some(stroke) = path.stroke() {
+            // How long the renderer draws a length of 1 of this path, along each axis: the shorter is taken.
+            let to = path.abs_transform();
+            let drawn = stroke.width().get() * to.sx.hypot(to.ky).min(to.kx.hypot(to.sy));
+            if stroke.dasharray().is_some() || drawn < MIN_ART_STROKE {
+                return Err(format!("a stroke is dashed, or drawn {drawn} wide, thinner than {MIN_ART_STROKE}"));
+            }
+            paints.push(stroke.paint());
+        }
+        for paint in paints {
+            self.cost.paint += match paint {
+                Paint::Color(_) => self.area,
+                Paint::LinearGradient(_) | Paint::RadialGradient(_) => 4 * self.area,
+                Paint::Pattern(_) => return Err("it paints with a pattern".into()),
+            };
+        }
+        let around = path.abs_stroke_bounding_box();
+        let (near, far) =
+            (around.left().min(around.top()), (around.right() - self.wide).max(around.bottom() - self.high));
+        if near < -MAX_ART_REACH || far > MAX_ART_REACH {
+            return Err(format!("a shape reaches more than {MAX_ART_REACH} past the picture's edge"));
+        }
+        Ok(())
     }
 }
 
-/// Holds an attribute's numbers to plain digits with no exponent, unit or `%`, of at most [`MAX_ART_NUMBER`]. A
-/// transform may only be `translate` and `rotate`. On the `<svg` itself (`root`) the most is [`MAX_ART_SIDE`], and
-/// `width`, `height` and the last two of `viewBox` are sizes: 1 or more ([`MIN_ART_VIEW`] in a `viewBox`), where alone
-/// `px` may follow. Returns how many numbers the value holds.
-fn numbers(name: &str, value: &str, root: bool) -> Result<usize, String> {
-    let most = if root { MAX_ART_SIDE } else { MAX_ART_NUMBER };
-    let digits = |text: &str| text.len() - text.trim_start_matches(|c: char| c.is_ascii_digit()).len();
-    let (mut rest, mut count) = (value, 0);
-    while let Some(at) = rest.find(|c: char| c.is_ascii_digit() || c == '.') {
-        let mut len = digits(&rest[at..]);
-        if let Some(decimals) = rest[at + len..].strip_prefix('.') {
-            len += 1 + digits(decimals);
-        }
-        let number = rest[at..at + len].parse::<f32>();
-        rest = &rest[at + len..];
-        count += 1;
-        if !number.is_ok_and(|number| number <= most) || rest.starts_with('e') {
-            return Err(format!("`{name}=\"{value}\"` holds a number that is not plain digits of at most {most}"));
-        }
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::{Options, Tree, counted};
+
+    // The two lists keep each of these out before a tree is made, so no file reaches these refusals today. The
+    // tree is judged all the same: it is what is drawn, and a list may one day be longer.
+    #[test]
+    fn a_tree_with_a_layer_a_dash_or_a_pattern_is_refused_whatever_the_lists_let_through() {
+        let judged = |inside: &str| {
+            let root = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">"#;
+            counted(&Tree::from_str(&format!("{root}{inside}</svg>"), &Options::default()).unwrap())
+                .map(|cost| cost.paint)
+        };
+        let rect = r#"<rect width="8" height="8"/>"#;
+        assert_eq!(judged(rect), Ok(64));
+        let layer = Err("it holds a group that is faded, clipped, masked, filtered or blended".to_string());
+        assert_eq!(judged(&format!(r#"<g opacity="0.5">{rect}</g>"#)), layer);
+        assert_eq!(judged(&format!(r#"<clipPath id="c">{rect}</clipPath><g clip-path="url(#c)">{rect}</g>"#)), layer);
+        assert_eq!(judged(&format!(r#"<g style="mix-blend-mode:multiply">{rect}</g>"#)), layer);
+        let dashed = judged(r##"<path d="M0 0H8" stroke="#000" stroke-dasharray="1 2"/>"##).unwrap_err();
+        assert!(dashed.starts_with("a stroke is dashed"), "{dashed}");
+        let pattern = format!(
+            r#"<pattern id="p" width="1" height="1">{rect}</pattern><rect width="8" height="8" fill="url(#p)"/>"#
+        );
+        assert_eq!(judged(&pattern), Err("it paints with a pattern".to_string()));
     }
-    let words = value.replace(|c: char| !c.is_ascii_alphabetic(), "");
-    if name.ends_with("transform") && !words.replace("translate", "").replace("rotate", "").is_empty() {
-        return Err(format!("`{name}=\"{value}\"` is more than `translate` and `rotate`"));
-    }
-    let least = if name == "viewbox" { MIN_ART_VIEW } else { 1.0 };
-    let fine = match name {
-        _ if !root => true,
-        "viewbox" => view(value).is_some_and(|view| view[2] >= least && view[3] >= least),
-        "width" | "height" => plain(value.strip_suffix("px").unwrap_or(value)).is_some_and(|side| side >= least),
-        _ => true,
-    };
-    if !fine && name == "viewbox" {
-        return Err(format!(
-            "`{name}=\"{value}\"` is not four plain numbers, the last two a size from {least} to {most}"
-        ));
-    }
-    if !fine {
-        return Err(format!("`{name}=\"{value}\"` is not a size from {least} to {most}"));
-    }
-    let lettered = match name {
-        "d" => !words.chars().all(|c| PATH_COMMANDS.contains(c)),
-        "width" | "height" if root => false,
-        _ => !name.ends_with("transform") && !words.is_empty(),
-    };
-    if lettered || value.contains('%') {
-        return Err(format!("`{name}` holds a unit or `%`: a number is plain digits"));
-    }
-    Ok(count)
 }

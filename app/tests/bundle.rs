@@ -1,6 +1,7 @@
 //! `app/macos/bundle.sh` writes the oldest macOS the app runs on into the bundle, and `install.sh` compares only the
 //! first number of it. So the script refuses a minimum that is not a whole release, before it makes anything. It is a
-//! shell script for a Mac (ADR 0013), so it is run on a Mac only, on a copy beside a made-up `install.sh`.
+//! shell script for a Mac (ADR 0013), so it is run on a Mac only, on a copy beside a made-up `install.sh`. The copy is
+//! started as a program, by its own first line: the test names no shell, and no other system could start it.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[cfg(target_os = "macos")]
@@ -19,9 +20,9 @@ fn a_minimum_macos_that_is_not_a_whole_release_is_refused_before_anything_is_mad
     fs::write(&file, "").unwrap();
     let bundle = |least: &str| {
         fs::write(dir.path().join("install.sh"), format!("MIN_MACOS={least}\n")).unwrap();
-        let mut sh = Command::new("sh");
-        sh.arg(&script).args([&file, &file]).args(["1.0", "arm64"]).arg(&out);
-        let ran = sh.env("TMPDIR", dir.path()).output().unwrap();
+        let mut bundle = Command::new(&script);
+        bundle.args([&file, &file]).args(["1.0", "arm64"]).arg(&out);
+        let ran = bundle.env("TMPDIR", dir.path()).output().unwrap();
         (ran.status.code(), String::from_utf8_lossy(&ran.stderr).into_owned())
     };
     for least in ["12.3", "11.0.1", "11.5.0", "11."] {

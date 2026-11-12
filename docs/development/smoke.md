@@ -11,18 +11,24 @@ make smoke                    # the features the Makefile picks for this machine
 cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build arguments>]
 ```
 
-The chain runs the programs of the debug build in the target folder. A build argument with which it would run
-what an earlier build left there is refused with one line, before anything is built:
+The chain runs the programs of the debug build in the target folder, so the build takes its arguments from a list
+(`crates/xtask/src/smoke/build.rs`). Any other is refused with one line, before anything is built:
 
-- one that makes cargo put the programs somewhere else, or build another workspace's: `--release`, `-r` alone or
-  among other short flags (`-vr`), `--profile`, `--target`, `--target-dir`, `--config`, `--manifest-path`;
-- one that builds only some targets, and so could leave `jellymoon`, `jellymoon-app` or `fake-claude` as it was:
-  `--bin`, `--bins`, `--lib`, `--example`, `--examples`, `--test`, `--tests`, `--bench`, `--benches`, `--exclude`.
+- alone: `--locked`, `--offline`, `--frozen`, `-v`, `-vv`, `--verbose`, `-q`, `--quiet`;
+- with a value: `--jobs`, `-j`, `--features`, `-F`. The value follows after a space or an `=`, or is written on to
+  a short one (`-j4`), and does not start with a `-`.
 
-What only adds to the build is taken: `-p`, `--package`, `--workspace`, `--features`, `-F`. The build is started
-without `CARGO_BUILD_TARGET` and `CARGO_BUILD_TARGET_DIR`, which move it as the flags do. Not held: a
-`build.target` or `build.target-dir` in a `.cargo/config.toml` above the repo also moves the build, and the chain
-then runs what `target/debug` holds. The repo has no such file.
+Each builds the same programs in the same place. The list was once of the arguments refused: `--release`,
+`--target`, `--bin` and their like. Twice an argument nobody had listed passed it, the last being `--help`, with
+which cargo prints its help, builds nothing and exits 0, and the chain then passed over the programs of an earlier
+build. `-p`, `--workspace` and `--no-default-features` are not on the list: nothing passes them, and the last takes
+away from what is built.
+
+The build is started without `CARGO_BUILD_TARGET` and `CARGO_BUILD_TARGET_DIR`, which move it as `--target` does.
+A relative `CARGO_TARGET_DIR` is read against the repo's root, where the build runs and cargo reads it, wherever
+the command was started. The programs' times are not compared with the build's start: cargo leaves a program that
+is up to date as it was. Not held: a `build.target` or `build.target-dir` in a `.cargo/config.toml` above the repo
+also moves the build, and the chain then runs what `target/debug` holds. The repo has no such file.
 
 Each run works in `target/smoke-home-<pid>-<nanoseconds>`, named for its process and for when it started, and
 removes it at its end. A run that was stopped leaves its home, and with `--real` that home holds the person's
@@ -30,7 +36,8 @@ page. So a run first removes the homes earlier runs left, before it builds: a bu
 them. Each run holds the system's lock on the `.lock` file beside its home for as long as it lives, on every
 system, and takes it before it makes the home. A home whose lock can be taken is one no living run has, and since
 no later run is ever given that name again, removing the home and then its lock file takes nothing from a run
-that lives. (Named for the process alone, a home could be removed under a new run that the system gave an old
+that lives. A run writes the file `jellymoon-smoke-home` into its home when it makes it, and only a folder that
+holds that file is removed: a folder somebody else gave a home's name is left. (Named for the process alone, a home could be removed under a new run that the system gave an old
 run's id, by a third run that had opened the old lock file before it was unlinked.)
 
 | Step | What it proves |

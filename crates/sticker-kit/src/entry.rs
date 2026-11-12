@@ -74,6 +74,12 @@ impl EntryState {
         self.chosen = at.unwrap_or(self.chosen);
     }
 
+    /// Whether the entry holds words of the person's, a composition among them. An entry that waits always does:
+    /// only words are entered. One that does is never taken off its page ([`crate::draw::Page::set_entry`]).
+    pub fn holds(&self) -> bool {
+        !self.text.is_empty()
+    }
+
     /// Whether Enter gave the words and no answer has come. While it waits the entry takes no key: no text, no
     /// composition, no caret move, no other option and no second Enter. A key pressed then is not kept for later.
     pub fn waiting(&self) -> bool {

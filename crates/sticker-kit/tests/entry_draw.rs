@@ -70,6 +70,17 @@ fn wish(text: &str, option: &str) -> EntryMade {
     EntryMade { id: "wish".into(), text: text.into(), option: Some(option.into()) }
 }
 
+/// How many of the entry's own pieces are placed: the field and its chips.
+fn pieces(page: &Entity<Page>, cx: &mut VisualTestContext) -> usize {
+    let placed = page.read_with(cx, |page, _| page.placed().to_vec());
+    placed.iter().filter(|p| matches!(p.piece, PieceKind::Entry | PieceKind::Chip)).count()
+}
+
+fn take_away(page: &Entity<Page>, cx: &mut VisualTestContext) {
+    page.update(cx, |page, cx| page.set_entry(None, cx));
+    cx.run_until_parked();
+}
+
 /// The handler's answer to what Enter gave.
 fn answer(page: &Entity<Page>, cx: &mut VisualTestContext, kept: bool) {
     cx.update(|window, cx| page.update(cx, |page, cx| page.answer_entry(kept, window, cx)));
@@ -195,15 +206,11 @@ fn a_chip_chooses_its_option_and_the_page_under_the_entry_still_takes_taps() {
     page.update(cx, |page, cx| page.set_entry(Some(fewer), cx));
     cx.run_until_parked();
     assert_eq!(state(&page, cx), ("lo".into(), 2, Some(0), true), "what was typed is held to the new entry");
-    let count = |cx: &mut VisualTestContext| {
-        let placed = page.read_with(cx, |page, _| page.placed().to_vec());
-        placed.iter().filter(|p| matches!(p.piece, PieceKind::Entry | PieceKind::Chip)).count()
-    };
-    assert_eq!(count(cx), 2);
-    page.update(cx, |page, cx| page.set_entry(None, cx));
-    cx.run_until_parked();
+    assert_eq!(pieces(&page, cx), 2);
+    keys(cx, "backspace backspace");
+    take_away(&page, cx);
     assert_eq!(
-        (count(cx), state(&page, cx)),
+        (pieces(&page, cx), state(&page, cx)),
         (0, (String::new(), 0, None, false)),
         "a page with no entry takes no keys"
     );
@@ -253,7 +260,93 @@ fn an_entry_waits_with_its_words_for_its_answer_and_takes_no_key_or_composition_
     keys(cx, "o k enter");
     assert_eq!(made.borrow().last(), Some(&wish("ok", "kitchen")), "the option is given by its name");
 
-    page.update(cx, |page, cx| page.set_entry(None, cx));
-    cx.run_until_parked();
+    answer(&page, cx, true);
+    take_away(&page, cx);
     assert!(!accepts(cx), "a page with no entry takes no text input");
+}
+
+#[test]
+fn an_entry_taken_away_stays_with_its_words_and_goes_once_it_is_empty_and_answered() {
+    let mut cx = context();
+    let (page, cx, made, _) = open(&mut cx);
+    let waiting = |cx: &mut VisualTestContext| page.read_with(cx, |page, _| page.entry().waiting());
+    take_away(&page, cx);
+    assert_eq!(pieces(&page, cx), 0, "an empty entry that does not wait goes at once");
+
+    // Words that wait: the entry stays as it was, chips and all, and a refusal leaves them to be changed.
+    page.update(cx, |page, cx| page.set_entry(Some(entry()), cx));
+    cx.run_until_parked();
+    let field = piece(&page, cx, PieceKind::Entry, 0);
+    click(cx, field.rect.center());
+    keys(cx, "d r a f t tab enter");
+    take_away(&page, cx);
+    let held = ("draft".to_string(), 5, Some(1), true);
+    assert_eq!((pieces(&page, cx), state(&page, cx), waiting(cx)), (4, held.clone(), true));
+    answer(&page, cx, false);
+    assert_eq!((pieces(&page, cx), state(&page, cx), waiting(cx)), (4, held, false), "the refusal found no words");
+    keys(cx, "backspace s enter");
+    assert_eq!(made.borrow().last(), Some(&wish("drafs", "kitchen")), "the words can be changed and entered");
+    // Kept: it empties, and only then goes.
+    answer(&page, cx, true);
+    assert_eq!((pieces(&page, cx), state(&page, cx)), (0, (String::new(), 0, None, false)));
+
+    // Words typed and not entered stay too, until the person takes them out.
+    page.update(cx, |page, cx| page.set_entry(Some(entry()), cx));
+    cx.run_until_parked();
+    click(cx, field.rect.center());
+    keys(cx, "t e a");
+    take_away(&page, cx);
+    assert_eq!((pieces(&page, cx), state(&page, cx).0.as_str()), (4, "tea"));
+    keys(cx, "backspace backspace");
+    assert_eq!((pieces(&page, cx), state(&page, cx).0.as_str()), (4, "t"));
+    keys(cx, "backspace");
+    assert_eq!(pieces(&page, cx), 0, "the entry that was taken away goes with its last word");
+}
+
+#[test]
+fn an_answer_is_always_for_the_words_on_show_since_an_entry_that_waits_cannot_go_and_come_back_empty() {
+    let mut cx = context();
+    let (page, cx, made, _) = open(&mut cx);
+    let field = piece(&page, cx, PieceKind::Entry, 0);
+    click(cx, field.rect.center());
+    keys(cx, "f i r s t enter");
+    take_away(&page, cx);
+    page.update(cx, |page, cx| page.set_entry(Some(entry()), cx));
+    cx.run_until_parked();
+    keys(cx, "s e c o n d enter");
+    let waiting = page.read_with(cx, |page, _| page.entry().waiting());
+    assert_eq!((state(&page, cx).0.as_str(), waiting), ("first", true), "a second wish was typed under the first");
+    assert_eq!(*made.borrow(), [wish("first", "garden")], "one Enter, so one answer to come");
+    answer(&page, cx, true);
+    assert_eq!((pieces(&page, cx), state(&page, cx).0.as_str()), (4, ""), "the entry given back is the page's");
+}
+
+#[test]
+fn an_entry_that_waits_does_not_take_escape_so_the_keys_stay_its_own() {
+    let mut cx = context();
+    let (page, cx, _, _) = open(&mut cx);
+    let field = piece(&page, cx, PieceKind::Entry, 0);
+    click(cx, field.rect.center());
+    keys(cx, "t e a enter escape");
+    assert_eq!(state(&page, cx), ("tea".into(), 3, Some(0), true), "Escape was taken while the entry waited");
+    answer(&page, cx, false);
+    keys(cx, "escape");
+    assert!(!state(&page, cx).3, "Escape gives the keys back once the answer has come");
+}
+
+#[test]
+fn a_page_with_no_handler_answers_itself_so_its_entry_never_stays_waiting() {
+    let mut cx = context();
+    cx.update(|cx| load_fonts(cx)).expect("bundled fonts load");
+    let (page, cx) =
+        cx.add_window_view(|_, _| Page::new(Scene::sample(), Theme::sticker()).reduce_motion(true).with_entry(entry()));
+    cx.simulate_resize(size(px(1440.0), px(900.0)));
+    cx.run_until_parked();
+    let field = piece(&page, cx, PieceKind::Entry, 0);
+    click(cx, field.rect.center());
+    keys(cx, "t e a enter");
+    let waiting = page.read_with(cx, |page, _| page.entry().waiting());
+    assert_eq!((state(&page, cx), waiting), ((String::new(), 0, Some(0), true), false));
+    keys(cx, "o k");
+    assert_eq!(state(&page, cx).0, "ok", "the entry takes keys again");
 }

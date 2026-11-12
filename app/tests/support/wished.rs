@@ -14,7 +14,7 @@ use jellymoon_app::today::Today;
 use serde_json::Value;
 use sticker_kit::Scene;
 
-use super::day::{self, DAY, answer, called, reading, result, said, shown, write_log};
+use super::day::{self, DAY, answer, called, noon, reading, result, said, shown, write_log, zone};
 
 /// The words every made-up window enters.
 pub const SAID: &str = "make the uploader retry twice";
@@ -51,8 +51,9 @@ pub fn world() -> World {
     #[cfg(unix)]
     std::os::unix::fs::symlink(&real, at("git").join("git")).unwrap();
     let git = if cfg!(unix) { at("git") } else { real.parent().unwrap().to_path_buf() };
-    let home = [("TZ", "America/Los_Angeles".into()), ("HOME", at("user").into()), ("USERPROFILE", at("user").into())];
-    let mut vars = home.to_vec();
+    let mut home = vec![("HOME", at("user").into()), ("USERPROFILE", at("user").into())];
+    home.extend(zone());
+    let mut vars = home.clone();
     vars.extend([
         ("PATH", git.into_os_string()),
         ("JELLYMOON_SYSTEM_BIN", OsString::new()),
@@ -64,7 +65,7 @@ pub fn world() -> World {
     if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
         vars.push(("SystemRoot", root)); // a Windows program needs it to start
     }
-    let mut reading_vars = home.to_vec();
+    let mut reading_vars = home;
     reading_vars.extend([
         ("JELLYMOON_HOME", at("jm").into()),
         ("PATH", at("read").into()),
@@ -72,7 +73,7 @@ pub fn world() -> World {
     ]);
     let world = World { day: day::World { home: at("jm"), rec: at("read"), vars: reading_vars, dir }, vars };
     let repo = world.repo("alpha");
-    let typed = |folder: &Path| [said("2026-03-10T16:00:00.000Z", folder.to_str().unwrap(), "look at the uploader")];
+    let typed = |folder: &Path| [said(&noon(0), folder.to_str().unwrap(), "look at the uploader")];
     write_log(&world.day, "-work-alpha/s1.jsonl", &typed(&repo));
     write_log(&world.day, "-work-beta/s2.jsonl", &typed(&world.at("work").join("beta")));
     answer(&world.day, &result(&reading()), 0);

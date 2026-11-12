@@ -101,7 +101,9 @@ enum Prompt {
 pub(crate) type Typed = (Option<Timestamp>, ReaderTurn, String);
 
 /// Returns one log's turns, on any day, each with when it was typed. A line that is not valid JSON is skipped; a file
-/// that cannot be read gives what was read before the error. `seen` holds the uuid of every typed line so far: a resumed
+/// that cannot be read gives what was read before the error. A log is read no further than its length when it was
+/// opened: one that is written to as fast as it is read would have no end, and a line cut off there is not valid
+/// JSON. `seen` holds the uuid of every typed line so far: a resumed
 /// or forked session repeats earlier lines in a new file, and the first one read is the one kept.
 pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, line_max: usize) -> Vec<Typed> {
     let Ok(log) = File::open(file) else {
@@ -109,7 +111,8 @@ pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, li
     };
     let folder =
         file.parent().and_then(Path::file_name).map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-    let (mut log, mut raw) = (BufReader::with_capacity(1 << 16, log), Vec::new());
+    let len = log.metadata().map_or(0, |held| held.len());
+    let (mut log, mut raw) = (BufReader::with_capacity(1 << 16, log.take(len)), Vec::new());
     let mut turns: Vec<Typed> = Vec::new();
     let mut open = false; // whether the last turn can still take a reply
     while let Ok(true) = next_line(&mut log, line_max, &mut raw) {

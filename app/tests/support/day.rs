@@ -24,6 +24,20 @@ pub struct World {
     pub vars: Vec<(&'static str, OsString)>,
 }
 
+/// When a line of the made-up day was typed: `second` seconds after noon of [`DAY`] in this system's zone. A step
+/// a test takes in its own process reads the day in that zone, which no test can set, so the day is typed where
+/// it is that day here, whichever zone this is, and [`zone`] has the programs a test starts read it there too.
+pub fn noon(second: i8) -> String {
+    let day: jiff::civil::Date = DAY.parse().unwrap();
+    day.at(12, 0, second, 0).to_zoned(jiff::tz::TimeZone::system()).unwrap().timestamp().to_string()
+}
+
+/// `TZ` as this process has it, for a program a test starts. None when it is not set: the program then reads the
+/// system's zone, as this process does.
+pub fn zone() -> Option<(&'static str, OsString)> {
+    env::var_os("TZ").map(|zone| ("TZ", zone))
+}
+
 /// One line of a session log, as Claude Code writes what a person typed.
 pub fn said(at: &str, cwd: &str, text: &str) -> String {
     json!({"type": "user", "timestamp": at, "cwd": cwd, "sessionId": "s", "origin": {"kind": "human"},
@@ -72,25 +86,18 @@ pub fn world() -> World {
         fs::copy(built, &program).unwrap();
     }
     fs::create_dir(at("user")).unwrap();
-    let vars = vec![
-        ("TZ", "America/Los_Angeles".into()),
+    let mut vars = vec![
         ("HOME", at("user").into()),
         ("USERPROFILE", at("user").into()),
         ("JELLYMOON_HOME", at("jm").into()),
         ("PATH", bin.clone().into()),
         ("JELLYMOON_SYSTEM_BIN", OsString::new()), // no folder of this machine is looked in for a harness
     ];
+    vars.extend(zone());
     let world = World { home: at("jm"), rec: bin, vars, dir };
-    let lines = [
-        said("2026-03-10T16:00:00.000Z", &work("alpha"), FIRST),
-        said("2026-03-10T17:00:00.000Z", &work("alpha"), SECOND),
-    ];
+    let lines = [said(&noon(0), &work("alpha"), FIRST), said(&noon(1), &work("alpha"), SECOND)];
     write_log(&world, "-work-alpha/s1.jsonl", &lines);
-    write_log(
-        &world,
-        "-work-private-notes/s2.jsonl",
-        &[said("2026-03-10T18:00:00.000Z", &work("private-notes"), "dear diary")],
-    );
+    write_log(&world, "-work-private-notes/s2.jsonl", &[said(&noon(2), &work("private-notes"), "dear diary")]);
     answer(&world, &result(&reading()), 0);
     world
 }

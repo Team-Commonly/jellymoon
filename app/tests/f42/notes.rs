@@ -9,7 +9,7 @@ use serde_json::json;
 use sticker_kit::{Mark, Note, Scene, State};
 
 use super::{SAID, chips, drawn, first, kept_wishes, on_show, read};
-use crate::support::day::{DAY, World, answer, names, said, shown, work, write_log};
+use crate::support::day::{DAY, World, answer, names, noon, said, shown, work, write_log};
 
 /// Why core keeps no wish for a project it does not offer.
 const GONE: &str =
@@ -32,7 +32,7 @@ fn titles(scene: &Scene) -> Vec<&str> {
 /// Something typed that day in a folder of each name.
 fn typed_in(world: &World, folders: &[&str]) {
     for name in folders {
-        write_log(world, &format!("-work-{name}/s.jsonl"), &[said("2026-03-10T16:30:00.000Z", &work(name), "hello")]);
+        write_log(world, &format!("-work-{name}/s.jsonl"), &[said(&noon(30), &work(name), "hello")]);
     }
 }
 
@@ -234,4 +234,22 @@ fn a_wish_s_note_names_its_words_outlives_a_reading_and_an_older_asking_leaves_a
     // A look keeps both, and the next wish that is kept takes both away.
     assert!((on.look())().is_none());
     assert_eq!(titles(&on.wished(SAID, Some("alpha")).0), [""; 0]);
+}
+
+// Every chip goes while the words are typed and the window's own reading runs: the reading's end has no entry to
+// give, and Enter is refused. The page still has the words for that refusal to leave: the kit keeps an entry
+// that is taken away while it holds words (`crates/sticker-kit/tests/entry_draw.rs`).
+#[test]
+fn every_folder_switched_off_under_typed_words_ends_the_reading_with_no_entry_and_refuses_enter() {
+    let world = read();
+    let mut on = on_show(&world);
+    assert_eq!((on.offering())().unwrap().options, ["alpha", "private-notes"]);
+    fs::write(world.home.join("skip.txt"), "work\n").unwrap();
+    let page = on.page.clone().unwrap();
+    let end = Next { scene: on.today.draw(&page), page: Some(page), later: None };
+    let (_, entry) = on.today.clone().offered(Box::new(move || Some(end)))().expect("the reading's last step");
+    assert!(entry.is_none(), "the reading's end gave an entry with no folder switched on");
+    let (scene, asking) = on.wished(SAID, Some("alpha"));
+    assert!(asking.is_none() && kept_wishes(&world).is_none(), "a wish was made for a folder switched off");
+    assert_eq!(first(&scene), Some((UNKEPT, format!("“{SAID}”: {GONE}").as_str())));
 }

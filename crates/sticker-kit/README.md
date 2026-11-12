@@ -47,8 +47,8 @@ Page::new(scene, theme)
 - **The entry then waits** for the handler's answer,
   `page.answer_entry(kept, window, cx)`, which every handler gives. Until then
   the words stay in the field, drawn in the theme's quiet colour with no caret,
-  and the entry takes no key, no click on a chip, no second Enter and no
-  composition (`accepts_text_input` is false). A key pressed while it waits is
+  and the entry takes no key, Escape included, no click on a chip, no second
+  Enter and no composition (`accepts_text_input` is false). It keeps the keys. A key pressed while it waits is
   dropped, not kept for later. Kept: the entry is empty and keeps its option.
   Not kept: the words are still there. A page with no handler answers itself.
 - **An input method** (Chinese, Japanese, Korean, a dead key) talks to the page
@@ -58,6 +58,13 @@ Page::new(scene, theme)
   is text: a window that acts on a bare key asks first. `page.entry()` is what
   is typed now; `set_entry` changes or removes the entry, and keeps the chosen
   option by its name when that name is still offered (`EntryState::keep_option`).
+- **An entry that holds words is not removed.** `set_entry(None)` takes an
+  empty entry off the page at once. One that holds words, or waits for its
+  answer, stays as it is, with its options, and goes when it is empty: after
+  an answer that kept the words, or when the person has deleted them. Words a
+  person typed never go with the entry, and an answer always finds the words
+  it is for: an entry cannot go and come back empty while it waits. An entry
+  set meanwhile takes its place and keeps the words.
 
 The rules are `entry::EntryState`, plain data with no GPUI in it
 (`tests/entry.rs`, `tests/entry_waits.rs`). `tests/entry_draw.rs` sends keys and clicks through GPUI's

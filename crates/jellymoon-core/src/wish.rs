@@ -311,10 +311,13 @@ mod tests {
         Ok(())
     }
 
-    /// A day's logs under `dir`: one thing typed in each of `folders`, and the read of them.
+    /// A day's logs under `dir`: one thing typed in each of `folders`, and the read of them. It is typed at noon
+    /// of the day in this system's zone, which is the zone the lookup reads in.
     fn typed_in(dir: &Path, folders: &[PathBuf], skip: &[&str]) -> DayOptions {
+        let noon = jiff::civil::date(2026, 3, 10).at(12, 0, 0, 0).to_zoned(jiff::tz::TimeZone::system()).unwrap();
+        let at = noon.timestamp().to_string();
         let line = |folder: &PathBuf| {
-            serde_json::json!({"type": "user", "timestamp": "2026-03-10T12:00:00.000Z", "cwd": folder,
+            serde_json::json!({"type": "user", "timestamp": at, "cwd": folder,
                 "sessionId": "s", "origin": {"kind": "human"}, "message": {"role": "user", "content": "hello"}})
             .to_string()
         };
@@ -364,6 +367,14 @@ mod tests {
         std::fs::remove_dir_all(dir.path().join("logs"))?;
         assert_eq!(wishable(&read, &names), [""; 0], "no logs, no folder");
         Ok(())
+    }
+
+    #[test]
+    fn a_folder_counts_only_as_a_full_path_and_is_matched_only_by_its_last_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let folders = [dir.path().join("work").join("alpha"), PathBuf::from("loose").join("beta")];
+        let names = ["alpha", "work", "beta", "loose"].map(str::to_string);
+        assert_eq!(wishable(&typed_in(dir.path(), &folders, &[]), &names), ["alpha"]);
     }
 
     #[test]

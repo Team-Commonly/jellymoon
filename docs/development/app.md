@@ -158,11 +158,18 @@ what core keeps.
   Words core refuses write nothing: the page's first note is "That wish was not kept.", with why. Taking the
   answer on the window's thread (`OnShow::answered`) opens no file.
 - **While core is asked the entry waits.** From Enter until core's answer the words stay in the field, drawn
-  pale, with no caret. The entry takes no key then: no letter, no editing key, no Tab, no click on a chip, no
-  second Enter, and no input method can begin a composition. A key pressed while it waits is not accepted and
+  pale, with no caret. The entry takes no key then: no letter, no editing key, no Tab, no Escape, no click on a
+  chip, no second Enter, and no input method can begin a composition. The keys stay the entry's, so `t` does
+  not switch the theme. A key pressed while it waits is not accepted and
   is not kept for later. The wait is the time of one read of the day's logs, and at most that and the 3 seconds
   core waits for a day that is locked. Kept: the field is empty. Refused: the words are still there, as typed,
   and the entry takes keys again, however many refusals follow one another.
+- **An entry with words in it is never taken away.** The window gives the page the entry of each reading step,
+  and none when no project is offered any more (every folder switched off in `skip.txt` while the reading runs,
+  logs that cannot be read). The kit keeps an entry that holds words, or waits, on the page as it was, with the
+  chips it had, until it is empty and answered (`Page::set_entry`). So a refusal always has the words to leave,
+  and words that were typed and not entered stay. Enter on a chip that is still drawn is asked of core like any
+  other, and core refuses a project it no longer offers.
 - **A wish's note** names its wish: its body is the start of the words between quotation marks, at most 40
   characters, then core's reason. Core cleans and cuts that start (`jellymoon_core::wish_start`), as it cleans
   a kept wish's words, so a credential typed in a wish is not in its note; a kept wish is named by the words

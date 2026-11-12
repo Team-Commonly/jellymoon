@@ -34,6 +34,8 @@ pub(super) struct EntryView {
     pub what: Option<Entry>,
     pub state: EntryState,
     on_made: Option<EntryHandler>,
+    /// The entry was taken away while it held words: it goes as soon as it holds none.
+    leaving: bool,
     focus: Option<FocusHandle>,
     /// Whether the entry had the keys when the frame was built.
     pub lit: bool,
@@ -114,7 +116,10 @@ impl Page {
         self
     }
 
-    /// Changes or removes the entry. What is already typed stays, held to the new entry's bounds.
+    /// Changes or removes the entry. What is already typed stays, held to the new entry's bounds. An entry that is
+    /// removed while it holds words, or waits for its answer, stays on the page as it is, with the chips it had,
+    /// and goes once it is empty and does not wait: words a person typed never go with it, and a refusal always
+    /// has them to leave. An entry given meanwhile takes its place, with the words.
     pub fn set_entry(&mut self, entry: Option<Entry>, cx: &mut Context<Self>) {
         match &entry {
             Some(entry) => {
@@ -122,9 +127,13 @@ impl Page {
                 self.entry.state.keep_option(was, &entry.options);
                 self.entry.state.fit(entry);
             }
+            None if self.entry.state.holds() => {
+                self.entry.leaving = true;
+                return;
+            }
             None => self.entry.state = EntryState::default(),
         }
-        self.entry.what = entry;
+        (self.entry.what, self.entry.leaving) = (entry, false);
         self.stale = Stale::Spring;
         cx.notify();
     }
@@ -221,6 +230,10 @@ impl Page {
         let (key, held) = (event.keystroke.key.as_str(), event.keystroke.modifiers);
         let command = held.secondary(cx);
         let state = &mut self.entry.state;
+        // An entry that waits takes no key at all: Escape too, so the keys stay the entry's and none is the window's.
+        if state.waiting() {
+            return;
+        }
         match key {
             "backspace" => state.backspace(),
             "delete" => state.delete(),
@@ -260,7 +273,12 @@ impl Page {
     }
 
     /// Tells the platform's text input that the text or the caret is no longer what it last saw, and draws again.
+    /// An entry that was taken away while it held words goes here, once it holds none.
     fn entry_changed(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if self.entry.leaving && !self.entry.state.holds() {
+            (self.entry.what, self.entry.state, self.entry.leaving) = (None, EntryState::default(), false);
+            self.stale = Stale::Spring;
+        }
         if let Some(focus) = &self.entry.focus {
             window.notify_text_input_changed(focus);
         }

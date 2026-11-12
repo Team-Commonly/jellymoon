@@ -262,7 +262,7 @@
         "the kit's entry keeps text being composed apart from text entered: Enter during a composition enters nothing"
       ],
       "test": "cargo test -p jellymoon-app --test f42",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F41"
       ]

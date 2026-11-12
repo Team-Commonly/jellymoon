@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use std::{fs, io};
 
 use jellymoon_app::today::{self, Asked, Today};
-use jellymoon_app::{lines, read, scene};
+use jellymoon_app::{lines, read, scene, wishing};
 use lexopt::prelude::*;
 use sticker_kit::{Theme, Viewport};
 
@@ -74,12 +74,15 @@ fn run() -> Result<String, Failure> {
     match parse(lexopt::Parser::from_env())? {
         Command::Help => Ok(USAGE.to_string()),
         Command::Layout(options) => {
-            let scene = match &options.page {
-                Source::File(file) => scene::scene(&page(file)?),
-                Source::Day(day) => day.last(),
-                Source::Waiting(date) => today::waiting(date),
+            let (scene, entry) = match &options.page {
+                Source::File(file) => (scene::scene(&page(file)?), None),
+                Source::Day(day) => {
+                    let (scene, page) = day.last();
+                    (scene, wishing::entry(page.as_ref()))
+                }
+                Source::Waiting(date) => (today::waiting(date), None),
             };
-            Ok(lines::lines(&scene, &options.theme, options.size))
+            Ok(lines::lines(&scene, entry.as_ref(), &options.theme, options.size))
         }
         Command::Window(options) => window(options).map(|()| String::new()),
     }

@@ -56,6 +56,11 @@ impl Default for Palette {
             choice_footer: Color::rgb(0x9A3A22),
             option: Color::rgb(0xFFFFFF),
             option_edge: Color::rgba(0xE4573A59),
+            entry: Color::rgb(0xFFFFFF),
+            entry_edge: Color::rgb(0xCFC8EE),
+            caret: Color::rgb(0xE4573A),
+            chip: Color::rgb(0xEDEBF4),
+            chip_chosen: Color::rgb(0xFFE39A),
             hues: vec![
                 hue(0xB9A9F6, 0x9684E6, 0xDCD3FE),
                 hue(0xFFB3CB, 0xF288AB, 0xFFD9E5),
@@ -178,6 +183,11 @@ fn plain_palette() -> Palette {
         choice_footer: Color::rgb(0x57606A),
         option: Color::rgb(0xFFFFFF),
         option_edge: Color::rgba(0x1F232833),
+        entry: Color::rgb(0xFFFFFF),
+        entry_edge: Color::rgb(0xC3C9D1),
+        caret: Color::rgb(0x2F6FEB),
+        chip: Color::rgb(0xECEDEF),
+        chip_chosen: Color::rgb(0xD6E4FD),
         hues: vec![
             hue(0xC4CAD3, 0xA2AAB6, 0xE3E6EA),
             hue(0xD3D7DD, 0xB3BAC4, 0xECEEF1),

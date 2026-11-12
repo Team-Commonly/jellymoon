@@ -364,7 +364,9 @@ harness: that is a cut-off run like any other.
 `run_apart` (`run/apart.rs`) starts the `jellymoon` program it is given as `jellymoon run --wish <id> --date <day>`,
 a process of its own in a process group of its own, and the asker goes on, or ends, while the run goes. A run
 lives as long as the command that holds its lock ("A run that was cut off"), so that command must be able to
-outlive whoever asked for it. The app will ask the same way (F42).
+outlive whoever asked for it. The app asks the same way for a wish entered in its window (F42,
+[app.md](app.md#a-wish-in-the-window-appsrcwishingrs)): it gives the installed command, once core's
+`installed_command` takes it, and starts no run itself.
 
 - **The program** is the one given, by its full path, and nothing is looked up: `jellymoon wish --run` gives its
   own (`current_exe`). A name that is no full path is refused.
@@ -481,7 +483,7 @@ empty `runs/no-hooks`), and they stay.
   has not ended yet. Killing that `jellymoon run` makes it a cut-off run, which the next stop or page ends.
 - A cancelled run's `denied` is 0 when the stop came before the result line: what was denied until then is in
   the stream's other lines, which are not counted.
-- The app does not start or stop a run yet (F42, F43). The 30 minutes are one number for every wish.
+- The app does not stop a run yet (F43). The 30 minutes are one number for every wish.
 - A run started apart was tested with an asker that exits. An asker whose terminal is closed (`SIGHUP` to its
   session) was not: the command has a group of its own, not a session of its own.
 - On Windows a run started apart is run by CI's tests only, never by a person. Its asker's output read through a

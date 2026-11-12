@@ -1,6 +1,7 @@
 # 0015 · The art door reads a picture with the renderer's parser
 
-Status: Accepted, by the coordinator's ruling, 2026-11-12, after the review of PR 142.
+Status: Superseded by [ADR 0016](0016-theme-files-name-no-pictures.md), 2026-11-12: the door this note describes is
+removed. Accepted before that by the coordinator's ruling, 2026-11-12, after the review of PR 142.
 [ADR 0013](0013-the-shell-dependencies.md) lists what the kit depends on. This note adds one line to that list.
 
 ## Decision

@@ -8,9 +8,6 @@ use super::ThemeError;
 /// The largest theme file read, in bytes.
 pub const MAX_THEME_BYTES: u64 = 256 * 1024;
 
-/// The largest art file read, in bytes: 64 KiB. What a file costs to draw grows with its bytes.
-pub const MAX_ART_BYTES: u64 = 64 * 1024;
-
 /// The range of each number, by the start of its dotted key. The first line that matches a key is its range; the
 /// last matches every key. A size that art is rasterised from has a range near what a theme needs (the sticker theme
 /// has a hero of 200, a character of 92 and a rim of 5), and damping one under which the spring stays stable.

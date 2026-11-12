@@ -72,8 +72,8 @@ fn an_unknown_key_or_a_missing_piece_falls_back_to_the_default() {
     expected.name = "dusk".into();
     expected.palette.ink = sticker_kit::Color::rgb(0x102030);
     assert_eq!(loaded.theme.to_toml().unwrap(), expected.to_toml().unwrap(), "every other piece is the default");
-    assert!(loaded.theme.art_svgs().is_empty(), "the kit's own star is drawn");
-    for key in ["sparkle", "palette.glitter", "motion.wobble", "art.star"] {
+    // The star's picture is not looked for: a theme file names no pictures, and the kit's own star is drawn.
+    for key in ["sparkle", "palette.glitter", "motion.wobble", "art"] {
         assert!(loaded.warnings.iter().any(|w| w.starts_with(&format!("{key}:"))), "{key}: {:?}", loaded.warnings);
     }
     assert_eq!(loaded.warnings.len(), 4);
@@ -81,21 +81,37 @@ fn an_unknown_key_or_a_missing_piece_falls_back_to_the_default() {
     let _ = fs::remove_dir_all(dir);
 }
 
+/// What the kit says of a theme file that names a picture.
+const NO_PICTURES: &str = "art: pictures in a theme are not read in this version; the kit's own art is drawn";
+
+// The step: "a theme carries no code: a theme file containing a script or a path outside its folder is refused".
+// A path outside the folder is refused, by the text of the key, with no file opened. A script could only ever be
+// in a picture the theme names, and a theme's pictures are never read: the theme is what its own text says,
+// whatever lies beside it, and holds no folder to find a file in.
 #[test]
 fn a_theme_file_with_a_script_or_a_path_outside_its_folder_is_refused() {
+    let text = "[art]\nstar = \"star.svg\"\n";
+    let mut said = Theme::from_toml(text).expect("the text is a theme");
+    said.theme.name = "theme".into();
+    assert_eq!(said.warnings, [NO_PICTURES]);
+    assert_eq!(said.theme.to_toml().unwrap(), Theme { name: "theme".into(), ..Theme::sticker() }.to_toml().unwrap());
     let scripts = [
         r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#,
         r#"<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><circle r="4"/></svg>"#,
         r#"<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:x()"><circle r="4"/></a></svg>"#,
     ];
     for svg in scripts {
-        let dir = folder("script", &[("star.svg", svg), ("theme.toml", "[art]\nstar = \"star.svg\"\n")]);
-        match Theme::load(&dir.join("theme.toml")) {
-            Err(ThemeError::RefusedSvg { key, .. }) => assert_eq!(key, "art.star"),
-            other => panic!("{svg} was not refused: {other:?}"),
-        }
+        let dir = folder("script", &[("star.svg", svg), ("theme.toml", text)]);
+        assert_eq!(Theme::load(&dir.join("theme.toml")).as_ref(), Ok(&said), "{svg} is beside it, and is not read");
         let _ = fs::remove_dir_all(dir);
     }
+    // Nor is the name looked for: a folder of that name, or nothing of it, is the same theme.
+    let dir = folder("no-file", &[("theme.toml", text)]);
+    assert_eq!(Theme::load(&dir.join("theme.toml")).as_ref(), Ok(&said));
+    fs::create_dir(dir.join("star.svg")).unwrap();
+    assert_eq!(Theme::load(&dir.join("theme.toml")).as_ref(), Ok(&said));
+    let _ = fs::remove_dir_all(dir);
+
     let picture = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle r="4"/></svg>"#;
     let dir = folder("inside", &[("star.svg", picture)]);
     let outside = folder("outside", &[("star.svg", picture)]);

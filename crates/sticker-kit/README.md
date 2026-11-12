@@ -9,7 +9,7 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 - `Scene` (`src/scene.rs`): what is on the page. A date, a title, a hero,
   characters, notes (`List`, `Choice`, `Plain`), a legend. Plain serde data.
 - `Theme` (`src/theme/`): how it looks. Colours, font names, tilt angles,
-  motion amounts, sizes, and optional SVG files that replace the drawn art.
+  motion amounts and sizes. It names no pictures: the art is the kit's own.
   Two are built in: `Theme::sticker()` and `Theme::plain()`.
 - `Placed` (`src/layout/`): where each piece goes. `layout(scene, theme,
   viewport, &measure)` returns them; it has no GPUI in it, so it is tested
@@ -145,13 +145,18 @@ desk = "#2B2440"
 
 [tilt]
 enabled = false
-
-[art]
-star = "star.svg"   # a file in the theme's own folder
 ```
 
 `Theme::load(path)` returns the theme and its warnings. An unknown key is
 ignored and named in a warning, so a theme for a newer kit still loads.
+
+**A theme file names no pictures**
+(`docs/adr/0016-theme-files-name-no-pictures.md`). The `[art]` table an older
+theme file has is not read: no file it names is opened, looked for or
+resolved, by `load`, by `layout` or by the view. It is said in one warning,
+`art: pictures in a theme are not read in this version; the kit's own art is
+drawn`. Only the text of each name is looked at, and one that leaves the
+theme's folder (`..`, a root) still refuses the theme, as it always did.
 
 ## The door: what the kit holds its input to
 
@@ -161,7 +166,6 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | Input | Bound | Where |
 |---|---|---|
 | theme file | a regular file of at most 256 KiB | `theme::MAX_THEME_BYTES` |
-| art file | a regular file of at most 64 KiB, inside the theme's folder (a symlink out of it counts as outside) | `theme::MAX_ART_BYTES` |
 | any number in a theme | finite, and 0 to 10000 unless a line below says otherwise | `theme::RANGES` |
 | `metrics.width`, `metrics.height` | 200 to 10000 | |
 | `metrics.columns` | 1 to 12 | |
@@ -172,7 +176,6 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | `motion.damping` | 0 to 200 (14); the spring is stable all the way | |
 | `labels.max_chars` | 1 to 200 | |
 | every angle under `tilt` | -45 to 45 | |
-| an art file's SVG | a flat picture, as the renderer's parser reads it, held to the lists below | `svg_refusal` |
 | notes in a scene | the first 12 are laid out, the rest only counted | `MAX_NOTES` |
 | options of a choice note | the first 4 | |
 | rows of a whole list | the first 12 are laid out, the rest only counted | |
@@ -188,143 +191,10 @@ a theme it refuses, and the view draws only what is placed. Behind that,
 `layout` returns at most `MAX_PIECES` pieces and punches at most 150 holes,
 and the view draws at most 1000 grid lines each way and 64 stripes on a tape.
 
-**An art file is read with the renderer's own parser, and its tree is judged by an allow-list**
-(`src/theme/svg_check.rs`, `docs/adr/0015-the-art-door-reads-with-the-renderers-parser.md`), so what a file costs
-to draw is bounded at the door and not left to the renderer. The parser is `usvg`, at the version GPUI draws
-with; the tree it makes is the tree that is drawn. A size, a shape, a stroke's width and where a transform puts a
-thing are what that tree says, so the door has no reading of its own for the renderer to differ from. A file with
-anything not named here refuses the whole theme, with the key and the reason. It is read through the door again
-when it is drawn, and a file that has gone bad since is left out for the kit's own art.
-
-Three things are held, in this order:
-
-1. **The bytes.** A regular file of at most 64 KiB, UTF-8.
-2. **The XML document**, before a picture is made of it. This bounds what the parser is asked to build, and keeps
-   out the two things it would load.
-   - It is XML with no DTD: no DOCTYPE and no entity. A comment or a processing instruction is passed over, as
-     the renderer passes over it, and a character reference is read by the one parser.
-   - Elements, the 15 in `theme::SVG_ELEMENTS`, in SVG's namespace and written as SVG writes them: `svg` (one),
-     `g`, `defs`, `title`, `desc`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`,
-     `linearGradient`, `radialGradient`, `stop`. So no `style`, `script`, `use`, `symbol`, `filter` or its
-     primitives, `pattern`, `mask`, `clipPath`, `image`, `foreignObject`, `text`.
-   - Attributes, the 32 in `theme::SVG_ATTRIBUTES`: `id`, `version`, geometry (`x` `y` `x1` `y1` `x2` `y2` `cx`
-     `cy` `r` `rx` `ry` `d` `points` `width` `height` `viewBox`), paint (`fill` `stroke` `stop-color` `offset`
-     `fill-rule` `fill-opacity` `stroke-width` `stroke-opacity` `stop-opacity` `stroke-linecap` `stroke-linejoin`
-     `gradientUnits`), and `transform`, `gradientTransform`. So no `style`, `href`, `filter`, `opacity` on a
-     group, `on…` handler, `xml:base`, dashes or mitre limit. A name in another case (`viewbox`) is another name,
-     and is refused.
-   - At most 100 elements (`MAX_ART_ELEMENTS`), each at most 12 deep (`MAX_ART_DEPTH`), the `<svg` counted in both.
-   - The `d` and `points` values hold at most 16 KiB together (`MAX_ART_PATH_BYTES`).
-   - What the paths and shapes write, walked with the parser library's own tokenizer before the parser makes a
-     picture of it (`theme/svg_text.rs`). The parser does three things by the length of a value, and one of them
-     ends the program:
-     - at most 2048 commands in the paths of a file, a pair of `points` being one (`MAX_ART_COMMANDS`);
-     - at most 32 closes or arcs in a row in a path with nothing else between them (`MAX_ART_IDLE`). The parser
-       calls itself once for each segment it draws nothing for, which is a close after a close and an arc too flat
-       to be a curve, and a path of a few thousand `z` overflowed its stack. The first close of a run and an arc
-       straight after a close are drawn, and not counted. Every other arc is, flat or not;
-     - no number in a `d` or in `points`, and no `x` `y` `x1` `y1` `x2` `y2` `cx` `cy` `r` `rx` `ry` `width`
-       `height`, is over 1000000 (`MAX_ART_WRITTEN`). An arc, a circle and a rounded corner are made of more
-       curves the larger they are written, all at once: `r="3e38"` was four million;
-     - an arc's two radii are within 1000 times of each other (`MAX_ART_FLAT`): the parser makes the smaller
-       as much larger as the other is, so a flat arc between far ends is a very large one.
-3. **The tree.**
-   - Groups and paths only. A group that is faded, clipped, masked, filtered or blended is refused, and so is a
-     dashed stroke, a pattern, text and an image. The two lists keep each of these out already; the tree is judged
-     all the same, since it is what is drawn.
-   - The picture is at most 256 a side (`MAX_ART_SIDE`), at the size the renderer gives it: its `width` and
-     `height`, else its `viewBox`'s, else as large as what is in it. A unit (`1in`) is what the renderer takes it for.
-     And at least 0.5 a side (`MIN_ART_SIDE`): it is drawn at twice its size cut to whole pixels, and the renderer
-     refuses a picture that comes to none.
-   - Every path's box after every transform, and twice its stroke's drawn width past it, is within 4096 of the
-     picture's edges (`MAX_ART_REACH`), in the picture's own pixels. Twice the width is as far as a mitre's point
-     goes. The renderer's own box of a stroke is not used: under a slant it is the path's box and no more.
-   - A stroke is drawn at least 0.51 wide (`MIN_ART_STROKE`), in the picture's own pixels: just over one drawn
-     pixel. A group that makes a picture smaller makes its strokes thinner, and that is the width held.
-   - The paths hold at most 3072 numbers (`MAX_ART_NUMBERS`): two for every point, once the renderer has made
-     each shape a path. A `rect` is 8, a `circle` or an `ellipse` 26, a rounded `rect` 34, an arc as many as the
-     curves it is drawn as. 99 circles are 2574.
-   - The paint is at most 4194304 (`MAX_ART_PAINT`, 64 fills of 256 by 256). Every fill and every stroke is the
-     picture's width times its height, and 16 (`ROW_PAINT`) for every row of the picture an edge of the path
-     crosses, each edge after the last and back to where a piece began; a stroke's rows count twice, for its two
-     sides. One painted with a gradient is four times all of that. A curve's edges are counted through the
-     points that pull it. So a fill that covers a picture of 256 is 73728, and 56 of them fit; a line down the
-     whole picture is 4096 under a fill.
-- A theme's art files together are held to the same two counts, so five files
-  cost no more than one. The refusal names the file that went over.
-- The files are read again when the theme is drawn (`Theme::art_svgs`: one pass, each file read
-  once, one sum), and are held
-  together to the two counts again, in the same order: a file changed since the load
-  that is refused, or would take the files before it past a count, is not drawn, and
-  the kit's own art is drawn for its piece.
-
-**What stays different between the door's parse and the renderer's** is only what the door turns off, each so
-that less is done and never so that a file is read another way. The renderer allows a DTD and expands its
-entities; the door refuses the file. The renderer loads the image an `<image` names and the system's fonts for a
-`<text`; the door's options resolve no image, and neither element is on the list, so neither parse is asked. The
-renderer unpacks a gzip file; the door reads text, and such a file is not UTF-8. A file the door takes holds none
-of these, so the two make the same tree of it. `tests/alike.rs` holds the door against `usvg` called as GPUI calls
-it, size for size and point for point, on each picture the door's own reader once took another way, and
-`tests/art_draw.rs` rasterises them and compares the sizes. The kit asks for `usvg` at exactly GPUI's version, and
-a test fails when the lock file holds two.
-
-What an address in a value does: nothing. The renderer has no network, and a paint it cannot find in the file
-(`fill="url(https://…)"`) is painted as a plain colour, which is how the door counts it.
-
-Those two counts are what a file costs to draw (`theme::art_cost`): a shape may paint the whole picture however
-small it is written, every point is a line or a curve the renderer walks, and every edge is walked down every row
-it crosses, the picture being painted in the pieces the edges cut a row into. Before the counts the bound was the
-file's size, and five files at it took 38 s to draw in a debug build on a Mac. `tests/cost.rs` holds each count,
-the reach and the stroke at its edge. Measured on one Mac, in a debug build and in a release:
-
-- **The heaviest themes the kit knows how to write** (`tests/draw.rs`): five ways to spend both counts to the last
-  unit over five files, each read at the door and rasterised. They are the dearest of what was measured, and not
-  a proof that nothing dearer is inside the counts.
-
-  | All the paint and every point spent on | debug | release |
-  |---|---|---|
-  | 52 see-through fills that cover the picture, the rest a ragged fill | 1.30 s | 56 ms |
-  | one ragged see-through fill a file, 241664 rows under its edges | 1.10 s | 80 ms |
-  | the same under a see-through gradient, 45056 rows | 0.64 s | 24 ms |
-  | the same under a fill and a round stroke 2.6 wide, 73728 rows | 0.77 s | 35 ms |
-  | the same written as curves, under a fill and the thinnest stroke | 0.84 s | 32 ms |
-
-  The door reads the five files in 3 to 16 ms (0.4 to 0.9 ms in a release). The heaviest is the first in a debug
-  build and the second in a release: 1.3 s and 80 ms. One paint of 256 by 256 with no edge in it: an opaque
-  fill 1.5 ms in a debug build, a see-through one 14 to 19 ms, a gradient 45 to 49 ms.
-- **What a row costs.** Before a row was counted, a fill cost its area and no more, and a review found eight
-  ragged shapes of 192 points, each edge as tall as the picture, under a see-through gradient and a gradient
-  stroke: all the paint of a file and no more, and 7.6 s to draw in a debug build (14 s on a busy
-  machine, 0.46 s in a release). It is now 19 times the paint of a file and refused, with its three neighbours
-  (`tests/cost.rs`). One ragged fill of 1535 points took 0.78 s opaque and 1.4 s under a see-through gradient, and
-  the time followed the points; the same points along the rows took 30 ms. A gradient stroke on such edges was
-  the dearest thing measured, 4.6 s for the eight.
-- **The worst file to read**: 64 KiB of arcs took the parser 0.36 s before its points could be counted. The 16 KiB
-  held for `d` and `points` refuses it before that parse (`tests/limits.rs`). **What ends the program** is refused
-  before the parse too. In a debug build the parser overflows a stack of 2 MiB on elements nested 700 deep (600 are
-  read), and one of 256 KiB on 80 deep or on a run of 96 closes; at 1024 deep it refuses a file itself. The door
-  takes 12 deep and a run of 32, and `tests/art_draw.rs` reads and draws the worst it takes on a stack of 256 KiB.
-- **What a review measured at seconds each** is refused (`tests/art_draw.rs`): 99 ellipses of a radius of 4096
-  under a thin stroke (4.5 to 6.5 s), circles and a rounded `rect` as large, a line under a stroke 4096 wide,
-  each for its reach; 511 lines under a stroke of 0.015 or thinner on a picture of 8 drawn 256 (1.6 s), for the
-  stroke. Their nearest kin that pass: 504 lines as tall as the picture at 0.016, the whole paint of a file,
-  0.21 s (17 ms in a release); one ellipse of 100, 36 to 53 ms; 40 of them filled see-through on 204 by 204, the
-  whole paint of a file, 1.1 s (32 ms in a release).
-- **Reach**: 30 circles under a thin stroke took 0.42 s at a radius of 8, 64 and 512 (16384 pixels past the
-  picture) alike, and 0.75 s at 4096. The reach held is a quarter of the largest that cost nothing.
-- **A stroke under a drawn pixel** is a hairline to the renderer: 511 lines took 64 ms at 0.016 and 0.74 s at
-  0.015, the same at 0.0001.
-
-The kit's own art, counted the same
-way at the built-in themes' sizes, is 2260 numbers and 2551696 paint: 74% and
-61% of the counts. 163440 of that paint is the rows its edges cross. Behind
-the ranges, the view rasterises the kit's own art at no more than 800 pixels a
-side with a rim of no more than 64, whatever a theme and a window multiply out
-to; a larger piece is that image scaled up. The kit's own art
-is built in code and does not come through this door. It alone blurs a shadow,
-scales, and fades a group, which a file may not ask for: the renderer panics
-on a blurred group whose box overflows, and keeps a layer of memory for every
-faded group.
+**The art is the kit's own, built in code** (`src/art.rs`), and the only
+pictures the view rasterises. Behind the ranges, it is rasterised at no more
+than 800 pixels a side with a rim of no more than 64, whatever a theme and a
+window multiply out to; a larger piece is that image scaled up.
 
 **Text is cleaned before it is measured or drawn** (`text::clean`): control
 characters, the line and paragraph separators U+2028 and U+2029, and every

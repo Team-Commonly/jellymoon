@@ -3,7 +3,6 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
 
 use gpui::{Modifiers, TestAppContext, TestDispatcher, VisualTestContext, point, px, size};
 use sticker_kit::draw::headless::text_system;
@@ -119,87 +118,6 @@ fn bundled_advances_run_a_little_wider_than_shaped_text() {
     });
 }
 
-/// One way to spend all that a theme's art may cost, over its five files.
-struct Heavy {
-    name: &'static str,
-    /// See-through fills over the whole picture, in the five files together: four points each.
-    covers: u64,
-    /// How the ragged shape in each file is painted.
-    paint: &'static str,
-    /// How many fills and strokes of the picture that is, a gradient being four, and what the door counts for a row
-    /// under one of the shape's edges.
-    areas: u64,
-    row: u64,
-    /// The shape is written as curves.
-    curved: bool,
-}
-
-/// What a review and the kit's own measuring found dearest, a count's worth of each: paint that covers the picture,
-/// and edges that cross its rows under each kind of paint. The second is the one a review measured at 7.6 s when a
-/// row cost nothing.
-const HEAVY: [Heavy; 5] = [
-    Heavy { name: "see-through fills", covers: 52, paint: SEE_THROUGH, areas: 1, row: 16, curved: false },
-    Heavy { name: "a ragged fill", covers: 0, paint: SEE_THROUGH, areas: 1, row: 16, curved: false },
-    Heavy {
-        name: "a ragged gradient",
-        covers: 0,
-        paint: r#"fill="url(#g)" fill-opacity="0.5" fill-rule="evenodd""#,
-        areas: 4,
-        row: 64,
-        curved: false,
-    },
-    Heavy {
-        name: "a ragged fill under a round stroke",
-        covers: 0,
-        paint: r##"fill="#abcdef" fill-opacity="0.2" stroke="#123456" stroke-opacity="0.3" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round""##,
-        areas: 2,
-        row: 48,
-        curved: false,
-    },
-    Heavy {
-        name: "ragged curves under the thinnest stroke",
-        covers: 0,
-        paint: r##"fill="#abcdef" fill-opacity="0.2" stroke="#123456" stroke-opacity="0.3" stroke-width="0.51""##,
-        areas: 2,
-        row: 48,
-        curved: true,
-    },
-];
-
-const SEE_THROUGH: &str = r##"fill="#abcdef" fill-opacity="0.2""##;
-
-/// One of five art files that together cost all the door lets a theme's art cost: both counts are spent to the last
-/// unit. Each file holds its share of the fills that cover the picture, and one ragged shape that takes every point
-/// left and every row left: it climbs from the top of the picture and comes back, as many times as it has points
-/// for. `nth` moves every point, so no two files are the same picture.
-fn heaviest_art(heavy: &Heavy, nth: u64) -> String {
-    use sticker_kit::theme::{MAX_ART_DEPTH, MAX_ART_NUMBERS, MAX_ART_PAINT, ROW_PAINT};
-    let area = 256 * 256;
-    // A fifth of each count, and the remainder to the first files.
-    let share = |all: u64| all / 5 + u64::from(nth < all % 5);
-    // A cover's two sides cross every row.
-    let covered = heavy.covers * (area + ROW_PAINT * 512);
-    let rows = (MAX_ART_PAINT - covered - 5 * heavy.areas * area) / heavy.row;
-    let (points, climb) = (share(MAX_ART_NUMBERS as u64 / 2 - 4 * heavy.covers), share(rows / 2));
-    let x = |point: u64| format!("{:.2}", nth as f32 * 0.3 + point as f32 * 250.0 / points as f32);
-    let spikes = (points - 1) / 2;
-    let mut d = format!("M{} 0", x(0));
-    for spike in 0..spikes {
-        let (tip, high, base) =
-            (x(2 * spike + 1), climb / spikes + u64::from(spike < climb % spikes), x(2 * spike + 2));
-        d += &if heavy.curved { format!("Q{tip} {high} {base} 0") } else { format!("L{tip} {high}L{base} 0") };
-    }
-    if points.is_multiple_of(2) {
-        d += &format!("L{} 0", x(points));
-    }
-    let cover = |i: u64| format!(r#"<rect x="-{}" y="-1" width="300" height="258" {SEE_THROUGH}/>"#, 1 + i + nth);
-    let covers: String = (0..share(heavy.covers)).map(cover).collect();
-    let gradient = r##"<linearGradient id="g" x2="0.02" gradientTransform="rotate(33)"><stop offset="0" stop-color="#f00"/><stop offset="0.5" stop-color="#0f0"/><stop offset="1" stop-color="#00f"/></linearGradient>"##;
-    let root = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">{gradient}"#);
-    let (open, close) = ("<g>".repeat(MAX_ART_DEPTH - 2), "</g>".repeat(MAX_ART_DEPTH - 2));
-    format!(r#"{root}{open}{covers}<path d="{d}z" {}/>{close}</svg>"#, heavy.paint)
-}
-
 /// Draws the sample scene headless. What bounds the time is counted elsewhere, in numbers that are the same on every
 /// machine; `backstop` is ten times what the draw took in a debug build on a Mac, so only a hang trips it.
 fn drawn(theme: Theme, name: &str, backstop: u64) {
@@ -210,50 +128,6 @@ fn drawn(theme: Theme, name: &str, backstop: u64) {
     eprintln!("{name}: {took:?}");
     assert!(out.is_file() && took.as_secs() < backstop, "{name} took {took:?}");
     let _ = std::fs::remove_file(&out);
-}
-
-// Whatever a theme's art is made of, it costs no more to draw than this: each way of spending the two counts is
-// read and drawn, and the time of each is printed (`README.md` states them).
-#[test]
-fn the_heaviest_art_a_theme_may_hold_is_counted_to_the_door_s_two_limits_and_drawn() {
-    HEAVY.iter().for_each(heaviest);
-}
-
-fn heaviest(heavy: &Heavy) {
-    use sticker_kit::theme::{ArtCost, MAX_ART_NUMBERS, MAX_ART_PAINT, art_cost};
-    let name = format!("heaviest art, {}", heavy.name);
-    let folder = std::env::temp_dir().join(format!("sticker-kit-heavy-{}-{}", heavy.row, std::process::id()));
-    let _ = std::fs::remove_dir_all(&folder);
-    std::fs::create_dir_all(&folder).unwrap();
-    let (mut theme, mut all) = (String::from("[art]\n"), ArtCost::default());
-    // What the five cost by themselves: the door's reading of each, and the renderer's drawing of it at its own size.
-    let (cx, mut read, mut rasterised) = (context(), Duration::ZERO, Duration::ZERO);
-    for (nth, piece) in ["hero", "character", "star", "bubble", "badge"].into_iter().enumerate() {
-        let art = heaviest_art(heavy, nth as u64);
-        let started = Instant::now();
-        let cost = art_cost(&art).unwrap_or_else(|why| panic!("{name}: {why}"));
-        read += started.elapsed();
-        all = all.with(cost);
-        let image = gpui::Image::from_bytes(gpui::ImageFormat::Svg, art.clone().into_bytes());
-        let started = Instant::now();
-        cx.update(|cx| image.to_image_data(cx.svg_renderer())).expect("it is drawn");
-        rasterised += started.elapsed();
-        std::fs::write(folder.join(format!("{piece}.svg")), &art).unwrap();
-        theme += &format!("{piece} = \"{piece}.svg\"\n");
-    }
-    eprintln!("{name}: read at the door in {read:?}, rasterised in {rasterised:?}");
-    let spent = ArtCost { numbers: MAX_ART_NUMBERS, paint: MAX_ART_PAINT };
-    assert_eq!(all, spent, "{name}: both counts are spent to the last unit");
-    std::fs::write(folder.join("theme.toml"), theme).unwrap();
-    let loaded = Theme::load(&folder.join("theme.toml")).expect("the art is inside the door");
-    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
-    drawn(loaded.theme, &name, 40);
-
-    let one_more = heaviest_art(heavy, 4).replacen("<path", r#"<circle r="1"/><path"#, 1);
-    std::fs::write(folder.join("badge.svg"), one_more).unwrap();
-    let refused = Theme::load(&folder.join("theme.toml")).expect_err("one shape over the counts");
-    assert!(refused.to_string().starts_with("the SVG for art.badge is refused: with the art before it, "));
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// The largest sizes a theme may ask for, on the smallest canvas at the largest scale: the hero comes out 3600 px

@@ -22,7 +22,7 @@ The words below mean exactly this in code, docs and tests. A new term is added h
 | **core** | `crates/jellymoon-core`: every rule of the journal, with no UI | the `jellymoon` binary, which is core behind commands |
 | **shell** | The app's window (`app/`): it draws page data with the kit and decides nothing | core |
 | **kit** | The fixed set of drawable pieces a page is arranged from (`crates/sticker-kit`). The model picks pieces; it never draws one | generated UI |
-| **theme** | How a page looks: colours, fonts, paper, the art for each piece and how much things move. Data and art only, never code | the kit, which is the pieces and their rules |
+| **theme** | How a page looks: colours, fonts, paper, sizes and how much things move. Data only, never code and never a picture: the art is the kit's own | the kit, which is the pieces and their rules |
 | **pack** | Extra pieces added to the kit as data and art only | a plugin, which would run code |
 | **made wish** | A wish the person made in the app or with `jellymoon wish`, kept in their exact words beside the day's page and drawn with the reading's wishes | a wish the reading call worked out; a ruling |
 | **run** | One agent session Jellymoon starts itself for a made wish: the person's harness, headless, in its own copy of the repo (ADR 0011, section 7; ADR 0014) | a session the person started, which Jellymoon only reads; the reading call, which has every tool off |

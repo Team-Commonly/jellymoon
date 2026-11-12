@@ -6,25 +6,14 @@ mod bounds;
 mod builtin;
 mod load;
 mod own;
-mod svg_check;
-mod svg_text;
-
-use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::color::Color;
 
-pub use bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, RANGES};
+pub use bounds::{MAX_THEME_BYTES, RANGES};
 pub use load::{Loaded, ThemeError};
 pub use own::{CHOSEN_INK_FLOOR, HINT_FLOOR, RING_FLOOR};
-pub use svg_check::{
-    ATTRIBUTES as SVG_ATTRIBUTES, ArtCost, ELEMENTS as SVG_ELEMENTS, MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_NUMBERS,
-    MAX_ART_PAINT, MAX_ART_PATH_BYTES, MAX_ART_REACH, MAX_ART_SIDE, MIN_ART_SIDE, MIN_ART_STROKE, ROW_PAINT, art_cost,
-    svg_refusal,
-};
-pub use svg_text::{MAX_ART_COMMANDS, MAX_ART_FLAT, MAX_ART_IDLE, MAX_ART_WRITTEN};
-
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Theme {
@@ -36,10 +25,6 @@ pub struct Theme {
     pub motion: Motion,
     pub labels: Labels,
     pub metrics: Metrics,
-    pub art: Art,
-    /// The folder the theme file was read from; art files resolve inside it.
-    #[serde(skip)]
-    folder: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -203,40 +188,6 @@ pub struct Metrics {
     pub max_scale: f32,
 }
 
-/// SVG files in the theme's own folder that replace the kit's drawn art.
-/// An empty name keeps the kit's art.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct Art {
-    pub hero: String,
-    pub character: String,
-    pub star: String,
-    pub bubble: String,
-    pub badge: String,
-}
-
-impl Art {
-    pub(crate) fn entries(&self) -> [(&'static str, &str); 5] {
-        [
-            ("hero", &self.hero),
-            ("character", &self.character),
-            ("star", &self.star),
-            ("bubble", &self.bubble),
-            ("badge", &self.badge),
-        ]
-    }
-
-    pub(crate) fn clear(&mut self, key: &str) {
-        match key {
-            "hero" => self.hero.clear(),
-            "character" => self.character.clear(),
-            "star" => self.star.clear(),
-            "bubble" => self.bubble.clear(),
-            _ => self.badge.clear(),
-        }
-    }
-}
-
 impl Theme {
     /// The colours for a character's hue index, wrapping past the end.
     pub fn hue(&self, index: u8) -> Hue {
@@ -250,9 +201,5 @@ impl Theme {
     /// `angle` when the theme tilts, zero when it does not.
     pub fn tilted(&self, angle: f32) -> f32 {
         if self.tilt.enabled { angle } else { 0.0 }
-    }
-
-    pub fn folder(&self) -> Option<&Path> {
-        self.folder.as_deref()
     }
 }

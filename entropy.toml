@@ -290,7 +290,11 @@ max_file_lines = 400
 # stated numbers; `tests/entry.rs` the characters nobody sees). The rest is a file's own colours and the floors at
 # the door (`src/theme/own.rs`, 91), contrast in `src/color.rs` (26), one rule for a character a person sees and a
 # cut in the middle (`src/text.rs`, 40), and a row's spare width given to its long chips (`src/layout/entry.rs`).
-"crates/sticker-kit" = 9001
+# Custom art taken out of theme files (ADR 0016) lowered it by 1919, to what the kit measures: `src` lost 602
+# (`theme/svg_check.rs` 332, `theme/svg_text.rs` 126, and the art read by `theme/load.rs`, `theme/mod.rs` and
+# `draw/sprites.rs`) and the tests 1317 (`tests/cost.rs` 374, `tests/limits.rs` 243, `tests/alike.rs` 194,
+# `tests/art_draw.rs` 190, and the door's cases in `tests/theme.rs` and `tests/draw.rs`).
+"crates/sticker-kit" = 7082
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -324,7 +328,9 @@ max_file_lines = 400
 # The review of the entry under the title raised it by 97: the window's passing of core's answer, tested on GPUI's
 # test platform, is 71 (`tests/f43/window.rs`); a theme file's picture in the example, 16; the hint whole at three
 # sizes in both themes (`tests/f42.rs`), 8.
-"app" = 5519
+# Custom art taken out of theme files (ADR 0016) lowered it by 1: the case of a picture with a script, which was
+# refused, is a picture that is not read (`tests/f32.rs`).
+"app" = 5518
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

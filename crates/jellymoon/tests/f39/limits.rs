@@ -10,7 +10,7 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, SAID, STAR, World, ended, grows, printed, ran, refused, wait_for, world};
+use super::{DAY, SAID, STAR, UNTOLD, World, ended, grows, never, printed, ran, refused, wait_for, world};
 use crate::support::{Ran, skipped};
 
 const NO_SIGNAL: &str = "this system has no signal to stop another command's child with, and nothing is stopped";
@@ -268,7 +268,7 @@ fn runs_started_at_once_for_one_wish_are_one_run() {
 
 // A harness found too old, with the day locked and the lock a copy is taken back behind held: `jellymoon run`
 // writes that the run was never started and is cut off before it could take the copy back. Its record names no
-// child, so the next look takes the copy back and makes the wish as it was; it is not a run that was cut off.
+// child, so the next look takes the copy back and tells the wish no run was started; it is not a run cut off.
 #[test]
 fn a_run_found_too_old_and_cut_off_before_its_copy_went_is_taken_back_by_the_next_look() {
     let w = world();
@@ -296,7 +296,7 @@ fn a_run_found_too_old_and_cut_off_before_its_copy_went_is_taken_back_by_the_nex
     held.unlock().unwrap();
     fs::remove_file(&day).unwrap();
 
-    assert_eq!((&w.on_page(&wish)["run"], w.kept(&wish)), (&json!(null), before), "the wish is as it was");
+    assert_eq!((&w.on_page(&wish)["run"], w.kept(&wish)), (&json!(null), never(before, UNTOLD)));
     let runs = fs::read_dir(w.jm("runs")).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());
     let runs: Vec<String> = runs.filter(|name| name != "no-hooks" && !name.contains("lock")).collect();
     assert_eq!((w.copies(), w.branches(&repo), runs), (vec![], vec![], Vec::<String>::new()));

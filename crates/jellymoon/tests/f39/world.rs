@@ -21,6 +21,11 @@ pub const SAID: &str = "make the uploader retry twice";
 /// What the made-up agent says in every text of its own. Jellymoon keeps and prints none of it.
 pub const MARKER: &str = "zebra-quartz-said-by-the-agent";
 pub const STAR: &str = "a run reported it finished";
+/// The lines a wish keeps of a run that was never started: said by its command, or by the look that found it.
+pub const OLD: &str = "nothing was started: this Claude Code is too old for runs, as it does not know --restricted; \
+                       update Claude Code and run the wish again";
+pub const UNTOLD: &str = "nothing was started: Claude Code is too old for runs or could not be started; run the \
+                          wish again when that is mended";
 
 /// The command line measured on Claude Code 2.1.322, and the one fixed text core adds to it.
 pub const ARGS: [&str; 19] = [
@@ -106,6 +111,12 @@ pub fn world_in(dir: TempDir) -> World {
 }
 
 /// The one line a command that worked printed, and nothing else.
+/// A made wish as a run that was never started leaves it: it names no run, says why and needs the person.
+pub fn never(mut made: Value, why: &str) -> Value {
+    (made["state"], made["why"]) = ("needs_you".into(), why.into());
+    made
+}
+
 pub fn printed(ran: &Ran) -> Value {
     assert_eq!((ran.code, ran.stderr.as_str()), (0, ""), "{}", ran.stdout);
     assert!(ran.stdout.ends_with("}\n") && ran.stdout.matches('\n').count() == 1, "{:?}", ran.stdout);

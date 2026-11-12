@@ -15,13 +15,18 @@ impl World {
     /// Starts the run of a wish through `fake-asker` (`support/fake_asker.rs`): a program that calls core's
     /// `run_apart` and exits, and that core starts in place of `jellymoon`, where it starts the real `jellymoon`
     /// with what it was given and leaves that command's exit code in `rec/exit`. What the asker printed.
-    fn asked(&self, wish: &str) -> Ran {
+    pub(super) fn asked(&self, wish: &str) -> Ran {
+        self.asked_with(&[], wish)
+    }
+
+    /// [`World::asked`], with more variables for the asker and the command it starts.
+    pub(super) fn asked_with(&self, with: &[(&'static str, OsString)], wish: &str) -> Ran {
         let asker = OsString::from(env!("CARGO_BIN_EXE_fake-asker"));
         let more = [
             ("FAKE_ASKER_JELLYMOON", OsString::from(env!("CARGO_BIN_EXE_jellymoon"))),
             ("FAKE_ASKER_REC", self.at("rec").into()),
         ];
-        let vars = self.vars.iter().chain(&more).map(|(name, value)| (*name, value.as_os_str()));
+        let vars = self.vars.iter().chain(&more).chain(with).map(|(name, value)| (*name, value.as_os_str()));
         let logs = self.at("harness").join("projects");
         let mut command = std::process::Command::new(asker);
         command.args(["ask", wish, DAY]).arg(self.at("jm")).arg(logs).env_clear().envs(vars);
@@ -43,13 +48,13 @@ impl World {
     }
 
     /// The run a wish names.
-    fn run_of(&self, wish: &str) -> String {
+    pub(super) fn run_of(&self, wish: &str) -> String {
         self.kept(wish)["run"].as_str().unwrap().to_string()
     }
 }
 
 /// The exit code `fake-asker` left of the `jellymoon run` it started, once that command has ended.
-fn exit_of(w: &World) -> String {
+pub(super) fn exit_of(w: &World) -> String {
     wait_for(&w.at("rec").join("exit"));
     fs::read_to_string(w.at("rec").join("exit")).unwrap()
 }

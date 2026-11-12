@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use super::child::{End, Ended};
 use super::record::Record;
-use super::{Ran, RunOutcome, STAR, cancelled, cut, cut_late, dead, failed, finished, record, refused};
+use super::{Ran, RunOutcome, STAR, cancelled, cut, cut_late, dead, failed, finished, left, never, record, refused};
 use crate::busy::{self, or_test};
 use crate::copy::{self, Outcome, RunCopy};
 use crate::reading::STARS_MAX;
@@ -31,7 +31,7 @@ pub(super) fn wait() -> Duration {
 
 /// How long a look waits for the lock a copy is made and cleaned behind, which another command may hold for as
 /// long as its git children take: the day's lock's own wait. A page never waits behind another command for more.
-fn soon() -> Option<Duration> {
+pub(super) fn soon() -> Option<Duration> {
     Some(or_test(busy::WAIT, "JELLYMOON_TEST_COPY_WAIT_MS"))
 }
 
@@ -104,21 +104,7 @@ pub(super) fn of_another(home: &Path, run: &str, record: Option<&Record>, day: &
     if held(home, run) {
         return true;
     }
-    // The day in a record is a word from a file: it is a day, or no file is looked for.
-    let theirs = wish::day_of(Some(&record.day)).and_then(|day| wish::kept_of(home, &day)).unwrap_or_default();
-    theirs.iter().any(|theirs| theirs.id == record.wish && theirs.run.as_deref() == Some(run))
-}
-
-/// A wish that names a run of which nothing is kept, not even its folder in `runs`: the run was never started
-/// and its copy was taken back while the day was locked (`run`). The wish is made as it was, to be run again.
-fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
-    let undo = |wish: &mut MadeWish| {
-        if wish.run.as_deref() == Some(run) && wish.state == WishState::Working {
-            (wish.run, wish.why) = (None, None);
-        }
-        Ok(())
-    };
-    wish::change(home, day, &wish.id, Duration::ZERO, undo).unwrap_or(MadeWish { run: None, why: None, ..wish })
+    left::names(home, record, run)
 }
 
 /// What a `jellymoon run` or a page does with a wish that still says working while nothing holds its run. It is
@@ -127,7 +113,7 @@ fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> MadeWish {
 /// written down as failed: its copy is marked, then the wish is told, and only for a wish that took it the record.
 /// Either way the harness child the record names is killed, if the pid is still that process (`dead.rs`), and
 /// the copy of a run that did not finish is marked. A run whose record says it was never started, and names no
-/// child, has its copy taken back, and only then is its wish made as it was; one that names a child did start,
+/// child, has its copy taken back, and only then is its wish told so (`never.rs`); one that names a child did start,
 /// and was cut off. A wish that names another wish's run is returned as needing the person, in one fixed line,
 /// with nothing written or killed ([`of_another`]).
 pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
@@ -141,8 +127,10 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     if held(home, &run) {
         return wish;
     }
+    // Nothing is kept of it, not even its folder in `runs`: it was never started, and its copy was taken back
+    // while the day was locked.
     if fs::symlink_metadata(copy::kept_at(home, &run)).is_err() {
-        return unstarted(home, day, wish, &run);
+        return never::unstarted(home, day, wish, &run);
     }
     // The record is read once nothing holds the run: one read before that could miss the end the run wrote.
     let record = record::kept(home, &run);
@@ -159,14 +147,14 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     if record.as_ref().is_some_and(never) {
         // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
         // With the lock not had in time nothing is written: the wish goes on naming the run where it is kept, so
-        // the next look tries again, and it is drawn as it was, with no run, never as one going. A copy that cannot
+        // the next look tries again, and it is drawn as it will be kept, with no run, never as one going. A copy that cannot
         // be taken back for any other reason (its repo is gone, git fails) never will be: what the home holds of
         // the run goes, as after a `jellymoon run` that could not take it back, and the wish can be run again.
         let taken = copy::take_back(home, &run, soon());
         if taken.is_err_and(|e| copy::timed_out(&e) || !copy::remove_ours(home, &run, soon())) {
-            return MadeWish { run: None, why: None, ..wish };
+            return never::drawn(wish);
         }
-        return unstarted(home, day, wish, &run);
+        return never::unstarted(home, day, wish, &run);
     }
     // Nothing holds the run, so nobody reads its child any more, whatever the record says of an end: a record
     // can be written by hand. A child that ended is not that process any more, and is not signalled.
@@ -281,12 +269,12 @@ fn told_first(home: &Path, day: &str, wish: &str, run: &str) -> bool {
 
 /// The copy of a run that did not finish is marked failed, so that it is kept. One marked already, or gone, is
 /// left as it is. False: the lock a copy is cleaned behind was not had within `wait`, and nothing was done.
-fn mark(home: &Path, run: &str, wait: Option<Duration>) -> bool {
+pub(super) fn mark(home: &Path, run: &str, wait: Option<Duration>) -> bool {
     !copy::end_copy(home, run, Outcome::Failed, wait).is_err_and(|e| copy::timed_out(&e))
 }
 
 /// The run's own record takes its end, once.
-fn note(
+pub(super) fn note(
     home: &Path,
     run: &str,
     outcome: RunOutcome,

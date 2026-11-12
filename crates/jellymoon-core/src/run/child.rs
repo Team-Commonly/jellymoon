@@ -47,7 +47,8 @@ pub(super) struct Ended {
 }
 
 /// Starts the command with `said` as its whole input, and waits for it to end, `limit` at most. `started` is told
-/// the child's pid as soon as there is one. `stop` says whether the person has asked for the run to stop: it is
+/// the child's pid as soon as there is one, and `began` is called once its stream has started as a run's does.
+/// `stop` says whether the person has asked for the run to stop: it is
 /// asked before the child is started, which then never is, and every 10 ms while the child goes. A child that has
 /// ended by itself when it is asked has ended, and was not stopped.
 pub(super) fn run(
@@ -55,6 +56,7 @@ pub(super) fn run(
     said: String,
     limit: Duration,
     started: impl FnOnce(u32),
+    began: impl FnOnce(),
     stop: impl Fn() -> bool,
 ) -> io::Result<Ended> {
     if stop() {
@@ -69,8 +71,11 @@ pub(super) fn run(
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(said.as_bytes())));
     let ((stream, so_far), head) = (stream::reader(child.stdout.take()), stderr_head(child.stderr.take()));
     let (deadline, grace) = (Instant::now() + limit, or_test(GRACE, "JELLYMOON_TEST_GRACE_MS"));
-    let mut read = None;
+    let (mut read, mut began) = (None, Some(began));
     let (end, grace) = loop {
+        if let Some(began) = began.take_if(|_| so_far.lock().is_ok_and(|so_far| so_far.start == Some(true))) {
+            began();
+        }
         if gone(&mut child) {
             break (End::Exited, Duration::ZERO);
         }

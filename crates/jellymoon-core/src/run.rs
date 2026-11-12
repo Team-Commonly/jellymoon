@@ -17,6 +17,9 @@ mod cap;
 mod child;
 mod dead;
 mod end;
+mod left;
+mod never;
+mod place;
 mod record;
 mod stop;
 mod stream;
@@ -29,6 +32,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub use apart::{Started, run_apart};
 pub(crate) use end::bury;
 use end::{lock_file, settle};
+pub(crate) use left::tidy;
 use record::Record;
 use serde::{Deserialize, Serialize};
 pub use stop::stop_run;
@@ -36,8 +40,8 @@ pub use stop::stop_run;
 use crate::busy::or_test;
 use crate::call::harness_of;
 use crate::copy::{self, RunCopy};
-use crate::wish::{self, MadeWish};
-use crate::{DayOptions, Error, find, reader};
+use crate::wish;
+use crate::{Error, WishState, find};
 
 /// The command line of a run, as measured on Claude Code 2.1.322 (ADR 0014, "Measured"): no shell, no web, no MCP
 /// server, no question asked, edits inside the folder it is started in, no session kept. [`PROMPT`] follows it.
@@ -70,8 +74,6 @@ const LIMIT: Duration = Duration::from_secs(30 * 60);
 
 /// The one star a finished run adds.
 const STAR: &str = "a run reported it finished";
-const OLD: &str = "nothing was started: this Claude Code is too old for runs, as it does not know --restricted; \
-                   update Claude Code and run the wish again";
 
 /// One `jellymoon run`.
 #[derive(Debug, Clone, Default)]
@@ -198,22 +200,28 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     };
     // Before anything is made: a harness that would look for its programs in the copy is not started.
     let mut command = harness_of(harness).map_err(|e| refused(format!("nothing was started: {e}")))?;
-    let repo = folder(home, &day, &wish, options)?;
+    let repo = place::folder(home, &day, &wish, options)?;
     // A folder read from the logs that is not a repo's top is refused with copy's own reason, in fixed words: no
     // folder above it is tried, and nothing git says of it is repeated.
+    // First what killed commands left: their agents are ended before the runs going are counted, so none is at
+    // work beside this run's own, and a copy no wish names is taken back (`left.rs`).
+    tidy(home, &wish::kept_of(home, &day)?);
     cap::room(home)?;
-    let copy = copy::copy_of(home, &repo, options.repo.is_some()).map_err(|e| match (e, &options.repo) {
+    let made = copy::copy_of(home, &repo, options.repo.is_some()).map_err(|e| match (e, &options.repo) {
         (Error::Copy(why), None) => {
             let why = why.replacen("--repo", "it", 1);
             refused(format!("the folder of that name typed in on {day} is not one a run can copy: {why}"))
         }
         (e, _) => e,
     })?;
+    // The copy's start lock is held until this command ends: what a killed command left is known by it.
+    let (copy, held) = made;
     // The lock is taken before the wish names the run, so a wish never names a run that nothing holds.
     let taken = start(home, &day, &wish.id, &copy.run);
     let lock = match taken {
         Ok(lock) => lock,
         Err(e) => {
+            drop(held);
             let _ = copy::take_back(home, &copy.run, None);
             return Err(e);
         }
@@ -221,77 +229,24 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     command.current_dir(&copy.folder).args(ARGS).arg(PROMPT);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
     let (told, stop) = (|pid| record::child(home, &copy.run, pid), || stop::asked(home, &copy.run));
-    let ended = child::run(command, format!("{}\n", wish.said), limit, told, stop);
-    let ended = ended.map_err(|e| refused(format!("nothing was started: Claude Code could not be started: {e}")));
-    if !ended.as_ref().is_ok_and(|ended| !ended.old) {
-        // Nothing ran: the wish is as it was, and can be run again. The day is waited for as a run's end waits.
-        // Whatever came of that, the record says the run was never started and the copy is taken back, both
-        // while this run's lock is held: so no look ever finds a run that nothing holds and that has no end. A
-        // wish that still names the run is made as it was by the next look (`end::bury`).
-        let undone = wish::change(home, &day, &wish.id, end::wait(), |wish| {
-            (wish.run, wish.why) = (None, None);
-            Ok(())
-        });
-        record::unstarted(home, &copy.run);
-        let taken = copy::take_back(home, &copy.run, None);
-        drop(lock);
-        // Where a file that is open cannot be removed, it can be now. Where git cannot be asked (the repo was moved
-        // away), what Jellymoon's own home holds of the run goes all the same.
-        let taken = taken.or_else(|_| copy::take_back(home, &copy.run, None));
-        taken.inspect_err(|_| _ = copy::remove_ours(home, &copy.run, None))?;
-        undone?;
-        return ended.and_then(|_| not_started(OLD.to_string()));
+    let began = || record::began(home, &copy.run);
+    let ended = child::run(command, format!("{}\n", wish.said), limit, told, began, stop);
+    let never = match &ended {
+        Err(_) => Some(never::UNSTARTABLE),
+        Ok(ended) => ended.old.then_some(never::OLD),
+    };
+    let ended = ended.map_err(|e| refused(format!("{}: {e}", never::UNSTARTABLE)));
+    if let Some(why) = never {
+        never::undo(home, (&day, &wish.id), &copy.run, why, (lock, held))?;
+        return ended.and_then(|_| not_started(never::OLD.to_string()));
     }
     let ran = ended.and_then(|ended| settle(home, (&day, &wish.id), &copy, &ended, limit));
+    // The start lock goes first: while the run's own is held, nothing takes this run for one left behind.
+    drop(held);
+    let _ = fs::remove_file(copy::start_lock(home, &copy.run));
     drop(lock);
     let _ = fs::remove_file(lock_file(home, &copy.run));
     ran
-}
-
-/// The repo a wish runs in: the folder named, or the one folder of the wish's project that was typed in that day.
-/// Its last name must be the wish's project. A folder read from a session log is never put in a refusal.
-fn folder(home: &Path, day: &str, wish: &MadeWish, options: &RunOptions) -> Result<PathBuf, Error> {
-    if let Some(repo) = &options.repo {
-        if !repo.is_absolute() {
-            return Err(refused("--repo must be a full path, from the root"));
-        }
-        let named = repo.file_name().is_some_and(|last| last == wish.project.as_str());
-        let why = "--repo is not the folder the wish is for: its last name is not the wish's project";
-        return if named { Ok(repo.clone()) } else { Err(refused(why)) };
-    }
-    let logs = options.logs.clone().ok_or_else(|| refused("no session logs are known; name the folder with --repo"))?;
-    let skip = options.skip.clone();
-    let read = DayOptions { logs, date: Some(day.to_string()), skip, home: Some(home.to_path_buf()) };
-    let mut found = reader::folders(&read, &wish.project)?;
-    match (found.pop(), found.len()) {
-        // The folder is a session log's word, and a log can be written by whatever wrote to the harness's folder.
-        (Some(repo), 0) if theirs(&repo) => Err(refused(format!(
-            "the folder of that name typed in on {day} is not a folder of your own; name the folder with --repo"
-        ))),
-        (Some(repo), 0) => Ok(repo),
-        (None, _) => Err(refused(format!(
-            "no folder of the name the wish gives was typed in on {day}; name the folder with --repo"
-        ))),
-        (Some(_), more) => Err(refused(format!(
-            "{} folders of the name the wish gives were typed in on {day}; name the one with --repo",
-            more + 1
-        ))),
-    }
-}
-
-/// Whether a folder that is there is owned by someone other than the person, who is taken to be the owner of
-/// their own home folder (`command.rs`). With no home every folder is someone else's. A link is followed: the
-/// folder it leads to is the one a copy would be made of. Windows has no such owner to read.
-#[cfg(unix)]
-fn theirs(folder: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    let person = crate::user_home().and_then(|home| fs::metadata(home).ok()).map(|home| home.uid());
-    fs::metadata(folder).is_ok_and(|folder| Some(folder.uid()) != person)
-}
-
-#[cfg(not(unix))]
-fn theirs(_: &Path) -> bool {
-    false
 }
 
 /// Takes the run's lock, when fewer than three runs go (`cap.rs`), writes its record, and has the wish name the
@@ -309,12 +264,17 @@ fn start(home: &Path, day: &str, wish: &str, run: &str) -> Result<File, Error> {
         skipped: 0,
         pid: None,
         mark: None,
+        began: false,
     };
     record::write(home, run, &record)?;
     wish::change(home, day, wish, Duration::ZERO, |wish| match &wish.run {
         Some(first) => Err(had(&wish.id, first)),
         None => {
             (wish.run, wish.why) = (Some(run.to_string()), Some(going(run)));
+            // A wish that an earlier run was never started for needed the person (`never.rs`): it is at work now.
+            if wish.state == WishState::NeedsYou {
+                wish.state = WishState::Working;
+            }
             Ok(())
         }
     })?;
@@ -338,7 +298,8 @@ mod tests {
         };
         let long = failed(run, "it did not start with the tools, servers and permission mode of a run");
         let texts = [going(run), cut(run), long, finished(&copy, true), finished(&copy, false), STAR.to_string()];
-        for text in texts.into_iter().chain([cancelled(run), cut_late(run)]) {
+        let never = [never::OLD, never::UNSTARTABLE, never::UNTOLD].map(str::to_string);
+        for text in texts.into_iter().chain([cancelled(run), cut_late(run)]).chain(never) {
             assert_eq!(line(&text, 200), text);
             assert!(copy::is_run_id(run) && text.chars().count() <= 200);
         }

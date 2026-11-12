@@ -3,9 +3,9 @@
 //! time. The system drops the lock when the process that holds it ends, however it ends, and no git child outlasts
 //! its limit (`git.rs`), so a wait for it ends.
 
-use std::fs::{File, TryLockError};
+use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{self, ErrorKind};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -24,6 +24,33 @@ pub(super) fn held(file: &Path, made: bool, wait: Option<Duration>) -> io::Resul
             Err(TryLockError::WouldBlock) => return Err(ErrorKind::TimedOut.into()),
         }
     }
+}
+
+/// The file a `jellymoon run` holds the system's lock on from before its copy is made until it ends,
+/// `runs/<id>/start.lock`. It takes the file away at its end, so one that is there with nothing holding it is
+/// of a command that was killed. A copy made by `jellymoon copy make` has none.
+pub(crate) fn start_lock(home: &Path, run: &str) -> PathBuf {
+    home.join("runs").join(run).join("start.lock")
+}
+
+/// Makes that file in the run's new folder, which holds nothing yet, and takes its lock.
+pub(super) fn start(runs: &Path, run: &str) -> io::Result<File> {
+    let lock = OpenOptions::new().write(true).create_new(true).open(runs.join(run).join("start.lock"))?;
+    lock.lock().map(|()| lock)
+}
+
+/// The runs whose command was killed: those with a plain file at their start lock's name that nothing holds.
+/// A lock that cannot be asked about is taken as held, and so is anything there that is not a plain file,
+/// which is never opened: of such a run nothing is taken back.
+pub(crate) fn left(home: &Path) -> Vec<String> {
+    let runs = fs::read_dir(home.join("runs")).into_iter().flatten().flatten();
+    let runs = runs.filter_map(|entry| entry.file_name().into_string().ok()).filter(|run| super::is_run_id(run));
+    let free = |run: &String| {
+        let lock = start_lock(home, run);
+        let plain = fs::symlink_metadata(&lock).is_ok_and(|meta| meta.is_file());
+        plain && File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_ok())
+    };
+    runs.filter(free).collect()
 }
 
 /// Whether an error is the lock not had within its wait, and nothing wrong with the copy.

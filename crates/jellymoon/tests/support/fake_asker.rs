@@ -4,7 +4,9 @@
 //! run goes. Started with anything else, which is how core starts it, it starts the real `jellymoon`
 //! (`FAKE_ASKER_JELLYMOON`) with the arguments and the output it was given itself, waits for it, and leaves that
 //! command's exit code in the file `exit` of the folder `FAKE_ASKER_REC`. It kills the command when a file `cut` is
-//! in that folder, which is how a test cuts off a run it has no other hold on.
+//! in that folder, which is how a test cuts off a run it has no other hold on. Two variables make it another
+//! asker or another command: `FAKE_ASKER_PROGRAM` is given to core as the `jellymoon` command in place of this
+//! program, and with `FAKE_ASKER_SAYS` the command says that on stderr, starts nothing and exits 1.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::io::Write;
@@ -22,12 +24,17 @@ fn main() -> ExitCode {
     {
         let (logs, day) = (Some(PathBuf::from(logs)), Some(day.clone()));
         let options = RunOptions { wish: wish.clone(), day, logs, ..RunOptions::default() };
-        let said = match run_apart(Path::new(home), &env::current_exe().unwrap(), &options) {
+        let program = env::var_os("FAKE_ASKER_PROGRAM").map_or_else(|| env::current_exe().unwrap(), PathBuf::from);
+        let said = match run_apart(Path::new(home), &program, &options) {
             Ok(started) => format!("run {}\n{}\n", started.run.as_deref().unwrap_or("none"), started.why),
             Err(e) => format!("refused\n{e}\n"),
         };
         io::stdout().write_all(said.as_bytes()).unwrap();
         return ExitCode::SUCCESS;
+    }
+    if let Some(says) = env::var_os("FAKE_ASKER_SAYS") {
+        io::stderr().write_all(says.as_encoded_bytes()).unwrap();
+        return ExitCode::from(1);
     }
     let rec = PathBuf::from(env::var_os("FAKE_ASKER_REC").unwrap());
     let mut command = Command::new(env::var_os("FAKE_ASKER_JELLYMOON").unwrap()).args(&args).spawn().unwrap();

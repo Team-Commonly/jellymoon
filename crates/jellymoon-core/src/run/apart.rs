@@ -3,7 +3,10 @@
 //! ends, while the run goes. Nothing runs in the caller's own process: a run lives as long as the command that
 //! holds its lock, and that command must be able to outlive whoever asked for it.
 //!
-//! The caller is answered once the wish names its run, or once the command has ended without that. The command's
+//! The caller is answered once the wish names its run and the harness's stream has begun as a run's, or the
+//! harness has said nothing for [`QUIET`], or once the command has ended: a harness too old for runs, or one
+//! that cannot be started, ends within that, and the caller is then told the line the wish keeps (`never.rs`),
+//! never that a run is going. The command's
 //! output goes nowhere; what it says on stderr is read only until then, 4 KiB of it at most, and its first line is
 //! given as the reason through `redact::line`. After that a caller that lives on reads it and drops it, and one
 //! that has ended leaves the pipe closed, which the command does not notice.
@@ -14,15 +17,19 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::child::stderr_head;
-use super::{RunOptions, going, had, no_wish, refused};
+use super::{RunOptions, going, had, no_wish, record, refused};
 use crate::busy::or_test;
 use crate::redact::line;
 use crate::wish::{self, MadeWish};
-use crate::{Error, find};
+use crate::{Error, WishState, find};
 
 /// How long the wish is waited for to name its run: longer than a copy of a large repo takes to make. A command
 /// still going then is left going, and the answer says so. A test's build reads a shorter wait.
 const WAIT: Duration = Duration::from_secs(120);
+/// How long a harness that was started and has said nothing yet is waited for before its run is said to be
+/// going: one too old for runs refuses its command line and ends well within this. A test's build reads a
+/// shorter wait.
+const QUIET: Duration = Duration::from_secs(3);
 /// How long what a command that has ended said is waited for.
 const SAID: Duration = Duration::from_secs(5);
 /// The most characters of a reason the command gave.
@@ -36,6 +43,8 @@ pub struct Started {
     /// How the run stands, as the wish has it, or why none was started: core's own words, or the first line the
     /// command said, cleaned.
     pub why: String,
+    /// How the wish stands now, as it is kept.
+    pub state: WishState,
 }
 
 /// Starts `program run` for a made wish and returns once the wish names its run, or the command has ended. The
@@ -53,10 +62,57 @@ pub fn run_apart(home: &Path, program: &Path, options: &RunOptions) -> Result<St
     }
     // Asked here as the command asks it, so that its reason is core's own line and no command is started for it.
     if let Err(e @ Error::NoHarness(_)) = find::named_or_found(options.harness.as_deref()) {
-        return Ok(Started { run: None, why: e.to_string() });
+        return Ok(Started { run: None, why: e.to_string(), state: wish.state });
     }
+    let child = command(home, program, &day, &wish.id, options).spawn();
+    let mut child = child.map_err(|e| refused(format!("nothing was started: jellymoon could not be started: {e}")))?;
+    let said = stderr_head(child.stderr.take());
+    let deadline = Instant::now() + or_test(WAIT, "JELLYMOON_TEST_APART_WAIT_MS");
+    let kept = || named(home, &day, &wish.id).ok().flatten();
+    let run_of = || kept().filter(|wish| wish.run.is_some());
+    let (quiet, mut since) = (or_test(QUIET, "JELLYMOON_TEST_APART_QUIET_MS"), None);
+    loop {
+        if let Some(wish) = run_of() {
+            // A run that has ended already is said as it ended. One that goes is said to be going once its
+            // harness has shown that it knows a run's command line, or has been at it for a while.
+            let began = wish.run.as_deref().and_then(|run| record::kept(home, run)).is_some_and(|record| record.began);
+            let long = since.get_or_insert_with(Instant::now).elapsed() >= quiet;
+            if wish.state != WishState::Working || began || long {
+                left(child);
+                return Ok(started(wish));
+            }
+        }
+        match child.try_wait() {
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+            Ok(None) => {
+                left(child);
+                let why = "no run has been started yet: jellymoon run is still at work, and the page shows the run \
+                           when it has one";
+                let none = || Started { run: None, why: why.to_string(), state: wish.state };
+                return Ok(run_of().map_or_else(none, started));
+            }
+            ended => {
+                // The command may have named the run, and even ended it, since the wish was last read.
+                let fine = matches!(ended, Ok(Some(status)) if status.success());
+                let Some(now) = kept().filter(|now| now.run.is_none()) else {
+                    return Ok(run_of().map_or_else(|| unsaid(&wish, fine), started));
+                };
+                // What the wish was told of a run that was never started is what the caller is told. A line it
+                // had before this command is an earlier command's, unless this one said nothing of its own.
+                let said = said.recv_timeout(SAID).unwrap_or_default();
+                let told = now.why.clone().filter(|told| Some(told) != wish.why.as_ref() || said.trim().is_empty());
+                let why = told.unwrap_or_else(|| reason(&said, fine));
+                return Ok(Started { run: None, why, state: now.state });
+            }
+        }
+    }
+}
+
+/// `program run` for the wish, with what the caller was given and nothing it was not: no `--skip` when no name
+/// is switched off. Its input and output go nowhere, and what it says on stderr is read.
+fn command(home: &Path, program: &Path, day: &str, wish: &str, options: &RunOptions) -> Command {
     let mut command = Command::new(program);
-    command.args(["run", "--wish", &wish.id, "--date", &day]).env("JELLYMOON_HOME", home);
+    command.args(["run", "--wish", wish, "--date", day]).env("JELLYMOON_HOME", home);
     for (flag, value) in [("--repo", &options.repo), ("--logs", &options.logs)] {
         if let Some(value) = value {
             command.arg(flag).arg(value);
@@ -70,32 +126,7 @@ pub fn run_apart(home: &Path, program: &Path, options: &RunOptions) -> Result<St
     }
     command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
     own_group(&mut command);
-    let child = command.spawn();
-    let mut child = child.map_err(|e| refused(format!("nothing was started: jellymoon could not be started: {e}")))?;
-    let said = stderr_head(child.stderr.take());
-    let deadline = Instant::now() + or_test(WAIT, "JELLYMOON_TEST_APART_WAIT_MS");
-    let run_of = || named(home, &day, &wish.id).ok().flatten().filter(|wish| wish.run.is_some());
-    loop {
-        if let Some(wish) = run_of() {
-            left(child);
-            return Ok(started(wish));
-        }
-        match child.try_wait() {
-            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
-            Ok(None) => {
-                left(child);
-                let why = "no run has been started yet: jellymoon run is still at work, and the page shows the run \
-                           when it has one";
-                return Ok(Started { run: None, why: why.to_string() });
-            }
-            ended => {
-                // The command may have named the run, and even ended it, since the wish was last read.
-                let fine = matches!(ended, Ok(Some(status)) if status.success());
-                let why = || reason(&said.recv_timeout(SAID).unwrap_or_default(), fine);
-                return Ok(run_of().map_or_else(|| Started { run: None, why: why() }, started));
-            }
-        }
-    }
+    command
 }
 
 fn named(home: &Path, day: &str, wish: &str) -> Result<Option<MadeWish>, Error> {
@@ -104,7 +135,12 @@ fn named(home: &Path, day: &str, wish: &str) -> Result<Option<MadeWish>, Error> 
 
 fn started(wish: MadeWish) -> Started {
     let why = wish.why.unwrap_or_else(|| wish.run.as_deref().map(going).unwrap_or_default());
-    Started { run: wish.run, why }
+    Started { run: wish.run, why, state: wish.state }
+}
+
+/// The answer when the wishes cannot be read once the command has ended.
+fn unsaid(wish: &MadeWish, fine: bool) -> Started {
+    Started { run: None, why: reason("", fine), state: wish.state }
 }
 
 /// Why a command that ended started no run: the first line it said, without its own name, cleaned and cut. One

@@ -163,6 +163,9 @@ fn hidden(name: &str) -> bool {
 /// The names in a `--skip` value, which commas part. A name with a character that cannot be seen would match nothing
 /// and look right, so the value is refused: the error names the name by its place, never by its text.
 pub fn skip_names(value: &str) -> Result<Vec<String>, String> {
+    if value.is_empty() {
+        return Ok(Vec::new()); // no name at all, and not one empty name
+    }
     let names: Vec<String> = value.split(',').map(str::to_string).collect();
     match names.iter().position(|name| hidden(name)) {
         Some(at) => Err(format!("--skip: name {} holds a character that cannot be seen; {WAY_OUT}", at + 1)),

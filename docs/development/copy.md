@@ -22,6 +22,9 @@ In Jellymoon's home (`JELLYMOON_HOME`, or `.jellymoon` in the home directory), b
   own git folder inside it, and when the run failed. It is outside the copy, where a run cannot write.
 - `runs/no-hooks` is an empty folder: git is started in it and told to look for hooks in it.
 - `runs/clean.lock` is an empty file, made with the first copy: a clean, and a copy being made, holds the system's lock on it.
+- `runs/<run>/start.lock` is an empty file only a `jellymoon run` makes, as soon as the run's id is taken and
+  before any git is started: the command holds the system's lock on it until it ends, and removes it then.
+  `jellymoon copy make` makes none.
 
 A run id is `r` and sixteen of `0-9a-f`. Core makes it; one given with `--run` is taken only in that shape, so a
 name with a dot, a separator or a full path never reaches a path. An id is taken by making `runs/<run>`, which only
@@ -74,6 +77,14 @@ the rest back, and every clean, under its lock, removes each real folder in `cop
 folder in `runs` (a copy being made has one before its folder is there; a link is left). What git itself still
 lists of such a folder is left to git's own `worktree prune`. A test shortens the limit with `JELLYMOON_TEST_GIT_LIMIT_MS`,
 which only a build with debug assertions reads: a release does not.
+
+**A copy a killed `jellymoon run` left.** One whose `start.lock` nothing holds, and that no wish names, is
+taken back by the next page or run ([run.md](run.md), "A copy nothing names"), behind the same lock, waited
+for 3 seconds: the folder, git's registration of it and its record go as in any take-back. Its branch is
+removed only when `git rev-list --max-count=1 <branch> --not --exclude=<branch> --all HEAD` prints nothing,
+which is to say when it holds no commit that another branch, a tag or the checkout does not have; a branch
+with such a commit is kept, and so is one git could not be asked about. A take-back by the command that made
+the copy removes the branch without asking, as nothing but that command has had the copy.
 
 The commit is by the person: `user.name` and `user.email` as git resolves them for that repo. When either is
 missing it is by `Jellymoon <jellymoon@localhost>`.

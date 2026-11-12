@@ -35,9 +35,12 @@ pub(super) struct Record {
     /// mark is never signalled by anyone but the `jellymoon run` that started it.
     #[serde(default)]
     pub mark: Option<String>,
+    /// Whether the harness's stream began as a run's does: the harness knows a run's command line, and works.
+    #[serde(default)]
+    pub began: bool,
 }
 
-fn file(home: &Path, run: &str) -> PathBuf {
+pub(super) fn file(home: &Path, run: &str) -> PathBuf {
     copy::kept_at(home, run).join("run.json")
 }
 
@@ -58,6 +61,15 @@ pub(super) fn kept(home: &Path, run: &str) -> Option<Record> {
 pub(super) fn unstarted(home: &Path, run: &str) {
     if let Some(mut record) = kept(home, run) {
         (record.outcome, record.pid, record.mark) = (Some(RunOutcome::NotStarted), None, None);
+        let _ = write(home, run, &record);
+    }
+}
+
+/// Writes down that the harness's stream began as a run's does, for whoever asked for the run apart and waits to
+/// say that it is going (`apart.rs`).
+pub(super) fn began(home: &Path, run: &str) {
+    if let Some(mut record) = kept(home, run) {
+        record.began = true;
         let _ = write(home, run, &record);
     }
 }

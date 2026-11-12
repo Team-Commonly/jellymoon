@@ -102,7 +102,10 @@ max_file_lines = 400
 # The made-up agent's `perl` script kept to the systems that use it, for Windows's lint, raised the binary by 1.
 # The fixes after F40's gate, round 2, raised core by 12 and the binary by 176, nearly all of it tests at the binary.
 # The copies' lock opened for writing again, which Windows needs before it gives a lock, raised core by 1 (a comment).
-"crates/jellymoon-core" = 5923
+# F41, a run started apart, raised core by 230: `run/apart.rs`, the command started as a process of its own and
+# what is read of it, is 135; `run/cap.rs`, three runs at once counted and claimed behind one lock, 65; the
+# owner of a folder found in a log and the names switched off, in `run.rs`, 25; the example's round trip, 5.
+"crates/jellymoon-core" = 6153
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -112,7 +115,13 @@ max_file_lines = 400
 # in `tests/f39/refused.rs`).
 # The words of a run that ends after a look told its wish, and the gone copy's line saying where its work was
 # put, raised core by 12 (`run/end.rs`, `run.rs`) and the binary by 25 (`tests/f40/late.rs`).
-"crates/jellymoon" = 8953
+# F41 raised the binary by 571: its tests at the binary are 452 (`tests/f41.rs`, 104, and `tests/f41/`:
+# `apart.rs` 154, `cap.rs` 88, `refused.rs` 106); the made-up asker they start, `tests/support/fake_asker.rs`,
+# is 48; and 71 are `wish --run`, `--logs` and `--skip` on `run`, and the header of `src/parse.rs`, which took
+# the command line's reading out of `src/main.rs` with no other change. What a failed test of a run started
+# apart says of the run (its command's exit and its record) raised it by 6 more, and the asker's output going
+# to files, which Windows needs, by 11, and the cut-off test's Windows branch by 4.
+"crates/jellymoon" = 9545
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -123,7 +132,9 @@ max_file_lines = 400
 # F40's step, `stop` (`smoke/stop.rs`, 69 lines), and the run command it shares with `run`, raised it by 80.
 # The leftovers of the smoke chain's review raised it by 88: the refusal of a build argument that puts the
 # programs elsewhere, the removal of the homes stopped runs left, with their lock, and the tests of both.
-"crates/xtask" = 1447
+# F41's step, `wish-run` (`smoke/apart.rs`, 82 lines: it makes its repo in the system's temporary folder and
+# removes it), raised it by 85.
+"crates/xtask" = 1532
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

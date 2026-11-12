@@ -7,7 +7,7 @@ stop sequence, `stop.rs` a stop the person asks for). The copy is [copy.md](copy
 [wish.md](wish.md)'s.
 
 ```
-jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>]
+jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]
 jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]
 ```
 
@@ -33,7 +33,10 @@ and its branch in them.
    with no folder named by its full path is refused here, before any copy ("What the harness is started with").
 3. **The repo.** `--repo`, a full path whose last name is the wish's project. Without it, the one folder of that
    name that something was typed in that day: core reads the day's session logs for the folders, as the reader
-   reads them (a harness worktree counts as the repo it is of, and a switched-off folder is not read). The folders
+   reads them (a harness worktree counts as the repo it is of, and a switched-off folder is not read: one named
+   with `--skip` or in `skip.txt`). `--logs` names the logs, in place of Claude Code's own. A folder found so is
+   a log's word, and a log is untrusted, so it must be the person's own: on Unix its owner must be the owner of
+   the person's home folder, and one that is not is refused and never copied. A `--repo` is not asked. The folders
    are never printed and never reach page data, and the run's record does not hold the one chosen. Git's own
    words name the folder they are about, so for a folder found this way nothing git says is repeated, now or
    when the copy is ended: the refusal has fixed words in their place (the copy's record keeps `found`). A
@@ -355,6 +358,60 @@ that outlives its `jellymoon run` and still prints is ended by the system at its
 harness is in a group of its own, Ctrl-C in the terminal of `jellymoon run` ends `jellymoon run` and not the
 harness: that is a cut-off run like any other.
 
+## A run started apart
+
+`jellymoon wish --run` keeps the wish and starts its run (F41). The run is never in the asking process: core's
+`run_apart` (`run/apart.rs`) starts the `jellymoon` program it is given as `jellymoon run --wish <id> --date <day>`,
+a process of its own in a process group of its own, and the asker goes on, or ends, while the run goes. A run
+lives as long as the command that holds its lock ("A run that was cut off"), so that command must be able to
+outlive whoever asked for it. The app will ask the same way (F42).
+
+- **The program** is the one given, by its full path, and nothing is looked up: `jellymoon wish --run` gives its
+  own (`current_exe`). A name that is no full path is refused.
+- **Before anything is started** the wish must be there and name no run, and a harness must be found, as the run
+  itself would find it. With none, nothing is started and `why` is core's line with the places looked in.
+- **What is waited for.** The asker is answered once the wish names its run, or once the command has ended
+  without that: at most 120 seconds, after which the command is left at work and `why` says no run has been
+  started yet.
+- **What is read of the command.** Its stdin and stdout are null, so nothing it prints is waited on. Its stderr is
+  a pipe read only until the answer: 4 KiB at most, of which the first line, without `jellymoon: `, goes through
+  `redact::line` and is cut at 300 characters. That line is the refusal `jellymoon run` gives ("What is
+  refused"), and it is `why`. A wish that names a run gives its own `why`, which is core's fixed words.
+- **After the answer** nothing the command says is kept: an asker that lives on reads it and drops it, and one
+  that has exited leaves the pipe closed. The command writes its record, its star and the wish as it would with a
+  terminal, and exits 0 for a completed run: a line it cannot print is not an error to it.
+- **A stop** reaches it as it reaches any run: `jellymoon run stop` leaves its request in the run's folder and the
+  run's own command finds it. A command started apart that is killed is a cut-off run, written down by the next look.
+- **Its group.** On Unix the command is the leader of a new process group, so an interrupt typed at the asker's
+  terminal does not reach it. On Windows it is started in a new process group with no window.
+- **On Windows the command inherits what its asker has open.** Windows gives a started program every handle the
+  starting one holds as inheritable, and the asker's own output is one. So a program that reads what
+  `jellymoon wish --run` prints through a pipe, to the pipe's end, waits until the run has ended. Sent to a file
+  or a terminal, the command returns as on Unix. Core does not close this: it would take `unsafe` or another
+  crate, as the stop's limits on Windows do.
+
+What `jellymoon wish --run` prints is the wish's line with `run` and `why` filled in, and it exits 0 whether or
+not a run was started: the wish is kept either way ([wish.md](wish.md)).
+
+## Three runs at once
+
+No more than three runs go at once (`run/cap.rs`). A run goes while its `jellymoon run` holds the system's lock on
+`runs/<id>/run.lock`. A fourth is refused in one line, with no copy made, and the wish is as it was, so it can
+be run when one has ended:
+
+```
+nothing was started: 3 runs are going, and no more than 3 go at once; run the wish again when one has ended
+```
+
+The count is exact. A run takes its own lock behind the system's lock on `runs/going.lock`, where the held locks
+are counted first, so the count and the claim are one step: of six `jellymoon run` started at once exactly three
+hold a run (`tests/f41/cap.rs`, where a test's build waits between the count and the claim). The runs are also
+counted once before the copy is made, with no lock, only so that a run that is one too many makes no copy; a run
+that passes there and is refused at the claim takes its copy back, as any run that was never started does.
+`going.lock` is held for the count and the claim only, is waited for 3 seconds, and is not opened when something
+other than a plain file is at its name. A run's lock that cannot be opened (one whose mode lets nobody read it)
+is counted as not held. A cut-off run holds nothing and is not counted, whether or not a look has written it down.
+
 ## A file of the home that is not a plain file
 
 Anyone who can write Jellymoon's home can put something else where one of its files is expected, and opening a
@@ -390,6 +447,8 @@ empty `runs/no-hooks`), and they stay.
 | `--repo` that is not a full path, or whose last name is not the wish's project | which of the two |
 | No `--repo`, and no folder of the name typed in that day, or two of them | how many, and to name one with `--repo` |
 | No `--repo`, and no session logs | the reader's own line |
+| No `--repo`, and the one folder is not owned by the person (Unix) | that it is not a folder of their own, and to name the folder with `--repo` |
+| Three runs going | that three are going and no more go at once ("Three runs at once") |
 | A `PATH` with no folder named by its full path | nothing was started, and why |
 | No `--repo`, and the one folder is inside a repo, or is no repo | that it is not one a run can copy, and `copy make`'s reason, with fixed words where git's own would be |
 | A folder that is not a checkout git can copy | `copy make`'s own line ([copy.md](copy.md)) |
@@ -422,4 +481,12 @@ empty `runs/no-hooks`), and they stay.
   has not ended yet. Killing that `jellymoon run` makes it a cut-off run, which the next stop or page ends.
 - A cancelled run's `denied` is 0 when the stop came before the result line: what was denied until then is in
   the stream's other lines, which are not counted.
-- The app does not start or stop a run yet. The 30 minutes are one number for every wish.
+- The app does not start or stop a run yet (F42, F43). The 30 minutes are one number for every wish.
+- A run started apart was tested with an asker that exits. An asker whose terminal is closed (`SIGHUP` to its
+  session) was not: the command has a group of its own, not a session of its own.
+- On Windows a run started apart is run by CI's tests only, never by a person. Its asker's output read through a
+  pipe waits for the run ("A run started apart"): CI's first run there showed it, as two tests that read an
+  asker's pipe and waited half a minute. The owner of a folder found in a log is not checked on Windows.
+- A person whose home folder cannot be read has no folder of their own: every folder found in a log is refused,
+  and `--repo` still names one.
+- A `jellymoon run` killed after its wish names the run is counted as going until it is gone, and no longer.

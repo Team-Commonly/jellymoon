@@ -40,6 +40,14 @@ path = "tests/support/fake_agent.rs"
 test = false
 doc = false
 
+# A made-up asker for a run started apart (F41): it calls core's `run_apart` and exits, and stands in for the
+# `jellymoon` command core starts, where it leaves the real command's exit code for a test to read.
+[[bin]]
+name = "fake-asker"
+path = "tests/support/fake_asker.rs"
+test = false
+doc = false
+
 [dependencies]
 jellymoon-core.workspace = true
 lexopt.workspace = true

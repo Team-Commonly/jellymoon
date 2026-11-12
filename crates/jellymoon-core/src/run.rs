@@ -12,6 +12,8 @@
 //! no end, was cut off. The next `jellymoon run` or page that finds it kills the harness child it left, if that is
 //! still the same process, and writes the run down as failed ([`bury`]).
 
+mod apart;
+mod cap;
 mod child;
 mod dead;
 mod end;
@@ -20,10 +22,11 @@ mod stop;
 mod stream;
 
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+pub use apart::{Started, run_apart};
 pub(crate) use end::bury;
 use end::{lock_file, settle};
 use record::Record;
@@ -83,6 +86,8 @@ pub struct RunOptions {
     pub logs: Option<PathBuf>,
     /// The harness program. None: the one found as the reading call finds it.
     pub harness: Option<PathBuf>,
+    /// Folder names switched off, as the reader's are: a folder of such a name is not found in the logs.
+    pub skip: Vec<String>,
 }
 
 /// How a `jellymoon run` ended.
@@ -196,6 +201,7 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     let repo = folder(home, &day, &wish, options)?;
     // A folder read from the logs that is not a repo's top is refused with copy's own reason, in fixed words: no
     // folder above it is tried, and nothing git says of it is repeated.
+    cap::room(home)?;
     let copy = copy::copy_of(home, &repo, options.repo.is_some()).map_err(|e| match (e, &options.repo) {
         (Error::Copy(why), None) => {
             let why = why.replacen("--repo", "it", 1);
@@ -254,9 +260,14 @@ fn folder(home: &Path, day: &str, wish: &MadeWish, options: &RunOptions) -> Resu
         return if named { Ok(repo.clone()) } else { Err(refused(why)) };
     }
     let logs = options.logs.clone().ok_or_else(|| refused("no session logs are known; name the folder with --repo"))?;
-    let read = DayOptions { logs, date: Some(day.to_string()), skip: Vec::new(), home: Some(home.to_path_buf()) };
+    let skip = options.skip.clone();
+    let read = DayOptions { logs, date: Some(day.to_string()), skip, home: Some(home.to_path_buf()) };
     let mut found = reader::folders(&read, &wish.project)?;
     match (found.pop(), found.len()) {
+        // The folder is a session log's word, and a log can be written by whatever wrote to the harness's folder.
+        (Some(repo), 0) if theirs(&repo) => Err(refused(format!(
+            "the folder of that name typed in on {day} is not a folder of your own; name the folder with --repo"
+        ))),
         (Some(repo), 0) => Ok(repo),
         (None, _) => Err(refused(format!(
             "no folder of the name the wish gives was typed in on {day}; name the folder with --repo"
@@ -268,11 +279,25 @@ fn folder(home: &Path, day: &str, wish: &MadeWish, options: &RunOptions) -> Resu
     }
 }
 
-/// Takes the run's lock, writes its record, and has the wish name the run, behind the day's lock. A wish that names
-/// a run already has had its run: this one is refused.
+/// Whether a folder that is there is owned by someone other than the person, who is taken to be the owner of
+/// their own home folder (`command.rs`). With no home every folder is someone else's. A link is followed: the
+/// folder it leads to is the one a copy would be made of. Windows has no such owner to read.
+#[cfg(unix)]
+fn theirs(folder: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let person = crate::user_home().and_then(|home| fs::metadata(home).ok()).map(|home| home.uid());
+    fs::metadata(folder).is_ok_and(|folder| Some(folder.uid()) != person)
+}
+
+#[cfg(not(unix))]
+fn theirs(_: &Path) -> bool {
+    false
+}
+
+/// Takes the run's lock, when fewer than three runs go (`cap.rs`), writes its record, and has the wish name the
+/// run, behind the day's lock. A wish that names a run already has had its run: this one is refused.
 fn start(home: &Path, day: &str, wish: &str, run: &str) -> Result<File, Error> {
-    let lock = OpenOptions::new().write(true).create_new(true).open(lock_file(home, run)).map_err(Error::Store)?;
-    lock.lock().map_err(Error::Store)?;
+    let lock = cap::claim(home, run)?;
     let started = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
     let record = Record {
         wish: wish.to_string(),

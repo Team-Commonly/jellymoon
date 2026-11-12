@@ -235,6 +235,51 @@
       "blockedBy": [
         "F39"
       ]
+    },
+    {
+      "id": "F41",
+      "category": "journal",
+      "description": "A wish made with `--run` starts its own run, which outlives the command that asked for it",
+      "steps": [
+        "`jellymoon wish --say <words> --project <name> --run` keeps the wish, starts `jellymoon run` for it as a process of its own, prints `{wish, run, why}` with the run's id once the wish names it, and exits while the run goes; `jellymoon page` then shows the wish working, and done with its star when the run completes",
+        "a run that could not be started leaves the wish kept and exits 0: with no harness, two folders of the name, or a folder that is no repo's top, `run` is null and `why` is core's own line",
+        "a folder found in a session log that is not the person's own is refused, a folder switched off with `--skip` is not found, and a fourth run while three are going is refused, each in one line with no copy made"
+      ],
+      "test": "cargo test -p jellymoon --test f41",
+      "passes": true,
+      "blockedBy": [
+        "F40"
+      ]
+    },
+    {
+      "id": "F42",
+      "category": "journal",
+      "description": "A wish typed in the app's window is on today's page at once, and its run starts",
+      "steps": [
+        "`jellymoon-app layout` prints one `entry` piece on a day's page, with one option per project of the day's reading; a day with no project read prints none",
+        "words entered for a project are kept by core's `wish` and drawn at once in the working state with no reading; the run is started by core's `run_apart` with the checked installed `jellymoon` command, never in the app's own process, and the page shows the star when it completes, with no tap and no reopening",
+        "words core refuses, a command that is not found, and a run that was not started each leave one plain note that says why in core's words; a refused wish writes nothing",
+        "the kit's entry keeps text being composed apart from text entered: Enter during a composition enters nothing"
+      ],
+      "test": "cargo test -p jellymoon-app --test f42",
+      "passes": false,
+      "blockedBy": [
+        "F41"
+      ]
+    },
+    {
+      "id": "F43",
+      "category": "journal",
+      "description": "A tap on a working made wish stops its run",
+      "steps": [
+        "a tap on the character of a made wish whose run is going shows one choice, `Stop it`; its tap calls core's `stop_run` off the window's thread, and the page says the run is being stopped, then draws the wish as needing the person with no star",
+        "a tap on any other character, on a wish with no run going, or on a stop choice whose run has ended meanwhile stops nothing and writes nothing"
+      ],
+      "test": "cargo test -p jellymoon-app --test f43",
+      "passes": false,
+      "blockedBy": [
+        "F42"
+      ]
     }
   ]
 }

@@ -5,14 +5,16 @@
 //! waits), or an error on stderr and nothing on stdout. None talks to a server. `uninstall` removes what `install.sh`
 //! added, and the hook.
 
+mod parse;
+
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, Error, Outcome, PageOptions, ReaderDay, RunOptions, UninstallOptions, user_home};
-use lexopt::prelude::*;
+use jellymoon_core::{DayOptions, Error, PageOptions, ReaderDay, RunOptions, UninstallOptions, user_home};
+use parse::{Command, parse};
 
 const USAGE: &str = "usage:
   jellymoon day [--date <YYYY-MM-DD>] [--logs <Claude Code projects dir>] [--skip <folder names, comma separated>]
@@ -21,7 +23,8 @@ const USAGE: &str = "usage:
   jellymoon hook                                 (run by Claude Code: hands waiting rulings to the session on stdin)
   jellymoon settle --date <YYYY-MM-DD> --clash <n> --option <1|2>   (a tap on a clash of the kept page: that statement stands)
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]   (keeps a wish you make on the day's page; starts nothing)
-  jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
+  jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --run [--logs <dir>] [--skip <names>]   (keeps the wish and starts its run, which goes on after this command)
+  jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
   jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]   (stops that run: its copy is kept, and no star is added)
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
@@ -38,24 +41,6 @@ const READING_LIMIT: Duration = Duration::from_secs(180);
 enum Failure {
     Usage(String),
     Run(String),
-}
-
-enum Command {
-    Help,
-    Day(DayOptions),
-    Page(DayOptions, String),
-    Rule { stands: String, over: String },
-    Hook,
-    InstallHook { settings: Option<PathBuf>, installed: bool },
-    Settle { date: String, clash: usize, option: usize },
-    Wish { date: Option<String>, say: String, project: String },
-    Run(RunOptions),
-    Stop(RunOptions),
-    RemoveHook,
-    HookStatus,
-    Uninstall,
-    MakeCopy { repo: PathBuf, run: Option<String> },
-    CleanCopy { run: String, outcome: Outcome },
 }
 
 fn main() -> ExitCode {
@@ -90,6 +75,27 @@ fn install_hook(settings: Option<PathBuf>, installed: bool) -> Result<jellymoon_
         jellymoon_core::install_hook(&settings, &home()?, &program)
     };
     state.map_err(|e| Failure::Run(e.to_string()))
+}
+
+/// `wish`: keeps the wish, and with `--run` starts its run as a `jellymoon run` of this same program, which goes
+/// on when this command has printed and ended. The wish is kept whatever comes of its run: a run that was not
+/// started is said in `why`, in core's words, and is no failure of this command.
+fn wish(date: Option<String>, say: &str, project: &str, apart: Option<RunOptions>) -> Result<String, Failure> {
+    let home = home()?;
+    let mut wished =
+        jellymoon_core::wish(&home, date.as_deref(), say, project).map_err(|e| Failure::Run(e.to_string()))?;
+    if let Some(options) = apart {
+        let options = RunOptions { wish: wished.wish.id.clone(), day: date, ..options };
+        let started = match env::current_exe() {
+            Ok(program) => jellymoon_core::run_apart(&home, &program, &options).map_err(|e| e.to_string()),
+            Err(e) => Err(format!("nothing was started: this program could not be found: {e}")),
+        };
+        (wished.run, wished.why) = match started {
+            Ok(started) => (started.run, started.why),
+            Err(why) => (None, why),
+        };
+    }
+    Ok(format!("{wished}\n"))
 }
 
 /// Runs the command and returns what it prints.
@@ -136,9 +142,7 @@ fn run() -> Result<String, Failure> {
             }
             Ok(format!("{settled}\n"))
         }
-        Command::Wish { date, say, project } => {
-            Ok(format!("{}\n", jellymoon_core::wish(&home()?, date.as_deref(), &say, &project).map_err(failed)?))
-        }
+        Command::Wish { date, say, project, apart } => wish(date, &say, &project, apart),
         Command::Run(options) => Ok(format!("{}\n", jellymoon_core::run(&home()?, &options).map_err(failed)?)),
         Command::Stop(RunOptions { wish, day, .. }) => {
             Ok(format!("{}\n", jellymoon_core::stop_run(&home()?, &wish, day.as_deref()).map_err(failed)?))
@@ -154,184 +158,6 @@ fn run() -> Result<String, Failure> {
         Command::CleanCopy { run, outcome } => {
             Ok(format!("{}\n", jellymoon_core::clean_copy(&home()?, &run, outcome).map_err(failed)?))
         }
-    }
-}
-
-/// Reads the command line. A flag's value is whatever follows it, even text that starts with dashes: a model name
-/// shaped like a flag is taken here and refused by the check on names, never read as a flag of ours.
-fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
-    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let command = match parser.next().map_err(usage)? {
-        Some(Value(command)) if command == "day" || command == "page" || command == "help" => command,
-        Some(Value(command)) if command == "uninstall" => {
-            return match parser.next().map_err(usage)? {
-                None => Ok(Command::Uninstall),
-                Some(Long("help") | Short('h')) => Ok(Command::Help),
-                Some(other) => Err(usage(other.unexpected())),
-            };
-        }
-        Some(Value(command)) if command == "rule" => return parse_rule(parser),
-        Some(Value(command)) if command == "settle" => return parse_settle(parser),
-        Some(Value(command)) if command == "wish" => return parse_wish(parser),
-        Some(Value(command)) if command == "run" => return parse_run(parser),
-        Some(Value(command)) if command == "hook" => return parse_hook(parser),
-        Some(Value(command)) if command == "copy" => return parse_copy(parser),
-        Some(Long("help") | Short('h')) => return Ok(Command::Help),
-        Some(other) => return Err(usage(other.unexpected())),
-        None => return Err(Failure::Usage("no command".to_string())),
-    };
-    let (mut date, mut logs, mut skip, mut model) = (None, None, String::new(), "sonnet".to_string());
-    while let Some(arg) = parser.next().map_err(usage)? {
-        match arg {
-            Long("help") | Short('h') => return Ok(Command::Help),
-            Long("date") => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("logs") => logs = Some(PathBuf::from(parser.value().map_err(usage)?)),
-            Long("skip") => skip = parser.value().and_then(|v| v.string()).map_err(usage)?,
-            Long("model") if command == "page" => model = parser.value().and_then(|v| v.string()).map_err(usage)?,
-            other => return Err(usage(other.unexpected())),
-        }
-    }
-    if command == "help" {
-        return Ok(Command::Help);
-    }
-    let logs = match logs {
-        Some(logs) if logs.to_string_lossy().trim().is_empty() => {
-            return Err(Failure::Usage("--logs needs a folder".to_string()));
-        }
-        Some(logs) => logs,
-        None => harness_folder()?.join("projects"),
-    };
-    let skip = jellymoon_core::skip_names(&skip).map_err(Failure::Usage)?;
-    let options = DayOptions { logs, date, skip, home: own_folder()? };
-    Ok(if command == "day" { Command::Day(options) } else { Command::Page(options, model) })
-}
-
-fn parse_rule(mut parser: lexopt::Parser) -> Result<Command, Failure> {
-    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let (mut stands, mut over) = (String::new(), String::new());
-    while let Some(arg) = parser.next().map_err(usage)? {
-        match arg {
-            Long("help") | Short('h') => return Ok(Command::Help),
-            Long("stands") => stands = parser.value().and_then(|v| v.string()).map_err(usage)?,
-            Long("over") => over = parser.value().and_then(|v| v.string()).map_err(usage)?,
-            other => return Err(usage(other.unexpected())),
-        }
-    }
-    Ok(Command::Rule { stands, over })
-}
-
-fn parse_settle(mut parser: lexopt::Parser) -> Result<Command, Failure> {
-    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let (mut date, mut clash, mut option) = (None, None, None);
-    // Digits and nothing else: `+1` is not a number here, though it would parse as one.
-    let number = |parser: &mut lexopt::Parser| {
-        let value = parser.value().and_then(|v| v.string()).map_err(usage)?;
-        let digits = !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
-        let number = digits.then(|| value.parse::<usize>().ok()).flatten();
-        number.ok_or_else(|| Failure::Usage(format!("--clash and --option take a number, and {value:?} is not one")))
-    };
-    while let Some(arg) = parser.next().map_err(usage)? {
-        match arg {
-            Long("help") | Short('h') => return Ok(Command::Help),
-            Long("date") => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("clash") => clash = Some(number(&mut parser)?),
-            Long("option") => option = Some(number(&mut parser)?),
-            other => return Err(usage(other.unexpected())),
-        }
-    }
-    match (date, clash, option) {
-        (Some(date), Some(clash), Some(option)) => Ok(Command::Settle { date, clash, option }),
-        _ => Err(Failure::Usage("settle takes --date, --clash and --option".to_string())),
-    }
-}
-
-fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
-    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let (mut date, mut say, mut project) = (None, None, None);
-    while let Some(arg) = parser.next().map_err(usage)? {
-        match arg {
-            Long("help") | Short('h') => return Ok(Command::Help),
-            Long("date") => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("say") => say = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("project") => project = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            other => return Err(usage(other.unexpected())),
-        }
-    }
-    match (say, project) {
-        (Some(say), Some(project)) => Ok(Command::Wish { date, say, project }),
-        _ => Err(Failure::Usage("wish takes --say and --project".to_string())),
-    }
-}
-
-/// `run` and `run stop`. The logs are read only when no repo is named, to find the one folder of the wish's project.
-fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
-    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let logs = harness_folder().ok().map(|folder| folder.join("projects"));
-    let mut options = RunOptions { logs, harness: named("JELLYMOON_CLAUDE"), ..RunOptions::default() };
-    let (mut wish, mut stop, mut first) = (None, false, true);
-    while let Some(arg) = parser.next().map_err(usage)? {
-        match arg {
-            Long("help") | Short('h') => return Ok(Command::Help),
-            Value(word) if first && word == "stop" => stop = true,
-            Long("wish") => wish = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("date") => options.day = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("repo") if !stop => options.repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
-            other => return Err(usage(other.unexpected())),
-        }
-        first = false;
-    }
-    options.wish = wish.ok_or_else(|| Failure::Usage("run takes --wish".to_string()))?;
-    Ok(if stop { Command::Stop(options) } else { Command::Run(options) })
-}
-
-fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {
-    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let install = |action: &Command| matches!(action, Command::InstallHook { .. });
-    let (mut action, mut settings, mut installed) = (Command::Hook, None, false);
-    while let Some(arg) = parser.next().map_err(usage)? {
-        match arg {
-            Long("help") | Short('h') => return Ok(Command::Help),
-            Value(word) if matches!(action, Command::Hook) && word == "install" => {
-                action = Command::InstallHook { settings: None, installed: false };
-            }
-            Value(word) if matches!(action, Command::Hook) && word == "uninstall" => action = Command::RemoveHook,
-            Value(word) if matches!(action, Command::Hook) && word == "status" => action = Command::HookStatus,
-            Long("settings") if install(&action) => settings = Some(PathBuf::from(parser.value().map_err(usage)?)),
-            Long("installed") if install(&action) => installed = true,
-            other => return Err(usage(other.unexpected())),
-        }
-    }
-    Ok(if install(&action) { Command::InstallHook { settings, installed } } else { action })
-}
-
-/// `copy make` and `copy clean`. What a run id may be is core's rule, so any text is taken here.
-fn parse_copy(mut parser: lexopt::Parser) -> Result<Command, Failure> {
-    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let (mut action, mut repo, mut run, mut outcome) = (String::new(), None, None, None);
-    while let Some(arg) = parser.next().map_err(usage)? {
-        match arg {
-            Long("help") | Short('h') => return Ok(Command::Help),
-            Value(word) if action.is_empty() && (word == "make" || word == "clean") => {
-                action = word.string().map_err(usage)?
-            }
-            Long("repo") if action == "make" => repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
-            Long("run") if !action.is_empty() => run = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("outcome") if action == "clean" => {
-                let named = parser.value().and_then(|v| v.string()).map_err(usage)?;
-                let known = Outcome::named(&named);
-                outcome = Some(
-                    known.ok_or_else(|| Failure::Usage(format!("--outcome is completed or failed, not {named:?}")))?,
-                );
-            }
-            other => return Err(usage(other.unexpected())),
-        }
-    }
-    match (action.as_str(), repo, run, outcome) {
-        ("make", Some(repo), run, _) => Ok(Command::MakeCopy { repo, run }),
-        ("clean", _, Some(run), Some(outcome)) => Ok(Command::CleanCopy { run, outcome }),
-        _ => Err(Failure::Usage(
-            "copy is `copy make --repo <folder>` or `copy clean --run <id> --outcome <completed|failed>`".to_string(),
-        )),
     }
 }
 

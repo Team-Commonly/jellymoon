@@ -97,7 +97,7 @@ pub(super) fn run(
 }
 
 /// The start of what the child said on stderr, as text; the rest is read and dropped, so the child never waits.
-fn stderr_head(pipe: Option<impl Read + Send + 'static>) -> Receiver<String> {
+pub(super) fn stderr_head(pipe: Option<impl Read + Send + 'static>) -> Receiver<String> {
     let (send, receive) = mpsc::channel();
     thread::spawn(move || {
         let mut head = Vec::new();

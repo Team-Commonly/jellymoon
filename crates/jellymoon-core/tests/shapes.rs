@@ -53,6 +53,11 @@ fn what_a_made_wish_prints_round_trips_byte_for_byte() {
     let wished: Wished = serde_json::from_str(&example).unwrap();
     assert_eq!(format!("{wished}\n"), example);
     assert_eq!((wished.wish.id.as_str(), wished.wish.state, wished.run), ("m1", WishState::Working, None));
+    // With `--run` the same line names the run the wish was given.
+    let example = fixture("wished-run.json");
+    let wished: Wished = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{wished}\n"), example);
+    assert_eq!(wished.run.as_deref(), Some("r0123456789abcdef"));
     let more = example.replace("\"stars\":[]", "\"stars\":[],\"label\":\"x\"");
     assert!(serde_json::from_str::<Wished>(&more).is_err(), "a made wish with a field nobody knows is refused");
 }

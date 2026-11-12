@@ -2,11 +2,13 @@
 
 A made wish is one the person made themselves, not one the reading call worked out (F37,
 [ADR 0014](../adr/0014-a-run-is-started-headless.md)). The rules are core's, in `crates/jellymoon-core/src/wish.rs`.
-`jellymoon wish` starts nothing: a made wish gets its run from `jellymoon run` ([run.md](run.md)), which adds
-`run` and `why` to the kept wish.
+`jellymoon wish` alone starts nothing: a made wish gets its run from `jellymoon run` ([run.md](run.md)), which adds
+`run` and `why` to the kept wish. With `--run` it keeps the wish and starts that run itself, as a process of its
+own that goes on after this command has exited.
 
 ```
 jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]
+jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --run [--logs <dir>] [--skip <names>]
 ```
 
 It prints one line of JSON and exits 0. With no `--date` the day is today in the computer's time zone, which `TZ`
@@ -15,6 +17,19 @@ overrides.
 ```json
 {"wish":{"id":"m1","said":"ship the changelog","project":"alpha","state":"working","stars":[]},"run":null,"why":"nothing was started: `jellymoon wish` keeps a wish and starts no run"}
 ```
+
+With `--run` (F41, [run.md](run.md), "A run started apart") the line names the run once the wish names it:
+
+```json
+{"wish":{"id":"m1","said":"ship the changelog","project":"alpha","state":"working","stars":[]},"run":"r0123456789abcdef","why":"run r0123456789abcdef is going, in a copy of the repo"}
+```
+
+The repo is the one folder of the project's name that something was typed in that day, found in the session
+logs (`--logs`, or Claude Code's own) with the folders named by `--skip` left out; `wish` takes no `--repo`, and
+takes `--logs` and `--skip` only with `--run`. A run that was not started leaves `run` null and says why in
+`why`, in core's own line: no harness, no folder or two of the name, a folder that is no repo's top or not the
+person's own, three runs going. The wish is kept in each case and the exit is 0; `jellymoon run --wish <id>`
+can start it later. Words core refuses are refused as without `--run`, and nothing is started.
 
 ## What is kept
 

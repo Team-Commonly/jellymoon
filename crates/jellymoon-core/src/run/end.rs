@@ -63,7 +63,7 @@ pub(super) fn lock_file(home: &Path, run: &str) -> PathBuf {
 /// Whether a `jellymoon run` that still lives holds the run. A lock that cannot be asked about is no lock, and
 /// neither is anything but a plain file at its name, which is not opened: a named pipe would keep whoever opens it
 /// waiting for ever. A run with such a lock is held by nothing, so it was cut off.
-fn held(home: &Path, run: &str) -> bool {
+pub(super) fn held(home: &Path, run: &str) -> bool {
     let lock = lock_file(home, run);
     let plain = fs::symlink_metadata(&lock).is_ok_and(|meta| meta.is_file());
     plain && File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_err())

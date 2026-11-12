@@ -280,6 +280,70 @@
       "blockedBy": [
         "F42"
       ]
+    },
+    {
+      "id": "F44",
+      "category": "journal",
+      "description": "A finished run's work is shown as what it made, with no git and no folder",
+      "steps": [
+        "`jellymoon run show --wish <id>` prints one line of JSON for a made wish whose run completed: the run, the wish, whether the work waits, was kept or was tossed, and its files, each with a cleaned name, whether it was made, changed or removed, its size, whether it is text, a link or another repo's entry, and whether it is one the person's tools obey (ADR 0017, decision 6); the list is cut at a stated count and says how many more there are",
+        "`--file <n>` prints that file as it is in the work, the whole text and never a diff, cleaned at the door every kept text is cleaned at and cut at a stated size; a file that is not text, a link, or a number that names no file prints a refusal in fixed words and no bytes of the file",
+        "everything is read from the repo's store by the run's commit and its parent: the person's working tree, `HEAD`, index and refs are unchanged, no file of the work is written to disk, opened or run, and a file name that looks like an option or holds control characters reaches git and the page only as data",
+        "a wish with no run, a run that is going, failed or was cancelled, a record that cannot be read, and a repo that is gone each print one plain refusal and exit 1"
+      ],
+      "test": "cargo test -p jellymoon --test f44",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F45",
+      "category": "journal",
+      "description": "Keeping a run's work lands it on the branch the person stands on, as one commit by them",
+      "steps": [
+        "`jellymoon run keep --wish <id>` with the checkout where the run started moves the person's branch forward to the run's commit; with commits of the person's own since, it lands one new commit on top of theirs that holds both; either way the files are in their working tree, the run's branch is gone, the record says `kept` with the commit, and it prints `{run, wish, kept, onto, why}`",
+        "work that no longer fits is refused with the working tree, `HEAD`, index and every ref unchanged and the reason in fixed words: the same lines changed on both sides, an unsaved change or an untracked file of the person's in the way, no branch stood on, a rebase, merge, cherry-pick or bisect in progress, a history that no longer holds the run's start, or a git too old to merge in the store",
+        "work that adds or changes a submodule entry or `.gitmodules` is never kept; work that touches a file the person's tools obey is refused unless `--with-settings` is given; no hook of the repo runs, nothing is fetched and nothing is pushed",
+        "`--ask` prints what a keep would do or why it would be refused, and changes nothing",
+        "a keep cut off at any of its steps is finished or begun again by the next `run keep`, and the work never lands twice; a second keep, and a keep of tossed work, change nothing and say so"
+      ],
+      "test": "cargo test -p jellymoon --test f45",
+      "passes": false,
+      "blockedBy": [
+        "F44"
+      ]
+    },
+    {
+      "id": "F46",
+      "category": "journal",
+      "description": "Tossing a run's work removes its branch and lets the wish go",
+      "steps": [
+        "`jellymoon run toss --wish <id>` on work that waits writes `tossed` and the commit's id in the run's record, then deletes the run's branch as the run's own ref at that commit, and the wish is drawn `let go`; it prints `{run, wish, tossed, commit, why}`",
+        "the branch is left and nothing is written when someone stands on it, when it is a symbolic ref, or when it moved since the work was shown; no other branch, tag or ref changes, and the person's working tree, `HEAD` and index are unchanged",
+        "a toss of a failed or cancelled run removes its kept copy as `copy clean` does, and its branch by the same rule",
+        "a second toss, and a toss of kept work, change nothing and say so"
+      ],
+      "test": "cargo test -p jellymoon --test f46",
+      "passes": false,
+      "blockedBy": [
+        "F44"
+      ]
+    },
+    {
+      "id": "F47",
+      "category": "journal",
+      "description": "A tap on a little one opens its wish, and work that waits is shown, kept or tossed there",
+      "steps": [
+        "`jellymoon-app layout` prints, for a made wish whose work waits, one note with the wish's own words, how many files the work made, changed and removed with their names, and three choices: `Show me`, `Keep it`, `Toss it`; core says which wishes those are",
+        "`Show me` draws one file of the work as text in the window, by core's `run show`; nothing is handed to the system's opener",
+        "`Keep it` and `Toss it` call core off the window's thread and draw core's words: the wish stays done with its star and the note goes, or the wish is drawn let go; a refused keep leaves one plain note with core's reason, and work that touches files the person's tools obey names them and asks once more before it is kept",
+        "a tap on any other little one shows its wish's own words and state, and changes nothing"
+      ],
+      "test": "cargo test -p jellymoon-app --test f47",
+      "passes": false,
+      "blockedBy": [
+        "F45",
+        "F46"
+      ]
     }
   ]
 }

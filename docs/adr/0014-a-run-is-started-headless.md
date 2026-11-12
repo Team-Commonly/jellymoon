@@ -23,6 +23,8 @@ edited to match and points here. Nothing else in ADR 0011 changes.
 4. **The work stays on its branch.** With no shell the agent cannot commit. When a run ends, core commits what is in
    the copy, with git's hooks off, on the run's own branch, and removes only the worktree folder. The branch is kept:
    it is the work. ADR 0011 said the copy was "removed with its branch when the run completes".
+   [ADR 0017](0017-a-runs-work-is-shown-kept-or-tossed.md) says what becomes of the branch once the person has seen
+   the work.
 5. **The star is core's.** Core adds a wish's star when the stream's result is a success and the child exits 0. The
    star's words are fixed and are never the agent's.
 6. **A made wish names one project.** A name that matches two folders is refused and nothing is written.

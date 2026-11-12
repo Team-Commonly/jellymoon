@@ -17,6 +17,7 @@ pub const LARGEST_SIDE: f32 = 16384.0;
 pub mod lines;
 pub mod read;
 pub mod scene;
+pub mod stopping;
 pub mod taps;
 pub mod today;
 #[cfg(feature = "window")]

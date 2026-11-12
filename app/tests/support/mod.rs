@@ -2,6 +2,7 @@
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
 pub mod day;
+pub mod wished;
 
 use std::fs;
 use std::io::Write;

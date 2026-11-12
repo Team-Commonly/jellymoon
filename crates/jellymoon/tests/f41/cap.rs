@@ -7,7 +7,7 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, SAID, World, ended, found_world, made, printed, refused};
+use super::{DAY, SAID, World, ended, found_world, made, printed, refused, silent_world};
 
 const FULL: &str = "nothing was started: 3 runs are going, and no more than 3 go at once; run the wish again when \
                     one has ended";
@@ -20,7 +20,7 @@ fn going(w: &World) -> usize {
 
 #[test]
 fn a_fourth_run_while_three_go_is_refused_with_no_copy_made_and_taken_when_one_has_ended() {
-    let w = found_world();
+    let w = silent_world();
     let repo = w.repo("alpha");
     w.typed_in("-work-alpha", &repo);
     w.play("slow", 0);
@@ -51,6 +51,45 @@ fn a_fourth_run_while_three_go_is_refused_with_no_copy_made_and_taken_when_one_h
         assert_eq!(w.ended_as(run)["outcome"], "completed");
         w.command_gone(run);
     }
+}
+
+// A person who starts one wish four times is told of its one run, never that three runs are going. Three commands
+// for the wish are held where each has its run's lock and the wish does not name it yet, and a fourth arrives.
+// Counted as runs, the three would fill the cap. They are not: the wish is asked, and named, behind the lock the
+// runs are counted behind, so only the first of them holds a lock, and the others learn of its run there.
+#[test]
+fn commands_started_at_once_for_one_wish_are_never_counted_against_each_other() {
+    let w = found_world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let go = w.at("rec").join("named");
+    let long = |name: &'static str| (name, OsString::from("60000"));
+    let door = long("JELLYMOON_TEST_DOOR_WAIT_MS");
+    let held = [long("JELLYMOON_TEST_NAME_WAIT_MS"), door.clone(), ("JELLYMOON_TEST_GO", go.clone().into())];
+    let args = ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
+    let mut asked: Vec<Child> = (0..3).map(|_| w.going(&held, &args)).collect();
+    let from = Instant::now();
+    while w.copies().len() < 3 || !go.with_extension("at").exists() {
+        assert!(from.elapsed() < Duration::from_secs(30), "the three never came to their claim");
+        thread::sleep(Duration::from_millis(10));
+    }
+    // Under the order this test is for, each of the three has taken its lock in less than this.
+    thread::sleep(Duration::from_millis(500));
+    let mut fourth = w.going(&[door], &args);
+    while w.copies().len() < 4 && fourth.try_wait().unwrap().is_none() {
+        assert!(from.elapsed() < Duration::from_secs(60), "the fourth never made its copy");
+        thread::sleep(Duration::from_millis(10));
+    }
+    fs::write(&go, "").unwrap();
+    asked.push(fourth);
+    let said: Vec<_> = asked.into_iter().map(ended).collect();
+    for said in &said {
+        assert!(!said.stderr.contains("runs are going"), "one wish's commands were counted as runs: {}", said.stderr);
+    }
+    let (done, late): (Vec<_>, Vec<_>) = said.iter().partition(|said| said.code == 0);
+    assert_eq!((done.len(), late.len()), (1, 3));
+    assert_eq!(printed(done[0])["outcome"], "completed");
+    assert!(late.iter().all(|late| refused(late).contains("has had its run")));
+    assert_eq!((w.copies().len(), w.branches(&repo).len(), w.starts()), (0, 1, 1));
 }
 
 // The count and the claim are one step: of six `jellymoon run` started at once, three hold a run and three are

@@ -68,3 +68,33 @@ pub(super) fn unstarted(home: &Path, day: &str, wish: MadeWish, run: &str) -> Ma
     };
     wish::change(home, day, &wish.id, Duration::ZERO, undo).unwrap_or_else(|_| drawn(wish))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A look reads a wish, and the wish can change before the look writes: the wish as it is kept decides. One
+    // that names the run and is at work no more has had its end, and one at work for another run is that run's.
+    #[test]
+    fn a_wish_is_told_no_run_was_started_only_while_it_names_that_run_and_is_at_work() -> Result<(), Error> {
+        let (home, day, run) = (tempfile::tempdir().map_err(Error::Store)?, "2026-03-10", "r0123456789abcdef");
+        wish::wish(home.path(), Some(day), "ship the changelog", "alpha")?;
+        let kept_as = |named: &str, state: WishState| {
+            wish::change(home.path(), day, "m1", Duration::ZERO, |wish| {
+                (wish.run, wish.why, wish.state) = (Some(named.to_string()), None, state);
+                Ok(())
+            })
+        };
+        let read = kept_as(run, WishState::Working)?;
+        for (named, state) in [(run, WishState::Done), ("r00000000000000aa", WishState::Working)] {
+            let kept = kept_as(named, state)?;
+            assert_eq!(unstarted(home.path(), day, read.clone(), run), kept, "{named} {state:?}");
+            assert_eq!(wish::kept_of(home.path(), day)?, [kept]);
+        }
+        kept_as(run, WishState::Working)?;
+        let told = unstarted(home.path(), day, read, run);
+        assert_eq!((told.run.as_deref(), told.why.as_deref(), told.state), (None, Some(UNTOLD), WishState::NeedsYou));
+        assert_eq!(wish::kept_of(home.path(), day)?, [told]);
+        Ok(())
+    }
+}

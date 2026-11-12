@@ -7,7 +7,7 @@ use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, STAR, ended, grows, ms, printed, world};
+use super::{DAY, STAR, ended, grows, ms, printed, until, wait_for, world};
 use crate::support::skipped;
 
 /// Takes every permission off a file. False where that does not keep this user from opening it.
@@ -56,16 +56,18 @@ fn a_run_that_finished_while_a_look_took_it_for_cut_off_is_drawn_with_the_end_it
         return;
     }
     fs::write(&day, "").unwrap(); // another change to the day: neither the run nor the look can tell the wish
-    let waits = [ms("JELLYMOON_TEST_LOOK_WAIT_MS", 10_000)];
+    // The look waits until the test lets it go on, however long the run takes to finish meanwhile.
+    let waits = [ms("JELLYMOON_TEST_LOOK_WAIT_MS", 60_000), until(&w, "looked")];
     let mut look = w.going(&waits, &["page", "--date", DAY, "--logs", logs.to_str().unwrap()]);
-    thread::sleep(Duration::from_secs(2)); // the look has read the record, which has no end, and waits
+    wait_for(&w.at("rec").join("looked.at")); // the look has read the record, which has no end, and waits
     fs::write(w.at("rec").join("go"), "").unwrap();
     assert!(look.try_wait().unwrap().is_none(), "the look had ended before the agent was let go");
     let from = Instant::now();
     while w.record(&run)["outcome"] != "completed" {
-        assert!(from.elapsed() < Duration::from_secs(7), "the run did not finish while the look waited");
+        assert!(from.elapsed() < Duration::from_secs(30), "the run did not finish while the look waited");
         thread::sleep(Duration::from_millis(10));
     }
+    fs::write(w.at("rec").join("looked"), "").unwrap();
     let drawn = printed(&ended(look))["wishes"][0].clone();
     assert_eq!((&drawn["state"], &drawn["stars"]), (&json!("done"), &json!([STAR])), "the look drew {drawn}");
     fs::remove_file(&day).unwrap();

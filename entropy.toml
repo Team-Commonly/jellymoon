@@ -110,7 +110,15 @@ max_file_lines = 400
 # `run/never.rs`, a wish told that its run was never started, 70; `run/place.rs` grew by 22 over the folder
 # rules it took out of `run.rs` (a log's folder resolved once); the start lock and the careful take-back in
 # `copy.rs` and `copy/hold.rs` are 58; the asker's wait for the harness to begin, in `run/apart.rs`, 36.
-"crates/jellymoon-core" = 6454
+# The third pass on F41 raised core by 146: tests' seams that do not need an idle machine are 39 (`busy.rs`
+# 22, a limit counted from a file in `call.rs`, `copy/git.rs` and `run/child.rs`); the wish asked and named
+# behind the lock the runs are counted behind, 28 (`run.rs`, `run/cap.rs`); the careful take-back's three rules
+# (the start lock asked again, a link at the copy's name, a record that names another repo), 42 (`copy.rs`,
+# `copy/hold.rs`, `copy/gone.rs`, `copy/record.rs`); the test of a look's guard in `run/never.rs`, 30; and the
+# last name that is no link, in `run/place.rs`, 5.
+# A copy's `gitdir` file read as git reads a path from the copy's git folder, and git told to write a whole
+# path, raised core by 12 (`copy/record.rs`, `copy/git.rs`) and the binary by 21 (its test, `tests/f41/left.rs`).
+"crates/jellymoon-core" = 6612
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -129,7 +137,12 @@ max_file_lines = 400
 # The fixes after F41's gate raised the binary by 419, all but 4 of them tests at the binary:
 # `tests/f41/left.rs` 139, `line.rs` 78, `named.rs` 65,
 # `never.rs` 64, 30 in `refused.rs`, and what the made-up asker and agent take and leave for them.
-"crates/jellymoon" = 9964
+# The third pass on F41 raised the binary by 216, all of it tests: `tests/f41/left.rs` 98 (the start lock
+# asked again, a run's own lock held, a link at the copy's name, a record that names another repo),
+# `named.rs` 45 (another spelling, a link led elsewhere after the lookup), `cap.rs` 39 (four commands for one
+# wish), `tests/f41.rs` 14 (the asker's wait, long and short), and 20 over F38, F39 and F40 where a wait on the
+# clock became a wait on a file.
+"crates/jellymoon" = 10201
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

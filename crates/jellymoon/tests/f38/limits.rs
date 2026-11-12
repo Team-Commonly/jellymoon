@@ -1,6 +1,8 @@
 //! The ways a copy's command could be left waiting or doubled: a git that never returns, copies made at once, and
 //! two `copy clean` of one run at once. The git that never returns is the made-up `fake-git`, first on the `PATH` these runs are
-//! given. It runs the real git, then sleeps for a minute holding a lock of the system's.
+//! given. It runs the real git, then leaves the file `stalled` and sleeps for a minute holding a lock of the
+//! system's. The short limit is counted from when that file is there (`JELLYMOON_TEST_GIT_LIMIT_FROM`): no git
+//! call that is not meant to stall, and no part of the one that is, has to be done within it.
 
 use std::env::consts::EXE_SUFFIX;
 use std::ffi::OsString;
@@ -13,7 +15,7 @@ use super::{World, refused, said, world};
 use crate::support::{Ran, plant};
 
 /// A folder with `fake-git` in it as `git`, told where the real one is, and the variables that put it first on
-/// `PATH` and give a git child three seconds: far more than a git call here takes, far less than the minute slept.
+/// `PATH` and give a git child one second once the made-up git has left `stalled`: far less than the minute slept.
 fn fake(w: &World) -> Vec<(&'static str, OsString)> {
     let (folder, name) = (w.at("fake"), format!("git{EXE_SUFFIX}"));
     fs::create_dir(&folder).unwrap();
@@ -22,7 +24,8 @@ fn fake(w: &World) -> Vec<(&'static str, OsString)> {
     let real = env::split_paths(&path).map(|dir| dir.join(&name)).find(|git| git.is_absolute() && git.is_file());
     fs::write(folder.join("real"), real.unwrap().to_str().unwrap()).unwrap();
     let first = env::join_paths([folder].into_iter().chain(env::split_paths(&path))).unwrap();
-    vec![("PATH", first), ("JELLYMOON_TEST_GIT_LIMIT_MS", "3000".into())]
+    let stalled = w.at("fake").join("stalled").into();
+    vec![("PATH", first), ("JELLYMOON_TEST_GIT_LIMIT_MS", "1000".into()), ("JELLYMOON_TEST_GIT_LIMIT_FROM", stalled)]
 }
 
 /// Runs `jellymoon` with a git that never returns from the call that has `word` among its arguments. The command
@@ -32,7 +35,7 @@ fn stalled_on(w: &World, vars: &[(&'static str, OsString)], word: &str, args: &[
     let fake = w.at("fake");
     fs::write(fake.join("on"), word).unwrap();
     let ran = w.run_with(vars, args);
-    assert!(refused(&ran).contains("git did not finish in 3 seconds and was stopped"), "{}", ran.stderr);
+    assert!(refused(&ran).contains("git did not finish in 1 seconds and was stopped"), "{}", ran.stderr);
     assert!(fake.join("stalled").is_file(), "the made-up git never got to its sleep");
     let held = fs::File::open(fake.join("held")).unwrap();
     assert!(held.try_lock().is_ok(), "the git that never returns is still running");

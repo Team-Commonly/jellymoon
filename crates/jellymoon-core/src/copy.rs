@@ -248,6 +248,12 @@ pub(crate) fn take_back(home: &Path, run: &str, wait: Option<Duration>) -> Resul
 /// ran there, so its branch is where the checkout was, and goes. A branch that holds a commit no other branch,
 /// tag or the checkout itself has is someone's work, whoever made it: it is kept, and so it is when git cannot
 /// be asked. The copy's folder, git's registration of it and what is kept for the run go all the same.
+///
+/// Three things differ from [`take_back`], since what is taken back here was found, not made by the caller.
+/// Nothing is done when the run's start lock is held once the copies' lock is had: its command lives. A link at
+/// the copy's name is removed as itself, and what it leads to is not touched. And a record whose repo does not
+/// list this copy as a worktree of its own (`record::ours`) was written by hand: nothing is asked of git in
+/// that repo, no branch is removed there, and only what Jellymoon's home holds of the run goes.
 pub(crate) fn take_back_left(home: &Path, run: &str, wait: Option<Duration>) -> Result<(), Error> {
     undo(home, run, wait, true)
 }
@@ -256,10 +262,23 @@ fn undo(home: &Path, run: &str, wait: Option<Duration>, careful: bool) -> Result
     known(run)?;
     let at = Places::of(home);
     let _held = hold::held(&at.lock(), false, wait).map_err(Error::Store)?;
+    if careful && !hold::let_go(home, run) {
+        return Ok(());
+    }
     if let Some(record) = read(&at.record(run))? {
         let folder = at.root.join(run);
+        let there = match standing(&at.root, &folder) {
+            Err(_) if careful && gone::unlink(&at.root, &folder) => false,
+            there => there?,
+        };
+        if careful && !record::ours(&record, &at.root, run) {
+            if there {
+                fs::remove_dir_all(&folder).map_err(Error::Store)?;
+            }
+            return gone::remove(&at.runs, run).map_err(Error::Store);
+        }
         let git = Git::find(&at.runs, record.found).map_err(refused)?;
-        gone(&git, &record, &folder, standing(&at.root, &folder)?)?;
+        gone(&git, &record, &folder, there)?;
         let name = format!("refs/heads/{}", branch(run));
         let repo = git.open(&record.repo).map_err(refused)?;
         // The first commit of the branch that nothing else of the repo reaches. None: it has no such commit.

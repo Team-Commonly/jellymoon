@@ -300,12 +300,12 @@ impl World {
         fs::File::open(self.at("rec").join(held)).unwrap().try_lock().is_ok()
     }
 
-    /// Waits for a lock of the made-up agent's to be free, five seconds at most: a kill is not felt at once. The
+    /// Waits for a lock of the made-up agent's to be free, half a minute at most: a kill is not felt at once. The
     /// first time it is free is the answer, and it is not asked again. To ask is to take the lock and let it go, and
     /// a command that another test starts at that moment has this one's open files, the lock with them, until it is
     /// its own program: asked again just then, the lock is found held with nothing of the agent's left.
     pub fn freed(&self, held: &str) -> bool {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             if self.free(held) {
                 return true;

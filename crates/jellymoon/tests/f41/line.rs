@@ -6,7 +6,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::process::Command;
 
-use super::{World, found_world, wait_for};
+use super::{World, found_world, silent_world, wait_for};
 use crate::support::{hub_key, shows, skipped};
 
 /// The pid, the process group and the arguments of the `jellymoon run` that started the made-up agent, as the
@@ -23,7 +23,7 @@ fn command_of(w: &World) -> (String, String, String) {
 
 /// A world where `wish --run` has started a run whose agent waits, with more arguments: the started command.
 fn started_with(more: &[&str]) -> (String, String, String) {
-    let w = found_world();
+    let w = silent_world();
     w.typed_in("-work-alpha", &w.repo("alpha"));
     w.play("slow", 0);
     let said = w.wish_run("alpha", more);

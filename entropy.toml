@@ -120,8 +120,8 @@ max_file_lines = 400
 # is 48; and 71 are `wish --run`, `--logs` and `--skip` on `run`, and the header of `src/parse.rs`, which took
 # the command line's reading out of `src/main.rs` with no other change. What a failed test of a run started
 # apart says of the run (its command's exit and its record) raised it by 6 more, and the asker's output going
-# to files, which Windows needs, by 11.
-"crates/jellymoon" = 9541
+# to files, which Windows needs, by 11, and the cut-off test's Windows branch by 4.
+"crates/jellymoon" = 9545
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -6,6 +6,7 @@ use crate::color::Color;
 use crate::geom::Rect;
 use crate::layout::{PieceKind, Placed};
 use crate::scene::{Mark, Note, Scene};
+use crate::text::Role;
 use crate::theme::{Stripe, Theme};
 
 pub(crate) struct Brush<'a> {
@@ -95,13 +96,30 @@ impl Brush<'_> {
                     self.mark(*mark, rect, out);
                 }
             }
-            PieceKind::Entry => {
-                let edge = if self.lit { p.caret } else { p.entry_edge };
-                out.push(self.pill(rect, p.entry, edge));
+            // The three are told apart by more than a shade: the field with the keys has a ring, the chosen chip
+            // is filled, and the hint is grey ([`Brush::ink`]).
+            PieceKind::Entry if self.lit => out.push(self.pill(rect, p.entry, p.entry_ring)),
+            PieceKind::Entry => out.push(self.pill(rect, p.entry, p.entry_edge)),
+            PieceKind::Chip if self.chosen == Some(piece.index) => {
+                out.push(self.pill(rect, p.chip_chosen, p.chip_chosen));
             }
-            PieceKind::Chip if self.chosen == Some(piece.index) => out.push(self.pill(rect, p.chip_chosen, p.caret)),
             PieceKind::Chip => out.push(self.pill(rect, p.chip, p.chip)),
             _ => {}
+        }
+    }
+
+    /// The colour a piece's text is painted in.
+    pub fn ink(&self, piece: &Placed, role: Role) -> Color {
+        let p = &self.theme.palette;
+        match (piece.piece, role) {
+            (PieceKind::Entry, _) => p.entry_hint,
+            (PieceKind::Chip, _) if self.chosen == Some(piece.index) => p.chip_chosen_ink,
+            (_, Role::LabelStruck | Role::Body | Role::Legend) => p.soft,
+            (_, Role::RowSub | Role::OptionStruck | Role::Footer) => p.quiet,
+            (_, Role::ChoiceTitle) => p.choice_title,
+            (_, Role::ChoiceFooter) => p.choice_footer,
+            (_, Role::Bullet) => p.star,
+            _ => p.ink,
         }
     }
 
@@ -144,6 +162,42 @@ impl Brush<'_> {
             }
             Mark::NeedsYou => out.push(self.disc(centre, 7.0 * k, p.accent, None)),
             Mark::Dimmed => out.push(self.disc(centre, 7.0 * k, p.dimmed.dark, None)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::draw::stage::REST;
+    use crate::geom::Viewport;
+    use crate::layout::layout_entry;
+    use crate::scene::Entry;
+    use crate::text::FixedAdvance;
+
+    /// The fill and the edge of each of the entry's shapes, and the colour of its text, for an entry with three
+    /// chips of which the second is chosen.
+    fn painted(theme: &Theme, lit: bool) -> Vec<(Color, Color, Color)> {
+        let entry = Entry { id: "wish".into(), hint: "wish".into(), options: vec!["a".into(); 3], most: 0 };
+        let placed = layout_entry(&entry, theme, Viewport { w: 1440.0, h: 900.0 }, &FixedAdvance(0.5));
+        let brush = Brush { theme, scene: &Scene::default(), k: 1.0, chosen: Some(1), lit };
+        let colours = |piece: &Placed| {
+            let mut out = Vec::new();
+            brush.add(piece, REST, &mut out);
+            let [Shape::Slab { fill, edge: Some((edge, _)), .. }] = out[..] else { return None };
+            Some((fill, edge, brush.ink(piece, piece.text.first()?.role)))
+        };
+        placed.iter().filter_map(colours).collect()
+    }
+
+    #[test]
+    fn the_hint_the_chosen_chip_and_the_ring_are_painted_in_the_theme_s_three_colours() {
+        for theme in [Theme::sticker(), Theme::plain()] {
+            let p = &theme.palette;
+            let chip = (p.chip, p.chip, p.soft);
+            let chosen = (p.chip_chosen, p.chip_chosen, p.chip_chosen_ink);
+            assert_eq!(painted(&theme, true), [(p.entry, p.entry_ring, p.entry_hint), chip, chosen, chip]);
+            assert_eq!(painted(&theme, false)[0], (p.entry, p.entry_edge, p.entry_hint), "no ring without the keys");
         }
     }
 }

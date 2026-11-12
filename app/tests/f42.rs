@@ -97,7 +97,7 @@ fn layout_prints_one_entry_on_a_day_s_page_with_a_chip_for_each_project_read() {
         assert_eq!(called(&world), !again, "the second page is the kept one");
         let entry = entries(&placed);
         assert_eq!((entry.len(), entry[0].id()), (1, "wish"));
-        assert!(entry[0].said().starts_with("Wish for something"), "{:?}", entry[0]);
+        assert_eq!(entry[0].said(), "Type a wish: Tab for its project, Enter", "the hint, whole");
         assert_eq!(chips(&placed), ["alpha", "private-notes"]);
         let last = placed.len() - 3;
         assert!(placed[last..].iter().all(|piece| ["entry", "chip"].contains(&piece.kind())), "they are printed last");

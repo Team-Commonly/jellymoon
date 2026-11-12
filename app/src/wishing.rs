@@ -23,7 +23,7 @@ use crate::today::{Later, Next, Today};
 /// The id of the entry a wish is typed in.
 pub const ENTRY: &str = "wish";
 
-const HINT: &str = "Wish for something: type it, choose its project with Tab, press Enter";
+const HINT: &str = "Type a wish: Tab for its project, Enter";
 
 /// The title of the note for words that were not kept as a wish. Its body names the words, then core's reason.
 pub const UNKEPT: &str = "That wish was not kept.";

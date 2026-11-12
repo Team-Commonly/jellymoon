@@ -1,6 +1,7 @@
 //! Where every piece goes. A pure function of the scene, the theme, the
 //! viewport and a text measurer; nothing here draws.
 
+mod entry;
 mod grid;
 mod notes;
 mod page;
@@ -31,6 +32,10 @@ pub enum PieceKind {
     Mark,
     Legend,
     Footer,
+    /// The field of an entry ([`layout_entry`]); its text is the hint.
+    Entry,
+    /// An option of an entry: `id` is the entry's, `index` the option.
+    Chip,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -58,6 +63,7 @@ pub struct Placed {
     pub text: Vec<TextRun>,
 }
 
+pub use entry::layout_entry;
 pub use notes::{MAX_NOTES, MORE_NOTES_ID};
 
 /// Longest text the kit carries for anything that is not a label.
@@ -79,17 +85,7 @@ pub fn layout(scene: &Scene, theme: &Theme, viewport: Viewport, measure: &dyn Me
     if theme.check().is_err() {
         return Vec::new();
     }
-    let k = page_scale(theme, viewport);
-    let m = &theme.metrics;
-    let mut cx = Ctx {
-        theme,
-        measure,
-        k,
-        ox: (viewport.w - m.width * k) / 2.0,
-        oy: (viewport.h - m.height * k) / 2.0,
-        has_notes: !scene.notes.is_empty(),
-        out: Vec::new(),
-    };
+    let mut cx = Ctx::new(theme, viewport, measure, !scene.notes.is_empty());
     page::header(&mut cx, scene);
     let top = page::hero(&mut cx, scene);
     grid::characters(&mut cx, scene, top);
@@ -109,7 +105,13 @@ pub(crate) struct Ctx<'a> {
     pub out: Vec<Placed>,
 }
 
-impl Ctx<'_> {
+impl<'a> Ctx<'a> {
+    fn new(theme: &'a Theme, viewport: Viewport, measure: &'a dyn Measure, has_notes: bool) -> Self {
+        let (k, m) = (page_scale(theme, viewport), &theme.metrics);
+        let (ox, oy) = ((viewport.w - m.width * k) / 2.0, (viewport.h - m.height * k) / 2.0);
+        Ctx { theme, measure, k, ox, oy, has_notes, out: Vec::new() }
+    }
+
     /// A design length in logical pixels.
     pub fn px(&self, v: f32) -> f32 {
         v * self.k
@@ -168,6 +170,7 @@ impl PieceKind {
             PieceKind::Paper => 0,
             PieceKind::Hole => 1,
             PieceKind::Title | PieceKind::Legend | PieceKind::Footer => 3,
+            PieceKind::Entry | PieceKind::Chip => 4,
             PieceKind::Label => 10,
             PieceKind::Hero | PieceKind::Character => 11,
             PieceKind::Star => 12,

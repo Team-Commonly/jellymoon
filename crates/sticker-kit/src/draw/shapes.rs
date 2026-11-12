@@ -13,6 +13,9 @@ pub(crate) struct Brush<'a> {
     pub scene: &'a Scene,
     /// Page scale: design units to logical pixels.
     pub k: f32,
+    /// The entry's chosen option, and whether the entry has the keys.
+    pub chosen: Option<usize>,
+    pub lit: bool,
 }
 
 impl Brush<'_> {
@@ -92,8 +95,19 @@ impl Brush<'_> {
                     self.mark(*mark, rect, out);
                 }
             }
+            PieceKind::Entry => {
+                let edge = if self.lit { p.caret } else { p.entry_edge };
+                out.push(self.pill(rect, p.entry, edge));
+            }
+            PieceKind::Chip if self.chosen == Some(piece.index) => out.push(self.pill(rect, p.chip_chosen, p.caret)),
+            PieceKind::Chip => out.push(self.pill(rect, p.chip, p.chip)),
             _ => {}
         }
+    }
+
+    fn pill(&self, rect: Rect, fill: Color, edge: Color) -> Shape {
+        let edge = Some((edge, 1.5 * self.k));
+        Shape::Slab { rect, radius: rect.h / 2.0, fill, edge, shadow: None, grid: None }
     }
 
     fn option(&self, piece: &Placed, rect: Rect) -> Shape {

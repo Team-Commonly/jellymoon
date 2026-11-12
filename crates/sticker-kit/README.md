@@ -20,6 +20,42 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 
 `draw::Page` is the GPUI view; taps on characters and options reach `on_tap`.
 
+## The entry: one line to type
+
+A page may hold one `Entry` (`src/scene.rs`) beside its scene: an id, a hint, a
+few options of which one is always chosen, and a cap on its characters. It has
+a spot of its own, right of the dated tape and above the title, so it moves no
+other piece: `layout_entry(entry, theme, viewport, &measure)` places the field
+(`PieceKind::Entry`) and a chip for each option (`PieceKind::Chip`).
+
+```rust
+Page::new(scene, theme)
+    .with_entry(Entry { id: "wish".into(), hint: "wish for something".into(), options, most: 200 })
+    .on_entry(|made, window, cx| { /* made.id, made.text, made.option */ })
+```
+
+- **Keys.** A click on the field or a chip gives the entry the keys; Escape, or
+  a press anywhere else, gives them back. Text goes in at the caret. Backspace,
+  Delete, Left, Right, Home and End (or Left and Right with the platform's
+  command key) edit, the command key with V pastes, Tab and Shift-Tab choose the
+  next and the previous option, Enter enters. There is a caret and no selection.
+- **Enter** calls `on_entry` with the text, trimmed, and the chosen option's
+  place; the entry is then empty and keeps its option. Text that is only spaces
+  enters nothing. The handler runs while the page is in use, as `on_tap` does:
+  one that changes the page does it in `cx.defer`.
+- **An input method** (Chinese, Japanese, Korean, a dead key) talks to the page
+  through GPUI's `EntityInputHandler`. What it is still composing is underlined,
+  and Enter, the editing keys and a click leave it alone until it ends.
+- **A window's own keys.** While `page.entry_focused(window)` is true a letter
+  is text: a window that acts on a bare key asks first. `page.entry()` is what
+  is typed now; `set_entry` changes or removes the entry.
+
+The rules are `entry::EntryState`, plain data with no GPUI in it
+(`tests/entry.rs`). `tests/entry_draw.rs` sends keys and clicks through GPUI's
+own dispatch to a headless page. The test platform has no input method, so a
+composition is started there by calling the handler, as a platform would; what
+a real input method does on a real window is checked by hand.
+
 ## Run it
 
 ```sh
@@ -77,6 +113,8 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | rows of a whole list | the first 12 are laid out, the rest only counted | |
 | any text | 400 characters, a label `labels.max_chars`; cut with an ellipsis | `layout::MAX_TEXT_CHARS` |
 | pieces a layout returns | 5000; what would come after is dropped | `MAX_PIECES` |
+| options of an entry | the first 6 are offered | `entry::MAX_ENTRY_OPTIONS` |
+| text in an entry | one line of the entry's `most` characters, 400 at most (and for a `most` of 0); a line break or a tab is a space, a control or unseen character is dropped; what is over is not taken, typed or pasted | `entry::MAX_ENTRY_CHARS` |
 
 `Theme::load("theme.toml")`, a bare name, reads from the folder the program
 runs in. **A theme built in code gets the same range check** (`Theme::check`,

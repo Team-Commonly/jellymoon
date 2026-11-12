@@ -147,7 +147,11 @@ max_file_lines = 400
 # The test of the one state where a whole list is not said among the notes raised it by 30 (`tests/whole.rs`).
 # The leftovers of the art cost's review raised it by 121: a picture that states no size is refused, an arc's
 # numbers count four times, the costs are summed again where the draw reads the art, and the tests of the three.
-"crates/sticker-kit" = 5860
+# F42's kit half raised it by 1237, to what the kit measures with a one-line text entry in it. 516 are its tests
+# (`tests/entry.rs`, `tests/entry_draw.rs`); the rest is its rules as plain data (`src/entry.rs`, 256), its place
+# (`src/layout/entry.rs`, 60), its keys, caret and input method in the view (`src/draw/entry.rs`, 337), and what joins
+# them to the page, the shapes and the two themes.
+"crates/sticker-kit" = 7097
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.

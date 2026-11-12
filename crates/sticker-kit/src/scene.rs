@@ -14,6 +14,22 @@ pub struct Scene {
     pub footer: String,
 }
 
+/// A place to type one line and enter it, with a small set of options of which one is always chosen. It stands
+/// beside a scene and is not a field of one: its spot is its own and it moves no other piece
+/// ([`crate::layout_entry`]), and a scene built field by field outside the kit stays as it is. What is typed is the
+/// view's ([`crate::entry::EntryState`]); this says only what the entry is.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Entry {
+    pub id: String,
+    /// Shown while nothing is typed.
+    pub hint: String,
+    /// The first [`crate::entry::MAX_ENTRY_OPTIONS`] are offered, each on a chip.
+    pub options: Vec<String>,
+    /// The most characters the entry takes: at most [`crate::entry::MAX_ENTRY_CHARS`], which 0 also means.
+    pub most: usize,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Character {

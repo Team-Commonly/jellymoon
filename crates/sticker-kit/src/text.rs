@@ -85,7 +85,7 @@ const ELLIPSIS: char = '…';
 /// marks, zero-width space, soft hyphen, word joiner, byte-order mark, tag characters and the rest) other than the
 /// joiners U+200C and U+200D, which emoji and several scripts are written with. The list is written out because the
 /// kit carries no Unicode tables.
-fn is_unseen(c: char) -> bool {
+pub(crate) fn is_unseen(c: char) -> bool {
     matches!(
         c as u32,
         0x00AD | 0x0600..=0x0605 | 0x061C | 0x06DD | 0x070F | 0x0890 | 0x0891 | 0x08E2 | 0x180E
@@ -142,7 +142,7 @@ fn is_mark(c: char) -> bool {
 /// base with every [`is_mark`] after it, whatever U+200D joins to it, or two regional indicators (a flag). This is
 /// not all of Unicode's rule, which needs tables the kit does not carry: the marks of other scripts (Hebrew, Arabic,
 /// Indic, Thai) and Hangul's jamo each count as a character of their own.
-fn ends(text: &str) -> Vec<usize> {
+pub(crate) fn ends(text: &str) -> Vec<usize> {
     let mut ends: Vec<usize> = Vec::new();
     let (mut before, mut flags) = ('\0', 0);
     for (at, c) in text.char_indices() {

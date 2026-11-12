@@ -4,6 +4,7 @@
 //! one canvas, sticker art as images, then text. Text is always level;
 //! at this GPUI version only drawn paths can be turned.
 
+mod entry;
 #[cfg(feature = "headless")]
 pub mod headless;
 mod measure;
@@ -17,11 +18,13 @@ use std::time::Instant;
 use gpui::{AnyElement, App, Context, MouseButton, Window, canvas, div, img, prelude::*, px};
 
 use crate::geom::Viewport;
-use crate::layout::{PieceKind, Placed, TextRun, layout, page_scale};
+use crate::layout::{PieceKind, Placed, TextRun, layout, layout_entry, page_scale};
 use crate::scene::Scene;
 use crate::text::Role;
 use crate::theme::Theme;
 
+pub use entry::EntryMade;
+use entry::EntryView;
 pub use measure::{GlyphMeasure, load_fonts};
 use measure::{family, hsla, weight};
 use paint::Shape;
@@ -59,6 +62,7 @@ pub struct Page {
     theme: Theme,
     reduce_motion: bool,
     on_tap: Option<TapHandler>,
+    entry: EntryView,
     placed: Vec<Placed>,
     viewport: Viewport,
     stale: Stale,
@@ -79,6 +83,7 @@ impl Page {
             theme,
             reduce_motion: false,
             on_tap: None,
+            entry: EntryView::default(),
             placed: Vec::new(),
             viewport: Viewport::default(),
             stale: Stale::Spring,
@@ -144,7 +149,10 @@ impl Page {
             return;
         }
         let measure = GlyphMeasure { text: window.text_system(), theme: &self.theme };
-        let placed = layout(&self.scene, &self.theme, viewport, &measure);
+        let mut placed = layout(&self.scene, &self.theme, viewport, &measure);
+        if let Some(entry) = &self.entry.what {
+            placed.extend(layout_entry(entry, &self.theme, viewport, &measure));
+        }
         let animate = self.stale == Stale::Spring && !self.placed.is_empty();
         self.stage.retarget(&self.placed, &placed, &self.scene, animate);
         self.placed = placed;
@@ -209,7 +217,9 @@ impl Page {
         let motion = self.theme.motion;
         let k = page_scale(&self.theme, viewport);
         let rim = self.theme.metrics.rim * k;
-        let brush = Brush { theme: &self.theme, scene: &self.scene, k };
+        let typed = !self.entry.state.text().is_empty();
+        let brush =
+            Brush { theme: &self.theme, scene: &self.scene, k, chosen: self.entry.state.chosen(), lit: self.entry.lit };
         let mut order: Vec<usize> = (0..self.placed.len()).collect();
         order.sort_by_key(|&i| self.placed[i].z);
         let mut flat = Vec::new();
@@ -224,7 +234,9 @@ impl Page {
                 let sticker = img(image).absolute().left(px(rect.x)).top(px(rect.y));
                 art.push(sticker.w(px(rect.w)).h(px(rect.h)).into_any_element());
             }
-            for (n, run) in piece.text.iter().enumerate().filter(|(_, r)| !r.text.is_empty()) {
+            // The hint gives way to what is typed.
+            let hidden = typed && piece.piece == PieceKind::Entry;
+            for (n, run) in piece.text.iter().enumerate().filter(|(_, r)| !r.text.is_empty() && !hidden) {
                 text.push(text_element(&self.theme, piece, n, run, pose));
             }
             if matches!(piece.piece, PieceKind::Hero | PieceKind::Character | PieceKind::Option) {
@@ -282,12 +294,14 @@ impl Render for Page {
             window.request_animation_frame();
         }
 
+        let entry = self.entry_layer(window, cx);
         let (flat, layers) = self.layers(t, still, viewport, cx);
         div()
             .size_full()
             .relative()
             .overflow_hidden()
             .bg(hsla(self.theme.palette.desk))
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::entry_left))
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|page, _, _, cx| {
@@ -302,5 +316,6 @@ impl Render for Page {
                     .size_full(),
             )
             .children(layers)
+            .children(entry)
     }
 }

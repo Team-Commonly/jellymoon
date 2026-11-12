@@ -1,12 +1,12 @@
 //! Whose a left copy's branch is when its copy is taken back (`docs/development/run.md`, "What is kept"): a
-//! checkout detached at its commit, a rebase or a bisect stopped on it, a commit no ref has that the copy was
-//! made at, a tag that holds its commit, and a worktree that cannot be asked.
+//! checkout detached at its commit, a rebase or a bisect stopped on it, a tag that holds its commit, and a
+//! checkout that cannot be asked. Which refs hold a commit is `held.rs`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
-
+use super::asked::shut;
+use super::named::link;
 use super::shapes::NONE;
 use super::{World, ended, found_world};
 use crate::support::skipped;
@@ -33,7 +33,7 @@ impl World {
         !self.git_ran(checkout, &["symbolic-ref", "--quiet", "HEAD"]).status.success()
     }
 
-    fn holders(&self, repo: &Path, commit: &str) -> String {
+    pub(super) fn holders(&self, repo: &Path, commit: &str) -> String {
         self.git(repo, &["for-each-ref", "--contains", commit, "--format=%(refname:short)"])
     }
 }
@@ -108,44 +108,7 @@ fn a_branch_a_bisect_was_started_on_is_kept() {
     assert_eq!((w.listed(&repo), w.home_of(&run)), (1, NONE));
 }
 
-// A copy made of a checkout detached at a commit no ref has: its branch holds that commit and no other ref
-// does, and it is not the branch's own, since the branch has not moved since the copy was made. The record
-// keeps the commit the copy was made at. A record without it, as an older build wrote, keeps the branch.
-#[test]
-fn a_copy_made_of_a_detached_checkout_is_taken_back_whole_by_the_commit_its_record_keeps() {
-    for with in [true, false] {
-        let w = found_world();
-        let repo = w.repo("alpha");
-        w.git(&repo, &["checkout", "-q", "--detach"]);
-        w.git(&repo, &["commit", "-q", "--allow-empty", "-m", "no ref's"]);
-        let (branch, run) = w.left_copy(&repo);
-        if !with {
-            let file = w.jm("runs").join(&run).join("copy.json");
-            let mut record: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
-            assert_eq!(record.as_object_mut().unwrap().remove("base"), Some(w.commit(&repo, "HEAD").into()));
-            fs::write(&file, record.to_string()).unwrap();
-        }
-        assert_eq!(w.look(&[]), 0);
-        let left = if with { vec![] } else { vec![branch] };
-        assert_eq!((w.branches(&repo), w.listed(&repo), w.home_of(&run)), (left, 1, NONE), "with the commit: {with}");
-    }
-}
-
-// The commit a record keeps is a word from a file. One that is not where the branch is does not remove a
-// branch with a commit of its own: that falls to what the repo says.
-#[test]
-fn a_record_whose_commit_is_not_where_the_branch_is_does_not_remove_a_branch_with_a_commit_of_its_own() {
-    let w = found_world();
-    let repo = w.repo("alpha");
-    let (branch, run) = w.left_copy(&repo);
-    let mine = w.commit_of_its_own(&repo, &run);
-    w.noted(&run, "base", w.commit(&repo, "main").into());
-    assert_eq!(w.look(&[]), 0);
-    assert_eq!((w.holders(&repo, &mine), w.home_of(&run)), (branch, NONE));
-}
-
-// Every ref of the repo is asked, not its branches alone: a tag holds the commit, so the branch has nothing
-// of its own, and goes.
+// A tag holds the commit, so the branch has nothing of its own, and goes.
 #[test]
 fn a_branch_whose_commit_a_tag_holds_goes_and_the_tag_keeps_the_commit() {
     let w = found_world();
@@ -208,28 +171,65 @@ fn a_record_whose_repo_or_own_is_not_a_full_path_has_nothing_done_for_it() {
     }
 }
 
-// What git keeps of a bisect is read only as a plain file no longer than a path. Nine thousand line breaks
-// after the branch's name, and a link to a file elsewhere that holds it: that checkout could not be asked, so
-// nothing is removed in the repo and the record waits.
+// What git keeps of a rebase or a bisect is read only as a plain file no longer than a path, in a real folder.
+// Nine thousand line breaks after the branch's name, a link to a file elsewhere that holds it, and a link to a
+// folder elsewhere where git keeps a rebase's folder: that checkout could not be asked, so nothing is removed
+// in the repo and the record waits.
 #[test]
-fn something_else_where_git_keeps_a_bisect_s_branch_puts_the_take_back_off() {
-    for shape in ["too long", "a link"] {
+fn something_else_where_git_keeps_a_branch_stood_on_puts_the_take_back_off() {
+    for shape in ["too long", "a link", "a linked folder"] {
         let w = found_world();
         let repo = w.repo("alpha");
         let (branch, run) = w.left_copy(&repo);
         let (file, real) = (repo.join(".git").join("BISECT_START"), w.at("work").join("elsewhere"));
-        fs::write(&real, format!("{branch}{}", "\n".repeat(if shape == "a link" { 1 } else { 9000 }))).unwrap();
-        #[cfg(unix)]
-        let linked = shape != "a link" || std::os::unix::fs::symlink(&real, &file).is_ok();
-        #[cfg(windows)]
-        let linked = shape != "a link" || std::os::windows::fs::symlink_file(&real, &file).is_ok();
-        if !linked {
-            return skipped("no link to a file can be made here");
-        }
-        if shape != "a link" {
-            fs::rename(&real, &file).unwrap();
+        let made = match shape {
+            "too long" => fs::write(&file, format!("{branch}{}", "\n".repeat(9000))).is_ok(),
+            "a link" => {
+                fs::write(&real, format!("{branch}\n")).unwrap();
+                #[cfg(unix)]
+                let linked = std::os::unix::fs::symlink(&real, &file).is_ok();
+                #[cfg(windows)]
+                let linked = std::os::windows::fs::symlink_file(&real, &file).is_ok();
+                linked
+            }
+            _ => {
+                fs::create_dir(&real).unwrap();
+                fs::write(real.join("head-name"), format!("refs/heads/{branch}\n")).unwrap();
+                link(&real, &repo.join(".git").join("rebase-merge"))
+            }
+        };
+        if !made {
+            return skipped("no link can be made here");
         }
         assert_eq!(w.look(&[]), 0, "{shape}");
         assert_eq!((w.branches(&repo), w.kept_for(&run)), (vec![branch], true), "{shape}");
+    }
+}
+
+// A file git keeps a branch's name in that cannot be read, or whose folder cannot, is not taken as not there:
+// the checkout could not be asked. Opened again, it names the branch, which is kept as stood on.
+#[test]
+fn a_file_where_git_keeps_a_branch_stood_on_that_cannot_be_read_puts_the_take_back_off() {
+    for shape in ["the file", "its folder"] {
+        let w = found_world();
+        let repo = w.repo("alpha");
+        let (branch, run) = w.left_copy(&repo);
+        let closed = repo.join(".git").join(if shape == "the file" { "BISECT_START" } else { "rebase-merge" });
+        if shape == "the file" {
+            fs::write(&closed, format!("{branch}\n")).unwrap();
+        } else {
+            fs::create_dir(&closed).unwrap();
+            fs::write(closed.join("head-name"), format!("refs/heads/{branch}\n")).unwrap();
+        }
+        if !shut(&closed, true) {
+            shut(&closed, false);
+            return skipped("nothing can be shut to this account here");
+        }
+        assert_eq!(w.look(&[]), 0, "{shape}");
+        let kept = (w.branches(&repo), w.kept_for(&run));
+        shut(&closed, false);
+        assert_eq!(kept, (vec![branch.clone()], true), "{shape}");
+        assert_eq!(w.look(&[]), 0, "{shape}");
+        assert_eq!((w.branches(&repo), w.home_of(&run)), (vec![branch], NONE), "{shape}");
     }
 }

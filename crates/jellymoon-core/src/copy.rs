@@ -213,9 +213,7 @@ fn add(git: &Git, person: &Repo, at: &Places, run: &str, shared: &Path, base: &s
     // A command killed while git makes the copy leaves this record, so a look can take back what git made by
     // then: git keeps a worktree's own git folder under the folder's name, which `note` then reads from git.
     let own = shared.join("worktrees").join(run);
-    let made_at = Some(base.to_string());
-    let (repo, found) = (shared.to_path_buf(), git.quiet);
-    let mut record = Record { repo, own, failed: None, found, put_off: None, base: made_at };
+    let mut record = Record { repo: shared.to_path_buf(), own, failed: None, found: git.quiet, put_off: None };
     write(&at.record(run), &record)?;
     let args = ["worktree", "add", "--quiet", "-b", &branch].map(OsStr::new);
     let args = [&args[..], &[folder.as_os_str(), OsStr::new(base)]].concat();

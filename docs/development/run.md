@@ -483,23 +483,34 @@ holds:
   git keeps the branch's name in `rebase-merge/head-name`, `rebase-apply/head-name` or `BISECT_START` in that
   checkout's git folder, and itself refuses to delete a branch one of them names. Each is read only as a
   plain file no longer than a path, in a real folder: anything else at those names, and a worktree whose
-  `HEAD` git cannot read, is a checkout that could not be asked, and the take-back is put off;
+  `HEAD` git cannot read, is a checkout that could not be asked, and the take-back is put off (`tests/f41/stood.rs`);
 - another ref is a name for it, a symbolic ref (`git for-each-ref --format=%(symref)`), which would be left
   naming nothing;
-- it holds a commit no other ref of the repo has (`git rev-list <branch> --not --exclude=<branch>
-  --glob=refs/*`: every ref, tags and remote branches too). **A detached `HEAD` holds nothing**, and no
-  `HEAD` is in the question: one that names a branch adds nothing to the refs, and one that names none is no
-  ref. So a commit that only this branch and a checkout detached at it have is the branch's own, and the
-  branch stays (`tests/f41/stood.rs`).
+- it holds a commit that nothing lasting else holds, by the one rule below.
 
-**A branch that has not moved since the copy was made has nothing of its own.** The copy's record keeps the
-commit the copy was made at (`base`, asked of git before it makes the copy). A branch still at that commit
-goes, once nothing stands on it and no ref names it, without the last question: a copy made of a checkout
-detached at a commit no ref has would else leave its branch for good, since that commit is one "no other ref
-has". The commit is a word from a file, so it is used only for that and only last: it never removes a branch
-a checkout stands on, and a record that lies can at most remove a branch whose tip is exactly the commit it
-names, in the repo that lists the copy. A record with no `base`, as a build before this wrote, falls to the
-question of the refs alone, and keeps the branch of such a copy.
+**The one rule: a run's branch is removed only when every commit on it is also on another branch, a tag or a
+remote-tracking branch.** The question is `git rev-list <branch> --not --exclude=<branch> --glob=refs/heads/*
+--glob=refs/tags/* --glob=refs/remotes/*`, asked after the two above, and a branch it prints a commit for
+stays (`tests/f41/held.rs`). Nothing else is in it:
+- **No `HEAD` counts, wherever it stands.** One that names a branch adds nothing to the branches, and a
+  detached one is no ref: git drops its commit at the next switch. So a commit that only this branch and a
+  checkout detached at it have keeps the branch, and so does one the person made on a detached `HEAD` before
+  the run and has since switched away from.
+- **No other ref counts.** `refs/stash` and `refs/bisect/*` go when the stash is taken out or the bisect
+  ends, and what a tool keeps under `refs/notes` or a name of its own is not where a person looks for work.
+- **Nothing a record says counts.** The record once kept the commit the copy was made at (`base`), and a
+  branch still at that commit went: that removed the last ref of a commit made on a detached `HEAD`. The
+  field is gone. A record that still has it, written by a build of that time, is read as any record, and the
+  word is not used.
+- Another left copy's branch is another branch. Of two copies made of one commit no other ref has, the first
+  asked goes and the last name stays.
+
+**What the rule costs: a name left over.** A copy made of a checkout detached at a commit no ref has, or of
+a commit that was amended or reset away afterwards, leaves `jellymoon/run-<id>` in the repo as that commit's
+only ref. The record is gone by then, so no later look asks again, and the name stays for good, also once a
+branch or a tag holds the commit: `git branch -D jellymoon/run-<id>` removes it. A branch or a tag that
+holds the commit before the look lets the branch go with the rest. A name left over is the cheap side: the
+other side is a commit with no ref and no warning from git.
 
 A copy an agent may have written in is never removed. Nothing outside Jellymoon's
 home is touched but that one branch and git's registration of the copy, as any take-back reaches them
@@ -531,15 +542,13 @@ again with what git said, leaves a record: the repo lists the copy by then, or d
 - A worktree of the repo whose `HEAD` cannot be read (a git folder in `worktrees` that is damaged), or with
   something other than a plain file where git keeps a rebase's or a bisect's branch, makes the question fail:
   the branch and the registration stay, for thirty days, as for any git step that failed.
-- A copy made of a checkout detached at a commit no ref has, by a build that kept no `base` in the record,
-  leaves its branch: the refs alone cannot tell that commit from one made on the branch.
-- A record that lies about `base` removes a branch whose tip is the commit it names, with a commit of the
-  person's on it, when nothing stands on the branch and no ref names it. It takes someone who can write the
-  home and knows the branch's tip, and reaches only `jellymoon/run-<id>` in the repo that lists the copy. The
-  commit stays in the repo until git's own `gc`, with no ref.
-- A branch a person stands on in a way git keeps no file for is not known as stood on: a checkout detached
-  at the branch's commit by hand, with no commit of its own on the branch, loses the branch's name and no
-  commit. A `git bisect` started from a detached `HEAD` names no branch.
+- The name the one rule leaves over (above) is never removed by Jellymoon.
+- A tag or a remote-tracking branch that holds the branch's commit at the look can itself be removed later
+  (`git tag -d`, `git fetch --prune`), and the commit then has no ref. A remote-tracking branch that a
+  fetch prunes is the nearest of these to a ref that comes and goes.
+- A rebase or a bisect of the run's branch that starts between a look's question and its removal of the
+  branch, three git calls later, is not seen: git then ends it with a ref it cannot lock, on a detached
+  `HEAD`. Reasoned, not run.
 - A copy the person locked (`git worktree lock`): the branch goes, git refuses to drop the registration, and
   the record waits thirty days, then the line. The registration stays for `git worktree unlock` and `remove`.
 - At the give-up, a link at `copies/<id>` is not followed and not removed: it stays in `copies` with no

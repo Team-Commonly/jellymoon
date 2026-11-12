@@ -24,10 +24,6 @@ pub(super) struct Record {
     /// its repo, or could not finish (`back.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub put_off: Option<u64>,
-    /// The commit the copy was made at, as git named it before it made the copy. A record of an older build
-    /// has none.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub base: Option<String>,
 }
 
 /// What a look learns of a left copy from the repo its record names.

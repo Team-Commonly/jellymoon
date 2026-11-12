@@ -86,11 +86,12 @@ for 3 seconds: the folder, its branch, git's registration of it and its record g
 The order is every take-back's: the registration is how a look knows the copy as the repo's own, so it goes
 last, and a take-back cut off before it is finished by the next look. Its branch is removed only when no
 checkout of the repo but the copy stands on it (by its `HEAD`, or by a rebase or a bisect stopped there), no
-other ref is a symbolic ref to it, and either it is still at the commit the record says the copy was made at
-(`base`) or `git rev-list --max-count=1 <branch> --not --exclude=<branch> --glob=refs/*` prints nothing,
-which is to say it holds no commit that another ref of the repo does not have. No `HEAD` is asked: a detached
-one is no ref. `--all` is not asked either: it counts the copy's own `HEAD`, which is this branch. A branch
-that is someone's in one of those ways is kept. A take-back by the
+other ref is a symbolic ref to it, and `git rev-list --max-count=1 <branch> --not --exclude=<branch>
+--glob=refs/heads/* --glob=refs/tags/* --glob=refs/remotes/*` prints nothing, which is to say every commit on
+it is also on another branch, a tag or a remote-tracking branch. That is the one rule: no `HEAD` is asked,
+since a detached one is no ref, no other ref is (`refs/stash` and `refs/bisect/*` come and go), and nothing
+the record says is. A branch that is someone's in one of those ways is kept, so a copy made of a checkout
+detached at a commit no ref has leaves its name behind ([run.md](run.md), "What the rule costs"). A take-back by the
 command that made the copy removes the branch without asking, as nothing but that command has had the copy.
 Three more things hold only for a copy that was found: nothing is done when its start lock is held once the
 copies' lock is had; a link or a plain file at `copies/<run>` is removed as itself, and what a link leads to is
@@ -104,8 +105,8 @@ then, since it is removed before any git step. Either is tried again for thirty 
 copy nothing names").
 
 **The record is written before the copy is made.** `runs/<run>/copy.json` first names the git folder git is
-about to make for the copy, `worktrees/<run>` in the repo's shared git folder, and the commit the copy is made
-at (`base`), and is written again once git has said where it put it. A command killed while git makes the copy so leaves a record a look takes the copy
+about to make for the copy, `worktrees/<run>` in the repo's shared git folder, and is written again once git
+has said where it put it. A command killed while git makes the copy so leaves a record a look takes the copy
 back by.
 
 The commit is by the person: `user.name` and `user.email` as git resolves them for that repo. When either is

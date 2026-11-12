@@ -69,10 +69,7 @@ fn back(at: &Places, run: &str, careful: bool) -> Result<(), Error> {
             // The branch goes before the repo's listing of the copy does: the listing is how the next look knows
             // the copy as the repo's own, so a look cut off here is finished by the next, and no branch is left
             // that nothing but a record's word says is Jellymoon's.
-            let goes = match &tip {
-                Some(tip) if careful => !theirs(&repo, &record, &name, tip).map_err(refused)?,
-                tip => tip.is_some(),
-            };
+            let goes = tip.is_some() && !(careful && theirs(&repo, &record, &name).map_err(refused)?);
             if goes {
                 repo.run(None, &[], &["update-ref", "-d", &name]).map_err(refused)?;
             }
@@ -84,20 +81,15 @@ fn back(at: &Places, run: &str, careful: bool) -> Result<(), Error> {
     gone::remove(&at.runs, run).map_err(Error::Store)
 }
 
-/// Whether a left copy's branch, which is at `tip`, is someone's by now, whoever made it so, and is kept:
+/// Whether a left copy's branch is someone's by now, whoever made it so, and is kept:
 /// - a checkout stands on it ([`stands`]): the repo's own, or a worktree of it other than the copy, whose own
 ///   `HEAD` is this branch because the copy was made so;
 /// - another ref is a name for it (a symbolic ref), and would be left naming nothing;
-/// - it has moved since the copy was made, and holds a commit of its own, one that no other ref of the repo
-///   reaches. Every ref is named by `--glob`, since `--all` would count the copy's own `HEAD`. No `HEAD` is
-///   asked: one that names a branch adds nothing to the refs, and a detached one is no ref, so a commit only
-///   this branch and a detached `HEAD` hold is the branch's own.
-///
-/// A branch still at the commit its record says the copy was made at has nothing of its own, whatever the refs
-/// say: a copy made of a checkout detached at a commit no ref has would else keep its branch for good. That
-/// commit is a word from a file, and is asked last: it never undoes that a branch is stood on or named. It is
-/// compared whole with what git printed for the branch, so nothing shorter than a full hash is equal to it.
-fn theirs(repo: &Repo, record: &Record, name: &str, tip: &str) -> Result<bool, String> {
+/// - it holds a commit that no other branch, no tag and no remote-tracking branch of the repo reaches. That is
+///   the one rule for a branch nothing stands on or names, and nothing a record says is in it. No `HEAD` is
+///   asked: a detached one is no ref, and its commit is lost at the next switch. No other ref is: `refs/stash`
+///   and `refs/bisect/*` go when the stash or the bisect ends. `--exclude` holds for the one `--glob` after it.
+fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
     let own = fs::canonicalize(&record.own).ok();
     let kept = match fs::read_dir(record.repo.join("worktrees")) {
         Ok(kept) => kept.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?,
@@ -113,10 +105,8 @@ fn theirs(repo: &Repo, record: &Record, name: &str, tip: &str) -> Result<bool, S
     if stood_on || named.lines().any(|named| named == name) {
         return Ok(true);
     }
-    if record.base.as_deref() == Some(tip) {
-        return Ok(false);
-    }
-    let only = ["rev-list", "--max-count=1", name, "--not", &format!("--exclude={name}"), "--glob=refs/*"];
+    let held = ["--glob=refs/heads/*", "--glob=refs/tags/*", "--glob=refs/remotes/*"];
+    let only = ["rev-list", "--max-count=1", name, "--not", &format!("--exclude={name}"), held[0], held[1], held[2]];
     Ok(!repo.run(None, &[], &only)?.is_empty())
 }
 

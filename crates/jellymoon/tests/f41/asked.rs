@@ -52,17 +52,17 @@ impl World {
     }
 }
 
-/// Shuts a folder to everyone, or opens it again. False where a mode keeps nobody out: on Windows, and for an
-/// account that may read everything.
+/// Shuts a folder or a file to everyone, or opens it again. False where a mode keeps nobody out: on Windows,
+/// and for an account that may read everything.
 #[cfg(unix)]
-fn shut(folder: &Path, shut: bool) -> bool {
+pub(super) fn shut(at: &Path, shut: bool) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(folder, fs::Permissions::from_mode(if shut { 0o000 } else { 0o755 })).unwrap();
-    !shut || fs::read_dir(folder).is_err()
+    fs::set_permissions(at, fs::Permissions::from_mode(if shut { 0o000 } else { 0o755 })).unwrap();
+    !shut || if at.is_dir() { fs::read_dir(at).is_err() } else { fs::File::open(at).is_err() }
 }
 
 #[cfg(not(unix))]
-fn shut(_: &Path, _: bool) -> bool {
+pub(super) fn shut(_: &Path, _: bool) -> bool {
     false
 }
 

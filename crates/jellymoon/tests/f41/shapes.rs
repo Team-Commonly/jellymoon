@@ -139,19 +139,29 @@ fn a_checkout_left_on_a_branch_with_no_commit_does_not_keep_a_left_copy() {
     assert_eq!((w.branches(&repo), w.listed(&repo), w.home_of(&run)), (vec![], 1, NONE));
 }
 
-// The person's checkout was switched onto the run's branch, and a commit made there. `HEAD` reaches that commit,
-// and is this branch: the branch is kept, and the rest is taken back.
+// The person's checkout was switched onto the run's branch: with a commit made there, with none, and with none
+// while another worktree of the repo stands on a branch of its own. `HEAD` is this branch in each: the branch
+// is kept, `HEAD` still names a branch that is there, and the rest is taken back.
 #[test]
 fn a_branch_the_person_s_checkout_stands_on_is_kept() {
-    let w = found_world();
-    let repo = w.repo("alpha");
-    let (branch, run) = w.left_copy(&repo);
-    w.git(&repo, &["checkout", "-q", "--ignore-other-worktrees", &branch]);
-    w.git(&repo, &["commit", "-q", "--allow-empty", "-m", "the person's own"]);
-    let mine = w.commit(&repo, "HEAD");
-    assert_eq!(w.look(&[]), 0);
-    assert_eq!((w.branches(&repo), w.commit(&repo, &branch)), (vec![branch], mine), "the checkout lost its branch");
-    assert_eq!((w.listed(&repo), w.home_of(&run)), (1, NONE));
+    for scene in ["a commit", "no commit", "no commit and another worktree"] {
+        let w = found_world();
+        let (repo, other) = (w.repo("alpha"), w.at("work").join("other"));
+        let (branch, run) = w.left_copy(&repo);
+        w.git(&repo, &["checkout", "-q", "--ignore-other-worktrees", &branch]);
+        if scene == "a commit" {
+            w.git(&repo, &["commit", "-q", "--allow-empty", "-m", "the person's own"]);
+        }
+        let others = usize::from(scene.ends_with("worktree"));
+        if others == 1 {
+            w.git(&repo, &["worktree", "add", "-q", "-b", "side", other.to_str().unwrap()]);
+        }
+        let mine = w.commit(&repo, "HEAD");
+        assert_eq!(w.look(&[]), 0, "{scene}");
+        assert_eq!(w.branches(&repo), vec![branch.clone()], "{scene}: the checkout lost its branch");
+        assert_eq!(w.git(&repo, &["symbolic-ref", "HEAD"]), format!("refs/heads/{branch}"), "{scene}");
+        assert_eq!((w.commit(&repo, "HEAD"), w.listed(&repo), w.home_of(&run)), (mine, 1 + others, NONE), "{scene}");
+    }
 }
 
 // Another worktree of the person's stands on the branch, with no commit of its own made there.

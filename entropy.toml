@@ -193,7 +193,10 @@ max_file_lines = 400
 # And its folder named in the plain form cargo answers in on Windows: 1.
 # The sweep's test asking more than one pass once a lock is let go, since a command another test starts holds a
 # copy of the lock for a moment: 9.
-"crates/xtask" = 1712
+# The chain running each program where cargo's own build messages say it is, a `build.target` in a config
+# included, raised it by 106: 63 are tests (the messages read, and a made-up package built under a triple with a
+# stale program in `debug`); the rest reads the messages and makes a run's world of what they name.
+"crates/xtask" = 1818
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

@@ -1,13 +1,15 @@
-//! The build the chain starts and the temporary homes it works in. The chain runs the programs of the debug build
-//! in the target folder, so the build takes only arguments from a list of ones that leave it there and build all of
-//! it. A list of refused ones was tried first, and twice an argument nobody had thought of passed it: `--help`
-//! made cargo print its help and build nothing, and the chain then passed over programs of an earlier build.
+//! The build the chain starts and the temporary homes it works in. The chain runs the programs this build says it
+//! made, each at the path cargo names in its own messages, so the build takes only arguments from a list of ones
+//! that build all of it. A list of refused ones was tried first, and twice an argument nobody had thought of passed
+//! it: `--help` made cargo print its help and build nothing, and the chain then passed over programs of an earlier
+//! build.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::process::{self, Command};
+use std::process::{self, Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The build arguments that stand alone. Each builds the same programs in the same place.
@@ -19,6 +21,10 @@ const VALUED: [&str; 4] = ["--jobs", "-j", "--features", "-F"];
 
 /// The variables that move a build as `--target` and `--target-dir` do. The build is started without them.
 const MOVING: [&str; 2] = ["CARGO_BUILD_TARGET", "CARGO_BUILD_TARGET_DIR"];
+
+/// The packages the chain builds, and the programs of theirs it runs.
+pub const PACKAGES: [&str; 2] = ["jellymoon", "jellymoon-app"];
+pub const PROGRAMS: [&str; 4] = ["jellymoon", "jellymoon-app", "fake-claude", "fake-agent"];
 
 /// The file a run writes into its home. The sweep removes only a folder that holds it.
 const MARKER: &str = "jellymoon-smoke-home";
@@ -37,8 +43,8 @@ pub fn taken(args: &[String]) -> Result<(), String> {
         };
         if !value.is_some_and(|value| !value.is_empty() && !value.starts_with('-')) {
             return Err(format!(
-                "`{arg}` is not taken after `--`: the chain runs the programs this build leaves in the target \
-                 folder, so the build takes only {} and, with a value, {}",
+                "`{arg}` is not taken after `--`: the chain runs the programs this build says it made, so the \
+                 build takes only {} and, with a value, {}",
                 ALONE.join(" "),
                 VALUED.join(" ")
             ));
@@ -57,11 +63,38 @@ fn cargo(root: &Path) -> Command {
     cargo
 }
 
-/// The build of the two programs, with the arguments [`taken`] passed.
-pub fn command(root: &Path, args: &[String]) -> Command {
+/// The build of the packages, with the arguments [`taken`] passed. Cargo says what it made as JSON on its output,
+/// one message a line, and draws what the compiler says for a person as it always does.
+pub fn command(root: &Path, packages: &[&str], args: &[String]) -> Command {
     let mut build = cargo(root);
-    build.args(["build", "-p", "jellymoon", "-p", "jellymoon-app"]).args(args);
+    build.arg("build").args(packages.iter().flat_map(|package| ["-p", *package]));
+    build.arg("--message-format=json-render-diagnostics").args(args);
     build
+}
+
+/// Builds, and gives every program the build made by its name, at the path cargo says it is at: whatever moved
+/// the build, a `build.target` in a config too, is in that path. A program that was up to date is named as well.
+pub fn built(root: &Path, packages: &[&str], args: &[String]) -> Result<BTreeMap<String, PathBuf>, String> {
+    let ran = command(root, packages, args).stderr(Stdio::inherit()).output();
+    let ran = ran.map_err(|e| format!("build: cargo build: {e}"))?;
+    programs(&String::from_utf8_lossy(&ran.stdout)).ok_or_else(|| "build: cargo build failed".to_string())
+}
+
+/// The programs in cargo's messages, or none when no message says the build finished well.
+fn programs(messages: &str) -> Option<BTreeMap<String, PathBuf>> {
+    let (mut programs, mut finished) = (BTreeMap::new(), false);
+    for message in messages.lines().filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok()) {
+        let target = &message["target"];
+        let program = target["kind"].as_array().is_some_and(|kinds| kinds.iter().any(|kind| kind == "bin"));
+        match (message["reason"].as_str(), target["name"].as_str(), message["executable"].as_str()) {
+            (Some("compiler-artifact"), Some(name), Some(path)) if program => {
+                programs.insert(name.to_string(), PathBuf::from(path));
+            }
+            (Some("build-finished"), ..) => finished = message["success"] == true,
+            _ => {}
+        }
+    }
+    finished.then_some(programs)
 }
 
 /// The folder the build writes to, as cargo itself says it: `cargo metadata`, started where the build is and as it
@@ -126,7 +159,7 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    use super::{MARKER, command, home_name, lock_beside, make_home, sweep, taken, target};
+    use super::{MARKER, command, home_name, lock_beside, make_home, programs, sweep, taken, target};
 
     fn args(args: &[&str]) -> Vec<String> {
         args.iter().map(|arg| (*arg).to_string()).collect()
@@ -163,11 +196,38 @@ mod tests {
 
     #[test]
     fn the_build_is_started_without_the_variables_that_would_move_it() {
-        let build = command(Path::new("."), &args(&["--locked"]));
+        let build = command(Path::new("."), &["jellymoon", "jellymoon-app"], &args(&["--locked"]));
         let removed = |name: &str| build.get_envs().any(|(var, value)| var == name && value.is_none());
         assert!(removed("CARGO_BUILD_TARGET") && removed("CARGO_BUILD_TARGET_DIR"));
         let args: Vec<_> = build.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
-        assert_eq!(args, ["build", "-p", "jellymoon", "-p", "jellymoon-app", "--locked"]);
+        let said = "--message-format=json-render-diagnostics";
+        assert_eq!(args, ["build", "-p", "jellymoon", "-p", "jellymoon-app", said, "--locked"]);
+    }
+
+    // Typed after what cargo prints. A library, a build script and a line that is no message name no program.
+    #[test]
+    fn a_program_is_one_cargo_s_messages_name_and_a_build_that_did_not_finish_well_has_none() {
+        let made = |name: &str, kind: &str, at: &str| {
+            format!(
+                r#"{{"reason":"compiler-artifact","target":{{"kind":["{kind}"],"name":"{name}"}},"executable":{at}}}"#
+            )
+        };
+        let lines = [
+            made("core", "lib", "null"),
+            made("build-script-build", "custom-build", r#""/t/build/x/build-script-build""#),
+            made("jellymoon", "bin", r#""/t/triple/debug/jellymoon""#),
+            "   Compiling something".to_string(),
+            r#"{"reason":"compiler-message","message":{"rendered":"a warning"}}"#.to_string(),
+            made("fake-claude", "bin", r#""/t/triple/debug/fake-claude""#),
+        ];
+        let ended =
+            |well: bool| format!("{}\n{{\"reason\":\"build-finished\",\"success\":{well}}}\n", lines.join("\n"));
+        let read = programs(&ended(true)).unwrap();
+        let names: Vec<_> = read.iter().map(|(name, path)| (name.as_str(), path.to_str().unwrap())).collect();
+        assert_eq!(names, [("fake-claude", "/t/triple/debug/fake-claude"), ("jellymoon", "/t/triple/debug/jellymoon")]);
+        assert_eq!(programs(&ended(false)), None, "a build that failed");
+        assert_eq!(programs(&lines.join("\n")), None, "a build that never said it finished");
+        assert_eq!(programs(""), None, "`--help` and its like print no message");
     }
 
     // Whatever moves the build is in cargo's own answer: a variable, relative or not, the cargo home's

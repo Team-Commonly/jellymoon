@@ -139,7 +139,7 @@ fn an_svg_that_could_run_code_is_refused() {
             other => panic!("case {i} was not refused: {other:?}"),
         }
     }
-    let inner = r##"<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"/></defs><rect fill="url(#g)"/></svg>"##;
+    let inner = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><defs><linearGradient id="g"/></defs><rect fill="url(#g)"/></svg>"##;
     assert_eq!(svg_refusal(inner), None, "references inside the file are fine");
 }
 
@@ -327,8 +327,13 @@ fn an_svg_is_held_to_a_size_of_its_own_and_a_flat_picture_passes() {
         let said = svg_refusal(&sized(size)).unwrap_or_else(|| panic!("{size} was accepted"));
         assert!(said.contains("256"), "{size}: {said}");
     }
-    for size in ["", r#"width="256" height="256px""#, r#"viewBox="-128 -128.5 256 8""#] {
+    for size in [r#"width="256" height="256px""#, r#"viewBox="-128 -128.5 256 8""#, r#"width="9" viewBox="0 0 8 8""#] {
         assert_eq!(svg_refusal(&sized(size)), None, "{size}");
+    }
+    // A size is stated: with no `viewBox`, a side left out would be as large as what the picture holds.
+    for size in ["", r#"width="40""#, r#"height="40px""#] {
+        let said = svg_refusal(&sized(size)).unwrap_or_else(|| panic!("{size} was accepted"));
+        assert_eq!(said, "it states no size: a picture needs a `viewBox`, or a `width` and a `height`", "{size}");
     }
     let fine = r##"<title>a &amp; b</title><desc>curl</desc><defs>
 <radialGradient id="g" cx="0.5" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#fff" stop-opacity="0.5"/></radialGradient></defs>

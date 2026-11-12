@@ -11,6 +11,15 @@ make smoke                    # the features the Makefile picks for this machine
 cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build arguments>]
 ```
 
+The chain runs the programs of the debug build in the target folder. A build argument that makes cargo put them
+somewhere else (`--release`, `-r`, `--profile`, `--target`, `--target-dir`) is refused with one line, before
+anything is built: with it the chain would run whatever an earlier build left there.
+
+Each run works in `target/smoke-home-<pid>` and removes it at its end. A run that was stopped leaves its home, and
+with `--real` that home holds the person's page. So a run first removes the homes earlier runs left. Each run
+holds the system's lock on `smoke-home-<pid>.lock` beside its home for as long as it lives, on every system, and a
+home whose lock can be taken is one no living run has: two runs at once never remove each other's.
+
 | Step | What it proves |
 |---|---|
 | `logs` | writes a made-up day: two projects, a wish and the change of mind that clashes with it, a wish that finished |

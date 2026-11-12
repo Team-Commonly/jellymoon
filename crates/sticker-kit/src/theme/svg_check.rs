@@ -91,8 +91,13 @@ const PATH_COMMANDS: &str = "mlhvcsqtaz";
 pub const MIN_ART_VIEW: f32 = 8.0;
 
 /// The most numbers in the `d` and `points` values of one art file, and of a theme's art files together. A number is
-/// at most one line, or a share of one curve, for the renderer to walk on every row of pixels it crosses.
+/// at most one line, or a share of one curve, for the renderer to walk on every row of pixels it crosses. An arc is
+/// drawn as several curves, so each number of an `a` command counts as [`ARC_NUMBERS`].
 pub const MAX_ART_NUMBERS: usize = 1024;
+
+/// What one number of an arc counts as. Measured in `tests/draw.rs`: a path of arcs with the largest radius under a
+/// thin stroke took about 40 times as long to draw as the same count of numbers in straight lines.
+pub const ARC_NUMBERS: usize = 4;
 
 /// The most paint in one art file, and in a theme's art files together: 64 shapes on 256 by 256. See [`ArtCost`].
 pub const MAX_ART_PAINT: u64 = 64 * 256 * 256;
@@ -111,6 +116,11 @@ pub struct ArtCost {
 }
 
 impl ArtCost {
+    /// This and more, together.
+    pub fn with(self, more: ArtCost) -> ArtCost {
+        ArtCost { numbers: self.numbers + more.numbers, paint: self.paint + more.paint }
+    }
+
     /// Why this much is refused, or `None` when it is inside [`MAX_ART_NUMBERS`] and [`MAX_ART_PAINT`].
     pub fn refusal(&self) -> Option<String> {
         if self.numbers > MAX_ART_NUMBERS {
@@ -149,11 +159,16 @@ impl Tally {
         }
     }
 
-    /// A picture with no size of its own takes its `viewBox`'s; with neither it is counted at the largest.
-    fn cost(&self) -> ArtCost {
-        let side = |i: usize| self.size[i].or(self.view[i]).unwrap_or(MAX_ART_SIDE).ceil() as u64;
+    /// A side the picture does not state is its `viewBox`'s, as the renderer has it. With no `viewBox` the renderer
+    /// draws a picture that leaves a side out as large as what is in it, whatever the other side says: that is no
+    /// size to count on, and it is refused.
+    fn cost(&self) -> Result<ArtCost, String> {
+        let side = |i: usize| self.size[i].or(self.view[i]).map(|side| side.ceil() as u64);
+        let (Some(wide), Some(high)) = (side(0), side(1)) else {
+            return Err("it states no size: a picture needs a `viewBox`, or a `width` and a `height`".into());
+        };
         let fills = if self.gradient { 4 } else { 1 };
-        ArtCost { numbers: self.numbers, paint: self.shapes * fills * side(0) * side(1) }
+        Ok(ArtCost { numbers: self.numbers, paint: self.shapes * fills * wide * high })
     }
 }
 
@@ -211,7 +226,7 @@ fn tags(text: &str) -> Result<ArtCost, String> {
             rest = after;
         }
     }
-    Ok(tally.cost())
+    tally.cost()
 }
 
 /// Reads one tag's attributes: the text after the tag, and whether the element stays open.
@@ -255,7 +270,7 @@ fn attributes<'a>(mut rest: &'a str, element: &str, tally: &mut Tally) -> Result
         if place >= WORDS {
             let count = numbers(name, value, element == "svg" && name != "version")?;
             if matches!(name, "d" | "points") {
-                tally.numbers += count;
+                tally.numbers += count + (ARC_NUMBERS - 1) * arc_numbers(value);
             }
             // Said here and not at the end, so that no file is walked far past what it may hold.
             if tally.numbers > MAX_ART_NUMBERS {
@@ -267,6 +282,20 @@ fn attributes<'a>(mut rest: &'a str, element: &str, tally: &mut Tally) -> Result
         }
         rest = after;
     }
+}
+
+/// How many of a `d`'s numbers belong to an arc: those after an `a`, up to the next letter. A number is read as
+/// [`numbers`] reads it: digits, with one `.` at most.
+fn arc_numbers(d: &str) -> usize {
+    let (mut arc, mut inside, mut dotted, mut count) = (false, false, false, 0);
+    for c in d.chars() {
+        let starts = if c == '.' { !inside || dotted } else { c.is_ascii_digit() && !inside };
+        count += usize::from(arc && starts);
+        dotted = c == '.' || (dotted && c.is_ascii_digit() && !starts);
+        inside = c == '.' || c.is_ascii_digit();
+        arc = if c.is_ascii_alphabetic() { c == 'a' } else { arc };
+    }
+    count
 }
 
 /// Holds an attribute's numbers to plain digits with no exponent, unit or `%`, of at most [`MAX_ART_NUMBER`]. A

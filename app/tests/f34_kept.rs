@@ -29,9 +29,16 @@ fn a_kept_page_comes_out_when_the_logs_cannot_be_read_with_a_note_that_says_so()
 }
 
 // The order the window follows, step by step: the kept page before any log is opened, then the count, then the call.
+// These steps run in this process, whose time zone a test cannot set: the day's lines are stamped at noon UTC,
+// which is that same day in every zone from twelve hours behind UTC to just under twelve ahead.
 #[test]
 fn a_kept_page_is_shown_before_the_logs_are_opened_and_stays_with_a_note_while_the_day_is_read_again() {
     let world = world();
+    let noon = |second: u8, project: &str, text: &str| {
+        said(&format!("{DAY}T12:00:0{second}.000Z"), &format!("/work/{project}"), text)
+    };
+    write_log(&world, "-work-alpha/s1.jsonl", &[noon(0, "alpha", FIRST), noon(1, "alpha", SECOND)]);
+    write_log(&world, "-work-private-notes/s2.jsonl", &[noon(2, "private-notes", "dear diary")]);
     shown(&world, &[]);
     assert!(called(&world));
     let logs = world.dir.path().join("logs");
@@ -59,6 +66,7 @@ fn a_kept_page_is_shown_before_the_logs_are_opened_and_stays_with_a_note_while_t
     assert!(!called(&world), "counting the turns makes no call");
     let read = counted.later.expect("the reading call is the next step")().expect("a page, or why there is none");
     assert!(read.later.is_none() && title(&read.scene) != "Reading your day again…");
+    assert!(called(&world), "the day was read again");
 }
 
 #[test]

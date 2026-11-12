@@ -7,11 +7,13 @@
 //! step (`smoke/run.rs`) then starts their Claude Code on a harmless wish, in a repo the chain makes.
 
 mod copy;
+mod off_path;
 mod run;
 mod steps;
 mod stop;
 
 use std::ffi::OsString;
+use std::fs::{File, OpenOptions};
 use std::path::{self, Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -26,6 +28,9 @@ const ZONE: &str = "America/Los_Angeles";
 /// How much of what a failed program printed is shown, in characters.
 const SHOWN: usize = 2000;
 
+/// How the build arguments that put the programs outside `target/debug` start.
+const ELSEWHERE: [&str; 3] = ["--release", "--target", "--profile"];
+
 #[derive(Default)]
 pub struct Options {
     window: bool,
@@ -35,19 +40,28 @@ pub struct Options {
 }
 
 impl Options {
-    /// Reads what follows `smoke`. None when it is not a smoke command line; `--skip` is the reader's and needs `--real`.
-    pub fn parse(args: &[String]) -> Option<Self> {
+    /// Reads what follows `smoke`. `Err(None)` when it is not a smoke command line; `--skip` is the reader's and needs
+    /// `--real`. `Err` with a line for a build argument that puts the programs where the chain does not look.
+    pub fn parse(args: &[String]) -> Result<Self, Option<String>> {
         let (mut options, mut args) = (Self::default(), args.iter());
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--window" => options.window = true,
                 "--real" => options.real = true,
-                "--skip" => options.skip = args.next()?.clone(),
+                "--skip" => options.skip = args.next().ok_or(None)?.clone(),
                 "--" => options.build = args.by_ref().cloned().collect(),
-                _ => return None,
+                _ => return Err(None),
             }
         }
-        (options.real || options.skip.is_empty()).then_some(options)
+        let elsewhere = |arg: &&String| ELSEWHERE.iter().any(|flag| arg.starts_with(flag)) || *arg == "-r";
+        if let Some(arg) = options.build.iter().find(elsewhere) {
+            let why = format!(
+                "`{arg}` is not taken after `--`: the chain runs the programs of the debug build in the \
+                               target folder, and with it cargo builds them somewhere else"
+            );
+            return Err(Some(why));
+        }
+        if options.real || options.skip.is_empty() { Ok(options) } else { Err(None) }
     }
 }
 
@@ -92,7 +106,9 @@ pub fn run(root: &Path, options: &Options) -> Result<(), String> {
     }
     let target = env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
     let target = path::absolute(target).map_err(|e| format!("build: the target folder: {e}"))?;
+    sweep(&target);
     let home = target.join(format!("smoke-home-{}", process::id()));
+    let held = lock_beside(&home).ok_or("home: the lock beside the temporary home could not be taken")?;
     let world = World { home, bin: target.join("debug"), real: options.real, skip: options.skip.clone() };
     let _ = fs::remove_dir_all(&world.home);
     fs::create_dir_all(&world.home).map_err(|e| format!("home: {e}"))?;
@@ -104,8 +120,33 @@ pub fn run(root: &Path, options: &Options) -> Result<(), String> {
     });
     let done = chain.map(|step| one(&world, step)).collect::<Result<Vec<()>, String>>();
     let _ = fs::remove_dir_all(&world.home);
+    drop(held);
+    let _ = fs::remove_file(world.home.with_extension("lock"));
     println!("smoke: ok, {} steps in {:.2} s", done?.len(), started.elapsed().as_secs_f32());
     Ok(())
+}
+
+/// The system's lock on the file beside a temporary home, `smoke-home-<pid>.lock`, which a run holds for as long as
+/// it lives. None while another process holds it.
+fn lock_beside(home: &Path) -> Option<File> {
+    let lock = OpenOptions::new().write(true).create(true).truncate(false).open(home.with_extension("lock")).ok()?;
+    lock.try_lock().ok().map(|()| lock)
+}
+
+/// Removes the temporary homes earlier runs left in the target folder: a run that was stopped never removed its
+/// own, and with `--real` it holds the person's page. A home whose run still lives is left: that run holds its lock.
+fn sweep(target: &Path) {
+    let left = fs::read_dir(target).into_iter().flatten().flatten().map(|entry| entry.path());
+    let homes = left.filter(|path| path.is_dir() && path.extension().is_none());
+    for home in
+        homes.filter(|path| path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("smoke-home-")))
+    {
+        if let Some(held) = lock_beside(&home) {
+            let _ = fs::remove_dir_all(&home);
+            drop(held);
+            let _ = fs::remove_file(home.with_extension("lock"));
+        }
+    }
 }
 
 fn one(world: &World, step: &Step) -> Result<(), String> {
@@ -237,20 +278,57 @@ pub fn write(path: &Path, text: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Only, Options, steps::STEPS};
+    use std::fs;
 
-    fn parse(args: &[&str]) -> Option<Options> {
+    use super::{Only, Options, lock_beside, steps::STEPS, sweep};
+
+    fn parse(args: &[&str]) -> Result<Options, Option<String>> {
         Options::parse(&args.iter().map(|arg| (*arg).to_string()).collect::<Vec<_>>())
     }
 
     #[test]
     fn the_command_line_takes_the_modes_and_passes_what_follows_two_dashes_to_the_build() {
         let options = parse(&["--window", "--real", "--skip", "notes", "--", "--features", "x/y"]);
-        assert!(options.is_some_and(|o| o.window && o.real && o.skip == "notes" && o.build == ["--features", "x/y"]));
-        assert!(parse(&[]).is_some_and(|o| !o.window && !o.real && o.build.is_empty()));
-        for wrong in [&["--skip", "notes"][..], &["--real", "--skip"], &["--fast"], &["check"]] {
-            assert!(parse(wrong).is_none(), "{wrong:?}");
+        assert!(options.is_ok_and(|o| o.window && o.real && o.skip == "notes" && o.build == ["--features", "x/y"]));
+        assert!(parse(&[]).is_ok_and(|o| !o.window && !o.real && o.build.is_empty()));
+        for wrong in [&["--skip", "notes"][..], &["--real", "--skip"], &["--fast"], &["check"], &["--release"]] {
+            assert!(matches!(parse(wrong), Err(None)), "{wrong:?}");
         }
+    }
+
+    // The chain runs what is in `target/debug`: a build that goes elsewhere would leave it running older programs.
+    #[test]
+    fn a_build_argument_that_puts_the_programs_elsewhere_is_refused_in_one_line() {
+        for flag in ["--release", "-r", "--target", "--target=x86_64-apple-darwin", "--target-dir", "--profile"] {
+            let Err(Some(why)) = parse(&["--window", "--", "--features", "x/y", flag, "more"]) else {
+                panic!("{flag} was taken");
+            };
+            assert!(why.starts_with(&format!("`{flag}` is not taken after `--`: ")) && !why.contains('\n'), "{why}");
+        }
+        assert!(parse(&["--", "--features", "release", "--locked"]).is_ok());
+    }
+
+    #[test]
+    fn the_homes_earlier_runs_left_are_removed_and_the_home_of_a_run_that_lives_is_not() {
+        let target = tempfile::tempdir().unwrap();
+        let at = |name: &str| target.path().join(name);
+        for home in ["smoke-home-1", "smoke-home-2", "smoke-home-3", "debug"] {
+            fs::create_dir_all(at(home).join("jm")).unwrap();
+            fs::write(at(home).join("jm").join("page.json"), "{}").unwrap();
+        }
+        fs::write(at("smoke-home-1.lock"), "").unwrap();
+        fs::write(at("smoke-home-9"), "a file").unwrap();
+        let living = lock_beside(&at("smoke-home-2")).unwrap();
+        sweep(target.path());
+        let mut left: Vec<String> = fs::read_dir(target.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["debug", "smoke-home-2", "smoke-home-2.lock", "smoke-home-9"]);
+        drop(living);
+        sweep(target.path());
+        assert!(!at("smoke-home-2").exists() && !at("smoke-home-2.lock").exists() && at("debug").is_dir());
     }
 
     #[test]
@@ -259,7 +337,9 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), STEPS.len());
-        let real = |name: &str| STEPS.iter().any(|step| step.name == name && matches!(step.only, Only::Any));
-        assert!(real("day") && real("page") && real("run") && !real("logs") && !real("uninstall"));
+        // Every step that runs with `--real`, over the person's own day. A step added to this list is one a
+        // maintainer has read for what it writes and prints there.
+        let real = STEPS.iter().filter(|step| matches!(step.only, Only::Any)).map(|step| step.name);
+        assert_eq!(real.collect::<Vec<_>>(), ["day", "page", "layout-sticker", "layout-plain", "broken-page", "run"]);
     }
 }

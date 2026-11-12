@@ -22,8 +22,9 @@ fn main() -> ExitCode {
     let done = match args.split_first() {
         Some((command, [])) if command == "check" => check(&root),
         Some((command, rest)) if command == "smoke" => match smoke::Options::parse(rest) {
-            Some(options) => smoke::run(&root, &options).map_err(|why| format!("smoke: FAILED at {why}")),
-            None => return usage(),
+            Ok(options) => smoke::run(&root, &options).map_err(|why| format!("smoke: FAILED at {why}")),
+            Err(Some(why)) => Err(format!("smoke: {why}")),
+            Err(None) => return usage(),
         },
         _ => return usage(),
     };

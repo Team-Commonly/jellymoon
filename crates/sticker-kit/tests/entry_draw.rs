@@ -301,6 +301,20 @@ fn an_entry_taken_away_stays_with_its_words_and_goes_once_it_is_empty_and_answer
     assert_eq!((pieces(&page, cx), state(&page, cx).0.as_str()), (4, "t"));
     keys(cx, "backspace");
     assert_eq!(pieces(&page, cx), 0, "the entry that was taken away goes with its last word");
+
+    // Spaces alone are no words: Enter gives nothing for them, so an entry that holds only them goes as an empty one.
+    for (typed, left) in [("space space", 0), ("space t e a space", 4)] {
+        page.update(cx, |page, cx| page.set_entry(Some(entry()), cx));
+        cx.run_until_parked();
+        click(cx, field.rect.center());
+        keys(cx, typed);
+        take_away(&page, cx);
+        assert_eq!(pieces(&page, cx), left, "after {typed:?}");
+    }
+    keys(cx, "backspace backspace backspace");
+    assert_eq!((pieces(&page, cx), state(&page, cx).0.as_str()), (4, " t"));
+    keys(cx, "backspace");
+    assert_eq!(pieces(&page, cx), 0, "it goes with its last word, whatever spaces are left");
 }
 
 #[test]

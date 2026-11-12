@@ -6,7 +6,8 @@
 //! - [`taps`]: what a tap on a day's page does: a ruling through core, or the delivery hook turned on.
 //! - [`wishing`]: a wish typed in the window: kept by core, its run asked of core, and the page looked at again.
 //! - [`today`]: the day's page, kept in the user's own folder and read again through core when the day has moved on.
-//! - [`window`]: the kit's view of the scene in a window (feature `window`).
+//! - [`showing`]: what the window does with a key, a tap, Enter, a reading step and a look, with no window.
+//! - [`window`]: the kit's view of the scene in a window (feature `window`): wiring only.
 
 /// The smallest size a page is drawn at. The fullest page core can write fits it; below it the text is too small.
 pub const SMALLEST: sticker_kit::Viewport = sticker_kit::Viewport { w: 960.0, h: 640.0 };
@@ -17,6 +18,7 @@ pub const LARGEST_SIDE: f32 = 16384.0;
 pub mod lines;
 pub mod read;
 pub mod scene;
+pub mod showing;
 pub mod stopping;
 pub mod taps;
 pub mod today;

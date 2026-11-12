@@ -7,6 +7,8 @@
 
 #[path = "f43/notes.rs"]
 mod notes;
+#[path = "f43/showing.rs"]
+mod showing;
 mod support;
 
 use std::fs;

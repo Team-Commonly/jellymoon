@@ -384,6 +384,11 @@ outlive whoever asked for it. The app will ask the same way (F42).
   run's own command finds it. A command started apart that is killed is a cut-off run, written down by the next look.
 - **Its group.** On Unix the command is the leader of a new process group, so an interrupt typed at the asker's
   terminal does not reach it. On Windows it is started in a new process group with no window.
+- **On Windows the command inherits what its asker has open.** Windows gives a started program every handle the
+  starting one holds as inheritable, and the asker's own output is one. So a program that reads what
+  `jellymoon wish --run` prints through a pipe, to the pipe's end, waits until the run has ended. Sent to a file
+  or a terminal, the command returns as on Unix. Core does not close this: it would take `unsafe` or another
+  crate, as the stop's limits on Windows do.
 
 What `jellymoon wish --run` prints is the wish's line with `run` and `why` filled in, and it exits 0 whether or
 not a run was started: the wish is kept either way ([wish.md](wish.md)).
@@ -479,8 +484,9 @@ empty `runs/no-hooks`), and they stay.
 - The app does not start or stop a run yet (F42, F43). The 30 minutes are one number for every wish.
 - A run started apart was tested with an asker that exits. An asker whose terminal is closed (`SIGHUP` to its
   session) was not: the command has a group of its own, not a session of its own.
-- On Windows a run started apart is built and linted only: its process group, its closed pipe and its end were
-  not run there before CI did. The owner of a folder found in a log is not checked on Windows.
+- On Windows a run started apart is run by CI's tests only, never by a person. Its asker's output read through a
+  pipe waits for the run ("A run started apart"): CI's first run there showed it, as two tests that read an
+  asker's pipe and waited half a minute. The owner of a folder found in a log is not checked on Windows.
 - A person whose home folder cannot be read has no folder of their own: every folder found in a log is refused,
   and `--repo` still names one.
 - A `jellymoon run` killed after its wish names the run is counted as going until it is gone, and no longer.

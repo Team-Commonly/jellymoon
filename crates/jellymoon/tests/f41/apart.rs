@@ -2,7 +2,9 @@
 
 use std::ffi::OsString;
 use std::fs;
+use std::io::{Read, Seek};
 use std::path::Path;
+use std::process::Stdio;
 
 use serde_json::json;
 
@@ -26,9 +28,18 @@ impl World {
         if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
             command.env("SystemRoot", root); // a Windows program needs it to start
         }
-        let done = command.current_dir(self.dir.path()).output().unwrap();
-        let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap();
-        Ran { stdout: text(done.stdout), stderr: text(done.stderr), code: done.status.code().unwrap_or(-1) }
+        // Its output goes to files. On Windows the run it starts inherits the handles the asker has open, and a
+        // pipe's end would be waited for until the run itself had ended.
+        let (mut out, mut err) = (tempfile::tempfile().unwrap(), tempfile::tempfile().unwrap());
+        command.stdin(Stdio::null()).stdout(out.try_clone().unwrap()).stderr(err.try_clone().unwrap());
+        let status = command.current_dir(self.dir.path()).status().unwrap();
+        let read = |file: &mut fs::File| {
+            let mut text = String::new();
+            file.rewind().unwrap();
+            file.read_to_string(&mut text).unwrap();
+            text
+        };
+        Ran { stdout: read(&mut out), stderr: read(&mut err), code: status.code().unwrap_or(-1) }
     }
 
     /// The run a wish names.

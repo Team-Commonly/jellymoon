@@ -52,7 +52,8 @@ fn a_look_that_finds_the_copy_gone_and_no_end_yet_waits_for_the_end_the_run_writ
 fn a_run_that_ends_after_a_look_told_its_wish_says_that_a_look_told_it_first() {
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    let (going, run) = w.run_going(("slow", 0), &[ms(NOTE, 1500)], &wish, &repo);
+    // Four seconds: the look waits one, and a busy machine has three to start the page in.
+    let (going, run) = w.run_going(("slow", 0), &[ms(NOTE, 4000)], &wish, &repo);
     if !closed(&w.jm("runs").join(&run).join("run.lock")) {
         skipped("no mode keeps this user from opening a file here: the system has none, or the user is root");
         fs::write(w.at("rec").join("go"), "").unwrap();

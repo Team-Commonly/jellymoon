@@ -95,7 +95,9 @@ started again without the flag.
 A record that says `not_started` is written with no child named: a harness that was started and found too old is
 gone by then. One that says so and names a child is a record changed by hand, of a run that did start, and a
 look does not remove a copy on its word, since the copy can hold work. That run was cut off ("A run that was cut
-off"): its child is killed, its copy is kept and marked failed, and the wish needs the person.
+off"): its child is killed, its copy is kept and marked failed, and the wish needs the person. A record made by
+hand to say `not_started` with no child named has its copy removed, work and all, and the agent of that run, if
+one still goes, is not stopped: nothing in the home says otherwise.
 
 If the repo was moved away while the harness ran, git cannot take the copy back, and `jellymoon run` exits 1 with
 git's reason: the copy's folder and the run's folder in `runs` are removed all the same and the wish is as it was,
@@ -283,6 +285,18 @@ or `cancelled` is marked failed, if it is not marked yet, so that it is one of t
 done before the wish is told, behind `runs/clean.lock` and with a cut-off run's wait for it: if the lock is not
 had in time nothing is written, and the next look does the rest.
 
+**A look between the end of the copy and the end in the record.** A finished run commits its copy, behind
+`runs/clean.lock`, and only then writes its end. A look that takes the run for one nothing holds can come
+between the two: it finds no end in the record, and nothing of the copy to mark. It then reads the record
+again, every 10 ms for one second at most, and gives the wish the end it finds, believed by the same rule. One
+second is many times the single file write between the two (the commit is over by then, since the look waited
+for its lock), and a third of what a look waits for anything. A run whose record has no end even then was cut
+off after its work was committed, or its copy was removed by hand, and its `why` does not say a copy is kept:
+`run <id> was cut off before it ended: no copy of it is kept, what was committed of it is on the branch
+jellymoon/run-<id>, and no star was added`. A build with
+debug assertions waits before the run writes its end for `JELLYMOON_TEST_NOTE_WAIT_MS`, and after a look's
+first read of the record for `JELLYMOON_TEST_LOOK_WAIT_MS`.
+
 **A wish that names another wish's run.** The day's wishes are a file too. A run is another wish's when its
 record names another wish, or another day, and either that wish names the run or a `jellymoon run` still holds
 it: while its command lives a run is stopped on the word of the wish its record names and no other, whatever the
@@ -342,7 +356,7 @@ is opened: what is at the name is asked first, and then it is opened, as the pag
 
 | At the name | Not a plain file |
 |---|---|
-| `runs/<id>/run.lock` | nothing holds the run, so it was cut off: it is written down as failed, and the child it left is killed ("A run that was cut off"). So is a run whose lock is a plain file that cannot be opened: a lock that cannot be asked about is no lock |
+| `runs/<id>/run.lock` | nothing holds the run, so it was cut off: it is written down as failed, and the child it left is killed ("A run that was cut off"). So is a run whose lock is a plain file that cannot be opened: a lock that cannot be asked about is no lock. Made unreadable by hand while its run goes, it ends that run: the next look kills the child and writes the run down as cut off, or, when the run finished by itself meanwhile, with the end its record has by then, waited for one second at most once its copy is gone ("The end is written in the record first") |
 | `runs/<id>/copy.json` | the copy's record cannot be read: the copy is left as it is, and the run's end is written all the same |
 | `runs/clean.lock` | no copy is ended or cleaned while it is so: a run that finishes then has failed, as its work could not be committed |
 | `runs/<id>/run.json`, the day's wishes, the day's page | not read, as before: a run with no record that can be used was cut off, and wishes that cannot be used are none |

@@ -287,7 +287,10 @@ fn an_end_written_into_a_cut_off_run_s_record_by_hand_gives_no_star() {
         fs::write(w.jm("runs").join(&run).join("run.json"), record.to_string()).unwrap();
         let on_page = w.on_page(&wish);
         assert_eq!((&on_page["state"], &on_page["stars"]), (&json!("needs_you"), &json!([])), "edit {edit}");
-        let cut = format!("run {run} was cut off before it ended: its copy is kept and no star was added");
+        // A copy that is gone is not said to be kept: the look waited a second for an end, and none came.
+        let gone = format!("no copy of it is kept, what was committed of it is on the branch jellymoon/run-{run},");
+        let copy = if edit == 1 { "its copy is kept" } else { gone.as_str() };
+        let cut = format!("run {run} was cut off before it ended: {copy} and no star was added");
         assert_eq!(w.kept(&wish)["why"], json!(cut), "edit {edit}");
         fs::write(w.at("rec").join("go"), "").unwrap();
     }

@@ -124,7 +124,7 @@ pub fn sweep(target: &Path) {
 mod tests {
     use std::ffi::OsStr;
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use super::{MARKER, command, home_name, lock_beside, make_home, sweep, taken, target};
 
@@ -175,7 +175,8 @@ mod tests {
     #[test]
     fn the_target_folder_is_the_one_cargo_names_whatever_moved_it() {
         let above = tempfile::tempdir().unwrap();
-        let above = above.path().canonicalize().unwrap();
+        // Windows resolves a folder to its `\\?\` form, and cargo answers in the plain one.
+        let above = PathBuf::from(above.path().canonicalize().unwrap().to_string_lossy().trim_start_matches(r"\\?\"));
         let (root, cargo_home, moved) = (above.join("repo"), above.join("cargo-home"), above.join("moved"));
         fs::create_dir_all(root.join("src")).unwrap();
         fs::write(root.join("src").join("lib.rs"), "").unwrap();

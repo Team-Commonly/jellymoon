@@ -103,7 +103,8 @@ place() {
   fi
   mv "$new_app" "$app_dir/Jellymoon.app"
   settle
-  mv -f "$new_bin" "$bin_dir/jellymoon"
+  mv -f "$new_bin" "$bin_dir/jellymoon" ||
+    die "the app was updated but the command in $bin_dir was not: run the installer again"
 }
 
 # Whether the folder the command is in can be written to by its group or by everyone, and is not sticky. Only a

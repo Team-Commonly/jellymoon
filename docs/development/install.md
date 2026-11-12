@@ -64,7 +64,9 @@ removes it ([delivery.md](delivery.md)).
 
 ## Cutting a release
 
-`.github/workflows/release.yml` runs when a tag `v<version>` is pushed: it builds `jellymoon` and `jellymoon-app` for
+`.github/workflows/release.yml` runs when a tag `v<version>` is pushed. Its first step asks GitHub whether the tagged
+commit is on `main` and builds nothing when it is not, so a tag pushed from a branch publishes nothing (this step has
+not run on a tag yet). It builds `jellymoon` and `jellymoon-app` for
 both chips on a Mac runner, with no `target` folder restored from an earlier run, and runs `app/macos/bundle.sh` (the
 bundle, its `Info.plist`, the ad-hoc signatures, the archive). It then writes `SHA256SUMS`, creates the release as a
 draft with all three files attached, and only then publishes it. A tag with a dash in it (`v0.2.0-rc1`) is published

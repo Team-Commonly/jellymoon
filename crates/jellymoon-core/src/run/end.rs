@@ -259,6 +259,9 @@ pub(super) fn settle(
         e if wish::was_locked(&e) => refused(format!(
             "run {run} has ended and its record says how; the page of {day} was busy, and shows it when it is next drawn"
         )),
+        _ if told_first(home, day, wish, run) => refused(format!(
+            "run {run} has ended; a look had taken it for cut off and told its wish first, so the wish shows what that look wrote"
+        )),
         _ => refused(format!(
             "run {run} has ended and its record says how; the made wishes of {day} could not be used, so the wish does not show it"
         )),
@@ -266,6 +269,14 @@ pub(super) fn settle(
     told.and(noted)?;
     let star = (outcome == RunOutcome::Completed).then(|| STAR.to_string());
     Ok(Ran { run: Some(run.clone()), wish: wish.to_string(), outcome, star, denied: read.denied, why })
+}
+
+/// Whether the wish names this run and no longer says working: a look that took the run for one nothing holds
+/// (its lock could not be asked about) told the wish before the run did.
+fn told_first(home: &Path, day: &str, wish: &str, run: &str) -> bool {
+    let told =
+        |kept: &MadeWish| kept.id == wish && kept.run.as_deref() == Some(run) && kept.state != WishState::Working;
+    wish::kept_of(home, day).is_ok_and(|kept| kept.iter().any(told))
 }
 
 /// The copy of a run that did not finish is marked failed, so that it is kept. One marked already, or gone, is

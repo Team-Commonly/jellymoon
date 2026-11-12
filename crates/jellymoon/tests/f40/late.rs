@@ -7,7 +7,7 @@ use std::{fs, thread};
 use serde_json::json;
 
 use super::closed::closed;
-use super::{DAY, STAR, World, ended, ms, world};
+use super::{DAY, STAR, World, ended, ms, printed, refused, world};
 use crate::support::skipped;
 
 /// How long a build with debug assertions waits between the end of its copy and the end in its record.
@@ -37,12 +37,37 @@ fn a_look_that_finds_the_copy_gone_and_no_end_yet_waits_for_the_end_the_run_writ
         return;
     }
     copy_gone(&w, &run);
-    let drawn = w.on_page(&wish);
+    let look = w.going(&[], &["page", "--date", DAY, "--logs", w.at("logs").to_str().unwrap()]);
+    assert!(w.record(&run)["outcome"].is_null(), "the run had written its end when the look was started");
+    let drawn = printed(&ended(look))["wishes"][0].clone();
     assert_eq!((&drawn["state"], &drawn["stars"]), (&json!("done"), &json!([STAR])), "the look drew {drawn}");
     ended(going); // it or the look told the wish, whichever came first: the other changed nothing
     let (kept, record) = (w.kept(&wish), w.record(&run));
     assert_eq!((&kept["state"], &kept["stars"], &kept["why"]), (&json!("done"), &json!([STAR]), &record["why"]));
     assert_eq!(record["outcome"], "completed");
+}
+
+// The run writes its end later than a look waits for it: the look told the wish, and the run says so.
+#[test]
+fn a_run_that_ends_after_a_look_told_its_wish_says_that_a_look_told_it_first() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let (going, run) = w.run_going(("slow", 0), &[ms(NOTE, 1500)], &wish, &repo);
+    if !closed(&w.jm("runs").join(&run).join("run.lock")) {
+        skipped("no mode keeps this user from opening a file here: the system has none, or the user is root");
+        fs::write(w.at("rec").join("go"), "").unwrap();
+        ended(going);
+        return;
+    }
+    copy_gone(&w, &run);
+    assert_eq!(w.on_page(&wish)["state"], "needs_you", "the look waited longer than a second for the end");
+    let kept = w.kept(&wish);
+    let said = format!(
+        "jellymoon: run {run} has ended; a look had taken it for cut off and told its wish first, so the wish \
+         shows what that look wrote\n"
+    );
+    assert_eq!(refused(&ended(going)), said);
+    assert_eq!(w.kept(&wish), kept, "the run changed a wish a look had told");
 }
 
 #[test]
@@ -54,7 +79,7 @@ fn a_run_cut_off_after_its_copy_went_is_written_down_in_a_line_that_does_not_say
     going.kill().unwrap();
     going.wait().unwrap();
     let why = format!(
-        "run {run} was cut off before it ended: no copy of it is kept, what was committed of it is on the branch \
+        "run {run} was cut off before it ended: no copy of it is kept, what was committed of it was on the branch \
          jellymoon/run-{run}, and no star was added"
     );
     let drawn = w.on_page(&wish);

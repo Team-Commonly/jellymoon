@@ -94,6 +94,22 @@ pub(crate) fn is_unseen(c: char) -> bool {
     )
 }
 
+/// What is a character and is drawn as nothing: every kind of space, the two joiners, the variation selectors, the
+/// combining grapheme joiner, the Hangul fillers and the blank braille pattern.
+fn is_blank(c: char) -> bool {
+    c.is_whitespace()
+        || matches!(
+            c as u32,
+            0x034F | 0x115F | 0x1160 | 0x200C | 0x200D | 0x2800 | 0x3164 | 0xFE00..=0xFE0F | 0xFFA0 | 0xE0100..=0xE01EF
+        )
+}
+
+/// Whether `text` has a character a person sees. Text with none is no words, whatever it holds: spaces, what is
+/// [`is_unseen`], joiners and selectors with nothing to join or select, fillers. The one rule for it in the kit.
+pub fn has_visible(text: &str) -> bool {
+    text.chars().any(|c| !(c.is_control() || is_unseen(c) || is_blank(c)))
+}
+
 /// Removes control characters and what is [`is_unseen`], turns line breaks and tabs into single spaces, and keeps at
 /// most `max_chars` characters, then an ellipsis when any were cut.
 pub fn clean(text: &str, max_chars: usize) -> String {
@@ -172,6 +188,29 @@ pub fn fit(text: &str, max_width: f32, role: Role, size: f32, measure: &dyn Meas
     let fitting = cuts.partition_point(|end| measure.width(&cut(*end), role, size) <= max_width);
     match fitting.checked_sub(1) {
         Some(last) => (cut(cuts[last]), measure.width(&cut(cuts[last]), role, size)),
+        None => (String::new(), 0.0),
+    }
+}
+
+/// `text` whole when it fits `max_width`; else its start and its end with an ellipsis between them, as much of both
+/// as fits, the end the longer by a character when they differ: two texts that begin alike are still told apart.
+/// Returns the text and its measured width.
+pub fn fit_middle(text: &str, max_width: f32, role: Role, size: f32, measure: &dyn Measure) -> (String, f32) {
+    let full = measure.width(text, role, size);
+    if full <= max_width {
+        return (text.to_string(), full);
+    }
+    let mut cuts = vec![0];
+    cuts.extend(ends(text));
+    let count = cuts.len() - 1;
+    let cut = |kept: usize| {
+        let (start, end) = (&text[..cuts[kept / 2]], &text[cuts[count - (kept - kept / 2)]..]);
+        format!("{}{ELLIPSIS}{}", start.trim_end_matches(' '), end.trim_start_matches(' '))
+    };
+    let kept: Vec<usize> = (0..count).collect();
+    let fitting = kept.partition_point(|kept| measure.width(&cut(*kept), role, size) <= max_width);
+    match fitting.checked_sub(1) {
+        Some(most) => (cut(most), measure.width(&cut(most), role, size)),
         None => (String::new(), 0.0),
     }
 }

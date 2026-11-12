@@ -7,7 +7,7 @@ use super::{Ctx, PieceKind, Placed, line_height, piece, run};
 use crate::entry::MAX_ENTRY_OPTIONS;
 use crate::geom::{Rect, Viewport};
 use crate::scene::Entry;
-use crate::text::{Measure, Role};
+use crate::text::{Measure, Role, fit_middle};
 use crate::theme::Theme;
 
 /// Where the pieces of an entry go: the field (`Entry`, with the hint as its text), then a `Chip` for each of the
@@ -60,28 +60,32 @@ pub(crate) fn band_bottom(cx: &Ctx) -> f32 {
     field_top(cx) + field_height(cx) + 2.0 * (cx.px(CHIP_GAP) + chip_height(cx)) + cx.px(GAP)
 }
 
-/// The options under the field, each as wide as its name: in one row when that holds them all, else in two, where
-/// a chip is no wider than its share of its row, so that every one of them is there to be chosen. A name too long
-/// for its share is cut with an ellipsis.
+/// The least a chip is wide, in its heights: a name of one letter is still a chip to click.
+const LEAST: f32 = 1.5;
+
+/// The options under the field, each as wide as its name while its row has the room: in one row when that holds
+/// them all, else in two. A row too narrow for its names gives the short ones their width and shares what is left
+/// between the long ones ([`widest`]), which are cut in the middle with an ellipsis. So every option is there to be
+/// chosen, no name is cut while its row has room, and two names that begin alike are told apart by their ends.
 fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
     let count = entry.options.len().min(MAX_ENTRY_OPTIONS);
     let size = cx.size(Role::Legend);
     let (gap, pad, height) = (cx.px(CHIP_GAP), cx.px(10.0), chip_height(cx));
-    let wide = |name: &str, most: f32| {
-        let (name, width) = cx.line(name, Role::Legend, most - 2.0 * pad);
-        ((width + 2.0 * pad).max(1.5 * height).min(most), name, width)
-    };
-    let all: f32 = entry.options.iter().take(count).map(|option| wide(option, field.w).0 + gap).sum();
-    let first = if all - gap <= field.w { count } else { count.div_ceil(2) };
+    let names: Vec<String> = entry.options.iter().take(count).map(|name| cx.clean(name)).collect();
+    let asks = |name: &String| (cx.measure.width(name, Role::Legend, size) + 2.0 * pad).max(LEAST * height);
+    let asked: Vec<f32> = names.iter().map(asks).collect();
+    let all = asked.iter().sum::<f32>() + gap * count.saturating_sub(1) as f32;
+    let (one, two) = asked.split_at(if all <= field.w { count } else { count.div_ceil(2) });
     let (mut left, mut top) = (field.x, field.bottom() + gap);
-    for (index, option) in entry.options.iter().take(count).enumerate() {
-        let in_row = if index < first { first } else { count - first };
-        if index == first {
+    for (index, name) in names.iter().enumerate() {
+        let row = if index < one.len() { one } else { two };
+        if index == one.len() {
             (left, top) = (field.x, top + height + gap);
         }
-        let share = (field.w - gap * (in_row - 1) as f32) / in_row as f32;
-        let (width, name, text) = wide(option, share);
+        let width = asked[index].min(widest(row, field.w - gap * (row.len() - 1) as f32));
         let rect = Rect::new(left, top, width, height);
+        // A chip as wide as its name asks holds it whole, whatever taking the padding off again rounds to.
+        let (name, text) = fit_middle(name, rect.w - 2.0 * pad + 0.01, Role::Legend, size, cx.measure);
         let mut chip = piece(PieceKind::Chip, &entry.id, index, rect);
         if !name.is_empty() {
             chip.text.push(run(name, Role::Legend, rect.x + (rect.w - text) / 2.0, rect.center().1, text, size));
@@ -89,4 +93,19 @@ fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
         out.push(chip);
         left = rect.right() + gap;
     }
+}
+
+/// The widest a chip of a row may be, for chips that ask `asked` and have `room` between them: the narrow ones are
+/// as wide as they ask, and the room they leave is shared by the ones that ask for more than their share of it.
+fn widest(asked: &[f32], mut room: f32) -> f32 {
+    let mut asked = asked.to_vec();
+    asked.sort_by(f32::total_cmp);
+    for (n, ask) in asked.iter().enumerate() {
+        let share = room / (asked.len() - n) as f32;
+        if *ask > share {
+            return share;
+        }
+        room -= ask;
+    }
+    f32::INFINITY
 }

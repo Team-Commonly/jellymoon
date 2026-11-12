@@ -34,6 +34,32 @@ impl Color {
         format!("#{:02X}{:02X}{:02X}", self.r, self.g, self.b)
     }
 
+    /// This colour laid on `under`, which is taken as opaque: what is seen where the two are drawn.
+    pub fn over(self, under: Color) -> Color {
+        let mix = |top: u8, low: u8| {
+            let (top, low, a) = (f32::from(top), f32::from(low), self.opacity());
+            (top * a + low * (1.0 - a)).round() as u8
+        };
+        Color { r: mix(self.r, under.r), g: mix(self.g, under.g), b: mix(self.b, under.b), a: 255 }
+    }
+
+    /// How light the colour is, from 0 for black to 1 for white: the relative luminance of WCAG 2. The alpha is
+    /// not counted.
+    pub fn luminance(self) -> f32 {
+        let part = |c: u8| {
+            let c = f32::from(c) / 255.0;
+            if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * part(self.r) + 0.7152 * part(self.g) + 0.0722 * part(self.b)
+    }
+
+    /// How far this colour, laid on `ground`, stands out from it: the contrast ratio of WCAG 2, from 1 for two
+    /// colours alike to 21 for black on white. A colour that is all transparent stands out from nothing.
+    pub fn contrast(self, ground: Color) -> f32 {
+        let (a, b) = (self.over(ground).luminance(), ground.luminance());
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
     pub fn parse(text: &str) -> Option<Self> {
         let digits = text.strip_prefix('#')?;
         if !digits.bytes().all(|b| b.is_ascii_hexdigit()) {

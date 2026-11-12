@@ -64,7 +64,7 @@ fn a_branch_a_rebase_stopped_in_the_person_s_checkout_names_is_kept() {
     assert!(!w.git_ran(&repo, &["rebase", "-q", "--apply", "main"]).status.success(), "the rebase did not stop");
     assert!(w.detached(&repo));
     assert_eq!(w.look(&[]), 0);
-    assert_eq!(w.branches(&repo), [branch.clone()], "a branch was removed in the middle of its rebase");
+    assert_eq!(w.branches(&repo), vec![branch.clone()], "a branch was removed in the middle of its rebase");
     fs::write(repo.join("a.txt"), "both\n").unwrap();
     w.git(&repo, &["add", "a.txt"]);
     w.git(&repo, &["rebase", "--continue"]);
@@ -82,7 +82,7 @@ fn a_branch_a_rebase_stopped_in_another_worktree_names_is_kept() {
     assert!(!w.git_ran(&other, &["rebase", "-q", "--merge", "main"]).status.success(), "the rebase did not stop");
     assert!(w.detached(&other));
     assert_eq!(w.look(&[]), 0);
-    assert_eq!(w.branches(&repo), [branch.clone()], "a branch was removed in the middle of its rebase");
+    assert_eq!(w.branches(&repo), vec![branch.clone()], "a branch was removed in the middle of its rebase");
     w.git(&other, &["rebase", "--abort"]);
     assert_eq!(w.git(&other, &["symbolic-ref", "HEAD"]), format!("refs/heads/{branch}"));
     assert_eq!((w.listed(&repo), w.home_of(&run)), (2, NONE));
@@ -102,7 +102,7 @@ fn a_branch_a_bisect_was_started_on_is_kept() {
     w.git(&repo, &["bisect", "start", "HEAD", "HEAD~2"]);
     assert!(w.detached(&repo));
     assert_eq!(w.look(&[]), 0);
-    assert_eq!(w.branches(&repo), [branch.clone()], "a branch was removed in the middle of a bisect");
+    assert_eq!(w.branches(&repo), vec![branch.clone()], "a branch was removed in the middle of a bisect");
     w.git(&repo, &["bisect", "reset"]);
     assert_eq!(w.git(&repo, &["symbolic-ref", "HEAD"]), format!("refs/heads/{branch}"));
     assert_eq!((w.listed(&repo), w.home_of(&run)), (1, NONE));

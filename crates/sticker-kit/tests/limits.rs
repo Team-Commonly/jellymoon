@@ -94,7 +94,7 @@ fn no_number_in_art_carries_a_unit_or_a_percent_sign() {
 fn a_path_or_a_list_of_points_is_held_to_a_length() {
     assert_eq!(MAX_ART_PATH_BYTES, 4096);
     for over in [0, 1] {
-        let d = format!("M0 0{}  ", "h1000".repeat((MAX_ART_PATH_BYTES - 4) / 5)) + &" ".repeat(over);
+        let d = format!("M0 0{}  ", "h0.00".repeat((MAX_ART_PATH_BYTES - 4) / 5)) + &" ".repeat(over);
         let points = "100,100 ".repeat(MAX_ART_PATH_BYTES / 8) + &" ".repeat(over);
         assert_eq!((d.len(), points.len()), (MAX_ART_PATH_BYTES + over, MAX_ART_PATH_BYTES + over));
         let shapes = [("d", format!(r#"<path d="{d}"/>"#)), ("points", format!(r#"<polygon points="{points}"/>"#))];

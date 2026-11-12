@@ -18,7 +18,8 @@ case "$version" in '' | *[!0-9A-Za-z.-]*) die "the version may hold letters, dig
 [ -f "$cli" ] || die "no file at $cli"
 # The oldest macOS the app runs on is written once, in install.sh, which refuses an older Mac before it downloads.
 min_macos=$(sed -n 's/^MIN_MACOS=//p' "$(dirname "$0")/../../install.sh")
-case "$min_macos" in '' | .* | *[!0-9.]*) die "install.sh has no MIN_MACOS=<number> line" ;; esac
+# A number as the system writes its own, which is what install.sh compares it with: no release is 0 or starts with a 0.
+case "$min_macos" in '' | .* | 0* | *[!0-9.]*) die "install.sh has no MIN_MACOS=<number> line" ;; esac
 # install.sh compares the first number only, so a minimum of 12.3 would let a Mac on 12.0 install an app that does
 # not start there.
 case "${min_macos#"${min_macos%%.*}"}" in

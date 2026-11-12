@@ -57,10 +57,8 @@ impl Sprites {
         for image in self.supplied.drain().map(|entry| entry.1) {
             image.remove_asset(cx);
         }
-        for name in ["hero", "character", "star", "bubble", "badge"] {
-            if let Some(svg) = theme.art_svg(name) {
-                self.supplied.insert(name, svg_image(svg));
-            }
+        for (name, svg) in theme.art_svgs() {
+            self.supplied.insert(name, svg_image(svg));
         }
     }
 

@@ -32,8 +32,11 @@ fn a_minimum_macos_that_is_not_a_whole_release_is_refused_before_anything_is_mad
         assert_eq!(bundle(least), (Some(1), said), "{least}");
         assert!(!out.exists(), "{least}: something was made");
     }
-    for least in [".0", "11.x", ""] {
-        assert_eq!(bundle(least), (Some(1), "bundle: install.sh has no MIN_MACOS=<number> line\n".to_string()));
+    // A number is written as the system writes its own: no release is 0, and none starts with a 0.
+    for least in [".0", "11.x", "", "0", "0.0", "011", "011.0"] {
+        let said = "bundle: install.sh has no MIN_MACOS=<number> line\n".to_string();
+        assert_eq!(bundle(least), (Some(1), said), "{least}");
+        assert!(!out.exists(), "{least}: something was made");
     }
     // A whole release goes on to the signing, which a made-up file fails or passes: the refusal is not said.
     for least in ["12", "11.0", "11.0.0"] {

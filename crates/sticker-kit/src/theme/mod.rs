@@ -5,6 +5,7 @@
 mod bounds;
 mod builtin;
 mod load;
+mod path_cost;
 mod svg_check;
 
 use std::path::{Path, PathBuf};
@@ -15,10 +16,10 @@ use crate::color::Color;
 
 pub use bounds::{MAX_ART_BYTES, MAX_THEME_BYTES, RANGES};
 pub use load::{Loaded, ThemeError};
+pub use path_cost::MAX_ART_REACH;
 pub use svg_check::{
-    ARC_NUMBERS, ATTRIBUTES as SVG_ATTRIBUTES, ArtCost, ELEMENTS as SVG_ELEMENTS, MAX_ART_DEPTH, MAX_ART_ELEMENTS,
-    MAX_ART_NUMBER, MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_PATH_BYTES, MAX_ART_SIDE, MIN_ART_VIEW, art_cost,
-    svg_refusal,
+    ATTRIBUTES as SVG_ATTRIBUTES, ArtCost, ELEMENTS as SVG_ELEMENTS, MAX_ART_DEPTH, MAX_ART_ELEMENTS, MAX_ART_NUMBER,
+    MAX_ART_NUMBERS, MAX_ART_PAINT, MAX_ART_PATH_BYTES, MAX_ART_SIDE, MIN_ART_VIEW, art_cost, svg_refusal,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

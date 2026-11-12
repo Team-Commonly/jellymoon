@@ -16,7 +16,7 @@ fn sized(side: u32, inside: &str) -> String {
 
 /// One path of `numbers` numbers.
 fn path(numbers: usize) -> String {
-    format!(r#"<path d="M0 0{}"/>"#, "h1".repeat(numbers - 2))
+    format!(r#"<path d="M0 0{}"/>"#, "h0".repeat(numbers - 2))
 }
 
 #[test]
@@ -55,19 +55,22 @@ fn an_art_file_is_held_to_the_numbers_in_its_paths_and_a_view_box_to_a_least_siz
     let over = art_cost(&two(r#"<polygon points="1,1 2 2 3"/>"#)).unwrap_err();
     assert_eq!(over, "its paths hold more than 1024 numbers");
     assert!(art_cost(&two(r#"<circle cx="1" cy="2" r="3"/><rect x="1"/>"#)).is_ok(), "only paths and points count");
-    // An arc is drawn as several curves: each of its numbers counts four times, in either case of its letter.
-    let arcs = |d: &str| art_cost(&sized(64, &format!(r#"<path d="{d}"/>"#))).map(|cost| cost.numbers);
-    assert_eq!(arcs("M0 0a4 4 0 1 1 2 2L1 1"), Ok(2 + 7 * 4 + 2));
-    assert_eq!(arcs("M0 0A4 4 0 1 1 2 2 4.5.5 0 1 1 3 3h1"), Ok(2 + 14 * 4 + 1), "an arc goes on until a letter");
-    let most = format!("M0 0{}{}", "a4 4 0 1 1 2 2".repeat(36), "h1".repeat(14));
-    assert_eq!(arcs(&most), Ok(MAX_ART_NUMBERS));
-    assert_eq!(arcs(&format!("{most}h1")), Err("its paths hold more than 1024 numbers".to_string()));
+    // Each kind of command has its own count, in either case of its letter. Within a path's reach a number of a
+    // curve costs what a number of a line does, but for an arc (several curves) and a `t` (a curve for two): two.
+    let d = |d: &str| art_cost(&sized(64, &format!(r#"<path d="{d}"/>"#))).map(|cost| cost.numbers);
+    assert_eq!(d("M0 0a4 4 0 1 1 2 2L1 1"), Ok(2 + 7 * 2 + 2));
+    assert_eq!(d("M0 0A4 4 0 1 1 2 2 4.5.5 0 1 1 3 3h1"), Ok(2 + 14 * 2 + 1), "a command goes on until a letter");
+    assert_eq!(d("M0 0C1 1 2 2 3 3s1 1 2 2Q1 1 2 2v1z"), Ok(2 + 6 + 4 + 4 + 1));
+    assert_eq!(d("M0 0T1 1t-1-1 2,2"), Ok(2 + 6 * 2));
+    let most = format!("M0 0{}{}", "t1 1".repeat(255), "h1".repeat(2));
+    assert_eq!(d(&most), Ok(MAX_ART_NUMBERS));
+    assert_eq!(d(&format!("{most}h1")), Err("its paths hold more than 1024 numbers".to_string()));
 
     let viewed = |view: &str| format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}">{CIRCLE}</svg>"#);
     assert!(art_cost(&viewed("0 0 8 8")).is_ok());
     for view in ["0 0 7.5 8", "0 0 8 7", "0 0 1 1"] {
         let said = art_cost(&viewed(view)).unwrap_err();
-        assert_eq!(said, format!("`viewbox=\"{view}\"` is not a size from 8 to 256"));
+        assert_eq!(said, format!("`viewbox=\"{view}\"` is not four plain numbers, the last two a size from 8 to 256"));
     }
 }
 
@@ -103,7 +106,12 @@ fn a_theme_s_art_files_together_are_held_to_the_same_two_counts() {
     // file that would take the theme past it is not given, so the kit's own art is drawn in its place.
     assert_eq!(write(&small(1), &small(1), &small(1)), Ok(()));
     let loaded = Theme::load(&theme).unwrap().theme;
-    let given = |loaded: &Theme| ["hero", "star", "badge"].map(|key| loaded.art_svg(key).is_some());
+    // One pass gives every piece: each file is read once and there is one sum, so no file can be changed between
+    // the reading of one piece and the summing of the next.
+    let given = |loaded: &Theme| {
+        let pieces: Vec<&str> = loaded.art_svgs().into_iter().map(|(piece, _)| piece).collect();
+        ["hero", "star", "badge"].map(|key| pieces.contains(&key))
+    };
     assert_eq!(given(&loaded), [true, true, true]);
     let full = sized(256, &CIRCLE.repeat(64));
     for name in ["hero", "star"] {

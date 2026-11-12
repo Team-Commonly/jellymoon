@@ -102,7 +102,7 @@ fn a_copy_whose_start_lock_is_taken_while_the_look_waits_for_the_copies_lock_is_
     copies.unlock().unwrap();
     assert_eq!(ended(look).code, 0);
     assert_eq!(w.left_of(&run, &repo), all, "the copy of a command that holds its start lock was taken back");
-    start.unlock().unwrap();
+    drop(start); // closed, not only let go: Windows moves no folder a file of which is open (`gone::remove`)
     w.on_page(&wish);
     assert_eq!(w.left_of(&run, &repo), (vec![], vec![], false));
 }
@@ -117,7 +117,7 @@ fn a_left_run_whose_own_lock_is_held_is_left_alone_until_it_is_let_go() {
     w.on_page(&wish);
     let all = (vec![run.clone()], vec![format!("jellymoon/run-{run}")], true);
     assert_eq!(w.left_of(&run, &repo), all, "a run that something holds was taken for one left behind");
-    held.unlock().unwrap();
+    drop(held); // closed, not only let go: Windows moves no folder a file of which is open (`gone::remove`)
     w.on_page(&wish);
     assert_eq!(w.left_of(&run, &repo), (vec![], vec![], false));
 }

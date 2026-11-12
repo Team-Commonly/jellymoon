@@ -131,6 +131,34 @@ max_file_lines = 400
 # the claim); what ends with a test, by a panic too, 177: `tests/f39/guard.rs` 82, its proof
 # `tests/f39/panics.rs` 58, the made-up agent's half 20, and 17 over `world.rs`, `support/mod.rs` (the one
 # limit of a test's command) and the suites.
+# The fifth pass on F41 raised core by 97 and the binary by 234. Core: the take-back moved out of `copy.rs`
+# into `copy/back.rs` (135, 76 of them moved), where it gained the repo asked before anything is done, the
+# branch removed before the registration by a step of its own, and the thirty days a copy that could not be
+# taken back is kept; `copy/record.rs` 26 (the three answers of a repo, the time of the first look that could
+# not ask); `copy.rs` 13 (the record written before git makes the copy). The binary, all of it tests:
+# `tests/f41/asked.rs` 220 (a look cut off after each git step, a repo moved away, shut for one look and gone
+# for good, a record made by hand for a copy no longer listed, `copies` a link, a repo named through a link,
+# a command killed while its copy was made), 8 over `left.rs` and `tests/f41.rs` (a command held at a named
+# place, known by the file it leaves) and 6 in `tests/f39/panics.rs` (a command only the world's wait covers).
+# The fixes after that pass's gate raised core by 57 and the binary by 276. Core: `copy/back.rs` 23 (a branch a
+# checkout stands on or another ref names is kept, `HEAD` left out where it names no commit, a time in the
+# future taken as now, the line of a copy given up), `copy/record.rs` 12 (a copy's git folder directly in the
+# `worktrees` of a repo's own git folder), `wish.rs` 11 and `run/left.rs` 3 (that line handed back beside the
+# page), `copy/git.rs` 5 (a repo asked through a worktree's git folder), `copy.rs` 2 and `lib.rs` 1. The
+# binary: 6 in `src/main.rs` (the line said on stderr), the rest tests: `tests/f41/shapes.rs` 241 (a record
+# naming the copy's own git folder, a worktree's, an enclosing repo's; a repo that is a worktree, or inside
+# another's git folder; a checkout with no commit; a branch stood on or named; the `gitdir` file's shapes;
+# `copies` a link at the thirty days; a command killed taking back a copy it could not make) and 29 in
+# `asked.rs` (the line, a time in the future).
+# The fixes after that gate's second round raised core by 53 and the binary by 261. Core: `copy/back.rs` 42 (a
+# branch a rebase or a bisect names is stood on, read from the files git keeps; no `HEAD` in the question of
+# the refs; a branch still at the commit its copy was made at has nothing of its own), `copy/record.rs` 9
+# (that commit, and a path that does not start at a root not asked), `copy.rs` 2. The binary, all of it tests:
+# `tests/f41/stood.rs` 235 (a checkout detached at the branch's commit, a rebase stopped in the checkout and
+# in another worktree, a bisect, a copy made of a detached checkout, a tag that holds the commit, a worktree
+# that cannot be asked, the command's own take-back, a path not from the root), 19 in `shapes.rs` (a git
+# folder deeper in `worktrees`, a `gitdir` naming another folder that is there), 5 in `f39/world.rs` (a git
+# command that is meant to stop half way) and 2 in `tests/f41.rs`.
 # After F43's third gate core rose by 11: a log whose length cannot be asked read to its end, as a function with
 # its test (9), and a byte-order mark taken off a log's first line (2). Three more are the room the fourth pass
 # on F41 had already used.
@@ -138,7 +166,16 @@ max_file_lines = 400
 # tests out of `session.rs` (a log with no end read for exactly its length, a length asked, then sought); the
 # bounded reading as a function of a reader and a length, the length sought when it cannot be asked, and the
 # place a test's build holds the reader at are 10.
-"crates/jellymoon-core" = 6825
+# The two lines of work joined: 6743 and what each raised, 154 and 53 on F41 and 82 on F43, is 7032; the crate
+# counts 7033 with both in, one more than the sum.
+# The third gate on F41 lowered core by 16, to what the crate counts, 7017: one rule is left for whether a left
+# copy's branch goes, and the commit a record kept is gone. `copy/back.rs` lost 10 (the rule on that commit and
+# its account, less the three kinds of ref the question names), `copy/record.rs` 4 (the field) and `copy.rs` 2
+# (where it was written).
+# The fourth gate on F41 raised core by 9, all in `copy/back.rs`: the run's name deleted as itself and only
+# where it was asked about, a name that is a symbolic ref kept, and the question asked with replace refs and
+# grafts off.
+"crates/jellymoon-core" = 7026
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -169,7 +206,17 @@ max_file_lines = 400
 # The gate on that change lowered it by 23: the made-up session is gone (`tests/support/fake_writer.rs`, 54), and
 # `tests/growing_log.rs` grew by 31 (the reader held at the open while lines are added, a mark after a blank line,
 # two marks).
-"crates/jellymoon" = 10598
+# The third gate on F41 raised the binary by 169, all of it tests: `tests/f41/held.rs` is 157 (which refs hold
+# a commit: a commit made on a detached `HEAD` and left, one amended away, a stash, a bisect's mark, a copy of
+# a detached checkout, two such copies, each kind of ref, a record that still names a commit), 10 are in
+# `shapes.rs` (the person's checkout on a branch that has not moved, alone and beside another worktree) and 2
+# in `tests/f41.rs`. `stood.rs` lost the two tests of the record's commit and gained a linked folder and a
+# file that cannot be read where git keeps a branch's name, and counts the same.
+# The fourth gate on F41 raised the binary by 148, all of it tests: `tests/f41/pointed.rs` is 140 (the run's
+# name made a symbolic ref, a commit that lands before the delete, a replace ref and a graft, a question git
+# cannot answer, a `worktrees` folder that cannot be listed, the command's own take-back), 4 are what the
+# made-up git does just before a step (`tests/support/fake_git.rs`), 2 in `shapes.rs` and 2 in `tests/f41.rs`.
+"crates/jellymoon" = 11686
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

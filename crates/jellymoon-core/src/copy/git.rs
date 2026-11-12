@@ -41,7 +41,7 @@ const ENVIRONMENT: &[&str] = &[
 /// Settings given on every command line, where they win over every config file: no file-system monitor program, no
 /// signing program, no command run in a submodule on checkout, and no transport, so no fetch of a missing object can
 /// start ssh, a credential helper or a remote helper. `core.hooksPath` is given beside them, as an empty folder.
-/// And a copy's `gitdir` file is written as a whole path, which is how a look knows the copy (`record::ours`).
+/// And a copy's `gitdir` file is written as a whole path, which is how a look knows the copy (`record::asked`).
 const OFF: &[&str] = &[
     "core.fsmonitor=false",
     "commit.gpgSign=false",
@@ -150,6 +150,11 @@ fn blanks(named: &str) -> Result<Vec<String>, String> {
 }
 
 impl Repo<'_> {
+    /// The same repo asked through the git folder of one of its worktrees, where `HEAD` is that worktree's.
+    pub fn through(&self, dir: &Path) -> Repo<'_> {
+        Repo { git: self.git, dir: dir.to_path_buf(), blanks: self.blanks.clone() }
+    }
+
     /// Runs git on this repo, with `tree` as the work tree when the command reads or writes files, and returns
     /// what it printed with the last line break cut. None when git exited 1 and said nothing: its way of saying a
     /// setting or a name is not there.

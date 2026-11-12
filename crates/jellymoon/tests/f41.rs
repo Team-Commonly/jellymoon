@@ -5,14 +5,20 @@
 //! folder: Cargo's may be inside a harness worktree of this repo, and a folder there is read as the repo's own.
 //! `f41/apart.rs` holds the run that outlives its asker, its end, a stop and a run cut off; `f41/refused.rs` what
 //! starts no run; `f41/cap.rs` the three runs that may go at once; `f41/named.rs` the folder a name leads to;
-//! `f41/never.rs` a harness that never begins a run; `f41/left.rs` what a killed command left; `f41/line.rs`
-//! the command a run is started with, and what an asker is told of one that started none.
+//! `f41/never.rs` a harness that never begins a run; `f41/left.rs` what a killed command left; `f41/asked.rs` a
+//! left copy whose repo cannot be asked, or is asked and cut off; `f41/shapes.rs` the records, repos and
+//! checkouts a look tells apart before it removes a branch; `f41/stood.rs` whose a left copy's branch is; `f41/line.rs` the command a run is started
+//! with, and what an asker is told of one that started none.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f41/apart.rs"]
 mod apart;
+#[path = "f41/asked.rs"]
+mod asked;
 #[path = "f41/cap.rs"]
 mod cap;
+#[path = "f41/held.rs"]
+mod held;
 #[path = "f41/left.rs"]
 mod left;
 #[path = "f41/line.rs"]
@@ -21,8 +27,14 @@ mod line;
 mod named;
 #[path = "f41/never.rs"]
 mod never;
+#[path = "f41/pointed.rs"]
+mod pointed;
 #[path = "f41/refused.rs"]
 mod refused;
+#[path = "f41/shapes.rs"]
+mod shapes;
+#[path = "f41/stood.rs"]
+mod stood;
 mod support;
 #[path = "f39/world.rs"]
 mod world;

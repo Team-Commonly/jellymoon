@@ -14,10 +14,13 @@ use crate::support::scratch;
 const INSIDE: &str = "JELLYMOON_TEST_PANICS_IN";
 const PANICS: &str = "panics::a_test_panics_with_an_agent_that_never_ends_and_a_command_that_waits";
 
-/// Whether the made-up agent, the program it left, or a `jellymoon run` of a world's folder still lives.
+/// Whether the made-up agent, the program it left, or a `jellymoon run` of a world's folder still lives. The
+/// runs are asked here by their start locks, and not only through the guard's own `alive`.
 fn going(world: &Path) -> bool {
-    let free = |held: &str| fs::File::open(world.join("rec").join(held)).is_ok_and(|held| held.try_lock().is_ok());
-    alive(world) || !free("held") || !free("litter-held")
+    let free = |held: &Path| fs::File::open(held).is_ok_and(|held| held.try_lock().is_ok());
+    let runs = fs::read_dir(world.join("jm").join("runs")).unwrap().map(|run| run.unwrap().path().join("start.lock"));
+    let run = runs.filter(|lock| lock.is_file()).any(|lock| !free(&lock));
+    alive(world) || run || !free(&world.join("rec").join("held")) || !free(&world.join("rec").join("litter-held"))
 }
 
 #[test]
@@ -28,7 +31,10 @@ fn a_test_panics_with_an_agent_that_never_ends_and_a_command_that_waits() {
     let (repo, wish, second) = (w.repo("alpha"), w.wish("alpha"), w.wish("alpha"));
     // The agent leaves a program of its own in another process group, and then neither ends by itself.
     w.play("holds", 2);
-    let _going = w.start_going(&wish, &repo);
+    // Its command is handed over, so nothing kills it when the test panics: it ends once its agent has, two
+    // seconds after it (it is held that long before it writes its end), and only the world's wait covers that.
+    let ends = [("JELLYMOON_TEST_NOTE_WAIT_MS", "2000".into())];
+    drop(w.going(&ends, &["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]).take());
     wait_for(&w.at("rec").join("started"));
     // A second command waits a minute with its copy made and no agent started: only a kill ends it sooner.
     let waits = [("JELLYMOON_TEST_CLAIM_WAIT_MS", "60000".into())];

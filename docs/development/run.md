@@ -348,9 +348,10 @@ first read of the record for `JELLYMOON_TEST_LOOK_WAIT_MS`.
 
 **A test does not depend on an idle machine.** Each such wait (`busy::pause`: those two, and
 `JELLYMOON_TEST_CLAIM_WAIT_MS`, `JELLYMOON_TEST_NAME_WAIT_MS` and `JELLYMOON_TEST_PLACE_WAIT_MS` in a run's
-start) ends early when the file `JELLYMOON_TEST_GO` names is there, and leaves a file of that name ending in
-`.at` when the command has come to it: a test holds a command at a place until it has done what it came to do,
-and no longer. A short limit under test is counted from when a file is there that the made-up program leaves
+start, `JELLYMOON_TEST_MADE_WAIT_MS` once git has made a copy, and `JELLYMOON_TEST_UNMADE_WAIT_MS` between
+the two git steps that take back one it could not make) ends early when the file `JELLYMOON_TEST_GO` names is
+there, and leaves a file of that name ending in `.at` when the command has come to it: a test holds a command
+at a place until it has done what it came to do, and no longer. A short limit under test is counted from when a file is there that the made-up program leaves
 once it has stalled (`JELLYMOON_TEST_RUN_LIMIT_FROM`, `JELLYMOON_TEST_GIT_LIMIT_FROM`), so nothing else has to
 be done within it. A test that expects an asker to be told of a run that never started sets the asker's wait
 for a silent harness to a minute (`JELLYMOON_TEST_APART_QUIET_MS`), and one whose agent says nothing by design
@@ -435,31 +436,156 @@ it counts the runs going, goes over those runs (`run/left.rs`):
 | Its record is there and cannot be used | nothing: it does not say who names the run |
 | Its record names a child | the child is killed, if the pid is still that process ("A run that was cut off"), whichever wish names the run |
 | A wish names it: one of the day looked at, or the wish and day its record names | no more than that: it is the look at that wish that writes it down |
-| No wish names it, and it has no record, or one that names no child | **taken back**: the copy's folder, git's registration of it, and `runs/<id>`. Nothing ran there, so the branch `jellymoon/run-<id>` is where the checkout was, and is removed. A link at `copies/<id>` is removed as itself, and what it leads to is not touched |
+| No wish names it, and it has no record, or one that names no child | **taken back**, once the repo has been asked (below): the copy's folder, the branch `jellymoon/run-<id>`, git's registration of the copy, and `runs/<id>`, in that order. Nothing ran there, so the branch is where the checkout was. A link at `copies/<id>` is removed as itself, and what it leads to is not touched |
 | No wish names it, and its record names a child and has no end | **kept**, as a cut-off run's copy is: the copy is marked failed and the record says the run was cut off. No wish is changed |
 
-**What is kept.** A branch that holds a commit no other branch, no tag and not the checkout itself has is
-someone's work, whoever made it: it stays, and so it does when git cannot be asked. The copy's folder goes all
-the same; the commit is on the branch. A copy an agent may have written in is never removed. Nothing outside
-Jellymoon's home is touched but that one branch and git's registration of the copy, in the repo the copy's own
-record names, as any take-back reaches them ([copy.md](copy.md)). A record is a file anyone who can write the
-home can write, so that repo is acted on only when it lists this copy as a worktree of its own: the copy's git
-folder is inside the repo's, and its `gitdir` file, which git wrote, names `copies/<id>/.git`. Inside is asked
-of the two folders as the system resolves them, never of their names: a record that reaches the copy's git
-folder by `..` out of another repo's, or through a link put in another repo's, names a folder that is not
-inside that repo. A link or a plain file at `copies/<id>` is removed as itself, and the rest is taken back. Jellymoon's git calls switch
-`worktree.useRelativePaths` off, so the file holds a whole path; one that holds a path from the copy's git
-folder, as a git of 2.48 or later writes with that setting on, is read from that folder. For a record
-that names any other repo nothing is asked of git and no branch is removed there; what the home holds of the
-run goes, and the branch and registration in the repo the copy was really made of stay, for `git worktree
-prune` and `git branch -D`. The person's checkout, index and other branches are as they were
-(`tests/f41/left.rs`).
+**The repo is asked first.** A copy's record is a file anyone who can write the home can write, so what a look
+does in a repo goes by what that repo holds (`record::asked`, `copy/back.rs`):
 
-**What is not closed.** A command killed while git was still making the copy has written no record of it:
-the run's folder goes, the copy's folder goes at the next `copy clean`, and the branch and git's registration
-stay in the repo (`git worktree prune` and `git branch -D` remove them). A run made by a build older than the
-start lock has none and is not found. The lock a copy is taken back behind is waited for 3 seconds, and what
-could not be done is left for the next look.
+| The repo the record names | What is done |
+|---|---|
+| lists the copy as a worktree of its own: the copy's git folder is directly in the `worktrees` folder of the repo's git folder, which is a repo's own, and its `gitdir` file, which git wrote, names `copies/<id>/.git` | the take-back above |
+| answers and does not list it: the repo's git folder resolves, and the copy's git folder or its `gitdir` file is not there, is anywhere else than directly in that `worktrees`, or names another place; or the folder named as the repo is a worktree's git folder | nothing in that repo: no git is asked and no branch is removed. What the home holds of the run goes |
+| could not be asked: its git folder does not resolve (moved away, on a volume that is not mounted, below a folder that cannot be read), or the copy's git folder or `gitdir` file cannot be read for another reason than not being there, or the record names the repo or the copy's git folder by a path that does not start at a root, which this process and git would read from two different folders | nothing at all. The copy and its record are kept for the next look |
+
+Where the two folders are is asked of them as the system resolves them, never of their names: a record that
+reaches the copy's git folder by `..` out of another repo's, or through a link put in another repo's, names a
+folder that is not in that repo's `worktrees`, and a record that names its own repo through a link is still
+that repo's. "Anywhere inside the repo's git folder" is not enough, and was the rule once
+(`tests/f41/shapes.rs`):
+- the copy's own git folder is inside itself, and git takes a worktree's git folder named as a repo for one,
+  with that worktree's `HEAD`, which is the copy's branch: the branch then looks reached by a checkout. A
+  worktree's git folder holds a `commondir` file and a repo's own holds none, and a folder that holds one is
+  not taken for a repo;
+- a repo whose git folder is inside another repo's, as a submodule's is at `.git/modules/<name>`, has its
+  copies' git folders inside the outer repo's too. Named as the copy's repo, the outer one does not list it.
+
+A repo that is itself a worktree of another is recorded by the shared git folder, and a repo with its git
+folder inside another's by its own: copies of both are taken back whole.
+Jellymoon's git calls switch `worktree.useRelativePaths` off, so the `gitdir` file holds a whole path; one that
+holds a path from the copy's git folder, as a git of 2.48 or later writes with that setting on, is read from
+that folder.
+
+**The branch goes before the registration.** The registration is the only thing in the repo that says the
+branch is Jellymoon's: once it is gone, a branch of the run's name has nothing but the record's word, and no
+look removes a branch on that. So every take-back removes the branch first and the registration last. A look
+cut off after any git step is finished by the next: cut off before the registration went, the repo still lists
+the copy; cut off after, there is no branch left to remove (`tests/f41/asked.rs`). The same order holds for the
+command that takes its own never-started copy back, and for a copy that could not be made.
+
+**What is kept.** A left copy's branch that is someone's by now, whoever made it so, stays, and the copy's
+folder, the registration and the record go all the same (`back::theirs`). It is someone's when any of these
+holds:
+- a checkout stands on it, in the repo's own checkout or in any worktree of the repo other than the copy
+  (asked through each git folder in `worktrees`; the copy's own `HEAD` is that branch because the copy was
+  made so, and is not counted). A checkout stands on a branch when its `HEAD` is that branch (`git
+  symbolic-ref HEAD`), and when its `HEAD` is detached by a rebase or a bisect that goes back to the branch:
+  git keeps the branch's name in `rebase-merge/head-name`, `rebase-apply/head-name` or `BISECT_START` in that
+  checkout's git folder, and itself refuses to delete a branch one of them names. Each is read only as a
+  plain file no longer than a path, in a real folder: anything else at those names, and a worktree whose
+  `HEAD` git cannot read, is a checkout that could not be asked, and the take-back is put off (`tests/f41/stood.rs`);
+- another ref is a name for it, a symbolic ref (`git for-each-ref --format=%(symref)`), which would be left
+  naming nothing;
+- the run's name is itself a symbolic ref by now (`git symbolic-ref --quiet <name>` answers): it is a name
+  for another branch, no longer the run's, and stays as it is (`tests/f41/pointed.rs`);
+- it holds a commit that nothing lasting else holds, by the one rule below.
+
+**The one rule: a run's branch is removed only when every commit on it is also on another branch, a tag or a
+remote-tracking branch.** The question is `git --no-replace-objects rev-list --max-count=1 <branch> --not
+--exclude=<branch> --glob=refs/heads/* --glob=refs/tags/* --glob=refs/remotes/*`, asked after the three
+above, and a branch it prints a commit for stays (`tests/f41/held.rs`). A question git cannot answer puts the
+take-back off. Nothing else is in it:
+- **No `HEAD` counts, wherever it stands.** One that names a branch adds nothing to the branches, and a
+  detached one is no ref: git drops its commit at the next switch. So a commit that only this branch and a
+  checkout detached at it have keeps the branch, and so does one the person made on a detached `HEAD` before
+  the run and has since switched away from.
+- **No other ref counts.** `refs/stash` and `refs/bisect/*` go when the stash is taken out or the bisect
+  ends, and what a tool keeps under `refs/notes` or a name of its own is not where a person looks for work.
+- **No replace ref and no graft counts.** Either can give a commit a parent it does not have and be removed
+  tomorrow. Replace refs are off by `--no-replace-objects`. git has no option for grafts, so that one call
+  is given `GIT_GRAFT_FILE` as a name in the empty folder it is started in, and `info/grafts` is not read.
+- **Nothing a record says counts.** The record once kept the commit the copy was made at (`base`), and a
+  branch still at that commit went: that removed the last ref of a commit made on a detached `HEAD`. The
+  field is gone. A record that still has it, written by a build of that time, is read as any record, and the
+  word is not used.
+- Another left copy's branch is another branch. Of two copies made of one commit no other ref has, the first
+  asked goes and the last name stays.
+
+**What the rule costs: a name left over.** A copy made of a checkout detached at a commit no ref has, or of
+a commit that was amended or reset away afterwards, leaves `jellymoon/run-<id>` in the repo as that commit's
+only ref. The record is gone by then, so no later look asks again, and the name stays for good, also once a
+branch or a tag holds the commit: `git branch -D jellymoon/run-<id>` removes it. A branch or a tag that
+holds the commit before the look lets the branch go with the rest. A name left over is the cheap side: the
+other side is a commit with no ref and no warning from git.
+
+A copy an agent may have written in is never removed. Nothing outside Jellymoon's
+home is touched but that one branch and git's registration of the copy, as any take-back reaches them
+([copy.md](copy.md)). The branch is deleted as the run's own name and never as what a name points at, and
+only while it is at the commit the look asked about (`git update-ref --no-deref -d <name> <commit>`): a
+commit that lands in between makes git refuse, the take-back is put off, and the next look asks again. The person's checkout, index and other branches are as they were (`tests/f41/left.rs`).
+
+**For thirty days.** A take-back that could not be done (the repo could not be asked, git failed or ran past
+its limit, `copies/<id>` could not be removed) puts the time in the copy's record, `put_off`, the first time,
+and is tried again at every look. A time there that is later than now, written by hand or before a clock was
+set back, would keep the copy for ever: it is taken as now, and written so. A repo that was away and is back
+has its copy taken back whole. At the first look more than thirty days after that time the repo is taken to be gone for good: the copy's folder and
+`runs/<id>` go, and nothing is done in any repo. The copy's folder goes only as a real folder in a real
+`copies`, never through a link. That look says so, once, in one line on stderr of `jellymoon page`, and is no
+failure: `jellymoon: the copy of run <id> could not be taken back for thirty days and is given up: what
+Jellymoon kept of it is removed, and its branch jellymoon/run-<id> may still be in its repo`. A page has no
+place for a run no wish names, so the line is not on it: core hands it back beside the page
+(`with_made_said`), and the app, which calls `with_made`, and a `jellymoon run` do not say it. A repo that
+comes back later than that keeps the branch and the registration (`git worktree prune` and `git branch -D` remove them). The bound is time, and not the
+repo's folder being gone, because a look cannot tell a repo that was removed from one that was moved, or from
+a volume that is not mounted.
+
+**A command killed while its copy is made.** The copy's record is written before git is called, naming the
+git folder git is about to make, so a command killed while git makes the copy, or before the record is written
+again with what git said, leaves a record: the repo lists the copy by then, or does not yet.
+
+**What is not closed.**
+- Another folder at the repo's path reads as a repo that answers and does not list the copy. A repo moved
+  away, with another repo, or any folder that resolves, put where it was: the record and the copy go at the
+  first look, not after thirty days, and the repo moved back keeps its branch and its registration.
+- A worktree of the repo whose `HEAD` cannot be read (a git folder in `worktrees` that is damaged), or with
+  something other than a plain file where git keeps a rebase's or a bisect's branch, makes the question fail:
+  the branch and the registration stay, for thirty days, as for any git step that failed.
+- The name the one rule leaves over (above) is never removed by Jellymoon.
+- A tag or a remote-tracking branch that holds the branch's commit at the look can itself be removed later
+  (`git tag -d`, `git fetch --prune`), and the commit then has no ref. A remote-tracking branch that a
+  fetch prunes is the nearest of these to a ref that comes and goes.
+- A never-started run's own take-back removes its branch without asking. If that branch was the other
+  branch that let a left copy's branch go a moment before, a commit made on a detached `HEAD` loses both
+  names: two runs on one such commit, and a switch away, within milliseconds. Reasoned, not run.
+- A rebase or a bisect of the run's branch that starts between a look's question and its removal of the
+  branch, three git calls later, is not seen: git then ends it with a ref it cannot lock, on a detached
+  `HEAD`. Reasoned, not run.
+- A copy the person locked (`git worktree lock`): the branch goes, git refuses to drop the registration, and
+  the record waits thirty days, then the line. The registration stays for `git worktree unlock` and `remove`.
+- At the give-up, a link at `copies/<id>` is not followed and not removed: it stays in `copies` with no
+  record.
+- A record made by hand that names a second repo, with a git folder for the copy put in that repo's
+  `worktrees` and a `gitdir` file copied there: that repo lists the copy by every sign a look has. Its branch
+  of the run's name goes if nothing of its own is on it, and the real repo keeps its branch and registration
+  with no record. Whoever can do that can write that repo's git folder, and could delete the branch there.
+- A commit made in the copy and reset away again is lost with the branch's reflog, as the person left it.
+- A branch of the run's name in a repo that answers and does not list the copy is never removed. A look cut
+  off no longer leaves that, but the person can: `git worktree prune`, or git's own `gc`, run between a look
+  that removed the copy's folder and the look that would have finished, drops the registration and leaves
+  the branch. Nothing left in the repo or the home then proves the branch is Jellymoon's, since whoever can
+  write the home can write all the home holds: it stays for `git branch -D`.
+- git makes the branch and the copy's git folder in one call. A command killed between those two, inside git,
+  leaves the branch with no registration, as above.
+- A git child killed with its command goes on by itself: one still writing the copy's folder after a look
+  took the copy back leaves a folder, which the next `copy clean` removes.
+- A record that is there and cannot be read is never taken back and never removed: it holds no time.
+- `copies` itself removed, or made a link: its copies cannot be told the repo's own, and are kept for thirty
+  days like a repo that cannot be asked.
+- On Windows a folder is resolved by a call some drives do not answer (some RAM disks and mapped drives). A
+  repo or a home there cannot be asked, so its left copies are kept for thirty days and then leave the home,
+  and their branches and registrations stay. Read, not run.
+- A run made by a build older than the start lock has none and is not found. The lock a copy is taken back
+  behind is waited for 3 seconds, and what could not be done is left for the next look.
 
 ## A run started apart
 

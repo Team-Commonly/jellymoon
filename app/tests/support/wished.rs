@@ -136,20 +136,20 @@ impl World {
         command
     }
 
-    /// Starts the made-up window: the words entered for the project of chip `option`, and what it does then. What
+    /// Starts the made-up window: the words entered for the project on the chosen chip, and what it does then. What
     /// it prints goes to two files, never to a pipe: on Windows the run it starts inherits the handles it holds,
     /// and a pipe read here would stay open until that run ended.
-    pub fn enters(&self, option: usize, then: &str) -> Window {
-        self.enters_with(option, then, "")
+    pub fn enters(&self, project: &str, then: &str) -> Window {
+        self.enters_with(project, then, "")
     }
 
     /// [`World::enters`] in a window started with `--skip <skip>`, when that is not empty.
-    pub fn enters_with(&self, option: usize, then: &str, skip: &str) -> Window {
+    pub fn enters_with(&self, project: &str, then: &str, skip: &str) -> Window {
         let said = self.at("tmp").join(format!("window-{}", fs::read_dir(self.at("tmp")).unwrap().count()));
         let file = |name: &str| fs::File::create(said.with_extension(name)).unwrap();
         let mut window = Command::new(env!("CARGO_BIN_EXE_f42-wisher"));
         window.arg(self.at("jm")).arg(self.at("logs")).arg(self.bin()).arg(self.at("agent").join("claude"));
-        window.args([DAY, &option.to_string(), SAID, then, skip]).current_dir(self.day.dir.path());
+        window.args([DAY, project, SAID, then, skip]).current_dir(self.day.dir.path());
         window.env_clear().envs(self.vars.iter().map(|(name, value)| (name, value)));
         window.stdin(Stdio::null()).stdout(file("out")).stderr(file("err"));
         Window { child: window.spawn().unwrap(), said }

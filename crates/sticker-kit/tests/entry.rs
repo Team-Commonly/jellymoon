@@ -18,10 +18,12 @@ fn made(text: &str, option: Option<usize>) -> Option<Made> {
 }
 
 #[test]
-fn enter_gives_the_text_and_the_chosen_option_and_clears_the_entry() {
+fn enter_gives_the_text_and_the_chosen_option_and_the_entry_is_empty_once_they_are_kept() {
     let mut entry = typed("  water the basil ");
     entry.next_option();
     assert_eq!(entry.enter(), made("water the basil", Some(1)));
+    assert_eq!(entry.text(), "  water the basil ", "the words stay until they are kept");
+    entry.answer(true);
     assert_eq!((entry.text(), entry.caret(), entry.chosen()), ("", 0, Some(1)), "the option stays chosen");
     assert_eq!(entry.enter(), None, "nothing typed is nothing entered");
     entry.replace(None, "   ");
@@ -235,26 +237,6 @@ fn the_chosen_option_is_kept_by_its_name_when_the_options_change() {
     state.keep_option(&fewer, &many);
     state.fit(&named(&many));
     assert_eq!(state.chosen(), Some(1));
-}
-
-#[test]
-fn words_put_back_are_typed_words_and_never_replace_what_was_typed_since() {
-    let mut state = typed("water the basil");
-    let made = state.enter().unwrap();
-    assert_eq!(state.text(), "", "Enter empties the entry");
-    state.put_back(&made.text);
-    assert_eq!((state.text(), state.caret()), ("water the basil", 15));
-    state.enter();
-    state.replace(None, "x");
-    state.put_back("water the basil");
-    assert_eq!(state.text(), "x", "what was typed since stays");
-    let mut small = EntryState::new(0, 5);
-    small.put_back("line\none two");
-    assert_eq!(small.text(), "line ", "words put back pass the entry's bounds");
-    let mut composing = EntryState::new(0, 80);
-    composing.mark(None, "ka", None);
-    composing.put_back("z");
-    assert_eq!(composing.text(), "ka", "a composition is left alone");
 }
 
 fn of(placed: &[Placed], kind: PieceKind) -> Vec<&Placed> {

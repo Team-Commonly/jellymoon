@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use jellymoon_app::wishing::UNSTARTED;
+use jellymoon_app::wishing::{UNKEPT, UNSTARTED};
 use serde_json::Value;
 use sticker_kit::{Mark, Note, Scene, State};
 
@@ -30,7 +30,7 @@ fn a_wish_entered_starts_its_run_apart_and_the_page_shows_its_star_with_no_tap()
         return;
     }
     w.play("slow");
-    let window = w.enters(0, "watch");
+    let window = w.enters("alpha", "watch");
     wait_until("the agent", || w.at("rec").join("started").is_file());
     let going = w.kept();
     assert_eq!((&going["state"], going["run"].is_string()), (&Value::from("working"), true), "{going}");
@@ -57,7 +57,7 @@ fn the_run_of_a_wish_goes_on_when_the_window_is_gone() {
         return;
     }
     w.play("slow");
-    let scenes = showed(w.enters(0, "leave"));
+    let scenes = showed(w.enters("alpha", "leave"));
     assert_eq!(scenes.len(), 1, "{:?}", scenes.last().and_then(first));
     wait_until("the agent", || w.at("rec").join("started").is_file());
     assert_eq!(w.kept()["state"], "working", "the run ended with the window");
@@ -68,8 +68,8 @@ fn the_run_of_a_wish_goes_on_when_the_window_is_gone() {
 }
 
 /// What the page says of a wish that was entered and has no run: the wish is kept and drawn working, and one note.
-fn unstarted(w: &World, option: usize, wish: &str) -> String {
-    let scenes = showed(w.enters(option, "leave"));
+fn unstarted(w: &World, project: &str, wish: &str) -> String {
+    let scenes = showed(w.enters(project, "leave"));
     assert_eq!(scenes.len(), 2, "the wish at once, then why it has no run");
     assert!(drawn(&scenes[0], wish).is_some() && first(&scenes[0]).is_none_or(|(title, _)| title != UNSTARTED));
     assert_eq!(drawn(&scenes[1], wish).map(|drawn| drawn.0), Some(State::Busy));
@@ -83,8 +83,23 @@ fn unstarted(w: &World, option: usize, wish: &str) -> String {
     body.strip_prefix(&format!("“{SAID}”: ")).expect(body).to_string()
 }
 
-// A folder switched off by a name above it is still offered, since only its name is on the page: the window
-// passes the names on, and the run, which reads the folder, starts nothing.
+// A folder switched off by a name above it: the window keeps no wish for it, and asks for no run.
+#[test]
+fn a_wish_entered_for_a_folder_switched_off_by_a_name_above_it_is_not_kept_and_starts_nothing() {
+    let w = world();
+    w.install();
+    let above = format!("work{}alph", std::path::MAIN_SEPARATOR);
+    let scenes = showed(w.enters_with("alpha", "leave", &above));
+    assert_eq!(scenes.len(), 1, "why it was not kept, and no asking");
+    let (title, body) = first(&scenes[0]).unwrap();
+    let why = "no folder of that project that is switched on was typed in on 2026-03-10, so this wish was not kept.";
+    assert_eq!((title, body), (UNKEPT, format!("“{SAID}”: {why}").as_str()));
+    assert!(!w.at("jm").join("pages").join("2026-03-10.wishes.json").exists(), "a wish was kept for it");
+    assert_eq!(w.starts(), 0);
+}
+
+// The names reach the run the window asks for, whatever the wish: here the wish is one made in a terminal, where
+// no name was given, and the run, which reads the folder, starts nothing.
 #[test]
 fn the_names_switched_off_reach_the_run_which_starts_nothing_in_a_folder_they_name() {
     let w = world();
@@ -93,9 +108,9 @@ fn the_names_switched_off_reach_the_run_which_starts_nothing_in_a_folder_they_na
         return;
     }
     let above = format!("work{}alph", std::path::MAIN_SEPARATOR);
-    let scenes = showed(w.enters_with(0, "leave", &above));
-    assert_eq!(scenes.len(), 2, "the wish at once, then why it has no run");
-    assert_eq!(first(&scenes[1]).map(|(title, _)| title), Some(UNSTARTED));
+    let scenes = showed(w.enters_with("alpha", "ask", &above));
+    assert_eq!(scenes.len(), 1, "why the wish has no run");
+    assert_eq!(first(&scenes[0]).map(|(title, _)| title), Some(UNSTARTED));
     let copies = fs::read_dir(w.at("jm").join("copies")).map_or(0, Iterator::count);
     assert_eq!((w.starts(), copies, w.kept()["run"].is_null()), (0, 0, true), "a run was started in it");
 }
@@ -103,13 +118,16 @@ fn the_names_switched_off_reach_the_run_which_starts_nothing_in_a_folder_they_na
 #[test]
 fn a_command_that_is_not_found_and_a_run_that_was_not_started_each_leave_one_note_that_says_why() {
     let w = world();
-    assert_eq!(unstarted(&w, 0, "m1"), "the installed jellymoon command is not used: it was not found.");
+    assert_eq!(unstarted(&w, "alpha", "m1"), "the installed jellymoon command is not used: it was not found.");
     let command = w.install();
     #[cfg(unix)]
     {
         // A command others can write to is not the one `install.sh` put there, and is never started.
         fs::set_permissions(&command, std::os::unix::fs::PermissionsExt::from_mode(0o775)).unwrap();
-        assert_eq!(unstarted(&w, 0, "m2"), "the installed jellymoon command is not used: others can write to it.");
+        assert_eq!(
+            unstarted(&w, "alpha", "m2"),
+            "the installed jellymoon command is not used: others can write to it."
+        );
         fs::set_permissions(&command, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     }
     if open_above(w.day.dir.path()).is_some() {
@@ -119,6 +137,6 @@ fn a_command_that_is_not_found_and_a_run_that_was_not_started_each_leave_one_not
     let wish = if cfg!(unix) { "m3" } else { "m2" };
     let no_repo = "the folder of that name typed in on 2026-03-10 is not one a run can copy: it is not there, or cannot \
                    be reached.";
-    assert_eq!(unstarted(&w, 1, wish), no_repo);
+    assert_eq!(unstarted(&w, "beta", wish), no_repo);
     assert!(command.is_file());
 }

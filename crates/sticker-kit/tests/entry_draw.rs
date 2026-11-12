@@ -66,8 +66,14 @@ fn state(page: &Entity<Page>, cx: &mut VisualTestContext) -> (String, usize, Opt
     })
 }
 
-fn wish(text: &str, option: usize) -> EntryMade {
-    EntryMade { id: "wish".into(), text: text.into(), option: Some(option) }
+fn wish(text: &str, option: &str) -> EntryMade {
+    EntryMade { id: "wish".into(), text: text.into(), option: Some(option.into()) }
+}
+
+/// The handler's answer to what Enter gave.
+fn answer(page: &Entity<Page>, cx: &mut VisualTestContext, kept: bool) {
+    cx.update(|window, cx| page.update(cx, |page, cx| page.answer_entry(kept, window, cx)));
+    cx.run_until_parked();
 }
 
 #[test]
@@ -87,7 +93,9 @@ fn a_click_gives_the_entry_the_keys_and_enter_gives_what_was_typed() {
     keys(cx, "tab");
     assert_eq!(state(&page, cx).2, Some(1), "Tab chooses the next option");
     keys(cx, "enter");
-    assert_eq!(*made.borrow(), [wish("tea at 4", 1)]);
+    assert_eq!(*made.borrow(), [wish("tea at 4", "kitchen")]);
+    assert_eq!(state(&page, cx), ("tea at 4".into(), 8, Some(1), true), "the words stay until they are kept");
+    answer(&page, cx, true);
     assert_eq!(state(&page, cx), (String::new(), 0, Some(1), true), "the entry is empty and keeps its option");
 
     keys(cx, "enter space enter");
@@ -121,7 +129,7 @@ fn the_editing_keys_and_a_click_move_the_caret_and_the_cap_holds() {
     keys(cx, "secondary-v");
     assert_eq!(state(&page, cx).0, "one twoyadxz", "pasted text is one line, cut to the entry's twelve characters");
     keys(cx, "q enter");
-    assert_eq!(*made.borrow(), [wish("one twoyadxz", 2)]);
+    assert_eq!(*made.borrow(), [wish("one twoyadxz", "letters")]);
 }
 
 #[test]
@@ -160,7 +168,7 @@ fn enter_during_a_composition_enters_nothing() {
     });
     assert_eq!(asked, (Some("你".into()), Some(1..2), None, Some(3..3)));
     keys(cx, "enter");
-    assert_eq!(*made.borrow(), [wish("a你好", 1)]);
+    assert_eq!(*made.borrow(), [wish("a你好", "kitchen")]);
 }
 
 #[test]
@@ -171,7 +179,8 @@ fn a_chip_chooses_its_option_and_the_page_under_the_entry_still_takes_taps() {
     click(cx, chip.rect.center());
     assert_eq!(state(&page, cx), (String::new(), 0, Some(2), true), "a chip chooses and gives the entry the keys");
     keys(cx, "o k enter");
-    assert_eq!(*made.borrow(), [wish("ok", 2)]);
+    assert_eq!(*made.borrow(), [wish("ok", "letters")]);
+    answer(&page, cx, true);
 
     let option = piece(&page, cx, PieceKind::Option, 1);
     click(cx, option.rect.center());
@@ -201,26 +210,49 @@ fn a_chip_chooses_its_option_and_the_page_under_the_entry_still_takes_taps() {
 }
 
 #[test]
-fn refused_words_come_back_the_option_stays_by_name_and_no_entry_takes_no_text_input() {
+fn an_entry_waits_with_its_words_for_its_answer_and_takes_no_key_or_composition_meanwhile() {
     let mut cx = context();
     let (page, cx, made, _) = open(&mut cx);
     let accepts = |cx: &mut VisualTestContext| {
         cx.update(|window, cx| page.update(cx, |page, cx| page.accepts_text_input(window, cx)))
     };
+    let waiting = |cx: &mut VisualTestContext| page.read_with(cx, |page, _| page.entry().waiting());
     assert!(accepts(cx), "a page with an entry takes text input");
     let field = piece(&page, cx, PieceKind::Entry, 0);
     click(cx, field.rect.center());
     keys(cx, "t e a tab enter");
-    assert_eq!(state(&page, cx), (String::new(), 0, Some(1), true));
-    let words = made.borrow()[0].text.clone();
-    cx.update(|window, cx| page.update(cx, |page, cx| page.put_back_entry(&words, window, cx)));
-    cx.run_until_parked();
-    assert_eq!(state(&page, cx), ("tea".into(), 3, Some(1), true), "the words the handler did not take are back");
+    let waits = ("tea".to_string(), 3, Some(1), true);
+    assert_eq!((state(&page, cx), waiting(cx)), (waits.clone(), true), "the words stay while the entry waits");
+    assert!(!accepts(cx), "an entry that waits takes no text input, so no composition begins");
+    keys(cx, "x backspace left home delete tab shift-tab enter secondary-v");
+    cx.update(|window, cx| {
+        page.update(cx, |page, cx| page.replace_and_mark_text_in_range(None, "ni", None, window, cx));
+        page.update(cx, |page, cx| page.replace_text_in_range(None, "你", window, cx));
+    });
+    let chip = piece(&page, cx, PieceKind::Chip, 2);
+    click(cx, chip.rect.center());
+    click(cx, (field.rect.x + 15.0, field.rect.center().1));
+    assert_eq!((state(&page, cx), waiting(cx)), (waits.clone(), true), "a key was taken while the entry waited");
+    assert_eq!(*made.borrow(), [wish("tea", "kitchen")], "a second Enter entered the words again");
 
+    // Not kept: the words are still there, and the keys are the entry's again. Twice over.
+    for nth in 1..3 {
+        answer(&page, cx, false);
+        assert_eq!((state(&page, cx), waiting(cx), accepts(cx)), (waits.clone(), false, true));
+        keys(cx, "s backspace enter");
+        assert_eq!(made.borrow().len(), nth + 1);
+        assert_eq!((state(&page, cx), waiting(cx)), (waits.clone(), true), "refusal {nth} lost the words");
+    }
+    // The options move while it waits: the option is kept by its name. Then the words are kept.
     let moved = Entry { options: ["kitchen", "letters", "garden"].map(String::from).to_vec(), ..entry() };
     page.update(cx, |page, cx| page.set_entry(Some(moved), cx));
     cx.run_until_parked();
-    assert_eq!(state(&page, cx).2, Some(0), "kitchen is still the chosen option");
+    assert_eq!((state(&page, cx).2, waiting(cx)), (Some(0), true), "kitchen is still the chosen option");
+    answer(&page, cx, true);
+    assert_eq!((state(&page, cx), waiting(cx)), ((String::new(), 0, Some(0), true), false));
+    keys(cx, "o k enter");
+    assert_eq!(made.borrow().last(), Some(&wish("ok", "kitchen")), "the option is given by its name");
+
     page.update(cx, |page, cx| page.set_entry(None, cx));
     cx.run_until_parked();
     assert!(!accepts(cx), "a page with no entry takes no text input");

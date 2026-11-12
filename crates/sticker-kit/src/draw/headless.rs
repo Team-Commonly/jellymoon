@@ -56,7 +56,8 @@ pub fn snapshot_typing(
                 page.update(cx, |page, cx| {
                     page.entry.state.choose(option);
                     page.focus_entry(window, cx);
-                    page.put_back_entry(&text, window, cx);
+                    page.entry.state.replace(None, &text);
+                    cx.notify();
                 })
             })
         })?;

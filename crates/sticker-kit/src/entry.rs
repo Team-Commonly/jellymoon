@@ -1,6 +1,7 @@
 //! What is typed into a scene's entry, as plain data: one line of text, the part of it an input method is still
 //! composing (marked), a caret and the chosen option. Nothing here draws or knows a window, so every rule is tested
-//! with no display. Places are bytes into the text, always between characters; the ranges a platform's input method
+//! with no display. Enter gives the words and keeps them: the entry waits, and takes no key, until it is answered
+//! ([`EntryState::answer`]), so words never leave it before whoever was given them has kept them. Places are bytes into the text, always between characters; the ranges a platform's input method
 //! speaks are UTF-16 and are turned into bytes here and nowhere else.
 
 use std::ops::Range;
@@ -30,6 +31,8 @@ pub struct EntryState {
     chosen: usize,
     options: usize,
     most: usize,
+    /// Enter gave the words and no answer has come.
+    waiting: bool,
 }
 
 impl Default for EntryState {
@@ -43,7 +46,8 @@ impl EntryState {
     /// to the kit's own bounds; a cap of 0 is the kit's cap.
     pub fn new(options: usize, most: usize) -> Self {
         let most = if most == 0 { MAX_ENTRY_CHARS } else { most.min(MAX_ENTRY_CHARS) };
-        Self { text: String::new(), marked: None, caret: 0, chosen: 0, options: options.min(MAX_ENTRY_OPTIONS), most }
+        let options = options.min(MAX_ENTRY_OPTIONS);
+        Self { text: String::new(), marked: None, caret: 0, chosen: 0, options, most, waiting: false }
     }
 
     pub fn of(entry: &Entry) -> Self {
@@ -66,17 +70,24 @@ impl EntryState {
     /// Keeps the chosen option by its name when the options change: `was` are the names before, `now` the names
     /// to come. A name that is still offered is chosen where it now stands; one that is gone leaves the place.
     pub fn keep_option(&mut self, was: &[String], now: &[String]) {
-        let name = was.get(self.chosen).filter(|_| self.chosen < self.options);
-        let at = name.and_then(|name| now.iter().take(MAX_ENTRY_OPTIONS).position(|one| one == name));
+        let at = was.get(self.chosen).and_then(|name| now.iter().take(MAX_ENTRY_OPTIONS).position(|one| one == name));
         self.chosen = at.unwrap_or(self.chosen);
     }
 
-    /// Puts back words that were entered and not taken, as if typed, when nothing was typed since. A composition
-    /// is text too, so one that is going is left alone.
-    pub fn put_back(&mut self, text: &str) {
-        if self.text.is_empty() {
-            self.replace(None, text);
+    /// Whether Enter gave the words and no answer has come. While it waits the entry takes no key: no text, no
+    /// composition, no caret move, no other option and no second Enter. A key pressed then is not kept for later.
+    pub fn waiting(&self) -> bool {
+        self.waiting
+    }
+
+    /// The answer to what Enter gave. Kept: the entry is empty again, with the same option chosen. Not kept: the
+    /// words stay as they were typed. Either way the entry takes keys again. Nothing when nothing waits.
+    pub fn answer(&mut self, kept: bool) {
+        if self.waiting && kept {
+            self.text.clear();
+            self.caret = 0;
         }
+        self.waiting = false;
     }
 
     pub fn text(&self) -> &str {
@@ -127,6 +138,9 @@ impl EntryState {
     /// Replaces a range with as much of `new`, cleaned, as the cap leaves room for. Returns where it now is.
     fn put(&mut self, range_utf16: Option<Range<usize>>, new: &str) -> Range<usize> {
         let caret = self.caret..self.caret;
+        if self.waiting {
+            return caret;
+        }
         let range = range_utf16.map(|range| self.from_utf16(range)).or(self.marked.clone()).unwrap_or(caret);
         // One character more than can ever fit is enough to tell where the last whole one ends, however much is pasted.
         let new: String = new.chars().filter_map(one_line).take(self.most + 1).collect();
@@ -148,7 +162,7 @@ impl EntryState {
     }
 
     fn cut(&mut self, range: Range<usize>) {
-        if self.marked.is_none() {
+        if self.marked.is_none() && !self.waiting {
             self.text.replace_range(range.clone(), "");
             self.caret = range.start;
         }
@@ -177,7 +191,7 @@ impl EntryState {
     }
 
     fn go(&mut self, to: usize) {
-        if self.marked.is_none() {
+        if self.marked.is_none() && !self.waiting {
             self.caret = to.min(self.text.len());
         }
     }
@@ -193,29 +207,28 @@ impl EntryState {
     }
 
     pub fn next_option(&mut self) {
-        self.chosen = (self.chosen + 1) % self.options.max(1);
+        self.choose((self.chosen + 1) % self.options.max(1));
     }
 
     pub fn previous_option(&mut self) {
-        self.chosen = (self.chosen + self.options.max(1) - 1) % self.options.max(1);
+        self.choose((self.chosen + self.options.max(1) - 1) % self.options.max(1));
     }
 
     pub fn choose(&mut self, option: usize) {
-        if option < self.options {
+        if option < self.options && !self.waiting {
             self.chosen = option;
         }
     }
 
-    /// What was entered, and the entry is empty again with the same option chosen. Nothing while a composition is
-    /// marked (that Enter belongs to the input method, to confirm it) and nothing for text that is only spaces.
+    /// What was entered. The words stay in the entry, which waits for [`answer`](Self::answer). Nothing while a
+    /// composition is marked (that Enter belongs to the input method, to confirm it), nothing for text that is
+    /// only spaces, and nothing while the entry waits.
     pub fn enter(&mut self) -> Option<Made> {
-        if self.marked.is_some() || self.text.trim().is_empty() {
+        if self.marked.is_some() || self.waiting || self.text.trim().is_empty() {
             return None;
         }
-        let text = self.text.trim().to_string();
-        self.text.clear();
-        self.caret = 0;
-        Some(Made { text, option: self.chosen() })
+        self.waiting = true;
+        Some(Made { text: self.text.trim().to_string(), option: self.chosen() })
     }
 
     pub fn len_utf16(&self) -> usize {

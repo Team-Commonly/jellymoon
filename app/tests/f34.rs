@@ -40,7 +40,7 @@ fn a_kept_page_is_shown_without_a_call_until_the_day_has_turns_it_did_not_see() 
     assert_eq!(notes(&shown(&world, &[])), first);
     assert!(!called(&world), "the kept page saw every turn of the day");
 
-    let more = [said("2026-03-10T19:00:00.000Z", "/work/alpha", "and log every failure")];
+    let more = [said("2026-03-10T19:00:00.000Z", &work("alpha"), "and log every failure")];
     write_log(&world, "-work-alpha/s3.jsonl", &more);
     shown(&world, &[]);
     assert!(called(&world), "a turn the kept page did not see");

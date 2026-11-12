@@ -31,6 +31,12 @@ pub fn said(at: &str, cwd: &str, text: &str) -> String {
     .to_string()
 }
 
+/// The folder `name` under `work`, written as a full path of this system: a chip is offered only for a folder
+/// with one. Nothing is ever at it.
+pub fn work(name: &str) -> String {
+    if cfg!(windows) { format!(r"C:\work\{name}") } else { format!("/work/{name}") }
+}
+
 pub fn write_log(world: &World, name: &str, lines: &[String]) {
     let path = world.dir.path().join("logs").join(name);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -76,14 +82,14 @@ pub fn world() -> World {
     ];
     let world = World { home: at("jm"), rec: bin, vars, dir };
     let lines = [
-        said("2026-03-10T16:00:00.000Z", "/work/alpha", FIRST),
-        said("2026-03-10T17:00:00.000Z", "/work/alpha", SECOND),
+        said("2026-03-10T16:00:00.000Z", &work("alpha"), FIRST),
+        said("2026-03-10T17:00:00.000Z", &work("alpha"), SECOND),
     ];
     write_log(&world, "-work-alpha/s1.jsonl", &lines);
     write_log(
         &world,
         "-work-private-notes/s2.jsonl",
-        &[said("2026-03-10T18:00:00.000Z", "/work/private-notes", "dear diary")],
+        &[said("2026-03-10T18:00:00.000Z", &work("private-notes"), "dear diary")],
     );
     answer(&world, &result(&reading()), 0);
     world

@@ -112,7 +112,9 @@ max_file_lines = 400
 # `copy.rs` and `copy/hold.rs` are 58; the asker's wait for the harness to begin, in `run/apart.rs`, 36.
 # F43 and the review of F42 raised core by 43: `wishable`, the projects of a page a wish can be made for (a name
 # `--project` takes, not switched off), and `going`, the made wishes whose run is going, with their unit test.
-"crates/jellymoon-core" = 6497
+# The gate on F43 raised core by 74: a chip and a wish from a page asked of the reader's own lookup
+# (`reader::typed_in`, `wish_offered`), the start of a wish cleaned for its note, and their unit tests.
+"crates/jellymoon-core" = 6571
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -169,7 +171,9 @@ max_file_lines = 400
 # rest is a name's case, the form of a `viewBox`, a size stated once, and the roots `tests/draw.rs` rasterises.
 # The review of F42 raised it by 129: 69 are tests; the chosen option kept by its name and refused words put back
 # (27), and a picture of a page with its entry, typed in or not (`src/draw/headless.rs`, 33).
-"crates/sticker-kit" = 7609
+# The gate on F43 raised it by 98: 76 are tests (`tests/entry_waits.rs`, `tests/entry_draw.rs`); the entry that
+# waits with its words for its answer and gives the chosen option by its name is 22.
+"crates/sticker-kit" = 7707
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -193,7 +197,9 @@ max_file_lines = 400
 # made-up window's world moved out of `f42/run.rs` into `tests/support/wished.rs`); `stopping.rs`, the tap that
 # stops a run, is 149; the wish carried to core off the window's thread, its notes kept and its chips asked of
 # core, 75 in `wishing.rs` and 42 in the window; the example's picture of the entry, 22.
-"app" = 4941
+# The gate on F43 raised it by 265: 226 are tests (`tests/f43/notes.rs` is 123, `tests/f42/notes.rs` grew by
+# 54); the entry asked of core off the window's thread and answered, and a tap on a choice that is gone, are 39.
+"app" = 5206
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

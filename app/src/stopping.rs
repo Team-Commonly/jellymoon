@@ -77,13 +77,26 @@ pub(crate) fn holds(note: &Note, shown: &Scene) -> bool {
     wish_of(note).is_none_or(working)
 }
 
-/// What a stop said, in place of the first note that says a run is being stopped.
+/// What a stop said, in place of the first note that says a run is being stopped and of what the stops before
+/// it said: a page holds one note of a stop that has ended, the newest.
 fn say(scene: &mut Scene, (title, body): (&'static str, String)) {
     let stopping = |note: &Note| matches!(note, Note::Plain { title, .. } if title == STOPPING);
     if let Some(at) = scene.notes.iter().position(stopping) {
         scene.notes.remove(at);
     }
+    scene.notes.retain(|note| stopping(note) || !said(note));
     scene.notes.insert(0, Note::Plain { title: title.to_string(), body });
+}
+
+/// What a tap on an option of a note did.
+pub enum Chosen {
+    /// It was the choice to stop a run: the scene to show at once, and the stop, as work for another thread.
+    Stop(Scene, Stopping),
+    /// It was a tap for `taps.rs`: the scene to show.
+    Tapped(Scene),
+    /// Nothing, and nothing to show: a tap on a choice to stop that is no longer on show (a second tap on it), or
+    /// on a page with no day.
+    Nothing,
 }
 
 impl Today {
@@ -97,6 +110,16 @@ impl Today {
 }
 
 impl OnShow {
+    /// A tap on option `index` (from 0) of the note `note`: the choice to stop when it is one on show, and
+    /// nothing when it is a choice to stop that is not. Any other note is `taps.rs`'s.
+    pub fn chose(&mut self, note: &str, index: usize) -> Chosen {
+        match self.stopping(note, index) {
+            Some((scene, stop)) => Chosen::Stop(scene, stop),
+            None if note.starts_with(STOPS) => Chosen::Nothing,
+            None => self.tap(note, index).map_or(Chosen::Nothing, Chosen::Tapped),
+        }
+    }
+
     /// A tap on the character `id`, as work for another thread: the choice to stop, over the scene on show, when
     /// core says that made wish has a run going. None, and nothing written, for any other character, for a wish
     /// with no run going, and when the choice is on show already. It is applied with [`OnShow::seen`].

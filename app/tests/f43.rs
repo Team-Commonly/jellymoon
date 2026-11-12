@@ -5,6 +5,8 @@
 //! the made-up agent of F39's tests is what runs: nothing here starts the real Claude Code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f43/notes.rs"]
+mod notes;
 mod support;
 
 use std::fs;
@@ -56,7 +58,7 @@ fn going(script: &str) -> Option<World> {
         return None;
     }
     w.play(script);
-    assert_eq!(showed(w.enters(0, "leave")).len(), 1, "the wish at once, and nothing to say of its run");
+    assert_eq!(showed(w.enters("alpha", "leave")).len(), 1, "the wish at once, and nothing to say of its run");
     wait_until("the agent", || w.at("rec").join("started").is_file());
     Some(w)
 }
@@ -133,9 +135,9 @@ fn a_stop_of_a_run_that_ended_meanwhile_stops_nothing_writes_nothing_and_says_wh
     assert_eq!(w.starts(), 1);
 }
 
-// No run is ever asked for here: the wishes are kept by core, as `jellymoon wish` keeps them.
-#[test]
-fn a_tap_on_any_other_character_or_on_a_wish_with_no_run_going_stops_nothing_and_writes_nothing() {
+/// A day read and kept with one made wish, `m1`, that is working and has no run: it is kept by core, as
+/// `jellymoon wish` keeps one, and no run is ever asked for.
+fn wished_alone() -> (day::World, OnShow) {
     let world = day::world();
     shown(&world, &[]);
     jellymoon_core::wish(&world.home, Some(DAY), SAID, "alpha").unwrap();
@@ -151,7 +153,24 @@ fn a_tap_on_any_other_character_or_on_a_wish_with_no_run_going_stops_nothing_and
         bin: None,
     };
     let (scene, page) = today.first();
-    let mut on = OnShow { today, page, scene };
+    (world, OnShow { today, page, scene })
+}
+
+/// A choice to stop the run of `wish`, as one left on show.
+fn planted(wish: &str) -> Note {
+    Note::Choice {
+        id: format!("stop-{wish}"),
+        title: String::new(),
+        options: vec![STOP.to_string()],
+        footer: String::new(),
+        struck_first: false,
+        whole: false,
+    }
+}
+
+#[test]
+fn a_tap_on_any_other_character_or_on_a_wish_with_no_run_going_stops_nothing_and_writes_nothing() {
+    let (world, mut on) = wished_alone();
     let wishes = world.home.join("pages").join(format!("{DAY}.wishes.json"));
     let kept = || (fs::read_to_string(&wishes).unwrap(), names(&world.home), names(&world.home.join("pages")));
     let before = kept();
@@ -165,14 +184,6 @@ fn a_tap_on_any_other_character_or_on_a_wish_with_no_run_going_stops_nothing_and
     assert!(on.stopping("stop-m1", 0).is_none(), "no choice is on show");
 
     // A choice left on show for a wish with no run (a page that changed under the person): core refuses.
-    let planted = |wish: &str| Note::Choice {
-        id: format!("stop-{wish}"),
-        title: String::new(),
-        options: vec![STOP.to_string()],
-        footer: String::new(),
-        struck_first: false,
-        whole: false,
-    };
     on.scene.notes.insert(0, planted("m1"));
     let (_, work) = on.stopping("stop-m1", 0).unwrap();
     let scene = on.stopped(work());

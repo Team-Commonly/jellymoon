@@ -1,6 +1,6 @@
 //! F42: a wish typed in the window is kept and run. The rules are core's and are proved at `jellymoon wish` and
 //! `jellymoon wish --run` (`crates/jellymoon/tests/f37.rs`, `f41.rs`). Here is the app's part: `layout` prints the
-//! entry, with a chip for each project read; Enter, followed with no window through `OnShow`, is carried to core
+//! entry, with a chip for each project read that a wish can be made for; Enter, followed with no window through `OnShow`, is carried to core
 //! and drawn at once; and a look draws what core keeps since. `f42/run.rs` holds the run, which a made-up window
 //! (`support/wisher.rs`) asks for in a process of its own: nothing here starts the real Claude Code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -126,14 +126,14 @@ fn a_day_with_no_project_read_prints_no_entry() {
 fn words_entered_are_kept_by_core_and_drawn_at_once_as_working_with_no_reading() {
     let world = read();
     let mut shown = on_show(&world);
-    let entry = shown.entry().unwrap();
+    let entry = (shown.offering())().unwrap();
     assert_eq!(
         (entry.id.as_str(), &entry.options[..], entry.most),
         ("wish", &["alpha".to_string(), "private-notes".to_string()][..], 200)
     );
     assert_eq!(drawn(&shown.scene, "m1"), None);
 
-    let (scene, asking) = shown.wished(SAID, Some(1));
+    let (scene, asking) = shown.wished(SAID, Some("private-notes"));
     assert!(asking.is_some(), "a kept wish asks for its run");
     assert_eq!(drawn(&scene, "m1"), Some((State::Busy, 0, Mark::Busy, SAID.to_string())));
     assert_eq!(scene, shown.scene, "what was given is what is on show");
@@ -143,7 +143,7 @@ fn words_entered_are_kept_by_core_and_drawn_at_once_as_working_with_no_reading()
     assert!(!called(&world), "a wish made a reading call");
     // A wish as long as core takes is kept whole: the entry's cap is core's.
     let longest = "w".repeat(200);
-    assert_eq!(drawn(&shown.wished(&longest, Some(0)).0, "m2"), Some((State::Busy, 0, Mark::Busy, longest)));
+    assert_eq!(drawn(&shown.wished(&longest, Some("alpha")).0, "m2"), Some((State::Busy, 0, Mark::Busy, longest)));
 }
 
 #[test]
@@ -152,11 +152,15 @@ fn words_core_refuses_leave_one_note_in_core_s_words_and_write_nothing() {
     let mut shown = on_show(&world);
     let before = (names(&world.home), names(&world.home.join("pages")));
     let long = "a wish is at most 200 characters, and this one is longer.";
-    let unchosen = "No project of this page was chosen, so nothing was sent.";
-    let cases =
-        [("w".repeat(201), Some(0), long), (SAID.to_string(), Some(2), unchosen), (SAID.to_string(), None, unchosen)];
-    for (typed, option, why) in cases {
-        let (scene, asking) = shown.wished(&typed, option);
+    let unchosen = "No project was chosen, so nothing was sent.";
+    let gone = "no folder of that project that is switched on was typed in on 2026-03-10, so this wish was not kept.";
+    let cases = [
+        ("w".repeat(201), Some("alpha"), long),
+        (SAID.to_string(), Some("no-such"), gone),
+        (SAID.to_string(), None, unchosen),
+    ];
+    for (typed, project, why) in cases {
+        let (scene, asking) = shown.wished(&typed, project);
         assert!(asking.is_none(), "{why}: words that were not kept asked for a run");
         // The note names the words, then says why.
         let (title, body) = first(&scene).unwrap();
@@ -167,7 +171,7 @@ fn words_core_refuses_leave_one_note_in_core_s_words_and_write_nothing() {
     }
     assert_eq!(kept_wishes(&world), None);
     // The next wish that is kept takes the note away.
-    assert_eq!(first(&shown.wished(SAID, Some(0)).0).map(|(title, _)| title), None);
+    assert_eq!(first(&shown.wished(SAID, Some("alpha")).0).map(|(title, _)| title), None);
 }
 
 // The poll's look: what core keeps now is drawn, a note over the page stays, and a look made from a scene that is
@@ -247,11 +251,12 @@ fn a_look_takes_away_a_note_of_the_page_s_own_that_no_longer_holds() {
     );
 }
 
-// The kit's part, with the app's own entry: Enter while an input method is composing confirms the composition.
+// The kit's part, with the app's own entry: Enter while an input method is composing confirms the composition,
+// and the words that are entered stay in the entry until core has answered.
 #[test]
 fn enter_during_a_composition_enters_nothing() {
     let world = read();
-    let mut typed = EntryState::of(&on_show(&world).entry().unwrap());
+    let mut typed = EntryState::of(&(on_show(&world).offering())().unwrap());
     typed.replace(None, "牛奶を");
     typed.mark(None, "kau", None);
     assert_eq!(typed.enter(), None, "text being composed was entered");
@@ -260,5 +265,7 @@ fn enter_during_a_composition_enters_nothing() {
     typed.next_option();
     let made = typed.enter().expect("the composition is confirmed");
     assert_eq!((made.text.as_str(), made.option), ("牛奶を買う", Some(1)));
-    assert_eq!(typed.text(), "");
+    assert_eq!((typed.text(), typed.waiting()), ("牛奶を買う", true), "the words left before core kept them");
+    typed.answer(true);
+    assert_eq!((typed.text(), typed.waiting()), ("", false));
 }

@@ -40,12 +40,17 @@ Page::new(scene, theme)
   command key) edit, the command key with V pastes, Tab and Shift-Tab choose the
   next and the previous option, Enter enters. There is a caret and no selection.
 - **Enter** calls `on_entry` with the text, trimmed, and the chosen option's
-  place; the entry is then empty and keeps its option. Text that is only spaces
-  enters nothing. The handler runs while the page is in use, as `on_tap` does:
-  one that changes the page does it in `cx.defer`. A handler that did not take
-  the words (they were refused) gives them back with
-  `page.put_back_entry(text, window, cx)`: they are in the field again, through
-  the entry's bounds, unless something was typed since.
+  name (`made.option`), never its place: the options can change before the
+  handler acts. Text that is only spaces enters nothing. The handler runs while
+  the page is in use, as `on_tap` does: one that changes the page does it in
+  `cx.defer`.
+- **The entry then waits** for the handler's answer,
+  `page.answer_entry(kept, window, cx)`, which every handler gives. Until then
+  the words stay in the field, drawn in the theme's quiet colour with no caret,
+  and the entry takes no key, no click on a chip, no second Enter and no
+  composition (`accepts_text_input` is false). A key pressed while it waits is
+  dropped, not kept for later. Kept: the entry is empty and keeps its option.
+  Not kept: the words are still there. A page with no handler answers itself.
 - **An input method** (Chinese, Japanese, Korean, a dead key) talks to the page
   through GPUI's `EntityInputHandler`. What it is still composing is underlined,
   and Enter, the editing keys and a click leave it alone until it ends.
@@ -55,7 +60,7 @@ Page::new(scene, theme)
   option by its name when that name is still offered (`EntryState::keep_option`).
 
 The rules are `entry::EntryState`, plain data with no GPUI in it
-(`tests/entry.rs`). `tests/entry_draw.rs` sends keys and clicks through GPUI's
+(`tests/entry.rs`, `tests/entry_waits.rs`). `tests/entry_draw.rs` sends keys and clicks through GPUI's
 own dispatch to a headless page. The test platform has no input method, so a
 composition is started there by calling the handler, as a platform would; what
 a real input method does on a real window is checked by hand.

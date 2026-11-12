@@ -42,13 +42,17 @@ Page::new(scene, theme)
 - **Enter** calls `on_entry` with the text, trimmed, and the chosen option's
   place; the entry is then empty and keeps its option. Text that is only spaces
   enters nothing. The handler runs while the page is in use, as `on_tap` does:
-  one that changes the page does it in `cx.defer`.
+  one that changes the page does it in `cx.defer`. A handler that did not take
+  the words (they were refused) gives them back with
+  `page.put_back_entry(text, window, cx)`: they are in the field again, through
+  the entry's bounds, unless something was typed since.
 - **An input method** (Chinese, Japanese, Korean, a dead key) talks to the page
   through GPUI's `EntityInputHandler`. What it is still composing is underlined,
   and Enter, the editing keys and a click leave it alone until it ends.
 - **A window's own keys.** While `page.entry_focused(window)` is true a letter
   is text: a window that acts on a bare key asks first. `page.entry()` is what
-  is typed now; `set_entry` changes or removes the entry.
+  is typed now; `set_entry` changes or removes the entry, and keeps the chosen
+  option by its name when that name is still offered (`EntryState::keep_option`).
 
 The rules are `entry::EntryState`, plain data with no GPUI in it
 (`tests/entry.rs`). `tests/entry_draw.rs` sends keys and clicks through GPUI's

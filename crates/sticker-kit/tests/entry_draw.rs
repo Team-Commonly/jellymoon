@@ -199,3 +199,29 @@ fn a_chip_chooses_its_option_and_the_page_under_the_entry_still_takes_taps() {
         "a page with no entry takes no keys"
     );
 }
+
+#[test]
+fn refused_words_come_back_the_option_stays_by_name_and_no_entry_takes_no_text_input() {
+    let mut cx = context();
+    let (page, cx, made, _) = open(&mut cx);
+    let accepts = |cx: &mut VisualTestContext| {
+        cx.update(|window, cx| page.update(cx, |page, cx| page.accepts_text_input(window, cx)))
+    };
+    assert!(accepts(cx), "a page with an entry takes text input");
+    let field = piece(&page, cx, PieceKind::Entry, 0);
+    click(cx, field.rect.center());
+    keys(cx, "t e a tab enter");
+    assert_eq!(state(&page, cx), (String::new(), 0, Some(1), true));
+    let words = made.borrow()[0].text.clone();
+    cx.update(|window, cx| page.update(cx, |page, cx| page.put_back_entry(&words, window, cx)));
+    cx.run_until_parked();
+    assert_eq!(state(&page, cx), ("tea".into(), 3, Some(1), true), "the words the handler did not take are back");
+
+    let moved = Entry { options: ["kitchen", "letters", "garden"].map(String::from).to_vec(), ..entry() };
+    page.update(cx, |page, cx| page.set_entry(Some(moved), cx));
+    cx.run_until_parked();
+    assert_eq!(state(&page, cx).2, Some(0), "kitchen is still the chosen option");
+    page.update(cx, |page, cx| page.set_entry(None, cx));
+    cx.run_until_parked();
+    assert!(!accepts(cx), "a page with no entry takes no text input");
+}

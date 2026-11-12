@@ -115,12 +115,23 @@ impl Page {
     /// Changes or removes the entry. What is already typed stays, held to the new entry's bounds.
     pub fn set_entry(&mut self, entry: Option<Entry>, cx: &mut Context<Self>) {
         match &entry {
-            Some(entry) => self.entry.state.fit(entry),
+            Some(entry) => {
+                let was = self.entry.what.as_ref().map(|was| was.options.as_slice()).unwrap_or_default();
+                self.entry.state.keep_option(was, &entry.options);
+                self.entry.state.fit(entry);
+            }
             None => self.entry.state = EntryState::default(),
         }
         self.entry.what = entry;
         self.stale = Stale::Spring;
         cx.notify();
+    }
+
+    /// Puts words back in the entry that Enter gave and the handler did not take (a wish that was refused), unless
+    /// something was typed since. They pass the entry's bounds as typed words do.
+    pub fn put_back_entry(&mut self, text: &str, window: &Window, cx: &mut Context<Self>) {
+        self.entry.state.put_back(text);
+        self.entry_changed(window, cx);
     }
 
     /// What is typed in the entry now.

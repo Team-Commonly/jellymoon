@@ -17,12 +17,12 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::hook::put;
-use crate::reader::parse;
+use crate::reader::{parse, switched_off};
 use crate::reading::{LABEL_MAX, STAR_MAX, STARS_MAX};
 use crate::redact::line;
 use crate::still::{Unkept, still};
 use crate::tap::{Lock, locked, plain};
-use crate::{Error, PageData, Wish, WishState, copy, run};
+use crate::{Error, PageData, Wish, WishState, copy, run, session};
 
 /// The most made wishes one day holds.
 pub const MADE_MAX: usize = 8;
@@ -100,6 +100,17 @@ fn cleaned(typed: &str) -> Result<String, Unkept> {
 fn named(project: &str) -> bool {
     let path = project.contains(['/', '\\']) || project == "." || project == "..";
     !project.is_empty() && !path && project.chars().count() <= PROJECT_MAX && line(project, PROJECT_MAX) == project
+}
+
+/// The projects of `projects` a wish can be made for now, in their order: each is one folder's name as [`wish`]
+/// takes it, and none is switched off by its name, with `skip` or in `<home>/skip.txt`, as the reader switches a
+/// folder off. A run would not find a folder switched off, and a wish for a name [`wish`] refuses is never kept.
+/// Only the name is asked here: a folder switched off by a name above it is refused by its run, which reads the
+/// folder. None at all when `skip.txt` cannot be used: a damaged list never puts a folder back on offer.
+pub fn wishable(home: &Path, skip: &[String], projects: &[String]) -> Vec<String> {
+    let Ok(listed) = switched_off(home) else { return Vec::new() };
+    let off = [skip, &listed].concat();
+    projects.iter().filter(|project| named(project) && !session::skipped(project, &off)).cloned().collect()
 }
 
 /// A wish read from the file, when it is what [`wish`] would have written at that place. Its words are cleaned as
@@ -241,6 +252,17 @@ pub fn made(home: &Path, day: &str) -> Vec<Wish> {
     kept.into_iter().map(drawn).collect()
 }
 
+/// The ids of the day's made wishes whose run is going: working, and naming a run, once a run that nothing holds
+/// has been given its end as [`made`] gives it. These are the wishes `stop_run` has a run to stop for.
+pub fn going(home: &Path, day: &str) -> Vec<String> {
+    let kept = if parse(day).is_ok() { kept(home, day).unwrap_or_default() } else { Vec::new() };
+    let going = |wish: MadeWish| {
+        let wish = run::bury(home, day, wish);
+        (wish.state == WishState::Working && wish.run.is_some()).then_some(wish.id)
+    };
+    kept.into_iter().filter_map(going).collect()
+}
+
 /// The page with the day's made wishes after the reading's. A wish whose id is on the page already is not added,
 /// so a page that was merged once is the same merged twice.
 pub fn with_made(home: &Path, mut page: PageData) -> PageData {
@@ -267,6 +289,27 @@ mod tests {
         let once = with_made(home.path(), page);
         assert_eq!(once.wishes.iter().map(|wish| wish.id.as_str()).collect::<Vec<_>>(), ["m1"]);
         assert_eq!(with_made(home.path(), once.clone()), once);
+        Ok(())
+    }
+
+    #[test]
+    fn a_wish_can_be_made_for_a_folder_s_name_that_is_not_switched_off() -> Result<(), Box<dyn std::error::Error>> {
+        let home = tempfile::tempdir()?;
+        let long = "p".repeat(101);
+        let names = ["alpha", "..", ".", "new\nline", &long, "a/b", "", "beta", "Beta", "gamma"].map(str::to_string);
+        let all =
+            |skip: &[&str]| wishable(home.path(), &skip.iter().map(|s| s.to_string()).collect::<Vec<_>>(), &names);
+        assert_eq!(all(&[]), ["alpha", "beta", "Beta", "gamma"], "each is a name `wish` keeps");
+        for kept in all(&[]) {
+            wish(home.path(), Some("2026-03-10"), "ship the changelog", &kept)?;
+        }
+        assert_eq!(all(&[" eta/ ", "delta"]), ["alpha", "gamma"], "matched as the reader matches a folder");
+        std::fs::write(home.path().join("skip.txt"), "gamma\n")?;
+        assert_eq!(all(&["beta"]), ["alpha", "Beta"]);
+        std::fs::write(home.path().join("skip.txt"), b"gamma\n\xff\n")?;
+        assert_eq!(all(&[]), [""; 0], "a list that cannot be read switches every folder off");
+        // None of these wishes names a run, so none has one going.
+        assert_eq!(going(home.path(), "2026-03-10"), [""; 0]);
         Ok(())
     }
 }

@@ -5,6 +5,8 @@
 //! (`support/wisher.rs`) asks for in a process of its own: nothing here starts the real Claude Code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f42/notes.rs"]
+mod notes;
 #[path = "f42/run.rs"]
 mod run;
 mod support;
@@ -13,18 +15,18 @@ use std::fs;
 
 use jellymoon_app::taps::OnShow;
 use jellymoon_app::today::Today;
-use jellymoon_app::wishing::{UNKEPT, entry};
+use jellymoon_app::wishing::UNKEPT;
 use serde_json::{Value, json};
 use sticker_kit::entry::EntryState;
 use sticker_kit::{Mark, Note, Scene, State};
 use support::Piece;
 use support::day::*;
 
-pub const SAID: &str = "make the uploader retry twice";
+pub use support::wished::SAID;
 
-/// The day as the window holds it, with its kept page on show. No harness and no command is ever reached here.
-fn on_show(world: &World) -> OnShow {
-    let today = Today {
+/// The day, with no harness and no command that could ever be reached.
+fn today(world: &World) -> Today {
+    Today {
         date: DAY.to_string(),
         logs: world.dir.path().join("logs"),
         skip: Vec::new(),
@@ -34,14 +36,19 @@ fn on_show(world: &World) -> OnShow {
         fresh: false,
         settings: None,
         bin: None,
-    };
+    }
+}
+
+/// The day as the window holds it, with its kept page on show.
+pub fn on_show(world: &World) -> OnShow {
+    let today = today(world);
     let page = today.kept().expect("the day's page is kept");
     let scene = today.draw(&page);
     OnShow { today, page: Some(page), scene }
 }
 
 /// The day read and kept, with nothing left of the reading call's record.
-fn read() -> World {
+pub fn read() -> World {
     let world = world();
     shown(&world, &[]);
     assert!(called(&world));
@@ -69,7 +76,7 @@ pub fn drawn(scene: &Scene, id: &str) -> Option<(State, u8, Mark, String)> {
 }
 
 /// The day's made wishes as they are kept. None when none was ever kept.
-fn kept_wishes(world: &World) -> Option<Value> {
+pub fn kept_wishes(world: &World) -> Option<Value> {
     let kept = fs::read_to_string(world.home.join("pages").join(format!("{DAY}.wishes.json"))).ok()?;
     Some(serde_json::from_str::<Value>(&kept).unwrap()["wishes"].clone())
 }
@@ -112,7 +119,7 @@ fn a_day_with_no_project_read_prints_no_entry() {
     assert_eq!((entries(&waiting).len(), chips(&waiting).len()), (0, 0));
     let quiet = shown(&world, &["--date", "2026-03-11"]);
     assert_eq!((entries(&quiet).len(), chips(&quiet).len()), (0, 0));
-    assert!(entry(None).is_none());
+    assert!(today(&world).entry(None).is_none());
 }
 
 #[test]
@@ -151,7 +158,9 @@ fn words_core_refuses_leave_one_note_in_core_s_words_and_write_nothing() {
     for (typed, option, why) in cases {
         let (scene, asking) = shown.wished(&typed, option);
         assert!(asking.is_none(), "{why}: words that were not kept asked for a run");
-        assert_eq!(first(&scene), Some((UNKEPT, why)));
+        // The note names the words, then says why.
+        let (title, body) = first(&scene).unwrap();
+        assert_eq!((title, body.split_once("”: ").map(|(_, why)| why)), (UNKEPT, Some(why)));
         let said = scene.notes.iter().filter(|note| matches!(note, Note::Plain { title, .. } if title == UNKEPT));
         assert_eq!(said.count(), 1, "{why}: the note of the wish before is still there");
         assert_eq!((names(&world.home), names(&world.home.join("pages"))), before, "{why}: something was written");

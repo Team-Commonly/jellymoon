@@ -63,6 +63,22 @@ impl EntryState {
         self.caret = self.caret.min(self.text.len());
     }
 
+    /// Keeps the chosen option by its name when the options change: `was` are the names before, `now` the names
+    /// to come. A name that is still offered is chosen where it now stands; one that is gone leaves the place.
+    pub fn keep_option(&mut self, was: &[String], now: &[String]) {
+        let name = was.get(self.chosen).filter(|_| self.chosen < self.options);
+        let at = name.and_then(|name| now.iter().take(MAX_ENTRY_OPTIONS).position(|one| one == name));
+        self.chosen = at.unwrap_or(self.chosen);
+    }
+
+    /// Puts back words that were entered and not taken, as if typed, when nothing was typed since. A composition
+    /// is text too, so one that is going is left alone.
+    pub fn put_back(&mut self, text: &str) {
+        if self.text.is_empty() {
+            self.replace(None, text);
+        }
+    }
+
     pub fn text(&self) -> &str {
         &self.text
     }

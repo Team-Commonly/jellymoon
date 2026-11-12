@@ -98,7 +98,7 @@ fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(D
 /// reach the reading call: a link to nothing, a folder, a pipe, a file that cannot be read, is too large or is not
 /// UTF-8, or a line with a character no folder name holds or nobody can see (which says the file is not the list it
 /// looks like). An error names a line by its number, never by its text.
-fn switched_off(home: &Path) -> Result<Vec<String>, String> {
+pub(crate) fn switched_off(home: &Path) -> Result<Vec<String>, String> {
     let path = home.join("skip.txt");
     match fs::symlink_metadata(&path) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),

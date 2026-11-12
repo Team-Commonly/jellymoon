@@ -214,6 +214,49 @@ fn a_scene_s_entry_is_held_to_a_count_of_options_and_a_cap() {
     assert_eq!((composing.text(), composing.marked(), composing.caret()), ("abc", None, 3));
 }
 
+#[test]
+fn the_chosen_option_is_kept_by_its_name_when_the_options_change() {
+    let names = |names: &[&str]| names.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+    let named =
+        |options: &[String]| Entry { id: "wish".into(), hint: String::new(), options: options.to_vec(), most: 80 };
+    let was = names(&["garden", "kitchen", "letters"]);
+    let mut state = EntryState::of(&named(&was));
+    state.choose(1);
+    let now = names(&["letters", "garden", "kitchen"]);
+    state.keep_option(&was, &now);
+    state.fit(&named(&now));
+    assert_eq!(state.chosen(), Some(2), "kitchen is still chosen, where it now stands");
+    let fewer = names(&["letters", "garden"]);
+    state.keep_option(&now, &fewer);
+    state.fit(&named(&fewer));
+    assert_eq!(state.chosen(), Some(1), "a name that is gone leaves the place, held to the options there are");
+    // A name past the six that are offered is not offered, so it is not chosen.
+    let many = names(&["a", "b", "c", "d", "e", "f", "garden"]);
+    state.keep_option(&fewer, &many);
+    state.fit(&named(&many));
+    assert_eq!(state.chosen(), Some(1));
+}
+
+#[test]
+fn words_put_back_are_typed_words_and_never_replace_what_was_typed_since() {
+    let mut state = typed("water the basil");
+    let made = state.enter().unwrap();
+    assert_eq!(state.text(), "", "Enter empties the entry");
+    state.put_back(&made.text);
+    assert_eq!((state.text(), state.caret()), ("water the basil", 15));
+    state.enter();
+    state.replace(None, "x");
+    state.put_back("water the basil");
+    assert_eq!(state.text(), "x", "what was typed since stays");
+    let mut small = EntryState::new(0, 5);
+    small.put_back("line\none two");
+    assert_eq!(small.text(), "line ", "words put back pass the entry's bounds");
+    let mut composing = EntryState::new(0, 80);
+    composing.mark(None, "ka", None);
+    composing.put_back("z");
+    assert_eq!(composing.text(), "ka", "a composition is left alone");
+}
+
 fn of(placed: &[Placed], kind: PieceKind) -> Vec<&Placed> {
     placed.iter().filter(|p| p.piece == kind).collect()
 }

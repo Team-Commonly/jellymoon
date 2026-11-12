@@ -1,8 +1,8 @@
 //! A made-up window for the F42 tests: what `window.rs` does with Enter in the entry, with no window. It is a
 //! program of its own so that core's `run_apart` is called with a test's variables and none of the caller's: the
 //! command core starts inherits them. Arguments: Jellymoon's home, the logs, the folder of the installed command,
-//! the harness, the day, the option's number, the words, and what to do after the asking (`watch` looks, as the
-//! window does, until a look gives a scene; anything else ends at once). Each scene the window would show is one
+//! the harness, the day, the option's number, the words, what to do after the asking (`watch` looks, as the
+//! window does, until a look gives a scene; anything else ends at once), and the `--skip` value, which may be empty. Each scene the window would show is one
 //! line of JSON on stdout.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -23,11 +23,11 @@ fn show(scene: &Scene) {
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
-    let [home, logs, bin, harness, day, option, typed, then] = &args[..] else { panic!("eight arguments") };
+    let [home, logs, bin, harness, day, option, typed, then, skip] = &args[..] else { panic!("nine arguments") };
     let today = Today {
         date: day.clone(),
         logs: PathBuf::from(logs),
-        skip: Vec::new(),
+        skip: if skip.is_empty() { Vec::new() } else { jellymoon_core::skip_names(skip).unwrap() },
         model: "sonnet".to_string(),
         home: PathBuf::from(home),
         harness: Some(PathBuf::from(harness)),

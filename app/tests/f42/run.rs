@@ -278,8 +278,8 @@ fn a_command_that_is_not_found_and_a_run_that_was_not_started_each_leave_one_not
     }
     // The command is started, finds no folder for the project, and says so: its line is the note.
     let wish = if cfg!(unix) { "m3" } else { "m2" };
-    let no_repo = "the folder of that name typed in on 2026-03-10 is not one a run can copy: it is not a git repo git could \
-                   open: what git said of a folder read from a session log is not repeated.";
+    let no_repo = "the folder of that name typed in on 2026-03-10 is not one a run can copy: it is not there, or cannot \
+                   be reached.";
     assert_eq!(unstarted(&w, 1, wish), no_repo);
     assert!(command.is_file());
 }

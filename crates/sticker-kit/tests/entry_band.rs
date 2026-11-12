@@ -1,5 +1,4 @@
-//! The band an entry stands in is kept free by every page, wherever a theme puts its big character. It is here and
-//! not in `tests/entry.rs`, which is at the size a file may be.
+//! The band an entry stands in is kept free by every page, wherever a theme puts its big character.
 
 use sticker_kit::{Entry, FixedAdvance, PieceKind, Scene, Theme, Viewport, layout, layout_entry};
 

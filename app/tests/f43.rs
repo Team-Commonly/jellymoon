@@ -10,6 +10,9 @@ mod notes;
 #[path = "f43/showing.rs"]
 mod showing;
 mod support;
+#[cfg(all(target_os = "macos", feature = "window"))]
+#[path = "f43/window.rs"]
+mod window;
 
 use std::fs;
 

@@ -1,4 +1,6 @@
 //! Reading a theme file. Unknown keys are ignored and reported, so a theme written for a newer kit still loads.
+//! One written for an older kit is drawn in its own colours, and text it makes unreadable is replaced and
+//! reported (`own.rs`).
 //! Refused, because they would make a theme more than data or more than a page can hold: a file over its size
 //! (`bounds.rs`), a number that is not finite or is outside its range, a path that leaves the theme's folder, and an
 //! SVG that is not a regular file of pictures only.
@@ -75,12 +77,15 @@ impl Theme {
         let mut warnings = Vec::new();
         prune(&mut table, &known, "", &mut warnings);
         check(&table, "")?;
-        let theme: Theme = table.try_into().map_err(|e: toml::de::Error| ThemeError::Parse(e.to_string()))?;
+        let palette = table.get("palette").and_then(Value::as_table).cloned();
+        let mut theme: Theme = table.try_into().map_err(|e: toml::de::Error| ThemeError::Parse(e.to_string()))?;
         for (key, name) in theme.art.entries() {
             if escapes_by_shape(name) {
                 return Err(escape(key, name));
             }
         }
+        theme.palette.own(palette.as_ref());
+        theme.palette.readable(&mut warnings);
         Ok(Loaded { theme, warnings })
     }
 

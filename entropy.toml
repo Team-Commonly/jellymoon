@@ -223,7 +223,12 @@ max_file_lines = 400
 # `tests/entry_band.rs`, `tests/entry_draw.rs` and the unit test of what is painted in `src/draw/shapes.rs`); the
 # rest is the chips in one row or two and the band every page keeps free (`src/layout/entry.rs`, `layout/page.rs`),
 # and the hint's grey, the filled chosen chip and the ring as keys of a theme.
-"crates/sticker-kit" = 8550
+# The review of the entry under the title raised it by 451: 291 are tests (`tests/colours.rs`, the floors and what a
+# theme file is given, is 160; `tests/entry_layout.rs` gained the row's spare width, the cut in the middle and two
+# stated numbers; `tests/entry.rs` the characters nobody sees). The rest is a file's own colours and the floors at
+# the door (`src/theme/own.rs`, 91), contrast in `src/color.rs` (26), one rule for a character a person sees and a
+# cut in the middle (`src/text.rs`, 40), and a row's spare width given to its long chips (`src/layout/entry.rs`).
+"crates/sticker-kit" = 9001
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -254,7 +259,10 @@ max_file_lines = 400
 # The line in `tests/bundle.rs` saying why the script is started as a program, on a Mac only, raised it by 1.
 # What the window does, taken out of the window so that it is tested with no window, raised it by 199:
 # `tests/f43/showing.rs` is 101 and `showing.rs` 123, of which `window.rs` lost 29.
-"app" = 5422
+# The review of the entry under the title raised it by 97: the window's passing of core's answer, tested on GPUI's
+# test platform, is 71 (`tests/f43/window.rs`); a theme file's picture in the example, 16; the hint whole at three
+# sizes in both themes (`tests/f42.rs`), 8.
+"app" = 5519
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

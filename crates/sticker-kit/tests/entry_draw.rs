@@ -100,6 +100,10 @@ fn a_click_gives_the_entry_the_keys_and_enter_gives_what_was_typed() {
     keys(cx, "t e a space a t space 4");
     assert_eq!(state(&page, cx), ("tea at 4".into(), 8, Some(0), true));
     assert!(cx.debug_bounds("Entry:wish:0:0").is_none(), "the hint gives way to what is typed");
+    keys(cx, "backspace backspace backspace backspace backspace backspace backspace backspace space space");
+    assert_eq!(state(&page, cx).0, "  ");
+    assert!(cx.debug_bounds("Entry:wish:0:0").is_some(), "spaces are no words: the hint stays");
+    keys(cx, "backspace backspace t e a space a t space 4");
 
     keys(cx, "tab");
     assert_eq!(state(&page, cx).2, Some(1), "Tab chooses the next option");

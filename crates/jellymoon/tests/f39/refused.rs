@@ -184,9 +184,14 @@ fn a_harness_too_old_while_the_day_is_locked_leaves_no_copy_and_a_wish_that_says
             wait_for(&w.at("rec").join("started"));
             fs::write(&lock, "").unwrap();
             fs::write(w.at("rec").join("go"), "").unwrap();
-            thread::sleep(Duration::from_secs(held));
-            fs::remove_file(&lock).unwrap();
-            going.join().unwrap()
+            // Held for a while and then let go, or held for as long as the command lives, however long that is.
+            if wait.is_none() {
+                thread::sleep(Duration::from_secs(held));
+                fs::remove_file(&lock).unwrap();
+            }
+            let over = going.join().unwrap();
+            let _ = fs::remove_file(&lock);
+            over
         });
         if wait.is_none() {
             assert_eq!(printed(&ended)["outcome"], "not_started");

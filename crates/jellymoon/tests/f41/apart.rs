@@ -8,7 +8,7 @@ use std::process::Stdio;
 
 use serde_json::json;
 
-use super::{DAY, SAID, STAR, World, found_world, grows, made, printed, wait_for};
+use super::{DAY, SAID, STAR, World, found_world, grows, made, printed, silent_world, wait_for};
 use crate::support::Ran;
 
 impl World {
@@ -73,7 +73,7 @@ fn repo_typed_in(w: &World) -> std::path::PathBuf {
 
 #[test]
 fn a_wish_made_with_run_starts_a_run_that_goes_on_after_the_command_and_adds_its_star() {
-    let w = found_world();
+    let w = silent_world();
     let repo = repo_typed_in(&w);
     w.play("slow", 0);
     let said = w.wish_run("alpha", &[]);
@@ -100,7 +100,7 @@ fn a_wish_made_with_run_starts_a_run_that_goes_on_after_the_command_and_adds_its
 // had, and its record and the wish say how.
 #[test]
 fn the_command_of_a_run_started_apart_exits_0_when_the_run_completes_after_its_asker_is_gone() {
-    let w = found_world();
+    let w = silent_world();
     repo_typed_in(&w);
     let wish = w.wish("alpha");
     w.play("slow", 0);
@@ -138,7 +138,7 @@ fn a_run_started_apart_that_does_not_finish_is_written_down_by_its_own_command()
 
 #[test]
 fn a_stop_ends_a_run_started_apart_and_everything_it_started() {
-    let w = found_world();
+    let w = silent_world();
     let repo = repo_typed_in(&w);
     w.play("lingers", 0);
     let run = w.wish_run("alpha", &[])["run"].as_str().unwrap().to_string();
@@ -158,7 +158,7 @@ fn a_stop_ends_a_run_started_apart_and_everything_it_started() {
 // run down as cut off, as it does for a run started with a terminal.
 #[test]
 fn a_run_started_apart_and_cut_off_is_written_down_by_the_next_look_and_its_agent_ended() {
-    let w = found_world();
+    let w = silent_world();
     repo_typed_in(&w);
     let wish = w.wish("alpha");
     w.play("scribble", 0);

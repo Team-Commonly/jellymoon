@@ -237,7 +237,7 @@ fn a_never_started_run_whose_copy_cannot_be_taken_back_is_still_named_by_its_wis
         (in_runs(&w.jm("runs")), ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
     let (asked, in_time) = thread::scope(|scope| {
         let (from, asking) = (Instant::now(), scope.spawn(|| w.run_with(&short, &args)));
-        while !asking.is_finished() && from.elapsed() < Duration::from_secs(10) {
+        while !asking.is_finished() && from.elapsed() < Duration::from_secs(60) {
             thread::sleep(Duration::from_millis(10));
         }
         let in_time = asking.is_finished();

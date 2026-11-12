@@ -35,9 +35,23 @@ use serde_json::{Value, json};
 use support::{said, write_log};
 pub use world::*;
 
-/// A world whose repos a session log can name.
+/// A world whose repos a session log can name. Whoever asks for a run apart there waits a minute for a harness
+/// that has said nothing (`JELLYMOON_TEST_APART_QUIET_MS`), where a release waits three seconds: no test is told
+/// that a run is going only because the machine was slow to say that it never started.
 pub fn found_world() -> World {
-    world_in(tempfile::tempdir().unwrap())
+    quiet_for("60000")
+}
+
+/// A world for an agent that says nothing before it waits: its asker is told that the run is going after a
+/// tenth of a second of that silence.
+pub fn silent_world() -> World {
+    quiet_for("100")
+}
+
+fn quiet_for(ms: &str) -> World {
+    let mut world = world_in(tempfile::tempdir().unwrap());
+    world.vars.push(("JELLYMOON_TEST_APART_QUIET_MS", ms.into()));
+    world
 }
 
 /// The wish as `jellymoon wish` prints it when it is made.

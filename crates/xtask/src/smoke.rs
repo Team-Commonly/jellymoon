@@ -7,18 +7,17 @@
 //! step (`smoke/run.rs`) then starts their Claude Code on a harmless wish, in a repo the chain makes.
 
 mod apart;
+mod build;
 mod copy;
 mod off_path;
 mod run;
 mod steps;
 mod stop;
 
-use std::ffi::OsString;
-use std::fs::{File, OpenOptions};
-use std::path::{self, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use std::{env, fs, process, thread};
+use std::time::{Duration, Instant};
+use std::{env, fs, thread};
 
 use serde_json::Value;
 
@@ -28,16 +27,6 @@ const ZONE: &str = "America/Los_Angeles";
 
 /// How much of what a failed program printed is shown, in characters.
 const SHOWN: usize = 2000;
-
-/// How the build arguments start that would leave the chain running a program of an earlier build. The first five
-/// put the programs outside `target/debug`, or build another workspace's. The rest build only some of the targets:
-/// the chain runs `jellymoon`, `jellymoon-app` and `fake-claude`, and one of them would be left as it was. What
-/// only adds to the build (`-p`, `--package`, `--workspace`, `--features`) is taken.
-const NOT_TAKEN: &str =
-    "--release --target --profile --config --manifest-path --bin --lib --example --test --bench --exclude";
-
-/// The variables that move a build as `--target` and `--target-dir` do. The build is started without them.
-const MOVING: [&str; 2] = ["CARGO_BUILD_TARGET", "CARGO_BUILD_TARGET_DIR"];
 
 #[derive(Default)]
 pub struct Options {
@@ -49,7 +38,7 @@ pub struct Options {
 
 impl Options {
     /// Reads what follows `smoke`. `Err(None)` when it is not a smoke command line; `--skip` is the reader's and needs
-    /// `--real`. `Err` with a line for a build argument that puts the programs where the chain does not look.
+    /// `--real`. `Err` with a line for a build argument that is not on the list (`smoke/build.rs`).
     pub fn parse(args: &[String]) -> Result<Self, Option<String>> {
         let (mut options, mut args) = (Self::default(), args.iter());
         while let Some(arg) = args.next() {
@@ -61,19 +50,7 @@ impl Options {
                 _ => return Err(None),
             }
         }
-        // `-r` is `--release`, and cargo takes it among other short flags written as one: `-vr`. A short flag with
-        // its value written on to it (`-Fx/y`, `-pjellymoon-app`) is taken unless the whole is small letters.
-        let short =
-            |arg: &str| arg.strip_prefix('-').is_some_and(|flags| flags.bytes().all(|b| b.is_ascii_lowercase()));
-        let stale =
-            |arg: &&String| NOT_TAKEN.split(' ').any(|flag| arg.starts_with(flag)) || (short(arg) && arg.contains('r'));
-        if let Some(arg) = options.build.iter().find(stale) {
-            let why = format!(
-                "`{arg}` is not taken after `--`: the chain runs the programs of the debug build in the \
-                 target folder, and with it cargo builds them somewhere else, or not all of them"
-            );
-            return Err(Some(why));
-        }
+        build::taken(&options.build).map_err(Some)?;
         if options.real || options.skip.is_empty() { Ok(options) } else { Err(None) }
     }
 }
@@ -112,17 +89,18 @@ pub struct Ran {
 /// Builds, then runs the chain. The error starts with the name of the step that failed.
 pub fn run(root: &Path, options: &Options) -> Result<(), String> {
     // Before the build, so that a build that fails still removes what a stopped `--real` run left.
-    let target = env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
-    let target = path::absolute(target).map_err(|e| format!("build: the target folder: {e}"))?;
-    sweep(&target);
-    if !build(root, options).status().is_ok_and(|status| status.success()) {
+    let target = build::target(root, env::var_os("CARGO_TARGET_DIR"))?;
+    build::sweep(&target);
+    // A build that succeeds leaves all three programs as the sources stand: its arguments are from a list that
+    // cannot make it build fewer, elsewhere, or nothing. Their times are not checked, since cargo leaves a program
+    // that is up to date as it was, older than this build's start.
+    if !build::command(root, &options.build).status().is_ok_and(|status| status.success()) {
         return Err("build: cargo build failed".to_string());
     }
-    let home = target.join(home_name());
-    let held = lock_beside(&home).ok_or("home: the lock beside the temporary home could not be taken")?;
+    let home = target.join(build::home_name());
+    let held = build::lock_beside(&home).ok_or("home: the lock beside the temporary home could not be taken")?;
     let world = World { home, bin: target.join("debug"), real: options.real, skip: options.skip.clone() };
-    let _ = fs::remove_dir_all(&world.home);
-    fs::create_dir_all(&world.home).map_err(|e| format!("home: {e}"))?;
+    build::make_home(&world.home)?;
     let started = Instant::now();
     let chain = steps::STEPS.iter().filter(|step| match step.only {
         Only::Any => true,
@@ -135,47 +113,6 @@ pub fn run(root: &Path, options: &Options) -> Result<(), String> {
     let _ = fs::remove_file(world.home.with_extension("lock"));
     println!("smoke: ok, {} steps in {:.2} s", done?.len(), started.elapsed().as_secs_f32());
     Ok(())
-}
-
-/// The build of the two programs, with what follows `--`.
-fn build(root: &Path, options: &Options) -> Command {
-    let mut build = Command::new(env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo")));
-    build.current_dir(root).args(["build", "-p", "jellymoon", "-p", "jellymoon-app"]).args(&options.build);
-    for name in MOVING {
-        build.env_remove(name);
-    }
-    build
-}
-
-/// A run's temporary home, named for its process and for when it started: `smoke-home-<pid>-<nanoseconds>`. A
-/// later run never takes the name of a home an earlier one left, even when the system gives it the same process
-/// id. So a name is one run's for good, and whoever takes the lock beside it holds a home no living run has.
-fn home_name() -> String {
-    let started = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_nanos());
-    format!("smoke-home-{}-{started}", process::id())
-}
-
-/// The system's lock on the file beside a temporary home, `<home>.lock`, which a run holds for as long as it lives.
-/// None while another process holds it.
-fn lock_beside(home: &Path) -> Option<File> {
-    let lock = OpenOptions::new().write(true).create(true).truncate(false).open(home.with_extension("lock")).ok()?;
-    lock.try_lock().ok().map(|()| lock)
-}
-
-/// Removes the temporary homes earlier runs left in the target folder: a run that was stopped never removed its
-/// own, and with `--real` it holds the person's page. A home whose run still lives is left: that run holds its lock.
-fn sweep(target: &Path) {
-    let left = fs::read_dir(target).into_iter().flatten().flatten().map(|entry| entry.path());
-    let homes = left.filter(|path| path.is_dir() && path.extension().is_none());
-    for home in
-        homes.filter(|path| path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("smoke-home-")))
-    {
-        if let Some(held) = lock_beside(&home) {
-            let _ = fs::remove_dir_all(&home);
-            drop(held);
-            let _ = fs::remove_file(home.with_extension("lock"));
-        }
-    }
 }
 
 fn one(world: &World, step: &Step) -> Result<(), String> {
@@ -307,10 +244,7 @@ pub fn write(path: &Path, text: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
-
-    use super::{Only, Options, build, home_name, lock_beside, steps::STEPS, sweep};
+    use super::{Only, Options, steps::STEPS};
 
     fn parse(args: &[&str]) -> Result<Options, Option<String>> {
         Options::parse(&args.iter().map(|arg| (*arg).to_string()).collect::<Vec<_>>())
@@ -324,65 +258,9 @@ mod tests {
         for wrong in [&["--skip", "notes"][..], &["--real", "--skip"], &["--fast"], &["check"], &["--release"]] {
             assert!(matches!(parse(wrong), Err(None)), "{wrong:?}");
         }
-    }
-
-    // The chain runs what is in `target/debug`: a build that goes elsewhere, or builds one program of the two,
-    // would leave it running older programs.
-    #[test]
-    fn a_build_argument_that_would_leave_an_older_program_to_run_is_refused_in_one_line() {
-        let elsewhere = ["--release", "--release=true", "-r", "-vr", "-rq", "--target", "--target=x86_64-apple-darwin"];
-        let config = ["--target-dir", "--profile", "--profile=dev", "--config", "--config=build.target=\"x\""];
-        let fewer = ["--bin", "--bins", "--lib", "--example", "--tests", "--bench", "--exclude", "--manifest-path"];
-        for flag in elsewhere.into_iter().chain(config).chain(fewer) {
-            let Err(Some(why)) = parse(&["--window", "--", "--features", "x/y", flag, "more"]) else {
-                panic!("{flag} was taken");
-            };
-            assert!(why.starts_with(&format!("`{flag}` is not taken after `--`: ")) && !why.contains('\n'), "{why}");
+        for refused in ["--help", "-h", "--release"] {
+            assert!(matches!(parse(&["--window", "--", refused]), Err(Some(_))), "{refused}");
         }
-        // What only adds to the build, or names a feature, is taken: a value is not read as a flag.
-        let taken = ["--features", "release", "--locked", "-v", "-q", "-p", "xtask", "-Fsticker-kit/runtime_shaders"];
-        assert!(parse(&[&["--"][..], &taken].concat()).is_ok());
-    }
-
-    #[test]
-    fn the_build_is_started_without_the_variables_that_would_move_it() {
-        let build = build(Path::new("."), &parse(&["--", "--locked"]).ok().unwrap());
-        let removed = |name: &str| build.get_envs().any(|(var, value)| var == name && value.is_none());
-        assert!(removed("CARGO_BUILD_TARGET") && removed("CARGO_BUILD_TARGET_DIR"));
-        let args: Vec<_> = build.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
-        assert_eq!(args, ["build", "-p", "jellymoon", "-p", "jellymoon-app", "--locked"]);
-    }
-
-    // A stale home and a living one never share a name, so whoever holds the lock beside a name may remove it.
-    #[test]
-    fn a_home_is_named_for_its_process_and_its_start_and_no_two_runs_share_a_name() {
-        let (first, second) = (home_name(), home_name());
-        let pid = format!("smoke-home-{}-", std::process::id());
-        assert!(first.starts_with(&pid) && second.starts_with(&pid) && first != second, "{first} {second}");
-        assert!(!first.contains('.'), "the sweep takes a name with no extension for a home");
-    }
-
-    #[test]
-    fn the_homes_earlier_runs_left_are_removed_and_the_home_of_a_run_that_lives_is_not() {
-        let target = tempfile::tempdir().unwrap();
-        let at = |name: &str| target.path().join(name);
-        for home in ["smoke-home-1", "smoke-home-2", "smoke-home-3", "debug"] {
-            fs::create_dir_all(at(home).join("jm")).unwrap();
-            fs::write(at(home).join("jm").join("page.json"), "{}").unwrap();
-        }
-        fs::write(at("smoke-home-1.lock"), "").unwrap();
-        fs::write(at("smoke-home-9"), "a file").unwrap();
-        let living = lock_beside(&at("smoke-home-2")).unwrap();
-        sweep(target.path());
-        let mut left: Vec<String> = fs::read_dir(target.path())
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-            .collect();
-        left.sort();
-        assert_eq!(left, ["debug", "smoke-home-2", "smoke-home-2.lock", "smoke-home-9"]);
-        drop(living);
-        sweep(target.path());
-        assert!(!at("smoke-home-2").exists() && !at("smoke-home-2.lock").exists() && at("debug").is_dir());
     }
 
     #[test]

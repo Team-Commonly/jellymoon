@@ -37,15 +37,20 @@ pub(super) fn folder(home: &Path, day: &str, wish: &MadeWish, options: &RunOptio
 }
 
 /// The folder a log's folder leads to, with every link and every `..` in it followed, once. The page names a
-/// folder's project by the last name of its path (`session.rs`), so the wish's project must be the last name of
-/// the folder itself: a link named after the project that leads to a folder of another name is refused. So is a
-/// folder that is someone else's. The path returned is the one the copy is made of: nothing looks the log's own
+/// folder's project by the last name of its path (`session.rs`), and the caller found this folder by that name.
+/// Where the last name is itself a link, the folder it leads to must carry the project's name too: a link named
+/// after the project that leads to a folder of another name is refused. A last name that is no link is the
+/// folder's own name, in whatever case or Unicode form it was typed: it is not compared with the form the file
+/// system keeps, which is another spelling wherever the system takes the two for one name. A folder that is
+/// someone else's is refused. The path returned is the one the copy is made of: nothing looks the log's own
 /// path up a second time, so a link put in its place after this is not followed.
 fn resolved(found: &Path, project: &str, day: &str) -> Result<PathBuf, Error> {
     let typed = format!("the folder of that name typed in on {day}");
     let real = fs::canonicalize(found)
         .map_err(|_| refused(format!("{typed} is not one a run can copy: it is not there, or cannot be reached")))?;
-    if real.file_name().is_none_or(|last| last != project) {
+    let linked = fs::symlink_metadata(found).is_ok_and(|meta| meta.is_symlink());
+    let last = if linked { real.file_name() } else { found.file_name() };
+    if last.is_none_or(|last| last != project) {
         return Err(refused(format!("{typed} leads to a folder of another name; name the folder with --repo")));
     }
     if theirs(&real) {

@@ -44,12 +44,24 @@ and its branch in them.
    `--repo` the person typed may be named back to them. The folder must be the top of its repo, as `copy make`
    asks: for one inside a repo, no folder above it is tried.
    **A folder found in a log is resolved once** (`run/place.rs`): every link and every `..` in its path is
-   followed, and the folder that comes out must have the project as its last name, as the page names a
-   folder's project by the last name of its path. A link named `alpha` that leads to a repo named `secrets`
-   is refused; one that leads to a repo named `alpha` runs there; one that leads nowhere is refused. The
-   owner is asked of that resolved folder, and the same resolved path is what the copy is made of: the log's
-   own path is not looked up a second time, so a link put in its place afterwards is not followed. A git
-   worktree in a folder named for the project is a folder of that name, and runs as before.
+   followed. The log's folder was found by its last name, as the page names a folder's project by the last
+   name of its path. Where that last name is itself a link, the folder it leads to must have the project as
+   its last name too: a link named `alpha` that leads to a repo named `secrets` is refused; one that leads to
+   a repo named `alpha` runs there; one that leads nowhere is refused. A last name that is no link is the
+   folder's own name, and is not compared with the spelling the file system keeps: a folder stored as `Alpha`
+   and typed as `alpha`, or stored and typed in two Unicode forms, is one folder wherever the system takes the
+   two for one name, and runs. The owner is asked of the resolved folder, and the same resolved path is what
+   the copy is made of: the log's own path is not looked up a second time, so a link put in its place
+   afterwards is not followed (`tests/f41/named.rs`). A git worktree in a folder named for the project is a
+   folder of that name, and runs as before.
+   **What is not closed.** The folder is looked up after what killed commands left is gone over ("A copy
+   nothing names"), so none of that pass's waits stands between the lookup and git. What is left: the look at
+   the last name and the lookup are two calls; after the lookup come the count of the runs going and the start
+   of git, which opens the folder by that path; and from then git names the repo by its git folder's path,
+   through the wait for the lock copies are made behind, which lasts as long as another command's git
+   children, until the worktree is added. Whoever can rename the folder, or a folder above it, in that span
+   can have the copy made of another repo: the agent's commit then lands on a `jellymoon/run-<id>` branch
+   there, and no checkout is written. That is someone who can write the folder's parent, usually the person.
 4. **The copy.** `make_copy`, as `jellymoon copy make` does it. The harness is started in the copy.
 5. **The run.** Below.
 6. **The end.** Finished: `clean_copy` as completed, so the work is one commit on `jellymoon/run-<id>` and the
@@ -334,6 +346,16 @@ such run. A build with
 debug assertions waits before the run writes its end for `JELLYMOON_TEST_NOTE_WAIT_MS`, and after a look's
 first read of the record for `JELLYMOON_TEST_LOOK_WAIT_MS`.
 
+**A test does not depend on an idle machine.** Each such wait (`busy::pause`: those two, and
+`JELLYMOON_TEST_CLAIM_WAIT_MS`, `JELLYMOON_TEST_NAME_WAIT_MS` and `JELLYMOON_TEST_PLACE_WAIT_MS` in a run's
+start) ends early when the file `JELLYMOON_TEST_GO` names is there, and leaves a file of that name ending in
+`.at` when the command has come to it: a test holds a command at a place until it has done what it came to do,
+and no longer. A short limit under test is counted from when a file is there that the made-up program leaves
+once it has stalled (`JELLYMOON_TEST_RUN_LIMIT_FROM`, `JELLYMOON_TEST_GIT_LIMIT_FROM`), so nothing else has to
+be done within it. A test that expects an asker to be told of a run that never started sets the asker's wait
+for a silent harness to a minute (`JELLYMOON_TEST_APART_QUIET_MS`), and one whose agent says nothing by design
+sets it to a tenth of a second. None of these is read by a release.
+
 **A wish that names another wish's run.** The day's wishes are a file too. A run is another wish's when its
 record names another wish, or another day, and either that wish names the run or a `jellymoon run` still holds
 it: while its command lives a run is stopped on the word of the wish its record names and no other, whatever the
@@ -400,21 +422,28 @@ it counts the runs going, goes over those runs (`run/left.rs`):
 
 | The run | What is done |
 |---|---|
-| Its start lock or its run's lock is held | nothing: its command lives |
+| Its start lock or its run's lock is held | nothing: its command lives. The start lock is asked again once the copies' lock is had: a command makes that file and takes its lock in two steps, and one listed between the two holds it by then |
 | Something other than a plain file is at `start.lock` | nothing, and it is never opened |
 | Its record has an end, other than `not_started` | the start lock is removed: the run is done with |
 | Its record is there and cannot be used | nothing: it does not say who names the run |
 | Its record names a child | the child is killed, if the pid is still that process ("A run that was cut off"), whichever wish names the run |
 | A wish names it: one of the day looked at, or the wish and day its record names | no more than that: it is the look at that wish that writes it down |
-| No wish names it, and it has no record, or one that names no child | **taken back**: the copy's folder, git's registration of it, and `runs/<id>`. Nothing ran there, so the branch `jellymoon/run-<id>` is where the checkout was, and is removed |
+| No wish names it, and it has no record, or one that names no child | **taken back**: the copy's folder, git's registration of it, and `runs/<id>`. Nothing ran there, so the branch `jellymoon/run-<id>` is where the checkout was, and is removed. A link at `copies/<id>` is removed as itself, and what it leads to is not touched |
 | No wish names it, and its record names a child and has no end | **kept**, as a cut-off run's copy is: the copy is marked failed and the record says the run was cut off. No wish is changed |
 
 **What is kept.** A branch that holds a commit no other branch, no tag and not the checkout itself has is
 someone's work, whoever made it: it stays, and so it does when git cannot be asked. The copy's folder goes all
 the same; the commit is on the branch. A copy an agent may have written in is never removed. Nothing outside
 Jellymoon's home is touched but that one branch and git's registration of the copy, in the repo the copy's own
-record names, as any take-back reaches them ([copy.md](copy.md)). The person's checkout, index and other
-branches are as they were (`tests/f41/left.rs`).
+record names, as any take-back reaches them ([copy.md](copy.md)). A record is a file anyone who can write the
+home can write, so that repo is acted on only when it lists this copy as a worktree of its own: the copy's git
+folder is inside the repo's, and its `gitdir` file, which git wrote, names `copies/<id>/.git`. Jellymoon's git calls switch
+`worktree.useRelativePaths` off, so the file holds a whole path; one that holds a path from the copy's git
+folder, as a git of 2.48 or later writes with that setting on, is read from that folder. For a record
+that names any other repo nothing is asked of git and no branch is removed there; what the home holds of the
+run goes, and the branch and registration in the repo the copy was really made of stay, for `git worktree
+prune` and `git branch -D`. The person's checkout, index and other branches are as they were
+(`tests/f41/left.rs`).
 
 **What is not closed.** A command killed while git was still making the copy has written no record of it:
 the run's folder goes, the copy's folder goes at the next `copy clean`, and the branch and git's registration
@@ -489,8 +518,18 @@ are counted first, so the count and the claim are one step: of six `jellymoon ru
 hold a run (`tests/f41/cap.rs`, where a test's build waits between the count and the claim). The runs are also
 counted once before the copy is made, with no lock, only so that a run that is one too many makes no copy; a run
 that passes there and is refused at the claim takes its copy back, as any run that was never started does.
-`going.lock` is held for the count and the claim only, is waited for 3 seconds, and is not opened when something
-other than a plain file is at its name. A run's lock that cannot be opened (one whose mode lets nobody read it)
+**Commands for one wish are not counted against each other.** Behind `going.lock` the wish is asked first
+whether it names a run, and a command whose wish does is refused there with "has had its run", before anything
+is counted. The run's record is written and the wish is made to name the run behind that lock too, after the
+run's lock is taken. So outside `going.lock` a run's lock is held only by a run its wish names, and of four
+commands started at once for one wish one runs and three are told of its run; none is told that three runs
+are going (`tests/f41/cap.rs`, where three are held with their lock taken and the wish not yet named while a
+fourth arrives). Before this, each of the four took its run's lock and only then asked the wish, so three of
+them standing there filled the cap for the fourth: possible since the cap was made (F41), with nothing in
+between to hold it.
+
+`going.lock` is held for the question, the count, the claim and the naming only, is waited for 3 seconds, and is
+not opened when something other than a plain file is at its name. A run's lock that cannot be opened (one whose mode lets nobody read it)
 is counted as not held. A cut-off run holds nothing and is not counted, whether or not a look has written it down.
 
 The cap counts commands, and an agent can outlive its command ("A run that was cut off"). So before it

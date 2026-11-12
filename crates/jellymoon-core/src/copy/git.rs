@@ -11,7 +11,7 @@ use std::time::Duration;
 use std::{env, fs};
 
 use crate::Error;
-use crate::busy::or_test;
+use crate::busy::{or_test, test_file};
 use crate::call::{full_folders, passed_on, run};
 use crate::redact::line;
 
@@ -41,14 +41,21 @@ const ENVIRONMENT: &[&str] = &[
 /// Settings given on every command line, where they win over every config file: no file-system monitor program, no
 /// signing program, no command run in a submodule on checkout, and no transport, so no fetch of a missing object can
 /// start ssh, a credential helper or a remote helper. `core.hooksPath` is given beside them, as an empty folder.
-const OFF: &[&str] =
-    &["core.fsmonitor=false", "commit.gpgSign=false", "submodule.recurse=false", "protocol.allow=never"];
+/// And a copy's `gitdir` file is written as a whole path, which is how a look knows the copy (`record::ours`).
+const OFF: &[&str] = &[
+    "core.fsmonitor=false",
+    "commit.gpgSign=false",
+    "submodule.recurse=false",
+    "protocol.allow=never",
+    "worktree.useRelativePaths=false",
+];
 
 /// How much of what git printed is kept in an error, in characters.
 const SAID_MAX: usize = 300;
 
 /// How long one git child may run. One still running then is killed, and the command it was for fails. A test's
-/// build reads a shorter one from `JELLYMOON_TEST_GIT_LIMIT_MS`.
+/// build reads a shorter one from `JELLYMOON_TEST_GIT_LIMIT_MS`, counted from when the file that
+/// `JELLYMOON_TEST_GIT_LIMIT_FROM` names is there, if it names one.
 const LIMIT: Duration = Duration::from_secs(300);
 
 /// What stands where git's own words would, for a repo whose folder was read from a session log.
@@ -178,7 +185,8 @@ fn joined(flag: &str, path: &Path) -> OsString {
 /// What the command printed. A failure is the start of what git said, made one line. A git still running at `limit`
 /// is killed, by the reading call's own runner: git is given nothing to read.
 fn printed(command: Command, git: &Git) -> Result<Option<String>, String> {
-    let output = run(command, Vec::new(), git.limit).map_err(|e| match e {
+    let from = test_file("JELLYMOON_TEST_GIT_LIMIT_FROM");
+    let output = run(command, Vec::new(), git.limit, from.as_deref()).map_err(|e| match e {
         Error::TooLong(limit) => format!("git did not finish in {} seconds and was stopped", limit.as_secs_f32()),
         e => format!("git could not be started: {e}"),
     })?;

@@ -21,6 +21,7 @@ headless = ["gpui", "gpui/test-support", "gpui_platform/test-support", "dep:gpui
 serde.workspace = true
 toml = { workspace = true, features = ["display"] }
 ttf-parser.workspace = true
+usvg.workspace = true
 gpui = { workspace = true, optional = true }
 gpui_platform = { workspace = true, optional = true, features = ["font-kit"] }
 
@@ -44,4 +45,8 @@ required-features = ["headless"]
 
 [[test]]
 name = "entry_draw"
+required-features = ["headless"]
+
+[[test]]
+name = "art_draw"
 required-features = ["headless"]

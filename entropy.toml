@@ -144,7 +144,10 @@ max_file_lines = 400
 # removes it), raised it by 85.
 # The leftovers of that fix's own review raised it by 53: the build arguments that leave one program unbuilt, the
 # build started without the two variables that move it, a home named for its start too, and the tests of the three.
-"crates/xtask" = 1585
+# The build's arguments taken from a list, and a home known by the file a run writes in it, raised it by 76
+# (`smoke/build.rs`, 198 lines, 94 of them its tests; `smoke.rs` lost 122): the list of what is taken and how a
+# value follows is longer than the list of what was refused, and a relative target folder is read against the root.
+"crates/xtask" = 1661
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -165,7 +168,9 @@ max_file_lines = 400
 # The door reading art only as the renderer does raised it by 366: 149 are `tests/alike.rs` and 135 are
 # `theme/path_cost.rs` (a path followed command by command: its reach, each kind's count, an arc's flags); the
 # rest is a name's case, the form of a `viewBox`, a size stated once, and the roots `tests/draw.rs` rasterises.
-"crates/sticker-kit" = 7480
+# The door reading art with the renderer's parser (ADR 0015) lowered it by 67: the tag scanner and
+# `theme/path_cost.rs` are gone (`src` lost 297), and the tests hold the tree's limits and `tests/art_draw.rs`.
+"crates/sticker-kit" = 7413
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -185,7 +190,8 @@ max_file_lines = 400
 # start, `tests/support/wisher.rs`); the rest is `wishing.rs` (155: a wish carried to core, the asking for its run,
 # the look), the window's entry, asking and look (66), and the entry in `layout`.
 # The kept page's test stamping its day at noon in the system's zone, and run in that zone, raised it by 8.
-"app" = 4206
+# The line in `tests/bundle.rs` saying why the script is started as a program, on a Mac only, raised it by 1.
+"app" = 4207
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

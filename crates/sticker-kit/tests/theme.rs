@@ -79,9 +79,8 @@ fn a_missing_piece_uses_the_built_in_art() {
     let path = folder.write("theme.toml", "[art]\nstar = \"star.svg\"\nbadge = \"not-there.svg\"\n");
     let loaded = Theme::load(&path).expect("loads");
     assert_eq!(loaded.theme.name, "theme");
-    assert_eq!(loaded.theme.art_svg("star").as_deref(), Some(PICTURE));
-    assert_eq!(loaded.theme.art_svg("badge"), None, "a named file that is absent");
-    assert_eq!(loaded.theme.art_svg("character"), None, "a piece the theme does not name");
+    let only = vec![("star", PICTURE.to_string())];
+    assert_eq!(loaded.theme.art_svgs(), only, "not `badge`, a named file that is absent, nor a piece not named");
     assert!(loaded.warnings.iter().any(|w| w.starts_with("art.badge:")), "{:?}", loaded.warnings);
 }
 

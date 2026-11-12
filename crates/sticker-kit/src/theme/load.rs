@@ -128,23 +128,25 @@ impl Theme {
         toml::to_string(self).map_err(|e| ThemeError::Parse(e.to_string()))
     }
 
-    /// The checked SVG text replacing a piece's art (`hero`, `character`, `star`, `bubble` or `badge`), when the
-    /// theme names one. The files are read again here, when the theme is drawn, and may have changed since
-    /// [`Theme::load`]: so they are held together to the two counts again, in the order `load` reads them. A file
-    /// that is refused, or would take the files before it past a count, is not given and not counted, and the
-    /// kit's own art is drawn for its piece.
-    pub fn art_svg(&self, key: &str) -> Option<String> {
-        let folder = self.folder.as_deref()?;
-        let mut all = ArtCost::default();
+    /// The checked SVG text replacing each piece's art (`hero`, `character`, `star`, `bubble`, `badge`), for the
+    /// pieces the theme names one for. The files are read again here, when the theme is drawn, and may have changed
+    /// since [`Theme::load`]: so they are held together to the two counts again, in the order `load` reads them. A
+    /// file that is refused, or would take the files before it past a count, is not given and not counted, and the
+    /// kit's own art is drawn for its piece. Each file is read once and there is one sum, so what is given is
+    /// inside the counts together, whatever is written to the folder meanwhile.
+    pub fn art_svgs(&self) -> Vec<(&'static str, String)> {
+        let (mut all, mut given) = (ArtCost::default(), Vec::new());
         for (piece, name) in self.art.entries() {
-            let read = if name.is_empty() { None } else { read_art(folder, piece, name).ok().flatten() };
-            let kept = read.filter(|(_, one)| all.with(*one).refusal().is_none());
-            all = kept.as_ref().map_or(all, |(_, one)| all.with(*one));
-            if piece == key {
-                return kept.map(|(svg, _)| svg);
+            let read = match &self.folder {
+                Some(folder) if !name.is_empty() => read_art(folder, piece, name).ok().flatten(),
+                _ => None,
+            };
+            if let Some((svg, one)) = read.filter(|(_, one)| all.with(*one).refusal().is_none()) {
+                all = all.with(one);
+                given.push((piece, svg));
             }
         }
-        None
+        given
     }
 }
 

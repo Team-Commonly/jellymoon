@@ -127,8 +127,23 @@ and the view draws at most 1000 grid lines each way and 64 stripes on a tape.
 so what a file costs to draw is bounded at the door and not left to the
 renderer. A file with anything not named here refuses the whole theme, with
 the key and the reason. It is read through the door again when it is drawn,
-and a file that has gone bad since is left out for the kit's own art:
+and a file that has gone bad since is left out for the kit's own art.
 
+**The door accepts only what it reads the way the renderer does, and refuses the rest.** Its counts bound
+what a file costs only while the renderer draws the picture the door counted. Wherever the two could read
+a file differently, the door takes the one form both read alike: a name in SVG's own case, a `viewBox` of
+four plain numbers, a size stated once, an arc's flags written apart. `tests/alike.rs` holds each, and
+`tests/draw.rs` rasterises the roots the two once read differently. So:
+
+- A name is written as SVG writes it: `viewBox`, `linearGradient`, `radialGradient`, `gradientUnits`,
+  `gradientTransform` with their capital, every other element and attribute in small letters. The renderer
+  reads a name in that case only: `viewbox="0 0 8 8"` was no `viewBox` to it, and the picture was drawn
+  8192 pixels a side while the door counted 8 by 8.
+- The `<svg` states `viewBox`, `width` and `height` once each at most. (A file that repeats an
+  attribute is not well-formed XML, and which of the two a reader takes is its own choice.)
+- A `viewBox` is four plain numbers (digits, with one `.` between digits at most), with a `-` allowed
+  before the first two only, and one space, one comma, or a comma and a space between them. The renderer
+  takes a `viewBox` it cannot read for none, and sizes the picture to what is in it.
 - Elements, the 15 in `theme::SVG_ELEMENTS`: `svg` (one), `g`, `defs`, `title`,
   `desc`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`,
   `linearGradient`, `radialGradient`, `stop`. So no `style`, `script`, `use`,
@@ -157,8 +172,16 @@ and a file that has gone bad since is left out for the kit's own art:
 - A `d` or `points` value is at most 4096 bytes (`MAX_ART_PATH_BYTES`).
 - A transform is only `translate` and `rotate`.
 - The `d` and `points` values of a file hold at most 1024 numbers together
-  (`MAX_ART_NUMBERS`). Each number of an arc (an `a` or `A` command) counts as four
-  (`ARC_NUMBERS`): an arc is drawn as several curves.
+  (`MAX_ART_NUMBERS`). In a `d` each kind of command has its own count
+  (`src/theme/path_cost.rs`): a number of an arc (`a`) or of a `t` counts as two, since an arc is
+  drawn as several curves and a `t` is a whole curve for two numbers; every other number counts one.
+- A path stays within 512 of the picture's corner (`MAX_ART_REACH`), with the pen followed through
+  the relative commands: every place it names, every handle of a curve, the handle an `s` or a `t`
+  mirrors from the curve before, and both radii of an arc. A group may still move it anywhere.
+- An arc's two flags are each `0` or `1`, written apart from the numbers beside them. The renderer
+  reads a flag as one character, so `11 2` is two flags and a 2 to it and an 11 and a 2 to a reader of
+  numbers. A `d` holds nothing but its command letters, numbers, spaces and commas, and no number that
+  no command takes.
 - A file's paint is at most 4194304 (`MAX_ART_PAINT`, 64 shapes on 256 by
   256): its shapes (`path`, `rect`, `circle`, `ellipse`, `line`, `polyline`,
   `polygon`) times its width times its height, and four times that in a file
@@ -166,7 +189,8 @@ and a file that has gone bad since is left out for the kit's own art:
   `viewBox`'s, which is how the renderer sizes it (`tests/draw.rs` holds the two together).
 - A theme's art files together are held to the same two counts, so five files
   cost no more than one. The refusal names the file that went over.
-- The files are read again when the theme is drawn (`Theme::art_svg`), and are held
+- The files are read again when the theme is drawn (`Theme::art_svgs`: one pass, each file read
+  once, one sum), and are held
   together to the two counts again, in the same order: a file changed since the load
   that is refused, or would take the files before it past a count, is not drawn, and
   the kit's own art is drawn for its piece.
@@ -180,10 +204,20 @@ files that spend both to the last unit on the dearest paint (see-through fills
 and strokes far larger than the picture, lines as tall as it) and draws them:
 1.4 s more than the page with no art, in the same build. Its clock is a
 backstop against a hang, ten times that. A second set of five spends the numbers
-on arcs of the largest radius under a thin stroke. Counted one for one, 1024 such
-numbers in one picture took 7.4 s to rasterise against 0.2 s for lines (and 1.3 s for
-cubic curves with far control points, which are still counted one for one); counted
-four for one, the five curved files draw in about the time of the five with lines. The kit's own art, counted the same
+on curves that reach as far as a path may under a thin stroke, one kind to a file (`A`, `C`, `S`, `Q`,
+`T`), and draws in the time of the five with lines (8.3 s and 8.4 s for the whole page, on one busy Mac).
+
+What made a curve slow was its reach, not its kind. On a picture 8 wide, drawn 256, one command under a
+thin stroke took: at a reach of 4096, an arc 35 ms and an `S` 8.7 ms against 0.6 to 1.2 ms for a line; at
+512, an arc 3.4 to 4.5 ms, and `C`, `S`, `Q` and `T` 1.4 to 2.3 ms against 0.9 to 1.6 ms for a line; at 256,
+all about a line's. A row of `T` between far points sent its mirrored handle further out at each one. A
+count alone that held an arc of 4096 to a line's time would have refused ordinary art, so a path is held
+to a reach, and then counted. With both, one picture that spends all 1024 on one kind at the reach
+rasterised in: lines 0.10 s, arcs 0.12 s, `C` 0.11 to 0.17 s, `S` 0.12 to 0.27 s, `Q` 0.07 to
+0.15 s, `T` 0.15 to 0.18 s (three runs each, twice, a debug build on one busy Mac: the spread is the
+machine's). So the worst picture of a kind is within about twice the worst of lines, not equal to it.
+Not counted: a thin-stroked `circle` or `ellipse` far larger than its picture (about 13 ms each at a
+radius of 4096), which holds no path numbers and is bounded by the 100 elements alone. The kit's own art, counted the same
 way at the built-in themes' sizes, is 368 numbers and 1728164 paint: 36% and
 41% of the counts. Behind
 the ranges, the view rasterises the kit's own art at no more than 800 pixels a

@@ -134,7 +134,9 @@ max_file_lines = 400
 # programs elsewhere, the removal of the homes stopped runs left, with their lock, and the tests of both.
 # F41's step, `wish-run` (`smoke/apart.rs`, 82 lines: it makes its repo in the system's temporary folder and
 # removes it), raised it by 85.
-"crates/xtask" = 1532
+# The leftovers of that fix's own review raised it by 53: the build arguments that leave one program unbuilt, the
+# build started without the two variables that move it, a home named for its start too, and the tests of the three.
+"crates/xtask" = 1585
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -152,7 +154,10 @@ max_file_lines = 400
 # (`src/layout/entry.rs`, 60), its keys, caret and input method in the view (`src/draw/entry.rs`, 337), and what joins
 # them to the page, the shapes and the two themes.
 # The test of a chip held to its share of a narrow row raised it by 17 (`tests/entry.rs`).
-"crates/sticker-kit" = 7114
+# The door reading art only as the renderer does raised it by 366: 149 are `tests/alike.rs` and 135 are
+# `theme/path_cost.rs` (a path followed command by command: its reach, each kind's count, an arc's flags); the
+# rest is a name's case, the form of a `viewBox`, a size stated once, and the roots `tests/draw.rs` rasterises.
+"crates/sticker-kit" = 7480
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -171,7 +176,8 @@ max_file_lines = 400
 # F42 raised the app by 835: 592 are its tests (`tests/f42.rs`, `tests/f42/run.rs`, and the made-up window they
 # start, `tests/support/wisher.rs`); the rest is `wishing.rs` (155: a wish carried to core, the asking for its run,
 # the look), the window's entry, asking and look (66), and the entry in `layout`.
-"app" = 4198
+# The kept page's test stamping its day at noon in the system's zone, and run in that zone, raised it by 8.
+"app" = 4206
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

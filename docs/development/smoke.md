@@ -11,14 +11,27 @@ make smoke                    # the features the Makefile picks for this machine
 cargo xtask smoke [--window] [--real [--skip <names>]] [-- <cargo build arguments>]
 ```
 
-The chain runs the programs of the debug build in the target folder. A build argument that makes cargo put them
-somewhere else (`--release`, `-r`, `--profile`, `--target`, `--target-dir`) is refused with one line, before
-anything is built: with it the chain would run whatever an earlier build left there.
+The chain runs the programs of the debug build in the target folder. A build argument with which it would run
+what an earlier build left there is refused with one line, before anything is built:
 
-Each run works in `target/smoke-home-<pid>` and removes it at its end. A run that was stopped leaves its home, and
-with `--real` that home holds the person's page. So a run first removes the homes earlier runs left. Each run
-holds the system's lock on `smoke-home-<pid>.lock` beside its home for as long as it lives, on every system, and a
-home whose lock can be taken is one no living run has: two runs at once never remove each other's.
+- one that makes cargo put the programs somewhere else, or build another workspace's: `--release`, `-r` alone or
+  among other short flags (`-vr`), `--profile`, `--target`, `--target-dir`, `--config`, `--manifest-path`;
+- one that builds only some targets, and so could leave `jellymoon`, `jellymoon-app` or `fake-claude` as it was:
+  `--bin`, `--bins`, `--lib`, `--example`, `--examples`, `--test`, `--tests`, `--bench`, `--benches`, `--exclude`.
+
+What only adds to the build is taken: `-p`, `--package`, `--workspace`, `--features`, `-F`. The build is started
+without `CARGO_BUILD_TARGET` and `CARGO_BUILD_TARGET_DIR`, which move it as the flags do. Not held: a
+`build.target` or `build.target-dir` in a `.cargo/config.toml` above the repo also moves the build, and the chain
+then runs what `target/debug` holds. The repo has no such file.
+
+Each run works in `target/smoke-home-<pid>-<nanoseconds>`, named for its process and for when it started, and
+removes it at its end. A run that was stopped leaves its home, and with `--real` that home holds the person's
+page. So a run first removes the homes earlier runs left, before it builds: a build that fails has still removed
+them. Each run holds the system's lock on the `.lock` file beside its home for as long as it lives, on every
+system, and takes it before it makes the home. A home whose lock can be taken is one no living run has, and since
+no later run is ever given that name again, removing the home and then its lock file takes nothing from a run
+that lives. (Named for the process alone, a home could be removed under a new run that the system gave an old
+run's id, by a third run that had opened the old lock file before it was unlinked.)
 
 | Step | What it proves |
 |---|---|

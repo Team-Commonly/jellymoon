@@ -72,7 +72,7 @@ fn an_unknown_key_or_a_missing_piece_falls_back_to_the_default() {
     expected.name = "dusk".into();
     expected.palette.ink = sticker_kit::Color::rgb(0x102030);
     assert_eq!(loaded.theme.to_toml().unwrap(), expected.to_toml().unwrap(), "every other piece is the default");
-    assert_eq!(loaded.theme.art_svg("star"), None, "the kit's own star is drawn");
+    assert!(loaded.theme.art_svgs().is_empty(), "the kit's own star is drawn");
     for key in ["sparkle", "palette.glitter", "motion.wobble", "art.star"] {
         assert!(loaded.warnings.iter().any(|w| w.starts_with(&format!("{key}:"))), "{key}: {:?}", loaded.warnings);
     }

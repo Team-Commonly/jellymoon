@@ -1,8 +1,9 @@
 //! The window: the kit's view of one scene, and of the scene that replaces it when a day has been read. `t` switches
 //! between the two built-in themes. A tap is written to stderr as one line: the piece's id, and the option when it
 //! was one, never a word of the page. A tap on an option of a day's page then goes to `taps.rs`, and the page it
-//! gives is shown. Enter in a day's entry goes to `wishing.rs`: the page it gives is shown at once, the wish's run is
-//! asked for off this thread, and once a second the day is looked at again, so a run's end is drawn with no tap.
+//! gives is shown. Enter in a day's entry goes to `wishing.rs`, and a tap on a wish's character or on the choice to
+//! stop its run to `stopping.rs`: core is asked off this thread, and the page is shown as soon as it has answered.
+//! Once a second the day is looked at again, so a run's end is drawn with no tap.
 //!
 //! The view measures text with GPUI's shaped glyphs, not with the bundled advances the `layout` command uses: shaping
 //! kerns, and the plain theme draws in the system's font (`docs/development/app.md` has the measured gap).
@@ -17,6 +18,7 @@ use gpui_platform::application;
 use sticker_kit::draw::{EntryMade, Page, Tap, load_fonts};
 use sticker_kit::{Scene, Theme, Viewport};
 
+use crate::stopping::Chosen;
 use crate::taps::OnShow;
 use crate::today::Later;
 
@@ -51,34 +53,9 @@ pub fn open(
             }
         };
         cx.on_window_closed(|cx, _| cx.quit()).detach();
-        cx.observe_keystrokes(move |event, _, cx| {
-            if event.keystroke.key == "t" {
-                // A `t` typed in the entry is a letter of a wish.
-                let _ = window.update(cx, |page, window, cx| {
-                    if !page.entry_focused(window) {
-                        switch_theme(page, cx);
-                    }
-                });
-            }
-        })
-        .detach();
+        cx.observe_keystrokes(move |event, _, cx| theme_key(&event.keystroke.key, window, cx)).detach();
         let reading = shown.clone();
-        cx.spawn(async move |cx| {
-            let mut later = later;
-            while let Some(work) = later.take() {
-                let Some(next) = cx.background_executor().spawn(async move { work() }).await else { break };
-                let entry = reading.borrow_mut().as_mut().and_then(|shown| {
-                    shown.show(&next);
-                    shown.entry()
-                });
-                let _ = window.update(cx, |page, _, cx| {
-                    page.set_entry(entry, cx);
-                    page.set_scene(next.scene, cx);
-                });
-                later = next.later;
-            }
-        })
-        .detach();
+        cx.spawn(async move |cx| reads(reading, later, window, cx).await).detach();
         cx.spawn(async move |cx| looks(shown, window, cx).await).detach();
         if let Some(limit) = quit_after {
             cx.spawn(async move |cx| {
@@ -89,6 +66,40 @@ pub fn open(
         }
         cx.activate(true);
     });
+}
+
+/// `t` switches the theme, unless it was typed in the entry, where it is a letter of a wish.
+fn theme_key(key: &str, window: WindowHandle<Page>, cx: &mut App) {
+    if key == "t" {
+        let _ = window.update(cx, |page, window, cx| {
+            if !page.entry_focused(window) {
+                switch_theme(page, cx);
+            }
+        });
+    }
+}
+
+/// The entry of the first page, then each scene the day's reading gives with the entry of its page. Which
+/// projects have a chip is asked of the session logs, so all of it is off the window's thread: the first page has
+/// no entry until core has answered.
+async fn reads(shown: Shown, later: Option<Later>, window: WindowHandle<Page>, cx: &mut gpui::AsyncApp) {
+    let Some((today, first)) = shown.borrow().as_ref().map(|shown| (shown.today.clone(), shown.offering())) else {
+        return;
+    };
+    let entry = cx.background_executor().spawn(async move { first() }).await;
+    let _ = window.update(cx, |page, _, cx| page.set_entry(entry, cx));
+    let mut later = later;
+    while let Some(work) = later.take() {
+        let work = today.clone().offered(work);
+        let Some((next, entry)) = cx.background_executor().spawn(async move { work() }).await else { break };
+        // The notes of a wish or a stop stay over what the reading gave.
+        let Some(scene) = shown.borrow_mut().as_mut().map(|shown| shown.show(&next)) else { return };
+        let _ = window.update(cx, |page, _, cx| {
+            page.set_entry(entry, cx);
+            page.set_scene(scene, cx);
+        });
+        later = next.later;
+    }
 }
 
 /// Looks at the day on show once a second, off the window's thread, and shows what a look gives when it differs
@@ -106,21 +117,68 @@ async fn looks(shown: Shown, window: WindowHandle<Page>, cx: &mut gpui::AsyncApp
     }
 }
 
-/// Enter in the entry: the wish goes to `wishing.rs`, the page it gives is shown at once, and the asking for the
-/// wish's run is run off the window's thread. What that has to say is shown when it ends.
+/// Enter in the entry: the wish goes to `wishing.rs`. The entry keeps its words and waits. Core is asked off the
+/// window's thread, and the page is shown as soon as it has answered: with the wish and an empty entry, or with why
+/// it was not kept and the words still in the entry. Then the asking for the wish's run is run, off the window's
+/// thread too, and what it has to say is shown when it ends.
 fn entered(made: &EntryMade, shown: &Shown, window: WindowHandle<Page>, cx: &mut App) {
     say(&format!("entry id={} characters={}", made.id, made.text.chars().count()));
-    let Some((scene, asking)) = shown.borrow_mut().as_mut().map(|shown| shown.wished(&made.text, made.option)) else {
-        return;
-    };
-    // The view is in the middle of handling the key: it takes the new scene once that is done.
-    cx.defer(move |cx| {
-        let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
-    });
-    let (Some(asking), shown) = (asking, shown.clone()) else { return };
+    let wishing = shown.borrow().as_ref().map(|shown| shown.wishing(&made.text, made.option.as_deref()));
+    let shown = shown.clone();
     cx.spawn(async move |cx| {
+        let answer = match wishing {
+            Some(wishing) => Some(cx.background_executor().spawn(async move { wishing() }).await),
+            None => None,
+        };
+        let answered = answer.and_then(|answer| shown.borrow_mut().as_mut().map(|shown| shown.answered(answer)));
+        // The entry is always answered, so it never waits for ever: with nothing answered its words stay.
+        let (scene, asking) = answered.unzip();
+        let kept = asking.as_ref().is_some_and(Option::is_some);
+        let _ = window.update(cx, |page, window, cx| {
+            page.answer_entry(kept, window, cx);
+            if let Some(scene) = scene {
+                page.set_scene(scene, cx);
+            }
+        });
+        let Some(asking) = asking.flatten() else { return };
         let said = cx.background_executor().spawn(async move { asking() }).await;
         let Some(scene) = shown.borrow_mut().as_mut().and_then(|shown| shown.asked(said)) else { return };
+        let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
+    })
+    .detach();
+}
+
+/// A tap on a character: when core says it is a made wish with a run going, the choice to stop it is shown. Core is
+/// asked off the window's thread.
+fn poked(id: &str, shown: &Shown, window: WindowHandle<Page>, cx: &mut App) {
+    let Some(look) = shown.borrow().as_ref().map(|shown| shown.poked(id)) else { return };
+    let shown = shown.clone();
+    cx.spawn(async move |cx| {
+        let Some(seen) = cx.background_executor().spawn(async move { look() }).await else { return };
+        let Some(scene) = shown.borrow_mut().as_mut().and_then(|shown| shown.seen(seen)) else { return };
+        let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
+    })
+    .detach();
+}
+
+/// A tap on an option. The choice to stop a run says so at once, and the stop, which waits for the run to end, is
+/// run off the window's thread. Any other option is a tap for `taps.rs`, and a choice to stop that is no longer on
+/// show is nothing.
+fn chose(note: &str, index: usize, shown: &Shown, window: WindowHandle<Page>, cx: &mut App) {
+    let chosen = shown.borrow_mut().as_mut().map(|shown| shown.chose(note, index));
+    let (after, stop) = match chosen {
+        Some(Chosen::Stop(scene, stop)) => (scene, Some(stop)),
+        Some(Chosen::Tapped(scene)) => (scene, None),
+        Some(Chosen::Nothing) | None => return,
+    };
+    // The view is in the middle of handling the tap: it takes the new scene once that is done.
+    cx.defer(move |cx| {
+        let _ = window.update(cx, |page, _, cx| page.set_scene(after, cx));
+    });
+    let (Some(stop), shown) = (stop, shown.clone()) else { return };
+    cx.spawn(async move |cx| {
+        let stopped = cx.background_executor().spawn(async move { stop() }).await;
+        let Some(scene) = shown.borrow_mut().as_mut().map(|shown| shown.stopped(stopped)) else { return };
         let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
     })
     .detach();
@@ -136,15 +194,14 @@ fn page(
     let bounds = Bounds::centered(None, size(px(viewport.w), px(viewport.h)), cx);
     // The handler is made before the window it will redraw, so the window's handle reaches it through this.
     let opened: Rc<Cell<Option<WindowHandle<Page>>>> = Rc::default();
-    let (handle, on_show, entry) = (opened.clone(), shown.clone(), shown.borrow().as_ref().and_then(OnShow::entry));
+    let (handle, on_show) = (opened.clone(), shown.clone());
     let tapped = move |tap: &Tap, _: &mut gpui::Window, cx: &mut App| {
         received(tap);
-        let (Tap::Option { note_id, index }, Some(window)) = (tap, handle.get()) else { return };
-        let Some(after) = on_show.borrow_mut().as_mut().and_then(|shown| shown.tap(note_id, *index)) else { return };
-        // The view is in the middle of handling the tap: it takes the new scene once that is done.
-        cx.defer(move |cx| {
-            let _ = window.update(cx, |page, _, cx| page.set_scene(after, cx));
-        });
+        let Some(window) = handle.get() else { return };
+        match tap {
+            Tap::Character { id } => poked(id, &on_show, window, cx),
+            Tap::Option { note_id, index } => chose(note_id, *index, &on_show, window, cx),
+        }
     };
     let handle = opened.clone();
     let made = move |made: &EntryMade, _: &mut gpui::Window, cx: &mut App| {
@@ -152,15 +209,9 @@ fn page(
             entered(made, &shown, window, cx);
         }
     };
-    let view = move |_: &mut gpui::Window, cx: &mut App| {
-        cx.new(|_| {
-            let page = Page::new(scene, theme).on_tap(tapped).on_entry(made);
-            match entry {
-                Some(entry) => page.with_entry(entry),
-                None => page,
-            }
-        })
-    };
+    // The entry comes with the first answer of `reads`.
+    let view =
+        move |_: &mut gpui::Window, cx: &mut App| cx.new(|_| Page::new(scene, theme).on_tap(tapped).on_entry(made));
     let window = cx.open_window(options(bounds), view)?;
     opened.set(Some(window));
     Ok(window)

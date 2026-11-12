@@ -276,7 +276,7 @@
         "a tap on any other character, on a wish with no run going, or on a stop choice whose run has ended meanwhile stops nothing and writes nothing"
       ],
       "test": "cargo test -p jellymoon-app --test f43",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F42"
       ]

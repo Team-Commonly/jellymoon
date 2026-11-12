@@ -40,18 +40,34 @@ Page::new(scene, theme)
   command key) edit, the command key with V pastes, Tab and Shift-Tab choose the
   next and the previous option, Enter enters. There is a caret and no selection.
 - **Enter** calls `on_entry` with the text, trimmed, and the chosen option's
-  place; the entry is then empty and keeps its option. Text that is only spaces
-  enters nothing. The handler runs while the page is in use, as `on_tap` does:
-  one that changes the page does it in `cx.defer`.
+  name (`made.option`), never its place: the options can change before the
+  handler acts. Text that is only spaces enters nothing. The handler runs while
+  the page is in use, as `on_tap` does: one that changes the page does it in
+  `cx.defer`.
+- **The entry then waits** for the handler's answer,
+  `page.answer_entry(kept, window, cx)`, which every handler gives. Until then
+  the words stay in the field, drawn in the theme's quiet colour with no caret,
+  and the entry takes no key, Escape included, no click on a chip, no second
+  Enter and no composition (`accepts_text_input` is false). It keeps the keys. A key pressed while it waits is
+  dropped, not kept for later. Kept: the entry is empty and keeps its option.
+  Not kept: the words are still there. A page with no handler answers itself.
 - **An input method** (Chinese, Japanese, Korean, a dead key) talks to the page
   through GPUI's `EntityInputHandler`. What it is still composing is underlined,
   and Enter, the editing keys and a click leave it alone until it ends.
 - **A window's own keys.** While `page.entry_focused(window)` is true a letter
   is text: a window that acts on a bare key asks first. `page.entry()` is what
-  is typed now; `set_entry` changes or removes the entry.
+  is typed now; `set_entry` changes or removes the entry, and keeps the chosen
+  option by its name when that name is still offered (`EntryState::keep_option`).
+- **An entry that holds words is not removed.** `set_entry(None)` takes an
+  empty entry off the page at once. One that holds words, or waits for its
+  answer, stays as it is, with its options, and goes when it is empty: after
+  an answer that kept the words, or when the person has deleted them. Words a
+  person typed never go with the entry, and an answer always finds the words
+  it is for: an entry cannot go and come back empty while it waits. An entry
+  set meanwhile takes its place and keeps the words.
 
 The rules are `entry::EntryState`, plain data with no GPUI in it
-(`tests/entry.rs`). `tests/entry_draw.rs` sends keys and clicks through GPUI's
+(`tests/entry.rs`, `tests/entry_waits.rs`). `tests/entry_draw.rs` sends keys and clicks through GPUI's
 own dispatch to a headless page. The test platform has no input method, so a
 composition is started there by calling the handler, as a platform would; what
 a real input method does on a real window is checked by hand.

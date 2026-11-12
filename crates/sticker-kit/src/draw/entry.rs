@@ -18,13 +18,13 @@ use crate::scene::Entry;
 use crate::text::Role;
 use crate::theme::Theme;
 
-/// What was entered: the entry's id, the text with no space at either end, and the chosen option's place among the
-/// entry's options (`None` for an entry with no options).
+/// What was entered: the entry's id, the text with no space at either end, and the chosen option by its name,
+/// never by its place: the options can change before the handler acts (`None` for an entry with no options).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EntryMade {
     pub id: String,
     pub text: String,
-    pub option: Option<usize>,
+    pub option: Option<String>,
 }
 
 type EntryHandler = Box<dyn Fn(&EntryMade, &mut Window, &mut App)>;
@@ -34,6 +34,8 @@ pub(super) struct EntryView {
     pub what: Option<Entry>,
     pub state: EntryState,
     on_made: Option<EntryHandler>,
+    /// The entry was taken away while it held words: it goes as soon as it holds none.
+    leaving: bool,
     focus: Option<FocusHandle>,
     /// Whether the entry had the keys when the frame was built.
     pub lit: bool,
@@ -54,7 +56,8 @@ impl EntryView {
         window: &Window,
     ) -> (Option<ShapedLine>, Pixels, f32) {
         let (state, font_size) = (&self.state, Role::RowMain.size(theme, k));
-        let ink = hsla(theme.palette.ink);
+        // Words that wait for their answer are drawn pale, as the hint is.
+        let ink = hsla(if state.waiting() { theme.palette.quiet } else { theme.palette.ink });
         let under = UnderlineStyle { thickness: px(1.0), color: Some(ink), wavy: false };
         let marked = state.marked().unwrap_or(0..0);
         let runs: Vec<TextRun> =
@@ -83,16 +86,16 @@ impl EntryView {
 /// Paints the typed line and the caret, and gives the window this entry as what the platform's text input talks to.
 fn paint(at: Bounds<Pixels>, page: &Entity<Page>, focus: &FocusHandle, window: &mut Window, cx: &mut App) {
     window.handle_input(focus, ElementInputHandler::new(at, page.clone()), cx);
-    let ((line, caret, height), scroll, colour) = page.update(cx, |page, _| {
+    let ((line, caret, height), scroll, colour, waiting) = page.update(cx, |page, _| {
         let Page { entry, theme, viewport, .. } = page;
         let shaped = entry.shape(theme, page_scale(theme, *viewport), at, window);
-        (shaped, entry.scroll, hsla(theme.palette.caret))
+        (shaped, entry.scroll, hsla(theme.palette.caret), entry.state.waiting())
     });
     let origin = point(at.left() - scroll, at.top() + (at.size.height - px(height)) / 2.0);
     if let Some(line) = line {
         let _ = line.paint(origin, px(height), TextAlign::Left, None, window, cx);
     }
-    if focus.is_focused(window) {
+    if focus.is_focused(window) && !waiting {
         window.paint_quad(fill(Bounds::new(point(origin.x + caret, origin.y), size(px(1.5), px(height))), colour));
     }
 }
@@ -105,22 +108,41 @@ impl Page {
         self
     }
 
-    /// Called with what was entered when Enter is pressed in the entry, which is then empty again. Like `on_tap`,
+    /// Called with what was entered when Enter is pressed in the entry. The entry keeps its words and waits, taking
+    /// no key, until the handler's answer comes ([`Page::answer_entry`]): a handler always answers. Like `on_tap`,
     /// it is called while the page is in use: a handler that changes the page does so in `cx.defer`.
     pub fn on_entry(mut self, handler: impl Fn(&EntryMade, &mut Window, &mut App) + 'static) -> Self {
         self.entry.on_made = Some(Box::new(handler));
         self
     }
 
-    /// Changes or removes the entry. What is already typed stays, held to the new entry's bounds.
+    /// Changes or removes the entry. What is already typed stays, held to the new entry's bounds. An entry that is
+    /// removed while it holds words, or waits for its answer, stays on the page as it is, with the chips it had,
+    /// and goes once it is empty and does not wait: words a person typed never go with it, and a refusal always
+    /// has them to leave. An entry given meanwhile takes its place, with the words.
     pub fn set_entry(&mut self, entry: Option<Entry>, cx: &mut Context<Self>) {
         match &entry {
-            Some(entry) => self.entry.state.fit(entry),
+            Some(entry) => {
+                let was = self.entry.what.as_ref().map(|was| was.options.as_slice()).unwrap_or_default();
+                self.entry.state.keep_option(was, &entry.options);
+                self.entry.state.fit(entry);
+            }
+            None if self.entry.state.holds() => {
+                self.entry.leaving = true;
+                return;
+            }
             None => self.entry.state = EntryState::default(),
         }
-        self.entry.what = entry;
+        (self.entry.what, self.entry.leaving) = (entry, false);
         self.stale = Stale::Spring;
         cx.notify();
+    }
+
+    /// The answer to what Enter gave: kept, and the entry is empty again; not kept, and its words stay. Either way
+    /// it takes keys again.
+    pub fn answer_entry(&mut self, kept: bool, window: &Window, cx: &mut Context<Self>) {
+        self.entry.state.answer(kept);
+        self.entry_changed(window, cx);
     }
 
     /// What is typed in the entry now.
@@ -208,6 +230,10 @@ impl Page {
         let (key, held) = (event.keystroke.key.as_str(), event.keystroke.modifiers);
         let command = held.secondary(cx);
         let state = &mut self.entry.state;
+        // An entry that waits takes no key at all: Escape too, so the keys stay the entry's and none is the window's.
+        if state.waiting() {
+            return;
+        }
         match key {
             "backspace" => state.backspace(),
             "delete" => state.delete(),
@@ -235,13 +261,24 @@ impl Page {
         let Some(made) = self.entry.state.enter() else {
             return;
         };
-        if let (Some(handler), Some(entry)) = (&self.entry.on_made, &self.entry.what) {
-            handler(&EntryMade { id: entry.id.clone(), text: made.text, option: made.option }, window, cx);
+        cx.notify();
+        match (&self.entry.on_made, &self.entry.what) {
+            (Some(handler), Some(entry)) => {
+                let option = made.option.and_then(|at| entry.options.get(at).cloned());
+                handler(&EntryMade { id: entry.id.clone(), text: made.text, option }, window, cx);
+            }
+            // Nobody was given the words, so nobody will answer: they are taken as kept.
+            _ => self.entry.state.answer(true),
         }
     }
 
     /// Tells the platform's text input that the text or the caret is no longer what it last saw, and draws again.
+    /// An entry that was taken away while it held words goes here, once it holds none.
     fn entry_changed(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if self.entry.leaving && !self.entry.state.holds() {
+            (self.entry.what, self.entry.state, self.entry.leaving) = (None, EntryState::default(), false);
+            self.stale = Stale::Spring;
+        }
         if let Some(focus) = &self.entry.focus {
             window.notify_text_input_changed(focus);
         }
@@ -331,7 +368,8 @@ impl EntityInputHandler for Page {
         Some(self.entry.state.len_utf16())
     }
 
+    /// Not while the entry waits for its answer: no composition can begin then.
     fn accepts_text_input(&self, _: &mut Window, _: &mut Context<Self>) -> bool {
-        self.entry.what.is_some()
+        self.entry.what.is_some() && !self.entry.state.waiting()
     }
 }

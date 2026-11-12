@@ -124,6 +124,13 @@ max_file_lines = 400
 # last name that is no link, in `run/place.rs`, 5.
 # A copy's `gitdir` file read as git reads a path from the copy's git folder, and git told to write a whole
 # path, raised core by 12 (`copy/record.rs`, `copy/git.rs`) and the binary by 21 (its test, `tests/f41/left.rs`).
+# The fourth pass on F41 added 3 lines to core, within its budget (`copy/record.rs`: inside a repo is asked of
+# the folders as the system resolves them), and raised the binary by 274, all of it tests: `tests/f41/left.rs`
+# 75 (a record that reaches the copy's git folder by `..` or by a link in another repo, a `gitdir` file that
+# names another place, a plain file at the copy's name) and `cap.rs` 22 (a command whose wish has its run by
+# the claim); what ends with a test, by a panic too, 177: `tests/f39/guard.rs` 82, its proof
+# `tests/f39/panics.rs` 58, the made-up agent's half 20, and 17 over `world.rs`, `support/mod.rs` (the one
+# limit of a test's command) and the suites.
 "crates/jellymoon-core" = 6743
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
@@ -150,7 +157,7 @@ max_file_lines = 400
 # `named.rs` 45 (another spelling, a link led elsewhere after the lookup), `cap.rs` 39 (four commands for one
 # wish), `tests/f41.rs` 14 (the asker's wait, long and short), and 20 over F38, F39 and F40 where a wait on the
 # clock became a wait on a file.
-"crates/jellymoon" = 10315
+"crates/jellymoon" = 10589
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

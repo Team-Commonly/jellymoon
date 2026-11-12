@@ -7,14 +7,18 @@
 use std::env::consts::EXE_SUFFIX;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 use std::{env, fs, thread};
 
 use serde_json::Value;
 use tempfile::TempDir;
 
-use crate::support::{Ran, ZONE, jellymoon_in, plant, scratch, tree};
+use crate::support::{LIMIT, Ran, ZONE, jellymoon_in, plant, scratch, tree};
+
+#[path = "guard.rs"]
+mod guard;
+pub use guard::{Going, alive};
 
 pub const DAY: &str = "2026-03-10";
 pub const SAID: &str = "make the uploader retry twice";
@@ -56,6 +60,13 @@ pub const ARGS: [&str; 19] = [
 pub struct World {
     pub dir: TempDir,
     pub vars: Vec<(&'static str, OsString)>,
+}
+
+/// A test that ends, by a panic too, leaves no agent and no `jellymoon run` of its folder going (`guard.rs`).
+impl Drop for World {
+    fn drop(&mut self) {
+        guard::end(self.dir.path());
+    }
 }
 
 /// Every file under a folder with its bytes, as `support::tree` lists them.
@@ -328,34 +339,31 @@ impl World {
     }
 
     /// Starts `jellymoon run` and returns at once, with the command still going.
-    pub fn start_going(&self, wish: &str, repo: &Path) -> Child {
+    pub fn start_going(&self, wish: &str, repo: &Path) -> Going {
         self.going(&[], &["run", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()])
     }
 
     /// Starts `jellymoon` with `more` variables after the world's and returns at once. What it prints is kept for
-    /// [`ended`]: one line, which never fills a pipe.
-    pub fn going(&self, more: &[(&'static str, OsString)], args: &[&str]) -> Child {
+    /// [`ended`]: one line, which never fills a pipe. Dropped while it still goes, the command is killed.
+    pub fn going(&self, more: &[(&'static str, OsString)], args: &[&str]) -> Going {
         let mut command = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
         let vars = self.vars.iter().chain(more).map(|(name, value)| (name, value));
         command.args(args).current_dir(self.dir.path()).env_clear().envs(vars);
         if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
             command.env("SystemRoot", root); // a Windows program needs it to start
         }
-        command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap()
+        Going::new(command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap())
     }
 }
 
-/// What a command started with [`World::going`] printed, once it has ended: half a minute is waited at most.
-pub fn ended(mut going: Child) -> Ran {
-    let deadline = Instant::now() + Duration::from_secs(30);
+/// What a command started with [`World::going`] printed, once it has ended: [`LIMIT`] is waited at most.
+pub fn ended(mut going: Going) -> Ran {
+    let deadline = Instant::now() + LIMIT;
     while going.try_wait().unwrap().is_none() {
-        if Instant::now() > deadline {
-            going.kill().unwrap();
-            panic!("jellymoon was still going after half a minute");
-        }
+        assert!(Instant::now() < deadline, "jellymoon was still going after {LIMIT:?}"); // killed as it is dropped
         thread::sleep(Duration::from_millis(5));
     }
-    let done = going.wait_with_output().unwrap();
+    let done = going.take().wait_with_output().unwrap();
     let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap();
     Ran { stdout: text(done.stdout), stderr: text(done.stderr), code: done.status.code().unwrap_or(-1) }
 }

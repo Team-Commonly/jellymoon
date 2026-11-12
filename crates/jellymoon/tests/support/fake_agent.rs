@@ -324,11 +324,14 @@ fn record(rec: &Path) {
 
 fn main() {
     if env::args().nth(1).as_deref() == Some("litters") {
-        litters(Path::new(&env::args().nth(2).unwrap()));
+        let rec = env::args().nth(2).unwrap();
+        gate::minded(Path::new(&rec));
+        litters(Path::new(&rec));
     }
     let play = fs::read_to_string(env::current_exe().unwrap().with_file_name("play")).unwrap();
     let play: Vec<&str> = play.lines().collect();
     let (script, rec, number) = (play[0], Path::new(play[1]), play[2].parse::<usize>().unwrap());
+    gate::minded(rec);
     if env::args().nth(1).as_deref() != Some("now") {
         again(script, rec, number);
     }

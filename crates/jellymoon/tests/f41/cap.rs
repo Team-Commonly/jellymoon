@@ -1,13 +1,12 @@
 //! Three runs go at once and no more (`docs/development/run.md`, "Three runs at once").
 
 use std::ffi::OsString;
-use std::process::Child;
 use std::time::{Duration, Instant};
 use std::{fs, thread};
 
 use serde_json::json;
 
-use super::{DAY, SAID, World, ended, found_world, made, printed, refused, silent_world};
+use super::{DAY, Going, SAID, World, ended, found_world, made, printed, refused, silent_world, wait_for};
 
 const FULL: &str = "nothing was started: 3 runs are going, and no more than 3 go at once; run the wish again when \
                     one has ended";
@@ -66,7 +65,7 @@ fn commands_started_at_once_for_one_wish_are_never_counted_against_each_other() 
     let door = long("JELLYMOON_TEST_DOOR_WAIT_MS");
     let held = [long("JELLYMOON_TEST_NAME_WAIT_MS"), door.clone(), ("JELLYMOON_TEST_GO", go.clone().into())];
     let args = ["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
-    let mut asked: Vec<Child> = (0..3).map(|_| w.going(&held, &args)).collect();
+    let mut asked: Vec<Going> = (0..3).map(|_| w.going(&held, &args)).collect();
     let from = Instant::now();
     while w.copies().len() < 3 || !go.with_extension("at").exists() {
         assert!(from.elapsed() < Duration::from_secs(30), "the three never came to their claim");
@@ -92,6 +91,29 @@ fn commands_started_at_once_for_one_wish_are_never_counted_against_each_other() 
     assert_eq!((w.copies().len(), w.branches(&repo).len(), w.starts()), (0, 1, 1));
 }
 
+// A command whose wish got its run while the command was on its way is told so before it is counted, and takes
+// no run's lock: the count made before a copy (`cap::room`) never sees one of a command that cannot become a run.
+// Every place a test's build can be held at leaves its name, and the last this command came to is the first.
+#[test]
+fn a_command_whose_wish_has_its_run_by_the_claim_never_takes_a_run_s_lock() {
+    let w = found_world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let (go, place) = (w.at("rec").join("placed"), "JELLYMOON_TEST_PLACE_WAIT_MS");
+    let held = [
+        (place, OsString::from("60000")),
+        ("JELLYMOON_TEST_CLAIM_WAIT_MS", "1".into()),
+        ("JELLYMOON_TEST_NAME_WAIT_MS", "1".into()),
+        ("JELLYMOON_TEST_GO", go.clone().into()),
+    ];
+    let late = w.going(&held, &["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    wait_for(&go.with_extension("at"));
+    assert_eq!(printed(&w.start(&wish, &repo))["outcome"], "completed");
+    fs::write(&go, "").unwrap();
+    assert!(refused(&ended(late)).contains("has had its run"));
+    assert_eq!(fs::read_to_string(go.with_extension("at")).unwrap(), place, "it came as far as a run's lock");
+    assert_eq!((w.copies().len(), w.branches(&repo).len(), w.starts()), (0, 1, 1));
+}
+
 // The count and the claim are one step: of six `jellymoon run` started at once, three hold a run and three are
 // refused. Each wish is of a day of its own, so that no two wait for the same day's lock.
 #[test]
@@ -107,10 +129,10 @@ fn of_six_runs_started_at_once_exactly_three_go() {
     let wait = [("JELLYMOON_TEST_CLAIM_WAIT_MS", OsString::from("200"))];
     let start =
         |day: &String| w.going(&wait, &["run", "--wish", "m1", "--date", day, "--repo", repo.to_str().unwrap()]);
-    let mut started: Vec<Child> = days.iter().map(start).collect();
+    let mut started: Vec<Going> = days.iter().map(start).collect();
     // The three that are refused end; the three that hold a run wait with their agents.
     let from = Instant::now();
-    let over = |started: &mut Vec<Child>| started.iter_mut().filter_map(|run| run.try_wait().unwrap()).count();
+    let over = |started: &mut Vec<Going>| started.iter_mut().filter_map(|run| run.try_wait().unwrap()).count();
     while over(&mut started) < 3 || going(&w) < 3 {
         assert!(from.elapsed() < Duration::from_secs(30), "{} ended, {} go", over(&mut started), going(&w));
         thread::sleep(Duration::from_millis(10));

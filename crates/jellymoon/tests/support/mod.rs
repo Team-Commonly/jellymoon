@@ -38,8 +38,14 @@ pub fn skipped(why: &str) {
     let _ = writeln!(std::io::stderr(), "skipped in {test}: {why}");
 }
 
-/// Runs `jellymoon` with only the variables given. A run still going after 20 seconds (a reader stuck on a pipe would be)
-/// is stopped and fails the test. Output goes to files, so a full pipe can never be what holds it up.
+/// How long a test waits for a `jellymoon` command it started, here and in `f39/world.rs` (`ended`): the one
+/// limit that ends a command that hangs. It stands above every bound a test states of its own (the longest is a
+/// minute), so such a bound is what fails when it is passed, and a command that hangs costs a run of the tests
+/// this long, once for each test it hangs in.
+pub const LIMIT: Duration = Duration::from_secs(90);
+
+/// Runs `jellymoon` with only the variables given. A run still going after [`LIMIT`] (a reader stuck on a pipe would
+/// be) is stopped and fails the test. Output goes to files, so a full pipe can never be what holds it up.
 pub fn jellymoon(vars: &[(&str, &OsStr)], args: &[&str]) -> Ran {
     started(Path::new("."), vars, args, "")
 }
@@ -67,14 +73,14 @@ pub fn started(folder: &Path, vars: &[(&str, &OsStr)], args: &[&str], input: &st
         cmd.env("SystemRoot", root); // a Windows program needs it to start
     }
     let mut child = cmd.spawn().unwrap();
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + LIMIT;
     let status = loop {
         if let Some(status) = child.try_wait().unwrap() {
             break status;
         }
         if Instant::now() > deadline {
             child.kill().unwrap();
-            panic!("jellymoon {args:?} was still running after 20 seconds");
+            panic!("jellymoon {args:?} was still running after {LIMIT:?}");
         }
         thread::sleep(Duration::from_millis(5));
     };

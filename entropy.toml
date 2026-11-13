@@ -196,7 +196,10 @@ max_file_lines = 400
 # F50 raised core by 229: `session/copies.rs` is 191 (the rule that a run's copy is not read is 67, and 124 are
 # its tests, which hold Windows' spellings as text on every system), `reader.rs` grew by 26 (23 of them the test
 # of the folders a run and a wish are offered) and `session.rs` by 12.
-"crates/jellymoon-core" = 8315
+# F50's follow-up raised core by 58, 49 of them tests: `session/tests.rs` 30 (the turn rules for a copy's line and
+# for a line with no folder), `session/copies.rs` 21 (17 the test of a `copies` that is a link, 2 a first name
+# that is no drive, 2 the third spelling), `session.rs` 6 and `reader.rs` 1.
+"crates/jellymoon-core" = 8373
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -250,7 +253,9 @@ max_file_lines = 400
 # `tests/f48/shown.rs` 48 (every partial record, in every state of the work), 22 are two scripts of the made-up
 # agent, and 12 are in `tests/f48.rs` and `tests/f41/left.rs`.
 # F50 raised the binary by 362, all of it its tests at the binary, `tests/f50.rs`.
-"crates/jellymoon" = 13799
+# F50's follow-up raised it by 105, all of it tests: `tests/f50/lines.rs` is 102 (a `copies` that is a link, a
+# line with no folder, a copy's line that repeats a uuid) and 3 are in `tests/f50.rs`.
+"crates/jellymoon" = 13904
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

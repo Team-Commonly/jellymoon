@@ -5,6 +5,8 @@
 //! and for the run the made-up agent of F39's test folder (`f39/world.rs`).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f50/lines.rs"]
+mod lines;
 mod support;
 #[allow(unused_imports)] // the world names more than this file asks of it
 #[path = "f39/world.rs"]
@@ -164,20 +166,21 @@ fn of_a_session_with_lines_in_a_copy_and_lines_elsewhere_only_the_copy_s_lines_g
         said(&at(2), &copy, &format!("{LEFT} typed")),
         reply(&at(3), &copy, &format!("{LEFT} said")),
         reply(&at(4), A, &format!("{LEFT} said elsewhere to what was typed in the copy")),
-        // Said in the copy to a turn typed elsewhere: it is a line of the copy, and no reply.
+        // Said in the copy to a turn typed elsewhere: it is a line of the copy, and no reply. The turn stays open
+        // for what is said elsewhere after it.
         said(&at(5), A, "second, in alpha"),
         reply(&at(6), text(&deeper), &format!("{LEFT} said deeper")),
-        said(&at(7), A, "third, in alpha"),
-        reply(&at(8), A, "third done"),
-        reply(&at(9), &copy, &format!("{LEFT} said last")),
+        reply(&at(7), A, "second done"),
+        said(&at(8), A, "third, in alpha"),
+        reply(&at(9), A, "third done"),
+        reply(&at(10), &copy, &format!("{LEFT} said last")),
     ];
     w.log("-work-alpha/s1.jsonl", &lines);
     let ran = w.run("day", &[]);
     assert!(!ran.stdout.contains(LEFT), "{}", ran.stdout);
     let word = |said: &str, reply: &str| (said.to_string(), reply.to_string());
-    let kept =
-        [word("first, in alpha", "first done"), word("second, in alpha", ""), word("third, in alpha", "third done")];
-    assert_eq!(turns(&ran.stdout), kept);
+    let kept = [("first", "first done"), ("second", "second done"), ("third", "third done")];
+    assert_eq!(turns(&ran.stdout), kept.map(|(nth, reply)| word(&format!("{nth}, in alpha"), reply)));
 }
 
 #[test]

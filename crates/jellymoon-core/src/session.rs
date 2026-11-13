@@ -14,6 +14,9 @@ use serde::Deserialize;
 use crate::redact::{pattern, shown};
 use crate::{Harness, ReaderTurn, busy};
 
+mod copies;
+pub(crate) use copies::Copies;
+
 /// The lengths `said`, `reply` and `project` are cleaned and cut to, in characters (`redact::shown`).
 const SAID_MAX: usize = 700;
 const REPLY_MAX: usize = 500;
@@ -97,13 +100,20 @@ enum Prompt {
     Neither,
 }
 
+/// What a read leaves out: the folders the person switched off, by a name in their path, and every run's copy.
+#[derive(Debug, Default)]
+pub(crate) struct Left {
+    pub skip: Vec<String>,
+    pub copies: Copies,
+}
+
 /// A turn, when it was typed, and the folder its project is named after: the log's own text, which is never printed.
 pub(crate) type Typed = (Option<Timestamp>, ReaderTurn, String);
 
 /// Returns one log's turns, on any day, each with when it was typed. A file that cannot be opened gives none. A log
 /// is read no further than its length when it was opened ([`length`]): one that is written to as fast as it is read
 /// would have no end. A test's build can be held here, the length asked and nothing read yet (`busy::pause`).
-pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, line_max: usize) -> Vec<Typed> {
+pub(crate) fn turns(file: &Path, left: &Left, seen: &mut HashSet<String>, line_max: usize) -> Vec<Typed> {
     let Ok(mut log) = File::open(file) else {
         return Vec::new();
     };
@@ -111,19 +121,20 @@ pub(crate) fn turns(file: &Path, skip: &[String], seen: &mut HashSet<String>, li
         file.parent().and_then(Path::file_name).map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let len = length(log.metadata().map(|held| held.len()), &mut log);
     busy::pause("JELLYMOON_TEST_OPEN_WAIT_MS");
-    read(log, len, &folder, skip, seen, line_max)
+    read(log, len, &folder, left, seen, line_max)
 }
 
 /// The turns in the first `len` bytes of a log, and not a byte more is asked of it. A line that is not valid JSON is
 /// skipped, as is one cut off at `len`; a log that cannot be read further gives what was read before the error. A
 /// byte-order mark before the first line is not part of it. `seen` holds the uuid of every typed line so far: a
 /// resumed or forked session repeats earlier lines in a new file, and the first one read is the one kept. `folder`
-/// is the name of the log's own folder.
+/// is the name of the log's own folder. A line whose folder is a run's copy, or in one, is no turn and no reply; a
+/// typed one still ends the turn before it, as a line of a switched-off folder does.
 fn read(
     log: impl Read,
     len: u64,
     folder: &str,
-    skip: &[String],
+    left: &Left,
     seen: &mut HashSet<String>,
     line_max: usize,
 ) -> Vec<Typed> {
@@ -136,14 +147,15 @@ fn read(
             continue;
         };
         let uuid = line.uuid.as_deref().unwrap_or_default();
+        let cwd = line.cwd.as_deref().unwrap_or_default();
+        let copy = left.copies.hold(cwd);
         match prompt(&line) {
             Prompt::Typed(_) if !uuid.is_empty() && seen.contains(uuid) => open = false,
             Prompt::Ends => open = false,
             Prompt::Typed(said) => {
                 seen.insert(uuid.to_string());
-                let cwd = line.cwd.as_deref().unwrap_or_default();
                 // A line with no folder is skipped by its session's folder name.
-                open = !said.is_empty() && !skipped(if cwd.is_empty() { folder } else { cwd }, skip);
+                open = !said.is_empty() && !copy && !skipped(if cwd.is_empty() { folder } else { cwd }, &left.skip);
                 if open {
                     // A folder's name is the log's text too: it is printed, and the model reads it.
                     let (project, folder) = place(cwd);
@@ -159,7 +171,7 @@ fn read(
                 }
             }
             Prompt::Neither => {
-                if let (true, Some(text), Some((_, turn, _))) = (open, reply(&line), turns.last_mut()) {
+                if let (true, Some(text), Some((_, turn, _))) = (open && !copy, reply(&line), turns.last_mut()) {
                     turn.reply = shown(&text, REPLY_MAX);
                 }
             }

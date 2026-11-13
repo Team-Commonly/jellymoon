@@ -193,7 +193,10 @@ max_file_lines = 400
 # moved), and 20 carry that commit to the copy's end, give a moved branch its own failure, check what a record
 # names before a look returns anything, and hold a record's writing for a test (`run.rs`, `run/end.rs`,
 # `run/show.rs`, `run/record.rs`).
-"crates/jellymoon-core" = 8086
+# F50 raised core by 229: `session/copies.rs` is 191 (the rule that a run's copy is not read is 67, and 124 are
+# its tests, which hold Windows' spellings as text on every system), `reader.rs` grew by 26 (23 of them the test
+# of the folders a run and a wish are offered) and `session.rs` by 12.
+"crates/jellymoon-core" = 8315
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -246,7 +249,8 @@ max_file_lines = 400
 # 62 (a look's writing drops an end, the end in one writing, the record before the wish names the run),
 # `tests/f48/shown.rs` 48 (every partial record, in every state of the work), 22 are two scripts of the made-up
 # agent, and 12 are in `tests/f48.rs` and `tests/f41/left.rs`.
-"crates/jellymoon" = 13437
+# F50 raised the binary by 362, all of it its tests at the binary, `tests/f50.rs`.
+"crates/jellymoon" = 13799
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -378,7 +382,8 @@ max_file_lines = 400
 # `art` in every shape, and a named pipe beside the theme that the app does not wait on); a said line cut at 300
 # characters and a theme's name kept to a part of a file's name are 28 in `src/lib.rs`, 17 of them their test;
 # `tests/f32.rs` grew by 9 (the cut at the binary, the leaving path that loads) and the example by 1.
-"app" = 5660
+# F50 raised the app by 11: the test that a folder in a run's copy gets no chip (`tests/f42.rs`).
+"app" = 5671
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

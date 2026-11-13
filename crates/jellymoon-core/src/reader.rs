@@ -76,12 +76,13 @@ fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(D
     };
     let edge = |date: Date| date.to_zoned(zone.clone()).map(|start| start.timestamp()).map_err(|_| Error::Date);
     let (start, end) = (edge(date)?, edge(date.tomorrow().map_err(|_| Error::Date)?)?);
-    let mut skip = options.skip.clone();
+    let mut left = session::Left { skip: options.skip.clone(), ..Default::default() };
     if let Some(home) = &options.home {
         if !home.is_absolute() {
             return Err(Error::Home);
         }
-        skip.extend(switched_off(home).map_err(Error::Skip)?);
+        left.skip.extend(switched_off(home).map_err(Error::Skip)?);
+        left.copies = session::Copies::of(home);
     }
     match fs::metadata(&options.logs) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -92,7 +93,7 @@ fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(D
     let mut seen = HashSet::new();
     let mut turns = Vec::new();
     for file in session_files(&options.logs, start) {
-        for (typed, mut turn, folder) in session::turns(&file, &skip, &mut seen, line_max) {
+        for (typed, mut turn, folder) in session::turns(&file, &left, &mut seen, line_max) {
             if let Some(at) = typed.filter(|at| (start..end).contains(at)) {
                 turn.at = at.to_zoned(zone.clone()).strftime("%H:%M").to_string();
                 turns.push((typed, turn, folder));
@@ -300,6 +301,31 @@ mod tests {
         // The neighbours of each range are ordinary characters, and so is white space at a name's edge.
         let seen = "\u{a0}\u{ae}\u{200a}\u{2010}\u{202f}\u{205f}\u{2070}\u{fdff}\u{fe10}\u{e0080}\u{e00ff}\u{e01f0}";
         assert_eq!(skip_names(&format!(" al{seen}pha\t, beta ")).unwrap().len(), 2);
+    }
+
+    // What a run finds its wish's repo by, and a wish is offered for (`wish::wishable`).
+    #[test]
+    fn a_folder_in_a_run_s_copy_is_not_one_something_was_typed_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let (home, logs) = (dir.path().join("jm"), dir.path().join("logs"));
+        let (copies, kept) = (home.join("copies"), home.join("kept").join("beta"));
+        let typed = [dir.path().join("alpha"), copies.join("r1"), copies.join("r2").join("beta"), kept];
+        let noon = jiff::civil::date(2026, 3, 10).at(12, 0, 0, 0).to_zoned(TimeZone::system()).unwrap();
+        let line = |folder: &PathBuf| {
+            serde_json::json!({"type": "user", "timestamp": noon.timestamp(), "cwd": folder,
+                "origin": {"kind": "human"}, "message": {"content": "hello"}})
+            .to_string()
+        };
+        fs::create_dir_all(logs.join("p")).unwrap();
+        fs::write(logs.join("p").join("s.jsonl"), typed.iter().map(line).collect::<Vec<_>>().join("\n")).unwrap();
+        let date = Some("2026-03-10".to_string());
+        let read = DayOptions { logs, date, skip: Vec::new(), home: Some(home) };
+        assert_eq!(typed_in(&read).unwrap(), [typed[0].clone(), typed[3].clone()]);
+        assert_eq!(folders(&read, "beta").unwrap(), [typed[3].clone()]);
+        let names = ["alpha", "r1", "beta", "r2"].map(str::to_string);
+        assert_eq!(crate::wishable(&read, &names), ["alpha", "beta"]);
+        // With no home there are no copies to know of.
+        assert_eq!(typed_in(&DayOptions { home: None, ..read }).unwrap().len(), 4);
     }
 
     #[test]

@@ -91,8 +91,8 @@ pub struct ShownFile {
     pub size: u64,
     /// The file as it is in the work, cleaned: what was read of it, up to the last whole word when `cut`.
     pub text: String,
-    /// Whether `text` is less than the file: reading stopped at `most` bytes, or cleaning made what was read
-    /// longer than `most` characters and cut it there.
+    /// Whether the file was not read whole (reading stopped at `most` bytes) or the cleaned text was cut at
+    /// `most` characters. A text that cleaning only shortens, at its end, is not cut.
     pub cut: bool,
     /// The most bytes of a file that are read. It is no count of what is printed: cleaning can make a text
     /// longer, up to `most` characters, each of which can be several bytes.

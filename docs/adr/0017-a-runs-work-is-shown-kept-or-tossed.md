@@ -131,9 +131,18 @@ F46 are built on them as scoped.
    check of a run's end, and a record can be changed by hand. So `run keep` and `run toss` compare the branch
    with `end` again, under their own check of the old value, and never take the record's word for it.
 2. **Of a finished run only:** a record names all three of `repo`, `start` and `end`, or, from before F48,
-   none. A run that is going, failed, was cancelled or was cut off names `repo` and `start` and no `end`, by
-   design, and its branch may hold core's commit all the same: a run killed after its commit, or one whose copy
-   could not be removed. `run toss` acts on failed and cancelled runs, and is built for a record of two.
+   none. A run that is going, failed, was cancelled or was cut off names `repo` and `start` and no `end`; or,
+   when its record was written before F48, or was written down as failed by the released v0.2.0-rc1 (which
+   drops the three, as `run.md` says), it names none of the three. A record of two is so by design, and its
+   branch may hold core's commit all the same: a run killed after its commit, or one whose copy could not be
+   removed. `run toss` acts on failed and cancelled runs, and is built for a record of two and for a record
+   of none.
+
+**Decided 2026-11-12, by the coordinator: `run toss` of a record that names none removes its kept copy as `copy
+clean` does and leaves the branch, in fixed words. A branch is deleted only as the run's own ref at a commit the
+record names; a branch no record names a commit for is left to the copy's own take-back rule (`copy/back.rs`).**
+Of the sentence above, that `run keep` and `run toss` refuse a record that names no commits, this is what stands:
+neither acts on a branch by such a record. `run keep` refuses it, and `run toss` takes back its copy and no more.
 
 ## What comes after
 

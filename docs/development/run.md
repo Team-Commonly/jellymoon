@@ -41,7 +41,10 @@ and its branch in them.
    are never printed and never reach page data. Of the one chosen, the run's record keeps the git folder of its
    repo ("What is kept"), and that is the one place it is kept once a finished run's copy is gone. Git's own
    words name the folder they are about, so for a folder found this way nothing git says is repeated, now or
-   when the copy is ended: the refusal has fixed words in their place (the copy's record keeps `found`). A
+   when the copy is ended: the refusal has fixed words in their place (the copy's record keeps `found`). Of
+   what any git step of a run says on stderr, the first 128 KiB are kept and the rest is read to its end and
+   dropped: git is never ended for what it says, and it cannot fill memory by it ([copy.md](copy.md), "A git
+   that says a lot"). A
    `--repo` the person typed may be named back to them. The folder must be the top of its repo, as `copy make`
    asks: for one inside a repo, no folder above it is tried.
    **A folder found in a log is resolved once** (`run/place.rs`): every link and every `..` in its path is
@@ -320,6 +323,11 @@ record whose end is not believed can have been written by hand too.
   | failed, was stopped, ran out of time, or could not be committed | yes | no |
   | was cut off | yes | no, and a look that writes it down as failed adds none |
 
+  The table is what this build writes. Not every record of a run that failed, was cancelled or was cut off
+  names `repo` and `start`: one written before F48 names none of the three, and neither does one the released
+  v0.2.0-rc1 wrote down as failed (below). What `run toss` does with a record of none is decided in ADR 0017
+  ("What `run keep` and `run toss` may build on").
+
   **At a run's end its branch must still be at `start`.** Before anything of a finished run is staged or
   committed, core asks git which commit `refs/heads/jellymoon/run-<id>` names, by that whole name, as a look does
   (`copy/work.rs`), and compares what git prints with the commit this command made the copy from, the one it
@@ -343,7 +351,8 @@ record whose end is not believed can have been written by hand too.
 
   **A run that changed nothing is checked once more.** Its end is the commit its branch was read at, and no
   commit is made. After the copy's files were staged and found to be that commit's own, git is asked the same
-  `update-ref --no-deref`, with that commit as the old value and as the new: it writes nothing, and it fails
+  `update-ref --no-deref`, with that commit as the old value and as the new: it moves nothing; a name that
+  was made a name for another branch is a plain branch again (`f48/raced.rs`). It fails
   when the branch no longer names that commit. The run has then failed as one whose work could not be
   committed, and no `end` is written. What is left open is the time after that last check: the copy's folder
   is removed and its listing dropped, then the end is written, and a branch moved by hand in that time, or

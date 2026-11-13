@@ -106,6 +106,33 @@ fn a_text_that_cleaning_makes_longer_than_is_kept_is_cut_and_says_so() {
     assert_eq!((&file["cut"], &file["text"]), (&json!(false), &json!("cm_… cm_… cm_…")));
 }
 
+// Cleaning also takes the spaces and line breaks off a text's end. All of the file was read and nothing of the
+// cleaned text was cut, so a text that is shorter than its file that way is not `cut`.
+#[test]
+fn a_text_that_cleaning_only_shortens_at_its_end_is_not_cut() {
+    let file = text_of(&finished(), "hello  \n \n\n");
+    assert_eq!((&file["text"], &file["size"], &file["cut"]), (&json!("hello"), &json!(11), &json!(false)));
+}
+
+// The gate's finding on the follow-up to F48. A look keeps little of what git says beside its answer, and git
+// is never cut off for saying more: a repo whose own config makes the real git warn four hundred times at every
+// command is shown as any other. With the pipe let go of where the keeping stops, git died on its next warning
+// and the look said the repo could not be read.
+#[test]
+fn a_repo_whose_config_makes_git_warn_at_every_command_is_still_shown() {
+    let made = finished();
+    let (shown, file) = (printed(&made.show(&[])), printed(&made.show(&["--file", "1"])));
+    let parts: Vec<String> = (0..400).map(|n| format!("no-such-part-{n}")).collect();
+    made.git(&["config", "core.fsync", &parts.join(",")], b"", None);
+    let said = made.w.git_ran(&made.repo, &["for-each-ref"]);
+    let warned = String::from_utf8_lossy(&said.stderr).lines().filter(|line| line.contains("core.fsync")).count();
+    assert_eq!(warned, 400, "this git does not warn of a part of core.fsync it does not know");
+    for _ in 0..3 {
+        assert_eq!(printed(&made.show(&[])), shown);
+        assert_eq!(printed(&made.show(&["--file", "1"])), file);
+    }
+}
+
 // A cut text is shown up to its last whole word. With no break in what was read there is none.
 #[test]
 fn a_text_over_the_stated_size_with_no_whole_word_in_what_is_read_is_refused() {

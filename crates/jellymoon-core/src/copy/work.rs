@@ -3,8 +3,8 @@
 //! the run's name: the files that commit changes from its one parent. Which commit that is, the run's record
 //! names (F48, [`Named`]), and the repo must say the same; of a record from before there is only the branch's
 //! shape to go by. Nothing is checked out, no file of the work is written anywhere, and git is told an object's
-//! id and never a file's name, so a name is only ever data that git printed. Every read has a size it stops at,
-//! of what git prints and of what git says beside it (`call::run_most`).
+//! id and never a file's name, so a name is only ever data that git printed. Every read of what git prints has a
+//! size it stops at; what git says beside it is heard out, and no more of it is kept (`call::run_most`).
 
 use std::fs;
 use std::path::Path;

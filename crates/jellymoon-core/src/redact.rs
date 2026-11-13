@@ -139,7 +139,7 @@ fn cut(text: &str, max: usize) -> String {
 /// How far past what will be shown a text is read, in characters. Nothing after `limit + WINDOW` characters is
 /// cleaned or kept, so the cost of cleaning does not grow with a text's length. Far longer than any key but a PEM
 /// one, which [`PEM`] replaces from its header on.
-const WINDOW: usize = 16_384;
+pub(crate) const WINDOW: usize = 16_384;
 
 /// The longest secret promised whole. A text the window cut must still be this much longer than what is shown once it
 /// is cleaned; otherwise so much was taken out that the window's end is near, and the word there is not shown.

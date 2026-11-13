@@ -74,7 +74,7 @@ awk -F'"' '
   /^ *"description":/ { desc[n] = $4 }
   /^ *"passes": *true/ { pass[id[n]] = 1; passing++ }
   /^ *"blockedBy":/ { inby = 1; for (i = 4; i <= NF; i += 2) by[n] = by[n] "\"" $i; if ($0 ~ /\]/) inby = 0; next }
-  inby && NF > 1 { by[n] = by[n] "\"" $2 }
+  inby { for (i = 2; i <= NF; i += 2) by[n] = by[n] "\"" $i }
   inby && /\]/ { inby = 0 }
   END {
     for (f = 1; f <= n; f++) {

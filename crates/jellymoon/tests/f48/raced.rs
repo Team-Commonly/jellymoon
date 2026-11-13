@@ -30,7 +30,9 @@ fn raced(script: &str, step: &str, first: impl Fn(&Made) -> Vec<String>) -> (Mad
     fs::write(fake.join("on"), step).unwrap();
     fs::write(made.w.at("rec").join("go"), "").unwrap();
     let ran = ended(going);
-    assert_eq!(fake.join("stalled").exists(), words.is_empty(), "the made-up git was at that step");
+    // It takes its lock on `held` at that step and at no other: a run that never came to the step raced nothing.
+    assert!(fake.join("held").exists(), "the made-up git was never at the step {step}");
+    assert_eq!(fake.join("stalled").exists(), words.is_empty(), "and stalled there only when told nothing to do");
     (made, ran)
 }
 
@@ -110,6 +112,25 @@ fn a_branch_moved_under_a_copy_that_changed_nothing_after_the_tip_read_fails_the
     could_not_be_committed(&made, &said);
     let at = made.w.commit(&made.repo, &made.branch());
     assert_eq!(made.git(&["log", "-1", "--format=%s", &at]), "moved by hand", "the branch is where it was put");
+}
+
+// The same last check, with the run's name made a name for `main` just before it. The check moves nothing: its
+// old value and its new are the run's start. It is still a write of the run's own name, which is a plain branch
+// again afterwards, at the start, and `main` is where it was.
+#[test]
+fn a_run_that_changed_nothing_whose_name_was_made_a_name_for_main_leaves_a_plain_branch_at_its_start() {
+    let (made, said) =
+        raced("idle", "update-ref", |made| vec!["symbolic-ref".into(), made.branch(), "refs/heads/main".into()]);
+    let (run, said) = ran(&said);
+    assert_eq!(said["outcome"], "completed", "{said}");
+    assert!(said["why"].as_str().unwrap().contains("changed nothing"), "{said}");
+    let main = made.git(&["rev-parse", "HEAD"]);
+    assert_eq!(made.w.commit(&made.repo, "refs/heads/main"), main, "the person's branch is where it was");
+    assert_eq!(made.git(&["log", "-1", "--format=%s", &main]), "the first commit");
+    assert!(!made.w.git_ran(&made.repo, &["symbolic-ref", "-q", &made.branch()]).status.success(), "a plain branch");
+    assert_eq!(made.w.commit(&made.repo, &made.branch()), main, "at the commit the run started from");
+    let record = made.record();
+    assert_eq!((&record["start"], &record["end"]), (&json!(main), &json!(main)), "run {run}: {record}");
 }
 
 // A git that does not answer where the branch is has not said the branch was moved.

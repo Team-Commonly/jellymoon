@@ -69,7 +69,8 @@ first 64 KiB are read, `cut` is true, and the text ends before the word the cut 
 of a key whose rest was never read. With no whole word before the cut (no space or line break in what was read,
 as in a minified file) the file is refused in fixed words, not printed as an empty text.
 
-**`cut` is true whenever `text` is less than the file.** `most` counts the bytes that are read of a file, and it
+**`cut` is true whenever the file was not read whole or the cleaned text was cut at `most`.** A text that
+cleaning only shortens, by the spaces and line breaks at its end, is not `cut`. `most` counts the bytes that are read of a file, and it
 is no count of what is printed. Cleaning can make a text longer: a token gains an ellipsis and a password in a
 link becomes `[redacted]`. A text is kept to `most` characters, so a file of 64 KiB or less that cleaning makes
 longer than that is cut there, ends in `…`, and says `cut`. A character can be several bytes, so `text` can be
@@ -143,8 +144,10 @@ and no other file.
 No file name is ever an argument: git is given ids, which are checked to be 40 or 64 hex digits. A name is bytes
 git printed between two zero bytes. So a name that is `-rf`, `--output=x` or `HEAD:a.txt`, or holds a line break,
 is a name. Reading stops at the size given: the pipe is closed there and git ends on its next write
-(`call::run_most`). What git says beside its answer (stderr) is read to the same size and no further, and none
-of it is kept. Each git has the copy's time limit (`copy.md`, "Limits").
+(`call::run_most`). What git says beside its answer (stderr) is not read that way: it is read to its end, so git
+is never ended for what it says, and no more of it is held than the size given, or 128 KiB when that is less;
+none of it is used. A repo whose config makes git warn at every command is shown as any other
+(`f44/bounds.rs`). Each git has the copy's time limit (`copy.md`, "Limits").
 
 **The work is the tip's change from its one parent.** The tip must be a commit with exactly one parent and the
 message `Jellymoon run <id>`, which is what a copy ends as (`copy/clean.rs`). A commit put on the branch afterwards,

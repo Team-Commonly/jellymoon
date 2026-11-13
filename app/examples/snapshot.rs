@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use jellymoon_app::{one_line, read, scene, wishing};
+use jellymoon_app::{file_part, one_line, read, scene, wishing};
 use sticker_kit::Theme;
 use sticker_kit::draw::headless::{Typing, snapshot_typing};
 
@@ -46,7 +46,8 @@ fn main() -> ExitCode {
         }
     }
     for theme in themes {
-        let out = PathBuf::from(folder).join(format!("{name}-{}.png", theme.name));
+        // A theme file's `name` is the file's text: cleaned, and only a part of the picture's name, never a path.
+        let out = PathBuf::from(folder).join(format!("{name}-{}.png", file_part(&theme.name)));
         let typing = entry.clone().map(|entry| Typing { entry, typed: typed.clone() });
         if let Err(error) = snapshot_typing(scene::scene(&page), theme, typing, side(0, 1440.0), side(1, 900.0), &out) {
             eprintln!("snapshot: could not render {}: {error}", out.display());

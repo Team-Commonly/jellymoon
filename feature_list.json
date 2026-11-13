@@ -360,6 +360,19 @@
       "blockedBy": [
         "F44"
       ]
+    },
+    {
+      "id": "F49",
+      "category": "journal",
+      "description": "A theme file's art is never read, whatever it holds, and the file loads",
+      "steps": [
+        "`jellymoon-app layout --theme <file>` with a theme file that holds `art` in any shape, naming a path outside its folder, a rooted path, a script or nothing at all, exits 0, lays the page out with the kit's own art and says once that the file's pictures are not read; the same file loads the same on macOS, Linux and Windows",
+        "no file an `art` names is opened, looked for or resolved: with a file of that name beside the theme that would stall or fail a reader, the app neither waits nor fails",
+        "F32's step 4 is replaced by this: no theme file is refused for what its `art` names"
+      ],
+      "test": "cargo test -p jellymoon-app --test f49",
+      "passes": true,
+      "blockedBy": []
     }
   ]
 }

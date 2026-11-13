@@ -123,6 +123,38 @@ fn backspace_and_delete_take_a_whole_character() {
     assert_eq!((entry.text(), entry.caret()), ("a", 0), "a flag is one character");
 }
 
+// The entry steps by the rule no cut falls inside (`text.rs`), so one press takes a base with every mark drawn
+// onto it: Thai, Devanagari, Hebrew, Arabic, and Hangul in conjoining jamo, the older jamo of its second block too.
+#[test]
+fn one_backspace_or_delete_takes_a_whole_cluster_of_a_script_written_with_marks() {
+    let clusters = [
+        "\u{0E01}\u{0E35}\u{0E48}",
+        "\u{0E19}\u{0E49}\u{0E33}",
+        "\u{0915}\u{093F}\u{0902}",
+        "\u{0905}\u{0900}",
+        "\u{05E9}\u{05C1}\u{05B8}",
+        "\u{05D0}\u{05C4}",
+        "\u{05D0}\u{05C5}",
+        "\u{05D0}\u{05C7}",
+        "\u{0645}\u{064E}\u{0651}",
+        "\u{1112}\u{1161}\u{11AB}",
+        "\u{1100}\u{D7B0}\u{D7CB}",
+        "\u{1100}\u{1161}\u{D7FB}",
+    ];
+    for cluster in clusters {
+        let mut entry = typed(&format!("a{cluster}"));
+        entry.left();
+        assert_eq!(entry.caret(), 1, "{cluster:?} is one step");
+        entry.end();
+        entry.backspace();
+        assert_eq!(entry.text(), "a", "{cluster:?} goes in one backspace");
+        let mut entry = typed(&format!("{cluster}a"));
+        entry.home();
+        entry.delete();
+        assert_eq!((entry.text(), entry.caret()), ("a", 0), "{cluster:?} goes in one delete");
+    }
+}
+
 #[test]
 fn the_caret_moves_by_whole_characters_and_text_goes_in_at_it() {
     let mut entry = typed("漢e\u{301}🙂");

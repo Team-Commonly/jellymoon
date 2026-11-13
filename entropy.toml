@@ -311,7 +311,13 @@ max_file_lines = 400
 # key the file set and no other; `tests/text.rs` grew by 50 for the middle cut; `tests/colours.rs` by 8). The door
 # that settles each pair against its floor is 89 more in `src/theme/own.rs`, and the marks of five more scripts,
 # which no cut falls before, are 8 in `src/text.rs`; `src/theme/load.rs` lost 1.
-"crates/sticker-kit" = 7436
+# The findings of the reviews of PR 156 and PR 157 raised it by 92, to what the kit counts: `src` lost 1 (the path
+# check on a theme file's `art` and its error are gone from `theme/load.rs`, 15; an `ink` or a `soft` one sees
+# through, replaced and said, is 14 in `theme/own.rs`) and the tests grew by 93 (`tests/floors.rs` 48: that text,
+# and a field and a chip over a see-through paper on a dark desk; `tests/entry.rs` 32: one backspace for a whole
+# cluster, which holds three ranges of marks no test held; `tests/theme.rs` 8: `art` in every shape; the four
+# tests of debug bounds marked for debug builds, 6; `tests/f32.rs` lost 1).
+"crates/sticker-kit" = 7528
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -349,7 +355,11 @@ max_file_lines = 400
 # refused, is a picture that is not read (`tests/f32.rs`).
 # The words said of a theme file cleaned in one place for the app and the example raised it by 8: the test of a
 # key that holds an escape and a direction mark (`tests/f32.rs`), and the example's two calls.
-"app" = 5526
+# The same two reviews raised the app by 134, to what it counts: F49's test at the binary is 96 (`tests/f49.rs`:
+# `art` in every shape, and a named pipe beside the theme that the app does not wait on); a said line cut at 300
+# characters and a theme's name kept to a part of a file's name are 28 in `src/lib.rs`, 17 of them their test;
+# `tests/f32.rs` grew by 9 (the cut at the binary, the leaving path that loads) and the example by 1.
+"app" = 5660
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

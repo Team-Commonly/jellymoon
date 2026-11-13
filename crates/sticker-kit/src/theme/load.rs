@@ -2,16 +2,17 @@
 //! One written for an older kit is drawn in its own colours where those read, and text a file makes unreadable is
 //! replaced, and reported for a key the file set (`own.rs`).
 //! Refused, because they would make a theme more than data or more than a page can hold: a file over its size
-//! (`bounds.rs`), a number that is not finite or is outside its range, and a path that leaves the theme's folder.
+//! (`bounds.rs`), and a number that is not finite or is outside its range.
 //!
-//! A theme file names no pictures (`docs/adr/0016-theme-files-name-no-pictures.md`). The `art` table an older
-//! theme file has is not read: no file it names is opened, looked for or resolved, here or anywhere. It is said
-//! in one warning, and the kit's own art is drawn.
+//! A theme file names no pictures (`docs/adr/0016-theme-files-name-no-pictures.md`). The `art` an older theme
+//! file has is not read, whatever its shape and whatever it names: no file it names is opened, looked for or
+//! resolved, here or anywhere, and no name is looked at. It is said in one warning, the kit's own art is drawn,
+//! and the file loads the same on every system.
 
 use std::fmt;
 use std::fs;
 use std::io::Read;
-use std::path::{Component, Path};
+use std::path::Path;
 
 use toml::{Table, Value};
 
@@ -29,11 +30,6 @@ pub struct Loaded {
 pub enum ThemeError {
     Read(String),
     Parse(String),
-    /// `key` names a file outside the theme's own folder.
-    PathEscapes {
-        key: String,
-        path: String,
-    },
     /// The number at `key` is not finite or is outside `low` to `high`.
     OutOfRange {
         key: String,
@@ -48,9 +44,6 @@ impl fmt::Display for ThemeError {
         match self {
             ThemeError::Read(why) => write!(f, "cannot read the theme: {why}"),
             ThemeError::Parse(why) => write!(f, "cannot parse the theme: {why}"),
-            ThemeError::PathEscapes { key, path } => {
-                write!(f, "{key} = \"{path}\" leaves the theme's folder")
-            }
             ThemeError::OutOfRange { key, value, low, high } => {
                 write!(f, "{key} = {value} is not a number from {low} to {high}")
             }
@@ -69,7 +62,7 @@ impl Theme {
         let mut table: Table = text.parse().map_err(|e: toml::de::Error| ThemeError::Parse(e.to_string()))?;
         let known = Table::try_from(Theme::default()).map_err(|e| ThemeError::Parse(e.to_string()))?;
         let mut warnings = Vec::new();
-        no_pictures(&mut table, &mut warnings)?;
+        no_pictures(&mut table, &mut warnings);
         prune(&mut table, &known, "", &mut warnings);
         check(&table, "")?;
         let palette = table.get("palette").and_then(Value::as_table).cloned();
@@ -131,19 +124,11 @@ fn prune(table: &mut Table, known: &Table, prefix: &str, warnings: &mut Vec<Stri
     }
 }
 
-/// Takes the `art` table out of a theme file, which named a picture for a piece of the page. Nothing it names is
-/// read: only the text of each name is looked at, and one that leaves the theme's folder is refused as it always
-/// was, since a theme that points out of its folder is not one to load.
-fn no_pictures(table: &mut Table, warnings: &mut Vec<String>) -> Result<(), ThemeError> {
-    let Some(art) = table.remove("art") else { return Ok(()) };
-    for (key, name) in art.as_table().into_iter().flatten() {
-        let name = name.as_str().unwrap_or_default();
-        if Path::new(name).components().any(|part| !matches!(part, Component::Normal(_) | Component::CurDir)) {
-            return Err(ThemeError::PathEscapes { key: format!("art.{key}"), path: name.to_string() });
-        }
+/// Takes `art` out of a theme file, which once named a picture for a piece of the page. Nothing of it is read.
+fn no_pictures(table: &mut Table, warnings: &mut Vec<String>) {
+    if table.remove("art").is_some() {
+        warnings.push("art: pictures in a theme are not read in this version; the kit's own art is drawn".to_string());
     }
-    warnings.push("art: pictures in a theme are not read in this version; the kit's own art is drawn".to_string());
-    Ok(())
 }
 
 fn over(max: u64) -> String {

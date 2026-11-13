@@ -1,7 +1,8 @@
-//! The entry's colours in a theme file. A file never draws a pair of them worse than it did before for a key it
-//! did not set: such a key takes the file's own colour only when the pair that makes meets its floor, and is the
-//! sticker theme's otherwise. And no text of the entry is drawn where it cannot be read: the file loads, a colour
-//! under its floor is replaced, and for a key the file set one line says which and by what.
+//! The entry's colours in a theme file. A file never draws a pair of them under its floor for a key it did
+//! not set: such a key takes the file's own colour only when the pair that makes meets its floor, and is the
+//! sticker theme's otherwise. Over its floor a pair may still be drawn worse than before: the file's own colours
+//! are the file's. And no text of the entry is drawn where it cannot be read: the file loads, a colour under its
+//! floor is replaced, and for a key the file set one line says which and by what.
 //!
 //! The built-in themes are made in code and are not touched here; `tests/colours.rs` holds them to the same floors.
 
@@ -53,7 +54,8 @@ impl Side<'_> {
     /// The colour for the key. `own`, the file's own colour for a key it did not set, when the pair reads with
     /// it; else `now`, what the palette holds (the file's, or the sticker theme's), when the pair reads with that;
     /// else the first of `spare`, black and white the pair reads with, and a line in `warnings` when the file set
-    /// the key. `now` when nothing reads, which only text one sees through can do.
+    /// the key. `now` when nothing reads, which only a ground under text one sees through can do: that text is
+    /// then settled itself ([`Side::text`]).
     fn settle(&self, now: Color, own: Option<Color>, spare: &[Color], warnings: &mut Vec<String>) -> Color {
         if let Some(own) = own.filter(|own| !self.set && self.reads(*own)) {
             return own;
@@ -78,6 +80,14 @@ impl Side<'_> {
         }
         read
     }
+
+    /// The text of a pair whose ground is settled, for the `ink` and the `soft`, which a ground gives way to. A
+    /// text one sees through is measured as it is drawn, laid on its ground ([`Color::contrast`]), and may be
+    /// under its floor on every ground: then it is replaced as any key is, by itself with nothing seen through
+    /// where that reads, and said when the file set it.
+    fn text(&self, now: Color, warnings: &mut Vec<String>) -> Color {
+        self.settle(now, None, &[Color { a: 255, ..now }], warnings)
+    }
 }
 
 impl Palette {
@@ -97,8 +107,9 @@ impl Palette {
     ///
     /// Then each text of the entry is held to its floor on its ground: one under it is replaced by the first of
     /// the palette's colours that is over it, or by black or white. The field and a chip give way to the `ink`
-    /// and the `soft` on them, which are the whole page's. A file is never refused for this, and only a key the
-    /// file set is named in `warnings`.
+    /// and the `soft` on them, which are the whole page's; an `ink` or a `soft` one sees through, which no ground
+    /// is read under, is replaced for the whole page. A file is never refused for this, and only a key the file
+    /// set is named in `warnings`.
     pub(super) fn own(&mut self, set: Option<&Table>, warnings: &mut Vec<String>) {
         let has = |key: &str| set.is_some_and(|table| table.contains_key(key));
         let (under, desk) = (self.ground(), self.desk.over(Color::rgb(0xFFFFFF)));
@@ -115,6 +126,7 @@ impl Palette {
             warnings,
         );
         let (field, before) = (("entry", self.entry), self.caret);
+        self.ink = side("ink", field, false, TYPED_FLOOR).text(self.ink, warnings);
         let lines = [self.accent_dark, self.ink];
         self.caret = side("caret", field, false, CARET_FLOOR).settle(
             self.caret,
@@ -145,6 +157,8 @@ impl Palette {
         let (soft, grounds) = (("soft", self.soft), [self.dimmed.light, self.option, self.paper, self.ink]);
         let chip = Side { key: "chip", set: has("chip"), other: soft, ground: true, floor: CHIP_INK_FLOOR, under };
         self.chip = chip.settle(self.chip, light, &grounds, warnings);
+        let name = Side { key: "soft", set: has("soft"), other: ("chip", self.chip), ground: false, ..chip };
+        self.soft = name.text(self.soft, warnings);
 
         // The chosen chip and its name are one pair: the file's `star` and `soft` are taken where the file sets
         // neither key's own colour, when the name reads on the chip so, and neither of them when it does not.

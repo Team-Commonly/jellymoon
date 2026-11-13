@@ -35,6 +35,9 @@ fn placed(page: &gpui::Entity<Page>, cx: &mut VisualTestContext) -> Vec<Placed> 
     page.read_with(cx, |page, _| page.placed().to_vec())
 }
 
+// The tests marked `cfg(debug_assertions)`, here and in `tests/entry_draw.rs`, ask `cx.debug_bounds` where a piece
+// was painted, and GPUI keeps those bounds in a debug build only: in a release test build they are left out.
+#[cfg(debug_assertions)]
 #[test]
 fn the_view_builds_for_both_themes() {
     for theme in [Theme::sticker(), Theme::plain()] {
@@ -68,6 +71,7 @@ fn a_click_on_an_option_reaches_the_callback() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn label_text_is_painted_where_the_layout_put_it() {
     for theme in [Theme::sticker(), Theme::plain()] {
@@ -144,6 +148,7 @@ fn a_theme_at_the_top_of_its_size_ranges_is_drawn() {
 
 // A whole choice's options are written smaller when room is short. What is painted is the size the layout measured:
 // each line is as wide as its run, so it ends inside its bubble. Painted at the role's own size it would run past.
+#[cfg(debug_assertions)]
 #[test]
 fn a_whole_option_written_smaller_is_painted_at_the_size_it_was_measured_at() {
     let options = vec!["请".repeat(200), "W".repeat(200)];

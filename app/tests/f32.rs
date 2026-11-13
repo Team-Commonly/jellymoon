@@ -46,8 +46,17 @@ fn a_theme_file_changes_the_look_and_a_refused_one_stops_the_run_with_one_line()
     let said = String::from_utf8(out.stderr).unwrap();
     assert_eq!(said, "jellymoon-app: theme: sparkle [31m: unknown key, ignored\n");
 
+    // A key as long as a file lets it be is said to a stated length, cut between two characters, and marked.
+    let long = file("long.toml", &format!("\"{}e\\u0301{}\" = true\n", "x".repeat(299), "y".repeat(5000)));
+    let said = String::from_utf8(layout(&day.to_string(), &["--theme", &long]).stderr).unwrap();
+    assert_eq!(said, format!("jellymoon-app: theme: {}…\n", "x".repeat(299)), "the 300th goes with its accent");
+    assert_eq!(jellymoon_app::LONGEST_LINE, 300);
+
+    // A name under `art` that leaves the folder is not looked at (`tests/f49.rs`): the file loads.
+    let out = file("out.toml", "[art]\nstar = \"../star.svg\"\n");
+    assert!(layout(&day.to_string(), &["--theme", &out]).status.success());
+
     let refused = [
-        (file("out.toml", "[art]\nstar = \"../star.svg\"\n"), "art.star = \"../star.svg\" leaves the theme's folder"),
         (file("wide.toml", "[metrics]\nrim = 41\n"), "metrics.rim = 41 is not a number from 0 to 40"),
         (file("broken.toml", "[metrics\nrim = 4\n"), "cannot parse the theme: TOML parse error at line 1"),
         ("neon".to_string(), "cannot read the theme: "),

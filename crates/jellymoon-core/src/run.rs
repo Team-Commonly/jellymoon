@@ -42,7 +42,7 @@ pub use stop::stop_run;
 
 use crate::busy::{self, or_test};
 use crate::call::harness_of;
-use crate::copy::{self, RunCopy};
+use crate::copy::{self, MadeFrom, RunCopy};
 use crate::wish;
 use crate::{Error, WishState, find};
 
@@ -221,9 +221,9 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
         (e, _) => e,
     })?;
     // The copy's start lock is held until this command ends: what a killed command left is known by it.
-    let (copy, held) = made;
+    let (copy, held, from) = made;
     // The lock is taken before the wish names the run, so a wish never names a run that nothing holds.
-    let taken = start(home, &day, &wish.id, &copy.run);
+    let taken = start(home, (&day, &wish.id), &copy.run, from);
     let lock = match taken {
         Ok(lock) => lock,
         Err(e) => {
@@ -258,16 +258,18 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
 /// Takes the run's lock, when fewer than three runs go, writes its record, and has the wish name the run, behind
 /// the day's lock: all of it behind the lock the runs are counted behind (`cap.rs`). A wish that names a run
 /// already has had its run: this one is refused, and before it is counted as a run.
-fn start(home: &Path, day: &str, wish: &str, run: &str) -> Result<File, Error> {
+fn start(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom) -> Result<File, Error> {
     let free = || match wish::kept_of(home, day)?.into_iter().find(|kept| kept.id == wish).and_then(|kept| kept.run) {
         Some(first) => Err(had(wish, &first)),
         None => Ok(()),
     };
-    cap::claim(home, run, free, || name(home, day, wish, run))
+    cap::claim(home, run, free, || name(home, (day, wish), run, from))
 }
 
-/// Writes the run's record and has the wish name the run, with the run's lock held.
-fn name(home: &Path, day: &str, wish: &str, run: &str) -> Result<(), Error> {
+/// Writes the run's record and has the wish name the run, with the run's lock held. The record names the repo and
+/// the commit the copy was made from, from its first writing: before the harness is started, and so long before
+/// the copy's own record, which names the repo too, is removed with a finished run's copy.
+fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom) -> Result<(), Error> {
     let started = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
     let record = Record {
         wish: wish.to_string(),
@@ -280,6 +282,9 @@ fn name(home: &Path, day: &str, wish: &str, run: &str) -> Result<(), Error> {
         pid: None,
         mark: None,
         began: false,
+        repo: Some(from.repo),
+        start: Some(from.commit),
+        end: None,
         work: None,
     };
     record::write(home, run, &record)?;

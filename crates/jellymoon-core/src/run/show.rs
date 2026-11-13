@@ -1,8 +1,9 @@
 //! What a finished run made, shown (F44, ADR 0017, `docs/development/show.md`): [`show_run`] lists the files of
 //! the run's work and [`show_file`] prints one of them as its text. Which run, and whether there is work to show,
 //! is read from the home as a stop reads it (`stop.rs`); the work itself is read from the repo's store
-//! (`copy/work.rs`). Nothing is written: not the home, not the repo, and no file of the work anywhere. Every name
-//! and every text is an agent's, and is cleaned before it is printed; no refusal holds either.
+//! (`copy/work.rs`), as the change from the start to the end the run's record names, in the repo it names (F48).
+//! Nothing is written: not the home, not the repo, and no file of the work anywhere. Every name and every text
+//! is an agent's, and is cleaned before it is printed; no refusal holds either, or the repo's path.
 
 use std::fmt;
 use std::path::Path;
@@ -11,8 +12,9 @@ use serde::{Deserialize, Serialize};
 
 use super::end::{held, of_another, recorded};
 use super::obeyed::obeyed;
+use super::record::Record;
 use super::{RunOptions, RunOutcome, finished, no_wish, place, record, refused};
-use crate::copy::{self, Done, Entry, LISTED, RunCopy, TEXT_MAX, Unread, WorkFile};
+use crate::copy::{self, Done, Entry, LISTED, Named, RunCopy, TEXT_MAX, Unread, WorkFile};
 use crate::still::{statement, still_text};
 use crate::{Error, wish};
 
@@ -134,9 +136,8 @@ fn work(home: &Path, options: &RunOptions) -> Result<Work, Error> {
         let cut = "was cut off before it ended: there is no work of it to show";
         return Err(no(if held(home, &run) { "is going: its work is shown once it has finished" } else { cut }));
     }
-    let Some((outcome, why)) = recorded(home, &day, id, &run, &kept) else {
-        return Err(refused(format!("the record of run {run} is not one Jellymoon wrote for this wish")));
-    };
+    let not_cores = || refused(format!("the record of run {run} is not one Jellymoon wrote for this wish"));
+    let (outcome, why) = recorded(home, &day, id, &run, &kept).ok_or_else(not_cores)?;
     match outcome {
         RunOutcome::Completed => {}
         RunOutcome::Cancelled => return Err(no("was cancelled by a stop: there is no work of it to show")),
@@ -147,10 +148,28 @@ fn work(home: &Path, options: &RunOptions) -> Result<Work, Error> {
     if state != WorkState::Waits || why != finished(&copy, true) {
         return Ok(Work { run, state, files: Vec::new(), more: 0 });
     }
+    // Before git is asked anything: what the record names is in the shape core writes, or the record is not core's.
+    let named = named(&kept).map_err(|()| not_cores())?;
+    // The repo is found as a run finds it, whatever the record names: the record's folder is only compared.
     let folder = place::folder(home, &day, &made, options)?;
-    let read = copy::work_of(home, &folder, &run, options.repo.is_none());
+    let read = copy::work_of(home, &folder, &run, options.repo.is_none(), named.as_ref());
     let (files, more) = read.map_err(|unread| unshown(&run, unread))?;
     Ok(Work { run, state, files, more })
+}
+
+/// What the record of a run that ended with a commit names of it: its repo, its start and its end, all three, or
+/// none of them in a record from before F48. Err for a record that names some and not others, a repo by a path
+/// that does not start at a root (a run writes the folder as the system resolves it, from a root), or a commit by
+/// anything but a whole object id. Such a word never reaches git, and neither does one that passes: an id is only
+/// ever compared with what git printed (`copy/work.rs`).
+fn named(record: &Record) -> Result<Option<Named<'_>>, ()> {
+    match (record.repo.as_deref(), record.start.as_deref(), record.end.as_deref()) {
+        (None, None, None) => Ok(None),
+        (Some(repo), Some(start), Some(end)) if repo.is_absolute() && copy::is_id(start) && copy::is_id(end) => {
+            Ok(Some(Named { repo, start, end }))
+        }
+        _ => Err(()),
+    }
 }
 
 fn unshown(run: &str, unread: Unread) -> Error {
@@ -163,6 +182,12 @@ fn unshown(run: &str, unread: Unread) -> Error {
         Unread::Missing => format!("{branch} is not in the repo, so there is no work of it to show"),
         Unread::Symbolic => format!("{branch} is a name for another branch by now, so its work is not shown"),
         Unread::Moved => format!("{branch} is not as the run left it, so what is on it is not shown as the run's"),
+        Unread::Another => {
+            format!("the repo found for run {run} is not the one its record names, so its work is not shown")
+        }
+        Unread::Start => format!(
+            "the work of run {run} does not start where its record says the run started, so it is not shown as the run's"
+        ),
         Unread::Many => format!("the work of run {run} is more files than Jellymoon lists"),
     })
 }

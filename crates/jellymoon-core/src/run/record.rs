@@ -1,6 +1,8 @@
 //! A run's own record, `runs/<id>/run.json`: how the run ended, which is written here before the wish is told,
-//! and the harness child's pid with what tells that process from a later one of the same pid (`dead.rs`). The
-//! repo's folder is not in it: the copy's record names the repo (`copy/record.rs`).
+//! and the harness child's pid with what tells that process from a later one of the same pid (`dead.rs`). It
+//! names the run's repo, the commit the run started from and the commit it ended as (F48), since the copy's record,
+//! which names the repo while the copy is kept (`copy/record.rs`), goes with a finished run's copy. A record is a
+//! file anyone who can write the home can write: what it names is checked and compared, never trusted (`show.rs`).
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -38,6 +40,18 @@ pub(super) struct Record {
     /// Whether the harness's stream began as a run's does: the harness knows a run's command line, and works.
     #[serde(default)]
     pub began: bool,
+    /// The git folder the checkouts of the run's repo share, as the system resolved it when the copy was made. It
+    /// is the one place a finished run's repo is kept, it is printed and sent nowhere, and it never chooses which
+    /// repo is read: `run show` finds the repo as a run does and compares. None in a record from before F48.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo: Option<PathBuf>,
+    /// The commit the copy was made from. None in a record from before F48.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<String>,
+    /// The commit the copy ended as, written with the end of a run that finished: the one commit of its work, or
+    /// the commit its branch was at when it changed nothing. None for every run that did not finish.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end: Option<String>,
     /// Whether the person kept or tossed the work of a run that finished. Left out while it waits: no run writes
     /// it, and `run show` reads it (`show.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -84,5 +98,34 @@ pub(super) fn child(home: &Path, run: &str, pid: u32) {
     if let Some(mut record) = kept(home, run) {
         (record.pid, record.mark) = (Some(pid), dead::mark(pid));
         let _ = write(home, run, &record);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const EXAMPLE: &str = include_str!("../../tests/fixtures/run-record.json");
+    const BEFORE: &str = include_str!("../../tests/fixtures/run-record-before.json");
+
+    // The contract is the type and its example: one changed without the other fails here.
+    #[test]
+    fn a_record_round_trips_byte_for_byte_and_one_from_before_is_read_and_written_as_it_was() {
+        let written = |record: &Record| serde_json::to_string(record).map(|line| format!("{line}\n")).unwrap();
+        let record: Record = serde_json::from_str(EXAMPLE).unwrap();
+        assert_eq!(written(&record), EXAMPLE);
+        let named = (record.repo.as_deref(), record.start.as_deref(), record.end.as_deref());
+        let (start, end) = ("0123456789abcdef0123456789abcdef01234567", "89abcdef0123456789abcdef0123456789abcdef");
+        assert_eq!(named, (Some(Path::new("/work/alpha/.git")), Some(start), Some(end)));
+        // A record from before F48 names none of the three, and written again it gains no field.
+        let before: Record = serde_json::from_str(BEFORE).unwrap();
+        assert!(before.repo.is_none() && before.start.is_none() && before.end.is_none());
+        assert_eq!(written(&before), BEFORE);
+        assert_eq!(EXAMPLE.split(",\"repo\":").next(), BEFORE.strip_suffix("}\n"));
+        // What is named is text, or the record is not read: nothing is made of a number or a list.
+        for odd in ["\"repo\":7", "\"start\":[\"main\"]", "\"end\":{}"] {
+            let changed = BEFORE.replace("\"began\":true", &format!("\"began\":true,{odd}"));
+            assert!(serde_json::from_str::<Record>(&changed).is_err(), "{odd}");
+        }
     }
 }

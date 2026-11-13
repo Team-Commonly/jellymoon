@@ -1,9 +1,11 @@
 //! What a finished run made, read from the repo's store and from nowhere else (ADR 0017, decision 2;
 //! `docs/development/show.md`). The run's work is the one commit its copy ended as (`clean.rs`), on the branch of
-//! the run's name: the files that commit changes from its one parent. Nothing is checked out, no file of the work
-//! is written anywhere, and git is told an object's id and never a file's name, so a name is only ever data that
-//! git printed. Every read has a size it stops at.
+//! the run's name: the files that commit changes from its one parent. Which commit that is, the run's record
+//! names (F48, [`Named`]), and the repo must say the same; of a record from before there is only the branch's
+//! shape to go by. Nothing is checked out, no file of the work is written anywhere, and git is told an object's
+//! id and never a file's name, so a name is only ever data that git printed. Every read has a size it stops at.
 
+use std::fs;
 use std::path::Path;
 
 use super::git::{Git, Repo};
@@ -27,8 +29,12 @@ pub(crate) enum Unread {
     Missing,
     /// The branch is a name for another branch.
     Symbolic,
-    /// The branch's last commit is not the one commit a run's copy ends as.
+    /// The branch's last commit is not the one commit a run's copy ends as, or not the end the record names.
     Moved,
+    /// The repo found is not the repo the record names.
+    Another,
+    /// The end's one parent is not the start the record names.
+    Start,
     /// More files than are read.
     Many,
 }
@@ -62,18 +68,48 @@ pub(crate) struct WorkFile {
     id: String,
 }
 
+/// What a run's record names of its work (`run/record.rs`): the git folder the repo's checkouts share, the commit
+/// the copy was made from and the commit it ended as. They are a file's words. The folder is compared with the
+/// one found and is never opened or looked up, and each id is compared with an id git printed and never handed
+/// to git.
+pub(crate) struct Named<'a> {
+    pub repo: &'a Path,
+    pub start: &'a str,
+    pub end: &'a str,
+}
+
 /// The first [`LISTED`] files of a run's work, in git's own order, and how many more there are. `quiet` is for a
 /// folder read from a session log (`git.rs`); no word of git's is kept of any failure here either way.
-pub(crate) fn work_of(home: &Path, folder: &Path, run: &str, quiet: bool) -> Result<(Vec<WorkFile>, usize), Unread> {
+///
+/// With what the record `named`, the work is the change from that start to that end in that repo, and is read
+/// only when the repo found at `folder` is that repo, the run's branch names that end, and the end's one parent
+/// is that start. The ids git is then given are the ones git printed, which are those. With none named, by a
+/// record from before, the work is the branch's last commit against its one parent, by its shape alone.
+pub(crate) fn work_of(
+    home: &Path,
+    folder: &Path,
+    run: &str,
+    quiet: bool,
+    named: Option<&Named>,
+) -> Result<(Vec<WorkFile>, usize), Unread> {
     let git = Git::find(&Places::of(home).runs, quiet).map_err(|_| Unread::Repo)?;
     let found = git.discover(folder).map_err(|_| Unread::Repo)?;
     let [bare, inside, below, _, shared] = &found[..] else { return Err(Unread::Repo) };
     if bare == "true" || inside != "true" || !below.is_empty() {
         return Err(Unread::Repo);
     }
+    if named.is_some_and(|named| !same(named.repo, Path::new(shared))) {
+        return Err(Unread::Another);
+    }
     let repo = git.open(Path::new(shared)).map_err(|_| Unread::Repo)?;
     let tip = tip(&repo, run)?;
+    if named.is_some_and(|named| named.end != tip) {
+        return Err(Unread::Moved);
+    }
     let parent = parent(&repo, run, &tip)?;
+    if named.is_some_and(|named| named.start != parent) {
+        return Err(Unread::Start);
+    }
     let list = ["diff-tree", "-r", "--no-renames", "--no-abbrev", "-z", &parent, &tip];
     let list = repo.bytes(&list, &[], LIST_MAX).ok_or(Unread::Repo)?;
     if list.len() >= LIST_MAX {
@@ -86,7 +122,18 @@ pub(crate) fn work_of(home: &Path, folder: &Path, run: &str, quiet: bool) -> Res
     Ok((files, more))
 }
 
-fn is_id(word: &str) -> bool {
+/// Whether the folder git `found` is the one a record `named`. One folder has many spellings, on Windows and on a
+/// Mac (case, a link, `..`, a short name, either separator, `\\?\`), and the system gives one resolved path for
+/// all of them: a run writes that one (`MadeFrom`), and here the folder found is resolved the same way and must be
+/// it, part for part. The record's own path is only compared. Nothing is asked of the system about it, since it
+/// is a file's word and could name any place, one on another machine too.
+fn same(named: &Path, found: &Path) -> bool {
+    fs::canonicalize(found).is_ok_and(|found| found == named)
+}
+
+/// Whether a word is a whole object id: 40 or 64 hex digits and nothing else, so never an option, a name or
+/// anything git would work out a commit from.
+pub(crate) fn is_id(word: &str) -> bool {
     matches!(word.len(), 40 | 64) && word.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
@@ -107,7 +154,7 @@ fn tip(repo: &Repo, run: &str) -> Result<String, Unread> {
 
 /// The one parent of the run's commit: the commit its copy was made of. A commit with another message, or with no
 /// parent or two, is not one a run's copy ended as: someone put it there, and its change is not shown as the
-/// run's. The record keeps neither commit's id (`run/record.rs`), so this is all that is checked.
+/// run's. Of a record from before, which names neither commit, this shape is all that is checked.
 fn parent(repo: &Repo, run: &str, tip: &str) -> Result<String, Unread> {
     let commit = repo.bytes(&["cat-file", "commit", tip], &[], COMMIT_MAX).ok_or(Unread::Repo)?;
     let commit = String::from_utf8(commit).map_err(|_| Unread::Moved)?;

@@ -194,7 +194,7 @@ fn written(home: &Path, day: &str, wish: MadeWish, run: &str, record: Option<&Re
     let (outcome, why) = ended.clone().unwrap_or_else(cut_off);
     let mut told = tell(home, day, &wish.id, run, outcome, &why, Duration::ZERO);
     if ended.is_none() {
-        told = told.and_then(|told| note(home, run, outcome, (0, 0), &why).map(|()| told));
+        told = told.and_then(|told| note(home, run, outcome, (0, 0), &why, None).map(|()| told));
     }
     told.unwrap_or_else(|_| drawn(wish, &(outcome, why)))
 }
@@ -230,10 +230,10 @@ pub(super) fn settle(
         None => copy::end_copy(home, run, Outcome::Completed, None).map_err(|_| KINDS[7]),
         Some(kind) => Err(kind),
     };
-    let (outcome, why) = match committed {
-        Ok((ended, changed)) => (RunOutcome::Completed, finished(&ended, changed)),
-        Err(_) if ended.end == End::Stopped => (RunOutcome::Cancelled, cancelled(run)),
-        Err(kind) => (RunOutcome::Failed, failed(run, kind)),
+    let (outcome, why, end) = match committed {
+        Ok((ended, changed, end)) => (RunOutcome::Completed, finished(&ended, changed), end),
+        Err(_) if ended.end == End::Stopped => (RunOutcome::Cancelled, cancelled(run), None),
+        Err(kind) => (RunOutcome::Failed, failed(run, kind), None),
     };
     if outcome != RunOutcome::Completed {
         mark(home, run, None);
@@ -241,7 +241,7 @@ pub(super) fn settle(
     // A test's build can wait here, with a finished run's copy gone and its end not yet in its record.
     busy::pause("JELLYMOON_TEST_NOTE_WAIT_MS");
     // A record that could not be written does not keep the wish from being told.
-    let noted = note(home, run, outcome, (read.denied, read.skipped), &why);
+    let noted = note(home, run, outcome, (read.denied, read.skipped), &why, end);
     let told = tell(home, day, wish, run, outcome, &why, wait()).map_err(|e| match e {
         Error::Store(e) => Error::Store(e),
         e if wish::was_locked(&e) => refused(format!(
@@ -273,17 +273,20 @@ pub(super) fn mark(home: &Path, run: &str, wait: Option<Duration>) -> bool {
     !copy::end_copy(home, run, Outcome::Failed, wait).is_err_and(|e| copy::timed_out(&e))
 }
 
-/// The run's own record takes its end, once.
+/// The run's own record takes its end, once, and with it, in the same writing, the commit a finished run's copy
+/// `ended` as. No other end names one: nothing of a run that did not finish was committed.
 pub(super) fn note(
     home: &Path,
     run: &str,
     outcome: RunOutcome,
     (denied, skipped): (usize, usize),
     why: &str,
+    ended: Option<String>,
 ) -> Result<(), Error> {
     let Some(mut record) = record::kept(home, run).filter(|record| record.outcome.is_none()) else { return Ok(()) };
     (record.outcome, record.why, record.denied, record.skipped) =
         (Some(outcome), Some(why.to_string()), denied, skipped);
+    record.end = ended;
     record::write(home, run, &record)
 }
 

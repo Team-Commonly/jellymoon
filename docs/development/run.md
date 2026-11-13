@@ -38,7 +38,8 @@ and its branch in them.
    with `--skip` or in `skip.txt`). `--logs` names the logs, in place of Claude Code's own. A folder found so is
    a log's word, and a log is untrusted, so it must be the person's own: on Unix its owner must be the owner of
    the person's home folder, and one that is not is refused and never copied. A `--repo` is not asked. The folders
-   are never printed and never reach page data, and the run's record does not hold the one chosen. Git's own
+   are never printed and never reach page data. Of the one chosen, the run's record keeps the git folder of its
+   repo ("What is kept"), and that is the one place it is kept once a finished run's copy is gone. Git's own
    words name the folder they are about, so for a folder found this way nothing git says is repeated, now or
    when the copy is ended: the refusal has fixed words in their place (the copy's record keeps `found`). A
    `--repo` the person typed may be named back to them. The folder must be the top of its repo, as `copy make`
@@ -290,10 +291,31 @@ record whose end is not believed can have been written by hand too.
   stands. While the run goes the wish is `working` and `why` says the run is going. Page data is unchanged: a
   page says it with the wish's `state` and `stars`.
 - **The record**, `runs/<id>/run.json`, beside the copy's:
-  `{wish, day, started, outcome, why, denied, skipped, pid, mark}`, `outcome` and `why` being null while the run
-  goes. No folder is in it.
+  `{wish, day, started, outcome, why, denied, skipped, pid, mark, began, repo, start, end}`, `outcome` and `why`
+  being null while the run goes (example `crates/jellymoon-core/tests/fixtures/run-record.json`).
   `pid` is the harness child and `mark` is when that process started, as the system says it. It is written as the tap's files are, and read as one (a plain file
   that only the person can write to).
+- **What the record names of the repo** (F48): `repo`, the git folder the repo's checkouts share, as the system
+  resolved it when the copy was made (the copy's own record names the same folder, and goes with a finished run's
+  copy);
+  `start`, the commit the copy was made from; `end`, the commit the copy ended as. `repo` and `start` are in the
+  record from its first writing, before the harness is started. `end` is written with `outcome` and `why`, in the
+  one writing of the run's end, and only for a run that finished: the commit made of its work, or, when it
+  changed nothing, the commit its branch was at. Each is left out when it is not known, never written as null,
+  and a record from before F48 has none of them (example `run-record-before.json`) and is read as it always was.
+  The repo's folder is a path of the person's machine: it is in this one file, and is not printed, not in page
+  data and not in what is sent to the model. Only `run show` reads the three, and it trusts none of them
+  ([show.md](show.md)).
+
+  | A run that | writes `repo`, `start` | writes `end` |
+  |---|---|---|
+  | was refused before its copy was made, or behind the lock runs are counted at | no record at all | |
+  | was never started (the harness too old, or not startable) | yes, then the record goes with the copy | no |
+  | finished, with work | yes | the one commit of its work |
+  | finished, and changed nothing | yes | the commit its branch was at, which is `start` |
+  | finished, with its copy's folder already gone | yes | no: nothing was there to commit |
+  | failed, was stopped, ran out of time, or could not be committed | yes | no |
+  | was cut off | yes | no, and a look that writes it down as failed adds none |
 - **A stop's request**, `runs/<id>/stop`: an empty file, there only when a stop was asked for.
 - **One run for a wish.** The wish names its run before the harness is started, behind the day's lock, so of two
   `jellymoon run` at once one starts and the other takes its own copy back and is refused.
@@ -321,8 +343,9 @@ a file that whoever can write the home can write, so its end is believed only wh
 and `day` are this wish and day; its `why` is, word for word, one of the texts core makes for that outcome and
 this run (the text put on the wish is made again by core, never copied from the file); and, for `completed`,
 nothing of the copy is kept, as after a finished run, whose work is on its branch. Any other record is a cut-off
-run's. The branch itself is not asked for: it is there from the copy's making, so it would prove nothing, and
-the record names no repo. The denials counted are the first result's.
+run's. The branch itself is not asked for: it is there from the copy's making, so it would prove nothing. What
+the record names of the repo is not read here either, and no repo is asked anything for a page: `run show`
+compares the three with the repo it finds. The denials counted are the first result's.
 
 Believed or not, the child the record names is killed, if it is still that process ("A run that was cut off"):
 nothing holds the run, so nobody reads that child any more, and a record that says the run ended can have been
@@ -414,6 +437,28 @@ On every system the copy is the run's own, so what such a harness edits is never
 that outlives its `jellymoon run` and still prints is ended by the system at its next line, as before. Because the
 harness is in a group of its own, Ctrl-C in the terminal of `jellymoon run` ends `jellymoon run` and not the
 harness: that is a cut-off run like any other.
+
+## What a kill leaves in the record
+
+`jellymoon run` writes its record whole each time, to a new file that is then renamed over the old one, so a kill
+leaves the record of the step before or of the step after, never half of one. What it names of the repo is
+written before anything it describes is removed: `repo` and `start` while the copy's own record is still there,
+and `end` after the copy is gone, which is the one step where the two are apart (the commit is made first, and
+is on the run's branch). `crates/jellymoon/tests/f48/cut.rs` kills a run while its harness works, and after its
+copy is removed and before its end is written; the other rows follow from the order of the steps and are not tested.
+
+| Killed | The record | The repo | `run show` |
+|---|---|---|---|
+| before the record is written | none; the copy is one nothing names, and is taken back ("A copy nothing names") | the run's branch, until then | `wish <id> has had no run` |
+| after the record, before the wish names the run | `repo`, `start`, no end; taken back with the copy | the same | the same |
+| while the harness works, or after it and before the commit | `repo`, `start`, no `outcome`, no `end` | the branch at `start`; the copy is kept | `was cut off before it ended`; after a look, `is not one Jellymoon wrote for this wish` |
+| after the commit, before the copy is removed | the same | the branch at the run's commit; the copy is kept, with the same work in it | the same |
+| after the copy is removed, before the end is written | the same | the branch at the run's commit, and no copy | the same: nothing names that commit as the run's end, so it is not shown as the run's |
+| after the end is written, before the wish is told | whole: `outcome`, `why`, `end` | as a finished run leaves it | the work, and the next look gives the wish the record's end |
+
+A look that finds a run cut off writes `failed` and the words of a cut-off run, and never an `end`
+("A run that was cut off"). An `end` put into such a record by hand changes nothing: the record's outcome and
+words are still a cut-off run's, and `run show` refuses it before it reads what it names.
 
 ## A copy nothing names
 

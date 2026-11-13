@@ -108,9 +108,13 @@ copy ends with. A commit made by hand in that shape, under that name, is shown a
 keeping it would land work no run made.
 
 **F48 closes this before anything is kept or tossed**: a run writes its repo, its start and its end in its record,
-and `run show`, `run keep` and `run toss` take the work from the record, not from the branch's shape.
-`feature_list.json` cannot give F45 and F46 a new edge, so the order is stated here: **F48 is built before F45 and
-F46.**
+and `run show` takes the work from the record and checks the branch against it. `feature_list.json` cannot give F45
+and F46 a new edge, so the order is stated here: **F48 is built before F45 and F46.**
+
+As F48 is built: a record from before, which names none of the three, is still shown by the branch's shape, and
+whoever can write the home can make a record into one from before. So **`run keep` and `run toss` refuse a record
+that names no commits**: only a look may go by shape. The path in the record is compared and never resolved, so a
+repo that was moved or copied since the run is refused as another repo.
 
 ## What comes after
 

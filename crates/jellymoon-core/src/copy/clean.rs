@@ -14,16 +14,18 @@ use crate::Error;
 /// Ends a run's copy. Completed: what is in the copy is committed onto the run's branch, the folder is removed and
 /// the branch is kept. Failed: the copy stays, and of all failed copies only the newest [`KEPT`] do.
 pub fn clean_copy(home: &Path, run: &str, outcome: Outcome) -> Result<RunCopy, Error> {
-    end_copy(home, run, outcome, None).map(|(copy, _)| copy)
+    end_copy(home, run, outcome, None).map(|(copy, ..)| copy)
 }
 
-/// [`clean_copy`], which also says whether a completed run's commit was made: false when the copy held nothing new.
+/// [`clean_copy`], which also says whether a completed run's commit was made, false when the copy held nothing
+/// new, and the commit the run's branch was left at, as git said it: the one made, or the one it was at. None for
+/// a failed run, and for a completed one whose folder was not there to commit.
 pub(crate) fn end_copy(
     home: &Path,
     run: &str,
     outcome: Outcome,
     wait: Option<Duration>,
-) -> Result<(RunCopy, bool), Error> {
+) -> Result<(RunCopy, bool, Option<String>), Error> {
     known(run)?;
     let at = Places::of(home);
     let file = at.record(run);
@@ -44,15 +46,16 @@ pub(crate) fn end_copy(
         record.failed = Some(u64::try_from(now).unwrap_or(u64::MAX).max(after));
         write(&file, &record)?;
         prune(&at);
-        return Ok((at.printed(run, at.root.join(run).exists()), false));
+        return Ok((at.printed(run, at.root.join(run).exists()), false, None));
     }
     let folder = at.root.join(run);
     let there = standing(&at.root, &folder)?;
     let git = Git::find(&at.runs, record.found).map_err(refused)?;
-    let made = there && commit(&git.open(&record.own).map_err(refused)?, &folder, run)?;
+    let ended = if there { Some(commit(&git.open(&record.own).map_err(refused)?, &folder, run)?) } else { None };
     gone(&git, &record, &folder, there)?;
     forget(&file);
-    Ok((at.printed(run, false), made))
+    let (made, end) = ended.map_or((false, None), |(end, made)| (made, Some(end)));
+    Ok((at.printed(run, false), made, end))
 }
 
 /// Removes what a git stopped at its limit, or a child of it, wrote after its copy was taken back: a real folder in
@@ -70,8 +73,9 @@ fn sweep(at: &Places) {
 /// Commits what is in the copy onto the run's branch, with git told the copy's git folder and its work tree. The
 /// paths that hold another repo are left out: adding one makes git start a second git inside that folder, under a
 /// config the agent could have written. No hook can start: the tree and the commit are written with git's plumbing,
-/// which has none, and the one hook of a ref update is off with the rest (`git.rs`). False: there was nothing new.
-fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<bool, Error> {
+/// which has none, and the one hook of a ref update is off with the rest (`git.rs`). Returned is the commit the
+/// branch is left at, and whether it was made here: false when there was nothing new, and the branch is where it was.
+fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<(String, bool), Error> {
     let failed = |said: String| refused(format!("git could not commit the copy, which is kept: {said}"));
     let git = |tree: Option<&Path>, vars: &[(&str, &str)], args: &[&str]| repo.run(tree, vars, args).map_err(failed);
     let staged = git(None, &[], &["ls-files", "-z", "--stage"])?;
@@ -83,7 +87,7 @@ fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<bool, Error> {
     let name = format!("refs/heads/{}", branch(run));
     let tip = git(None, &[], &["rev-parse", "--verify", &format!("{name}^{{commit}}")])?;
     if git(None, &[], &["rev-parse", "--verify", &format!("{tip}^{{tree}}")])? == tree {
-        return Ok(false);
+        return Ok((tip, false));
     }
     // The person's own name and address, as git reads them for this repo; Jellymoon's when either is missing.
     let own = |key: &str| repo.ask(None, &[], &["config", "--get", key]).map_err(failed);
@@ -98,7 +102,7 @@ fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<bool, Error> {
         ("GIT_COMMITTER_EMAIL", address.as_str()),
     ];
     let made = git(None, &who, &["commit-tree", "-p", &tip, "-m", &format!("Jellymoon run {run}"), &tree])?;
-    git(None, &[], &["update-ref", &name, &made, &tip]).map(|_| true)
+    git(None, &[], &["update-ref", &name, &made, &tip]).map(|_| (made, true))
 }
 
 /// Removes every failed copy but the newest [`KEPT`], with its registration. What cannot be removed now (a link

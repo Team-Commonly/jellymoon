@@ -1,8 +1,9 @@
 # A look at a run's work: `jellymoon run show`
 
-What a finished run made, read from the repo's store and printed as data (F44; ADR 0017, decisions 1, 2, 3 and 6).
-The rules are in `crates/jellymoon-core/src/run/show.rs` (which run, what is refused, what is printed) and
-`crates/jellymoon-core/src/copy/work.rs` (every question asked of git). The test is `crates/jellymoon/tests/f44.rs`.
+What a finished run made, read from the repo's store and printed as data (F44 and F48; ADR 0017, decisions 1, 2, 3
+and 6). The rules are in `crates/jellymoon-core/src/run/show.rs` (which run, what is refused, what is printed) and
+`crates/jellymoon-core/src/copy/work.rs` (every question asked of git). The tests are
+`crates/jellymoon/tests/f44.rs` and, for what the record names, `crates/jellymoon/tests/f48.rs`.
 
 ```
 jellymoon run show --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]
@@ -50,11 +51,36 @@ The wish's run is read as a stop reads it (`run.md`, "A stop the person asks for
 `runs/<id>/run.json`. A finished run is believed only as `run/end.rs` believes one: its record is for this wish and
 day, its words are core's, and its copy is gone. Whether it made a commit is read from those words.
 
-The record does not name the repo, the commit the run started from or the commit it ended as, and the copy's
-record, which named the repo, is removed when the copy is cleaned. So the repo is found as a run finds it
-(`run.md`, "The order"): `--repo`, or the one folder of the wish's project typed in on the day, from `--logs`. It
-must be the top of a checkout. Of a folder read from a log nothing git says is repeated; here nothing git says is
-repeated of any folder.
+The repo is found as a run finds it (`run.md`, "The order"): `--repo`, or the one folder of the wish's project
+typed in on the day, from `--logs`. It must be the top of a checkout. Of a folder read from a log nothing git says
+is repeated; here nothing git says is repeated of any folder.
+
+## What the record names, and how far it is trusted
+
+The record names the run's repo, the commit the run started from and the commit it ended as (F48; `run.md`, "What
+is kept"). The record is a file, and whoever can write the home can write it, so none of the three is trusted:
+
+- **Checked first, before git is asked anything** (`named` in `run/show.rs`). A record names all three or none.
+  `start` and `end` must each be a whole object id, 40 or 64 hex digits and nothing else, and `repo` a path from a
+  root. Anything else (a branch's name, `HEAD~1`, a short id, an option, two of the three) is refused as a record
+  Jellymoon did not write.
+- **The repo's path chooses nothing, and nothing is looked up at it.** The repo is found as above, whatever the
+  record says. Git then names the git folder that repo's checkouts share, and that folder must be the record's.
+  One folder has many spellings, on a Mac by a link or by case, on Windows by case, a short name, either
+  separator or a `\\?\` prefix, and the system gives one resolved path for all of them (`fs::canonicalize`, every
+  link and `..` followed). A run writes that resolved path in its record. A look resolves the folder it found the
+  same way and compares the two part by part, with no letter's case folded. The record's own path is never
+  resolved, opened or asked about: it is a file's word, and could name a place on another machine. So a record
+  that spells the same folder another way is refused, as naming another repo.
+- **No id from the record is given to git.** The branch is asked for by its name, and git prints the commit it
+  names; that id must be the record's `end`. Git is asked for that commit by the id git printed, and its one
+  parent must be the record's `start`. The ids `diff-tree` is given are those two, which git printed.
+
+So the work shown is the change from the recorded start to the recorded end, in the recorded repo, and only while
+the run's branch still names that end.
+
+**A record from before F48** names none of the three, and is shown by the shape of its branch alone, as F44 built
+it: the tip must be a run's commit (below), and the work is its change from its one parent.
 
 ## What is asked of git
 
@@ -80,8 +106,9 @@ is a name. Reading stops at the size given: the pipe is closed there and git end
 **The work is the tip's change from its one parent.** The tip must be a commit with exactly one parent and the
 message `Jellymoon run <id>`, which is what a copy ends as (`copy/clean.rs`). A commit put on the branch afterwards,
 a merge, a commit with no parent and a branch made a name for another branch are refused: what is there is not
-shown as the run's. This is all that can be checked, since the record keeps neither commit (see "What it does not
-do").
+shown as the run's. For a record that names its commits the tip must also be that end and its parent that start,
+so a commit of the right shape made by hand is refused too. For a record from before, the shape is all that can
+be checked (see "What it does not do").
 
 ## Cleaning
 
@@ -181,7 +208,10 @@ must say obeyed), and every character above against every name of one and two AS
 | a folder that is not the top of a checkout, a git that failed or ran out of time, an object that is missing | `the work of run <run> could not be read from the repo: ...` |
 | no branch of the run's name | `the branch of run <run> is not in the repo, so there is no work of it to show` |
 | the branch is a name for another | `the branch of run <run> is a name for another branch by now, ...` |
-| a tip that is not a run's commit | `the branch of run <run> is not as the run left it, ...` |
+| a finished run's record that names a commit by anything but a whole id, a repo by a path not from a root, or only some of the three | `the record of run <run> is not one Jellymoon wrote for this wish` |
+| a repo that is not the one the record names | `the repo found for run <run> is not the one its record names, so its work is not shown` |
+| a tip that is not a run's commit, or not the end the record names | `the branch of run <run> is not as the run left it, ...` |
+| a tip whose one parent is not the start the record names | `the work of run <run> does not start where its record says the run started, so it is not shown as the run's` |
 | a list of files over 16 MiB | `the work of run <run> is more files than Jellymoon lists` |
 | `--file` with no such number, or one past the 200 listed | `file <n> of run <run> names no file: ...` |
 | `--file` of a removed file | `file <n> of run <run> was removed by the work, ...` |
@@ -191,14 +221,21 @@ must say obeyed), and every character above against every name of one and two AS
 | `--file` of a text cleaning goes on changing | `file <n> of run <run> cannot be cleaned, so it is not shown` |
 
 `--file` with anything but digits is a usage error, exit 2. No refusal holds a file's name, a byte of a file, a
-word of the agent's or a word of git's.
+word of the agent's or a word of git's, and neither a refusal nor an answer holds the repo's path or a commit's id.
 
 ## What it does not do
 
-- **It does not know the run's commits.** The record keeps neither where the run started nor what it ended as. A
-  commit with the run's message and one parent, put on the run's branch by anyone who can write the repo, is shown
-  as the run's work. F45 needs both ids in the record before it lands anything; writing them changes what a run
-  writes at its end.
+- **It does not know the commits of a run from before F48.** Such a record names none, and a commit with the run's
+  message and one parent, put on the run's branch by anyone who can write the repo, is shown as that run's work.
+  Whoever can write the home can make any record one from before, by taking the three names out. So the record
+  guards against a change to the repo, not against a change to the home: F45 and F46, which act on the work,
+  should refuse a record that names no commits and not fall back to the shape.
+- **It does not follow a repo that was moved.** The record names the git folder where it was when the run was
+  made. A repo moved or copied elsewhere since is another repo, and its work is not shown. The same holds when
+  the system resolves the folder to another path than it did then (a volume mounted under another name or
+  letter): it is refused, never guessed.
+- **It does not show a commit no record names.** A run killed after its commit and before its end was written
+  leaves that commit on its branch (`run.md`, "What a kill leaves in the record"). It is not shown.
 - **It does not look past 200 files or 64 KiB of one.** There is no way to ask for the rest.
 - **It writes no `work` to the record.** Nothing does yet: `kept` and `tossed` are F45's and F46's to write.
 - **It does not bury a run that was cut off.** A look is not a page: it refuses, and writes nothing down.

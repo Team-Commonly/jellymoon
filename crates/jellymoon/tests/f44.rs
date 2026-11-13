@@ -107,10 +107,24 @@ impl Made {
         self.git(&[&["commit-tree"][..], &parents, &["-m", message, &tree]].concat(), b"", None)
     }
 
-    /// Puts made-up work where the run's own was: one commit over `main`, with the message core gives a run's.
+    /// Puts made-up work where the run's own was: one commit over `main`, with the message core gives a run's,
+    /// which the run's record is made to name as the commit the run ended as (F48): a look goes by the record.
     pub fn rework(&self, entries: &[Entry]) {
         let made = self.commit_of(entries, &["main"], &format!("Jellymoon run {}", self.run));
         self.git(&["update-ref", &self.branch(), &made], b"", None);
+        let mut record = self.w.record(&self.run);
+        record["end"] = json!(made);
+        fs::write(self.w.jm("runs").join(&self.run).join("run.json"), format!("{record}\n")).unwrap();
+    }
+
+    /// Makes the run's record one from before F48, which names no repo and no commit: a look then goes by the
+    /// branch's last commit and its one parent.
+    pub fn from_before(&self) {
+        let mut record = self.w.record(&self.run);
+        for name in ["repo", "start", "end"] {
+            record.as_object_mut().unwrap().remove(name);
+        }
+        fs::write(self.w.jm("runs").join(&self.run).join("run.json"), format!("{record}\n")).unwrap();
     }
 
     /// Everything git keeps of the repo that a look could change: the person's files, index and `HEAD`, and every

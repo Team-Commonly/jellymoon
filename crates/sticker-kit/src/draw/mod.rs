@@ -275,7 +275,7 @@ impl Render for Page {
         let size = window.viewport_size();
         let viewport = Viewport { w: size.width.into(), h: size.height.into() };
         if !self.themed {
-            self.sprites.reset(&self.theme, cx);
+            self.sprites.forget(cx);
             self.themed = true;
         }
         self.relayout(viewport, window);

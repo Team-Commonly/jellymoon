@@ -29,19 +29,18 @@ fn a_theme_file_changes_the_look_and_a_refused_one_stops_the_run_with_one_line()
     assert_eq!(which(&pieces(&day, &["--theme", "plain"])), which(&sticker));
     assert!(level(&themed) && !level(&sticker), "the file's theme is the one laid out");
 
-    let newer = file("newer.toml", "sparkle = true\n[art]\nstar = \"not-there.svg\"\n");
+    // A theme file names no pictures: the one beside it, script and all, is not read, and it is said in one line.
+    file("star.svg", r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#);
+    let newer = file("newer.toml", "sparkle = true\n[art]\nstar = \"star.svg\"\n");
     let out = layout(&day.to_string(), &["--theme", &newer]);
     assert!(out.status.success());
     assert_eq!(out.stdout, layout(&day.to_string(), &[]).stdout, "what is unknown or missing is the default");
     let said = String::from_utf8(out.stderr).unwrap();
-    assert!(said.starts_with("jellymoon-app: theme: sparkle: unknown key, ignored\n"), "{said}");
+    let pictures = "art: pictures in a theme are not read in this version; the kit's own art is drawn";
+    let lines: Vec<_> = said.lines().map(|line| line.strip_prefix("jellymoon-app: theme: ")).collect();
+    assert_eq!(lines, [Some(pictures), Some("sparkle: unknown key, ignored")]);
 
-    file("star.svg", r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#);
     let refused = [
-        (
-            file("script.toml", "[art]\nstar = \"star.svg\"\n"),
-            "the SVG for art.star is refused: it contains the element `<script`",
-        ),
         (file("out.toml", "[art]\nstar = \"../star.svg\"\n"), "art.star = \"../star.svg\" leaves the theme's folder"),
         (file("wide.toml", "[metrics]\nrim = 41\n"), "metrics.rim = 41 is not a number from 0 to 40"),
         (file("broken.toml", "[metrics\nrim = 4\n"), "cannot parse the theme: TOML parse error at line 1"),

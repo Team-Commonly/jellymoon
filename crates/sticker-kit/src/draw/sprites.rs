@@ -25,8 +25,6 @@ struct Key {
 #[derive(Default)]
 pub(crate) struct Sprites {
     drawn: HashMap<Key, Arc<Image>>,
-    /// Art the theme supplies from its own folder, by piece name.
-    supplied: HashMap<&'static str, Arc<Image>>,
 }
 
 /// Sizes art is rasterised at, so a window being resized reuses images
@@ -40,29 +38,9 @@ fn svg_image(svg: String) -> Arc<Image> {
     Arc::new(Image::from_bytes(ImageFormat::Svg, svg.into_bytes()))
 }
 
-fn piece_name(kind: PieceKind) -> &'static str {
-    match kind {
-        PieceKind::Hero => "hero",
-        PieceKind::Character => "character",
-        PieceKind::Star => "star",
-        PieceKind::Bubble => "bubble",
-        _ => "badge",
-    }
-}
-
 impl Sprites {
-    /// Forgets every image and reads the theme's own art afresh.
-    pub fn reset(&mut self, theme: &Theme, cx: &mut App) {
-        self.forget(cx);
-        for image in self.supplied.drain().map(|entry| entry.1) {
-            image.remove_asset(cx);
-        }
-        for (name, svg) in theme.art_svgs() {
-            self.supplied.insert(name, svg_image(svg));
-        }
-    }
-
-    fn forget(&mut self, cx: &mut App) {
+    /// Forgets every image: a theme's are not another's.
+    pub fn forget(&mut self, cx: &mut App) {
         for image in self.drawn.drain().map(|entry| entry.1) {
             image.remove_asset(cx);
         }
@@ -71,9 +49,6 @@ impl Sprites {
     /// The image for a piece and the rectangle it covers, which is larger
     /// than the piece by the room its rim and shadow need.
     pub fn get(&mut self, piece: &Placed, scene: &Scene, theme: &Theme, rim: f32, cx: &mut App) -> (Arc<Image>, Rect) {
-        if let Some(image) = self.supplied.get(piece_name(piece.piece)) {
-            return (image.clone(), piece.rect);
-        }
         let width = piece.rect.w.max(1.0);
         let (size, half_rims) = raster(width, rim);
         let grow = size / width;

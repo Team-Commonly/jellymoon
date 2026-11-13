@@ -12,8 +12,13 @@ use super::{end, record};
 use crate::wish::{self, MadeWish};
 use crate::{Error, WishState, copy};
 
-pub(super) const OLD: &str = "nothing was started: this Claude Code is too old for runs, as it does not know \
-                              --restricted; update Claude Code and run the wish again";
+/// Of a harness that refused a run's command line for `option`, one it does not know (`child.rs`).
+pub(super) fn old(option: &str) -> String {
+    format!(
+        "nothing was started: this Claude Code is too old for runs, as it does not know {option}; update Claude Code \
+         and run the wish again"
+    )
+}
 /// What the system said of it follows this where `jellymoon run` prints it, and is not kept with the wish.
 pub(super) const UNSTARTABLE: &str = "nothing was started: Claude Code could not be started";
 /// What a look writes for a run whose command could not tell its wish which of the two it was.
@@ -22,7 +27,7 @@ pub(super) const UNTOLD: &str = "nothing was started: Claude Code is too old for
 
 /// The wish as a run that was never started leaves it.
 pub(super) fn mark(wish: &mut MadeWish, why: &str) {
-    (wish.run, wish.why, wish.state) = (None, Some(why.to_string()), WishState::NeedsYou);
+    (wish.run, wish.why, wish.state, wish.question) = (None, Some(why.to_string()), WishState::NeedsYou, None);
 }
 
 /// What `jellymoon run` does when the harness it started for a run never began one: the wish names no run, says

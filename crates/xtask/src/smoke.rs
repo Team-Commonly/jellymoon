@@ -7,6 +7,7 @@
 //! step (`smoke/run.rs`) then starts their Claude Code on a harmless wish, in a repo the chain makes.
 
 mod apart;
+mod asks;
 mod build;
 mod copy;
 mod keep;

@@ -9,7 +9,9 @@ and the wish is let go. It is the one command that deletes in a person's repo, s
    as itself and only while it names the commit the run's record names. No working tree, no index, no `HEAD` and
    no other ref is touched, and the commit stays in the store until git tidies it away.
 2. **The record says tossed before anything goes**, with the commit the branch was at: that line is how a toss
-   is undone by hand (`git branch jellymoon/run-<id> <commit>`). The app offers no undo.
+   is undone by hand (`git branch jellymoon/run-<id> <commit>`). The app offers no undo. A later `run toss`
+   of that wish deletes a branch put back so, as it does whatever the record's toss left: it says the record said
+   tossed and that it did what was left to do, and claims no cause.
 3. **Work that waits is checked whole first.** A refusal of it leaves every ref, the record and the wish as they
    were.
 
@@ -35,7 +37,7 @@ One line of JSON (`Tossed`; the example `crates/jellymoon-core/tests/fixtures/to
 | the run made its one commit | `the work of run <id> was tossed` |
 | the run finished and changed nothing | `run <id>, which changed nothing, was tossed` |
 | the run failed, was cancelled or was cut off | `run <id>, which did not finish, was tossed` |
-| the record said tossed and something was left to do | `a toss of run <id> that was cut off was finished` |
+| the record said tossed and something was left to do, whatever left it: a toss that was cut off, a branch put back by hand, a toss asked in a folder that is not the repo | `the record of run <id> said it was tossed, and this toss did what was left to do` |
 | the record said tossed and nothing was | `run <id> was tossed before, and nothing was changed` |
 
 After the head, when something was changed: `: <copy><branch>, and the wish is let go`. `<copy>` is said only of a
@@ -47,6 +49,7 @@ run that did not finish: `its kept copy was removed, ` or `no copy of it was kep
 | not there | `its branch was not in the repo` |
 | a checkout stands on it | `its branch is left, as a checkout stands on it` |
 | it is a symbolic ref | `its branch is left, as it is a name for another branch by now` |
+| another ref of the repo is a symbolic ref that names it | `its branch is left, as a name of the person's points at it` |
 | it is at another commit | `its branch is left, as it is not at the commit the record names for it` |
 | git refused the delete | `its branch is left, as it was changed while the toss was at work` |
 | the repo was not found, is another, or did not answer | `its branch is left, as the repo could not be found or asked` |
@@ -77,8 +80,16 @@ A lock file left by a command that was killed is nobody's lock.
 A finished run whose record names its repo, start and end, with no `work` yet. In this order, and each a refusal
 below: a keep that was cut off has not landed the work; the run's branch is the run's own name at `end` (and `end`
 is `start`, or a commit whose one parent is `start`); no checkout of the repo stands on it, under any case of the
-letters of its name (a disk that folds case takes `Jellymoon/run-<id>` for the branch itself). A branch that is not
-in the repo at all is no refusal: there is nothing to delete, and the toss is written.
+letters of its name (a disk that folds case takes `Jellymoon/run-<id>` for the branch itself). A checkout on
+another spelling of the run's branch is refused as stood on on every disk, one that keeps case apart too, where
+that spelling is a different branch: the toss is the safe side, and `git checkout` of another branch frees it. A
+branch that is not in the repo at all is no refusal: there is nothing to delete, and the toss is written.
+
+**A name of the person's that points at the branch** (a symbolic ref, `refs/heads/alias` naming
+`refs/heads/jellymoon/run-<id>`, in either case of its letters) would be left naming nothing by the delete. It is
+no refusal either: the record takes `tossed`, the wish is let go, and the branch is left in the words above. It
+is the question a take-back asks (`copy/back.rs`, `pointed_at`: `for-each-ref --format=%(symref)`), asked once
+for both, and a keep asks it before it deletes the run's branch ([keep.md](keep.md), step 5).
 
 **Whether a cut-off keep landed** is asked of the repo, and only for a record that holds a keep's `kept`. The
 record names the branch the keep meant, and git moves whatever `HEAD` names at the moment of the step
@@ -96,9 +107,9 @@ the checkout stands on a branch again. A record without `kept` asks none of this
 | Step | What is done | Cut off after it, the next `run toss` |
 |---|---|---|
 | 1 | every check | begins again: nothing was written |
-| 2 | the record takes `work: tossed` and `tossed`, the commit; a keep's unfinished `kept` and `onto` go | says a toss that was cut off was finished, deletes the branch if it is the run's own at that commit and leaves it if not, and lets the wish go |
+| 2 | the record takes `work: tossed` and `tossed`, the commit; a keep's unfinished `kept` and `onto` go | says the record said tossed and it did what was left, deletes the branch if it is the run's own at that commit and leaves it if not, and lets the wish go |
 | 3 | (a finished run has no kept copy) | |
-| 4 | the branch is deleted (`git update-ref --no-deref -d <name> <commit>`) | lets the wish go, and says a cut-off toss was finished |
+| 4 | the branch is deleted (`git update-ref --no-deref -d <name> <commit>`) | lets the wish go, and says the same |
 | 5 | the wish is let go | says the run was tossed before |
 
 Once the record says tossed, nothing is a refusal of the toss any more: a branch that is not the run's own at
@@ -120,7 +131,21 @@ A failed, cancelled or cut-off run keeps its copy, and its record names `repo` a
 
 The copy is removed by its own record, which names its repo: so it goes even when the toss was asked of a folder
 that is not the run's repo. The branch is then left ("the repo could not be found or asked"), and a later toss
-asked in the repo deletes it and says a cut-off toss was finished.
+asked in the repo deletes it and says the record said tossed and it did what was left to do.
+
+**A run that asks** (F51) is tossed by these steps too: it has a copy, a `start` and no `end`, and until an
+answer can be given a toss is the one thing to do with it. Its copy is not one of the failed copies, and is
+removed all the same, edits and all; its branch is at `start`, since nothing was committed, and goes; the wish is
+let go and loses its `question`. The record keeps its outcome `asks` and its question beside `work: tossed`, so
+`run stop` afterwards prints the outcome `asks` with the line of a tossed run and no question, and `run show`
+says the run did not finish. Nothing holds a run that asks, so a toss, which holds the lock a keep and a toss share
+(`runs/keep.lock`) as every toss does, then takes the run's own lock,
+`runs/<id>/run.lock`, before it reads the record again and holds it until it is done, then removes the file:
+no other command can take the run up meanwhile. When another command holds that lock the toss is refused as of a
+run that is going. A toss of any other run takes no lock of the run's. No
+keep writes in the record of a run that asks: `run keep` refuses it before the record is touched, and a record
+that asks and holds a keep's `kept` all the same is not one Jellymoon wrote. While a toss holds it, the run counts as
+one of the three that may go at once.
 
 **A branch that is not at `start` is left.** A run killed after core's commit, or one whose copy could not be
 removed, has a branch that holds more than the start, and no record names that commit. It is not deleted as the
@@ -140,11 +165,11 @@ Each ends the command with exit 1, one line on stderr, and nothing changed, but 
 | the wish has had no run | `wish <id> has had no run, so there is nothing to toss` |
 | the record is not there or not JSON | `the record of run <id> cannot be read, so nothing was tossed` |
 | the run is another wish's | `wish <id> names run <run>, which is another wish's run: nothing was tossed` |
-| the run is going | `run <id> is going: it is stopped first, and nothing was tossed` |
+| the run is going, or it asks and another command holds its lock | `run <id> is going: it is stopped first, and nothing was tossed` |
 | the wish is working or the record has no outcome | `run <id> has no end written down yet: nothing was tossed` |
 | a keep or a toss holds the lock for ten seconds | `another keep or toss is at work in this home: nothing of run <id> was tossed` |
 | the lock's file could not be made or asked about | `the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home: nothing of run <id> was tossed` |
-| the record's words and names do not agree, it says tossed at another commit than it names, or it holds half a keep that a run that did not finish cannot have | `the record of run <id> is not one Jellymoon wrote for this wish` |
+| the record's words and names do not agree, it says tossed at another commit than it names, it says tossed and still holds a keep's `kept` and `onto` (a toss takes them out as it writes `tossed`), or it holds half a keep that a run that did not finish cannot have | `the record of run <id> is not one Jellymoon wrote for this wish` |
 | the record's `work` says kept, whatever branch, or none, it names beside | `the work of run <id> was kept, so it is not tossed: nothing was changed` |
 | a keep that was cut off had landed the work | ``a keep of run <id> that was cut off had landed its work, so it is kept and not tossed: `run keep` finishes that keep, and nothing was changed`` |
 | a checkout stands on the branch | `a checkout stands on the branch of run <id>: its work was not tossed, and nothing was changed` |
@@ -174,7 +199,10 @@ say kept yet, is not tossed: the work is on a branch of the person's or on their
 `git update-ref --no-deref -d refs/heads/jellymoon/run-<id> <commit>`: git deletes that name only while it holds
 that commit, and never follows a symbolic ref through it. It is asked with a keep's git: no hook, no config of
 the machine's, an answer bounded in bytes and in time. When git refuses, the branch is asked for once more: gone
-is said as gone, and anything else is left as "changed while the toss was at work".
+is said as gone, and anything else is left as "changed while the toss was at work". On a disk that folds case,
+with the run's branch packed and a loose other spelling of it at another commit, git reads the loose one for the
+name and refuses the delete: the toss has written the record and lets the wish go, and the branch is left in
+those words. With both spellings at one commit, the one delete removes both.
 
 Between the last question and the delete a checkout can come to stand on the branch. After the delete the
 checkouts are asked again, and if one stands on the name it is put back at the same commit, as a new name only

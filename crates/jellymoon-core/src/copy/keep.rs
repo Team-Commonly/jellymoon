@@ -62,11 +62,13 @@ pub(crate) struct Landing {
 }
 
 /// What a keep has the record say: the commit it is about to land on a branch, and that it has landed. And what
-/// it has the answer name: a `.gitattributes` the work removes that is at its path all the same after the step.
+/// it has the answer name: a `.gitattributes` the work removes that is at its path all the same after the step,
+/// and that the run's branch is left, as a name of the person's points at it.
 pub(crate) enum Note<'a> {
     Intent(&'a str, &'a str),
     Kept(&'a str, &'a str),
     Stayed(&'a [u8]),
+    Pointed,
 }
 
 pub(crate) struct Keep<'a> {
@@ -171,8 +173,8 @@ pub(crate) fn keep(
     }
     step::cut(4);
     // The run's branch goes only when a branch holds the commit: work on a detached `HEAD` has no other name.
-    if landing.how != How::Loose {
-        drop_branch(&at);
+    if landing.how != How::Loose && drop_branch(&at) {
+        note(Note::Pointed);
     }
     Ok(landing)
 }
@@ -240,13 +242,19 @@ fn stood_on(at: &At) -> Result<bool, Unkept> {
     Ok(false)
 }
 
-/// Deletes the run's branch as itself, while it names the record's end and nothing stands on it. git's own check
-/// of the old value is the comparison: a branch that was moved, made a name for another or removed stays as it is.
-fn drop_branch(at: &At) {
-    if stood_on(at) == Ok(false) {
+/// Deletes the run's branch as itself, while it names the record's end, nothing stands on it and no name of the
+/// person's points at it (`back::pointed_at`). git's own check of the old value is the comparison: a branch that
+/// was moved, made a name for another or removed stays as it is. True: it is left because such a name points at it.
+fn drop_branch(at: &At) -> bool {
+    if stood_on(at) != Ok(false) {
+        return false;
+    }
+    let pointed = back::pointed_at(at.repo, &at.name);
+    if pointed == Ok(false) {
         let delete = ["update-ref", "--no-deref", "-d", &at.name, at.of.named.end];
         let _ = at.repo.answer(None, &[], &delete, &[], SAID_MAX);
     }
+    pointed == Ok(true)
 }
 
 /// The branch the person's checkout stands on, by its whole name, and the commit it names. git follows a `HEAD`

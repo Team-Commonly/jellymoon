@@ -11,7 +11,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::stream::{self, Stream};
+use super::stream::{self, Expect, Stream};
 use crate::busy::{or_test, test_file};
 
 /// How much of what the child said on stderr is looked at, for the one fixed sign of a harness that is too old.
@@ -42,11 +42,15 @@ pub(super) struct Ended {
     pub exit_0: bool,
     pub read: Stream,
     /// It printed no line at all and refused its command line as one with an option it does not know: a harness
-    /// too old for runs.
-    pub old: bool,
+    /// too old for runs. The option is the first of a run's it named ([`NEWER`]).
+    pub old: Option<&'static str>,
 }
 
-/// Starts the command with `said` as its whole input, and waits for it to end, `limit` at most. `started` is told
+/// The options of a run's command line that a Claude Code can be too old for, in the order they are looked for.
+const NEWER: [&str; 3] = ["--restricted", "--json-schema", "--session-id"];
+
+/// Starts the command with `said` as its whole input, and waits for it to end, `limit` at most. Its stream is
+/// read against `expect`. `started` is told
 /// the child's pid as soon as there is one, and `began` is called once its stream has started as a run's does.
 /// `stop` says whether the person has asked for the run to stop: it is
 /// asked before the child is started, which then never is, and every 10 ms while the child goes. A child that has
@@ -55,12 +59,13 @@ pub(super) fn run(
     mut command: Command,
     said: String,
     limit: Duration,
+    expect: Expect,
     started: impl FnOnce(u32),
     began: impl FnOnce(),
     stop: impl Fn() -> bool,
 ) -> io::Result<Ended> {
     if stop() {
-        return Ok(Ended { end: End::Stopped, exit_0: false, read: Stream::default(), old: false });
+        return Ok(Ended { end: End::Stopped, exit_0: false, read: Stream::default(), old: None });
     }
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
@@ -69,7 +74,7 @@ pub(super) fn run(
     let stdin = child.stdin.take();
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(said.as_bytes())));
-    let ((stream, so_far), head) = (stream::reader(child.stdout.take()), stderr_head(child.stderr.take()));
+    let ((stream, so_far), head) = (stream::reader(child.stdout.take(), expect), stderr_head(child.stderr.take()));
     let (mut deadline, grace) = (Instant::now() + limit, or_test(GRACE, "JELLYMOON_TEST_GRACE_MS"));
     // A test's limit is counted from when its made-up agent has left its mark (`busy::test_file`).
     let from = test_file("JELLYMOON_TEST_RUN_LIMIT_FROM");
@@ -96,11 +101,12 @@ pub(super) fn run(
     let status = halt(&mut child, end == End::Stopped, grace);
     // A reader that does not finish has read what it has so far: its stream is never taken for an empty one.
     let whole = read.or_else(|| stream.recv_timeout(DRAIN).ok());
-    let read = whole.or_else(|| so_far.lock().ok().map(|so_far| *so_far)).unwrap_or_default();
+    let drained = whole.is_some();
+    let read = whole.or_else(|| so_far.lock().ok().map(|so_far| so_far.clone())).unwrap_or_default();
     let exit_0 = end == End::Exited && status.is_some_and(|status| status.success());
     let head = head.recv_timeout(DRAIN).unwrap_or_default();
-    let unknown = head.contains("unknown option") && head.contains("--restricted");
-    let old = end == End::Exited && !exit_0 && whole.is_some() && read.lines == 0 && unknown;
+    let unknown = NEWER.into_iter().find(|option| head.contains("unknown option") && head.contains(option));
+    let old = unknown.filter(|_| end == End::Exited && !exit_0 && drained && read.lines == 0);
     // A child the person stopped was stopped, whatever it printed while it was being ended.
     let end = if read.over && end != End::Stopped { End::Over } else { end };
     Ok(Ended { end, exit_0, read, old })

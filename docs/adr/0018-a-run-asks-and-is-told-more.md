@@ -95,6 +95,35 @@ run's command line less `--no-session-persistence` and with `--json-schema` and 
   user lines that the reader's rule keeps, each with the copy as its working directory. The fork's file repeats
   the first session's lines under the second copy's folder.
 
+The coordinator measured three more on 2026-11-12, on the same Claude Code, in a scratch repo, while F51 was
+built:
+
+- **An agent that edits and then asks.** It edited a file and ended `asks`, with a success and exit 0. So the copy
+  of a run that asks may hold changes; they stay in it, uncommitted (decision 4).
+- **`--session-id` with a fork.** `--session-id <uuid>` works with `--resume <id> --fork-session`: the fork's id,
+  in the stream and in its file's name, was the id asked for. A follow-up's id can be core's too.
+- **Every line names its folder.** Every `user` and `assistant` line of both kept session files carried a working
+  directory.
+
+## Found while building F51
+
+- **The last word is read strictly.** Exactly `{"state":"done"}` or `{"state":"asks","question":<text>}`. `done`
+  with a question, `asks` with anything more, and every other value is a failed run: a harness that enforces the
+  schema never sends them, and one that does not is not believed.
+- **The stated length is 300 characters**, cut with `…`; a question of more than 4096 bytes, the most the door
+  looks at, is a failed run and is not cut.
+- **The session is checked.** An init line that names another session than the one given, or none, stops the
+  child and fails the run, in its own words. The record names only ids core made.
+- **The tool list is exact.** With a schema the init line lists `StructuredOutput` beside the five, once.
+- **A copy that asks is never marked failed**, so it is not one of the five kept and nothing prunes it. Only a
+  toss removes it until F52.
+- **`jellymoon run` prints the question**, as a seventh name, cleaned. It is the first text of an agent's that a
+  run prints.
+- **A harness too old is told by any of three options**, `--restricted`, `--json-schema` and `--session-id`, and
+  the line names the one it did not know.
+- **A toss holds the run's lock** for a run that asks, since nothing else holds such a run and F52's answer will
+  take the same lock.
+
 ## Read, not measured
 
 - Claude Code's hooks page, read 2026-11-12, for "Not chosen": `defer` "requires non-interactive mode", is ignored
@@ -109,13 +138,14 @@ run's command line less `--no-session-persistence` and with `--json-schema` and 
 
 ## Not measured
 
-- Whether `--session-id` may be passed with `--resume --fork-session`, so that a follow-up's id is core's too. If
-  not, the id is read from the stream's first line and written then.
 - A session resumed after the harness was updated, on Windows, or on a Claude Code too old for `--json-schema` or
   `--session-id`. Such a harness is expected to answer as one too old for `--restricted` does, and is told the
   same way (`run.md`, "A run that was never started").
-- An agent that edits files and then asks, one that returns `asks` with no question, and one whose last word does
-  not fit the schema. The harness is said to retry such a word and to end with a subtype of its own.
+- An agent that returns `asks` with no question, one whose last word does not fit the schema, and one that
+  reaches a turn limit. The harness is said to retry such a word and to end with a subtype of its own. Core
+  takes each for a failed run whatever the harness does (`run.md`, "A run that asks"), proved on the made-up
+  agent only.
+- The fixed words that tell the agent to end with `done` or `asks`, as F51 wrote them, on a real harness.
 - Two answers at once. The run's lock decides it, as it decides two starts.
 - How a kept session's size grows over many answers, and what a resume costs.
 

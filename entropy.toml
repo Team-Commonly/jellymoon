@@ -248,7 +248,20 @@ max_file_lines = 400
 # either case of its letters; a question git answers "not there" while it warns), `tests/shapes.rs` 13 and `busy.rs` 11 (the one cut a keep and a toss share, which
 # `copy/keep/step.rs` lost 5 to); `copy.rs` 7, `run/keep.rs` 4 (the two sentences of the lock both hold),
 # `run/stop.rs` 3, and `run/end.rs` and `copy/keep.rs` 2 each.
-"crates/jellymoon-core" = 10697
+# F51, a run that asks, raised core by 531. `run/asks.rs`, 246, is the schema, the last word read in two shapes,
+# the question at the door, the session id and the lock a toss holds, with their tests; `run/stream.rs` gained 86
+# (the session and the tool of a last word asked of the first line, the last word of the first result, and their
+# tests), `run/record.rs` 55 (`session`, `question`, and a record that asks believed only as core writes one),
+# `run.rs` 30, `run/end.rs` 27, `tests/shapes.rs` 16 (four example files), `session/copies.rs` 13 (a spelling
+# with no name is none, and its test); `run/child.rs`, `run/never.rs`, `shapes.rs`, `run/stop.rs`, `run/show.rs`,
+# `reading.rs` and `run/toss.rs` 24 between them. `wish.rs` gave its tests to `wish/tests.rs`, which with the
+# question a wish carries and its two tests is 34 more than what left.
+# The seven findings F46's gate left, closed with F51, raised core by 30: `copy/keep.rs` 8 (a keep leaves the
+# run's branch a name of the person's points at, and notes it), `copy/back.rs` 7 (`pointed_at`, the one question
+# of a take-back, a toss and a keep), `run/keep.rs` 7 (the words a keep's answer ends with then), `copy/keep/toss.rs`
+# 5 (such a branch is left by a toss, and is no refusal) and `run/toss.rs` 3 (its words; a head that claims no
+# cause; a record that says tossed and holds a keep's words is none of core's).
+"crates/jellymoon-core" = 11258
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -352,7 +365,16 @@ max_file_lines = 400
 # goes, where there are no signals), `src/parse.rs` gained 3 and `src/main.rs` 2. `tests/f44/names.rs` gained 2:
 # why its long names are in a letter no run id holds. `tests/f45/attrs.rs` gained 12: a link at the path of a
 # `.gitattributes` the work removes is not one that stayed.
-"crates/jellymoon" = 18398
+# F51 raised the binary by 1007, all of it tests: `tests/f51.rs` is 189 and the four files below it 607 (what
+# comes after a run that asks 296, the reader 131, the last words 113, the start 67); the made-up agent's part,
+# `tests/support/fake_agent/asks.rs`, is 173 and `fake_agent.rs` gained 2; `tests/f39/line.rs`, 45, is the
+# command line the tests compare, of which `tests/f39/world.rs` gave 11; `tests/f40.rs` and `tests/f48.rs` 1 each.
+# The tests of the seven findings F46's gate left raised it by 95: `tests/f46/landed.rs` 28 (a rebase's and a
+# bisect's file naming the run's branch under another spelling), `tests/f46.rs` 26 and `tests/f45.rs` 23 (a
+# branch a name of the person's points at, left by a toss and by a keep), `tests/f46/refused.rs` 17 (a record
+# that says tossed and holds a keep's words; a branch put back by hand) and `tests/f46/unfinished.rs` 1.
+# The made-up agent holding its lock before a first line that gets it stopped raised it by 6.
+"crates/jellymoon" = 19506
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -382,7 +404,8 @@ max_file_lines = 400
 # F44's step, `show` (`smoke/show.rs`, 50 lines), raised it by 54.
 # F45's step, `keep` (`smoke/keep.rs`, 58 lines), raised it by 61.
 # F46's step, `toss` (`smoke/toss.rs`, 54 lines), raised it by 57.
-"crates/xtask" = 1990
+# F51's step, `asks` (`smoke/asks.rs`, 55 lines), raised it by 58.
+"crates/xtask" = 2048
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -487,7 +510,8 @@ max_file_lines = 400
 # characters and a theme's name kept to a part of a file's name are 28 in `src/lib.rs`, 17 of them their test;
 # `tests/f32.rs` grew by 9 (the cut at the binary, the leaving path that loads) and the example by 1.
 # F50 raised the app by 11: the test that a folder in a run's copy gets no chip (`tests/f42.rs`).
-"app" = 5671
+# F51 raised the app by 1: a test's made wish names the question it does not carry.
+"app" = 5672
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

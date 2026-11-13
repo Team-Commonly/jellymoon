@@ -399,7 +399,7 @@
         "a look takes a run that asks for neither one going nor one cut off, and `run stop`, `run show` and a second `jellymoon run` each refuse it in fixed words"
       ],
       "test": "cargo test -p jellymoon --test f51",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F48",
         "F50"

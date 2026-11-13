@@ -37,7 +37,7 @@ fn the_agent_is_started_with_the_measured_command_line_in_the_copy_and_the_wish_
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
     let (run, _) = ran(&w.start(&wish, &repo));
-    let args: Vec<String> = (0..).map_while(|n| w.rec(&format!("arg{n}"))).collect();
+    let (args, _) = w.args();
     assert_eq!(args, ARGS, "the arguments, in order");
     assert_eq!(w.rec("stdin").unwrap(), format!("{SAID}\n"), "the wish's words go in on the input");
     assert!(args.iter().all(|arg| !arg.contains(SAID) && !arg.contains("uploader")), "and in no argument");

@@ -14,7 +14,7 @@ use super::end::{self, bury, held, of_another, recorded, soon};
 use super::keep::{BUSY, NO_LOCK, intent};
 use super::record::Record;
 use super::show::{Asked, not_cores, unread_words};
-use super::{RunOptions, RunOutcome, WorkState, finished, no_wish, place, record, refused};
+use super::{RunOptions, RunOutcome, WorkState, asks, finished, no_wish, place, record, refused};
 use crate::busy::cut;
 use crate::copy::{self, Branch, Keep, Left, Named, Unkept, Untossed};
 use crate::wish::{self, MadeWish};
@@ -83,13 +83,14 @@ fn let_go(run: &str) -> String {
 pub fn toss_run(home: &Path, options: &RunOptions) -> Result<Tossed, Error> {
     // Before the record is read: what a keep or a toss that ended a moment ago wrote is what this one goes by.
     let alone = copy::alone(home);
-    let on = ended(home, options)?;
+    let (on, _held) = ended(home, options)?;
     let (run, id) = (on.run.clone(), options.wish.clone());
     let _alone = alone.map_err(|unkept| unheld(&run, unkept))?;
     let state = on.record.work.unwrap_or(WorkState::Waits);
     let commit = on.named.as_ref().map(|named| named.2.clone());
     let fits = match state {
-        WorkState::Tossed => on.record.tossed == commit,
+        // A toss takes a keep's unfinished `kept` and `onto` out as it writes `tossed`: no record holds both.
+        WorkState::Tossed => on.record.tossed == commit && on.was.is_none(),
         _ => on.record.tossed.is_none() && (on.done || (state == WorkState::Waits && on.was.is_none())),
     };
     if !fits {
@@ -107,7 +108,7 @@ pub fn toss_run(home: &Path, options: &RunOptions) -> Result<Tossed, Error> {
             if wish.run.as_deref() != Some(run.as_str()) {
                 return Err(refused("the wish no longer names this run"));
             }
-            (wish.state, wish.why) = (WishState::LetGo, Some(let_go(&run)));
+            (wish.state, wish.why, wish.question) = (WishState::LetGo, Some(let_go(&run)), None);
             Ok(())
         });
         if told.is_err() {
@@ -120,7 +121,8 @@ pub fn toss_run(home: &Path, options: &RunOptions) -> Result<Tossed, Error> {
     let changed = did.wrote || !told || did.copy == Some(true) || did.branch == Branch::Deleted;
     let head = match (first, done, work) {
         _ if !changed => format!("run {run} was tossed before, and nothing was changed"),
-        (false, ..) => format!("a toss of run {run} that was cut off was finished"),
+        // Whatever left it: a toss that was cut off, a branch put back by hand, a toss asked outside the repo.
+        (false, ..) => format!("the record of run {run} said it was tossed, and this toss did what was left to do"),
         (_, true, true) => format!("the work of run {run} was tossed"),
         (_, true, false) => format!("run {run}, which changed nothing, was tossed"),
         (_, false, _) => format!("run {run}, which did not finish, was tossed"),
@@ -143,6 +145,7 @@ fn words(head: &str, changed: bool, did: &Did) -> String {
         Branch::Gone => return head.to_string(),
         Branch::Left(Left::Stood) => "its branch is left, as a checkout stands on it",
         Branch::Left(Left::Symbolic) => "its branch is left, as it is a name for another branch by now",
+        Branch::Left(Left::Pointed) => "its branch is left, as a name of the person's points at it",
         Branch::Left(Left::Moved) => "its branch is left, as it is not at the commit the record names for it",
         Branch::Left(Left::Raced) => "its branch is left, as it was changed while the toss was at work",
         Branch::Left(Left::Unasked) => "its branch is left, as the repo could not be found or asked",
@@ -164,8 +167,9 @@ fn copy_words(did: &Did) -> &'static str {
 }
 
 /// Finds the wish's run, which must have ended, and reads what its record names. A run that nothing holds is
-/// given its end first, as a stop and a page give it (`end::bury`).
-fn ended(home: &Path, options: &RunOptions) -> Result<Ended, Error> {
+/// given its end first, as a stop and a page give it (`end::bury`). The record of a run that asks is read behind
+/// the run's own lock, which is returned held (`asks::for_toss`).
+fn ended(home: &Path, options: &RunOptions) -> Result<(Ended, Option<asks::Held>), Error> {
     let day = wish::day_of(options.day.as_deref())?;
     let id = options.wish.as_str();
     let made = wish::kept_of(home, &day)?.into_iter().find(|made| made.id == id).ok_or_else(|| no_wish(&day))?;
@@ -174,13 +178,13 @@ fn ended(home: &Path, options: &RunOptions) -> Result<Ended, Error> {
         return Err(refused(format!("wish {id} has had no run, so there is nothing to toss")));
     };
     let no = |why: &str| refused(format!("run {run} {why}"));
-    let Some(record) = record::kept(home, &run) else {
+    let Some((record, lock)) = asks::for_toss(home, &run).map_err(|()| no(TOSSED.going))? else {
         return Err(refused(format!("the record of run {run} cannot be read, so nothing was tossed")));
     };
     if of_another(home, &run, Some(&record), &day, id) {
         return Err(refused(format!("wish {id} names run {run}, which is another wish's run: nothing was tossed")));
     }
-    if held(home, &run) {
+    if lock.is_none() && held(home, &run) {
         return Err(no(TOSSED.going));
     }
     if made.state == WishState::Working || record.outcome.is_none() {
@@ -195,7 +199,7 @@ fn ended(home: &Path, options: &RunOptions) -> Result<Ended, Error> {
     let kept = record.work == Some(WorkState::Kept);
     let was = if kept { None } else { intent(&record.kept, &record.onto).map_err(|()| not_cores(&run))? };
     let was = was.map(|(kept, onto)| (kept.to_string(), onto.to_string()));
-    Ok(Ended { day, made, run, record, done, work, named, was })
+    Ok((Ended { day, made, run, record, done, work, named, was }, lock))
 }
 
 /// The record's part and the repo's. Work that waits with a commit named for it is checked whole before the

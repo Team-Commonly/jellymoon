@@ -122,8 +122,7 @@ fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
     for other in others {
         stood_on |= stands(&repo.through(&other), &other, name)?;
     }
-    let named = repo.run(None, &[], &["for-each-ref", "--format=%(symref)"])?;
-    if stood_on || named.lines().any(|named| named == name) {
+    if stood_on | pointed_at(repo, name)? {
         return Ok(true);
     }
     let grafts = repo.nowhere(NO_GRAFTS);
@@ -132,6 +131,14 @@ fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
         (format!("--exclude={name}"), ["--glob=refs/heads/*", "--glob=refs/tags/*", "--glob=refs/remotes/*"]);
     let only = ["--no-replace-objects", "rev-list", "--max-count=1", name, "--not", &less, held[0], held[1], held[2]];
     Ok(!repo.run(None, &[("GIT_GRAFT_FILE", grafts)], &only)?.is_empty())
+}
+
+/// Whether another ref of the repo is a name for this branch (a symbolic ref), and would be left naming nothing
+/// were the branch deleted: the one question, for a take-back ([`theirs`]), a toss and a keep (`keep.rs`). The
+/// name is compared in either case of its letters, as [`stands`] compares it.
+pub(super) fn pointed_at(repo: &Repo, name: &str) -> Result<bool, String> {
+    let named = repo.run(None, &[], &["for-each-ref", "--format=%(symref)"])?;
+    Ok(named.lines().any(|named| named.eq_ignore_ascii_case(name)))
 }
 
 /// Whether the checkout a git folder is of stands on a branch: its `HEAD` is that branch, or `HEAD` is detached

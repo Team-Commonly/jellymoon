@@ -157,3 +157,31 @@ fn work_kept_on_no_branch_whose_runs_branch_the_keep_left_is_kept_and_not_tossed
     made.refuses(&made.toss(), &before, "the work of run {run} was kept, so it is not tossed: nothing was changed");
     assert_eq!((made.w.commit(&made.repo, &made.branch()), &made.w.kept(&made.wish)["state"]), (end, &json!("done")));
 }
+
+// A rebase or a bisect that goes back to the run's branch stands on it too, and git keeps that name in a file:
+// it is read in either case of its letters, by its whole name and its short one. The files are typed here as git
+// writes them, so this holds on a disk that keeps case apart as well.
+#[test]
+fn a_rebase_or_a_bisect_that_goes_back_to_the_runs_branch_under_another_spelling_stands_on_it() {
+    let made = finished();
+    let (git, short) = (made.repo.join(".git"), format!("Jellymoon/run-{}", made.run));
+    let whole = format!("refs/heads/{short}");
+    let stood = "a checkout stands on the branch of run {run}: its work was not tossed, and nothing was changed";
+    for (folder, file, held) in [
+        (Some("rebase-merge"), "head-name", &whole),
+        (Some("rebase-apply"), "head-name", &whole),
+        (None, "BISECT_START", &short),
+    ] {
+        let at = folder.map_or(git.clone(), |folder| git.join(folder));
+        fs::create_dir_all(&at).unwrap();
+        fs::write(at.join(file), format!("{held}\n")).unwrap();
+        let before = made.held();
+        made.refuses(&made.toss(), &before, stood);
+        fs::remove_file(at.join(file)).unwrap();
+        if folder.is_some() {
+            fs::remove_dir(&at).unwrap();
+        }
+    }
+    // The control: with none of the files there, the same toss goes through.
+    tossed(&made, &made.toss(), true, json!(made.end()), &format!("{WORK}: {DELETED}"));
+}

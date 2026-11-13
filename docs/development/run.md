@@ -4,7 +4,8 @@ A run is the person's own Claude Code, started headless on one made wish, in a c
 [ADR 0014](../adr/0014-a-run-is-started-headless.md)). The rules are core's, in `crates/jellymoon-core/src/run.rs`
 and `run/` (`child.rs` the child, `stream.rs` what is read, `end.rs` how an end is written down, `dead.rs` the
 stop sequence, `stop.rs` a stop the person asks for, `place.rs` the folder, `never.rs` a run never started,
-`left.rs` what a killed command left, `apart.rs` and `cap.rs` F41). The copy is [copy.md](copy.md)'s, and the wish is
+`left.rs` what a killed command left, `apart.rs` and `cap.rs` F41, `asks.rs` a run's session id, its last word
+and its question). The copy is [copy.md](copy.md)'s, and the wish is
 [wish.md](wish.md)'s. What a finished run made is shown by `jellymoon run show`, which is [show.md](show.md)'s, and landed on the
 person's branch by `jellymoon run keep`, which is [keep.md](keep.md)'s and adds `work`, `kept` and `onto` to the
 run's record. What a run left is refused with `jellymoon run toss`, which is [toss.md](toss.md)'s and adds `work`
@@ -24,10 +25,12 @@ run ended, and the day stayed locked. See "The end is written in the record firs
 {"run":"r0123456789abcdef","wish":"m1","outcome":"failed","star":null,"denied":1,"why":"run r0123456789abcdef did not finish (its result was not a success): its copy is kept and no star was added"}
 {"run":"r0123456789abcdef","wish":"m1","outcome":"cancelled","star":null,"denied":1,"why":"run r0123456789abcdef was cancelled by a stop: its copy is kept and no star was added"}
 {"run":null,"wish":"m1","outcome":"not_started","star":null,"denied":0,"why":"nothing was started: this Claude Code is too old for runs, as it does not know --restricted; update Claude Code and run the wish again"}
+{"run":"r0123456789abcdef","wish":"m1","outcome":"asks","star":null,"denied":0,"why":"run r0123456789abcdef asks a question: its copy is kept as it is, and nothing was committed","question":"Which of the two uploaders did you mean?"}
 ```
 
-No word of these is the agent's, a session log's or the wish's: `why` and `star` are fixed words with the run's id
-and its branch in them.
+`why` and `star` are fixed words with the run's id and its branch in them: no word of them is the agent's, a
+session log's or the wish's. `question` is printed only by a run that asks, and is the one text of the agent's
+that is: cleaned, on one line, 300 characters at most ("A run that asks"). Every other line has six names.
 
 ## The order
 
@@ -83,13 +86,25 @@ The arguments, in this order, and nothing else:
 
 ```
 -p --restricted --strict-mcp-config --permission-prompts none --permission-mode acceptEdits
---tools Read Edit Write Glob Grep --no-session-persistence --output-format stream-json --verbose
---append-system-prompt <fixed words>
+--tools Read Edit Write Glob Grep --session-id <id> --json-schema <schema> --output-format stream-json
+--verbose --append-system-prompt <fixed words>
 ```
 
-The fixed words say the folder is a copy made for one wish, that files in it can be read and edited, and that no
-command can be run. The wish's kept words go in on the harness's input, with a line break after them, and are in
-no argument. The variables are the reading call's list and nothing else, by the same function (`call::harness_of`):
+`<id>` is the session id core chose for this run and wrote in the run's record before the harness is started
+("A run that asks"). `<schema>` is the fixed schema of the harness's last word:
+
+```json
+{"type":"object","properties":{"state":{"type":"string","enum":["done","asks"]},"question":{"type":"string"}},"required":["state"],"additionalProperties":false}
+```
+
+Since F51 there is no `--no-session-persistence`: the harness keeps the run's session, in its own store.
+
+The fixed words are these, and nothing of a wish or a repo is in them: "You are working in a copy of a repo that
+was made for this one wish. You can read and edit files in this folder only. You cannot run commands. Make the
+change the wish asks for, then stop with the state `done`. If you cannot make it without an answer that only the
+person can give, stop with the state `asks` and one question for them, in plain words."
+
+The wish's kept words go in on the harness's input, with a line break after them, and are in no argument. The variables are the reading call's list and nothing else, by the same function (`call::harness_of`):
 `PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM` and `CLAUDE_CONFIG_DIR`, or the Windows list.
 
 **Only full paths are passed on.** The harness starts in the copy, which the agent writes, so a path that is not
@@ -101,9 +116,11 @@ with none left nothing is started, and one line says so. A variable that names o
 
 ## A run that was never started
 
-A Claude Code that answers this command line with an unknown option, naming `--restricted`, is too old. That is
-read from all of: no line at all on its output, an exit with a failure, and those two fixed pieces in the first
-4 KiB of what it said on stderr. A harness that printed anything first has worked, and is a failed run; so is
+A Claude Code that answers this command line with an unknown option, naming `--restricted`, `--json-schema` or
+`--session-id`, is too old. That is read from all of: no line at all on its output, an exit with a failure, and
+those two fixed pieces (`unknown option`, and the option) in the first 4 KiB of what it said on stderr. The three
+are looked for in that order, and the line names the first one found. An unknown option that is none of the
+three is no sign of age: that harness was started, and the run has failed. A harness that printed anything first has worked, and is a failed run; so is
 one whose output something it left still holds open, so that its reader never finishes: what was read so far is
 what counts, and a reader that did not finish is never the reader of a harness too old. A harness the system
 refuses to start at all is the other run that was never started.
@@ -113,7 +130,7 @@ run's end waits for it: it names no run, its state is `needs_you`, and its `why`
 
 | `why` | Written by |
 |---|---|
-| `nothing was started: this Claude Code is too old for runs, as it does not know --restricted; update Claude Code and run the wish again` | `jellymoon run`, which prints the same line as its own `why`, with `not_started` |
+| `nothing was started: this Claude Code is too old for runs, as it does not know <option>; update Claude Code and run the wish again`, with `--restricted`, `--json-schema` or `--session-id` | `jellymoon run`, which prints the same line as its own `why`, with `not_started` |
 | `nothing was started: Claude Code could not be started` | `jellymoon run`, which exits 1 with this line and the system's reason after it; the wish keeps the fixed part only |
 | `nothing was started: Claude Code is too old for runs or could not be started; run the wish again when that is mended` | a look, for a run whose command could not tell its wish: the day stayed locked, or the command was killed |
 
@@ -167,20 +184,26 @@ The stream is untrusted. A line is read up to 1 MiB with its line break; the who
 is longer, that is not a JSON object, whose `type` is not text, or whose `subtype`, `is_error` or
 `permission_denials` has another shape is counted (`skipped`, in the record) and skipped. Of everything else this
 is taken: how the stream starts, how many lines of `type` `result` came, the first one's `subtype`, `is_error` and
-how many entries its `permission_denials` lists (`denied`), and whether a skipped line came after it. No text of
-the agent's is kept, printed or put in the commit message, and nothing of what it said on stderr is.
+how many entries its `permission_denials` lists (`denied`), its `structured_output` (the last word, "A run that
+asks"), and whether a skipped line came after it. Of the agent's text only a question that passed the door is kept
+or printed; none is put in the commit message, and nothing of what it said on stderr is kept.
 
 **The start is checked.** The stream's `system`/`init` line says what the harness really started with, and three
-parts of it are compared: `tools` is exactly `Edit`, `Glob`, `Grep`, `Read`, `Write` in any order, `mcp_servers`
-is an empty list, and `permissionMode` is `acceptEdits`. A part that is missing or of another shape differs.
+parts of it are compared: `tools` is exactly `Edit`, `Glob`, `Grep`, `Read`, `Write` and `StructuredOutput`, each
+once, in any order, `mcp_servers` is an empty list, and `permissionMode` is `acceptEdits`. `StructuredOutput` is
+what the harness lists when it is given a schema (ADR 0018, "Measured"): a list without it, or with it twice,
+differs. A part that is missing or of another shape differs. A fourth part is compared by itself: `session_id` is
+the id the harness was given, as text, letter for letter. An init line that fits in the three and names another
+session, or none, stops the child as one that differs does, and the run has failed in words of its own.
 Every other part of the line is passed over. Before that line only other `system` lines are let by. Every
 later init line is measured the same way: one that differs stops the child and fails the run, wherever it comes. Anything
 else first (a skipped line, a line of another `type`, an init line that differs) is not a run's stream: the
 child is killed at once, with no five seconds, nothing more is read, and the run has failed.
 
 **Finished** is all of: the start is a run's; exactly one result line came; its `subtype` is `success`; its
-`is_error` is there and is the literal `false`; no skipped line came after it; and the harness exited with 0. A
-run with denials can still have finished ("What is denied").
+`is_error` is there and is the literal `false`; no skipped line came after it; the harness exited with 0; and
+the result's last word is `done`. A run with denials can still have finished ("What is denied"). With the last
+word `asks` and a question that passes the door, the same stream is a run that asks.
 
 The first row that fits is the one said:
 
@@ -189,12 +212,18 @@ The first row that fits is the one said:
 | Still going after 30 minutes | it was stopped at its time limit of 1800 seconds |
 | Having printed more than 64 MiB | it printed more than Jellymoon reads of a run |
 | Having printed no line at all | Claude Code ended without a result |
+| With an init line under another session id than the one given, or none | it did not start under the session id it was given |
 | With a start that is not a run's | it did not start with the tools, servers and permission mode of a run |
 | With no result line (or one over the line cap) | Claude Code ended without a result |
 | With more than one result line | it gave more than one result |
 | With a result that is not a success, or does not say `"is_error":false` | its result was not a success |
 | With a skipped line after its result | a line that could not be read came after its result |
 | With a success, and an exit that is not 0 | Claude Code exited with a failure after its result |
+| With a success, exit 0, and no `structured_output` or a null one | its result did not say whether it is done or asks |
+| With a last word that is not exactly `{"state":"done"}` or `{"state":"asks","question":<text>}` | its last word was not `done` alone, or `asks` with one question |
+| Asking, with a question of more than 4096 bytes | its question was longer than Jellymoon reads |
+| Asking, with a question of which cleaning leaves nothing | nothing was left of its question once it was cleaned |
+| Asking, with a question that eight cleanings still change | its question could not be cleaned |
 | Finished, and its branch was no longer at the commit the run started from ("What is kept") | its branch was moved while it worked |
 | Finished, and its work could not be committed | its work could not be committed |
 
@@ -293,14 +322,72 @@ done, `cancelled` for one whose `why` is the one line of a cancelled run, and `f
 stop` and the run's own `jellymoon run` print one line for one end. `denied` is then 0, since the count in a
 record whose end is not believed can have been written by hand too.
 
+## A run that asks
+
+A run can end with a question for the person instead of work (F51, ADR 0018, decisions 2, 3, 4 and 6). This build
+makes a run that asks and keeps it; the answer (`jellymoon run answer`) is F52, and until then a run that asks
+can only be tossed.
+
+**The session.** Before the harness is started core makes a session id: a random UUID, version 4, in small
+letters, from two outputs of the standard library's keyed hasher (the keys come from the system's random source).
+It is in the record's first writing, as `session`, and the harness is started with `--session-id <id>`. The
+harness keeps the session in its own store, where the person's own sessions lie; Jellymoon never reads, writes or
+removes anything there. The reader leaves a run's copy out of every day ([reader.md](reader.md)), so a kept
+session is not read back as something the person typed. A harness whose init line names another session than the
+one it was given is stopped at once and has failed.
+
+**The last word is data.** The harness is given a schema, and the first result line's `structured_output` is read
+in two shapes only: exactly `{"state":"done"}`, and exactly `{"state":"asks","question":<text>}`. Any other
+value (another state, `done` with a question, `asks` without one, a question that is not text, any part more, a
+list, a text) is a failed run, and so is none at all. The last word is asked only of a stream that is a success
+in every other part, from a harness that exited with 0: a question in a result that is not a success, that came
+twice, or before a failing exit is not a question. Nothing is read from the agent's prose.
+
+**The question passes the door.** It is cleaned at the door every kept text is cleaned at (`still.rs`): at most
+4096 bytes are looked at, and a longer question is a failed run; credential shapes are replaced with
+`[redacted]`; control characters and terminal sequences go; line breaks become spaces, so it is one line; it is
+cut at 300 characters, with `…` for its last when it was cut. A question of which nothing is left, or which
+eight cleanings still change, is a failed run. Of a last word that failed no word is kept or printed: not in the
+record, the wish, the page, or what `jellymoon run` prints.
+
+**What a run that asks leaves.** In this order: the record takes the outcome `asks`, the fixed line `run <id> asks
+a question: its copy is kept as it is, and nothing was committed` and `question`, in one writing; then the wish is
+told behind the day's lock: `needs_you`, that line as its `why`, the question as its `question`, no star; then the
+run's lock is let go and its file removed. The copy is not ended: its folder stays as the agent left it, edits
+and all, nothing is staged or committed, the run's branch stays at the commit the run started from, and the
+copy's record is not marked failed. So it is none of the five failed copies kept for a look, and no later run's
+failure removes it. The record names no `end`. `jellymoon run` prints the outcome `asks` with the question as a
+seventh name, and exits 0.
+
+**What is read back.** Anyone who can write the home can write a record or a wish, so a question is believed
+only as core would have written it. A record asks when its outcome is `asks`, its `why` is the fixed line with
+its own run's id, its `session` is an id of the shape core makes, and its `question` is one the door leaves
+unchanged; any other record that says `asks` has no end core wrote, and a look takes its run for cut off. Made
+wishes are refused as not that day's when a wish has a `question` the door would change, or one on a wish that
+is not `needs_you` or names no run. A page's `question` that the door would change is dropped when the page is
+put together.
+
+**What each command does with it.**
+
+| Command | A run that asks |
+|---|---|
+| a look (`jellymoon page`, the app) | neither going nor cut off: nothing is written, no copy is marked, the wish shows `needs_you` with the question. A wish that still says `working` (its `jellymoon run` was killed between the record and the wish) is given the question from the record |
+| `jellymoon run`, again | refused: `wish <id> has had its run, <run>: a made wish gets one run` |
+| `jellymoon run stop` | refused, exit 1: `run <id> asks a question and is not going, so nothing was stopped` |
+| `jellymoon run show` | refused: `run <id> asks a question: there is no work of it to show` |
+| `jellymoon run keep` | refused: `run <id> asks a question: there is no work of it to keep` |
+| `jellymoon run toss` | tossed as a run that did not finish ([toss.md](toss.md)), with the run's own lock held while it works |
+
 ## What is kept
 
 - **The wish**, in `pages/<day>.wishes.json`, behind the day's lock: `run`, the run's id, and `why`, how it
-  stands. While the run goes the wish is `working` and `why` says the run is going. Page data is unchanged: a
-  page says it with the wish's `state` and `stars`.
+  stands. While the run goes the wish is `working` and `why` says the run is going. A page says it with the
+  wish's `state` and `stars`, and for a run that asks with the wish's `question` (example `page-asks.json`).
 - **The record**, `runs/<id>/run.json`, beside the copy's:
-  `{wish, day, started, outcome, why, denied, skipped, pid, mark, began, repo, start, end}`, `outcome` and `why`
-  being null while the run goes (example `crates/jellymoon-core/tests/fixtures/run-record.json`).
+  `{wish, day, started, outcome, why, denied, skipped, pid, mark, began, repo, start, end, session, question}`,
+  `outcome` and `why` being null while the run goes (example `crates/jellymoon-core/tests/fixtures/run-record.json`).
+  `session` is in the record from its first writing and `question` only in that of a run that asks (example
+  `run-record-asks.json`); each is left out when there is none, and a record from before F51 has neither.
   `pid` is the harness child and `mark` is when that process started, as the system says it. It is written as the tap's files are, and read as one (a plain file
   that only the person can write to).
 - **What the record names of the repo** (F48): `repo`, the git folder the repo's checkouts share, as the system
@@ -324,6 +411,7 @@ record whose end is not believed can have been written by hand too.
   | finished, with its copy's folder already gone | yes | `start`: nothing was there to commit |
   | would have finished, and its branch was not at `start` by then | yes | no: it failed, as its branch was moved |
   | failed, was stopped, ran out of time, or could not be committed | yes | no |
+  | asks | yes | no: nothing was committed |
   | was cut off | yes | no, and a look that writes it down as failed adds none |
 
   The table is what this build writes. Not every record of a run that failed, was cancelled or was cut off
@@ -847,8 +935,15 @@ empty `runs/no-hooks`), and they stay.
   there wants a drive with a root, or a share: `C:\bin` and `\\server\share\bin` are kept (so is anything else
   that starts with two separators, which is read as a share), and `\bin` (no drive), `C:bin` (no root), `bin`
   and `.` are dropped.
-- A harness whose init line names more than the three compared parts differently (a new field, say) still passes:
-  only tools, MCP servers and permission mode are compared.
+- A harness whose init line names more than the four compared parts differently (a new field, say) still passes:
+  only tools, MCP servers, permission mode and the session id are compared.
+- A run that asks waits for an answer no command gives yet (F52). Until then it can be tossed, and nothing ages
+  it: its copy stays, and is not one of the five failed copies.
+- The fixed words that tell the agent to end with `done` or `asks` were not tried on a real harness in this
+  build, and neither was a real harness's answer to a last word that does not fit the schema, to `asks` with no
+  question, or its exact words for an unknown `--json-schema` or `--session-id` (ADR 0018, "Not measured").
+- A kept session lies in the harness's store for as long as the harness keeps it. Jellymoon removes none, so a
+  tossed run's session stays there too.
 - What the real harness does with the command line is measured once, on a Mac (ADR 0014, "Measured"). A repo with
   its own `CLAUDE.md`, settings or hooks, Windows, and an older Claude Code's exact words were not measured.
 - A run does not follow a project's own rules: on the measured Claude Code the restricted command line does not

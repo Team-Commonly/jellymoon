@@ -18,9 +18,12 @@ use crate::support::{LIMIT, Ran, ZONE, jellymoon_in, plant, scratch, tree};
 
 #[path = "guard.rs"]
 mod guard;
+#[path = "line.rs"]
+mod line;
 #[path = "made.rs"]
 mod made;
 pub use guard::{Going, alive};
+pub use line::{ARGS, SCHEMA, is_session};
 pub use made::{Made, NAMED};
 
 pub const DAY: &str = "2026-03-10";
@@ -33,30 +36,6 @@ pub const OLD: &str = "nothing was started: this Claude Code is too old for runs
                        update Claude Code and run the wish again";
 pub const UNTOLD: &str = "nothing was started: Claude Code is too old for runs or could not be started; run the \
                           wish again when that is mended";
-
-/// The command line measured on Claude Code 2.1.322, and the one fixed text core adds to it.
-pub const ARGS: [&str; 19] = [
-    "-p",
-    "--restricted",
-    "--strict-mcp-config",
-    "--permission-prompts",
-    "none",
-    "--permission-mode",
-    "acceptEdits",
-    "--tools",
-    "Read",
-    "Edit",
-    "Write",
-    "Glob",
-    "Grep",
-    "--no-session-persistence",
-    "--output-format",
-    "stream-json",
-    "--verbose",
-    "--append-system-prompt",
-    "You are working in a copy of a repo that was made for this one wish. You can read and edit files in this \
-     folder only. You cannot run commands. Make the change the wish asks for, then stop.",
-];
 
 /// One test's folder: `user` is the person's home, `jm` Jellymoon's, `harness` Claude Code's, `work` holds the
 /// repos, `bin` the made-up agent under the harness's name, and `rec` what it recorded.
@@ -162,6 +141,16 @@ impl World {
     /// What the made-up agent recorded under a name. None when it was never started.
     pub fn rec(&self, name: &str) -> Option<String> {
         fs::read_to_string(self.at("rec").join(name)).ok()
+    }
+
+    /// The command line the made-up agent was started with, with `<id>` where its session id stood, and that
+    /// id: it is one core made, or this fails.
+    pub fn args(&self) -> (Vec<String>, String) {
+        let mut args: Vec<String> = (0..).map_while(|n| self.rec(&format!("arg{n}"))).collect();
+        let at = args.iter().position(|arg| arg == "--session-id").unwrap() + 1;
+        let id = std::mem::replace(&mut args[at], "<id>".to_string());
+        assert!(is_session(&id), "{id}");
+        (args, id)
     }
 
     /// How many times the made-up agent was started.

@@ -197,11 +197,12 @@ fn the_agent_of_a_stopped_run_was_started_with_exactly_the_measured_command_line
     let w = world();
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
     let (going, run) = w.run_going(("lingers", 0), &[], &wish, &repo);
-    let args = || (0..).map_while(|n| w.rec(&format!("arg{n}"))).collect::<Vec<String>>();
-    assert_eq!(args(), ARGS, "while the run goes");
+    let args = || w.args();
+    let (first, id) = args();
+    assert_eq!(first, ARGS, "while the run goes");
     assert_eq!(printed(&w.stop(&wish)), said_cancelled(&run, &wish, 0));
     assert_eq!(printed(&ended(going))["outcome"], "cancelled");
-    assert_eq!((args(), w.starts()), (ARGS.map(str::to_string).to_vec(), 1), "after the stop");
+    assert_eq!((args(), w.starts()), ((ARGS.map(str::to_string).to_vec(), id), 1), "after the stop");
     assert_eq!(w.rec("stdin").unwrap(), format!("{SAID}\n"));
 }
 

@@ -25,13 +25,14 @@ mod world;
 
 pub use kept::{Held, finished, said};
 use serde_json::{Value, json};
-use support::Ran;
+use support::{Ran, skipped};
 pub use world::*;
 
 pub const WORK: &str = "the work of run {run} was tossed";
 pub const DELETED: &str = "its branch was deleted, and the wish is let go";
 pub const BEFORE: &str = "run {run} was tossed before, and nothing was changed";
 pub const LET_GO: &str = "run {run} was tossed, and the wish was let go";
+pub const POINTED: &str = "its branch is left, as a name of the person's points at it";
 pub const REFS: [&str; 2] = ["for-each-ref", "--format=%(refname) %(objectname) %(symref)"];
 
 /// What a toss that was not refused printed, with its five names and no other.
@@ -151,4 +152,29 @@ fn a_copy_is_made_and_a_run_started_and_tossed_in_a_repo_whose_config_makes_git_
     let made = Made { w, repo, wish, run };
     tossed(&made, &made.toss(), true, json!(made.end()), &format!("{WORK}: {DELETED}"));
     assert_eq!(made.w.branches(&made.repo).len(), 1, "the copy's own branch is all that is left");
+}
+
+// The gate's finding: a name of the person's that is a name for the run's branch (a symbolic ref) would be left
+// naming nothing by the delete. The toss is written, the wish is let go, and the branch is left with words that
+// say why; on a disk that folds case, a name for another spelling of the branch points at it too.
+#[test]
+fn a_branch_that_a_name_of_the_persons_points_at_is_left_and_the_toss_is_written() {
+    for spelled in ["jellymoon", "Jellymoon"] {
+        let made = finished();
+        let end = json!(made.end());
+        made.git(&["symbolic-ref", "refs/heads/alias", &format!("refs/heads/{spelled}/run-{}", made.run)]);
+        if !made.w.git_ran(&made.repo, &["rev-parse", "--verify", "--quiet", "refs/heads/alias"]).status.success() {
+            return skipped("a name for another spelling of the run's branch: this disk keeps the spellings apart");
+        }
+        let (others, person) = (made.others(), made.w.persons(&made.repo));
+        tossed(&made, &made.toss(), true, end.clone(), &format!("{WORK}: {POINTED}, and the wish is let go"));
+        made.is_tossed(&end, 1);
+        assert_eq!((made.others(), made.git(&["rev-parse", "refs/heads/alias"])), (others, made.end()));
+        assert!(person == made.w.persons(&made.repo));
+        tossed(&made, &made.toss(), false, end.clone(), &format!("{BEFORE}: {POINTED}"));
+        // The control: with that name gone, the next toss deletes the branch, and says no more than it knows.
+        made.git(&["symbolic-ref", "-d", "refs/heads/alias"]);
+        tossed(&made, &made.toss(), true, end, &format!("{}: {DELETED}", unfinished::CUT_OFF));
+        assert!(made.w.branches(&made.repo).is_empty());
+    }
 }

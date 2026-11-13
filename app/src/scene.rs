@@ -210,6 +210,7 @@ mod tests {
             project: "alpha".to_string(),
             state,
             stars: stars.iter().map(|star| star.to_string()).collect(),
+            question: None,
         }
     }
 

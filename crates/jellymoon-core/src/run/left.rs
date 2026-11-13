@@ -57,7 +57,7 @@ pub(crate) fn tidy(home: &Path, wishes: &[MadeWish]) -> Vec<String> {
         if record.as_ref().is_some_and(|record| record.pid.is_some()) {
             if mark(home, &run, soon()) {
                 let why = cut(&run);
-                let _ = note(home, &run, RunOutcome::Failed, (0, 0), &why, None);
+                let _ = note(home, &run, RunOutcome::Failed, (0, 0), &why, None, None);
             }
         } else {
             said.extend(copy::take_back_left(home, &run, soon()));

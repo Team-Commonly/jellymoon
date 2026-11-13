@@ -32,11 +32,14 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
   still ends the turn before it, as a line of a switched-off folder does. Lines are judged one by one, so of a
   session with lines in a copy and lines elsewhere only the copy's go. A line that is left out hides nothing: its
   uuid is not remembered, so a copy's line read first never drops a line of the same uuid typed elsewhere. A line
-  with no working directory is judged, for this rule only, as the last line before it in its file that had one
+  with no working directory, or an empty one, is judged, for this rule only, as the last line before it in its file that had one
   was: in a run's session it is left out with the rest, in a person's own it is read, and at the top of a file it
   is read. Only one yes or no is kept from line to line, never a folder. No flag turns this off, and nothing
   counts or names what was left out. It holds for `day` and `page`, and wherever a folder that was typed in is
   looked for: a run's search for its wish's folder, and the projects a wish is offered for.
+  Since F51 the harness keeps a run's session in the person's own store, which is the store the reader reads:
+  this rule is what keeps a run's wish and its agent's words out of the next day (ADR 0018, "Measured": every
+  `user` and `assistant` line of a kept session names the copy as its working directory).
   - **How the folder is compared** (`session/copies.rs`). The log's working directory is text and is compared
     as text: nothing of it is looked up. `copies` has three spellings: under the home as it is given, under
     the home as the system resolves it when it is there, and `copies` itself as the system resolves it when it
@@ -46,7 +49,8 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
     A folder is left out when it is a full path whose first names are a spelling's, each whole, with at least
     one more. So `copies-old/x`, `copiesx`, a `copies` anywhere else, a folder beside the home and `copies`
     itself are read. A separator that is doubled or ends the path, and a `.`, change nothing. A path with a
-    `..` in it is read.
+    `..` in it is read. A spelling with no name at all, which a `copies` linked to a disk's root resolves to, is
+    no spelling: nothing is left out by it.
   - **Letter case and Windows.** On a Mac and on Linux a name is compared exactly; on a Mac the resolved
     spelling is in the case the disk keeps, which is what a harness logs. On Windows `/` and `\` both part
     names, a name matches in any ASCII case (the drive's letter too), and the long spellings `\\?\C:\…` and

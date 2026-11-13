@@ -149,6 +149,7 @@ pub const STEPPED: &str = "git would not move the branch forward to the work of 
 pub const FORWARD: &str = "run {run} was kept: the branch was moved forward to the run's commit";
 pub const JOINED: &str = "run {run} was kept: one new commit on top of the branch's own holds its work and the run's";
 pub const BEFORE: &str = "the work of run {run} was kept before: nothing was changed";
+pub const POINTED: &str = "; the run's branch is left, as a name of the person's points at it";
 pub const UNCHANGED: &str = "the work of run {run} was not kept, and nothing was changed";
 
 /// What a keep that worked printed, with its five names and no other.
@@ -314,4 +315,26 @@ fn a_file_of_any_name_is_kept_and_no_name_is_read_as_an_option_or_a_pattern() {
     let files: HashMap<String, String> = made.files().into_iter().collect();
     assert_eq!(files["-rf"], "a name like an option\n");
     assert_eq!(files.len(), 3 + entries.len());
+}
+
+// The F46 gate's finding: a name of the person's that is a name for the run's branch (a symbolic ref) would be
+// left naming nothing when a keep deletes that branch. The work is kept, the branch is left, and the answer says so.
+#[test]
+fn a_keep_leaves_the_runs_branch_when_a_name_of_the_persons_points_at_it() {
+    let made = finished();
+    let end = made.end();
+    made.git(&["symbolic-ref", "refs/heads/alias", &made.branch()]);
+    kept(&made, &made.keep(&[]), &end, "main", &format!("{FORWARD}{POINTED}"));
+    assert_eq!(
+        (made.w.commit(&made.repo, &made.branch()), made.git(&["rev-parse", "refs/heads/alias"])),
+        (end.clone(), end.clone())
+    );
+    assert_eq!((made.record()["work"].clone(), made.w.commit(&made.repo, "main")), (json!("kept"), end.clone()));
+    // A keep asked again leaves it as well, and says nothing of it.
+    kept(&made, &made.keep(&[]), &end, "main", BEFORE);
+    assert_eq!(made.w.branches(&made.repo).len(), 1);
+    // The control: with that name gone, the next keep takes the run's branch away.
+    made.git(&["symbolic-ref", "-d", "refs/heads/alias"]);
+    kept(&made, &made.keep(&[]), &end, "main", BEFORE);
+    assert!(made.w.branches(&made.repo).is_empty());
 }

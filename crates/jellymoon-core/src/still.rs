@@ -10,7 +10,7 @@ use crate::redact::{line, shown};
 /// The most makings of one text that change it. One more follows, which must change nothing.
 const CHANGES: usize = 8;
 /// The most bytes of a text that is made at all: twenty times what is kept.
-const LOOKED: usize = 4096;
+pub(crate) const LOOKED: usize = 4096;
 /// The most characters a text may come to while it is made: far more than it can.
 const ROOM: usize = 4 * LOOKED;
 /// How many times its most characters a file's text is given room for while it is made ([`still_text`]).

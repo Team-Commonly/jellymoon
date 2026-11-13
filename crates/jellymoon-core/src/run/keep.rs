@@ -118,9 +118,13 @@ pub fn keep_run(home: &Path, options: &RunOptions, how: KeepOptions) -> Result<K
 /// The keep itself, and what it prints. What it notes for the record is written there as it goes; a
 /// `.gitattributes` it notes as still there is named in the answer, whose `why` then ends with [`STAYED`].
 fn landed(of: &Keep, wish: String, mut record: record::Record, how: KeepOptions) -> Result<Kept, Error> {
-    let (run, mut settings, mut stayed) = (of.run.to_string(), Vec::new(), Vec::new());
+    let (run, mut settings, mut stayed, mut pointed) = (of.run.to_string(), Vec::new(), Vec::new(), "");
     let mut note = |note: Note| {
         let (commit, onto, done) = match note {
+            Note::Pointed => {
+                pointed = POINTED;
+                return true;
+            }
             Note::Intent(commit, onto) => (commit, onto, false),
             Note::Kept(commit, onto) => (commit, onto, true),
             Note::Stayed(path) => {
@@ -139,7 +143,8 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, how: KeepOptions)
             let own = landed.commit.as_deref() == Some(of.named.end);
             let more = if stayed.len() > LISTED { MORE } else { "" };
             stayed.truncate(LISTED);
-            let why = done(&run, landed.how, how.ask, own) + if stayed.is_empty() { "" } else { STAYED } + more;
+            let why =
+                done(&run, landed.how, how.ask, own) + if stayed.is_empty() { "" } else { STAYED } + more + pointed;
             let (onto, fits) = (short(&landed.onto), how.ask.then_some(true));
             Ok(Kept { run, wish, kept: landed.commit, onto, why, settings, stayed, fits })
         }
@@ -160,6 +165,8 @@ const STAYED: &str = "; not every `.gitattributes` the work removes is gone: eac
                       that path in the checkout, and a file of the work it sets a filter for was written as the \
                       store holds it, not as that filter would have made it";
 const MORE: &str = ", and more of them are still there than `stayed` names";
+/// What `why` ends with when the run's branch was not deleted because a name of the person's is a name for it.
+const POINTED: &str = "; the run's branch is left, as a name of the person's points at it";
 
 /// Whether a record's `onto` is a branch a keep writes there: by the rule the keep itself writes a name by
 /// (`copy::nameable`), and no run's branch, where no work is ever kept (`copy::runs`).

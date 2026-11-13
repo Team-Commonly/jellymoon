@@ -11,7 +11,8 @@ use super::{BEFORE, DAY, DELETED, Made, WORK, World, ended, printed, ran, tossed
 pub const UNFINISHED: &str = "run {run}, which did not finish, was tossed";
 pub const REMOVED: &str = "its kept copy was removed, ";
 pub const NO_COPY: &str = "no copy of it was kept by now, ";
-pub const CUT_OFF: &str = "a toss of run {run} that was cut off was finished";
+/// The head of a toss that found the record saying tossed and something left to do, whatever left it.
+pub const CUT_OFF: &str = "the record of run {run} said it was tossed, and this toss did what was left to do";
 const MOVED: &str = "its branch is left, as it is not at the commit the record names for it";
 const UNNAMED: &str = "its branch is left, as the record names no commit for it";
 

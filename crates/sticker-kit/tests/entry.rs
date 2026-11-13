@@ -242,7 +242,7 @@ fn the_chosen_option_is_kept_by_its_name_when_the_options_change() {
 fn text_of_no_character_a_person_sees_is_no_words() {
     let joined = "\u{200D}\u{FE0F} \u{2800}\u{200C}";
     let blanks = ["\u{200D}", "\u{200C}", "\u{3164}", "\u{2800}", "\u{FE0F}", " \t\u{A0}\u{3000}\u{200B}", joined];
-    for blank in blanks.into_iter().chain(["\u{115F}\u{1160}\u{FFA0}", "\u{034F}", ""]) {
+    for blank in blanks.into_iter().chain(["\u{115F}\u{1160}\u{FFA0}", "\u{034F}", "\u{FE00}\u{E0100}\u{E01EF}", ""]) {
         let mut entry = typed(blank);
         assert!(!entry.holds(), "{blank:?} is no words");
         assert_eq!((entry.enter(), entry.waiting()), (None, false), "{blank:?} is nothing entered");

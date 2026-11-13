@@ -40,6 +40,12 @@ fn a_theme_file_changes_the_look_and_a_refused_one_stops_the_run_with_one_line()
     let lines: Vec<_> = said.lines().map(|line| line.strip_prefix("jellymoon-app: theme: ")).collect();
     assert_eq!(lines, [Some(pictures), Some("sparkle: unknown key, ignored")]);
 
+    // A key's name is said as text on one line: no control character of it, and none that turns the line round.
+    let turned = file("turned.toml", "\"spar\\u202Ekle\\u001B[31m\\u200F\" = true\n");
+    let out = layout(&day.to_string(), &["--theme", &turned]);
+    let said = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(said, "jellymoon-app: theme: sparkle [31m: unknown key, ignored\n");
+
     let refused = [
         (file("out.toml", "[art]\nstar = \"../star.svg\"\n"), "art.star = \"../star.svg\" leaves the theme's folder"),
         (file("wide.toml", "[metrics]\nrim = 41\n"), "metrics.rim = 41 is not a number from 0 to 40"),

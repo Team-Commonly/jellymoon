@@ -1,10 +1,11 @@
-//! The entry's colours in a theme file. A key the file does not set takes the file's own colour, never another
-//! theme's beside its own: a file written before the key was is drawn in its own palette. And text that cannot be read on its
-//! ground is not drawn so: the file loads, the colour is replaced, and one line says which key and by what.
+//! The entry's colours in a theme file. A file never draws a pair of them worse than it did before for a key it
+//! did not set: such a key takes the file's own colour only when the pair that makes meets its floor, and is the
+//! sticker theme's otherwise. And no text of the entry is drawn where it cannot be read: the file loads, a colour
+//! under its floor is replaced, and for a key the file set one line says which and by what.
 //!
 //! The built-in themes are made in code and are not touched here; `tests/colours.rs` holds them to the same floors.
 
-use toml::Table;
+use toml::{Table, Value};
 
 use super::Palette;
 use crate::color::Color;
@@ -16,73 +17,161 @@ pub const CHOSEN_INK_FLOOR: f32 = 4.5;
 pub const HINT_FLOOR: f32 = 2.5;
 /// The least contrast of the ring of a field that has the keys on the paper: what WCAG 2 asks of a line.
 pub const RING_FLOOR: f32 = 3.0;
+/// The least contrast of a chip's name, the palette's `soft`, on a chip that is not the chosen one: what WCAG 2
+/// asks of text. Both built-in themes draw it over 5.
+pub const CHIP_INK_FLOOR: f32 = 4.5;
+/// The least contrast of what is typed, the palette's `ink`, on the field: what WCAG 2 asks of text. Both built-in
+/// themes draw it over 14.
+pub const TYPED_FLOOR: f32 = 4.5;
+/// The least contrast of the caret on the field: what WCAG 2 asks of a line. The sticker theme draws it at 3.67.
+pub const CARET_FLOOR: f32 = 3.0;
+/// The least contrast of the chosen chip's fill with the other chips' and with what is under it for the fill
+/// alone to tell which chip is chosen; under it a line does. The sticker theme's yellow on its lilac chips is 1.22
+/// and is told by its fill, so the floor is just under that.
+pub const CHOSEN_FILL_FLOOR: f32 = 1.2;
 
-/// Two fills are close when no channel of theirs is this far apart: then a line tells the chosen chip.
-const CLOSE: u8 = 48;
+/// One colour of a pair of the entry, to be settled against the pair's other colour, which is settled.
+struct Side<'a> {
+    key: &'a str,
+    /// Whether the file set `key`.
+    set: bool,
+    /// The other colour's key, and the colour.
+    other: (&'a str, Color),
+    /// Whether this colour is the ground the other is drawn on, or is what is drawn on the other.
+    ground: bool,
+    floor: f32,
+    /// What is under the pair, opaque.
+    under: Color,
+}
+
+impl Side<'_> {
+    fn reads(&self, colour: Color) -> bool {
+        let (text, ground) = if self.ground { (self.other.1, colour) } else { (colour, self.other.1) };
+        text.contrast(ground.over(self.under)) >= self.floor
+    }
+
+    /// The colour for the key. `own`, the file's own colour for a key it did not set, when the pair reads with
+    /// it; else `now`, what the palette holds (the file's, or the sticker theme's), when the pair reads with that;
+    /// else the first of `spare`, black and white the pair reads with, and a line in `warnings` when the file set
+    /// the key. `now` when nothing reads, which only text one sees through can do.
+    fn settle(&self, now: Color, own: Option<Color>, spare: &[Color], warnings: &mut Vec<String>) -> Color {
+        if let Some(own) = own.filter(|own| !self.set && self.reads(*own)) {
+            return own;
+        }
+        if self.reads(now) {
+            return now;
+        }
+        let ends = [Color::rgb(0x000000), Color::rgb(0xFFFFFF)];
+        let Some(read) = spare.iter().chain(&ends).copied().find(|colour| self.reads(*colour)) else {
+            return now;
+        };
+        if self.set {
+            let (key, floor, other, used) = (self.key, self.floor, self.other.0, written(read));
+            let was = written(now);
+            warnings.push(if self.ground {
+                let text = written(self.other.1);
+                format!("palette.{key}: palette.{other} {text} on it, {was}, is under {floor} to 1; {used} is used")
+            } else {
+                let on = written(self.other.1.over(self.under));
+                format!("palette.{key}: {was} on palette.{other} {on} is under {floor} to 1; {used} is used")
+            });
+        }
+        read
+    }
+}
 
 impl Palette {
-    /// Gives each of the entry's keys that `set`, the file's `[palette]`, lacks the file's own colour, when the
-    /// file has one: the field is its `option`, the field's edge its `bubble_ring`, the caret its `accent_dark`,
-    /// a chip its `dimmed.light`, the chosen chip its `star`, that chip's name its `soft`, the hint its `quiet`,
-    /// and the ring its caret's. These are what the sticker theme's own keys are, or were before each had a key.
-    /// A file that sets neither a key nor the colour it is taken from is the sticker theme there, pair and all.
-    pub(super) fn own(&mut self, set: Option<&Table>) {
+    /// What the page's pieces are drawn on, opaque. A paper one sees through is laid on the desk, which is what
+    /// the kit draws under it; a desk one sees through is laid on white, since the kit does not know what a
+    /// window has under its page and has to name one ground.
+    pub fn ground(&self) -> Color {
+        self.paper.over(self.desk.over(Color::rgb(0xFFFFFF)))
+    }
+
+    /// Settles the entry's colours for a theme file whose `[palette]` is `set`. A key the file lacks takes the
+    /// file's own colour when the file sets that and the pair reads with it: the field is its `option` under its
+    /// `ink`, the caret its `accent_dark` and the hint its `quiet` on the field, the ring its caret's on the
+    /// paper, a chip its `dimmed.light` under its `soft`, and the chosen chip and its name its `star` and its
+    /// `soft`, both or neither. The field's edge, which no text is on, is its `bubble_ring`. Otherwise the key is
+    /// the sticker theme's, as before the file's own colours were taken, and nothing is said.
+    ///
+    /// Then each text of the entry is held to its floor on its ground: one under it is replaced by the first of
+    /// the palette's colours that is over it, or by black or white. The field and a chip give way to the `ink`
+    /// and the `soft` on them, which are the whole page's. A file is never refused for this, and only a key the
+    /// file set is named in `warnings`.
+    pub(super) fn own(&mut self, set: Option<&Table>, warnings: &mut Vec<String>) {
         let has = |key: &str| set.is_some_and(|table| table.contains_key(key));
-        let give = |key: &str, to: &mut Color, from: &str, own: Color| {
-            if !has(key) && has(from) {
-                *to = own;
-            }
-        };
-        give("entry", &mut self.entry, "option", self.option);
-        give("entry_edge", &mut self.entry_edge, "bubble_ring", self.bubble_ring);
-        give("caret", &mut self.caret, "accent_dark", self.accent_dark);
-        give("chip", &mut self.chip, "dimmed", self.dimmed.light);
-        give("chip_chosen", &mut self.chip_chosen, "star", self.star);
-        give("chip_chosen_ink", &mut self.chip_chosen_ink, "soft", self.soft);
-        give("entry_hint", &mut self.entry_hint, "quiet", self.quiet);
-        // The caret is the file's own when it set it, or set what it is taken from.
-        give("entry_ring", &mut self.entry_ring, if has("caret") { "caret" } else { "accent_dark" }, self.caret);
-    }
-
-    /// Holds the entry's three texts to their floors. One under its floor is replaced by the first of the file's
-    /// own colours that is over it, or by black or white, of which one always is; a line in `warnings` names the
-    /// key. A file is never refused for this: one that loaded before the floors still loads.
-    pub(super) fn readable(&mut self, warnings: &mut Vec<String>) {
-        let paper = self.paper;
-        let (chosen, field) = (self.chip_chosen.over(paper), self.entry.over(paper));
-        let (inks, pale) = ([self.soft, self.ink], [self.quiet, self.soft, self.ink]);
-        let lines = [self.caret, self.accent_dark, self.ink];
-        let mut hold = |key: &str, text: &mut Color, ground: (&str, Color), floor: f32, own: &[Color]| {
-            if text.contrast(ground.1) >= floor {
-                return;
-            }
-            let ends = [Color::rgb(0x000000), Color::rgb(0xFFFFFF)];
-            let Some(read) = own.iter().chain(&ends).find(|colour| colour.contrast(ground.1) >= floor) else {
-                return;
-            };
-            let (was, on) = (written(*text), written(ground.1));
-            warnings.push(format!(
-                "palette.{key}: {was} on palette.{} {on} is under {floor} to 1; {} is used",
-                ground.0,
-                written(*read)
-            ));
-            *text = *read;
-        };
-        hold("chip_chosen_ink", &mut self.chip_chosen_ink, ("chip_chosen", chosen), CHOSEN_INK_FLOOR, &inks);
-        hold("entry_hint", &mut self.entry_hint, ("entry", field), HINT_FLOOR, &pale);
-        hold("entry_ring", &mut self.entry_ring, ("paper", paper), RING_FLOOR, &lines);
-    }
-
-    /// The edge of the chosen chip. Its own fill, so no line shows, when the fill is told from the other chips';
-    /// when the two fills are close, the colour of its name, so that a line tells which chip is chosen.
-    pub fn chosen_edge(&self) -> Color {
-        let (chosen, other) = (self.chip_chosen.over(self.paper), self.chip.over(self.paper));
-        let apart = |a: u8, b: u8| a.abs_diff(b) >= CLOSE;
-        if apart(chosen.r, other.r) || apart(chosen.g, other.g) || apart(chosen.b, other.b) {
-            self.chip_chosen
-        } else {
-            self.chip_chosen_ink
+        let (under, desk) = (self.ground(), self.desk.over(Color::rgb(0xFFFFFF)));
+        let side = |key, other, ground, floor| Side { key, set: has(key), other, ground, floor, under };
+        let own = |from: &str, colour: Color| has(from).then_some(colour);
+        if !has("entry_edge") && has("bubble_ring") {
+            self.entry_edge = self.bubble_ring;
         }
+        let grounds = [self.option, self.paper, self.ink];
+        self.entry = side("entry", ("ink", self.ink), true, TYPED_FLOOR).settle(
+            self.entry,
+            own("option", self.option),
+            &grounds,
+            warnings,
+        );
+        let (field, before) = (("entry", self.entry), self.caret);
+        let lines = [self.accent_dark, self.ink];
+        self.caret = side("caret", field, false, CARET_FLOOR).settle(
+            self.caret,
+            own("accent_dark", self.accent_dark),
+            &lines,
+            warnings,
+        );
+        let pale = [self.quiet, self.soft, self.ink];
+        self.entry_hint = side("entry_hint", field, false, HINT_FLOOR).settle(
+            self.entry_hint,
+            own("quiet", self.quiet),
+            &pale,
+            warnings,
+        );
+        // The ring is the caret's colour when the caret is the file's, or stands in for one the file set.
+        let caret = (has("caret") || self.caret != before).then_some(self.caret);
+        let ring = Side { under: desk, ..side("entry_ring", ("paper", self.paper), false, RING_FLOOR) };
+        self.entry_ring = ring.settle(self.entry_ring, caret, &[self.caret, self.accent_dark, self.ink], warnings);
+        self.chips(set, under, warnings);
+    }
+
+    /// The chips' colours, for [`Palette::own`].
+    fn chips(&mut self, set: Option<&Table>, under: Color, warnings: &mut Vec<String>) {
+        let has = |key: &str| set.is_some_and(|table| table.contains_key(key));
+        // A file that sets another shade of `dimmed` and not its light one has no colour of its own for a chip.
+        let dimmed = set.and_then(|table| table.get("dimmed")).and_then(Value::as_table);
+        let light = dimmed.is_some_and(|hue| hue.contains_key("light")).then_some(self.dimmed.light);
+        let (soft, grounds) = (("soft", self.soft), [self.dimmed.light, self.option, self.paper, self.ink]);
+        let chip = Side { key: "chip", set: has("chip"), other: soft, ground: true, floor: CHIP_INK_FLOOR, under };
+        self.chip = chip.settle(self.chip, light, &grounds, warnings);
+
+        // The chosen chip and its name are one pair: the file's `star` and `soft` are taken where the file sets
+        // neither key's own colour, when the name reads on the chip so, and neither of them when it does not.
+        let fill = if !has("chip_chosen") && has("star") { self.star } else { self.chip_chosen };
+        let name = if !has("chip_chosen_ink") && has("soft") { self.soft } else { self.chip_chosen_ink };
+        if name.contrast(fill.over(under)) >= CHOSEN_INK_FLOOR {
+            (self.chip_chosen, self.chip_chosen_ink) = (fill, name);
+        }
+        let name = Side {
+            key: "chip_chosen_ink",
+            set: has("chip_chosen_ink"),
+            other: ("chip_chosen", self.chip_chosen),
+            ground: false,
+            floor: CHOSEN_INK_FLOOR,
+            under,
+        };
+        self.chip_chosen_ink = name.settle(self.chip_chosen_ink, None, &[self.soft, self.ink], warnings);
+    }
+
+    /// The edge of the chosen chip. Its own fill, so no line shows, when the fill stands out from the other
+    /// chips' and from what is under it ([`CHOSEN_FILL_FLOOR`]); else the colour of its name, so that a line
+    /// tells which chip is chosen.
+    pub fn chosen_edge(&self) -> Color {
+        let under = self.ground();
+        let chosen = self.chip_chosen.over(under);
+        let told = |from: Color| chosen.contrast(from) >= CHOSEN_FILL_FLOOR;
+        if told(self.chip.over(under)) && told(under) { self.chip_chosen } else { self.chip_chosen_ink }
     }
 }
 

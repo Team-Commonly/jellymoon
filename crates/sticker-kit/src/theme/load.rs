@@ -1,6 +1,6 @@
 //! Reading a theme file. Unknown keys are ignored and reported, so a theme written for a newer kit still loads.
-//! One written for an older kit is drawn in its own colours, and text it makes unreadable is replaced and
-//! reported (`own.rs`).
+//! One written for an older kit is drawn in its own colours where those read, and text a file makes unreadable is
+//! replaced, and reported for a key the file set (`own.rs`).
 //! Refused, because they would make a theme more than data or more than a page can hold: a file over its size
 //! (`bounds.rs`), a number that is not finite or is outside its range, and a path that leaves the theme's folder.
 //!
@@ -74,8 +74,7 @@ impl Theme {
         check(&table, "")?;
         let palette = table.get("palette").and_then(Value::as_table).cloned();
         let mut theme: Theme = table.try_into().map_err(|e: toml::de::Error| ThemeError::Parse(e.to_string()))?;
-        theme.palette.own(palette.as_ref());
-        theme.palette.readable(&mut warnings);
+        theme.palette.own(palette.as_ref(), &mut warnings);
         Ok(Loaded { theme, warnings })
     }
 

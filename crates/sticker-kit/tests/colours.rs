@@ -1,8 +1,9 @@
-//! The entry's colours: what the built-in themes draw its three texts in, the least contrast each is held to, and
-//! what a theme file is given for a key it does not set. Contrast is WCAG 2's ratio of relative luminance.
+//! The entry's colours: what the built-in themes draw its texts in, the least contrast each is held to, and what a
+//! theme file is given for a key it does not set (`tests/floors.rs` holds when it is not given it). Contrast is
+//! WCAG 2's ratio of relative luminance.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use sticker_kit::theme::{CHOSEN_INK_FLOOR, HINT_FLOOR, Palette, RING_FLOOR};
+use sticker_kit::theme::{CARET_FLOOR, CHIP_INK_FLOOR, CHOSEN_INK_FLOOR, HINT_FLOOR, Palette, RING_FLOOR, TYPED_FLOOR};
 use sticker_kit::{Color, Theme};
 
 fn hex(text: &str) -> Color {
@@ -53,7 +54,13 @@ fn both_built_in_themes_draw_the_entry_s_texts_over_their_floors_and_through_the
         let grey = Color { r: p.entry_hint.g, b: p.entry_hint.g, ..p.entry_hint };
         assert!(p.entry_hint.contrast(grey) < 1.05, "{}: {:?} is a grey", theme.name, p.entry_hint);
         assert!(p.entry_ring.luminance() < p.chip_chosen.luminance(), "{}: the ring is the darker", theme.name);
-        assert!(p.caret.contrast(p.entry) >= 3.0, "{}: the caret shows on the field", theme.name);
+        // A chip's name on its chip, what is typed on the field, and the caret on the field.
+        let more = [p.soft.contrast(p.chip), p.ink.contrast(p.entry), p.caret.contrast(p.entry)];
+        let floors = [CHIP_INK_FLOOR, TYPED_FLOOR, CARET_FLOOR];
+        assert_eq!(floors, [4.5, 4.5, 3.0]);
+        for ((got, want), floor) in more.iter().zip([[5.66, 14.39, 3.67], [5.45, 15.80, 4.57]][n]).zip(floors) {
+            assert!((got - want).abs() < 0.006 && *got >= floor, "{}: {got}, not {want}", theme.name);
+        }
         assert_eq!(p.chosen_edge(), p.chip_chosen, "{}: its fill tells the chosen chip, with no line", theme.name);
         assert_eq!(theme.check(), Ok(()));
         // Written to a file and read again, a theme is what it was, and nothing is said of it.
@@ -90,14 +97,15 @@ fn a_file_without_the_three_newer_keys_draws_them_in_its_own_colours() {
     assert_eq!(p.chosen_edge(), hex("#C9C9D4"));
     assert!(p.chosen_edge().contrast(p.chip) >= CHOSEN_INK_FLOOR);
 
-    // The file of the review of PR 150: three keys, the rest the kit's. Its name is read; its amber ring is not
-    // seen on the kit's pale paper, so the ring is its darker accent, and a line says so.
+    // The file of the review of PR 150: three keys, the rest the kit's. Its name is read; its amber caret is not
+    // seen on the kit's white field, so the caret is the darker accent, and a line says so. The ring, which the
+    // file did not set, is the caret's, and nothing is said of it.
     let three = "[palette]\nchip_chosen = \"#3B3B52\"\nsoft = \"#C9C9D4\"\ncaret = \"#FFB347\"\n";
     let (p, warnings) = palette(three);
     assert_eq!(p.chip_chosen_ink, hex("#C9C9D4"));
     assert!(contrasts(&p)[0] >= 6.0, "{:?}", contrasts(&p));
-    assert_eq!(warnings, ["palette.entry_ring: #FFB347 on palette.paper #FFFDF7 is under 3 to 1; #E4573A is used"]);
-    assert_eq!(p.entry_ring, hex("#E4573A"));
+    assert_eq!(warnings, ["palette.caret: #FFB347 on palette.entry #FFFFFF is under 3 to 1; #E4573A is used"]);
+    assert_eq!((p.caret, p.entry_ring), (hex("#E4573A"), hex("#E4573A")));
 }
 
 #[test]
@@ -105,11 +113,11 @@ fn a_key_a_file_does_not_set_is_its_own_colour_and_one_it_sets_is_kept() {
     // A file from before the entry sets none of its keys: each is the file's own colour, never the sticker's.
     let before = "[palette]\npaper = \"#0A0A0A\"\noption = \"#101820\"\nbubble_ring = \"#405060\"\naccent_dark = \"#F0A000\"\n\
                   star = \"#00C0A0\"\nsoft = \"#102030\"\nquiet = \"#8090A0\"\nink = \"#F0F0F0\"\n\
-                  [palette.dimmed]\nlight = \"#203040\"\n";
+                  [palette.dimmed]\nlight = \"#C0D0E0\"\n";
     let (p, warnings) = palette(before);
     assert_eq!(warnings, Vec::<String>::new());
     assert_eq!((p.entry, p.entry_edge, p.caret), (hex("#101820"), hex("#405060"), hex("#F0A000")));
-    assert_eq!((p.chip, p.chip_chosen, p.chip_chosen_ink), (hex("#203040"), hex("#00C0A0"), hex("#102030")));
+    assert_eq!((p.chip, p.chip_chosen, p.chip_chosen_ink), (hex("#C0D0E0"), hex("#00C0A0"), hex("#102030")));
     assert_eq!((p.entry_hint, p.entry_ring), (hex("#8090A0"), hex("#F0A000")), "the ring is the caret's");
 
     // A file that sets some of the keys keeps those, and the others are its own.
@@ -137,17 +145,17 @@ fn text_a_file_makes_unreadable_is_replaced_and_the_file_still_loads() {
     assert_eq!(
         warnings,
         [
-            "palette.chip_chosen_ink: #3B3B52 on palette.chip_chosen #3B3B52 is under 4.5 to 1; #C9C9D4 is used",
             "palette.entry_hint: #FFFFFF on palette.entry #FFFFFF is under 2.5 to 1; #9390A6 is used",
             "palette.entry_ring: #FFFDF700 on palette.paper #FFFDF7 is under 3 to 1; #E4573A is used",
+            "palette.chip_chosen_ink: #3B3B52 on palette.chip_chosen #3B3B52 is under 4.5 to 1; #C9C9D4 is used",
         ]
     );
     assert!(contrasts(&p).iter().zip([4.5, 2.5, 3.0]).all(|(got, floor)| *got >= floor), "{:?}", contrasts(&p));
 
-    // A dark chosen chip and nothing else: the sticker theme's dark name is not read on it, nor its `soft`.
+    // A dark chosen chip and nothing else: the sticker theme's dark name is not read on it, nor its `soft`, so
+    // the name is white. The file did not set the name's key, and nothing is said.
     let (p, warnings) = palette("[palette]\nchip_chosen = \"#3B3B52\"\n");
-    let said = "palette.chip_chosen_ink: #2B2350 on palette.chip_chosen #3B3B52 is under 4.5 to 1; #FFFFFF is used";
-    assert_eq!((p.chip_chosen_ink, warnings), (hex("#FFFFFF"), vec![said.to_string()]));
+    assert_eq!((p.chip_chosen_ink, warnings), (hex("#FFFFFF"), Vec::new()));
 
     // None of the file's own colours is read on a mid grey: then black is, or white.
     let grey = "[palette]\nchip_chosen = \"#808080\"\nchip_chosen_ink = \"#909090\"\nsoft = \"#707070\"\n\

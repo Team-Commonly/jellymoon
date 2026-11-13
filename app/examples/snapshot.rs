@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use jellymoon_app::{read, scene, wishing};
+use jellymoon_app::{one_line, read, scene, wishing};
 use sticker_kit::Theme;
 use sticker_kit::draw::headless::{Typing, snapshot_typing};
 
@@ -35,11 +35,12 @@ fn main() -> ExitCode {
     if let Some(file) = more.get(4) {
         match Theme::load(std::path::Path::new(file)) {
             Ok(loaded) => {
-                loaded.warnings.iter().for_each(|warning| eprintln!("snapshot: {file}: {warning}"));
+                // Said as the app says them: a key of the file is text, and may hold what a terminal obeys.
+                loaded.warnings.iter().for_each(|warning| eprintln!("snapshot: {file}: {}", one_line(warning)));
                 themes.push(loaded.theme);
             }
             Err(why) => {
-                eprintln!("snapshot: {file}: {why}");
+                eprintln!("snapshot: {file}: {}", one_line(&why.to_string()));
                 return ExitCode::FAILURE;
             }
         }

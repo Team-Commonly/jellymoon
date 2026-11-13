@@ -15,6 +15,16 @@ pub const SMALLEST: sticker_kit::Viewport = sticker_kit::Viewport { w: 960.0, h:
 /// The longest side `--size` takes, in pixels.
 pub const LARGEST_SIDE: f32 = 16384.0;
 
+/// The first and the last line of `text` as one line of text and no more, for the terminal: a control character
+/// is a space, and what turns a line round or is not seen (the kit's `clean`) is left out. A TOML error is several
+/// lines: where it is, the text there, and what is wrong. A theme file's key can hold any character.
+pub fn one_line(text: &str) -> String {
+    let mut lines = text.lines().map(str::trim).filter(|line| !line.is_empty());
+    let first = lines.next().unwrap_or_default();
+    let line = lines.next_back().map_or(first.to_string(), |last| format!("{first}: {last}"));
+    sticker_kit::text::clean(&line.replace(char::is_control, " "), usize::MAX)
+}
+
 pub mod lines;
 pub mod read;
 pub mod scene;

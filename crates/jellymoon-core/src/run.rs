@@ -21,6 +21,7 @@ mod left;
 mod never;
 mod place;
 mod record;
+mod show;
 mod stop;
 mod stream;
 
@@ -35,6 +36,7 @@ use end::{lock_file, settle};
 pub(crate) use left::tidy;
 use record::Record;
 use serde::{Deserialize, Serialize};
+pub use show::{FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, show_file, show_run};
 pub use stop::stop_run;
 
 use crate::busy::{self, or_test};
@@ -277,6 +279,7 @@ fn name(home: &Path, day: &str, wish: &str, run: &str) -> Result<(), Error> {
         pid: None,
         mark: None,
         began: false,
+        work: None,
     };
     record::write(home, run, &record)?;
     wish::change(home, day, wish, Duration::ZERO, |wish| match &wish.run {

@@ -11,6 +11,7 @@ mod build;
 mod copy;
 mod off_path;
 mod run;
+mod show;
 mod steps;
 mod stop;
 

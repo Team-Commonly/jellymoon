@@ -14,6 +14,7 @@ mod git;
 mod gone;
 mod hold;
 mod record;
+mod work;
 
 use std::collections::hash_map::RandomState;
 use std::ffi::OsStr;
@@ -30,6 +31,7 @@ use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
 use record::{Record, write};
 use serde::Serialize;
+pub(crate) use work::{Done, Entry, LISTED, TEXT_MAX, Unread, WorkFile, work_of};
 
 use crate::call::private_dir;
 use crate::{Error, busy};

@@ -175,7 +175,11 @@ max_file_lines = 400
 # The fourth gate on F41 raised core by 9, all in `copy/back.rs`: the run's name deleted as itself and only
 # where it was asked about, a name that is a symbolic ref kept, and the question asked with replace refs and
 # grafts off.
-"crates/jellymoon-core" = 7026
+# F44 raised core by 607: `run/show.rs` is 293 (the two answers' types, which run's work is shown, a name and a
+# text cleaned, the files tools obey), `copy/work.rs` 230 (the run's commit and its one parent read from the
+# store, the list of files, their starts), and 84 are a read that stops at a size (`call.rs`, `copy/git.rs`),
+# a text cleaned until cleaning changes nothing (`still.rs`), the record's optional `work` and the shapes' test.
+"crates/jellymoon-core" = 7633
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -216,7 +220,9 @@ max_file_lines = 400
 # name made a symbolic ref, a commit that lands before the delete, a replace ref and a graft, a question git
 # cannot answer, a `worktrees` folder that cannot be listed, the command's own take-back), 4 are what the
 # made-up git does just before a step (`tests/support/fake_git.rs`), 2 in `shapes.rs` and 2 in `tests/f41.rs`.
-"crates/jellymoon" = 11686
+# F44 raised the binary by 704: its tests at the binary are 677 (`tests/f44.rs` 260, and `tests/f44/`:
+# `file.rs` 127, `names.rs` 123, `refused.rs` 167), and 27 are `run show` and `--file` on the command line.
+"crates/jellymoon" = 12390
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -243,7 +249,8 @@ max_file_lines = 400
 # The chain running each program where cargo's own build messages say it is, a `build.target` in a config
 # included, raised it by 106: 63 are tests (the messages read, and a made-up package built under a triple with a
 # stale program in `debug`); the rest reads the messages and makes a run's world of what they name.
-"crates/xtask" = 1818
+# F44's step, `show` (`smoke/show.rs`, 50 lines), raised it by 54.
+"crates/xtask" = 1872
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

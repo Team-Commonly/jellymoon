@@ -165,13 +165,25 @@ pub(crate) fn private_dir(dir: &Path) -> io::Result<()> {
 
 /// Runs the command with `input` on its stdin and returns what it printed. One still running at `limit` is stopped.
 /// With `from`, a file of a test's (`busy::test_file`), the limit is counted from when that file is there.
-pub(crate) fn run(mut command: Command, input: Vec<u8>, limit: Duration, from: Option<&Path>) -> Result<Output, Error> {
+pub(crate) fn run(command: Command, input: Vec<u8>, limit: Duration, from: Option<&Path>) -> Result<Output, Error> {
+    run_most(command, input, limit, from, usize::MAX)
+}
+
+/// [`run`], reading no more than `most` bytes of what the command prints on stdout. The pipe is let go of there,
+/// so a command that prints more is ended by its own next write: what it exited with then says nothing.
+pub(crate) fn run_most(
+    mut command: Command,
+    input: Vec<u8>,
+    limit: Duration,
+    from: Option<&Path>,
+    most: usize,
+) -> Result<Output, Error> {
     let mut child =
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(Error::Call)?;
     let stdin = child.stdin.take();
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(&input)));
-    let (stdout, stderr) = (collect(child.stdout.take()), collect(child.stderr.take()));
+    let (stdout, stderr) = (collect(child.stdout.take(), most), collect(child.stderr.take(), usize::MAX));
     let mut deadline = Instant::now() + limit;
     let status = loop {
         if let Some(status) = child.try_wait().map_err(Error::Call)? {
@@ -192,12 +204,12 @@ pub(crate) fn run(mut command: Command, input: Vec<u8>, limit: Duration, from: O
 }
 
 /// Reads a pipe to its end on a thread of its own, so a harness that prints a lot is never left waiting to be read.
-fn collect(pipe: Option<impl Read + Send + 'static>) -> Receiver<Vec<u8>> {
+fn collect(pipe: Option<impl Read + Send + 'static>, most: usize) -> Receiver<Vec<u8>> {
     let (send, receive) = mpsc::channel();
     thread::spawn(move || {
         let mut read = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = pipe.read_to_end(&mut read);
+        if let Some(pipe) = pipe {
+            let _ = pipe.take(u64::try_from(most).unwrap_or(u64::MAX)).read_to_end(&mut read);
         }
         let _ = send.send(read);
     });

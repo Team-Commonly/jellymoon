@@ -5,7 +5,7 @@ A run is the person's own Claude Code, started headless on one made wish, in a c
 and `run/` (`child.rs` the child, `stream.rs` what is read, `end.rs` how an end is written down, `dead.rs` the
 stop sequence, `stop.rs` a stop the person asks for, `place.rs` the folder, `never.rs` a run never started,
 `left.rs` what a killed command left, `apart.rs` and `cap.rs` F41). The copy is [copy.md](copy.md)'s, and the wish is
-[wish.md](wish.md)'s.
+[wish.md](wish.md)'s. What a finished run made is shown by `jellymoon run show`, which is [show.md](show.md)'s.
 
 ```
 jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]

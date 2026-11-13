@@ -5,7 +5,10 @@
 use std::fs;
 use std::path::PathBuf;
 
-use jellymoon_core::{Harness, HookState, PageData, Ran, ReaderDay, Ruling, RunOutcome, WishState, Wished};
+use jellymoon_core::{
+    FileChange, FileKind, Harness, HookState, PageData, Ran, ReaderDay, Ruling, RunOutcome, Shown, ShownFile,
+    WishState, Wished, WorkState,
+};
 
 fn fixture(name: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
@@ -97,4 +100,31 @@ fn a_wrong_type_a_missing_field_and_an_unknown_state_or_tool_are_refused() {
         let refused = serde_json::from_str::<PageData>(&fixture(&format!("refused/{name}"))).expect_err(name);
         assert!(refused.to_string().contains(why), "{name}: {refused}");
     }
+}
+
+#[test]
+fn what_a_look_at_a_runs_work_prints_round_trips_byte_for_byte() {
+    let example = fixture("shown.json");
+    let shown: Shown = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{shown}\n"), example);
+    let kinds: Vec<_> = shown.files.iter().map(|file| (file.change, file.kind)).collect();
+    let want = [
+        (FileChange::Made, FileKind::Text),
+        (FileChange::Changed, FileKind::Other),
+        (FileChange::Made, FileKind::Link),
+        (FileChange::Removed, FileKind::Text),
+        (FileChange::Made, FileKind::Repo),
+    ];
+    assert_eq!((kinds, shown.work, shown.files[0].obeyed), (want.to_vec(), WorkState::Waits, true));
+    for state in ["kept", "tossed"] {
+        let stood: Shown = serde_json::from_str(&example.replace("waits", state)).unwrap();
+        assert_ne!(stood.work, WorkState::Waits);
+    }
+    for broken in [example.replace("\"more\":0", "\"more\":0,\"diff\":\"x\""), example.replace("waits", "burned")] {
+        assert!(serde_json::from_str::<Shown>(&broken).is_err(), "{broken}");
+    }
+    let example = fixture("shown-file.json");
+    let file: ShownFile = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{file}\n"), example);
+    assert_eq!((file.n, file.text.lines().count(), file.cut), (1, 3, false));
 }

@@ -12,7 +12,7 @@ use std::{env, fs};
 
 use crate::Error;
 use crate::busy::{or_test, test_file};
-use crate::call::{full_folders, passed_on, run};
+use crate::call::{full_folders, passed_on, run, run_most};
 use crate::redact::line;
 
 /// What git may see of this process's environment: where its programs and the person's config are, and the two
@@ -178,6 +178,19 @@ impl Repo<'_> {
         args: &[S],
     ) -> Result<String, String> {
         self.ask(tree, vars, args)?.ok_or_else(|| "git failed and did not say why".to_string())
+    }
+
+    /// What git printed, as bytes, with `input` on its input: for what is not a line of text, and for what must
+    /// not be read whole (`work.rs`). No more than `most` bytes are read. Fewer are all that git printed, and git
+    /// must have worked; `most` of them say only that there was that much or more. An object is read as it is,
+    /// whatever the repo names to stand in its place, and no word of git's is kept of a failure.
+    pub fn bytes(&self, args: &[&str], input: &[u8], most: usize) -> Option<Vec<u8>> {
+        let mut command = self.git.command();
+        command.args(self.blanks.iter().flat_map(|blank| ["-c", blank])).arg(joined("--git-dir=", &self.dir));
+        command.arg("--no-replace-objects").args(args);
+        let from = test_file("JELLYMOON_TEST_GIT_LIMIT_FROM");
+        let output = run_most(command, input.to_vec(), self.git.limit, from.as_deref(), most).ok()?;
+        (output.status.success() || output.stdout.len() >= most).then_some(output.stdout)
     }
 }
 

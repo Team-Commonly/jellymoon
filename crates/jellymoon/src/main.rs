@@ -26,6 +26,7 @@ const USAGE: &str = "usage:
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --run [--logs <dir>] [--skip <names>]   (keeps the wish and starts its run, which goes on after this command)
   jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
   jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]   (stops that run: its copy is kept, and no star is added)
+  jellymoon run show --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--file <n>]   (what that run made, read from the repo's store: its files, or one file's text; writes nothing)
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
@@ -156,6 +157,7 @@ fn run() -> Result<String, Failure> {
         Command::Stop(RunOptions { wish, day, .. }) => {
             Ok(format!("{}\n", jellymoon_core::stop_run(&home()?, &wish, day.as_deref()).map_err(failed)?))
         }
+        Command::Show(options, file) => show(&options, file),
         Command::HookStatus => {
             let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));
             Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))
@@ -168,6 +170,16 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::clean_copy(&home()?, &run, outcome).map_err(failed)?))
         }
     }
+}
+
+/// What a finished run made, or one file of it as text.
+fn show(options: &RunOptions, file: Option<usize>) -> Result<String, Failure> {
+    let home = home()?;
+    let shown = match file {
+        None => jellymoon_core::show_run(&home, options).map(|shown| format!("{shown}\n")),
+        Some(n) => jellymoon_core::show_file(&home, options, n).map(|shown| format!("{shown}\n")),
+    };
+    shown.map_err(|e| Failure::Run(e.to_string()))
 }
 
 /// The path a variable names, when it is set to something.

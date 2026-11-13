@@ -5,7 +5,7 @@
 //! by one more making, which is all that a file read back is asked. Only these short texts come here; a session
 //! log's turn is cleaned once.
 
-use crate::redact::line;
+use crate::redact::{line, shown};
 
 /// The most makings of one text that change it. One more follows, which must change nothing.
 const CHANGES: usize = 8;
@@ -53,6 +53,23 @@ pub(crate) fn still(text: &str, most: usize, cut: bool) -> Result<String, Unkept
         } else {
             return Err(Unkept::Long);
         }
+    }
+}
+
+/// A file's text made until a making changes nothing, with its lines and its quotes kept: a making here is the
+/// reader's cleaning of a turn (`redact::shown`). `most` is the text's most bytes, and so no making cuts it. A text
+/// of any length is made, since reading it stopped at `most`; one a ninth making changes is refused.
+pub(crate) fn still_text(text: &str, most: usize) -> Result<String, Unkept> {
+    let (mut words, mut changes) = (text.to_string(), 0);
+    loop {
+        let made = shown(&words, most);
+        if made == words {
+            return Ok(words);
+        }
+        if changes == CHANGES {
+            return Err(Unkept::Changing);
+        }
+        (words, changes) = (made, changes + 1);
     }
 }
 

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::{RunOutcome, dead};
+use super::{RunOutcome, WorkState, dead};
 use crate::hook::put;
 use crate::tap::plain;
 use crate::{Error, copy};
@@ -38,6 +38,10 @@ pub(super) struct Record {
     /// Whether the harness's stream began as a run's does: the harness knows a run's command line, and works.
     #[serde(default)]
     pub began: bool,
+    /// Whether the person kept or tossed the work of a run that finished. Left out while it waits: no run writes
+    /// it, and `run show` reads it (`show.rs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work: Option<WorkState>,
 }
 
 pub(super) fn file(home: &Path, run: &str) -> PathBuf {

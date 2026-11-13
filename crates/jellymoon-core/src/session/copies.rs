@@ -5,8 +5,9 @@
 use std::fs;
 use std::path::Path;
 
-/// The home's `copies` folder under each spelling a harness may log: as the home is given, and as the system
-/// resolves it (on a Mac a home under `/tmp` is logged under `/private`). Each is a root and its names.
+/// The home's `copies` folder under each spelling a harness may log: as the home is given, as the system
+/// resolves the home (on a Mac a home under `/tmp` is logged under `/private`), and as it resolves `copies` itself,
+/// which a person may have moved to another disk and linked. Each is a root and its names.
 #[derive(Debug, Default)]
 pub(crate) struct Copies {
     spelled: Vec<(usize, Vec<String>)>,
@@ -16,13 +17,14 @@ pub(crate) struct Copies {
 impl Copies {
     /// The copies of `home`, which is a full path. A home that is not there has one spelling, the one given.
     pub(crate) fn of(home: &Path) -> Self {
-        let homes = [Some(home.to_path_buf()), fs::canonicalize(home).ok()];
-        let folders = homes.into_iter().flatten().map(|home| home.join("copies").to_string_lossy().into_owned());
-        Self::spelled(folders, cfg!(windows))
+        let given = home.join("copies");
+        let resolved = [fs::canonicalize(home).ok().map(|home| home.join("copies")), fs::canonicalize(&given).ok()];
+        let folders = [Some(given)].into_iter().chain(resolved).flatten();
+        Self::spelled(folders.map(|folder| folder.to_string_lossy().into_owned()), cfg!(windows))
     }
 
     /// The copies at `folders`, read as Windows writes a path or as every other system does.
-    fn spelled(folders: impl IntoIterator<Item = String>, windows: bool) -> Self {
+    pub(super) fn spelled(folders: impl IntoIterator<Item = String>, windows: bool) -> Self {
         let whole = |folder: String| {
             let (root, names) = parts(&folder, windows)?;
             let names: Vec<String> = names.map(str::to_string).collect();
@@ -168,6 +170,8 @@ mod tests {
         for folder in [r"work\jm\copies\r1", r"\work\jm\copies\r1", r"C:work\jm\copies\r1", r"\\?\work\jm\copies\r1"] {
             assert!(!none.hold(folder), "{folder}");
         }
+        // A first name that only ends in `:` is no drive: a drive is one letter and the `:`.
+        assert!(!copies(&[r"CD:\work\jm\copies"], true).hold(r"CD:\work\jm\copies\r1"));
         // Only letters of ASCII are taken for one another: a home written with another `É` is another home.
         let accented = copies(&["C:\\work\\\u{c9}da\\jm\\copies"], true);
         assert!(
@@ -187,5 +191,22 @@ mod tests {
         let held = Copies::of(&given);
         assert!(held.hold(&run(&given)) && held.hold(&run(&resolved)));
         assert!(!held.hold(&run(dir.path())) && !held.hold(&given.to_string_lossy()));
+    }
+
+    // Unix only: on Windows making a link needs a right a test cannot count on.
+    #[cfg(unix)]
+    #[test]
+    fn a_copies_that_is_a_link_is_also_spelled_as_the_system_resolves_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let (home, far) = (dir.path().join("jm"), dir.path().join("far"));
+        fs::create_dir(&home).unwrap();
+        std::os::unix::fs::symlink(&far, home.join("copies")).unwrap();
+        let run = |copies: &Path| copies.join("r1").to_string_lossy().into_owned();
+        let resolved = fs::canonicalize(dir.path()).unwrap().join("far");
+        assert!(!Copies::of(&home).hold(&run(&resolved)), "a link to nothing resolves to nothing");
+        fs::create_dir(&far).unwrap();
+        let held = Copies::of(&home);
+        assert!(held.hold(&run(&resolved)) && held.hold(&run(&home.join("copies"))));
+        assert!(!held.hold(&resolved.to_string_lossy()) && !held.hold(&run(dir.path())));
     }
 }

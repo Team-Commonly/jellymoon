@@ -129,7 +129,9 @@ pub(crate) fn turns(file: &Path, left: &Left, seen: &mut HashSet<String>, line_m
 /// byte-order mark before the first line is not part of it. `seen` holds the uuid of every typed line so far: a
 /// resumed or forked session repeats earlier lines in a new file, and the first one read is the one kept. `folder`
 /// is the name of the log's own folder. A line whose folder is a run's copy, or in one, is no turn and no reply; a
-/// typed one still ends the turn before it, as a line of a switched-off folder does.
+/// typed one still ends the turn before it, as a line of a switched-off folder does, but its uuid is not held: a
+/// line that is left out hides no other. For this rule alone a line with no folder is judged as the last line
+/// decoded before it that had one was, and of that line one yes or no is kept, never its folder.
 fn read(
     log: impl Read,
     len: u64,
@@ -142,18 +144,22 @@ fn read(
     let mut turns: Vec<Typed> = Vec::new();
     let mut open = false; // whether the last turn can still take a reply
     let mut mark = Some(b"\xef\xbb\xbf".as_slice()); // a byte-order mark, which only a log's first line can begin with
+    let mut last = false; // whether the last decoded line that had a folder was in a copy
     while let Ok(true) = next_line(&mut log, line_max, &mut raw) {
         let Some(line) = decode(mark.take().and_then(|mark| raw.strip_prefix(mark)).unwrap_or(&raw), open) else {
             continue;
         };
         let uuid = line.uuid.as_deref().unwrap_or_default();
         let cwd = line.cwd.as_deref().unwrap_or_default();
-        let copy = left.copies.hold(cwd);
+        let copy = if cwd.is_empty() { last } else { left.copies.hold(cwd) };
+        last = copy;
         match prompt(&line) {
             Prompt::Typed(_) if !uuid.is_empty() && seen.contains(uuid) => open = false,
             Prompt::Ends => open = false,
             Prompt::Typed(said) => {
-                seen.insert(uuid.to_string());
+                if !copy {
+                    seen.insert(uuid.to_string());
+                }
                 // A line with no folder is skipped by its session's folder name.
                 open = !said.is_empty() && !copy && !skipped(if cwd.is_empty() { folder } else { cwd }, &left.skip);
                 if open {

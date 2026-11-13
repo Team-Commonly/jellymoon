@@ -28,8 +28,9 @@ pub struct DayOptions {
     /// Names of the folders the person switched off. A turn whose folder contains one contributes nothing. Spaces
     /// around a name are dropped and an empty name is ignored.
     pub skip: Vec<String>,
-    /// Jellymoon's own folder. Its `skip.txt`, one folder name a line, names more folders switched off. None reads no
-    /// such file.
+    /// Jellymoon's own folder. Its `skip.txt`, one folder name a line, names more folders switched off, and its
+    /// `copies` holds every run's copy: a line whose working directory is in one is left out. None reads no such
+    /// file and knows no copy, so a run's own session is read back as a person's.
     pub home: Option<PathBuf>,
 }
 

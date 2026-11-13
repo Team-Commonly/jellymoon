@@ -108,3 +108,33 @@ fn a_project_is_named_from_a_folder_of_any_length_in_one_walk() {
     assert_eq!(project(&format!("{slashes}beta/.claude/worktrees/x{slashes}")), "beta");
     assert!(start.elapsed() < std::time::Duration::from_secs(20), "{:?}", start.elapsed());
 }
+
+// The turn rules for a line in a run's copy, and for a line with no folder: it goes as the last line with one did.
+#[test]
+fn a_reply_in_a_copy_is_no_reply_and_a_typed_line_in_a_copy_ends_the_turn_before_it() {
+    let line = |kind: &str, cwd: &str, text: &str| {
+        let origin = if kind == "user" { r#""origin":{"kind":"human"},"# } else { "" };
+        let cwd = if cwd.is_empty() { String::new() } else { format!(r#""cwd":"{cwd}","#) };
+        format!(r#"{{"type":"{kind}",{cwd}{origin}"message":{{"content":[{{"type":"text","text":"{text}"}}]}}}}"#)
+            + "\n"
+    };
+    let (alpha, copy) = ("/work/alpha", "/work/jm/copies/r1");
+    let log = [
+        line("user", "", "zero"),
+        line("user", alpha, "one"),
+        line("assistant", alpha, "one done"),
+        line("assistant", copy, "LEFT said in the copy"),
+        line("assistant", "", "LEFT said with no folder after it"),
+        line("user", copy, "LEFT typed in the copy"),
+        line("user", "", "LEFT typed with no folder after it"),
+        line("assistant", alpha, "LEFT said to what was typed in the copy"),
+        line("user", alpha, "two"),
+        line("user", "", "three"),
+        line("assistant", "", "three done"),
+    ]
+    .concat();
+    let left = Left { skip: Vec::new(), copies: Copies::spelled(["/work/jm/copies".to_string()], false) };
+    let turns = read(log.as_bytes(), log.len() as u64, "-work-alpha", &left, &mut HashSet::new(), 1 << 20);
+    let said: Vec<_> = turns.iter().map(|(_, turn, _)| (turn.said.as_str(), turn.reply.as_str())).collect();
+    assert_eq!(said, [("zero", ""), ("one", "one done"), ("two", ""), ("three", "three done")]);
+}

@@ -87,6 +87,7 @@ fn answer(page: &Entity<Page>, cx: &mut VisualTestContext, kept: bool) {
     cx.run_until_parked();
 }
 
+#[cfg(debug_assertions)] // it asks `cx.debug_bounds`: see `tests/draw.rs`
 #[test]
 fn a_click_gives_the_entry_the_keys_and_enter_gives_what_was_typed() {
     let mut cx = context();

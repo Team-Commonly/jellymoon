@@ -89,16 +89,24 @@ fn the_pictures_a_theme_file_names_are_not_read() {
     assert!(!kept.contains("art"), "and a theme the kit writes has no such table");
 }
 
+// No name under `art` is looked at, so none refuses a theme: the same text is the same theme on every system.
 #[test]
-fn a_path_out_of_the_theme_folder_is_refused() {
-    for name in ["../outside.svg", "/outside.svg", "art/../../outside.svg"] {
-        let text = format!("[art]\nstar = \"{name}\"\n");
-        match Theme::from_toml(&text) {
-            Err(ThemeError::PathEscapes { key, path }) => {
-                assert_eq!((key.as_str(), path.as_str()), ("art.star", name));
-            }
-            other => panic!("{name} was not refused: {other:?}"),
-        }
+fn art_in_any_shape_and_naming_anything_is_the_same_theme_with_the_one_warning() {
+    let said = Theme::from_toml("[art]\nstar = \"star.svg\"\n").expect("loads");
+    let shapes = [
+        "[art]\nstar = \"../outside.svg\"\n",
+        "[art]\nstar = \"/outside.svg\"\nhero = \"art/../../outside.svg\"\n",
+        "[art]\nfuture = '..\\outside.svg'\nstar = 'C:\\Windows\\x.svg'\nhero = 'C:x.svg'\nbadge = '\\\\host\\share\\x'\n",
+        "art = \"../outside.svg\"\n",
+        "art = [\"../outside.svg\", \"/outside.svg\"]\n",
+        "[art.star]\ndeep = \"../outside.svg\"\n",
+        "[[art]]\nstar = \"../outside.svg\"\n[[art]]\nstar = \"javascript:alert(1)\"\n",
+        "art = 7\n",
+        "[art]\n",
+        "[art]\nstar = \"\"\n",
+    ];
+    for text in shapes {
+        assert_eq!(Theme::from_toml(text).as_ref(), Ok(&said), "{text}");
     }
 }
 

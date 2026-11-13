@@ -1,4 +1,4 @@
-//! A theme file never draws a pair of the entry worse than before for a key it did not set: its own colour is
+//! A theme file never draws a pair of the entry under its floor for a key it did not set: its own colour is
 //! taken for such a key only when the pair it makes meets its floor, every text of the entry has a floor on its
 //! ground, and a warning names only a key the file set.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -173,6 +173,54 @@ fn a_see_through_paper_is_measured_on_the_desk_it_is_laid_on() {
     let dark = "[palette]\npaper = \"#101018\"\nsoft = \"#F0F0F0\"\n";
     assert_eq!(palette(&format!("{dark}chip = \"#FFFFFF30\"\n")).1, Vec::<String>::new());
     assert_eq!(palette(&format!("{dark}chip = \"#FFFFFF\"\n")).1.len(), 1);
+    // The field and a chip are laid on that paper on its desk too: nearly all see-through over a paper that is,
+    // on a dark desk, each is the desk's dark, which the sticker's dark words are not read on.
+    let desk = "[palette]\npaper = \"#FFFFFF00\"\ndesk = \"#101010\"\n";
+    for (key, text) in [("entry", "ink #2B2350"), ("chip", "soft #5E5878")] {
+        let (p, warnings) = palette(&format!("{desk}{key} = \"#FFFFFF20\"\n"));
+        let start = format!("palette.{key}: palette.{text} on it, #FFFFFF20, is under 4.5 to 1; ");
+        assert!(warnings.len() == 1 && warnings[0].starts_with(&start), "{warnings:?}");
+        assert!(pairs(&p).iter().all(|(_, got, floor)| got >= floor), "{key}{:?}", pairs(&p));
+    }
+}
+
+#[test]
+fn a_text_one_sees_through_that_no_ground_is_read_under_is_replaced_and_said() {
+    // The file of the review of PR 157: typed words that were barely there, and nothing was said.
+    let (p, warnings) = palette("[palette]\nink = \"#2B235020\"\n");
+    assert_eq!(warnings, ["palette.ink: #2B235020 on palette.entry #FFFFFF is under 4.5 to 1; #2B2350 is used"]);
+    assert_eq!((p.ink, p.entry), (hex("#2B2350"), Theme::sticker().palette.entry), "itself, with nothing seen through");
+    let (p, warnings) = palette("[palette]\nsoft = \"#5E587830\"\n");
+    assert_eq!(warnings, ["palette.soft: #5E587830 on palette.chip #EDEBF4 is under 4.5 to 1; #5E5878 is used"]);
+    assert_eq!((p.soft, p.chip_chosen_ink), (hex("#5E5878"), hex("#5E5878")), "and the chosen name is the one used");
+    // Where itself is not read either, black or white is: one line, for the text, and its ground is kept.
+    let (p, warnings) = palette("[palette]\nentry = \"#101010\"\nink = \"#20202040\"\n");
+    assert_eq!(warnings, ["palette.ink: #20202040 on palette.entry #101010 is under 4.5 to 1; #FFFFFF is used"]);
+    assert_eq!((p.ink, p.entry), (hex("#FFFFFF"), hex("#101010")));
+    // A text one sees through that is read is the file's, and a ground gives way to it before it is replaced.
+    let (p, warnings) = palette("[palette]\nink = \"#000000C0\"\nsoft = \"#000000D0\"\n");
+    assert_eq!((p.ink, p.soft, warnings), (hex("#000000C0"), hex("#000000D0"), Vec::new()));
+    let (p, warnings) = palette("[palette]\nentry = \"#404040\"\noption = \"#FFFFFF\"\nink = \"#000000C0\"\n");
+    assert_eq!((p.ink, p.entry, warnings.len()), (hex("#000000C0"), hex("#FFFFFF"), 1), "{warnings:?}");
+    assert!(warnings[0].starts_with("palette.entry: "), "{warnings:?}");
+
+    // Every text of the entry is over its floor whatever a file's `ink` and `soft` let through, on any paper,
+    // and only those two keys, which the file set, are named, each once.
+    let texts = ["#2B235020", "#FFFFFF10", "#00000080", "#80808080", "#FFFFFFC0", "#00000000", "#FF0000A0"];
+    for paper in ["#FFFDF7", "#101018", "#808080", "#FFFFFF00", "#20203080", "#FFE000"] {
+        for (ink, soft) in texts.iter().flat_map(|ink| texts.map(|soft| (ink, soft))) {
+            let file =
+                format!("[palette]\npaper = \"{paper}\"\ndesk = \"#30303080\"\nink = \"{ink}\"\nsoft = \"{soft}\"\n");
+            let (p, warnings) = palette(&file);
+            for (what, got, floor) in pairs(&p) {
+                assert!(got >= floor, "{what} is {got}, under {floor}, in\n{file}{p:?}");
+            }
+            let named =
+                |key: &str| warnings.iter().filter(|line| line.starts_with(&format!("palette.{key}: "))).count();
+            assert!(named("ink") <= 1 && named("soft") <= 1, "{file}{warnings:?}");
+            assert_eq!(named("ink") + named("soft"), warnings.len(), "{file}{warnings:?}");
+        }
+    }
 }
 
 #[test]

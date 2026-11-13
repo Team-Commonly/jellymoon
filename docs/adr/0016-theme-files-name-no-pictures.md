@@ -12,6 +12,12 @@ loads, with one warning through the path warnings already take: `art: pictures i
 version; the kit's own art is drawn`. Only the text of each name is looked at, and one that leaves the theme's
 folder still refuses the theme, which is how F32's step is kept.
 
+Corrected 2026-11-13, by the coordinator's ruling on the review of PR 156: the last sentence no longer holds. No
+name under `art` is looked at, and no theme file is refused for what its `art` names. The check guarded nothing,
+since nothing named is opened; it refused one spelling and loaded another, and answered differently on a Mac and
+on Windows. `art` in any shape, naming anything, is not read, is said in the one warning, and the file loads the
+same on every system. F32's step 4 is replaced by feature F49.
+
 The art on a page is the kit's own, built in code (`crates/sticker-kit/src/art.rs`). The window's process now
 parses no picture it did not draw itself.
 

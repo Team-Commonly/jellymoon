@@ -23,7 +23,7 @@ The words below mean exactly this in code, docs and tests. A new term is added h
 | **shell** | The app's window (`app/`): it draws page data with the kit and decides nothing | core |
 | **kit** | The fixed set of drawable pieces a page is arranged from (`crates/sticker-kit`). The model picks pieces; it never draws one | generated UI |
 | **theme** | How a page looks: colours, fonts, paper, sizes and how much things move. Data only, never code and never a picture: the art is the kit's own | the kit, which is the pieces and their rules |
-| **pack** | Extra pieces added to the kit as data and art only | a plugin, which would run code |
+| **pack** | Extra pieces added to the kit as data and art only. None can be added yet, and a theme file is not one: a theme file names no art (ADR 0016) | a plugin, which would run code; a theme, which is how a page looks |
 | **made wish** | A wish the person made in the app or with `jellymoon wish`, kept in their exact words beside the day's page and drawn with the reading's wishes | a wish the reading call worked out; a ruling |
 | **run** | One agent session Jellymoon starts itself for a made wish: the person's harness, headless, in its own copy of the repo (ADR 0011, section 7; ADR 0014) | a session the person started, which Jellymoon only reads; the reading call, which has every tool off |
 | **cancelled** | How a run ended that the person stopped with `jellymoon run stop`: no star, the copy kept, and the wish needs the person. A made wish gets one run, and that was it | failed, which is a run that ended badly by itself or was cut off |

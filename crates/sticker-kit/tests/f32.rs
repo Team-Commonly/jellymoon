@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use sticker_kit::motion::{bob, hop, pulse, twinkle};
-use sticker_kit::{FixedAdvance, PieceKind, Scene, Theme, ThemeError, Viewport, layout};
+use sticker_kit::{FixedAdvance, PieceKind, Scene, Theme, Viewport, layout};
 
 const SIZES: [Viewport; 2] = [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 960.0, h: 640.0 }];
 
@@ -85,11 +85,11 @@ fn an_unknown_key_or_a_missing_piece_falls_back_to_the_default() {
 const NO_PICTURES: &str = "art: pictures in a theme are not read in this version; the kit's own art is drawn";
 
 // The step: "a theme carries no code: a theme file containing a script or a path outside its folder is refused".
-// A path outside the folder is refused, by the text of the key, with no file opened. A script could only ever be
-// in a picture the theme names, and a theme's pictures are never read: the theme is what its own text says,
-// whatever lies beside it, and holds no folder to find a file in.
+// F49 replaces its second half: no theme file is refused for what its `art` names. A script could only ever be in
+// a picture the theme names, and a theme's pictures are never read: the theme is what its own text says, whatever
+// lies beside it and wherever a name points, and holds no folder to find a file in.
 #[test]
-fn a_theme_file_with_a_script_or_a_path_outside_its_folder_is_refused() {
+fn a_theme_file_carries_no_code_and_what_its_art_names_is_never_read() {
     let text = "[art]\nstar = \"star.svg\"\n";
     let mut said = Theme::from_toml(text).expect("the text is a theme");
     said.theme.name = "theme".into();
@@ -117,11 +117,10 @@ fn a_theme_file_with_a_script_or_a_path_outside_its_folder_is_refused() {
     let outside = folder("outside", &[("star.svg", picture)]);
     let up = format!("../{}/star.svg", outside.file_name().unwrap().to_string_lossy());
     let absolute = outside.join("star.svg").to_string_lossy().replace('\\', "/");
-    for (name, refused) in [("star.svg", false), (up.as_str(), true), (absolute.as_str(), true)] {
+    // A name that leaves the folder, to a picture that is there, is the same theme: the name is not looked at.
+    for name in ["star.svg", up.as_str(), absolute.as_str()] {
         fs::write(dir.join("theme.toml"), format!("[art]\nstar = \"{name}\"\n")).unwrap();
-        let loaded = Theme::load(&dir.join("theme.toml"));
-        assert_eq!(matches!(loaded, Err(ThemeError::PathEscapes { .. })), refused, "{name}: {loaded:?}");
-        assert_eq!(loaded.is_ok(), !refused, "{name}");
+        assert_eq!(Theme::load(&dir.join("theme.toml")).as_ref(), Ok(&said), "{name}");
     }
     let _ = fs::remove_dir_all(dir);
     let _ = fs::remove_dir_all(outside);

@@ -63,10 +63,13 @@ of text (4.5) or of a line (3), but the hint's, which is meant to be pale:
 A colour one can see through is laid on what is under it before it is
 measured: a chip and the field on the paper, the paper on the desk, and the
 desk on white, since the kit does not know what a window has under its page
-(`Palette::ground`).
+(`Palette::ground`). A text one can see through is laid on its ground the same
+way, so it is measured as it is drawn.
 
-A theme file never draws one of these pairs worse than before for a key it
-did not set (`src/theme/own.rs`). A key of the entry the file lacks takes the
+A theme file never draws one of these pairs under its floor for a key it did
+not set (`src/theme/own.rs`). Over its floor a pair may be drawn worse than
+before: `accent_dark = "#808080"` alone moves the ring from 5.35 to 3.88. A
+key of the entry the file lacks takes the
 file's own colour only when the file sets that colour and the pair reads with
 it: `entry` is its `option` under its `ink`, `caret` its `accent_dark`,
 `entry_hint` its `quiet`, `entry_ring` its caret's, `chip` its `dimmed.light`
@@ -74,7 +77,9 @@ it: `entry` is its `option` under its `ink`, `caret` its `accent_dark`,
 `chip_chosen` and `chip_chosen_ink` its `star` and its `soft`, both or
 neither. `entry_edge`, which no text is on, is its `bubble_ring`. Where the
 pair does not read, or the file does not set the colour, the key is the
-sticker theme's, and nothing is said.
+sticker theme's, and nothing is said. The edge of a field without the keys is
+held to no floor: it is the file's own `bubble_ring`, unchecked, and a
+`bubble_ring` of the paper's colour draws a field with no edge.
 
 Then every pair is held to its floor, and a file is never refused for one: a
 colour under its floor is replaced by the first of the palette's that is over
@@ -82,9 +87,14 @@ it (`soft` then `ink` for the chosen name; `quiet`, `soft`, `ink` for the
 hint; `accent_dark`, `ink` for the caret; the caret, `accent_dark`, `ink` for
 the ring), or by black or white. `soft` and `ink` are the whole page's, so
 under them it is the ground that gives way: a chip to `dimmed.light`,
-`option`, `paper`, `ink`, and the field to `option`, `paper`, `ink`. One
+`option`, `paper`, `ink`, and the field to `option`, `paper`, `ink`. An `ink`
+or a `soft` one can see through, which no ground is read under
+(`ink = "#2B235020"`), is replaced itself, for the whole page: by the same
+colour with nothing seen through where that reads, else by black or white. One
 warning names the key, and only a key the file set: a replacement for a key
-the file never set is not said.
+the file never set is not said. So a file that sets only a pale `ink` or
+`soft` gets a different field and chips with nothing said (`ink = "#C0C0C0"`
+alone draws a black field): the field and the chips are keys it did not set.
 
 When the chosen chip's fill does not stand out from the other chips' and from
 the paper under it (a contrast under 1.2, `CHOSEN_FILL_FLOOR`: the sticker
@@ -104,6 +114,10 @@ Page::new(scene, theme)
   Delete, Left, Right, Home and End (or Left and Right with the platform's
   command key) edit, the command key with V pastes, Tab and Shift-Tab choose the
   next and the previous option, Enter enters. There is a caret and no selection.
+  One Backspace or Delete removes a whole character as a reader sees it, by
+  the rule no cut falls inside (`text.rs`, `ends`): a letter with its accents,
+  a joined emoji, a flag, and a whole cluster of Thai, Devanagari, Hebrew,
+  Arabic or Hangul in conjoining jamo, not one mark of it (`tests/entry.rs`).
 - **Enter** calls `on_entry` with the text, trimmed, and the chosen option's
   name (`made.option`), never its place: the options can change before the
   handler acts. Text that is only spaces enters nothing. The handler runs while
@@ -173,12 +187,13 @@ enabled = false
 ignored and named in a warning, so a theme for a newer kit still loads.
 
 **A theme file names no pictures**
-(`docs/adr/0016-theme-files-name-no-pictures.md`). The `[art]` table an older
-theme file has is not read: no file it names is opened, looked for or
-resolved, by `load`, by `layout` or by the view. It is said in one warning,
-`art: pictures in a theme are not read in this version; the kit's own art is
-drawn`. Only the text of each name is looked at, and one that leaves the
-theme's folder (`..`, a root) still refuses the theme, as it always did.
+(`docs/adr/0016-theme-files-name-no-pictures.md`). The `art` an older theme
+file has is not read, in any shape (a table of names, a string, an array) and
+whatever it names (a path out of the folder, a root, a script, nothing): no
+file it names is opened, looked for or resolved, by `load`, by `layout` or by
+the view, and no name is looked at. It is said in one warning, `art: pictures
+in a theme are not read in this version; the kit's own art is drawn`, and the
+file loads, the same on every system. No theme file is refused for its `art`.
 
 ## The door: what the kit holds its input to
 

@@ -16,9 +16,9 @@ the waiting page and reads nothing; with `--page` the flags of a day are taken a
 `--theme` is `sticker` (the default), `plain`, or the path of a theme file; the two names win over a file called the
 same. A theme changes how the page looks and never which pieces are on it. A theme file is TOML in which every key
 is optional (the kit's README has the keys and the bounds it is held to). A key the kit does not know falls
-back to the sticker theme's, and an `[art]` table is not read (a theme file names no pictures, and the kit's own art
-is drawn), each said in one `jellymoon-app: theme: ` line on stderr, the first 8 of them. A theme file that cannot be read or that the kit refuses (a number out of its range, a
-path out of the theme's folder) exits 1 with one line that names the key and the reason.
+back to the sticker theme's, and `art` is not read, whatever it holds (a theme file names no pictures, the kit's own art
+is drawn, and no file is refused for what its `art` names), each said in one `jellymoon-app: theme: ` line on stderr, the first 8 of them; a line is cut at 300 characters (`LONGEST_LINE`), with an ellipsis. A theme file that cannot be read or that the kit refuses (a number out of its
+range) exits 1 with one line that names the key and the reason.
 
 With `layout` it prints where every piece goes. Without, it opens a window (default 1440x900); `t` switches between the two built-in themes, and
 `JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. `--size` is from 960x640 to 16384x16384, each side a whole

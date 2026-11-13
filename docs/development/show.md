@@ -60,18 +60,22 @@ is repeated; here nothing git says is repeated of any folder.
 The record names the run's repo, the commit the run started from and the commit it ended as (F48; `run.md`, "What
 is kept"). The record is a file, and whoever can write the home can write it, so none of the three is trusted:
 
-- **Checked first, before git is asked anything** (`named` in `run/show.rs`). A record names all three or none.
+- **Checked first, before git is asked anything and before anything of the run is printed** (`named` in
+  `run/show.rs`), for every finished run: one whose work waits, one that changed nothing, and one whose work is
+  `kept` or `tossed`. A record names all three or none.
   `start` and `end` must each be a whole object id, 40 or 64 hex digits and nothing else, and `repo` a path from a
-  root. Anything else (a branch's name, `HEAD~1`, a short id, an option, two of the three) is refused as a record
-  Jellymoon did not write.
+  root. Anything else (a branch's name, `HEAD~1`, a short id, an option, one or two of the three) is refused as a
+  record Jellymoon did not write.
 - **The repo's path chooses nothing, and nothing is looked up at it.** The repo is found as above, whatever the
   record says. Git then names the git folder that repo's checkouts share, and that folder must be the record's.
   One folder has many spellings, on a Mac by a link or by case, on Windows by case, a short name, either
   separator or a `\\?\` prefix, and the system gives one resolved path for all of them (`fs::canonicalize`, every
   link and `..` followed). A run writes that resolved path in its record. A look resolves the folder it found the
   same way and compares the two part by part, with no letter's case folded. The record's own path is never
-  resolved, opened or asked about: it is a file's word, and could name a place on another machine. So a record
-  that spells the same folder another way is refused, as naming another repo.
+  resolved, opened or asked about: it is a file's word, and could name a place on another machine. The two are
+  compared as paths, so a record that spells the same folder with a separator at its end, a `.` part or a
+  doubled separator compares equal. One that spells it in another case, through a link or with `..`, or that
+  names where the repo was before it was moved, does not, and is refused as naming another repo.
 - **No id from the record is given to git.** The branch is asked for by its name, and git prints the commit it
   names; that id must be the record's `end`. Git is asked for that commit by the id git printed, and its one
   parent must be the record's `start`. The ids `diff-tree` is given are those two, which git printed.

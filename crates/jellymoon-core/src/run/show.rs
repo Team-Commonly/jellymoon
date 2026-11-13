@@ -143,13 +143,14 @@ fn work(home: &Path, options: &RunOptions) -> Result<Work, Error> {
         RunOutcome::Cancelled => return Err(no("was cancelled by a stop: there is no work of it to show")),
         _ => return Err(no("did not finish: there is no work of it to show")),
     }
+    // Before git is asked anything, and before anything is printed of a run whose work is not asked for at all:
+    // what the record names is in the shape core writes, or the record is not core's.
+    let named = named(&kept).map_err(|()| not_cores())?;
     let state = kept.work.unwrap_or(WorkState::Waits);
     let copy = RunCopy { run: run.clone(), folder: String::new(), branch: copy::branch(&run), kept: false };
     if state != WorkState::Waits || why != finished(&copy, true) {
         return Ok(Work { run, state, files: Vec::new(), more: 0 });
     }
-    // Before git is asked anything: what the record names is in the shape core writes, or the record is not core's.
-    let named = named(&kept).map_err(|()| not_cores())?;
     // The repo is found as a run finds it, whatever the record names: the record's folder is only compared.
     let folder = place::folder(home, &day, &made, options)?;
     let read = copy::work_of(home, &folder, &run, options.repo.is_none(), named.as_ref());
@@ -157,11 +158,12 @@ fn work(home: &Path, options: &RunOptions) -> Result<Work, Error> {
     Ok(Work { run, state, files, more })
 }
 
-/// What the record of a run that ended with a commit names of it: its repo, its start and its end, all three, or
-/// none of them in a record from before F48. Err for a record that names some and not others, a repo by a path
-/// that does not start at a root (a run writes the folder as the system resolves it, from a root), or a commit by
-/// anything but a whole object id. Such a word never reaches git, and neither does one that passes: an id is only
-/// ever compared with what git printed (`copy/work.rs`).
+/// What the record of a run that finished names of it: its repo, its start and its end, all three, or none of
+/// them in a record from before F48. It is asked of every finished run, whatever the state of its work. Err for a
+/// record that names some and not others, a repo by a path that does not start at a root (a run writes the folder
+/// as the system resolves it, from a root), or a commit by anything but a whole object id. Such a word never
+/// reaches git, and neither does one that passes: an id is only ever compared with what git printed
+/// (`copy/work.rs`).
 fn named(record: &Record) -> Result<Option<Named<'_>>, ()> {
     match (record.repo.as_deref(), record.start.as_deref(), record.end.as_deref()) {
         (None, None, None) => Ok(None),

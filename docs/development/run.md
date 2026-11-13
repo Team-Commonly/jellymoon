@@ -67,8 +67,9 @@ and its branch in them.
 5. **The run.** Below.
 6. **The end.** Finished: `clean_copy` as completed, so the work is one commit on `jellymoon/run-<id>` and the
    folder is gone; the wish is `done` with one more star. A run that changed nothing has still finished, and says
-   the branch is where the checkout was. Anything else: `clean_copy` as failed, so the copy is kept for a look;
-   the wish is `needs_you` with no star.
+   the branch is where the checkout was. Both hold only of a branch that is still at the commit the copy was
+   made from: one that was moved while the run worked fails the run ("What is kept"). Anything else:
+   `clean_copy` as failed, so the copy is kept for a look; the wish is `needs_you` with no star.
 
 ## What the harness is started with
 
@@ -188,6 +189,7 @@ The first row that fits is the one said:
 | With a result that is not a success, or does not say `"is_error":false` | its result was not a success |
 | With a skipped line after its result | a line that could not be read came after its result |
 | With a success, and an exit that is not 0 | Claude Code exited with a failure after its result |
+| Finished, and its branch was no longer at the commit the run started from ("What is kept") | its branch was moved while it worked |
 | Finished, and its work could not be committed | its work could not be committed |
 
 A run the person stopped is none of these: it is `cancelled`, whatever its stream held.
@@ -301,7 +303,7 @@ record whose end is not believed can have been written by hand too.
   `start`, the commit the copy was made from; `end`, the commit the copy ended as. `repo` and `start` are in the
   record from its first writing, before the harness is started. `end` is written with `outcome` and `why`, in the
   one writing of the run's end, and only for a run that finished: the commit made of its work, or, when it
-  changed nothing, the commit its branch was at. Each is left out when it is not known, never written as null,
+  changed nothing, `start` itself. Each is left out when it is not known, never written as null,
   and a record from before F48 has none of them (example `run-record-before.json`) and is read as it always was.
   The repo's folder is a path of the person's machine: it is in this one file, and is not printed, not in page
   data and not in what is sent to the model. Only `run show` reads the three, and it trusts none of them
@@ -311,11 +313,29 @@ record whose end is not believed can have been written by hand too.
   |---|---|---|
   | was refused before its copy was made, or behind the lock runs are counted at | no record at all | |
   | was never started (the harness too old, or not startable) | yes, then the record goes with the copy | no |
-  | finished, with work | yes | the one commit of its work |
-  | finished, and changed nothing | yes | the commit its branch was at, which is `start` |
-  | finished, with its copy's folder already gone | yes | no: nothing was there to commit |
+  | finished, with work | yes | the one commit of its work, made on top of `start` |
+  | finished, and changed nothing | yes | `start` |
+  | finished, with its copy's folder already gone | yes | `start`: nothing was there to commit |
+  | would have finished, and its branch was not at `start` by then | yes | no: it failed, as its branch was moved |
   | failed, was stopped, ran out of time, or could not be committed | yes | no |
   | was cut off | yes | no, and a look that writes it down as failed adds none |
+
+  **At a run's end its branch must still be at `start`.** Before anything of a finished run is staged or
+  committed, core asks git which commit `refs/heads/jellymoon/run-<id>` names, by that whole name, as a look does
+  (`copy/work.rs`), and compares what git prints with the commit this command made the copy from, the one it
+  wrote in the record as `start`. No word of a record is given to git. If the two differ, or the branch is gone
+  or is a name for another branch, the run has failed, whoever moved it: a commit put there by hand, in a run's
+  own shape or not, and the person's own commit inside the copy alike. `why` says `its branch was moved while it
+  worked`, nothing is staged or committed, the branch is left where it was moved to, the copy is kept as any
+  failed run's is, and no `end` is written. So an `end` is only ever `start` itself or the one commit core made
+  on top of `start`, by how it is made and not only by a later check. The commit is put on the branch only if
+  the branch still names `start` at that moment (`update-ref` with the old value); a branch moved in between
+  fails the run as one whose work could not be committed. `jellymoon copy clean` knows no start and commits
+  onto the branch as it is ([copy.md](copy.md)).
+
+  The released v0.2.0-rc1 reads a record that names the three, since it reads past names it does not know. It
+  writes a record again in one case only, a look that writes a cut-off run down as failed, and the three are
+  dropped from that record then: such a run has no work to show.
 - **A stop's request**, `runs/<id>/stop`: an empty file, there only when a stop was asked for.
 - **One run for a wish.** The wish names its run before the harness is started, behind the day's lock, so of two
   `jellymoon run` at once one starts and the other takes its own copy back and is refused.
@@ -366,10 +386,11 @@ jellymoon/run-<id>, and no star was added`. The branch is named as where the wor
 nothing, and a branch can be removed by hand. The end is written in the record only after the wish took it,
 so while the day's wishes cannot be written the one-second wait is paid again on every look, once for each
 such run. A build with
-debug assertions waits before the run writes its end for `JELLYMOON_TEST_NOTE_WAIT_MS`, and after a look's
-first read of the record for `JELLYMOON_TEST_LOOK_WAIT_MS`.
+debug assertions waits before the run writes its end for `JELLYMOON_TEST_NOTE_WAIT_MS`, after a look's
+first read of the record for `JELLYMOON_TEST_LOOK_WAIT_MS`, and after every writing of a run's record for
+`JELLYMOON_TEST_RECORD_WAIT_MS`, so that a test reads each state the record ever has.
 
-**A test does not depend on an idle machine.** Each such wait (`busy::pause`: those two, and
+**A test does not depend on an idle machine.** Each such wait (`busy::pause`: those three, and
 `JELLYMOON_TEST_CLAIM_WAIT_MS`, `JELLYMOON_TEST_NAME_WAIT_MS` and `JELLYMOON_TEST_PLACE_WAIT_MS` in a run's
 start, `JELLYMOON_TEST_MADE_WAIT_MS` once git has made a copy, and `JELLYMOON_TEST_UNMADE_WAIT_MS` between
 the two git steps that take back one it could not make) ends early when the file `JELLYMOON_TEST_GO` names is
@@ -440,8 +461,9 @@ harness: that is a cut-off run like any other.
 
 ## What a kill leaves in the record
 
-`jellymoon run` writes its record whole each time, to a new file that is then renamed over the old one, so a kill
-leaves the record of the step before or of the step after, never half of one. What it names of the repo is
+`jellymoon run` writes its record whole each time, to a new file that is synced and then renamed over the old one,
+so a kill leaves the record of the step before or of the step after, never half of one. The folder is not synced:
+after a power loss the rename itself can be lost, and the record is then the one of the step before. What it names of the repo is
 written before anything it describes is removed: `repo` and `start` while the copy's own record is still there,
 and `end` after the copy is gone, which is the one step where the two are apart (the commit is made first, and
 is on the run's branch). `crates/jellymoon/tests/f48/cut.rs` kills a run while its harness works, and after its

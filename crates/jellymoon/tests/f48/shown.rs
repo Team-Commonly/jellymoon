@@ -3,11 +3,11 @@
 //! one writes it by hand, as anyone who can write Jellymoon's home can.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use serde_json::{Value, json};
 
-use super::{Made, NAMED, finished, printed, refused};
+use super::{Made, NAMED, finished, played, printed, refused};
 
 const MOVED: &str = "is not as the run left it, so what is on it is not shown as the run's";
 const ANOTHER: &str = "is not the one its record names, so its work is not shown";
@@ -24,7 +24,7 @@ fn no(made: &Made, repo: &Path, why: &str) {
     }
 }
 
-fn names(shown: &Value) -> Vec<&str> {
+pub fn names(shown: &Value) -> Vec<&str> {
     shown["files"].as_array().unwrap().iter().map(|file| file["name"].as_str().unwrap()).collect()
 }
 
@@ -110,8 +110,9 @@ fn a_repo_that_is_not_the_one_the_record_names_is_refused() {
     copied(&made.repo, &other);
     assert_eq!(made.w.commit(&other, &made.branch()), kept["end"].as_str().unwrap());
     no(&made, &other, ANOTHER);
-    // A record made to name that other repo is not the record of a run in this one.
-    made.write(&with(&kept, "repo", json!(other.join(".git"))));
+    // A record made to name that other repo, as a run in it would have written it (the folder as the system
+    // resolves it, which on Windows begins `\\?\`), is not the record of a run in this one.
+    made.write(&with(&kept, "repo", json!(fs::canonicalize(other.join(".git")).unwrap())));
     no(&made, &made.repo, ANOTHER);
     assert_eq!(names(&printed(&made.show_in(&other, &[]))), ["a.txt", "b.txt", "n.txt"], "and is one in that one");
     // The folder above the one git names is not it, and neither is one inside it.
@@ -146,7 +147,14 @@ fn the_repo_found_is_compared_as_the_system_resolves_it_and_the_records_path_is_
         made.write(&with(&kept, "repo", json!(upper.join(".git"))));
         no(&made, &made.repo, ANOTHER);
     }
-    made.write(&with(&kept, "repo", json!(Path::new(named).parent().unwrap().join("sub").join("..").join(".git"))));
+    // The same folder through `sub/..`, spelled as text: on a Windows path that begins `\\?\`, `Path::join("..")`
+    // takes the last part away and keeps no `..`, and the path it gives is the resolved one itself.
+    let (above, sep) = (Path::new(named).parent().unwrap().to_str().unwrap(), std::path::MAIN_SEPARATOR);
+    let dotted = format!("{above}{sep}sub{sep}..{sep}.git");
+    assert!(Path::new(&dotted).components().any(|part| part == Component::ParentDir), "{dotted}");
+    // Asked only where the system reads `..` in every path: one that begins `\\?\` is taken as it is spelled.
+    assert!(!cfg!(unix) || fs::canonicalize(&dotted).unwrap() == Path::new(named), "it is the folder the record names");
+    made.write(&with(&kept, "repo", json!(dotted)));
     no(&made, &made.repo, ANOTHER);
     #[cfg(unix)]
     {
@@ -180,6 +188,7 @@ fn a_record_that_names_a_commit_by_anything_but_a_full_hex_id_or_names_only_some
         "--output=made-by-git".to_string(),
         "-h".to_string(),
         String::new(),
+        "g".repeat(40), // as long as an id, and no hex digit in it
     ];
     for name in ["end", "start"] {
         for not_id in &not_ids {
@@ -194,16 +203,55 @@ fn a_record_that_names_a_commit_by_anything_but_a_full_hex_id_or_names_only_some
     made.write(&with(&kept, "repo", json!(".git")));
     no(&made, &made.repo, NOT_CORES);
     // A run that ended with a commit names all three or, written by a build from before, none.
-    for left_out in NAMED {
-        let mut record = kept.clone();
-        record.as_object_mut().unwrap().remove(left_out);
-        made.write(&record);
+    for some in partly(&kept) {
+        made.write(&some);
         no(&made, &made.repo, NOT_CORES);
     }
     made.write(&with(&kept, "repo", json!(7)));
     no(&made, &made.repo, "cannot be read");
     made.write(&kept);
     assert_eq!(names(&printed(&made.show())), ["a.txt", "b.txt", "n.txt"]);
+}
+
+/// The record without the names in `gone`.
+fn without(record: &Value, gone: &[&str]) -> Value {
+    let mut record = record.clone();
+    for name in gone {
+        record.as_object_mut().unwrap().remove(*name);
+    }
+    record
+}
+
+/// Every record that names some of the three and not all: each one alone, and each two.
+fn partly(record: &Value) -> Vec<Value> {
+    let [repo, start, end] = NAMED;
+    let gone = [&[start, end][..], &[repo, end], &[repo, start], &[end], &[start], &[repo]];
+    gone.iter().map(|gone| without(record, gone)).collect()
+}
+
+// Nothing of a finished run is printed before what its record names is checked: not that it changed nothing, and
+// not that its work was kept or tossed. Such a record prints no files and git is never asked, and it is a file all
+// the same, which `run keep` and `run toss` will read.
+#[test]
+fn what_a_record_names_is_checked_whatever_the_state_of_the_work_before_anything_is_printed() {
+    let (nothing, made) = (played("nothing", "completed"), finished());
+    let (kept, tossed) = (with(&made.record(), "work", json!("kept")), with(&made.record(), "work", json!("tossed")));
+    for (made, whole, state) in
+        [(&nothing, nothing.record(), "waits"), (&made, kept, "kept"), (&made, tossed, "tossed")]
+    {
+        let not_cores = [("end", json!("HEAD")), ("start", json!("main")), ("end", json!("")), ("repo", json!("x"))];
+        let changed = not_cores.iter().map(|(name, word)| with(&whole, name, word.clone()));
+        for record in partly(&whole).into_iter().chain(changed) {
+            made.write(&record);
+            no(made, &made.repo, NOT_CORES);
+        }
+        // All three, or none in a record from before: its state is printed, with no file.
+        for record in [without(&whole, &NAMED), whole] {
+            made.write(&record);
+            let shown = printed(&made.show());
+            assert_eq!((&shown["work"], &shown["files"]), (&json!(state), &json!([])), "{record}");
+        }
+    }
 }
 
 #[test]

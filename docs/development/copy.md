@@ -46,6 +46,8 @@ new thing in their repo is the run's branch (and git's own registration of the w
 - **completed.** Core commits what is in the copy onto the run's branch, removes the folder itself, then has git
   drop the worktree's registration. The branch is kept: it is the work. Nothing to commit is not an error, and
   neither is a folder already gone. The commit is one commit, `Jellymoon run <run>`, on top of the branch.
+  `jellymoon copy clean` takes the branch as it is. A run's own end takes it only while it is still at the commit
+  the copy was made from, and has failed otherwise (`run.md`, "What is kept").
 - **failed.** The copy stays for a look. Of all failed copies, of every repo, the newest five stay; older ones are
   removed with their registration, and what was not committed in them is lost. Their branches stay. Newest is the
   order the runs failed in, which the records hold: each is dated later than every failed run before it, so the run

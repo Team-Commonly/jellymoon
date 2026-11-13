@@ -5,7 +5,7 @@
 use std::time::{Duration, Instant};
 use std::{fs, thread};
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::{DAY, Made, World, refused, world};
 
@@ -83,4 +83,66 @@ fn a_run_cut_off_after_its_commit_and_before_its_end_was_written_is_refused_and_
     made.write(&record);
     assert!(refused(&made.show()).contains("is not one Jellymoon wrote for this wish"));
     assert!(fs::read_dir(made.w.jm("copies")).unwrap().next().is_none());
+}
+
+// A look's writing of a cut-off run is the record with no end, whatever stood there: an end is only ever written
+// by the run that finished.
+#[test]
+fn an_end_put_in_the_record_of_a_cut_off_run_is_gone_once_a_look_has_written_the_run_down() {
+    let made = cut_off("forever", &[], |w, _| w.at("rec").join("started").exists());
+    let mut record = made.record();
+    record["end"] = record["start"].clone();
+    made.write(&record);
+    assert_eq!(made.w.on_page(&made.wish)["state"], "needs_you");
+    assert_eq!(made.record()["outcome"], "failed");
+    names_no_end(&made);
+}
+
+// A run's record is there, naming its repo and its start, before its wish names the run: a kill between the two
+// leaves a record no wish names, never a wish that names a run with no record.
+#[test]
+fn a_runs_record_is_written_before_its_wish_names_the_run() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let hold = [("JELLYMOON_TEST_RECORD_WAIT_MS", "60000".into())];
+    let mut going = w.going(&hold, &["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    let records = || fs::read_dir(w.jm("runs")).into_iter().flatten().flatten().map(|run| run.path().join("run.json"));
+    let read = |file: std::path::PathBuf| serde_json::from_slice::<Value>(&fs::read(file).ok()?).ok();
+    let mut record = None;
+    until("the run never wrote its record", || {
+        record = records().find_map(read);
+        record.is_some()
+    });
+    let named = w.kept(&wish)["run"].clone();
+    going.kill().unwrap();
+    going.wait().unwrap();
+    let record = record.unwrap();
+    assert!(named.is_null(), "the wish named run {named} while the record's first writing was held");
+    assert!(record["repo"].is_string() && record["start"] == json!(w.commit(&repo, "main")), "{record}");
+}
+
+// Every writing of a record is held for a moment in a test's build, so each state the file ever has is read
+// here: none has the run's end without the commit it ended as, or that commit without the end.
+#[test]
+fn a_finished_runs_end_and_the_commit_it_ended_as_are_in_one_writing_of_its_record() {
+    let w = world();
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let hold = [("JELLYMOON_TEST_RECORD_WAIT_MS", "250".into())];
+    let mut going = w.going(&hold, &["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    until("the wish never named its run", || w.kept(&wish)["run"].is_string());
+    let file = w.jm("runs").join(w.kept(&wish)["run"].as_str().unwrap()).join("run.json");
+    let read = || fs::read(&file).ok().and_then(|line| serde_json::from_slice::<Value>(&line).ok());
+    let mut seen: Vec<Value> = Vec::new();
+    until("the run never ended", || {
+        let over = going.try_wait().unwrap().is_some();
+        if let Some(record) = read().filter(|record| seen.last() != Some(record)) {
+            seen.push(record);
+        }
+        over
+    });
+    assert!(seen.len() >= 3, "going, with its child, and ended: {seen:?}");
+    for record in &seen {
+        assert_eq!(record["outcome"].is_null(), record.get("end").is_none(), "{record}");
+    }
+    assert_eq!(seen[seen.len() - 1]["outcome"], "completed");
 }

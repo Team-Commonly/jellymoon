@@ -2,11 +2,16 @@
 //! while building F44"; `docs/development/run.md`, "What is kept"; `docs/development/show.md`). `jellymoon run` is
 //! run as a black box in F39's test folder (`f39/world.rs`), with the made-up `fake-agent` as the harness and repos
 //! made with the real `git`. This file holds what a run writes; `f48/shown.rs` holds what `jellymoon run show`
-//! takes from the record and what it refuses, and `f48/cut.rs` a run cut off between its steps.
+//! takes from the record and what it refuses, `f48/cut.rs` a run cut off between its steps, `f48/moved.rs` a run
+//! whose branch was moved while it worked, and `f48/linked.rs` a repo with a second checkout.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f48/cut.rs"]
 mod cut;
+#[path = "f48/linked.rs"]
+mod linked;
+#[path = "f48/moved.rs"]
+mod moved;
 #[path = "f48/shown.rs"]
 mod shown;
 mod support;
@@ -95,7 +100,7 @@ impl Made {
 }
 
 /// Whether a record's word is that folder as the system resolves it: the one spelling a run writes.
-fn one_folder(one: &str, other: &Path) -> bool {
+pub fn one_folder(one: &str, other: &Path) -> bool {
     Path::new(one) == fs::canonicalize(other).unwrap()
 }
 
@@ -109,12 +114,14 @@ fn a_run_that_completes_writes_its_repo_its_start_and_its_end_in_its_record() {
     assert_ne!(main, end);
     assert_eq!(made.git(&["rev-list", "--parents", "-n", "1", &end]), format!("{end} {main}"));
 
-    // A run that changed nothing ended as the commit it started from: the branch is where the checkout was.
+    // A run that changed nothing ended as the commit it started from. Its branch is still at that commit, or
+    // the run would have failed (`f48/moved.rs`): core compares the two before it commits anything.
     let nothing = played("nothing", "completed");
     let (record, main) = (nothing.record(), nothing.w.commit(&nothing.repo, "main"));
     assert!(record["why"].as_str().unwrap().contains("changed nothing"), "{record}");
     assert!(one_folder(record["repo"].as_str().unwrap(), &nothing.repo.join(".git")), "{record}");
     assert_eq!((&record["start"], &record["end"]), (&json!(main), &json!(main)), "{record}");
+    assert_eq!(nothing.w.commit(&nothing.repo, &nothing.branch()), main);
 }
 
 #[test]
@@ -258,10 +265,13 @@ fn the_repos_path_is_in_the_runs_record_and_in_nothing_else_a_run_or_a_page_writ
         w.run(&["run", "stop", "--wish", &made.wish, "--date", DAY]),
         w.run(&["day", "--date", DAY, "--logs", logs.to_str().unwrap()]),
     ];
-    // The path as it was typed and as the system resolves it, with either separator.
+    // The path as it was typed and as the system resolves it, with either separator, and as JSON spells it:
+    // there every `\` of a Windows path is two, in the record and in whatever is printed.
     let real = fs::canonicalize(&made.repo).unwrap();
     let spelled = [repo.to_string(), real.to_string_lossy().into_owned()];
-    let needles: Vec<String> = spelled.iter().flat_map(|path| [path.clone(), path.replace('\\', "/")]).collect();
+    let in_json = |path: &String| serde_json::to_string(path).unwrap().trim_matches('"').to_string();
+    let spellings = |path: &String| [path.clone(), path.replace('\\', "/"), in_json(path)];
+    let needles: Vec<String> = spelled.iter().flat_map(spellings).collect();
     let holds = |bytes: &[u8]| needles.iter().any(|path| bytes.windows(path.len()).any(|at| at == path.as_bytes()));
     for ran in &printed_by {
         assert_eq!(ran.code, 0, "{}", ran.stderr);

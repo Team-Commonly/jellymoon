@@ -114,7 +114,9 @@ and F46 a new edge, so the order is stated here: **F48 is built before F45 and F
 As F48 is built: a record from before, which names none of the three, is still shown by the branch's shape, and
 whoever can write the home can make a record into one from before. So **`run keep` and `run toss` refuse a record
 that names no commits**: only a look may go by shape. The path in the record is compared and never resolved, so a
-repo that was moved or copied since the run is refused as another repo.
+repo that was moved or copied since the run is refused as another repo. The record names the git folder the repo's
+checkouts share, so with linked worktrees it does not say which checkout a run started from, and `run keep` goes by
+`start` and by where the person stands.
 
 ## What comes after
 

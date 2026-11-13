@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::{RunOutcome, WorkState, dead};
 use crate::hook::put;
 use crate::tap::plain;
-use crate::{Error, copy};
+use crate::{Error, busy, copy};
 
 /// The most bytes of a run's record that are read.
 const RECORD_MAX: usize = 64 * 1024;
@@ -48,8 +48,9 @@ pub(super) struct Record {
     /// The commit the copy was made from. None in a record from before F48.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start: Option<String>,
-    /// The commit the copy ended as, written with the end of a run that finished: the one commit of its work, or
-    /// the commit its branch was at when it changed nothing. None for every run that did not finish.
+    /// The commit the copy ended as, written with the end of a run that finished: the one commit core made of its
+    /// work on top of `start`, or `start` itself when it changed nothing. None for every run that did not finish,
+    /// one whose branch was moved from `start` while it worked among them (`copy/clean.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end: Option<String>,
     /// Whether the person kept or tossed the work of a run that finished. Left out while it waits: no run writes
@@ -64,7 +65,10 @@ pub(super) fn file(home: &Path, run: &str) -> PathBuf {
 
 pub(super) fn write(home: &Path, run: &str, record: &Record) -> Result<(), Error> {
     let text = serde_json::to_string(record).map_err(io::Error::from);
-    text.and_then(|text| put(&file(home, run), &format!("{text}\n"), false)).map_err(Error::Store)
+    let written = text.and_then(|text| put(&file(home, run), &format!("{text}\n"), false)).map_err(Error::Store);
+    // A test's build can wait here, after each writing, so that a test reads every state the record ever has.
+    busy::pause("JELLYMOON_TEST_RECORD_WAIT_MS");
+    written
 }
 
 /// The record as it is kept. None when there is none that can be used.

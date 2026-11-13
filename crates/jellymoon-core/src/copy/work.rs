@@ -139,7 +139,7 @@ pub(crate) fn is_id(word: &str) -> bool {
 
 /// The commit the run's branch names. The branch is asked for by its whole name, and only the line of that whole
 /// name is taken: a tag or a remote's branch of the same short name is another name, and so is a branch below it.
-fn tip(repo: &Repo, run: &str) -> Result<String, Unread> {
+pub(super) fn tip(repo: &Repo, run: &str) -> Result<String, Unread> {
     let name = format!("refs/heads/{}", branch(run));
     let format = "--format=%(refname) %(objectname) %(objecttype) %(symref)";
     let refs = repo.run(None, &[], &["for-each-ref", format, &name]).map_err(|_| Unread::Repo)?;

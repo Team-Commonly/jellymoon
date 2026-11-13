@@ -36,7 +36,7 @@ pub(super) fn soon() -> Option<Duration> {
 }
 
 /// Why a run did not finish, in every fixed form but the time limit's, which names its seconds ([`at_limit`]).
-const KINDS: [&str; 8] = [
+const KINDS: [&str; 9] = [
     "it printed more than Jellymoon reads of a run",
     "Claude Code ended without a result",
     "it did not start with the tools, servers and permission mode of a run",
@@ -45,6 +45,7 @@ const KINDS: [&str; 8] = [
     "a line that could not be read came after its result",
     "Claude Code exited with a failure after its result",
     "its work could not be committed",
+    "its branch was moved while it worked",
 ];
 
 /// How long a look that finds a run's copy gone and no end in its record reads the record again. A run that
@@ -203,10 +204,14 @@ fn written(home: &Path, day: &str, wish: MadeWish, run: &str, record: Option<&Re
 /// so. Finished is all of: the stream started as a run's does, one result line came, it says success and no
 /// error, nothing that could not be read came after it, and the harness exited with 0. A child that was stopped
 /// for the person is a cancelled run whatever its stream holds: its copy is kept as a failed run's is.
+///
+/// `start` is the commit the copy was made from, as this command wrote it in the record. A run that would have
+/// finished has failed when its branch is no longer at it, whoever moved the branch: nothing is committed onto
+/// a moved branch and no end is written, so an end is only ever `start` or the one commit made on top of it.
 pub(super) fn settle(
     home: &Path,
     (day, wish): (&str, &str),
-    copy: &RunCopy,
+    (copy, start): (&RunCopy, &str),
     ended: &Ended,
     limit: Duration,
 ) -> Result<Ran, Error> {
@@ -227,7 +232,8 @@ pub(super) fn settle(
     };
     let run = &copy.run;
     let committed = match kind {
-        None => copy::end_copy(home, run, Outcome::Completed, None).map_err(|_| KINDS[7]),
+        None => copy::end_copy(home, run, Outcome::Completed, None, Some(start))
+            .map_err(|e| if copy::moved(&e) { KINDS[8] } else { KINDS[7] }),
         Some(kind) => Err(kind),
     };
     let (outcome, why, end) = match committed {
@@ -270,11 +276,13 @@ fn told_first(home: &Path, day: &str, wish: &str, run: &str) -> bool {
 /// The copy of a run that did not finish is marked failed, so that it is kept. One marked already, or gone, is
 /// left as it is. False: the lock a copy is cleaned behind was not had within `wait`, and nothing was done.
 pub(super) fn mark(home: &Path, run: &str, wait: Option<Duration>) -> bool {
-    !copy::end_copy(home, run, Outcome::Failed, wait).is_err_and(|e| copy::timed_out(&e))
+    !copy::end_copy(home, run, Outcome::Failed, wait, None).is_err_and(|e| copy::timed_out(&e))
 }
 
 /// The run's own record takes its end, once, and with it, in the same writing, the commit a finished run's copy
-/// `ended` as. No other end names one: nothing of a run that did not finish was committed.
+/// `ended` as. No other end names one, and an end that stood in the record is not kept. That is not to say that
+/// nothing of a run with no end was committed: a run whose commit was made and whose copy could then not be
+/// removed is written failed, with no end, and its branch holds that commit. It is left so here, for `run toss`.
 pub(super) fn note(
     home: &Path,
     run: &str,

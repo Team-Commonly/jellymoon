@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 pub(crate) use back::{remove_ours, take_back, take_back_left};
 pub use clean::clean_copy;
-pub(crate) use clean::end_copy;
+pub(crate) use clean::{end_copy, moved};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
 use record::{Record, write};

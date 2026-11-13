@@ -8,23 +8,38 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::git::{Git, Repo};
 use super::record::{Record, forget, read, write};
+use super::work::{Unread, tip};
 use super::{JELLYMOON, KEPT, Outcome, Places, RunCopy, branch, gone, hold, known, refused, standing};
 use crate::Error;
 
 /// Ends a run's copy. Completed: what is in the copy is committed onto the run's branch, the folder is removed and
 /// the branch is kept. Failed: the copy stays, and of all failed copies only the newest [`KEPT`] do.
 pub fn clean_copy(home: &Path, run: &str, outcome: Outcome) -> Result<RunCopy, Error> {
-    end_copy(home, run, outcome, None).map(|(copy, ..)| copy)
+    end_copy(home, run, outcome, None, None).map(|(copy, ..)| copy)
+}
+
+/// What a completed run is refused with when its branch is not at the commit the run started from ([`moved`]).
+const MOVED: &str = "the run's branch is not at the commit the run started from, so nothing was committed";
+
+/// Whether an error is a completed run's branch not being where the run started: someone moved it meanwhile.
+pub(crate) fn moved(error: &Error) -> bool {
+    matches!(error, Error::Copy(why) if why == MOVED)
 }
 
 /// [`clean_copy`], which also says whether a completed run's commit was made, false when the copy held nothing
-/// new, and the commit the run's branch was left at, as git said it: the one made, or the one it was at. None for
-/// a failed run, and for a completed one whose folder was not there to commit.
+/// new, and the commit the run's branch was left at, as git said it. None for a failed run.
+///
+/// With the commit a run's copy was made from, `start`, a completed run's branch must still be at it, or the end
+/// is refused ([`moved`]) before anything is staged, committed or removed. So the commit returned is `start`
+/// itself, when the copy held nothing new or its folder was gone, or the one commit made here on top of `start`.
+/// Without one (`jellymoon copy clean`) the commit is made on the branch as it is, and none is returned for a
+/// folder that was not there to commit.
 pub(crate) fn end_copy(
     home: &Path,
     run: &str,
     outcome: Outcome,
     wait: Option<Duration>,
+    start: Option<&str>,
 ) -> Result<(RunCopy, bool, Option<String>), Error> {
     known(run)?;
     let at = Places::of(home);
@@ -51,7 +66,12 @@ pub(crate) fn end_copy(
     let folder = at.root.join(run);
     let there = standing(&at.root, &folder)?;
     let git = Git::find(&at.runs, record.found).map_err(refused)?;
-    let ended = if there { Some(commit(&git.open(&record.own).map_err(refused)?, &folder, run)?) } else { None };
+    let ended = match (there, start) {
+        (true, _) => Some(commit(&git.open(&record.own).map_err(refused)?, &folder, run, start)?),
+        // Nothing is there to commit: the run ended as its start, which its branch must still name.
+        (false, Some(start)) => Some((at_start(&git.open(&record.repo).map_err(refused)?, run, start)?, false)),
+        (false, None) => None,
+    };
     gone(&git, &record, &folder, there)?;
     forget(&file);
     let (made, end) = ended.map_or((false, None), |(end, made)| (made, Some(end)));
@@ -75,17 +95,24 @@ fn sweep(at: &Places) {
 /// config the agent could have written. No hook can start: the tree and the commit are written with git's plumbing,
 /// which has none, and the one hook of a ref update is off with the rest (`git.rs`). Returned is the commit the
 /// branch is left at, and whether it was made here: false when there was nothing new, and the branch is where it was.
-fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<(String, bool), Error> {
+///
+/// The commit is made on the branch's own last commit. For a run that is `start`, asked first ([`at_start`]): a
+/// branch that was moved gets nothing staged and no commit. The branch then takes the commit only if it still
+/// names the commit it was made on, which is git's own check of the old value.
+fn commit(repo: &Repo, folder: &Path, run: &str, start: Option<&str>) -> Result<(String, bool), Error> {
     let failed = |said: String| refused(format!("git could not commit the copy, which is kept: {said}"));
     let git = |tree: Option<&Path>, vars: &[(&str, &str)], args: &[&str]| repo.run(tree, vars, args).map_err(failed);
+    let name = format!("refs/heads/{}", branch(run));
+    let tip = match start {
+        Some(start) => at_start(repo, run, start)?,
+        None => git(None, &[], &["rev-parse", "--verify", &format!("{name}^{{commit}}")])?,
+    };
     let staged = git(None, &[], &["ls-files", "-z", "--stage"])?;
     let inner = staged.split('\0').filter_map(|entry| entry.strip_prefix("160000 ")?.split_once('\t'));
     let inner: Vec<String> = inner.map(|(_, path)| format!(":(top,exclude,literal){path}")).collect();
     let add = ["add", "-A", "--", ":(top)"].into_iter().chain(inner.iter().map(String::as_str));
     git(Some(folder), &[], &add.collect::<Vec<_>>())?;
     let tree = git(None, &[], &["write-tree"])?;
-    let name = format!("refs/heads/{}", branch(run));
-    let tip = git(None, &[], &["rev-parse", "--verify", &format!("{name}^{{commit}}")])?;
     if git(None, &[], &["rev-parse", "--verify", &format!("{tip}^{{tree}}")])? == tree {
         return Ok((tip, false));
     }
@@ -103,6 +130,18 @@ fn commit(repo: &Repo, folder: &Path, run: &str) -> Result<(String, bool), Error
     ];
     let made = git(None, &who, &["commit-tree", "-p", &tip, "-m", &format!("Jellymoon run {run}"), &tree])?;
     git(None, &[], &["update-ref", &name, &made, &tip]).map(|_| (made, true))
+}
+
+/// The commit a run's branch names, which must be `start`, the commit the run's copy was made from. The branch is
+/// read by its whole name, as a look reads it (`work.rs`), and what git prints is compared with `start`, which is
+/// never given to git. A branch that names another commit, that is gone, or that is a name for another branch
+/// was moved, by whoever ([`MOVED`]); a git that does not answer is a commit that could not be made.
+fn at_start(repo: &Repo, run: &str, start: &str) -> Result<String, Error> {
+    match tip(repo, run) {
+        Ok(tip) if tip == start => Ok(tip),
+        Err(Unread::Repo) => Err(refused("git could not read the run's branch, so nothing was committed")),
+        _ => Err(refused(MOVED)),
+    }
 }
 
 /// Removes every failed copy but the newest [`KEPT`], with its registration. What cannot be removed now (a link

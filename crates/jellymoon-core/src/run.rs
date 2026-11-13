@@ -169,6 +169,10 @@ fn cut_late(run: &str) -> String {
     )
 }
 
+/// The line of a run that finished. Both forms hold by how a run ends (`end::settle`, `copy/clean.rs`): its branch
+/// was still at the commit the copy was made from, or the run failed. So the one commit is on top of that commit,
+/// and a run that changed nothing left its branch at it, which is where the person's checkout was when the run
+/// started.
 fn finished(copy: &RunCopy, changed: bool) -> String {
     let (run, branch) = (&copy.run, &copy.branch);
     if changed {
@@ -222,6 +226,8 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     })?;
     // The copy's start lock is held until this command ends: what a killed command left is known by it.
     let (copy, held, from) = made;
+    // Where the run started, kept as git said it: the run's branch must still be there at the run's end.
+    let began_at = from.commit.clone();
     // The lock is taken before the wish names the run, so a wish never names a run that nothing holds.
     let taken = start(home, (&day, &wish.id), &copy.run, from);
     let lock = match taken {
@@ -246,7 +252,7 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
         never::undo(home, (&day, &wish.id), &copy.run, why, (lock, held))?;
         return ended.and_then(|_| not_started(never::OLD.to_string()));
     }
-    let ran = ended.and_then(|ended| settle(home, (&day, &wish.id), &copy, &ended, limit));
+    let ran = ended.and_then(|ended| settle(home, (&day, &wish.id), (&copy, &began_at), &ended, limit));
     // The start lock goes first: while the run's own is held, nothing takes this run for one left behind.
     drop(held);
     let _ = fs::remove_file(copy::start_lock(home, &copy.run));

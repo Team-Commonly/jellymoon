@@ -295,14 +295,16 @@ fn a_copy_no_wish_names_is_taken_back_on_a_record_with_no_child_and_kept_as_fail
     w.on_page(&wish);
     assert_eq!((w.copies(), w.branches(&repo), w.kept_for(&run)), (vec![], vec![], false));
 
-    // A pid no process of this system has, so nothing is signalled.
+    // A pid no process of this system has, so nothing is signalled. The record names where the run started, as
+    // a run's does (F48): a run that was cut off ended as no commit, and is given none.
     let run = w.killed_in_the_claim(&wish, &repo);
-    fs::write(w.jm("runs").join(&run).join("run.json"), record(json!({"pid": 4_000_000_000_u32, "mark": "none"})))
-        .unwrap();
+    let child = json!({"pid": 4_000_000_000_u32, "mark": "none", "start": w.commit(&repo, "main")});
+    fs::write(w.jm("runs").join(&run).join("run.json"), record(child)).unwrap();
     w.on_page(&wish);
     let why = format!("run {run} was cut off before it ended: its copy is kept and no star was added");
     let kept = w.record(&run);
     assert_eq!((&kept["outcome"], &kept["why"]), (&json!("failed"), &json!(why)));
+    assert!(kept["start"].is_string() && kept.get("end").is_none(), "{kept}");
     assert_eq!((w.copies(), w.branches(&repo)), (vec![run.clone()], vec![format!("jellymoon/run-{run}")]));
     assert_eq!(w.kept(&wish), made(&wish, "alpha"), "a run no wish names changed a wish");
     // It is done with: the next look finds nothing more to do, and the copy stays one of the failed copies.

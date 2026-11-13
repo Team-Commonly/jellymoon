@@ -31,5 +31,8 @@ The words below mean exactly this in code, docs and tests. A new term is added h
 | **work** | What a finished run made: the one commit on its branch, which waits until the person keeps it or tosses it (ADR 0017) | a star, which says a job was reported finished; the copy, which is the folder it was made in |
 | **kept** | Work the person took with `jellymoon run keep`: it is one commit on the branch their checkout stands on, and the run's branch is gone | the copy being kept for a look, which is a failed run's folder left in place |
 | **tossed** | Work the person refused with `jellymoon run toss`: the run's branch is deleted and the wish is let go | cancelled, which is how a run ended; let go, which is the wish's state |
+| **question** | One line a run's agent ends a turn with when it cannot go on without a fact: an agent's text, cleaned and drawn as text. The run has not ended; it asks (ADR 0018) | a permission request, which no run makes; a ruling's ask |
+| **answer** | The words the person gives a run that asks, with `jellymoon run answer`; they go on with the same run | a made wish, which starts a run; a ruling |
+| **follow-up** | A made wish that names the wish it follows ("more like this"): a new run on the followed work, with a fork of its session (ADR 0018) | an answer, which goes on with the same run |
 | **feature** | One entry of `feature_list.json`: a test at the binary's boundary that defines done | an issue |
 | **unit** | One piece of work given to one worker: usually one feature, and one file in `progress/` | a feature, though often one-to-one |

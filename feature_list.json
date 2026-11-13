@@ -373,6 +373,88 @@
       "test": "cargo test -p jellymoon-app --test f49",
       "passes": true,
       "blockedBy": []
+    },
+    {
+      "id": "F50",
+      "category": "journal",
+      "description": "The reader leaves out a session whose working directory is a run's copy",
+      "steps": [
+        "`jellymoon day` over logs that hold a session whose lines name a folder inside the home's `copies` as their working directory prints no turn of it, whatever was typed there, and prints every other session's turns as before",
+        "the folder is compared as the reader compares a switched-off folder, by the path the log gives; a folder that only shares a name with `copies`, or lies beside the home, is read",
+        "nothing of a left-out session reaches the reading call or page data, and the page says nothing of it"
+      ],
+      "test": "cargo test -p jellymoon --test f50",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F51",
+      "category": "journal",
+      "description": "A run's session is kept under an id core chose, its last word is data, and a run can ask",
+      "steps": [
+        "`jellymoon run` starts the harness with a session id core made and wrote in the run's record first, with a schema for its last word, and without the flag that kept no session; the record's example file round-trips and a record from before is still read",
+        "a harness whose result is a success with exit 0 and the state `done` is a finished run, as before; a success with any other last word, or none, is a failed run",
+        "a harness that ends with the state `asks` and one question is a run that asks: its record says so with the question cleaned at the door, on one line and cut at a stated length; its lock is let go; its copy is left as it is with nothing committed; the wish needs the person and carries the question; `jellymoon run` prints the outcome `asks`",
+        "a question that cleaning empties or goes on changing is a failed run, and no word of it is printed or kept",
+        "a look takes a run that asks for neither one going nor one cut off, and `run stop`, `run show` and a second `jellymoon run` each refuse it in fixed words"
+      ],
+      "test": "cargo test -p jellymoon --test f51",
+      "passes": false,
+      "blockedBy": [
+        "F48",
+        "F50"
+      ]
+    },
+    {
+      "id": "F52",
+      "category": "journal",
+      "description": "`jellymoon run answer` resumes a run that asks with the person's words",
+      "steps": [
+        "`jellymoon run answer --wish <id>` takes the answer on its input and passes it the door a made wish passes; credential-shaped text in it is replaced before the harness is started",
+        "the harness is started in the run's own copy with the run's session resumed and the same list of what it may do; the run goes on under the same id, branch and record, and ends as any run ends, or asks again",
+        "an answer is refused, with nothing started and nothing written, for a wish with no run, a run that does not ask, a run another answer is going for, and an empty answer",
+        "a harness that says the session is not kept fails the run in fixed words with its copy kept",
+        "the answer's words are in the harness's input and in nothing Jellymoon writes but the made wish's own file"
+      ],
+      "test": "cargo test -p jellymoon --test f52",
+      "passes": false,
+      "blockedBy": [
+        "F51"
+      ]
+    },
+    {
+      "id": "F53",
+      "category": "journal",
+      "description": "A follow-up is a made wish that names the wish it follows, run on that work with a fork of its session",
+      "steps": [
+        "`jellymoon wish --after <id>` makes a made wish that names the wish it follows; it is refused when that wish has no finished run or its work was tossed",
+        "`jellymoon run` for a follow-up makes its copy at the followed work's commit when that work waits and where the person's checkout stands when it was kept, and starts the harness with a fork of the followed run's session; with that session not kept it starts a new session, and the record says which",
+        "`run keep` of a follow-up refuses while the work it follows waits and names the wish to keep first; `run toss` of work a waiting follow-up follows refuses and names the follow-up",
+        "`run show` of a follow-up shows what it adds to the work it follows"
+      ],
+      "test": "cargo test -p jellymoon --test f53",
+      "passes": false,
+      "blockedBy": [
+        "F45",
+        "F46",
+        "F52"
+      ]
+    },
+    {
+      "id": "F54",
+      "category": "journal",
+      "description": "The entry shows a run's question with a field to answer in, and `More like this` beside shown work",
+      "steps": [
+        "a made wish whose run asks is drawn with the question as the little one's words, apart from Jellymoon's own, and a field; what is typed there is given to core's answer off the window's thread, and core's words are drawn",
+        "a made wish whose work waits or was kept offers `More like this` with a field; what is typed there is made a follow-up by core",
+        "the shell decides nothing: every refusal drawn is core's, and a question is drawn as text and never as a link or a control"
+      ],
+      "test": "cargo test -p jellymoon-app --test f54",
+      "passes": false,
+      "blockedBy": [
+        "F47",
+        "F52"
+      ]
     }
   ]
 }

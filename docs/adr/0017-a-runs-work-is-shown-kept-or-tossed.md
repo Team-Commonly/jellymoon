@@ -116,8 +116,9 @@ F46.**
 
 Each gets its own note before it is built.
 
-1. **A run that answers back.** A run today is one shot: it cannot ask, and it cannot be told more. Which of an
-   agent's questions reach the person, how an answer gets back, and "more like this" on work that was shown.
+1. **A run that answers back** ([ADR 0018](0018-a-run-asks-and-is-told-more.md)). A run today is one shot: it
+   cannot ask, and it cannot be told more. Which of an agent's questions reach the person, how an answer gets
+   back, and "more like this" on work that was shown.
 2. **A wish said aloud, from anywhere** (F30): a held key, and a little one at the edge of the screen.
 3. **Codex** (F31), then one starter that speaks ACP.
 

@@ -105,8 +105,15 @@ fn a_repo_that_is_gone_or_is_another_repo_is_refused() {
     let show = |repo: &std::path::Path| {
         made.w.run(&["run", "show", "--wish", "m1", "--date", DAY, "--repo", repo.to_str().unwrap()])
     };
+    // The record names the run's repo (F48), and this is another; by a record from before, which names none, it
+    // is a repo that has no branch of the run's.
+    let said = show(&other);
+    assert!(refused(&said).contains("is not the one its record names"), "{}", said.stderr);
+    let kept = made.w.record(&made.run);
+    made.from_before();
     let said = show(&other);
     assert!(refused(&said).contains("is not in the repo"), "{}", said.stderr);
+    fs::write(made.w.jm("runs").join(&made.run).join("run.json"), format!("{kept}\n")).unwrap();
     // A folder inside the repo is not the repo, and neither is a folder of another name.
     fs::create_dir_all(made.repo.join("sub").join("alpha")).unwrap();
     let said = show(&made.repo.join("sub").join("alpha"));
@@ -131,6 +138,9 @@ fn a_repo_that_is_gone_or_is_another_repo_is_refused() {
 #[test]
 fn a_branch_that_is_not_as_the_run_left_it_is_refused() {
     let made = finished();
+    // By a record from before F48, so that each commit below is refused for its shape: by a record that names
+    // the run's end, every one of them is refused as another commit than that (`f48/shown.rs`).
+    made.from_before();
     let (branch, tip) = (made.branch(), made.w.commit(&made.repo, &made.branch()));
     let git = |args: &[&str]| made.git(args, b"", None);
     let work: [super::Entry; 1] = [("100644", "w.txt", WORK.as_bytes())];

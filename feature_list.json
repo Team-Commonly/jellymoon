@@ -356,7 +356,7 @@
         "nothing else a run writes, and no step of a run in the person's repo, changes"
       ],
       "test": "cargo test -p jellymoon --test f48",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F44"
       ]

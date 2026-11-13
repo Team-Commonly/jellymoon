@@ -26,12 +26,12 @@ use std::path::{Path, PathBuf};
 
 pub(crate) use back::{remove_ours, take_back, take_back_left};
 pub use clean::clean_copy;
-pub(crate) use clean::end_copy;
+pub(crate) use clean::{end_copy, moved};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
 use record::{Record, write};
 use serde::Serialize;
-pub(crate) use work::{Done, Entry, LISTED, TEXT_MAX, Unread, WorkFile, work_of};
+pub(crate) use work::{Done, Entry, LISTED, Named, TEXT_MAX, Unread, WorkFile, is_id, work_of};
 
 use crate::call::private_dir;
 use crate::{Error, busy};
@@ -49,6 +49,14 @@ pub struct RunCopy {
     pub folder: String,
     pub branch: String,
     pub kept: bool,
+}
+
+/// What a copy was made from, for the run's record (`run/record.rs`): the git folder the repo's checkouts share,
+/// which the copy's own record names too, here as the system resolves it, and the commit the person's checkout
+/// was on.
+pub(crate) struct MadeFrom {
+    pub repo: PathBuf,
+    pub commit: String,
 }
 
 /// How a run ended.
@@ -144,17 +152,17 @@ fn claim(runs: &Path, given: Option<&str>) -> Result<String, Error> {
 /// Makes a copy of the repo at `repo` for a run: a worktree of the commit the person's checkout is on, on the new
 /// branch `jellymoon/run-<id>`. Nothing of the person's checkout, index or `HEAD` is written.
 pub fn make_copy(home: &Path, repo: &Path, run: Option<&str>) -> Result<RunCopy, Error> {
-    make(home, repo, run, false, false).map(|(copy, _)| copy)
+    make(home, repo, run, false, false).map(|(copy, ..)| copy)
 }
 
 /// [`make_copy`] for a run. A folder that was not `typed` by the person was read from a session log: no refusal,
 /// now or when the copy is ended, repeats what git says of it, since git's words name the folder. With the copy
 /// comes the system's lock on `runs/<id>/start.lock`, taken before anything of the copy was made: the command
 /// holds it for as long as it lives, so what a command that was killed left is known from what one still at
-/// work has (`hold.rs`, `run/left.rs`).
-pub(crate) fn copy_of(home: &Path, repo: &Path, typed: bool) -> Result<(RunCopy, File), Error> {
-    let (copy, held) = make(home, repo, None, !typed, true)?;
-    held.map(|held| (copy, held)).ok_or_else(|| refused("the copy's own lock was not taken"))
+/// work has (`hold.rs`, `run/left.rs`). And with it comes what the copy was made from, as git said it just now.
+pub(crate) fn copy_of(home: &Path, repo: &Path, typed: bool) -> Result<(RunCopy, File, MadeFrom), Error> {
+    let (copy, held, from) = make(home, repo, None, !typed, true)?;
+    held.map(|held| (copy, held, from)).ok_or_else(|| refused("the copy's own lock was not taken"))
 }
 
 fn make(
@@ -163,7 +171,7 @@ fn make(
     run: Option<&str>,
     found: bool,
     of_run: bool,
-) -> Result<(RunCopy, Option<File>), Error> {
+) -> Result<(RunCopy, Option<File>, MadeFrom), Error> {
     if !repo.is_absolute() {
         return Err(refused("--repo must be a full path, from the root"));
     }
@@ -198,7 +206,10 @@ fn make(
     if made.is_err() {
         let _ = gone::remove(&at.runs, &run);
     }
-    made
+    // Resolved now, so that a look has one spelling to compare with and never resolves a path a file gave it. A
+    // folder that does not resolve is named as git named it, which is the repo's to a look only where it resolves so.
+    let repo = fs::canonicalize(shared).unwrap_or_else(|_| PathBuf::from(shared));
+    made.map(|(copy, held)| (copy, held, MadeFrom { repo, commit: base }))
 }
 
 /// The worktree and its record. A branch of that name already there is an earlier run's work, and is refused. A copy

@@ -121,6 +121,28 @@ fn round_2(script: &str, number: usize, rec: &Path) -> i32 {
             1
         }
         "holds" => holds(rec, number),
+        // F48. Both report a success only once the test leaves `go`, half a minute at most, and hold the lock
+        // until then. `worked` has done its work by then. `gone` removes the folder it was started in, from outside it.
+        "worked" | "gone" => {
+            if script == "worked" {
+                edits()
+            } else {
+                starts()
+            }
+            let _held = held(rec);
+            for _ in 0..3000 {
+                if rec.join("go").exists() {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+            if script == "gone" {
+                let copy = env::current_dir().unwrap();
+                env::set_current_dir(rec).unwrap();
+                fs::remove_dir_all(copy).unwrap();
+            }
+            ends_with(&success())
+        }
         // F40. The measured start and the work, and then it does not end by itself.
         "lingers" => {
             edits();

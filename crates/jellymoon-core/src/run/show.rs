@@ -190,6 +190,15 @@ pub(super) fn found(home: &Path, options: &RunOptions, asked: &Asked) -> Result<
     }
 }
 
+/// The wish's run when its work waits for the person: it finished with its one commit, and its record names
+/// that commit and says neither kept nor tossed. None of any other wish. Nothing of a repo is asked.
+pub(super) fn waiting(home: &Path, options: &RunOptions) -> Option<Found> {
+    let found = found(home, options, &SHOWN).ok()?;
+    let waits =
+        found.record.work.is_none_or(|work| work == WorkState::Waits) && found.why == finished(&found.run, true);
+    (waits && found.named().ok()?.is_some()).then_some(found)
+}
+
 /// Reads the work of the wish's run. git is asked only for a run that finished with a commit, whose work waits.
 /// With `only`, a file's number, that file alone is read past its size.
 fn work(home: &Path, options: &RunOptions, only: Option<usize>) -> Result<Work, Error> {

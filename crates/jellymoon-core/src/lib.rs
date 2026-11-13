@@ -36,7 +36,8 @@ pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};
 pub use run::{
     FileChange, FileKind, KeepOptions, Kept, Ran, RunOptions, RunOutcome, Shown, ShownEntry, ShownFile, Started,
-    Tossed, WorkState, keep_run, run, run_apart, show_file, show_run, stop_run, toss_run,
+    Tossed, Waiting, Waits, WorkDone, WorkState, WorkTap, keep_run, run, run_apart, show_file, show_run, stands,
+    stop_run, toss_run, waiting, waits, work_tapped,
 };
 pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, ReaderTurn, Ruling, Wish, WishState};
 pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};

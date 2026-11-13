@@ -146,18 +146,18 @@ fn poked(id: &str, shown: &Showing, window: WindowHandle<Page>, cx: &mut App) {
     .detach();
 }
 
-/// A tap on an option: its scene is shown at once, and a stop, which waits for the run to end, is run off the
-/// window's thread.
+/// A tap on an option: its scene is shown at once, and what it left to do (a stop, which waits for the run to
+/// end, or a show, a keep or a toss of work that waits) is run off the window's thread.
 fn chose(note: &str, index: usize, shown: &Showing, window: WindowHandle<Page>, cx: &mut App) {
-    let Some((after, stop)) = shown.chose(note, index) else { return };
+    let Some((after, left)) = shown.chose(note, index) else { return };
     // The view is in the middle of handling the tap: it takes the new scene once that is done.
     cx.defer(move |cx| {
         let _ = window.update(cx, |page, _, cx| page.set_scene(after, cx));
     });
-    let (Some(stop), shown) = (stop, shown.clone()) else { return };
+    let (Some(left), shown) = (left, shown.clone()) else { return };
     cx.spawn(async move |cx| {
-        let stopped = cx.background_executor().spawn(async move { stop() }).await;
-        let Some(scene) = shown.stopped(stopped) else { return };
+        let ended = cx.background_executor().spawn(async move { left.run() }).await;
+        let Some(scene) = shown.ended(ended) else { return };
         let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
     })
     .detach();

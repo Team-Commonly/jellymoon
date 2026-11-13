@@ -30,6 +30,7 @@ mod show;
 mod stop;
 mod stream;
 mod toss;
+mod waits;
 
 use std::fmt;
 use std::fs::{self, File};
@@ -48,6 +49,7 @@ use serde::{Deserialize, Serialize};
 pub use show::{FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, show_file, show_run};
 pub use stop::stop_run;
 pub use toss::{Tossed, toss_run};
+pub use waits::{Waiting, Waits, WorkDone, WorkTap, stands, waiting, waits, work_tapped};
 
 use crate::busy::{self, or_test};
 use crate::call::harness_of;

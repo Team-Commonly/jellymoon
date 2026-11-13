@@ -82,6 +82,17 @@ pub enum Note {
         title: String,
         body: String,
     },
+    /// A text and the choices under it. Each of `body` starts on a line of its own and is wrapped, as many lines
+    /// as the page has room for and at most [`crate::layout::MAX_TEXT_LINES`]; a last line counts the ones of `body`
+    /// that are not drawn to their end. A tap on an option is the note's `id` and the option's place, as a choice's.
+    Text {
+        id: String,
+        title: String,
+        #[serde(default)]
+        body: Vec<String>,
+        #[serde(default)]
+        options: Vec<String>,
+    },
     /// A list of texts no word of which may be hidden. Each row is drawn after its mark to its last word, on as many
     /// lines as that takes, or it is left out; a last line, `+N more`, counts the rows left out. No row is cut short.
     Whole {

@@ -18,6 +18,8 @@ edited to match and points here. Nothing else in ADR 0011 changes.
    run's session is not kept, so the next day's reader never reads a run back as something the person typed. The first
    list is reading and editing files inside the run's copy. No shell, no web, no MCP. Allowing a shell is a later
    switch the person turns on in so many words.
+   [ADR 0018](0018-a-run-asks-and-is-told-more.md) changes one thing here: a run's session is kept, so that a run
+   can ask and be answered, and the reader leaves out a run's copy instead.
 3. **A stop interrupts, then signals, then kills.** There is no `session/cancel` without ACP. Core asks the child to
    stop, waits, signals one that did not, and kills one deaf to the signal.
 4. **The work stays on its branch.** With no shell the agent cannot commit. When a run ends, core commits what is in

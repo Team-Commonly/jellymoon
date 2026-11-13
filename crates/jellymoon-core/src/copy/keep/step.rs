@@ -86,10 +86,11 @@ fn stood(at: &At) -> Option<String> {
 /// git acted on what `HEAD` named by then, and `HEAD` is asked. On a run's branch nothing was kept, whatever git
 /// did: said as kept there, the next keep would delete the branch the work is on. At the commit, the work is in
 /// the checkout and is kept where it is: on the branch `HEAD` names, when a record holds that name and the repo
-/// lists that very name (`HEAD` names it, so its tip is where `HEAD` is), and otherwise on no branch that is
-/// named. A disk that folds case lets `HEAD` name a branch under a spelling the repo does not list: written
-/// down, it would be a name nothing reads back. Ahead of the commit on a listed branch, git had nothing to do:
-/// that branch held the work already. Anywhere else nothing is known to have landed.
+/// lists that very name with its tip where `HEAD` is, and otherwise on no branch that is named. A disk that
+/// folds case lets `HEAD` name a branch under a spelling the repo does not list, or lists at another commit
+/// (in its packed list): written down, it would name nothing, or a branch that took nothing. Ahead of the
+/// commit on a listed branch, git had nothing to do: that branch held the work already. Anywhere else nothing
+/// is known to have landed.
 fn landed(at: &At, commit: String, onto: String, how: How) -> Result<Landing, Unkept> {
     if tip_of(at.repo, &onto).ok().as_deref() == Some(commit.as_str()) {
         return Ok(Landing { commit: Some(commit), onto, how });
@@ -100,7 +101,7 @@ fn landed(at: &At, commit: String, onto: String, how: How) -> Result<Landing, Un
     }
     let head = line(at.mine, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
     let head = head.ok().flatten().ok_or(Unkept::Stepped)?;
-    let listed = |name: &String| nameable(name) && tip_of(at.repo, name).is_ok();
+    let listed = |name: &String| nameable(name) && tip_of(at.repo, name).ok().as_deref() == Some(head.as_str());
     let (onto, how) = match stood.filter(listed) {
         Some(name) if head == commit => (name, How::Elsewhere),
         None if head == commit => (LOOSE.to_string(), How::Loose),

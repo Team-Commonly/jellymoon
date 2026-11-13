@@ -276,24 +276,46 @@ fn a_checkout_moved_to_a_branch_that_holds_the_work_just_before_the_step_is_said
 // Moved to a branch whose name a record does not hold (here one with a no-break space), the work is kept as on
 // no branch that is named: the record never holds such a name, whoever made the branch. So is it moved to the
 // person's own `feature` as `Feature`, on a disk that folds case: git moves `feature`, the repo lists no
-// `Feature`, and a record that named it would name a branch nothing reads back.
+// `Feature`, and a record that named it would name a branch nothing reads back. The gate's finding of its fourth
+// pass: so is it when the repo does list a `Feature`, in its packed list at a commit of the person's own, and
+// `HEAD` is aimed at that name. git moves `feature` through its file, and the listed `Feature` took nothing.
 #[test]
 fn a_checkout_moved_to_a_branch_no_record_names_just_before_the_step_keeps_the_work_as_on_no_branch() {
-    let odd = "odd\u{a0}name";
-    for (listed, first) in [(odd, &["checkout", "-q", "-b", odd][..]), ("feature", &["checkout", "-q", "Feature"])] {
+    let (odd, aimed) = ("odd\u{a0}name", ["symbolic-ref", "HEAD", "refs/heads/Feature"]);
+    let spelled = ["checkout", "-q", "Feature"];
+    for (listed, first) in [(odd, &["checkout", "-q", "-b", odd][..]), ("feature", &spelled), ("feature", &aimed)] {
         let made = finished();
         if listed != odd && !made.repo.join(".GIT").exists() {
             return skipped(FOLDS);
         }
         let (start, end) = (made.w.commit(&made.repo, "main"), made.end());
+        let theirs = (first == aimed).then(|| {
+            made.who();
+            let theirs = made.git(&["commit-tree", "-p", &start, "-m", "theirs", &format!("{start}^{{tree}}")]);
+            made.git(&["branch", "Feature", &theirs]);
+            made.git(&["pack-refs", "--all"]);
+            format!("refs/heads/Feature {theirs}\n")
+        });
         made.git(&["branch", "feature"]);
         let ran = raced(&made, "merge", first);
-        said(&made, &ran, &end, json!(null), &LOOSE.replace("{which}", OWN));
-        assert_eq!((made.w.commit(&made.repo, listed), made.w.commit(&made.repo, "main")), (end.clone(), start));
-        assert_eq!(made.w.commit(&made.repo, &made.branch()), end);
-        assert_eq!(words(&made), (json!("kept"), json!(end), json!("HEAD")));
+        // What the repo lists by now is what tells, and a disk that folds case does one of two things. A Mac keeps
+        // the file `feature` under its spelling: nothing lists `Feature` at the commit, and the work is on no
+        // branch that is named. Windows gives the file the spelling git wrote it under: the repo lists `Feature`
+        // at the commit and no `feature`, the work is kept there, and the run's branch goes.
+        let refs = made.git(&["for-each-ref", "--format=%(refname) %(objectname)"]) + "\n";
+        let respelled = refs.contains(&format!("refs/heads/Feature {end}\n"));
+        assert!(respelled || theirs.is_none_or(|theirs| refs.contains(&theirs)), "`Feature` took nothing: {refs}");
+        let (onto, held, why) = match respelled {
+            true => (json!("Feature"), "refs/heads/Feature", ELSEWHERE.to_string()),
+            false => (json!(null), "HEAD", LOOSE.replace("{which}", OWN)),
+        };
+        said(&made, &ran, &end, onto.clone(), &why);
+        assert_eq!(made.w.commit(&made.repo, "main"), start);
+        assert!(respelled || refs.contains(&format!("refs/heads/{listed} {end}\n")), "{refs}");
+        assert_eq!(refs.contains(&format!("{} {end}\n", made.branch())), !respelled, "{refs}");
+        assert_eq!(words(&made), (json!("kept"), json!(end), json!(held)));
         let before = made.held();
-        said(&made, &made.keep(&[]), &end, json!(null), BEFORE);
+        said(&made, &made.keep(&[]), &end, onto, BEFORE);
         assert!(before == made.held());
     }
 }

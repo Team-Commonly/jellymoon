@@ -10,7 +10,7 @@ use super::{DAY, Entry, FORWARD, JOINED, Made, UNCHANGED, finished, kept, printe
 pub const IN_WAY: &str = "an unsaved change, or a file that is not in the branch, is where the work would go";
 pub const HISTORY: &str = "the branch's history does not hold the commit run {run} started from";
 const NO_BRANCH: &str =
-    "the checkout stands on no branch of the person's: its HEAD is detached, or names a run's branch";
+    "the checkout stands on no branch of the person's: its HEAD is detached, or names a branch named as a run's is";
 const MIDWAY: &str = "a merge, a cherry-pick, a revert, a rebase or a bisect is going on in the checkout";
 
 /// Fails unless a keep is refused for `why` with nothing changed, asked or not.

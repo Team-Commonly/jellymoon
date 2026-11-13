@@ -45,8 +45,8 @@ pub struct Kept {
     /// The files of the work that the person's tools obey, cleaned, at most 200. Left out when there are none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub settings: Vec<String>,
-    /// Each `.gitattributes` the work removes that was still in the checkout after the keep, cleaned, at most
-    /// 200: `why` then ends with words that say so. Left out when there are none.
+    /// Each `.gitattributes` the work removes that was still at its path after the keep, cleaned, at most 200:
+    /// `why` then ends with words that say so, and that there are more. Left out when there are none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stayed: Vec<String>,
     /// With `--ask` only: whether a keep would be done.
@@ -120,7 +120,8 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, how: KeepOptions)
             Note::Intent(commit, onto) => (commit, onto, false),
             Note::Kept(commit, onto) => (commit, onto, true),
             Note::Stayed(path) => {
-                stayed.extend((stayed.len() < LISTED).then(|| statement(&String::from_utf8_lossy(path), NAME_MAX)));
+                // One past what a list holds says that there are more.
+                stayed.extend((stayed.len() <= LISTED).then(|| statement(&String::from_utf8_lossy(path), NAME_MAX)));
                 return true;
             }
         };
@@ -132,7 +133,9 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, how: KeepOptions)
     match landed {
         Ok(landed) => {
             let own = landed.commit.as_deref() == Some(of.named.end);
-            let why = done(&run, landed.how, how.ask, own) + if stayed.is_empty() { "" } else { STAYED };
+            let more = if stayed.len() > LISTED { MORE } else { "" };
+            stayed.truncate(LISTED);
+            let why = done(&run, landed.how, how.ask, own) + if stayed.is_empty() { "" } else { STAYED } + more;
             let (onto, fits) = (short(&landed.onto), how.ask.then_some(true));
             Ok(Kept { run, wish, kept: landed.commit, onto, why, settings, stayed, fits })
         }
@@ -147,10 +150,12 @@ fn unfit(run: String, wish: String, unkept: Unkept, settings: Vec<String>) -> Ke
     Kept { why, run, wish, kept: None, onto: None, settings, stayed, fits: Some(false) }
 }
 
-/// What `why` ends with when a `.gitattributes` the work removes is still in the checkout after the step.
-const STAYED: &str = "; git could not remove every `.gitattributes` the work removes: each one `stayed` names is \
-                      still in the checkout, and a file of the work it sets a filter for was written as the store \
-                      holds it, not as that filter would have made it";
+/// What `why` ends with when a `.gitattributes` the work removes is still at its path after the step, whatever
+/// left it there, and after that when there are more of them than a list holds.
+const STAYED: &str = "; not every `.gitattributes` the work removes is gone: each one `stayed` names is still at \
+                      that path in the checkout, and a file of the work it sets a filter for was written as the \
+                      store holds it, not as that filter would have made it";
+const MORE: &str = ", and more of them are still there than `stayed` names";
 
 /// Whether a record's `onto` is a branch a keep writes there: by the rule the keep itself writes a name by
 /// (`copy::nameable`), and no run's branch, where no work is ever kept (`copy::runs`).
@@ -280,7 +285,8 @@ fn words(run: &str, unkept: Unkept) -> String {
         ),
         Unkept::Stood => format!("a checkout stands on the branch of run {run}: {unchanged}"),
         Unkept::NoBranch => format!(
-            "the checkout stands on no branch of the person's: its HEAD is detached, or names a run's branch: \
+            "the checkout stands on no branch of the person's: its HEAD is detached, or names a branch named as a \
+             run's is: \
              {unchanged}"
         ),
         Unkept::Midway => {

@@ -149,7 +149,7 @@ fn what_a_keep_prints_round_trips_byte_for_byte() {
     let loose: Kept = serde_json::from_str(&example).unwrap();
     assert_eq!(format!("{loose}\n"), example);
     assert_eq!((loose.kept.map(|id| id.len()), loose.onto, loose.fits), (Some(40), None, None));
-    // Work kept past a `.gitattributes` git could not remove: the file is named, and no other answer has the name.
+    // Work kept past a `.gitattributes` still at its path: the file is named, and no other answer has the name.
     let example = fixture("kept-stayed.json");
     let stayed: Kept = serde_json::from_str(&example).unwrap();
     assert_eq!(format!("{stayed}\n"), example);

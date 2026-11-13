@@ -29,7 +29,7 @@ One line of JSON (`Kept`; the examples `crates/jellymoon-core/tests/fixtures/kep
 | `onto` | the branch, by its short name, cleaned at the door every kept text is cleaned at, on one line. `null` of work that would not be kept, and of work that was kept on no branch a record names |
 | `why` | what was done, or with `--ask` what would be, in core's fixed words |
 | `settings` | the files of the work that the person's tools obey ([show.md](show.md), "Files the person's tools obey"), cleaned, at most 200. Left out when there are none |
-| `stayed` | each `.gitattributes` the work removes that was still in the checkout after the step, cleaned as `settings` is, at most 200 ("A file with a filter"). Left out when there are none, which is every keep but that one |
+| `stayed` | each `.gitattributes` the work removes that was still at its path in the checkout after the step, cleaned as `settings` is, at most 200 ("A file with a filter"). Left out when there are none, which is every keep but that one |
 | `fits` | with `--ask` only: whether a keep would land the work |
 
 Two more words on the command line:
@@ -54,10 +54,11 @@ What a keep did, in `why`:
 | the same, and what landed is the one new commit | the same words to `the run's own commit,`, then ``and the new commit the keep made to join the work with the person's commits is named by nothing of Jellymoon's: `kept` is its id`` |
 | it was kept before | `the work of run <id> was kept before: nothing was changed` |
 
-When `stayed` names a file, `why` goes on after any of these with: ``; git could not remove every `.gitattributes`
-the work removes: each one `stayed` names is still in the checkout, and a file of the work it sets a filter for was
-written as the store holds it, not as that filter would have made it``. The work is kept all the same (git landed
-the commit) and the command ends with 0.
+When `stayed` names a file, `why` goes on after any of these with: ``; not every `.gitattributes` the work removes
+is gone: each one `stayed` names is still at that path in the checkout, and a file of the work it sets a filter
+for was written as the store holds it, not as that filter would have made it``, and, when more are there than the
+200 it names, with ``, and more of them are still there than `stayed` names``. The work is kept all the same (git
+landed the commit) and the command ends with 0.
 
 With `--ask`, in the same order: `a keep of run <id> would move the branch forward to the run's commit`; `a keep of
 run <id> would land one new commit on top of the branch's own, holding its work and the run's`; `a keep of run <id>
@@ -202,7 +203,11 @@ nothing reached the run's commit. So a name is written as `onto`, and lets the r
 when `for-each-ref` lists that very name with its tip where `HEAD` is. A name it does not list is a run's when
 it is under `refs/heads/jellymoon/run-` in either case of those letters (nothing kept, above; the checks before
 the step and the reading of a record go by the same rule); any other, with `HEAD` at the commit, is work kept on
-no branch that is named, and the run's branch is left.
+no branch that is named, and the run's branch is left. So is a name it lists at another commit: found by the
+fourth gate, with `Feature` in the packed list at a commit of the person's own and `HEAD` aimed at it, git moved
+`feature` through its file and the keep said the work was on `Feature`. Some systems re-spell the branch when git
+moves it (on Windows the file `feature` becomes `Feature`, on a Mac it keeps its spelling), and the keep goes by
+what the repo lists afterwards: there the work is kept on `Feature`, which the repo lists at the commit.
 
 Kept, the work is the person's checkout's: its files are written and its `HEAD` is at the commit. A later
 `run keep` says the work was kept before, with the same `onto`, and `run show` says `kept`.
@@ -368,10 +373,15 @@ tracked `sub/deep/.gitattributes` takes it off, the work removes both and makes 
 shut (mode 555): plain git filters the new file; all four readings say no filter, `--ask` says `fits: true`, and
 the keep writes the file as stored. No check before the step can know every reason a file cannot be removed, and
 `--ask` cannot see this one. So the keep looks after the step: each `.gitattributes` the work removes that is
-still in the checkout is named in `stayed`, and `why` says so ("What it prints"). The work is kept, with exit 0:
+still at its path is named in `stayed`, and `why` says so ("What it prints"). The work is kept, with exit 0:
 git landed the commit, and the file it left is untracked from then on. It is looked for after every step git
 took, but one that found the work already on the branch `HEAD` was moved to. `tests/f45/attrs.rs` runs the
-scene beside plain git, and is skipped where a folder cannot be shut.
+scene beside plain git, forward and joined, and is skipped where a folder cannot be shut.
+
+Still at its path means a plain file there, with every folder above it in the checkout a folder (found by the
+fourth gate). Where the work puts a folder at the path (`sub/.gitattributes/x`), or makes `sub` a link to a
+folder that holds a `.gitattributes`, git did remove the file and nothing is named. A file the person makes
+again between the step and the look is named: the words say where a file is, and not what left it there.
 
 A filter is also what git starts when it looks whether a touched file changed, of any tracked file, in the work
 or beside it. Switched off, git compares the file as it is. A filter the repo says is `required` is
@@ -469,7 +479,7 @@ instead. `<unchanged>` stands for `the work of run <id> was not kept, and nothin
 | its commit does not stand on the record's start | `the work of run <id> does not start where its record says the run started, so it is not kept as the run's` | printed |
 | the work is more files than are listed | `the work of run <id> is more files than Jellymoon lists` | printed |
 | a checkout stands on the run's branch | `a checkout stands on the branch of run <id>: <unchanged>` | printed |
-| no branch is stood on | `the checkout stands on no branch of the person's: its HEAD is detached, or names a run's branch: <unchanged>` | printed |
+| no branch is stood on | `the checkout stands on no branch of the person's: its HEAD is detached, or names a branch named as a run's is: <unchanged>` | printed |
 | the branch's name is one no record holds | `the checkout stands on a branch whose name Jellymoon does not write in a run's record: the name holds a space of some kind, a line break or a control character, or is longer than 1024 bytes: <unchanged>` | printed |
 | something is going on | `a merge, a cherry-pick, a revert, a rebase or a bisect is going on in the checkout: <unchanged>` | printed |
 | the history does not hold the start, or the branch has no commit | `the branch's history does not hold the commit run <id> started from: <unchanged>` | printed |

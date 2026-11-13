@@ -236,7 +236,10 @@ max_file_lines = 400
 # name the repo lists is where work was kept; the look after the step), `copy/keep/attrs.rs` by 10 (a
 # `.gitattributes` git could not remove; the list of the step's index is gone), `tests/shapes.rs` by 5 and
 # `copy/keep.rs` by 4 (a run's name in either case).
-"crates/jellymoon-core" = 10114
+# The fixes after F45's fourth gate raised core by 13: `copy/keep/attrs.rs` by 6 (only a plain file at its path,
+# under folders that are folders, stayed), `run/keep.rs` by 6 (the words when more stayed than a list holds) and
+# `copy/keep/step.rs` by 1.
+"crates/jellymoon-core" = 10127
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -326,7 +329,11 @@ max_file_lines = 400
 # `.gitattributes` git cannot remove beside plain git, the two scenes that hold the first and third readings to
 # the step's index, a sparse checkout's left-out path, a git that will not make the step's index) and `raced.rs`
 # by 27 (a run's branch and a person's own under another spelling).
-"crates/jellymoon" = 17173
+# The fixes after F45's fourth gate raised the binary by 67, all of it tests: `tests/f45/attrs.rs` grew by 45 (a
+# folder or a link where the file was, more files still there than a list holds and the one at the top, the shut
+# folder joined) and `raced.rs` by 22 (a `Feature` the repo lists at another commit, and the two things a disk
+# that folds case does with a branch's spelling).
+"crates/jellymoon" = 17240
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

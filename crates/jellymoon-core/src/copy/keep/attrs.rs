@@ -19,7 +19,7 @@
 //!
 //! The repo's `info/attributes` and the config's `core.attributesFile` are read in all four. What no reading
 //! sees is a `.gitattributes` the step should remove and cannot (its folder is shut): git goes on and reads it,
-//! so the step looks for one afterwards ([`stayed`]).
+//! so the step looks afterwards for one that is still at its path ([`stayed`]).
 
 use std::collections::BTreeSet;
 use std::fs::{self, File};
@@ -114,10 +114,16 @@ fn tracked(mine: &Repo, folder: &Path) -> Result<BTreeSet<Vec<u8>>, Unkept> {
     }
 }
 
-/// Each `.gitattributes` the work removes that is in the checkout all the same, asked after the step.
+/// Each `.gitattributes` the work removes that is at its path in the checkout all the same, asked after the
+/// step: a plain file, with every folder above it a folder. A folder the work put at the path, or a file reached
+/// through a link the work put above it, is not the file that was to go.
 pub(super) fn stayed<'a>(folder: &'a Path, files: &'a [Touched]) -> impl Iterator<Item = &'a [u8]> {
     let named = |path: &[u8]| path == b".gitattributes" || path.ends_with(b"/.gitattributes");
-    let there = move |path: &&[u8]| on_disk(folder, path).is_some_and(|at| fs::symlink_metadata(at).is_ok());
+    let kind = move |path: &[u8]| Some(fs::symlink_metadata(on_disk(folder, path)?).ok()?.file_type());
+    let there = move |path: &&[u8]| {
+        let folders = above(path).all(|above| kind(&above[..above.len() - 1]).is_some_and(|kind| kind.is_dir()));
+        folders && kind(path).is_some_and(|kind| kind.is_file())
+    };
     files.iter().filter(move |file| file.removed && named(&file.path)).map(|file| &file.path[..]).filter(there)
 }
 

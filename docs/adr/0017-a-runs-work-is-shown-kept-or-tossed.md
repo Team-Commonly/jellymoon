@@ -224,6 +224,22 @@ has the words and the measurements):
    moved that branch. A split index's shared part has its time changed by any read, a question's too, which
    nothing stops: stated.
 
+## Found by the fourth gate on F45 (2026-11-13)
+
+The fourth gate closed both of those and found one blocking scene and four smaller things:
+
+1. **Listed, and at the commit.** The rule above was written as "the repo lists the name". With `Feature` in the
+   packed list at a commit of the person's own and `HEAD` aimed at it, on a disk that folds case, git moved
+   `feature` and the keep said the work was on `Feature`. A name is where work was kept only when its listed tip
+   is where `HEAD` is. Some systems re-spell the branch when git moves it (Windows does, a Mac does not): the
+   keep goes by what the repo lists afterwards, whichever that is.
+2. **`stayed` names a plain file at the path, and claims no cause.** A folder at the path, or a file reached
+   through a link above it, is not named. The words say each one "is still at that path in the checkout", since a
+   file the person made again after the step is there too. Past the 200 a list holds, a fixed clause says that
+   more are there.
+3. **A name like a run's is said as that.** A checkout on the person's own `Jellymoon/Run-notes` is refused as
+   one whose `HEAD` "names a branch named as a run's is".
+
 ## The slices
 
 `feature_list.json` is read top down, and F30 and F31 stand above these. The order is stated here: **F44 to F47 are

@@ -13,14 +13,15 @@ use super::late::writable;
 use super::raced::told;
 use super::settings::finished_over;
 use super::support::skipped;
-use super::{Entry, FORWARD, Made, UNCHANGED, finished, planted, printed, shell, started};
+use super::{Entry, FORWARD, JOINED, Made, UNCHANGED, finished, planted, printed, shell, started};
 
 const FILTER: &str = "a file of the work would be passed through a filter this repo sets for it, and Jellymoon \
                       starts no filter";
 const SET: &str = "*.dat filter=planted\n";
-const STAYED: &str = "; git could not remove every `.gitattributes` the work removes: each one `stayed` names is \
-                      still in the checkout, and a file of the work it sets a filter for was written as the store \
-                      holds it, not as that filter would have made it";
+const STAYED: &str = "; not every `.gitattributes` the work removes is gone: each one `stayed` names is still at \
+                      that path in the checkout, and a file of the work it sets a filter for was written as the \
+                      store holds it, not as that filter would have made it";
+const MORE: &str = ", and more of them are still there than `stayed` names";
 /// Two files a filter would be set for: git writes the first before a `.gitattributes` beside it, the second after.
 const DATA: [Entry; 2] =
     [("100644", "sub/+first.dat", b"what the store holds\n"), ("100644", "sub/new.dat", b"what the store holds\n")];
@@ -229,7 +230,7 @@ fn a_word_only_what_is_staged_gives_a_filter_to_sets_it_through_a_file_of_the_pe
 // the step can know every reason a file stays. So the keep looks after the step, and its answer names the file.
 #[test]
 fn an_attributes_file_git_could_not_remove_is_named_by_the_keep_that_wrote_past_it() {
-    for keep in [false, true] {
+    for (keep, joined) in [(false, false), (true, false), (true, true)] {
         let deep = ("sub/deep/.gitattributes", "*.dat -filter\n");
         let made = finished_over(&[("sub/.gitattributes", SET), deep, ("sub/plain.txt", "stays too, unnamed\n")]);
         let (folder, new) = (filter(&made), made.repo.join("sub").join("deep").join("new.dat"));
@@ -239,6 +240,9 @@ fn an_attributes_file_git_could_not_remove_is_named_by_the_keep_that_wrote_past_
             ("0", "sub/plain.txt", b""),
             ("100644", "sub/deep/new.dat", b"what the store holds\n"),
         ]);
+        if joined {
+            made.moved_on();
+        }
         if !writable(&made.repo.join("sub"), false) {
             return skipped("an attributes file git cannot remove: this system, or this user, has no shut folder");
         }
@@ -251,8 +255,11 @@ fn an_attributes_file_git_could_not_remove_is_named_by_the_keep_that_wrote_past_
         assert_eq!(printed(&made.keep(&["--ask", "--with-settings"]))["fits"], json!(true), "no question sees it");
         let ran = made.keep(&["--with-settings"]);
         assert!(writable(&made.repo.join("sub"), true));
-        let (said, why) = (printed(&ran), format!("{FORWARD}{STAYED}").replace("{run}", &made.run));
-        assert_eq!((ran.code, &said["kept"], &said["why"]), (0, &json!(end), &json!(why)), "{}", ran.stderr);
+        let (said, how, kept) =
+            (printed(&ran), if joined { JOINED } else { FORWARD }, made.w.commit(&made.repo, "main"));
+        let why = format!("{how}{STAYED}").replace("{run}", &made.run);
+        assert_eq!((ran.code, &said["kept"], &said["why"]), (0, &json!(kept), &json!(why)), "{}", ran.stderr);
+        assert_eq!(kept == end, !joined);
         assert_eq!((&said["stayed"], &made.record()["work"]), (&json!(["sub/.gitattributes"]), &json!("kept")));
         assert_eq!((started(&folder), fs::read_to_string(new).unwrap().as_str()), (vec![], "what the store holds\n"));
     }
@@ -267,6 +274,44 @@ fn an_attributes_file_git_could_not_remove_is_named_by_the_keep_that_wrote_past_
     let held = super::record::HELD.replace("{run}", &made.run);
     assert_eq!((&said["why"], &said["onto"], &said["stayed"]), (&json!(held), &json!("ahead"), &json!(null)));
     assert!(made.repo.join("sub").join(".gitattributes").exists());
+}
+
+// The gate's second finding of its fourth pass. Only a plain file at the path is one that stayed. Where the work
+// puts a folder at the path, or makes the folder above it a link to one that holds such a file, git did remove
+// the file, and nothing is named.
+#[test]
+fn an_attributes_file_the_work_swaps_for_a_folder_or_puts_behind_a_link_is_not_said_to_have_stayed() {
+    let made = finished_over(&[("a/.gitattributes", "# nothing\n"), ("b/.gitattributes", "# nothing\n")]);
+    let end = made.rework(&[
+        ("0", "a/.gitattributes", b""),
+        ("100644", "a/.gitattributes/x", b"in a folder by now\n"),
+        ("0", "b/.gitattributes", b""),
+        ("120000", "b", b"real"),
+        ("100644", "real/.gitattributes", b"# nothing\n"),
+    ]);
+    let (said, why) = (printed(&made.keep(&["--with-settings"])), FORWARD.replace("{run}", &made.run));
+    assert_eq!((&said["kept"], &said["why"], &said["stayed"]), (&json!(end), &json!(why), &json!(null)));
+    assert!(made.repo.join("a").join(".gitattributes").is_dir());
+}
+
+// Made again by the person between the step and the look, a file is at its path all the same and is named, the
+// one at the top too. Of more than a list holds, the first 200 are named and the words say that there are more.
+#[test]
+fn of_more_attributes_files_still_there_than_a_list_holds_the_words_say_that_there_are_more() {
+    for over in [false, true] {
+        let below: Vec<String> = (0..199 + usize::from(over)).map(|n| format!("d{n:03}/.gitattributes")).collect();
+        let names: Vec<&str> = [".gitattributes"].into_iter().chain(below.iter().map(String::as_str)).collect();
+        let made = finished_over(&names.iter().map(|name| (*name, "# nothing\n")).collect::<Vec<_>>());
+        let start = made.w.commit(&made.repo, "main");
+        let end = made.rework(&names.iter().map(|name| ("0", *name, &b""[..])).collect::<Vec<_>>());
+        let again: [(&str, &[&str]); 1] = [("after", &["checkout", "-q", start.as_str(), "--", "."])];
+        let said = printed(&told(&made, &made.repo, "merge", &again));
+        let why = format!("{FORWARD}{STAYED}{}", if over { MORE } else { "" }).replace("{run}", &made.run);
+        assert_eq!((&said["kept"], &said["why"]), (&json!(end), &json!(why)), "{over}");
+        let stayed = said["stayed"].as_array().unwrap();
+        let ends = (stayed.len(), &stayed[0], &stayed[199]);
+        assert_eq!(ends, (200, &json!(".gitattributes"), &json!("d198/.gitattributes")), "{over}");
+    }
 }
 
 // A checkout that leaves a path out (sparse, by patterns), with a file of the person's at that path, which the

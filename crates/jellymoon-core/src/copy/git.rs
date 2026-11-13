@@ -96,6 +96,11 @@ impl Git {
         }
     }
 
+    /// A name from the repo's config as it goes in an error: not at all for a repo read from a session log.
+    fn unsaid(&self, named: String) -> String {
+        if self.quiet { UNSAID.to_string() } else { named }
+    }
+
     fn command(&self) -> Command {
         let mut command = Command::new(&self.program);
         command.current_dir(&self.empty).env_clear();
@@ -119,26 +124,47 @@ impl Git {
         Ok(printed(command, self)?.unwrap_or_default().lines().map(str::to_string).collect())
     }
 
-    /// Names a repo by its git folder and reads which filters and which transports its config names, so each call
-    /// can switch them off ([`blanks`]).
+    /// Names a repo by its git folder and reads which filters, merge drivers and transports its config names, so
+    /// each call can switch them off ([`blanks`]).
     pub fn open(&self, dir: &Path) -> Result<Repo<'_>, String> {
+        self.opened(dir).map_err(|unopened| match unopened {
+            Unopened::Unasked(said) | Unopened::Unswitched(said) => said,
+        })
+    }
+
+    /// [`Git::open`], for a caller that says something else of a config it cannot switch off than of a git that
+    /// did not answer (`keep.rs`).
+    pub fn opened(&self, dir: &Path) -> Result<Repo<'_>, Unopened> {
         let mut repo = Repo { git: self, dir: dir.to_path_buf(), blanks: Vec::new() };
-        let keys = r"^(filter\..*\.(clean|smudge|process)|protocol\..*\.allow)$";
-        let named = repo.ask(None, &[], &["config", "-z", "--name-only", "--get-regexp", keys])?.unwrap_or_default();
-        repo.blanks = blanks(&named).map_err(|named| if self.quiet { UNSAID.to_string() } else { named })?;
+        repo.blanks = repo.named()?;
         Ok(repo)
     }
 }
 
+/// Why a repo was not opened: git did not say what its config names, or the config names what cannot be switched
+/// off on a command line. Each holds the words [`Git::open`] gives.
+pub(super) enum Unopened {
+    Unasked(String),
+    Unswitched(String),
+}
+
+/// The most bytes of settings put on one command line to switch off what a config names. Windows takes 32767
+/// characters for a whole command line, and the paths beside the settings need their part of it.
+const OFF_MAX: usize = 8 * 1024;
+
 /// The settings that switch off what a repo's config names, from the names as `git config -z` prints them. A filter
 /// is a program git starts for every file it adds or checks out: its command is set to nothing. A transport's own
-/// `protocol.<name>.allow` wins over `protocol.allow`, so each one named is set to `never` itself. A name that holds
-/// `=` cannot be given on a command line, and then git is not run at all.
+/// `protocol.<name>.allow` wins over `protocol.allow`, so each one named is set to `never` itself. A merge driver
+/// is a program git starts for a file both sides of a merge changed (`keep.rs`): its command is set to nothing, and
+/// git then starts nothing and takes the file as one that clashes (measured on git 2.50.1). A name that holds `=`
+/// cannot be given on a command line, and more settings than [`OFF_MAX`] bytes do not go on one: then git is not
+/// run at all.
 fn blanks(named: &str) -> Result<Vec<String>, String> {
     let mut blanks = Vec::new();
     for key in named.split('\0').filter(|key| !key.is_empty()) {
         match key.rsplit_once('.').filter(|_| !key.contains('=')) {
             Some((_, "allow")) => blanks.push(format!("{key}=never")),
+            Some((_, "driver")) => blanks.push(format!("{key}=")),
             Some((filter, _)) => blanks.extend([format!("{key}="), format!("{filter}.required=false")]),
             None => {
                 let what = "the repo's git config names a filter or a transport that cannot be switched off";
@@ -146,13 +172,44 @@ fn blanks(named: &str) -> Result<Vec<String>, String> {
             }
         }
     }
-    Ok(blanks)
+    too_many(blanks)
 }
 
-impl Repo<'_> {
+/// The settings, unless they are more than one command line carries.
+fn too_many(blanks: Vec<String>) -> Result<Vec<String>, String> {
+    let what = "the repo's git config names more filters, merge drivers and transports than one command line can \
+                switch off";
+    let bytes = blanks.iter().map(|blank| blank.len() + 4).sum::<usize>();
+    if bytes > OFF_MAX { Err(what.to_string()) } else { Ok(blanks) }
+}
+
+impl<'a> Repo<'a> {
     /// The same repo asked through the git folder of one of its worktrees, where `HEAD` is that worktree's.
-    pub fn through(&self, dir: &Path) -> Repo<'_> {
+    pub fn through(&self, dir: &Path) -> Repo<'a> {
         Repo { git: self.git, dir: dir.to_path_buf(), blanks: self.blanks.clone() }
+    }
+
+    /// [`Repo::through`], with what that worktree's own config names switched off as well. git reads a worktree's
+    /// `config.worktree` only through that worktree's git folder, and a step run through it obeys that file
+    /// (`keep.rs`): so the names are read through it too, and both lists are given to every call.
+    pub fn seen_from(&self, dir: &Path) -> Result<Repo<'a>, Unopened> {
+        let mut seen = Repo { git: self.git, dir: dir.to_path_buf(), blanks: Vec::new() };
+        let mut both = self.blanks.clone();
+        for blank in seen.named()? {
+            if !both.contains(&blank) {
+                both.push(blank);
+            }
+        }
+        seen.blanks = too_many(both).map_err(|named| Unopened::Unswitched(self.git.unsaid(named)))?;
+        Ok(seen)
+    }
+
+    /// The settings that switch off what the config names, as git reads it through this git folder.
+    fn named(&self) -> Result<Vec<String>, Unopened> {
+        let keys = r"^(filter\..*\.(clean|smudge|process)|protocol\..*\.allow|merge\..*\.driver)$";
+        let asked = ["config", "-z", "--name-only", "--get-regexp", keys];
+        let named = self.ask(None, &[], &asked).map_err(Unopened::Unasked)?.unwrap_or_default();
+        blanks(&named).map_err(|named| Unopened::Unswitched(self.git.unsaid(named)))
     }
 
     /// Runs git on this repo, with `tree` as the work tree when the command reads or writes files, and returns
@@ -185,12 +242,28 @@ impl Repo<'_> {
     /// must have worked; `most` of them say only that there was that much or more. An object is read as it is,
     /// whatever the repo names to stand in its place, and no word of git's is kept of a failure.
     pub fn bytes(&self, args: &[&str], input: &[u8], most: usize) -> Option<Vec<u8>> {
+        let (code, printed) = self.answer(None, &[], args, input, most)?;
+        (code == Some(0) || printed.len() >= most).then_some(printed)
+    }
+
+    /// The code git ended with and what it printed, read as [`Repo::bytes`] reads: for a step whose `1` is an
+    /// answer (`keep.rs`), with `tree` as the work tree and `vars` beside git's own. No code is one of a git that
+    /// a signal ended. None when git could not be started or was stopped at its limit.
+    pub fn answer(
+        &self,
+        tree: Option<&Path>,
+        vars: &[(&str, &str)],
+        args: &[&str],
+        input: &[u8],
+        most: usize,
+    ) -> Option<(Option<i32>, Vec<u8>)> {
         let mut command = self.git.command();
         command.args(self.blanks.iter().flat_map(|blank| ["-c", blank])).arg(joined("--git-dir=", &self.dir));
-        command.arg("--no-replace-objects").args(args);
+        command.args(tree.map(|tree| joined("--work-tree=", tree))).arg("--no-replace-objects");
+        command.args(args).envs(vars.iter().copied());
         let from = test_file("JELLYMOON_TEST_GIT_LIMIT_FROM");
         let output = run_most(command, input.to_vec(), self.git.limit, from.as_deref(), most).ok()?;
-        (output.status.success() || output.stdout.len() >= most).then_some(output.stdout)
+        Some((output.status.code(), output.stdout))
     }
 }
 
@@ -226,7 +299,8 @@ mod tests {
 
     #[test]
     fn every_filter_and_every_transport_the_config_names_is_switched_off_by_its_name() {
-        let named = "filter.lfs.clean\0protocol.file.allow\0filter.a.b.process\0protocol.Ext\nX.allow\0";
+        let named =
+            "filter.lfs.clean\0protocol.file.allow\0filter.a.b.process\0protocol.Ext\nX.allow\0merge.m.driver\0";
         let off = [
             "filter.lfs.clean=",
             "filter.lfs.required=false",
@@ -234,6 +308,7 @@ mod tests {
             "filter.a.b.process=",
             "filter.a.b.required=false",
             "protocol.Ext\nX.allow=never",
+            "merge.m.driver=",
         ];
         assert_eq!(blanks(named).unwrap(), off);
         assert_eq!(blanks("").unwrap(), Vec::<String>::new());
@@ -241,5 +316,10 @@ mod tests {
             let said = blanks(&format!("filter.ok.clean\0{unnamed}\0")).unwrap_err();
             assert!(said.ends_with(&format!("cannot be switched off: {unnamed}")), "{said}");
         }
+        // 8 KiB of settings go on a command line and one byte more does not: each costs its length and four.
+        let fits: String = (0..128).map(|n| format!("merge.{n:03}{}.driver\0", "d".repeat(43))).collect();
+        assert_eq!(blanks(&fits).unwrap().len(), 128);
+        let over = blanks(&format!("{fits}merge.d.driver\0")).unwrap_err();
+        assert!(over.ends_with("than one command line can switch off"), "{over}");
     }
 }

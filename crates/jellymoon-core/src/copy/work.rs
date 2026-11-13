@@ -17,12 +17,12 @@ pub(crate) const LISTED: usize = 200;
 /// The most bytes of one file that are read.
 pub(crate) const TEXT_MAX: usize = 64 * 1024;
 /// The most bytes of git's list of changed files that are read: over a hundred thousand files of everyday names.
-const LIST_MAX: usize = 16 * 1024 * 1024;
+pub(super) const LIST_MAX: usize = 16 * 1024 * 1024;
 /// The most bytes of the run's commit that are read: its message is one line. A commit of that many or more is
 /// not one a run's copy ended as.
 const COMMIT_MAX: usize = 64 * 1024;
 /// The most bytes of git's answer about the run's branch that are read: one line, of a name and an id.
-const REF_MAX: usize = 16 * 1024;
+pub(super) const REF_MAX: usize = 16 * 1024;
 
 /// Why a run's work cannot be shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +71,8 @@ pub(crate) struct WorkFile {
     pub size: u64,
     /// The file's first [`TEXT_MAX`] bytes. Nothing for a link or another repo's entry.
     pub head: Vec<u8>,
+    /// Another repo's entry, before the change or after it.
+    pub(super) other: bool,
     id: String,
 }
 
@@ -118,17 +120,23 @@ pub(crate) fn work_of(
     if named.is_some_and(|named| named.start != parent) {
         return Err(Unread::Start);
     }
-    // No rename is ever listed: git's plumbing finds one only when told to, whatever the repo's config says.
-    let list = ["diff-tree", "-r", "--no-abbrev", "-z", &parent, &tip];
-    let list = repo.bytes(&list, &[], LIST_MAX).ok_or(Unread::Repo)?;
-    if list.len() >= LIST_MAX {
-        return Err(Unread::Many);
-    }
-    let mut files = listed(&list).ok_or(Unread::Repo)?;
+    let mut files = changed(&repo, &parent, &tip)?;
     let more = files.len().saturating_sub(LISTED);
     files.truncate(LISTED);
     read(&repo, &mut files, only).ok_or(Unread::Repo)?;
     Ok((files, more))
+}
+
+/// Every file that differs between two commits or trees, in git's own order, with no size and no bytes read: the
+/// one list of a change, for a look and for a keep (`keep/fits.rs`). No rename is ever listed: git's plumbing
+/// finds one only when told to, whatever the repo's config says.
+pub(super) fn changed(repo: &Repo, from: &str, to: &str) -> Result<Vec<WorkFile>, Unread> {
+    let list = ["diff-tree", "-r", "--no-abbrev", "-z", from, to];
+    let list = repo.bytes(&list, &[], LIST_MAX).ok_or(Unread::Repo)?;
+    if list.len() >= LIST_MAX {
+        return Err(Unread::Many);
+    }
+    listed(&list).ok_or(Unread::Repo)
 }
 
 /// Whether the folder git `found` is the one a record `named`. One folder has many spellings, on Windows and on a
@@ -136,7 +144,7 @@ pub(crate) fn work_of(
 /// all of them: a run writes that one (`MadeFrom`), and here the folder found is resolved the same way and must be
 /// it, part for part. The record's own path is only compared. Nothing is asked of the system about it, since it
 /// is a file's word and could name any place, one on another machine too.
-fn same(named: &Path, found: &Path) -> bool {
+pub(super) fn same(named: &Path, found: &Path) -> bool {
     fs::canonicalize(found).is_ok_and(|found| found == named)
 }
 
@@ -150,11 +158,15 @@ pub(crate) fn is_id(word: &str) -> bool {
 /// name is taken: a tag or a remote's branch of the same short name is another name, and so is a branch below it.
 /// The answer is a line or two; one as long as reading stops at, or that is not text, is no answer.
 pub(super) fn tip(repo: &Repo, run: &str) -> Result<String, Unread> {
-    let name = format!("refs/heads/{}", branch(run));
+    tip_of(repo, &format!("refs/heads/{}", branch(run)))
+}
+
+/// [`tip`] for any branch, by its whole name: the one the person stands on, when a run's work is kept (`keep.rs`).
+pub(super) fn tip_of(repo: &Repo, name: &str) -> Result<String, Unread> {
     let format = "--format=%(refname) %(objectname) %(objecttype) %(symref)";
-    let refs = repo.bytes(&["for-each-ref", format, &name], &[], REF_MAX).filter(|refs| refs.len() < REF_MAX);
+    let refs = repo.bytes(&["for-each-ref", format, name], &[], REF_MAX).filter(|refs| refs.len() < REF_MAX);
     let refs = refs.and_then(|refs| String::from_utf8(refs).ok()).ok_or(Unread::Repo)?;
-    let ours = refs.lines().find_map(|line| line.strip_prefix(name.as_str())?.strip_prefix(' '));
+    let ours = refs.lines().find_map(|line| line.strip_prefix(name)?.strip_prefix(' '));
     let mut words = ours.ok_or(Unread::Missing)?.split(' ');
     let (id, kind, leads_to) = (words.next().unwrap_or(""), words.next(), words.next().unwrap_or(""));
     if !leads_to.is_empty() {
@@ -167,7 +179,7 @@ pub(super) fn tip(repo: &Repo, run: &str) -> Result<String, Unread> {
 /// parent or two, is not one a run's copy ended as: someone put it there, and its change is not shown as the
 /// run's. Of a record from before, which names neither commit, this shape is all that is checked. A commit that
 /// was not read whole is not judged by its start: what was read could end just where a run's message does.
-fn parent(repo: &Repo, run: &str, tip: &str) -> Result<String, Unread> {
+pub(super) fn parent(repo: &Repo, run: &str, tip: &str) -> Result<String, Unread> {
     let commit = repo.bytes(&["cat-file", "commit", tip], &[], COMMIT_MAX).ok_or(Unread::Repo)?;
     if commit.len() >= COMMIT_MAX {
         return Err(Unread::Moved);
@@ -183,7 +195,7 @@ fn parent(repo: &Repo, run: &str, tip: &str) -> Result<String, Unread> {
 
 /// The files of `diff-tree -r -z`: for each, a line of the two modes, the two ids and a letter, then the path, each
 /// ended by a zero byte. A removed file is described as it was. None when the list is not in that form.
-fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
+pub(super) fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
     let (mut files, mut parts) = (Vec::new(), list.split(|byte| *byte == 0));
     while let Some(line) = parts.next().filter(|line| !line.is_empty()) {
         let words: Vec<&str> = std::str::from_utf8(line).ok()?.strip_prefix(':')?.split(' ').collect();
@@ -194,6 +206,7 @@ fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
             "D" => Done::Removed,
             _ => return None,
         };
+        let other = was_mode == "160000" || mode == "160000";
         let (mode, id) = if done == Done::Removed { (was_mode, was_id) } else { (mode, id) };
         let entry = match mode {
             "120000" => Entry::Link,
@@ -201,7 +214,7 @@ fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
             _ => Entry::File,
         };
         let path = parts.next().filter(|path| !path.is_empty() && is_id(id))?.to_vec();
-        files.push(WorkFile { path, done, entry, size: 0, head: Vec::new(), id: id.to_string() });
+        files.push(WorkFile { path, done, entry, size: 0, head: Vec::new(), other, id: id.to_string() });
     }
     Some(files)
 }

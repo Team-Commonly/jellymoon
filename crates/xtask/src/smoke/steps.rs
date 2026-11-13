@@ -43,6 +43,8 @@ pub const STEPS: &[Step] = &[
     // A look at that run's work (F44): it reads the chain's own repo, and writes nothing. Not with --real: it
     // asks for a page, which there is a second real reading call, and nobody has read it for a real agent's work.
     Step { name: "show", only: Only::Synthetic, run: super::show::show },
+    // A keep of that run's work (F45): it writes to the chain's own repo and to no other. Never with --real.
+    Step { name: "keep", only: Only::Synthetic, run: super::keep::keep },
     // A stop (F40), of a second run in that repo. Not with --real: only a made-up agent is sure to be still going.
     Step { name: "stop", only: Only::Synthetic, run: super::stop::stop },
     // A run started apart (F41), in a repo found by its name in a made-up log. Not with --real, as `wish`.

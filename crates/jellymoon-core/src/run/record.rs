@@ -55,9 +55,17 @@ pub(super) struct Record {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end: Option<String>,
     /// Whether the person kept or tossed the work of a run that finished. Left out while it waits: no run writes
-    /// it, and `run show` reads it (`show.rs`).
+    /// it, `run show` reads it (`show.rs`) and `run keep` writes it (`keep.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work: Option<WorkState>,
+    /// The commit a keep landed on the person's branch, or, while `work` does not say kept, the commit a keep
+    /// was about to land when it was written: it is put here before the checkout is touched (ADR 0017, decision
+    /// 8), so the next keep can ask the repo whether it landed. None before any keep.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kept: Option<String>,
+    /// The branch that commit was landed on, by its whole name. Written with `kept`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onto: Option<String>,
 }
 
 pub(super) fn file(home: &Path, run: &str) -> PathBuf {
@@ -136,6 +144,7 @@ mod tests {
 
     const EXAMPLE: &str = include_str!("../../tests/fixtures/run-record.json");
     const BEFORE: &str = include_str!("../../tests/fixtures/run-record-before.json");
+    const KEPT: &str = include_str!("../../tests/fixtures/run-record-kept.json");
 
     // The contract is the type and its example: one changed without the other fails here.
     #[test]
@@ -151,8 +160,16 @@ mod tests {
         assert!(before.repo.is_none() && before.start.is_none() && before.end.is_none());
         assert_eq!(written(&before), BEFORE);
         assert_eq!(EXAMPLE.split(",\"repo\":").next(), BEFORE.strip_suffix("}\n"));
+        // A record whose work was kept says so after everything a run wrote, with the commit and the branch.
+        let kept: Record = serde_json::from_str(KEPT).unwrap();
+        assert_eq!(written(&kept), KEPT);
+        assert_eq!(
+            (kept.work, kept.kept.as_deref(), kept.onto.as_deref()),
+            (Some(WorkState::Kept), Some(start), Some("refs/heads/main"))
+        );
+        assert_eq!(KEPT.split(",\"work\":").next(), EXAMPLE.strip_suffix("}\n"));
         // What is named is text, or the record is not read: nothing is made of a number or a list.
-        for odd in ["\"repo\":7", "\"start\":[\"main\"]", "\"end\":{}"] {
+        for odd in ["\"repo\":7", "\"start\":[\"main\"]", "\"end\":{}", "\"kept\":1", "\"onto\":[]"] {
             let changed = BEFORE.replace("\"began\":true", &format!("\"began\":true,{odd}"));
             assert!(serde_json::from_str::<Record>(&changed).is_err(), "{odd}");
         }

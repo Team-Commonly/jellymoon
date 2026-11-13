@@ -1,0 +1,1 @@
+{"run":"r0123456789abcdef","wish":"m1","kept":"89abcdef0123456789abcdef0123456789abcdef","onto":"main","why":"run r0123456789abcdef was kept: the branch was moved forward to the run's commit","settings":["CLAUDE.md",".claude/settings.json"]}

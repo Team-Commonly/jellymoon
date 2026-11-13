@@ -209,7 +209,37 @@ max_file_lines = 400
 # megabyte in 256 writes is heard out and ends as itself; one that prints past the size read is ended by its
 # own write), and 19 are the reader that keeps the start of stderr and reads the rest into nothing, the bound
 # on what is kept and the check, when it is built, that the bound holds all that an error's line is made of.
-"crates/jellymoon-core" = 8499
+# F45, a keep, raised core by 1106. `copy/keep.rs`, 400, is the keeps' lock, what is asked of the repo and the
+# checkout, the five steps and the one `git merge`; `copy/keep/fits.rs`, 242, is whether what would land fits the
+# checkout (82 of it tests); `copy/keep/made.rs`, 47, is the merged tree and the one new commit; `run/keep.rs`,
+# 305, is the record of a keep and every word it prints (52 of it tests). `run/show.rs` grew by 41 (its words
+# shared with a keep), `copy/git.rs` by 21 (merge drivers blanked, an answer with its exit code), `run/record.rs`
+# and `tests/shapes.rs` by 17 each, and `run/obeyed.rs`, `copy/work.rs`, `run.rs` and `copy.rs` by 16 between them.
+# The fixes after F45's gate raised core by 306. New: `copy/keep/attrs.rs`, 152, asks a file's filter as git
+# reads attributes when it writes, and `copy/keep/step.rs`, 89, is the one step and where git is found to have
+# landed the work after it. `copy/git.rs` grew by 59 (a linked worktree's own config read and switched off, a
+# bound on what one command line switches off, its test), `run/keep.rs` by 40 (the words of work landed
+# elsewhere and of three refusals, the one word of work on no branch), `tests/shapes.rs` by 5 and
+# `copy/keep/made.rs` by 4. `copy/keep.rs` lost 19 (the step moved out) and `copy/keep/fits.rs` 24 (the
+# attributes moved out; the trial on a copy of the index came in).
+# The fixes after F45's second gate raised core by 143. New: `copy/keep/why.rs`, 79, is the two lists of why a
+# keep did not keep and how one did, moved out of `copy/keep.rs` (which lost 54) with four new reasons.
+# `copy/keep/fits.rs` grew by 37 (a name the disk does not take, the index the step would leave, an ignored
+# file asked of a keep begun again), `run/keep.rs` by 37 (the words of four refusals, a record that names a
+# run's branch), `copy/keep/attrs.rs` by 18 (the attributes asked of the index the step leaves),
+# `copy/keep/step.rs` by 11 (a run's branch is never where work was kept), `copy/work.rs` by 9 (the one list of
+# a change, for a look and a keep), `busy.rs` by 5 (a test's wait compiled out of a release) and
+# `copy/keep/made.rs` by 1.
+# The fixes after F45's third gate raised core by 60. `run/keep.rs` and its unit tests, which moved to
+# `run/keep/tests.rs`, grew by 30 together (the answer's `stayed` and its words, the two endings of the words of
+# work kept on no branch, the keep and its answer as a function of their own), `copy/keep/step.rs` by 11 (only a
+# name the repo lists is where work was kept; the look after the step), `copy/keep/attrs.rs` by 10 (a
+# `.gitattributes` git could not remove; the list of the step's index is gone), `tests/shapes.rs` by 5 and
+# `copy/keep.rs` by 4 (a run's name in either case).
+# The fixes after F45's fourth gate raised core by 13: `copy/keep/attrs.rs` by 6 (only a plain file at its path,
+# under folders that are folders, stayed), `run/keep.rs` by 6 (the words when more stayed than a list holds) and
+# `copy/keep/step.rs` by 1.
+"crates/jellymoon-core" = 10127
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -277,7 +307,33 @@ max_file_lines = 400
 # only shortens is not cut), `tests/f48/raced.rs` 21 (a run that changed nothing, its name made a name for
 # `main` before the last check; the made-up git known to have been at its step) and `tests/f44/refused.rs` 15
 # (a repo whose config says bare is refused by a look).
-"crates/jellymoon" = 14448
+# F45 raised the binary by 1359, all but 16 of it tests: `tests/f45.rs` is 351 and the six files below it 978
+# (what is refused 265, settings and what a repo could start 245, a keep cut off 188, records 154, what a disk
+# does with names 63, a linked worktree 63), the made-up git gained 14 (a version it says, and a planted hook's
+# part), `src/parse.rs` 9 and `src/main.rs` 7.
+# The fixes after F45's gate raised the binary by 806, all of it tests: four new files, `tests/f45/raced.rs` 224
+# (a checkout moved, an index locked and a run's branch changed just before a step), `started.rs` 193 (what a
+# linked worktree's config names, each beside a control, and the four readings of a filter), `late.rs` 143 (a
+# step git stops, a touched file, a question that writes nothing) and `names.rs` 99 (branch names a record
+# does not hold); and `settings.rs` 45, `record.rs` 32, `refused.rs` 26, `tests/f45.rs` 25 and `cut.rs` 19.
+# Naming a planted filter or merge driver so that git's shell starts it on Windows too raised it by 8.
+# The fixes after F45's second gate raised the binary by 425, all of it tests: `tests/f45/attrs.rs` is new, 190
+# (a `.gitattributes` the work removes, changes or adds, one that is a link, a git that does not answer, a
+# filter only what is staged sets, each beside a control), `raced.rs` grew by 119 (a checkout moved onto the run's own branch, detached ahead of the
+# work, moved away and back, and a linked worktree moved), `disk.rs` by 31 (a name no disk takes, a branch under
+# another spelling), `late.rs` by 30 (a store that takes no new object), `started.rs` by 30 (a filter named only
+# by its `process`, two controls), the made-up git by 9 (a step it fails, a step it does something after),
+# `record.rs` by 6, `settings.rs` by 4, `cut.rs` by 3 and `tests/f45.rs` by 3. Planting a test program over one
+# planted before removes the first (2 lines): on Linux a copy onto the link emptied the built program itself.
+# The fixes after F45's third gate raised the binary by 125, all of it tests: `tests/f45/attrs.rs` grew by 98 (a
+# `.gitattributes` git cannot remove beside plain git, the two scenes that hold the first and third readings to
+# the step's index, a sparse checkout's left-out path, a git that will not make the step's index) and `raced.rs`
+# by 27 (a run's branch and a person's own under another spelling).
+# The fixes after F45's fourth gate raised the binary by 67, all of it tests: `tests/f45/attrs.rs` grew by 45 (a
+# folder or a link where the file was, more files still there than a list holds and the one at the top, the shut
+# folder joined) and `raced.rs` by 22 (a `Feature` the repo lists at another commit, and the two things a disk
+# that folds case does with a branch's spelling).
+"crates/jellymoon" = 17240
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -305,7 +361,8 @@ max_file_lines = 400
 # included, raised it by 106: 63 are tests (the messages read, and a made-up package built under a triple with a
 # stale program in `debug`); the rest reads the messages and makes a run's world of what they name.
 # F44's step, `show` (`smoke/show.rs`, 50 lines), raised it by 54.
-"crates/xtask" = 1872
+# F45's step, `keep` (`smoke/keep.rs`, 58 lines), raised it by 61.
+"crates/xtask" = 1933
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

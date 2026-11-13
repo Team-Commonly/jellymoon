@@ -307,7 +307,7 @@
         "a keep cut off at any of its steps is finished or begun again by the next `run keep`, and the work never lands twice; a second keep, and a keep of tossed work, change nothing and say so"
       ],
       "test": "cargo test -p jellymoon --test f45",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F44"
       ]

@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use jellymoon_core::{
-    FileChange, FileKind, Harness, HookState, PageData, Ran, ReaderDay, Ruling, RunOutcome, Shown, ShownFile,
+    FileChange, FileKind, Harness, HookState, Kept, PageData, Ran, ReaderDay, Ruling, RunOutcome, Shown, ShownFile,
     WishState, Wished, WorkState,
 };
 
@@ -127,4 +127,31 @@ fn what_a_look_at_a_runs_work_prints_round_trips_byte_for_byte() {
     let file: ShownFile = serde_json::from_str(&example).unwrap();
     assert_eq!(format!("{file}\n"), example);
     assert_eq!((file.n, file.text.lines().count(), file.cut), (1, 3, false));
+}
+
+#[test]
+fn what_a_keep_prints_round_trips_byte_for_byte() {
+    let example = fixture("kept.json");
+    let kept: Kept = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{kept}\n"), example);
+    assert_eq!(
+        (kept.kept.map(|id| id.len()), kept.onto.as_deref(), kept.settings.len(), kept.fits),
+        (Some(40), Some("main"), 2, None)
+    );
+    // Asked first: whether it fits is said, and of work that would not be kept there is no commit and no branch.
+    let example = fixture("kept-asked.json");
+    let asked: Kept = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{asked}\n"), example);
+    assert_eq!((asked.kept, asked.onto, asked.settings.len(), asked.fits), (None, None, 0, Some(false)));
+    assert!(serde_json::from_str::<Kept>(&example.replace("\"fits\"", "\"forced\"")).is_err());
+    // Work that landed on no branch a record names: a commit, and no branch.
+    let example = fixture("kept-loose.json");
+    let loose: Kept = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{loose}\n"), example);
+    assert_eq!((loose.kept.map(|id| id.len()), loose.onto, loose.fits), (Some(40), None, None));
+    // Work kept past a `.gitattributes` still at its path: the file is named, and no other answer has the name.
+    let example = fixture("kept-stayed.json");
+    let stayed: Kept = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{stayed}\n"), example);
+    assert_eq!((stayed.stayed.len(), kept.stayed.len()), (1, 0));
 }

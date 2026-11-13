@@ -3,12 +3,13 @@
 //! and a last small sheet says how many: no note goes without a word. A whole list is the one exception to the
 //! order: it comes below every other note and takes only the room they leave, so it never moves or shrinks one.
 
+use super::text_note::{LEAST_TEXT_LINES, MAX_TEXT_LINES, text};
 use super::{Ctx, PieceKind, Placed, TextRun, line_height, piece, run};
 use crate::geom::Rect;
 use crate::scene::{Mark, Note, Scene};
 use crate::text::{Role, wrap};
 
-const MAX_OPTIONS: usize = 4;
+pub(super) const MAX_OPTIONS: usize = 4;
 
 /// The ways to make room, tried in order until every note fits: how many lines an option is shown in, the gap under
 /// a note in design units, and how large the options of a `whole` choice are written. A list gives up rows before any
@@ -36,14 +37,14 @@ const WHOLE_WAYS: [(f32, f32); 5] = [(48.0, 1.0), (32.0, 1.0), (32.0, 0.85), (32
 type At<'a> = (usize, &'a Note);
 
 /// A note being filled from the top down.
-struct Sheet {
-    rect: Rect,
+pub(super) struct Sheet {
+    pub rect: Rect,
     /// Left edge and width of the text column.
-    left: f32,
-    inner: f32,
-    cursor: f32,
-    runs: Vec<TextRun>,
-    options: Vec<Placed>,
+    pub left: f32,
+    pub inner: f32,
+    pub cursor: f32,
+    pub runs: Vec<TextRun>,
+    pub options: Vec<Placed>,
 }
 
 pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
@@ -68,8 +69,9 @@ pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
     let (mut after, mut drawn) = (used, 0);
     for (at, (index, note)) in seen.iter().enumerate().take(placed) {
         after -= needs[at];
-        // A list is as long as the room it is given: what the notes after it and the count do not need.
-        let room = if matches!(note, Note::List { .. }) { bottom - top - after - kept } else { f32::INFINITY };
+        // A list, and a text, is as long as the room it is given: what the notes after it and the count do not need.
+        let long = matches!(note, Note::List { .. } | Note::Text { .. });
+        let room = if long { bottom - top - after - kept } else { f32::INFINITY };
         let Some((sheet, id, tilt)) = fill(cx, note, *index, top, room, way) else {
             break;
         };
@@ -165,6 +167,9 @@ fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
 fn height_needed(cx: &Ctx, note: &Note, index: usize, way: Way) -> f32 {
     let least = match note {
         Note::List { title, rows } => list(cx, title, &rows[..rows.len().min(2)], 0.0, f32::INFINITY),
+        Note::Text { id, title, body, options } => {
+            text(cx, (id, title), (body, options), 0.0, (f32::INFINITY, LEAST_TEXT_LINES), way.0)
+        }
         _ => fill(cx, note, index, 0.0, f32::INFINITY, way).map(|(sheet, ..)| sheet),
     };
     least.map_or(0.0, |sheet| sheet.rect.h)
@@ -189,6 +194,10 @@ fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32, way: Way) -> O
             paragraph(cx, &mut sheet, footer, Role::ChoiceFooter, 1);
             close(cx, sheet, 18.0, room).map(|sheet| (sheet, id.clone(), tilt.choice_note))
         }
+        Note::Text { id, title, body, options } => {
+            let sheet = text(cx, (id, title), (body, options), top, (room, MAX_TEXT_LINES), way.0)?;
+            Some((sheet, if id.is_empty() { fallback } else { id.clone() }, tilt.list_note))
+        }
         // A whole list is not one of the planned notes: `notes` gives it the room they leave.
         Note::Whole { .. } => None,
         Note::Plain { title, body } => {
@@ -201,7 +210,7 @@ fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32, way: Way) -> O
 }
 
 /// Starts a sheet `width` design units wide, capped at the note column.
-fn open(cx: &Ctx, top: f32, indent: f32, width: f32, pad: (f32, f32)) -> Sheet {
+pub(super) fn open(cx: &Ctx, top: f32, indent: f32, width: f32, pad: (f32, f32)) -> Sheet {
     let m = cx.theme.metrics;
     let width = cx.px(width.min(m.note_width));
     let x = cx.x(m.note_left) + indent.min(cx.px(m.note_width) - width);
@@ -217,12 +226,12 @@ fn open(cx: &Ctx, top: f32, indent: f32, width: f32, pad: (f32, f32)) -> Sheet {
 }
 
 /// Ends the sheet; `None` when it does not fit the room left on the paper.
-fn close(cx: &Ctx, mut sheet: Sheet, pad_bottom: f32, room: f32) -> Option<Sheet> {
+pub(super) fn close(cx: &Ctx, mut sheet: Sheet, pad_bottom: f32, room: f32) -> Option<Sheet> {
     sheet.rect.h = sheet.cursor - sheet.rect.y + cx.px(pad_bottom - 9.0);
     (sheet.rect.h <= room).then_some(sheet)
 }
 
-fn heading(cx: &Ctx, sheet: &mut Sheet, title: &str, role: Role) {
+pub(super) fn heading(cx: &Ctx, sheet: &mut Sheet, title: &str, role: Role) {
     paragraph(cx, sheet, title, role, 2);
 }
 
@@ -243,7 +252,7 @@ fn paragraph(cx: &Ctx, sheet: &mut Sheet, text: &str, role: Role, max_lines: usi
 }
 
 /// One option of a choice, in at most `max_lines` lines of text written at `scale` of the role's size.
-fn choice_option(
+pub(super) fn choice_option(
     cx: &Ctx,
     sheet: &mut Sheet,
     (id, index): (&str, usize),

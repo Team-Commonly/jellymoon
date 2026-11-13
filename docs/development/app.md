@@ -273,6 +273,39 @@ shows the choice and carries its tap to core.
 `OnShow::poked`, `chose`, `stopping` and `stopped` need no window; `app/tests/f43.rs` follows them with the
 made-up agent of the run tests, and `f43/notes.rs` the notes. Not tested: the tap itself, on a real window.
 
+## A wish opened, and its work shown, kept or tossed (`app/src/working.rs`)
+
+The rules and every word are core's ([show.md](show.md#work-that-waits-jellymoon-run-waiting)). The app carries a
+tap to core and puts core's answer in notes. Each note is the kit's text note (`Note::Text`: a title, texts each
+from a line of its own, options), whose body is drawn as text and as nothing else; the kit draws the first texts
+that fit and counts the rest in a last line, `+N more`.
+
+- **A tap on a little one** whose run is not going opens its wish (`OnShow::poked`, off the window's thread). Work
+  that waits: one note, `work-<wish>`, with the wish's own words, core's count of files made, changed and removed,
+  their names, and the choices `Show me`, `Keep it`, `Toss it`. Any other wish: one note, `wish-<wish>`, with how
+  it stands and its own words, and no choice. One wish is open at a time. A tap on no wish, or on a wish whose
+  note is on show, shows nothing. Nothing is written by any of it.
+- **`layout`** has no tap, so it prints the note of every made wish whose work waits, first among the notes.
+- **A tap on a choice** (`OnShow::working`) puts `busy-<wish>` in the note's place at once, with what core says is
+  being done, and leaves core's part as work the window runs off its own thread (`showing.rs`, `After::Work`).
+  The window's thread opens no file for it. While that note is on show, a second tap on a choice of that wish and
+  a tap on its little one do nothing: one tap of a wish is carried at a time.
+- **`Show me`** adds `file-<n>-<wish>` under the work's note: one file's text, as `run show --file` prints it.
+  The next tap shows the next file. The app starts no program and hands nothing to the system's opener
+  (`the_shell_starts_no_program_and_hands_nothing_to_the_system_s_opener` reads `app/src` for it).
+- **`Keep it` and `Toss it`** end in one note, `said-<wish>`, with core's sentence: the work was kept and the wish
+  stays done with its star, or tossed and the wish is drawn let go, or core's reason why not, with nothing changed.
+- **Files the person's tools obey**: the first `Keep it` changes nothing and shows `sure-<wish>`, which names them
+  and offers `Keep it, with those files`. Only that tap keeps them.
+- **The repo is not named by the app.** Core finds it as the run did: the folder of the wish's project typed in
+  the day's logs, with the folders switched off left out, and checked against the run's record. When it is not
+  found the note says so in core's words and has no choice.
+
+`app/tests/f47.rs` and `f47/asked.rs` follow all of it through `Showing`, in a made-up window that is a process
+of its own (`tests/support/tapper.rs`), since the git core starts takes the variables of the process it is in.
+Not tested: the tap itself, on a real window. Not done: a file's text is not scrolled, so of a long file the
+first lines are drawn and the rest counted.
+
 ## From page data to pieces (`app/src/scene.rs`)
 
 | Page data | Piece |

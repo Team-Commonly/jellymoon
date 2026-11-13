@@ -329,6 +329,31 @@ the note's reading the tests are written from, not the row's plain words.** The 
 
 The whole account, with every sentence and what is not closed, is `docs/development/toss.md`.
 
+## Found while building F47
+
+1. **The app does not name the repo.** A show, a keep or a toss from a page gives core the wish, the day and the
+   day's logs, and core finds the repo as the run found it: the folder of the wish's project that was typed in
+   that day, with the folders switched off left out. The record's `repo` is what that folder is checked against,
+   as before; it is never opened by its own word. Naming the record's folder to core would have been a second
+   rule for where a run's repo is, and would have made a home that someone else wrote a way to point a keep at
+   any repo.
+2. **No tap begins a toss where the repo is not found.** `run toss` there removes the copy and leaves the branch,
+   which is right for a terminal and a half-step for a page. `work_tapped` reads the work first and does nothing
+   when it cannot: the note says why in core's words and has no choice, and a tap that comes all the same is
+   refused whole.
+3. **Which wishes have work that waits is core's** (`waits`, printed by `jellymoon run waiting`), and so is every
+   sentence a page says of it, the order of the choices, and the one more yes before files the person's tools
+   obey are kept. The first `Keep it` of such work changes nothing; the second choice is `--with-settings`.
+4. **A file's text is a note's body.** The kit got one new note, `Text`, that knows nothing of Jellymoon: texts
+   drawn as text, the first that fit, and a count of the rest. Nothing is scrolled.
+5. **The thread that hears out what a git says on stderr** (`call.rs`, `collect`) ends when every holder of the
+   pipe has closed it. In the app, which stays open, that is every call: core's git is given no hook, no
+   file-system monitor, no filter, no merge driver and no transport, its one step that is not plumbing (the
+   keep's `merge`) is given `gc.auto=0` and `maintenance.auto=false`, and a git still going at its limit is
+   killed. So git leaves nothing that holds the pipe, and the thread ends with it. A `git` on `PATH` that is
+   itself a program which leaves a child holding stderr would keep one thread and one pipe per call until that
+   child ends; nothing here bounds that, and no test of F47 covers it.
+
 ## What comes after
 
 Each gets its own note before it is built.

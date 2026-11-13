@@ -66,6 +66,7 @@ pub fn play(script: &str, number: usize, rec: &Path) -> i32 {
             eprintln!("error: unknown option '--restricted'");
             1
         }
+        "rules" => rules(),
         other => round_2(other, number, rec),
     }
 }
@@ -103,6 +104,16 @@ fn lingers(rec: &Path, denials: usize) -> i32 {
     let _held = held(rec);
     thread::sleep(Duration::from_secs(60));
     1
+}
+
+/// F47. The work, and beside it a file the person's tools obey and one whose text would be more than text to
+/// anything that read it as a page, a link, a terminal's colours or a command.
+fn rules() -> i32 {
+    edits();
+    fs::write("CLAUDE.md", "rules from the run\n").unwrap();
+    let odd = "<script>open('file:///')</script>\n\u{1b}[31m[tap](https://example.test)\n$(touch ran)\n";
+    fs::write("0.md", odd).unwrap();
+    ends_with(&success())
 }
 
 /// The scripts of the gate's second round (`tests/f39/stream.rs`, `tests/f39/refused.rs`), and F40's.

@@ -1,6 +1,6 @@
 //! The `show` step (F44): in the repo the `run` step made, `jellymoon run show` on the wish that step ran. The
-//! list names `HELLO.txt` as text, `--file` prints its one word, the work waits, and the checkout and the run's
-//! branch are as they were. The step prints counts and yes or no, and nothing a harness wrote.
+//! list names `HELLO.txt` as text, `--file` prints its one word, the work waits, `jellymoon run waiting` lists
+//! it for a page (F47), and the checkout and the run's branch are as they were. The step prints counts and yes or no, and nothing a harness wrote.
 
 use std::path::Path;
 use std::time::Duration;
@@ -32,19 +32,24 @@ pub fn show(world: &World) -> Result<String, String> {
     // What the file holds is compared and never printed.
     let file = jellymoon(&["run", "show", "--wish", wish, "--date", DAY, "--repo", &repo, "--file", &n]);
     let word = file.is_ok_and(|file| file["text"].as_str().is_some_and(|held| held.trim().to_lowercase() == "hello"));
+    // The same work as a page is told of it (F47): this wish, read, with its one file named.
+    let waiting = jellymoon(&["run", "waiting", "--date", DAY, "--repo", &repo, "--logs", &text(&world.at("no-logs"))]);
+    let named = |waits: &Value| waits["wish"] == wish && waits["read"] == true && waits["names"][0] == "HELLO.txt";
+    let listed = waiting.is_ok_and(|day| day["waits"].as_array().is_some_and(|waits| waits.iter().any(named)));
     let same = git(&["status", "--porcelain"]).is_ok_and(|changed| changed.is_empty());
     let refs = git(&["for-each-ref", "--format=%(refname) %(objectname)"]).is_ok_and(|after| after == before);
     let yes = |so: bool| if so { "yes" } else { "no" };
     let work = shown["work"].as_str().unwrap_or("?");
     let found = format!(
-        "work {work}, files {}, HELLO.txt listed as text {}, its text as wished {}, checkout unchanged {}, refs \
-         unchanged {}",
+        "work {work}, files {}, HELLO.txt listed as text {}, its text as wished {}, listed as waiting {}, checkout \
+         unchanged {}, refs unchanged {}",
         files.len(),
         yes(hello.is_some()),
         yes(word),
+        yes(listed),
         yes(same),
         yes(refs)
     );
     world.made_up(files.len() == 1, || format!("{} files in the work, not 1", files.len()))?;
-    if work == "waits" && hello.is_some() && word && same && refs { Ok(found) } else { Err(found) }
+    if work == "waits" && hello.is_some() && word && listed && same && refs { Ok(found) } else { Err(found) }
 }

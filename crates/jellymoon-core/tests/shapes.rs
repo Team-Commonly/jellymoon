@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use jellymoon_core::{
     FileChange, FileKind, Harness, HookState, Kept, PageData, Ran, ReaderDay, Ruling, RunOutcome, Shown, ShownFile,
-    Tossed, WishState, Wished, WorkState,
+    Tossed, Waiting, WishState, Wished, WorkState,
 };
 
 fn fixture(name: &str) -> String {
@@ -183,4 +183,17 @@ fn what_a_toss_prints_round_trips_byte_for_byte() {
     let tossed: Tossed = serde_json::from_str(&unnamed).unwrap();
     assert_eq!((format!("{tossed}\n"), tossed.commit), (unnamed.clone(), None));
     assert!(serde_json::from_str::<Tossed>(&unnamed.replace("\"commit\"", "\"branch\"")).is_err());
+}
+
+#[test]
+fn what_run_waiting_prints_round_trips_byte_for_byte() {
+    let example = fixture("waiting.json");
+    let waiting: Waiting = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{waiting}\n"), example);
+    let [read, unread] = &waiting.waits[..] else { panic!("two wishes wait") };
+    assert_eq!((read.read, read.made, read.changed, read.removed, read.more), (true, 1, 1, 1, 0));
+    assert_eq!((read.lines().len(), read.choices(false).len(), read.choices(true).len()), (3, 3, 3));
+    // Work that was not read names no file and has no choice: a tap on its note has nothing to change.
+    assert_eq!((unread.read, unread.lines().len(), unread.choices(false).len()), (false, 2, 0));
+    assert!(serde_json::from_str::<Waiting>(&example.replace("\"day\"", "\"date\"")).is_err());
 }

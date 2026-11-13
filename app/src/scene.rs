@@ -131,11 +131,16 @@ fn mark(state: WishState) -> Mark {
     }
 }
 
+/// The id of a wish as its character carries it, which is what a tap on the character gives.
+pub(crate) fn drawn_id(id: &str) -> String {
+    clean(id, MAX_ID_CHARS)
+}
+
 /// The character that stands for a wish. Its colour only tells neighbours apart: the hero has the first hue, the
 /// little ones take turns with the next four.
 fn little_one(index: usize, wish: &Wish) -> Character {
     Character {
-        id: clean(&wish.id, MAX_ID_CHARS),
+        id: drawn_id(&wish.id),
         label: wish.label.clone(),
         hue: u8::try_from(index % 4).unwrap_or(0) + 1,
         stars: u8::try_from(wish.stars.len()).unwrap_or(u8::MAX),

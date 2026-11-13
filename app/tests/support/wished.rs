@@ -23,7 +23,7 @@ pub const SAID: &str = "make the uploader retry twice";
 pub struct World {
     pub day: day::World,
     /// What the made-up window is started with, and through it the `jellymoon` command and git.
-    vars: Vec<(&'static str, OsString)>,
+    pub(super) vars: Vec<(&'static str, OsString)>,
 }
 
 fn copied(built: &str, program: &Path) {
@@ -189,8 +189,8 @@ impl World {
 
 /// The made-up window, going, and the files what it prints goes to (`.out` and `.err`).
 pub struct Window {
-    child: Child,
-    said: PathBuf,
+    pub(super) child: Child,
+    pub(super) said: PathBuf,
 }
 
 /// The scenes the made-up window showed, once it has ended: a minute is waited at most.

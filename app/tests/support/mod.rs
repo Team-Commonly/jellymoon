@@ -3,6 +3,7 @@
 
 pub mod day;
 pub mod wished;
+pub mod worked;
 
 use std::fs;
 use std::io::Write;

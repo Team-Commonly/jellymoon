@@ -3,11 +3,12 @@
 //! can answer at all.
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 
 use super::super::git::Repo;
 use super::super::work::LIST_MAX;
-use super::{SAID_MAX, Unkept, Unread};
+use super::{SAID_MAX, Unkept, Unread, attrs};
 
 /// One file a commit touches, from git's list of the change.
 #[derive(Debug, PartialEq, Eq)]
@@ -17,7 +18,7 @@ pub(crate) struct Touched {
     /// Another repo's entry, before the change or after it.
     pub repo: bool,
     made: bool,
-    removed: bool,
+    pub(super) removed: bool,
 }
 
 #[cfg(test)]
@@ -69,17 +70,17 @@ pub(super) fn locked(own: &Path) -> bool {
 }
 
 /// Whether `target` can be landed on `tip` in the person's checkout: `places` are the checkout, its git folder
-/// and a file of the home's for an index of the keep's own; `files` are what differs between the two.
+/// and a folder of the home's for what the keep makes of its own; `files` are what differs between the two.
 ///
 /// - The index is not locked.
-/// - No file that would be written has a `filter` set, by the attributes the checkout would have then or has
-///   now. Every filter is switched off (`git.rs`), so such a file would be written as the store has it and not
-///   as the person's filter would make it: it is refused, and no filter is ever started.
-/// - git's own trial of the move (`read-tree -n`) passes: no unsaved change and no untracked file in the way.
+/// - No file that would be written has a `filter` set, by any reading of the attributes (`attrs.rs`).
+/// - git's own trial of the move passes ([`trial`]): no unsaved change and no untracked file in the way.
 /// - Nothing is on the disk where a file the work makes would go ([`taken`]). The trial takes an ignored file as
 ///   nobody's; here it is the person's. A keep that goes on after one that was cut off (`again`) skips this,
 ///   since the files there may be the ones that keep wrote, and leaves it to the step itself, which stops for an
 ///   ignored file too.
+///
+/// Nothing here writes to the repo or the checkout, and nothing takes the lock on the checkout's index.
 pub(super) fn fits(
     mine: &Repo,
     places: (&Path, &Path, &Path),
@@ -87,43 +88,42 @@ pub(super) fn fits(
     files: &[Touched],
     again: bool,
 ) -> Result<(), Unkept> {
-    let (folder, own, index) = places;
+    let (folder, own, scratch) = places;
     if locked(own) {
         return Err(Unkept::Locked);
     }
-    let written = || files.iter().filter(|file| !file.removed);
-    let names: Vec<u8> = written().flat_map(|file| [&file.path[..], b"\0"].concat()).collect();
-    if !names.is_empty() {
-        let own_index = [("GIT_INDEX_FILE", index.to_str().ok_or(Unread::Home)?)];
-        let asked = ["check-attr", "-z", "--stdin", "filter"];
-        let most = names.len() + files.len() * 64 + 1;
-        // The index file is Jellymoon's own, and this keep is the only one of the home: a lock on it is one a
-        // keep that was cut off left.
-        let lock = index.with_extension("index.lock");
-        let _ = fs::remove_file(&lock);
-        let read = mine.answer(None, &own_index, &["read-tree", target], &[], SAID_MAX);
-        let then = mine.answer(None, &own_index, &[&asked[..1], &["--cached"], &asked[1..]].concat(), &names, most);
-        let _ = (fs::remove_file(index), fs::remove_file(&lock));
-        let now = mine.answer(Some(folder), &[], &asked, &names, most);
-        if !matches!(read, Some((Some(0), _))) {
-            return Err(Unread::Repo.into());
-        }
-        for said in [then, now] {
-            let Some((Some(0), said)) = said.filter(|said| said.1.len() < most) else {
-                return Err(Unread::Repo.into());
-            };
-            if !unfiltered(&said) {
-                return Err(Unkept::Filter);
-            }
-        }
-    }
-    let trial = mine.answer(Some(folder), &[], &["read-tree", "-n", "-m", "-u", tip, target], &[], SAID_MAX);
-    if !matches!(trial, Some((Some(0), _))) {
-        return Err(if locked(own) { Unkept::Locked } else { Unkept::InWay });
+    attrs::unfiltered(mine, (folder, scratch), target, files)?;
+    if !trial(mine, places, tip, target)? {
+        return Err(Unkept::InWay);
     }
     let removed: Vec<&[u8]> = files.iter().filter(|file| file.removed).map(|file| &file.path[..]).collect();
     let in_way = !again && files.iter().any(|file| file.made && taken(folder, &file.path, &removed));
     if in_way { Err(Unkept::InWay) } else { Ok(()) }
+}
+
+/// git's own trial of the move (`read-tree -n -m -u`), on a copy of the checkout's index that is Jellymoon's
+/// (`keep.trial`, removed at once, with a lock a cut keep left on it): git locks the index it is given even for
+/// a trial, and a question does not lock the person's. The copy is first told which files only look changed
+/// (`update-index --refresh`, which reads them): a file that was touched and holds what it held is no unsaved
+/// change, to the trial as to `git merge`, which does the same to the index itself. A filter is off for the look,
+/// and so is its `required` (`git.rs`): git compares the file as it is and does not stop at it. A lock on the
+/// checkout's own index is not seen by the trial: it is asked before ([`fits`]) and found by the step.
+fn trial(mine: &Repo, places: (&Path, &Path, &Path), tip: &str, target: &str) -> Result<bool, Unkept> {
+    let (folder, own, scratch) = places;
+    let copy = scratch.join("keep.trial");
+    let clear = || (fs::remove_file(&copy), fs::remove_file(copy.with_extension("trial.lock")));
+    let _ = clear();
+    match fs::copy(own.join("index"), &copy) {
+        // A checkout that never had anything staged has no index, and git reads none as an empty one.
+        Err(e) if e.kind() != ErrorKind::NotFound => return Err(Unread::Repo.into()),
+        _ => {}
+    }
+    let index = [("GIT_INDEX_FILE", copy.to_str().ok_or(Unread::Home)?)];
+    // What the look ends with is not asked: where it could not read a file, the trial stops at that file.
+    let _ = mine.answer(Some(folder), &index, &["update-index", "-q", "--refresh"], &[], SAID_MAX);
+    let trial = mine.answer(Some(folder), &index, &["read-tree", "-n", "-m", "-u", tip, target], &[], SAID_MAX);
+    let _ = clear();
+    Ok(matches!(trial, Some((Some(0), _))))
 }
 
 /// Whether something is on the disk where a file the work makes would go: at its path, or a file or a link where
@@ -138,18 +138,9 @@ fn taken(folder: &Path, path: &[u8], removed: &[&[u8]]) -> bool {
     whole || above.any(|above| !removed.contains(&above) && there(above).is_some_and(|there| !there.is_dir()))
 }
 
-/// Whether `check-attr -z` says of every path that no filter is set: a path, the attribute's name and its value,
-/// each ended by a zero byte.
-fn unfiltered(said: &[u8]) -> bool {
-    let parts: Vec<&[u8]> = said.split(|byte| *byte == 0).collect();
-    let (answers, rest) = parts.split_at(parts.len() - 1);
-    let unset = |answer: &[&[u8]]| answer.len() == 3 && (answer[2] == b"unspecified" || answer[2] == b"unset");
-    rest.iter().all(|rest| rest.is_empty()) && answers.chunks(3).all(unset)
-}
-
 /// Where a path of the store is in a checkout. None for a path that leads out of it, which git never writes, and
 /// on a system whose names are text for a path that is not.
-fn on_disk(folder: &Path, path: &[u8]) -> Option<PathBuf> {
+pub(super) fn on_disk(folder: &Path, path: &[u8]) -> Option<PathBuf> {
     #[cfg(unix)]
     let below = Path::new(<std::ffi::OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(path));
     #[cfg(not(unix))]
@@ -192,21 +183,6 @@ mod tests {
         }
         for old in ["git version 2.37.9", "git version 1.99.0", "git version", "2.50.1", "git version x.50", ""] {
             assert!(!new_enough(old), "{old}");
-        }
-    }
-
-    #[test]
-    fn a_filter_is_set_unless_git_says_unspecified_or_unset_of_every_path() {
-        assert!(unfiltered(b"a.txt\0filter\0unspecified\0b\0filter\0unset\0"));
-        assert!(unfiltered(b""));
-        for set in [
-            &b"a\0filter\0lfs\0"[..],
-            b"a\0filter\0set\0",
-            b"a\0filter\0unspecified\0b\0filter\0x\0",
-            b"a\0filter\0",
-            b"a\0filter\0unset",
-        ] {
-            assert!(!unfiltered(set), "{set:?}");
         }
     }
 

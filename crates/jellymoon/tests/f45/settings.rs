@@ -192,12 +192,15 @@ fn a_file_the_repo_sets_a_filter_for_is_not_kept_and_no_filter_is_started() {
             "disk" => fs::write(made.repo.join(".gitattributes"), "*.dat filter=planted\n").unwrap(),
             _ => {}
         }
-        made.rework(&entries);
+        let end = made.rework(&entries);
         let (before, why) = (made.held(), format!("{FILTER}: {UNCHANGED}"));
         let asked = printed(&made.keep(&["--ask", "--with-settings"]));
         assert_eq!((&asked["fits"], &asked["why"]), (&json!(false), &json!(why.replace("{run}", &made.run))), "{from}");
         made.refuses(&made.keep(&["--with-settings"]), &before, &why);
         assert_eq!(started(&folder), Vec::<String>::new(), "{from}");
+        // The control: it is a filter git starts for this file, when the person lands the commit themselves.
+        made.w.git_ran(&made.repo, &["merge", "-q", "--ff-only", &end]);
+        assert_eq!(started(&folder), ["ran-filter"], "{from}: git starts this filter for this file");
     }
     // A filter that touches no file of the work is no reason to stop, and is not started either.
     let made = finished();
@@ -213,7 +216,7 @@ fn no_merge_driver_of_the_repo_is_started_and_what_the_config_adds_to_a_merge_is
     // Both sides changed a file the repo names a merge driver for: git is not let start it, and without it the
     // file is one git does not merge here.
     let made = finished_over(&[("long.txt", "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n")]);
-    made.rework(&[("100644", "long.txt", b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight by the run\n")]);
+    let end = made.rework(&[("100644", "long.txt", b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight by the run\n")]);
     made.who();
     let folder = made.w.at("tmp");
     made.git(&["config", "merge.planted.driver", planted(&folder, "driver").to_str().unwrap()]);
@@ -224,6 +227,10 @@ fn no_merge_driver_of_the_repo_is_started_and_what_the_config_adds_to_a_merge_is
     assert_eq!(made.keep(&[]).code, 1);
     assert!(before == made.held());
     assert_eq!(started(&folder), Vec::<String>::new());
+    // The control: it is a driver git starts for this merge, when the person merges the two in the store.
+    made.w.git_ran(&made.repo, &["merge-tree", "--write-tree", "main", &end]);
+    assert_eq!(started(&folder), ["ran-driver"], "git starts this driver for this merge");
+    fs::remove_file(folder.join("ran-driver")).unwrap();
     // A squash, a stash, no fast-forward and a signature check, set for the branch and for every merge: none is done.
     let made = finished();
     made.w.work_in_progress(&made.repo);
@@ -232,14 +239,52 @@ fn no_merge_driver_of_the_repo_is_started_and_what_the_config_adds_to_a_merge_is
         ("merge.autoStash", "true"),
         ("merge.ff", "false"),
         ("merge.verifySignatures", "true"),
-        ("commit.gpgSign", "true"),
-        ("gpg.program", planted(&folder, "signer").to_str().unwrap()),
     ] {
         made.git(&["config", key, value]);
     }
-    let (end, stash) = (made.end(), made.git(&["rev-parse", "refs/stash"]));
+    // A stash puts the person's unsaved files away and writes them again: their times would be the keep's.
+    let times = || ["c.txt", "staged.txt"].map(|file| fs::metadata(made.repo.join(file)).unwrap().modified().unwrap());
+    super::touch(&made.repo.join("c.txt"));
+    super::touch(&made.repo.join("staged.txt"));
+    let (end, stash, written) = (made.end(), made.git(&["rev-parse", "refs/stash"]), times());
     kept(&made, &made.keep(&[]), &end, "main", FORWARD);
     assert_eq!((made.w.commit(&made.repo, "main"), made.git(&["rev-parse", "refs/stash"])), (end, stash));
     assert!(!made.repo.join(".git").join("SQUASH_MSG").exists());
     assert_eq!(started(&folder), Vec::<String>::new());
+    // Nothing was put away and taken out again: what was staged is staged, and what was not is not.
+    assert_eq!(made.status(), " M c.txt\nA  staged.txt\n?? note.txt");
+    assert_eq!(times(), written, "a file of the person's beside the work was written again");
+}
+
+// The one new commit a keep makes is not signed, whatever the config says of every commit.
+#[test]
+fn no_signer_of_the_persons_is_started_for_the_one_new_commit() {
+    let made = finished();
+    let (theirs, folder) = (made.moved_on(), made.w.at("tmp"));
+    made.git(&["config", "commit.gpgSign", "true"]);
+    made.git(&["config", "gpg.program", planted(&folder, "signer").to_str().unwrap()]);
+    let ran = made.keep(&[]);
+    let tip = made.w.commit(&made.repo, "main");
+    kept(&made, &ran, &tip, "main", JOINED);
+    assert_eq!(made.git(&["rev-parse", &format!("{tip}^")]), theirs);
+    assert_eq!(started(&folder), Vec::<String>::new());
+    // The control: it is a signer git starts, for the person's own next commit.
+    fs::write(made.repo.join("mine.txt"), "the person's own, again\n").unwrap();
+    made.w.git_ran(&made.repo, &["commit", "-q", "-am", "the person's next commit"]);
+    assert_eq!(started(&folder), ["ran-signer"], "git starts this signer for a commit");
+}
+
+// A name that stands in for the run's commit (`git replace`) is not followed: the files that land are those of
+// the commit the record names, which is the commit the branch is moved to.
+#[test]
+fn a_commit_another_stands_in_for_is_landed_as_itself() {
+    let made = finished();
+    let (end, start) = (made.end(), made.w.commit(&made.repo, "main"));
+    // The stand-in holds the files of the run's start: followed, it would land nothing of the work.
+    let other = made.git(&["commit-tree", "-p", &start, "-m", "a stand-in", &format!("{start}^{{tree}}")]);
+    made.git(&["update-ref", &format!("refs/replace/{end}"), &other]);
+    let said = printed(&made.keep(&[]));
+    assert_eq!((&said["kept"], &said["why"]), (&json!(end), &json!(FORWARD.replace("{run}", &made.run))));
+    assert_eq!(made.files(), super::worked());
+    assert_eq!(made.git(&["--no-replace-objects", "rev-parse", "main^{tree}"]), made.git(&["write-tree"]));
 }

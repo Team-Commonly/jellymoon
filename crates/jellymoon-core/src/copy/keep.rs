@@ -12,8 +12,10 @@
 //! can tell a keep that landed from one that did not ([`before`]). git answers with a code, and no word of git's
 //! and no name from the repo is kept of any failure ([`Unkept`]); every answer is read to a size ([`Repo::answer`]).
 
+mod attrs;
 mod fits;
 mod made;
+mod step;
 
 use std::fs::{self, File};
 use std::io::ErrorKind;
@@ -21,8 +23,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub(crate) use fits::Touched;
+pub(crate) use step::LOOSE;
 
-use super::git::{Git, Repo};
+use super::git::{Git, Repo, Unopened};
 use super::work::{REF_MAX, parent, same, tip, tip_of};
 use super::{Named, Places, Unread, back, branch, hold, is_id};
 use crate::busy::or_test;
@@ -44,26 +47,6 @@ const MIDWAY: [&str; 8] = [
     "rebase-apply",
     "sequencer",
 ];
-/// The one step that touches the checkout. Each word after `--ff-only` takes away something a repo's config
-/// could add to a merge (`branch.<name>.mergeOptions`, `merge.autoStash`, `merge.verifySignatures`), keeps git
-/// from tidying the store afterwards, or makes an ignored file in the way a reason to stop, as an untracked one
-/// is. Hooks, filters, signing and submodules are off for every git (`git.rs`).
-const FORWARD: [&str; 14] = [
-    "-c",
-    "gc.auto=0",
-    "-c",
-    "maintenance.auto=false",
-    "merge",
-    "--ff-only",
-    "--no-squash",
-    "--no-autostash",
-    "--no-verify-signatures",
-    "--no-overwrite-ignore",
-    "--no-stat",
-    "--no-edit",
-    "--no-progress",
-    "--quiet",
-];
 
 /// Why a run's work was not kept. `run/keep.rs` has the words of each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,10 +55,16 @@ pub(crate) enum Unkept {
     Unread(Unread),
     /// Another keep of this home is at work.
     Busy,
+    /// The keeps' lock could not be made or taken.
+    NoLock,
+    /// The repo's config names what cannot be switched off on a command line (`git.rs`).
+    Config,
     /// A checkout stands on the run's branch.
     Stood,
     /// The person's checkout stands on no branch of theirs.
     NoBranch,
+    /// The checkout stands on a branch whose name a record does not hold ([`nameable`]).
+    Unnamed,
     /// A merge, a cherry-pick, a revert, a rebase or a bisect is going on in the checkout.
     Midway,
     /// The branch's history does not hold the run's start.
@@ -96,7 +85,7 @@ pub(crate) enum Unkept {
     InWay,
     /// The checkout's index is locked.
     Locked,
-    /// git would not move the branch forward, though every check had passed.
+    /// git stopped the step though every check had passed, or took it and the commit is not where `HEAD` is.
     Stepped,
     /// The run's record could not be written.
     Unwritten,
@@ -119,13 +108,18 @@ pub(crate) enum How {
     Held,
     /// A keep that was cut off had landed the commit its record names.
     Finished,
+    /// The checkout was moved to another branch just before the step, and git landed the commit there.
+    Elsewhere,
+    /// The checkout was moved just before the step, and git landed the commit on no branch a record names: its
+    /// `HEAD` was detached, or stood on a branch whose name is not written down. The run's branch is left.
+    Loose,
 }
 
 /// What a keep landed, or with [`Keep::ask`] would land.
 pub(crate) struct Landing {
     /// The commit on the branch. None only of a commit that would have to be made, when asked.
     pub commit: Option<String>,
-    /// The branch, by its whole name.
+    /// The branch, by its whole name; [`LOOSE`] of work that landed on none that is named.
     pub onto: String,
     pub how: How,
 }
@@ -160,13 +154,12 @@ struct At<'a> {
     name: String,
 }
 
-/// Where a test's build ends the command, as a power cut would, when `JELLYMOON_TEST_KEEP_CUT` is this step's
-/// number. A release never does.
-fn cut(step: u8) {
-    let asked = std::env::var("JELLYMOON_TEST_KEEP_CUT").ok().filter(|_| cfg!(debug_assertions));
-    if asked.is_some_and(|asked| asked == step.to_string()) {
-        std::process::exit(70);
-    }
+/// Whether a run's record holds this name of a branch: a branch's whole name of at most 1024 bytes, with no
+/// space of any kind, no line break, no control character and nothing git reads as a pattern. It is the one
+/// rule, for the keep that writes the name ([`stands`]) and for the command that reads it back (`run/keep.rs`).
+pub(crate) fn nameable(onto: &str) -> bool {
+    let odd = |c: char| c.is_control() || c.is_whitespace() || "*?[\\~^:".contains(c);
+    onto.starts_with("refs/heads/") && onto.len() <= 1024 && !onto.contains(odd)
 }
 
 /// Whether git said yes with a 0 or no with a 1. Any other end is no answer.
@@ -191,10 +184,13 @@ fn line(repo: &Repo, vars: &[(&str, &str)], args: &[&str]) -> Result<Option<Stri
 
 /// The system's lock on `runs/keep.lock`, which a keep holds from before it reads the run's record until it
 /// ends: one keep of a home at a time, so a second one reads what the first wrote. It is waited for a short
-/// while, and the system drops it when its holder ends, however it ends.
+/// while, and the system drops it when its holder ends, however it ends. The file is made when it is not there,
+/// by a question too, and is never removed: a question waits for a keep as a keep does, so that it answers of
+/// what that keep left.
 pub(crate) fn alone(home: &Path) -> Result<File, Unkept> {
     let wait = or_test(WAIT, "JELLYMOON_TEST_KEEP_WAIT_MS");
-    hold::held(&Places::of(home).runs.join("keep.lock"), true, Some(wait)).map_err(|_| Unkept::Busy)
+    let held = hold::held(&Places::of(home).runs.join("keep.lock"), true, Some(wait));
+    held.map_err(|e| if e.kind() == ErrorKind::TimedOut { Unkept::Busy } else { Unkept::NoLock })
 }
 
 /// Keeps the work, or with `ask` says what a keep would do and changes nothing. The caller holds the keeps' lock
@@ -207,8 +203,14 @@ pub(crate) fn keep(
 ) -> Result<Landing, Unkept> {
     let git = Git::find(&Places::of(of.home).runs, true).map_err(|_| Unread::Home)?;
     let (shared, own) = checkout(&git, of)?;
-    let repo = git.open(&shared).map_err(|_| Unread::Repo)?;
-    let mine = repo.through(&own);
+    // What is switched off is what the config names as git reads it through the shared git folder and through
+    // the checkout's own, which may have a config of its own: every call is given both lists.
+    let unopened = |unopened| match unopened {
+        Unopened::Unasked(_) => Unkept::Unread(Unread::Repo),
+        Unopened::Unswitched(_) => Unkept::Config,
+    };
+    let mine = git.opened(&shared).and_then(|repo| repo.seen_from(&own)).map_err(unopened)?;
+    let repo = mine.through(&shared);
     let name = format!("refs/heads/{}", branch(of.run));
     let at = At { of, repo: &repo, mine: &mine, shared: &shared, own: &own, name };
     let landing = match before(&at) {
@@ -219,8 +221,11 @@ pub(crate) fn keep(
     if !note(Note::Kept(commit, &landing.onto)) {
         return Err(Unkept::Unwritten);
     }
-    cut(4);
-    drop_branch(&at);
+    step::cut(4);
+    // The run's branch goes only when a branch holds the commit: work on a detached `HEAD` has no other name.
+    if landing.how != How::Loose {
+        drop_branch(&at);
+    }
     Ok(landing)
 }
 
@@ -304,6 +309,9 @@ fn stands(at: &At) -> Result<(String, String), Unkept> {
     if !onto.starts_with("refs/heads/") || onto.starts_with("refs/heads/jellymoon/run-") {
         return Err(Unkept::NoBranch);
     }
+    if !nameable(&onto) {
+        return Err(Unkept::Unnamed);
+    }
     let going =
         |name: &&str| !matches!(fs::symlink_metadata(at.own.join(name)), Err(e) if e.kind() == ErrorKind::NotFound);
     if MIDWAY.iter().any(going) {
@@ -359,8 +367,8 @@ fn land(
     } else {
         (end.to_string(), None, work)
     };
-    let index = Places::of(of.home).runs.join(of.run).join("keep.index");
-    fits::fits(at.mine, (of.folder, at.own, &index), (&tip, &target), &files, of.was.is_some())?;
+    let scratch = Places::of(of.home).runs.join(of.run);
+    fits::fits(at.mine, (of.folder, at.own, &scratch), (&tip, &target), &files, of.was.is_some())?;
     let how = if joined { How::Joined } else { How::Forward };
     if of.ask {
         return Ok(Landing { commit: (!joined).then_some(target), onto, how });
@@ -369,32 +377,5 @@ fn land(
         Some(who) => made::commit(at, &who, &tip, &target)?,
         None => target,
     };
-    forward(at, commit, onto, how, note)
-}
-
-/// Writes down what is about to land, and lands it: the one step that touches the person's checkout and moves
-/// their branch, which git does whole or not at all.
-fn forward(
-    at: &At,
-    commit: String,
-    onto: String,
-    how: How,
-    note: &mut dyn FnMut(Note) -> bool,
-) -> Result<Landing, Unkept> {
-    cut(1);
-    if !note(Note::Intent(&commit, &onto)) {
-        return Err(Unkept::Unwritten);
-    }
-    cut(2);
-    let forward: Vec<&str> = FORWARD.iter().copied().chain([commit.as_str()]).collect();
-    let moved = at.mine.answer(Some(at.of.folder), &[], &forward, &[], SAID_MAX);
-    cut(3);
-    // git moved the branch it found the checkout on: it is asked once more whether that was this one.
-    match moved {
-        Some((Some(0), _)) if tip_of(at.repo, &onto).ok().as_deref() == Some(&commit) => {
-            Ok(Landing { commit: Some(commit), onto, how })
-        }
-        _ if fits::locked(at.own) => Err(Unkept::Locked),
-        _ => Err(Unkept::Stepped),
-    }
+    step::forward(at, commit, onto, how, note)
 }

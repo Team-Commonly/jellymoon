@@ -6,12 +6,12 @@ use std::fs;
 
 use serde_json::{Value, json};
 
-use super::{BEFORE, DAY, FORWARD, JOINED, Made, UNCHANGED, ended, finished, kept, printed, worked};
+use super::{BEFORE, DAY, FORWARD, JOINED, Made, STEPPED, UNCHANGED, ended, finished, kept, printed, worked};
 
 const FINISHED: &str = "run {run} was kept: a keep that was cut off had landed its work, and this one finished it";
 
 /// A keep that ends itself after step `step`.
-fn cut(made: &Made, step: u8) {
+pub fn cut(made: &Made, step: u8) {
     let ran = made.keep_in(&made.repo, &[], &[("JELLYMOON_TEST_KEEP_CUT", step.to_string().into())]);
     assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (70, "", ""), "step {step}");
 }
@@ -158,10 +158,29 @@ fn files_a_cut_checkout_left_half_written_are_in_the_way_until_the_person_clears
         format!("an unsaved change, or a file that is not in the branch, is where the work would go: {UNCHANGED}");
     made.refuses(&made.keep(&[]), &before, &why);
     fs::remove_file(made.repo.join("n.txt")).unwrap();
-    // A lock a cut keep left on Jellymoon's own index file is nobody's, and is no reason to stop.
-    fs::write(made.w.jm("runs").join(&made.run).join("keep.index.lock"), "").unwrap();
+    // The same when git was told to ignore the file: by the checkout's `.gitignore`, by the repo's `info/exclude`
+    // and by the person's own list for every repo. git's trial takes an ignored file as nobody's, and a keep
+    // that goes on leaves it to the step, which is told to stop for one (`--no-overwrite-ignore`).
+    let everywhere = made.w.at("tmp").join("ignored-everywhere");
+    made.git(&["config", "--global", "core.excludesFile", everywhere.to_str().unwrap()]);
+    for list in [made.repo.join(".gitignore"), made.repo.join(".git").join("info").join("exclude"), everywhere] {
+        fs::write(&list, "n.txt\n").unwrap();
+        fs::write(made.repo.join("n.txt"), "the person's own, which git ignores\n").unwrap();
+        assert_eq!(made.git(&["status", "--porcelain", "--ignored", "n.txt"]), "!! n.txt", "{}", list.display());
+        let before = made.held();
+        made.refuses(&made.keep(&[]), &before, STEPPED);
+        assert_eq!(fs::read_to_string(made.repo.join("n.txt")).unwrap(), "the person's own, which git ignores\n");
+        fs::remove_file(made.repo.join("n.txt")).unwrap();
+        fs::remove_file(&list).unwrap();
+    }
+    // A lock a cut keep left on Jellymoon's own index files is nobody's, and is no reason to stop.
+    let own = made.w.jm("runs").join(&made.run);
+    for lock in ["keep.index.lock", "keep.trial.lock"] {
+        fs::write(own.join(lock), "").unwrap();
+    }
     kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
-    assert!(!made.w.jm("runs").join(&made.run).join("keep.index.lock").exists());
+    let left: Vec<_> = fs::read_dir(&own).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+    assert!(!left.iter().any(|name| name.to_string_lossy().starts_with("keep.")), "{left:?}");
     assert_eq!(made.files(), worked());
 }
 

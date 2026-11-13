@@ -22,11 +22,15 @@ pub(super) fn merged(at: &At, tip: &str) -> Result<String, Unkept> {
     }
 }
 
-/// The person's name and address, as git reads them for this checkout at this moment. None is ever made up.
+/// The person's name and address, as git reads them for this checkout at this moment: through the checkout's own
+/// git folder, so a linked worktree's own config is read. None is ever made up, and one that git would cut down
+/// to nothing is none: git takes spaces, control characters and `,:;<>"\'` off both ends of a name (measured on
+/// git 2.50.1, which refuses a name of only those; an older git takes a `.` off too).
 pub(super) fn author(at: &At) -> Result<(String, String), Unkept> {
     let own = |key: &str| line(at.mine, &[], &["config", "--get", key]);
+    let said = |text: &str| text.chars().any(|c| c > ' ' && !",:;<>\"\\'".contains(c));
     match (own("user.name")?, own("user.email")?) {
-        (Some(name), Some(address)) if !name.is_empty() && !address.is_empty() => Ok((name, address)),
+        (Some(name), Some(address)) if said(&name) && said(&address) => Ok((name, address)),
         _ => Err(Unkept::Nobody),
     }
 }

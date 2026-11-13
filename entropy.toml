@@ -215,7 +215,14 @@ max_file_lines = 400
 # 305, is the record of a keep and every word it prints (52 of it tests). `run/show.rs` grew by 41 (its words
 # shared with a keep), `copy/git.rs` by 21 (merge drivers blanked, an answer with its exit code), `run/record.rs`
 # and `tests/shapes.rs` by 17 each, and `run/obeyed.rs`, `copy/work.rs`, `run.rs` and `copy.rs` by 16 between them.
-"crates/jellymoon-core" = 9605
+# The fixes after F45's gate raised core by 306. New: `copy/keep/attrs.rs`, 152, asks a file's filter as git
+# reads attributes when it writes, and `copy/keep/step.rs`, 89, is the one step and where git is found to have
+# landed the work after it. `copy/git.rs` grew by 59 (a linked worktree's own config read and switched off, a
+# bound on what one command line switches off, its test), `run/keep.rs` by 40 (the words of work landed
+# elsewhere and of three refusals, the one word of work on no branch), `tests/shapes.rs` by 5 and
+# `copy/keep/made.rs` by 4. `copy/keep.rs` lost 19 (the step moved out) and `copy/keep/fits.rs` 24 (the
+# attributes moved out; the trial on a copy of the index came in).
+"crates/jellymoon-core" = 9911
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -287,7 +294,12 @@ max_file_lines = 400
 # (what is refused 265, settings and what a repo could start 245, a keep cut off 188, records 154, what a disk
 # does with names 63, a linked worktree 63), the made-up git gained 14 (a version it says, and a planted hook's
 # part), `src/parse.rs` 9 and `src/main.rs` 7.
-"crates/jellymoon" = 15807
+# The fixes after F45's gate raised the binary by 806, all of it tests: four new files, `tests/f45/raced.rs` 224
+# (a checkout moved, an index locked and a run's branch changed just before a step), `started.rs` 193 (what a
+# linked worktree's config names, each beside a control, and the four readings of a filter), `late.rs` 143 (a
+# step git stops, a touched file, a question that writes nothing) and `names.rs` 99 (branch names a record
+# does not hold); and `settings.rs` 45, `record.rs` 32, `refused.rs` 26, `tests/f45.rs` 25 and `cut.rs` 19.
+"crates/jellymoon" = 16613
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

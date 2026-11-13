@@ -37,7 +37,8 @@ pub struct Kept {
     /// The commit on the person's branch that holds the work. None when asked, of a commit that would have to be
     /// made, and of work that would not be kept.
     pub kept: Option<String>,
-    /// The branch, by its short name, cleaned, on one line. None of work that would not be kept.
+    /// The branch, by its short name, cleaned, on one line. None of work that would not be kept, and of work
+    /// that was kept on no branch a record names.
     pub onto: Option<String>,
     /// What was done, or with `--ask` what would be, in core's fixed words.
     pub why: String,
@@ -90,17 +91,21 @@ pub fn keep_run(home: &Path, options: &RunOptions, how: KeepOptions) -> Result<K
     let of = |folder| Keep { home, folder, run: &run, named: &named, was, ask: how.ask };
     if state == WorkState::Kept {
         let Some((commit, onto)) = was else { return Err(not_cores(&run)) };
-        // A keep that was cut off after the record said kept left the run's branch: it goes now.
-        if let (Ok(folder), false) = (&folder, how.ask) {
+        // A keep that was cut off after the record said kept left the run's branch: it goes now, unless the
+        // work is on no branch, where the run's branch is the one name it has.
+        if let (Ok(folder), false, true) = (&folder, how.ask, onto != copy::LOOSE) {
             copy::swept(&of(folder));
         }
         let why = format!("the work of run {run} was kept before: nothing was changed");
-        let (kept, onto, fits) = (Some(commit.to_string()), Some(short(onto)), how.ask.then_some(false));
+        let (kept, onto, fits) = (Some(commit.to_string()), short(onto), how.ask.then_some(false));
         return Ok(Kept { run, wish, kept, onto, why, settings: Vec::new(), fits });
     }
+    // Only a record that says kept names no branch: a keep writes the branch it means before it lands anything.
+    if was.is_some_and(|was| was.1 == copy::LOOSE) {
+        return Err(not_cores(&run));
+    }
     let folder = folder?;
-    let mut settings = Vec::new();
-    let mut record = found.record;
+    let (mut settings, mut record) = (Vec::new(), found.record);
     let mut note = |note: Note| {
         let (commit, onto, done) = match note {
             Note::Intent(commit, onto) => (commit, onto, false),
@@ -113,8 +118,7 @@ pub fn keep_run(home: &Path, options: &RunOptions, how: KeepOptions) -> Result<K
     let landed = copy::keep(&of(&folder), &mut |files| judge(files, how.with_settings, &mut settings), &mut note);
     match landed {
         Ok(landed) => {
-            let (why, onto, fits) =
-                (done(&run, landed.how, how.ask), Some(short(&landed.onto)), how.ask.then_some(true));
+            let (why, onto, fits) = (done(&run, landed.how, how.ask), short(&landed.onto), how.ask.then_some(true));
             Ok(Kept { run, wish, kept: landed.commit, onto, why, settings, fits })
         }
         Err(unkept) if how.ask => Ok(unfit(run, wish, unkept, settings)),
@@ -128,23 +132,21 @@ fn unfit(run: String, wish: String, unkept: Unkept, settings: Vec<String>) -> Ke
 }
 
 /// The commit and the branch a keep wrote in the record, both or neither, as a keep writes them: a whole object
-/// id, and a branch's whole name with nothing in it that git reads as a pattern or that no branch's name has.
+/// id, and a branch's whole name by the rule the keep itself writes one by (`copy::nameable`), or the one word
+/// for work that landed on no branch a record names.
 fn intent<'a>(kept: &'a Option<String>, onto: &'a Option<String>) -> Result<Option<(&'a str, &'a str)>, ()> {
-    let odd = |c: char| c.is_control() || c.is_whitespace() || "*?[\\~^:".contains(c);
     match (kept.as_deref(), onto.as_deref()) {
         (None, None) => Ok(None),
-        (Some(kept), Some(onto))
-            if copy::is_id(kept) && onto.starts_with("refs/heads/") && onto.len() <= 1024 && !onto.contains(odd) =>
-        {
+        (Some(kept), Some(onto)) if copy::is_id(kept) && (copy::nameable(onto) || onto == copy::LOOSE) => {
             Ok(Some((kept, onto)))
         }
         _ => Err(()),
     }
 }
 
-/// A branch's short name as it is printed.
-fn short(onto: &str) -> String {
-    statement(onto.strip_prefix("refs/heads/").unwrap_or(onto), NAME_MAX)
+/// A branch's short name as it is printed. None of work on no branch a record names.
+fn short(onto: &str) -> Option<String> {
+    (onto != copy::LOOSE).then(|| statement(onto.strip_prefix("refs/heads/").unwrap_or(onto), NAME_MAX))
 }
 
 /// Whether work that touches these files may be kept. Each name is asked as git keeps it and as it is printed
@@ -191,6 +193,31 @@ fn done(run: &str, how: How, ask: bool) -> String {
         (How::Finished, true) => {
             format!("a keep of run {run} would finish one that was cut off after it had landed the work")
         }
+        // Only a keep that took the step finds the checkout moved: nothing is asked that would.
+        (How::Elsewhere, _) => format!(
+            "run {run} was kept, on another branch than the keep began on: the checkout was moved to the branch \
+             that `onto` names while the keep was at work, and git landed the work there"
+        ),
+        (How::Loose, _) => format!(
+            "run {run} was kept, on no branch that is named here: while the keep was at work the checkout's HEAD \
+             was detached, or moved to a branch whose name Jellymoon does not write down, and git landed the work \
+             there; the run's branch is left"
+        ),
+    }
+}
+
+/// The words of the three refusals that are of the home, the config and the branch's name, and not of the work.
+fn before_the_work(unkept: &Unkept) -> &'static str {
+    match unkept {
+        Unkept::NoLock => "the keeps' lock (runs/keep.lock) could not be made or taken in this home",
+        Unkept::Config => {
+            "the repo's git config names a filter, a merge driver or a transport that cannot be switched off on \
+             git's command line: there are too many of them, or one has `=` in its name"
+        }
+        _ => {
+            "the checkout stands on a branch whose name Jellymoon does not write in a run's record: the name holds \
+             a space of some kind, a line break or a control character, or is longer than 1024 bytes"
+        }
     }
 }
 
@@ -200,6 +227,7 @@ fn words(run: &str, unkept: Unkept) -> String {
     match unkept {
         Unkept::Unread(unread) => unread_words(run, unread, &KEPT),
         Unkept::Busy => format!("another keep is at work in this home: {unchanged}"),
+        Unkept::NoLock | Unkept::Config | Unkept::Unnamed => format!("{}: {unchanged}", before_the_work(&unkept)),
         Unkept::Stood => format!("a checkout stands on the branch of run {run}: {unchanged}"),
         Unkept::NoBranch => format!(
             "the checkout stands on no branch of the person's: its HEAD is detached, or names a run's branch: \
@@ -241,8 +269,8 @@ fn words(run: &str, unkept: Unkept) -> String {
              left the file: the work of run {run} was not kept"
         ),
         Unkept::Stepped => format!(
-            "git would not move the branch forward to the work of run {run}: the checkout or the branch changed \
-             while the keep was at work, and the next `run keep` begins again"
+            "git would not move the branch forward to the work of run {run}: git stopped the step, files of the \
+             work may already be written to the checkout, and the next `run keep` begins again"
         ),
         Unkept::Unwritten => format!(
             "the record of run {run} could not be written: the next `run keep` goes on from where this one stopped"
@@ -261,7 +289,19 @@ mod tests {
         assert_eq!(intent(&None, &None), Ok(None));
         assert_eq!(named(&id, "refs/heads/main"), Ok(()));
         assert_eq!(named(&id, "refs/heads/feature/x-1"), Ok(()));
+        // The one word of work that landed on no branch, and names of other alphabets and of 1024 bytes.
+        for onto in ["HEAD", "refs/heads/ok-ünï", "refs/heads/@", &format!("refs/heads/{}", "x".repeat(1013))] {
+            assert_eq!(named(&id, onto), Ok(()), "{onto}");
+        }
         for onto in [
+            "refs/heads/a\u{a0}b",
+            "refs/heads/a\u{3000}b",
+            "refs/heads/a\u{2028}b",
+            "refs/heads/a\u{85}b",
+            "refs/heads/a\u{9b}b",
+            &format!("refs/heads/{}", "x".repeat(1014)),
+            "refs/heads/HEAD ",
+            "head",
             "main",
             "refs/tags/v1",
             "refs/heads/a b",

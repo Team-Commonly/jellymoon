@@ -6,9 +6,10 @@ use std::fs;
 
 use serde_json::json;
 
+use super::support::skipped;
 use super::{BEFORE, FORWARD, Made, finished, kept, printed};
 
-const HELD: &str = "run {run} was kept: the branch held the run's work already, and nothing was landed";
+pub const HELD: &str = "run {run} was kept: the branch held the run's work already, and nothing was landed";
 const NOT_CORES: &str = "the record of run {run} is not one Jellymoon wrote for this wish";
 
 /// Fails unless a keep is refused in these words with nothing changed, and asked first says the same.
@@ -57,6 +58,11 @@ fn a_record_whose_words_of_a_keep_are_not_a_keeps_is_not_cores() {
         json!({"kept": "main", "onto": "refs/heads/main"}),
         json!({"kept": "--all", "onto": "refs/heads/main"}),
         json!({"work": "kept"}),
+        // A name the keep itself never writes: with a space of some kind, or of more than 1024 bytes. And the
+        // one word of work on no branch, which only a record that says kept holds.
+        json!({"kept": end, "onto": "refs/heads/a\u{a0}b"}),
+        json!({"kept": end, "onto": format!("refs/heads/{}", "n".repeat(1014))}),
+        json!({"kept": end, "onto": "HEAD"}),
     ];
     for words in words {
         let mut wrong = record.clone();
@@ -68,7 +74,11 @@ fn a_record_whose_words_of_a_keep_are_not_a_keeps_is_not_cores() {
         assert!(before == made.held(), "{words}");
         made.refuses(&ran, &before, NOT_CORES);
     }
-    made.write(&record);
+    // A name of exactly 1024 bytes is one a record holds: it names no branch here, so the keep begins again.
+    let mut long = record.clone();
+    long["kept"] = json!(end);
+    long["onto"] = json!(format!("refs/heads/{}", "n".repeat(1013)));
+    made.write(&long);
     kept(&made, &made.keep(&[]), &end, "main", FORWARD);
 }
 
@@ -117,6 +127,28 @@ fn a_keep_in_a_repo_the_record_does_not_name_is_refused() {
     let why = "the work of run {run} could not be read from the repo: the folder is not the top of a checkout git \
                opens, or git did not answer";
     made.refuses(&made.keep_in(&below, &[], &[]), &before, why);
+    // Nor is a link of the project's name, outside the checkout, that leads to a folder below its top: git
+    // finds the repo from there, and the work would be written into that folder.
+    fs::create_dir(made.repo.join("sub")).unwrap();
+    let link = made.w.at("tmp").join("alpha");
+    if !linked(&made.repo.join("sub"), &link) {
+        return skipped("a link to a folder below the top of a checkout: this system let the test make no link");
+    }
+    let before = made.held();
+    made.refuses(&made.keep_in(&link, &[], &[]), &before, why);
+    assert_eq!(printed(&made.keep_in(&link, &["--ask"], &[]))["why"], json!(why.replace("{run}", &made.run)));
+    assert!(before == made.held());
+    assert!(fs::read_dir(made.repo.join("sub")).unwrap().next().is_none(), "nothing was written below the top");
+}
+
+/// Makes a link to a folder. False where the system does not let this user make one (Windows, without the
+/// right to).
+fn linked(to: &std::path::Path, link: &std::path::Path) -> bool {
+    #[cfg(unix)]
+    let made = std::os::unix::fs::symlink(to, link);
+    #[cfg(windows)]
+    let made = std::os::windows::fs::symlink_dir(to, link);
+    made.is_ok()
 }
 
 #[test]

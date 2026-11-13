@@ -130,6 +130,50 @@ its own checkout, which no test can time.
    the copy found the person to be, or Jellymoon's fallback name. Only the one new commit of decision 4's second
    case is made under the person's name of that moment, and it is refused when git names none.
 
+## Found by the gate on F45 (2026-11-13)
+
+The gate on F45 found eleven things, four of them blocking. What was decided, and what was measured for it (git
+2.50.1, a Mac; the whole account is `docs/development/keep.md`):
+
+1. **What is switched off is read where the step runs.** A linked worktree's own config (`config.worktree`) is
+   read by git only through that worktree's git folder. The keep read the config's names through the shared git
+   folder and ran the step through the worktree's, so a filter named there was started. Every git a keep starts
+   is now given the names read through both.
+2. **Whether a file has a filter is asked as git will read it when it writes.** A file with a `filter` is
+   refused, since the filter is off (found while building, 4). git reads `.gitattributes` from the commit it
+   checks out, and from the disk only where the commit has none; no one `check-attr` reads that way. Measured:
+   with an untracked attributes file that sets the filter and an unsaved edit of a tracked one that unsets it,
+   the checkout says `unset`, the commit by `--cached` and by `--source` says `unspecified`, and the step runs
+   the filter. So four readings are asked and any `filter` refuses: the commit's index over a copy of the
+   checkout's attribute files the commit lacks; the commit's alone; the checkout's files; the checkout's index.
+   `--source` is not used: the commit read into an index of Jellymoon's and asked with `--cached` is the same
+   question on every git. The sentence "no file is ever written other than as its filter would have made it"
+   now stands with three stated gaps (an attributes file changed between check and step, a case-folded spelling
+   of `.gitattributes`, and a linked `.gitattributes` on git before 2.32).
+3. **A checkout moved just before the step keeps the work where it landed.** Nothing holds a checkout still
+   between the checks and `git merge`. When git took the step and the meant branch is not at the commit, `HEAD`
+   is asked: at the commit, the work is kept, the record's `onto` is the branch it is on or the one word `HEAD`
+   for none, and the words say so; the run's branch is deleted only when a branch holds the commit. On a branch
+   that is ahead of the commit and holds it, git had nothing to do, and the keep says the branch held the work
+   already. Anywhere else, the late refusal stands.
+4. **One rule says which branch names a record holds**, for the keep that writes and the command that reads. A
+   branch whose name holds a space of any kind, a line break or a control character, or is longer than 1024
+   bytes, is refused before anything is written. Before, such a keep landed and left a record every later
+   command called someone else's.
+5. **The late refusal says what is true of every cause**: git stopped the step, files of the work may already be
+   written, the next keep begins again. Measured: with a folder of the checkout shut, the trial passes, the step
+   exits 1 with some files written, `ORIG_HEAD` written and the branch unmoved. `ORIG_HEAD` is no longer among
+   what a refusal is said to leave.
+6. **A file that was only touched is no unsaved change.** The trial runs on a copy of the checkout's index that
+   has been refreshed, so the check reads the file and writes nothing of the person's, and `--ask` takes no lock
+   on their index. Measured: `read-tree -n -m -u` refuses a touched file until `update-index --refresh` has read
+   it. A filter the repo says is required is switched off as any other, with its `required`, so a
+   touched file that has one is compared as it is.
+7. **Smaller ones**: a name or an address made only of spaces or of the marks git takes off a name is no name; a
+   config with more than 8 KiB of names to switch off, or one with `=` in it, is refused in its own words; a
+   keeps' lock that cannot be made is said as that; the hook a test's build ends a keep at is compiled out of a
+   release with the read of its variable.
+
 ## The slices
 
 `feature_list.json` is read top down, and F30 and F31 stand above these. The order is stated here: **F44 to F47 are

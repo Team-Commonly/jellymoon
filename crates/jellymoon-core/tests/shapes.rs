@@ -144,4 +144,9 @@ fn what_a_keep_prints_round_trips_byte_for_byte() {
     assert_eq!(format!("{asked}\n"), example);
     assert_eq!((asked.kept, asked.onto, asked.settings.len(), asked.fits), (None, None, 0, Some(false)));
     assert!(serde_json::from_str::<Kept>(&example.replace("\"fits\"", "\"forced\"")).is_err());
+    // Work that landed on no branch a record names: a commit, and no branch.
+    let example = fixture("kept-loose.json");
+    let loose: Kept = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{loose}\n"), example);
+    assert_eq!((loose.kept.map(|id| id.len()), loose.onto, loose.fits), (Some(40), None, None));
 }

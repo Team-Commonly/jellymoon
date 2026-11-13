@@ -4,21 +4,32 @@
 //! made-up identity and no config of this machine. This file holds what a keep does; `f45/refused.rs` what is
 //! refused with nothing changed, `f45/record.rs` the records and branches a keep does not go by, `f45/settings.rs`
 //! the files the person's tools obey, other repos' entries and what a repo's config could start, `f45/cut.rs` a
-//! keep cut off after each of its steps, `f45/disk.rs` what a disk does with the work's names, and `f45/linked.rs` a repo with a second checkout.
+//! keep cut off after each of its steps, `f45/disk.rs` what a disk does with the work's names, `f45/linked.rs` a
+//! repo with a second checkout, `f45/started.rs` what a keep never starts beside what git does start,
+//! `f45/raced.rs` a checkout or a branch changed between two steps, `f45/names.rs` the branch names a record
+//! holds, and `f45/late.rs` a step git stops, a file that only looks changed and what a question writes.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f45/cut.rs"]
 mod cut;
 #[path = "f45/disk.rs"]
 mod disk;
+#[path = "f45/late.rs"]
+mod late;
 #[path = "f45/linked.rs"]
 mod linked;
+#[path = "f45/names.rs"]
+mod names;
+#[path = "f45/raced.rs"]
+mod raced;
 #[path = "f45/record.rs"]
 mod record;
 #[path = "f45/refused.rs"]
 mod refused;
 #[path = "f45/settings.rs"]
 mod settings;
+#[path = "f45/started.rs"]
+mod started;
 mod support;
 #[path = "f39/world.rs"]
 mod world;
@@ -180,6 +191,20 @@ pub fn started(folder: &Path) -> Vec<String> {
     left.filter(|name| name.starts_with("ran-")).collect()
 }
 
+/// Makes a file look changed to git, with what it holds left as it is: its time is set back twenty years.
+pub fn touch(file: &Path) {
+    touch_back(file, 20);
+}
+
+/// [`touch`], to a time so many years back: a second touch of one file takes another time than the first.
+pub fn touch_back(file: &Path, years: u64) {
+    let then = std::time::SystemTime::now() - std::time::Duration::from_secs(years * 365 * 24 * 3600);
+    fs::File::options().write(true).open(file).unwrap().set_modified(then).unwrap();
+}
+
+pub const STEPPED: &str = "git would not move the branch forward to the work of run {run}: git stopped the step, \
+                           files of the work may already be written to the checkout, and the next `run keep` begins \
+                           again";
 pub const FORWARD: &str = "run {run} was kept: the branch was moved forward to the run's commit";
 pub const JOINED: &str = "run {run} was kept: one new commit on top of the branch's own holds its work and the run's";
 pub const BEFORE: &str = "the work of run {run} was kept before: nothing was changed";

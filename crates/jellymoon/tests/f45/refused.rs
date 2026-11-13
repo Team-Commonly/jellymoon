@@ -194,9 +194,12 @@ fn a_commit_is_never_made_under_a_made_up_name() {
         made.moved_on();
         made.git(&["config", "--unset", missing]);
         unfit(&made, nobody);
-        // A name that is set to nothing is no name.
-        made.git(&["config", missing, ""]);
-        unfit(&made, nobody);
+        // A name that is set to nothing is no name, and neither is one git would cut down to nothing: spaces,
+        // and the marks git takes off both ends of a name.
+        for nothing in ["", " ", " \t ", "<>", "< >", ",;:\"'"] {
+            made.git(&["config", missing, nothing]);
+            unfit(&made, nobody);
+        }
     }
     // No commit is made to move a branch forward, so nobody is asked who they are.
     let made = finished();
@@ -222,7 +225,30 @@ fn a_locked_index_and_another_keep_at_work_are_refused() {
     made.refuses(&made.keep_in(&made.repo, &[], &wait), &before, &busy);
     assert_eq!(printed(&made.keep_in(&made.repo, &["--ask"], &wait))["fits"], json!(false));
     drop(lock);
+    // A lock that cannot be made is said as that, and not as another keep: here a folder has its name.
+    fs::remove_file(made.w.jm("runs").join("keep.lock")).unwrap();
+    fs::create_dir(made.w.jm("runs").join("keep.lock")).unwrap();
+    unfit(&made, "the keeps' lock (runs/keep.lock) could not be made or taken in this home");
+    fs::remove_dir(made.w.jm("runs").join("keep.lock")).unwrap();
     kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
+}
+
+#[test]
+fn a_config_that_names_what_cannot_be_switched_off_on_a_command_line_is_refused() {
+    let config = "the repo's git config names a filter, a merge driver or a transport that cannot be switched off \
+                  on git's command line: there are too many of them, or one has `=` in its name";
+    // More drivers than a command line carries, and one whose name holds the sign a setting is split at.
+    let many: String = (0..40_000).map(|n| format!("[merge \"d{n}\"]\n\tdriver = true\n")).collect();
+    for named in [many.as_str(), "[filter \"a=b\"]\n\tclean = cat\n", "[merge \"a=b\"]\n\tdriver = true\n"] {
+        let made = finished();
+        let file = made.repo.join(".git").join("config");
+        let was = fs::read_to_string(&file).unwrap();
+        fs::write(&file, format!("{was}{named}")).unwrap();
+        unfit(&made, config);
+        // With the config as it was, the work is kept.
+        fs::write(&file, was).unwrap();
+        kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
+    }
 }
 
 #[test]

@@ -9,6 +9,7 @@
 mod apart;
 mod build;
 mod copy;
+mod keep;
 mod off_path;
 mod run;
 mod show;

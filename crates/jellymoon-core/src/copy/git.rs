@@ -119,11 +119,11 @@ impl Git {
         Ok(printed(command, self)?.unwrap_or_default().lines().map(str::to_string).collect())
     }
 
-    /// Names a repo by its git folder and reads which filters and which transports its config names, so each call
-    /// can switch them off ([`blanks`]).
+    /// Names a repo by its git folder and reads which filters, merge drivers and transports its config names, so
+    /// each call can switch them off ([`blanks`]).
     pub fn open(&self, dir: &Path) -> Result<Repo<'_>, String> {
         let mut repo = Repo { git: self, dir: dir.to_path_buf(), blanks: Vec::new() };
-        let keys = r"^(filter\..*\.(clean|smudge|process)|protocol\..*\.allow)$";
+        let keys = r"^(filter\..*\.(clean|smudge|process)|protocol\..*\.allow|merge\..*\.driver)$";
         let named = repo.ask(None, &[], &["config", "-z", "--name-only", "--get-regexp", keys])?.unwrap_or_default();
         repo.blanks = blanks(&named).map_err(|named| if self.quiet { UNSAID.to_string() } else { named })?;
         Ok(repo)
@@ -132,13 +132,16 @@ impl Git {
 
 /// The settings that switch off what a repo's config names, from the names as `git config -z` prints them. A filter
 /// is a program git starts for every file it adds or checks out: its command is set to nothing. A transport's own
-/// `protocol.<name>.allow` wins over `protocol.allow`, so each one named is set to `never` itself. A name that holds
-/// `=` cannot be given on a command line, and then git is not run at all.
+/// `protocol.<name>.allow` wins over `protocol.allow`, so each one named is set to `never` itself. A merge driver
+/// is a program git starts for a file both sides of a merge changed (`keep.rs`): its command is set to nothing, and
+/// git then starts nothing and takes the file as one that clashes (measured on git 2.50.1). A name that holds `=`
+/// cannot be given on a command line, and then git is not run at all.
 fn blanks(named: &str) -> Result<Vec<String>, String> {
     let mut blanks = Vec::new();
     for key in named.split('\0').filter(|key| !key.is_empty()) {
         match key.rsplit_once('.').filter(|_| !key.contains('=')) {
             Some((_, "allow")) => blanks.push(format!("{key}=never")),
+            Some((_, "driver")) => blanks.push(format!("{key}=")),
             Some((filter, _)) => blanks.extend([format!("{key}="), format!("{filter}.required=false")]),
             None => {
                 let what = "the repo's git config names a filter or a transport that cannot be switched off";
@@ -185,12 +188,28 @@ impl Repo<'_> {
     /// must have worked; `most` of them say only that there was that much or more. An object is read as it is,
     /// whatever the repo names to stand in its place, and no word of git's is kept of a failure.
     pub fn bytes(&self, args: &[&str], input: &[u8], most: usize) -> Option<Vec<u8>> {
+        let (code, printed) = self.answer(None, &[], args, input, most)?;
+        (code == Some(0) || printed.len() >= most).then_some(printed)
+    }
+
+    /// The code git ended with and what it printed, read as [`Repo::bytes`] reads: for a step whose `1` is an
+    /// answer (`keep.rs`), with `tree` as the work tree and `vars` beside git's own. No code is one of a git that
+    /// a signal ended. None when git could not be started or was stopped at its limit.
+    pub fn answer(
+        &self,
+        tree: Option<&Path>,
+        vars: &[(&str, &str)],
+        args: &[&str],
+        input: &[u8],
+        most: usize,
+    ) -> Option<(Option<i32>, Vec<u8>)> {
         let mut command = self.git.command();
         command.args(self.blanks.iter().flat_map(|blank| ["-c", blank])).arg(joined("--git-dir=", &self.dir));
-        command.arg("--no-replace-objects").args(args);
+        command.args(tree.map(|tree| joined("--work-tree=", tree))).arg("--no-replace-objects");
+        command.args(args).envs(vars.iter().copied());
         let from = test_file("JELLYMOON_TEST_GIT_LIMIT_FROM");
         let output = run_most(command, input.to_vec(), self.git.limit, from.as_deref(), most).ok()?;
-        (output.status.success() || output.stdout.len() >= most).then_some(output.stdout)
+        Some((output.status.code(), output.stdout))
     }
 }
 
@@ -226,7 +245,8 @@ mod tests {
 
     #[test]
     fn every_filter_and_every_transport_the_config_names_is_switched_off_by_its_name() {
-        let named = "filter.lfs.clean\0protocol.file.allow\0filter.a.b.process\0protocol.Ext\nX.allow\0";
+        let named =
+            "filter.lfs.clean\0protocol.file.allow\0filter.a.b.process\0protocol.Ext\nX.allow\0merge.m.driver\0";
         let off = [
             "filter.lfs.clean=",
             "filter.lfs.required=false",
@@ -234,6 +254,7 @@ mod tests {
             "filter.a.b.process=",
             "filter.a.b.required=false",
             "protocol.Ext\nX.allow=never",
+            "merge.m.driver=",
         ];
         assert_eq!(blanks(named).unwrap(), off);
         assert_eq!(blanks("").unwrap(), Vec::<String>::new());

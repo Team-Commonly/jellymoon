@@ -67,6 +67,7 @@ run's id, by a third run that had opened the old lock file before it was unlinke
 | `copy` | with the real `git` on the caller's `PATH` and no git config of this machine: a repo the chain makes, `jellymoon copy make` on it, an edit in the copy, and `jellymoon copy clean` leaving one commit on the run's branch, the folder gone and the checkout as it was |
 | `run` | a repo the chain makes and a wish made for it: `jellymoon run`, through `fake-agent`, ends as completed with one commit on the run's branch, which holds `HELLO.txt` with the one word `hello` (trimmed, in any case), the checkout has no changed file, and `jellymoon page` shows the wish done with one star. With `--real` the harness is the person's own Claude Code, on one harmless fixed wish |
 | `show` | `jellymoon run show` on the wish the `run` step ran: the work waits, the list names `HELLO.txt` as text, `--file` prints its one word (trimmed, in any case), and the checkout and every ref are as they were |
+| `keep` | `jellymoon run keep` on that wish: asked first (`--ask`) it says the work fits and changes nothing; then `main` is moved forward to the run's commit, `HELLO.txt` is in the checkout with its one word, nothing is left unsaved, the run's branch is gone, and a second keep changes nothing |
 | `stop` | a second wish in that repo and a run whose `fake-agent` does its work and then does not end: `jellymoon run stop` ends it, both commands print `cancelled`, the page shows the wish needing the person with no star, the copy is kept with nothing committed on the run's branch, and the checkout has no changed file |
 | `wish-run` | a repo the chain makes in the system's temporary folder, and a made-up log of something typed in it: `jellymoon wish --run` finds the repo by its name, starts the run through `fake-agent` and exits; `jellymoon page` then shows the wish done with one star, the run's command ends by itself with one commit on the run's branch, and the checkout has no changed file. The step removes the repo |
 | `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty; the hook is out and the settings are as they were |
@@ -74,9 +75,9 @@ run's id, by a third run that had opened the old lock file before it was unlinke
 
 A made-up run starts each program with no variable of the caller's: a scratch `HOME`, `CLAUDE_CONFIG_DIR`,
 `JELLYMOON_HOME`, `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` in the temporary home, and `JELLYMOON_CLAUDE` naming the copy of
-`fake-claude` there. It never runs Claude Code and never reads a real log. The `copy`, `run`, `show`, `stop` and `wish-run` steps
+`fake-claude` there. It never runs Claude Code and never reads a real log. The `copy`, `run`, `show`, `keep`, `stop` and `wish-run` steps
 alone are given the caller's `PATH`, to find git, with an empty global git config and the system's switched off.
-The `run`, `show`, `stop` and `wish-run` steps name their harness, a copy of `fake-agent`, with `JELLYMOON_CLAUDE`, so no harness on
+The `run`, `show`, `keep`, `stop` and `wish-run` steps name their harness, a copy of `fake-agent`, with `JELLYMOON_CLAUDE`, so no harness on
 that `PATH` is looked for.
 
 ## The three modes
@@ -86,7 +87,7 @@ that `PATH` is looked for.
   it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
   logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`,
-  `no-logs`, the delivery steps, `wish`, `copy`, `show`, `stop`, `wish-run` and `uninstall` are left out;
+  `no-logs`, the delivery steps, `wish`, `copy`, `show`, `keep`, `stop`, `wish-run` and `uninstall` are left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what. Its sixth step is `run`
   (F39): one real run of the person's Claude Code, in a repo the chain makes in the temporary home, on the fixed

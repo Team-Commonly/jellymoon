@@ -1,0 +1,1 @@
+{"run":"r0123456789abcdef","wish":"m1","kept":null,"onto":null,"why":"a merge, a cherry-pick, a revert, a rebase or a bisect is going on in the checkout: the work of run r0123456789abcdef was not kept, and nothing was changed","fits":false}

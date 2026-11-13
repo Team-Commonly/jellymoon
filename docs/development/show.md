@@ -292,7 +292,8 @@ word of the agent's or a word of git's, and neither a refusal nor an answer hold
   branch `Jellymoon/other` already there, git stores the run's branch under `refs/heads/Jellymoon/` and lists
   it by that name. The look asks for `refs/heads/jellymoon/run-<id>` to the letter and says the branch is not
   in the repo. Nothing is shown that is not the run's; the run's own work is not shown either.
-- **It writes no `work` to the record.** Nothing does yet: `kept` and `tossed` are F45's and F46's to write.
+- **It writes no `work` to the record.** `run keep` writes `kept` ([keep.md](keep.md)); `tossed` is F46's to
+  write.
 - **It does not bury a run that was cut off.** A look is not a page: it refuses, and writes nothing down.
 - **Measured on macOS only**, with git 2.50; the test lists work of ten thousand files and allows it a minute. Not
   measured: Windows, Linux, a git older than 2.31, a repo of the SHA-256 format, a partial clone.

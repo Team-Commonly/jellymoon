@@ -65,9 +65,9 @@ Each line is changed by the feature that makes it true, not before.
 
 | It says today | It will say |
 |---|---|
-| ADR 0014, 4: "The branch is kept: it is the work." | The branch is kept until the person keeps the work or tosses it; either removes the run's branch |
+| ADR 0014, 4: "The branch is kept: it is the work." | The branch is kept until the person keeps the work or tosses it; either removes the run's branch. F45 made the half about keeping true and changed the line so far |
 | `wish.md`: a made wish's "state moves only with its one run" | And with a toss, which lets the wish go |
-| Glossary, **copy**: "the branch, with the work on it, is kept" | Kept until the work is kept or tossed |
+| Glossary, **copy**: "the branch, with the work on it, is kept" | Kept until the work is kept or tossed. F45 changed it to "until the work is kept" |
 
 A run still never touches the person's checkout. Keeping is the person's own command.
 
@@ -87,6 +87,48 @@ On git 2.50.1, on a Mac, in a made-up repo, before any of this was built:
 
 Not measured: git 2.38 and 2.39 (the oldest that can merge in the store, and the one older Macs ship), Windows and
 Linux, a repo with filters or LFS, and a keep cut off between its steps. The features below measure them.
+
+Measured as F45 was built (2026-11-12), on git 2.50.1 on a Mac, in made-up repos with hooks of every kind
+planted. The whole account is `docs/development/keep.md`, "What was measured" and "What is not closed".
+
+| Scene | What git did |
+|---|---|
+| `merge --ff-only` with an unsaved or a staged change in a file of the work, an untracked file, a file where a folder would go, a folder where a file would, or `index.lock` | exit 1; files, index, `HEAD` and refs unmoved |
+| the same with an ignored file of the person's in the way | written over, unless `--no-overwrite-ignore` is given: then exit 1 and nothing moved |
+| `read-tree -m -u` with an ignored file in the way | written over. So it is used only as a trial (`-n`), never as the step |
+| `merge --ff-only` on a detached `HEAD` | moves it. So the branch is asked for first |
+| `branch.<name>.mergeOptions "--squash --autostash --no-ff"` | overridden by `--ff-only --no-squash --no-autostash` on the command line |
+| a hook of every kind git starts on a merge, a checkout, an index write and a ref write, with `core.hooksPath` an empty folder | none started |
+| `merge-tree --write-tree` with a merge driver the config names for a file both sides changed | the driver is started; with `-c merge.<name>.driver=` it is not, and git exits 1 |
+| a checkout with a `filter` whose command is set to nothing | the file is written as the store has it. So a keep refuses work that would write such a file |
+| `merge --ff-only` asked through a linked worktree's git folder | that worktree's files, index and branch alone |
+| work that makes `A.TXT` beside a tracked `a.txt`, on a disk that takes them for one name | with an unsaved change in `a.txt`: exit 1, nothing moved. With none: exit 0, and `a.txt` holds the work's text. So a keep asks the disk first |
+| `symbolic-ref HEAD` where `HEAD` names a name for a branch | the branch at the end: git follows it |
+| a keep ended after each of its steps (a test's build ends itself there) | the next keep finishes it or begins again; one commit on the branch |
+
+Still not measured: git 2.38 and 2.39 themselves (the refusal is tested with a made-up git that says an older
+version), Windows and Linux by hand (CI runs the tests there), real LFS, a sparse checkout, and git killed inside
+its own checkout, which no test can time.
+
+## Found while building F45
+
+1. **git moves the person's branch, not core.** The step that writes the checkout is `git merge --ff-only`, and
+   git moves the branch `HEAD` names under its own check of the value it read. Core does not write that ref with
+   an old value of its own: a write of the ref apart from the checkout would leave, at a cut between the two, a
+   branch ahead of its files or files ahead of their branch. Core asks first where the checkout stands, and asks
+   again afterwards whether the branch is at the commit. The run's branch is deleted by core, as itself, under
+   the old value.
+2. **What a keep prints has two names more than the feature's row**: `settings`, the files tools obey, and with
+   `--ask` `fits`. A reason the work does not fit is printed by `--ask` as data, exit 0.
+3. **Stricter than decision 5**: work that removes another repo's entry or `.gitmodules` is refused too.
+4. **A file with a `filter` attribute is refused**, since every filter is switched off and the file would be
+   written other than as the person's filter makes it.
+5. **Work the branch holds already is marked kept and nothing is landed**: the person moved the branch
+   themselves, or their last commit holds exactly what a keep would land.
+6. **A `HEAD` that names a name for a branch** stands on that branch, as git says, and the work lands there.
+7. **When the branch is still at the run's start, the commit that lands is the run's own**, whose author is who
+   the copy found the person to be, or Jellymoon's fallback name. Only the one new commit of decision 4's second
+   case is made under the person's name of that moment, and it is refused when git names none.
 
 ## The slices
 

@@ -13,6 +13,7 @@ mod clean;
 mod git;
 mod gone;
 mod hold;
+mod keep;
 mod record;
 mod work;
 
@@ -29,6 +30,7 @@ pub use clean::clean_copy;
 pub(crate) use clean::{end_copy, moved};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
+pub(crate) use keep::{How, Keep, Note, Touched, Unkept, alone, keep, swept};
 use record::{Record, write};
 use serde::Serialize;
 pub(crate) use work::{Done, Entry, LISTED, Named, TEXT_MAX, Unread, WorkFile, is_id, work_of};

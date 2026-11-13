@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use jellymoon_core::{DayOptions, Outcome, RunOptions};
+use jellymoon_core::{DayOptions, KeepOptions, Outcome, RunOptions};
 use lexopt::prelude::*;
 
 use crate::{Failure, harness_folder, named, own_folder};
@@ -37,6 +37,8 @@ pub enum Command {
     Stop(RunOptions),
     /// `run show`, and the number of the one file to print.
     Show(RunOptions, Option<usize>),
+    /// `run keep`, and whether it only asks and whether files the person's tools obey are kept too.
+    Keep(RunOptions, KeepOptions),
     RemoveHook,
     HookStatus,
     Uninstall,
@@ -174,17 +176,23 @@ fn found(logs: Option<PathBuf>, skip: &str) -> Result<RunOptions, Failure> {
     Ok(RunOptions { logs, harness: named("JELLYMOON_CLAUDE"), skip, ..RunOptions::default() })
 }
 
-/// `run`, `run stop` and `run show`. The logs are read only when no repo is named, to find the one folder of the
-/// wish's project. A file's number is digits and nothing else.
+/// `run`, `run stop`, `run show` and `run keep`. The logs are read only when no repo is named, to find the one
+/// folder of the wish's project. A file's number is digits and nothing else.
 fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut options, mut logs, mut skip) = (RunOptions::default(), None, String::new());
     let (mut wish, mut stop, mut show, mut file, mut first) = (None, false, false, None, true);
+    let mut keep: Option<KeepOptions> = None;
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(word) if first && word == "stop" => stop = true,
             Value(word) if first && word == "show" => show = true,
+            Value(word) if first && word == "keep" => keep = Some(KeepOptions::default()),
+            Long("ask") if keep.is_some() => keep = keep.map(|keep| KeepOptions { ask: true, ..keep }),
+            Long("with-settings") if keep.is_some() => {
+                keep = keep.map(|keep| KeepOptions { with_settings: true, ..keep })
+            }
             Long("file") if show => file = Some(number(&mut parser, "--file takes")?),
             Long("wish") => wish = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("date") => options.day = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
@@ -197,9 +205,10 @@ fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     }
     let wish = wish.ok_or_else(|| Failure::Usage("run takes --wish".to_string()))?;
     let options = RunOptions { wish, day: options.day, repo: options.repo, ..found(logs, &skip)? };
-    Ok(match (stop, show) {
-        (true, _) => Command::Stop(options),
-        (_, true) => Command::Show(options, file),
+    Ok(match (stop, show, keep) {
+        (true, ..) => Command::Stop(options),
+        (_, true, _) => Command::Show(options, file),
+        (_, _, Some(keep)) => Command::Keep(options, keep),
         _ => Command::Run(options),
     })
 }

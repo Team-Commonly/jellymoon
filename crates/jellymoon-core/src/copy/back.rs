@@ -122,7 +122,7 @@ fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
 /// Whether the checkout a git folder is of stands on a branch: its `HEAD` is that branch, or `HEAD` is detached
 /// by a rebase or a bisect that goes back to it, as git says in the files it keeps for those, by the branch's
 /// whole name or its short one. git itself refuses to delete such a branch.
-fn stands(repo: &Repo, folder: &Path, name: &str) -> Result<bool, String> {
+pub(super) fn stands(repo: &Repo, folder: &Path, name: &str) -> Result<bool, String> {
     let mut on = repo.ask(None, &[], &["symbolic-ref", "--quiet", "HEAD"])?.as_deref() == Some(name);
     for file in [&["rebase-merge", "head-name"][..], &["rebase-apply", "head-name"], &["BISECT_START"]] {
         let held = state(folder, file)?;

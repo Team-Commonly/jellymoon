@@ -93,6 +93,12 @@ pub(super) fn obeyed(path: &str) -> bool {
     parts.iter().any(|part| short(part)) || OBEYED.iter().any(named)
 }
 
+/// Whether any folder or file of the path is `.gitmodules` as a disk reads it: the file that names the repos
+/// git fetches into a checkout. Work that touches one is never kept (`keep.rs`).
+pub(super) fn modules(path: &str) -> bool {
+    path.split(['/', '\\']).map(folded).any(|part| part.eq_ignore_ascii_case(".gitmodules"))
+}
+
 #[cfg(test)]
 #[path = "obeyed/tests.rs"]
 mod tests;

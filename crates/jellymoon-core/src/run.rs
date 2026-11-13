@@ -17,6 +17,7 @@ mod cap;
 mod child;
 mod dead;
 mod end;
+mod keep;
 mod left;
 mod never;
 mod obeyed;
@@ -34,6 +35,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub use apart::{Started, run_apart};
 pub(crate) use end::bury;
 use end::{lock_file, settle};
+pub use keep::{KeepOptions, Kept, keep_run};
 pub(crate) use left::tidy;
 use record::Record;
 use serde::{Deserialize, Serialize};
@@ -293,6 +295,8 @@ fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom) -> Re
         start: Some(from.commit),
         end: None,
         work: None,
+        kept: None,
+        onto: None,
     };
     record::write(home, run, &record)?;
     wish::change(home, day, wish, Duration::ZERO, |wish| match &wish.run {

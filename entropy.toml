@@ -209,7 +209,13 @@ max_file_lines = 400
 # megabyte in 256 writes is heard out and ends as itself; one that prints past the size read is ended by its
 # own write), and 19 are the reader that keeps the start of stderr and reads the rest into nothing, the bound
 # on what is kept and the check, when it is built, that the bound holds all that an error's line is made of.
-"crates/jellymoon-core" = 8499
+# F45, a keep, raised core by 1106. `copy/keep.rs`, 400, is the keeps' lock, what is asked of the repo and the
+# checkout, the five steps and the one `git merge`; `copy/keep/fits.rs`, 242, is whether what would land fits the
+# checkout (82 of it tests); `copy/keep/made.rs`, 47, is the merged tree and the one new commit; `run/keep.rs`,
+# 305, is the record of a keep and every word it prints (52 of it tests). `run/show.rs` grew by 41 (its words
+# shared with a keep), `copy/git.rs` by 21 (merge drivers blanked, an answer with its exit code), `run/record.rs`
+# and `tests/shapes.rs` by 17 each, and `run/obeyed.rs`, `copy/work.rs`, `run.rs` and `copy.rs` by 16 between them.
+"crates/jellymoon-core" = 9605
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -277,7 +283,11 @@ max_file_lines = 400
 # only shortens is not cut), `tests/f48/raced.rs` 21 (a run that changed nothing, its name made a name for
 # `main` before the last check; the made-up git known to have been at its step) and `tests/f44/refused.rs` 15
 # (a repo whose config says bare is refused by a look).
-"crates/jellymoon" = 14448
+# F45 raised the binary by 1359, all but 16 of it tests: `tests/f45.rs` is 351 and the six files below it 978
+# (what is refused 265, settings and what a repo could start 245, a keep cut off 188, records 154, what a disk
+# does with names 63, a linked worktree 63), the made-up git gained 14 (a version it says, and a planted hook's
+# part), `src/parse.rs` 9 and `src/main.rs` 7.
+"crates/jellymoon" = 15807
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -305,7 +315,8 @@ max_file_lines = 400
 # included, raised it by 106: 63 are tests (the messages read, and a made-up package built under a triple with a
 # stale program in `debug`); the rest reads the messages and makes a run's world of what they name.
 # F44's step, `show` (`smoke/show.rs`, 50 lines), raised it by 54.
-"crates/xtask" = 1872
+# F45's step, `keep` (`smoke/keep.rs`, 58 lines), raised it by 61.
+"crates/xtask" = 1933
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

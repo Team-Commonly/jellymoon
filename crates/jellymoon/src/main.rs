@@ -27,6 +27,7 @@ const USAGE: &str = "usage:
   jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
   jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]   (stops that run: its copy is kept, and no star is added)
   jellymoon run show --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--file <n>]   (what that run made, read from the repo's store: its files, or one file's text; writes nothing)
+  jellymoon run keep --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--ask] [--with-settings]   (lands that run's work on the branch your checkout stands on, as one commit; --ask only says what it would do; --with-settings keeps files your tools obey too)
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
@@ -121,17 +122,7 @@ fn run() -> Result<String, Failure> {
             }
             Ok(format!("{page}\n"))
         }
-        Command::Uninstall => {
-            // The same two folders, under the same two names, that install.sh puts the pieces in.
-            let app = named("JELLYMOON_APP_DIR").or_else(|| Some(user_home()?.join("Applications")));
-            let home = own_folder()?;
-            let (Some(app), Some(bin)) = (app, bin()) else {
-                return Err(Failure::Run("no home directory: set JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR".to_string()));
-            };
-            let binary = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
-            let options = UninstallOptions { app: app.join("Jellymoon.app"), binary, home };
-            Ok(format!("{}\n", jellymoon_core::uninstall(&options).map_err(failed)?))
-        }
+        Command::Uninstall => uninstall(),
         Command::Rule { stands, over } => {
             Ok(format!("{}\n", jellymoon_core::rule(&home()?, &stands, &over).map_err(failed)?))
         }
@@ -158,6 +149,9 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::stop_run(&home()?, &wish, day.as_deref()).map_err(failed)?))
         }
         Command::Show(options, file) => show(&options, file),
+        Command::Keep(options, how) => {
+            Ok(format!("{}\n", jellymoon_core::keep_run(&home()?, &options, how).map_err(failed)?))
+        }
         Command::HookStatus => {
             let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));
             Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))
@@ -170,6 +164,19 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::clean_copy(&home()?, &run, outcome).map_err(failed)?))
         }
     }
+}
+
+/// Takes the pieces `install.sh` put on this machine away again.
+fn uninstall() -> Result<String, Failure> {
+    // The same two folders, under the same two names, that install.sh puts the pieces in.
+    let app = named("JELLYMOON_APP_DIR").or_else(|| Some(user_home()?.join("Applications")));
+    let home = own_folder()?;
+    let (Some(app), Some(bin)) = (app, bin()) else {
+        return Err(Failure::Run("no home directory: set JELLYMOON_APP_DIR and JELLYMOON_BIN_DIR".to_string()));
+    };
+    let binary = bin.join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
+    let options = UninstallOptions { app: app.join("Jellymoon.app"), binary, home };
+    Ok(format!("{}\n", jellymoon_core::uninstall(&options).map_err(|e| Failure::Run(e.to_string()))?))
 }
 
 /// What a finished run made, or one file of it as text.

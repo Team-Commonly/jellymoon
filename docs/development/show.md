@@ -252,6 +252,7 @@ must say obeyed), and every character above against every name of one and two AS
 | a record that is not core's for this wish, or a finished run whose copy is still there | `the record of run <run> is not one Jellymoon wrote for this wish` |
 | a cancelled run | `run <run> was cancelled by a stop: there is no work of it to show` |
 | a run that failed or was never started | `run <run> did not finish: there is no work of it to show` |
+| a run that asks ([run.md](run.md), "A run that asks") | `run <run> asks a question: there is no work of it to show` |
 | no one folder for the wish | the refusals of `run.md`, "What is refused", for the folder |
 | no `git` on `PATH`, or something in the folder of the home git is started in | `the work of run <run> could not be read: no `git` program was found on PATH, or the folder Jellymoon keeps empty for git (runs/no-hooks) is not an empty folder` |
 | a folder that is not the top of a checkout, a git that failed, ran out of time or answered about the branch at more length than is read, an object that is missing | `the work of run <run> could not be read from the repo: ...` |

@@ -62,6 +62,10 @@ pub struct Wish {
     pub state: WishState,
     /// One short text for each finished job an agent reported for the wish, at most 4.
     pub stars: Vec<String>,
+    /// The question a made wish's run asks (`run/asks.rs`): an agent's text, cleaned at the door, on one line,
+    /// at most 300 characters. It is data to draw as text. Left out of every wish whose run does not ask.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub question: Option<String>,
 }
 
 /// How a wish stands.

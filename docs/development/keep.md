@@ -155,7 +155,7 @@ again and by a question (`tests/f45/cut.rs`).
 | 2 | The record takes `kept` (the commit about to land) and `onto` (the branch's whole name). `work` is not yet written | begins again: the commit the record names is not in the branch's history, so every check is made anew, for the checkout as it is then |
 | 3 | `git merge --ff-only` moves the checkout and the branch to the commit. Then core asks git where the commit is ("A checkout moved just before the step"), and the disk whether a `.gitattributes` the work removes is still there ("A file with a filter") | finds the record's commit in the history of the record's branch and finishes: nothing more is landed |
 | 4 | The record takes `work: kept`, with the branch the commit is on | says the work was kept before, and deletes the run's branch if it is still there |
-| 5 | The run's branch is deleted, as itself and only while it names `end` (`git update-ref --no-deref -d <name> <end>`) and no checkout stands on it. It is left when the work is on no branch | (nothing is left to do) |
+| 5 | The run's branch is deleted, as itself and only while it names `end` (`git update-ref --no-deref -d <name> <end>`), no checkout stands on it and no other ref of the repo is a symbolic ref that names it (the question of [toss.md](toss.md), "A name of the person's that points at the branch"): then `why` ends with `; the run's branch is left, as a name of the person's points at it`, and a later `run keep` deletes it once that name is gone, saying nothing. It is left when the work is on no branch | (nothing is left to do) |
 
 Whether a cut-off keep landed is asked of the record and the refs alone, before the run's branch is looked at:
 a keep that landed is finished whatever became of that branch since, and wherever the person stands by then. The
@@ -464,7 +464,7 @@ instead. `<unchanged>` stands for `the work of run <id> was not kept, and nothin
 
 | When | Words | With `--ask` |
 |---|---|---|
-| the wish is not there, has no run, names another's, or its run is going, was cut off, was cancelled or failed | the words of a look ([show.md](show.md), "Every refusal") with `keep` and `kept` for `show` and `shown`; a run that is going: `run <id> is going: its work can be kept once it has finished` | refused |
+| the wish is not there, has no run, names another's, or its run is going, asks, was cut off, was cancelled or failed | the words of a look ([show.md](show.md), "Every refusal") with `keep` and `kept` for `show` and `shown`; a run that is going: `run <id> is going: its work can be kept once it has finished` | refused |
 | the work was tossed | `the work of run <id> was tossed, so nothing of it was kept` | refused |
 | the run made no commit | `run <id> changed nothing: there is no work of it to keep` | refused |
 | the record names no commits | `the record of run <id> is from before a run's record named its commits: its work is shown, and is not kept by Jellymoon` | refused |

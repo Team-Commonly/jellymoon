@@ -3,7 +3,9 @@
 //! its record in, and a number some scripts take. The record is one line in `starts`, a file per argument, the names
 //! of its variables, the folder it ran in and its whole input. Then it plays the script: a stream shaped like the one
 //! measured from Claude Code 2.1.322 (`docs/adr/0014-a-run-is-started-headless.md`, "Measured"), every line typed
-//! here. Whatever it prints as its own words holds [`MARKER`], which no file and no output of Jellymoon may ever hold.
+//! here: its first line names the session it was started under and lists the tool of a last word when it was given
+//! a schema, and its result's last word is `done` (F51, `fake_agent/asks.rs`). Whatever it prints as its own words
+//! holds [`MARKER`], which no file and no output of Jellymoon may ever hold.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::io::{Read, Write};
@@ -11,6 +13,8 @@ use std::path::Path;
 use std::time::Duration;
 use std::{env, fs, io, process, thread};
 
+#[path = "fake_agent/asks.rs"]
+mod asks;
 #[path = "fake_agent/gate.rs"]
 mod gate;
 
@@ -34,7 +38,7 @@ fn result(subtype: &str, is_error: &str, denials: usize, pad: usize) -> String {
     let denial = r#"{"tool_name":"Write","tool_use_id":"t1","tool_input":{"file_path":"/elsewhere/x"}}"#;
     let denials = vec![denial; denials].join(",");
     format!(
-        r#"{{"type":"result","subtype":"{subtype}","is_error":{is_error},"num_turns":2,"result":"{MARKER} all done","permission_denials":[{denials}],"pad":"{}"}}"#,
+        r#"{{"type":"result","subtype":"{subtype}","is_error":{is_error},"num_turns":2,"result":"{MARKER} all done","permission_denials":[{denials}],"structured_output":{{"state":"done"}},"pad":"{}"}}"#,
         "x".repeat(pad)
     )
 }
@@ -48,8 +52,8 @@ const MODE: &str = r#""acceptEdits""#;
 
 /// The stream's first line as it was measured, but for the three parts given, each as JSON.
 fn init(tools: &str, servers: &str, mode: &str) {
-    let parts = format!(r#""tools":{tools},"mcp_servers":{servers},"permissionMode":{mode}"#);
-    line(&format!(r#"{{"type":"system","subtype":"init","cwd":"{MARKER}",{parts}}}"#));
+    let parts = format!(r#""tools":{},"mcp_servers":{servers},"permissionMode":{mode}"#, asks::listed(tools));
+    line(&format!(r#"{{"type":"system","subtype":"init","cwd":"{MARKER}",{}{parts}}}"#, asks::session()));
 }
 
 fn says() {
@@ -128,8 +132,9 @@ fn garbage() {
 /// Junk lines, then the result, `total` bytes in all.
 fn fill(total: usize) {
     let (last, chunk) = (success() + "\n", 64 * 1024);
-    let first =
-        format!(r#"{{"type":"system","subtype":"init","tools":{TOOLS},"mcp_servers":[],"permissionMode":{MODE}}}"#);
+    let (session, tools) = (asks::session(), asks::listed(TOOLS));
+    let parts = format!(r#"{session}"tools":{tools},"mcp_servers":[],"permissionMode":{MODE}"#);
+    let first = format!(r#"{{"type":"system","subtype":"init",{parts}}}"#);
     line(&first);
     let mut left = total - last.len() - first.len() - 1;
     while left > 0 {
@@ -329,6 +334,7 @@ fn main() {
     let play: Vec<&str> = play.lines().collect();
     let (script, rec, number) = (play[0], Path::new(play[1]), play[2].parse::<usize>().unwrap());
     gate::minded(rec);
+    asks::told(rec);
     if env::args().nth(1).as_deref() != Some("now") {
         again(script, rec, number);
     }
@@ -374,14 +380,10 @@ fn main() {
             fill(number);
             0
         }
-        "old" => {
-            eprintln!("error: unknown option '--restricted'");
-            1
-        }
         "forever" | "deaf" | "slow" => waits(script == "slow", rec),
         "obeys" | "floods" => obeys(script == "obeys" && number == 0, rec),
         "scribble" => scribbles(rec),
-        other => gate::play(other, number, rec),
+        other => asks::play(other, number, rec).unwrap_or_else(|| gate::play(other, number, rec)),
     };
     process::exit(code);
 }

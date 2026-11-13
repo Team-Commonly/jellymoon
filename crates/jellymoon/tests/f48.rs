@@ -158,11 +158,12 @@ fn nothing_else_a_run_writes_changes_and_no_step_of_a_run_in_the_persons_repo_do
     let want = json!({"wish": "m1", "outcome": "completed", "star": STAR, "denied": 0, "why": why});
     assert_eq!(said, want);
 
-    // The record: one line, the fields a run wrote before and then the three, and every earlier value as it was.
+    // The record: one line, the fields a run wrote before, then the three, then the session (F51), and every
+    // earlier value as it was.
     let line = fs::read_to_string(w.jm("runs").join(run).join("run.json")).unwrap();
     assert!(line.ends_with("}\n") && line.matches('\n').count() == 1, "{line:?}");
     let old = ["wish", "day", "started", "outcome", "why", "denied", "skipped", "pid", "mark", "began"];
-    assert_eq!(fields(&line), [&old[..], &NAMED[..]].concat());
+    assert_eq!(fields(&line), [&old[..], &NAMED[..], &["session"]].concat());
     let mut record = made.as_before();
     assert!(record["started"].as_u64().is_some_and(|at| at > 1_600_000_000), "{record}");
     assert!(record["pid"].as_u64().is_some() && (record["mark"].is_string() || cfg!(windows)), "{record}");

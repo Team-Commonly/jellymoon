@@ -23,12 +23,13 @@ impl Copies {
         Self::spelled(folders.map(|folder| folder.to_string_lossy().into_owned()), cfg!(windows))
     }
 
-    /// The copies at `folders`, read as Windows writes a path or as every other system does.
+    /// The copies at `folders`, read as Windows writes a path or as every other system does. A folder with no
+    /// name, a disk's root, is no spelling: every folder of that disk would be a copy.
     pub(super) fn spelled(folders: impl IntoIterator<Item = String>, windows: bool) -> Self {
         let whole = |folder: String| {
             let (root, names) = parts(&folder, windows)?;
             let names: Vec<String> = names.map(str::to_string).collect();
-            (!names.iter().any(|name| name == "..")).then_some((root, names))
+            (!names.is_empty() && !names.iter().any(|name| name == "..")).then_some((root, names))
         };
         Self { spelled: folders.into_iter().filter_map(whole).collect(), windows }
     }
@@ -123,6 +124,18 @@ mod tests {
         let none = copies(&["jm/copies", "/work/ada/../bea/copies", ""], false);
         assert!(!none.hold("jm/copies/r1") && !none.hold("/work/ada/../bea/copies/r1") && !none.hold("/r1"));
         assert!(!Copies::default().hold("/work/ada/jm/copies/r1"));
+    }
+
+    // A `copies` linked to a disk's root resolves to a path with no name. It is no spelling, or every folder of
+    // the disk would be left out; the other spellings still hold.
+    #[test]
+    fn a_spelling_with_no_name_holds_nothing() {
+        for (root, windows) in [("/", false), ("//", false), ("/./", false), (r"\\", true), ("/", true)] {
+            let held = copies(&[root], windows);
+            assert!(!held.hold("/work/alpha") && !held.hold("/r1") && !held.hold(r"\\files\homes"), "{root}");
+            let both = copies(&[root, "/jm/copies"], false);
+            assert!(both.hold("/jm/copies/r1") && !both.hold("/work/alpha"), "{root}");
+        }
     }
 
     #[test]

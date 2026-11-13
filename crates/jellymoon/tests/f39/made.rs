@@ -36,11 +36,11 @@ impl Made {
         fs::write(self.w.jm("runs").join(&self.run).join("run.json"), format!("{record}\n")).unwrap();
     }
 
-    /// The record as a build before F48 wrote it: without the three. Written so, a look goes by the branch's
-    /// last commit and its one parent.
+    /// The record as a build before F48 wrote it: without the three, and without the session F51 added. Written
+    /// so, a look goes by the branch's last commit and its one parent.
     pub fn as_before(&self) -> Value {
         let mut record = self.record();
-        for name in NAMED {
+        for name in NAMED.into_iter().chain(["session"]) {
             record.as_object_mut().unwrap().remove(name);
         }
         record

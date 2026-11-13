@@ -57,6 +57,10 @@ pub struct MadeWish {
     /// How that run stands, in core's fixed words. Left out when no run was started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
+    /// The question that run asks (F51): an agent's text as the door left it, on one line, at most 300
+    /// characters. Only a wish that needs the person and names a run has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub question: Option<String>,
 }
 
 /// The made wishes of one day, `pages/<day>.wishes.json`.
@@ -142,7 +146,10 @@ fn own(at: usize, wish: MadeWish) -> Option<MadeWish> {
         && wish.stars.len() <= STARS_MAX
         && wish.stars.iter().all(star)
         && wish.run.as_deref().is_none_or(copy::is_run_id)
-        && wish.why.as_ref().is_none_or(|why| !why.is_empty() && line(why, WHY_MAX) == *why);
+        && wish.why.as_ref().is_none_or(|why| !why.is_empty() && line(why, WHY_MAX) == *why)
+        && wish.question.as_deref().is_none_or(|question| {
+            run::kept_question(question) && wish.state == WishState::NeedsYou && wish.run.is_some()
+        });
     own.then_some(MadeWish { said, ..wish })
 }
 
@@ -188,7 +195,8 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
     let _lock = behind(home, &day, Duration::ZERO, "this wish was not kept")?;
     let mut wishes = room()?;
     let (id, project) = (format!("m{}", wishes.len() + 1), project.to_string());
-    let wish = MadeWish { id, said, project, state: WishState::Working, stars: Vec::new(), run: None, why: None };
+    let (state, stars) = (WishState::Working, Vec::new());
+    let wish = MadeWish { id, said, project, state, stars, run: None, why: None, question: None };
     wishes.push(wish.clone());
     write(home, &day, wishes)?;
     Ok(Wished { wish, run: None, why: WHY.to_string() })
@@ -269,8 +277,16 @@ fn made_said(home: &Path, day: &str) -> (Vec<Wish>, Vec<String>) {
     let said = run::tidy(home, &kept);
     let drawn = |wish: MadeWish| {
         let wish = run::bury(home, day, wish);
-        let label = line(&wish.said, LABEL_MAX);
-        Wish { label, state: wish.state, id: wish.id, said: wish.said, project: wish.project, stars: wish.stars }
+        let (label, question) = (line(&wish.said, LABEL_MAX), wish.question);
+        Wish {
+            label,
+            state: wish.state,
+            id: wish.id,
+            said: wish.said,
+            project: wish.project,
+            stars: wish.stars,
+            question,
+        }
     };
     (kept.into_iter().map(drawn).collect(), said)
 }
@@ -293,9 +309,13 @@ pub fn with_made(home: &Path, page: PageData) -> PageData {
 }
 
 /// [`with_made`], and what this look has to say that is no part of a page: a line for each copy a killed command
-/// left that was given up, and may have left a branch in its repo (`copy/back.rs`).
+/// left that was given up, and may have left a branch in its repo (`copy/back.rs`). A question the page was
+/// given with a wish stays only when it is what the door leaves of one: no reading writes one.
 pub fn with_made_said(home: &Path, mut page: PageData) -> (PageData, Vec<String>) {
     let (made, said) = made_said(home, &page.day);
+    for wish in &mut page.wishes {
+        wish.question.take_if(|question| !run::kept_question(question));
+    }
     for wish in made {
         if page.wishes.iter().all(|on| on.id != wish.id) {
             page.wishes.push(wish);
@@ -305,95 +325,4 @@ pub fn with_made_said(home: &Path, mut page: PageData) -> (PageData, Vec<String>
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::PageRead;
-
-    // `jellymoon page` prints a merged page. One that is merged again must not hold a made wish twice.
-    #[test]
-    fn a_page_merged_twice_holds_each_made_wish_once() -> Result<(), Box<dyn std::error::Error>> {
-        let home = tempfile::tempdir()?;
-        wish(home.path(), Some("2026-03-10"), "ship the changelog", "alpha")?;
-        let read = PageRead { turns: 0, projects: Vec::new() };
-        let page = PageData { day: "2026-03-10".to_string(), wishes: Vec::new(), clashes: Vec::new(), read };
-        let once = with_made(home.path(), page);
-        assert_eq!(once.wishes.iter().map(|wish| wish.id.as_str()).collect::<Vec<_>>(), ["m1"]);
-        assert_eq!(with_made(home.path(), once.clone()), once);
-        Ok(())
-    }
-
-    /// A day's logs under `dir`: one thing typed in each of `folders`, and the read of them. It is typed at noon
-    /// of the day in this system's zone, which is the zone the lookup reads in.
-    fn typed_in(dir: &Path, folders: &[PathBuf], skip: &[&str]) -> DayOptions {
-        let noon = jiff::civil::date(2026, 3, 10).at(12, 0, 0, 0).to_zoned(jiff::tz::TimeZone::system()).unwrap();
-        let at = noon.timestamp().to_string();
-        let line = |folder: &PathBuf| {
-            serde_json::json!({"type": "user", "timestamp": at, "cwd": folder,
-                "sessionId": "s", "origin": {"kind": "human"}, "message": {"role": "user", "content": "hello"}})
-            .to_string()
-        };
-        let logs = dir.join("logs");
-        std::fs::create_dir_all(logs.join("p")).unwrap();
-        let lines: Vec<String> = folders.iter().map(line).collect();
-        std::fs::write(logs.join("p").join("s.jsonl"), lines.join("\n") + "\n").unwrap();
-        let skip = skip.iter().map(|name| name.to_string()).collect();
-        DayOptions { logs, date: Some("2026-03-10".to_string()), skip, home: Some(dir.join("jm")) }
-    }
-
-    #[test]
-    fn a_wish_is_offered_for_a_folder_typed_in_that_day_that_no_name_switches_off()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let dir = tempfile::tempdir()?;
-        let (home, work) = (dir.path().join("jm"), dir.path().join("work"));
-        let long = "p".repeat(101);
-        let names = ["alpha", "..", ".", "new\nline", &long, "a/b", "", "beta", "Beta", "gamma", "delta"];
-        let names = names.map(str::to_string);
-        // Something was typed in a folder of every name but the last.
-        let folders: Vec<PathBuf> = names.iter().take(10).map(|name| work.join(name)).collect();
-        let all = |skip: &[&str]| wishable(&typed_in(dir.path(), &folders, skip), &names);
-        assert_eq!(all(&[]), ["alpha", "beta", "Beta", "gamma"], "a name `wish` keeps, typed in that day");
-        assert_eq!(all(&[" eta/ ", "delta"]), ["alpha", "gamma"], "matched as the reader matches a folder");
-        // A name above the folder switches it off: the reader's rule is asked of the folder's path.
-        assert_eq!(all(&["work"]), [""; 0]);
-        let above = format!("work{}alph", std::path::MAIN_SEPARATOR);
-        assert_eq!(all(&[&above]), ["beta", "Beta", "gamma"]);
-        std::fs::create_dir_all(&home)?;
-        std::fs::write(home.join("skip.txt"), "gamma\n")?;
-        assert_eq!(all(&["beta"]), ["alpha", "Beta"]);
-
-        // A wish from a page is kept only for a project that is offered then.
-        let read = typed_in(dir.path(), &folders, &["beta"]);
-        for refused in ["beta", "gamma", "delta", "..", "jm"] {
-            let why = wish_offered(&read, "ship the changelog", refused).unwrap_err().to_string();
-            assert!(why.ends_with("was typed in on 2026-03-10, so this wish was not kept"), "{refused}: {why}");
-        }
-        assert!(!file(&home, "2026-03-10").exists(), "a refusal wrote something");
-        assert_eq!(wish_offered(&read, "ship the changelog", "Beta")?.wish.project, "Beta");
-        // None of these wishes names a run, so none has one going.
-        assert_eq!(going(&home, "2026-03-10"), [""; 0]);
-
-        std::fs::write(home.join("skip.txt"), b"gamma\n\xff\n")?;
-        assert_eq!(all(&[]), [""; 0], "a list that cannot be read switches every folder off");
-        std::fs::remove_file(home.join("skip.txt"))?;
-        std::fs::remove_dir_all(dir.path().join("logs"))?;
-        assert_eq!(wishable(&read, &names), [""; 0], "no logs, no folder");
-        Ok(())
-    }
-
-    #[test]
-    fn a_folder_counts_only_as_a_full_path_and_is_matched_only_by_its_last_name() {
-        let dir = tempfile::tempdir().unwrap();
-        let folders = [dir.path().join("work").join("alpha"), PathBuf::from("loose").join("beta")];
-        let names = ["alpha", "work", "beta", "loose"].map(str::to_string);
-        assert_eq!(wishable(&typed_in(dir.path(), &folders, &[]), &names), ["alpha"]);
-    }
-
-    #[test]
-    fn the_start_of_a_wish_s_words_is_cleaned_before_it_is_cut() {
-        let key = format!("sk{}{}", "-ant-", "Zx9Yw8Vu7T".repeat(3));
-        let start = wish_start(&format!("use {key} for the uploader, then retry twice and say so"), 40);
-        assert!(start.starts_with("use [redacted] for the uploader") && !start.contains("Zx9"), "{start}");
-        assert!(start.chars().count() <= 40, "{start}");
-        assert_eq!(wish_start("x\u{1b}[31m\u{202e}evil ok", 40), "xevil ok");
-    }
-}
+mod tests;

@@ -6,7 +6,7 @@
 use super::{At, Keep, SAID_MAX, Unkept, before, checkout, line, stood_on, yes};
 use crate::copy::git::Git;
 use crate::copy::work::{REF_MAX, parent, tip};
-use crate::copy::{Places, Unread, branch};
+use crate::copy::{Places, Unread, back, branch};
 
 /// Leaves out of git's `--branches` every branch named as a run's is, as `keep::runs` reads a name: the start of
 /// the short name in either case of each letter, and anything after it.
@@ -28,6 +28,8 @@ pub(crate) enum Left {
     Stood,
     /// It is a name for another branch.
     Symbolic,
+    /// Another name of the repo's is a name for it, and would be left naming nothing.
+    Pointed,
     /// It is not at the commit the record names, or that commit is not one a run's copy ended as.
     Moved,
     /// It was at that commit when asked, and git would not delete it as such a moment later.
@@ -59,7 +61,8 @@ impl From<Unread> for Untossed {
 /// Deletes the run's branch while it is the run's own name at `of.named.end`, and says what became of it. The
 /// caller holds the keeps' lock (`alone`). For work that waits (`strict`) every check comes first and any that
 /// fails is a refusal; then `note` writes the record, and false from it ends the toss; only then is the branch
-/// deleted. Without `strict` the record says tossed already: nothing is refused but a repo that cannot be asked,
+/// deleted. A branch that a name of the person's points at is no refusal: the toss is written and the branch is
+/// left. Without `strict` the record says tossed already: nothing is refused but a repo that cannot be asked,
 /// and a branch that is not the run's own at that commit is left.
 pub(crate) fn toss(of: &Keep, strict: bool, note: &mut dyn FnMut() -> bool) -> Result<Branch, Untossed> {
     let git = Git::find(&Places::of(of.home).runs, true).map_err(|_| Unread::Home)?;
@@ -80,8 +83,8 @@ pub(crate) fn toss(of: &Keep, strict: bool, note: &mut dyn FnMut() -> bool) -> R
             Err(Branch::Left(Left::Stood)) => return Err(Untossed::Stood),
             Err(Branch::Left(Left::Symbolic)) => return Err(Unread::Symbolic.into()),
             Err(Branch::Left(Left::Moved)) => return Err(Unread::Moved.into()),
-            Err(Branch::Left(_)) => return Err(Unread::Repo.into()),
-            Err(_) | Ok(()) => {}
+            Err(Branch::Left(Left::Pointed) | Branch::Gone) | Ok(()) => {}
+            Err(_) => return Err(Unread::Repo.into()),
         }
         if !note() {
             return Err(Untossed::Unwritten);
@@ -126,8 +129,9 @@ fn landed(at: &At) -> Result<bool, Unread> {
 }
 
 /// Whether the branch is there to be deleted: the run's own name, at the record's commit, which is the run's
-/// start or the one commit a run's copy ends as on top of it, with no checkout standing on it. Err says what it
-/// is instead. What the record names is compared with what git prints, and git is given what it printed.
+/// start or the one commit a run's copy ends as on top of it, with no checkout standing on it and no other name
+/// of the repo's that is a name for it (`back::pointed_at`, the question a take-back asks). Err says what it is
+/// instead. What the record names is compared with what git prints, and git is given what it printed.
 fn found(at: &At) -> Result<(), Branch> {
     let (start, end) = (at.of.named.start, at.of.named.end);
     match tip(at.repo, at.of.run) {
@@ -144,10 +148,11 @@ fn found(at: &At) -> Result<(), Branch> {
             _ => return Err(Branch::Left(Left::Moved)),
         }
     }
-    match stood_on(at) {
-        Ok(false) => Ok(()),
-        Ok(true) => Err(Branch::Left(Left::Stood)),
-        Err(_) => Err(Branch::Left(Left::Unasked)),
+    match (stood_on(at), back::pointed_at(at.repo, &at.name)) {
+        (Ok(true), _) => Err(Branch::Left(Left::Stood)),
+        (Ok(false), Ok(true)) => Err(Branch::Left(Left::Pointed)),
+        (Ok(false), Ok(false)) => Ok(()),
+        _ => Err(Branch::Left(Left::Unasked)),
     }
 }
 

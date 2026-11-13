@@ -49,6 +49,10 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   unchanged ([reader.md](reader.md)); a session log's turn is still cleaned once.
 - **The id.** `m1` to `m8`, by the wish's place in the file. A reading's ids are `w1` to `w8`, which core writes
   itself whatever the model called them, so the two never meet.
+- **A question.** The wish of a run that asks carries `question`, the run's question as the door left it
+  ([run.md](run.md), "A run that asks"; example `wished-asks.json`). No other wish has the name. Made wishes
+  are refused as not that day's when a wish has a question the door would change, an empty one, or one on a wish
+  that is not `needs_you` or names no run. A toss of the run takes the question away with the wish's state.
 - **The write.** Behind the day's lock, `pages/<day>.ruled.lock`, which is the tap's
   ([delivery.md](delivery.md), "A tap on a clash"): one change to a day at a time. The file is written beside its
   place and moved there, 0600 in a folder set to 0700. What Windows does differently when two changes meet is in
@@ -87,7 +91,8 @@ characters, or still changing after the eighth cleaning) is not used at all, as 
 `jellymoon_core::with_made` puts a day's made wishes after the reading's when a page is drawn. `jellymoon page`
 prints them so, and the app draws them so ([app.md](app.md)): on the kept page, on a page just read, and, before a
 day has been read or when it could not be, under the one note that says so. A made wish's label is the start of its
-own words. The kept page itself never holds a made wish.
+own words. The kept page itself never holds a made wish. A made wish's `question` is on the page's wish too
+(example `page-asks.json`); one the door would change is left out there.
 
 ## Not covered yet
 

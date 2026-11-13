@@ -3,8 +3,10 @@
 //! harness there with a fixed command line and the wish's kept words on its input, and waits. A run has finished
 //! only when its stream starts as a run's does and gives one result, which says success and no error, with nothing
 //! unread after it, and the harness exited with 0 (`stream.rs`, `end.rs`); then its work is one commit on its
-//! branch and the wish has one more star. Every other end is a failed run: the copy is kept, no star. A run the
-//! person stopped with [`stop_run`] is a cancelled one: the copy is kept, no star (`stop.rs`).
+//! branch and the wish has one more star. A run whose last word is `asks`, with a question that passes the door,
+//! asks: its copy is left as it is, with nothing committed, and the wish carries the question (`asks.rs`). Every
+//! other end is a failed run: the copy is kept, no star. A run the person stopped with [`stop_run`] is a cancelled
+//! one: the copy is kept, no star (`stop.rs`).
 //!
 //! A made wish gets one run. Its id and how it stands are kept with the wish, in fixed words; the run's own record
 //! is `runs/<id>/run.json`. While `jellymoon run` lives it holds the system's lock on `runs/<id>/run.lock`, which
@@ -13,6 +15,7 @@
 //! still the same process, and writes the run down as failed ([`bury`]).
 
 mod apart;
+mod asks;
 mod cap;
 mod child;
 mod dead;
@@ -31,9 +34,11 @@ mod toss;
 use std::fmt;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub use apart::{Started, run_apart};
+pub(crate) use asks::kept as kept_question;
 pub(crate) use end::bury;
 use end::{lock_file, settle};
 pub use keep::{KeepOptions, Kept, keep_run};
@@ -50,8 +55,10 @@ use crate::copy::{self, MadeFrom};
 use crate::wish;
 use crate::{Error, WishState, find};
 
-/// The command line of a run, as measured on Claude Code 2.1.322 (ADR 0014, "Measured"): no shell, no web, no MCP
-/// server, no question asked, edits inside the folder it is started in, no session kept. [`PROMPT`] follows it.
+/// The command line of a run, as measured on Claude Code 2.1.322 (ADR 0014, "Measured") and 2.1.323 (ADR 0018,
+/// "Measured"): no shell, no web, no MCP server, no permission asked, edits inside the folder it is started in.
+/// After these come `--session-id` with the id core made for the run, under which the harness keeps the session
+/// in its own store, and `--json-schema` with the schema of its last word (`asks.rs`); then [`AFTER`] and [`PROMPT`].
 const ARGS: &[&str] = &[
     "-p",
     "--restricted",
@@ -66,15 +73,13 @@ const ARGS: &[&str] = &[
     "Write",
     "Glob",
     "Grep",
-    "--no-session-persistence",
-    "--output-format",
-    "stream-json",
-    "--verbose",
-    "--append-system-prompt",
 ];
+const AFTER: &[&str] = &["--output-format", "stream-json", "--verbose", "--append-system-prompt"];
 /// What is added to the harness's own system prompt: fixed words, so nothing of a wish or a repo can change them.
 const PROMPT: &str = "You are working in a copy of a repo that was made for this one wish. You can read and edit \
-                      files in this folder only. You cannot run commands. Make the change the wish asks for, then stop.";
+                      files in this folder only. You cannot run commands. Make the change the wish asks for, then \
+                      stop with the state `done`. If you cannot make it without an answer that only the person can \
+                      give, stop with the state `asks` and one question for them, in plain words.";
 
 /// How long a run may take. One still going then is stopped, and has failed. A test's build reads a shorter one.
 const LIMIT: Duration = Duration::from_secs(30 * 60);
@@ -111,9 +116,12 @@ pub enum RunOutcome {
     Cancelled,
     /// No run was started and nothing was made: there is no harness, or it is too old.
     NotStarted,
+    /// The run asks a question: its copy is left as it is, nothing is committed, and the wish needs the person.
+    Asks,
 }
 
-/// What `jellymoon run` and `jellymoon run stop` print. No word here is the agent's, a session log's or the wish's.
+/// What `jellymoon run` and `jellymoon run stop` print. No word here is a session log's or the wish's, and only
+/// `question` is the agent's.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Ran {
     /// The run's id. None when no run was started.
@@ -126,6 +134,10 @@ pub struct Ran {
     pub denied: usize,
     /// How the run stands, in fixed words.
     pub why: String,
+    /// The question of a run that asks: the agent's text, cleaned at the door, on one line, at most 300
+    /// characters. It is data to draw as text. Left out of every other run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub question: Option<String>,
 }
 
 impl fmt::Display for Ran {
@@ -165,6 +177,11 @@ fn failed(run: &str, kind: &str) -> String {
 
 fn cancelled(run: &str) -> String {
     format!("run {run} was cancelled by a stop{COPY_KEPT}")
+}
+
+/// The line of a run that asks. It says what holds of its copy and its branch for as long as it asks.
+fn asking(run: &str) -> String {
+    format!("run {run} asks a question: its copy is kept as it is, and nothing was committed")
 }
 
 fn no_wish(day: &str) -> Error {
@@ -216,7 +233,8 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
         return Err(had(&wish.id, run));
     }
     let not_started = |why: String| {
-        Ok(Ran { run: None, wish: wish.id.clone(), outcome: RunOutcome::NotStarted, star: None, denied: 0, why })
+        let (run, outcome) = (None, RunOutcome::NotStarted);
+        Ok(Ran { run, wish: wish.id.clone(), outcome, star: None, denied: 0, why, question: None })
     };
     let harness = match find::named_or_found(options.harness.as_deref()) {
         Ok(harness) => harness,
@@ -244,10 +262,11 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     })?;
     // The copy's start lock is held until this command ends: what a killed command left is known by it.
     let (copy, held, from) = made;
-    // Where the run started, kept as git said it: the run's branch must still be there at the run's end.
-    let began_at = from.commit.clone();
+    // Where the run started, kept as git said it: the run's branch must still be there at the run's end. And
+    // the session's id, which is core's: made here, and written in the record before the harness is started.
+    let (began_at, session) = (from.commit.clone(), asks::fresh());
     // The lock is taken before the wish names the run, so a wish never names a run that nothing holds.
-    let taken = start(home, (&day, &wish.id), &copy.run, from);
+    let taken = start(home, (&day, &wish.id), &copy.run, from, &session);
     let lock = match taken {
         Ok(lock) => lock,
         Err(e) => {
@@ -256,19 +275,19 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
             return Err(e);
         }
     };
-    command.current_dir(&copy.folder).args(ARGS).arg(PROMPT);
+    let expect = lined(&mut command, &copy.folder, session);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
     let (told, stop) = (|pid| record::child(home, &copy.run, pid), || stop::asked(home, &copy.run));
     let began = || record::began(home, &copy.run);
-    let ended = child::run(command, format!("{}\n", wish.said), limit, told, began, stop);
+    let ended = child::run(command, format!("{}\n", wish.said), limit, expect, told, began, stop);
     let never = match &ended {
-        Err(_) => Some(never::UNSTARTABLE),
-        Ok(ended) => ended.old.then_some(never::OLD),
+        Err(_) => Some(never::UNSTARTABLE.to_string()),
+        Ok(ended) => ended.old.map(never::old),
     };
     let ended = ended.map_err(|e| refused(format!("{}: {e}", never::UNSTARTABLE)));
     if let Some(why) = never {
-        never::undo(home, (&day, &wish.id), &copy.run, why, (lock, held))?;
-        return ended.and_then(|_| not_started(never::OLD.to_string()));
+        never::undo(home, (&day, &wish.id), &copy.run, &why, (lock, held))?;
+        return ended.and_then(|_| not_started(why));
     }
     let ran = ended.and_then(|ended| settle(home, (&day, &wish.id), (&copy, &began_at), &ended, limit));
     // The start lock goes first: while the run's own is held, nothing takes this run for one left behind.
@@ -279,21 +298,29 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     ran
 }
 
+/// Gives the harness a run's whole command line, in the copy's folder, and returns what its stream must then say.
+fn lined(command: &mut Command, folder: &str, session: String) -> stream::Expect {
+    command.current_dir(folder).args(ARGS).args(["--session-id", &session, "--json-schema", asks::SCHEMA]);
+    command.args(AFTER).arg(PROMPT);
+    stream::Expect { session, schema: true }
+}
+
 /// Takes the run's lock, when fewer than three runs go, writes its record, and has the wish name the run, behind
 /// the day's lock: all of it behind the lock the runs are counted behind (`cap.rs`). A wish that names a run
 /// already has had its run: this one is refused, and before it is counted as a run.
-fn start(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom) -> Result<File, Error> {
+fn start(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, session: &str) -> Result<File, Error> {
     let free = || match wish::kept_of(home, day)?.into_iter().find(|kept| kept.id == wish).and_then(|kept| kept.run) {
         Some(first) => Err(had(wish, &first)),
         None => Ok(()),
     };
-    cap::claim(home, run, free, || name(home, (day, wish), run, from))
+    cap::claim(home, run, free, || name(home, (day, wish), run, from, session))
 }
 
 /// Writes the run's record and has the wish name the run, with the run's lock held. The record names the repo and
 /// the commit the copy was made from, from its first writing: before the harness is started, and so long before
-/// the copy's own record, which names the repo too, is removed with a finished run's copy.
-fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom) -> Result<(), Error> {
+/// the copy's own record, which names the repo too, is removed with a finished run's copy. And it names the
+/// session the harness is then started under (ADR 0018, decision 6).
+fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, session: &str) -> Result<(), Error> {
     let started = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
     let record = Record {
         wish: wish.to_string(),
@@ -313,12 +340,14 @@ fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom) -> Re
         kept: None,
         onto: None,
         tossed: None,
+        session: Some(session.to_string()),
+        question: None,
     };
     record::write(home, run, &record)?;
     wish::change(home, day, wish, Duration::ZERO, |wish| match &wish.run {
         Some(first) => Err(had(&wish.id, first)),
         None => {
-            (wish.run, wish.why) = (Some(run.to_string()), Some(going(run)));
+            (wish.run, wish.why, wish.question) = (Some(run.to_string()), Some(going(run)), None);
             // A wish that an earlier run was never started for needed the person (`never.rs`): it is at work now.
             if wish.state == WishState::NeedsYou {
                 wish.state = WishState::Working;
@@ -340,8 +369,9 @@ mod tests {
         let run = "r0123456789abcdef";
         let long = failed(run, "it did not start with the tools, servers and permission mode of a run");
         let texts = [going(run), cut(run), long, finished(run, true), finished(run, false), STAR.to_string()];
-        let never = [never::OLD, never::UNSTARTABLE, never::UNTOLD].map(str::to_string);
-        for text in texts.into_iter().chain([cancelled(run), cut_late(run)]).chain(never) {
+        let never = [never::UNSTARTABLE.to_string(), never::UNTOLD.to_string(), never::old("--json-schema")];
+        let last = asks::KINDS.map(|kind| failed(run, kind)).into_iter().chain([asking(run)]);
+        for text in texts.into_iter().chain([cancelled(run), cut_late(run)]).chain(never).chain(last) {
             assert_eq!(line(&text, 200), text);
             assert!(copy::is_run_id(run) && text.chars().count() <= 200);
         }

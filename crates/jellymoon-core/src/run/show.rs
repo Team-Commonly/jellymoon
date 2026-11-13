@@ -156,7 +156,7 @@ pub(super) fn not_cores(run: &str) -> Error {
 }
 
 /// Finds the wish's run. Refused: a wish that is not there, one with no run or another wish's, a run that is
-/// going or did not complete, and a record that is not core's.
+/// going, asks or did not complete, and a record that is not core's.
 pub(super) fn found(home: &Path, options: &RunOptions, asked: &Asked) -> Result<Found, Error> {
     let (to, done) = (asked.to, asked.done);
     let day = wish::day_of(options.day.as_deref())?;
@@ -182,6 +182,9 @@ pub(super) fn found(home: &Path, options: &RunOptions, asked: &Asked) -> Result<
     match outcome {
         RunOutcome::Completed => Ok(Found { day, made, run, record, why }),
         RunOutcome::Cancelled => Err(no(&format!("was cancelled by a stop: there is no work of it to {to}"))),
+        RunOutcome::Asks if record.work.is_none() => {
+            Err(no(&format!("asks a question: there is no work of it to {to}")))
+        }
         _ if why == cut(&run) || why == cut_late(&run) => Err(no(&cut_off)),
         _ => Err(no(&format!("did not finish: there is no work of it to {to}"))),
     }

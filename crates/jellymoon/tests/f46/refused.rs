@@ -5,6 +5,7 @@ use std::fs;
 
 use serde_json::{Value, json};
 
+use super::unfinished::CUT_OFF;
 use super::{DAY, DELETED, Made, WORK, ended, finished, printed, refused, said, tossed, wait_for, world};
 
 const STOOD: &str = "a checkout stands on the branch of run {run}: its work was not tossed, and nothing was changed";
@@ -232,4 +233,20 @@ fn a_command_line_that_is_not_a_toss_s_is_refused_as_usage() {
     }
     assert_eq!(made.w.run(&["run", "toss", "--date", DAY]).code, 2, "a toss takes a wish");
     assert!(before == made.held());
+}
+
+// A toss clears a keep's `kept` and `onto` as it writes `tossed`, so a record that says tossed and holds them is
+// none of core's. Before that: a branch put back by hand, as `toss.md` says a toss is undone, goes at the next toss.
+#[test]
+fn a_record_that_says_tossed_and_still_holds_a_keeps_words_is_not_one_jellymoon_wrote() {
+    let made = finished();
+    let end = made.end();
+    then_tossed(&made);
+    made.git(&["update-ref", &made.branch(), &end]);
+    tossed(&made, &made.toss(), true, json!(end), &format!("{CUT_OFF}: {DELETED}"));
+    made.git(&["update-ref", &made.branch(), &end]);
+    let mut record = made.record();
+    (record["kept"], record["onto"]) = (json!(end), json!("refs/heads/main"));
+    made.write(&record);
+    no(&made, NOT_CORES);
 }

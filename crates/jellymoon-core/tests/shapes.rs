@@ -29,11 +29,17 @@ fn a_reader_day_round_trips_byte_for_byte() {
 
 #[test]
 fn page_data_round_trips_byte_for_byte() {
-    for name in ["page.json", "page-empty.json"] {
+    for name in ["page.json", "page-empty.json", "page-asks.json"] {
         let example = fixture(name);
         let page: PageData = serde_json::from_str(&example).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(format!("{page}\n"), example, "{name}");
     }
+    // The wish of a run that asks carries the question, and no other wish has the name at all.
+    let asks: PageData = serde_json::from_str(&fixture("page-asks.json")).unwrap();
+    assert_eq!(asks.wishes[0].question.as_deref(), Some("Which of the two uploaders did you mean?"));
+    assert!(!fixture("page.json").contains("question"));
+    let odd = fixture("page-asks.json").replace("\"question\":\"", "\"question\":[\"");
+    assert!(serde_json::from_str::<PageData>(&odd.replace("mean?\"", "mean?\"]")).is_err(), "a question is text");
     let page: PageData = serde_json::from_str(&fixture("page.json")).unwrap();
     let states: Vec<WishState> = page.wishes.iter().map(|wish| wish.state).collect();
     assert_eq!(states, [WishState::LetGo, WishState::Done, WishState::NeedsYou, WishState::Working]);
@@ -63,6 +69,12 @@ fn what_a_made_wish_prints_round_trips_byte_for_byte() {
     assert_eq!(wished.run.as_deref(), Some("r0123456789abcdef"));
     let more = example.replace("\"stars\":[]", "\"stars\":[],\"label\":\"x\"");
     assert!(serde_json::from_str::<Wished>(&more).is_err(), "a made wish with a field nobody knows is refused");
+    // The wish of a run that asks is printed with the question, after everything a wish had before.
+    let example = fixture("wished-asks.json");
+    let wished: Wished = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{wished}\n"), example);
+    let question = wished.wish.question.as_deref();
+    assert_eq!((wished.wish.state, question), (WishState::NeedsYou, Some("Which of the two uploaders did you mean?")));
 }
 
 #[test]
@@ -72,12 +84,16 @@ fn what_a_run_prints_round_trips_byte_for_byte_for_each_outcome() {
         ("ran-failed.json", RunOutcome::Failed, true, false),
         ("ran-cancelled.json", RunOutcome::Cancelled, true, false),
         ("ran-not-started.json", RunOutcome::NotStarted, false, false),
+        ("ran-asks.json", RunOutcome::Asks, true, false),
     ];
     for (name, outcome, started, star) in outcomes {
         let example = fixture(name);
         let ran: Ran = serde_json::from_str(&example).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(format!("{ran}\n"), example, "{name}");
         assert_eq!((ran.outcome, ran.run.is_some(), ran.star.is_some()), (outcome, started, star), "{name}");
+        // Only a run that asks prints a question, and no other line has the name.
+        assert_eq!(ran.question.is_some(), outcome == RunOutcome::Asks, "{name}");
+        assert_eq!(example.contains("question"), outcome == RunOutcome::Asks, "{name}");
     }
 }
 

@@ -12,7 +12,9 @@ use std::time::{Duration, Instant};
 
 use super::child::{End, Ended};
 use super::record::Record;
-use super::{Ran, RunOutcome, STAR, cancelled, cut, cut_late, dead, failed, finished, left, never, record, refused};
+use super::{
+    Ran, RunOutcome, STAR, asking, asks, cancelled, cut, cut_late, dead, failed, finished, left, never, record, refused,
+};
 use crate::busy::{self, or_test};
 use crate::copy::{self, Outcome, RunCopy};
 use crate::reading::STARS_MAX;
@@ -70,10 +72,14 @@ pub(super) fn held(home: &Path, run: &str) -> bool {
     plain && File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_err())
 }
 
+/// An end as a wish is told it: the outcome, core's line for it, and the question of a run that asks.
+type Told = (RunOutcome, String, Option<String>);
+
 /// The end in a run's record, when it is one core wrote for this wish, by a run or by the look that found the
 /// run cut off: the words are made here again, and the record's are used only to choose among them. A record is
 /// a file, and anyone who can write the home can write it: a finished run is believed only when its copy is gone
-/// as a finished run's is, with its work on its branch.
+/// as a finished run's is, with its work on its branch, and a run that asks only with a question the door left
+/// and a session id of core's (`Record::asked`).
 pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> Option<(RunOutcome, String)> {
     let (outcome, said) = (record.outcome?, record.why.as_deref()?);
     if record.wish != wish || record.day != day {
@@ -85,9 +91,11 @@ pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &R
             let seconds = said.split(" seconds)").next().and_then(|to| to.rsplit(' ').next()?.parse::<u64>().ok());
             let limit = seconds.map(|seconds| failed(run, &at_limit(Duration::from_secs(seconds))));
             // And the two lines of a run that was cut off, which a look writes ([`written`]) and no run does.
-            KINDS.iter().map(|kind| failed(run, kind)).chain(limit).chain([cut(run), cut_late(run)]).collect()
+            let kinds = KINDS.iter().chain(&asks::KINDS).map(|kind| failed(run, kind));
+            kinds.chain(limit).chain([cut(run), cut_late(run)]).collect()
         }
         RunOutcome::Cancelled => vec![cancelled(run)],
+        RunOutcome::Asks if record.asked().is_some() => vec![asking(run)],
         _ => Vec::new(),
     };
     ours.into_iter().find(|ours| ours == said && line(ours, 200) == *ours).map(|why| (outcome, why))
@@ -164,14 +172,18 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
 }
 
 /// Writes down a run that nothing holds, whose record was read as `record`: the end that record has, when it is
-/// believed, and else that the run was cut off.
+/// believed, and else that the run was cut off. A run that asks is neither: its wish is given the question of
+/// the same record its end was believed of, and its copy is left as it is.
 fn written(home: &Path, day: &str, wish: MadeWish, run: &str, record: Option<&Record>) -> MadeWish {
-    let end = |record: Option<&Record>| record.and_then(|record| recorded(home, day, &wish.id, run, record));
+    let end = |record: Option<&Record>| -> Option<Told> {
+        let (outcome, why) = recorded(home, day, &wish.id, run, record?)?;
+        Some((outcome, why, record?.asked().map(str::to_string)))
+    };
     let again = || end(record::kept(home, run).as_ref());
     // A copy that is gone is not said to be kept: its work was committed, and the run cut off after that.
-    let cut_off = || (RunOutcome::Failed, if copy::is_gone(home, run) { cut_late(run) } else { cut(run) });
-    let drawn = |mut wish: MadeWish, (outcome, why): &(RunOutcome, String)| {
-        apply(&mut wish, *outcome, why);
+    let cut_off = || (RunOutcome::Failed, if copy::is_gone(home, run) { cut_late(run) } else { cut(run) }, None);
+    let drawn = |mut wish: MadeWish, (outcome, why, question): &Told| {
+        apply(&mut wish, *outcome, why, question.as_deref());
         wish
     };
     let first = end(record);
@@ -179,8 +191,8 @@ fn written(home: &Path, day: &str, wish: MadeWish, run: &str, record: Option<&Re
     // the wish is drawn as it will be kept, and the next look, which finds it as this one did, does the rest.
     // An end that is believed and is not a finished run's can have been written by hand too, over a run whose
     // own command never marked its copy, so its copy is marked as a cut off run's is.
-    let finished = first.as_ref().is_some_and(|(outcome, _)| *outcome == RunOutcome::Completed);
-    if !finished && !mark(home, run, soon()) {
+    let unmarked = |(outcome, ..): &Told| matches!(outcome, RunOutcome::Completed | RunOutcome::Asks);
+    if !first.as_ref().is_some_and(unmarked) && !mark(home, run, soon()) {
         return drawn(wish, &first.unwrap_or_else(cut_off));
     }
     // A run whose lock could not be asked about may have been going still, and have ended since its record was
@@ -192,18 +204,41 @@ fn written(home: &Path, day: &str, wish: MadeWish, run: &str, record: Option<&Re
         thread::sleep(Duration::from_millis(10));
         ended = again();
     }
-    let (outcome, why) = ended.clone().unwrap_or_else(cut_off);
-    let mut told = tell(home, day, &wish.id, run, outcome, &why, Duration::ZERO);
+    let (outcome, why, question) = ended.clone().unwrap_or_else(cut_off);
+    let mut told = tell(home, day, &wish.id, run, (outcome, &why, question.as_deref()), Duration::ZERO);
     if ended.is_none() {
-        told = told.and_then(|told| note(home, run, outcome, (0, 0), &why, None).map(|()| told));
+        told = told.and_then(|told| note(home, run, outcome, (0, 0), &why, None, None).map(|()| told));
     }
-    told.unwrap_or_else(|_| drawn(wish, &(outcome, why)))
+    told.unwrap_or_else(|_| drawn(wish, &(outcome, why, question)))
+}
+
+/// What a child that is gone comes to, before anything is committed: None, it would finish; a question, as it
+/// is kept, it asks. Err is why it did neither, and is empty for a child that was stopped for the person. The
+/// last word is asked only of a stream that says success in every other part, from a harness that exited with 0.
+fn word(ended: &Ended, limit: Duration) -> Result<Option<String>, String> {
+    let read = &ended.read;
+    let kind = match (ended.end, read.results, read.fine, read.unread, ended.exit_0) {
+        (End::Stopped, ..) => "",
+        (End::Limit, ..) => return Err(at_limit(limit)),
+        (End::Over, ..) => KINDS[0],
+        (End::Exited, ..) if read.lines == 0 => KINDS[1],
+        _ if read.other => asks::OTHER,
+        _ if read.start != Some(true) => KINDS[2],
+        (_, 0, ..) => KINDS[1],
+        (_, 2.., ..) => KINDS[3],
+        (_, _, false, ..) => KINDS[4],
+        (_, _, _, true, _) => KINDS[5],
+        (.., false) => KINDS[6],
+        (.., true) => return asks::word(&read.last).map_err(str::to_string),
+    };
+    Err(kind.to_string())
 }
 
 /// What a child that is gone comes to: the copy is ended as completed or failed, and the record and the wish say
 /// so. Finished is all of: the stream started as a run's does, one result line came, it says success and no
 /// error, nothing that could not be read came after it, and the harness exited with 0. A child that was stopped
-/// for the person is a cancelled run whatever its stream holds: its copy is kept as a failed run's is.
+/// for the person is a cancelled run whatever its stream holds: its copy is kept as a failed run's is. A run
+/// whose last word is `asks`, with a question the door leaves, asks: its copy is neither committed nor marked.
 ///
 /// `start` is the commit the copy was made from, as this command wrote it in the record. A run that would have
 /// finished has failed when its branch is no longer at it, whoever moved the branch: nothing is committed onto
@@ -215,54 +250,44 @@ pub(super) fn settle(
     ended: &Ended,
     limit: Duration,
 ) -> Result<Ran, Error> {
-    let read = &ended.read;
-    let at_limit = at_limit(limit);
-    let kind = match (ended.end, read.results, read.fine, read.unread, ended.exit_0) {
-        (End::Stopped, ..) => Some(""),
-        (End::Limit, ..) => Some(at_limit.as_str()),
-        (End::Over, ..) => Some(KINDS[0]),
-        (End::Exited, ..) if read.lines == 0 => Some(KINDS[1]),
-        _ if read.start != Some(true) => Some(KINDS[2]),
-        (_, 0, ..) => Some(KINDS[1]),
-        (_, 2.., ..) => Some(KINDS[3]),
-        (_, _, false, ..) => Some(KINDS[4]),
-        (_, _, _, true, _) => Some(KINDS[5]),
-        (.., false) => Some(KINDS[6]),
-        (.., true) => None,
-    };
-    let run = &copy.run;
-    let committed = match kind {
-        None => copy::end_copy(home, run, Outcome::Completed, None, Some(start))
+    let (read, run) = (&ended.read, &copy.run);
+    let word = word(ended, limit);
+    let committed = match &word {
+        Ok(None) => copy::end_copy(home, run, Outcome::Completed, None, Some(start))
             .map_err(|e| if copy::moved(&e) { KINDS[8] } else { KINDS[7] }),
-        Some(kind) => Err(kind),
+        Ok(Some(_)) => Err(""),
+        Err(kind) => Err(kind.as_str()),
     };
+    let question = word.as_ref().ok().cloned().flatten();
     let (outcome, why, end) = match committed {
         Ok((_, changed, end)) => (RunOutcome::Completed, finished(run, changed), end),
+        Err(_) if question.is_some() => (RunOutcome::Asks, asking(run), None),
         Err(_) if ended.end == End::Stopped => (RunOutcome::Cancelled, cancelled(run), None),
         Err(kind) => (RunOutcome::Failed, failed(run, kind), None),
     };
-    if outcome != RunOutcome::Completed {
+    if matches!(outcome, RunOutcome::Failed | RunOutcome::Cancelled) {
         mark(home, run, None);
     }
+    let stands = if question.is_some() { "asks a question" } else { "has ended" };
     // A test's build can wait here, with a finished run's copy gone and its end not yet in its record.
     busy::pause("JELLYMOON_TEST_NOTE_WAIT_MS");
     // A record that could not be written does not keep the wish from being told.
-    let noted = note(home, run, outcome, (read.denied, read.skipped), &why, end);
-    let told = tell(home, day, wish, run, outcome, &why, wait()).map_err(|e| match e {
+    let noted = note(home, run, outcome, (read.denied, read.skipped), &why, end, question.clone());
+    let told = tell(home, day, wish, run, (outcome, &why, question.as_deref()), wait()).map_err(|e| match e {
         Error::Store(e) => Error::Store(e),
         e if wish::was_locked(&e) => refused(format!(
-            "run {run} has ended and its record says how; the page of {day} was busy, and shows it when it is next drawn"
+            "run {run} {stands} and its record says how; the page of {day} was busy, and shows it when it is next drawn"
         )),
         _ if told_first(home, day, wish, run) => refused(format!(
-            "run {run} has ended; a look had taken it for cut off and told its wish first, so the wish shows what that look wrote"
+            "run {run} {stands}; a look had taken it for cut off and told its wish first, so the wish shows what that look wrote"
         )),
         _ => refused(format!(
-            "run {run} has ended and its record says how; the made wishes of {day} could not be used, so the wish does not show it"
+            "run {run} {stands} and its record says how; the made wishes of {day} could not be used, so the wish does not show it"
         )),
     });
     told.and(noted)?;
     let star = (outcome == RunOutcome::Completed).then(|| STAR.to_string());
-    Ok(Ran { run: Some(run.clone()), wish: wish.to_string(), outcome, star, denied: read.denied, why })
+    Ok(Ran { run: Some(run.clone()), wish: wish.to_string(), outcome, star, denied: read.denied, why, question })
 }
 
 /// Whether the wish names this run and no longer says working: a look that took the run for one nothing holds
@@ -283,6 +308,7 @@ pub(super) fn mark(home: &Path, run: &str, wait: Option<Duration>) -> bool {
 /// `ended` as. No other end names one, and an end that stood in the record is not kept. That is not to say that
 /// nothing of a run with no end was committed: a run whose commit was made and whose copy could then not be
 /// removed is written failed, with no end, and its branch holds that commit. It is left so here, for `run toss`.
+/// The `question` of a run that asks is written with its end too, and no other end has one.
 pub(super) fn note(
     home: &Path,
     run: &str,
@@ -290,11 +316,12 @@ pub(super) fn note(
     (denied, skipped): (usize, usize),
     why: &str,
     ended: Option<String>,
+    question: Option<String>,
 ) -> Result<(), Error> {
     let Some(mut record) = record::kept(home, run).filter(|record| record.outcome.is_none()) else { return Ok(()) };
     (record.outcome, record.why, record.denied, record.skipped) =
         (Some(outcome), Some(why.to_string()), denied, skipped);
-    record.end = ended;
+    (record.end, record.question) = (ended, question);
     record::write(home, run, &record)
 }
 
@@ -305,27 +332,27 @@ fn tell(
     day: &str,
     wish: &str,
     run: &str,
-    outcome: RunOutcome,
-    why: &str,
+    (outcome, why, question): (RunOutcome, &str, Option<&str>),
     wait: Duration,
 ) -> Result<MadeWish, Error> {
     wish::change(home, day, wish, wait, |wish| {
         if wish.run.as_deref() != Some(run) || wish.state != WishState::Working {
             return Err(refused("the wish no longer names this run as going; it was not changed"));
         }
-        apply(wish, outcome, why);
+        apply(wish, outcome, why, question);
         Ok(())
     })
 }
 
-/// A wish as its run's end leaves it: done with one more star, or needing the person.
-fn apply(wish: &mut MadeWish, outcome: RunOutcome, why: &str) {
+/// A wish as its run's end leaves it: done with one more star, or needing the person, with the question of a
+/// run that asks.
+fn apply(wish: &mut MadeWish, outcome: RunOutcome, why: &str, question: Option<&str>) {
     let done = outcome == RunOutcome::Completed;
     wish.state = if done { WishState::Done } else { WishState::NeedsYou };
     if done && wish.stars.len() < STARS_MAX {
         wish.stars.push(STAR.to_string());
     }
-    wish.why = Some(why.to_string());
+    (wish.why, wish.question) = (Some(why.to_string()), question.map(str::to_string));
 }
 
 #[cfg(test)]
@@ -341,7 +368,7 @@ mod tests {
             (wish.run, wish.state) = (Some(run.to_string()), WishState::Done);
             Ok(())
         })?;
-        assert!(tell(home.path(), day, "m1", run, RunOutcome::Failed, &cut(run), Duration::ZERO).is_err());
+        assert!(tell(home.path(), day, "m1", run, (RunOutcome::Failed, &cut(run), None), Duration::ZERO).is_err());
         assert_eq!(wish::kept_of(home.path(), day)?, [done]);
         Ok(())
     }

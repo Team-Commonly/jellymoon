@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use std::{fs, io};
 
 use jellymoon_app::today::{self, Asked, Today};
-use jellymoon_app::{lines, read, scene};
+use jellymoon_app::{lines, one_line, read, scene};
 use lexopt::prelude::*;
 use sticker_kit::{Theme, Viewport};
 
@@ -176,15 +176,6 @@ fn named(theme: &str) -> Result<Theme, Failure> {
         let _ = io::stderr().write_all(format!("jellymoon-app: theme: {line}\n").as_bytes());
     }
     Ok(loaded.theme)
-}
-
-/// The first and the last line of `text` as one line with no control character. A TOML error is several lines: where
-/// it is, the text there, and what is wrong.
-fn one_line(text: &str) -> String {
-    let mut lines = text.lines().map(str::trim).filter(|line| !line.is_empty());
-    let first = lines.next().unwrap_or_default();
-    let line = lines.next_back().map_or(first.to_string(), |last| format!("{first}: {last}"));
-    line.replace(char::is_control, " ")
 }
 
 /// `960x640` as a viewport. Each side is a whole number of pixels, from the smallest size a page is drawn at to

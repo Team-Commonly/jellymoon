@@ -145,19 +145,26 @@ pub fn clean(text: &str, max_chars: usize) -> String {
 }
 
 /// What is drawn onto the character before it: the combining marks of Latin, Greek and Cyrillic and of symbols, the
-/// two kana voicing marks, the variation selectors, the two joiners and the emoji skin tones.
+/// two kana voicing marks, the variation selectors, the two joiners and the emoji skin tones; and the points of
+/// Hebrew, the vowel marks of Arabic, the vowel signs of Devanagari, Thai's upper and lower vowels and tones, and
+/// the vowels and final consonants of Hangul written in conjoining jamo.
 fn is_mark(c: char) -> bool {
     matches!(
         c as u32,
         0x0300..=0x036F | 0x0483..=0x0489 | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x200C | 0x200D | 0x20D0..=0x20FF
             | 0x3099 | 0x309A | 0xFE00..=0xFE0F | 0xFE20..=0xFE2F | 0x1F3FB..=0x1F3FF | 0xE0100..=0xE01EF
+            | 0x0591..=0x05BD | 0x05BF | 0x05C1 | 0x05C2 | 0x05C4 | 0x05C5 | 0x05C7
+            | 0x0610..=0x061A | 0x064B..=0x065F | 0x0670 | 0x06D6..=0x06DC | 0x06DF..=0x06E4 | 0x06E7 | 0x06E8
+            | 0x06EA..=0x06ED | 0x0900..=0x0903 | 0x093A..=0x093C | 0x093E..=0x094F | 0x0951..=0x0957 | 0x0962
+            | 0x0963 | 0x0E31 | 0x0E33..=0x0E3A | 0x0E47..=0x0E4E | 0x1160..=0x11FF | 0xD7B0..=0xD7FF
     )
 }
 
 /// Where each character a reader sees ends, in bytes. No cut or line break falls anywhere else. A character is a
 /// base with every [`is_mark`] after it, whatever U+200D joins to it, or two regional indicators (a flag). This is
-/// not all of Unicode's rule, which needs tables the kit does not carry: the marks of other scripts (Hebrew, Arabic,
-/// Indic, Thai) and Hangul's jamo each count as a character of their own.
+/// not all of Unicode's rule, which needs tables the kit does not carry: the marks of the scripts [`is_mark`] does
+/// not name (the Indic scripts other than Devanagari, Lao, Tibetan, Khmer, Myanmar) each count as a character of
+/// their own.
 pub(crate) fn ends(text: &str) -> Vec<usize> {
     let mut ends: Vec<usize> = Vec::new();
     let (mut before, mut flags) = ('\0', 0);
@@ -194,6 +201,7 @@ pub fn fit(text: &str, max_width: f32, role: Role, size: f32, measure: &dyn Meas
 
 /// `text` whole when it fits `max_width`; else its start and its end with an ellipsis between them, as much of both
 /// as fits, the end the longer by a character when they differ: two texts that begin alike are still told apart.
+/// Both are whole characters ([`ends`]), so the end never begins with a mark or with what a joiner joined.
 /// Returns the text and its measured width.
 pub fn fit_middle(text: &str, max_width: f32, role: Role, size: f32, measure: &dyn Measure) -> (String, f32) {
     let full = measure.width(text, role, size);

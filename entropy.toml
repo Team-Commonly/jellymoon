@@ -294,7 +294,12 @@ max_file_lines = 400
 # (`theme/svg_check.rs` 332, `theme/svg_text.rs` 126, and the art read by `theme/load.rs`, `theme/mod.rs` and
 # `draw/sprites.rs`) and the tests 1317 (`tests/cost.rs` 374, `tests/limits.rs` 243, `tests/alike.rs` 194,
 # `tests/art_draw.rs` 190, and the door's cases in `tests/theme.rs` and `tests/draw.rs`).
-"crates/sticker-kit" = 7082
+# The review of a file's own colours raised it by 354: 258 are tests (`tests/floors.rs`, 200: a file's own colour
+# taken only where its pair reads, every text of the entry over its floor for a sweep of papers, a warning for a
+# key the file set and no other; `tests/text.rs` grew by 50 for the middle cut; `tests/colours.rs` by 8). The door
+# that settles each pair against its floor is 89 more in `src/theme/own.rs`, and the marks of five more scripts,
+# which no cut falls before, are 8 in `src/text.rs`; `src/theme/load.rs` lost 1.
+"crates/sticker-kit" = 7436
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -330,7 +335,9 @@ max_file_lines = 400
 # sizes in both themes (`tests/f42.rs`), 8.
 # Custom art taken out of theme files (ADR 0016) lowered it by 1: the case of a picture with a script, which was
 # refused, is a picture that is not read (`tests/f32.rs`).
-"app" = 5518
+# The words said of a theme file cleaned in one place for the app and the example raised it by 8: the test of a
+# key that holds an escape and a direction mark (`tests/f32.rs`), and the example's two calls.
+"app" = 5526
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

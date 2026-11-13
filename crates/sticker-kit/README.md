@@ -32,6 +32,8 @@ has the room. In a row too narrow for its names the short ones keep their
 width and the long ones share what is left; those are cut in the middle with
 an ellipsis ("kitc…ntend"), so no name is cut while its row has room and two
 names that begin alike are told apart by their ends (`tests/entry_layout.rs`).
+The end never begins with a mark that is drawn onto the character before it
+(`tests/text.rs`).
 Every page keeps that band free, whether or not it has an entry (a page
 with no big character begins its small ones under it), so an entry that comes
 or goes moves no piece. `layout_entry(entry, theme, viewport, &measure)` places
@@ -45,31 +47,51 @@ words of an entry that waits), the chosen chip is filled (`chip_chosen`, its
 name in `chip_chosen_ink`), and the field that has the keys has a ring, a
 line darker than that fill (`entry_ring`; `entry_edge` without the keys).
 
-Each of the three is held to a least contrast on its ground (WCAG 2's ratio
-of relative luminance, `Color::contrast`):
+Every text of the entry is held to a least contrast on its ground (WCAG 2's
+ratio of relative luminance, `Color::contrast`). Each floor is what WCAG 2 asks
+of text (4.5) or of a line (3), but the hint's, which is meant to be pale:
 
 | Text | On | Floor | sticker | plain |
 |---|---|---|---|---|
 | the chosen chip's name | `chip_chosen` | 4.5 (`CHOSEN_INK_FLOOR`) | 9.99 | 4.57 |
+| a chip's name, the palette's `soft` | `chip` | 4.5 (`CHIP_INK_FLOOR`) | 5.66 | 5.45 |
+| what is typed, the palette's `ink` | `entry` | 4.5 (`TYPED_FLOOR`) | 14.39 | 15.80 |
 | the hint, and words that wait | `entry` | 2.5 (`HINT_FLOOR`) | 2.80 | 3.06 |
+| the caret | `entry` | 3.0 (`CARET_FLOOR`) | 3.67 | 4.57 |
 | the ring | `paper` | 3.0 (`RING_FLOOR`) | 5.35 | 15.80 |
 
-A theme file is held to them at the door (`src/theme/own.rs`), and is never
-refused for them: a colour under its floor is replaced by the first of the
-file's own that is over it (`soft` then `ink` for the name; `quiet`, `soft`,
-`ink` for the hint; `caret`, `accent_dark`, `ink` for the ring), or by black
-or white, and one warning names the key.
+A colour one can see through is laid on what is under it before it is
+measured: a chip and the field on the paper, the paper on the desk, and the
+desk on white, since the kit does not know what a window has under its page
+(`Palette::ground`).
 
-A key of the entry that a theme file does not set is the file's own colour,
-when the file sets one for it: `chip_chosen_ink` is its `soft`, `entry_hint`
-its `quiet`, `entry_ring` its `caret`; and `entry` is its `option`,
-`entry_edge` its `bubble_ring`, `caret` its `accent_dark`, `chip` its
-`dimmed.light`, `chip_chosen` its `star`. So a file written before a key was
-is drawn in its own palette. A file that sets neither a key nor the colour it
-is taken from is the sticker theme there, and the floors hold what is left. When the chosen chip's fill is close to the other chips' (no
-channel 48 apart), a line in the colour of its name is drawn round it;
-otherwise, as in both built-in themes, its fill alone tells it.
-`tests/colours.rs` holds the built-in themes and theme files to all of this.
+A theme file never draws one of these pairs worse than before for a key it
+did not set (`src/theme/own.rs`). A key of the entry the file lacks takes the
+file's own colour only when the file sets that colour and the pair reads with
+it: `entry` is its `option` under its `ink`, `caret` its `accent_dark`,
+`entry_hint` its `quiet`, `entry_ring` its caret's, `chip` its `dimmed.light`
+(the light shade itself, not another shade of `dimmed`) under its `soft`, and
+`chip_chosen` and `chip_chosen_ink` its `star` and its `soft`, both or
+neither. `entry_edge`, which no text is on, is its `bubble_ring`. Where the
+pair does not read, or the file does not set the colour, the key is the
+sticker theme's, and nothing is said.
+
+Then every pair is held to its floor, and a file is never refused for one: a
+colour under its floor is replaced by the first of the palette's that is over
+it (`soft` then `ink` for the chosen name; `quiet`, `soft`, `ink` for the
+hint; `accent_dark`, `ink` for the caret; the caret, `accent_dark`, `ink` for
+the ring), or by black or white. `soft` and `ink` are the whole page's, so
+under them it is the ground that gives way: a chip to `dimmed.light`,
+`option`, `paper`, `ink`, and the field to `option`, `paper`, `ink`. One
+warning names the key, and only a key the file set: a replacement for a key
+the file never set is not said.
+
+When the chosen chip's fill does not stand out from the other chips' and from
+the paper under it (a contrast under 1.2, `CHOSEN_FILL_FLOOR`: the sticker
+theme's yellow on its lilac chips is 1.22), a line in the colour of its name
+is drawn round it; otherwise, as in both built-in themes, its fill alone tells
+it. `tests/colours.rs` and `tests/floors.rs` hold the built-in themes and
+theme files to all of this.
 
 ```rust
 Page::new(scene, theme)

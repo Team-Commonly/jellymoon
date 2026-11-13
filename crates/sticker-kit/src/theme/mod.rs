@@ -13,7 +13,7 @@ use crate::color::Color;
 
 pub use bounds::{MAX_THEME_BYTES, RANGES};
 pub use load::{Loaded, ThemeError};
-pub use own::{CHOSEN_INK_FLOOR, HINT_FLOOR, RING_FLOOR};
+pub use own::{CARET_FLOOR, CHIP_INK_FLOOR, CHOSEN_FILL_FLOOR, CHOSEN_INK_FLOOR, HINT_FLOOR, RING_FLOOR, TYPED_FLOOR};
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Theme {

@@ -369,6 +369,7 @@ cargo run -p jellymoon-app --example snapshot --features headless -- <page file>
 It writes `<name>-sticker.png` and `<name>-plain.png`. The page has the entry a day's page has, with a chip for
 each of the file's first six projects (a picture reads no logs) and its hint in the field. With `<words>` the field holds
 them, with the caret after them, and the chip of place `<option>` (from 0; 0 when left out) is the chosen one. With `<theme file>` a third picture is
-written, named after that theme, and the file's warnings are said on stderr.
+written, named after that theme, and the file's warnings are said on stderr, each as one line of text, cleaned as the app's are
+(`jellymoon_app::one_line`).
 
 Linux needs the packages the CI job installs. The dependencies and GPUI's pin are in `docs/adr/0013-the-shell-dependencies.md`.

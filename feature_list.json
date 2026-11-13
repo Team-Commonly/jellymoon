@@ -292,7 +292,7 @@
         "a wish with no run, a run that is going, failed or was cancelled, a record that cannot be read, and a repo that is gone each print one plain refusal and exit 1"
       ],
       "test": "cargo test -p jellymoon --test f44",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {
@@ -343,6 +343,22 @@
       "blockedBy": [
         "F45",
         "F46"
+      ]
+    },
+    {
+      "id": "F48",
+      "category": "journal",
+      "description": "A run's record names its repo, the commit it started from and the commit it ended as",
+      "steps": [
+        "a run that completes writes in its record the repo it ran for, the commit its copy was made from and the commit the copy ended as; a run that failed, was cancelled or never started writes what of those it knows and no more; the record's example file round-trips, and a record from before, without them, is still read",
+        "`jellymoon run show` for a record that names them takes the work as the change from that start to that end in that repo, and refuses in fixed words when the run's branch no longer names that end, when the end's one parent is not that start, or when the repo is not the one the record names; a commit made by hand with a run's message under a run's branch name is refused; a record from before is shown by the branch's tip and its one parent, as F44 built it",
+        "the repo's path is written in the run's record under the home and nowhere else: it is in no page data, no reading call and no printed answer but `run show`'s own",
+        "nothing else a run writes, and no step of a run in the person's repo, changes"
+      ],
+      "test": "cargo test -p jellymoon --test f48",
+      "passes": false,
+      "blockedBy": [
+        "F44"
       ]
     }
   ]

@@ -35,6 +35,8 @@ pub enum Command {
     },
     Run(RunOptions),
     Stop(RunOptions),
+    /// `run show`, and the number of the one file to print.
+    Show(RunOptions, Option<usize>),
     RemoveHook,
     HookStatus,
     Uninstall,
@@ -170,15 +172,24 @@ fn found(logs: Option<PathBuf>, skip: &str) -> Result<RunOptions, Failure> {
     Ok(RunOptions { logs, harness: named("JELLYMOON_CLAUDE"), skip, ..RunOptions::default() })
 }
 
-/// `run` and `run stop`. The logs are read only when no repo is named, to find the one folder of the wish's project.
+/// `run`, `run stop` and `run show`. The logs are read only when no repo is named, to find the one folder of the
+/// wish's project. A file's number is digits and nothing else.
 fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut options, mut logs, mut skip) = (RunOptions::default(), None, String::new());
-    let (mut wish, mut stop, mut first) = (None, false, true);
+    let (mut wish, mut stop, mut show, mut file, mut first) = (None, false, false, None, true);
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(word) if first && word == "stop" => stop = true,
+            Value(word) if first && word == "show" => show = true,
+            Long("file") if show => {
+                let value = parser.value().and_then(|v| v.string()).map_err(usage)?;
+                let digits = !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
+                let number = digits.then(|| value.parse::<usize>().ok()).flatten();
+                let not = || Failure::Usage(format!("--file takes a number, and {value:?} is not one"));
+                file = Some(number.ok_or_else(not)?);
+            }
             Long("wish") => wish = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("date") => options.day = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("repo") if !stop => options.repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
@@ -190,7 +201,11 @@ fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     }
     let wish = wish.ok_or_else(|| Failure::Usage("run takes --wish".to_string()))?;
     let options = RunOptions { wish, day: options.day, repo: options.repo, ..found(logs, &skip)? };
-    Ok(if stop { Command::Stop(options) } else { Command::Run(options) })
+    Ok(match (stop, show) {
+        (true, _) => Command::Stop(options),
+        (_, true) => Command::Show(options, file),
+        _ => Command::Run(options),
+    })
 }
 
 fn parse_hook(mut parser: lexopt::Parser) -> Result<Command, Failure> {

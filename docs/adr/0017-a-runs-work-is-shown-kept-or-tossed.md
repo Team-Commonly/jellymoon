@@ -81,7 +81,7 @@ On git 2.50.1, on a Mac, in a made-up repo, before any of this was built:
 | An unsaved change in a file the work changes | `merge --ff-only`: exit 1; `HEAD` and the file unmoved |
 | An unsaved change in another file | `merge --ff-only`: exit 0; the unsaved change still there |
 | The person's own untracked file where the work makes one | `merge --ff-only`: exit 1; their file unmoved |
-| What the work is | `diff-tree -r --no-renames --name-status -z <parent> <commit>`, `cat-file -s`, `cat-file blob` |
+| What the work is | `diff-tree -r --no-renames --no-abbrev -z <parent> <commit>`, then `cat-file --batch-check` and `--batch` with ids on input (as built by F44: no file name is an argument to git) |
 
 Not measured: git 2.38 and 2.39 (the oldest that can merge in the store, and the one older Macs ship), Windows and
 Linux, a repo with filters or LFS, and a keep cut off between its steps. The features below measure them.
@@ -94,9 +94,23 @@ built before F30 and F31.**
 | Feature | What it adds | Waits on | Waits for `GATE: PASS` |
 |---|---|---|---|
 | F44 | `jellymoon run show`: what a run's work made, and one file's text | nothing | no |
-| F45 | `jellymoon run keep`: the work lands on the person's branch | F44 | yes: an agent's work reaches the person's checkout |
-| F46 | `jellymoon run toss`: the work and its branch go, and the wish is let go | F44 | yes: it deletes in the person's repo |
+| F48 | A run's record names its repo, the commit it started from and the commit it ended as | F44 | yes: it changes what a run writes |
+| F45 | `jellymoon run keep`: the work lands on the person's branch | F44, F48 | yes: an agent's work reaches the person's checkout |
+| F46 | `jellymoon run toss`: the work and its branch go, and the wish is let go | F44, F48 | yes: it deletes in the person's repo |
 | F47 | A tap on a little one opens its wish: `Show me`, `Keep it`, `Toss it` | F45, F46 | no |
+
+## Found while building F44
+
+A run's record (`runs/<id>/run.json`) names no repo and no commit, and the copy's record that named the repo is
+removed when a completed run's copy is cleaned. So F44 finds the repo as a run finds it, and takes as the work the tip
+of `refs/heads/jellymoon/run-<id>` against its one parent, when that tip is a commit with one parent and the message a
+copy ends with. A commit made by hand in that shape, under that name, is shown as the run's. Showing it harms nothing;
+keeping it would land work no run made.
+
+**F48 closes this before anything is kept or tossed**: a run writes its repo, its start and its end in its record,
+and `run show`, `run keep` and `run toss` take the work from the record, not from the branch's shape.
+`feature_list.json` cannot give F45 and F46 a new edge, so the order is stated here: **F48 is built before F45 and
+F46.**
 
 ## What comes after
 

@@ -19,6 +19,7 @@ mod dead;
 mod end;
 mod left;
 mod never;
+mod obeyed;
 mod place;
 mod record;
 mod show;

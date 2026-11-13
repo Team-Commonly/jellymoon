@@ -90,16 +90,79 @@ do").
 - **A text** passes `still::still_text`: the reader's cleaning of a turn (`redact::shown`), which keeps lines and
   quotes, made again until a making changes nothing. Eight makings may change it; a text a ninth changes is
   refused, never printed half cleaned.
-- **`obeyed`** is asked of the name as git keeps it and of the cleaned name, so an invisible character inside
-  `.claude` does not hide it.
+- **`obeyed`** is asked of the name as git keeps it, read as the disks read it (below), and of the cleaned name
+  too. Cleaning takes out most characters nobody sees but keeps the joiners U+200C and U+200D, which HFS+ leaves
+  out of a name: those two are dropped by the rule itself. The name as git keeps it is asked whole, so a name
+  the tools obey past the 200 characters that are printed is marked.
 
 ## Files the person's tools obey
 
-One list, `OBEYED` in `run/show.rs`. A path is obeyed when any of its parts is, in any case of ASCII letters, one
-of: `.claude`, `.codex`, `.cursor`, `.vscode`, `.idea`, `.husky`, `.devcontainer`, `CLAUDE.md`, `AGENTS.md`,
-`.mcp.json`, `.envrc`, `.gitmodules`, `.gitattributes`; or when `.github` is followed by `workflows`. It is a
-warning, not a wall: a tool the list does not know obeys its file all the same, and kept work is code in the
-person's project either way.
+One list and one rule, in `crates/jellymoon-core/src/run/obeyed.rs`. A path is obeyed when any of its parts is one
+of: `.claude`, `.codex`, `.cursor`, `.cursorrules`, `.vscode`, `.idea`, `.husky`, `.pre-commit-config.yaml`,
+`.devcontainer`, `.cargo`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.mcp.json`, `.envrc`, `.gitmodules`,
+`.gitattributes`; or when `.github` is followed by `workflows` or by `copilot-instructions.md`. It is a warning,
+not a wall: a tool the list does not know obeys its file all the same, and kept work is code in the person's
+project either way.
+
+**A part is read as the disks read it before it is compared.** A run's agent needs only to write a file to make
+a name, and a disk opens more spellings as `.claude` than a comparison of letters finds. The rule is generous: a
+spelling marked that no disk folds costs the person one more yes, and one missed is the fault.
+
+| Step | What is done | Whose fold it is |
+|---|---|---|
+| 1 | a path is parted at `/` and at `\` | Windows |
+| 2 | a part is cut at its first `:` | Windows: after it is a stream of the same file |
+| 3 | U+200C to U+200F, U+202A to U+202E, U+206A to U+206F and U+FEFF are dropped | HFS+ |
+| 4 | `ſ` U+017F is `s`, `K` U+212A is `k`, `ß` U+00DF and `ẞ` U+1E9E are `ss`, U+FB00 to U+FB06 are `ff`, `fi`, `fl`, `ffi`, `ffl`, `st`, `st` | APFS |
+| 4 | `ı` U+0131 is `i` | NTFS, whose table of capitals makes it `I` |
+| 5 | dots and spaces at the end of a part are dropped | Windows |
+| 6 | the part is compared in any case of ASCII letters | all three |
+
+And a part that holds `~` and then a digit is marked whatever else it holds: it has the shape of a short name
+(`CLAUDE~1`, `GITATT~1`) that a Windows disk gives a file beside its own, and which name it is short for cannot
+be read from it.
+
+Not obeyed, because no disk measured or reasoned about takes one for the other: a longer name (`.claudex/`,
+`xAGENTS.md`, `.cargo.toml`), a letter of another script that looks the same (Cyrillic `с` in `.сlaude`, a
+fullwidth `ｃ`), a letter with an accent, a dot or space that is not at the end of a part, and the second name
+of a pair without the first (`copilot-instructions.md` outside `.github`).
+
+### What was measured
+
+On a Mac (macOS 26, arm64), with a script that made files and asked the disk, in a fresh folder: once on the
+system's APFS volume (not case-sensitive) and once on a 100 MB HFS+ image (not case-sensitive) mounted for the
+purpose. Asked of every code point from U+0001 to U+FFFF but `/` and the surrogates, and of U+E0000 to U+E01EF:
+63,982 in all.
+
+- **One character for one ASCII character**: the file named by the character was made, then each of `a` to `z`,
+  `0` to `9`, `-` and `_` was asked for (and `.` between two letters). APFS: U+017F for `s` and U+212A for `k`,
+  and no other. HFS+: none.
+- **One character for two or three**: every name of two and of three of those 39 characters was made, then each
+  character was asked for, and each one found was asked again the first way. APFS: U+00DF and U+1E9E for `ss`,
+  U+FB00 `ff`, U+FB01 `fi`, U+FB02 `fl`, U+FB03 `ffi`, U+FB04 `ffl`, U+FB05 and U+FB06 `st`. HFS+: none.
+- **A character left out**: `x<c>y`, `<c>xy` and `xy<c>` were made, and `xy` asked for. APFS: none. HFS+: the
+  sixteen of step 3, in all three places.
+- **Ends**: neither disk takes `xy.`, `xy `, a `\` or a `:` for anything but itself.
+- APFS refused to make a name of 1,529 of the code points (the first is U+0378), so they were not asked; a name
+  the disk will not make cannot be opened as another. HFS+ refused none.
+
+`run/obeyed/tests.rs` asks the disk again on every `cargo test` on a Mac, in the system's temporary folder:
+every obeyed name in every spelling the table knows (where the disk takes the spelling for the name, the rule
+must say obeyed), and every character above against every name of one and two ASCII characters and against
+`xy` (the disk may take none the table does not know). On a disk that folds nothing they assert nothing.
+
+### What is not closed
+
+- **Windows was not run.** Steps 1, 2 and 5, `ı`, and the short names are reasoned from how Win32 and NTFS are
+  written up. Other characters NTFS's table of capitals may take for an ASCII letter were not looked for.
+- **A short name is marked by its shape, not found.** `~` and a digit anywhere in a part is marked, so
+  `notes~1.txt` is too; a short name made of a hash, such as `CL1A2B~1`, is marked the same way.
+- **HFS+ was measured on one image**, and the test run on every `cargo test` asks only the disk the temporary
+  folder is on. Not measured: a case-sensitive volume of either kind, a name of four or more characters taken
+  for one, a character above U+FFFF other than U+E0000 to U+E01EF, ext4 with case folding, exFAT, SMB and NFS
+  mounts.
+- **A name that is not UTF-8** is asked with U+FFFD where its bad bytes are.
+- **The list is closed.** A tool it does not name is not marked.
 
 ## Every refusal
 

@@ -10,6 +10,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::end::{held, of_another, recorded};
+use super::obeyed::obeyed;
 use super::{RunOptions, RunOutcome, finished, no_wish, place, record, refused};
 use crate::copy::{self, Done, Entry, LISTED, RunCopy, TEXT_MAX, Unread, WorkFile};
 use crate::still::{statement, still_text};
@@ -17,28 +18,6 @@ use crate::{Error, wish};
 
 /// The most characters of a file's name that are printed.
 const NAME_MAX: usize = 200;
-
-/// Names the person's tools obey, wherever they are in a path and in whatever case: the settings, rules, hooks and
-/// servers of coding agents and editors, what a shell or git loads on entering the folder, and what a forge runs
-/// on a push. A warning, not a wall (ADR 0017, decision 6): work that touches none of these is still code in the
-/// person's project, and a tool this list does not know is obeyed all the same.
-const OBEYED: [&str; 13] = [
-    ".claude",
-    ".codex",
-    ".cursor",
-    ".vscode",
-    ".idea",
-    ".husky",
-    ".devcontainer",
-    "CLAUDE.md",
-    "AGENTS.md",
-    ".mcp.json",
-    ".envrc",
-    ".gitmodules",
-    ".gitattributes",
-];
-/// The one folder that is obeyed only inside another: a forge's workflows.
-const WORKFLOWS: (&str, &str) = (".github", "workflows");
 
 /// Whether a run's work waits for the person, or they kept it or tossed it. A record that does not say waits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -249,45 +228,4 @@ fn entry(n: usize, file: &WorkFile) -> ShownEntry {
     // Asked of the name as git keeps it and as it is printed: a character nobody sees must not hide one.
     let obeyed = obeyed(&raw) || obeyed(&name);
     ShownEntry { n, name, change, size: file.size, kind, obeyed }
-}
-
-/// Whether any folder or file of the path has one of the [`OBEYED`] names.
-fn obeyed(path: &str) -> bool {
-    let parts: Vec<&str> = path.split('/').collect();
-    let named = |part: &&str| OBEYED.iter().any(|name| part.eq_ignore_ascii_case(name));
-    let (forge, inside) = WORKFLOWS;
-    let flows = |two: &[&str]| two[0].eq_ignore_ascii_case(forge) && two[1].eq_ignore_ascii_case(inside);
-    parts.iter().any(named) || parts.windows(2).any(flows)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_path_is_obeyed_by_a_whole_name_in_it_in_any_case_and_never_by_part_of_one() {
-        let yes = [
-            ".claude/settings.json",
-            "a/b/.CLAUDE/x",
-            "claude.md",
-            "deep/Agents.md",
-            ".github/workflows/ci.yml",
-            "x/.GitHub/WORKFLOWS/y",
-            ".envrc",
-            ".vscode",
-            ".gitmodules",
-        ];
-        let no = [
-            "claude/settings.json",
-            ".claude.bak/x",
-            "CLAUDE.md.txt",
-            "my.envrc",
-            ".github/ISSUE_TEMPLATE.md",
-            ".github/x/workflows/ci.yml",
-            "workflows/.github",
-            "",
-        ];
-        assert_eq!(yes.map(obeyed), [true; 9]);
-        assert_eq!(no.map(obeyed), [false; 8]);
-    }
 }

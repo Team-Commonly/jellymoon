@@ -3,13 +3,16 @@
 //! finished in F39's test folder (`f39/world.rs`). Work of other shapes is put on the run's branch by the test, with
 //! the real `git` and an index file of its own: no file of it is ever written to a disk, so a name no system could
 //! hold is tested on every system. `f44/file.rs` holds `--file`, `f44/refused.rs` what is refused, and
-//! `f44/names.rs` the names that look like options, the count the list is cut at and ten thousand files.
+//! `f44/names.rs` the names that look like options, the count the list is cut at and ten thousand files, and
+//! `f44/obeyed.rs` the spellings a disk takes for a name the person's tools obey.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f44/file.rs"]
 mod file;
 #[path = "f44/names.rs"]
 mod names;
+#[path = "f44/obeyed.rs"]
+mod obeyed;
 #[path = "f44/refused.rs"]
 mod refused;
 mod support;

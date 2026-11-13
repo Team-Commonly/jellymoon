@@ -123,7 +123,8 @@ fn round_2(script: &str, number: usize, rec: &Path) -> i32 {
         "holds" => holds(rec, number),
         // F48. Both report a success only once the test leaves `go`, half a minute at most, and hold the lock
         // until then. `worked` has done its work by then. `gone` removes the folder it was started in, from outside it.
-        "worked" | "gone" => {
+        // `idle` does neither: it changes nothing.
+        "worked" | "gone" | "idle" => {
             if script == "worked" {
                 edits()
             } else {

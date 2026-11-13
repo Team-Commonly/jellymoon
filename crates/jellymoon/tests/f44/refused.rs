@@ -109,11 +109,11 @@ fn a_repo_that_is_gone_or_is_another_repo_is_refused() {
     // is a repo that has no branch of the run's.
     let said = show(&other);
     assert!(refused(&said).contains("is not the one its record names"), "{}", said.stderr);
-    let kept = made.w.record(&made.run);
-    made.from_before();
+    let kept = made.record();
+    made.write(&made.as_before());
     let said = show(&other);
     assert!(refused(&said).contains("is not in the repo"), "{}", said.stderr);
-    fs::write(made.w.jm("runs").join(&made.run).join("run.json"), format!("{kept}\n")).unwrap();
+    made.write(&kept);
     // A folder inside the repo is not the repo, and neither is a folder of another name.
     fs::create_dir_all(made.repo.join("sub").join("alpha")).unwrap();
     let said = show(&made.repo.join("sub").join("alpha"));
@@ -135,12 +135,27 @@ fn a_repo_that_is_gone_or_is_another_repo_is_refused() {
     no(&made, "could not be read from the repo");
 }
 
+// A look reads the store and no checkout, and still shows only a folder that is the top of one. It has no check
+// of its own for a bare repo: git is asked whether the folder is inside a work tree, and of a repo whose config
+// says it is bare git answers that it is not, which is what refuses it (`copy/work.rs`).
+#[test]
+fn a_repo_whose_config_says_it_is_bare_is_refused_by_gits_answer_that_the_folder_is_inside_no_work_tree() {
+    let made = finished();
+    let shown = printed(&made.show(&[]));
+    made.git(&["config", "core.bare", "true"], b"", None);
+    let inside = made.w.git_ran(&made.repo, &["rev-parse", "--is-inside-work-tree"]);
+    assert_eq!(String::from_utf8_lossy(&inside.stdout).trim(), "false", "what the real git says of such a folder");
+    no(&made, "could not be read from the repo: the folder is not the top of a checkout git opens");
+    made.git(&["config", "core.bare", "false"], b"", None);
+    assert_eq!(printed(&made.show(&[])), shown);
+}
+
 #[test]
 fn a_branch_that_is_not_as_the_run_left_it_is_refused() {
     let made = finished();
     // By a record from before F48, so that each commit below is refused for its shape: by a record that names
     // the run's end, every one of them is refused as another commit than that (`f48/shown.rs`).
-    made.from_before();
+    made.write(&made.as_before());
     let (branch, tip) = (made.branch(), made.w.commit(&made.repo, &made.branch()));
     let git = |args: &[&str]| made.git(args, b"", None);
     let work: [super::Entry; 1] = [("100644", "w.txt", WORK.as_bytes())];
@@ -155,6 +170,9 @@ fn a_branch_that_is_not_as_the_run_left_it_is_refused() {
     git(&["update-ref", &branch, &made.commit_of(&work, &[], &message)]);
     no(&made, "is not as the run left it");
     git(&["update-ref", &branch, &made.commit_of(&work, &["main"], &format!("{message} and more"))]);
+    no(&made, "is not as the run left it");
+    // The run's message is its one line and nothing below it.
+    git(&["update-ref", &branch, &made.commit_of(&work, &["main"], &format!("{message}\n\nand more"))]);
     no(&made, "is not as the run left it");
     // A name for another branch is not the run's branch, wherever it leads.
     git(&["update-ref", "refs/heads/theirs", &tip]);

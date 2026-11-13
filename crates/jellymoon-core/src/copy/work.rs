@@ -3,7 +3,8 @@
 //! the run's name: the files that commit changes from its one parent. Which commit that is, the run's record
 //! names (F48, [`Named`]), and the repo must say the same; of a record from before there is only the branch's
 //! shape to go by. Nothing is checked out, no file of the work is written anywhere, and git is told an object's
-//! id and never a file's name, so a name is only ever data that git printed. Every read has a size it stops at.
+//! id and never a file's name, so a name is only ever data that git printed. Every read of what git prints has a
+//! size it stops at; what git says beside it is heard out, and no more of it is kept (`call::run_most`).
 
 use std::fs;
 use std::path::Path;
@@ -17,12 +18,17 @@ pub(crate) const LISTED: usize = 200;
 pub(crate) const TEXT_MAX: usize = 64 * 1024;
 /// The most bytes of git's list of changed files that are read: over a hundred thousand files of everyday names.
 const LIST_MAX: usize = 16 * 1024 * 1024;
-/// The most bytes of the run's commit that are read: its message is one line.
+/// The most bytes of the run's commit that are read: its message is one line. A commit of that many or more is
+/// not one a run's copy ended as.
 const COMMIT_MAX: usize = 64 * 1024;
+/// The most bytes of git's answer about the run's branch that are read: one line, of a name and an id.
+const REF_MAX: usize = 16 * 1024;
 
 /// Why a run's work cannot be shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Unread {
+    /// No git was found, or the folder of the home that git is started in holds something (`Git::find`).
+    Home,
     /// The folder is no checkout git opens, or git did not answer, or an object the work names is not there.
     Repo,
     /// The repo has no branch of the run's name.
@@ -78,8 +84,9 @@ pub(crate) struct Named<'a> {
     pub end: &'a str,
 }
 
-/// The first [`LISTED`] files of a run's work, in git's own order, and how many more there are. `quiet` is for a
-/// folder read from a session log (`git.rs`); no word of git's is kept of any failure here either way.
+/// The first [`LISTED`] files of a run's work, in git's own order, and how many more there are. No word of git's
+/// is kept of any failure here. With `only`, a file's number from 1, that file alone is read past its size: one
+/// file is printed without a read of any other file's bytes.
 ///
 /// With what the record `named`, the work is the change from that start to that end in that repo, and is read
 /// only when the repo found at `folder` is that repo, the run's branch names that end, and the end's one parent
@@ -89,13 +96,14 @@ pub(crate) fn work_of(
     home: &Path,
     folder: &Path,
     run: &str,
-    quiet: bool,
     named: Option<&Named>,
+    only: Option<usize>,
 ) -> Result<(Vec<WorkFile>, usize), Unread> {
-    let git = Git::find(&Places::of(home).runs, quiet).map_err(|_| Unread::Repo)?;
+    let git = Git::find(&Places::of(home).runs, true).map_err(|_| Unread::Home)?;
     let found = git.discover(folder).map_err(|_| Unread::Repo)?;
-    let [bare, inside, below, _, shared] = &found[..] else { return Err(Unread::Repo) };
-    if bare == "true" || inside != "true" || !below.is_empty() {
+    // A bare repo has no checkout to be inside of.
+    let [_, inside, below, _, shared] = &found[..] else { return Err(Unread::Repo) };
+    if inside != "true" || !below.is_empty() {
         return Err(Unread::Repo);
     }
     if named.is_some_and(|named| !same(named.repo, Path::new(shared))) {
@@ -110,7 +118,8 @@ pub(crate) fn work_of(
     if named.is_some_and(|named| named.start != parent) {
         return Err(Unread::Start);
     }
-    let list = ["diff-tree", "-r", "--no-renames", "--no-abbrev", "-z", &parent, &tip];
+    // No rename is ever listed: git's plumbing finds one only when told to, whatever the repo's config says.
+    let list = ["diff-tree", "-r", "--no-abbrev", "-z", &parent, &tip];
     let list = repo.bytes(&list, &[], LIST_MAX).ok_or(Unread::Repo)?;
     if list.len() >= LIST_MAX {
         return Err(Unread::Many);
@@ -118,7 +127,7 @@ pub(crate) fn work_of(
     let mut files = listed(&list).ok_or(Unread::Repo)?;
     let more = files.len().saturating_sub(LISTED);
     files.truncate(LISTED);
-    read(&repo, &mut files).ok_or(Unread::Repo)?;
+    read(&repo, &mut files, only).ok_or(Unread::Repo)?;
     Ok((files, more))
 }
 
@@ -139,10 +148,12 @@ pub(crate) fn is_id(word: &str) -> bool {
 
 /// The commit the run's branch names. The branch is asked for by its whole name, and only the line of that whole
 /// name is taken: a tag or a remote's branch of the same short name is another name, and so is a branch below it.
+/// The answer is a line or two; one as long as reading stops at, or that is not text, is no answer.
 pub(super) fn tip(repo: &Repo, run: &str) -> Result<String, Unread> {
     let name = format!("refs/heads/{}", branch(run));
     let format = "--format=%(refname) %(objectname) %(objecttype) %(symref)";
-    let refs = repo.run(None, &[], &["for-each-ref", format, &name]).map_err(|_| Unread::Repo)?;
+    let refs = repo.bytes(&["for-each-ref", format, &name], &[], REF_MAX).filter(|refs| refs.len() < REF_MAX);
+    let refs = refs.and_then(|refs| String::from_utf8(refs).ok()).ok_or(Unread::Repo)?;
     let ours = refs.lines().find_map(|line| line.strip_prefix(name.as_str())?.strip_prefix(' '));
     let mut words = ours.ok_or(Unread::Missing)?.split(' ');
     let (id, kind, leads_to) = (words.next().unwrap_or(""), words.next(), words.next().unwrap_or(""));
@@ -154,9 +165,13 @@ pub(super) fn tip(repo: &Repo, run: &str) -> Result<String, Unread> {
 
 /// The one parent of the run's commit: the commit its copy was made of. A commit with another message, or with no
 /// parent or two, is not one a run's copy ended as: someone put it there, and its change is not shown as the
-/// run's. Of a record from before, which names neither commit, this shape is all that is checked.
+/// run's. Of a record from before, which names neither commit, this shape is all that is checked. A commit that
+/// was not read whole is not judged by its start: what was read could end just where a run's message does.
 fn parent(repo: &Repo, run: &str, tip: &str) -> Result<String, Unread> {
     let commit = repo.bytes(&["cat-file", "commit", tip], &[], COMMIT_MAX).ok_or(Unread::Repo)?;
+    if commit.len() >= COMMIT_MAX {
+        return Err(Unread::Moved);
+    }
     let commit = String::from_utf8(commit).map_err(|_| Unread::Moved)?;
     let (head, message) = commit.split_once("\n\n").ok_or(Unread::Moved)?;
     let mut parents = head.lines().filter_map(|line| line.strip_prefix("parent "));
@@ -191,10 +206,12 @@ fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
     Some(files)
 }
 
-/// Reads each file's size, and the start of each that is a file. Sizes are asked for in one call, and so is every
-/// file that is read whole: git prints each as a line of its id, kind and size, then its bytes and a line break.
-/// A longer file is read alone, to the size reading stops at. Whatever is not a blob of that id is no file.
-fn read(repo: &Repo, files: &mut [WorkFile]) -> Option<()> {
+/// Reads each file's size, and the start of each that is a file: of every one, for the list, which says of each
+/// whether it is text, or with `only`, a number from 1, of that file alone. Sizes are asked for in one call, and
+/// so is every file that is read whole: git prints each as a line of its id, kind and size, then its bytes and a
+/// line break. A longer file is read alone, to the size reading stops at. Whatever is not a blob of that id is no
+/// file.
+fn read(repo: &Repo, files: &mut [WorkFile], only: Option<usize>) -> Option<()> {
     let ids = |of: &[&WorkFile]| of.iter().flat_map(|file| [file.id.as_bytes(), b"\n"].concat()).collect::<Vec<u8>>();
     let kept: Vec<&WorkFile> = files.iter().filter(|file| file.entry != Entry::Repo).collect();
     let sizes = repo.bytes(&["cat-file", "--batch-check"], &ids(&kept), kept.len() * 128 + 1)?;
@@ -206,12 +223,13 @@ fn read(repo: &Repo, files: &mut [WorkFile]) -> Option<()> {
     for file in files.iter_mut().filter(|file| file.entry != Entry::Repo) {
         file.size = sizes.next()?;
     }
-    let whole = |file: &&WorkFile| file.entry == Entry::File && file.size <= TEXT_MAX as u64;
-    let short: Vec<&WorkFile> = files.iter().filter(whole).collect();
+    let asked = |at: usize, file: &WorkFile| file.entry == Entry::File && only.is_none_or(|only| only == at + 1);
+    let whole = |(at, file): &(usize, &WorkFile)| asked(*at, file) && file.size <= TEXT_MAX as u64;
+    let short: Vec<&WorkFile> = files.iter().enumerate().filter(whole).map(|(_, file)| file).collect();
     let most = short.iter().map(|file| usize::try_from(file.size).unwrap_or(TEXT_MAX) + 130).sum::<usize>() + 1;
     let printed = repo.bytes(&["cat-file", "--batch"], &ids(&short), most)?;
     let mut rest = &printed[..];
-    for file in files.iter_mut().filter(|file| file.entry == Entry::File) {
+    for (_, file) in files.iter_mut().enumerate().filter(|(at, file)| asked(*at, file)) {
         if file.size > TEXT_MAX as u64 {
             file.head = repo.bytes(&["cat-file", "blob", &file.id], &[], TEXT_MAX)?;
             continue;

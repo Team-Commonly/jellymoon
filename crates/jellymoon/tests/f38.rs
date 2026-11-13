@@ -199,6 +199,30 @@ fn a_completed_run_leaves_its_work_as_one_commit_on_its_branch_and_the_checkout_
     assert!(refused(&again).contains("has its branch already") && w.persons(&repo, &[&made]) == before);
 }
 
+// `copy clean` takes the branch where it is, and it must be a plain branch at a commit: nothing is committed
+// through a name for another branch, and none onto a branch that is gone.
+#[test]
+fn a_completed_copy_whose_branch_is_gone_or_is_a_name_for_another_branch_is_refused_and_kept() {
+    let w = world();
+    let repo = w.repo("alpha");
+    let main = w.commit(&repo, "main");
+    let line = "jellymoon: the run's branch is not a branch at a commit, so nothing was committed\n";
+    for symbolic in [false, true] {
+        let made = w.make(&repo);
+        fs::write(made.folder.join("n.txt"), "new from the run\n").unwrap();
+        let name = format!("refs/heads/{}", made.branch);
+        let by_hand: &[&str] =
+            if symbolic { &["symbolic-ref", &name, "refs/heads/main"] } else { &["update-ref", "-d", &name] };
+        w.git(&repo, by_hand);
+        let before = w.git(&repo, &["for-each-ref", "--format=%(refname) %(objectname) %(symref)"]);
+        assert_eq!(refused(&w.clean(&made.run, "completed")), line, "symbolic: {symbolic}");
+        assert_eq!(w.commit(&repo, "refs/heads/main"), main, "the person's branch took no commit");
+        assert_eq!(w.git(&repo, &["for-each-ref", "--format=%(refname) %(objectname) %(symref)"]), before);
+        assert_eq!(fs::read_to_string(made.folder.join("n.txt")).unwrap(), "new from the run\n", "the copy is kept");
+        assert!(refused(&w.clean(&made.run, "completed")).contains("not a branch at a commit"), "it is still kept");
+    }
+}
+
 #[test]
 fn a_run_that_changed_nothing_is_cleaned_with_no_commit() {
     let w = world();
@@ -293,6 +317,8 @@ fn what_cannot_be_copied_is_said_in_one_plain_line() {
     }
     w.git(&bare, &["init", "-q", "--bare"]);
     w.git(&unborn, &["init", "-q", "-b", "main"]);
+    let said_bare = w.repo("said-bare");
+    w.git(&said_bare, &["config", "core.bare", "true"]);
     fs::create_dir(w.at("empty")).unwrap();
     let no_git = [("PATH", OsString::from(w.at("empty")))];
     let make = |repo: &str, more: &[(&'static str, OsString)]| w.run_with(more, &["copy", "make", "--repo", repo]);
@@ -304,6 +330,8 @@ fn what_cannot_be_copied_is_said_in_one_plain_line() {
         (make(w.at("nowhere").to_str().unwrap(), &[]), "is not a git repo"),
         (make("alpha", &[]), "full path"),
         (make(repo.to_str().unwrap(), &no_git), "no `git` program"),
+        // A checkout whose own config says it is bare is one git answers for as a bare repo.
+        (make(said_bare.to_str().unwrap(), &[]), "bare repo or a repo's own git folder: a run needs a checkout"),
     ];
     for (ran, why) in &cases {
         assert!(refused(ran).contains(why), "{why}: {}", ran.stderr);

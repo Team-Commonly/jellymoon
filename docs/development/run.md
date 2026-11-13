@@ -41,7 +41,10 @@ and its branch in them.
    are never printed and never reach page data. Of the one chosen, the run's record keeps the git folder of its
    repo ("What is kept"), and that is the one place it is kept once a finished run's copy is gone. Git's own
    words name the folder they are about, so for a folder found this way nothing git says is repeated, now or
-   when the copy is ended: the refusal has fixed words in their place (the copy's record keeps `found`). A
+   when the copy is ended: the refusal has fixed words in their place (the copy's record keeps `found`). Of
+   what any git step of a run says on stderr, the first 128 KiB are kept and the rest is read to its end and
+   dropped: git is never ended for what it says, and it cannot fill memory by it ([copy.md](copy.md), "A git
+   that says a lot"). A
    `--repo` the person typed may be named back to them. The folder must be the top of its repo, as `copy make`
    asks: for one inside a repo, no folder above it is tried.
    **A folder found in a log is resolved once** (`run/place.rs`): every link and every `..` in its path is
@@ -320,6 +323,11 @@ record whose end is not believed can have been written by hand too.
   | failed, was stopped, ran out of time, or could not be committed | yes | no |
   | was cut off | yes | no, and a look that writes it down as failed adds none |
 
+  The table is what this build writes. Not every record of a run that failed, was cancelled or was cut off
+  names `repo` and `start`: one written before F48 names none of the three, and neither does one the released
+  v0.2.0-rc1 wrote down as failed (below). What `run toss` does with a record of none is decided in ADR 0017
+  ("What `run keep` and `run toss` may build on").
+
   **At a run's end its branch must still be at `start`.** Before anything of a finished run is staged or
   committed, core asks git which commit `refs/heads/jellymoon/run-<id>` names, by that whole name, as a look does
   (`copy/work.rs`), and compares what git prints with the commit this command made the copy from, the one it
@@ -329,9 +337,38 @@ record whose end is not believed can have been written by hand too.
   worked`, nothing is staged or committed, the branch is left where it was moved to, the copy is kept as any
   failed run's is, and no `end` is written. So an `end` is only ever `start` itself or the one commit core made
   on top of `start`, by how it is made and not only by a later check. The commit is put on the branch only if
-  the branch still names `start` at that moment (`update-ref` with the old value); a branch moved in between
-  fails the run as one whose work could not be committed. `jellymoon copy clean` knows no start and commits
-  onto the branch as it is ([copy.md](copy.md)).
+  the branch still names `start` at that moment (`update-ref --no-deref` with the old value); a branch moved in
+  between fails the run as one whose work could not be committed. `jellymoon copy clean` knows no start and
+  commits onto the branch as it is ([copy.md](copy.md)).
+
+  **The run's name is written as itself.** Between the read of the branch and that `update-ref`, a hand in the
+  store can make the run's name a symbolic ref, a name for another branch. Git checks the old value through
+  such a name, and without `--no-deref` it would then move the branch the name leads to: the person's `main`,
+  when that is still at `start`. With it, git writes the run's own name and nothing else: the name becomes a
+  plain branch again, at core's commit, the run finishes, and the branch it was pointed at is not moved. When
+  the name leads to a branch that is not at `start`, the old value does not hold, nothing is written, and the
+  run has failed as one whose work could not be committed (`f48/raced.rs`).
+
+  **A run that changed nothing is checked once more.** Its end is the commit its branch was read at, and no
+  commit is made. After the copy's files were staged and found to be that commit's own, git is asked the same
+  `update-ref --no-deref`, with that commit as the old value and as the new: it moves nothing; a name that
+  was made a name for another branch is a plain branch again (`f48/raced.rs`). It fails
+  when the branch no longer names that commit. The run has then failed as one whose work could not be
+  committed, and no `end` is written. What is left open is the time after that last check: the copy's folder
+  is removed and its listing dropped, then the end is written, and a branch moved by hand in that time, or
+  ever after, is not where the record's `end` says. The words of a finished run say only where the branch was
+  when git was last asked. A look goes by what the repo says when it looks, and so must `run keep` and `run
+  toss`, which compare the branch with `end` again under their own check of the old value (ADR 0017).
+
+  **A git that does not answer is not a moved branch.** When git fails, or runs out of time, at the read of
+  the branch, the run has failed as one whose work could not be committed. Only an answer that names another
+  commit, no branch, or a name for another branch says `its branch was moved while it worked`.
+
+  **`its copy is kept` is said of every failed run, and is not always so.** The words of a run that failed,
+  was cancelled or was cut off say its copy is kept, and they are fixed when the run ends. The folder can be
+  gone all the same: removed by hand, removed by the run's own agent, or lost to a kill between the folder's
+  removal and git dropping its listing. Nothing checks the folder before the words are written. A second form
+  of the words, for a failed run whose folder is not standing, comes with `run toss`.
 
   The released v0.2.0-rc1 reads a record that names the three, since it reads past names it does not know. It
   writes a record again in one case only, a look that writes a cut-off run down as failed, and the three are
@@ -473,14 +510,16 @@ copy is removed and before its end is written; the other rows follow from the or
 |---|---|---|---|
 | before the record is written | none; the copy is one nothing names, and is taken back ("A copy nothing names") | the run's branch, until then | `wish <id> has had no run` |
 | after the record, before the wish names the run | `repo`, `start`, no end; taken back with the copy | the same | the same |
-| while the harness works, or after it and before the commit | `repo`, `start`, no `outcome`, no `end` | the branch at `start`; the copy is kept | `was cut off before it ended`; after a look, `is not one Jellymoon wrote for this wish` |
+| while the harness works, or after it and before the commit | `repo`, `start`, no `outcome`, no `end` | the branch at `start`; the copy is kept | `was cut off before it ended`, before a look has written the run down and after |
 | after the commit, before the copy is removed | the same | the branch at the run's commit; the copy is kept, with the same work in it | the same |
 | after the copy is removed, before the end is written | the same | the branch at the run's commit, and no copy | the same: nothing names that commit as the run's end, so it is not shown as the run's |
 | after the end is written, before the wish is told | whole: `outcome`, `why`, `end` | as a finished run leaves it | the work, and the next look gives the wish the record's end |
 
 A look that finds a run cut off writes `failed` and the words of a cut-off run, and never an `end`
-("A run that was cut off"). An `end` put into such a record by hand changes nothing: the record's outcome and
-words are still a cut-off run's, and `run show` refuses it before it reads what it names.
+("A run that was cut off"). Those words are core's own, in their two forms (the copy kept, or gone), and a
+record that holds them for this wish is one Jellymoon wrote: `run show` knows it and says the run was cut off,
+in the line it says before any look. An `end` put into such a record by hand changes nothing: the record's
+outcome and words are still a cut-off run's, and `run show` refuses it before it reads what it names.
 
 ## A copy nothing names
 

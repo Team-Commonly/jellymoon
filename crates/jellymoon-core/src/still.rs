@@ -13,6 +13,8 @@ const CHANGES: usize = 8;
 const LOOKED: usize = 4096;
 /// The most characters a text may come to while it is made: far more than it can.
 const ROOM: usize = 4 * LOOKED;
+/// How many times its most characters a file's text is given room for while it is made ([`still_text`]).
+const GROWN: usize = 20;
 /// What is kept of a statement that cannot be made: the mark cleaning leaves where a credential was.
 const MARK: &str = "[redacted]";
 
@@ -57,14 +59,20 @@ pub(crate) fn still(text: &str, most: usize, cut: bool) -> Result<String, Unkept
 }
 
 /// A file's text made until a making changes nothing, with its lines and its quotes kept: a making here is the
-/// reader's cleaning of a turn (`redact::shown`). `most` is the text's most bytes, and so no making cuts it. A text
-/// of any length is made, since reading it stopped at `most`; one a ninth making changes is refused.
-pub(crate) fn still_text(text: &str, most: usize) -> Result<String, Unkept> {
-    let (mut words, mut changes) = (text.to_string(), 0);
+/// reader's cleaning of a turn (`redact::shown`). `most` is the most bytes the text has, since reading it stopped
+/// there, and the most characters that are kept of it. A making can make a text longer (a token gains its
+/// ellipsis, a password becomes the mark), so one can come to more than `most` characters: it is cut there, and
+/// the answer says so. One a ninth making changes is refused.
+pub(crate) fn still_text(text: &str, most: usize) -> Result<(String, bool), Unkept> {
+    let (mut words, mut changes, mut shortened) = (text.to_string(), 0, false);
     loop {
-        let made = shown(&words, most);
+        // Made first with room for whatever a making adds, which is under twenty characters for each one read.
+        let mut made = shown(&words, most.saturating_mul(GROWN));
+        if made.chars().count() > most {
+            (made, shortened) = (shown(&words, most), true);
+        }
         if made == words {
-            return Ok(words);
+            return Ok((words, shortened));
         }
         if changes == CHANGES {
             return Err(Unkept::Changing);

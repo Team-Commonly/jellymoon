@@ -69,7 +69,7 @@ pub(crate) fn end_copy(
     let ended = match (there, start) {
         (true, _) => Some(commit(&git.open(&record.own).map_err(refused)?, &folder, run, start)?),
         // Nothing is there to commit: the run ended as its start, which its branch must still name.
-        (false, Some(start)) => Some((at_start(&git.open(&record.repo).map_err(refused)?, run, start)?, false)),
+        (false, Some(_)) => Some((at_start(&git.open(&record.repo).map_err(refused)?, run, start)?, false)),
         (false, None) => None,
     };
     gone(&git, &record, &folder, there)?;
@@ -96,17 +96,18 @@ fn sweep(at: &Places) {
 /// which has none, and the one hook of a ref update is off with the rest (`git.rs`). Returned is the commit the
 /// branch is left at, and whether it was made here: false when there was nothing new, and the branch is where it was.
 ///
-/// The commit is made on the branch's own last commit. For a run that is `start`, asked first ([`at_start`]): a
-/// branch that was moved gets nothing staged and no commit. The branch then takes the commit only if it still
-/// names the commit it was made on, which is git's own check of the old value.
+/// The commit is made on the branch's own last commit, read by the branch's whole name ([`at_start`]): for a
+/// run that is `start`, and a branch that was moved gets nothing staged and no commit. The branch then takes the
+/// commit only if it still names the commit it was made on, which is git's own check of the old value, and takes
+/// it as itself (`--no-deref`): a name made a symbolic ref since the tip was read is written over as a plain
+/// branch, and the branch it was pointed at is not moved. A copy that held nothing new goes through the same
+/// step, with the commit the branch was read at as old and as new, so a branch moved since then fails there too.
 fn commit(repo: &Repo, folder: &Path, run: &str, start: Option<&str>) -> Result<(String, bool), Error> {
     let failed = |said: String| refused(format!("git could not commit the copy, which is kept: {said}"));
     let git = |tree: Option<&Path>, vars: &[(&str, &str)], args: &[&str]| repo.run(tree, vars, args).map_err(failed);
     let name = format!("refs/heads/{}", branch(run));
-    let tip = match start {
-        Some(start) => at_start(repo, run, start)?,
-        None => git(None, &[], &["rev-parse", "--verify", &format!("{name}^{{commit}}")])?,
-    };
+    let tip = at_start(repo, run, start)?;
+    let put = |made: &str| git(None, &[], &["update-ref", "--no-deref", &name, made, &tip]);
     let staged = git(None, &[], &["ls-files", "-z", "--stage"])?;
     let inner = staged.split('\0').filter_map(|entry| entry.strip_prefix("160000 ")?.split_once('\t'));
     let inner: Vec<String> = inner.map(|(_, path)| format!(":(top,exclude,literal){path}")).collect();
@@ -114,7 +115,7 @@ fn commit(repo: &Repo, folder: &Path, run: &str, start: Option<&str>) -> Result<
     git(Some(folder), &[], &add.collect::<Vec<_>>())?;
     let tree = git(None, &[], &["write-tree"])?;
     if git(None, &[], &["rev-parse", "--verify", &format!("{tip}^{{tree}}")])? == tree {
-        return Ok((tip, false));
+        return put(&tip).map(|_| (tip.clone(), false));
     }
     // The person's own name and address, as git reads them for this repo; Jellymoon's when either is missing.
     let own = |key: &str| repo.ask(None, &[], &["config", "--get", key]).map_err(failed);
@@ -129,18 +130,21 @@ fn commit(repo: &Repo, folder: &Path, run: &str, start: Option<&str>) -> Result<
         ("GIT_COMMITTER_EMAIL", address.as_str()),
     ];
     let made = git(None, &who, &["commit-tree", "-p", &tip, "-m", &format!("Jellymoon run {run}"), &tree])?;
-    git(None, &[], &["update-ref", &name, &made, &tip]).map(|_| (made, true))
+    put(&made).map(|_| (made, true))
 }
 
-/// The commit a run's branch names, which must be `start`, the commit the run's copy was made from. The branch is
-/// read by its whole name, as a look reads it (`work.rs`), and what git prints is compared with `start`, which is
-/// never given to git. A branch that names another commit, that is gone, or that is a name for another branch
-/// was moved, by whoever ([`MOVED`]); a git that does not answer is a commit that could not be made.
-fn at_start(repo: &Repo, run: &str, start: &str) -> Result<String, Error> {
-    match tip(repo, run) {
-        Ok(tip) if tip == start => Ok(tip),
-        Err(Unread::Repo) => Err(refused("git could not read the run's branch, so nothing was committed")),
-        _ => Err(refused(MOVED)),
+/// The commit a run's branch names, which for a run must be `start`, the commit the run's copy was made from. The
+/// branch is read by its whole name, as a look reads it (`work.rs`), and what git prints is compared with `start`,
+/// which is never given to git. A branch that names another commit, that is gone, or that is a name for another
+/// branch was moved, by whoever ([`MOVED`]); a git that does not answer is a commit that could not be made. With
+/// no start (`jellymoon copy clean`) the branch is taken where it is, read the same way.
+fn at_start(repo: &Repo, run: &str, start: Option<&str>) -> Result<String, Error> {
+    match (tip(repo, run), start) {
+        (Ok(tip), None) => Ok(tip),
+        (Ok(tip), Some(start)) if tip == start => Ok(tip),
+        (Err(Unread::Repo), _) => Err(refused("git could not read the run's branch, so nothing was committed")),
+        (_, Some(_)) => Err(refused(MOVED)),
+        (_, None) => Err(refused("the run's branch is not a branch at a commit, so nothing was committed")),
     }
 }
 

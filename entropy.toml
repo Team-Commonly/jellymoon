@@ -199,7 +199,17 @@ max_file_lines = 400
 # F50's follow-up raised core by 58, 49 of them tests: `session/tests.rs` 30 (the turn rules for a copy's line and
 # for a line with no folder), `session/copies.rs` 21 (17 the test of a `copies` that is a link, 2 a first name
 # that is no drive, 2 the third spelling), `session.rs` 6 and `reader.rs` 1.
-"crates/jellymoon-core" = 8373
+# The run follow-up raised core by 81: `call.rs` 27 (what a command says is read no further than what it prints,
+# and 25 of them the test of that), `run/record.rs` 25 (the one place a record's three names are read, and its
+# words compared with them), `copy/work.rs` 18 (a bound on the answer about a branch, a commit read to its limit
+# refused, one file's bytes read alone, the home's own fault), `busy.rs` 9 and `still.rs` 8 (a step a test waits
+# for without a clock; a text cleaning made longer is cut and says so), `copy/clean.rs` 4. `run.rs`, `run/end.rs`
+# and `run/show.rs` lost 10 between them.
+# The fixes after that change's gate raised core by 45, all in `call.rs`: 26 are tests (a command that says a
+# megabyte in 256 writes is heard out and ends as itself; one that prints past the size read is ended by its
+# own write), and 19 are the reader that keeps the start of stderr and reads the rest into nothing, the bound
+# on what is kept and the check, when it is built, that the bound holds all that an error's line is made of.
+"crates/jellymoon-core" = 8499
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -255,7 +265,19 @@ max_file_lines = 400
 # F50 raised the binary by 362, all of it its tests at the binary, `tests/f50.rs`.
 # F50's follow-up raised it by 105, all of it tests: `tests/f50/lines.rs` is 102 (a `copies` that is a link, a
 # line with no folder, a copy's line that repeats a uuid) and 3 are in `tests/f50.rs`.
-"crates/jellymoon" = 13904
+# The run follow-up raised the binary by 453, all of it tests (`src/parse.rs` lost 4): `tests/f44/bounds.rs` is
+# 168 (where each read of a look stops), `tests/f48/raced.rs` 122 (a branch changed between two of a run's git
+# steps, by the made-up git), `tests/f39/made.rs` 71 (a finished run's record and branch, shared by F44's and
+# F48's tests, which lost 45 for it), `tests/f44/shapes.rs` 66 (a removed link, a parent that is no commit,
+# renames), `tests/f48/named.rs` 46 (a record's words against its names), `tests/f48/moved.rs` gained 29 and
+# `tests/f48/cut.rs` 9, and `tests/f41/asked.rs` lost 19 (its made-up git is the shared one).
+# The fixes after that change's gate raised the binary by 91, all of it tests: `tests/f38.rs` 28 (`copy clean`
+# of a branch that is gone or is a name for another, and `copy make` of a checkout whose config says bare),
+# `tests/f44/bounds.rs` 27 (a repo whose config makes git warn 400 times a command is shown; a text cleaning
+# only shortens is not cut), `tests/f48/raced.rs` 21 (a run that changed nothing, its name made a name for
+# `main` before the last check; the made-up git known to have been at its step) and `tests/f44/refused.rs` 15
+# (a repo whose config says bare is refused by a look).
+"crates/jellymoon" = 14448
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -2,8 +2,9 @@
 //! the run's work and [`show_file`] prints one of them as its text. Which run, and whether there is work to show,
 //! is read from the home as a stop reads it (`stop.rs`); the work itself is read from the repo's store
 //! (`copy/work.rs`), as the change from the start to the end the run's record names, in the repo it names (F48).
-//! Nothing is written: not the home, not the repo, and no file of the work anywhere. Every name and every text
-//! is an agent's, and is cleaned before it is printed; no refusal holds either, or the repo's path.
+//! Nothing of the work is written anywhere, and nothing in the repo or of the day; the home gets only what any
+//! command that asks git makes there, empty (`show.md`, "What a look makes"). Every name and every text is an
+//! agent's, and is cleaned before it is printed; no refusal holds either, or the repo's path.
 
 use std::fmt;
 use std::path::Path;
@@ -12,9 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use super::end::{held, of_another, recorded};
 use super::obeyed::obeyed;
-use super::record::Record;
-use super::{RunOptions, RunOutcome, finished, no_wish, place, record, refused};
-use crate::copy::{self, Done, Entry, LISTED, Named, RunCopy, TEXT_MAX, Unread, WorkFile};
+use super::{RunOptions, RunOutcome, cut, cut_late, finished, no_wish, place, record, refused};
+use crate::copy::{self, Done, Entry, LISTED, TEXT_MAX, Unread, WorkFile};
 use crate::still::{statement, still_text};
 use crate::{Error, wish};
 
@@ -89,23 +89,27 @@ pub struct ShownFile {
     pub n: usize,
     pub name: String,
     pub size: u64,
-    /// The file as it is in the work, cleaned: its first `most` bytes, up to the last whole word when `cut`.
+    /// The file as it is in the work, cleaned: what was read of it, up to the last whole word when `cut`.
     pub text: String,
+    /// Whether the file was not read whole (reading stopped at `most` bytes) or the cleaned text was cut at
+    /// `most` characters. A text that cleaning only shortens, at its end, is not cut.
     pub cut: bool,
+    /// The most bytes of a file that are read. It is no count of what is printed: cleaning can make a text
+    /// longer, up to `most` characters, each of which can be several bytes.
     pub most: usize,
 }
 
-impl fmt::Display for Shown {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&serde_json::to_string(self).map_err(|_| fmt::Error)?)
-    }
+/// Each is printed as its one line of JSON.
+macro_rules! printed_as_json {
+    ($($shown:ty),*) => {$(
+        impl fmt::Display for $shown {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&serde_json::to_string(self).map_err(|_| fmt::Error)?)
+            }
+        }
+    )*};
 }
-
-impl fmt::Display for ShownFile {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&serde_json::to_string(self).map_err(|_| fmt::Error)?)
-    }
-}
+printed_as_json!(Shown, ShownFile);
 
 /// The run of a made wish that finished, how its work stands, and the first files of work that waits.
 struct Work {
@@ -117,12 +121,13 @@ struct Work {
 
 /// Finds the wish's run and reads its work. Refused: a wish that is not there, one with no run or another wish's,
 /// a run that is going or did not finish, and a record that is not core's. git is asked only for a run that
-/// finished with a commit, whose work waits.
-fn work(home: &Path, options: &RunOptions) -> Result<Work, Error> {
+/// finished with a commit, whose work waits. With `only`, a file's number, that file alone is read past its size.
+fn work(home: &Path, options: &RunOptions, only: Option<usize>) -> Result<Work, Error> {
     let day = wish::day_of(options.day.as_deref())?;
     let id = options.wish.as_str();
     let made = wish::kept_of(home, &day)?.into_iter().find(|made| made.id == id).ok_or_else(|| no_wish(&day))?;
-    let Some(run) = made.run.clone().filter(|run| copy::is_run_id(run)) else {
+    // A run a kept wish names is a run id, or the day's file is not used at all (`wish.rs`).
+    let Some(run) = made.run.clone() else {
         return Err(refused(format!("wish {id} has had no run, so there is no work to show")));
     };
     let no = |why: &str| refused(format!("run {run} {why}"));
@@ -132,51 +137,40 @@ fn work(home: &Path, options: &RunOptions) -> Result<Work, Error> {
     if of_another(home, &run, Some(&kept), &day, id) {
         return Err(refused(format!("wish {id} names run {run}, which is another wish's run: its work is not shown")));
     }
+    // The one line of a run that was cut off: before a look has written it down, and after.
+    let cut_off = "was cut off before it ended: there is no work of it to show";
     if kept.outcome.is_none() {
-        let cut = "was cut off before it ended: there is no work of it to show";
-        return Err(no(if held(home, &run) { "is going: its work is shown once it has finished" } else { cut }));
+        return Err(no(if held(home, &run) { "is going: its work is shown once it has finished" } else { cut_off }));
     }
     let not_cores = || refused(format!("the record of run {run} is not one Jellymoon wrote for this wish"));
     let (outcome, why) = recorded(home, &day, id, &run, &kept).ok_or_else(not_cores)?;
     match outcome {
         RunOutcome::Completed => {}
         RunOutcome::Cancelled => return Err(no("was cancelled by a stop: there is no work of it to show")),
+        _ if why == cut(&run) || why == cut_late(&run) => return Err(no(cut_off)),
         _ => return Err(no("did not finish: there is no work of it to show")),
     }
     // Before git is asked anything, and before anything is printed of a run whose work is not asked for at all:
-    // what the record names is in the shape core writes, or the record is not core's.
-    let named = named(&kept).map_err(|()| not_cores())?;
+    // what the record names is as core writes it, or the record is not core's (`Record::named`).
+    let named = kept.named(&run).map_err(|()| not_cores())?;
     let state = kept.work.unwrap_or(WorkState::Waits);
-    let copy = RunCopy { run: run.clone(), folder: String::new(), branch: copy::branch(&run), kept: false };
-    if state != WorkState::Waits || why != finished(&copy, true) {
+    if state != WorkState::Waits || why != finished(&run, true) {
         return Ok(Work { run, state, files: Vec::new(), more: 0 });
     }
     // The repo is found as a run finds it, whatever the record names: the record's folder is only compared.
     let folder = place::folder(home, &day, &made, options)?;
-    let read = copy::work_of(home, &folder, &run, options.repo.is_none(), named.as_ref());
+    let read = copy::work_of(home, &folder, &run, named.as_ref(), only);
     let (files, more) = read.map_err(|unread| unshown(&run, unread))?;
     Ok(Work { run, state, files, more })
-}
-
-/// What the record of a run that finished names of it: its repo, its start and its end, all three, or none of
-/// them in a record from before F48. It is asked of every finished run, whatever the state of its work. Err for a
-/// record that names some and not others, a repo by a path that does not start at a root (a run writes the folder
-/// as the system resolves it, from a root), or a commit by anything but a whole object id. Such a word never
-/// reaches git, and neither does one that passes: an id is only ever compared with what git printed
-/// (`copy/work.rs`).
-fn named(record: &Record) -> Result<Option<Named<'_>>, ()> {
-    match (record.repo.as_deref(), record.start.as_deref(), record.end.as_deref()) {
-        (None, None, None) => Ok(None),
-        (Some(repo), Some(start), Some(end)) if repo.is_absolute() && copy::is_id(start) && copy::is_id(end) => {
-            Ok(Some(Named { repo, start, end }))
-        }
-        _ => Err(()),
-    }
 }
 
 fn unshown(run: &str, unread: Unread) -> Error {
     let branch = format!("the branch of run {run}");
     refused(match unread {
+        Unread::Home => format!(
+            "the work of run {run} could not be read: no `git` program was found on PATH, or the folder Jellymoon \
+             keeps empty for git (runs/no-hooks) is not an empty folder"
+        ),
         Unread::Repo => format!(
             "the work of run {run} could not be read from the repo: the folder is not the top of a checkout git \
              opens, or git did not answer"
@@ -194,18 +188,18 @@ fn unshown(run: &str, unread: Unread) -> Error {
     })
 }
 
-/// The files of a finished run's work. Nothing is written anywhere.
+/// The files of a finished run's work. Nothing of it is written anywhere.
 pub fn show_run(home: &Path, options: &RunOptions) -> Result<Shown, Error> {
-    let work = work(home, options)?;
+    let work = work(home, options, None)?;
     let files = work.files.iter().enumerate().map(|(at, file)| entry(at + 1, file)).collect();
     Ok(Shown { run: work.run, wish: options.wish.clone(), work: work.state, files, more: work.more, most: LISTED })
 }
 
 /// File `n` of that list as its text. Refused in fixed words, with no byte of the file: a number that names no
-/// file, a file the work removed, a link, another repo's entry, what is not text, and a text that cleaning goes
-/// on changing.
+/// file, a file the work removed, a link, another repo's entry, what is not text, a text that cleaning goes on
+/// changing, and a text cut where reading stopped that has no whole word before the cut.
 pub fn show_file(home: &Path, options: &RunOptions, n: usize) -> Result<ShownFile, Error> {
-    let work = work(home, options)?;
+    let work = work(home, options, Some(n))?;
     let no = |why: &str| refused(format!("file {n} of run {} {why}", work.run));
     let Some(file) = n.checked_sub(1).and_then(|at| work.files.get(at)) else {
         return Err(no("names no file: `run show` lists the files, each with its number"));
@@ -218,11 +212,14 @@ pub fn show_file(home: &Path, options: &RunOptions, n: usize) -> Result<ShownFil
         (_, _, None) => return Err(no("is not text, so it is not shown")),
         (_, _, Some(text)) => text,
     };
-    let cut = file.size > TEXT_MAX as u64;
+    let long = file.size > TEXT_MAX as u64;
     // The word the cut fell in can be the head of a key whose rest was never read: it is not shown.
-    let text = if cut { text.rfind(char::is_whitespace).map_or("", |at| &text[..at]) } else { text };
-    let text = still_text(text, TEXT_MAX).map_err(|_| no("cannot be cleaned, so it is not shown"))?;
-    let (run, wish, work) = (work.run.clone(), options.wish.clone(), work.state);
+    let text = if long { text.rfind(char::is_whitespace).map_or("", |at| &text[..at]) } else { text };
+    let (text, shortened) = still_text(text, TEXT_MAX).map_err(|_| no("cannot be cleaned, so it is not shown"))?;
+    if long && text.is_empty() {
+        return Err(no("has no whole word in what is read of it, so it is not shown"));
+    }
+    let (run, wish, work, cut) = (work.run.clone(), options.wish.clone(), work.state, long || shortened);
     Ok(ShownFile { run, wish, work, n, name: shown.name, size: file.size, text, cut, most: TEXT_MAX })
 }
 

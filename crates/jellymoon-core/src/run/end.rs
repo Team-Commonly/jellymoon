@@ -70,8 +70,8 @@ pub(super) fn held(home: &Path, run: &str) -> bool {
     plain && File::open(&lock).is_ok_and(|lock| lock.try_lock_shared().is_err())
 }
 
-/// The end in a run's record, when it is one core wrote for this wish: the words are made here again, and the
-/// record's are used only to choose among them. A record is a file, and anyone who can write the home can write
+/// The end in a run's record, when it is one core wrote for this wish, by a run or by the look that found the
+/// run cut off: the words are made here again, and the record's are used only to choose among them. A record is a file, and anyone who can write the home can write
 /// it: a finished run is believed only when its copy is gone as a finished run's is, with its work on its branch.
 pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> Option<(RunOutcome, String)> {
     let (outcome, said) = (record.outcome?, record.why.as_deref()?);
@@ -79,14 +79,12 @@ pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &R
         return None;
     }
     let ours: Vec<String> = match outcome {
-        RunOutcome::Completed if copy::is_gone(home, run) => {
-            let copy = RunCopy { run: run.to_string(), folder: String::new(), branch: copy::branch(run), kept: false };
-            vec![finished(&copy, true), finished(&copy, false)]
-        }
+        RunOutcome::Completed if copy::is_gone(home, run) => vec![finished(run, true), finished(run, false)],
         RunOutcome::Failed => {
             let seconds = said.split(" seconds)").next().and_then(|to| to.rsplit(' ').next()?.parse::<u64>().ok());
             let limit = seconds.map(|seconds| failed(run, &at_limit(Duration::from_secs(seconds))));
-            KINDS.iter().map(|kind| failed(run, kind)).chain(limit).collect()
+            // And the two lines of a run that was cut off, which a look writes ([`written`]) and no run does.
+            KINDS.iter().map(|kind| failed(run, kind)).chain(limit).chain([cut(run), cut_late(run)]).collect()
         }
         RunOutcome::Cancelled => vec![cancelled(run)],
         _ => Vec::new(),
@@ -237,7 +235,7 @@ pub(super) fn settle(
         Some(kind) => Err(kind),
     };
     let (outcome, why, end) = match committed {
-        Ok((ended, changed, end)) => (RunOutcome::Completed, finished(&ended, changed), end),
+        Ok((_, changed, end)) => (RunOutcome::Completed, finished(run, changed), end),
         Err(_) if ended.end == End::Stopped => (RunOutcome::Cancelled, cancelled(run), None),
         Err(kind) => (RunOutcome::Failed, failed(run, kind), None),
     };

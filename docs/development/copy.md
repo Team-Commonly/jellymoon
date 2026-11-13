@@ -47,7 +47,13 @@ new thing in their repo is the run's branch (and git's own registration of the w
   drop the worktree's registration. The branch is kept: it is the work. Nothing to commit is not an error, and
   neither is a folder already gone. The commit is one commit, `Jellymoon run <run>`, on top of the branch.
   `jellymoon copy clean` takes the branch as it is. A run's own end takes it only while it is still at the commit
-  the copy was made from, and has failed otherwise (`run.md`, "What is kept").
+  the copy was made from, and has failed otherwise (`run.md`, "What is kept"). Either way the branch is read by
+  its whole name, as a look reads it, and must be a plain branch at a commit: one that is gone, or is a name
+  for another branch, is refused with nothing staged (`the run's branch is not a branch at a commit, so nothing
+  was committed`, for `copy clean`). The commit is put there with `update-ref --no-deref` and the commit the
+  branch was read at as the old value, so it lands on that name only, and only while the name is still there;
+  a copy that held nothing new is put through the same step: it moves nothing; a name that was made a name
+  for another branch is a plain branch again.
 - **failed.** The copy stays for a look. Of all failed copies, of every repo, the newest five stay; older ones are
   removed with their registration, and what was not committed in them is lost. Their branches stay. Newest is the
   order the runs failed in, which the records hold: each is dated later than every failed run before it, so the run
@@ -81,6 +87,12 @@ lists of such a folder is left to git's own `worktree prune`. A test shortens th
 which only a build with debug assertions reads: a release does not. With `JELLYMOON_TEST_GIT_LIMIT_FROM` the
 short limit is counted from when the file it names is there, which the made-up git leaves once it has stalled:
 no git call that is not meant to stall has to end within it.
+
+**A git that says a lot.** Of what a git child says on stderr the first 128 KiB are kept and the rest is read to
+its end and dropped (`call.rs`, `SAID_KEPT`): git is never ended for what it says, and a git that says a great
+deal costs no more memory than that. An error's one line is made from the first 300 characters of it, so no
+line changes. What a git step of `make` or `clean` prints (stdout) is read whole; only a look's reads of it stop
+at a size ([show.md](show.md)).
 
 **A copy a killed `jellymoon run` left.** One whose `start.lock` nothing holds, and that no wish names, is
 taken back by the next page or run ([run.md](run.md), "A copy nothing names"), behind the same lock, waited

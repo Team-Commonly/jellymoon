@@ -14,7 +14,7 @@ use std::{env, fs, io, thread};
 use serde::Deserialize;
 
 use crate::find::{self, Found};
-use crate::redact::line;
+use crate::redact::{WINDOW, line};
 use crate::{Error, PageOptions, ReaderDay};
 
 /// The whole system prompt of the reading call: a fixed text, so nothing in a day can change it.
@@ -63,6 +63,15 @@ const DRAIN: Duration = Duration::from_secs(1);
 
 /// How much of what a harness printed is kept in an error, in characters.
 const SAID_MAX: usize = 300;
+
+/// The most bytes that are kept of what a command says on stderr, whoever reads it: 128 KiB. What is said after
+/// that is read and dropped ([`collect`]). Nothing reads further in: the reading call's harness and every git
+/// step of a run's copy (`copy/git.rs`) make an error's one line of it with `redact::line`, which looks at the
+/// first [`SAID_MAX`] and [`WINDOW`] characters and at nothing after them, and a git step that asks whether
+/// anything was said at all asks it of that line. Those characters are at most four bytes each, so they are all
+/// within what is kept, and every such line is what it was when all of stderr was kept.
+pub(crate) const SAID_KEPT: usize = 128 * 1024;
+const _: () = assert!(SAID_KEPT >= 4 * (SAID_MAX + WINDOW));
 
 /// `--output-format json`: one object, the model's text in `result`.
 #[derive(Deserialize)]
@@ -163,14 +172,17 @@ pub(crate) fn private_dir(dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Runs the command with `input` on its stdin and returns what it printed. One still running at `limit` is stopped.
-/// With `from`, a file of a test's (`busy::test_file`), the limit is counted from when that file is there.
+/// Runs the command with `input` on its stdin and returns what it printed, all of it, and the first
+/// [`SAID_KEPT`] bytes of what it said on stderr. One still running at `limit` is stopped. With `from`, a file of
+/// a test's (`busy::test_file`), the limit is counted from when that file is there.
 pub(crate) fn run(command: Command, input: Vec<u8>, limit: Duration, from: Option<&Path>) -> Result<Output, Error> {
     run_most(command, input, limit, from, usize::MAX)
 }
 
-/// [`run`], reading no more than `most` bytes of what the command prints on stdout. The pipe is let go of there,
-/// so a command that prints more is ended by its own next write: what it exited with then says nothing.
+/// [`run`], reading no more than `most` bytes of what the command prints on stdout. That pipe is let go of
+/// there, so a command that prints more is ended by its own next write: what it exited with then says nothing.
+/// Of what it says on stderr no more than `most` bytes are kept either, and never more than [`SAID_KEPT`], but
+/// that pipe is read to its end: a command is never ended for what it says beside its answer.
 pub(crate) fn run_most(
     mut command: Command,
     input: Vec<u8>,
@@ -183,7 +195,8 @@ pub(crate) fn run_most(
     let stdin = child.stdin.take();
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(&input)));
-    let (stdout, stderr) = (collect(child.stdout.take(), most), collect(child.stderr.take(), usize::MAX));
+    let stdout = collect(child.stdout.take(), most, false);
+    let stderr = collect(child.stderr.take(), most.min(SAID_KEPT), true);
     let mut deadline = Instant::now() + limit;
     let status = loop {
         if let Some(status) = child.try_wait().map_err(Error::Call)? {
@@ -203,15 +216,23 @@ pub(crate) fn run_most(
     Ok(Output { status, stdout: drained(stdout), stderr: drained(stderr) })
 }
 
-/// Reads a pipe to its end on a thread of its own, so a harness that prints a lot is never left waiting to be read.
-fn collect(pipe: Option<impl Read + Send + 'static>, most: usize) -> Receiver<Vec<u8>> {
+/// Reads a pipe on a thread of its own, so a command that prints a lot is never left waiting to be read, and
+/// hands over its first `most` bytes as soon as it has them, or all of it at its end. With `heard_out` the thread
+/// then goes on reading, into nothing, until the pipe ends or fails: the pipe stays open and is never full, so
+/// its writer is neither ended by a write nor left waiting on one, on any system. The thread is waited for by
+/// nobody, and ends when every holder of the pipe's other end has closed it: the command, by ending or by being
+/// killed at its limit, and whatever it started. Without `heard_out` the pipe is let go of at `most` bytes.
+fn collect(pipe: Option<impl Read + Send + 'static>, most: usize, heard_out: bool) -> Receiver<Vec<u8>> {
     let (send, receive) = mpsc::channel();
     thread::spawn(move || {
-        let mut read = Vec::new();
-        if let Some(pipe) = pipe {
-            let _ = pipe.take(u64::try_from(most).unwrap_or(u64::MAX)).read_to_end(&mut read);
+        let (mut read, mut pipe) = (Vec::new(), pipe);
+        if let Some(pipe) = pipe.as_mut() {
+            let _ = pipe.by_ref().take(u64::try_from(most).unwrap_or(u64::MAX)).read_to_end(&mut read);
         }
         let _ = send.send(read);
+        if let (true, Some(mut pipe)) = (heard_out, pipe) {
+            let _ = io::copy(&mut pipe, &mut io::sink());
+        }
     });
     receive
 }
@@ -243,6 +264,57 @@ mod tests {
         let stopped = run(command, b"the day\n".to_vec(), Duration::from_millis(300), None);
         assert!(matches!(stopped, Err(Error::TooLong(_))), "want the call stopped at its limit");
         assert!(start.elapsed() < Duration::from_secs(10), "stopped only after {:?}", start.elapsed());
+    }
+
+    /// Not a test of its own either: a child that says a megabyte on stderr, in 256 writes with a pause after
+    /// each, and fails when one of them is not taken. Then it prints one word.
+    #[test]
+    fn a_child_that_says_a_lot() {
+        if env::var_os("JELLYMOON_TEST_SAYS_A_LOT").is_some() {
+            for _ in 0..256 {
+                std::io::stderr().write_all(&[b'e'; 4096]).expect("what it says is read to its end");
+                thread::sleep(Duration::from_millis(1));
+            }
+            println!("said-it-all");
+        }
+    }
+
+    // The gate's finding on the follow-up to F48. A read that stops at a size keeps no more than that of what the
+    // command says beside its answer, and a call that reads everything keeps `SAID_KEPT`. Neither lets go of the
+    // pipe: a command that goes on saying things is heard out, ends as itself, and its answer is whole.
+    #[test]
+    fn a_command_that_says_far_more_than_is_kept_is_heard_out_and_ends_as_itself() {
+        for (most, kept) in [(4096, 4096), (usize::MAX, SAID_KEPT)] {
+            let mut command = this_test_program("call::tests::a_child_that_says_a_lot");
+            command.env("JELLYMOON_TEST_SAYS_A_LOT", "1");
+            let ran = run_most(command, Vec::new(), Duration::from_secs(30), None, most).unwrap();
+            let printed = String::from_utf8_lossy(&ran.stdout);
+            assert!(ran.status.success(), "read to {most}: the command was ended, {}: {printed}", ran.status);
+            assert!(printed.contains("said-it-all") && printed.contains("1 passed"), "read to {most}: {printed}");
+            assert_eq!(ran.stderr.len(), kept, "read to {most}");
+            assert!(ran.stderr.iter().all(|byte| *byte == b'e'), "what is kept is the start of what was said");
+        }
+    }
+
+    /// Not a test of its own either: a child that prints until a write is not taken, a minute at most.
+    #[test]
+    fn a_child_that_prints_without_end() {
+        if env::var_os("JELLYMOON_TEST_PRINTS_ON").is_some() {
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_secs(60) && std::io::stdout().write_all(&[b'o'; 4096]).is_ok() {}
+        }
+    }
+
+    // What a command prints is read to a size and its pipe let go of there, which is what ends a command that
+    // prints more: only what it says beside its answer is heard out.
+    #[test]
+    fn a_command_that_prints_past_the_size_read_is_ended_by_its_own_next_write() {
+        let mut command = this_test_program("call::tests::a_child_that_prints_without_end");
+        command.env("JELLYMOON_TEST_PRINTS_ON", "1");
+        let start = Instant::now();
+        let ran = run_most(command, Vec::new(), Duration::from_secs(20), None, 4096).unwrap();
+        assert_eq!(ran.stdout.len(), 4096);
+        assert!(start.elapsed() < Duration::from_secs(15), "ended only after {:?}", start.elapsed());
     }
 
     #[test]

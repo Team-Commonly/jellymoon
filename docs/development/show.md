@@ -10,8 +10,18 @@ jellymoon run show --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <
 jellymoon run show --wish <id> ... --file <n>
 ```
 
-Each prints one line of JSON and exits 0, or one line on stderr and exits 1. It writes nothing: not Jellymoon's
-home, not the repo, and no file of the work anywhere. It starts no program but `git`.
+Each prints one line of JSON and exits 0, or one line on stderr and exits 1. It writes nothing in the repo, no
+file of the work anywhere, and nothing of the day or of a run. It starts no program but `git`.
+
+**What a look makes in the home.** One thing, and only when git is asked: the folder
+
+```
+runs/no-hooks
+```
+
+when it is not there. It is the empty folder every git of Jellymoon's is started in and told to look for hooks in
+(`copy.md`, "What is switched off"), a run makes it too, and a look that finds it gone makes it again, empty.
+Nothing else in the home is made, changed or removed by a look.
 
 ## What it prints
 
@@ -36,14 +46,35 @@ Each file: `n` (its number, from 1), `name` (the path, cleaned, on one line, at 
 | `repo` | another repo's entry, a submodule (mode 160000) | 0: nothing of it is in this repo |
 
 A removed file is described as it was. A file whose mode alone changed is `changed`. A rename is a file removed
-and a file made: nothing guesses that two names are one file.
+and a file made: nothing guesses that two names are one file. Git's plumbing finds a rename only when it is told
+to, and it is not told; `diff.renames` in the repo's config or the person's changes nothing
+(`f44/shapes.rs`).
+
+**What a printed name can hold.** A name is cleaned (below), so two files can print the same name, and only `n`
+tells two files apart:
+
+- A name that is only spaces, or only characters cleaning takes out (U+200B, say), prints as `""`. `README.md`
+  with a U+200B after it prints exactly as `README.md`.
+- A name over 4,096 bytes is not cleaned at all and prints as `[redacted]`, as every such name does.
+- The joiners U+200C and U+200D are kept in a printed name: emoji and several scripts are written with them. A
+  name can hold them and show nothing of it.
+- A text keeps those two and also U+2028, U+2029, U+034F, U+FE0F and U+3164, which are not format or control
+  characters to the cleaning and draw as nothing or as a line's end.
 
 Work that is `kept` or `tossed`, and a run that finished and changed nothing, print no files, and git is not asked.
 
 One file (`ShownFile`, example `shown-file.json`): `run`, `wish`, `work`, `n`, `name`, `size`, `text`, `cut` and
 `most` (65536). `text` is the file as it is in the work, whole, and never a diff. Of a file over 64 KiB only the
 first 64 KiB are read, `cut` is true, and the text ends before the word the cut fell in: that word can be the head
-of a key whose rest was never read.
+of a key whose rest was never read. With no whole word before the cut (no space or line break in what was read,
+as in a minified file) the file is refused in fixed words, not printed as an empty text.
+
+**`cut` is true whenever the file was not read whole or the cleaned text was cut at `most`.** A text that
+cleaning only shortens, by the spaces and line breaks at its end, is not `cut`. `most` counts the bytes that are read of a file, and it
+is no count of what is printed. Cleaning can make a text longer: a token gains an ellipsis and a password in a
+link becomes `[redacted]`. A text is kept to `most` characters, so a file of 64 KiB or less that cleaning makes
+longer than that is cut there, ends in `…`, and says `cut`. A character can be several bytes, so `text` can be
+more than `most` bytes long.
 
 ## Which run, and which repo
 
@@ -60,12 +91,16 @@ is repeated; here nothing git says is repeated of any folder.
 The record names the run's repo, the commit the run started from and the commit it ended as (F48; `run.md`, "What
 is kept"). The record is a file, and whoever can write the home can write it, so none of the three is trusted:
 
-- **Checked first, before git is asked anything and before anything of the run is printed** (`named` in
-  `run/show.rs`), for every finished run: one whose work waits, one that changed nothing, and one whose work is
-  `kept` or `tossed`. A record names all three or none.
+- **Checked first, before git is asked anything and before anything of the run is printed** (`Record::named` in
+  `run/record.rs`, the one place the three are read), for every finished run: one whose work waits, one that
+  changed nothing, and one whose work is `kept` or `tossed`. A finished run's record names all three or none.
   `start` and `end` must each be a whole object id, 40 or 64 hex digits and nothing else, and `repo` a path from a
   root. Anything else (a branch's name, `HEAD~1`, a short id, an option, one or two of the three) is refused as a
   record Jellymoon did not write.
+- **The record's words and its names must agree.** A run whose `why` says its work is one commit ended as
+  another commit than it started from, and a run whose `why` says it changed nothing ended as its start. A
+  record with `one commit` and `end` equal to `start`, or with `changed nothing` and two commits, is refused the
+  same way, at the same place.
 - **The repo's path chooses nothing, and nothing is looked up at it.** The repo is found as above, whatever the
   record says. Git then names the git folder that repo's checkouts share, and that folder must be the record's.
   One folder has many spellings, on a Mac by a link or by case, on Windows by case, a short name, either
@@ -95,17 +130,24 @@ commits are compared as trees, with no history walked.
 
 | Asked | For | Read up to |
 |---|---|---|
-| `for-each-ref --format='%(refname) %(objectname) %(objecttype) %(symref)' refs/heads/jellymoon/run-<id>` | the branch, by its whole name: only the line of exactly that name is taken | every ref under that name: not bounded |
-| `cat-file commit <id>` | the commit's parents and message | 64 KiB |
-| `diff-tree -r --no-renames --no-abbrev -z <parent> <commit>` | the files, as modes, ids and a letter, each path ended by a zero byte | 16 MiB |
+| `for-each-ref --format='%(refname) %(objectname) %(objecttype) %(symref)' refs/heads/jellymoon/run-<id>` | the branch, by its whole name: only the line of exactly that name is taken | 16 KiB; an answer of that size or more is no answer, and is refused as a repo that could not be read |
+| `cat-file commit <id>` | the commit's parents and message | 64 KiB; a commit of that size or more is not a run's, whatever its first 64 KiB say |
+| `diff-tree -r --no-abbrev -z <parent> <commit>` | the files, as modes, ids and a letter, each path ended by a zero byte | 16 MiB; a list of that size or more is refused |
 | `cat-file --batch-check`, ids on its input | each listed file's size, and that it is a blob | 128 bytes a file |
-| `cat-file --batch`, ids on its input | every listed file of at most 64 KiB | their sizes |
-| `cat-file blob <id>` | the start of a longer file | 64 KiB |
+| `cat-file --batch`, ids on its input | for the list, every listed file of at most 64 KiB; for `--file <n>`, file `n` when it is that short | their sizes |
+| `cat-file blob <id>` | the start of a longer file: of each, for the list; of file `n` alone, for `--file <n>` | 64 KiB |
+
+The list says of every file whether it is text, so it reads the start of every file. `--file <n>` reads the
+sizes of all and the bytes of file `n` only: a file git cannot be made to give keeps the list from being shown,
+and no other file.
 
 No file name is ever an argument: git is given ids, which are checked to be 40 or 64 hex digits. A name is bytes
 git printed between two zero bytes. So a name that is `-rf`, `--output=x` or `HEAD:a.txt`, or holds a line break,
 is a name. Reading stops at the size given: the pipe is closed there and git ends on its next write
-(`call::run_most`). Each git has the copy's time limit (`copy.md`, "Limits").
+(`call::run_most`). What git says beside its answer (stderr) is not read that way: it is read to its end, so git
+is never ended for what it says, and no more of it is held than the size given, or 128 KiB when that is less;
+none of it is used. A repo whose config makes git warn at every command is shown as any other
+(`f44/bounds.rs`). Each git has the copy's time limit (`copy.md`, "Limits").
 
 **The work is the tip's change from its one parent.** The tip must be a commit with exactly one parent and the
 message `Jellymoon run <id>`, which is what a copy ends as (`copy/clean.rs`). A commit put on the branch afterwards,
@@ -120,7 +162,8 @@ be checked (see "What it does not do").
   character, credential shapes replaced, `"` made `'`, cut at 200 characters.
 - **A text** passes `still::still_text`: the reader's cleaning of a turn (`redact::shown`), which keeps lines and
   quotes, made again until a making changes nothing. Eight makings may change it; a text a ninth changes is
-  refused, never printed half cleaned.
+  refused, never printed half cleaned. A making that leaves more than 65,536 characters is cut there, and the
+  answer's `cut` says so.
 - **`obeyed`** is asked of the name as git keeps it, read as the disks read it (below), and of the cleaned name
   too. Cleaning takes out most characters nobody sees but keeps the joiners U+200C and U+200D, which HFS+ leaves
   out of a name: those two are dropped by the rule itself. The name as git keeps it is asked whole, so a name
@@ -204,17 +247,18 @@ must say obeyed), and every character above against every name of one and two AS
 | no record that can be read | `the record of run <run> cannot be read, so its work is not shown` |
 | a run that is another wish's | `wish <id> names run <run>, which is another wish's run: its work is not shown` |
 | a run that is going | `run <run> is going: its work is shown once it has finished` |
-| a run cut off, not yet written down | `run <run> was cut off before it ended: there is no work of it to show` |
+| a run that was cut off, before a look has written it down and after | `run <run> was cut off before it ended: there is no work of it to show` |
 | a record that is not core's for this wish, or a finished run whose copy is still there | `the record of run <run> is not one Jellymoon wrote for this wish` |
 | a cancelled run | `run <run> was cancelled by a stop: there is no work of it to show` |
 | a run that failed or was never started | `run <run> did not finish: there is no work of it to show` |
 | no one folder for the wish | the refusals of `run.md`, "What is refused", for the folder |
-| a folder that is not the top of a checkout, a git that failed or ran out of time, an object that is missing | `the work of run <run> could not be read from the repo: ...` |
+| no `git` on `PATH`, or something in the folder of the home git is started in | `the work of run <run> could not be read: no `git` program was found on PATH, or the folder Jellymoon keeps empty for git (runs/no-hooks) is not an empty folder` |
+| a folder that is not the top of a checkout, a git that failed, ran out of time or answered about the branch at more length than is read, an object that is missing | `the work of run <run> could not be read from the repo: ...` |
 | no branch of the run's name | `the branch of run <run> is not in the repo, so there is no work of it to show` |
 | the branch is a name for another | `the branch of run <run> is a name for another branch by now, ...` |
-| a finished run's record that names a commit by anything but a whole id, a repo by a path not from a root, or only some of the three | `the record of run <run> is not one Jellymoon wrote for this wish` |
+| a finished run's record that names a commit by anything but a whole id, a repo by a path not from a root, only some of the three, or a start and an end that do not fit its words | `the record of run <run> is not one Jellymoon wrote for this wish` |
 | a repo that is not the one the record names | `the repo found for run <run> is not the one its record names, so its work is not shown` |
-| a tip that is not a run's commit, or not the end the record names | `the branch of run <run> is not as the run left it, ...` |
+| a tip that is not a run's commit, is a commit longer than is read, or is not the end the record names | `the branch of run <run> is not as the run left it, ...` |
 | a tip whose one parent is not the start the record names | `the work of run <run> does not start where its record says the run started, so it is not shown as the run's` |
 | a list of files over 16 MiB | `the work of run <run> is more files than Jellymoon lists` |
 | `--file` with no such number, or one past the 200 listed | `file <n> of run <run> names no file: ...` |
@@ -223,6 +267,7 @@ must say obeyed), and every character above against every name of one and two AS
 | `--file` of another repo's entry | `file <n> of run <run> is another repo's entry, ...` |
 | `--file` of what is not text | `file <n> of run <run> is not text, so it is not shown` |
 | `--file` of a text cleaning goes on changing | `file <n> of run <run> cannot be cleaned, so it is not shown` |
+| `--file` of a text over 64 KiB with no space or line break in what is read | `file <n> of run <run> has no whole word in what is read of it, so it is not shown` |
 
 `--file` with anything but digits is a usage error, exit 2. No refusal holds a file's name, a byte of a file, a
 word of the agent's or a word of git's, and neither a refusal nor an answer holds the repo's path or a commit's id.
@@ -241,6 +286,12 @@ word of the agent's or a word of git's, and neither a refusal nor an answer hold
 - **It does not show a commit no record names.** A run killed after its commit and before its end was written
   leaves that commit on its branch (`run.md`, "What a kill leaves in the record"). It is not shown.
 - **It does not look past 200 files or 64 KiB of one.** There is no way to ask for the rest.
+- **It does not tell two files apart by name.** Two files can print one name ("What a printed name can hold");
+  `n` is the file.
+- **It does not find a run's branch that a disk keeps under another case.** On a disk that folds case, with a
+  branch `Jellymoon/other` already there, git stores the run's branch under `refs/heads/Jellymoon/` and lists
+  it by that name. The look asks for `refs/heads/jellymoon/run-<id>` to the letter and says the branch is not
+  in the repo. Nothing is shown that is not the run's; the run's own work is not shown either.
 - **It writes no `work` to the record.** Nothing does yet: `kept` and `tossed` are F45's and F46's to write.
 - **It does not bury a run that was cut off.** A look is not a page: it refuses, and writes nothing down.
 - **Measured on macOS only**, with git 2.50; the test lists work of ten thousand files and allows it a minute. Not

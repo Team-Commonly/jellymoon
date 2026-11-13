@@ -19,8 +19,8 @@ and `attrs.rs` the checks, `made.rs` the one new commit, `step.rs` the step and 
 
 ## What it prints
 
-One line of JSON (`Kept`; the examples `crates/jellymoon-core/tests/fixtures/kept.json`, `kept-asked.json` and
-`kept-loose.json` round-trip):
+One line of JSON (`Kept`; the examples `crates/jellymoon-core/tests/fixtures/kept.json`, `kept-asked.json`,
+`kept-loose.json` and `kept-stayed.json` round-trip):
 
 | Name | What it is |
 |---|---|
@@ -29,6 +29,7 @@ One line of JSON (`Kept`; the examples `crates/jellymoon-core/tests/fixtures/kep
 | `onto` | the branch, by its short name, cleaned at the door every kept text is cleaned at, on one line. `null` of work that would not be kept, and of work that was kept on no branch a record names |
 | `why` | what was done, or with `--ask` what would be, in core's fixed words |
 | `settings` | the files of the work that the person's tools obey ([show.md](show.md), "Files the person's tools obey"), cleaned, at most 200. Left out when there are none |
+| `stayed` | each `.gitattributes` the work removes that was still in the checkout after the step, cleaned as `settings` is, at most 200 ("A file with a filter"). Left out when there are none, which is every keep but that one |
 | `fits` | with `--ask` only: whether a keep would land the work |
 
 Two more words on the command line:
@@ -49,8 +50,14 @@ What a keep did, in `why`:
 | the branch held the work already | `run <id> was kept: the branch held the run's work already, and nothing was landed` |
 | a keep that was cut off had landed it | `run <id> was kept: a keep that was cut off had landed its work, and this one finished it` |
 | the checkout was moved to another branch just before the step | ``run <id> was kept, on another branch than the keep began on: the checkout was moved to the branch that `onto` names while the keep was at work, and git landed the work there`` |
-| the checkout's `HEAD` was detached just before the step | ``run <id> was kept, on no branch that is named here: while the keep was at work the checkout's HEAD was detached, or moved to a branch whose name Jellymoon does not write down, and git landed the work there; the run's branch is left and still holds the run's own commit, and a new commit the keep made to join the work with the person's commits is named by nothing of Jellymoon's: `kept` is its id`` |
+| the checkout's `HEAD` was detached just before the step, and what landed is the run's own commit | ``run <id> was kept, on no branch that is named here: while the keep was at work the checkout's HEAD was detached, or moved to a branch whose name Jellymoon does not write down or the repo does not list under that spelling, and git landed the work there; the run's branch is left and still holds the run's own commit, which is the commit git landed: `kept` is its id`` |
+| the same, and what landed is the one new commit | the same words to `the run's own commit,`, then ``and the new commit the keep made to join the work with the person's commits is named by nothing of Jellymoon's: `kept` is its id`` |
 | it was kept before | `the work of run <id> was kept before: nothing was changed` |
+
+When `stayed` names a file, `why` goes on after any of these with: ``; git could not remove every `.gitattributes`
+the work removes: each one `stayed` names is still in the checkout, and a file of the work it sets a filter for was
+written as the store holds it, not as that filter would have made it``. The work is kept all the same (git landed
+the commit) and the command ends with 0.
 
 With `--ask`, in the same order: `a keep of run <id> would move the branch forward to the run's commit`; `a keep of
 run <id> would land one new commit on top of the branch's own, holding its work and the run's`; `a keep of run <id>
@@ -79,8 +86,10 @@ for any other reason is said as that, and not as another keep.
 `--ask` makes every check below and takes no step. It writes no file of the checkout, no index of the person's,
 no ref and no word of the record, and takes no lock on the checkout's index: git's trial runs on a copy of the
 index that is Jellymoon's. When the branch is where the run started it writes nothing in the checkout's git
-folder at all (`tests/f45/late.rs` asks in a checkout whose git folder takes no new file). What a question does
-write:
+folder at all (`tests/f45/late.rs` asks in a checkout whose git folder takes no new file). One time is changed
+there: of an index kept in two parts, git sets the shared part's time of change to now whenever it reads the
+index, the copy too (measured on 2.50.1; no setting stops it, and the person's own `git status` does the same).
+What a question does write:
 
 - `runs/keep.lock`, the empty file the keeps' lock is taken on, when it is not there yet. A question waits for a
   keep as a keep does, so that it answers of what that keep left, and the file is never removed.
@@ -118,6 +127,10 @@ which files only look changed (`update-index -q --refresh`): a tracked file whos
 did not is no unsaved change, to the trial as to `git merge`. The check reads such a file and writes nothing of
 the person's. A trial that passed is taken once more without `-n` and without `-u`, which writes the copy and
 nothing else: the copy is then the index the step would leave, and it is what the attributes are asked of.
+What stops only that second take is in the way as well, and is said in the same words. It was measured in a
+checkout that is sparse by patterns, with a file of the person's at a path the checkout leaves out, which the
+work removes: the trial passes, the second take stops (`not uptodate`), and plain `git merge` refuses
+(`tests/f45/attrs.rs`).
 Of an index kept in two parts (`core.splitIndex`) the copy is the part that is the checkout's own, and it reads
 the shared part where it is: git 2.50.1 writes the copy and no new shared part into the checkout's git folder,
 with every file of the checkout touched, and the second take is told to write the copy whole
@@ -139,7 +152,7 @@ again and by a question (`tests/f45/cut.rs`).
 |---|---|---|
 | 1 | With commits of the person's own: `git commit-tree` makes the one new commit in the store. Nothing names it | begins again and makes another; git tidies the first away in time |
 | 2 | The record takes `kept` (the commit about to land) and `onto` (the branch's whole name). `work` is not yet written | begins again: the commit the record names is not in the branch's history, so every check is made anew, for the checkout as it is then |
-| 3 | `git merge --ff-only` moves the checkout and the branch to the commit. Then core asks git where the commit is ("A checkout moved just before the step") | finds the record's commit in the history of the record's branch and finishes: nothing more is landed |
+| 3 | `git merge --ff-only` moves the checkout and the branch to the commit. Then core asks git where the commit is ("A checkout moved just before the step"), and the disk whether a `.gitattributes` the work removes is still there ("A file with a filter") | finds the record's commit in the history of the record's branch and finishes: nothing more is landed |
 | 4 | The record takes `work: kept`, with the branch the commit is on | says the work was kept before, and deletes the run's branch if it is still there |
 | 5 | The run's branch is deleted, as itself and only while it names `end` (`git update-ref --no-deref -d <name> <end>`) and no checkout stands on it. It is left when the work is on no branch | (nothing is left to do) |
 
@@ -161,29 +174,43 @@ step and the branch the keep meant is not at the commit, core asks where `HEAD` 
 
 | `HEAD` after the step | What the keep says and does |
 |---|---|
-| on a run's branch (any name under `refs/heads/jellymoon/run-`), whether git took the step or not | not kept, in the words of "moved onto a run's branch" below: the record keeps what was meant, the run's branch is left, and the next keep begins again |
-| on a branch of the person's whose name a record holds, at the commit | kept, in the words of "another branch": the record's `onto` is that branch, and the run's branch is deleted |
-| detached at the commit, or at the commit on a branch whose name no record holds | kept, in the words of "no branch": the record's `onto` is the one word `HEAD`, what is printed has `onto: null`, and the run's branch is left. No ref is written. Moved forward, the run's branch is the one name of Jellymoon's the commit has; joined with the person's commits, the run's branch names the run's own commit and the new commit has no name but `kept` and the detached `HEAD` (or the branch of the odd name) |
-| on a branch of the person's whose name a record holds, ahead of the commit with the commit in its history | kept, in the words of work the branch held already: git had nothing to do there. The record names that branch, and the run's branch is deleted |
+| on a run's branch (any name under `refs/heads/jellymoon/run-`, those letters in either case), whether git took the step or not | not kept, in the words of "moved onto a run's branch" below: the record keeps what was meant, the run's branch is left, and the next keep begins again |
+| on a branch of the person's whose name a record holds and the repo lists, byte for byte, with its tip where `HEAD` is, at the commit | kept, in the words of "another branch": the record's `onto` is that branch, and the run's branch is deleted |
+| detached at the commit, or at the commit on a branch whose name no record holds or the repo does not list under that spelling | kept, in the words of "no branch": the record's `onto` is the one word `HEAD`, what is printed has `onto: null`, and the run's branch is left. No ref is written. Moved forward, the run's branch is the one name of Jellymoon's the commit has; joined with the person's commits, the run's branch names the run's own commit and the new commit has no name but `kept` and the detached `HEAD` (or the branch of the odd name) |
+| on such a listed branch, ahead of the commit with the commit in its history | kept, in the words of work the branch held already: git had nothing to do there. The record names that branch, and the run's branch is deleted |
 | anywhere else: detached somewhere else than at the commit (ahead of it too), or on a branch that does not hold it | the late refusal ("A step git stops") |
 
 **A run's branch is never where work was kept.** A checkout moved onto the run's own branch just before the step
 is already at the run's commit, so git says it has nothing to do; said as "kept there", the next keep would find
 the work "landed" on that branch and delete it, with the commit on no branch at all. So nothing was kept:
 
-``while the keep was at work the checkout was moved onto a run's branch, where Jellymoon keeps no work: the work of
-run <id> was not kept, its branch is left, and the next `run keep` begins again``
+``while the keep was at work the checkout was moved onto a branch named as a run's is, where Jellymoon keeps no
+work: git may have moved that branch forward and written the work's files, and nothing is recorded as kept; the
+branch of run <id> is left, and the next `run keep` begins again``
 
 It is said whenever `HEAD` names a run's branch after the step, whether git took the step or stopped it (with a
-commit of the person's own to land, git stops: the run's branch is not behind that commit). The same rule reads
-a record: one whose `onto` is a run's branch is not core's ("What the record takes").
+commit of the person's own to land, git stops: the run's branch is not behind that commit). On the run's own
+branch git had nothing to move; on a branch someone named like a run's (`jellymoon/run-mine`), behind the work,
+git moved it and wrote the files, which is why the words say "may have". The same rule reads a record: one whose
+`onto` is a run's branch is not core's ("What the record takes").
+
+**Only a name the repo lists is where work was kept.** On a disk that folds case, `git checkout Jellymoon/run-<id>`
+stands the checkout on the run's branch under a name the repo does not list, and `git checkout Feature` on the
+person's `feature`. Found by the third gate: said as "kept, on another branch" with `onto: Jellymoon/run-<id>`,
+the same keep deleted the run's branch from under the checkout, `HEAD` named a branch with no commit, and
+nothing reached the run's commit. So a name is written as `onto`, and lets the run's branch be deleted, only
+when `for-each-ref` lists that very name with its tip where `HEAD` is. A name it does not list is a run's when
+it is under `refs/heads/jellymoon/run-` in either case of those letters (nothing kept, above; the checks before
+the step and the reading of a record go by the same rule); any other, with `HEAD` at the commit, is work kept on
+no branch that is named, and the run's branch is left.
 
 Kept, the work is the person's checkout's: its files are written and its `HEAD` is at the commit. A later
 `run keep` says the work was kept before, with the same `onto`, and `run show` says `kept`.
 `tests/f45/raced.rs` moves the checkout to a new branch, to an older branch, to a branch that holds the work, to a
 branch whose name has a no-break space, off every branch (forward and joined), off every branch to a commit ahead
-of the work, onto the run's own branch (forward and joined), and away and back again around the step, with a
-stand-in git; and moves a linked worktree, where `HEAD` is asked through that worktree's own git folder.
+of the work, onto the run's own branch (forward and joined; and, on a disk that folds case, as
+`Jellymoon/run-<id>` and `JELLYMOON/RUN-<id>`), onto the person's `feature` as `Feature` there, and away and back
+again around the step, with a stand-in git; and moves a linked worktree, where `HEAD` is asked through that worktree's own git folder.
 
 Two outcomes of such a move are not what a person would expect, and are stated here and not closed:
 
@@ -239,7 +266,7 @@ They are read back strictly: an id of 40 or 64 hex digits, and a name a record h
 (`copy::nameable`), asked by the keep before it writes a name and by the command that reads one back: a name
 under `refs/heads/` of at most 1024 bytes, with no space of any kind (a no-break space, an ideographic space and
 a line separator among them), no line break, no control character (the C1 controls among them) and nothing git
-reads as a pattern. And it is no run's branch: a name under `refs/heads/jellymoon/run-` is never where work was
+reads as a pattern. And it is no run's branch: a name under `refs/heads/jellymoon/run-`, those letters in either case, is never where work was
 kept, so a keep refuses a checkout that stands on one and a record that names one is not core's. A checkout on a branch of any other name is refused before anything is written, so no keep
 leaves a record the next one cannot read (`tests/f45/names.rs`). Names of other alphabets, `@`, a name of 300
 bytes and a name with a character that turns the line around (U+202E) are held, and are printed cleaned. Beside
@@ -302,7 +329,8 @@ No one question of `git check-attr` reads that way, so four are asked, and a `fi
 (`keep.trial`, "The steps"):
 
 1. as the step will read them: that index, over a folder of Jellymoon's (`keep.attrs/`) that holds a copy
-   of each `.gitattributes` of the checkout which that index has none for and which the step does not remove;
+   of each `.gitattributes` of the checkout which the person's index does not hold (one it holds, the step
+   reads from its own index or removes);
 2. by that index alone, with `--cached`: the commit's own and what the person has staged;
 3. by the checkout's files as they are now, and by that index where the checkout has no file;
 4. by the commit's own alone, in an index of Jellymoon's (`keep.index`) with `--cached`. It is what
@@ -317,13 +345,33 @@ there are more than git needs: where the work changes a `.gitattributes` so that
 checkout's own file still sets it; and where what the person staged sets a filter that an untracked file of
 theirs below takes off again. git would start nothing in either, and the keep is refused.
 
+That the first and the third are asked of the index the step would leave, and not of the commit's own, is held
+by one test with two scenes (`tests/f45/attrs.rs`). What the person staged at the top gives a filter to a word
+of its own (`[attr]big filter=planted`), which is in that index and in no commit. With an untracked file of
+theirs below that gives `*.dat` the word, and the top file on the disk edited so that it no longer has it, only
+the first reading says `filter`, and git does start the filter. With the word given by an unsaved edit of a
+tracked file below, and the top file gone from the disk, only the third says it; git would start nothing, and
+the keep is refused: a third refusal that is more than git needs.
+
 A reading git does not answer (it ends with anything but 0) is no answer that there is no filter: the keep is
 refused as one whose repo could not be read (`tests/f45/attrs.rs`).
 
 The repo's `info/attributes` and the config's `core.attributesFile` are read in all four. With these, no file is
 written other than as its filter would have made it, except: where the person changes an attributes file between
 the check and the step; where a disk that folds case holds the file under another spelling than `.gitattributes`;
-and on a git before 2.32, which follows a `.gitattributes` that is a link, where a keep does not.
+on a git before 2.32, which follows a `.gitattributes` that is a link, where a keep does not; and where git
+cannot remove a `.gitattributes` the work removes.
+
+**A `.gitattributes` git cannot remove.** git warns (`unable to unlink`), goes on, ends with 0, and reads the
+file it left for the files it writes beside and below it. Measured: tracked `sub/.gitattributes` sets a filter,
+tracked `sub/deep/.gitattributes` takes it off, the work removes both and makes `sub/deep/new.dat`, and `sub` is
+shut (mode 555): plain git filters the new file; all four readings say no filter, `--ask` says `fits: true`, and
+the keep writes the file as stored. No check before the step can know every reason a file cannot be removed, and
+`--ask` cannot see this one. So the keep looks after the step: each `.gitattributes` the work removes that is
+still in the checkout is named in `stayed`, and `why` says so ("What it prints"). The work is kept, with exit 0:
+git landed the commit, and the file it left is untracked from then on. It is looked for after every step git
+took, but one that found the work already on the branch `HEAD` was moved to. `tests/f45/attrs.rs` runs the
+scene beside plain git, and is skipped where a folder cannot be shut.
 
 A filter is also what git starts when it looks whether a touched file changed, of any tracked file, in the work
 or beside it. Switched off, git compares the file as it is. A filter the repo says is `required` is
@@ -368,11 +416,11 @@ Every answer is read to a size and git's words are never kept: a failure is one 
 | the two merged | `merge-tree --write-tree --no-messages <branch's commit> <end>` | objects in the store, which nothing names |
 | who the person is | `config --get user.name`, `config --get user.email`, through the checkout's own git folder | nothing |
 | whether it fits | on a copy of the checkout's index (`runs/<run>/keep.trial`, removed before the answer): `update-index -q --refresh`, then `read-tree -n -m -u <branch's commit> <target>`, and when that passed `-c core.splitIndex=false read-tree -m <branch's commit> <target>`, which makes the copy the index the step would leave | Jellymoon's own file: `-n` is a trial, and without `-u` no file of the checkout is written |
-| whether a filter is set | `ls-files -z -- ':(glob)**/.gitattributes'` of the checkout's index and of that copy, `read-tree <target>` into an index file of Jellymoon's own (`runs/<run>/keep.index`), then `check-attr -z --stdin filter` four times ("A file with a filter"), the names on git's input. The file, the folder beside it and a lock a cut keep left are removed at once | Jellymoon's own files |
+| whether a filter is set | `ls-files -z -- ':(glob)**/.gitattributes'` of the checkout's index, `read-tree <target>` into an index file of Jellymoon's own (`runs/<run>/keep.index`), then `check-attr -z --stdin filter` four times ("A file with a filter"), the names on git's input. The file, the folder beside it and a lock a cut keep left are removed at once | Jellymoon's own files |
 | whether what is in the way is ignored, in a keep begun again | `check-ignore -z --stdin`, the names on git's input | nothing |
 | the one new commit | `commit-tree -p <branch's commit> -m "Jellymoon run <id>" <tree>`, with the person's name and address as author and committer | one object in the store |
 | the landing | `merge --ff-only ...`, above | the checkout's files, its index, the branch, `ORIG_HEAD` and the reflog |
-| where the commit is after the step | `for-each-ref` of the branch; if it is not there, `symbolic-ref --quiet HEAD`, `rev-parse --verify --quiet HEAD^{commit}` and, with `HEAD` elsewhere than at the commit, `merge-base --is-ancestor`, the first two through the git folder of the checkout the keep was asked in. After a step git stopped, `symbolic-ref --quiet HEAD` alone | nothing |
+| where the commit is after the step | `for-each-ref` of the branch; if it is not there, `symbolic-ref --quiet HEAD`, `rev-parse --verify --quiet HEAD^{commit}`, `for-each-ref` of the name `HEAD` gave and, with `HEAD` elsewhere than at the commit, `merge-base --is-ancestor`, the first two through the git folder of the checkout the keep was asked in. After a step git stopped, `symbolic-ref --quiet HEAD` alone | nothing |
 | the run's branch | `update-ref --no-deref -d <name> <end>` | that one ref |
 
 No file name is an argument to git: names go on git's input, ended by a zero byte.
@@ -434,10 +482,10 @@ instead. `<unchanged>` stands for `the work of run <id> was not kept, and nothin
 | files tools obey | ``the work of run <id> touches files the person's tools obey, which `run keep --ask` names: it is kept only with --with-settings, and nothing was changed`` | printed |
 | a filter | `a file of the work would be passed through a filter this repo sets for it, and Jellymoon starts no filter: <unchanged>` | printed |
 | a name the disk does not take | `a file of the work has a name this disk does not take: a part of it is too long, or is no name on this system: <unchanged>` | printed |
-| something in the way | `an unsaved change, or a file that is not in the branch, is where the work would go: <unchanged>` | printed |
+| something in the way, or git's trial of the move stopped for any other reason | `an unsaved change, or a file that is not in the branch, is where the work would go: <unchanged>` | printed |
 | the index is locked | `the checkout's index is locked (index.lock): another git is at work in it, or one was cut off and left the file: the work of run <id> was not kept` | printed |
 | git stopped the step | ``git would not move the branch forward to the work of run <id>: git stopped the step, files of the work may already be written to the checkout, and the next `run keep` begins again`` | (a keep's alone) |
-| the checkout was moved onto a run's branch just before the step | ``while the keep was at work the checkout was moved onto a run's branch, where Jellymoon keeps no work: the work of run <id> was not kept, its branch is left, and the next `run keep` begins again`` | (a keep's alone) |
+| the checkout was moved onto a run's branch just before the step | ``while the keep was at work the checkout was moved onto a branch named as a run's is, where Jellymoon keeps no work: git may have moved that branch forward and written the work's files, and nothing is recorded as kept; the branch of run <id> is left, and the next `run keep` begins again`` | (a keep's alone) |
 | the record could not be written | ``the record of run <id> could not be written: the next `run keep` goes on from where this one stopped`` | (a keep's alone) |
 
 "Git is too old" is said only when a merge is needed: moving a branch forward asks nothing of 2.38.
@@ -511,7 +559,10 @@ made only of spaces or of `<>`, and takes an address of either.
   one only to some program (a name Windows keeps for a device, on a git that writes it) is left to git's step.
 - **Who the person is** is read from git's config alone (`user.name`, `user.email`). A name given only in
   `GIT_AUTHOR_NAME` or under `author.name` is not read, and the keep is refused as having no name.
-- **A sparse checkout, a partial clone and a repo whose objects are borrowed** were not run.
+- **A sparse checkout** was run in one scene (a file of the person's at a path it leaves out, "The steps"). **A
+  partial clone and a repo whose objects are borrowed** were not run.
+- **A `.gitattributes` git cannot remove** is found after the step and said, not prevented ("A file with a
+  filter"). Any other file git cannot remove stays as well, untracked, and is not named.
 - **A name of only dots** (`user.name` set to `.`) is a name to git 2.50.1 and to a keep. An older git takes the
   dot off too and makes no commit: the keep is then refused as "git did not answer", with nothing changed.
 - **Old git.** 2.38 and 2.39 were not run: the version is read and compared, and the refusal was tested with a

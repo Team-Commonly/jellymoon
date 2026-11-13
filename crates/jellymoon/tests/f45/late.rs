@@ -11,7 +11,7 @@ use super::{Entry, FORWARD, JOINED, Made, STEPPED, finished, kept, printed, touc
 
 /// Whether a folder may be written to, set as the system's own tools set it. False where it could not be set,
 /// or does not hold for the one who runs the test (root).
-fn writable(folder: &Path, may: bool) -> bool {
+pub fn writable(folder: &Path, may: bool) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

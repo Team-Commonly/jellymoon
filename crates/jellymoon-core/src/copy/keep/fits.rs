@@ -138,12 +138,12 @@ fn trial(
     let did = |words: &[&str]| matches!(mine.answer(Some(folder), &index, words, &[], SAID_MAX), Some((Some(0), _)));
     // What the look ends with is not asked: where it could not read a file, the trial stops at that file.
     let _ = did(&["update-index", "-q", "--refresh"]);
-    if !did(&["read-tree", "-n", "-m", "-u", tip, target]) {
+    // The second take is written whole into the copy: an index kept in two parts would get a new shared part in
+    // the git folder. What stops only that take is in the way too: it stops, as the step does, for a file of the
+    // person's at a path a sparse checkout leaves out, which the trial passes.
+    let second = ["-c", "core.splitIndex=false", "read-tree", "-m", tip, target];
+    if !did(&["read-tree", "-n", "-m", "-u", tip, target]) || !did(&second) {
         return Ok(false);
-    }
-    // Written whole into the copy: an index kept in two parts would get a new shared part in the git folder.
-    if !did(&["-c", "core.splitIndex=false", "read-tree", "-m", tip, target]) {
-        return Err(Unread::Repo.into());
     }
     attrs::unfiltered(mine, (folder, scratch), copy, target, files)?;
     Ok(true)

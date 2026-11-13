@@ -59,10 +59,12 @@ pub(crate) struct Landing {
     pub how: How,
 }
 
-/// What a keep has the record say: the commit it is about to land on a branch, and that it has landed.
+/// What a keep has the record say: the commit it is about to land on a branch, and that it has landed. And what
+/// it has the answer name: a `.gitattributes` the work removes that is still in the checkout after the step.
 pub(crate) enum Note<'a> {
     Intent(&'a str, &'a str),
     Kept(&'a str, &'a str),
+    Stayed(&'a [u8]),
 }
 
 pub(crate) struct Keep<'a> {
@@ -97,11 +99,13 @@ pub(crate) fn nameable(onto: &str) -> bool {
     onto.starts_with("refs/heads/") && onto.len() <= 1024 && !onto.contains(odd)
 }
 
-/// Whether a branch's whole name is one a run's branch has. No work is ever kept on such a branch: a keep refuses
-/// a checkout that stands on one ([`stands`]), says so of one moved there just before the step (`step.rs`), and a
-/// record that names one is not core's (`run/keep.rs`).
+/// Whether a branch's whole name is one a run's branch has, under any spelling of its ASCII letters: a disk that
+/// folds case takes `Jellymoon/run-<id>` for the run's branch itself. No work is ever kept on such a branch: a
+/// keep refuses a checkout that stands on one ([`stands`]), says so of one moved there just before the step
+/// (`step.rs`), and a record that names one is not core's (`run/keep.rs`).
 pub(crate) fn runs(onto: &str) -> bool {
-    onto.starts_with("refs/heads/jellymoon/run-")
+    const RUNS: &str = "refs/heads/jellymoon/run-";
+    onto.get(..RUNS.len()).is_some_and(|start| start.eq_ignore_ascii_case(RUNS))
 }
 
 /// Whether git said yes with a 0 or no with a 1. Any other end is no answer.
@@ -323,5 +327,5 @@ fn land(
         Some(who) => made::commit(at, &who, &tip, &target)?,
         None => target,
     };
-    step::forward(at, commit, onto, how, note)
+    step::forward(at, commit, onto, how, &files, note)
 }

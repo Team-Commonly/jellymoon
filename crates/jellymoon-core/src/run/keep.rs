@@ -45,6 +45,10 @@ pub struct Kept {
     /// The files of the work that the person's tools obey, cleaned, at most 200. Left out when there are none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub settings: Vec<String>,
+    /// Each `.gitattributes` the work removes that was still in the checkout after the keep, cleaned, at most
+    /// 200: `why` then ends with words that say so. Left out when there are none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stayed: Vec<String>,
     /// With `--ask` only: whether a keep would be done.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fits: Option<bool>,
@@ -98,28 +102,39 @@ pub fn keep_run(home: &Path, options: &RunOptions, how: KeepOptions) -> Result<K
         }
         let why = format!("the work of run {run} was kept before: nothing was changed");
         let (kept, onto, fits) = (Some(commit.to_string()), short(onto), how.ask.then_some(false));
-        return Ok(Kept { run, wish, kept, onto, why, settings: Vec::new(), fits });
+        return Ok(Kept { run, wish, kept, onto, why, settings: Vec::new(), stayed: Vec::new(), fits });
     }
     // Only a record that says kept names no branch: a keep writes the branch it means before it lands anything.
     if was.is_some_and(|was| was.1 == copy::LOOSE) {
         return Err(not_cores(&run));
     }
-    let folder = folder?;
-    let (mut settings, mut record) = (Vec::new(), found.record);
+    landed(&of(&folder?), wish, found.record, how)
+}
+
+/// The keep itself, and what it prints. What it notes for the record is written there as it goes; a
+/// `.gitattributes` it notes as still there is named in the answer, whose `why` then ends with [`STAYED`].
+fn landed(of: &Keep, wish: String, mut record: record::Record, how: KeepOptions) -> Result<Kept, Error> {
+    let (run, mut settings, mut stayed) = (of.run.to_string(), Vec::new(), Vec::new());
     let mut note = |note: Note| {
         let (commit, onto, done) = match note {
             Note::Intent(commit, onto) => (commit, onto, false),
             Note::Kept(commit, onto) => (commit, onto, true),
+            Note::Stayed(path) => {
+                stayed.extend((stayed.len() < LISTED).then(|| statement(&String::from_utf8_lossy(path), NAME_MAX)));
+                return true;
+            }
         };
         (record.kept, record.onto) = (Some(commit.to_string()), Some(onto.to_string()));
         record.work = done.then_some(WorkState::Kept);
-        record::write(home, &run, &record).is_ok()
+        record::write(of.home, &run, &record).is_ok()
     };
-    let landed = copy::keep(&of(&folder), &mut |files| judge(files, how.with_settings, &mut settings), &mut note);
+    let landed = copy::keep(of, &mut |files| judge(files, how.with_settings, &mut settings), &mut note);
     match landed {
         Ok(landed) => {
-            let (why, onto, fits) = (done(&run, landed.how, how.ask), short(&landed.onto), how.ask.then_some(true));
-            Ok(Kept { run, wish, kept: landed.commit, onto, why, settings, fits })
+            let own = landed.commit.as_deref() == Some(of.named.end);
+            let why = done(&run, landed.how, how.ask, own) + if stayed.is_empty() { "" } else { STAYED };
+            let (onto, fits) = (short(&landed.onto), how.ask.then_some(true));
+            Ok(Kept { run, wish, kept: landed.commit, onto, why, settings, stayed, fits })
         }
         Err(unkept) if how.ask => Ok(unfit(run, wish, unkept, settings)),
         Err(unkept) => Err(refused(words(&run, unkept))),
@@ -128,8 +143,14 @@ pub fn keep_run(home: &Path, options: &RunOptions, how: KeepOptions) -> Result<K
 
 /// What `--ask` prints of work that would not be kept.
 fn unfit(run: String, wish: String, unkept: Unkept, settings: Vec<String>) -> Kept {
-    Kept { why: words(&run, unkept), run, wish, kept: None, onto: None, settings, fits: Some(false) }
+    let (why, stayed) = (words(&run, unkept), Vec::new());
+    Kept { why, run, wish, kept: None, onto: None, settings, stayed, fits: Some(false) }
 }
+
+/// What `why` ends with when a `.gitattributes` the work removes is still in the checkout after the step.
+const STAYED: &str = "; git could not remove every `.gitattributes` the work removes: each one `stayed` names is \
+                      still in the checkout, and a file of the work it sets a filter for was written as the store \
+                      holds it, not as that filter would have made it";
 
 /// Whether a record's `onto` is a branch a keep writes there: by the rule the keep itself writes a name by
 /// (`copy::nameable`), and no run's branch, where no work is ever kept (`copy::runs`).
@@ -175,8 +196,8 @@ fn judge(files: &[Touched], with_settings: bool, settings: &mut Vec<String>) -> 
     if obeys && !with_settings { Err(Unkept::Settings) } else { Ok(()) }
 }
 
-/// What a keep did, or would do.
-fn done(run: &str, how: How, ask: bool) -> String {
+/// What a keep did, or would do. `own` is whether what landed is the run's own commit.
+fn done(run: &str, how: How, ask: bool, own: bool) -> String {
     match (how, ask) {
         (How::Forward, false) => format!("run {run} was kept: the branch was moved forward to the run's commit"),
         (How::Forward, true) => format!("a keep of run {run} would move the branch forward to the run's commit"),
@@ -205,9 +226,15 @@ fn done(run: &str, how: How, ask: bool) -> String {
         ),
         (How::Loose, _) => format!(
             "run {run} was kept, on no branch that is named here: while the keep was at work the checkout's HEAD \
-             was detached, or moved to a branch whose name Jellymoon does not write down, and git landed the work \
-             there; the run's branch is left and still holds the run's own commit, and a new commit the keep made \
-             to join the work with the person's commits is named by nothing of Jellymoon's: `kept` is its id"
+             was detached, or moved to a branch whose name Jellymoon does not write down or the repo does not \
+             list under that spelling, and git landed the work there; the run's branch is left and still holds \
+             the run's own commit, {}: `kept` is its id",
+            if own {
+                "which is the commit git landed"
+            } else {
+                "and the new commit the keep made to join the work with the person's commits is named by nothing \
+                 of Jellymoon's"
+            }
         ),
     }
 }
@@ -303,8 +330,9 @@ fn at_the_step(run: &str, unkept: &Unkept) -> String {
              work may already be written to the checkout, and the next `run keep` begins again"
         ),
         Unkept::OnRun => format!(
-            "while the keep was at work the checkout was moved onto a run's branch, where Jellymoon keeps no work: \
-             the work of run {run} was not kept, its branch is left, and the next `run keep` begins again"
+            "while the keep was at work the checkout was moved onto a branch named as a run's is, where Jellymoon \
+             keeps no work: git may have moved that branch forward and written the work's files, and nothing is \
+             recorded as kept; the branch of run {run} is left, and the next `run keep` begins again"
         ),
         _ => format!(
             "the record of run {run} could not be written: the next `run keep` goes on from where this one stopped"
@@ -313,70 +341,4 @@ fn at_the_step(run: &str, unkept: &Unkept) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn what_a_keep_wrote_in_a_record_is_an_id_and_a_branchs_whole_name_or_the_record_is_not_cores() {
-        let id = "a".repeat(40);
-        let named = |kept: &str, onto: &str| intent(&Some(kept.to_string()), &Some(onto.to_string())).map(|_| ());
-        assert_eq!(intent(&None, &None), Ok(None));
-        assert_eq!(named(&id, "refs/heads/main"), Ok(()));
-        assert_eq!(named(&id, "refs/heads/feature/x-1"), Ok(()));
-        // The one word of work that landed on no branch, and names of other alphabets and of 1024 bytes.
-        for onto in ["HEAD", "refs/heads/ok-ünï", "refs/heads/@", &format!("refs/heads/{}", "x".repeat(1013))] {
-            assert_eq!(named(&id, onto), Ok(()), "{onto}");
-        }
-        for onto in [
-            "refs/heads/a\u{a0}b",
-            "refs/heads/a\u{3000}b",
-            "refs/heads/a\u{2028}b",
-            "refs/heads/a\u{85}b",
-            "refs/heads/a\u{9b}b",
-            &format!("refs/heads/{}", "x".repeat(1014)),
-            "refs/heads/HEAD ",
-            "head",
-            "main",
-            "refs/tags/v1",
-            "refs/heads/a b",
-            "refs/heads/*",
-            "refs/heads/a\nb",
-            "refs/heads/a?",
-            "refs/heads/[a]",
-            // A run's branch is never where work was kept.
-            "refs/heads/jellymoon/run-r0123456789abcdef",
-            "refs/heads/jellymoon/run-",
-        ] {
-            assert_eq!(named(&id, onto), Err(()), "{onto}");
-        }
-        for kept in ["main", "HEAD", "--all", &id[..39]] {
-            assert_eq!(named(kept, "refs/heads/main"), Err(()), "{kept}");
-        }
-        assert_eq!(intent(&Some(id), &None), Err(()));
-        assert_eq!(intent(&None, &Some("refs/heads/main".to_string())), Err(()));
-    }
-
-    #[test]
-    fn another_repos_entry_is_never_kept_and_a_file_tools_obey_only_when_asked() {
-        let file = |path: &str, repo: bool| Touched::of(path.as_bytes(), repo);
-        let asked = |files: &[Touched], with: bool| {
-            let mut settings = Vec::new();
-            (judge(files, with, &mut settings), settings)
-        };
-        assert_eq!(asked(&[file("src/a.rs", false)], false), (Ok(()), vec![]));
-        let obeyed = [file("src/a.rs", false), file(".claude/settings.json", false), file("CLAUDE.md", false)];
-        let names = vec![".claude/settings.json".to_string(), "CLAUDE.md".to_string()];
-        assert_eq!(asked(&obeyed, false), (Err(Unkept::Settings), names.clone()));
-        assert_eq!(asked(&obeyed, true), (Ok(()), names));
-        // Another repo's entry is refused whatever was asked for, and before a file tools obey is.
-        for repos in
-            [file("sub", true), file(".gitmodules", false), file("x/.GITMODULES", false), file(".gitmodules ", false)]
-        {
-            let files = [file("CLAUDE.md", false), repos];
-            assert_eq!(asked(&files, true).0, Err(Unkept::Repos));
-            assert_eq!(asked(&files, false).0, Err(Unkept::Repos));
-        }
-        // A character nobody sees does not hide a name: the name is asked as it is printed too.
-        assert_eq!(asked(&[file(".git\u{200b}modules", false)], true).0, Err(Unkept::Repos));
-    }
-}
+mod tests;

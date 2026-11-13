@@ -201,6 +201,29 @@ whole account):
    and not closed. The list of a change is one function for a look and a keep, and a test's wait is compiled
    out of a release.
 
+## Found by the third gate on F45 (2026-11-13)
+
+The third gate found two blocking scenes and seven smaller things (git 2.50.1, a Mac; `docs/development/keep.md`
+has the words and the measurements):
+
+1. **Only a name the repo lists is where work was kept.** On a disk that folds case, a checkout moved onto
+   `Jellymoon/run-<id>` just before the step was said "kept, on another branch", and the same keep deleted the
+   run's branch from under it. A name is now written as `onto`, and lets the run's branch go, only when
+   `for-each-ref` lists that very name with its tip where `HEAD` is. A name it does not list is a run's when it
+   is under `refs/heads/jellymoon/run-` in either case of those letters (nothing kept), and otherwise work kept
+   on no branch that is named. `copy::runs` compares without regard to ASCII case wherever it is used.
+2. **A `.gitattributes` git cannot remove is said after the step.** git goes on past a file it cannot unlink and
+   then reads it; no check before the step can know. The keep looks afterwards, names each such file in a new
+   `stayed` of what it prints, and ends `why` with fixed words. The work is still kept, with exit 0. `stayed` is
+   left out of every other answer, so what F46 and F47 read is as it was.
+3. **What stops the second take of the trial is in the way.** A file of the person's at a path a sparse checkout
+   leaves out passes `read-tree -n -m -u` and stops `read-tree -m`; it was said as "could not be read".
+4. **Smaller ones.** The list of what the step's index holds changed no answer and is gone. One test holds the
+   first and third readings to the step's index. The words of work kept on no branch have two endings, one for
+   the run's own commit and one for a new one; the words of "moved onto a run's branch" say that git may have
+   moved that branch. A split index's shared part has its time changed by any read, a question's too, which
+   nothing stops: stated.
+
 ## The slices
 
 `feature_list.json` is read top down, and F30 and F31 stand above these. The order is stated here: **F44 to F47 are

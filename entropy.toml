@@ -230,7 +230,13 @@ max_file_lines = 400
 # `copy/keep/step.rs` by 11 (a run's branch is never where work was kept), `copy/work.rs` by 9 (the one list of
 # a change, for a look and a keep), `busy.rs` by 5 (a test's wait compiled out of a release) and
 # `copy/keep/made.rs` by 1.
-"crates/jellymoon-core" = 10054
+# The fixes after F45's third gate raised core by 60. `run/keep.rs` and its unit tests, which moved to
+# `run/keep/tests.rs`, grew by 30 together (the answer's `stayed` and its words, the two endings of the words of
+# work kept on no branch, the keep and its answer as a function of their own), `copy/keep/step.rs` by 11 (only a
+# name the repo lists is where work was kept; the look after the step), `copy/keep/attrs.rs` by 10 (a
+# `.gitattributes` git could not remove; the list of the step's index is gone), `tests/shapes.rs` by 5 and
+# `copy/keep.rs` by 4 (a run's name in either case).
+"crates/jellymoon-core" = 10114
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -316,7 +322,11 @@ max_file_lines = 400
 # by its `process`, two controls), the made-up git by 9 (a step it fails, a step it does something after),
 # `record.rs` by 6, `settings.rs` by 4, `cut.rs` by 3 and `tests/f45.rs` by 3. Planting a test program over one
 # planted before removes the first (2 lines): on Linux a copy onto the link emptied the built program itself.
-"crates/jellymoon" = 17048
+# The fixes after F45's third gate raised the binary by 125, all of it tests: `tests/f45/attrs.rs` grew by 98 (a
+# `.gitattributes` git cannot remove beside plain git, the two scenes that hold the first and third readings to
+# the step's index, a sparse checkout's left-out path, a git that will not make the step's index) and `raced.rs`
+# by 27 (a run's branch and a person's own under another spelling).
+"crates/jellymoon" = 17173
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -4,7 +4,7 @@
 //! asked where the commit is, and the keep says that and nothing else.
 
 use super::super::work::tip_of;
-use super::{At, How, Landing, Note, SAID_MAX, Unkept, fits, line, nameable, reaches, runs};
+use super::{At, How, Landing, Note, SAID_MAX, Touched, Unkept, attrs, fits, line, nameable, reaches, runs};
 
 /// What a record's `onto` says of work that landed on no branch a record names.
 pub(crate) const LOOSE: &str = "HEAD";
@@ -45,11 +45,13 @@ pub(super) fn cut(step: u8) {
 /// their branch. git checks every file before it writes one; what it cannot check (a folder it may not write
 /// to) stops it part way, and then the keep says so ([`Unkept::Stepped`]). A step git stopped in a checkout that
 /// by then stands on a run's branch is said as that ([`Unkept::OnRun`]): git could not move that branch forward.
+/// git goes on when it cannot remove a file: a `.gitattributes` among `files` that it wrote files past is noted.
 pub(super) fn forward(
     at: &At,
     commit: String,
     onto: String,
     how: How,
+    files: &[Touched],
     note: &mut dyn FnMut(Note) -> bool,
 ) -> Result<Landing, Unkept> {
     cut(1);
@@ -61,7 +63,13 @@ pub(super) fn forward(
     let moved = at.mine.answer(Some(at.of.folder), &[], &forward, &[], SAID_MAX);
     cut(3);
     match moved {
-        Some((Some(0), _)) => landed(at, commit, onto, how),
+        Some((Some(0), _)) => {
+            let landing = landed(at, commit, onto, how)?;
+            if landing.how != How::Held {
+                attrs::stayed(at.of.folder, files).for_each(|path| _ = note(Note::Stayed(path)));
+            }
+            Ok(landing)
+        }
         _ if fits::locked(at.own) => Err(Unkept::Locked),
         _ if stood(at).is_some_and(|name| runs(&name)) => Err(Unkept::OnRun),
         _ => Err(Unkept::Stepped),
@@ -77,9 +85,11 @@ fn stood(at: &At) -> Option<String> {
 /// Where the commit is after a step git said it took. On the branch the keep meant, it landed as meant. If not,
 /// git acted on what `HEAD` named by then, and `HEAD` is asked. On a run's branch nothing was kept, whatever git
 /// did: said as kept there, the next keep would delete the branch the work is on. At the commit, the work is in
-/// the checkout and is kept where it is: on the branch `HEAD` names, when a record holds that name, and
-/// otherwise on no branch that is named. Ahead of the commit on such a branch, git had nothing to do: that
-/// branch held the work already. Anywhere else nothing is known to have landed.
+/// the checkout and is kept where it is: on the branch `HEAD` names, when a record holds that name and the repo
+/// lists that very name (`HEAD` names it, so its tip is where `HEAD` is), and otherwise on no branch that is
+/// named. A disk that folds case lets `HEAD` name a branch under a spelling the repo does not list: written
+/// down, it would be a name nothing reads back. Ahead of the commit on a listed branch, git had nothing to do:
+/// that branch held the work already. Anywhere else nothing is known to have landed.
 fn landed(at: &At, commit: String, onto: String, how: How) -> Result<Landing, Unkept> {
     if tip_of(at.repo, &onto).ok().as_deref() == Some(commit.as_str()) {
         return Ok(Landing { commit: Some(commit), onto, how });
@@ -90,7 +100,8 @@ fn landed(at: &At, commit: String, onto: String, how: How) -> Result<Landing, Un
     }
     let head = line(at.mine, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
     let head = head.ok().flatten().ok_or(Unkept::Stepped)?;
-    let (onto, how) = match stood.filter(|name| nameable(name)) {
+    let listed = |name: &String| nameable(name) && tip_of(at.repo, name).is_ok();
+    let (onto, how) = match stood.filter(listed) {
         Some(name) if head == commit => (name, How::Elsewhere),
         None if head == commit => (LOOSE.to_string(), How::Loose),
         Some(name) if reaches(at, &commit, &head) == Ok(true) => (name, How::Held),

@@ -11,12 +11,15 @@
 //! the index the step would leave, which git's trial made (`left`):
 //!
 //! 1. as the step will read them: that index, over a folder of Jellymoon's that holds a copy of each
-//!    `.gitattributes` of the checkout which that index has none for and which the step does not remove;
+//!    `.gitattributes` of the checkout which the person's index does not hold (one it holds, the step reads
+//!    from its own index or removes);
 //! 2. by that index alone: the commit's own, and what the person has staged;
 //! 3. by the checkout's files as they are now, and by that index where the checkout has no file;
 //! 4. by the commit's own alone (what `--source` asks on git 2.40 or later), in an index of Jellymoon's.
 //!
-//! The repo's `info/attributes` and the config's `core.attributesFile` are read in all four.
+//! The repo's `info/attributes` and the config's `core.attributesFile` are read in all four. What no reading
+//! sees is a `.gitattributes` the step should remove and cannot (its folder is shut): git goes on and reads it,
+//! so the step looks for one afterwards ([`stayed`]).
 
 use std::collections::BTreeSet;
 use std::fs::{self, File};
@@ -75,10 +78,10 @@ fn asked(
     if !matches!(read, Some((Some(0), _))) {
         return Err(Unread::Repo.into());
     }
-    // What the step's index holds git reads from there. What the person's index holds and the step's does not,
-    // the step removes from the disk before it writes a file.
-    let (theirs, stays) = (tracked(mine, folder, &[])?, tracked(mine, folder, step)?);
-    copied((folder, beside), written, |name| theirs.contains(name) || stays.contains(name))?;
+    // What the person's index holds, the step's holds too and git reads it from there, or the step removes it
+    // from the disk before it writes a file.
+    let theirs = tracked(mine, folder)?;
+    copied((folder, beside), written, |name| theirs.contains(name))?;
     let names: Vec<u8> = written.iter().flat_map(|path| [*path, &b"\0"[..]].concat()).collect();
     let most = names.len() + written.len() * 64 + 1;
     let (by_files, by_index) =
@@ -99,16 +102,23 @@ fn asked(
     Ok(true)
 }
 
-/// Every `.gitattributes` an index holds: the checkout's own, or with `vars` the one they name.
-fn tracked(mine: &Repo, folder: &Path, vars: &Vars) -> Result<BTreeSet<Vec<u8>>, Unkept> {
+/// Every `.gitattributes` the checkout's own index holds.
+fn tracked(mine: &Repo, folder: &Path) -> Result<BTreeSet<Vec<u8>>, Unkept> {
     let tracked = ["ls-files", "-z", "--", ":(glob)**/.gitattributes"];
-    match mine.answer(Some(folder), vars, &tracked, &[], LIST_MAX) {
+    match mine.answer(Some(folder), &[], &tracked, &[], LIST_MAX) {
         Some((Some(0), tracked)) if tracked.len() < LIST_MAX => {
             Ok(tracked.split(|byte| *byte == 0).map(<[u8]>::to_vec).collect())
         }
         Some((Some(0), _)) => Err(Unread::Many.into()),
         _ => Err(Unread::Repo.into()),
     }
+}
+
+/// Each `.gitattributes` the work removes that is in the checkout all the same, asked after the step.
+pub(super) fn stayed<'a>(folder: &'a Path, files: &'a [Touched]) -> impl Iterator<Item = &'a [u8]> {
+    let named = |path: &[u8]| path == b".gitattributes" || path.ends_with(b"/.gitattributes");
+    let there = move |path: &&[u8]| on_disk(folder, path).is_some_and(|at| fs::symlink_metadata(at).is_ok());
+    files.iter().filter(move |file| file.removed && named(&file.path)).map(|file| &file.path[..]).filter(there)
 }
 
 /// Every folder above a path, each with its `/`.

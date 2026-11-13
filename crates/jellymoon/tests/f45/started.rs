@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::settings::finished_over;
-use super::{Entry, FORWARD, JOINED, Made, UNCHANGED, finished, kept, planted, printed, started, touch};
+use super::{Entry, FORWARD, JOINED, Made, UNCHANGED, finished, kept, planted, printed, shell, started, touch};
 
 const FILTER: &str = "a file of the work would be passed through a filter this repo sets for it, and Jellymoon \
                       starts no filter";
@@ -28,7 +28,7 @@ fn linked(made: &Made) -> PathBuf {
 /// person's (`--global`, which in a test is a file of the test's).
 fn filtered(made: &Made, checkout: &Path, scope: &str, filter: &Path) {
     for step in ["clean", "smudge"] {
-        made.w.git(checkout, &["config", scope, &format!("filter.planted.{step}"), filter.to_str().unwrap()]);
+        made.w.git(checkout, &["config", scope, &format!("filter.planted.{step}"), &shell(filter)]);
     }
 }
 
@@ -115,7 +115,7 @@ fn a_merge_driver_in_the_first_checkouts_own_config_is_not_started_by_a_keep_in_
     let end = made.rework(&[("100644", "long.txt", b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight by the run\n")]);
     made.who();
     let (feat, folder) = (linked(&made), made.w.at("tmp"));
-    made.git(&["config", "--worktree", "merge.planted.driver", planted(&folder, "driver").to_str().unwrap()]);
+    made.git(&["config", "--worktree", "merge.planted.driver", &shell(&planted(&folder, "driver"))]);
     fs::write(made.repo.join(".git").join("info").join("attributes"), "long.txt merge=planted\n").unwrap();
     fs::write(feat.join("long.txt"), "one by the person\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n").unwrap();
     made.w.git(&feat, &["commit", "-q", "-am", "the person's edit of another line"]);
@@ -152,7 +152,7 @@ fn the_one_new_commit_in_a_linked_worktree_is_by_who_git_says_the_person_is_ther
 fn an_untracked_attributes_file_above_a_file_of_the_work_is_read_as_git_will_read_it() {
     let made = finished();
     let folder = made.w.at("tmp");
-    made.git(&["config", "filter.planted.smudge", planted(&folder, "filter").to_str().unwrap()]);
+    made.git(&["config", "filter.planted.smudge", &shell(&planted(&folder, "filter"))]);
     let entries: [Entry; 1] = [("100644", "sub/deep/big.dat", b"what the store holds\n")];
     made.rework(&entries);
     fs::create_dir(made.repo.join("sub")).unwrap();

@@ -185,6 +185,12 @@ pub fn planted(folder: &Path, name: &str) -> std::path::PathBuf {
     program
 }
 
+/// A planted program as a config names one that git hands to a shell (a filter, a merge driver): in quotes, and
+/// with the one slash a shell keeps on every system. A Windows path as it is written starts nothing there.
+pub fn shell(program: &Path) -> String {
+    format!("'{}'", program.to_str().unwrap().replace('\\', "/"))
+}
+
 /// The planted programs that were started, by the files they left.
 pub fn started(folder: &Path) -> Vec<String> {
     let left = fs::read_dir(folder).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap());

@@ -6,7 +6,9 @@ use std::fs;
 
 use serde_json::json;
 
-use super::{Entry, FORWARD, JOINED, Made, UNCHANGED, World, finished, kept, planted, printed, ran, started, world};
+use super::{
+    Entry, FORWARD, JOINED, Made, UNCHANGED, World, finished, kept, planted, printed, ran, shell, started, world,
+};
 
 const REPOS: &str = "the work of run {run} adds, changes or removes another repo's entry or `.gitmodules`, and \
                      Jellymoon never keeps such work: nothing was changed";
@@ -180,7 +182,7 @@ fn a_file_the_repo_sets_a_filter_for_is_not_kept_and_no_filter_is_started() {
         let folder = made.w.at("tmp");
         let filter = planted(&folder, "filter");
         for step in ["clean", "smudge", "process"] {
-            made.git(&["config", &format!("filter.planted.{step}"), filter.to_str().unwrap()]);
+            made.git(&["config", &format!("filter.planted.{step}"), &shell(&filter)]);
         }
         made.git(&["config", "filter.planted.required", "true"]);
         let mut entries: Vec<Entry> = vec![("100644", "big.dat", b"what the store holds\n")];
@@ -205,7 +207,7 @@ fn a_file_the_repo_sets_a_filter_for_is_not_kept_and_no_filter_is_started() {
     // A filter that touches no file of the work is no reason to stop, and is not started either.
     let made = finished();
     let folder = made.w.at("tmp");
-    made.git(&["config", "filter.planted.smudge", planted(&folder, "filter").to_str().unwrap()]);
+    made.git(&["config", "filter.planted.smudge", &shell(&planted(&folder, "filter"))]);
     fs::write(made.repo.join(".git").join("info").join("attributes"), "*.dat filter=planted\n").unwrap();
     kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
     assert_eq!(started(&folder), Vec::<String>::new());
@@ -219,7 +221,7 @@ fn no_merge_driver_of_the_repo_is_started_and_what_the_config_adds_to_a_merge_is
     let end = made.rework(&[("100644", "long.txt", b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight by the run\n")]);
     made.who();
     let folder = made.w.at("tmp");
-    made.git(&["config", "merge.planted.driver", planted(&folder, "driver").to_str().unwrap()]);
+    made.git(&["config", "merge.planted.driver", &shell(&planted(&folder, "driver"))]);
     fs::write(made.repo.join(".git").join("info").join("attributes"), "long.txt merge=planted\n").unwrap();
     fs::write(made.repo.join("long.txt"), "one by the person\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n").unwrap();
     made.git(&["commit", "-q", "-am", "the person's edit of another line"]);

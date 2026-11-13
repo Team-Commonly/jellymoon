@@ -103,8 +103,10 @@ pub fn install(dir: &Path, name: &str) -> PathBuf {
 
 /// Puts a built test program at `program`. On Linux it is a link: a program file that was just written cannot be
 /// started there while a child of another test still holds it open ("text file busy"). Elsewhere it is a copy: a Mac
-/// now and then kills a signed program started through a fresh link.
+/// now and then kills a signed program started through a fresh link. What was planted there before goes first: a
+/// link cannot be made over one, and a copy onto a link empties the built program itself, for every test after it.
 pub fn plant(built: &str, program: &Path) {
+    let _ = fs::remove_file(program);
     if !cfg!(target_os = "linux") || fs::hard_link(built, program).is_err() {
         fs::copy(built, program).unwrap();
     }

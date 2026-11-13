@@ -314,8 +314,9 @@ max_file_lines = 400
 # work, moved away and back, and a linked worktree moved), `disk.rs` by 31 (a name no disk takes, a branch under
 # another spelling), `late.rs` by 30 (a store that takes no new object), `started.rs` by 30 (a filter named only
 # by its `process`, two controls), the made-up git by 9 (a step it fails, a step it does something after),
-# `record.rs` by 6, `settings.rs` by 4, `cut.rs` by 3 and `tests/f45.rs` by 3.
-"crates/jellymoon" = 17046
+# `record.rs` by 6, `settings.rs` by 4, `cut.rs` by 3 and `tests/f45.rs` by 3. Planting a test program over one
+# planted before removes the first (2 lines): on Linux a copy onto the link emptied the built program itself.
+"crates/jellymoon" = 17048
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

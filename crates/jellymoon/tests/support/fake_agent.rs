@@ -169,7 +169,11 @@ fn ends_with(last: &str) -> i32 {
 /// `forever` waits a minute, or until the test leaves `stop`, and fails. `slow` waits for the test to leave `go`,
 /// half a minute at most, then does the work. Both hold the lock while they live.
 fn waits(slow: bool, rec: &Path) -> i32 {
-    let _held = held(rec);
+    waits_held(slow, rec, held(rec))
+}
+
+/// [`waits`] with the lock taken before: a script whose first line gets it stopped takes it before that line.
+fn waits_held(slow: bool, rec: &Path, _held: fs::File) -> i32 {
     let (left, turns) = if slow { ("go", 3000) } else { ("stop", 6000) };
     for _ in 0..turns {
         if rec.join(left).exists() {

@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::OnceLock;
 use std::{env, fs};
 
-use super::{MARKER, MODE, TOOLS, edits, line, says, starts, waits, work};
+use super::{MARKER, MODE, TOOLS, edits, held, line, says, starts, waits_held, work};
 
 /// The session id this program was started with, and whether it was given a schema.
 static TOLD: OnceLock<(String, bool)> = OnceLock::new();
@@ -130,12 +130,13 @@ pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
             if number == 2 { 3 } else { 0 }
         }
         // A start whose tools are not a run's with a schema: 0 lists no tool for a last word, 1 lists it twice.
-        // It never ends by itself.
+        // It never ends by itself, and holds the lock before its first line: that line gets it stopped.
         "tools" => {
+            let held = held(rec);
             let twice = TOOLS.replacen('[', r#"["StructuredOutput","StructuredOutput","#, 1);
             init(if number == 0 { TOOLS } else { &twice }, &session());
             says();
-            waits(false, rec)
+            waits_held(false, rec, held)
         }
         // A start under another session than the one given: 0 another id, 1 none, 2 a number, 3 the id in
         // capitals, 4 the id with a space after it. None ends by itself. 5 is the measured start, then a second
@@ -149,13 +150,14 @@ pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
                 4 => format!(r#""session_id":"{id} ","#),
                 _ => r#""session_id":"0123abcd-4567-4abc-8def-0123456789ab","#.to_string(),
             };
+            let held = (number != 5).then(|| held(rec));
             if number == 5 {
                 starts();
             }
             init(&listed(TOOLS), &other);
-            if number != 5 {
+            if let Some(held) = held {
                 says();
-                return Some(waits(false, rec));
+                return Some(waits_held(false, rec, held));
             }
             work();
             line(&last("success", false, r#"{"state":"done"}"#));

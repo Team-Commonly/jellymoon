@@ -55,6 +55,15 @@ pub(crate) fn pause(variable: &str) {
     }
 }
 
+/// [`pause`] for a test that reads every state a file ever has: the file `JELLYMOON_TEST_GO` names is taken away
+/// when the wait is over, so the test's next one lets go of the next step only. No clock is in such a proof.
+pub(crate) fn step(variable: &str) {
+    pause(variable);
+    if let Some(go) = test_file("JELLYMOON_TEST_GO").filter(|_| !or_test(Duration::ZERO, variable).is_zero()) {
+        let _ = retried(|| std::fs::remove_file(&go));
+    }
+}
+
 /// Does `step`, again every 10 ms while it fails with a file in use and [`WAIT`] has not passed.
 pub(crate) fn retried<T>(step: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     retrying(WAIT, in_use, step)

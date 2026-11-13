@@ -47,7 +47,12 @@ new thing in their repo is the run's branch (and git's own registration of the w
   drop the worktree's registration. The branch is kept: it is the work. Nothing to commit is not an error, and
   neither is a folder already gone. The commit is one commit, `Jellymoon run <run>`, on top of the branch.
   `jellymoon copy clean` takes the branch as it is. A run's own end takes it only while it is still at the commit
-  the copy was made from, and has failed otherwise (`run.md`, "What is kept").
+  the copy was made from, and has failed otherwise (`run.md`, "What is kept"). Either way the branch is read by
+  its whole name, as a look reads it, and must be a plain branch at a commit: one that is gone, or is a name
+  for another branch, is refused with nothing staged (`the run's branch is not a branch at a commit, so nothing
+  was committed`, for `copy clean`). The commit is put there with `update-ref --no-deref` and the commit the
+  branch was read at as the old value, so it lands on that name only, and only while the name is still there;
+  a copy that held nothing new is put through the same step and writes nothing.
 - **failed.** The copy stays for a look. Of all failed copies, of every repo, the newest five stay; older ones are
   removed with their registration, and what was not committed in them is lost. Their branches stay. Newest is the
   order the runs failed in, which the records hold: each is dated later than every failed run before it, so the run

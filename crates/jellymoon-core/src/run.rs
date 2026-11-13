@@ -42,7 +42,7 @@ pub use stop::stop_run;
 
 use crate::busy::{self, or_test};
 use crate::call::harness_of;
-use crate::copy::{self, MadeFrom, RunCopy};
+use crate::copy::{self, MadeFrom};
 use crate::wish;
 use crate::{Error, WishState, find};
 
@@ -169,12 +169,13 @@ fn cut_late(run: &str) -> String {
     )
 }
 
-/// The line of a run that finished. Both forms hold by how a run ends (`end::settle`, `copy/clean.rs`): its branch
-/// was still at the commit the copy was made from, or the run failed. So the one commit is on top of that commit,
-/// and a run that changed nothing left its branch at it, which is where the person's checkout was when the run
-/// started.
-fn finished(copy: &RunCopy, changed: bool) -> String {
-    let (run, branch) = (&copy.run, &copy.branch);
+/// The line of a run that finished. Both forms say what git was last asked as the run ended (`end::settle`,
+/// `copy/clean.rs`): the branch took the run's one commit, or was looked at once more, only while it still named
+/// the commit the copy was made from, which is where the person's checkout was when the run started. Neither says
+/// where the branch is after that check: until the copy's folder is removed, and ever after, a hand can move it,
+/// and a look goes by what the repo says then (`show.rs`).
+fn finished(run: &str, changed: bool) -> String {
+    let branch = copy::branch(run);
     if changed {
         format!("run {run} finished: its work is one commit on the branch {branch}")
     } else {
@@ -317,14 +318,8 @@ mod tests {
     #[test]
     fn every_word_a_run_keeps_with_a_wish_is_what_cleaning_leaves() {
         let run = "r0123456789abcdef";
-        let copy = RunCopy {
-            run: run.to_string(),
-            folder: String::new(),
-            branch: format!("jellymoon/run-{run}"),
-            kept: false,
-        };
         let long = failed(run, "it did not start with the tools, servers and permission mode of a run");
-        let texts = [going(run), cut(run), long, finished(&copy, true), finished(&copy, false), STAR.to_string()];
+        let texts = [going(run), cut(run), long, finished(run, true), finished(run, false), STAR.to_string()];
         let never = [never::OLD, never::UNSTARTABLE, never::UNTOLD].map(str::to_string);
         for text in texts.into_iter().chain([cancelled(run), cut_late(run)]).chain(never) {
             assert_eq!(line(&text, 200), text);

@@ -169,8 +169,10 @@ pub(crate) fn run(command: Command, input: Vec<u8>, limit: Duration, from: Optio
     run_most(command, input, limit, from, usize::MAX)
 }
 
-/// [`run`], reading no more than `most` bytes of what the command prints on stdout. The pipe is let go of there,
-/// so a command that prints more is ended by its own next write: what it exited with then says nothing.
+/// [`run`], reading no more than `most` bytes of what the command prints on stdout, and then no more than that
+/// of what it says on stderr either. A pipe is let go of there, so a command that prints more is ended by its own
+/// next write: what it exited with then says nothing. Only a caller that reads everything ([`run`]) is given all
+/// that was said: it makes an error's words of it, and its command must not be ended for saying much.
 pub(crate) fn run_most(
     mut command: Command,
     input: Vec<u8>,
@@ -183,7 +185,7 @@ pub(crate) fn run_most(
     let stdin = child.stdin.take();
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(&input)));
-    let (stdout, stderr) = (collect(child.stdout.take(), most), collect(child.stderr.take(), usize::MAX));
+    let (stdout, stderr) = (collect(child.stdout.take(), most), collect(child.stderr.take(), most));
     let mut deadline = Instant::now() + limit;
     let status = loop {
         if let Some(status) = child.try_wait().map_err(Error::Call)? {
@@ -243,6 +245,31 @@ mod tests {
         let stopped = run(command, b"the day\n".to_vec(), Duration::from_millis(300), None);
         assert!(matches!(stopped, Err(Error::TooLong(_))), "want the call stopped at its limit");
         assert!(start.elapsed() < Duration::from_secs(10), "stopped only after {:?}", start.elapsed());
+    }
+
+    /// Not a test of its own either: a child that says more than a megabyte on stderr and then one word on stdout.
+    #[test]
+    fn a_child_that_says_a_lot() {
+        if env::var_os("JELLYMOON_TEST_SAYS_A_LOT").is_some() {
+            let said = std::io::stderr().write_all(&vec![b'e'; 1 << 20]);
+            println!("{}", if said.is_ok() { "said-it-all" } else { "was-not-heard" });
+        }
+    }
+
+    // A read that stops at a size stops there for what the command says beside its answer, too.
+    #[test]
+    fn a_bounded_call_keeps_no_more_of_what_the_command_says_than_of_what_it_prints() {
+        let child = || {
+            let mut command = this_test_program("call::tests::a_child_that_says_a_lot");
+            command.env("JELLYMOON_TEST_SAYS_A_LOT", "1");
+            command
+        };
+        let bounded = run_most(child(), Vec::new(), Duration::from_secs(30), None, 4096).unwrap();
+        assert_eq!(bounded.stderr.len(), 4096);
+        // A call that reads everything is given everything, and its command goes on to its end.
+        let whole = run(child(), Vec::new(), Duration::from_secs(30), None).unwrap();
+        assert_eq!(whole.stderr.len(), 1 << 20);
+        assert!(whole.status.success() && String::from_utf8_lossy(&whole.stdout).contains("said-it-all"));
     }
 
     #[test]

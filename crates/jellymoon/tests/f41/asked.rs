@@ -1,17 +1,16 @@
 //! A left copy whose repo cannot be asked at a look, and a look that is cut off between its git steps
 //! (`docs/development/run.md`, "A copy nothing names"). The git that never returns is F38's made-up `fake-git`,
-//! first on the `PATH` of the one look that is to be cut off.
+//! first on the `PATH` of the one look that is to be cut off (`World::fake_git`, `f39/world.rs`).
 
-use std::env::consts::EXE_SUFFIX;
 use std::ffi::OsString;
+use std::fs;
 use std::path::Path;
-use std::{env, fs};
 
 use serde_json::{Value, json};
 
 use super::named::link;
 use super::{DAY, World, found_world};
-use crate::support::{plant, skipped};
+use crate::support::skipped;
 
 impl World {
     /// A look: `jellymoon page` of the day, with `more` variables after the world's.
@@ -31,24 +30,6 @@ impl World {
         let mut record: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
         record[field] = value;
         fs::write(&file, record.to_string()).unwrap();
-    }
-
-    /// The variables that put `fake-git` first on `PATH` and give a git child one second from when the made-up
-    /// git has left `stalled`.
-    pub(super) fn fake_git(&self) -> Vec<(&'static str, OsString)> {
-        let (folder, name) = (self.at("fake"), format!("git{EXE_SUFFIX}"));
-        fs::create_dir(&folder).unwrap();
-        plant(env!("CARGO_BIN_EXE_fake-git"), &folder.join(&name));
-        let path = &self.vars.iter().find(|(name, _)| *name == "PATH").unwrap().1;
-        let real = env::split_paths(path).map(|dir| dir.join(&name)).find(|git| git.is_file()).unwrap();
-        fs::write(folder.join("real"), real.to_str().unwrap()).unwrap();
-        let first = env::join_paths([folder.clone()].into_iter().chain(env::split_paths(path))).unwrap();
-        let stalled = folder.join("stalled").into();
-        vec![
-            ("PATH", first),
-            ("JELLYMOON_TEST_GIT_LIMIT_MS", "1000".into()),
-            ("JELLYMOON_TEST_GIT_LIMIT_FROM", stalled),
-        ]
     }
 }
 

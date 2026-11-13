@@ -18,7 +18,10 @@ use crate::support::{LIMIT, Ran, ZONE, jellymoon_in, plant, scratch, tree};
 
 #[path = "guard.rs"]
 mod guard;
+#[path = "made.rs"]
+mod made;
 pub use guard::{Going, alive};
+pub use made::{Made, NAMED};
 
 pub const DAY: &str = "2026-03-10";
 pub const SAID: &str = "make the uploader retry twice";

@@ -12,10 +12,10 @@ use super::{Made, NAMED, finished, played, printed, refused};
 const MOVED: &str = "is not as the run left it, so what is on it is not shown as the run's";
 const ANOTHER: &str = "is not the one its record names, so its work is not shown";
 const START: &str = "does not start where its record says the run started, so it is not shown as the run's";
-const NOT_CORES: &str = "is not one Jellymoon wrote for this wish";
+pub(super) const NOT_CORES: &str = "is not one Jellymoon wrote for this wish";
 
 /// A refusal of the list and of a file alike: one fixed line that names the run, with no path and no word of git's.
-fn no(made: &Made, repo: &Path, why: &str) {
+pub(super) fn no(made: &Made, repo: &Path, why: &str) {
     for more in [&[][..], &["--file", "1"]] {
         let ran = made.show_in(repo, more);
         let said = refused(&ran);
@@ -29,7 +29,7 @@ pub fn names(shown: &Value) -> Vec<&str> {
 }
 
 /// The record with one of its fields changed.
-fn with(record: &Value, name: &str, value: Value) -> Value {
+pub(super) fn with(record: &Value, name: &str, value: Value) -> Value {
     let mut record = record.clone();
     record[name] = value;
     record
@@ -72,8 +72,9 @@ fn an_end_whose_one_parent_is_not_the_start_the_record_names_is_refused() {
     // The record says the run started somewhere else than where its end was made from.
     made.write(&with(&kept, "start", json!(other)));
     no(&made, &made.repo, START);
+    // A start that is the end is not what a run that made a commit wrote (`named.rs`).
     made.write(&with(&kept, "start", kept["end"].clone()));
-    no(&made, &made.repo, START);
+    no(&made, &made.repo, NOT_CORES);
     // The branch and the record agree on an end that was made from another commit than the start.
     let from_other = made.by_hand(&other, &made.message(), &end);
     made.git(&["update-ref", &branch, &from_other]);
@@ -258,7 +259,7 @@ fn what_a_record_names_is_checked_whatever_the_state_of_the_work_before_anything
 fn a_record_from_before_is_shown_by_the_branchs_tip_and_its_one_parent() {
     let made = finished();
     let (branch, end, with_them) = (made.branch(), made.w.commit(&made.repo, &made.branch()), printed(&made.show()));
-    let before = made.from_before();
+    let before = made.as_before();
     assert_eq!(before.as_object().unwrap().len(), 10, "{before}");
     made.write(&before);
     assert_eq!(printed(&made.show()), with_them);

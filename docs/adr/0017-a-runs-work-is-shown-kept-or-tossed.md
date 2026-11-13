@@ -46,7 +46,9 @@ other harnesses each get their own note, in the order under "What comes after".
    standing instructions (a fixed list of names in core, such as `.claude/`, `.codex/`, `CLAUDE.md`, `AGENTS.md`,
    `.vscode/`, `.envrc`, `.github/workflows/`) is marked when shown, and `run keep` refuses it unless asked in so
    many words. The list is a warning, not a wall: kept work is code in the person's project, and they trust it as
-   they trust what their agent writes in a session of their own.
+   they trust what their agent writes in a session of their own. A name is compared as the disks read it, not
+   letter by letter (`run/obeyed.rs`; `show.md`, "Files the person's tools obey"), and `run keep` asks it of
+   the name as git keeps it and of the name as it is printed, as `run show` does.
 7. **Tossing deletes the run's own name and nothing else.** The record takes `tossed` and the commit's id first, then
    the branch is deleted as the run's own ref at that commit (the delete a look uses, ADR 0014 and `run.md`). The
    wish becomes `let go`. git keeps a commit nothing names for a while, so the record is how a toss is undone by
@@ -81,7 +83,7 @@ On git 2.50.1, on a Mac, in a made-up repo, before any of this was built:
 | An unsaved change in a file the work changes | `merge --ff-only`: exit 1; `HEAD` and the file unmoved |
 | An unsaved change in another file | `merge --ff-only`: exit 0; the unsaved change still there |
 | The person's own untracked file where the work makes one | `merge --ff-only`: exit 1; their file unmoved |
-| What the work is | `diff-tree -r --no-renames --no-abbrev -z <parent> <commit>`, then `cat-file --batch-check` and `--batch` with ids on input (as built by F44: no file name is an argument to git) |
+| What the work is | every question asked of git, and how far each answer is read, is the table in `docs/development/show.md`, "What is asked of git" (as built by F44: no file name is an argument to git) |
 
 Not measured: git 2.38 and 2.39 (the oldest that can merge in the store, and the one older Macs ship), Windows and
 Linux, a repo with filters or LFS, and a keep cut off between its steps. The features below measure them.
@@ -117,6 +119,21 @@ that names no commits**: only a look may go by shape. The path in the record is 
 repo that was moved or copied since the run is refused as another repo. The record names the git folder the repo's
 checkouts share, so with linked worktrees it does not say which checkout a run started from, and `run keep` goes by
 `start` and by where the person stands.
+
+## What `run keep` and `run toss` may build on (2026-11-12)
+
+Two sentences were said of a run's record more widely than they hold. Each is true with its scope, and F45 and
+F46 are built on them as scoped.
+
+1. **Of a finished run, as written:** a record's `end` is its `start`, or the one commit core made whose one
+   parent is `start`. That holds of every `end` core writes, and a record whose words and names do not agree is
+   refused (`Record::named`). It says nothing of where the branch is. The branch can be moved after the last
+   check of a run's end, and a record can be changed by hand. So `run keep` and `run toss` compare the branch
+   with `end` again, under their own check of the old value, and never take the record's word for it.
+2. **Of a finished run only:** a record names all three of `repo`, `start` and `end`, or, from before F48,
+   none. A run that is going, failed, was cancelled or was cut off names `repo` and `start` and no `end`, by
+   design, and its branch may hold core's commit all the same: a run killed after its commit, or one whose copy
+   could not be removed. `run toss` acts on failed and cancelled runs, and is built for a record of two.
 
 ## What comes after
 

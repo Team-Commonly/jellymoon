@@ -113,22 +113,24 @@ fn parse_rule(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     Ok(Command::Rule { stands, over })
 }
 
+/// An option's value that is a number: digits and nothing else, so `+1` is not one, though it would parse as one.
+fn number(parser: &mut lexopt::Parser, takes: &str) -> Result<usize, Failure> {
+    let value = parser.value().and_then(|v| v.string()).map_err(|e| Failure::Usage(e.to_string()))?;
+    let digits = !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
+    let number = digits.then(|| value.parse::<usize>().ok()).flatten();
+    number.ok_or_else(|| Failure::Usage(format!("{takes} a number, and {value:?} is not one")))
+}
+
 fn parse_settle(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut date, mut clash, mut option) = (None, None, None);
-    // Digits and nothing else: `+1` is not a number here, though it would parse as one.
-    let number = |parser: &mut lexopt::Parser| {
-        let value = parser.value().and_then(|v| v.string()).map_err(usage)?;
-        let digits = !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
-        let number = digits.then(|| value.parse::<usize>().ok()).flatten();
-        number.ok_or_else(|| Failure::Usage(format!("--clash and --option take a number, and {value:?} is not one")))
-    };
+    let takes = "--clash and --option take";
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
             Long("date") => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            Long("clash") => clash = Some(number(&mut parser)?),
-            Long("option") => option = Some(number(&mut parser)?),
+            Long("clash") => clash = Some(number(&mut parser, takes)?),
+            Long("option") => option = Some(number(&mut parser, takes)?),
             other => return Err(usage(other.unexpected())),
         }
     }
@@ -183,13 +185,7 @@ fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(word) if first && word == "stop" => stop = true,
             Value(word) if first && word == "show" => show = true,
-            Long("file") if show => {
-                let value = parser.value().and_then(|v| v.string()).map_err(usage)?;
-                let digits = !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit());
-                let number = digits.then(|| value.parse::<usize>().ok()).flatten();
-                let not = || Failure::Usage(format!("--file takes a number, and {value:?} is not one"));
-                file = Some(number.ok_or_else(not)?);
-            }
+            Long("file") if show => file = Some(number(&mut parser, "--file takes")?),
             Long("wish") => wish = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("date") => options.day = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("repo") if !stop => options.repo = Some(PathBuf::from(parser.value().map_err(usage)?)),

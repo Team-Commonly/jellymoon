@@ -9,10 +9,11 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::{RunOutcome, WorkState, dead};
+use super::{RunOutcome, WorkState, dead, finished};
+use crate::copy::{self, Named};
 use crate::hook::put;
 use crate::tap::plain;
-use crate::{Error, busy, copy};
+use crate::{Error, busy};
 
 /// The most bytes of a run's record that are read.
 const RECORD_MAX: usize = 64 * 1024;
@@ -66,9 +67,33 @@ pub(super) fn file(home: &Path, run: &str) -> PathBuf {
 pub(super) fn write(home: &Path, run: &str, record: &Record) -> Result<(), Error> {
     let text = serde_json::to_string(record).map_err(io::Error::from);
     let written = text.and_then(|text| put(&file(home, run), &format!("{text}\n"), false)).map_err(Error::Store);
-    // A test's build can wait here, after each writing, so that a test reads every state the record ever has.
-    busy::pause("JELLYMOON_TEST_RECORD_WAIT_MS");
+    // A test's build is held here, after each writing, until the test has read the state the record has.
+    busy::step("JELLYMOON_TEST_RECORD_WAIT_MS");
     written
+}
+
+impl Record {
+    /// What the record of a run that finished names of it: its repo, its start and its end, all three, or none of
+    /// them in a record from before F48. It is the one place those words are read, by `run show` and by whatever
+    /// comes to act on a run's work, and it is asked of every finished run, whatever the state of its work,
+    /// before git is asked anything and before anything is printed. Err for a record that is not as a run writes
+    /// it: one that names some and not others, a repo by a path that does not start at a root (a run writes the
+    /// folder as the system resolves it, from a root), a commit by anything but a whole object id, or a start and
+    /// an end that do not fit the record's own words: a run that made its one commit ended as another commit than
+    /// it started from, and a run that changed nothing ended as its start. None of these words reaches git, and
+    /// neither does one that passes: an id is only ever compared with what git printed (`copy/work.rs`).
+    pub(super) fn named(&self, run: &str) -> Result<Option<Named<'_>>, ()> {
+        let changed = self.why.as_deref() == Some(finished(run, true).as_str());
+        match (self.repo.as_deref(), self.start.as_deref(), self.end.as_deref()) {
+            (None, None, None) => Ok(None),
+            (Some(repo), Some(start), Some(end))
+                if repo.is_absolute() && copy::is_id(start) && copy::is_id(end) && (start != end) == changed =>
+            {
+                Ok(Some(Named { repo, start, end }))
+            }
+            _ => Err(()),
+        }
+    }
 }
 
 /// The record as it is kept. None when there is none that can be used.

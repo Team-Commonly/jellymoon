@@ -2,19 +2,24 @@
 //! whoever moved it, the run has failed in fixed words, nothing is committed onto the moved branch and the record
 //! names no end. So an end is only ever the start itself, or the one commit core made on top of it.
 
+use std::ffi::OsString;
 use std::fs;
 
 use serde_json::json;
 
-use super::{Going, Made, ended, ran, refused, wait_for, world};
+use super::{DAY, Going, Made, World, ended, ran, refused, wait_for, world};
 
 /// A run whose made-up agent waits for the test to leave `go`: `slow` has its work still to do then, `worked`
-/// has done it, and `gone` will remove its own copy.
+/// has done it, `gone` will remove its own copy and `idle` changes nothing.
 fn waiting(script: &str) -> (Made, Going) {
-    let w = world();
+    waiting_in(world(), script, &[])
+}
+
+/// [`waiting`] in a world of the caller's, with its variables after the world's.
+pub(super) fn waiting_in(w: World, script: &str, vars: &[(&'static str, OsString)]) -> (Made, Going) {
     w.play(script, 0);
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    let going = w.start_going(&wish, &repo);
+    let going = w.going(vars, &["run", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
     wait_for(&w.at("rec").join("started"));
     let run = w.kept(&wish)["run"].as_str().unwrap().to_string();
     (Made { w, repo, wish, run }, going)
@@ -36,10 +41,10 @@ fn the_work_by_hand(made: &Made, start: &str, message: &str) -> String {
 }
 
 /// Lets the agent end, and holds the run to what a moved branch leaves: it failed in the fixed words, its record
-/// names its start and no end, its branch is where it was moved to, and `run show` refuses it as any failed run.
-fn failed_as_moved(made: &Made, going: Going, moved_to: &str) {
+/// names its start and no end, its branch is where it was moved to (gone, with none), and `run show` refuses it
+/// as any failed run.
+fn failed_as_moved(made: &Made, going: Going, moved_to: Option<&str>) {
     let (w, main) = (&made.w, made.w.commit(&made.repo, "main"));
-    assert_ne!(moved_to, main);
     fs::write(w.at("rec").join("go"), "").unwrap();
     let (run, said) = ran(&ended(going));
     let why = format!(
@@ -50,7 +55,10 @@ fn failed_as_moved(made: &Made, going: Going, moved_to: &str) {
     let record = made.record();
     assert_eq!((&record["outcome"], &record["why"], &record["start"]), (&json!("failed"), &json!(why), &json!(main)));
     assert!(record.get("end").is_none(), "a run whose branch was moved ended as no commit: {record}");
-    assert_eq!(w.commit(&made.repo, &made.branch()), moved_to, "nothing was committed onto the moved branch");
+    match moved_to {
+        Some(to) => assert_eq!(w.commit(&made.repo, &made.branch()), to, "nothing was committed onto the branch"),
+        None => assert_eq!(w.branches(&made.repo), Vec::<String>::new(), "the branch was not made again"),
+    }
     assert_eq!(w.commit(&made.repo, "main"), main);
     let kept = w.kept(&made.wish);
     assert_eq!((&kept["state"], &kept["stars"], &kept["why"]), (&json!("needs_you"), &json!([]), &json!(why)));
@@ -70,7 +78,7 @@ fn a_branch_moved_to_a_commit_in_a_runs_own_shape_while_the_run_goes_fails_the_r
     let by_hand = the_work_by_hand(&made, &main, &made.message());
     assert_eq!(made.git(&["log", "-1", "--format=%P %s", &by_hand]), format!("{main} {}", made.message()));
     made.git(&["update-ref", &made.branch(), &by_hand, &main]);
-    failed_as_moved(&made, going, &by_hand);
+    failed_as_moved(&made, going, Some(&by_hand));
     // The copy is kept as a failed run's is, with the agent's files in it, which are the commit's own.
     let copy = made.w.jm("copies").join(&made.run);
     assert_eq!(made.w.copies(), std::slice::from_ref(&made.run));
@@ -85,7 +93,7 @@ fn the_persons_own_commit_inside_the_copy_while_the_run_goes_fails_the_run_and_n
     made.w.git(&copy, &["add", "-A"]);
     made.w.git(&copy, &["commit", "-q", "-m", "the person's own"]);
     let theirs = made.w.commit(&made.repo, &made.branch());
-    failed_as_moved(&made, going, &theirs);
+    failed_as_moved(&made, going, Some(&theirs));
     assert_eq!(made.w.copies(), std::slice::from_ref(&made.run), "the copy is kept, on their commit");
     assert_eq!(made.w.commit(&copy, "HEAD"), theirs);
 }
@@ -99,7 +107,7 @@ fn a_branch_moved_under_a_run_whose_copy_changed_too_fails_the_run_and_takes_no_
     let by_hand = made.by_hand(&main, "moved by hand", &main);
     made.git(&["update-ref", &made.branch(), &by_hand, &main]);
     let before = made.git(&["rev-list", "--all", "--count"]);
-    failed_as_moved(&made, going, &by_hand);
+    failed_as_moved(&made, going, Some(&by_hand));
     assert_eq!(made.git(&["rev-list", "--all", "--count"]), before, "no commit was put under any name");
     let copy = made.w.jm("copies").join(&made.run);
     assert_eq!(fs::read_to_string(copy.join("a.txt")).unwrap(), "edited by the run\n", "the work is in the copy");
@@ -126,5 +134,26 @@ fn a_run_whose_copy_is_gone_at_its_end_ended_as_its_start_or_failed_when_its_bra
     let main = made.w.commit(&made.repo, "main");
     let by_hand = made.by_hand(&main, "moved by hand", &main);
     made.git(&["update-ref", &made.branch(), &by_hand, &main]);
-    failed_as_moved(&made, going, &by_hand);
+    failed_as_moved(&made, going, Some(&by_hand));
+}
+
+// A name for another branch is not the run's branch, though it leads to the very commit the run started from:
+// read through, it would look unmoved, and the run's commit would land on the branch it leads to. And a branch
+// that is gone is not made again.
+#[test]
+fn a_branch_made_a_name_for_another_or_deleted_while_the_run_goes_fails_the_run_and_moves_nothing() {
+    let (made, going) = waiting("slow");
+    let main = made.w.commit(&made.repo, "main");
+    made.git(&["update-ref", "refs/heads/theirs", &main]);
+    made.git(&["symbolic-ref", &made.branch(), "refs/heads/theirs"]);
+    let before = made.git(&["rev-list", "--all", "--count"]);
+    failed_as_moved(&made, going, Some(&main));
+    assert_eq!(made.git(&["symbolic-ref", &made.branch()]), "refs/heads/theirs", "the name is left as it was made");
+    assert_eq!(made.w.commit(&made.repo, "refs/heads/theirs"), main, "the branch it leads to took no commit");
+    assert_eq!(made.git(&["rev-list", "--all", "--count"]), before, "no commit was put under any name");
+
+    let (made, going) = waiting("slow");
+    made.git(&["update-ref", "-d", &made.branch()]);
+    failed_as_moved(&made, going, None);
+    assert_eq!(made.w.copies(), std::slice::from_ref(&made.run), "the copy is kept, with the work in it");
 }

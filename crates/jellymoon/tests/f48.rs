@@ -3,7 +3,8 @@
 //! run as a black box in F39's test folder (`f39/world.rs`), with the made-up `fake-agent` as the harness and repos
 //! made with the real `git`. This file holds what a run writes; `f48/shown.rs` holds what `jellymoon run show`
 //! takes from the record and what it refuses, `f48/cut.rs` a run cut off between its steps, `f48/moved.rs` a run
-//! whose branch was moved while it worked, and `f48/linked.rs` a repo with a second checkout.
+//! whose branch was moved while it worked, `f48/raced.rs` one whose branch was moved between two git steps of its
+//! end, and `f48/linked.rs` a repo with a second checkout.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f48/cut.rs"]
@@ -12,6 +13,10 @@ mod cut;
 mod linked;
 #[path = "f48/moved.rs"]
 mod moved;
+#[path = "f48/named.rs"]
+mod named;
+#[path = "f48/raced.rs"]
+mod raced;
 #[path = "f48/shown.rs"]
 mod shown;
 mod support;
@@ -24,17 +29,6 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 use support::{Ran, install, said, tree, write_log};
 pub use world::*;
-
-/// The three things F48 adds to a run's record, in the order they are written.
-pub const NAMED: [&str; 3] = ["repo", "start", "end"];
-
-/// One run of the wish `m1` in the repo `work/alpha`.
-pub struct Made {
-    pub w: World,
-    pub repo: PathBuf,
-    pub wish: String,
-    pub run: String,
-}
 
 /// A run the made-up agent finished: it edited `a.txt`, removed `b.txt` and made `n.txt`.
 pub fn finished() -> Made {
@@ -52,30 +46,8 @@ pub fn played(script: &str, outcome: &str) -> Made {
 }
 
 impl Made {
-    pub fn branch(&self) -> String {
-        format!("refs/heads/jellymoon/run-{}", self.run)
-    }
-
     pub fn git(&self, args: &[&str]) -> String {
         self.w.git(&self.repo, args)
-    }
-
-    pub fn record(&self) -> Value {
-        self.w.record(&self.run)
-    }
-
-    /// Writes the run's record by hand, as anyone who can write Jellymoon's home can.
-    pub fn write(&self, record: &Value) {
-        fs::write(self.w.jm("runs").join(&self.run).join("run.json"), format!("{record}\n")).unwrap();
-    }
-
-    /// The record as a build before F48 wrote it: without the three.
-    pub fn from_before(&self) -> Value {
-        let mut record = self.record();
-        for name in NAMED {
-            record.as_object_mut().unwrap().remove(name);
-        }
-        record
     }
 
     /// `jellymoon run show` for the wish, in `repo`, with `more` arguments.
@@ -191,7 +163,7 @@ fn nothing_else_a_run_writes_changes_and_no_step_of_a_run_in_the_persons_repo_do
     assert!(line.ends_with("}\n") && line.matches('\n').count() == 1, "{line:?}");
     let old = ["wish", "day", "started", "outcome", "why", "denied", "skipped", "pid", "mark", "began"];
     assert_eq!(fields(&line), [&old[..], &NAMED[..]].concat());
-    let mut record = made.from_before();
+    let mut record = made.as_before();
     assert!(record["started"].as_u64().is_some_and(|at| at > 1_600_000_000), "{record}");
     assert!(record["pid"].as_u64().is_some() && (record["mark"].is_string() || cfg!(windows)), "{record}");
     for at in ["started", "pid", "mark"] {

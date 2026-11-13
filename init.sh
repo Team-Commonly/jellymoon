@@ -68,10 +68,21 @@ make preflight
 
 echo "== features"
 awk -F'"' '
-  function flush() { if (id != "") printf "%s  %-7s  %s\n", id, (pass ? "pass" : blocked ? "blocked" : "todo"), desc }
-  /^ *"id":/ { flush(); id = $4; desc = ""; pass = 0; blocked = 0; total++ }
-  /^ *"description":/ { desc = $4 }
-  /^ *"passes": *true/ { pass = 1; passing++ }
-  /^ *"blockedBy":/ { blocked = 1 }
-  END { flush(); printf "\n%d/%d passing\n", passing, total }
+  # A feature is blocked only while something its blockedBy names does not pass: a feature that is still
+  # false, or words that name no feature at all.
+  /^ *"id":/ { n++; id[n] = $4; inby = 0 }
+  /^ *"description":/ { desc[n] = $4 }
+  /^ *"passes": *true/ { pass[id[n]] = 1; passing++ }
+  /^ *"blockedBy":/ { inby = 1; for (i = 4; i <= NF; i += 2) by[n] = by[n] "\"" $i; if ($0 ~ /\]/) inby = 0; next }
+  inby && NF > 1 { by[n] = by[n] "\"" $2 }
+  inby && /\]/ { inby = 0 }
+  END {
+    for (f = 1; f <= n; f++) {
+      blocked = 0
+      k = split(by[f], names, "\"")
+      for (i = 2; i <= k; i++) if (!pass[names[i]]) blocked = 1
+      printf "%s  %-7s  %s\n", id[f], (pass[id[f]] ? "pass" : blocked ? "blocked" : "todo"), desc[f]
+    }
+    printf "\n%d/%d passing\n", passing, n
+  }
 ' feature_list.json

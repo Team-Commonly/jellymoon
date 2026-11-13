@@ -2,11 +2,14 @@
 //! 6; `docs/development/show.md`). `jellymoon run show` is run as a black box on runs the made-up `fake-agent`
 //! finished in F39's test folder (`f39/world.rs`). Work of other shapes is put on the run's branch by the test, with
 //! the real `git` and an index file of its own: no file of it is ever written to a disk, so a name no system could
-//! hold is tested on every system. `f44/file.rs` holds `--file`, `f44/refused.rs` what is refused, and
-//! `f44/names.rs` the names that look like options, the count the list is cut at and ten thousand files, and
-//! `f44/obeyed.rs` the spellings a disk takes for a name the person's tools obey.
+//! hold is tested on every system. `f44/file.rs` holds `--file`, `f44/refused.rs` what is refused, `f44/names.rs`
+//! the names that look like options, the count the list is cut at and ten thousand files, `f44/obeyed.rs` the
+//! spellings a disk takes for a name the person's tools obey, `f44/bounds.rs` where a look's reads stop, and
+//! `f44/shapes.rs` work of a few more shapes.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f44/bounds.rs"]
+mod bounds;
 #[path = "f44/file.rs"]
 mod file;
 #[path = "f44/names.rs"]
@@ -15,13 +18,15 @@ mod names;
 mod obeyed;
 #[path = "f44/refused.rs"]
 mod refused;
+#[path = "f44/shapes.rs"]
+mod shapes;
 mod support;
 #[path = "f39/world.rs"]
 mod world;
 
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::{env, fs};
 
@@ -32,19 +37,11 @@ pub use world::*;
 /// What every made-up file of a run's work holds somewhere: no file under a test's folder may hold it afterwards.
 pub const WORK: &str = "plum-otter-made-by-the-run";
 
-/// One run that finished, of the wish `m1` in the repo `work/alpha`: the made-up agent edited `a.txt`, removed
-/// `b.txt` and made `n.txt`.
-pub struct Made {
-    pub w: World,
-    pub repo: PathBuf,
-    pub wish: String,
-    pub run: String,
-}
-
 /// One file of made-up work: its mode as git writes it (`0` takes the file away), its path and what it holds. For
 /// mode 160000 it holds nothing: the entry names a commit of another repo.
 pub type Entry<'a> = (&'a str, &'a str, &'a [u8]);
 
+/// One run that finished: the made-up agent edited `a.txt`, removed `b.txt` and made `n.txt`.
 pub fn finished() -> Made {
     finished_in(world())
 }
@@ -57,10 +54,6 @@ fn finished_in(w: World) -> Made {
 }
 
 impl Made {
-    pub fn branch(&self) -> String {
-        format!("refs/heads/jellymoon/run-{}", self.run)
-    }
-
     /// `jellymoon run show` for the wish, in the repo, with `more` arguments.
     pub fn show(&self, more: &[&str]) -> Ran {
         let asked = ["run", "show", "--wish", &self.wish, "--date", DAY, "--repo", self.repo.to_str().unwrap()];
@@ -112,19 +105,9 @@ impl Made {
     pub fn rework(&self, entries: &[Entry]) {
         let made = self.commit_of(entries, &["main"], &format!("Jellymoon run {}", self.run));
         self.git(&["update-ref", &self.branch(), &made], b"", None);
-        let mut record = self.w.record(&self.run);
+        let mut record = self.record();
         record["end"] = json!(made);
-        fs::write(self.w.jm("runs").join(&self.run).join("run.json"), format!("{record}\n")).unwrap();
-    }
-
-    /// Makes the run's record one from before F48, which names no repo and no commit: a look then goes by the
-    /// branch's last commit and its one parent.
-    pub fn from_before(&self) {
-        let mut record = self.w.record(&self.run);
-        for name in ["repo", "start", "end"] {
-            record.as_object_mut().unwrap().remove(name);
-        }
-        fs::write(self.w.jm("runs").join(&self.run).join("run.json"), format!("{record}\n")).unwrap();
+        self.write(&record);
     }
 
     /// Everything git keeps of the repo that a look could change: the person's files, index and `HEAD`, and every

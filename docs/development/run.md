@@ -7,7 +7,8 @@ stop sequence, `stop.rs` a stop the person asks for, `place.rs` the folder, `nev
 `left.rs` what a killed command left, `apart.rs` and `cap.rs` F41). The copy is [copy.md](copy.md)'s, and the wish is
 [wish.md](wish.md)'s. What a finished run made is shown by `jellymoon run show`, which is [show.md](show.md)'s, and landed on the
 person's branch by `jellymoon run keep`, which is [keep.md](keep.md)'s and adds `work`, `kept` and `onto` to the
-run's record.
+run's record. What a run left is refused with `jellymoon run toss`, which is [toss.md](toss.md)'s and adds `work`
+and `tossed`.
 
 ```
 jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]
@@ -328,7 +329,7 @@ record whose end is not believed can have been written by hand too.
   The table is what this build writes. Not every record of a run that failed, was cancelled or was cut off
   names `repo` and `start`: one written before F48 names none of the three, and neither does one the released
   v0.2.0-rc1 wrote down as failed (below). What `run toss` does with a record of none is decided in ADR 0017
-  ("What `run keep` and `run toss` may build on").
+  ("What `run keep` and `run toss` may build on") and told in [toss.md](toss.md): the copy goes, the branch is left.
 
   **At a run's end its branch must still be at `start`.** Before anything of a finished run is staged or
   committed, core asks git which commit `refs/heads/jellymoon/run-<id>` names, by that whole name, as a look does
@@ -369,8 +370,10 @@ record whose end is not believed can have been written by hand too.
   **`its copy is kept` is said of every failed run, and is not always so.** The words of a run that failed,
   was cancelled or was cut off say its copy is kept, and they are fixed when the run ends. The folder can be
   gone all the same: removed by hand, removed by the run's own agent, or lost to a kill between the folder's
-  removal and git dropping its listing. Nothing checks the folder before the words are written. A second form
-  of the words, for a failed run whose folder is not standing, comes with `run toss`.
+  removal and git dropping its listing. Nothing checks the folder before the words are written. So the
+  words have a second form, `: its copy is no longer kept, and no star was added`, which `jellymoon run stop`
+  prints of a run that ended when nothing is at the copy's name any more (F46). The line the wish holds is not
+  written again, so the page still prints the first; a wish whose run was tossed holds a toss's line.
 
   The released v0.2.0-rc1 reads a record that names the three, since it reads past names it does not know. It
   writes a record again in one case only, a look that writes a cut-off run down as failed, and the three are

@@ -9,6 +9,7 @@
 //! `f45/raced.rs` a checkout or a branch changed between two steps, `f45/names.rs` the branch names a record
 //! holds, `f45/late.rs` a step git stops, a file that only looks changed and what a question writes, and
 //! `f45/attrs.rs` which attributes git goes by when the work removes, changes or adds a `.gitattributes`.
+//! `f45/made.rs` is what these tests share with a toss's (F46).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f45/attrs.rs"]
@@ -17,6 +18,8 @@ mod attrs;
 mod cut;
 #[path = "f45/disk.rs"]
 mod disk;
+#[path = "f45/made.rs"]
+mod kept;
 #[path = "f45/late.rs"]
 mod late;
 #[path = "f45/linked.rs"]
@@ -38,66 +41,20 @@ mod support;
 mod world;
 
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use serde_json::{Value, json};
+pub use kept::{Held, finished, said};
+use serde_json::json;
 use support::{Ran, tree};
 pub use world::*;
 
 /// One file of made-up work: its mode as git writes it (`0` takes the file away), its path and what it holds.
 pub type Entry<'a> = (&'a str, &'a str, &'a [u8]);
 
-/// What [`Made::held`] holds.
-pub type Held = ((Vec<(std::path::PathBuf, Vec<u8>)>, Vec<u8>, Vec<u8>, Vec<String>), String, Value);
-
-/// One run that finished: the made-up agent edited `a.txt`, removed `b.txt` and made `n.txt`.
-pub fn finished() -> Made {
-    let w = world();
-    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
-    let (run, said) = ran(&w.start(&wish, &repo));
-    assert_eq!(said["outcome"], "completed", "{said}");
-    Made { w, repo, wish, run }
-}
-
 impl Made {
-    pub fn git(&self, args: &[&str]) -> String {
-        self.w.git(&self.repo, args)
-    }
-
-    /// `jellymoon run keep` for the wish, in `repo`, with `more` arguments and `vars`.
-    pub fn keep_in(&self, repo: &Path, more: &[&str], vars: &[(&'static str, OsString)]) -> Ran {
-        let asked = ["run", "keep", "--wish", &self.wish, "--date", DAY, "--repo", repo.to_str().unwrap()];
-        self.w.run_with(vars, &[&asked[..], more].concat())
-    }
-
-    pub fn keep(&self, more: &[&str]) -> Ran {
-        self.keep_in(&self.repo, more, &[])
-    }
-
-    /// The commit the run ended as, by its record.
-    pub fn end(&self) -> String {
-        self.record()["end"].as_str().unwrap().to_string()
-    }
-
-    /// The person says who they are in this repo, and commits a change to `c.txt` and a file of their own.
-    pub fn moved_on(&self) -> String {
-        self.who();
-        fs::write(self.repo.join("c.txt"), "c.txt as the person left it\n").unwrap();
-        fs::write(self.repo.join("mine.txt"), "the person's own\n").unwrap();
-        self.git(&["add", "c.txt", "mine.txt"]);
-        self.git(&["commit", "-q", "-m", "the person's own commit"]);
-        self.w.commit(&self.repo, "main")
-    }
-
-    pub fn who(&self) {
-        self.git(&["config", "user.name", "Ada Example"]);
-        self.git(&["config", "user.email", "ada@example.test"]);
-    }
-
     /// The real git in the repo with `input` on its input and an index file of the test's own.
     fn stored(&self, args: &[&str], input: &[u8], index: &Path) -> String {
         let mut git = Command::new("git");
@@ -141,26 +98,6 @@ impl Made {
         made
     }
 
-    /// Everything a keep could change: the person's files, index and `HEAD`, every ref with what it names, the
-    /// run's own too, and the run's record.
-    pub fn held(&self) -> Held {
-        let refs = self.git(&["for-each-ref", "--format=%(refname) %(objectname) %(symref)"]);
-        (self.w.persons(&self.repo), refs, self.record())
-    }
-
-    /// Fails unless the command was refused in these words, with nothing changed since `before`.
-    pub fn refuses(&self, ran: &Ran, before: &Held, why: &str) {
-        assert_eq!((ran.code, ran.stdout.as_str()), (1, ""), "{}", ran.stderr);
-        assert_eq!(refused(ran), said(&why.replace("{run}", &self.run)));
-        assert!(*before == self.held(), "a refused keep changed something: {}", ran.stderr);
-        self.w.never_says_the_agent(ran);
-    }
-
-    /// What `git status` says of the checkout, the files git ignores too.
-    pub fn status(&self) -> String {
-        self.git(&["status", "--porcelain", "--ignored"])
-    }
-
     /// The files of the checkout as text, by name.
     pub fn files(&self) -> Vec<(String, String)> {
         let git = |path: &Path| path.components().any(|part| part.as_os_str() == ".git");
@@ -174,11 +111,6 @@ impl Made {
 pub fn worked() -> Vec<(String, String)> {
     let files = [("a.txt", "edited by the run\n"), ("c.txt", "c.txt as it was\n"), ("n.txt", "new from the run\n")];
     files.iter().map(|(name, holds)| (name.to_string(), holds.to_string())).collect()
-}
-
-/// A refusal as it is printed.
-pub fn said(why: &str) -> String {
-    format!("jellymoon: {why}\n")
 }
 
 /// A program planted where git would start it, which leaves `ran-<name>` beside itself if it ever is.

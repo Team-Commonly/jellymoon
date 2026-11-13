@@ -65,9 +65,9 @@ Each line is changed by the feature that makes it true, not before.
 
 | It says today | It will say |
 |---|---|
-| ADR 0014, 4: "The branch is kept: it is the work." | The branch is kept until the person keeps the work or tosses it; either removes the run's branch. F45 made the half about keeping true and changed the line so far |
-| `wish.md`: a made wish's "state moves only with its one run" | And with a toss, which lets the wish go |
-| Glossary, **copy**: "the branch, with the work on it, is kept" | Kept until the work is kept or tossed. F45 changed it to "until the work is kept" |
+| ADR 0014, 4: "The branch is kept: it is the work." | The branch is kept until the person keeps the work or tosses it; either removes the run's branch. F45 made the half about keeping true and changed the line so far; F46 made the other half true and changed the rest |
+| `wish.md`: a made wish's "state moves only with its one run" | And with a toss, which lets the wish go. Changed by F46 |
+| Glossary, **copy**: "the branch, with the work on it, is kept" | Kept until the work is kept or tossed. F45 changed it to "until the work is kept", and F46 to the whole |
 
 A run still never touches the person's checkout. Keeping is the person's own command.
 
@@ -295,6 +295,39 @@ clean` does and leaves the branch, in fixed words. A branch is deleted only as t
 record names; a branch no record names a commit for is left to the copy's own take-back rule (`copy/back.rs`).**
 Of the sentence above, that `run keep` and `run toss` refuse a record that names no commits, this is what stands:
 neither acts on a branch by such a record. `run keep` refuses it, and `run toss` takes back its copy and no more.
+
+## Found while building F46 (2026-11-13)
+
+The feature's row says of a toss of a failed or cancelled run that its kept copy is removed "and its branch by
+the same rule". This note's reading, in "What `run keep` and `run toss` may build on", is narrower, and **it is
+the note's reading the tests are written from, not the row's plain words.** The row is left as it is.
+
+1. **A toss of any record writes `tossed` and lets the wish go.** The commit's id is written only when the record
+   names one: a finished run's `end`, or the `start` of a run that did not finish. Of a record that names none,
+   the kept copy is removed if there is one, and the branch is left, in fixed words (`its branch is left, as the
+   record names no commit for it`).
+2. **A record of two whose branch is not at `start` keeps its branch.** A run killed after core's commit, or one
+   whose copy could not be removed, has a branch no record names the commit of. The copy goes; the branch is
+   left (`its branch is left, as it is not at the commit the record names for it`).
+3. **Only work that waits is refused for its branch.** A finished run's work, with a commit named for it, is
+   checked whole before the record is written, and a branch that is moved, a name for another branch, or stood
+   on refuses the toss with nothing changed. Once a record says tossed, and for every run that did not finish,
+   a branch that cannot be deleted as the run's own is left and said so, and the toss goes on.
+4. **A branch that is not in the repo is no refusal.** There is nothing to delete; the record and the wish are
+   written, and the words say the branch was not there.
+5. **Work that was kept, or that a cut-off keep had landed, is not tossed.** Both are refusals. A keep's intent
+   that did not land is tossed, and goes from the record. Landed is asked of the repo and not of the record's
+   `onto` alone, since git lands the work where `HEAD` is by then: the commit `kept` held by that branch, by any
+   branch that is not named as a run's is (in either case of the letters, as a keep reads a name), or by a
+   `HEAD` that names no branch in the checkout the toss is asked in.
+6. **What a toss prints** is `run`, `wish`, `tossed` (whether this command changed anything), `commit` and `why`.
+   A second toss is no refusal: it prints `tossed: false`.
+7. **A run's line has a second form**, `its copy is no longer kept`, which `run stop` prints when nothing is at
+   the copy's name. The wish's stored line is not written again.
+8. **git's answer to a question asked of it**: exit 1 with nothing printed is "not there", whatever git said on
+   stderr. A repo whose config makes git warn at every command is read as any other (`copy/git.rs`, `printed`).
+
+The whole account, with every sentence and what is not closed, is `docs/development/toss.md`.
 
 ## What comes after
 

@@ -69,8 +69,9 @@ first 64 KiB are read, `cut` is true, and the text ends before the word the cut 
 of a key whose rest was never read. With no whole word before the cut (no space or line break in what was read,
 as in a minified file) the file is refused in fixed words, not printed as an empty text.
 
-**`cut` is true whenever the file was not read whole or the cleaned text was cut at `most`.** A text that
-cleaning only shortens, by the spaces and line breaks at its end, is not `cut`. `most` counts the bytes that are read of a file, and it
+**`cut` is true whenever the file was not read whole or the cleaned text was cut at `most`.** Cleaning
+shortens a text at its start and at its end, by the spaces and line breaks there, and by characters it takes out
+(a zero-width space, for one): none of that is `cut`. `most` counts the bytes that are read of a file, and it
 is no count of what is printed. Cleaning can make a text longer: a token gains an ellipsis and a password in a
 link becomes `[redacted]`. A text is kept to `most` characters, so a file of 64 KiB or less that cleaning makes
 longer than that is cut there, ends in `…`, and says `cut`. A character can be several bytes, so `text` can be
@@ -292,8 +293,8 @@ word of the agent's or a word of git's, and neither a refusal nor an answer hold
   branch `Jellymoon/other` already there, git stores the run's branch under `refs/heads/Jellymoon/` and lists
   it by that name. The look asks for `refs/heads/jellymoon/run-<id>` to the letter and says the branch is not
   in the repo. Nothing is shown that is not the run's; the run's own work is not shown either.
-- **It writes no `work` to the record.** `run keep` writes `kept` ([keep.md](keep.md)); `tossed` is F46's to
-  write.
+- **It writes no `work` to the record.** `run keep` writes `kept` ([keep.md](keep.md)) and `run toss` writes
+  `tossed` ([toss.md](toss.md)).
 - **It does not bury a run that was cut off.** A look is not a page: it refuses, and writes nothing down.
 - **Measured on macOS only**, with git 2.50; the test lists work of ten thousand files and allows it a minute. Not
   measured: Windows, Linux, a git older than 2.31, a repo of the SHA-256 format, a partial clone.

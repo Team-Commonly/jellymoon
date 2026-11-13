@@ -323,7 +323,7 @@
         "a second toss, and a toss of kept work, change nothing and say so"
       ],
       "test": "cargo test -p jellymoon --test f46",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F44"
       ]

@@ -221,14 +221,14 @@ fn a_locked_index_and_another_keep_at_work_are_refused() {
     let lock = fs::File::create(made.w.jm("runs").join("keep.lock")).unwrap();
     lock.lock().unwrap();
     let wait = [("JELLYMOON_TEST_KEEP_WAIT_MS", "200".into())];
-    let busy = format!("another keep is at work in this home: {UNCHANGED}");
+    let busy = format!("another keep or toss is at work in this home: {UNCHANGED}");
     made.refuses(&made.keep_in(&made.repo, &[], &wait), &before, &busy);
     assert_eq!(printed(&made.keep_in(&made.repo, &["--ask"], &wait))["fits"], json!(false));
     drop(lock);
     // A lock that cannot be made is said as that, and not as another keep: here a folder has its name.
     fs::remove_file(made.w.jm("runs").join("keep.lock")).unwrap();
     fs::create_dir(made.w.jm("runs").join("keep.lock")).unwrap();
-    unfit(&made, "the keeps' lock (runs/keep.lock) could not be made or taken in this home");
+    unfit(&made, "the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home");
     fs::remove_dir(made.w.jm("runs").join("keep.lock")).unwrap();
     kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
 }

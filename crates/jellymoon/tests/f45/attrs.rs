@@ -278,7 +278,7 @@ fn an_attributes_file_git_could_not_remove_is_named_by_the_keep_that_wrote_past_
 
 // The gate's second finding of its fourth pass. Only a plain file at the path is one that stayed. Where the work
 // puts a folder at the path, or makes the folder above it a link to one that holds such a file, git did remove
-// the file, and nothing is named.
+// the file, and nothing is named. Nor is a link at the path, made there just after the step, to a plain file.
 #[test]
 fn an_attributes_file_the_work_swaps_for_a_folder_or_puts_behind_a_link_is_not_said_to_have_stayed() {
     let made = finished_over(&[("a/.gitattributes", "# nothing\n"), ("b/.gitattributes", "# nothing\n")]);
@@ -292,6 +292,18 @@ fn an_attributes_file_the_work_swaps_for_a_folder_or_puts_behind_a_link_is_not_s
     let (said, why) = (printed(&made.keep(&["--with-settings"])), FORWARD.replace("{run}", &made.run));
     assert_eq!((&said["kept"], &said["why"], &said["stayed"]), (&json!(end), &json!(why), &json!(null)));
     assert!(made.repo.join("a").join(".gitattributes").is_dir());
+
+    let made = finished_over(&[("c/.gitattributes", "# nothing\n"), ("c/plain.txt", "# nothing\n")]);
+    let link = made.rework(&[("120000", "c/.gitattributes", b"plain.txt")]);
+    let end = made.rework(&[("0", "c/.gitattributes", b"")]);
+    let again: [(&str, &[&str]); 1] = [("after", &["checkout", "-q", link.as_str(), "--", "c/.gitattributes"])];
+    let (said, why) = (printed(&told(&made, &made.repo, "merge", &again)), FORWARD.replace("{run}", &made.run));
+    let at = made.repo.join("c").join(".gitattributes");
+    if !fs::symlink_metadata(&at).is_ok_and(|at| at.file_type().is_symlink()) {
+        return skipped("a link at the path of a `.gitattributes`: this checkout writes a link as a plain file");
+    }
+    assert_eq!(fs::read_to_string(&at).unwrap(), "# nothing\n", "the link is to a plain file");
+    assert_eq!((&said["kept"], &said["why"], &said["stayed"]), (&json!(end), &json!(why), &json!(null)));
 }
 
 // Made again by the person between the step and the look, a file is at its path all the same and is named, the

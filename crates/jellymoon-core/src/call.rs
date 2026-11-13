@@ -61,8 +61,8 @@ const NO_PATH: &str =
 /// How long a stopped or finished harness's output is waited for: something it started may still hold the pipe.
 const DRAIN: Duration = Duration::from_secs(1);
 
-/// How much of what a harness printed is kept in an error, in characters.
-const SAID_MAX: usize = 300;
+/// How much of what a harness or a git (`copy/git.rs`) printed is kept in an error, in characters.
+pub(crate) const SAID_MAX: usize = 300;
 
 /// The most bytes that are kept of what a command says on stderr, whoever reads it: 128 KiB. What is said after
 /// that is read and dropped ([`collect`]). Nothing reads further in: the reading call's harness and every git

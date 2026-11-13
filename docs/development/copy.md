@@ -44,7 +44,8 @@ new thing in their repo is the run's branch (and git's own registration of the w
 ## Clean
 
 - **completed.** Core commits what is in the copy onto the run's branch, removes the folder itself, then has git
-  drop the worktree's registration. The branch is kept: it is the work. Nothing to commit is not an error, and
+  drop the worktree's registration. The branch is kept until the person keeps the work or tosses it
+  ([keep.md](keep.md), [toss.md](toss.md)): it is the work. Nothing to commit is not an error, and
   neither is a folder already gone. The commit is one commit, `Jellymoon run <run>`, on top of the branch.
   `jellymoon copy clean` takes the branch as it is. A run's own end takes it only while it is still at the commit
   the copy was made from, and has failed otherwise (`run.md`, "What is kept"). Either way the branch is read by
@@ -149,7 +150,10 @@ An agent could have rewritten every file in its copy, the `.git` file too, or le
   switched off"), so a run's change to a submodule is not on its branch.
 - **Filters are not run, so a new large file in a Git LFS repo is committed whole**, as an ordinary file, and the
   LFS files a run sees in its copy are their pointers.
-- **Run branches are never looked at again and never deleted by Jellymoon.** A person removes one with
+- **A run's branch is deleted only by the person's own `run keep` or `run toss`**, as the run's own name at the
+  commit its record names ([keep.md](keep.md), [toss.md](toss.md)), or by a take-back (above). A toss also removes
+  the kept copy of a run that did not finish, as a failed copy past the newest five goes (`drop_copy`), and
+  leaves a branch that is not where the record says. A person removes a branch that was left with
   `git branch -D jellymoon/run-<run>` in their repo, and lists them with `git branch --list 'jellymoon/*'`. An id
   whose branch is still there is not given to a new copy.
 

@@ -77,10 +77,10 @@ worktree named with `--repo`, and no other checkout's files, index or `HEAD` is 
 names a name for a branch to the branch itself, as it does when it says where a checkout stands, and that branch
 is the one the work lands on.
 
-One keep of a home runs at a time: a keep holds the system's lock on `runs/keep.lock` from before it reads the
-run's record until it ends, and one that waits ten seconds for it is refused. So of two keeps started together,
-the second reads what the first wrote and says the work was kept before. A lock that cannot be made or taken
-for any other reason is said as that, and not as another keep.
+One keep or toss of a home runs at a time: a keep holds the system's lock on `runs/keep.lock` from before it
+reads the run's record until it ends, and one that waits ten seconds for it is refused. So of two keeps started
+together, the second reads what the first wrote and says the work was kept before. A lock that cannot be made or
+taken for any other reason is said as that, and not as another keep or toss; a toss says both in the same words.
 
 ## Asked first
 
@@ -164,8 +164,8 @@ of the branch the record names.
 
 A test's build ends itself after the step `JELLYMOON_TEST_KEEP_CUT` numbers (1 to 4), as a power cut would. A
 release holds no read of that variable: the read itself is compiled only into a build with debug assertions
-(`copy/keep/step.rs`). `tests/f45/cut.rs` cuts a keep after each step, forward and with the person's commits,
-and runs the next one.
+(`busy::cut`, the one reader a keep and a toss share). `tests/f45/cut.rs` cuts a keep after each step, forward
+and with the person's commits, and runs the next one.
 
 ## A checkout moved just before the step
 
@@ -207,7 +207,9 @@ no branch that is named, and the run's branch is left. So is a name it lists at 
 fourth gate, with `Feature` in the packed list at a commit of the person's own and `HEAD` aimed at it, git moved
 `feature` through its file and the keep said the work was on `Feature`. Some systems re-spell the branch when git
 moves it (on Windows the file `feature` becomes `Feature`, on a Mac it keeps its spelling), and the keep goes by
-what the repo lists afterwards: there the work is kept on `Feature`, which the repo lists at the commit.
+what the repo lists afterwards: there the work is kept on `Feature`, which the repo lists at the commit. Where
+git re-spells a branch so, a packed branch under the old spelling is shadowed by the new one, as it is in plain
+git.
 
 Kept, the work is the person's checkout's: its files are written and its `HEAD` is at the commit. A later
 `run keep` says the work was kept before, with the same `onto`, and `run show` says `kept`.
@@ -467,8 +469,8 @@ instead. `<unchanged>` stands for `the work of run <id> was not kept, and nothin
 | the run made no commit | `run <id> changed nothing: there is no work of it to keep` | refused |
 | the record names no commits | `the record of run <id> is from before a run's record named its commits: its work is shown, and is not kept by Jellymoon` | refused |
 | the record's `kept` and `onto` are not an id and a branch's whole name, or `work` says kept with neither | `the record of run <id> is not one Jellymoon wrote for this wish` | refused |
-| another keep holds the lock | `another keep is at work in this home: <unchanged>` | printed |
-| the lock could not be made or taken | `the keeps' lock (runs/keep.lock) could not be made or taken in this home: <unchanged>` | printed |
+| another keep, or a toss ([toss.md](toss.md)), holds the lock | `another keep or toss is at work in this home: <unchanged>` | printed |
+| the lock could not be made or taken | `the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home: <unchanged>` | printed |
 | the config names what cannot be switched off | ``the repo's git config names a filter, a merge driver or a transport that cannot be switched off on git's command line: there are too many of them, or one has `=` in its name: <unchanged>`` | printed |
 | no git, or the empty folder is not empty | `the work of run <id> could not be read: no `git` program was found on PATH, or the folder Jellymoon keeps empty for git (runs/no-hooks) is not an empty folder` | printed |
 | the folder is not a checkout's top, or git did not answer | `the work of run <id> could not be read from the repo: the folder is not the top of a checkout git opens, or git did not answer` | printed |

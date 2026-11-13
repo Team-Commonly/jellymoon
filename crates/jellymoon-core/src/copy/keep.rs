@@ -16,6 +16,7 @@ mod attrs;
 mod fits;
 mod made;
 mod step;
+mod toss;
 mod why;
 
 use std::fs::{self, File};
@@ -25,6 +26,7 @@ use std::time::Duration;
 
 pub(crate) use fits::Touched;
 pub(crate) use step::LOOSE;
+pub(crate) use toss::{Branch, Left, Untossed, toss};
 pub(crate) use why::{How, Unkept};
 
 use super::git::{Git, Repo, Unopened};
@@ -60,7 +62,7 @@ pub(crate) struct Landing {
 }
 
 /// What a keep has the record say: the commit it is about to land on a branch, and that it has landed. And what
-/// it has the answer name: a `.gitattributes` the work removes that is still in the checkout after the step.
+/// it has the answer name: a `.gitattributes` the work removes that is at its path all the same after the step.
 pub(crate) enum Note<'a> {
     Intent(&'a str, &'a str),
     Kept(&'a str, &'a str),

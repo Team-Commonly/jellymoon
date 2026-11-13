@@ -14,7 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::end::{bury, of_another, recorded};
-use super::{Ran, RunOutcome, STAR, cancelled, cut, no_wish, record, refused};
+use super::{Ran, RunOutcome, STAR, by_now, cancelled, cut, no_wish, record, refused};
 use crate::busy::or_test;
 use crate::wish::{self, MadeWish};
 use crate::{Error, WishState, copy};
@@ -48,10 +48,10 @@ fn ask(home: &Path, run: &str) -> Result<(), Error> {
 }
 
 /// Stops the run of a made wish, and returns how that run ended, once it has. Refused, with nothing written: a
-/// wish that is not there, one that names no run, and one that names another wish's run. A run that had ended is returned as it ended, and nothing is
-/// changed. A run that was cut off is written down as one, with the child it left killed (`end::bury`). A run that
-/// is going is asked to stop, and waited for: one that has not ended when the wait is over is refused in one line,
-/// with the request left for it.
+/// wish that is not there, one that names no run, and one that names another wish's run. A run that had ended is
+/// returned as it ended, and nothing is changed. A run that was cut off is written down as one, with the child it
+/// left killed (`end::bury`). A run that is going is asked to stop, and waited for: one that has not ended when
+/// the wait is over is refused in one line, with the request left for it.
 pub fn stop_run(home: &Path, wish: &str, day: Option<&str>) -> Result<Ran, Error> {
     let day = wish::day_of(day)?;
     let deadline = Instant::now() + or_test(WAIT, "JELLYMOON_TEST_STOP_WAIT_MS");
@@ -81,12 +81,14 @@ pub fn stop_run(home: &Path, wish: &str, day: Option<&str>) -> Result<Ran, Error
 /// A run that has ended, as `jellymoon run` printed it: the end in its record when that is core's and fits the
 /// wish, else what the wish says, whose line names a cancelled run in core's one line for it. The star is the
 /// wish's. The count of what was denied is the record's only with its end: of a record whose end is not
-/// believed, nothing is printed.
+/// believed, nothing is printed. A run that was tossed (`toss.rs`) ended as its record says, its line is the one
+/// its wish was let go with, and its star is the one its wish still has. Of any other run that did not finish,
+/// the line says of its copy what holds now (`by_now`).
 fn ended(home: &Path, day: &str, wish: &MadeWish, run: &str) -> Ran {
     let kept = record::kept(home, run);
-    let done = wish.state == WishState::Done;
+    let (done, tossed) = (wish.state == WishState::Done, wish.state == WishState::LetGo);
     let end = kept.as_ref().and_then(|kept| recorded(home, day, &wish.id, run, kept));
-    let end = end.filter(|(outcome, _)| (*outcome == RunOutcome::Completed) == done);
+    let end = end.filter(|(outcome, _)| tossed || (*outcome == RunOutcome::Completed) == done);
     let denied = end.as_ref().and(kept).map_or(0, |kept| kept.denied);
     let (outcome, why) = end.unwrap_or_else(|| {
         let why = wish.why.clone().unwrap_or_else(|| cut(run));
@@ -94,6 +96,7 @@ fn ended(home: &Path, day: &str, wish: &MadeWish, run: &str) -> Ran {
         let outcome = if done { RunOutcome::Completed } else { RunOutcome::Failed };
         (if stopped { RunOutcome::Cancelled } else { outcome }, why)
     });
-    let star = done.then(|| STAR.to_string());
+    let why = wish.why.clone().filter(|_| tossed).unwrap_or_else(|| by_now(home, run, why));
+    let star = (done || (tossed && outcome == RunOutcome::Completed)).then(|| STAR.to_string());
     Ran { run: Some(run.to_string()), wish: wish.id.clone(), outcome, star, denied, why }
 }

@@ -17,6 +17,10 @@ use crate::Error;
 use crate::copy::{self, How, Keep, LISTED, Named, Note, Touched, Unkept};
 use crate::still::statement;
 
+/// Why a keep or a toss did not have the lock both hold (`runs/keep.lock`): another holds it, or it is not to be had.
+pub(super) const BUSY: &str = "another keep or toss is at work in this home";
+pub(super) const NO_LOCK: &str =
+    "the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home";
 const KEPT: Asked = Asked { to: "keep", done: "kept", going: "is going: its work can be kept once it has finished" };
 
 /// What `jellymoon run keep` is asked beside the wish.
@@ -165,7 +169,7 @@ fn branch(onto: &str) -> bool {
 
 /// The commit and the branch a keep wrote in the record, both or neither, as a keep writes them: a whole object
 /// id, and a branch's whole name ([`branch`]), or the one word for work that landed on no branch a record names.
-fn intent<'a>(kept: &'a Option<String>, onto: &'a Option<String>) -> Result<Option<(&'a str, &'a str)>, ()> {
+pub(super) fn intent<'a>(kept: &'a Option<String>, onto: &'a Option<String>) -> Result<Option<(&'a str, &'a str)>, ()> {
     match (kept.as_deref(), onto.as_deref()) {
         (None, None) => Ok(None),
         (Some(kept), Some(onto)) if copy::is_id(kept) && (branch(onto) || onto == copy::LOOSE) => {
@@ -257,7 +261,7 @@ fn before_the_work(unkept: &Unkept) -> &'static str {
             "a file of the work has a name this disk does not take: a part of it is too long, or is no name on \
              this system"
         }
-        Unkept::NoLock => "the keeps' lock (runs/keep.lock) could not be made or taken in this home",
+        Unkept::NoLock => NO_LOCK,
         Unkept::Config => {
             "the repo's git config names a filter, a merge driver or a transport that cannot be switched off on \
              git's command line: there are too many of them, or one has `=` in its name"
@@ -274,7 +278,7 @@ fn words(run: &str, unkept: Unkept) -> String {
     let unchanged = format!("the work of run {run} was not kept, and nothing was changed");
     match unkept {
         Unkept::Unread(unread) => unread_words(run, unread, &KEPT),
-        Unkept::Busy => format!("another keep is at work in this home: {unchanged}"),
+        Unkept::Busy => format!("{BUSY}: {unchanged}"),
         Unkept::NoLock | Unkept::Config | Unkept::Unnamed | Unkept::Spelled | Unkept::Name => {
             format!("{}: {unchanged}", before_the_work(&unkept))
         }

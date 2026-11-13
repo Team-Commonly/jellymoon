@@ -27,10 +27,12 @@ use std::path::{Path, PathBuf};
 
 pub(crate) use back::{remove_ours, take_back, take_back_left};
 pub use clean::clean_copy;
-pub(crate) use clean::{end_copy, moved};
+pub(crate) use clean::{drop_copy, end_copy, moved};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
-pub(crate) use keep::{How, Keep, LOOSE, Note, Touched, Unkept, alone, keep, nameable, runs, swept};
+pub(crate) use keep::{
+    Branch, How, Keep, LOOSE, Left, Note, Touched, Unkept, Untossed, alone, keep, nameable, runs, swept, toss,
+};
 use record::{Record, write};
 use serde::Serialize;
 pub(crate) use work::{Done, Entry, LISTED, Named, TEXT_MAX, Unread, WorkFile, is_id, work_of};
@@ -260,6 +262,11 @@ fn note(git: &Git, at: &Places, run: &str, record: &mut Record, folder: &Path) -
 pub(crate) fn is_gone(home: &Path, run: &str) -> bool {
     let at = Places::of(home);
     known(run).is_ok() && !at.record(run).exists() && fs::symlink_metadata(at.root.join(run)).is_err()
+}
+
+/// Whether nothing is at the name of a run's copy: its folder is gone, whatever is on the books for it.
+pub(crate) fn no_folder(home: &Path, run: &str) -> bool {
+    known(run).is_ok() && fs::symlink_metadata(Places::of(home).root.join(run)).is_err()
 }
 
 /// Whether the run's folder is there to be removed: a real folder directly inside a real `copies`. A link under that

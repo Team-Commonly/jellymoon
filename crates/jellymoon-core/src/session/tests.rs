@@ -74,7 +74,7 @@ fn a_reading_of_a_log_with_no_end_returns_having_read_exactly_its_length() {
     for (len, whole) in [(3 * line.len(), 3), (3 * line.len() + 40, 3), (0, 0), ((1 << 16) + 7, (1 << 16) / line.len())]
     {
         let mut log = Endless { line: line.clone(), given: 0, most: len + (1 << 20) };
-        let turns = read(&mut log, len as u64, "-work-alpha", &[], &mut HashSet::new(), 1 << 20);
+        let turns = read(&mut log, len as u64, "-work-alpha", &Left::default(), &mut HashSet::new(), 1 << 20);
         assert_eq!((turns.len(), log.given), (whole, len), "a length of {len}");
         assert!(turns.iter().all(|(_, turn, _)| turn.said == "typed" && turn.project == "alpha"));
     }

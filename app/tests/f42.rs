@@ -115,6 +115,17 @@ fn layout_prints_one_entry_on_a_day_s_page_with_a_chip_for_each_project_read() {
     assert_eq!(chips(&shown(&world, &["--fresh", "--skip", "private-notes"])), ["alpha"]);
 }
 
+// F50: the day the app reads leaves out a run's copy, so a folder in one is no project a wish can be made for.
+#[test]
+fn a_session_in_a_run_s_copy_gets_no_chip_and_nothing_typed_there_is_placed() {
+    let world = world();
+    let copy = world.home.join("copies").join("r0123456789abcdef").join("zeta");
+    write_log(&world, "-jm-copies-run/s3.jsonl", &[said(&noon(3), copy.to_str().unwrap(), "quince-heron in a copy")]);
+    let out = run(&world, &["--fresh"], &[]);
+    assert!(out.status.success() && !String::from_utf8_lossy(&out.stdout).contains("quince-heron"));
+    assert_eq!(chips(&shown(&world, &["--fresh"])), ["alpha", "private-notes"]);
+}
+
 #[test]
 fn a_day_with_no_project_read_prints_no_entry() {
     let world = world();

@@ -35,7 +35,7 @@ and its branch in them.
 3. **The repo.** `--repo`, a full path whose last name is the wish's project. Without it, the one folder of that
    name that something was typed in that day: core reads the day's session logs for the folders, as the reader
    reads them (a harness worktree counts as the repo it is of, and a switched-off folder is not read: one named
-   with `--skip` or in `skip.txt`). `--logs` names the logs, in place of Claude Code's own. A folder found so is
+   with `--skip` or in `skip.txt`, and neither is a run's copy: [reader.md](reader.md)). `--logs` names the logs, in place of Claude Code's own. A folder found so is
    a log's word, and a log is untrusted, so it must be the person's own: on Unix its owner must be the owner of
    the person's home folder, and one that is not is refused and never copied. A `--repo` is not asked. The folders
    are never printed and never reach page data. Of the one chosen, the run's record keeps the git folder of its

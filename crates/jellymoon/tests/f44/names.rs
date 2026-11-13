@@ -98,7 +98,9 @@ fn the_list_is_cut_at_two_hundred_files_and_says_how_many_more_there_are() {
 fn a_list_of_names_longer_than_is_read_is_refused_and_not_cut_in_the_middle_of_a_name() {
     let made = finished();
     // Six thousand names of some 3,000 bytes each: more than the 16 MiB of git's list that are read.
-    let deep = [&"d".repeat(240)[..]; 12].join("/");
+    // The folders are named in a letter no run id holds: an id is sixteen hex digits, and one in three hundred
+    // has `ddd` in it, which failed this test on a day nothing was wrong.
+    let deep = [&"z".repeat(240)[..]; 12].join("/");
     let names: Vec<String> = (0..6000).map(|n| format!("{deep}/file-{n:04}.txt")).collect();
     let entries: Vec<Entry> = names.iter().map(|name| ("100644", name.as_str(), &b"one of many\n"[..])).collect();
     made.rework(&entries);
@@ -106,7 +108,7 @@ fn a_list_of_names_longer_than_is_read_is_refused_and_not_cut_in_the_middle_of_a
     for more in [&[][..], &["--file", "1"]] {
         let said = made.show(more);
         assert!(refused(&said).contains("is more files than Jellymoon lists"), "{}", said.stderr.len());
-        assert!(!said.stderr.contains("ddd"));
+        assert!(!said.stderr.contains("zzz"));
     }
     assert_eq!(made.held(), before);
 }

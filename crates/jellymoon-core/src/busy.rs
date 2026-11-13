@@ -69,6 +69,17 @@ pub(crate) fn step(variable: &str) {
     }
 }
 
+/// Where a test's build ends the command, as a power cut would, when `variable` holds this step's number: the
+/// one reader a keep and a toss share. A release holds none of this: the read is not compiled into it.
+pub(crate) fn cut(variable: &str, step: u8) {
+    #[cfg(debug_assertions)]
+    if std::env::var(variable).is_ok_and(|asked| asked == step.to_string()) {
+        std::process::exit(70);
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = (variable, step);
+}
+
 /// Does `step`, again every 10 ms while it fails with a file in use and [`WAIT`] has not passed.
 pub(crate) fn retried<T>(step: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     retrying(WAIT, in_use, step)

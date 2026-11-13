@@ -239,7 +239,16 @@ max_file_lines = 400
 # The fixes after F45's fourth gate raised core by 13: `copy/keep/attrs.rs` by 6 (only a plain file at its path,
 # under folders that are folders, stayed), `run/keep.rs` by 6 (the words when more stayed than a list holds) and
 # `copy/keep/step.rs` by 1.
-"crates/jellymoon-core" = 10127
+# F46, a toss, raised core by 570. `run/toss.rs`, 267, is the record of a toss and every word it prints;
+# `copy/keep/toss.rs`, 171, is the delete of the run's own name with its races, and the question where a
+# cut-off keep's commit is (39 of it, with the pattern that leaves out every branch named as a run's is); `copy/clean.rs` gained 26
+# (`drop_copy`, a kept copy removed for a toss), `run/record.rs` 24 (the `tossed` name and what a run that did
+# not finish names), `run.rs` 16 (a run's line of a copy that is gone), `copy/back.rs` 18 and `copy/git.rs` 11 (a
+# take-back that reads the tip as a look does and names no file by a relative path, and a branch stood on under
+# either case of its letters; a question git answers "not there" while it warns), `tests/shapes.rs` 13 and `busy.rs` 11 (the one cut a keep and a toss share, which
+# `copy/keep/step.rs` lost 5 to); `copy.rs` 7, `run/keep.rs` 4 (the two sentences of the lock both hold),
+# `run/stop.rs` 3, and `run/end.rs` and `copy/keep.rs` 2 each.
+"crates/jellymoon-core" = 10697
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -333,7 +342,17 @@ max_file_lines = 400
 # folder or a link where the file was, more files still there than a list holds and the one at the top, the shut
 # folder joined) and `raced.rs` by 22 (a `Feature` the repo lists at another commit, and the two things a disk
 # that folds case does with a branch's spelling).
-"crates/jellymoon" = 17240
+# F46 raised the binary by 1158, all but 5 of it tests: `tests/f46.rs` is 154 and the five files below it 910
+# (what is refused 235, a run that did not finish 221, a toss cut off 189, a branch changed before the delete
+# 106, a cut-off keep whose work landed elsewhere than it meant, branches named as a run's is and work kept on
+# no named branch 159); `tests/f45/made.rs`, 94, is what the tests of a keep and of a toss share, and `tests/f45.rs` lost 68 to
+# it; `tests/f38.rs` gained 20 (a completed copy cleaned with its branch moved or its folder gone),
+# `tests/f41/pointed.rs` and `tests/f39/made.rs` 17 each (a name that points at no branch; a repo whose config
+# makes git warn), `tests/f44/bounds.rs` lost 2 and the made-up agent 3 (it ends when a test's `stop`
+# goes, where there are no signals), `src/parse.rs` gained 3 and `src/main.rs` 2. `tests/f44/names.rs` gained 2:
+# why its long names are in a letter no run id holds. `tests/f45/attrs.rs` gained 12: a link at the path of a
+# `.gitattributes` the work removes is not one that stayed.
+"crates/jellymoon" = 18398
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -362,7 +381,8 @@ max_file_lines = 400
 # stale program in `debug`); the rest reads the messages and makes a run's world of what they name.
 # F44's step, `show` (`smoke/show.rs`, 50 lines), raised it by 54.
 # F45's step, `keep` (`smoke/keep.rs`, 58 lines), raised it by 61.
-"crates/xtask" = 1933
+# F46's step, `toss` (`smoke/toss.rs`, 54 lines), raised it by 57.
+"crates/xtask" = 1990
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

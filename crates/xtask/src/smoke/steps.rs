@@ -47,6 +47,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "keep", only: Only::Synthetic, run: super::keep::keep },
     // A stop (F40), of a second run in that repo. Not with --real: only a made-up agent is sure to be still going.
     Step { name: "stop", only: Only::Synthetic, run: super::stop::stop },
+    // A toss of that cancelled run (F46): its kept copy and its branch, in the chain's own repo. Never with --real.
+    Step { name: "toss", only: Only::Synthetic, run: super::toss::toss },
     // A run started apart (F41), in a repo found by its name in a made-up log. Not with --real, as `wish`.
     Step { name: "wish-run", only: Only::Synthetic, run: super::apart::wish_run },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },

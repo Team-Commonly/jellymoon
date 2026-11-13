@@ -71,8 +71,9 @@ pub(super) fn held(home: &Path, run: &str) -> bool {
 }
 
 /// The end in a run's record, when it is one core wrote for this wish, by a run or by the look that found the
-/// run cut off: the words are made here again, and the record's are used only to choose among them. A record is a file, and anyone who can write the home can write
-/// it: a finished run is believed only when its copy is gone as a finished run's is, with its work on its branch.
+/// run cut off: the words are made here again, and the record's are used only to choose among them. A record is
+/// a file, and anyone who can write the home can write it: a finished run is believed only when its copy is gone
+/// as a finished run's is, with its work on its branch.
 pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &Record) -> Option<(RunOutcome, String)> {
     let (outcome, said) = (record.outcome?, record.why.as_deref()?);
     if record.wish != wish || record.day != day {
@@ -146,9 +147,10 @@ pub(crate) fn bury(home: &Path, day: &str, wish: MadeWish) -> MadeWish {
     if record.as_ref().is_some_and(never) {
         // Its `jellymoon run` said so and then could not take the copy back, or tell the wish.
         // With the lock not had in time nothing is written: the wish goes on naming the run where it is kept, so
-        // the next look tries again, and it is drawn as it will be kept, with no run, never as one going. A copy that cannot
-        // be taken back for any other reason (its repo is gone, git fails) never will be: what the home holds of
-        // the run goes, as after a `jellymoon run` that could not take it back, and the wish can be run again.
+        // the next look tries again, and it is drawn as it will be kept, with no run, never as one going. A copy
+        // that cannot be taken back for any other reason (its repo is gone, git fails) never will be: what the
+        // home holds of the run goes, as after a `jellymoon run` that could not take it back, and the wish can be
+        // run again.
         let taken = copy::take_back(home, &run, soon());
         if taken.is_err_and(|e| copy::timed_out(&e) || !copy::remove_ours(home, &run, soon())) {
             return never::drawn(wish);

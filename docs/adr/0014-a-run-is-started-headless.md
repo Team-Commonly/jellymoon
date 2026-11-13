@@ -24,7 +24,7 @@ edited to match and points here. Nothing else in ADR 0011 changes.
    stop, waits, signals one that did not, and kills one deaf to the signal.
 4. **The work stays on its branch.** With no shell the agent cannot commit. When a run ends, core commits what is in
    the copy, with git's hooks off, on the run's own branch, and removes only the worktree folder. The branch is kept
-   until the person keeps the work, which removes it (`run keep`, F45): it is the work. ADR 0011 said the copy was "removed with its branch when the run completes".
+   until the person keeps the work or tosses it; either removes it (`run keep`, F45; `run toss`, F46): it is the work. ADR 0011 said the copy was "removed with its branch when the run completes".
    [ADR 0017](0017-a-runs-work-is-shown-kept-or-tossed.md) says what becomes of the branch once the person has seen
    the work.
 5. **The star is core's.** Core adds a wish's star when the stream's result is a success and the child exits 0. The

@@ -26,6 +26,32 @@ pub(crate) fn moved(error: &Error) -> bool {
     matches!(error, Error::Copy(why) if why == MOVED)
 }
 
+/// Removes the kept copy of a run that did not finish, for a toss (`run/toss.rs`): its folder, the repo's listing
+/// of it and its record, behind the lock every clean holds, as a failed copy past the newest [`KEPT`] goes
+/// ([`prune`]). True when a folder was there and went. With `ask` nothing is removed: an Err then says that the
+/// copy's place is not a folder Jellymoon made (a link, or anything with no record of a copy), or that it could
+/// not be asked about.
+pub(crate) fn drop_copy(home: &Path, run: &str, wait: Option<Duration>, ask: bool) -> Result<bool, Error> {
+    known(run)?;
+    let at = Places::of(home);
+    let _held = match hold::held(&at.lock(), false, wait) {
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
+        held => held.map_err(Error::Store)?,
+    };
+    let folder = at.root.join(run);
+    let Some(record) = read(&at.record(run))? else {
+        // No record says whose repo lists it: something at the copy's name is not removed on a guess.
+        let nothing = fs::symlink_metadata(&folder).is_err();
+        return if nothing { Ok(false) } else { Err(refused("something is at the copy's name, with no record")) };
+    };
+    let there = standing(&at.root, &folder)?;
+    if !ask {
+        gone(&Git::find(&at.runs, record.found).map_err(refused)?, &record, &folder, there)?;
+        forget(&at.record(run));
+    }
+    Ok(there)
+}
+
 /// [`clean_copy`], which also says whether a completed run's commit was made, false when the copy held nothing
 /// new, and the commit the run's branch was left at, as git said it. None for a failed run.
 ///

@@ -31,14 +31,9 @@ const FORWARD: [&str; 14] = [
 ];
 
 /// Where a test's build ends the command, as a power cut would, when `JELLYMOON_TEST_KEEP_CUT` is this step's
-/// number. A release holds none of this: the variable is not read there.
+/// number. A release holds no read of it (`busy::cut`, the one reader a keep and a toss share).
 pub(super) fn cut(step: u8) {
-    #[cfg(debug_assertions)]
-    if std::env::var("JELLYMOON_TEST_KEEP_CUT").is_ok_and(|asked| asked == step.to_string()) {
-        std::process::exit(70);
-    }
-    #[cfg(not(debug_assertions))]
-    let _ = step;
+    crate::busy::cut("JELLYMOON_TEST_KEEP_CUT", step);
 }
 
 /// Writes down what is about to land, and lands it: the one step that touches the person's checkout and moves

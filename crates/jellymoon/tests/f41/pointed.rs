@@ -45,6 +45,20 @@ fn a_run_s_name_made_a_symbolic_ref_is_kept_and_the_branch_it_points_at_is_not_d
     }
 }
 
+// A name made a symbolic ref to a branch that is not there names no commit. It is not the run's branch: the look
+// leaves it as it is, asks nothing more about it, and does not put the take-back off for it.
+#[test]
+fn a_run_s_name_that_points_at_no_branch_is_left_and_the_take_back_is_not_put_off() {
+    let w = found_world();
+    let repo = w.repo("alpha");
+    let (branch, run) = w.left_copy(&repo);
+    let name = format!("refs/heads/{branch}");
+    w.git(&repo, &["symbolic-ref", &name, "refs/heads/nowhere"]);
+    assert_eq!(w.look(&[]), 0);
+    assert_eq!(w.git(&repo, &["symbolic-ref", &name]), "refs/heads/nowhere");
+    assert_eq!((w.listed(&repo), w.home_of(&run)), (1, NONE));
+}
+
 // A commit lands on the run's branch between the look's question and its delete: the made-up git moves the
 // branch just before the real `update-ref` runs. git is told where the branch was, and refuses. The next look
 // asks again, and keeps the branch for its commit.
@@ -64,10 +78,12 @@ fn a_commit_that_lands_between_the_question_and_the_delete_keeps_the_branch() {
 }
 
 // A replace ref, or a line in `info/grafts`, that gives `main`'s commit the run's own commit as a parent makes
-// the commit look held, until the replace ref or the line is removed. The question is asked with both off.
+// the commit look held, until the replace ref or the line is removed. The question is asked with both off. git
+// is told its grafts are in a file that is never there, by its whole path: a name alone is read from inside the
+// repo's git folder, where anyone can leave a file of that name.
 #[test]
 fn a_replace_ref_or_a_graft_does_not_stand_for_a_commit() {
-    for way in ["replace", "graft"] {
+    for way in ["replace", "graft", "no-grafts"] {
         let w = found_world();
         let repo = w.repo("alpha");
         let (branch, run) = w.left_copy(&repo);
@@ -76,7 +92,8 @@ fn a_replace_ref_or_a_graft_does_not_stand_for_a_commit() {
         if way == "replace" {
             w.git(&repo, &["replace", &main, &w.loose_commit(&repo, &mine)]);
         } else {
-            fs::write(repo.join(".git").join("info").join("grafts"), format!("{main} {mine}\n")).unwrap();
+            let file = if way == "graft" { Path::new("info").join("grafts") } else { way.into() };
+            fs::write(repo.join(".git").join(file), format!("{main} {mine}\n")).unwrap();
         }
         assert_eq!(w.look(&[]), 0, "{way}");
         assert_eq!((w.branches(&repo), w.commit(&repo, &branch)), (vec![branch], mine), "{way}");

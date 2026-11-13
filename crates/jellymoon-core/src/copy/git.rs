@@ -12,7 +12,7 @@ use std::{env, fs};
 
 use crate::Error;
 use crate::busy::{or_test, test_file};
-use crate::call::{full_folders, passed_on, run, run_most};
+use crate::call::{SAID_MAX, full_folders, passed_on, run, run_most};
 use crate::redact::line;
 
 /// What git may see of this process's environment: where its programs and the person's config are, and the two
@@ -49,9 +49,6 @@ const OFF: &[&str] = &[
     "protocol.allow=never",
     "worktree.useRelativePaths=false",
 ];
-
-/// How much of what git printed is kept in an error, in characters.
-const SAID_MAX: usize = 300;
 
 /// How long one git child may run. One still running then is killed, and the command it was for fails. A test's
 /// build reads a shorter one from `JELLYMOON_TEST_GIT_LIMIT_MS`, counted from when the file that
@@ -121,7 +118,7 @@ impl Git {
         command.envs(folder.parent().map(|above| ("GIT_CEILING_DIRECTORIES", above)));
         command.arg("-C").arg(folder).args(["rev-parse", "--path-format=absolute", "--is-bare-repository"]);
         command.args(["--is-inside-work-tree", "--show-prefix", "--git-dir", "--git-common-dir"]);
-        Ok(printed(command, self)?.unwrap_or_default().lines().map(str::to_string).collect())
+        Ok(printed(command, self, false)?.unwrap_or_default().lines().map(str::to_string).collect())
     }
 
     /// Names a repo by its git folder and reads which filters, merge drivers and transports its config names, so
@@ -212,29 +209,42 @@ impl<'a> Repo<'a> {
         blanks(&named).map_err(|named| Unopened::Unswitched(self.git.unsaid(named)))
     }
 
-    /// Runs git on this repo, with `tree` as the work tree when the command reads or writes files, and returns
-    /// what it printed with the last line break cut. None when git exited 1 and said nothing: its way of saying a
-    /// setting or a name is not there.
+    /// A name in the folder git is started in, which Jellymoon keeps empty, by its whole path: a file that is
+    /// never there, for a setting that must name one (`back.rs`).
+    pub fn nowhere(&self, name: &str) -> PathBuf {
+        self.git.empty.join(name)
+    }
+
+    /// Asks git a question of this repo whose answer may be "not there" (`rev-parse --verify --quiet`,
+    /// `symbolic-ref --quiet`, `config --get`), with `tree` as the work tree when the command reads files, and
+    /// returns what it printed with the last line break cut. None when git exited 1 and printed nothing: its way
+    /// of saying a setting or a name is not there, whatever it said beside. A repo whose config makes git warn
+    /// at every command is asked like any other.
     pub fn ask<S: AsRef<OsStr>>(
         &self,
         tree: Option<&Path>,
         vars: &[(&str, &str)],
         args: &[S],
     ) -> Result<Option<String>, String> {
-        let mut command = self.git.command();
-        command.args(self.blanks.iter().flat_map(|blank| ["-c", blank])).arg(joined("--git-dir=", &self.dir));
-        command.args(tree.map(|tree| joined("--work-tree=", tree))).args(args).envs(vars.iter().copied());
-        printed(command, self.git)
+        printed(self.command(tree, vars, args), self.git, true)
     }
 
-    /// The same, for a command that must work.
+    /// Runs a command that must work. One that exited 1 failed, and what it said is the error.
     pub fn run<S: AsRef<OsStr>>(
         &self,
         tree: Option<&Path>,
         vars: &[(&str, &str)],
         args: &[S],
     ) -> Result<String, String> {
-        self.ask(tree, vars, args)?.ok_or_else(|| "git failed and did not say why".to_string())
+        let printed = printed(self.command(tree, vars, args), self.git, false)?;
+        printed.ok_or_else(|| "git failed and did not say why".to_string())
+    }
+
+    fn command<S: AsRef<OsStr>>(&self, tree: Option<&Path>, vars: &[(&str, &str)], args: &[S]) -> Command {
+        let mut command = self.git.command();
+        command.args(self.blanks.iter().flat_map(|blank| ["-c", blank])).arg(joined("--git-dir=", &self.dir));
+        command.args(tree.map(|tree| joined("--work-tree=", tree))).args(args).envs(vars.iter().copied());
+        command
     }
 
     /// What git printed, as bytes, with `input` on its input: for what is not a line of text, and for what must
@@ -274,8 +284,9 @@ fn joined(flag: &str, path: &Path) -> OsString {
 }
 
 /// What the command printed. A failure is the start of what git said, made one line. A git still running at `limit`
-/// is killed, by the reading call's own runner: git is given nothing to read.
-fn printed(command: Command, git: &Git) -> Result<Option<String>, String> {
+/// is killed, by the reading call's own runner: git is given nothing to read. None is a git that exited 1 and said
+/// nothing, or, when a question was `asked` whose answer may be "not there", one that exited 1 and printed nothing.
+fn printed(command: Command, git: &Git, asked: bool) -> Result<Option<String>, String> {
     let from = test_file("JELLYMOON_TEST_GIT_LIMIT_FROM");
     let output = run(command, Vec::new(), git.limit, from.as_deref()).map_err(|e| match e {
         Error::TooLong(limit) => format!("git did not finish in {} seconds and was stopped", limit.as_secs_f32()),
@@ -287,7 +298,7 @@ fn printed(command: Command, git: &Git) -> Result<Option<String>, String> {
             Ok(printed) => Ok(Some(printed.trim_end_matches(['\r', '\n']).to_string())),
             Err(_) => Err("git printed a name that is not text".to_string()),
         },
-        (false, Some(1)) if said.is_empty() => Ok(None),
+        (false, Some(1)) if said.is_empty() || (asked && output.stdout.is_empty()) => Ok(None),
         _ if git.quiet => Err(UNSAID.to_string()),
         _ => Err(said),
     }

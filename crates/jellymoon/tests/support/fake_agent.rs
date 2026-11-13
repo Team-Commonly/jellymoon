@@ -161,21 +161,18 @@ fn ends_with(last: &str) -> i32 {
     0
 }
 
-/// `forever` sleeps a minute and fails. `slow` waits for the test to leave `go`, half a minute at most, then does
-/// the work. Both hold the lock while they live.
+/// `forever` waits a minute, or until the test leaves `stop`, and fails. `slow` waits for the test to leave `go`,
+/// half a minute at most, then does the work. Both hold the lock while they live.
 fn waits(slow: bool, rec: &Path) -> i32 {
     let _held = held(rec);
-    if !slow {
-        thread::sleep(Duration::from_secs(60));
-        return 1;
-    }
-    for _ in 0..3000 {
-        if rec.join("go").exists() {
+    let (left, turns) = if slow { ("go", 3000) } else { ("stop", 6000) };
+    for _ in 0..turns {
+        if rec.join(left).exists() {
             break;
         }
         thread::sleep(Duration::from_millis(10));
     }
-    ends(&success(), 0)
+    if slow { ends(&success(), 0) } else { 1 }
 }
 
 /// `scribble` keeps writing a file in the folder it was started in and prints nothing, so nothing tells it that

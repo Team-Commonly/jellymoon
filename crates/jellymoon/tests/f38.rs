@@ -233,6 +233,26 @@ fn a_run_that_changed_nothing_is_cleaned_with_no_commit() {
     assert!(!made.folder.exists() && w.listed(&repo) == 1);
 }
 
+// `copy clean` has no start to hold the branch to: a branch someone moved takes the copy's commit on top of where
+// it is. A copy whose folder is gone has nothing to commit: its listing and its record go, and its branch stays.
+#[test]
+fn a_completed_copy_whose_branch_was_moved_or_whose_folder_is_gone_is_cleaned_as_it_is() {
+    let w = world();
+    let repo = w.repo("alpha");
+    let made = w.make(&repo);
+    let moved = w.git(&repo, &["commit-tree", "main^{tree}", "-p", "main", "-m", "moved by hand"]);
+    w.git(&repo, &["update-ref", &format!("refs/heads/{}", made.branch), &moved]);
+    fs::write(made.folder.join("n.txt"), "new from the run\n").unwrap();
+    assert!(!said(&w.clean(&made.run, "completed")).kept);
+    assert_eq!(w.commit(&repo, &format!("{}~1", made.branch)), moved);
+    assert_eq!(w.git(&repo, &["show", &format!("{}:n.txt", made.branch)]), "new from the run");
+    let gone = w.make(&repo);
+    fs::remove_dir_all(&gone.folder).unwrap();
+    assert!(!said(&w.clean(&gone.run, "completed")).kept);
+    assert_eq!((w.commit(&repo, &gone.branch), w.listed(&repo)), (w.commit(&repo, "main"), 1));
+    assert!(refused(&w.clean(&gone.run, "completed")).contains("no copy"));
+}
+
 #[test]
 fn two_copies_of_one_repo_do_not_see_each_other() {
     let w = world();

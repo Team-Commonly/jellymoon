@@ -15,6 +15,7 @@ mod run;
 mod show;
 mod steps;
 mod stop;
+mod toss;
 
 use std::collections::BTreeMap;
 use std::fs::File;

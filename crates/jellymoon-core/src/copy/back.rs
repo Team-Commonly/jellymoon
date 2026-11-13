@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::git::{Git, Repo};
 use super::record::{self, Listed, Record, read, write};
+use super::work::{Unread, tip};
 use super::{Places, branch, gone, hold, known, refused, standing, unlist};
 use crate::Error;
 
@@ -15,7 +16,8 @@ use crate::Error;
 const PUT_OFF: Duration = Duration::from_secs(30 * 24 * 3600);
 
 /// Where git is told its grafts are for the one question of [`theirs`]: a name in the folder git is started in,
-/// which Jellymoon keeps empty, so the repo's `info/grafts` is not read.
+/// which Jellymoon keeps empty, so the repo's `info/grafts` is not read. git is given the whole path
+/// (`Repo::nowhere`): it reads a path that does not start at a root from inside the repo's git folder.
 const NO_GRAFTS: &str = "no-grafts";
 
 /// Undoes a copy no run was started in (F39: the harness was too old, or another run took the wish first): its
@@ -69,7 +71,19 @@ fn back(at: &Places, run: &str, careful: bool) -> Result<(), Error> {
             let git = Git::find(&at.runs, record.found).map_err(refused)?;
             let repo = git.open(&record.repo).map_err(refused)?;
             let name = format!("refs/heads/{}", branch(run));
-            let tip = repo.ask(None, &[], &["rev-parse", "--verify", "--quiet", &name]).map_err(refused)?;
+            // Where the branch is, read by the name's whole spelling, so no other name git would try stands in
+            // for one that is gone. A name that is gone, that names no commit, or that is a name for another
+            // branch by now is not the run's branch: a look leaves it, and has nothing more to ask about it. The
+            // command's own take-back asks nobody whose the branch is, and deletes a name for another branch as
+            // itself, at the commit git follows it to.
+            let tip = match tip(&repo, run) {
+                Ok(tip) => Some(tip),
+                Err(Unread::Symbolic) if !careful => {
+                    repo.ask(None, &[], &["rev-parse", "--verify", "--quiet", &name]).map_err(refused)?
+                }
+                Err(Unread::Repo) => return Err(refused("git did not say where that run's branch is")),
+                Err(_) => None,
+            };
             // The branch goes before the repo's listing of the copy does: the listing is how the next look knows
             // the copy as the repo's own, so a look cut off here is finished by the next, and no branch is left
             // that nothing but a record's word says is Jellymoon's. What goes is the name itself, never what a
@@ -89,8 +103,8 @@ fn back(at: &Places, run: &str, careful: bool) -> Result<(), Error> {
 /// Whether a left copy's branch is someone's by now, whoever made it so, and is kept:
 /// - a checkout stands on it ([`stands`]): the repo's own, or a worktree of it other than the copy, whose own
 ///   `HEAD` is this branch because the copy was made so;
-/// - another ref is a name for it (a symbolic ref), and would be left naming nothing, or it is itself a name
-///   for another branch by now, and no longer the run's;
+/// - another ref is a name for it (a symbolic ref), and would be left naming nothing. A branch that is itself a
+///   name for another by now is no longer the run's, and never comes here ([`back`]);
 /// - it holds a commit that no other branch, no tag and no remote-tracking branch of the repo reaches. That is
 ///   the one rule for a branch nothing stands on or names, and nothing a record says is in it. No `HEAD` is
 ///   asked: a detached one is no ref, and its commit is lost at the next switch. No other ref is: `refs/stash`
@@ -109,24 +123,28 @@ fn theirs(repo: &Repo, record: &Record, name: &str) -> Result<bool, String> {
         stood_on |= stands(&repo.through(&other), &other, name)?;
     }
     let named = repo.run(None, &[], &["for-each-ref", "--format=%(symref)"])?;
-    let symbolic = repo.ask(None, &[], &["symbolic-ref", "--quiet", name])?.is_some();
-    if stood_on || symbolic || named.lines().any(|named| named == name) {
+    if stood_on || named.lines().any(|named| named == name) {
         return Ok(true);
     }
+    let grafts = repo.nowhere(NO_GRAFTS);
+    let grafts = grafts.to_str().ok_or("the folder Jellymoon keeps empty for git has a name that is not text")?;
     let (less, held) =
         (format!("--exclude={name}"), ["--glob=refs/heads/*", "--glob=refs/tags/*", "--glob=refs/remotes/*"]);
     let only = ["--no-replace-objects", "rev-list", "--max-count=1", name, "--not", &less, held[0], held[1], held[2]];
-    Ok(!repo.run(None, &[("GIT_GRAFT_FILE", NO_GRAFTS)], &only)?.is_empty())
+    Ok(!repo.run(None, &[("GIT_GRAFT_FILE", grafts)], &only)?.is_empty())
 }
 
 /// Whether the checkout a git folder is of stands on a branch: its `HEAD` is that branch, or `HEAD` is detached
 /// by a rebase or a bisect that goes back to it, as git says in the files it keeps for those, by the branch's
-/// whole name or its short one. git itself refuses to delete such a branch.
+/// whole name or its short one. git itself refuses to delete such a branch. The name is compared in either case
+/// of its letters: a disk that folds case takes another spelling of a run's branch for the branch itself, and a
+/// branch is never deleted from under a checkout (`keep::runs`).
 pub(super) fn stands(repo: &Repo, folder: &Path, name: &str) -> Result<bool, String> {
-    let mut on = repo.ask(None, &[], &["symbolic-ref", "--quiet", "HEAD"])?.as_deref() == Some(name);
+    let is = |held: &str| held.eq_ignore_ascii_case(name);
+    let mut on = repo.ask(None, &[], &["symbolic-ref", "--quiet", "HEAD"])?.is_some_and(|head| is(&head));
     for file in [&["rebase-merge", "head-name"][..], &["rebase-apply", "head-name"], &["BISECT_START"]] {
         let held = state(folder, file)?;
-        on |= held.is_some_and(|held| held == name || name.strip_prefix("refs/heads/") == Some(&held));
+        on |= held.is_some_and(|held| is(&held) || is(&format!("refs/heads/{held}")));
     }
     Ok(on)
 }

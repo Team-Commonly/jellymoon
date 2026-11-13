@@ -26,6 +26,7 @@ mod record;
 mod show;
 mod stop;
 mod stream;
+mod toss;
 
 use std::fmt;
 use std::fs::{self, File};
@@ -41,6 +42,7 @@ use record::Record;
 use serde::{Deserialize, Serialize};
 pub use show::{FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, show_file, show_run};
 pub use stop::stop_run;
+pub use toss::{Tossed, toss_run};
 
 use crate::busy::{self, or_test};
 use crate::call::harness_of;
@@ -144,12 +146,25 @@ fn going(run: &str) -> String {
     format!("run {run} is going, in a copy of the repo")
 }
 
+/// How the line of a run that did not finish ends when it is written, and how it ends when it is printed after
+/// the copy has gone: a failed copy past the newest five is removed, and so is the copy of a run that was tossed.
+const COPY_KEPT: &str = ": its copy is kept and no star was added";
+const COPY_GONE: &str = ": its copy is no longer kept, and no star was added";
+
+/// A run's line as it holds now: of a copy whose folder is not standing it is not said that it is kept.
+fn by_now(home: &Path, run: &str, why: String) -> String {
+    match why.strip_suffix(COPY_KEPT).filter(|_| copy::no_folder(home, run)) {
+        Some(head) => format!("{head}{COPY_GONE}"),
+        None => why,
+    }
+}
+
 fn failed(run: &str, kind: &str) -> String {
-    format!("run {run} did not finish ({kind}): its copy is kept and no star was added")
+    format!("run {run} did not finish ({kind}){COPY_KEPT}")
 }
 
 fn cancelled(run: &str) -> String {
-    format!("run {run} was cancelled by a stop: its copy is kept and no star was added")
+    format!("run {run} was cancelled by a stop{COPY_KEPT}")
 }
 
 fn no_wish(day: &str) -> Error {
@@ -157,7 +172,7 @@ fn no_wish(day: &str) -> Error {
 }
 
 fn cut(run: &str) -> String {
-    format!("run {run} was cut off before it ended: its copy is kept and no star was added")
+    format!("run {run} was cut off before it ended{COPY_KEPT}")
 }
 
 /// The line of a run that was cut off with its copy gone: after it was committed and before the end was in the
@@ -297,6 +312,7 @@ fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom) -> Re
         work: None,
         kept: None,
         onto: None,
+        tossed: None,
     };
     record::write(home, run, &record)?;
     wish::change(home, day, wish, Duration::ZERO, |wish| match &wish.run {

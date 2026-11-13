@@ -55,7 +55,7 @@ pub(super) struct Record {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end: Option<String>,
     /// Whether the person kept or tossed the work of a run that finished. Left out while it waits: no run writes
-    /// it, `run show` reads it (`show.rs`) and `run keep` writes it (`keep.rs`).
+    /// it, `run show` reads it (`show.rs`), `run keep` writes it (`keep.rs`) and `run toss` does (`toss.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work: Option<WorkState>,
     /// The commit a keep landed on the person's branch, or, while `work` does not say kept, the commit a keep
@@ -66,6 +66,11 @@ pub(super) struct Record {
     /// The branch that commit was landed on, by its whole name. Written with `kept`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub onto: Option<String>,
+    /// The commit the run's branch was to be deleted at, written with `work` saying tossed before anything is
+    /// deleted (ADR 0017, decision 7): the run's end, or the start of a run that did not finish. It is how a
+    /// toss is undone by hand. None before any toss, and in a tossed record that names no commit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tossed: Option<String>,
 }
 
 pub(super) fn file(home: &Path, run: &str) -> PathBuf {
@@ -98,6 +103,19 @@ impl Record {
                 if repo.is_absolute() && copy::is_id(start) && copy::is_id(end) && (start != end) == changed =>
             {
                 Ok(Some(Named { repo, start, end }))
+            }
+            _ => Err(()),
+        }
+    }
+
+    /// [`Record::named`] for a run that did not finish, which a toss asks (`toss.rs`): its repo and its start,
+    /// both, and no end; or none of the three, in a record from before F48 or one the released v0.2.0-rc1 wrote
+    /// down as failed. The commit its branch was made at stands as both ends: nothing was made on top of it.
+    pub(super) fn began_at(&self) -> Result<Option<Named<'_>>, ()> {
+        match (self.repo.as_deref(), self.start.as_deref(), self.end.as_deref()) {
+            (None, None, None) => Ok(None),
+            (Some(repo), Some(start), None) if repo.is_absolute() && copy::is_id(start) => {
+                Ok(Some(Named { repo, start, end: start }))
             }
             _ => Err(()),
         }
@@ -145,6 +163,7 @@ mod tests {
     const EXAMPLE: &str = include_str!("../../tests/fixtures/run-record.json");
     const BEFORE: &str = include_str!("../../tests/fixtures/run-record-before.json");
     const KEPT: &str = include_str!("../../tests/fixtures/run-record-kept.json");
+    const TOSSED: &str = include_str!("../../tests/fixtures/run-record-tossed.json");
 
     // The contract is the type and its example: one changed without the other fails here.
     #[test]
@@ -168,8 +187,13 @@ mod tests {
             (Some(WorkState::Kept), Some(start), Some("refs/heads/main"))
         );
         assert_eq!(KEPT.split(",\"work\":").next(), EXAMPLE.strip_suffix("}\n"));
+        // One whose work was tossed says so in the same place, with the commit its branch was to be deleted at.
+        let tossed: Record = serde_json::from_str(TOSSED).unwrap();
+        assert_eq!(written(&tossed), TOSSED);
+        assert_eq!((tossed.work, tossed.tossed.as_deref(), &tossed.kept), (Some(WorkState::Tossed), Some(end), &None));
+        assert_eq!(TOSSED.split(",\"work\":").next(), EXAMPLE.strip_suffix("}\n"));
         // What is named is text, or the record is not read: nothing is made of a number or a list.
-        for odd in ["\"repo\":7", "\"start\":[\"main\"]", "\"end\":{}", "\"kept\":1", "\"onto\":[]"] {
+        for odd in ["\"repo\":7", "\"start\":[\"main\"]", "\"end\":{}", "\"kept\":1", "\"onto\":[]", "\"tossed\":1"] {
             let changed = BEFORE.replace("\"began\":true", &format!("\"began\":true,{odd}"));
             assert!(serde_json::from_str::<Record>(&changed).is_err(), "{odd}");
         }

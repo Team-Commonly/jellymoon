@@ -91,7 +91,8 @@ own words. The kept page itself never holds a made wish.
 
 ## Not covered yet
 
-- A made wish cannot be taken back or changed. Its state moves only with its one run ([run.md](run.md)).
+- A made wish cannot be taken back or changed. Its state moves only with its one run ([run.md](run.md)),
+  and with a toss of what that run left, which lets the wish go ([toss.md](toss.md)).
 - `jellymoon wish` does not check that the project is a folder on this computer. `jellymoon run` does, and
   refuses a name two folders share.
 - The same words made twice are two wishes.

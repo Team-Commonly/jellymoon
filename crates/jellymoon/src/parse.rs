@@ -39,6 +39,7 @@ pub enum Command {
     Show(RunOptions, Option<usize>),
     /// `run keep`, and whether it only asks and whether files the person's tools obey are kept too.
     Keep(RunOptions, KeepOptions),
+    Toss(RunOptions),
     RemoveHook,
     HookStatus,
     Uninstall,
@@ -182,13 +183,14 @@ fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut options, mut logs, mut skip) = (RunOptions::default(), None, String::new());
     let (mut wish, mut stop, mut show, mut file, mut first) = (None, false, false, None, true);
-    let mut keep: Option<KeepOptions> = None;
+    let (mut keep, mut toss): (Option<KeepOptions>, bool) = (None, false);
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(word) if first && word == "stop" => stop = true,
             Value(word) if first && word == "show" => show = true,
             Value(word) if first && word == "keep" => keep = Some(KeepOptions::default()),
+            Value(word) if first && word == "toss" => toss = true,
             Long("ask") if keep.is_some() => keep = keep.map(|keep| KeepOptions { ask: true, ..keep }),
             Long("with-settings") if keep.is_some() => {
                 keep = keep.map(|keep| KeepOptions { with_settings: true, ..keep })
@@ -209,6 +211,7 @@ fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         (true, ..) => Command::Stop(options),
         (_, true, _) => Command::Show(options, file),
         (_, _, Some(keep)) => Command::Keep(options, keep),
+        _ if toss => Command::Toss(options),
         _ => Command::Run(options),
     })
 }

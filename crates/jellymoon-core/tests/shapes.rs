@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use jellymoon_core::{
     FileChange, FileKind, Harness, HookState, Kept, PageData, Ran, ReaderDay, Ruling, RunOutcome, Shown, ShownFile,
-    WishState, Wished, WorkState,
+    Tossed, WishState, Wished, WorkState,
 };
 
 fn fixture(name: &str) -> String {
@@ -154,4 +154,17 @@ fn what_a_keep_prints_round_trips_byte_for_byte() {
     let stayed: Kept = serde_json::from_str(&example).unwrap();
     assert_eq!(format!("{stayed}\n"), example);
     assert_eq!((stayed.stayed.len(), kept.stayed.len()), (1, 0));
+}
+
+#[test]
+fn what_a_toss_prints_round_trips_byte_for_byte() {
+    let example = fixture("tossed.json");
+    let tossed: Tossed = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{tossed}\n"), example);
+    assert_eq!((tossed.tossed, tossed.commit.as_deref().map(str::len)), (true, Some(40)));
+    // A record that names no commit is tossed with none, and the name is printed still.
+    let unnamed = example.replace("\"89abcdef0123456789abcdef0123456789abcdef\"", "null");
+    let tossed: Tossed = serde_json::from_str(&unnamed).unwrap();
+    assert_eq!((format!("{tossed}\n"), tossed.commit), (unnamed.clone(), None));
+    assert!(serde_json::from_str::<Tossed>(&unnamed.replace("\"commit\"", "\"branch\"")).is_err());
 }

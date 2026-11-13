@@ -131,13 +131,18 @@ fn unfit(run: String, wish: String, unkept: Unkept, settings: Vec<String>) -> Ke
     Kept { why: words(&run, unkept), run, wish, kept: None, onto: None, settings, fits: Some(false) }
 }
 
+/// Whether a record's `onto` is a branch a keep writes there: by the rule the keep itself writes a name by
+/// (`copy::nameable`), and no run's branch, where no work is ever kept (`copy::runs`).
+fn branch(onto: &str) -> bool {
+    copy::nameable(onto) && !copy::runs(onto)
+}
+
 /// The commit and the branch a keep wrote in the record, both or neither, as a keep writes them: a whole object
-/// id, and a branch's whole name by the rule the keep itself writes one by (`copy::nameable`), or the one word
-/// for work that landed on no branch a record names.
+/// id, and a branch's whole name ([`branch`]), or the one word for work that landed on no branch a record names.
 fn intent<'a>(kept: &'a Option<String>, onto: &'a Option<String>) -> Result<Option<(&'a str, &'a str)>, ()> {
     match (kept.as_deref(), onto.as_deref()) {
         (None, None) => Ok(None),
-        (Some(kept), Some(onto)) if copy::is_id(kept) && (copy::nameable(onto) || onto == copy::LOOSE) => {
+        (Some(kept), Some(onto)) if copy::is_id(kept) && (branch(onto) || onto == copy::LOOSE) => {
             Ok(Some((kept, onto)))
         }
         _ => Err(()),
@@ -201,14 +206,25 @@ fn done(run: &str, how: How, ask: bool) -> String {
         (How::Loose, _) => format!(
             "run {run} was kept, on no branch that is named here: while the keep was at work the checkout's HEAD \
              was detached, or moved to a branch whose name Jellymoon does not write down, and git landed the work \
-             there; the run's branch is left"
+             there; the run's branch is left and still holds the run's own commit, and a new commit the keep made \
+             to join the work with the person's commits is named by nothing of Jellymoon's: `kept` is its id"
         ),
     }
 }
 
-/// The words of the three refusals that are of the home, the config and the branch's name, and not of the work.
+/// The words of the refusals that are of the home, the config, the branch's name and a file's name, with no
+/// run's id in them.
 fn before_the_work(unkept: &Unkept) -> &'static str {
     match unkept {
+        Unkept::Spelled => {
+            "the checkout's HEAD names a branch the repo does not list under that name: on a disk that takes two \
+             spellings for one name it is another spelling of a branch's name, and `git checkout` with the name as \
+             `git branch` prints it stands on the branch itself"
+        }
+        Unkept::Name => {
+            "a file of the work has a name this disk does not take: a part of it is too long, or is no name on \
+             this system"
+        }
         Unkept::NoLock => "the keeps' lock (runs/keep.lock) could not be made or taken in this home",
         Unkept::Config => {
             "the repo's git config names a filter, a merge driver or a transport that cannot be switched off on \
@@ -227,7 +243,14 @@ fn words(run: &str, unkept: Unkept) -> String {
     match unkept {
         Unkept::Unread(unread) => unread_words(run, unread, &KEPT),
         Unkept::Busy => format!("another keep is at work in this home: {unchanged}"),
-        Unkept::NoLock | Unkept::Config | Unkept::Unnamed => format!("{}: {unchanged}", before_the_work(&unkept)),
+        Unkept::NoLock | Unkept::Config | Unkept::Unnamed | Unkept::Spelled | Unkept::Name => {
+            format!("{}: {unchanged}", before_the_work(&unkept))
+        }
+        Unkept::Unmerged => format!(
+            "git could not merge the work of run {run} with the branch's commits since in the repo's store: the \
+             store takes no new object (the merge writes one tree there, asked or not), or git did not answer: \
+             {unchanged}"
+        ),
         Unkept::Stood => format!("a checkout stands on the branch of run {run}: {unchanged}"),
         Unkept::NoBranch => format!(
             "the checkout stands on no branch of the person's: its HEAD is detached, or names a run's branch: \
@@ -264,6 +287,13 @@ fn words(run: &str, unkept: Unkept) -> String {
         Unkept::InWay => {
             format!("an unsaved change, or a file that is not in the branch, is where the work would go: {unchanged}")
         }
+        Unkept::Locked | Unkept::Stepped | Unkept::OnRun | Unkept::Unwritten => at_the_step(run, &unkept),
+    }
+}
+
+/// The words of the refusals a keep may come to at its step, which do not say that nothing was changed.
+fn at_the_step(run: &str, unkept: &Unkept) -> String {
+    match unkept {
         Unkept::Locked => format!(
             "the checkout's index is locked (index.lock): another git is at work in it, or one was cut off and \
              left the file: the work of run {run} was not kept"
@@ -272,7 +302,11 @@ fn words(run: &str, unkept: Unkept) -> String {
             "git would not move the branch forward to the work of run {run}: git stopped the step, files of the \
              work may already be written to the checkout, and the next `run keep` begins again"
         ),
-        Unkept::Unwritten => format!(
+        Unkept::OnRun => format!(
+            "while the keep was at work the checkout was moved onto a run's branch, where Jellymoon keeps no work: \
+             the work of run {run} was not kept, its branch is left, and the next `run keep` begins again"
+        ),
+        _ => format!(
             "the record of run {run} could not be written: the next `run keep` goes on from where this one stopped"
         ),
     }
@@ -309,6 +343,9 @@ mod tests {
             "refs/heads/a\nb",
             "refs/heads/a?",
             "refs/heads/[a]",
+            // A run's branch is never where work was kept.
+            "refs/heads/jellymoon/run-r0123456789abcdef",
+            "refs/heads/jellymoon/run-",
         ] {
             assert_eq!(named(&id, onto), Err(()), "{onto}");
         }

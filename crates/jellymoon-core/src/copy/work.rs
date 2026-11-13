@@ -71,6 +71,8 @@ pub(crate) struct WorkFile {
     pub size: u64,
     /// The file's first [`TEXT_MAX`] bytes. Nothing for a link or another repo's entry.
     pub head: Vec<u8>,
+    /// Another repo's entry, before the change or after it.
+    pub(super) other: bool,
     id: String,
 }
 
@@ -118,17 +120,23 @@ pub(crate) fn work_of(
     if named.is_some_and(|named| named.start != parent) {
         return Err(Unread::Start);
     }
-    // No rename is ever listed: git's plumbing finds one only when told to, whatever the repo's config says.
-    let list = ["diff-tree", "-r", "--no-abbrev", "-z", &parent, &tip];
-    let list = repo.bytes(&list, &[], LIST_MAX).ok_or(Unread::Repo)?;
-    if list.len() >= LIST_MAX {
-        return Err(Unread::Many);
-    }
-    let mut files = listed(&list).ok_or(Unread::Repo)?;
+    let mut files = changed(&repo, &parent, &tip)?;
     let more = files.len().saturating_sub(LISTED);
     files.truncate(LISTED);
     read(&repo, &mut files, only).ok_or(Unread::Repo)?;
     Ok((files, more))
+}
+
+/// Every file that differs between two commits or trees, in git's own order, with no size and no bytes read: the
+/// one list of a change, for a look and for a keep (`keep/fits.rs`). No rename is ever listed: git's plumbing
+/// finds one only when told to, whatever the repo's config says.
+pub(super) fn changed(repo: &Repo, from: &str, to: &str) -> Result<Vec<WorkFile>, Unread> {
+    let list = ["diff-tree", "-r", "--no-abbrev", "-z", from, to];
+    let list = repo.bytes(&list, &[], LIST_MAX).ok_or(Unread::Repo)?;
+    if list.len() >= LIST_MAX {
+        return Err(Unread::Many);
+    }
+    listed(&list).ok_or(Unread::Repo)
 }
 
 /// Whether the folder git `found` is the one a record `named`. One folder has many spellings, on Windows and on a
@@ -187,7 +195,7 @@ pub(super) fn parent(repo: &Repo, run: &str, tip: &str) -> Result<String, Unread
 
 /// The files of `diff-tree -r -z`: for each, a line of the two modes, the two ids and a letter, then the path, each
 /// ended by a zero byte. A removed file is described as it was. None when the list is not in that form.
-fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
+pub(super) fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
     let (mut files, mut parts) = (Vec::new(), list.split(|byte| *byte == 0));
     while let Some(line) = parts.next().filter(|line| !line.is_empty()) {
         let words: Vec<&str> = std::str::from_utf8(line).ok()?.strip_prefix(':')?.split(' ').collect();
@@ -198,6 +206,7 @@ fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
             "D" => Done::Removed,
             _ => return None,
         };
+        let other = was_mode == "160000" || mode == "160000";
         let (mode, id) = if done == Done::Removed { (was_mode, was_id) } else { (mode, id) };
         let entry = match mode {
             "120000" => Entry::Link,
@@ -205,7 +214,7 @@ fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
             _ => Entry::File,
         };
         let path = parts.next().filter(|path| !path.is_empty() && is_id(id))?.to_vec();
-        files.push(WorkFile { path, done, entry, size: 0, head: Vec::new(), id: id.to_string() });
+        files.push(WorkFile { path, done, entry, size: 0, head: Vec::new(), other, id: id.to_string() });
     }
     Some(files)
 }

@@ -7,9 +7,12 @@
 //! keep cut off after each of its steps, `f45/disk.rs` what a disk does with the work's names, `f45/linked.rs` a
 //! repo with a second checkout, `f45/started.rs` what a keep never starts beside what git does start,
 //! `f45/raced.rs` a checkout or a branch changed between two steps, `f45/names.rs` the branch names a record
-//! holds, and `f45/late.rs` a step git stops, a file that only looks changed and what a question writes.
+//! holds, `f45/late.rs` a step git stops, a file that only looks changed and what a question writes, and
+//! `f45/attrs.rs` which attributes git goes by when the work removes, changes or adds a `.gitattributes`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f45/attrs.rs"]
+mod attrs;
 #[path = "f45/cut.rs"]
 mod cut;
 #[path = "f45/disk.rs"]

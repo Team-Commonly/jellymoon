@@ -120,6 +120,36 @@ fn a_question_is_answered_in_a_checkout_whose_git_folder_takes_no_new_file() {
     assert!(!git.join("ORIG_HEAD").exists() && !git.join("index.lock").exists());
 }
 
+// With commits of the person's own, a question has git merge the two in the store, which writes one tree there.
+// In a store that takes no new object git cannot, and the answer says that, in words of its own, asked or not.
+#[test]
+fn a_question_that_must_merge_says_so_when_the_store_takes_no_new_object() {
+    let made = finished();
+    made.moved_on();
+    let before = made.held();
+    let mut folders = vec![made.repo.join(".git").join("objects")];
+    let below = fs::read_dir(&folders[0]).unwrap().map(|entry| entry.unwrap().path());
+    folders.extend(below.filter(|path| path.is_dir()));
+    let shut = |may: bool| folders.iter().filter(|folder| !writable(folder, may)).count() == 0;
+    if !shut(false) {
+        shut(true);
+        return skipped("a store that takes no new object: this system, or this user, has no such folder");
+    }
+    let (asked, ran) = (made.keep(&["--ask"]), made.keep(&[]));
+    assert!(shut(true));
+    let why = format!(
+        "git could not merge the work of run {{run}} with the branch's commits since in the repo's store: the store \
+         takes no new object (the merge writes one tree there, asked or not), or git did not answer: {}",
+        super::UNCHANGED
+    );
+    let asked = printed(&asked);
+    assert_eq!((&asked["fits"], &asked["why"]), (&json!(false), &json!(why.replace("{run}", &made.run))));
+    made.refuses(&ran, &before, &why);
+    assert_eq!(left(&made), Vec::<String>::new());
+    // With the store open again the work is kept.
+    kept(&made, &made.keep(&[]), &made.w.commit(&made.repo, "main"), "main", JOINED);
+}
+
 // An index kept in two parts has its shared part in the checkout's git folder. Every file is touched, so the
 // look has all of the index to write: git writes the keep's own copy, and the git folder gets no new file.
 #[test]

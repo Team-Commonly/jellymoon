@@ -28,10 +28,15 @@ pub(crate) fn in_use(error: &io::Error) -> bool {
 }
 
 /// A wait or a limit, shorter for a test: the variable holds milliseconds, and is read only by a build with debug
-/// assertions, which a release is not.
+/// assertions. A release holds no read of it: the line is compiled out there.
 pub(crate) fn or_test(real: Duration, variable: &str) -> Duration {
-    let short = std::env::var(variable).ok().filter(|_| cfg!(debug_assertions));
-    short.and_then(|ms| ms.parse().ok()).map_or(real, Duration::from_millis)
+    #[cfg(debug_assertions)]
+    if let Some(short) = std::env::var(variable).ok().and_then(|ms| ms.parse().ok()) {
+        return Duration::from_millis(short);
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = variable;
+    real
 }
 
 /// The file a test's build names in `variable`, and none in a release. A limit that is under test is counted

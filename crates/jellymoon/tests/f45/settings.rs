@@ -207,10 +207,14 @@ fn a_file_the_repo_sets_a_filter_for_is_not_kept_and_no_filter_is_started() {
     // A filter that touches no file of the work is no reason to stop, and is not started either.
     let made = finished();
     let folder = made.w.at("tmp");
-    made.git(&["config", "filter.planted.smudge", &shell(&planted(&folder, "filter"))]);
+    made.git(&["config", "filter.planted.clean", &shell(&planted(&folder, "filter"))]);
     fs::write(made.repo.join(".git").join("info").join("attributes"), "*.dat filter=planted\n").unwrap();
     kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
     assert_eq!(started(&folder), Vec::<String>::new());
+    // The control: it is a filter git starts, for a file of the person's own that the attributes name.
+    fs::write(made.repo.join("mine.dat"), "the person's\n").unwrap();
+    made.w.git_ran(&made.repo, &["add", "mine.dat"]);
+    assert_eq!(started(&folder), ["ran-filter"], "git starts this filter for a file it is set for");
 }
 
 #[test]

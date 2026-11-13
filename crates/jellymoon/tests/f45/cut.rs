@@ -6,7 +6,7 @@ use std::fs;
 
 use serde_json::{Value, json};
 
-use super::{BEFORE, DAY, FORWARD, JOINED, Made, STEPPED, UNCHANGED, ended, finished, kept, printed, worked};
+use super::{BEFORE, DAY, FORWARD, JOINED, Made, UNCHANGED, ended, finished, kept, printed, worked};
 
 const FINISHED: &str = "run {run} was kept: a keep that was cut off had landed its work, and this one finished it";
 
@@ -159,8 +159,9 @@ fn files_a_cut_checkout_left_half_written_are_in_the_way_until_the_person_clears
     made.refuses(&made.keep(&[]), &before, &why);
     fs::remove_file(made.repo.join("n.txt")).unwrap();
     // The same when git was told to ignore the file: by the checkout's `.gitignore`, by the repo's `info/exclude`
-    // and by the person's own list for every repo. git's trial takes an ignored file as nobody's, and a keep
-    // that goes on leaves it to the step, which is told to stop for one (`--no-overwrite-ignore`).
+    // and by the person's own list for every repo. git's trial takes an ignored file as nobody's, so a keep
+    // that goes on asks git whether what is on the disk there is ignored: a question and a keep say the same,
+    // and it is what a first keep says.
     let everywhere = made.w.at("tmp").join("ignored-everywhere");
     made.git(&["config", "--global", "core.excludesFile", everywhere.to_str().unwrap()]);
     for list in [made.repo.join(".gitignore"), made.repo.join(".git").join("info").join("exclude"), everywhere] {
@@ -168,7 +169,9 @@ fn files_a_cut_checkout_left_half_written_are_in_the_way_until_the_person_clears
         fs::write(made.repo.join("n.txt"), "the person's own, which git ignores\n").unwrap();
         assert_eq!(made.git(&["status", "--porcelain", "--ignored", "n.txt"]), "!! n.txt", "{}", list.display());
         let before = made.held();
-        made.refuses(&made.keep(&[]), &before, STEPPED);
+        let asked = printed(&made.keep(&["--ask"]));
+        assert_eq!((&asked["fits"], &asked["why"]), (&json!(false), &json!(why.replace("{run}", &made.run))));
+        made.refuses(&made.keep(&[]), &before, &why);
         assert_eq!(fs::read_to_string(made.repo.join("n.txt")).unwrap(), "the person's own, which git ignores\n");
         fs::remove_file(made.repo.join("n.txt")).unwrap();
         fs::remove_file(&list).unwrap();

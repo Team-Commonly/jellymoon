@@ -18,7 +18,8 @@ pub(super) fn merged(at: &At, tip: &str) -> Result<String, Unkept> {
     match (code, tree) {
         (Some(0), Some(tree)) if is_id(tree) => Ok(tree.to_string()),
         (Some(1), _) => Err(Unkept::Clash),
-        _ => Err(Unread::Repo.into()),
+        // The merge writes a tree, asked or not: in a store that takes no new object git ends with an error.
+        _ => Err(Unkept::Unmerged),
     }
 }
 

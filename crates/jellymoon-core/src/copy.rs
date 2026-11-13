@@ -30,7 +30,7 @@ pub use clean::clean_copy;
 pub(crate) use clean::{end_copy, moved};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
-pub(crate) use keep::{How, Keep, LOOSE, Note, Touched, Unkept, alone, keep, nameable, swept};
+pub(crate) use keep::{How, Keep, LOOSE, Note, Touched, Unkept, alone, keep, nameable, runs, swept};
 use record::{Record, write};
 use serde::Serialize;
 pub(crate) use work::{Done, Entry, LISTED, Named, TEXT_MAX, Unread, WorkFile, is_id, work_of};

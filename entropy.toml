@@ -222,7 +222,15 @@ max_file_lines = 400
 # elsewhere and of three refusals, the one word of work on no branch), `tests/shapes.rs` by 5 and
 # `copy/keep/made.rs` by 4. `copy/keep.rs` lost 19 (the step moved out) and `copy/keep/fits.rs` 24 (the
 # attributes moved out; the trial on a copy of the index came in).
-"crates/jellymoon-core" = 9911
+# The fixes after F45's second gate raised core by 143. New: `copy/keep/why.rs`, 79, is the two lists of why a
+# keep did not keep and how one did, moved out of `copy/keep.rs` (which lost 54) with four new reasons.
+# `copy/keep/fits.rs` grew by 37 (a name the disk does not take, the index the step would leave, an ignored
+# file asked of a keep begun again), `run/keep.rs` by 37 (the words of four refusals, a record that names a
+# run's branch), `copy/keep/attrs.rs` by 18 (the attributes asked of the index the step leaves),
+# `copy/keep/step.rs` by 11 (a run's branch is never where work was kept), `copy/work.rs` by 9 (the one list of
+# a change, for a look and a keep), `busy.rs` by 5 (a test's wait compiled out of a release) and
+# `copy/keep/made.rs` by 1.
+"crates/jellymoon-core" = 10054
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -300,7 +308,14 @@ max_file_lines = 400
 # step git stops, a touched file, a question that writes nothing) and `names.rs` 99 (branch names a record
 # does not hold); and `settings.rs` 45, `record.rs` 32, `refused.rs` 26, `tests/f45.rs` 25 and `cut.rs` 19.
 # Naming a planted filter or merge driver so that git's shell starts it on Windows too raised it by 8.
-"crates/jellymoon" = 16621
+# The fixes after F45's second gate raised the binary by 425, all of it tests: `tests/f45/attrs.rs` is new, 190
+# (a `.gitattributes` the work removes, changes or adds, one that is a link, a git that does not answer, a
+# filter only what is staged sets, each beside a control), `raced.rs` grew by 119 (a checkout moved onto the run's own branch, detached ahead of the
+# work, moved away and back, and a linked worktree moved), `disk.rs` by 31 (a name no disk takes, a branch under
+# another spelling), `late.rs` by 30 (a store that takes no new object), `started.rs` by 30 (a filter named only
+# by its `process`, two controls), the made-up git by 9 (a step it fails, a step it does something after),
+# `record.rs` by 6, `settings.rs` by 4, `cut.rs` by 3 and `tests/f45.rs` by 3.
+"crates/jellymoon" = 17046
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -63,6 +63,11 @@ fn a_record_whose_words_of_a_keep_are_not_a_keeps_is_not_cores() {
         json!({"kept": end, "onto": "refs/heads/a\u{a0}b"}),
         json!({"kept": end, "onto": format!("refs/heads/{}", "n".repeat(1014))}),
         json!({"kept": end, "onto": "HEAD"}),
+        // A run's branch, this run's or another's, is never where work was kept: a keep that went by such a
+        // record would find the work "landed" on the run's own branch, and delete that branch.
+        json!({"kept": end, "onto": made.branch()}),
+        json!({"kept": end, "onto": made.branch(), "work": "kept"}),
+        json!({"kept": end, "onto": "refs/heads/jellymoon/run-of-another"}),
     ];
     for words in words {
         let mut wrong = record.clone();
@@ -73,6 +78,7 @@ fn a_record_whose_words_of_a_keep_are_not_a_keeps_is_not_cores() {
         assert_eq!((ran.code, ran.stdout.as_str()), (1, ""), "{words}: {}", ran.stderr);
         assert!(before == made.held(), "{words}");
         made.refuses(&ran, &before, NOT_CORES);
+        made.refuses(&made.keep(&["--ask"]), &before, NOT_CORES);
     }
     // A name of exactly 1024 bytes is one a record holds: it names no branch here, so the keep begins again.
     let mut long = record.clone();

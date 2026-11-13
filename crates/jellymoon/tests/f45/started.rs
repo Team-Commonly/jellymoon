@@ -104,7 +104,29 @@ fn a_touched_file_beside_the_work_whose_filter_is_required_is_no_reason_to_stop(
         assert_eq!(printed(&made.keep_in(&feat, &["--ask"], &[]))["fits"], json!(true), "{scope}");
         kept(&made, &made.keep_in(&feat, &[], &[]), &made.end(), "feat", FORWARD);
         assert_eq!(started(&folder), Vec::<String>::new(), "{scope}");
+        // The control: the same touched file, and the person asks git what changed.
+        super::touch_back(&feat.join("big.dat"), 10);
+        made.w.git_ran(&feat, &["status", "--porcelain"]);
+        assert_eq!(started(&folder), ["ran-filter"], "{scope}: git starts this filter for this file");
     }
+}
+
+// A filter can be named by one long-lived program alone (`filter.<name>.process`, as LFS names its own), with no
+// `clean` and no `smudge` beside it. It is switched off as the other two are.
+#[test]
+fn a_filter_named_only_by_its_process_program_is_switched_off_too() {
+    let made = finished_over(&[(".gitattributes", "*.dat filter=planted\n"), ("big.dat", "as it was stored\n")]);
+    let folder = made.w.at("tmp");
+    made.git(&["config", "filter.planted.process", &shell(&planted(&folder, "filter"))]);
+    touch(&made.repo.join("big.dat"));
+    assert_eq!(printed(&made.keep(&["--ask"]))["fits"], json!(true));
+    assert_eq!(started(&folder), Vec::<String>::new(), "asked");
+    kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
+    assert_eq!(started(&folder), Vec::<String>::new(), "kept");
+    // The control: the same touched file, and the person asks git what changed. git starts the program.
+    super::touch_back(&made.repo.join("big.dat"), 10);
+    made.w.git_ran(&made.repo, &["status", "--porcelain"]);
+    assert_eq!(started(&folder), ["ran-filter"], "git starts this program for this file");
 }
 
 // A merge driver named in the config of the repo's first checkout is one git starts for a merge in the store,
@@ -152,16 +174,24 @@ fn the_one_new_commit_in_a_linked_worktree_is_by_who_git_says_the_person_is_ther
 fn an_untracked_attributes_file_above_a_file_of_the_work_is_read_as_git_will_read_it() {
     let made = finished();
     let folder = made.w.at("tmp");
-    made.git(&["config", "filter.planted.smudge", &shell(&planted(&folder, "filter"))]);
+    filtered(&made, &made.repo, "--local", &planted(&folder, "filter"));
     let entries: [Entry; 1] = [("100644", "sub/deep/big.dat", b"what the store holds\n")];
     made.rework(&entries);
+    let set = || fs::write(made.repo.join("sub").join(".gitattributes"), "deep/*.dat filter=planted\n").unwrap();
     fs::create_dir(made.repo.join("sub")).unwrap();
-    fs::write(made.repo.join("sub").join(".gitattributes"), "deep/*.dat filter=planted\n").unwrap();
+    set();
     super::refused::unfit(&made, FILTER);
     assert_eq!(started(&folder), Vec::<String>::new());
     // With the file gone the work is kept.
     fs::remove_file(made.repo.join("sub").join(".gitattributes")).unwrap();
     kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
+    assert_eq!(started(&folder), Vec::<String>::new());
+    // The control: with the file back, it is a filter git starts for the work's file, when the file is touched
+    // and the person asks git what changed.
+    set();
+    touch(&made.repo.join("sub").join("deep").join("big.dat"));
+    made.w.git_ran(&made.repo, &["status", "--porcelain"]);
+    assert_eq!(started(&folder), ["ran-filter"], "git starts this filter for this file");
 }
 
 // The other three readings each refuse alone. A filter that only one of them tells of is a reason to stop,

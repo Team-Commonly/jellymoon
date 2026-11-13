@@ -6,6 +6,7 @@ use std::fs;
 
 use super::refused::{HISTORY, IN_WAY, unfit};
 use super::settings::finished_over;
+use super::support::skipped;
 use super::{Entry, FORWARD, finished, kept};
 
 const SWAP: [Entry; 4] = [
@@ -53,6 +54,36 @@ fn a_file_of_the_persons_under_another_spelling_of_a_made_files_name_is_never_wr
         }
         assert_eq!(fs::read_to_string(made.repo.join("a.txt")).unwrap(), theirs);
     }
+}
+
+// A name no disk of the three systems takes: one part of it is longer than 255. git would stop at it part way;
+// the keep says what it is before anything is written.
+#[test]
+fn a_file_of_the_work_whose_name_the_disk_does_not_take_is_said_as_that() {
+    let made = finished();
+    let long = format!("deep/{}.txt", "n".repeat(300));
+    made.rework(&[("100644", long.as_str(), b"under a long name\n")]);
+    let name = "a file of the work has a name this disk does not take: a part of it is too long, or is no name on this \
+                system";
+    unfit(&made, name);
+    assert!(!made.repo.join("deep").exists());
+}
+
+// On a disk that takes two spellings for one name, `git checkout Main` stands the checkout on `main` under a
+// name the repo does not list. The keep says that, and not that the branch has no history.
+#[test]
+fn a_branch_stood_on_under_another_spelling_of_its_name_is_said_as_that() {
+    let made = finished();
+    let moved = made.w.git_ran(&made.repo, &["checkout", "-q", "Main"]).status.success();
+    if !moved || made.git(&["symbolic-ref", "HEAD"]) != "refs/heads/Main" {
+        return skipped("a branch under another spelling of its name: this disk takes one spelling for a name");
+    }
+    let spelled = "the checkout's HEAD names a branch the repo does not list under that name: on a disk that takes \
+                   two spellings for one name it is another spelling of a branch's name, and `git checkout` with \
+                   the name as `git branch` prints it stands on the branch itself";
+    unfit(&made, spelled);
+    made.git(&["checkout", "-q", "main"]);
+    kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
 }
 
 #[test]

@@ -6,6 +6,7 @@
 //! is deleted only as itself and only while it names the run's end.
 
 use std::fs;
+use std::path::Path;
 
 use serde_json::{Value, json};
 
@@ -17,20 +18,36 @@ const ELSEWHERE: &str = "run {run} was kept, on another branch than the keep beg
                          branch that `onto` names while the keep was at work, and git landed the work there";
 const LOOSE: &str = "run {run} was kept, on no branch that is named here: while the keep was at work the checkout's \
                      HEAD was detached, or moved to a branch whose name Jellymoon does not write down, and git landed \
-                     the work there; the run's branch is left";
+                     the work there; the run's branch is left and still holds the run's own commit, and a new commit \
+                     the keep made to join the work with the person's commits is named by nothing of Jellymoon's: \
+                     `kept` is its id";
+const ON_A_RUNS: &str = "while the keep was at work the checkout was moved onto a run's branch, where Jellymoon keeps \
+                         no work: the work of run {run} was not kept, its branch is left, and the next `run keep` \
+                         begins again";
+
+/// A keep in `checkout` with the made-up git told what to do at the git step that has `step` among its words.
+/// Each of `told` is a file of its folder and that file's lines: `first` and `after` are done in the checkout by
+/// the real git, just before the step and just after it, and `fails` is the number the step ends with, untaken.
+pub fn told(made: &Made, checkout: &Path, step: &str, told: &[(&str, &[&str])]) -> Ran {
+    let (vars, fake) = (made.w.fake_git(), made.w.at("fake"));
+    fs::write(fake.join("on"), step).unwrap();
+    fs::write(fake.join("returns"), "").unwrap();
+    for (file, lines) in told {
+        let there = if *file == "fails" { vec![] } else { vec!["-C", checkout.to_str().unwrap()] };
+        fs::write(fake.join(file), [&there[..], lines].concat().join("\n")).unwrap();
+    }
+    let ran = made.keep_in(checkout, &[], &vars);
+    // It takes its lock on `held` at that step and at no other: a keep that never came to the step raced nothing.
+    assert!(fake.join("held").exists(), "the made-up git was never at the step {step}: {}", ran.stderr);
+    for file in ["on", "first", "after", "fails", "held"] {
+        let _ = fs::remove_file(fake.join(file));
+    }
+    ran
+}
 
 /// A keep with `first` done in the repo by the real git just before the git step that has `step` among its words.
 fn raced(made: &Made, step: &str, first: &[&str]) -> Ran {
-    let (vars, fake) = (made.w.fake_git(), made.w.at("fake"));
-    let repo = made.repo.to_str().unwrap();
-    fs::write(fake.join("on"), step).unwrap();
-    fs::write(fake.join("first"), [&["-C", repo], first].concat().join("\n")).unwrap();
-    fs::write(fake.join("returns"), "").unwrap();
-    let ran = made.keep_in(&made.repo, &[], &vars);
-    // It takes its lock on `held` at that step and at no other: a keep that never came to the step raced nothing.
-    assert!(fake.join("held").exists(), "the made-up git was never at the step {step}: {}", ran.stderr);
-    fs::remove_file(fake.join("on")).unwrap();
-    ran
+    told(made, &made.repo, step, &[("first", first)])
 }
 
 /// What a keep printed when it worked, with `onto` as it is: a name, or null.
@@ -99,24 +116,126 @@ fn a_checkout_moved_to_an_older_branch_just_before_the_step_keeps_the_work_there
 
 #[test]
 fn a_head_detached_just_before_the_step_keeps_the_work_on_no_branch_and_leaves_the_runs_branch() {
+    for joined in [false, true] {
+        let made = finished();
+        let (start, end) = (made.w.commit(&made.repo, "main"), made.end());
+        let theirs = if joined { made.moved_on() } else { start };
+        let ran = raced(&made, "merge", &["checkout", "-q", "--detach"]);
+        // git moved the detached `HEAD` and no branch. The run's branch stays, at the run's own commit: it is the
+        // one name that commit has, and the one new commit of a joined keep has no name at all.
+        let commit = made.git(&["rev-parse", "HEAD"]);
+        assert_eq!(commit == end, !joined);
+        said(&made, &ran, &commit, json!(null), LOOSE);
+        assert!(!made.w.git_ran(&made.repo, &["symbolic-ref", "-q", "HEAD"]).status.success(), "HEAD is detached");
+        assert_eq!(made.w.commit(&made.repo, "main"), theirs);
+        assert_eq!(made.w.commit(&made.repo, &made.branch()), end);
+        assert_eq!(made.git(&["for-each-ref", "--format=%(refname)", "--points-at", &commit]).is_empty(), joined);
+        assert_eq!(made.files() == worked(), !joined);
+        assert_eq!(made.status(), "");
+        assert_eq!(words(&made), (json!("kept"), json!(commit), json!("HEAD")));
+        // A second keep and a look say it was kept, name no branch, and leave the run's branch again.
+        let before = made.held();
+        said(&made, &made.keep(&[]), &commit, json!(null), BEFORE);
+        let asked = printed(&made.keep(&["--ask"]));
+        assert_eq!((&asked["kept"], &asked["onto"], &asked["fits"]), (&json!(commit), &json!(null), &json!(false)));
+        assert_eq!(shown(&made), json!("kept"));
+        assert!(before == made.held());
+    }
+}
+
+// The gate's second finding of its second pass. Moved onto the run's own branch just before the step, the
+// checkout is where the work already is, git has nothing to do (or, with a commit to land, will not), and no
+// branch of the person's took anything: nothing was kept, the run's branch stays, and the next keep begins again.
+#[test]
+fn a_checkout_moved_onto_the_runs_own_branch_just_before_the_step_keeps_nothing_and_the_next_keep_lands_it() {
+    for joined in [false, true] {
+        let made = finished();
+        let (start, end) = (made.w.commit(&made.repo, "main"), made.end());
+        let theirs = if joined { made.moved_on() } else { start };
+        let own = format!("jellymoon/run-{}", made.run);
+        let refs = made.git(&["for-each-ref", "--format=%(refname) %(objectname)"]);
+        let ran = raced(&made, "merge", &["checkout", "-q", &own]);
+        assert_eq!((ran.code, ran.stdout.as_str()), (1, ""), "joined {joined}: {}", ran.stderr);
+        assert_eq!(super::refused(&ran), super::said(&ON_A_RUNS.replace("{run}", &made.run)), "joined {joined}");
+        // Every branch is where it was, the run's too, and the record names what was meant and not that it landed.
+        assert_eq!(made.git(&["for-each-ref", "--format=%(refname) %(objectname)"]), refs);
+        assert_eq!(words(&made).0, json!(null));
+        assert_eq!(words(&made).2, json!("refs/heads/main"));
+        assert_eq!(shown(&made), json!("waits"));
+        // Asked on the run's branch, a keep says that a checkout stands there, and changes nothing.
+        let before = made.held();
+        assert_eq!(printed(&made.keep(&["--ask"]))["fits"], json!(false));
+        assert!(before == made.held());
+        // Back on their own branch, the person keeps the work: the commit is on `main`, and only then is the
+        // run's branch deleted.
+        made.git(&["checkout", "-q", "main"]);
+        let ran = made.keep(&[]);
+        let commit = made.w.commit(&made.repo, "main");
+        kept(&made, &ran, &commit, "main", if joined { super::JOINED } else { FORWARD });
+        assert_eq!(made.git(&["rev-parse", &format!("{commit}^")]), theirs);
+        assert_eq!(commit == end, !joined);
+        assert!(made.w.branches(&made.repo).is_empty());
+        assert_eq!(made.status(), "");
+    }
+}
+
+// Detached at a commit ahead of the work just before the step, git has nothing to do and says so with a 0. The
+// work is in that commit's history and on no branch's: nothing was kept, and it is not said to be.
+#[test]
+fn a_head_detached_ahead_of_the_work_just_before_the_step_is_the_late_refusal_and_not_kept_on_no_branch() {
     let made = finished();
     let (start, end) = (made.w.commit(&made.repo, "main"), made.end());
-    let ran = raced(&made, "merge", &["checkout", "-q", "--detach"]);
-    said(&made, &ran, &end, json!(null), LOOSE);
-    // git moved the detached `HEAD` and no branch: the run's branch is the one name the commit has, and stays.
-    assert_eq!(made.git(&["rev-parse", "HEAD"]), end);
-    assert!(!made.w.git_ran(&made.repo, &["symbolic-ref", "-q", "HEAD"]).status.success(), "HEAD is detached");
-    assert_eq!(made.w.commit(&made.repo, "main"), start);
+    made.who();
+    let ahead = made.git(&["commit-tree", "-p", &end, "-m", "one more", &format!("{end}^{{tree}}")]);
+    let ran = raced(&made, "merge", &["checkout", "-q", "--detach", &ahead]);
+    assert_eq!((ran.code, ran.stdout.as_str()), (1, ""), "{}", ran.stderr);
+    assert_eq!(super::refused(&ran), super::said(&super::STEPPED.replace("{run}", &made.run)));
+    assert_eq!((made.git(&["rev-parse", "HEAD"]), made.w.commit(&made.repo, "main")), (ahead, start));
     assert_eq!(made.w.commit(&made.repo, &made.branch()), end);
-    assert_eq!(made.files(), worked());
-    assert_eq!(words(&made), (json!("kept"), json!(end), json!("HEAD")));
-    // A second keep and a look say it was kept, name no branch, and leave the run's branch again.
-    let before = made.held();
-    said(&made, &made.keep(&[]), &end, json!(null), BEFORE);
-    let asked = printed(&made.keep(&["--ask"]));
-    assert_eq!((&asked["kept"], &asked["onto"], &asked["fits"]), (&json!(end), &json!(null), &json!(false)));
-    assert_eq!(shown(&made), json!("kept"));
-    assert!(before == made.held());
+    assert_eq!(words(&made), (json!(null), json!(end), json!("refs/heads/main")));
+    made.git(&["checkout", "-q", "main"]);
+    kept(&made, &made.keep(&[]), &end, "main", FORWARD);
+}
+
+// Moved to a new branch just before the step and back just after it: git landed the work on the new branch, and
+// by the time the keep asks, the checkout stands on a branch that does not hold it. That branch is not said to
+// have held the work already. The keep says git stopped the step, and the next one lands the work on `main` too.
+#[test]
+fn a_checkout_moved_away_for_the_step_and_back_after_it_is_the_late_refusal_and_the_next_keep_lands_on_main() {
+    let made = finished();
+    let (start, end) = (made.w.commit(&made.repo, "main"), made.end());
+    let moved: [(&str, &[&str]); 2] =
+        [("first", &["checkout", "-q", "-b", "feature"]), ("after", &["checkout", "-q", "main"])];
+    let ran = told(&made, &made.repo, "merge", &moved);
+    assert_eq!((ran.code, ran.stdout.as_str()), (1, ""), "{}", ran.stderr);
+    assert_eq!(super::refused(&ran), super::said(&super::STEPPED.replace("{run}", &made.run)));
+    assert_eq!((made.w.commit(&made.repo, "feature"), made.w.commit(&made.repo, "main")), (end.clone(), start));
+    assert_eq!(made.git(&["symbolic-ref", "HEAD"]), "refs/heads/main");
+    assert_eq!(words(&made), (json!(null), json!(end), json!("refs/heads/main")));
+    assert_eq!(made.w.commit(&made.repo, &made.branch()), end);
+    kept(&made, &made.keep(&[]), &end, "main", FORWARD);
+    assert_eq!((made.w.commit(&made.repo, "feature"), made.w.commit(&made.repo, "main")), (end.clone(), end));
+    assert!(made.w.branches(&made.repo).is_empty());
+}
+
+// The checkout a keep asks about after the step is the one it was asked in. In a linked worktree moved to a new
+// branch just before the step, the first checkout stands on `main` as ever, and the work is where the linked
+// one stands.
+#[test]
+fn a_linked_checkout_moved_to_a_new_branch_just_before_the_step_keeps_the_work_where_that_checkout_stands() {
+    let made = finished();
+    let (start, end) = (made.w.commit(&made.repo, "main"), made.end());
+    let feat = made.w.at("work").join("linked").join("alpha");
+    made.git(&["worktree", "add", "-q", "-b", "feat", feat.to_str().unwrap()]);
+    let main = made.w.persons(&made.repo);
+    let ran = told(&made, &feat, "merge", &[("first", &["checkout", "-q", "-b", "other"])]);
+    said(&made, &ran, &end, json!("other"), ELSEWHERE);
+    assert_eq!(made.w.git(&feat, &["symbolic-ref", "HEAD"]), "refs/heads/other");
+    let tips = ["other", "feat", "main"].map(|name| made.w.commit(&made.repo, name));
+    assert_eq!(tips, [end.clone(), start.clone(), start]);
+    assert_eq!(words(&made), (json!("kept"), json!(end), json!("refs/heads/other")));
+    let after = made.w.persons(&made.repo);
+    assert_eq!((&main.0, &main.1, &main.2), (&after.0, &after.1, &after.2), "the first checkout was touched");
 }
 
 // Moved to a branch that holds the run's commit already, git has nothing to do there and says so with a 0: the

@@ -16,6 +16,7 @@ mod attrs;
 mod fits;
 mod made;
 mod step;
+mod why;
 
 use std::fs::{self, File};
 use std::io::ErrorKind;
@@ -24,6 +25,7 @@ use std::time::Duration;
 
 pub(crate) use fits::Touched;
 pub(crate) use step::LOOSE;
+pub(crate) use why::{How, Unkept};
 
 use super::git::{Git, Repo, Unopened};
 use super::work::{REF_MAX, parent, same, tip, tip_of};
@@ -47,73 +49,6 @@ const MIDWAY: [&str; 8] = [
     "rebase-apply",
     "sequencer",
 ];
-
-/// Why a run's work was not kept. `run/keep.rs` has the words of each.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Unkept {
-    /// The repo or the run's branch is not as the record names it (`work.rs`).
-    Unread(Unread),
-    /// Another keep of this home is at work.
-    Busy,
-    /// The keeps' lock could not be made or taken.
-    NoLock,
-    /// The repo's config names what cannot be switched off on a command line (`git.rs`).
-    Config,
-    /// A checkout stands on the run's branch.
-    Stood,
-    /// The person's checkout stands on no branch of theirs.
-    NoBranch,
-    /// The checkout stands on a branch whose name a record does not hold ([`nameable`]).
-    Unnamed,
-    /// A merge, a cherry-pick, a revert, a rebase or a bisect is going on in the checkout.
-    Midway,
-    /// The branch's history does not hold the run's start.
-    History,
-    /// The work and the person's commits must be merged, and this git cannot do that in the store.
-    Old,
-    /// Both changed the same lines, or the same file in ways git does not merge.
-    Clash,
-    /// A commit must be made, and the repo names no author.
-    Nobody,
-    /// The work adds, changes or removes another repo's entry or `.gitmodules`.
-    Repos,
-    /// The work touches a file the person's tools obey, and that was not asked for.
-    Settings,
-    /// A file of the work would be passed through a filter of the repo's.
-    Filter,
-    /// A changed, an untracked or an ignored file of the person's is where the work's would go.
-    InWay,
-    /// The checkout's index is locked.
-    Locked,
-    /// git stopped the step though every check had passed, or took it and the commit is not where `HEAD` is.
-    Stepped,
-    /// The run's record could not be written.
-    Unwritten,
-}
-
-impl From<Unread> for Unkept {
-    fn from(unread: Unread) -> Unkept {
-        Unkept::Unread(unread)
-    }
-}
-
-/// How the work came to be on the branch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum How {
-    /// The branch was at the run's start and was moved forward to the run's commit.
-    Forward,
-    /// One new commit on top of the person's holds their work and the run's.
-    Joined,
-    /// The branch held the run's commit already.
-    Held,
-    /// A keep that was cut off had landed the commit its record names.
-    Finished,
-    /// The checkout was moved to another branch just before the step, and git landed the commit there.
-    Elsewhere,
-    /// The checkout was moved just before the step, and git landed the commit on no branch a record names: its
-    /// `HEAD` was detached, or stood on a branch whose name is not written down. The run's branch is left.
-    Loose,
-}
 
 /// What a keep landed, or with [`Keep::ask`] would land.
 pub(crate) struct Landing {
@@ -160,6 +95,13 @@ struct At<'a> {
 pub(crate) fn nameable(onto: &str) -> bool {
     let odd = |c: char| c.is_control() || c.is_whitespace() || "*?[\\~^:".contains(c);
     onto.starts_with("refs/heads/") && onto.len() <= 1024 && !onto.contains(odd)
+}
+
+/// Whether a branch's whole name is one a run's branch has. No work is ever kept on such a branch: a keep refuses
+/// a checkout that stands on one ([`stands`]), says so of one moved there just before the step (`step.rs`), and a
+/// record that names one is not core's (`run/keep.rs`).
+pub(crate) fn runs(onto: &str) -> bool {
+    onto.starts_with("refs/heads/jellymoon/run-")
 }
 
 /// Whether git said yes with a 0 or no with a 1. Any other end is no answer.
@@ -306,7 +248,7 @@ fn drop_branch(at: &At) {
 /// that branch is the one the work lands on.
 fn stands(at: &At) -> Result<(String, String), Unkept> {
     let onto = line(at.mine, &[], &["symbolic-ref", "--quiet", "HEAD"])?.ok_or(Unkept::NoBranch)?;
-    if !onto.starts_with("refs/heads/") || onto.starts_with("refs/heads/jellymoon/run-") {
+    if !onto.starts_with("refs/heads/") || runs(&onto) {
         return Err(Unkept::NoBranch);
     }
     if !nameable(&onto) {
@@ -319,8 +261,12 @@ fn stands(at: &At) -> Result<(String, String), Unkept> {
     }
     match tip_of(at.repo, &onto) {
         Ok(tip) => Ok((onto, tip)),
-        // A branch with no commit yet has no history.
-        Err(Unread::Missing) => Err(Unkept::History),
+        // A branch with no commit yet has no history. A `HEAD` that is at a commit, on a branch the repo does not
+        // list under that name, was read by a disk that takes another spelling for a branch's name.
+        Err(Unread::Missing) => match line(at.mine, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])? {
+            Some(_) => Err(Unkept::Spelled),
+            None => Err(Unkept::History),
+        },
         Err(Unread::Symbolic) => Err(Unkept::NoBranch),
         Err(unread) => Err(unread.into()),
     }

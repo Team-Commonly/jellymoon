@@ -174,6 +174,33 @@ The gate on F45 found eleven things, four of them blocking. What was decided, an
    keeps' lock that cannot be made is said as that; the hook a test's build ends a keep at is compiled out of a
    release with the read of its variable.
 
+## Found by the second gate on F45 (2026-11-13)
+
+The second gate found ten things, three of them blocking (git 2.50.1, a Mac; `docs/development/keep.md` has the
+whole account):
+
+1. **Attributes are asked of the index the step would leave.** The four readings took a `.gitattributes` the
+   work removes as still there. Measured: a tracked `sub/deep/.gitattributes` that unsets a filter, removed by
+   the work beside a new file there, and an untracked `sub/.gitattributes` of the person's that sets it: git
+   removes before it writes and starts the filter. git reads attributes from the index it is leaving, and from
+   the disk only where that index has none. So the trial, once passed, is taken again without `-n` and without
+   `-u` into the copy of the index, and three of the four readings are asked of that copy; the fourth is the
+   commit's own. One the work changes or adds is read from the index, whatever git writes first; one the person
+   staged is read as staged. A change that takes a filter off is still refused, by the checkout's own file.
+2. **A run's branch is never where work was kept.** A checkout moved onto the run's own branch just before the
+   step was said "kept, on another branch", and the next keep deleted that branch. Now `HEAD` on any name
+   under `refs/heads/jellymoon/run-` after the step is a refusal in fixed words, the record keeps what was
+   meant, the branch is left, and the next keep begins again. A record whose `onto` is such a name is not core's.
+3. **Three guards have tests**: a filter named only by `process`, a `HEAD` detached ahead of the work, and a
+   checkout moved away and back. One comparison was no guard and is gone: the branch `HEAD` names is where
+   `HEAD` is.
+4. **Smaller ones.** The words of work kept on no branch are true of a joined commit too. A question that must
+   merge writes one tree in the store, and says so when the store takes none. A keep begun again asks git
+   whether what is in the way is ignored, so it agrees with a first keep. A name the disk does not take and a
+   branch stood on under another spelling have words of their own. Two outcomes of a moved checkout are stated
+   and not closed. The list of a change is one function for a look and a keep, and a test's wait is compiled
+   out of a release.
+
 ## The slices
 
 `feature_list.json` is read top down, and F30 and F31 stand above these. The order is stated here: **F44 to F47 are

@@ -28,7 +28,7 @@ fn every_event_round_trips_byte_for_byte() {
     assert_eq!(written, example);
     let cannot = Said::Cannot { why: EarCannot::MicrophoneRefused };
     assert_eq!(events[1], HearEvent::Key { key: KeyMove::Down });
-    assert_eq!((&events[3], &events[10]), (&HearEvent::Tick { tick: 1200 }, &HearEvent::Said(cannot)));
+    assert_eq!((&events[3], &events[11]), (&HearEvent::Tick { tick: 1200 }, &HearEvent::Said(cannot)));
     assert_eq!(events[2], HearEvent::Said(Said::Partial { words: "make the up".to_string() }));
     // Every reason the ear has is one a line can name, and none is known under another name.
     for why in EarCannot::ALL {

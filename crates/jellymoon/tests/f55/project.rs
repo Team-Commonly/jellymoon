@@ -104,6 +104,9 @@ fn a_ninth_wish_is_not_kept_and_the_line_says_why() {
     let want = [quiet(), listening(""), heard(SAID, "alpha", 4000), cannot(full)];
     assert_eq!(w.hear(&["--run"], &held_and_waited()), want);
     assert!(w.home() == before && w.starts() == 0, "nothing was kept and nothing was started");
+    // It is said for six seconds from the tick that refused it.
+    let later = |at: u64| w.hear(&[], &[held_and_waited(), vec![tick(10_999), tick(at)]].concat());
+    assert_eq!((later(10_999).last(), later(11_000).last()), (Some(&cannot(full)), Some(&quiet())));
 }
 
 #[test]
@@ -119,6 +122,25 @@ fn on_a_day_that_is_locked_nothing_is_kept_and_the_line_says_why() {
     assert_eq!(w.hear(&[], &held_and_waited()), want);
     assert!(started.elapsed() >= Duration::from_secs(3), "the lock was not waited for");
     assert!(w.home() == before, "nothing was kept");
+}
+
+// The project is checked again when the wish is made: one switched off while the words were shown makes no wish.
+#[test]
+fn a_project_switched_off_inside_the_window_makes_no_wish_and_the_line_says_why() {
+    let w = alpha_world();
+    let mut hearing = w.hearing(&[]);
+    assert_eq!(hearing.line(), quiet());
+    for event in hold(0, SAID) {
+        hearing.feed(&event);
+    }
+    assert_eq!((hearing.line(), hearing.line()), (listening(""), heard(SAID, "alpha", 4000)));
+    fs::create_dir(w.at("jm")).unwrap();
+    fs::write(w.jm("skip.txt"), "alpha\n").unwrap();
+    hearing.feed(&tick(5000));
+    let off = "no folder of that project that is switched on was typed in on 2026-03-10, so this wish was not kept";
+    assert_eq!(hearing.line(), cannot(off));
+    hearing.end();
+    assert_eq!((w.made_wishes(), w.jm("pages").exists()), (None, false));
 }
 
 #[test]

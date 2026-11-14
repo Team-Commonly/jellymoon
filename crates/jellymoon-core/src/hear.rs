@@ -56,10 +56,21 @@ pub struct HearOptions {
     pub apart: Option<(PathBuf, RunOptions)>,
 }
 
+/// When a span that an event began is counted from: the first tick at or after the event, which is None until
+/// that tick comes. The time of the tick before the event is never used: it may be long past, and a span counted
+/// from it would be shorter than what the person saw, down to nothing.
+type Since = Option<u64>;
+
+/// How much of a span has passed at `now`, a tick's time. The first tick asked starts the span.
+fn passed(since: &mut Since, now: u64) -> u64 {
+    now - *since.get_or_insert(now)
+}
+
 /// Where a hold stands.
 enum Hold {
     None,
-    /// The key is down since `since`. `said` counts the times the words so far were changed.
+    /// The key is down since `since`, the time of the tick before it: a hold's length is the time between the
+    /// ticks before its two key events. `said` counts the times the words so far were changed.
     Held {
         since: u64,
         so_far: String,
@@ -67,7 +78,7 @@ enum Hold {
     },
     /// The hold is over since `since`, and the ear's final words are waited for.
     Over {
-        since: u64,
+        since: Since,
         so_far: String,
         said: usize,
     },
@@ -75,7 +86,7 @@ enum Hold {
     Heard {
         words: String,
         project: String,
-        since: u64,
+        since: Since,
     },
 }
 
@@ -90,7 +101,7 @@ pub struct Hearing {
     now: u64,
     hold: Hold,
     /// What was refused, and since when it is said.
-    cannot: Option<(String, u64)>,
+    cannot: Option<(String, Since)>,
     runs: day::Runs,
     looked: u64,
     /// The wish just made, for the next line to name.
@@ -156,20 +167,28 @@ impl Hearing {
     }
 
     /// The first tick starts the clock, so nothing has passed at it whatever its number. A later one moves the
-    /// time forward to it, and one that would move it back is passed over.
+    /// time forward to it, and one that would move it back is passed over. Every span an event began (a heard
+    /// wish's window, a refusal's time, the wait for the ear) starts at the first tick at or after that event,
+    /// which may be one at the time of the last.
     fn tick(&mut self, tick: u64) {
         let now = tick.saturating_sub(*self.origin.get_or_insert(tick));
-        if now <= self.now {
+        if now < self.now {
             return;
         }
         self.now = now;
-        self.cannot.take_if(|(_, since)| now - *since >= CANNOT_MS);
-        match std::mem::replace(&mut self.hold, Hold::None) {
-            Hold::Held { since, so_far, said } if now - since >= HOLD_MS => {
-                self.hold = Hold::Over { since: now, so_far, said };
-            }
-            Hold::Over { since, .. } if now - since >= EAR_MS => self.refuse(EAR_SILENT),
-            Hold::Heard { words, project, since } if now - since >= WINDOW_MS => self.make(&words, &project),
+        self.cannot.take_if(|(_, since)| passed(since, now) >= CANNOT_MS);
+        let mut hold = std::mem::replace(&mut self.hold, Hold::None);
+        let over = match &mut hold {
+            Hold::None => false,
+            Hold::Held { since, .. } => now - *since >= HOLD_MS,
+            Hold::Over { since, .. } => passed(since, now) >= EAR_MS,
+            Hold::Heard { since, .. } => passed(since, now) >= WINDOW_MS,
+        };
+        match hold {
+            // This tick is the one the hold ended at, so the wait for the ear starts at it.
+            Hold::Held { so_far, said, .. } if over => self.hold = Hold::Over { since: Some(now), so_far, said },
+            Hold::Over { .. } if over => self.refuse(EAR_SILENT, Some(now)),
+            Hold::Heard { words, project, .. } if over => self.make(&words, &project),
             hold => self.hold = hold,
         }
         if now - self.looked >= LOOK_MS {
@@ -188,7 +207,7 @@ impl Hearing {
         if let Hold::Held { since, .. } = self.hold {
             let Hold::Held { so_far, said, .. } = std::mem::replace(&mut self.hold, Hold::None) else { return };
             if self.now - since >= SLIP_MS {
-                self.hold = Hold::Over { since: self.now, so_far, said };
+                self.hold = Hold::Over { since: None, so_far, said };
             }
         }
     }
@@ -211,7 +230,7 @@ impl Hearing {
                 if matches!(hold, Hold::Held { .. } | Hold::Over { .. }) {
                     *hold = Hold::None;
                 }
-                self.refuse(why.says());
+                self.refuse(why.says(), None);
             }
             _ => {}
         }
@@ -220,33 +239,39 @@ impl Hearing {
     /// The final words of a hold, through the door. Words the door refuses are refused in a wish's own line;
     /// words that are empty once cleaned are nothing at all. Nothing is written.
     fn heard(&mut self, words: &str) {
-        match wish::cleaned(words) {
-            Ok(words) if words.is_empty() => {}
+        let refused = match wish::cleaned(words) {
+            Ok(words) if words.is_empty() => return,
             Ok(words) => match day::project(&self.read, &self.home, &self.day) {
-                Some(project) => self.hold = Hold::Heard { words, project, since: self.now },
-                None => self.refuse(day::NO_PROJECT),
+                Some(project) => {
+                    self.hold = Hold::Heard { words, project, since: None };
+                    return;
+                }
+                None => day::NO_PROJECT,
             },
-            Err(Unkept::Long) => self.refuse(wish::LONG),
-            Err(Unkept::Changing) => self.refuse(wish::CHANGING),
-        }
+            Err(Unkept::Long) => wish::LONG,
+            Err(Unkept::Changing) => wish::CHANGING,
+        };
+        self.refuse(refused, None);
     }
 
-    /// The window has passed: the heard wish is made a wish, and with a run asked for, its run is started.
+    /// The window has passed, at a tick: the heard wish is made a wish, and with a run asked for, its run is
+    /// started. What is refused here is said from this tick.
     fn make(&mut self, words: &str, project: &str) {
         match day::make(&self.read, &self.home, self.apart.as_ref(), words, project) {
             Ok((made, unstarted)) => {
                 self.made = Some(made);
                 if let Some(why) = unstarted {
-                    self.refuse(&why);
+                    self.refuse(&why, Some(self.now));
                 }
             }
-            Err(unkept) => self.refuse(&unkept),
+            Err(unkept) => self.refuse(&unkept, Some(self.now)),
         }
         self.look();
     }
 
-    fn refuse(&mut self, why: &str) {
-        self.cannot = Some((why.to_string(), self.now));
+    /// `since`: the tick that refused it, or None when an event did, and the next tick starts its time.
+    fn refuse(&mut self, why: &str, since: Since) {
+        self.cannot = Some((why.to_string(), since));
     }
 
     fn look(&mut self) {
@@ -265,7 +290,7 @@ impl Hearing {
                 says: TAKE_BACK.to_string(),
                 words: words.clone(),
                 project: project.clone(),
-                left: WINDOW_MS.saturating_sub(self.now - since),
+                left: WINDOW_MS.saturating_sub(since.map_or(0, |since| self.now - since)),
                 ..blank
             },
             (Hold::None, Some((why, _))) => Jelly { state: JellyState::Cannot, says: why.clone(), ..blank },
@@ -289,8 +314,9 @@ pub fn hear(options: HearOptions, mut input: impl BufRead, mut output: impl Writ
     print(hearing.shows())?;
     let mut line = Vec::new();
     while session::next_line(&mut input, HEAR_LINE_MAX, &mut line).map_err(unread)? {
-        // A line that was read past comes back with nothing in it, not even its line break.
-        if line.is_empty() {
+        // A line that was read past comes back with nothing in it, not even its line break. The input's last
+        // line with no line break is held to the length a line has without one.
+        if line.is_empty() || (line.len() == HEAR_LINE_MAX && !line.ends_with(b"\n")) {
             hearing.skipped += 1;
         } else if let Some(jelly) = hearing.line(&line) {
             print(&jelly)?;

@@ -38,8 +38,9 @@ fn a_hold_is_listened_to_and_its_final_words_are_shown_for_four_seconds_and_then
         UP.to_string(),
         fin(SAID),
         tick(1000),
-        tick(4899),
-        tick(4900),
+        tick(1100),
+        tick(4999),
+        tick(5000),
         tick(9000),
         tick(60_000),
     ];
@@ -57,6 +58,25 @@ fn a_hold_is_listened_to_and_its_final_words_are_shown_for_four_seconds_and_then
     assert_eq!(w.made_wishes(), Some(json!([made("m1", SAID, "alpha")])));
     assert_eq!((w.starts(), w.jm("runs").exists(), w.jm("copies").exists()), (0, false, false));
     assert_eq!(w.on_page("m1")["said"], SAID);
+}
+
+// The four seconds are the person's to take the wish back in, so they start when the words can be seen: at the
+// first tick at or after the final words, never at the tick before them.
+#[test]
+fn the_four_seconds_start_at_the_first_tick_at_or_after_the_final_words() {
+    let w = alpha_world();
+    let said = [tick(0), DOWN.to_string(), tick(1000), UP.to_string(), fin(SAID)];
+    let then = |ticks: &[u64]| [&said[..], &ticks.iter().map(|at| tick(*at)).collect::<Vec<_>>()].concat();
+    let shown = [quiet(), listening(""), heard(SAID, "alpha", 4000)];
+    // A sender that did not tick for four seconds: the words are shown, and nothing is made at that tick.
+    assert_eq!(w.hear(&[], &then(&[5000])), shown);
+    assert_eq!(w.hear(&[], &then(&[5000, 8999])), [&shown[..], &[heard(SAID, "alpha", 1)]].concat());
+    // A tick at the time of the last one is one at the final words, and a tick that goes back is none.
+    assert_eq!(w.hear(&[], &then(&[1000, 4999])), [&shown[..], &[heard(SAID, "alpha", 1)]].concat());
+    assert_eq!(w.hear(&[], &then(&[900, 5000, 8999])), [&shown[..], &[heard(SAID, "alpha", 1)]].concat());
+    assert!(!w.at("jm").exists(), "a heard wish was made before four seconds of ticks had passed");
+    let made = [&shown[..], &[with(quiet(), "made", json!("m1"))]].concat();
+    assert_eq!(w.hear(&[], &then(&[5000, 9000])), made);
 }
 
 // The same events but for the last tick: the input ends one millisecond inside the window.
@@ -103,7 +123,7 @@ fn a_key_pressed_while_a_heard_wish_is_shown_takes_it_back_held_or_tapped() {
     let again = "make the uploader retry three times";
     let mut held = hold(0, SAID);
     held.extend([tick(3000), DOWN.to_string(), partial("make the"), tick(4000), UP.to_string(), fin(again)]);
-    held.extend([tick(7999), tick(8000), tick(20_000)]);
+    held.extend([tick(4000), tick(7999), tick(8000), tick(20_000)]);
     let lines = w.hear(&[], &held);
     let end = [
         heard(SAID, "alpha", 2000),
@@ -144,6 +164,11 @@ fn a_hold_ends_by_itself_at_60_seconds() {
     // The key is never let go. At 60 seconds the hold is over, and the ear's last words are its heard wish.
     let events = [tick(0), DOWN.to_string(), tick(59_999), fin("too soon"), tick(60_000), fin(SAID), UP.to_string()];
     assert_eq!(w.hear(&[], &events), [quiet(), listening(""), heard(SAID, "alpha", 4000)]);
+    // The tick that ended the hold is the one the ear is waited from.
+    let silent = "nothing was heard: the ear did not say what it heard";
+    let events = [tick(0), DOWN.to_string(), tick(60_000), tick(64_999)];
+    assert_eq!(w.hear(&[], &events), [quiet(), listening("")]);
+    assert_eq!(w.hear(&[], &[&events[..], &[tick(65_000)]].concat()), [quiet(), listening(""), cannot(silent)]);
 }
 
 // The door a typed wish passes (`still.rs`): one line, nothing unseen, credential shapes replaced, never cut.
@@ -153,7 +178,8 @@ fn heard_words_and_the_words_so_far_pass_the_door_before_they_are_printed_or_kep
     let so_far = format!("deploy  with {}\nfr\u{2065}om", model_key());
     let raw = format!("  deploy  with {}\nfr\u{2065}om \"now\" on ", hub_key());
     let clean = "deploy with [redacted] from 'now' on";
-    let events = [tick(0), DOWN.to_string(), partial(&so_far), tick(1000), UP.to_string(), fin(&raw), tick(5000)];
+    let events =
+        [tick(0), DOWN.to_string(), partial(&so_far), tick(1000), UP.to_string(), fin(&raw), tick(1000), tick(5000)];
     let ran = w.hear_ran(&[], &events);
     let want = [
         quiet(),

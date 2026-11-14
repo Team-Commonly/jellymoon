@@ -79,7 +79,8 @@ pub(super) fn make(
     let Some((program, options)) = apart else { return Ok((made, None)) };
     let options = RunOptions { wish: made.clone(), day: read.date.clone(), ..options.clone() };
     let unstarted = match run_apart(home, program, &options) {
-        Ok(started) => started.run.is_none().then_some(started.why),
+        // A run that was named and has ended already is said as it ended, as `jellymoon wish --run` prints it.
+        Ok(started) => (started.run.is_none() || started.state != WishState::Working).then_some(started.why),
         Err(e) => Some(e.to_string()),
     };
     Ok((made, unstarted))

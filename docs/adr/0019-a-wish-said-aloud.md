@@ -365,6 +365,20 @@ F55 is core's hearing at `jellymoon hear`, with `voice.toml` and F30's test file
 13. **Bounds added:** a line of events is 64 KiB at most; the words so far change 4096 times in a hold at
     most; a refusal is said for 6000 ms (decision 4's "6 seconds").
 
+14. **(Changed after F55's gate, 2026-11-14.) A span an event begins is counted from the first tick at or after
+    the event.** F55 counted a heard wish's four seconds from the tick before the final words, so a sender that
+    had not ticked just before them shortened the time to take the wish back, down to nothing. Now the four
+    seconds, a refusal's six and the ear's five each start at the first tick at or after their event; `left`
+    reads 4000 on the first `heard` line and at that tick. A hold's length is still the time between the ticks
+    before its two key events: an error there makes a slip of a hold or a hold of a slip, and takes nothing
+    from the four seconds.
+15. **(The same.) A key held with Shift alone is refused** (`Shift+A`, `Shift+Space`): registered with the
+    system it would take capitals and signs from every program. A refused key or language that holds a
+    character that cannot be seen is not named back, since the cleaned value would read as one that is right.
+16. **(The same.) `hear --run` says how a run ended** when it had ended by the time its start was answered,
+    as `wish --run` prints it; and the input's last line with no line break is held to 65 535 bytes, the
+    length a line of 64 KiB has without its break.
+
 **Not closed by F55:** final words are not tied to their hold (the events carry no hold's number, so an
 earlier hold's final that comes after a later hold's key went up is taken for the later one; F60 can number
 holds); a run that was cut off reads `working` until the page is looked at; a sender that stops its ticks

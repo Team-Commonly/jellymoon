@@ -10,7 +10,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
-use crate::redact::line;
+use crate::redact::{holds_unseen, line};
 use crate::tap::plain;
 
 /// The most bytes of `voice.toml` that are read. A larger file is refused.
@@ -19,6 +19,8 @@ pub const VOICE_BYTES: usize = 4096;
 const SHOWN: usize = 40;
 const KEY: &str = "Control+Shift+Space";
 const LANGUAGE: &str = "default";
+/// What a key whose one modifier is Shift is refused with.
+const SHIFT_ALONE: &str = "the key is held with Shift alone, which typing uses: add Control, Option or Command to it";
 const MODIFIERS: [&str; 4] = ["Control", "Shift", "Option", "Command"];
 
 /// The settings of voice, as `jellymoon hear --settings` prints them.
@@ -71,16 +73,32 @@ pub fn voice(home: &Path) -> Result<Voice, Error> {
         }
     }
     let (key, language) = (key.unwrap_or_else(|| KEY.to_string()), language.unwrap_or_else(|| LANGUAGE.to_string()));
-    if !is_key(&key) {
+    checked(&key, &language)?;
+    Ok(Voice { key, language })
+}
+
+/// Refuses a key or a language that is not one. A value that holds a character that cannot be seen is not named
+/// back: cleaned, it would read as a value that is right. A key held with Shift alone is refused too: it is how
+/// capitals and signs are typed, and the system would take them from every program.
+fn checked(key: &str, language: &str) -> Result<(), Error> {
+    for (name, value) in [("key", key), ("language", language)] {
+        if holds_unseen(value) {
+            return Err(refused(format!("the {name} holds a character that cannot be seen")));
+        }
+    }
+    if !is_key(key) {
         let takes = "is not one or more of Control, Shift, Option and Command, each once, and then one of A to Z, \
                      0 to 9, F1 to F12 or Space, joined by +";
-        return Err(refused(format!("the key \"{}\" {takes}", line(&key, SHOWN))));
+        return Err(refused(format!("the key \"{}\" {takes}", line(key, SHOWN))));
     }
-    if !is_language(&language) {
-        let shown = line(&language, SHOWN);
+    if key.starts_with("Shift+") && key.matches('+').count() == 1 {
+        return Err(refused(SHIFT_ALONE));
+    }
+    if !is_language(language) {
+        let shown = line(language, SHOWN);
         return Err(refused(format!("the language \"{shown}\" is not `default` or a tag such as en-US")));
     }
-    Ok(Voice { key, language })
+    Ok(())
 }
 
 /// What is between a value's two quotes, when it has no quote and no backslash in it.

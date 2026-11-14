@@ -19,7 +19,7 @@ fn working(going: usize) -> Value {
 }
 
 /// A `jellymoon hear` that goes on: events are written to it one at a time.
-struct Hearing {
+pub struct Hearing {
     going: Going,
     events: Option<ChildStdin>,
     printed: Receiver<String>,
@@ -33,7 +33,7 @@ impl World {
         self
     }
 
-    fn hearing(&self, more: &[&str]) -> Hearing {
+    pub fn hearing(&self, more: &[&str]) -> Hearing {
         let logs = self.logs();
         let mut command = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
         command.args(["hear", "--date", DAY, "--logs", logs.to_str().unwrap()]).args(more);
@@ -57,18 +57,18 @@ impl World {
 }
 
 impl Hearing {
-    fn feed(&mut self, event: &str) {
+    pub fn feed(&mut self, event: &str) {
         writeln!(self.events.as_mut().unwrap(), "{event}").unwrap();
     }
 
     /// The next line it printed. It is waited for half a minute.
-    fn line(&self) -> Value {
+    pub fn line(&self) -> Value {
         let line = self.printed.recv_timeout(Duration::from_secs(30)).expect("no line was printed");
         serde_json::from_str(&line).unwrap()
     }
 
     /// Ends its input: it exits 0, having printed nothing more.
-    fn end(mut self) {
+    pub fn end(mut self) {
         drop(self.events.take());
         let from = Instant::now();
         let status = loop {
@@ -127,7 +127,34 @@ fn without_run_no_harness_is_started_and_with_no_harness_the_wish_is_kept_and_th
     let printed = w.hear(&["--run"], &events);
     assert_eq!(printed[3..], [with(cannot(why), "made", json!("m1"))]);
     assert_eq!(w.made_wishes(), Some(json!([made("m1", SAID, "alpha")])), "the wish is kept as it was made");
+    // What the tick that made the wish refused is said for six seconds from that tick.
     assert!(w.starts() == 0 && !w.jm("copies").exists());
+    let said_at = |at: u64| {
+        let mut w = heard_world().with_repo();
+        fs::create_dir(w.at("empty")).unwrap();
+        w.vars.push(("PATH", w.at("empty").into()));
+        w.hear(&["--run"], &[&events[..], &[tick(at)]].concat())[4..].to_vec()
+    };
+    assert_eq!((said_at(10_999), said_at(11_000)), (vec![], vec![quiet()]));
+}
+
+// A run that was named and had ended by the time its asker was answered is said as `jellymoon wish --run` says
+// it: the wish is kept, and the line carries how its run ended. A run is said to be going once its harness began
+// (`run/apart.rs`), so the made-up agent's stream here does not start as a run's: it never began, and it is ended.
+#[test]
+fn with_run_a_run_that_ended_at_once_is_said_as_it_ended() {
+    let mut events = hold(0, SAID);
+    events.push(tick(5000));
+    let mut w = heard_world().with_repo();
+    // No answer comes for a run that goes and has said nothing, so one that ended is not said to go.
+    w.vars.push(("JELLYMOON_TEST_APART_QUIET_MS", "30000".into()));
+    w.play("first", 13);
+    let printed = w.hear(&["--run"], &events);
+    w.run_ended("m1");
+    let kept = w.kept("m1");
+    let why = kept["why"].as_str().expect("the wish says how its run ended");
+    assert_eq!((&kept["state"], why.contains("run r")), (&json!("needs_you"), true), "{why}");
+    assert_eq!(printed[3..], [with(cannot(why), "made", json!("m1"))]);
 }
 
 #[test]
@@ -159,7 +186,7 @@ fn the_day_s_runs_give_working_asks_and_waits_with_no_hearing_at_all() {
     assert_eq!(w.at_rest(), with(jelly("asks", ASKS, "", "", 0), "question", question.clone()));
     // What is heard is shown before any of it, and what is refused too.
     let mut events = vec![tick(0), DOWN.to_string(), tick(1000), UP.to_string(), fin(SAID), ear_cannot("failed")];
-    events.extend([tick(5000), tick(7000)]);
+    events.extend([tick(1000), tick(5000), tick(7000)]);
     let asks = with(jelly("asks", ASKS, "", "", 0), "question", question);
     let want = [
         asks.clone(),

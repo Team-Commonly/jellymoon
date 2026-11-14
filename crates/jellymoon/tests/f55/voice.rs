@@ -60,7 +60,7 @@ fn the_file_names_the_key_and_the_language() {
     let text =
         "# the key that is held\r\nkey = \"Control+Option+Command+Shift+F12\"\r\n  language=\"zh-Hans-CN\"  \r\n";
     assert_eq!(w.voice(text), voice("Control+Option+Command+Shift+F12", "zh-Hans-CN"));
-    for key in ["Command+A", "Shift+Z", "Control+0", "Option+9", "Control+F1", "Shift+Command+Space"] {
+    for key in ["Command+A", "Option+Z", "Control+0", "Option+9", "Control+F1", "Shift+Command+Space"] {
         assert_eq!(w.voice(&format!("key = \"{key}\"\n"))["key"], key);
     }
     for language in ["default", "en", "fil", "en-GB", "es-419", "zh-Hant", "sr-Latn-RS"] {
@@ -102,6 +102,20 @@ fn a_key_core_does_not_know_is_refused_in_one_line_that_names_it() {
     let secret = hub_key();
     let line = w.unused(&format!("key = \"Control+{secret}\"\n"));
     assert!(!shows(&line, &secret) && line.starts_with("the key \"Control+"), "{line}");
+    // A key or a language that holds what cannot be seen would be named back as one that reads right: it is not named.
+    for unseen in ["Control+Shift+Space\u{200b}", "Con\u{2065}trol+Space", "Control+\u{1b}[31mSpace"] {
+        let line = w.unused(&format!("key = \"{unseen}\"\n"));
+        assert_eq!(line, "the key holds a character that cannot be seen", "{unseen:?}");
+    }
+    let line = w.unused("language = \"en\u{feff}-US\"\n");
+    assert_eq!(line, "the language holds a character that cannot be seen");
+    // Shift alone is how capitals and signs are typed: such a key would take them from every program.
+    for typing in ["Shift+A", "Shift+Space", "Shift+7", "Shift+F5"] {
+        let line = w.unused(&format!("key = \"{typing}\"\n"));
+        let alone = "the key is held with Shift alone, which typing uses: add Control, Option or Command to it";
+        assert_eq!(line, alone, "{typing}");
+    }
+    assert_eq!(w.voice("key = \"Control+Shift+A\"\n")["key"], "Control+Shift+A");
     let line = w.unused(&format!("key = \"{}\"\n", "Hyper+".repeat(50)));
     assert!(line.starts_with("the key \"Hyper+Hyper+") && line.chars().count() < 40 + takes.len() + 12, "{line}");
 }

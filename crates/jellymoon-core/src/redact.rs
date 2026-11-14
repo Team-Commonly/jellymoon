@@ -74,6 +74,11 @@ static UNSEEN: LazyLock<Regex> = LazyLock::new(|| {
     ))
 });
 
+/// Whether a text holds something that is [`UNSEEN`]: shown cleaned, it would read as a text it is not.
+pub(crate) fn holds_unseen(text: &str) -> bool {
+    UNSEEN.is_match(text)
+}
+
 /// Strips what is [`UNSEEN`] and shortens every token to its prefix and an ellipsis. The stripping goes first, so a
 /// colour code before a key, or a character planted inside one, cannot hide it.
 fn string(text: &str) -> String {

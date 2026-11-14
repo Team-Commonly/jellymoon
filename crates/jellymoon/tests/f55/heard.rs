@@ -63,9 +63,10 @@ pub fn with(mut line: Value, name: &str, value: Value) -> Value {
     line
 }
 
-/// A hold of a second that ends with `words` as its final words, on a clock that starts at `from`.
+/// A hold of a second that ends with `words` as its final words, on a clock that starts at `from`, and the tick
+/// that follows them, at the same time: what was heard or refused is counted from it.
 pub fn hold(from: u64, words: &str) -> Vec<String> {
-    vec![tick(from), DOWN.to_string(), tick(from + 1000), UP.to_string(), fin(words)]
+    vec![tick(from), DOWN.to_string(), tick(from + 1000), UP.to_string(), fin(words), tick(from + 1000)]
 }
 
 /// A world in the system's temporary folder, where nothing was typed yet.

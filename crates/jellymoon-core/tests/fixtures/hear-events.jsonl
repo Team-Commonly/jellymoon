@@ -4,9 +4,11 @@
 {"tick":1200}
 {"key":"up"}
 {"said":"final","words":"make the uploader retry twice"}
-{"tick":3200}
-{"tick":5200}
+{"tick":1250}
+{"tick":3250}
+{"tick":5250}
 {"key":"down"}
 {"tick":5300}
 {"said":"cannot","why":"microphone_refused"}
-{"tick":11300}
+{"tick":5350}
+{"tick":11350}

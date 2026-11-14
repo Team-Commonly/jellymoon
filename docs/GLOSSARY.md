@@ -41,5 +41,7 @@ The words below mean exactly this in code, docs and tests. A new term is added h
 | **heard wish** | Words the ear returned for one hold, once they passed the door a typed wish passes. It is shown for four seconds and is kept nowhere; then it is made a wish, unless the person took it back | a made wish, which is kept and cannot be taken back |
 | **taken back** | A heard wish the person dropped by pressing the key again before its four seconds ended: nothing was written and nothing started | tossed, which refuses what a run left; cancelled, which is how a run ended |
 | **jellyfish** | The small window at the screen's edge that shows, in core's words, what is being heard and what the runs are doing. It takes no keys; a tap on it opens the page | a little one, which stands for one wish on a page; the shell's page window |
+| **project** | A repo's top folder, called by its last name. A wish is made for one, and a run works in a copy of it | the folder's path, which is the person's and is never printed; a page |
+| **known project** | A project on the list Jellymoon keeps in its own folder: a run started in it, or the person named it or made it (ADR 0020). It is offered on a day nothing was typed in it | a project typed in that day, which is offered with no list |
 | **feature** | One entry of `feature_list.json`: a test at the binary's boundary that defines done | an issue |
 | **unit** | One piece of work given to one worker: usually one feature, and one file in `progress/` | a feature, though often one-to-one |

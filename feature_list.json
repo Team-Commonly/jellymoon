@@ -572,6 +572,78 @@
         "F54",
         "F60"
       ]
+    },
+    {
+      "id": "F62",
+      "category": "journal",
+      "description": "Jellymoon keeps a list of the projects it knows, and offers them",
+      "steps": [
+        "`jellymoon project add --repo <folder>` lists a repo's top folder under its last name; `project list` prints names and the day each was last used, and never a path; `project forget <name>` removes the line and touches nothing else",
+        "a run that starts writes its repo on the list, after every check a run makes of a repo today",
+        "`jellymoon wish --run` and `jellymoon run` find a listed project's repo on a day nothing was typed in it, and core's `wishable` offers it; a listed folder that is gone, is no repo's top, is not the person's own or is switched off is not offered and starts nothing",
+        "a name both typed in that day and listed, with two folders that are not one repo, is not offered and starts nothing, in words that name `--repo` and `project forget`; a second folder under a listed name is refused"
+      ],
+      "test": "cargo test -p jellymoon --test f62",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F63",
+      "category": "journal",
+      "description": "A day nothing was typed has a page of its made wishes and an entry",
+      "steps": [
+        "on a day with a made wish or a project on offer, and no turn typed, `jellymoon page` prints the day's made wishes as page data and makes no call to a model",
+        "`jellymoon-app layout` on that day places the made wishes, the entry and a chip for each project on offer"
+      ],
+      "test": "cargo test -p jellymoon-app --test f63",
+      "passes": false,
+      "blockedBy": [
+        "F62"
+      ]
+    },
+    {
+      "id": "F64",
+      "category": "journal",
+      "description": "A folder dropped on the window is a project",
+      "steps": [
+        "a folder dropped on the window is handed to core off the window's thread; core's answer, the name or a refusal, is one note, and the path is never drawn",
+        "the project has a chip at once"
+      ],
+      "test": "cargo test -p jellymoon-app --test f64",
+      "passes": false,
+      "blockedBy": [
+        "F62"
+      ]
+    },
+    {
+      "id": "F65",
+      "category": "journal",
+      "description": "A new project is a folder Jellymoon makes",
+      "steps": [
+        "`jellymoon project new <name>` makes the folder inside the one folder of the home that Jellymoon owns, makes it a repo with one empty first commit under the name a run commits under, and lists it",
+        "a name that is a path, is taken or is no project's name is refused and nothing is made; with no git, it says so and makes nothing; nothing is ever written outside that one folder",
+        "a wish for the new project starts a run in it"
+      ],
+      "test": "cargo test -p jellymoon --test f65",
+      "passes": false,
+      "blockedBy": [
+        "F62"
+      ]
+    },
+    {
+      "id": "F66",
+      "category": "journal",
+      "description": "The entry offers to start something new",
+      "steps": [
+        "with no project on offer the entry's place holds one choice, in core's words, and a field for a name",
+        "the name is handed to core's `project new` off the window's thread; the new project has a chip, or core's refusal is one note"
+      ],
+      "test": "cargo test -p jellymoon-app --test f66",
+      "passes": false,
+      "blockedBy": [
+        "F63",
+        "F65"
+      ]
     }
   ]
 }

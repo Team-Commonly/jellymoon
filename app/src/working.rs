@@ -8,6 +8,8 @@
 //! A file of the work is a note's text and nothing else: it is never handed to a program, and this crate starts
 //! none. The repo is not named here: core finds it as the run did, by the wish's project in the day's logs.
 
+use std::panic::{self, AssertUnwindSafe};
+
 use jellymoon_core::{RunOptions, Waits, WorkDone, WorkTap};
 use sticker_kit::{Note, Scene};
 
@@ -35,6 +37,10 @@ pub struct Worked {
 
 /// A tap on a choice carried to core: the window runs it off its own thread.
 pub type Working = Box<dyn FnOnce() -> Worked + Send>;
+
+/// The call to core a tap is carried by: `jellymoon_core::work_tapped`, of the wish's run.
+pub trait Ask: FnOnce(&Today, &str, WorkTap) -> WorkDone + Send + 'static {}
+impl<A: FnOnce(&Today, &str, WorkTap) -> WorkDone + Send + 'static> Ask for A {}
 
 fn text(id: String, title: &str, body: Vec<String>, options: Vec<&str>) -> Note {
     Note::Text { id, title: title.to_string(), body, options: options.into_iter().map(str::to_string).collect() }
@@ -159,22 +165,38 @@ impl OnShow {
     /// another thread. None for any other note and for an option that is not drawn. While core is at work for a
     /// wish its choices are not on show, so a second tap does nothing.
     pub fn working(&mut self, note: &str, index: usize) -> Option<(Scene, Working)> {
-        let (sure, wish) = match (note.strip_prefix(WORK), note.strip_prefix(SURE)) {
-            (Some(wish), _) => (false, wish.to_string()),
-            (_, Some(wish)) => (true, wish.to_string()),
-            _ => return None,
-        };
-        let drawn = |one: &Note| matches!(one, Note::Text { id, options, .. } if id == note && index < options.len());
-        let at = self.scene.notes.iter().position(drawn)?;
+        self.carrying(note, index, |today, wish, tap| {
+            jellymoon_core::work_tapped(&today.home, &today.run_of(wish), tap)
+        })
+    }
+
+    /// [`OnShow::working`] with the call to core given, so a test can stand in for it. Which tap it is, core says
+    /// from what was drawn: the words of the option and of its note. Nothing is decided here by a note's id but
+    /// whose wish it is.
+    ///
+    /// A carried call that panics is caught where it runs, and answered with a note in core's words in place of
+    /// the one that says what is being done: the wish is never left as being worked on for good.
+    pub fn carrying(&mut self, note: &str, index: usize, ask: impl Ask) -> Option<(Scene, Working)> {
+        let wish = note.strip_prefix(WORK).or_else(|| note.strip_prefix(SURE))?.to_string();
+        let at = self.scene.notes.iter().position(|one| id_of(one) == Some(note))?;
+        let Note::Text { body, options, .. } = &self.scene.notes[at] else { return None };
         let after = self.scene.notes.iter().find_map(|one| file_of(one, &wish)).unwrap_or(0);
-        let tap = WorkTap::of(index, sure, after)?;
+        let tap = WorkTap::of(options.get(index)?, body, after)?;
         self.scene.notes[at] = text(format!("{BUSY}{wish}"), tap.doing(), Vec::new(), Vec::new());
         let (today, page, from) = (self.today.clone(), self.page.clone(), self.scene.clone());
         let work = move || {
-            let done = jellymoon_core::work_tapped(&today.home, &today.run_of(&wish), tap);
-            let notes = notes_of(&wish, done);
-            let mut now = today.again(page.as_ref(), &from);
-            put(&mut now, &wish, notes.clone());
+            let failed = tap.failed();
+            let asked = || {
+                let notes = notes_of(&wish, ask(&today, &wish, tap));
+                let mut now = today.again(page.as_ref(), &from);
+                put(&mut now, &wish, notes.clone());
+                (now, notes)
+            };
+            let (now, notes) = panic::catch_unwind(AssertUnwindSafe(asked)).unwrap_or_else(|_| {
+                let (notes, mut now) = (notes_of(&wish, failed), from.clone());
+                put(&mut now, &wish, notes.clone());
+                (now, notes)
+            });
             Worked { seen: Seen { from, now }, wish, notes }
         };
         Some((self.scene.clone(), Box::new(work)))

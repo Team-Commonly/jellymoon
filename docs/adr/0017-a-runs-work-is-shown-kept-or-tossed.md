@@ -343,7 +343,7 @@ The whole account, with every sentence and what is not closed, is `docs/developm
    refused whole.
 3. **Which wishes have work that waits is core's** (`waits`, printed by `jellymoon run waiting`), and so is every
    sentence a page says of it, the order of the choices, and the one more yes before files the person's tools
-   obey are kept. The first `Keep it` of such work changes nothing; the second choice is `--with-settings`.
+   obey are kept. The first `Keep it` of such work changes nothing; what the second is, the gate changed (6).
 4. **A file's text is a note's body.** The kit got one new note, `Text`, that knows nothing of Jellymoon: texts
    drawn as text, the first that fit, and a count of the rest. Nothing is scrolled.
 5. **The thread that hears out what a git says on stderr** (`call.rs`, `collect`) ends when every holder of the
@@ -353,6 +353,15 @@ The whole account, with every sentence and what is not closed, is `docs/developm
    killed. So git leaves nothing that holds the pipe, and the thread ends with it. A `git` on `PATH` that is
    itself a program which leaves a child holding stderr would keep one thread and one pipe per call until that
    child ends; nothing here bounds that, and no test of F47 covers it.
+6. **Found by the gate on F47: the second yes kept files the note never named.** The note named the files the
+   person's tools obey among the first 200 of the work, and the yes kept all of them. Now the names are of the
+   whole work, by the one rule a look and a keep judge a file by. A yes is a yes to what was drawn: the tap
+   carries the note's words, and core keeps only when it would say the same words now. The keep itself lands no
+   such file but the ones named, under its own lock, so a keep that was never asked once more lands none. The
+   shell decides none of it: core makes the tap from the words of the option and of its note.
+7. **Open risk: a `git` that is a launcher.** Where `git` is a small program that starts the real one and waits
+   (Git for Windows), a call that is killed at its limit ends the launcher, and the real git can go on with the
+   pipe open. One reading thread then stays until that inner git ends. This is not bounded yet.
 
 ## What comes after
 

@@ -289,20 +289,32 @@ that fit and counts the rest in a last line, `+N more`.
 - **A tap on a choice** (`OnShow::working`) puts `busy-<wish>` in the note's place at once, with what core says is
   being done, and leaves core's part as work the window runs off its own thread (`showing.rs`, `After::Work`).
   The window's thread opens no file for it. While that note is on show, a second tap on a choice of that wish and
-  a tap on its little one do nothing: one tap of a wish is carried at a time.
+  a tap on its little one do nothing: one tap of a wish is carried at a time. Which tap it is, core says
+  (`WorkTap::of`) from what was drawn: the words of the option and the words of its note. A note's id tells the
+  app whose wish it is and nothing else.
+- **A carried call that panics** is caught where it runs (`OnShow::carrying`). `busy-<wish>` gives way to
+  `said-<wish>` with core's words that it did not finish and that what was changed is not known, and the wish
+  can be opened again.
 - **`Show me`** adds `file-<n>-<wish>` under the work's note: one file's text, as `run show --file` prints it.
   The next tap shows the next file. The app starts no program and hands nothing to the system's opener
   (`the_shell_starts_no_program_and_hands_nothing_to_the_system_s_opener` reads `app/src` for it).
 - **`Keep it` and `Toss it`** end in one note, `said-<wish>`, with core's sentence: the work was kept and the wish
   stays done with its star, or tossed and the wish is drawn let go, or core's reason why not, with nothing changed.
-- **Files the person's tools obey**: the first `Keep it` changes nothing and shows `sure-<wish>`, which names them
-  and offers `Keep it, with those files`. Only that tap keeps them.
+- **Files the person's tools obey**: the first `Keep it` changes nothing and shows `sure-<wish>`. Its first text
+  names every such file of the whole work, past the 200 files a list of the work holds too: the first six by
+  name, and a count of the rest. It offers `Keep it, with those files`. A tap on that carries the note's words
+  to core, and core keeps the work only when it would draw the same words of the work as it is now; a yes to a
+  note that names other files is refused, with nothing changed. The keep itself lands no such file but the ones
+  named, so a `Keep it` that was not asked once more lands none: where only the merge would bring one (the
+  person renamed a file the work edits to a name their tools obey), it is refused, with nothing changed.
 - **The repo is not named by the app.** Core finds it as the run did: the folder of the wish's project typed in
   the day's logs, with the folders switched off left out, and checked against the run's record. When it is not
   found the note says so in core's words and has no choice.
 
-`app/tests/f47.rs` and `f47/asked.rs` follow all of it through `Showing`, in a made-up window that is a process
-of its own (`tests/support/tapper.rs`), since the git core starts takes the variables of the process it is in.
+`app/tests/f47.rs`, `f47/asked.rs` and `f47/named.rs` follow all of it through `Showing`, in a made-up window that
+is a process of its own (`tests/support/tapper.rs`), since the git core starts takes the variables of the process
+it is in. `f47/gone.rs` follows, in the test's own process, what asks no repo: a choice of work that waits no
+more, and a carried call that panics.
 Not tested: the tap itself, on a real window. Not done: a file's text is not scrolled, so of a long file the
 first lines are drawn and the rest counted.
 

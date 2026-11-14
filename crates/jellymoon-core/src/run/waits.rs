@@ -2,16 +2,17 @@
 //! "Work that waits"). [`waits`] says whether a made wish's work waits and what it is, [`waiting`] says it of every
 //! made wish of a day, and [`work_tapped`] is a tap on one of the choices under it. Nothing new is decided of a
 //! repo here: the work is read by `show.rs`, kept by `keep.rs` and tossed by `toss.rs`, each with its own checks.
-//! What is here is which wishes those are, the order of the choices, the one more yes a keep of files the
-//! person's tools obey takes, and every word a page says of any of it, so that a shell words nothing.
+//! What is here is which wishes those are, the choices, the one more yes a keep of files the person's tools obey
+//! takes and what that yes is a yes to, and every word a page says of any of it, so that a shell words nothing
+//! and decides nothing.
 
 use std::fmt;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::keep::{KeepOptions, keep_run};
-use super::show::{self, FileChange, FileKind, Shown, ShownFile, show_file, show_run};
+use super::keep::keep_named;
+use super::show::{self, FileChange, FileKind, Shown, ShownFile, show_file};
 use super::toss::toss_run;
 use super::{RunOptions, refused};
 use crate::{Error, Wish, WishState, wish};
@@ -44,7 +45,8 @@ pub struct Waits {
     pub names: Vec<String>,
     /// How many files of the work there are after those.
     pub more: usize,
-    /// The listed files the person's tools obey. A keep from a page takes one more yes when there is one.
+    /// Every file of the whole work the person's tools obey, past the listed ones too, by its cleaned name.
+    /// A keep from a page takes one more yes when there is one.
     pub obeyed: Vec<String>,
     /// What waits, in core's fixed words, or why the work was not read: a refusal of `run show`.
     pub why: String,
@@ -66,15 +68,16 @@ impl fmt::Display for Waiting {
 }
 
 /// One choice under work that waits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkTap {
     /// The next file after the one of that number that is text to show: from the first again past the last.
     Show {
         after: usize,
     },
-    /// `sure`: the person was told which files their tools obey, and chose to keep them too.
+    /// `yes_to`: the words of the note that named the files the person's tools obey, when the choice was the
+    /// one under it that keeps them too. The keep is done only when the work's note would say those words now.
     Keep {
-        sure: bool,
+        yes_to: Option<Vec<String>>,
     },
     Toss,
 }
@@ -91,14 +94,28 @@ pub enum WorkDone {
 }
 
 impl WorkTap {
-    /// The tap on choice `index`, from 0, in the order of [`Waits::choices`]. `sure` is whether the choices were
-    /// the ones that ask once more, and `after` the number of the file on show, or 0.
-    pub fn of(index: usize, sure: bool, after: usize) -> Option<WorkTap> {
-        [WorkTap::Show { after }, WorkTap::Keep { sure }, WorkTap::Toss].get(index).copied()
+    /// The tap on the choice that reads `choice`, under a note whose words are `drawn`: what a page drew is all
+    /// a tap is made of. `after` is the number of the file on show, or 0. None for words that are no choice.
+    pub fn of(choice: &str, drawn: &[String], after: usize) -> Option<WorkTap> {
+        match choice {
+            SHOW => Some(WorkTap::Show { after }),
+            KEEP => Some(WorkTap::Keep { yes_to: None }),
+            KEEP_TOO => Some(WorkTap::Keep { yes_to: Some(drawn.to_vec()) }),
+            TOSS => Some(WorkTap::Toss),
+            _ => None,
+        }
+    }
+
+    /// What a page says of a tap whose carrying failed before core answered. It ends what the page said was
+    /// being done, so the wish can be opened again.
+    pub fn failed(&self) -> WorkDone {
+        let unknown = "Jellymoon failed before it had an answer, so what was changed is not known here. Open the \
+                       wish again to see how its work stands.";
+        WorkDone::Said("That did not finish.", unknown.to_string())
     }
 
     /// What a page says while the tap is at work.
-    pub fn doing(self) -> &'static str {
+    pub fn doing(&self) -> &'static str {
         match self {
             WorkTap::Show { .. } => "That work is being read.",
             WorkTap::Keep { .. } => "That work is being kept.",
@@ -106,7 +123,7 @@ impl WorkTap {
         }
     }
 
-    fn undone(self) -> &'static str {
+    fn undone(&self) -> &'static str {
         match self {
             WorkTap::Show { .. } => "No file of that work was shown.",
             WorkTap::Keep { .. } => "That work was not kept.",
@@ -135,13 +152,14 @@ impl Waits {
         lines
     }
 
-    /// The choices under the note, in the order a tap counts them: none of work that was not read, so a tap
-    /// there changes nothing. `sure` gives the ones that ask once more.
+    /// The choices under the note: none of work that was not read, so a tap there changes nothing. `sure` gives
+    /// the ones under the note that asks once more.
     pub fn choices(&self, sure: bool) -> Vec<&'static str> {
         if self.read { vec![SHOW, if sure { KEEP_TOO } else { KEEP }, TOSS] } else { Vec::new() }
     }
 
-    /// The title and the words of the note that asks once more before a keep.
+    /// The title and the words of the note that asks once more before a keep: the files of the whole work the
+    /// person's tools obey, the first [`NAMED`] by name and the rest counted. A yes is a yes to these words.
     pub fn asks(&self) -> (&'static str, Vec<String>) {
         let kept = "Nothing was changed. Kept, they are in your checkout, where your tools read them.";
         ("This work touches files your tools obey.", vec![named(&self.obeyed, 0), kept.to_string()])
@@ -177,8 +195,8 @@ pub fn stands(wish: &Wish) -> (&'static str, Vec<String>) {
 fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
     let found = show::waiting(home, options)?;
     let (wish, run, said) = (options.wish.clone(), found.run, found.made.said);
-    let shown = match show_run(home, options) {
-        Ok(shown) => shown,
+    let (shown, obeyed) = match show::whole(home, options) {
+        Ok(whole) => whole,
         Err(unread) => {
             let (names, obeyed, why) = (Vec::new(), Vec::new(), unread.to_string());
             let waits =
@@ -190,7 +208,6 @@ fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
     let (made, changed, removed) = (count(FileChange::Made), count(FileChange::Changed), count(FileChange::Removed));
     let names: Vec<String> = shown.files.iter().take(NAMED).map(|file| file.name.clone()).collect();
     let more = shown.files.len() - names.len() + shown.more;
-    let obeyed = shown.files.iter().filter(|file| file.obeyed).map(|file| file.name.clone()).collect();
     let first = if shown.more > 0 { format!(" of its first {}", shown.files.len()) } else { String::new() };
     let why = format!("the work of run {run} waits: files made {made}, changed {changed}, removed {removed}{first}");
     Some((Waits { wish, run, said, read: true, made, changed, removed, names, more, obeyed, why }, Some(shown)))
@@ -228,10 +245,15 @@ fn next(home: &Path, options: &RunOptions, shown: &Shown, after: usize) -> Resul
 
 /// A tap on a choice under the work of the wish's run. Nothing is done unless the work waits now and was read
 /// from its repo now: a toss asked where the repo is not found would remove what the run left in the home and
-/// leave its branch, and no tap is let begin that. A keep of work that touches files the person's tools obey
-/// changes nothing the first time and names them; only a tap that is `sure` keeps them.
+/// leave its branch, and no tap is let begin that.
+///
+/// A keep of work that touches files the person's tools obey, anywhere in the whole work, changes nothing the
+/// first time and names them. A yes to that note keeps them only when the note would say the same words of the
+/// work as it is now; and the keep itself lands no such file but the ones named (`keep_named`), so a keep that
+/// was never asked once more lands none.
 pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone {
-    let no = |why: String| WorkDone::Said(tap.undone(), format!("{why}."));
+    let undone = tap.undone();
+    let no = |why: String| WorkDone::Said(undone, format!("{why}."));
     let Some((waits, shown)) = read(home, options) else {
         return no("no work of that wish waits any more, so nothing was changed".to_string());
     };
@@ -241,8 +263,14 @@ pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone 
             Ok(file) => WorkDone::Shown(waits, file),
             Err(unshown) => no(unshown.to_string()),
         },
-        WorkTap::Keep { sure: false } if !waits.obeyed.is_empty() => WorkDone::Asks(waits),
-        WorkTap::Keep { sure } => match keep_run(home, options, KeepOptions { ask: false, with_settings: sure }) {
+        WorkTap::Keep { yes_to: None } if !waits.obeyed.is_empty() => WorkDone::Asks(waits),
+        WorkTap::Keep { yes_to: Some(drawn) } if drawn != waits.asks().1 => no(format!(
+            "the files of the work of run {} that your tools obey are not the ones that note named, so it was not \
+             kept, and nothing was changed",
+            waits.run
+        )),
+        // Here every file of the work the person's tools obey was named and agreed to, or there is none.
+        WorkTap::Keep { .. } => match keep_named(home, options, &waits.obeyed) {
             Ok(kept) => WorkDone::Said("That work was kept.", format!("{}.", kept.why)),
             Err(unkept) => no(unkept.to_string()),
         },

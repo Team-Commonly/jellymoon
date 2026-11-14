@@ -288,8 +288,10 @@ and writes nothing:
   commit, and whose work is neither kept nor tossed. That is asked of the home alone. A wish with no run, a run
   that changed nothing, failed, was cancelled or asks, and a record from before F48 are not listed.
 - **What is said of each.** The list `run show` gives, counted: files made, changed and removed, the first six
-  names as `run show` cleans them, how many more there are, and the listed files the person's tools obey. When
-  the list stopped at 200 files, `why` ends ` of its first 200`.
+  names as `run show` cleans them, and how many more there are. When the list stopped at 200 files, `why` ends
+  ` of its first 200`. `obeyed` is not of the list: it names every file of the whole work the person's tools
+  obey, the ones past the 200 too, by the rule a look and a keep judge a file by (`obeyed.rs`,
+  `named`). Of the files past the list only the paths are read.
 - **A repo that is not found** (or any other refusal of `run show`) still lists the wish, with `read: false`, no
   counts, no name, and `why` holding that refusal. A page then offers no choice.
 - **The choices and their words** are core's too: `Waits::title`, `lines`, `choices` and `asks`, `ShownFile::title`
@@ -297,9 +299,15 @@ and writes nothing:
 - **A tap on a choice** is `work_tapped`. It does nothing unless the work waits now and was read from its repo
   now, so a toss never begins where the repo is not found: `run toss` there would remove the copy and leave the
   branch. `Show me` gives the next file after the one on show that is text `run show --file` prints, from the
-  first again past the last, asking for at most eight. `Keep it` of work with a file the person's tools obey
-  changes nothing and gives the names back; only the tap that follows, on `Keep it, with those files`, is a keep
-  `--with-settings`. Any other keep is `run keep`, and `Toss it` is `run toss`, each with its own checks.
+  first again past the last, asking for at most eight; a file the work removed is not asked for.
+- **A keep from a page.** `Keep it` of work with a file the person's tools obey, anywhere in the whole work,
+  changes nothing and gives the names back: `Waits::asks` words them, the first six by name and the rest
+  counted. A tap is made of what was drawn (`WorkTap::of`: the option's words and its note's words), and the tap
+  on `Keep it, with those files` carries that note's words. The keep is done only when `asks` would say the
+  same words of the work as it is now; else it is refused, with nothing changed. The keep is `run keep` with one
+  difference (`keep.rs`, `keep_named`): of the files the person's tools obey it lands only the ones named, and a
+  keep that was not asked once more names none. So work whose merge would bring such a file that no note named
+  is refused whole, in a page's words and not `--with-settings`. `Toss it` is `run toss`, with its own checks.
 
 `work_tapped` has no command of its own: it is proved at the app's boundary (`app/tests/f47.rs`), and what it
 calls is proved at `run show`, `run keep` and `run toss`. `run waiting` is `crates/jellymoon/tests/f47.rs`, and

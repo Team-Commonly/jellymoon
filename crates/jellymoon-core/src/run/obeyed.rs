@@ -8,6 +8,18 @@
 
 use std::ops::RangeInclusive;
 
+use super::show::NAME_MAX;
+use crate::still::statement;
+
+/// A file's name as it is printed, and whether the person's tools obey the file. Asked of the name as git keeps
+/// it and as it is printed: a character nobody sees must not hide one. The one rule of a look, a keep and a page.
+pub(super) fn named(path: &[u8]) -> (String, bool) {
+    let raw = String::from_utf8_lossy(path);
+    let name = statement(&raw, NAME_MAX);
+    let obeys = obeyed(&raw) || obeyed(&name);
+    (name, obeys)
+}
+
 /// Names the person's tools obey, wherever they are in a path: the settings, rules, hooks and servers of coding
 /// agents and editors, what a shell, git or cargo loads on entering the folder, and what a forge runs on a push.
 /// A name with a `/` is obeyed only as those folders, one inside the other. A warning, not a wall: work that

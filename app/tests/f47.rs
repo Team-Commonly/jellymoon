@@ -10,6 +10,8 @@
 mod asked;
 #[path = "f47/gone.rs"]
 mod gone;
+#[path = "f47/named.rs"]
+mod named;
 mod support;
 
 use std::fs;

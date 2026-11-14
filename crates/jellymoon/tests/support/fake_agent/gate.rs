@@ -67,6 +67,7 @@ pub fn play(script: &str, number: usize, rec: &Path) -> i32 {
             1
         }
         "rules" => rules(),
+        "many" | "past" | "walls" => beside(script),
         other => round_2(other, number, rec),
     }
 }
@@ -113,6 +114,30 @@ fn rules() -> i32 {
     fs::write("CLAUDE.md", "rules from the run\n").unwrap();
     let odd = "<script>open('file:///')</script>\n\u{1b}[31m[tap](https://example.test)\n$(touch ran)\n";
     fs::write("0.md", odd).unwrap();
+    ends_with(&success())
+}
+
+/// F47, after its gate. The work, and beside it: `many`, 230 plain files, with one file the person's tools obey
+/// before them and two after, past what a list of the work holds; `past`, the same with only one such file, after;
+/// `walls`, seven files of one word longer than is read of a file, which are text and cannot be shown.
+fn beside(script: &str) -> i32 {
+    edits();
+    if script == "walls" {
+        for n in 0..7 {
+            fs::write(format!("c{n}.txt"), "x".repeat(64 * 1024 + 1)).unwrap();
+        }
+        return ends_with(&success());
+    }
+    for n in 0..230 {
+        fs::write(format!("f{n:03}.txt"), "plain\n").unwrap();
+    }
+    let below = Path::new("zz").join(".claude");
+    fs::create_dir_all(&below).unwrap();
+    if script == "many" {
+        fs::write("CLAUDE.md", "rules from the run\n").unwrap();
+        fs::write(below.join("settings.json"), "{}\n").unwrap();
+    }
+    fs::write(Path::new("zz").join(".envrc"), "PATH_add bin\n").unwrap();
     ends_with(&success())
 }
 

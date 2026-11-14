@@ -86,7 +86,8 @@ pub(crate) struct Named<'a> {
     pub end: &'a str,
 }
 
-/// The first [`LISTED`] files of a run's work, in git's own order, and how many more there are. No word of git's
+/// The first [`LISTED`] files of a run's work, in git's own order, and the paths of the files after them, of
+/// which nothing else is read. No word of git's
 /// is kept of any failure here. With `only`, a file's number from 1, that file alone is read past its size: one
 /// file is printed without a read of any other file's bytes.
 ///
@@ -100,7 +101,7 @@ pub(crate) fn work_of(
     run: &str,
     named: Option<&Named>,
     only: Option<usize>,
-) -> Result<(Vec<WorkFile>, usize), Unread> {
+) -> Result<(Vec<WorkFile>, Vec<Vec<u8>>), Unread> {
     let git = Git::find(&Places::of(home).runs, true).map_err(|_| Unread::Home)?;
     let found = git.discover(folder).map_err(|_| Unread::Repo)?;
     // A bare repo has no checkout to be inside of.
@@ -121,10 +122,9 @@ pub(crate) fn work_of(
         return Err(Unread::Start);
     }
     let mut files = changed(&repo, &parent, &tip)?;
-    let more = files.len().saturating_sub(LISTED);
-    files.truncate(LISTED);
+    let past = files.split_off(LISTED.min(files.len())).into_iter().map(|file| file.path).collect();
     read(&repo, &mut files, only).ok_or(Unread::Repo)?;
-    Ok((files, more))
+    Ok((files, past))
 }
 
 /// Every file that differs between two commits or trees, in git's own order, with no size and no bytes read: the

@@ -100,3 +100,34 @@ fn work_whose_repo_is_not_found_is_listed_with_core_s_reason_and_no_file() {
     );
     assert_eq!((w.persons(&repo), w.branches(&repo), w.record(&run), w.copies()), before);
 }
+
+#[test]
+fn every_file_of_the_whole_work_the_person_s_tools_obey_is_named_as_a_keep_asked_names_them() {
+    let w = world();
+    let repo = w.repo("alpha");
+    let (wish, run) = ran_as(&w, &repo, "many");
+    let listed = waiting(&w, Some(&repo), &[]);
+    let [one] = &listed[..] else { panic!("{listed:?}") };
+    // 236 files, of which a list holds 200: two of the three the person's tools obey are past it.
+    let obeyed = json!(["CLAUDE.md", "zz/.claude/settings.json", "zz/.envrc"]);
+    let why = format!("the work of run {run} waits: files made 198, changed 1, removed 1 of its first 200");
+    assert_eq!((&one["obeyed"], &one["more"], &one["why"]), (&obeyed, &json!(230), &json!(why)));
+    assert_eq!(one["names"], json!(["CLAUDE.md", "a.txt", "b.txt", "f000.txt", "f001.txt", "f002.txt"]));
+    let asked = w.run(&["run", "keep", "--ask", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    assert_eq!(printed(&asked)["settings"], obeyed, "{}", asked.stderr);
+}
+
+#[test]
+fn a_run_whose_record_names_no_commits_has_no_work_that_waits() {
+    let w = world();
+    let repo = w.repo("alpha");
+    let (_, run) = ran_as(&w, &repo, "edits");
+    assert_eq!(waiting(&w, Some(&repo), &[]).len(), 1);
+    // A record from before a record named its repo and its commits: its work is shown, and is not a page's.
+    let mut record = w.record(&run);
+    for name in ["repo", "start", "end"] {
+        assert!(record.as_object_mut().unwrap().remove(name).is_some(), "{name}");
+    }
+    std::fs::write(w.jm("runs").join(&run).join("run.json"), record.to_string()).unwrap();
+    assert_eq!(waiting(&w, Some(&repo), &[]), [] as [Value; 0]);
+}

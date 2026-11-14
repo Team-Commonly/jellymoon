@@ -455,6 +455,123 @@
         "F47",
         "F52"
       ]
+    },
+    {
+      "id": "F55",
+      "category": "journal",
+      "description": "Words heard are a heard wish: shown for four seconds, then made a wish through the door a typed wish passes",
+      "steps": [
+        "`jellymoon hear` reads events on its input, one JSON object a line (the key down and up, the ear's partial words, final words or refusal, and `tick` with milliseconds), and prints one line of JSON for each change of what the jellyfish shows: its state, core's fixed sentence, the words, the project and the time left; no clock is read",
+        "final words pass the door a typed wish passes and are a heard wish for 4000 ms; at the end they are made a wish by the call the entry uses, and with `--run` its run is started as `jellymoon wish --run` starts one; until then nothing is written",
+        "a key pressed while a heard wish is shown takes it back with nothing written: held, it listens anew; a hold under 300 ms hears nothing; words that are empty once cleaned make nothing; a hold ends by itself at 60 seconds",
+        "the project is the day's last made wish's when core still offers it, else the only one offered; with none, and for words the door refuses, a ninth wish and a day that is locked, nothing is kept and the line carries core's reason",
+        "`voice.toml` in Jellymoon's home names the key and the language: a file that is absent gives the defaults, and a key or a language core does not know is refused in one line that names it",
+        "`crates/jellymoon/tests/f30.rs` holds F30's three steps for a wish entered through `jellymoon hear`"
+      ],
+      "test": "cargo test -p jellymoon --test f55",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F56",
+      "category": "journal",
+      "description": "The jellyfish is drawn from core's state with the kit's edge scene",
+      "steps": [
+        "the kit has an edge scene, which knows nothing of Jellymoon: a character with a mood, a bubble of text lines, a ring from full to empty, and a pure function that places a corner window on a screen inside the room the system leaves",
+        "`jellymoon-app layout --jelly <file, or - for stdin> --screen <W>x<H>` reads one line of `jellymoon hear` and prints the pieces of the jellyfish and of its bubble, and where both windows stand; each of the seven states prints its own, and `quiet`, `working` and `waits` print no bubble",
+        "the words so far, a heard wish's words, a project's name and a run's question are drawn as text, cut to the bubble with an ellipsis; a question is drawn apart from Jellymoon's own words; markup or a control character changes nothing but the text",
+        "when more than one state holds, core's order decides, and the day's made wishes give `working`, `asks` and `waits` with no hearing at all"
+      ],
+      "test": "cargo test -p jellymoon-app --test f56",
+      "passes": false,
+      "blockedBy": [
+        "F55"
+      ]
+    },
+    {
+      "id": "F57",
+      "category": "journal",
+      "description": "The jellyfish is a window at the screen's edge that takes no keys, and the app lives with the page closed",
+      "steps": [
+        "the app opens the jellyfish as a pop-up window of the kit's edge scene, see-through, never focused, on the primary display where the kit's placing says; a unit test holds the options asked, and on the Mac GPUI's test platform opens it and draws each state",
+        "the bubble is a second window opened while core's state has words and removed when it has none; no window is resized or moved",
+        "closing the page's window leaves the app and the jellyfish; opening the app again, or a tap on the jellyfish, shows the page; Quit ends both; `JELLYMOON_QUIT_AFTER` still ends the app",
+        "once a second the jellyfish is drawn again from what core keeps, off the window's thread, as the page's look is"
+      ],
+      "test": "cargo test -p jellymoon-app --test f57",
+      "passes": false,
+      "blockedBy": [
+        "F56"
+      ]
+    },
+    {
+      "id": "F58",
+      "category": "journal",
+      "description": "A key held anywhere on the system is carried to core as a hold",
+      "steps": [
+        "`hearing.rs` in the app, with no GPUI in it, carries key and ear events to core's hearing off the window's thread and gives back core's state; a made-up window that is a program of its own, fed a script of events, makes a wish and starts its run with no key, no microphone and no window",
+        "the window registers the key `voice.toml` names with the system through `global-hotkey`, on the Mac and on Windows, and carries its press and its release; no permission is asked for",
+        "a key the system refuses to register leaves core's fixed sentence at the jellyfish, and every typed wish works as before",
+        "core and the `jellymoon` binary may list neither `global-hotkey` nor `ear`: `cargo xtask check` refuses it"
+      ],
+      "test": "cargo test -p jellymoon-app --test f58",
+      "passes": false,
+      "blockedBy": [
+        "F55",
+        "F57"
+      ]
+    },
+    {
+      "id": "F59",
+      "category": "journal",
+      "description": "The ear turns what is said into words on the machine, and sends no sound anywhere",
+      "steps": [
+        "`crates/ear` is a crate that knows nothing of Jellymoon, with a safe surface of plain data: partial words, final words, or one of a closed list of refusals; `unsafe` is written in one file for each system and nowhere else in the workspace, and `cargo xtask check` holds that",
+        "on the Mac the ear asks Apple's recognizer for on-device recognition only: it is started with `requiresOnDeviceRecognition` set, and when the recognizer does not support that for the language it starts nothing and says `NotOnDevice`",
+        "the `ear` binary, started with no bundle or with a bundle whose `Info.plist` lacks either usage string, opens nothing and prints `NotBundled`; a language name that is not one prints `NoSuchLanguage`; on a system with no ear it prints `NoEar`",
+        "`app/macos/bundle.sh` writes `NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription` into the bundle's `Info.plist`, in the words of ADR 0019",
+        "no sound is written to disk, and none is held once the key is let go"
+      ],
+      "test": "cargo test -p ear --test f59",
+      "passes": false,
+      "blockedBy": [
+        "a person's spike of the ear in a bundle signed as a release is (ADR 0019, spike 1)"
+      ]
+    },
+    {
+      "id": "F60",
+      "category": "journal",
+      "description": "Holding the key and saying a wish starts a run on it, and every refusal is said in core's words",
+      "steps": [
+        "a hold opens the ear and the words it sends reach core's hearing; the wish is made and its run started as F55 says, with the app not in front",
+        "the shell reads its bundle's `Info.plist` as a file before the ear is opened, and with a usage string missing the ear is never opened",
+        "at the first hold the jellyfish says, in core's fixed words, that the system will ask twice and that the sound stays on the machine; nothing is asked at launch",
+        "each refusal of the ear (no microphone, the microphone refused, speech refused, not on the device, no such language, not bundled, failed, no ear) is one fixed sentence of core's that names what to turn on and where, shown once per hold",
+        "a made-up ear, fed text, drives every case through a made-up window that is a program of its own; no sound file is in the repo"
+      ],
+      "test": "cargo test -p jellymoon-app --test f60",
+      "passes": false,
+      "blockedBy": [
+        "F58",
+        "F59"
+      ]
+    },
+    {
+      "id": "F61",
+      "category": "journal",
+      "description": "A held key answers a run that asks",
+      "steps": [
+        "while the jellyfish shows a run's question, a hold's final words are an answer, shown for the same 4000 ms and taken back the same way; at the end they are given to core's answer, off the window's thread",
+        "`jellymoon hear` prints the same states for an answer, and names the wish it answers; with two runs that ask, the one whose question is shown is answered",
+        "an answer core refuses leaves core's reason at the jellyfish and starts nothing"
+      ],
+      "test": "cargo test -p jellymoon-app --test f61",
+      "passes": false,
+      "blockedBy": [
+        "F52",
+        "F54",
+        "F60"
+      ]
     }
   ]
 }

@@ -143,14 +143,15 @@ struct Plan {
 fn plan(cx: &Ctx, seen: &[At], total: usize, way: Way, room: f32) -> Plan {
     let gap = cx.px(way.1);
     let more = gap + more_sheet(cx, 0, total, 0.0).rect.h;
-    let needs: Vec<f32> = seen.iter().map(|(index, note)| height_needed(cx, note, *index, way) + gap).collect();
-    let (mut placed, mut used) = (0, 0.0);
-    for (index, need) in needs.iter().enumerate() {
-        let kept = if index + 1 < total { more } else { 0.0 };
+    let (mut needs, mut placed, mut used) = (Vec::new(), 0, 0.0);
+    for (at, (index, note)) in seen.iter().enumerate() {
+        let kept = if at + 1 < total { more } else { 0.0 };
+        let need = height_needed(cx, note, *index, way, room - used - kept) + gap;
+        needs.push(need);
         if used + need - gap + kept > room {
             break;
         }
-        (placed, used) = (index + 1, used + need);
+        (placed, used) = (at + 1, used + need);
     }
     Plan { way, gap, more, needs, placed, used }
 }
@@ -164,11 +165,14 @@ fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
 }
 
 /// The height a note takes. A list is measured with two rows: one of its own and the line that counts the rest.
-fn height_needed(cx: &Ctx, note: &Note, index: usize, way: Way) -> f32 {
+fn height_needed(cx: &Ctx, note: &Note, index: usize, way: Way, room: f32) -> f32 {
     let least = match note {
         Note::List { title, rows } => list(cx, title, &rows[..rows.len().min(2)], 0.0, f32::INFINITY),
+        // A text with options needs its whole body, where `room` has that: its options are drawn under no less.
         Note::Text { id, title, body, options } => {
-            text(cx, (id, title), (body, options), 0.0, (f32::INFINITY, LEAST_TEXT_LINES), way.0)
+            let sized = |room, most| text(cx, (id, title), (body, options), 0.0, (room, most), way.0);
+            let whole = sized(room, MAX_TEXT_LINES).filter(|sheet| !sheet.options.is_empty());
+            whole.or_else(|| sized(f32::INFINITY, LEAST_TEXT_LINES))
         }
         _ => fill(cx, note, index, 0.0, f32::INFINITY, way).map(|(sheet, ..)| sheet),
     };

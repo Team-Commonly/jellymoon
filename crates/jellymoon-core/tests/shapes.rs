@@ -197,3 +197,50 @@ fn what_run_waiting_prints_round_trips_byte_for_byte() {
     assert_eq!((unread.read, unread.lines().len(), unread.choices(false).len()), (false, 2, 0));
     assert!(serde_json::from_str::<Waiting>(&example.replace("\"day\"", "\"date\"")).is_err());
 }
+
+#[test]
+fn the_note_that_asks_names_each_file_in_a_text_of_its_own_and_past_six_a_page_has_no_yes() {
+    let waiting: Waiting = serde_json::from_str(&fixture("waiting.json")).unwrap();
+    let with = |obeyed: usize, names: usize, more: usize| {
+        let mut waits = waiting.waits[0].clone();
+        waits.obeyed = (0..obeyed).map(|n| format!("d{n}/CLAUDE.md")).collect();
+        (waits.names, waits.more) = ((0..names).map(|n| format!("f{n}.txt")).collect(), more);
+        waits
+    };
+    let told = "Nothing was changed. Kept, they are in your checkout, where your tools read them.";
+    let over = "A note cannot name every file of this work that your tools obey, each whole and as it is, so a page \
+                does not keep it. It is kept from the command line, with `jellymoon run keep`.";
+    for obeyed in 1..=6 {
+        let waits = with(obeyed, 3, 0);
+        let (title, body) = waits.asks();
+        let [names @ .., last] = &body[..] else { panic!("{body:?}") };
+        assert_eq!(
+            (title, names, last.as_str()),
+            ("This work touches files your tools obey.", &waits.obeyed[..], told)
+        );
+        assert!(body.iter().all(|text| !text.contains(" more")), "a count stands for a name: {body:?}");
+        assert_eq!(waits.choices(true), ["Show me", "Keep it, with those files", "Toss it"]);
+        assert_eq!((waits.choices(false), waits.lines().len()), (vec!["Show me", "Keep it", "Toss it"], 3));
+    }
+    // Past six, and of any number when one name is not printed as git keeps it: the yes would be to other words.
+    for (obeyed, plain) in [(7, true), (8, true), (300, true), (1, false), (6, false)] {
+        let mut waits = with(obeyed, 3, 0);
+        waits.plain = plain;
+        assert_eq!(waits.asks().1, [over, "Nothing was changed."], "no name, and no count of them");
+        assert_eq!(
+            (waits.choices(true), waits.choices(false)),
+            (vec!["Show me", "Toss it"], vec!["Show me", "Toss it"])
+        );
+        assert_eq!(waits.lines().last().map(String::as_str), Some(over));
+    }
+    // The work's own line names six files and counts every other: the ones after them, and the ones past a list.
+    let line = |names: usize, more: usize| with(0, names, more).lines().pop().unwrap();
+    let six = "f0.txt, f1.txt, f2.txt, f3.txt, f4.txt, f5.txt";
+    assert_eq!((line(6, 0), line(6, 230)), (six.to_string(), format!("{six}, and 230 more")));
+    assert_eq!((line(8, 0), line(8, 3)), (format!("{six}, and 2 more"), format!("{six}, and 5 more")));
+    // Names too long for one line of a note are counted too: the line is one a note draws whole.
+    let mut long = with(0, 0, 4);
+    long.names = (0..3).map(|n| format!("{n}{}", "x".repeat(158))).collect();
+    let line = long.lines().pop().unwrap();
+    assert_eq!((line.chars().count(), line.ends_with("x, and 5 more")), (320 + 12, true), "{line}");
+}

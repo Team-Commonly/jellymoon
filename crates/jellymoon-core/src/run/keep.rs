@@ -5,6 +5,7 @@
 //! that is printed: no refusal holds a word of git's, of the agent's or of the repo's, and a name is printed
 //! only as data, cleaned at the door every kept text is cleaned at.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::path::Path;
 
@@ -33,7 +34,7 @@ pub struct KeepOptions {
 }
 
 /// Which files the person's tools obey a keep may land: all of them or none, as a command says, or for a page
-/// only the ones the person was named and said yes to.
+/// the ones the person was named and said yes to, which must be the work's own, all of them and no other.
 #[derive(Clone, Copy)]
 enum Yes<'a> {
     Said(bool),
@@ -80,7 +81,8 @@ pub fn keep_run(home: &Path, options: &RunOptions, how: KeepOptions) -> Result<K
 }
 
 /// A keep from a page (`waits.rs`): [`keep_run`], but of the files the person's tools obey it lands only those
-/// `named`, by their names as they are printed. Work that would land another is refused whole, in a page's words.
+/// `named`, by their names as they are printed, and only when they are every such file of the work. Work that
+/// would land another, or that has not one of them, is refused whole, in a page's words.
 pub(super) fn keep_named(home: &Path, options: &RunOptions, named: &[String]) -> Result<Kept, Error> {
     keep(home, options, false, Yes::To(named))
 }
@@ -155,7 +157,10 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, yes: Yes) -> Resu
         record.work = done.then_some(WorkState::Kept);
         record::write(of.home, &run, &record).is_ok()
     };
-    let landed = copy::keep(of, &mut |files| judge(files, yes, &mut settings), &mut note);
+    // The first files asked of are the work's own; the ones after are what one new commit would land of it.
+    let mut works = true;
+    let mut judged = |files: &[Touched]| judge(files, yes, std::mem::take(&mut works), &mut settings);
+    let landed = copy::keep(of, &mut judged, &mut note);
     match landed {
         Ok(landed) => {
             let own = landed.commit.as_deref() == Some(of.named.end);
@@ -168,8 +173,8 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, yes: Yes) -> Resu
         }
         Err(unkept) if of.ask => Ok(unfit(run, wish, unkept, settings)),
         Err(Unkept::Settings) if matches!(yes, Yes::To(_)) => Err(refused(format!(
-            "the work of run {run} would put a file your tools obey in your checkout that no note named, so it was \
-             not kept, and nothing was changed"
+            "the files of the work of run {run} that your tools obey, as it would land in your checkout, are not \
+             the ones a note named, so it was not kept, and nothing was changed"
         ))),
         Err(unkept) => Err(refused(words(&run, unkept))),
     }
@@ -216,8 +221,14 @@ fn short(onto: &str) -> Option<String> {
 /// Whether work that touches these files may be kept. Each name is asked as git keeps it and as it is printed
 /// (`show.rs`). Another repo's entry, or `.gitmodules`, is never kept. A file the person's tools obey is kept
 /// only when `yes` says so, and its cleaned name is added to `settings` either way, up to the most a list has.
-fn judge(files: &[Touched], yes: Yes, settings: &mut Vec<String>) -> Result<(), Unkept> {
-    let mut unasked = false;
+/// A page's yes is to names, held as a set: each such file must be among them, and when the files are the
+/// `works` own, each name must be one of theirs.
+fn judge(files: &[Touched], yes: Yes, works: bool, settings: &mut Vec<String>) -> Result<(), Unkept> {
+    let asked: HashSet<&str> = match yes {
+        Yes::To(names) => names.iter().map(String::as_str).collect(),
+        Yes::Said(_) => HashSet::new(),
+    };
+    let (mut unasked, mut found) = (false, HashSet::new());
     for file in files {
         let raw = String::from_utf8_lossy(&file.path);
         let (name, obeys) = named(&file.path);
@@ -227,14 +238,16 @@ fn judge(files: &[Touched], yes: Yes, settings: &mut Vec<String>) -> Result<(), 
         if obeys {
             unasked |= match yes {
                 Yes::Said(all) => !all,
-                Yes::To(names) => !names.contains(&name),
+                Yes::To(_) => !asked.contains(name.as_str()),
             };
             if settings.len() < LISTED && !settings.contains(&name) {
-                settings.push(name);
+                settings.push(name.clone());
             }
+            found.insert(name);
         }
     }
-    if unasked { Err(Unkept::Settings) } else { Ok(()) }
+    let other = works && matches!(yes, Yes::To(_)) && asked.iter().any(|name| !found.contains(*name));
+    if unasked || other { Err(Unkept::Settings) } else { Ok(()) }
 }
 
 /// What a keep did, or would do. `own` is whether what landed is the run's own commit.

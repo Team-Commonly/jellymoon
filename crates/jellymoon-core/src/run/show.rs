@@ -244,18 +244,25 @@ pub(super) fn unread_words(run: &str, unread: Unread, asked: &Asked) -> String {
 
 /// The files of a finished run's work. Nothing of it is written anywhere.
 pub fn show_run(home: &Path, options: &RunOptions) -> Result<Shown, Error> {
-    whole(home, options).map(|(shown, _)| shown)
+    whole(home, options).map(|(shown, ..)| shown)
 }
 
 /// [`show_run`], and every file of the whole work the person's tools obey, by its name as it is printed, in git's
-/// order: the files past the list are judged by the rule the listed ones are (`obeyed.rs`).
-pub(super) fn whole(home: &Path, options: &RunOptions) -> Result<(Shown, Vec<String>), Error> {
+/// order: the files past the list are judged by the rule the listed ones are (`obeyed.rs`). And whether each of
+/// those names is printed as git keeps it, byte for byte: cleaning changed none of it.
+pub(super) fn whole(home: &Path, options: &RunOptions) -> Result<(Shown, Vec<String>, bool), Error> {
     let work = work(home, options, None)?;
     let files = work.files.iter().enumerate().map(|(at, file)| entry(at + 1, file)).collect();
-    let paths = work.files.iter().map(|file| &file.path).chain(&work.past);
-    let obeyed = paths.map(|path| named(path)).filter(|(_, obeys)| *obeys).map(|(name, _)| name).collect();
+    let (mut obeyed, mut plain) = (Vec::new(), true);
+    for path in work.files.iter().map(|file| &file.path).chain(&work.past) {
+        let (name, obeys) = named(path);
+        if obeys {
+            plain &= name.as_bytes() == &path[..];
+            obeyed.push(name);
+        }
+    }
     let (run, wish, more) = (work.run, options.wish.clone(), work.past.len());
-    Ok((Shown { run, wish, work: work.state, files, more, most: LISTED }, obeyed))
+    Ok((Shown { run, wish, work: work.state, files, more, most: LISTED }, obeyed, plain))
 }
 
 /// File `n` of that list as its text. Refused in fixed words, with no byte of the file: a number that names no

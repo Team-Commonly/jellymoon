@@ -5,6 +5,13 @@
 //! What is here is which wishes those are, the choices, the one more yes a keep of files the person's tools obey
 //! takes and what that yes is a yes to, and every word a page says of any of it, so that a shell words nothing
 //! and decides nothing.
+//!
+//! The rule of that yes: a page keeps a file the person's tools obey only when that file's name was drawn,
+//! whole, on the note the yes was given under. A count is not a name: the agent picks the files, so it picks
+//! which would fall behind a count. So the note that asks names each such file in a text of its own and counts
+//! none, work with more of them than a note names has no yes on a page at all, and the names the tap carried
+//! are the ones the keep lands (`keep_named`). A name is drawn whole only when it is printed as it is: work with
+//! one that cleaning changed, as a name that looks like a credential is, has no yes on a page either.
 
 use std::fmt;
 use std::path::Path;
@@ -17,8 +24,15 @@ use super::toss::toss_run;
 use super::{RunOptions, refused};
 use crate::{Error, Wish, WishState, wish};
 
-/// The most names of files that are said of a run's work.
+/// The most names of files that are said of a run's work, and the most files the person's tools obey that the
+/// note that asks names. Each is a text of its own there, and a text note draws its choices only under a body
+/// drawn whole: six names of a line each, under the title and over the sentence and the three choices, are what
+/// the smallest window a page is drawn at (960x640) has room for. Longer names take more lines, and then the
+/// note has no choice either.
 const NAMED: usize = 6;
+/// The most characters of names on the line of a work's files. A text note draws 400 characters of one text and
+/// its choices only under texts drawn whole, so a longer line would leave the work with no choice on a page.
+const LINE: usize = 320;
 /// The most files one tap on [`SHOW`] asks for, when one after another cannot be shown.
 const TRIED: usize = 8;
 
@@ -26,6 +40,9 @@ const SHOW: &str = "Show me";
 const KEEP: &str = "Keep it";
 const KEEP_TOO: &str = "Keep it, with those files";
 const TOSS: &str = "Toss it";
+/// What a page says of work it has no yes for: [`Waits::over`].
+const OVER: &str = "A note cannot name every file of this work that your tools obey, each whole and as it is, so a \
+                    page does not keep it. It is kept from the command line, with `jellymoon run keep`.";
 
 /// The work of one made wish's run that waits for the person.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,6 +65,9 @@ pub struct Waits {
     /// Every file of the whole work the person's tools obey, past the listed ones too, by its cleaned name.
     /// A keep from a page takes one more yes when there is one.
     pub obeyed: Vec<String>,
+    /// Whether each of those names is printed as git keeps it, whole and unchanged. One that looks like a
+    /// credential, or holds what is not printed, is not, and a page then has no yes for the work.
+    pub plain: bool,
     /// What waits, in core's fixed words, or why the work was not read: a refusal of `run show`.
     pub why: String,
 }
@@ -75,7 +95,8 @@ pub enum WorkTap {
         after: usize,
     },
     /// `yes_to`: the words of the note that named the files the person's tools obey, when the choice was the
-    /// one under it that keeps them too. The keep is done only when the work's note would say those words now.
+    /// one under it that keeps them too: each name as it was drawn, and after them the note's last sentence. The
+    /// keep is done only when the work's note would say those words now, and it lands those names and no other.
     Keep {
         yes_to: Option<Vec<String>>,
     },
@@ -132,10 +153,19 @@ impl WorkTap {
     }
 }
 
-/// Names on one line, the first [`NAMED`] of them, and how many there are beside.
+/// Names on one line, the first [`NAMED`] of them that are no more than [`LINE`] characters together, and how
+/// many there are beside. Only the note of work that waits says its files so: nothing is kept on the word of it.
 fn named(names: &[String], beside: usize) -> String {
-    let more = names.len().saturating_sub(NAMED) + beside;
-    let said = names.iter().take(NAMED).map(String::as_str).collect::<Vec<_>>().join(", ");
+    let (mut said, mut told) = (String::new(), 0);
+    for name in names.iter().take(NAMED) {
+        if told > 0 && said.chars().count() + 2 + name.chars().count() > LINE {
+            break;
+        }
+        said.push_str(if told > 0 { ", " } else { "" });
+        said.push_str(name);
+        told += 1;
+    }
+    let more = names.len() - told + beside;
     if more > 0 { format!("{said}, and {more} more") } else { said }
 }
 
@@ -145,24 +175,41 @@ impl Waits {
         if self.read { "Work waits for this wish." } else { "Work waits for this wish, and it was not read." }
     }
 
-    /// What the note says: the wish's own words, what waits or why it was not read, and the files' names.
+    /// Whether the work touches more files the person's tools obey than a note names, or one whose name is not
+    /// printed as it is: a page has no yes for it.
+    fn over(&self) -> bool {
+        self.obeyed.len() > NAMED || !self.plain
+    }
+
+    /// What the note says: the wish's own words, what waits or why it was not read, the files' names, and of
+    /// work a page does not keep that it does not.
     pub fn lines(&self) -> Vec<String> {
         let mut lines = vec![format!("“{}”", self.said), format!("{}.", self.why)];
         lines.extend((!self.names.is_empty()).then(|| named(&self.names, self.more)));
+        lines.extend(self.over().then(|| OVER.to_string()));
         lines
     }
 
-    /// The choices under the note: none of work that was not read, so a tap there changes nothing. `sure` gives
-    /// the ones under the note that asks once more.
+    /// The choices under the note: none of work that was not read, so a tap there changes nothing, and no keep
+    /// of work a page does not keep. `sure` gives the ones under the note that asks once more.
     pub fn choices(&self, sure: bool) -> Vec<&'static str> {
-        if self.read { vec![SHOW, if sure { KEEP_TOO } else { KEEP }, TOSS] } else { Vec::new() }
+        match (self.read, self.over()) {
+            (false, _) => Vec::new(),
+            (true, true) => vec![SHOW, TOSS],
+            (true, false) => vec![SHOW, if sure { KEEP_TOO } else { KEEP }, TOSS],
+        }
     }
 
-    /// The title and the words of the note that asks once more before a keep: the files of the whole work the
-    /// person's tools obey, the first [`NAMED`] by name and the rest counted. A yes is a yes to these words.
+    /// The title and the words of the note that asks once more before a keep: every file of the whole work the
+    /// person's tools obey, each name a text of its own, and none counted. A yes is a yes to these names. Of
+    /// work a page has no yes for ([`Waits::over`]) it says so instead, and names none.
     pub fn asks(&self) -> (&'static str, Vec<String>) {
+        let title = "This work touches files your tools obey.";
+        if self.over() {
+            return (title, vec![OVER.to_string(), "Nothing was changed.".to_string()]);
+        }
         let kept = "Nothing was changed. Kept, they are in your checkout, where your tools read them.";
-        ("This work touches files your tools obey.", vec![named(&self.obeyed, 0), kept.to_string()])
+        (title, self.obeyed.iter().cloned().chain([kept.to_string()]).collect())
     }
 }
 
@@ -195,12 +242,12 @@ pub fn stands(wish: &Wish) -> (&'static str, Vec<String>) {
 fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
     let found = show::waiting(home, options)?;
     let (wish, run, said) = (options.wish.clone(), found.run, found.made.said);
-    let (shown, obeyed) = match show::whole(home, options) {
+    let (shown, obeyed, plain) = match show::whole(home, options) {
         Ok(whole) => whole,
         Err(unread) => {
-            let (names, obeyed, why) = (Vec::new(), Vec::new(), unread.to_string());
-            let waits =
-                Waits { wish, run, said, read: false, made: 0, changed: 0, removed: 0, names, more: 0, obeyed, why };
+            let (names, obeyed, plain, why) = (Vec::new(), Vec::new(), true, unread.to_string());
+            let (read, made, changed, removed, more) = (false, 0, 0, 0, 0);
+            let waits = Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why };
             return Some((waits, None));
         }
     };
@@ -210,7 +257,8 @@ fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
     let more = shown.files.len() - names.len() + shown.more;
     let first = if shown.more > 0 { format!(" of its first {}", shown.files.len()) } else { String::new() };
     let why = format!("the work of run {run} waits: files made {made}, changed {changed}, removed {removed}{first}");
-    Some((Waits { wish, run, said, read: true, made, changed, removed, names, more, obeyed, why }, Some(shown)))
+    let read = true;
+    Some((Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why }, Some(shown)))
 }
 
 /// The work of the wish's run, when it waits for the person: the run finished with its one commit, and its record
@@ -248,9 +296,11 @@ fn next(home: &Path, options: &RunOptions, shown: &Shown, after: usize) -> Resul
 /// leave its branch, and no tap is let begin that.
 ///
 /// A keep of work that touches files the person's tools obey, anywhere in the whole work, changes nothing the
-/// first time and names them. A yes to that note keeps them only when the note would say the same words of the
-/// work as it is now; and the keep itself lands no such file but the ones named (`keep_named`), so a keep that
-/// was never asked once more lands none.
+/// first time and names them, each in a text of its own; of more than a note names, and of a name that is not
+/// printed as it is, it only says that a page does not keep the work, whatever the tap. A yes to that note
+/// keeps them only when the note would say the same words of the work as it is now; and the keep itself is
+/// given the names the tap carried, and lands the work only when they are the files of it the person's tools
+/// obey, all of them and no other (`keep_named`). So a keep that was never asked once more lands none.
 pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone {
     let undone = tap.undone();
     let no = |why: String| WorkDone::Said(undone, format!("{why}."));
@@ -263,17 +313,23 @@ pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone 
             Ok(file) => WorkDone::Shown(waits, file),
             Err(unshown) => no(unshown.to_string()),
         },
+        WorkTap::Keep { .. } if waits.over() => WorkDone::Asks(waits),
         WorkTap::Keep { yes_to: None } if !waits.obeyed.is_empty() => WorkDone::Asks(waits),
         WorkTap::Keep { yes_to: Some(drawn) } if drawn != waits.asks().1 => no(format!(
             "the files of the work of run {} that your tools obey are not the ones that note named, so it was not \
              kept, and nothing was changed",
             waits.run
         )),
-        // Here every file of the work the person's tools obey was named and agreed to, or there is none.
-        WorkTap::Keep { .. } => match keep_named(home, options, &waits.obeyed) {
-            Ok(kept) => WorkDone::Said("That work was kept.", format!("{}.", kept.why)),
-            Err(unkept) => no(unkept.to_string()),
-        },
+        // The names the tap carried are the note's texts but the last, its sentence: none, of a keep that was
+        // not asked once more. The keep lands the work only when they are the files of it the tools obey.
+        WorkTap::Keep { yes_to } => {
+            let drawn = yes_to.unwrap_or_default();
+            let named = drawn.split_last().map_or(&[][..], |(_, named)| named);
+            match keep_named(home, options, named) {
+                Ok(kept) => WorkDone::Said("That work was kept.", format!("{}.", kept.why)),
+                Err(unkept) => no(unkept.to_string()),
+            }
+        }
         WorkTap::Toss => match toss_run(home, options) {
             Ok(tossed) => WorkDone::Said("That work was tossed.", format!("{}.", tossed.why)),
             Err(untossed) => no(untossed.to_string()),

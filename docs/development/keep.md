@@ -110,8 +110,9 @@ Every check comes first, in this order. Each is a refusal below.
 4. If that commit already holds `end` in its history, nothing is landed.
 5. The files the work touches are judged: another repo's entry and `.gitmodules` never, a file tools obey only
    with `--with-settings`. A keep from a page (`keep_named`, [show.md](show.md#work-that-waits-jellymoon-run-waiting))
-   is judged here by the same rule, with the names the person said yes to in place of the flag: a file tools
-   obey that is not among them is refused.
+   is judged here by the same rule, with the names the person said yes to in place of the flag, held as a set:
+   the work's files tools obey must be those names, all of them and no other, and of what the merged tree
+   changes (6) each such file must be among them. Else it is refused.
 6. If the branch is not at `start`: `start` is in its history, git is 2.38 or later, git merges the two in the
    store, the files the merged tree changes are judged again (the person's own rename can carry the work into a
    file their tools obey), and git names an author.

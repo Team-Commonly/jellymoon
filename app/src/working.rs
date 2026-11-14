@@ -171,8 +171,12 @@ impl OnShow {
     }
 
     /// [`OnShow::working`] with the call to core given, so a test can stand in for it. Which tap it is, core says
-    /// from what was drawn: the words of the option and of its note. Nothing is decided here by a note's id but
-    /// whose wish it is.
+    /// from what was drawn: the words of the option and the texts of its note. Nothing is decided here by a
+    /// note's id but whose wish it is.
+    ///
+    /// The note's texts are what was drawn: the kit's view gives a tap only on an option it placed, and it places
+    /// a text note's options only under a body drawn whole, every text to its last character. So the names a
+    /// yes carries to core are names the person was shown.
     ///
     /// A carried call that panics is caught where it runs, and answered with a note in core's words in place of
     /// the one that says what is being done: the wish is never left as being worked on for good.

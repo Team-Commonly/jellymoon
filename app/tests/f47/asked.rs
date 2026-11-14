@@ -124,6 +124,7 @@ fn work_that_touches_files_the_person_s_tools_obey_names_them_and_is_kept_only_a
 
     let told = "Nothing was changed. Kept, they are in your checkout, where your tools read them.";
     let again = ["Show me", "Keep it, with those files", "Toss it"];
+    // One file, and its name is a text of its own.
     let note = ("sure-m1", "This work touches files your tools obey.", vec!["CLAUDE.md", told], again.to_vec());
     assert_eq!(texts(asks.as_ref().unwrap()), [note]);
     assert_eq!(texts(at_once.as_ref().unwrap()), [("busy-m1", "That work is being kept.", vec![], vec![])]);

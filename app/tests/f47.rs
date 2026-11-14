@@ -8,6 +8,8 @@
 
 #[path = "f47/asked.rs"]
 mod asked;
+#[path = "f47/drawn.rs"]
+mod drawn;
 #[path = "f47/gone.rs"]
 mod gone;
 #[path = "f47/named.rs"]

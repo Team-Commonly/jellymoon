@@ -48,7 +48,7 @@ fn run_waiting_lists_the_made_wishes_whose_finished_work_waits_with_counts_and_n
     let why = format!("the work of run {run} waits: files made 1, changed 1, removed 1");
     let want = json!({
         "wish": wish, "run": run, "said": SAID, "read": true, "made": 1, "changed": 1, "removed": 1,
-        "names": ["a.txt", "b.txt", "n.txt"], "more": 0, "obeyed": [], "why": why,
+        "names": ["a.txt", "b.txt", "n.txt"], "more": 0, "obeyed": [], "plain": true, "why": why,
     });
     assert_eq!(waiting(&w, Some(&repo), &[]), [want]);
     assert_eq!((w.persons(&repo), w.branches(&repo), support::tree(&w.jm("pages")), w.record(&run)), before);
@@ -88,7 +88,7 @@ fn work_whose_repo_is_not_found_is_listed_with_core_s_reason_and_no_file() {
     let why = format!("no folder of the name the wish gives was typed in on {DAY}; name the folder with --repo");
     let want = json!({
         "wish": wish, "run": run, "said": SAID, "read": false, "made": 0, "changed": 0, "removed": 0,
-        "names": [], "more": 0, "obeyed": [], "why": why,
+        "names": [], "more": 0, "obeyed": [], "plain": true, "why": why,
     });
     assert_eq!(listed, [want]);
     // A folder of another name is not the wish's repo either.

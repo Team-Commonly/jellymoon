@@ -48,7 +48,7 @@ fn another_repos_entry_is_never_kept_and_a_file_tools_obey_only_when_asked() {
     let file = |path: &str, repo: bool| Touched::of(path.as_bytes(), repo);
     let asked = |files: &[Touched], with: bool| {
         let mut settings = Vec::new();
-        (judge(files, Yes::Said(with), &mut settings), settings)
+        (judge(files, Yes::Said(with), true, &mut settings), settings)
     };
     assert_eq!(asked(&[file("src/a.rs", false)], false), (Ok(()), vec![]));
     let obeyed = [file("src/a.rs", false), file(".claude/settings.json", false), file("CLAUDE.md", false)];
@@ -56,12 +56,28 @@ fn another_repos_entry_is_never_kept_and_a_file_tools_obey_only_when_asked() {
     assert_eq!(asked(&obeyed, false), (Err(Unkept::Settings), names.clone()));
     assert_eq!(asked(&obeyed, true), (Ok(()), names.clone()));
     // A page's keep lands the ones the person was named and no other: every one of the work must be among them.
-    let to = |named: &[String]| judge(&obeyed, Yes::To(named), &mut Vec::new());
-    assert_eq!(
-        (to(&names), to(&names[..1]), to(&names[1..]), to(&[])),
-        (Ok(()), Err(Unkept::Settings), Err(Unkept::Settings), Err(Unkept::Settings))
-    );
-    assert_eq!(judge(&[file("src/a.rs", false)], Yes::To(&[]), &mut Vec::new()), Ok(()));
+    let to = |named: &[String], works: bool| judge(&obeyed, Yes::To(named), works, &mut Vec::new());
+    for works in [true, false] {
+        assert_eq!(
+            (to(&names, works), to(&names[..1], works), to(&names[1..], works), to(&[], works)),
+            (Ok(()), Err(Unkept::Settings), Err(Unkept::Settings), Err(Unkept::Settings))
+        );
+    }
+    // And every name must be one of the work's: a yes to a file past the first that the work has not is no yes
+    // to this work. What one new commit would land of the work may be fewer files than the work's.
+    let (mut other, mut swapped) = (names.clone(), names.clone());
+    other.push(".envrc".to_string());
+    swapped[1] = "AGENTS.md".to_string();
+    assert_eq!((to(&other, true), to(&other, false)), (Err(Unkept::Settings), Ok(())));
+    assert_eq!((to(&swapped, true), to(&swapped, false)), (Err(Unkept::Settings), Err(Unkept::Settings)));
+    let plain = [file("src/a.rs", false)];
+    assert_eq!(judge(&plain, Yes::To(&[]), true, &mut Vec::new()), Ok(()));
+    assert_eq!(judge(&plain, Yes::To(&names[..1]), true, &mut Vec::new()), Err(Unkept::Settings));
+    // The names are a set: as many as a work may have are asked of in one pass.
+    let many: Vec<String> = (0..20_000).map(|n| format!("d{n}/CLAUDE.md")).collect();
+    let files: Vec<Touched> = many.iter().map(|name| file(name, false)).collect();
+    assert_eq!(judge(&files, Yes::To(&many), true, &mut Vec::new()), Ok(()));
+    assert_eq!(judge(&files, Yes::To(&many[1..]), true, &mut Vec::new()), Err(Unkept::Settings));
     // Another repo's entry is refused whatever was asked for, and before a file tools obey is.
     for repos in
         [file("sub", true), file(".gitmodules", false), file("x/.GITMODULES", false), file(".gitmodules ", false)]

@@ -345,7 +345,8 @@ The whole account, with every sentence and what is not closed, is `docs/developm
    sentence a page says of it, the order of the choices, and the one more yes before files the person's tools
    obey are kept. The first `Keep it` of such work changes nothing; what the second is, the gate changed (6).
 4. **A file's text is a note's body.** The kit got one new note, `Text`, that knows nothing of Jellymoon: texts
-   drawn as text, the first that fit, and a count of the rest. Nothing is scrolled.
+   drawn as text, the first that fit, and a count of the rest. Nothing is scrolled. Its options are placed only
+   under a body drawn whole (8).
 5. **The thread that hears out what a git says on stderr** (`call.rs`, `collect`) ends when every holder of the
    pipe has closed it. In the app, which stays open, that is every call: core's git is given no hook, no
    file-system monitor, no filter, no merge driver and no transport, its one step that is not plumbing (the
@@ -358,10 +359,33 @@ The whole account, with every sentence and what is not closed, is `docs/developm
    whole work, by the one rule a look and a keep judge a file by. A yes is a yes to what was drawn: the tap
    carries the note's words, and core keeps only when it would say the same words now. The keep itself lands no
    such file but the ones named, under its own lock, so a keep that was never asked once more lands none. The
-   shell decides none of it: core makes the tap from the words of the option and of its note.
+   shell decides none of it: core makes the tap from the words of the option and of its note. That was not
+   enough (8).
 7. **Open risk: a `git` that is a launcher.** Where `git` is a small program that starts the real one and waits
    (Git for Windows), a call that is killed at its limit ends the launcher, and the real git can go on with the
    pipe open. One reading thread then stays until that inner git ends. This is not bounded yet.
+8. **Found by the second gate on F47: the yes could still be given to a name the person did not see.** The rule
+   now: a page keeps a file the person's tools obey only when that file's name was drawn, whole, on the note the
+   yes was given under. After (6) the note's words were what the yes was to, and three things stood between the
+   words and what a person saw: the note named six files and counted the rest; the kit cut a text at 400
+   characters, and the names were one text; and where the body did not fit, the kit drew `+N more` and the
+   options all the same. A count is not a name. The agent picks the files of its work, so it picks their names
+   and their order, and so which fall behind `and N more`, behind a cut, or off the note: a count would let it
+   put the one file that matters where the person is shown a number. So:
+   - core names each such file in a text of its own and counts none, and work with more of them than a note
+     names (six: what the smallest window has room for, a line a name) has no yes on a page; core says it is
+     kept from the command line, with `run keep`, and says no more of that command than that;
+   - a name is drawn whole only when it is printed as git keeps it. Work with one that cleaning changed (a name
+     that looks like a credential is printed `[redacted]`, and two such files as the same word) has no yes on a
+     page either, in the same sentence;
+   - the kit places a text note's options only under a body drawn whole, every text to its last character, and
+     plans such a note with the room of its whole body, so a tap, which finds only a placed option, is under
+     names that were drawn;
+   - the tap carries the names, and they bind: under the keep's lock the work's files the person's tools obey
+     must be those names as a set, all of them and no other. The names read again at the tap are not what is
+     kept.
+   What a person may still not see is a name's own shape: one that reads like a count, and one with a character
+   that joins without being seen. These are open.
 
 ## What comes after
 

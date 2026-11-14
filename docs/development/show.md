@@ -281,7 +281,7 @@ A page asks which made wishes have work for the person to look at, and what to s
 and writes nothing:
 
 ```json
-{"day":"2026-03-10","waits":[{"wish":"m1","run":"r0123456789abcdef","said":"make the uploader retry twice","read":true,"made":1,"changed":1,"removed":1,"names":["a.txt","b.txt","n.txt"],"more":0,"obeyed":[],"why":"the work of run r0123456789abcdef waits: files made 1, changed 1, removed 1"}]}
+{"day":"2026-03-10","waits":[{"wish":"m1","run":"r0123456789abcdef","said":"make the uploader retry twice","read":true,"made":1,"changed":1,"removed":1,"names":["CLAUDE.md","a.txt","b.txt"],"more":0,"obeyed":["CLAUDE.md"],"plain":true,"why":"the work of run r0123456789abcdef waits: files made 1, changed 1, removed 1"},{"wish":"m3","run":"rfedcba9876543210","said":"tidy the notes","read":false,"made":0,"changed":0,"removed":0,"names":[],"more":0,"obeyed":[],"plain":true,"why":"no folder of the name the wish gives was typed in on 2026-03-10; name the folder with --repo"}]}
 ```
 
 - **Which wishes.** A made wish of the day whose run finished with its one commit, whose record names that
@@ -291,7 +291,9 @@ and writes nothing:
   names as `run show` cleans them, and how many more there are. When the list stopped at 200 files, `why` ends
   ` of its first 200`. `obeyed` is not of the list: it names every file of the whole work the person's tools
   obey, the ones past the 200 too, by the rule a look and a keep judge a file by (`obeyed.rs`,
-  `named`). Of the files past the list only the paths are read.
+  `named`). Of the files past the list only the paths are read. `plain` says whether each of those names is
+  printed as git keeps it, byte for byte: `false` when cleaning changed one, as it prints a name that looks like
+  a credential as `[redacted]`.
 - **A repo that is not found** (or any other refusal of `run show`) still lists the wish, with `read: false`, no
   counts, no name, and `why` holding that refusal. A page then offers no choice.
 - **The choices and their words** are core's too: `Waits::title`, `lines`, `choices` and `asks`, `ShownFile::title`
@@ -299,15 +301,29 @@ and writes nothing:
 - **A tap on a choice** is `work_tapped`. It does nothing unless the work waits now and was read from its repo
   now, so a toss never begins where the repo is not found: `run toss` there would remove the copy and leave the
   branch. `Show me` gives the next file after the one on show that is text `run show --file` prints, from the
-  first again past the last, asking for at most eight; a file the work removed is not asked for.
-- **A keep from a page.** `Keep it` of work with a file the person's tools obey, anywhere in the whole work,
-  changes nothing and gives the names back: `Waits::asks` words them, the first six by name and the rest
-  counted. A tap is made of what was drawn (`WorkTap::of`: the option's words and its note's words), and the tap
-  on `Keep it, with those files` carries that note's words. The keep is done only when `asks` would say the
-  same words of the work as it is now; else it is refused, with nothing changed. The keep is `run keep` with one
-  difference (`keep.rs`, `keep_named`): of the files the person's tools obey it lands only the ones named, and a
-  keep that was not asked once more names none. So work whose merge would bring such a file that no note named
-  is refused whole, in a page's words and not `--with-settings`. `Toss it` is `run toss`, with its own checks.
+  first again past the last, asking for at most eight (a ninth is never asked for: the tap then says why the
+  eighth was not shown); a file the work removed is not asked for.
+- **A keep from a page.** The rule: a page keeps a file the person's tools obey only when that file's name was
+  drawn, whole, on the note the yes was given under. A count is not a name.
+  - `Keep it` of work with such a file, anywhere in the whole work, changes nothing and gives the names back:
+    `Waits::asks` gives each name as a text of its own, and counts none.
+  - Work with more than six of them (`NAMED`: what a note has room for in the smallest window, a line a name) has
+    no yes on a page. Nor has work with one whose name is not printed as it is (`plain` is `false`): the word
+    drawn would not be the file's name, and two files can be printed as one word. `Waits::lines`, `asks` and
+    `choices` say so in one sentence and offer `Show me` and `Toss it`; any keep tapped all the same is answered
+    with that note. The sentence says only that such work is kept from the command line, with `jellymoon run
+    keep`.
+  - A tap is made of what was drawn (`WorkTap::of`: the option's words and its note's texts), and the tap on
+    `Keep it, with those files` carries that note's texts: the names, and the note's last sentence. The keep is
+    done only when `asks` would say the same texts of the work as it is now; else it is refused, with nothing
+    changed.
+  - The keep is `run keep` with one difference (`keep.rs`, `keep_named`, `judge`): it is given the names the tap
+    carried, held as a set, and under the keep's lock the work's files the person's tools obey must be those
+    names, all of them and no other; what one new commit would land must be among them. A keep that was not
+    asked once more carries none. So work whose merge would bring such a file that no note named is refused
+    whole, in a page's words and not `--with-settings`.
+  - The line of the work's own note still counts (`a.txt, b.txt, and 4 more`), and is at most 320 characters of
+    names: nothing is kept on the word of it. `Toss it` is `run toss`, with its own checks.
 
 `work_tapped` has no command of its own: it is proved at the app's boundary (`app/tests/f47.rs`), and what it
 calls is proved at `run show`, `run keep` and `run toss`. `run waiting` is `crates/jellymoon/tests/f47.rs`, and

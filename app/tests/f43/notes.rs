@@ -116,7 +116,8 @@ fn a_wish_whose_run_died_is_given_its_end_before_it_is_said_to_be_going() {
     kept["wishes"][0]["run"] = Value::from(format!("r{}", "0123456789abcdef"));
     fs::write(&wishes, kept.to_string()).unwrap();
 
-    assert!(poke(&mut on, "m1").is_none(), "a run that died was said to be going");
+    let opened = poke(&mut on, "m1").expect("the wish is opened");
+    assert!(stops(&opened).is_empty(), "a run that died was said to be going");
     assert_eq!(jellymoon_core::going(&world.home, DAY), [""; 0]);
     let kept: Value = serde_json::from_str(&fs::read_to_string(&wishes).unwrap()).unwrap();
     assert_ne!(kept["wishes"][0]["state"], "working", "the wish still waits for a run that is gone");

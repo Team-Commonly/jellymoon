@@ -21,7 +21,7 @@ use jellymoon_app::taps::OnShow;
 use serde_json::json;
 use sticker_kit::{Note, Scene, State};
 use support::Piece;
-use support::day::{self, DAY, names, shown};
+use support::day::{self, DAY, FIRST, SECOND, names, shown};
 use support::open_above;
 use support::wished::{SAID, World, showed, wait_until, world};
 
@@ -113,7 +113,7 @@ fn a_tap_on_a_working_wish_s_character_shows_stop_it_and_its_tap_stops_the_run()
     assert_eq!((&kept["state"], &kept["stars"], &kept["why"]), (&json!("needs_you"), &json!([]), &json!(why)));
 
     // A stopped run is not going: no choice for it, in the window or in `layout`.
-    assert!(poke(&mut on, "m1").is_none());
+    assert_eq!(poke(&mut on, "m1").map(|scene| stops(&scene).len()), Some(0), "the wish is opened, and no more");
     assert_eq!(options(&shown(&w.day, &[])), []);
     assert!((on.look())().is_none(), "the note stays");
 }
@@ -182,9 +182,29 @@ fn a_tap_on_any_other_character_or_on_a_wish_with_no_run_going_stops_nothing_and
     assert_eq!(drawn(&on.scene, "m1"), Some((State::Busy, 0)), "working, with no run");
     let characters: Vec<String> = on.scene.characters.iter().map(|one| one.id.clone()).collect();
     assert_eq!(characters, ["w1", "w2", "m1"]);
-    for id in ["me", "w1", "w2", "m1", "m2", "stop-m1", ""] {
+    for id in ["me", "m2", "stop-m1", ""] {
         assert!(poke(&mut on, id).is_none(), "a tap on {id:?} showed something");
     }
+    // A wish with no run going is opened (F47): its own words and how it stands, one wish at a time, and no
+    // choice to stop.
+    let page = on.scene.clone();
+    let stands = [
+        ("w1", "This wish was let go.", FIRST),
+        ("w2", "This wish is done.", SECOND),
+        ("m1", "This wish is being worked on.", SAID),
+    ];
+    for (id, title, said) in stands {
+        let scene = poke(&mut on, id).expect("the wish is opened");
+        let want = Note::Text {
+            id: format!("wish-{id}"),
+            title: title.into(),
+            body: vec![format!("“{said}”")],
+            options: vec![],
+        };
+        assert_eq!((&scene.notes[0], &scene.notes[1..], stops(&scene).len()), (&want, &page.notes[..], 0));
+        assert!(poke(&mut on, id).is_none(), "the note of {id:?} is shown once");
+    }
+    on.scene = page;
     assert_eq!(options(&shown(&world, &[])).iter().filter(|(note, _)| note.starts_with("stop-")).count(), 0);
     assert!(on.stopping("stop-m1", 0).is_none(), "no choice is on show");
 

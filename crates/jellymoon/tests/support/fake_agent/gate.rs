@@ -1,7 +1,7 @@
 //! The made-up agent's scripts for what the gate found: streams that are not a run's, results that earn no star,
 //! and harnesses that leave something going or turn out too old late.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{env, fs, process, thread};
 
@@ -66,6 +66,9 @@ pub fn play(script: &str, number: usize, rec: &Path) -> i32 {
             eprintln!("error: unknown option '--restricted'");
             1
         }
+        "rules" => rules(),
+        "many" | "past" | "walls" | "wall8" => beside(script),
+        "crowd" | "long" | "longs" | "six" | "seven" | "eight" | "masked" => obeyed(script),
         other => round_2(other, number, rec),
     }
 }
@@ -103,6 +106,69 @@ fn lingers(rec: &Path, denials: usize) -> i32 {
     let _held = held(rec);
     thread::sleep(Duration::from_secs(60));
     1
+}
+
+/// F47. The work, and beside it a file the person's tools obey and one whose text would be more than text to
+/// anything that read it as a page, a link, a terminal's colours or a command.
+fn rules() -> i32 {
+    edits();
+    fs::write("CLAUDE.md", "rules from the run\n").unwrap();
+    let odd = "<script>open('file:///')</script>\n\u{1b}[31m[tap](https://example.test)\n$(touch ran)\n";
+    fs::write("0.md", odd).unwrap();
+    ends_with(&success())
+}
+
+/// F47, after its gate. The work, and beside it: `many`, 230 plain files, with one file the person's tools obey
+/// before them and two after, past what a list of the work holds; `past`, the same with only one such file, after;
+/// `walls`, seven files of one word longer than is read of a file, which are text and cannot be shown; `wall8`,
+/// eight of them.
+fn beside(script: &str) -> i32 {
+    edits();
+    if script.starts_with("wall") {
+        for n in 0..if script == "walls" { 7 } else { 8 } {
+            fs::write(format!("c{n}.txt"), "x".repeat(64 * 1024 + 1)).unwrap();
+        }
+        return ends_with(&success());
+    }
+    for n in 0..230 {
+        fs::write(format!("f{n:03}.txt"), "plain\n").unwrap();
+    }
+    let below = Path::new("zz").join(".claude");
+    fs::create_dir_all(&below).unwrap();
+    if script == "many" {
+        fs::write("CLAUDE.md", "rules from the run\n").unwrap();
+        fs::write(below.join("settings.json"), "{}\n").unwrap();
+    }
+    fs::write(Path::new("zz").join(".envrc"), "PATH_add bin\n").unwrap();
+    ends_with(&success())
+}
+
+/// F47, after its second gate. The work, and beside it files the person's tools obey and no other: `crowd`,
+/// three of them; `long`, three whose names are long, and `longs`, six; `six`, `seven` and `eight`, that many;
+/// `masked`, one, whose name has the shape of a credential and is not printed.
+fn obeyed(script: &str) -> i32 {
+    edits();
+    let deep = Path::new("a folder with a long name of plain words").join("and a second one as long as the first");
+    let deep = deep.join("and a third folder of plain words below").join("and a fourth one below all the others");
+    let rules = |folder: &Path, n: usize| folder.join(format!("r{n}")).join("CLAUDE.md");
+    let files: Vec<PathBuf> = match script {
+        "crowd" => vec![
+            Path::new(".claude").join("settings.json"),
+            Path::new(".github").join("workflows").join("deploy.yml"),
+            PathBuf::from("CLAUDE.md"),
+        ],
+        "long" => (0..3).map(|n| rules(&deep, n)).collect(),
+        "longs" => (0..6).map(|n| rules(&deep, n)).collect(),
+        "six" => (0..6).map(|n| rules(Path::new(""), n)).collect(),
+        "seven" => (0..7).map(|n| rules(Path::new(""), n)).collect(),
+        "masked" => vec![Path::new(".claude").join(format!("AK{}{}.md", "IA", "Q7".repeat(8)))],
+        _ => (0..8).map(|n| rules(Path::new(""), n)).collect(),
+    };
+    for file in files {
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(file, "rules from the run\n").unwrap();
+    }
+    ends_with(&success())
 }
 
 /// The scripts of the gate's second round (`tests/f39/stream.rs`, `tests/f39/refused.rs`), and F40's.

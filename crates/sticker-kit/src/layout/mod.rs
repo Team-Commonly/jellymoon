@@ -5,6 +5,7 @@ mod entry;
 mod grid;
 mod notes;
 mod page;
+mod text_note;
 
 use serde::{Deserialize, Serialize};
 
@@ -65,6 +66,7 @@ pub struct Placed {
 
 pub use entry::layout_entry;
 pub use notes::{MAX_NOTES, MORE_NOTES_ID};
+pub use text_note::MAX_TEXT_LINES;
 
 /// Longest text the kit carries for anything that is not a label.
 pub const MAX_TEXT_CHARS: usize = 400;

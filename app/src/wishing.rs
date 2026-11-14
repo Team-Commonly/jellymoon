@@ -19,6 +19,7 @@ use crate::read::Page;
 use crate::stopping;
 use crate::taps::{OnShow, UNTOLD};
 use crate::today::{Later, Next, Today};
+use crate::working;
 
 /// The id of the entry a wish is typed in.
 pub const ENTRY: &str = "wish";
@@ -207,6 +208,7 @@ impl Today {
         let own = |title: &str| [crate::scene::NOTHING, UNTOLD].contains(&title);
         let over = |note: &&Note| {
             stopping::asks(note)
+                || working::ours(note)
                 || matches!(note, Note::Plain { title, .. } if !own(title)) && !shown.notes.contains(note)
         };
         let over: Vec<Note> =
@@ -218,7 +220,8 @@ impl Today {
     /// `next`, the scene a reading gave, under the notes of `drawn` that are about a wish or a stop: a reading
     /// that ends says nothing of those, so it takes none of them away.
     pub(crate) fn under(&self, drawn: &Scene, mut next: Scene) -> Scene {
-        let stays = |note: &&Note| of_a_wish(note) || stopping::said(note) || stopping::asks(note);
+        let stays =
+            |note: &&Note| of_a_wish(note) || stopping::said(note) || stopping::asks(note) || working::ours(note);
         let over: Vec<Note> =
             drawn.notes.iter().filter(stays).filter(|note| stopping::holds(note, &next)).cloned().collect();
         next.notes.splice(0..0, over);

@@ -25,9 +25,10 @@ pub(super) const UNSTARTABLE: &str = "nothing was started: Claude Code could not
 pub(super) const UNTOLD: &str = "nothing was started: Claude Code is too old for runs or could not be started; \
                                  run the wish again when that is mended";
 
-/// The wish as a run that was never started leaves it.
+/// The wish as a run that was never started leaves it. It names no run, so it has no answer to one.
 pub(super) fn mark(wish: &mut MadeWish, why: &str) {
     (wish.run, wish.why, wish.state, wish.question) = (None, Some(why.to_string()), WishState::NeedsYou, None);
+    wish.answer = None;
 }
 
 /// What `jellymoon run` does when the harness it started for a run never began one: the wish names no run, says

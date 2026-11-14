@@ -64,6 +64,11 @@ pub struct MadeWish {
     /// characters. Only a wish that needs the person and names a run has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
+    /// The last answer the person gave that run (F52): their own words as the door left them, on one line, at
+    /// most 600 characters. Only a wish that names a run has one, it is kept here and nowhere else, and no
+    /// page shows it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer: Option<String>,
 }
 
 /// The made wishes of one day, `pages/<day>.wishes.json`.
@@ -166,7 +171,8 @@ fn own(at: usize, wish: MadeWish) -> Option<MadeWish> {
         && wish.why.as_ref().is_none_or(|why| !why.is_empty() && line(why, WHY_MAX) == *why)
         && wish.question.as_deref().is_none_or(|question| {
             run::kept_question(question) && wish.state == WishState::NeedsYou && wish.run.is_some()
-        });
+        })
+        && wish.answer.as_deref().is_none_or(|answer| run::kept_answer(answer) && wish.run.is_some());
     own.then_some(MadeWish { said, ..wish })
 }
 
@@ -213,7 +219,7 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
     let mut wishes = room()?;
     let (id, project) = (format!("m{}", wishes.len() + 1), project.to_string());
     let (state, stars) = (WishState::Working, Vec::new());
-    let wish = MadeWish { id, said, project, state, stars, run: None, why: None, question: None };
+    let wish = MadeWish { id, said, project, state, stars, run: None, why: None, question: None, answer: None };
     wishes.push(wish.clone());
     write(home, &day, wishes)?;
     Ok(Wished { wish, run: None, why: WHY.to_string() })

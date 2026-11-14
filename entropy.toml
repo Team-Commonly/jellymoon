@@ -279,7 +279,13 @@ max_file_lines = 400
 # at or after it), `hear/voice.rs` 18 (a key held with Shift alone, a value that holds what cannot be seen),
 # `redact.rs` 5 and `hear/day.rs` 1. Its own gate raised core by 7 more (`redact.rs` 6: what is not read in a
 # quoted value; `hear/day.rs` 1) and the binary by 11, the values of `voice.toml` that were still named back.
-"crates/jellymoon-core" = 12646
+# F52 raised core by 421: `run/answer.rs` is 214 (`run answer`: the door for an answer, the three locks, the wish
+# and the record told, what is put back), `run/asks.rs` 76 (a last word's parts as written, so a part named twice
+# is seen; the lock of a run that asks, taken by a toss and an answer; a toss's second read), `still.rs` 54 (the
+# door reads across a line break), `run/cap.rs` 15 (a claim behind the count for an answer), `run/stream.rs` and
+# `child.rs` 15 (a session that is not kept), `copy.rs` and `copy/keep.rs` 16 (the copy of a run that asks; a
+# branch left unasked), 22 in seven more files of `run/` and `wish.rs`, and 9 in `tests/shapes.rs`.
+"crates/jellymoon-core" = 13067
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -405,7 +411,11 @@ max_file_lines = 400
 # The fix after F55's gate raised the binary by 126, all of it tests under `tests/f55`: the window, a refusal's
 # time and the ear's wait from the first tick after their event; a project switched off inside the window; a run
 # that ended at once; a last line with no line break; the two new refusals of `voice.toml`.
-"crates/jellymoon" = 21056
+# F52 raised it by 831: `tests/f52.rs` and `tests/f52/` are 786 (24 tests of `run answer` at the binary, and of
+# what F51's gate left), the made-up agent's scripts 24 (a session that is not kept, three more last words,
+# `--resume`), the command's parse, usage and input 17, and 4 in two older tests the door's new rule changes.
+# And 3 for the lost session whose stream did not start as a run's (CI on Windows): a fifth script and its test.
+"crates/jellymoon" = 21890
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -438,7 +448,8 @@ max_file_lines = 400
 # F51's step, `asks` (`smoke/asks.rs`, 55 lines), raised it by 58.
 # F47 raised it by 5: the `show` step asks `run waiting` too.
 # F55's step, `hear` (`smoke/hear.rs`, 46 lines), raised it by 49.
-"crates/xtask" = 2102
+# F52's step, `answer` (`smoke/answer.rs`, 73 lines), raised it by 76.
+"crates/xtask" = 2178
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

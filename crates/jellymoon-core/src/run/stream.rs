@@ -27,10 +27,13 @@ const MODE: &str = "acceptEdits";
 
 /// What a run's stream must say of how the harness was started, by what core passed it.
 pub(super) struct Expect {
-    /// The session id passed with `--session-id`: the init line names it, or the stream is not this run's.
+    /// The session id passed with `--session-id`, or with `--resume` to a run that is answered: the init line
+    /// names it, or the stream is not this run's.
     pub session: String,
     /// Whether a schema for the last word was passed. Only then does the init line list the tool for one.
     pub schema: bool,
+    /// Whether the harness was told to go on with that session (F52): only then can it say it has it no more.
+    pub resumed: bool,
 }
 
 /// What the reader of the stream has, when it stops reading.
@@ -55,6 +58,9 @@ pub(super) struct Stream {
     pub other: bool,
     /// The first result's last word.
     pub last: Last,
+    /// A harness told to go on with a session gave a result that is an error and says the session is not kept
+    /// (`asks::LOST_SIGN`), wherever in the stream it came.
+    pub lost: bool,
 }
 
 /// The parts of a line of the stream that are looked at. A line that is not an object with a `type` that is text,
@@ -69,7 +75,7 @@ struct Line {
     #[serde(default)]
     permission_denials: Vec<IgnoredAny>,
     /// The last word. It is read whatever its shape, so a result with an odd one is still the stream's result.
-    structured_output: Option<Value>,
+    structured_output: Option<asks::Word>,
 }
 
 /// The four parts of the `system`/`init` line that are compared. Every other part of it is passed over.
@@ -109,6 +115,9 @@ impl Stream {
         let read = line(raw);
         let system = read.as_ref().is_some_and(|line| line.kind == "system");
         let init = system && read.as_ref().is_some_and(|line| line.subtype.as_deref() == Some("init"));
+        let error = |line: &Line| line.kind == "result" && line.is_error == Some(true);
+        let sign = asks::LOST_SIGN.as_bytes();
+        self.lost |= expect.resumed && read.as_ref().is_some_and(error) && raw.windows(sign.len()).any(|at| at == sign);
         if init || (self.start.is_none() && !system) {
             let (fits, same) = if init { measured(raw, expect) } else { (false, true) };
             self.other |= fits && !same;
@@ -177,7 +186,7 @@ mod tests {
     fn start(tools: &str, session: &str, schema: bool) -> (Option<bool>, bool, bool) {
         let parts = format!(r#""tools":{tools},"mcp_servers":[],"permissionMode":"acceptEdits"{session}"#);
         let mut stream = Stream::default();
-        let expect = Expect { session: ID.to_string(), schema };
+        let expect = Expect { session: ID.to_string(), schema, resumed: false };
         let more = stream.take(format!(r#"{{"type":"system","subtype":"init",{parts}}}"#).as_bytes(), &expect);
         (stream.start, stream.other, more)
     }
@@ -206,7 +215,7 @@ mod tests {
 
     #[test]
     fn the_last_word_is_the_first_result_s_and_no_other_line_s() {
-        let expect = Expect { session: ID.to_string(), schema: true };
+        let expect = Expect { session: ID.to_string(), schema: true, resumed: false };
         let asks = r#""structured_output":{"state":"asks","question":"which?"}"#;
         let result = |word: &str| format!(r#"{{"type":"result","subtype":"success","is_error":false,{word}}}"#);
         let mut stream = Stream::default();

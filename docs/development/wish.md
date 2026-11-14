@@ -37,6 +37,20 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   the kept page `pages/<day>.json`, because every reading writes that file again.
 - **The words.** What is kept is what a page draws, by the rule of a clash's statement: one line, each run of
   spaces made one, nothing that cannot be seen, credential shapes replaced by `[redacted]`, each `"` made `'`.
+- **A credential split by a line break.** A line break is read as a space, so a key typed on two lines was two
+  words, neither a credential's shape, and both were kept. The door now reads each stretch of the words that
+  holds a line break and no other space twice, as it stands with the break a space and with the break taken
+  out, and when the two readings clean differently the whole stretch is kept as `[redacted]`. Either reading
+  may be the one that holds the shape: a key with a break in it, or a key id that the next line's capitals
+  would hide. Words on two lines that are no credential either way are kept as before, as two words. This is
+  the door's rule, so it holds for a made wish, a clash's statement, a run's question and an answer alike.
+  What these now keep differently: a wish or statement with such a stretch was kept in its own words and is
+  kept as `[redacted]` there, and a file written before that holds one is drawn so. The stretch is whole: a
+  key alone on its line takes the word that ends the line before and the word that starts the line after with
+  it, and two long names on two lines with no space (two file paths, say) that together have a credential's
+  shape are one `[redacted]`. Not closed: a break with a
+  space or a tab beside it (an indented second line) keeps the two sides apart, and a session log's turn is
+  not read this way.
 - **Cleaned until nothing changes.** Cleaning once is not always cleaning twice: a private key's first line with a
   tab in it is one only once it is on one line, and a key straight after another is found only once the first is
   `[redacted]`. So the words are cleaned again until a cleaning changes nothing, and that is what is kept
@@ -53,6 +67,11 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   ([run.md](run.md), "A run that asks"; example `wished-asks.json`). No other wish has the name. Made wishes
   are refused as not that day's when a wish has a question the door would change, an empty one, or one on a wish
   that is not `needs_you` or names no run. A toss of the run takes the question away with the wish's state.
+- **An answer.** A wish whose run was answered carries `answer`, the last answer the person gave that run, as
+  the door left it: one line, at most 600 characters ([run.md](run.md), "An answer"; example
+  `wished-answered.json`). It is the one place Jellymoon keeps an answer. It stays when the run ends, a later
+  answer takes its place, and no page shows it. Made wishes are refused as not that day's when a wish has an
+  answer the door would change, an empty one, one over 600 characters, or one on a wish that names no run.
 - **The write.** Behind the day's lock, `pages/<day>.ruled.lock`, which is the tap's
   ([delivery.md](delivery.md), "A tap on a clash"): one change to a day at a time. The file is written beside its
   place and moved there, 0600 in a folder set to 0700. What Windows does differently when two changes meet is in

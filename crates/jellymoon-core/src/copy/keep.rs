@@ -63,12 +63,14 @@ pub(crate) struct Landing {
 
 /// What a keep has the record say: the commit it is about to land on a branch, and that it has landed. And what
 /// it has the answer name: a `.gitattributes` the work removes that is at its path all the same after the step,
-/// and that the run's branch is left, as a name of the person's points at it.
+/// and that the run's branch is left: as a name of the person's points at it, or as the repo could not be asked
+/// what stands on it or points at it.
 pub(crate) enum Note<'a> {
     Intent(&'a str, &'a str),
     Kept(&'a str, &'a str),
     Stayed(&'a [u8]),
     Pointed,
+    Unasked,
 }
 
 pub(crate) struct Keep<'a> {
@@ -173,8 +175,10 @@ pub(crate) fn keep(
     }
     step::cut(4);
     // The run's branch goes only when a branch holds the commit: work on a detached `HEAD` has no other name.
-    if landing.how != How::Loose && drop_branch(&at) {
-        note(Note::Pointed);
+    if landing.how != How::Loose
+        && let Some(left) = drop_branch(&at)
+    {
+        note(left);
     }
     Ok(landing)
 }
@@ -244,17 +248,21 @@ fn stood_on(at: &At) -> Result<bool, Unkept> {
 
 /// Deletes the run's branch as itself, while it names the record's end, nothing stands on it and no name of the
 /// person's points at it (`back::pointed_at`). git's own check of the old value is the comparison: a branch that
-/// was moved, made a name for another or removed stays as it is. True: it is left because such a name points at it.
-fn drop_branch(at: &At) -> bool {
-    if stood_on(at) != Ok(false) {
-        return false;
+/// was moved, made a name for another or removed stays as it is. What is returned is to be said of a branch
+/// that is left: such a name points at it, or the repo did not say whether one does or what stands on it.
+fn drop_branch(at: &At) -> Option<Note<'static>> {
+    match stood_on(at)
+        .and_then(|stood| Ok((stood, stood || back::pointed_at(at.repo, &at.name).map_err(|_| Unread::Repo)?)))
+    {
+        Ok((true, _)) => None,
+        Ok((false, false)) => {
+            let delete = ["update-ref", "--no-deref", "-d", &at.name, at.of.named.end];
+            let _ = at.repo.answer(None, &[], &delete, &[], SAID_MAX);
+            None
+        }
+        Ok((false, true)) => Some(Note::Pointed),
+        Err(_) => Some(Note::Unasked),
     }
-    let pointed = back::pointed_at(at.repo, &at.name);
-    if pointed == Ok(false) {
-        let delete = ["update-ref", "--no-deref", "-d", &at.name, at.of.named.end];
-        let _ = at.repo.answer(None, &[], &delete, &[], SAID_MAX);
-    }
-    pointed == Ok(true)
 }
 
 /// The branch the person's checkout stands on, by its whole name, and the commit it names. git follows a `HEAD`

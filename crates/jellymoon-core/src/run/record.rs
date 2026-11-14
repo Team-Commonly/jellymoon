@@ -18,7 +18,7 @@ use crate::{Error, busy};
 /// The most bytes of a run's record that are read.
 const RECORD_MAX: usize = 64 * 1024;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct Record {
     pub wish: String,
     pub day: String,

@@ -177,14 +177,14 @@ fn heard_words_and_the_words_so_far_pass_the_door_before_they_are_printed_or_kep
     let w = alpha_world();
     let so_far = format!("deploy  with {}\nfr\u{2065}om", model_key());
     let raw = format!("  deploy  with {}\nfr\u{2065}om \"now\" on ", hub_key());
-    let clean = "deploy with [redacted] from 'now' on";
+    let clean = "deploy with [redacted] 'now' on";
     let events =
         [tick(0), DOWN.to_string(), partial(&so_far), tick(1000), UP.to_string(), fin(&raw), tick(1000), tick(5000)];
     let ran = w.hear_ran(&[], &events);
     let want = [
         quiet(),
         listening(""),
-        listening("deploy with [redacted] from"),
+        listening("deploy with [redacted]"),
         heard(clean, "alpha", 4000),
         with(quiet(), "made", json!("m1")),
     ];

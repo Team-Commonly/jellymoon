@@ -7,7 +7,7 @@
 
 mod parse;
 
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
@@ -26,6 +26,7 @@ const USAGE: &str = "usage:
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --run [--logs <dir>] [--skip <names>]   (keeps the wish and starts its run, which goes on after this command)
   jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
   jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]   (stops that run: its copy is kept, and no star is added)
+  jellymoon run answer --wish <id> [--date <YYYY-MM-DD>]   (takes your answer on its input, and goes on with a run that asks, in its copy, and waits)
   jellymoon run show --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--file <n>]   (what that run made, read from the repo's store: its files, or one file's text; writes nothing)
   jellymoon run keep --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--ask] [--with-settings]   (lands that run's work on the branch your checkout stands on, as one commit; --ask only says what it would do; --with-settings keeps files your tools obey too)
   jellymoon run toss --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (refuses what that run left: its branch is deleted, the kept copy of a run that did not finish is removed, and the wish is let go)
@@ -108,6 +109,16 @@ fn wish(date: Option<String>, say: &str, project: &str, apart: Option<RunOptions
     Ok(format!("{wished}\n"))
 }
 
+/// `run answer`: the answer is this command's input, read no further than one byte past what the door looks at,
+/// so one that is too long is known as that and the rest of it is never read. It is on no command line.
+fn answer(options: &RunOptions) -> Result<String, Failure> {
+    let mut typed = Vec::new();
+    let read = io::stdin().lock().take(jellymoon_core::ANSWER_READ).read_to_end(&mut typed);
+    read.map_err(|e| Failure::Run(format!("the answer could not be read from this command's input: {}", e.kind())))?;
+    let ran = jellymoon_core::answer_run(&home()?, options, &typed);
+    Ok(format!("{}\n", ran.map_err(|e| Failure::Run(e.to_string()))?))
+}
+
 /// Runs the command and returns what it prints.
 fn run() -> Result<String, Failure> {
     let failed = |e: jellymoon_core::Error| Failure::Run(e.to_string());
@@ -154,6 +165,7 @@ fn run() -> Result<String, Failure> {
         Command::Stop(RunOptions { wish, day, .. }) => {
             Ok(format!("{}\n", jellymoon_core::stop_run(&home()?, &wish, day.as_deref()).map_err(failed)?))
         }
+        Command::Answer(options) => answer(&options),
         Command::Show(options, file) => show(&options, file),
         Command::Keep(options, how) => {
             Ok(format!("{}\n", jellymoon_core::keep_run(&home()?, &options, how).map_err(failed)?))

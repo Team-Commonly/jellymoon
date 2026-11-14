@@ -75,6 +75,15 @@ fn what_a_made_wish_prints_round_trips_byte_for_byte() {
     assert_eq!(format!("{wished}\n"), example);
     let question = wished.wish.question.as_deref();
     assert_eq!((wished.wish.state, question), (WishState::NeedsYou, Some("Which of the two uploaders did you mean?")));
+    // The wish of a run that was answered carries the answer, last, and no question while the run goes.
+    let example = fixture("wished-answered.json");
+    let wished: Wished = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{wished}\n"), example);
+    let (answer, question) = (wished.wish.answer.as_deref(), wished.wish.question);
+    assert_eq!(
+        (wished.wish.state, answer, question),
+        (WishState::Working, Some("the old one, in src/upload.rs"), None)
+    );
 }
 
 #[test]

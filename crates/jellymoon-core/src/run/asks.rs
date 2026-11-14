@@ -4,15 +4,19 @@
 //! model's: it is data, read in one shape only, and of one that fails nothing is kept.
 
 use std::collections::hash_map::RandomState;
+use std::fmt;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::hash::{BuildHasher, Hasher};
 use std::path::{Path, PathBuf};
 
+use serde::Deserialize;
+use serde::de::{Deserializer, IgnoredAny, MapAccess, Visitor};
 use serde_json::Value;
 
 use super::RunOutcome;
 use super::end::lock_file;
 use super::record::{self, Record};
+use crate::busy;
 use crate::still::{LOOKED, Unkept, still};
 
 /// The schema of the harness's last word, passed with `--json-schema`: a state, and with `asks` one question.
@@ -38,11 +42,47 @@ pub(super) enum Last {
     Unfit,
 }
 
-/// Reads a last word: exactly `{"state":"done"}`, or exactly `{"state":"asks","question":<text>}`.
-pub(super) fn last(word: Option<Value>) -> Last {
+/// A last word as the stream wrote it: an object with every part it wrote, or anything else.
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(super) enum Word {
+    Object(Parts),
+    Other(IgnoredAny),
+}
+
+/// The parts of an object in the order they were written, a name written twice as two parts. A map would keep
+/// the last of the two, and `{"state":"asks","state":"done"}` would read as done.
+pub(super) struct Parts(Vec<(String, Value)>);
+
+impl<'de> Deserialize<'de> for Parts {
+    fn deserialize<D: Deserializer<'de>>(from: D) -> Result<Self, D::Error> {
+        struct Written;
+        impl<'de> Visitor<'de> for Written {
+            type Value = Parts;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("an object")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Parts, A::Error> {
+                let mut parts = Vec::new();
+                while let Some(part) = map.next_entry()? {
+                    parts.push(part);
+                }
+                Ok(Parts(parts))
+            }
+        }
+        from.deserialize_map(Written)
+    }
+}
+
+/// Reads a last word: exactly `{"state":"done"}`, or exactly `{"state":"asks","question":<text>}`. A word that
+/// names a part twice has one part too many, whatever the two say.
+pub(super) fn last(word: Option<Word>) -> Last {
     let Some(word) = word else { return Last::None };
-    let Some(word) = word.as_object() else { return Last::Unfit };
-    match (word.get("state").and_then(Value::as_str), word.get("question"), word.len()) {
+    let Word::Object(Parts(word)) = word else { return Last::Unfit };
+    let part = |name: &str| word.iter().find(|part| part.0 == name).map(|part| &part.1);
+    match (part("state").and_then(Value::as_str), part("question"), word.len()) {
         (Some("done"), None, 1) => Last::Done,
         (Some("asks"), Some(Value::String(question)), 2) if question.len() > LOOKED => Last::Long,
         (Some("asks"), Some(Value::String(question)), 2) => Last::Asks(question.clone()),
@@ -58,8 +98,13 @@ pub(super) const EMPTY: &str = "nothing was left of its question once it was cle
 pub(super) const CHANGING: &str = "its question could not be cleaned";
 /// And why one whose init line names another session than the one it was given, or none, did not.
 pub(super) const OTHER: &str = "it did not start under the session id it was given";
+/// And why a run that was answered (F52, `answer.rs`) did not go on: the harness has the session no more.
+pub(super) const LOST: &str = "Claude Code no longer keeps the session it asked in";
+/// What Claude Code says of a session id it is told to go on with and does not have: on stderr, and in the
+/// `errors` of a result that is an error. It is looked for only in a run that was answered, and never kept.
+pub(super) const LOST_SIGN: &str = "No conversation found with session ID";
 /// Every one of them: a record's end is one core wrote only in these words (`end::recorded`).
-pub(super) const KINDS: [&str; 6] = [NO_WORD, UNFIT, LONG, EMPTY, CHANGING, OTHER];
+pub(super) const KINDS: [&str; 7] = [NO_WORD, UNFIT, LONG, EMPTY, CHANGING, OTHER, LOST];
 
 /// What the last word of a run that would else have finished makes of it: None, it is done; a question, as it
 /// is kept, it asks. Err is why it has failed.
@@ -112,8 +157,8 @@ pub(super) fn is_session(id: &str) -> bool {
     id.len() == 36 && id.bytes().enumerate().all(shaped)
 }
 
-/// The lock of a run that asks, held by a toss of it for as long as the toss is at work, so that nothing takes
-/// the run up meanwhile. Its file goes with it, as a run's own does when the run ends.
+/// The lock of a run that asks, held by a toss of it or an answer to it for as long as that is at work, so that
+/// nothing else takes the run up meanwhile. Its file goes with it, as a run's own does when the run ends.
 pub(super) struct Held(File, PathBuf);
 
 impl Drop for Held {
@@ -123,23 +168,35 @@ impl Drop for Held {
     }
 }
 
+/// Takes the lock of a run that asks. Err(true): a command holds the run. Err(false): there is no lock to be
+/// had, as it cannot be made or asked about, or its name holds something other than a plain file, which is
+/// not opened (`end::held`).
+pub(super) fn take(home: &Path, run: &str) -> Result<Held, bool> {
+    let lock = lock_file(home, run);
+    if fs::symlink_metadata(&lock).is_ok_and(|meta| !meta.is_file()) {
+        return Err(false);
+    }
+    let file = OpenOptions::new().write(true).create(true).truncate(false).open(&lock).map_err(|_| false)?;
+    match file.try_lock() {
+        Ok(()) => Ok(Held(file, lock)),
+        Err(e) => Err(matches!(e, TryLockError::WouldBlock)),
+    }
+}
+
 /// The run's record, read for a toss: that of a run that asks is read again behind the run's own lock, which
-/// is then held. None: there is no record that can be used. Err: a command holds the run. A lock that cannot be
-/// made or asked about, or whose name holds something other than a plain file, is no lock, as it is for a look
-/// (`end::held`): the record is read without one.
+/// is then held. None: there is no record that can be used. Err: a command holds the run. Where there is no
+/// lock to be had the record is read without one, as a look reads it.
 pub(super) fn for_toss(home: &Path, run: &str) -> Result<Option<(Record, Option<Held>)>, ()> {
     let Some(record) = record::kept(home, run) else { return Ok(None) };
-    let lock = lock_file(home, run);
-    if record.outcome != Some(RunOutcome::Asks) || fs::symlink_metadata(&lock).is_ok_and(|meta| !meta.is_file()) {
+    if record.outcome != Some(RunOutcome::Asks) {
         return Ok(Some((record, None)));
     }
-    let Ok(file) = OpenOptions::new().write(true).create(true).truncate(false).open(&lock) else {
-        return Ok(Some((record, None)));
-    };
-    match file.try_lock() {
-        Ok(()) => Ok(record::kept(home, run).map(|record| (record, Some(Held(file, lock))))),
-        Err(TryLockError::WouldBlock) => Err(()),
-        Err(TryLockError::Error(_)) => Ok(Some((record, None))),
+    // A test's build can wait here, with the record read and the run's lock not yet asked for.
+    busy::pause("JELLYMOON_TEST_TOSS_LOCK_WAIT_MS");
+    match take(home, run) {
+        Ok(held) => Ok(record::kept(home, run).map(|record| (record, Some(held)))),
+        Err(true) => Err(()),
+        Err(false) => Ok(Some((record, None))),
     }
 }
 
@@ -149,9 +206,26 @@ mod tests {
 
     use super::*;
 
+    /// A last word as the stream's reader reads it from a result line.
+    fn read(word: &str) -> Last {
+        last(serde_json::from_str::<Option<Word>>(word).unwrap())
+    }
+
     #[test]
     fn a_last_word_is_read_in_two_shapes_and_every_other_is_unfit() {
-        assert_eq!(last(None), Last::None);
+        let last = |word: Option<Value>| word.map_or(Last::None, |word| read(&word.to_string()));
+        assert_eq!((last(None), read("null")), (Last::None, Last::None));
+        // A name written twice is two parts: the word is read by neither of them.
+        for twice in [
+            r#"{"state":"asks","state":"done"}"#,
+            r#"{"state":"done","state":"asks"}"#,
+            r#"{"state":"done","state":"done"}"#,
+            r#"{"state":"asks","question":"a?","question":"b?"}"#,
+            r#"{"state":"asks","question":"a?","state":"asks"}"#,
+            r#"{"question":"a?","state":"done","state":"asks"}"#,
+        ] {
+            assert_eq!(read(twice), Last::Unfit, "{twice}");
+        }
         assert_eq!(last(Some(json!({"state": "done"}))), Last::Done);
         assert_eq!(last(Some(json!({"state": "asks", "question": "which?"}))), Last::Asks("which?".into()));
         assert_eq!(last(Some(json!({"state": "asks", "question": ""}))), Last::Asks(String::new()));
@@ -160,6 +234,8 @@ mod tests {
         assert_eq!(last(Some(json!({"state": "asks", "question": over}))), Last::Long);
         for unfit in [
             json!("done"),
+            json!(7),
+            json!(true),
             json!(["done"]),
             json!({}),
             json!({"state": "paused"}),
@@ -211,7 +287,7 @@ mod tests {
         assert_eq!((word(&Last::None), word(&Last::Long), word(&Last::Unfit)), (Err(NO_WORD), Err(LONG), Err(UNFIT)));
         let mut kinds = KINDS.to_vec();
         kinds.dedup();
-        assert_eq!(kinds.len(), 6, "each way to fail has words of its own");
+        assert_eq!(kinds.len(), 7, "each way to fail has words of its own");
     }
 
     #[test]

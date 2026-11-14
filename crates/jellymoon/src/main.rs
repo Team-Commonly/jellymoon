@@ -29,6 +29,8 @@ const USAGE: &str = "usage:
   jellymoon run show --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--file <n>]   (what that run made, read from the repo's store: its files, or one file's text; writes nothing)
   jellymoon run keep --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--ask] [--with-settings]   (lands that run's work on the branch your checkout stands on, as one commit; --ask only says what it would do; --with-settings keeps files your tools obey too)
   jellymoon run toss --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (refuses what that run left: its branch is deleted, the kept copy of a run that did not finish is removed, and the wish is let go)
+  jellymoon hear [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <names>] [--run]   (reads key, ear and tick events on stdin, a line of JSON each, and prints what the jellyfish shows at each change; a heard wish is made a wish after four seconds, and --run starts its run)
+  jellymoon hear --settings   (the key and the language of voice, from voice.toml in Jellymoon's folder, or the defaults)
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
@@ -145,6 +147,8 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{settled}\n"))
         }
         Command::Wish { date, say, project, apart } => wish(date, &say, &project, apart),
+        Command::Hear(options) => hear(options),
+        Command::Voice => Ok(format!("{}\n", jellymoon_core::voice(&home()?).map_err(failed)?)),
         Command::Run(options) => Ok(format!("{}\n", jellymoon_core::run(&home()?, &options).map_err(failed)?)),
         Command::Stop(RunOptions { wish, day, .. }) => {
             Ok(format!("{}\n", jellymoon_core::stop_run(&home()?, &wish, day.as_deref()).map_err(failed)?))
@@ -166,6 +170,15 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::clean_copy(&home()?, &run, outcome).map_err(failed)?))
         }
     }
+}
+
+/// A hearing: each line is printed as it comes to be, by core, on this command's own output.
+fn hear(options: jellymoon_core::HearOptions) -> Result<String, Failure> {
+    let passed = jellymoon_core::hear(options, io::stdin().lock(), io::stdout().lock());
+    if let Some(passed) = passed.map_err(|e| Failure::Run(e.to_string()))? {
+        let _ = io::stderr().write_all(format!("jellymoon: {passed}\n").as_bytes());
+    }
+    Ok(String::new())
 }
 
 /// Takes the pieces `install.sh` put on this machine away again.

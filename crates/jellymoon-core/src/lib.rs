@@ -13,6 +13,7 @@ mod command;
 mod copy;
 mod error;
 mod find;
+mod hear;
 mod hook;
 mod reader;
 mod reading;
@@ -30,6 +31,10 @@ pub use command::{installed_command, turn_on_delivery};
 pub use copy::{Outcome, RunCopy, clean_copy, make_copy};
 pub use error::Error;
 pub use find::{own_folder, user_home};
+pub use hear::{
+    CANNOT_MS, EAR_MS, EarCannot, HEAR_LINE_MAX, HOLD_MS, HearEvent, HearOptions, Hearing, Jelly, JellyState, KeyMove,
+    LOOK_MS, SAID_SO_FAR_MAX, SLIP_MS, Said, Voice, WINDOW_MS, hear, voice,
+};
 pub use hook::{hook_installed, install_hook, remove_hook};
 pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};

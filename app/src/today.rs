@@ -280,7 +280,8 @@ fn words(error: &Error) -> String {
         | Error::Command(_)
         | Error::Copy(_)
         | Error::Wish(_)
-        | Error::Run(_) => {
+        | Error::Run(_)
+        | Error::Hear(_) => {
             format!("{error}.")
         }
     }

@@ -1,0 +1,12 @@
+{"tick":0}
+{"key":"down"}
+{"said":"partial","words":"make the up"}
+{"tick":1200}
+{"key":"up"}
+{"said":"final","words":"make the uploader retry twice"}
+{"tick":3200}
+{"tick":5200}
+{"key":"down"}
+{"tick":5300}
+{"said":"cannot","why":"microphone_refused"}
+{"tick":11300}

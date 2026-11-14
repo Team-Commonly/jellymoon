@@ -142,6 +142,15 @@ pub(super) fn kept(home: &Path, run: &str) -> Option<Record> {
     serde_json::from_slice(&bytes).ok()
 }
 
+/// Whether the run finished with work of its own that the person has neither kept nor tossed: what the record
+/// says, with no look at the repo.
+pub(crate) fn work_waits(home: &Path, run: &str) -> bool {
+    kept(home, run).is_some_and(|record| {
+        let made = record.why.as_deref() == Some(finished(run, true).as_str());
+        record.outcome == Some(RunOutcome::Completed) && made && matches!(record.work, None | Some(WorkState::Waits))
+    })
+}
+
 /// Writes down that the run was never started: an end of its own kind, which no look takes for a run cut off.
 /// It names no child: a harness that was started to find it too old is gone by now. Only so is the copy removed
 /// on the record's word (`end::bury`).

@@ -66,6 +66,9 @@ pub enum Error {
     /// A run was refused, or could not be started. It holds why, in one line with no word of the wish, of a session
     /// log or of the agent.
     Run(String),
+    /// A hearing could not begin or go on, or `voice.toml` is not used. It holds why, in one line with no word
+    /// that was heard.
+    Hear(String),
 }
 
 impl fmt::Display for Error {
@@ -111,7 +114,9 @@ impl fmt::Display for Error {
             Error::Changed => {
                 write!(f, "the installed hook entry cannot be taken out safely; remove it by hand. Nothing was changed")
             }
-            Error::Tap(why) | Error::Copy(why) | Error::Wish(why) | Error::Run(why) => write!(f, "{why}"),
+            Error::Tap(why) | Error::Copy(why) | Error::Wish(why) | Error::Run(why) | Error::Hear(why) => {
+                write!(f, "{why}")
+            }
             Error::Command(why) => write!(f, "the installed jellymoon command is not used: {why}"),
         }
     }

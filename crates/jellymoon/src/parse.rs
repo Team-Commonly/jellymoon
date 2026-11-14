@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use jellymoon_core::{DayOptions, KeepOptions, Outcome, RunOptions};
+use jellymoon_core::{DayOptions, HearOptions, KeepOptions, Outcome, RunOptions};
 use lexopt::prelude::*;
 
 use crate::{Failure, harness_folder, named, own_folder};
@@ -33,6 +33,9 @@ pub enum Command {
         project: String,
         apart: Option<RunOptions>,
     },
+    Hear(HearOptions),
+    /// `hear --settings`.
+    Voice,
     Run(RunOptions),
     Stop(RunOptions),
     /// `run show`, and the number of the one file to print.
@@ -69,6 +72,7 @@ pub fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         Some(Value(command)) if command == "rule" => return parse_rule(parser),
         Some(Value(command)) if command == "settle" => return parse_settle(parser),
         Some(Value(command)) if command == "wish" => return parse_wish(parser),
+        Some(Value(command)) if command == "hear" => return parse_hear(parser),
         Some(Value(command)) if command == "run" => return parse_run(parser),
         Some(Value(command)) if command == "hook" => return parse_hook(parser),
         Some(Value(command)) if command == "copy" => return parse_copy(parser),
@@ -167,6 +171,42 @@ fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         (Some(say), Some(project)) => Ok(Command::Wish { date, say, project, apart }),
         _ => Err(Failure::Usage("wish takes --say and --project".to_string())),
     }
+}
+
+/// `hear`, and `hear --settings`, which takes nothing else. With `--run` a made wish's run is started as
+/// `jellymoon wish --run` starts it: by this same program, with the same logs and names switched off.
+fn parse_hear(mut parser: lexopt::Parser) -> Result<Command, Failure> {
+    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
+    let (mut date, mut logs, mut skip) = (None, None, String::new());
+    let (mut run, mut settings, mut given) = (false, false, 0);
+    while let Some(arg) = parser.next().map_err(usage)? {
+        match arg {
+            Long("help") | Short('h') => return Ok(Command::Help),
+            Long("settings") => settings = true,
+            Long("date") => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("logs") => logs = Some(PathBuf::from(parser.value().map_err(usage)?)),
+            Long("skip") => skip = parser.value().and_then(|v| v.string()).map_err(usage)?,
+            Long("run") => run = true,
+            other => return Err(usage(other.unexpected())),
+        }
+        given += 1;
+    }
+    if settings {
+        let alone = Failure::Usage("hear --settings takes nothing else".to_string());
+        return if given == 1 { Ok(Command::Voice) } else { Err(alone) };
+    }
+    if logs.as_ref().is_some_and(|logs| logs.to_string_lossy().trim().is_empty()) {
+        return Err(Failure::Usage("--logs needs a folder".to_string()));
+    }
+    let apart = found(logs.clone(), &skip)?;
+    let logs = match logs {
+        Some(logs) => logs,
+        None => harness_folder()?.join("projects"),
+    };
+    let read = DayOptions { logs, date, skip: apart.skip.clone(), home: own_folder()? };
+    let program = || std::env::current_exe().map_err(|e| Failure::Run(format!("finding this program: {e}")));
+    let apart = if run { Some((program()?, apart)) } else { None };
+    Ok(Command::Hear(HearOptions { read, apart }))
 }
 
 /// The options of a run whose repo is found by its name in the session logs: the logs named, or Claude Code's

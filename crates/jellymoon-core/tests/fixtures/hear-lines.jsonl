@@ -1,0 +1,9 @@
+{"state":"quiet","says":"","words":"","project":"","left":0}
+{"state":"listening","says":"","words":"","project":"","left":0}
+{"state":"listening","says":"","words":"make the up","project":"","left":0}
+{"state":"heard","says":"press the key again to take it back","words":"make the uploader retry twice","project":"alpha","left":4000}
+{"state":"heard","says":"press the key again to take it back","words":"make the uploader retry twice","project":"alpha","left":2000}
+{"state":"quiet","says":"","words":"","project":"","left":0,"made":"m1"}
+{"state":"listening","says":"","words":"","project":"","left":0}
+{"state":"cannot","says":"nothing was heard: Jellymoon may not use the microphone; allow it in System Settings, Privacy & Security, Microphone","words":"","project":"","left":0}
+{"state":"quiet","says":"","words":"","project":"","left":0}

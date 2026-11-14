@@ -53,6 +53,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "asks", only: Only::Synthetic, run: super::asks::asks },
     // A run started apart (F41), in a repo found by its name in a made-up log. Not with --real, as `wish`.
     Step { name: "wish-run", only: Only::Synthetic, run: super::apart::wish_run },
+    // A wish said aloud (F55), as events on a command's input. Not with --real, as `wish`.
+    Step { name: "hear", only: Only::Synthetic, run: super::hear::hear },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
     Step { name: "window", only: Only::Window, run: window },
 ];

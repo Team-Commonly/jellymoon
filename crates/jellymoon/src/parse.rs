@@ -40,6 +40,8 @@ pub enum Command {
     /// `run keep`, and whether it only asks and whether files the person's tools obey are kept too.
     Keep(RunOptions, KeepOptions),
     Toss(RunOptions),
+    /// `run waiting`: the options name no wish.
+    Waiting(RunOptions),
     RemoveHook,
     HookStatus,
     Uninstall,
@@ -177,13 +179,13 @@ fn found(logs: Option<PathBuf>, skip: &str) -> Result<RunOptions, Failure> {
     Ok(RunOptions { logs, harness: named("JELLYMOON_CLAUDE"), skip, ..RunOptions::default() })
 }
 
-/// `run`, `run stop`, `run show` and `run keep`. The logs are read only when no repo is named, to find the one
+/// `run`, `run stop`, `run show`, `run keep`, `run toss` and `run waiting`. The logs are read only when no repo is named, to find the one
 /// folder of the wish's project. A file's number is digits and nothing else.
 fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut options, mut logs, mut skip) = (RunOptions::default(), None, String::new());
     let (mut wish, mut stop, mut show, mut file, mut first) = (None, false, false, None, true);
-    let (mut keep, mut toss): (Option<KeepOptions>, bool) = (None, false);
+    let (mut keep, mut toss, mut waiting): (Option<KeepOptions>, bool, bool) = (None, false, false);
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
@@ -191,12 +193,13 @@ fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Value(word) if first && word == "show" => show = true,
             Value(word) if first && word == "keep" => keep = Some(KeepOptions::default()),
             Value(word) if first && word == "toss" => toss = true,
+            Value(word) if first && word == "waiting" => waiting = true,
             Long("ask") if keep.is_some() => keep = keep.map(|keep| KeepOptions { ask: true, ..keep }),
             Long("with-settings") if keep.is_some() => {
                 keep = keep.map(|keep| KeepOptions { with_settings: true, ..keep })
             }
             Long("file") if show => file = Some(number(&mut parser, "--file takes")?),
-            Long("wish") => wish = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("wish") if !waiting => wish = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("date") => options.day = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("repo") if !stop => options.repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
             Long("logs") if !stop => logs = Some(PathBuf::from(parser.value().map_err(usage)?)),
@@ -204,6 +207,10 @@ fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             other => return Err(usage(other.unexpected())),
         }
         first = false;
+    }
+    if waiting {
+        let options = RunOptions { day: options.day, repo: options.repo, ..found(logs, &skip)? };
+        return Ok(Command::Waiting(options));
     }
     let wish = wish.ok_or_else(|| Failure::Usage("run takes --wish".to_string()))?;
     let options = RunOptions { wish, day: options.day, repo: options.repo, ..found(logs, &skip)? };

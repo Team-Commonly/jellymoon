@@ -274,6 +274,45 @@ must say obeyed), and every character above against every name of one and two AS
 `--file` with anything but digits is a usage error, exit 2. No refusal holds a file's name, a byte of a file, a
 word of the agent's or a word of git's, and neither a refusal nor an answer holds the repo's path or a commit's id.
 
+## Work that waits: `jellymoon run waiting`
+
+A page asks which made wishes have work for the person to look at, and what to say of each (F47,
+`crates/jellymoon-core/src/run/waits.rs`). `jellymoon run waiting [--date] [--repo] [--logs] [--skip]` prints it,
+and writes nothing:
+
+```json
+{"day":"2026-03-10","waits":[{"wish":"m1","run":"r0123456789abcdef","said":"make the uploader retry twice","read":true,"made":1,"changed":1,"removed":1,"names":["a.txt","b.txt","n.txt"],"more":0,"obeyed":[],"why":"the work of run r0123456789abcdef waits: files made 1, changed 1, removed 1"}]}
+```
+
+- **Which wishes.** A made wish of the day whose run finished with its one commit, whose record names that
+  commit, and whose work is neither kept nor tossed. That is asked of the home alone. A wish with no run, a run
+  that changed nothing, failed, was cancelled or asks, and a record from before F48 are not listed.
+- **What is said of each.** The list `run show` gives, counted: files made, changed and removed, the first six
+  names as `run show` cleans them, and how many more there are. When the list stopped at 200 files, `why` ends
+  ` of its first 200`. `obeyed` is not of the list: it names every file of the whole work the person's tools
+  obey, the ones past the 200 too, by the rule a look and a keep judge a file by (`obeyed.rs`,
+  `named`). Of the files past the list only the paths are read.
+- **A repo that is not found** (or any other refusal of `run show`) still lists the wish, with `read: false`, no
+  counts, no name, and `why` holding that refusal. A page then offers no choice.
+- **The choices and their words** are core's too: `Waits::title`, `lines`, `choices` and `asks`, `ShownFile::title`
+  and `lines`, `WorkTap::doing`, and `stands` for a wish with no work waiting. A shell words nothing.
+- **A tap on a choice** is `work_tapped`. It does nothing unless the work waits now and was read from its repo
+  now, so a toss never begins where the repo is not found: `run toss` there would remove the copy and leave the
+  branch. `Show me` gives the next file after the one on show that is text `run show --file` prints, from the
+  first again past the last, asking for at most eight; a file the work removed is not asked for.
+- **A keep from a page.** `Keep it` of work with a file the person's tools obey, anywhere in the whole work,
+  changes nothing and gives the names back: `Waits::asks` words them, the first six by name and the rest
+  counted. A tap is made of what was drawn (`WorkTap::of`: the option's words and its note's words), and the tap
+  on `Keep it, with those files` carries that note's words. The keep is done only when `asks` would say the
+  same words of the work as it is now; else it is refused, with nothing changed. The keep is `run keep` with one
+  difference (`keep.rs`, `keep_named`): of the files the person's tools obey it lands only the ones named, and a
+  keep that was not asked once more names none. So work whose merge would bring such a file that no note named
+  is refused whole, in a page's words and not `--with-settings`. `Toss it` is `run toss`, with its own checks.
+
+`work_tapped` has no command of its own: it is proved at the app's boundary (`app/tests/f47.rs`), and what it
+calls is proved at `run show`, `run keep` and `run toss`. `run waiting` is `crates/jellymoon/tests/f47.rs`, and
+the smoke chain's `show` step asks it.
+
 ## What it does not do
 
 - **It does not know the commits of a run from before F48.** Such a record names none, and a commit with the run's

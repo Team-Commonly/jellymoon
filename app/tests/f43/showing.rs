@@ -57,7 +57,7 @@ fn a_tap_on_an_option_shows_its_scene_at_once_and_only_a_choice_to_stop_leaves_w
     let (at_once, stop) = showing.chose("stop-m1", 0).unwrap();
     assert_eq!(title(&at_once), Some(STOPPING));
     // The wish has no run, so core refuses the stop: the page says so.
-    let after = showing.stopped(stop.expect("the stop is work for another thread")()).unwrap();
+    let after = showing.ended(stop.expect("the stop is work for another thread").run()).unwrap();
     assert_eq!(title(&after), Some(UNSTOPPED));
     assert!(showing.chose("stop-m1", 0).is_none(), "a second tap on the choice is nothing");
     // Any other option is a tap for core: its scene, and no work after it.

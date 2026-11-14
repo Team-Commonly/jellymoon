@@ -12,6 +12,7 @@ use crate::stopping::{Chosen, Stopped, Stopping};
 use crate::taps::OnShow;
 use crate::today::{Later, Next};
 use crate::wishing::{Answer, Asking, Look, Offering, Reading, Said, Seen, Wishing};
+use crate::working::{Worked, Working};
 
 /// The day's page on show, shared by the window's handlers, which all run on its thread. A page-data file has no
 /// day: every act on it is nothing.
@@ -27,6 +28,28 @@ pub struct Entered {
     /// The asking for the wish's run, when core kept the wish: work for another thread, answered with
     /// [`Showing::asked`].
     pub asking: Option<Asking>,
+}
+
+/// What a tap on an option left to do: work for another thread.
+pub enum After {
+    Stop(Stopping),
+    Work(Working),
+}
+
+/// What an [`After`] gave.
+pub enum Ended {
+    Stopped(Stopped),
+    Worked(Worked),
+}
+
+impl After {
+    /// The work itself: it asks core, which reads files and a repo, or waits for a run to end.
+    pub fn run(self) -> Ended {
+        match self {
+            After::Stop(stop) => Ended::Stopped(stop()),
+            After::Work(work) => Ended::Worked(work()),
+        }
+    }
 }
 
 impl Showing {
@@ -86,19 +109,23 @@ impl Showing {
         self.with(|on| on.poked(id))
     }
 
-    /// A tap on an option: the scene to show at once, and the stop when it was the choice to stop a run, as work
-    /// for another thread. None for a tap that is nothing.
-    pub fn chose(&self, note: &str, index: usize) -> Option<(Scene, Option<Stopping>)> {
+    /// A tap on an option: the scene to show at once, and, when it was the choice to stop a run or a choice of
+    /// work that waits, core's part of it as work for another thread. None for a tap that is nothing.
+    pub fn chose(&self, note: &str, index: usize) -> Option<(Scene, Option<After>)> {
         match self.with(|on| on.chose(note, index))? {
-            Chosen::Stop(scene, stop) => Some((scene, Some(stop))),
+            Chosen::Stop(scene, stop) => Some((scene, Some(After::Stop(stop)))),
+            Chosen::Work(scene, work) => Some((scene, Some(After::Work(work)))),
             Chosen::Tapped(scene) => Some((scene, None)),
             Chosen::Nothing => None,
         }
     }
 
-    /// What a stop gave: the scene to show.
-    pub fn stopped(&self, stopped: Stopped) -> Option<Scene> {
-        self.with(|on| on.stopped(stopped))
+    /// What the work a tap left gave: the scene to show.
+    pub fn ended(&self, ended: Ended) -> Option<Scene> {
+        self.with(|on| match ended {
+            Ended::Stopped(stopped) => on.stopped(stopped),
+            Ended::Worked(worked) => on.worked(worked),
+        })
     }
 }
 

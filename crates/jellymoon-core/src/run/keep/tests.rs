@@ -48,13 +48,20 @@ fn another_repos_entry_is_never_kept_and_a_file_tools_obey_only_when_asked() {
     let file = |path: &str, repo: bool| Touched::of(path.as_bytes(), repo);
     let asked = |files: &[Touched], with: bool| {
         let mut settings = Vec::new();
-        (judge(files, with, &mut settings), settings)
+        (judge(files, Yes::Said(with), &mut settings), settings)
     };
     assert_eq!(asked(&[file("src/a.rs", false)], false), (Ok(()), vec![]));
     let obeyed = [file("src/a.rs", false), file(".claude/settings.json", false), file("CLAUDE.md", false)];
     let names = vec![".claude/settings.json".to_string(), "CLAUDE.md".to_string()];
     assert_eq!(asked(&obeyed, false), (Err(Unkept::Settings), names.clone()));
-    assert_eq!(asked(&obeyed, true), (Ok(()), names));
+    assert_eq!(asked(&obeyed, true), (Ok(()), names.clone()));
+    // A page's keep lands the ones the person was named and no other: every one of the work must be among them.
+    let to = |named: &[String]| judge(&obeyed, Yes::To(named), &mut Vec::new());
+    assert_eq!(
+        (to(&names), to(&names[..1]), to(&names[1..]), to(&[])),
+        (Ok(()), Err(Unkept::Settings), Err(Unkept::Settings), Err(Unkept::Settings))
+    );
+    assert_eq!(judge(&[file("src/a.rs", false)], Yes::To(&[]), &mut Vec::new()), Ok(()));
     // Another repo's entry is refused whatever was asked for, and before a file tools obey is.
     for repos in
         [file("sub", true), file(".gitmodules", false), file("x/.GITMODULES", false), file(".gitmodules ", false)]

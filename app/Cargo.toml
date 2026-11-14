@@ -63,6 +63,14 @@ path = "tests/support/wisher.rs"
 test = false
 doc = false
 
+# What the F47 tests start: a made-up window that carries taps through `showing.rs` in a process of its own, so
+# that the git core starts for a show, a keep or a toss has a test's variables and none of the caller's.
+[[bin]]
+name = "f47-tapper"
+path = "tests/support/tapper.rs"
+test = false
+doc = false
+
 [lints]
 workspace = true
 

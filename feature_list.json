@@ -339,7 +339,7 @@
         "a tap on any other little one shows its wish's own words and state, and changes nothing"
       ],
       "test": "cargo test -p jellymoon-app --test f47",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F45",
         "F46"

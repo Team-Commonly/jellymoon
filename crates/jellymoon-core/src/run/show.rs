@@ -12,11 +12,11 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::end::{held, of_another, recorded};
-use super::obeyed::obeyed;
+use super::obeyed::named;
 use super::record::Record;
 use super::{RunOptions, RunOutcome, cut, cut_late, finished, no_wish, place, record, refused};
 use crate::copy::{self, Done, Entry, LISTED, TEXT_MAX, Unread, WorkFile};
-use crate::still::{statement, still_text};
+use crate::still::still_text;
 use crate::wish::MadeWish;
 use crate::{Error, wish};
 
@@ -118,7 +118,8 @@ struct Work {
     run: String,
     state: WorkState,
     files: Vec<WorkFile>,
-    more: usize,
+    /// The paths of the files after those, as git keeps them.
+    past: Vec<Vec<u8>>,
 }
 
 /// The words of a refusal that differ between a look at a run's work and a keep of it (`keep.rs`).
@@ -190,6 +191,15 @@ pub(super) fn found(home: &Path, options: &RunOptions, asked: &Asked) -> Result<
     }
 }
 
+/// The wish's run when its work waits for the person: it finished with its one commit, and its record names
+/// that commit and says neither kept nor tossed. None of any other wish. Nothing of a repo is asked.
+pub(super) fn waiting(home: &Path, options: &RunOptions) -> Option<Found> {
+    let found = found(home, options, &SHOWN).ok()?;
+    let waits =
+        found.record.work.is_none_or(|work| work == WorkState::Waits) && found.why == finished(&found.run, true);
+    (waits && found.named().ok()?.is_some()).then_some(found)
+}
+
 /// Reads the work of the wish's run. git is asked only for a run that finished with a commit, whose work waits.
 /// With `only`, a file's number, that file alone is read past its size.
 fn work(home: &Path, options: &RunOptions, only: Option<usize>) -> Result<Work, Error> {
@@ -198,13 +208,13 @@ fn work(home: &Path, options: &RunOptions, only: Option<usize>) -> Result<Work, 
     let run = found.run.clone();
     let state = found.record.work.unwrap_or(WorkState::Waits);
     if state != WorkState::Waits || found.why != finished(&run, true) {
-        return Ok(Work { run, state, files: Vec::new(), more: 0 });
+        return Ok(Work { run, state, files: Vec::new(), past: Vec::new() });
     }
     // The repo is found as a run finds it, whatever the record names: the record's folder is only compared.
     let folder = place::folder(home, &found.day, &found.made, options)?;
     let read = copy::work_of(home, &folder, &run, named.as_ref(), only);
-    let (files, more) = read.map_err(|unread| refused(unread_words(&run, unread, &SHOWN)))?;
-    Ok(Work { run, state, files, more })
+    let (files, past) = read.map_err(|unread| refused(unread_words(&run, unread, &SHOWN)))?;
+    Ok(Work { run, state, files, past })
 }
 
 /// Why a run's work could not be read from its repo, for a look or for a keep.
@@ -234,9 +244,18 @@ pub(super) fn unread_words(run: &str, unread: Unread, asked: &Asked) -> String {
 
 /// The files of a finished run's work. Nothing of it is written anywhere.
 pub fn show_run(home: &Path, options: &RunOptions) -> Result<Shown, Error> {
+    whole(home, options).map(|(shown, _)| shown)
+}
+
+/// [`show_run`], and every file of the whole work the person's tools obey, by its name as it is printed, in git's
+/// order: the files past the list are judged by the rule the listed ones are (`obeyed.rs`).
+pub(super) fn whole(home: &Path, options: &RunOptions) -> Result<(Shown, Vec<String>), Error> {
     let work = work(home, options, None)?;
     let files = work.files.iter().enumerate().map(|(at, file)| entry(at + 1, file)).collect();
-    Ok(Shown { run: work.run, wish: options.wish.clone(), work: work.state, files, more: work.more, most: LISTED })
+    let paths = work.files.iter().map(|file| &file.path).chain(&work.past);
+    let obeyed = paths.map(|path| named(path)).filter(|(_, obeys)| *obeys).map(|(name, _)| name).collect();
+    let (run, wish, more) = (work.run, options.wish.clone(), work.past.len());
+    Ok((Shown { run, wish, work: work.state, files, more, most: LISTED }, obeyed))
 }
 
 /// File `n` of that list as its text. Refused in fixed words, with no byte of the file: a number that names no
@@ -280,8 +299,7 @@ fn head(file: &WorkFile) -> Option<&str> {
 }
 
 fn entry(n: usize, file: &WorkFile) -> ShownEntry {
-    let raw = String::from_utf8_lossy(&file.path);
-    let name = statement(&raw, NAME_MAX);
+    let (name, obeyed) = named(&file.path);
     let change = match file.done {
         Done::Made => FileChange::Made,
         Done::Changed => FileChange::Changed,
@@ -293,7 +311,5 @@ fn entry(n: usize, file: &WorkFile) -> ShownEntry {
         Entry::File if head(file).is_some() => FileKind::Text,
         Entry::File => FileKind::Other,
     };
-    // Asked of the name as git keeps it and as it is printed: a character nobody sees must not hide one.
-    let obeyed = obeyed(&raw) || obeyed(&name);
     ShownEntry { n, name, change, size: file.size, kind, obeyed }
 }

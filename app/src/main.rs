@@ -78,7 +78,7 @@ fn run() -> Result<String, Failure> {
                 Source::File(file) => (scene::scene(&page(file)?), None),
                 Source::Day(day) => {
                     let (scene, page) = day.last();
-                    (day.with_stops(scene), day.entry(page.as_ref()))
+                    (day.with_work(day.with_stops(scene)), day.entry(page.as_ref()))
                 }
                 Source::Waiting(date) => (today::waiting(date), None),
             };

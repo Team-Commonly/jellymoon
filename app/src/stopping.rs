@@ -13,6 +13,7 @@ use sticker_kit::{Note, Scene, State};
 use crate::taps::OnShow;
 use crate::today::Today;
 use crate::wishing::{Look, Seen};
+use crate::working::{self, Working};
 
 /// The one option of the choice a tap on a working made wish's character shows.
 pub const STOP: &str = "Stop it";
@@ -92,10 +93,13 @@ fn say(scene: &mut Scene, (title, body): (&'static str, String)) {
 pub enum Chosen {
     /// It was the choice to stop a run: the scene to show at once, and the stop, as work for another thread.
     Stop(Scene, Stopping),
+    /// It was a choice of work that waits (`working.rs`): the scene to show at once, and core's part of it, as
+    /// work for another thread.
+    Work(Scene, Working),
     /// It was a tap for `taps.rs`: the scene to show.
     Tapped(Scene),
-    /// Nothing, and nothing to show: a tap on a choice to stop that is no longer on show (a second tap on it), or
-    /// on a page with no day.
+    /// Nothing, and nothing to show: a tap on a choice to stop or a choice of work that is no longer on show (a
+    /// second tap on it), or on a page with no day.
     Nothing,
 }
 
@@ -116,23 +120,30 @@ impl OnShow {
         match self.stopping(note, index) {
             Some((scene, stop)) => Chosen::Stop(scene, stop),
             None if note.starts_with(STOPS) => Chosen::Nothing,
-            None => self.tap(note, index).map_or(Chosen::Nothing, Chosen::Tapped),
+            None => match self.working(note, index) {
+                Some((scene, work)) => Chosen::Work(scene, work),
+                None if working::names(note) => Chosen::Nothing,
+                None => self.tap(note, index).map_or(Chosen::Nothing, Chosen::Tapped),
+            },
         }
     }
 
     /// A tap on the character `id`, as work for another thread: the choice to stop, over the scene on show, when
-    /// core says that made wish has a run going. None, and nothing written, for any other character, for a wish
-    /// with no run going, and when the choice is on show already. It is applied with [`OnShow::seen`].
+    /// core says that made wish has a run going, and else the wish opened (`working.rs`): its work that waits, or
+    /// its own words and how it stands. None, and nothing written, for a character that is no wish and when what
+    /// the tap would show is on show already. It is applied with [`OnShow::seen`].
     pub fn poked(&self, id: &str) -> Look {
-        let (today, from, id) = (self.today.clone(), self.scene.clone(), id.to_string());
+        let (today, page, from, id) = (self.today.clone(), self.page.clone(), self.scene.clone(), id.to_string());
         Box::new(move || {
-            let on_show = from.notes.iter().any(|note| wish_of(note) == Some(&id));
-            let going = !on_show && jellymoon_core::going(&today.home, &today.date).contains(&id);
-            going.then(|| {
-                let mut now = from.clone();
-                now.notes.insert(0, choice(&id));
-                Seen { from, now }
-            })
+            if from.notes.iter().any(|note| wish_of(note) == Some(&id)) {
+                return None;
+            }
+            if !jellymoon_core::going(&today.home, &today.date).contains(&id) {
+                return today.opened(page.as_ref(), from, &id);
+            }
+            let mut now = from.clone();
+            now.notes.insert(0, choice(&id));
+            Some(Seen { from, now })
         })
     }
 

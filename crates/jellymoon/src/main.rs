@@ -29,6 +29,7 @@ const USAGE: &str = "usage:
   jellymoon run show --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--file <n>]   (what that run made, read from the repo's store: its files, or one file's text; writes nothing)
   jellymoon run keep --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--ask] [--with-settings]   (lands that run's work on the branch your checkout stands on, as one commit; --ask only says what it would do; --with-settings keeps files your tools obey too)
   jellymoon run toss --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (refuses what that run left: its branch is deleted, the kept copy of a run that did not finish is removed, and the wish is let go)
+  jellymoon run waiting [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (the day's made wishes whose run's work waits to be kept or tossed, each with its files counted and named; writes nothing)
   jellymoon hook install [--settings <Claude Code settings file>] [--installed]   (--installed: for the installed command, as the app does)
   jellymoon hook uninstall
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
@@ -154,6 +155,7 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::keep_run(&home()?, &options, how).map_err(failed)?))
         }
         Command::Toss(options) => Ok(format!("{}\n", jellymoon_core::toss_run(&home()?, &options).map_err(failed)?)),
+        Command::Waiting(options) => Ok(format!("{}\n", jellymoon_core::waiting(&home()?, &options).map_err(failed)?)),
         Command::HookStatus => {
             let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));
             Ok(format!("{}\n", jellymoon_core::HookState { installed, changed: false }))

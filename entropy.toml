@@ -261,7 +261,12 @@ max_file_lines = 400
 # of a take-back, a toss and a keep), `run/keep.rs` 7 (the words a keep's answer ends with then), `copy/keep/toss.rs`
 # 5 (such a branch is left by a toss, and is no refusal) and `run/toss.rs` 3 (its words; a head that claims no
 # cause; a record that says tossed and holds a keep's words is none of core's).
-"crates/jellymoon-core" = 11258
+# F47 raised core by 279: `run/waits.rs` is 254 (which made wishes have work that waits, every word a page says of
+# it, and the tap on a choice), `run/show.rs` 9 (the one question of the home), the round trip of what
+# `run waiting` prints 13 in `tests/shapes.rs`, and 3 of exports.
+# The gate on F47 raised core by 79: the files the person's tools obey are of the whole work (`show.rs`,
+# `whole`), a page's keep lands only the ones named (`keep.rs`, `keep_named`), and a tap is made of what was drawn.
+"crates/jellymoon-core" = 11616
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -374,7 +379,11 @@ max_file_lines = 400
 # branch a name of the person's points at, left by a toss and by a keep), `tests/f46/refused.rs` 17 (a record
 # that says tossed and holds a keep's words; a branch put back by hand) and `tests/f46/unfinished.rs` 1.
 # The made-up agent holding its lock before a first line that gets it stopped raised it by 6.
-"crates/jellymoon" = 19506
+# F47 raised it by 122: `tests/f47.rs` is 102 (`run waiting` at the binary), the made-up agent's script for work
+# that touches a file the person's tools obey 11, and the command's parse and usage 9.
+# The gate on F47 raised it by 56: three scripts of the made-up agent (work past what a list holds, files that
+# cannot be shown) and two tests of `run waiting`.
+"crates/jellymoon" = 19684
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -405,7 +414,8 @@ max_file_lines = 400
 # F45's step, `keep` (`smoke/keep.rs`, 58 lines), raised it by 61.
 # F46's step, `toss` (`smoke/toss.rs`, 54 lines), raised it by 57.
 # F51's step, `asks` (`smoke/asks.rs`, 55 lines), raised it by 58.
-"crates/xtask" = 2048
+# F47 raised it by 5: the `show` step asks `run waiting` too.
+"crates/xtask" = 2053
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -467,7 +477,9 @@ max_file_lines = 400
 # and a field and a chip over a see-through paper on a dark desk; `tests/entry.rs` 32: one backspace for a whole
 # cluster, which holds three ranges of marks no test held; `tests/theme.rs` 8: `art` in every shape; the four
 # tests of debug bounds marked for debug builds, 6; `tests/f32.rs` lost 1).
-"crates/sticker-kit" = 7528
+# F47 raised the kit by 152: the text note is 72 in `layout/text_note.rs` and 24 in `scene.rs`, `layout/notes.rs`
+# and the exports, and its tests are 56 (`tests/text_note.rs`).
+"crates/sticker-kit" = 7680
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -511,7 +523,14 @@ max_file_lines = 400
 # `tests/f32.rs` grew by 9 (the cut at the binary, the leaving path that loads) and the example by 1.
 # F50 raised the app by 11: the test that a folder in a run's copy gets no chip (`tests/f42.rs`).
 # F51 raised the app by 1: a test's made wish names the question it does not carry.
-"app" = 5672
+# F47 raised the app by 946: `src/working.rs` is 193 and the rest of `src` grew by 37 (a tap's work carried as
+# `After` and `Ended` in `showing.rs`, the tap that opens a wish in `stopping.rs`); its tests at the binary are
+# 425 (`tests/f47.rs`, `f47/asked.rs`, `f47/gone.rs`), the made-up window they start 104 (`support/tapper.rs`)
+# and its world 154 (`support/worked.rs`); F43's tests grew by 25 for a tap that now opens the wish, and the
+# rest is 8.
+# The gate on F47 raised the app by 216: `tests/f47/named.rs` (the second yes, at the made-up window), the
+# carried call that panics and its catch, and the note left on show in `support/tapper.rs`.
+"app" = 6834
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

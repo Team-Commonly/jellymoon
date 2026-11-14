@@ -34,7 +34,10 @@ const MADE_BYTES: usize = 64 * 1024;
 /// The most characters of what a wish says of its run.
 const WHY_MAX: usize = 200;
 /// What refuses words that cleaning still changes after its last time: they are never kept half cleaned.
-const CHANGING: &str = "a wish is kept as cleaning leaves it, and cleaning was not done with these words after 8 times";
+pub(crate) const CHANGING: &str =
+    "a wish is kept as cleaning leaves it, and cleaning was not done with these words after 8 times";
+/// What refuses words that are longer than a wish once cleaned.
+pub(crate) const LONG: &str = "a wish is at most 200 characters, and this one is longer";
 /// What a made wish says while no run was started for it.
 const WHY: &str = "nothing was started: `jellymoon wish` keeps a wish and starts no run";
 
@@ -96,7 +99,7 @@ fn file(home: &Path, day: &str) -> PathBuf {
 }
 
 /// The words of a wish as they are kept: cleaned until cleaning changes nothing, and never cut.
-fn cleaned(typed: &str) -> Result<String, Unkept> {
+pub(crate) fn cleaned(typed: &str) -> Result<String, Unkept> {
     still(typed, MADE_SAID_MAX, false)
 }
 
@@ -116,6 +119,20 @@ pub fn wishable(read: &DayOptions, projects: &[String]) -> Vec<String> {
     let Ok(typed) = reader::typed_in(read) else { return Vec::new() };
     let found = |project: &String| named(project) && typed.iter().any(|folder| reader::is_named(folder, project));
     projects.iter().filter(|project| found(project)).cloned().collect()
+}
+
+/// Every project a wish can be made for on `read`'s day, each once, in the order its folders were typed in: the
+/// names [`wishable`] would offer. A folder's name is a session log's text: one that is no folder's name as
+/// [`wish`] takes it is never offered. None at all when the day cannot be read.
+pub(crate) fn offered(read: &DayOptions) -> Vec<String> {
+    let mut offered: Vec<String> = Vec::new();
+    for folder in reader::typed_in(read).unwrap_or_default() {
+        let name = folder.file_name().and_then(|name| name.to_str()).filter(|name| named(name));
+        if let Some(name) = name.filter(|name| !offered.iter().any(|known| known == name)) {
+            offered.push(name.to_string());
+        }
+    }
+    offered
 }
 
 /// [`wish`] for a project chosen on a page: kept only when [`wishable`] offers that project now, on `read`'s day
@@ -173,7 +190,7 @@ fn kept(home: &Path, day: &str) -> Result<Vec<MadeWish>, String> {
 pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Result<Wished, Error> {
     let day = day_of(day)?;
     let said = cleaned(typed).map_err(|why| match why {
-        Unkept::Long => refused("a wish is at most 200 characters, and this one is longer"),
+        Unkept::Long => refused(LONG),
         Unkept::Changing => refused(CHANGING),
     })?;
     if said.is_empty() {

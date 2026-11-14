@@ -270,7 +270,12 @@ max_file_lines = 400
 # is 56 (each name a text of its own, no yes past six or for a name not printed as it is, the line of names kept to
 # one a note draws whole, the names the tap carried given to the keep), `keep.rs` 13 (the names as a set, all of the
 # work's and no other) and `show.rs` 7 (whether each such name is printed as git keeps it).
-"crates/jellymoon-core" = 11755
+# F55, a hearing, raised core by 834: `hear.rs` (the hold from the key to the wish, and `jellymoon hear`'s
+# loop) is 301, `hear/shapes.rs` (the events, the ear's eight reasons and what the jellyfish shows) 145,
+# `hear/voice.rs` (the reader of `voice.toml`) 122, `hear/day.rs` (the project, the making, the day's runs) 106 and
+# the contract's test `tests/hear.rs` 123; the rest is the names a made wish's project may be offered under
+# (`wish.rs`), whether a run's work waits (`run/record.rs`), the new error and the exports.
+"crates/jellymoon-core" = 12589
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -389,7 +394,11 @@ max_file_lines = 400
 # cannot be shown) and two tests of `run waiting`.
 # The second gate on F47 raised it by 30: the made-up agent's scripts for work of three, six, seven and eight files
 # the person's tools obey, of long names, of a name that is not printed, and of eight files that cannot be shown.
-"crates/jellymoon" = 19714
+# F55 raised the binary by 1205, all but 53 lines of it tests: `tests/f55.rs` is 172 and the five files below
+# it 904 (`heard.rs`, the shared events and world; `events.rs`; `project.rs`; `started.rs`, a hearing fed a line
+# at a time; `voice.rs`), and `tests/f30.rs`, F30's three steps through `jellymoon hear`, is 76. The command
+# itself is `parse_hear` and 13 lines of `main.rs`.
+"crates/jellymoon" = 20919
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -421,7 +430,8 @@ max_file_lines = 400
 # F46's step, `toss` (`smoke/toss.rs`, 54 lines), raised it by 57.
 # F51's step, `asks` (`smoke/asks.rs`, 55 lines), raised it by 58.
 # F47 raised it by 5: the `show` step asks `run waiting` too.
-"crates/xtask" = 2053
+# F55's step, `hear` (`smoke/hear.rs`, 46 lines), raised it by 49.
+"crates/xtask" = 2102
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -541,7 +551,8 @@ max_file_lines = 400
 # The second gate on F47 raised the app by 246: `tests/f47/drawn.rs` is 162 (what `layout` places under a yes),
 # `tests/f47/named.rs` grew by 41 and `f47.rs` and `asked.rs` by 3, the made-up window that taps only a placed
 # option by 36 (`support/tapper.rs`), and `working.rs` by 4, all comment.
-"app" = 7080
+# F55 raised the app by 1: the arm for core's new error where it puts an error into words.
+"app" = 7081
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

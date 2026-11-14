@@ -72,6 +72,7 @@ run's id, by a third run that had opened the old lock file before it was unlinke
 | `toss` | `jellymoon run toss` on the wish whose run the `stop` step cancelled: it says tossed at the commit the run started from, the kept copy and the run's branch are gone and `main` is the one ref left, where it was, the page shows the wish let go, the checkout has no changed file, and a second toss changes nothing |
 | `asks` | a third wish in that repo and a run whose `fake-agent` edits a file and then ends with a question: `jellymoon run` prints `asks` with the question and no star, the page shows the wish needing the person with the same question and no star, the copy is kept with the agent's new file and nothing committed on the run's branch, the checkout has no changed file, and `jellymoon run toss` removes the copy and the branch, leaving `main` the one ref |
 | `wish-run` | a repo the chain makes in the system's temporary folder, and a made-up log of something typed in it: `jellymoon wish --run` finds the repo by its name, starts the run through `fake-agent` and exits; `jellymoon page` then shows the wish done with one star, the run's command ends by itself with one commit on the run's branch, and the checkout has no changed file. The step removes the repo |
+| `hear` | a made-up log of something typed in one folder, and `jellymoon hear` fed a hold of a second, final words and five seconds of ticks: the words are shown as a heard wish for 4000 ms with a project, the last line names the wish that was made, and `jellymoon page` shows that wish working in the same words. No key, no sound and no run |
 | `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty; the hook is out and the settings are as they were |
 | `window` (with `--window`) | `jellymoon-app --page` opens a window and, with `JELLYMOON_QUIT_AFTER=3`, exits 0 within 30 seconds with no panic |
 
@@ -90,7 +91,7 @@ that `PATH` is looked for.
   it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
   logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`,
-  `no-logs`, the delivery steps, `wish`, `copy`, `show`, `keep`, `stop`, `toss`, `asks`, `wish-run` and `uninstall` are left out;
+  `no-logs`, the delivery steps, `wish`, `copy`, `show`, `keep`, `stop`, `toss`, `asks`, `wish-run`, `hear` and `uninstall` are left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what. Its sixth step is `run`
   (F39): one real run of the person's Claude Code, in a repo the chain makes in the temporary home, on the fixed

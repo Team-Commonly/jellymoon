@@ -469,7 +469,7 @@
         "`crates/jellymoon/tests/f30.rs` holds F30's three steps for a wish entered through `jellymoon hear`"
       ],
       "test": "cargo test -p jellymoon --test f55",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {

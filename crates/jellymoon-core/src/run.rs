@@ -45,6 +45,7 @@ use end::{lock_file, settle};
 pub use keep::{KeepOptions, Kept, keep_run};
 pub(crate) use left::tidy;
 use record::Record;
+pub(crate) use record::work_waits;
 use serde::{Deserialize, Serialize};
 pub use show::{FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, show_file, show_run};
 pub use stop::stop_run;

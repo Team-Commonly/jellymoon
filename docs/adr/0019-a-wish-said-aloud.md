@@ -320,6 +320,59 @@ Each is a throwaway build outside the repo, run by a person at a Mac. None is a 
    take the keys; is it over a full-screen app and on every space; does the system draw a shadow or a frame; does
    the see-through part take clicks; does the app live on when the page's window closes; a second display.
 
+## Found while building F55 (2026-11-14)
+
+F55 is core's hearing at `jellymoon hear`, with `voice.toml` and F30's test file. The account is
+[hear.md](../development/hear.md). Where this note was silent, this was decided:
+
+1. **The events.** `{"key":"down"|"up"}`, `{"said":"partial"|"final","words":...}`, `{"said":"cannot","why":...}`
+   and `{"tick":<ms>}`. The ear's eight reasons are named in snake case (`no_ear`, `no_microphone`,
+   `microphone_refused`, `speech_refused`, `not_on_device`, `no_such_language`, `not_bundled`, `failed`), and
+   each is said in a sentence of core's: the ear gives a name and never text. A name this build does not know
+   makes the line no event.
+2. **A line that is no event is passed over and counted, and the hearing goes on.** A hearing that died on one
+   bad line would leave the app with no jellyfish. One line on stderr says how many when the input ends.
+3. **Time starts at the first tick**, and a tick that is not later changes nothing. So a sender may use any
+   clock that does not go back, and core never reads one. With no tick no time passes.
+4. **A line has five names always** (`state`, `says`, `words`, `project`, `left`) and `going`, `question` and
+   `made` when they hold. `made` is the wish's id on the first line after it is made, so the shell can show it
+   or look at the page without reading the made wishes itself.
+5. **The ear's final words are waited for 5000 ms** once a hold is over; then `cannot` says the ear did not
+   answer. Decision 5 has no word for an ear that never answers, and without a bound `listening` would stay
+   for ever. Final words count only once the hold is over: while the key is held they are an earlier hold's.
+6. **A key pressed while final words are waited for drops that hold** and listens anew, as it does for a heard
+   wish. A second press while the key is held is passed over.
+7. **The ear's refusal is said whenever it comes**, with no hold too, since the ear may refuse as the app
+   starts. It ends a hold. It does not take a heard wish back: only the key does.
+8. **`working`, `asks` and `waits` are read, never written.** A hearing looks at the day's made wishes as it
+   begins, once for each 1000 ms of ticks, and after a wish is made. It does not end a run that was cut off,
+   which a look at the page does (`wish::made`), so a jellyfish that is drawn writes nothing. `waits` is a
+   done wish whose run's record says it finished with a commit and that the work was neither kept nor tossed.
+9. **The project is asked for when the final words come**, so it is shown for the whole four seconds, and the
+   wish is checked again when it is made (`wish_offered`). The names offered are the last names of the folders
+   typed in that day that a made wish could name: a log's folder name that is a credential's shape is never
+   shown.
+10. **`voice.toml` is read by core's own reader (`hear/voice.rs`), not a TOML library.** Two names, each a
+    quoted text on a line of its own, and anything else refuses the whole file. The kit reads theme files with
+    `toml`, but core does not depend on it, and two names do not earn core a dependency. A key is
+    checked for its shape (modifiers, then one key); whether the system registers it is F58's to find out. A
+    language is `default` or a tag's shape; whether the Mac knows it is the ear's to say.
+11. **`jellymoon hear --run` starts the run with the program that runs it**, as `jellymoon wish --run` does,
+    which is what F55's step asks. Decision 5 says "with the installed command": that is the app's part (F58),
+    which gives `Hearing` the installed command as F42's entry does.
+12. **The hearing waits while a run is started apart**, and reads no event meanwhile, as `wish --run` prints
+    nothing while it waits. F58 runs the hearing off the window's thread for this reason.
+13. **Bounds added:** a line of events is 64 KiB at most; the words so far change 4096 times in a hold at
+    most; a refusal is said for 6000 ms (decision 4's "6 seconds").
+
+**Not closed by F55:** final words are not tied to their hold (the events carry no hold's number, so an
+earlier hold's final that comes after a later hold's key went up is taken for the later one; F60 can number
+holds); a run that was cut off reads `working` until the page is looked at; a sender that stops its ticks
+stops the four seconds; and risk 1 above, a day with no folder typed in, is now the first thing the key meets.
+
+**New in core's error type:** `Error::Hear`, for a hearing that cannot begin or go on and for a `voice.toml`
+that is not used. The app puts it into words where it does core's other errors, which is 1 line.
+
 ## New dependencies
 
 | Package | For | Licence | Size | Rejected |

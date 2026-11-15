@@ -23,7 +23,7 @@ struct Line<'a> {
 }
 
 #[derive(Serialize)]
-struct Run<'a> {
+pub(crate) struct Run<'a> {
     role: Role,
     text: &'a str,
     /// The font size the run is drawn at, in logical pixels: smaller than its role's own where the kit made room.
@@ -33,7 +33,7 @@ struct Run<'a> {
 }
 
 #[derive(Serialize)]
-struct At {
+pub(crate) struct At {
     x: f64,
     y: f64,
     w: f64,
@@ -62,15 +62,15 @@ fn line<'a>(piece: &'a Placed, scene: &Scene) -> Line<'a> {
     }
 }
 
-fn run(run: &TextRun) -> Run<'_> {
+pub(crate) fn run(run: &TextRun) -> Run<'_> {
     Run { role: run.role, text: &run.text, size: hundredths(run.size), at: at(run.rect) }
 }
 
-fn at(rect: Rect) -> At {
+pub(crate) fn at(rect: Rect) -> At {
     At { x: hundredths(rect.x), y: hundredths(rect.y), w: hundredths(rect.w), h: hundredths(rect.h) }
 }
 
 /// Logical pixels to two decimals: enough to place a piece, and no noise from the last bits of a float.
-fn hundredths(value: f32) -> f64 {
+pub(crate) fn hundredths(value: f32) -> f64 {
     (f64::from(value) * 100.0).round() / 100.0 + 0.0
 }

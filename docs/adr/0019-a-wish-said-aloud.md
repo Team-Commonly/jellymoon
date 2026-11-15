@@ -389,6 +389,88 @@ stops the four seconds; and risk 1 above, a day with no folder typed in, is now 
 **New in core's error type:** `Error::Hear`, for a hearing that cannot begin or go on and for a `voice.toml`
 that is not used. The app puts it into words where it does core's other errors, which is 1 line.
 
+## Found while building F56 (2026-11-15)
+
+F56 draws the jellyfish as data: `jellymoon-app layout --jelly` prints the pieces and where both windows stand,
+and opens no window. The account is [app.md](../development/app.md), "The jellyfish", and
+[hear.md](../development/hear.md), "What is drawn". Where this note was silent, this was decided:
+
+1. **The seven states are the line's, and their order is core's.** `JellyState::ORDER` is decision 4's order
+   as data: `listening`, `heard`, `cannot`, `asks`, `working`, `waits`, `quiet`. The first three are a
+   hearing's own (the key, the ear, a refusal); the other four are what a day's made wishes give.
+   `jellymoon_core::jellyfish(line, home, day)` gives the one line that is drawn: the hearing's while it is in
+   one of its own three states, and else what the day's made wishes give now. So a line that says `working`
+   or `asks` is not trusted over the day: it is as old as the hearing's last look, and the day is read again.
+   With no line at all the day alone decides, which is the jellyfish with no hearing. The `made` of a line is
+   kept either way.
+2. **What is drawn is core's too.** `Jelly::drawn()` gives a `JellyDrawn`: the state, a count, the bubble's
+   texts each with whose words it is (`yours`, `project`, `run`, `jellymoon`), and the ring in thousandths.
+   The shell maps a state to a mood and a voice to a tone, one name for one name, and decides nothing.
+   `tests/fixtures/jelly-drawn.jsonl` is what is drawn of each line of the two examples.
+
+   | State | Mood | The bubble, in order | Ring |
+   |---|---|---|---|
+   | `quiet` | `floats` | none | no |
+   | `listening` | `leans_in` | the words so far; none until there are words | no |
+   | `heard` | `holds_up` | the words, the project, "press the key again to take it back" | `left` of 4000 |
+   | `working` | `swims` | none; the count of runs going is drawn on the jellyfish when more than one goes | no |
+   | `asks` | `waves` | "a run asks, and waits for your answer on the page", then the question | no |
+   | `waits` | `glows` | none | no |
+   | `cannot` | `droops` | core's sentence for what was refused | no |
+
+   Two things here are more than decision 4's table says. A heard wish's bubble also holds the line's
+   sentence, since the ring means nothing to a person who was never told the key takes the wish back. And a
+   question stands under core's sentence that a run asks, so a person can tell Jellymoon's words from the
+   run's. `waits` has a sentence on its line and no bubble, as the table has it: the page says it.
+3. **The count is on the jellyfish, not in a bubble**, so `working` opens no second window. It is drawn for
+   two runs or more; the kit draws a number over 99 as `99+`.
+4. **The ring is `left` of the four seconds, in thousandths, rounded down**: 4000 is 1000, 2000 is 500, and
+   under 4 ms is 0. Core divides; the kit is given a share from 1 to 0 and reads no clock. A share that is no
+   number is drawn empty, and one out of range is held to its end.
+5. **The kit's edge scene** (`crates/sticker-kit/src/edge.rs`, `layout/edge.rs`) knows a character with a
+   mood and a count, a bubble of texts each with a tone, and a ring. Its windows have one size for a theme,
+   whatever is said: the character's is 96 by 96, the bubble's 300 wide and as tall as 8 lines of the theme's
+   largest bubble text. So a window is opened and removed, and never resized or moved (decision 4). The bubble
+   itself is as tall as its lines and stands on the side of its window where the character is.
+6. **Where the windows stand** is two pure functions, `place_corner` and `place_beside`. They are given the
+   screen and the room the system leaves on it as numbers. The room is cut to the screen; a room that is
+   nothing, is off the screen or is not numbers is the whole screen. The jellyfish stands 16 pixels from the
+   two edges of the lower right corner of the room. The margin gives way first; a window larger than the room
+   keeps its size and starts at the room's top left, so its start is always on the screen. The bubble stands
+   8 pixels to the left of the jellyfish, their lower edges level; where the room is too narrow for both side
+   by side it stands over the jellyfish, flush with its right edge. `layout --jelly` gives the whole screen as
+   the room: only an open app can ask the system, and F57 does.
+7. **How a text is cut.** Each text is cleaned as every text of the kit is (no control character, no format
+   character but the two joiners, at most 400 characters), then broken into lines by the kit's own measure and
+   cut with an ellipsis, between two characters a reader sees. A person's words take at most 3 lines, a
+   project's name 1, a sentence of Jellymoon's 4 and a question 3; a bubble has at most 4 texts and 8 lines,
+   and a text after a long one always keeps a line. Every sentence core has for the ear fits whole.
+8. **A question is a text of its own.** It has its own role, `quoted`, in the kit and in the output, and 10
+   pixels above and below it where two of Jellymoon's texts have 6. It is told from Jellymoon's words by
+   whose it is, never by what it says: a question that reads exactly like a sentence of core's is still
+   drawn `quoted`.
+9. **Text is text.** Markup, a link's shape, an escape sequence or a control character changes the letters
+   drawn and nothing else: the same lines of the same kinds, the same windows. A run of text has a role, its
+   letters, a size and a box, and no piece of the edge scene can be tapped or followed.
+10. **A line that is no line of `hear` is refused in one sentence**, "jellymoon-app: the input is not one
+    line of `jellymoon hear`", with exit 1 and nothing drawn. `Jelly::read` is the door: at most 64 KiB, one
+    object on one line with the names a line has and no other, and in each state only what that state carries
+    (words while `listening` or `heard`; a project and a time of at most 4000 with `heard` alone; a count of
+    at least one with `working` alone; a question with `asks` alone; the state's own sentence, and any
+    sentence that is not empty with `cannot`). The command does not pass a bad line over as `hear` passes a
+    bad event over: it is given one line, and drawing nothing wrongly is worse than refusing.
+11. **A screen that is no `<W>x<H>` is a wrong command line**: exit 2 with the usage. Each side is a whole
+    number of pixels from 1 to 16384. `--jelly` and `--screen` go together, with `layout` and with `--theme`
+    and `--date` only.
+12. **`--date` is what reads the day.** Without it the command reads its input and nothing else, and an input
+    of nothing is no line. With it core reads that day's made wishes in Jellymoon's home, writes nothing, and
+    an input of nothing is no hearing at all. Made wishes that cannot be used give `quiet`, as in a hearing.
+
+**Not closed by F56:** nothing is drawn on a screen yet. The art of the seven moods, the ring's stroke and
+the bubble's shape are F57's, with the two windows; the room the Dock and the menu bar leave is asked there.
+The kit's drawing half paints no piece of the edge scene yet, so no theme has a colour for one: F57 gives
+the `quoted` role its ink.
+
 ## New dependencies
 
 | Package | For | Licence | Size | Rejected |

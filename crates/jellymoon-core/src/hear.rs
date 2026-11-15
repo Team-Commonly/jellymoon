@@ -11,12 +11,14 @@
 //! is no event is counted and passed over.
 
 mod day;
+mod drawn;
 mod shapes;
 mod voice;
 
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
 
+pub use drawn::{JellyDrawn, JellyText, Whose, jellyfish};
 pub use shapes::{EarCannot, HearEvent, Jelly, JellyState, KeyMove, Said};
 pub use voice::{Voice, voice};
 

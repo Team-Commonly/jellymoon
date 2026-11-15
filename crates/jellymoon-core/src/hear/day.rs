@@ -9,8 +9,8 @@ use crate::{DayOptions, RunOptions, WishState, run, run_apart, wish, wish_offere
 /// What is said when no project can be picked for a heard wish.
 pub(super) const NO_PROJECT: &str = "nothing was kept: make the day's first wish on the page, so that Jellymoon knows \
                                      which project a wish said aloud is for";
-const ASKS: &str = "a run asks, and waits for your answer on the page";
-const WAITS: &str = "a run's work waits for you on the page";
+pub(super) const ASKS: &str = "a run asks, and waits for your answer on the page";
+pub(super) const WAITS: &str = "a run's work waits for you on the page";
 
 /// The day's runs, as its made wishes tell of them.
 #[derive(Default)]

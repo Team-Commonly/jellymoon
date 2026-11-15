@@ -33,8 +33,9 @@ pub use copy::{Outcome, RunCopy, clean_copy, make_copy};
 pub use error::Error;
 pub use find::{own_folder, user_home};
 pub use hear::{
-    CANNOT_MS, EAR_MS, EarCannot, HEAR_LINE_MAX, HOLD_MS, HearEvent, HearOptions, Hearing, Jelly, JellyState, KeyMove,
-    LOOK_MS, SAID_SO_FAR_MAX, SLIP_MS, Said, Voice, WINDOW_MS, hear, voice,
+    CANNOT_MS, EAR_MS, EarCannot, HEAR_LINE_MAX, HOLD_MS, HearEvent, HearOptions, Hearing, Jelly, JellyDrawn,
+    JellyState, JellyText, KeyMove, LOOK_MS, SAID_SO_FAR_MAX, SLIP_MS, Said, Voice, WINDOW_MS, Whose, hear, jellyfish,
+    voice,
 };
 pub use hook::{hook_installed, install_hook, remove_hook};
 pub use project::{Known, PROJECTS_MAX, Projects, add_project, forget_project, projects};

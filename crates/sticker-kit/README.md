@@ -157,6 +157,31 @@ own dispatch to a headless page. The test platform has no input method, so a
 composition is started there by calling the handler, as a platform would; what
 a real input method does on a real window is checked by hand.
 
+## The edge scene: a character at a corner of the screen
+
+`Edge` (`src/edge.rs`) is a second, smaller scene: one character with a `mood` (`floats`, `leans_in`, `holds_up`,
+`swims`, `waves`, `glows`, `droops`) and a `count`, a `bubble` of texts, and a `ring` from 1, full, to 0, empty.
+`layout_edge(edge, theme, corner, measure)` places it in two windows, each from its own top left: the character and
+its count in one of 96 by 96, the bubble with its lines and its ring in a second, 300 wide. `edge_windows(theme)`
+gives both sizes, which never depend on what is said: a window is opened and removed, never resized.
+
+- A text of the bubble has a `tone`: `plain` (the role `body`, at most 4 lines), `strong` (`row_main`, 3), `small`
+  (`row_sub`, 1) or `quoted` (the role `quoted`, 3), for someone else's words, which stand 10 pixels apart from the
+  texts around them. A bubble draws the first 4 texts that hold something a person sees, on 8 lines at most; each
+  is cleaned and cut like every text of the kit, and every text keeps a line. With none there is no bubble, no
+  second window and no ring.
+- A count of 0 draws nothing, and one over 99 is drawn as `99+`. A ring that is no number is empty. The kit reads
+  no clock: whoever counts the time gives the share that is left.
+- `place_corner(screen, room, size, corner, margin)` says where a window stands in a corner, and
+  `place_beside(screen, room, anchor, size, corner, gap)` where a second stands beside it. The room is what the
+  system leaves of the screen (a menu bar, a dock, a task bar), given as numbers: the kit asks the system nothing.
+  A room that is nothing, off the screen or not numbers is the whole screen. The margin gives way before a window
+  leaves the room; a window larger than the room keeps its size and starts at the room's top left. The second
+  window stands away from the corner's edge, level with the first; where the room is too narrow it stands over a
+  lower anchor and under an upper one.
+
+Nothing of the edge scene is painted yet: `draw` knows the page's pieces only.
+
 ## Run it
 
 ```sh

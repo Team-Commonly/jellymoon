@@ -8,6 +8,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::{HEAR_LINE_MAX, Jelly, JellyState, TAKE_BACK, WINDOW_MS, day};
+use crate::redact::seen;
 use crate::{Error, wish};
 
 impl JellyState {
@@ -70,10 +71,14 @@ pub struct JellyDrawn {
 impl Jelly {
     /// The line `bytes` hold, when they are one line a hearing prints and nothing else: at most
     /// [`HEAR_LINE_MAX`] bytes, one object on one line with the names a line has, and in each state only what
-    /// that state carries. Any other text is no line.
+    /// that state carries. A heard wish's words and its project are something a person sees, as the door
+    /// makes no wish of less. Any other text is no line.
     pub fn read(bytes: &[u8]) -> Option<Jelly> {
-        let line = bytes.trim_ascii();
-        if bytes.len() > HEAR_LINE_MAX || line.contains(&b'\n') {
+        // The one line break a line ends in, as any system writes it; then no character that ends a line. A form
+        // feed needs no word here: it is no blank of JSON's, so the object is refused with it anywhere.
+        let line = bytes.strip_suffix(b"\n").unwrap_or(bytes);
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        if bytes.len() > HEAR_LINE_MAX || line.iter().any(|byte| matches!(byte, b'\n' | b'\r')) {
             return None;
         }
         serde_json::from_slice::<Jelly>(line).ok().filter(Jelly::is_printed)
@@ -92,7 +97,7 @@ impl Jelly {
         };
         let heard = self.state == Heard;
         let words = match self.state {
-            Heard => !self.words.is_empty(),
+            Heard => seen(&self.words) && seen(&self.project),
             Listening => true,
             _ => self.words.is_empty(),
         };

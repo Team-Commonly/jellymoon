@@ -22,12 +22,18 @@ back to the sticker theme's, and `art` is not read, whatever it holds (a theme f
 is drawn, and no file is refused for what its `art` names), each said in one `jellymoon-app: theme: ` line on stderr, the first 8 of them; a line is cut at 300 characters (`LONGEST_LINE`), with an ellipsis. A theme file that cannot be read or that the kit refuses (a number out of its
 range) exits 1 with one line that names the key and the reason.
 
-With `layout` it prints where every piece goes. Without, it opens a window (default 1440x900); `t` switches between the two built-in themes, and
-`JELLYMOON_QUIT_AFTER=<seconds>` closes it by itself. `--size` is from 960x640 to 16384x16384, each side a whole
-number of pixels: 960x640 is the smallest size a page is drawn at, and the window is asked not to shrink below it
+With `layout` it prints where every piece goes. Without, it opens the page's window (default 1440x900) and the
+jellyfish ("The jellyfish's two windows", below); `t` switches the page between the two built-in themes, and
+`JELLYMOON_QUIT_AFTER=<seconds>` ends the app by itself. `--size` is from 960x640 to 16384x16384, each side a whole
+number of pixels written in digits only: 960x640 is the smallest size a page is drawn at, and the window is asked not to shrink below it
 (a unit test holds what is asked; that the system obeys was seen by hand on the Mac only). A wrong command line exits 2 with the usage on stderr; a file
-that cannot be read, is over 1 MiB or is not page data exits 1 with one line. Both start `jellymoon-app: ` and print
-nothing on stdout.
+that is over 1 MiB or is not page data exits 1 with one line. Both start `jellymoon-app: ` and print
+nothing on stdout. A wrong `--size` or `--screen` is said back cleaned and cut at 40 characters, with an ellipsis.
+
+A file that cannot be read, for `--page` or for `--jelly`, exits 1 with `jellymoon-app: the file cannot be read:
+<name>`, where the name is the file's last name on one line: no folder that was typed, and no word of the
+system's. With no name left it is `jellymoon-app: the file cannot be read`; for stdin it is
+`jellymoon-app: the input cannot be read`.
 
 ## Today's page (`app/src/today.rs`)
 
@@ -382,21 +388,24 @@ for one name, and prints what the kit placed.
 | `waits` | `glows` | none | |
 | `cannot` | `droops` | core's sentence for what was refused (`body`) | |
 
-**The lines.** One JSON object a line. A `window` line has `id` (`jelly` or `bubble`) and where the window stands on
-the screen. The lines after it are that window's pieces, with the same `id`, placed from the window's own top left:
+**The lines.** One JSON object a line. A `window` line has `id` (`jelly` or `bubble`), where the window stands on
+the screen, and `opens`: what the window is asked for when the app opens it (next section). The lines after it are that window's pieces, with the same `id`, placed from the window's own top left:
 `character` (with `state` and `mood`) and `count` in `jelly`; `bubble` and `ring` (with `ring`, from 1, full, to 0)
 in `bubble`. `text` is a list of runs as in the page's output. With no bubble, the `bubble` window is not printed.
 
 ```json
-{"kind":"window","id":"jelly","x":1328.0,"y":788.0,"w":96.0,"h":96.0}
+{"kind":"window","id":"jelly","x":1328.0,"y":788.0,"w":96.0,"h":96.0,"opens":{"kind":"pop_up","focus":false,"see_through":true,"moves":false,"resizes":false,"tap":"page"}}
 {"kind":"character","id":"jelly","x":8.0,"y":8.0,"w":80.0,"h":80.0,"state":"quiet","mood":"floats","text":[]}
 ```
 
 **Where the windows stand.** The jellyfish's window is 96 by 96, 16 pixels from the right and the lower edge of the
 screen. The bubble's is 300 wide, one height for a theme whatever is said, 8 pixels left of the jellyfish with their
-lower edges level; on a screen too narrow for both it stands over the jellyfish. A window larger than the screen
-keeps its size and starts at the screen's top left. Here the room is the whole screen: the room a Dock and a menu
-bar leave is given to the same two functions of the kit by the window that F57 opens.
+lower edges level; on a screen too narrow for both it stands over the jellyfish. On a screen that holds the two
+apart only with less than 16 pixels at the edge, the jellyfish's margin gives way first, as far as it must, so the
+bubble is never laid over the jellyfish while there is room for both (`place_pair`). A window larger than the
+screen keeps its size and starts at the screen's top left. Here the room is the whole screen: the open app gives
+the same function the room a Dock and a menu bar leave. A theme's text sizes are held to 9 to 22 pixels in the
+edge scene, so no theme file makes a window that a text leaves.
 
 **Text.** A person's words take at most 3 lines, a project's name 1, a sentence of Jellymoon's 4 and a question 3,
 each cut with an ellipsis between two characters a reader sees. A question is a run's own words: it has the role
@@ -409,12 +418,64 @@ With `--date` an input of nothing is no hearing at all, and the day alone is dra
 input is read.
 
 **Refused.** An input that is not one line of `jellymoon hear` exits 1 with
-`jellymoon-app: the input is not one line of `jellymoon hear`` and prints nothing. A `--screen` that is not `<W>x<H>`
-with each side a whole number from 1 to 16384, `--jelly` without `layout` or without `--screen`, and either with a
-page's flags (`--page`, `--waiting`, `--size`, `--logs`, `--skip`, `--model`, `--fresh`) exit 2 with the usage.
+`jellymoon-app: the input is not one line of `jellymoon hear`` and prints nothing: so does a heard wish whose
+words or project hold nothing a person sees, and a line with a carriage return or a form feed inside it (a line
+may end in `\r\n`). A `--jelly` file that cannot be read exits 1 with `jellymoon-app: the file cannot be read:
+<name>`, as above. A `--screen` that is not `<W>x<H>` with each side a whole number from 1 to 16384 in digits only,
+`--jelly` without `layout` or without `--screen`, and either with a page's flags (`--page`, `--waiting`, `--size`,
+`--logs`, `--skip`, `--model`, `--fresh`) exit 2 with the usage.
 
-Tests: `app/tests/f56.rs` with `f56/jelly.rs`, `words.rs` and `day.rs`; the kit's half is
+Tests: `app/tests/f56.rs` with `f56/jelly.rs`, `words.rs` and `day.rs`, and `app/tests/f57.rs`; the kit's half is
 `crates/sticker-kit/tests/edge.rs`. The smoke chain's `jelly` step draws the line its `hear` step printed.
+
+## The jellyfish's two windows (`app/src/popup.rs`, `jellyfish.rs`, `shell.rs`)
+
+The open app shows the jellyfish in a window of its own, and its bubble in a second (ADR 0019, decision 4 and
+"Found while building F57").
+
+**What each window is asked for** is data, `popup::JELLY` and `popup::BUBBLE`, printed as `opens` by
+`layout --jelly`. `popup::options` is the one place that turns it into what GPUI is asked.
+
+| | `kind` | `focus` | `see_through` | `moves` | `resizes` | `tap` |
+|---|---|---|---|---|---|---|
+| the jellyfish | `pop_up` | no | yes | no | no | `page` |
+| the bubble | `pop_up` | no | yes | no | no | `none` |
+
+Both are opened without a title bar, on the primary display, at the place and the size `jelly::stands` gives, which
+is the kit's `place_pair` in the room the system says the menu bar and the Dock leave (`Room::primary`). Neither is
+ever asked for the focus, and neither has a key: a key pressed anywhere goes to the page's window or nowhere.
+
+**The bubble** is opened when core's state has words a person sees, and removed when it has none. No window is
+moved or resized: the bubble's place is fixed when the jellyfish is opened, and what changes inside either window
+is drawn in it.
+
+**A tap on the jellyfish shows the page and does nothing else**: the page's window is brought to the front, or
+opened again when it was closed. A tap on the bubble does nothing. A text in the bubble is drawn as text: a run's
+question keeps its own role and its own ink (the palette's `quoted`), below Jellymoon's sentence.
+
+**Closing the page's window ends nothing.** The app and the jellyfish stay; the page is the same view in a new
+window when it is shown again, with its scene, its theme and what was typed in its entry. A day goes on being read
+and looked at while its window is closed, and an answer to a wish entered just before is taken. Opening the app
+again (its icon in the Dock) shows the page as a tap does. **Quit** (the menu, or Cmd-Q) removes all three windows
+and ends the app; so does `JELLYMOON_QUIT_AFTER`. If the jellyfish could not be opened, one line on stderr says
+so, and closing the page then ends the app, since nothing is left to show it from.
+
+**Once a second** what core keeps for the jellyfish is read again: `jellymoon_core::jellyfish` with no line, in
+the day's home, which is that day's made wishes and their runs (`working` with its count, `asks` with the
+question, `waits`, else `quiet`). The reading is off the window's thread, as the page's look is, and what it gives
+is drawn. A look that fails draws `quiet`. With `--page` or `--waiting` there is no day: the jellyfish is quiet
+and nothing is looked at. The jellyfish keeps the theme the app was opened with; `t` switches the page only.
+
+Tests: `app/tests/f57/window.rs` opens all of it on GPUI's test platform, on the Mac, where there is no screen:
+both windows placed, each of the seven states drawn, the bubble opened and removed with nothing moved, the page
+closed and shown again by a tap and by opening again, Quit, the end by itself, and the look once a second off the
+window's thread. `popup.rs` holds the options asked in a unit test.
+
+**Not tested, and not seen**: nothing here was opened on a screen. Whether a pop-up brings the app to the front
+when it is opened or tapped, whether the system draws a shadow or a frame round a window one sees through, and
+whether the part one sees through takes clicks are for a person to check; all three are answered in
+`popup::options` and nowhere else. That Quit ends the process, the menu, Cmd-Q and opening the app again are the
+system's and are not run by a test: a test sees the windows removed and nothing opened after.
 
 ## From page data to pieces (`app/src/scene.rs`)
 

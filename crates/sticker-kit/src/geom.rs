@@ -42,6 +42,15 @@ impl Rect {
         self.x >= outer.x && self.y >= outer.y && self.right() <= outer.right() && self.bottom() <= outer.bottom()
     }
 
+    /// The part of this rectangle that is inside `within`. Nothing, with no size below nothing, when the two are
+    /// apart or either is not numbers.
+    pub fn clipped(&self, within: &Rect) -> Rect {
+        let (x, y) = (self.x.max(within.x), self.y.max(within.y));
+        let (w, h) = (self.right().min(within.right()) - x, self.bottom().min(within.bottom()) - y);
+        let numbers = [self.x, self.y, self.w, self.h, w, h].iter().all(|side| side.is_finite());
+        if w > 0.0 && h > 0.0 && numbers { Rect::new(x, y, w, h) } else { Rect::new(x, y, 0.0, 0.0) }
+    }
+
     pub fn grown(&self, by: f32) -> Rect {
         Rect::new(self.x - by, self.y - by, self.w + 2.0 * by, self.h + 2.0 * by)
     }

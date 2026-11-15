@@ -88,6 +88,12 @@ pub fn drawn_on(line: &Value, screen: &str) -> Drawn {
     placed(&run(&["layout", "--jelly", "-", "--screen", screen], Some(&format!("{line}\n"))))
 }
 
+/// What is drawn of one line in the theme `theme` names.
+pub fn drawn_in(line: &Value, theme: &str) -> Drawn {
+    let args = ["layout", "--jelly", "-", "--screen", SCREEN, "--theme", theme];
+    placed(&run(&args, Some(&format!("{line}\n"))))
+}
+
 /// The lines `layout --jelly` printed, in their order.
 pub struct Drawn(pub Vec<Piece>);
 

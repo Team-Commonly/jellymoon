@@ -83,7 +83,7 @@ impl Measure for FixedAdvance {
 
 const ELLIPSIS: char = '…';
 
-/// What nobody sees: the line and paragraph separators, and every format character (Unicode category Cf: direction
+/// What nobody sees: the line and paragraph separators (a space in [`clean`]), and every format character (Unicode category Cf: direction
 /// marks, zero-width space, soft hyphen, word joiner, byte-order mark, tag characters and the rest) other than the
 /// joiners U+200C and U+200D, which emoji and several scripts are written with. The list is written out because the
 /// kit carries no Unicode tables.
@@ -112,18 +112,33 @@ pub fn has_visible(text: &str) -> bool {
     text.chars().any(|c| !(c.is_control() || is_unseen(c) || is_blank(c)))
 }
 
-/// Removes control characters and what is [`is_unseen`], turns line breaks and tabs into single spaces, and keeps at
-/// most `max_chars` characters, then an ellipsis when any were cut.
+/// The most marks kept on one character: a letter under a pile of them is drawn as a column of ink over its
+/// neighbours.
+pub const MAX_MARKS: usize = 8;
+
+/// What ends a line or a word: a space and a tab, and each character Unicode ends a line with.
+fn is_break(c: char) -> bool {
+    matches!(c, '\n' | '\r' | '\t' | ' ' | '\u{b}' | '\u{c}' | '\u{85}' | '\u{2028}' | '\u{2029}')
+}
+
+/// Removes control characters and what is [`is_unseen`], turns every line break and tab into a single space,
+/// keeps at most [`MAX_MARKS`] marks on one character, and keeps at most `max_chars` characters, then an ellipsis
+/// when any were cut. A mark that is left out is not counted.
 pub fn clean(text: &str, max_chars: usize) -> String {
     let mut out = String::new();
     let mut count = 0;
     let mut pending_space = false;
+    let mut marks = 0;
     for c in text.chars() {
-        if matches!(c, '\n' | '\r' | '\t' | ' ') {
-            pending_space = !out.is_empty();
+        if is_break(c) {
+            (pending_space, marks) = (!out.is_empty(), 0);
             continue;
         }
         if c.is_control() || is_unseen(c) {
+            continue;
+        }
+        marks = if is_mark(c) { marks + 1 } else { 0 };
+        if marks > MAX_MARKS {
             continue;
         }
         let needed = if pending_space { 2 } else { 1 };

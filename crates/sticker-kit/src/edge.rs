@@ -16,7 +16,7 @@ pub struct Edge {
     pub count: usize,
     /// The bubble's texts, in order: the first [`crate::layout::MAX_BUBBLE_TEXTS`] that hold something a person
     /// sees. With none there is no bubble, and no second window.
-    pub bubble: Vec<Said>,
+    pub bubble: Vec<EdgeText>,
     /// How full the bubble's ring is, from 1, full, to 0, empty. None draws no ring, and so does no bubble. The
     /// kit reads no clock: whoever counts the time gives the share that is left.
     pub ring: Option<f32>,
@@ -39,7 +39,7 @@ pub enum EdgeMood {
 /// One text of a bubble. It is drawn as text, cleaned and cut like every text of the kit, and as nothing else.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct Said {
+pub struct EdgeText {
     pub text: String,
     pub tone: Tone,
 }
@@ -131,4 +131,28 @@ pub fn place_beside(screen: Viewport, left: Rect, anchor: Rect, size: Viewport, 
         (x, if corner.bottom() { anchor.y - gap - h } else { anchor.bottom() + gap })
     };
     Rect::new(held(x, w, room.x, room.w), held(y, h, room.y, room.h), w, h)
+}
+
+/// Where two windows stand at a corner: the first as [`place_corner`] places it, the second beside it as
+/// [`place_beside`] does. In a room that holds both apart only with less than `margin`, the first window's
+/// margin gives way, as far as it must and no further, before the second is laid over the first: beside it when
+/// the room is wide enough for that, else over or under it. The first stands where this says with a second
+/// window or with none, so neither is ever moved for the other.
+pub fn place_pair(
+    screen: Viewport,
+    left: Rect,
+    first: Viewport,
+    second: Viewport,
+    corner: Corner,
+    margin: f32,
+    gap: f32,
+) -> (Rect, Rect) {
+    let (held, margin) = (room(screen, left), length(margin));
+    // What is left of the room's width with the two side by side, and of its height with one over the other.
+    let beside = held.w - length(first.w) - length(gap) - length(second.w);
+    let over = held.h - length(first.h) - length(gap) - length(second.h);
+    let spare = beside.max(over);
+    let margin = if spare >= 0.0 { margin.min(spare) } else { margin };
+    let anchor = place_corner(screen, left, first, corner, margin);
+    (anchor, place_beside(screen, left, anchor, second, corner, gap))
 }

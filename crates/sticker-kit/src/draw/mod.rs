@@ -4,6 +4,7 @@
 //! one canvas, sticker art as images, then text. Text is always level;
 //! at this GPUI version only drawn paths can be turned.
 
+mod edge;
 mod entry;
 #[cfg(feature = "headless")]
 pub mod headless;
@@ -23,6 +24,7 @@ use crate::scene::Scene;
 use crate::text::Role;
 use crate::theme::Theme;
 
+pub use edge::{EdgePart, EdgeView, edge_ink};
 pub use entry::EntryMade;
 use entry::EntryView;
 pub use measure::{GlyphMeasure, load_fonts};

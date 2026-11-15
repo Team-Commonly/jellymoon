@@ -92,7 +92,7 @@ fn paint_grid(rect: Rect, step: f32, color: Color, origin: Point<Pixels>, window
     }
 }
 
-fn paint_polygon(points: &[(f32, f32)], color: Color, origin: Point<Pixels>, window: &mut Window) {
+pub(crate) fn paint_polygon(points: &[(f32, f32)], color: Color, origin: Point<Pixels>, window: &mut Window) {
     if points.len() < 3 {
         return;
     }

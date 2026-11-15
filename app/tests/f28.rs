@@ -326,6 +326,7 @@ fn a_file_that_is_not_page_data_is_refused() {
     }
     let missing = support::run(&["layout", "--page", "no-such-file.json"], None);
     assert_eq!(missing.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&missing.stderr).starts_with("jellymoon-app: reading no-such-file.json: "));
+    // In fixed words, with the file's last name and nothing the system says (F56's review, note 3).
+    assert_eq!(String::from_utf8_lossy(&missing.stderr), "jellymoon-app: the file cannot be read: no-such-file.json\n");
     assert!(missing.stdout.is_empty());
 }

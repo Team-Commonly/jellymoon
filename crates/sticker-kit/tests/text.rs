@@ -5,15 +5,32 @@ use sticker_kit::{FixedAdvance, Measure, Role};
 
 #[test]
 fn every_control_and_format_character_is_removed_but_the_two_joiners() {
-    let gone = "\u{0}\u{7}\u{1b}\u{7f}\u{85}\u{9b}\u{ad}\u{600}\u{61c}\u{6dd}\u{70f}\u{890}\u{8e2}\u{180e}\u{200b}\u{200e}\u{200f}\
-\u{2028}\u{2029}\u{202a}\u{202e}\u{2060}\u{2064}\u{2066}\u{2069}\u{206f}\u{feff}\u{fff9}\u{fffb}\u{110bd}\u{13430}\u{1bca0}\
+    let gone = "\u{0}\u{7}\u{1b}\u{7f}\u{9b}\u{ad}\u{600}\u{61c}\u{6dd}\u{70f}\u{890}\u{8e2}\u{180e}\u{200b}\u{200e}\u{200f}\
+\u{202a}\u{202e}\u{2060}\u{2064}\u{2066}\u{2069}\u{206f}\u{feff}\u{fff9}\u{fffb}\u{110bd}\u{13430}\u{1bca0}\
 \u{1d173}\u{e0000}\u{e0001}\u{e0020}\u{e007f}";
     let count = gone.chars().count();
     let text: String = gone.chars().map(|c| format!("x{c}")).collect();
     assert_eq!(clean(&text, 400), "x".repeat(count));
     let joined = "\u{645}\u{200c}\u{6cc} and 👩\u{200d}🚀";
     assert_eq!(clean(joined, 400), joined, "the joiners are kept: emoji and several scripts need them");
-    assert_eq!(clean("one\u{2028}two\u{2029}three\nfour", 400), "onetwothree four", "no line end inside a text");
+    // Every character that ends a line is one space between two words, and none at either end.
+    assert_eq!(
+        clean("one\u{2028}two\u{2029}three\nfour\u{85}five\u{b}six\u{c}seven", 400),
+        "one two three four five six seven"
+    );
+    assert_eq!(clean("\u{2028}one\u{85}\u{b} \u{2029}two\u{2029}", 400), "one two", "a run of them is one space");
+}
+
+#[test]
+fn marks_piled_on_one_character_are_capped_at_eight() {
+    let piled = format!("a{}b", "\u{301}".repeat(399));
+    assert_eq!(clean(&piled, 400), format!("a{}b", "\u{301}".repeat(8)));
+    // Eight are kept, and what a joiner joins is no pile: a family of four is whole.
+    let eight = format!("e{}", "\u{301}".repeat(8));
+    let family = "👩\u{200d}👩\u{200d}👧\u{200d}👦";
+    assert_eq!((clean(&eight, 400), clean(family, 400)), (eight.clone(), family.to_string()));
+    // The marks left out are not counted against the text's length.
+    assert_eq!(clean(&format!("{piled} tail"), 15), format!("a{}b tail", "\u{301}".repeat(8)));
 }
 
 #[test]

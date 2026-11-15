@@ -63,6 +63,7 @@ of text (4.5) or of a line (3), but the hint's, which is meant to be pale:
 | the hint, and words that wait | `entry` | 2.5 (`HINT_FLOOR`) | 2.80 | 3.06 |
 | the caret | `entry` | 3.0 (`CARET_FLOOR`) | 3.67 | 4.57 |
 | the ring | `paper` | 3.0 (`RING_FLOOR`) | 5.35 | 15.80 |
+| `quoted`, someone else's words | `bubble` | 4.5 (`QUOTED_FLOOR`) | 6.14 | 6.66 |
 
 A colour one can see through is laid on what is under it before it is
 measured: a chip and the field on the paper, the paper on the desk, and the
@@ -184,7 +185,20 @@ gives both sizes, which never depend on what is said: a window is opened and rem
   window stands away from the corner's edge, level with the first; where the room is too narrow it stands over a
   lower anchor and under an upper one.
 
-Nothing of the edge scene is painted yet: `draw` knows the page's pieces only.
+- `place_pair(screen, room, first, second, corner, margin, gap)` places both. In a room that holds the two apart
+  only with less than the margin, the first window's margin gives way, as far as it must, before the second is
+  laid over the first. A size, a margin or a gap below nothing, or that is no number, is nothing.
+- A text of the edge scene is drawn at its role's size held to 9 to 22 pixels, whatever a theme asks, so a window
+  of the size `edge_windows` gives always holds its texts.
+- `Edge::speaks()` says whether there is a bubble, and so a second window.
+
+`EdgeView` (`src/draw/edge.rs`, feature `gpui`) paints one window of the scene: `EdgePart::Character` or
+`EdgePart::Bubble`. It is given the scene with `set_edge` and draws it again; `on_tap` is told a tap anywhere in
+it, and a view with no `on_tap` takes none. The character is the theme's art in one of seven poses, one a mood,
+with the count on a pill; the bubble is a rounded shape with the ring as an arc that empties. Every run of text is
+clipped to its piece, and is text and nothing else. A `quoted` run is drawn in the palette's `quoted` ink
+(`edge_ink`), the others in `ink` and `soft`. A theme file's `quoted` falls back to its `accent_dark` where that
+reads on its `bubble`, and is held to its floor like the pairs above, on a bubble laid on white.
 
 ## Run it
 

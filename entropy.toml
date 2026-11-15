@@ -303,11 +303,11 @@ max_file_lines = 400
 # and `reader.rs` 13; `run.rs` and `wish.rs` lost 12, their own lookups gone.
 # F56 raised core by 264: what is drawn of a hearing's line, the door a line passes and the one state of a line
 # and a day (`hear/drawn.rs`, 194 lines), and their contract tests in `tests/hear.rs`.
-# F65, a new project, raised core by 239: `project/new.rs`, the name, what is taken, the order and what a failure
-# takes back, is 170; `copy/fresh.rs`, the new repo and its empty first commit, 43; `copy/git.rs` 11 (`init`, and
+# F65, a new project, raised core by 240: `project/new.rs`, the name, what is taken, the order and what a failure
+# takes back, is 171; `copy/fresh.rs`, the new repo and its empty first commit, 43; `copy/git.rs` 11 (`init`, and
 # the look for the program on `PATH` by itself); `copy/clean.rs` 10 (who a commit is by, shared with a run's);
 # `copy.rs` and `project.rs` 5.
-"crates/jellymoon-core" = 14242
+"crates/jellymoon-core" = 14243
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).

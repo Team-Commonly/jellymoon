@@ -74,6 +74,7 @@ fn taken(folder: &Path, name: &str) -> bool {
 /// what is at it, a link too, is an error, so nothing is ever made through one.
 fn make(folder: &Path) -> io::Result<()> {
     let mut make = fs::DirBuilder::new();
+    make.recursive(false);
     #[cfg(unix)]
     std::os::unix::fs::DirBuilderExt::mode(&mut make, 0o700);
     make.create(folder)

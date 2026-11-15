@@ -292,7 +292,10 @@ max_file_lines = 400
 # `run/answer.rs` (only marks refused); `run/asks.rs` lost 2 (a lock that removed its file).
 # Its second gate raised core by 45: `still.rs` 43 (a stretch read with every two to eight lines in a row joined,
 # 14, and its test) and `run.rs` 2 (the record read before the lock is let go of).
-"crates/jellymoon-core" = 13243
+# The follow-up to F47's third gate raised core by 49: `run/obeyed.rs` is 24 (a name is plain only when a person
+# reads it as git keeps it: no letter that draws as nothing, no unseen space, no shape of a count) and its test 27;
+# `run/waits.rs` lost 2 (the comparison before a page's keep is gone: the keep's own check is the one).
+"crates/jellymoon-core" = 13292
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -429,7 +432,9 @@ max_file_lines = 400
 # agent's three scripts 13, `tests/f55/` 9, `tests/f52.rs` 6 and `tests/f51` 2 (a lock asked, not looked for).
 # Its second gate raised it by 19: a split key id that a word touches, in an answer, and the lock file a refused
 # answer may leave (`tests/f52/words.rs`, `refused.rs`).
-"crates/jellymoon" = 22078
+# The follow-up to F47's third gate raised it by 28: the made-up agent's three scripts for names printed whole that
+# a person does not read, 8, and the test of `run waiting` that says them not plain, 20.
+"crates/jellymoon" = 22106
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -529,7 +534,9 @@ max_file_lines = 400
 # and the exports, and its tests are 56 (`tests/text_note.rs`).
 # The second gate on F47 raised the kit by 91: 55 are tests (`tests/text_note.rs`); `layout/text_note.rs` is 32 (a
 # text note's options only under a body drawn whole) and `layout/notes.rs` 4 (such a note planned with that room).
-"crates/sticker-kit" = 7771
+# The follow-up to F47's third gate raised the kit by 40: a text note's options only under a title drawn whole too
+# is 7 in `layout/text_note.rs`, and its test 33 (`tests/text_note.rs`).
+"crates/sticker-kit" = 7811
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -584,7 +591,9 @@ max_file_lines = 400
 # `tests/f47/named.rs` grew by 41 and `f47.rs` and `asked.rs` by 3, the made-up window that taps only a placed
 # option by 36 (`support/tapper.rs`), and `working.rs` by 4, all comment.
 # F55 raised the app by 1: the arm for core's new error where it puts an error into words.
-"app" = 7081
+# The follow-up to F47's third gate raised the app by 10: `tests/f47/drawn.rs` 7 (three works whose names are
+# printed whole and not read) and `tests/f47/named.rs` 3 (a yes to other names is refused by the keep itself).
+"app" = 7091
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

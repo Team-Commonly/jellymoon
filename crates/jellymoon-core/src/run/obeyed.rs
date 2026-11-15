@@ -7,8 +7,12 @@
 //! file's tests; what is there for Windows was reasoned and not run.
 
 use std::ops::RangeInclusive;
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 use super::show::NAME_MAX;
+use crate::redact::pattern;
 use crate::still::statement;
 
 /// A file's name as it is printed, and whether the person's tools obey the file. Asked of the name as git keeps
@@ -18,6 +22,26 @@ pub(super) fn named(path: &[u8]) -> (String, bool) {
     let name = statement(&raw, NAME_MAX);
     let obeys = obeyed(&raw) || obeyed(&name);
     (name, obeys)
+}
+
+/// What a person does not read in a name though every byte of it is printed. A letter that draws as nothing or
+/// as a blank: the code points Unicode says are ignorable by default (the joiners U+200C and U+200D, the Hangul
+/// fillers, the variation selectors and the rest), every space but the plain one, the Braille blank, and two
+/// fillers that are in neither list. A plain space where none is seen: at an end of the name or of a folder's,
+/// or after another. And the shape of a count, a digit and then `more`: a note counts what it does not draw as
+/// `+5 more`, and a name that reads so would be read as that line. A list and not a proof: a font may draw a
+/// letter this does not know as nothing.
+static UNREAD: LazyLock<Regex> = LazyLock::new(|| {
+    pattern(concat!(
+        r"\p{Default_Ignorable_Code_Point}|[\p{White_Space}--[ ]]|[\u{2800}\u{16fe4}\u{1d159}]",
+        r"|^ | $|  | /|/ |(?i:\p{Nd} *more)",
+    ))
+});
+
+/// Whether a file's name is printed so that a person reads the name git keeps: byte for byte, so cleaning
+/// changed none of it, and with nothing in it that is [`UNREAD`]. A yes on a page is given only to such names.
+pub(super) fn plain(path: &[u8], name: &str) -> bool {
+    name.as_bytes() == path && !UNREAD.is_match(name)
 }
 
 /// Names the person's tools obey, wherever they are in a path: the settings, rules, hooks and servers of coding

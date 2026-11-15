@@ -112,7 +112,9 @@ Every check comes first, in this order. Each is a refusal below.
    with `--with-settings`. A keep from a page (`keep_named`, [show.md](show.md#work-that-waits-jellymoon-run-waiting))
    is judged here by the same rule, with the names the person said yes to in place of the flag, held as a set:
    the work's files tools obey must be those names, all of them and no other, and of what the merged tree
-   changes (6) each such file must be among them. Else it is refused.
+   changes (6) each such file must be among them. Else it is refused. This is the one check of a page's yes:
+   core hands the keep the names the tap carried and compares nothing before it
+   (`app/tests/f47/named.rs` gives it a name too few, one too many and another in one's place).
 6. If the branch is not at `start`: `start` is in its history, git is 2.38 or later, git merges the two in the
    store, the files the merged tree changes are judged again (the person's own rename can carry the work into a
    file their tools obey), and git names an author.

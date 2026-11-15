@@ -217,3 +217,30 @@ mod disk {
         }
     }
 }
+
+#[test]
+fn a_name_is_plain_only_when_a_person_reads_in_it_every_letter_git_keeps() {
+    let is = |name: &str| plain(name.as_bytes(), name);
+    for name in ["CLAUDE.md", ".claude/a b.md", "a folder of words/CLAUDE.md", "ünï/.claude/名前.md", ".claude/more 5"]
+    {
+        assert!(is(name), "{name}");
+    }
+    assert!(!plain(b".claude/x.md", ".claude/y.md"), "a name that is not printed as git keeps it");
+    // Letters that draw as nothing or as a blank: the gate's U+3164 and its kin, the joiners, selectors, spaces.
+    let blanks = "\u{3164}\u{115f}\u{1160}\u{ffa0}\u{2800}\u{200c}\u{200d}\u{34f}\u{17b4}\u{180b}\u{fe0f}\u{e0100}\
+                  \u{a0}\u{2003}\u{3000}\u{16fe4}\u{1d159}";
+    for c in blanks.chars() {
+        for name in [format!(".claude/{c}"), format!("{c}/CLAUDE.md"), format!(".claude/a{c}b.md")] {
+            assert!(!is(&name), "{c:?} is not seen in {name:?}");
+        }
+    }
+    // A plain space nobody sees, and the shape of the line a note counts with.
+    for name in [" /CLAUDE.md", "a/ /CLAUDE.md", ".claude/x ", ".claude/ x", ".claude /x", ".claude/a  b", " .envrc"] {
+        assert!(!is(name), "{name:?}");
+    }
+    for name in
+        [".claude/+5 more", ".claude/a, and 12 more", "+5more/CLAUDE.md", ".claude/+5 MORE", ".claude/\u{663} more"]
+    {
+        assert!(!is(name), "{name:?}");
+    }
+}

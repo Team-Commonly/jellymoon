@@ -118,6 +118,26 @@ fn every_file_of_the_whole_work_the_person_s_tools_obey_is_named_as_a_keep_asked
 }
 
 #[test]
+fn names_a_person_does_not_read_as_they_are_are_printed_whole_and_said_not_plain() {
+    let works = [
+        ("crowd", json!([".claude/settings.json", ".github/workflows/deploy.yml", "CLAUDE.md"]), true),
+        // A letter that draws as a blank, a joiner between two letters, and the shape of a note's count.
+        ("blank", json!([".claude/\u{3164}", "\u{3164}/CLAUDE.md"]), false),
+        // Each beside a name that is read, after it and before it: one name that is not is enough.
+        ("joined", json!([".claude/a\u{200d}b.md", "CLAUDE.md"]), false),
+        ("counted", json!([".cargo/config.toml", ".claude/+5 more"]), false),
+    ];
+    for (script, obeyed, plain) in works {
+        let w = world();
+        let repo = w.repo("alpha");
+        ran_as(&w, &repo, script);
+        let listed = waiting(&w, Some(&repo), &[]);
+        let [one] = &listed[..] else { panic!("{listed:?}") };
+        assert_eq!((&one["obeyed"], &one["plain"]), (&obeyed, &json!(plain)), "{script}");
+    }
+}
+
+#[test]
 fn a_run_whose_record_names_no_commits_has_no_work_that_waits() {
     let w = world();
     let repo = w.repo("alpha");

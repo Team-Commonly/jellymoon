@@ -10,8 +10,9 @@
 //! whole, on the note the yes was given under. A count is not a name: the agent picks the files, so it picks
 //! which would fall behind a count. So the note that asks names each such file in a text of its own and counts
 //! none, work with more of them than a note names has no yes on a page at all, and the names the tap carried
-//! are the ones the keep lands (`keep_named`). A name is drawn whole only when it is printed as it is: work with
-//! one that cleaning changed, as a name that looks like a credential is, has no yes on a page either.
+//! are the ones the keep lands (`keep_named`). A name is drawn whole only when a person reads it as it is: work
+//! with one that cleaning changed, as a name that looks like a credential is, or with a letter in it that draws
+//! as nothing, or that reads like a note's count, has no yes on a page either (`obeyed.rs`, `plain`).
 
 use std::fmt;
 use std::path::Path;
@@ -65,8 +66,9 @@ pub struct Waits {
     /// Every file of the whole work the person's tools obey, past the listed ones too, by its cleaned name.
     /// A keep from a page takes one more yes when there is one.
     pub obeyed: Vec<String>,
-    /// Whether each of those names is printed as git keeps it, whole and unchanged. One that looks like a
-    /// credential, or holds what is not printed, is not, and a page then has no yes for the work.
+    /// Whether each of those names is printed as git keeps it, whole and unchanged, and read so. One that looks
+    /// like a credential, holds what is not printed or a letter that draws as nothing, or reads like a count is
+    /// not, and a page then has no yes for the work.
     pub plain: bool,
     /// What waits, in core's fixed words, or why the work was not read: a refusal of `run show`.
     pub why: String,
@@ -96,7 +98,7 @@ pub enum WorkTap {
     },
     /// `yes_to`: the words of the note that named the files the person's tools obey, when the choice was the
     /// one under it that keeps them too: each name as it was drawn, and after them the note's last sentence. The
-    /// keep is done only when the work's note would say those words now, and it lands those names and no other.
+    /// keep is given those names, and lands the work only when they are its own, all of them and no other.
     Keep {
         yes_to: Option<Vec<String>>,
     },
@@ -297,10 +299,11 @@ fn next(home: &Path, options: &RunOptions, shown: &Shown, after: usize) -> Resul
 ///
 /// A keep of work that touches files the person's tools obey, anywhere in the whole work, changes nothing the
 /// first time and names them, each in a text of its own; of more than a note names, and of a name that is not
-/// printed as it is, it only says that a page does not keep the work, whatever the tap. A yes to that note
-/// keeps them only when the note would say the same words of the work as it is now; and the keep itself is
-/// given the names the tap carried, and lands the work only when they are the files of it the person's tools
-/// obey, all of them and no other (`keep_named`). So a keep that was never asked once more lands none.
+/// read as it is, it only says that a page does not keep the work, whatever the tap. A yes to that note gives
+/// the keep the names the tap carried, and nothing read here stands in for them: under its lock the keep lands
+/// the work only when they are the files of it the person's tools obey, all of them and no other
+/// (`keep_named`). So a yes to other names is refused there, and a keep that was never asked once more lands
+/// none.
 pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone {
     let undone = tap.undone();
     let no = |why: String| WorkDone::Said(undone, format!("{why}."));
@@ -315,11 +318,6 @@ pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone 
         },
         WorkTap::Keep { .. } if waits.over() => WorkDone::Asks(waits),
         WorkTap::Keep { yes_to: None } if !waits.obeyed.is_empty() => WorkDone::Asks(waits),
-        WorkTap::Keep { yes_to: Some(drawn) } if drawn != waits.asks().1 => no(format!(
-            "the files of the work of run {} that your tools obey are not the ones that note named, so it was not \
-             kept, and nothing was changed",
-            waits.run
-        )),
         // The names the tap carried are the note's texts but the last, its sentence: none, of a keep that was
         // not asked once more. The keep lands the work only when they are the files of it the tools obey.
         WorkTap::Keep { yes_to } => {

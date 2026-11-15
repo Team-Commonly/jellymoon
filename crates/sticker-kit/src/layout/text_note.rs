@@ -2,9 +2,10 @@
 //! long as the room it is given, like a list: when its texts do not all fit, the first ones are drawn and a last
 //! line, `+N more`, counts the rest. No text is hidden without that count, and none is drawn but as text.
 //!
-//! An option is an answer to what the note says, so it is drawn only under a body that was drawn whole: every
-//! text of it, each to its last character. Under a body with a text cut short, or with texts the count stands
-//! for, no option is placed, and a tap finds none.
+//! An option is an answer to what the note says, so it is drawn only under a title and a body that were both
+//! drawn whole: the title and every text of the body, each to its last character. Under a title cut at its
+//! second line, a body with a text cut short, or texts the count stands for, no option is placed, and a tap
+//! finds none.
 
 use super::notes::{MAX_OPTIONS, Sheet, choice_option, close, heading, open};
 use super::{Ctx, line_height, run};
@@ -35,7 +36,13 @@ pub(super) fn text(
     }
 }
 
-/// The sheet with these options under its body, and whether the body was drawn whole.
+/// Whether [`heading`] draws the title to its last character: it draws two lines of it at most.
+fn titled(cx: &Ctx, sheet: &Sheet, title: &str) -> bool {
+    let (kept, size) = (cx.clean(title), cx.size(Role::NoteTitle));
+    kept == clean(title, usize::MAX) && wrap(&kept, sheet.inner, 3, Role::NoteTitle, size, cx.measure).len() <= 2
+}
+
+/// The sheet with these options under its body, and whether the title and the body were drawn whole.
 fn written(
     cx: &Ctx,
     (id, title): (&str, &str),
@@ -99,6 +106,6 @@ fn written(
         sheet.cursor += gap;
     }
     end(&mut sheet);
-    let whole = drawn == body.len() && near.iter().all(|(_, cut)| !cut);
+    let whole = titled(cx, &sheet, title) && drawn == body.len() && near.iter().all(|(_, cut)| !cut);
     close(cx, sheet, 20.0, room).map(|sheet| (sheet, whole))
 }

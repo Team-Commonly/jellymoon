@@ -81,15 +81,18 @@ fn work_whose_only_file_the_person_s_tools_obey_is_past_the_list_is_asked_about_
 #[test]
 fn a_yes_to_a_note_that_names_other_files_than_the_work_s_is_refused_and_nothing_is_changed() {
     let (w, repo) = finished("many");
+    // A keep leaves the file of its lock in the home, asked first or refused: one is asked first.
+    super::drawn::asked(&w, &repo);
     let before = w.everything(&repo);
     let why = format!(
-        "the files of the work of run {} that your tools obey are not the ones that note named, so it was not kept, \
-         and nothing was changed.",
+        "the files of the work of run {} that your tools obey, as it would land in your checkout, are not the ones \
+         a note named, so it was not kept, and nothing was changed.",
         run(&w)
     );
     // The work's three, each a text: a note that names the first alone, one without the last, one with another
     // in the last one's place, one with one more than there are, one with the three on one line, and one that
-    // names none. A yes to any of them is a yes to other files than the work's.
+    // names none. A yes to any of them is a yes to other files than the work's: the keep is given the names the
+    // tap carried, and refuses them under its lock.
     let (all, sentence) = (["CLAUDE.md", "zz/.claude/settings.json", "zz/.envrc"], [TOLD]);
     let joined = all.join(", ");
     let others: [&[&str]; 6] = [

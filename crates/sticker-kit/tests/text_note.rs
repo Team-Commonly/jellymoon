@@ -102,6 +102,39 @@ fn a_text_note_with_options_is_given_the_room_of_its_whole_body_before_the_notes
 }
 
 #[test]
+fn a_title_that_is_cut_is_drawn_with_no_option_and_one_drawn_to_its_last_character_with_them() {
+    // The first is where the gate's fuzz drew a cut title over placed options.
+    let cases = [
+        (Theme::plain(), Viewport { w: 2315.0, h: 610.0 }, 0.9),
+        (Theme::sticker(), SIZES[0], 0.56),
+        (Theme::sticker(), SIZES[1], 0.56),
+    ];
+    // A title over one text and one option: whether it was drawn whole, and the options.
+    let under = |title: String, theme: &Theme, viewport: Viewport, advance: f32| {
+        let (body, options) = (vec!["CLAUDE.md".to_string()], vec!["Yes".to_string()]);
+        let note = Note::Text { id: "file-1".into(), title: title.clone(), body, options };
+        let scene = Scene { notes: vec![note], ..Scene::sample() };
+        let (texts, options) = said(&layout(&scene, theme, viewport, &FixedAdvance(advance)));
+        let [drawn @ .., text] = &texts[..] else { panic!("{texts:?}") };
+        assert_eq!(text, "CLAUDE.md");
+        (drawn.join(" ") == title, options)
+    };
+    for (theme, viewport, advance) in cases {
+        let titled = |words: usize| under(vec!["word"; words].join(" "), &theme, viewport, advance);
+        let most = (1..200).take_while(|words| titled(*words).0).count();
+        assert!(most > 1, "{most}");
+        assert_eq!(titled(most), (true, vec!["Yes".to_string()]), "a title drawn whole has its options");
+        for words in [most + 1, most + 2, 150, 2000] {
+            assert_eq!(titled(words), (false, Vec::new()), "a title of {words} words is cut, and has no option");
+        }
+    }
+    // Letters so narrow that any title fits a line: one of more characters than a text is drawn with is cut.
+    let long = |chars: usize| under("a".repeat(chars), &Theme::sticker(), SIZES[0], 0.001);
+    assert_eq!(long(MAX_TEXT_CHARS), (true, vec!["Yes".to_string()]));
+    assert_eq!(long(MAX_TEXT_CHARS + 1), (false, Vec::new()));
+}
+
+#[test]
 fn a_text_is_drawn_as_the_characters_it_holds_and_what_cannot_be_seen_is_left_out() {
     let odd = "<b>bold</b> \u{1b}[31mred\u{202e} [tap](https://example.test) $(touch ran)".to_string();
     let (texts, _) = said(&place(vec![note(vec![odd], &[])], &Theme::sticker(), Viewport { w: 1440.0, h: 900.0 }));

@@ -8,9 +8,11 @@
 //! - [`draw`]: a GPUI view that paints the placed pieces (feature `gpui`).
 //!
 //! Beside a scene a page may hold one [`Entry`], a line to type: [`entry`] is its rules, as plain data.
+//! [`edge`] is a second, smaller scene: one character at a corner of the screen and its bubble.
 
 pub mod art;
 pub mod color;
+pub mod edge;
 pub mod entry;
 mod fonts;
 pub mod geom;
@@ -25,10 +27,12 @@ pub mod theme;
 pub mod draw;
 
 pub use color::Color;
+pub use edge::{Corner, EDGE_GAP, EDGE_MARGIN, Edge, EdgeMood, Said, Tone, place_beside, place_corner};
 pub use fonts::BundledMeasure;
 pub use geom::{Rect, Viewport};
 pub use layout::{
-    MAX_NOTES, MAX_PIECES, MAX_TEXT_LINES, MORE_NOTES_ID, PieceKind, Placed, TextRun, layout, layout_entry,
+    EdgeKind, EdgePiece, EdgePlaced, EdgeWindow, MAX_BUBBLE_LINES, MAX_BUBBLE_TEXTS, MAX_NOTES, MAX_PIECES,
+    MAX_TEXT_LINES, MORE_NOTES_ID, PieceKind, Placed, TextRun, edge_windows, layout, layout_edge, layout_entry,
 };
 pub use scene::{Character, Entry, LegendItem, Mark, Mood, Note, Scene, State};
 pub use text::{FixedAdvance, Measure, Role};

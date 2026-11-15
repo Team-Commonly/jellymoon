@@ -483,7 +483,7 @@
         "when more than one state holds, core's order decides, and the day's made wishes give `working`, `asks` and `waits` with no hearing at all"
       ],
       "test": "cargo test -p jellymoon-app --test f56",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F55"
       ]

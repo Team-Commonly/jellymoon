@@ -1,0 +1,12 @@
+{"state":"quiet","bubble":[]}
+{"state":"listening","bubble":[]}
+{"state":"listening","bubble":[{"whose":"yours","text":"make the up"}]}
+{"state":"heard","bubble":[{"whose":"yours","text":"make the uploader retry twice"},{"whose":"project","text":"alpha"},{"whose":"jellymoon","text":"press the key again to take it back"}],"ring":1000}
+{"state":"heard","bubble":[{"whose":"yours","text":"make the uploader retry twice"},{"whose":"project","text":"alpha"},{"whose":"jellymoon","text":"press the key again to take it back"}],"ring":500}
+{"state":"quiet","bubble":[]}
+{"state":"listening","bubble":[]}
+{"state":"cannot","bubble":[{"whose":"jellymoon","text":"nothing was heard: Jellymoon may not use the microphone; allow it in System Settings, Privacy & Security, Microphone"}]}
+{"state":"quiet","bubble":[]}
+{"state":"working","count":2,"bubble":[]}
+{"state":"asks","bubble":[{"whose":"jellymoon","text":"a run asks, and waits for your answer on the page"},{"whose":"run","text":"Which of the two uploaders did you mean?"}]}
+{"state":"waits","bubble":[]}

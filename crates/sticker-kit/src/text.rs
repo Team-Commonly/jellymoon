@@ -25,6 +25,8 @@ pub enum Role {
     Bullet,
     Legend,
     Footer,
+    /// Someone else's words in a bubble: never drawn as the scene's own.
+    Quoted,
 }
 
 /// Which of the theme's three font families a role uses.
@@ -55,7 +57,7 @@ impl Role {
             Role::ChoiceFooter => m.note_title_size * 0.74,
             Role::RowMain => m.body_size,
             Role::Bullet => m.body_size * 1.2,
-            Role::Body | Role::Option | Role::OptionStruck | Role::Legend => m.body_size - 1.0,
+            Role::Body | Role::Option | Role::OptionStruck | Role::Legend | Role::Quoted => m.body_size - 1.0,
             Role::RowSub | Role::Footer => m.small_size,
         };
         (base * k).max(base.min(theme.labels.min_font_size))

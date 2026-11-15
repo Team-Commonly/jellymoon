@@ -126,6 +126,44 @@ tick prints a line: whoever sends the ticks sets how often the ring is drawn.
 `working`, `waits`, `quiet`. So what the ear refuses while a heard wish is shown is said once the wish is made
 or taken back, if its six seconds are not over by then.
 
+## What is drawn
+
+Core also says what the jellyfish draws of a line (F56, `hear/drawn.rs`); the shell only places it
+([app.md](app.md), "The jellyfish").
+
+- **`Jelly::read(bytes)`** takes a line a hearing prints and nothing else: at most 64 KiB, one object on one
+  line, the names above and no other, and in each state only what that state carries. Words go with
+  `listening` and `heard`; a project, and a time of at most 4000, with `heard` alone, which has both words and
+  a project; a count of at least one with `working` alone; a question with `asks` alone. `says` is the
+  state's own sentence, and with `cannot` any sentence that is not empty. Anything else is no line.
+- **`Jelly::drawn()`** gives a `JellyDrawn`: `state`; `count`, the runs going when more than one goes;
+  `bubble`, the texts in the order they are drawn, each with `whose` words it is (`yours`, `project`, `run` or
+  `jellymoon`); and `ring` with `heard`, the thousandths of the four seconds that are left, rounded down.
+  `quiet`, `working` and `waits` have no bubble, and `listening` has none until there are words.
+- **`jellyfish(line, home, day)`** gives the one line that is drawn when a hearing's line and the day's made
+  wishes each give a state. `JellyState::ORDER` is the order above. A line in `listening`, `heard` or `cannot`
+  is drawn as it is: only a hearing knows those. Any other line gives way to what the day's made wishes give
+  now, read as a hearing reads them, since the line is as old as the hearing's last look; its `made` is kept.
+  With no line the day alone decides: `working`, `asks`, `waits` or `quiet` with no hearing at all. It writes
+  nothing.
+
+What is drawn of each line of the two examples above, `tests/fixtures/jelly-drawn.jsonl`:
+
+```json
+{"state":"quiet","bubble":[]}
+{"state":"listening","bubble":[]}
+{"state":"listening","bubble":[{"whose":"yours","text":"make the up"}]}
+{"state":"heard","bubble":[{"whose":"yours","text":"make the uploader retry twice"},{"whose":"project","text":"alpha"},{"whose":"jellymoon","text":"press the key again to take it back"}],"ring":1000}
+{"state":"heard","bubble":[{"whose":"yours","text":"make the uploader retry twice"},{"whose":"project","text":"alpha"},{"whose":"jellymoon","text":"press the key again to take it back"}],"ring":500}
+{"state":"quiet","bubble":[]}
+{"state":"listening","bubble":[]}
+{"state":"cannot","bubble":[{"whose":"jellymoon","text":"nothing was heard: Jellymoon may not use the microphone; allow it in System Settings, Privacy & Security, Microphone"}]}
+{"state":"quiet","bubble":[]}
+{"state":"working","count":2,"bubble":[]}
+{"state":"asks","bubble":[{"whose":"jellymoon","text":"a run asks, and waits for your answer on the page"},{"whose":"run","text":"Which of the two uploaders did you mean?"}]}
+{"state":"waits","bubble":[]}
+```
+
 ## A hold, from the key to the wish
 
 1. **The key goes down:** `listening`, with no words. A key pressed while a heard wish is shown takes the wish
@@ -301,6 +339,7 @@ say what the file means.
 | Made wishes in a day | 8 | `MADE_MAX`, `wish.rs` |
 | `voice.toml` | 4096 bytes | `VOICE_BYTES`, `hear/voice.rs` |
 | A refused value named back | 40 characters | `SHOWN`, `hear/voice.rs` |
+| A line read to be drawn | 64 KiB | `HEAR_LINE_MAX`, `hear/drawn.rs` |
 
 Nothing here grows with the input: a hearing holds one hold's words, one refusal and one count.
 
@@ -338,4 +377,6 @@ Nothing here grows with the input: a hearing holds one hold's words, one refusal
 harness (`crates/jellymoon/tests/f55.rs`, and `f55/events.rs`, `project.rs`, `started.rs`, `voice.rs`).
 `cargo test -p jellymoon --test f30` holds F30's three steps for a wish entered this way. The contract is
 `crates/jellymoon-core/tests/hear.rs` with the fixtures above, which also holds this doc to them. The smoke
-chain's `hear` step runs the built command ([smoke.md](smoke.md)).
+chain's `hear` step runs the built command ([smoke.md](smoke.md)). What is drawn is held by the same contract
+file and `jelly-drawn.jsonl`, by unit tests in `hear/drawn.rs`, and at the app's boundary by
+`cargo test -p jellymoon-app --test f56`.

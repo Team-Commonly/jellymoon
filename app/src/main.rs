@@ -1,15 +1,16 @@
 //! The `jellymoon-app` command. With `layout` it prints where the kit puts every piece of a page, one line of JSON
 //! each; without, it opens the page in a window. With `--page` both draw the page data they are given and nothing
 //! else happens. With no `--page` the page is the day's own (`today.rs`): kept in the user's folder, and read through
-//! core when the day has moved on. A tap in the window goes to core through `taps.rs`.
+//! core when the day has moved on. A tap in the window goes to core through `taps.rs`. `layout --jelly` prints the
+//! jellyfish for one line of `jellymoon hear` (`jelly.rs`).
 
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::{fs, io};
 
 use jellymoon_app::today::{self, Asked, Today};
-use jellymoon_app::{lines, one_line, read, scene};
+use jellymoon_app::{jelly, lines, one_line, read, scene};
 use lexopt::prelude::*;
 use sticker_kit::{Theme, Viewport};
 
@@ -24,7 +25,14 @@ const USAGE: &str = "usage:
     --logs <dir> --skip <names> --model <name>    as for `jellymoon page`
     --waiting                       what is shown while a day is read
     --page <file, or - for stdin>   a page-data file: nothing is read and nothing is kept
+  jellymoon-app layout --jelly <file, or - for stdin> --screen <W>x<H> [--theme <theme>] [--date <YYYY-MM-DD>]
+      prints the jellyfish and its bubble for one line of `jellymoon hear`, and where both windows stand on a
+      screen of that size; with --date that day's made wishes are read too, and no line is no hearing at all
 ";
+
+/// What is said when `--jelly` or `--screen` is given with anything that is not theirs.
+const JELLY_ALONE: &str =
+    "--jelly goes with `layout` and --screen <W>x<H>, and with --theme and --date only: a page is another command";
 
 /// The size a page is designed at, and the window's first size.
 const DEFAULT_SIZE: Viewport = Viewport { w: 1440.0, h: 900.0 };
@@ -39,12 +47,22 @@ enum Command {
     Help,
     Layout(Options),
     Window(Options),
+    Jelly(Box<Jellyfish>),
 }
 
 struct Options {
     page: Source,
     theme: Theme,
     size: Viewport,
+}
+
+/// What `layout --jelly` was asked: where the line is, the screen, and the day whose made wishes are read, with
+/// Jellymoon's home, when one was named.
+struct Jellyfish {
+    file: String,
+    screen: Viewport,
+    theme: Theme,
+    day: Option<(PathBuf, String)>,
 }
 
 /// Which page: a page-data file, a day, or the scene shown while a day is read.
@@ -85,7 +103,25 @@ fn run() -> Result<String, Failure> {
             Ok(lines::lines(&scene, entry.as_ref(), &options.theme, options.size))
         }
         Command::Window(options) => window(options).map(|()| String::new()),
+        Command::Jelly(asked) => jellyfish(&asked),
     }
+}
+
+/// The jellyfish for the line given, placed on the screen. With a day, core reads that day's made wishes and says
+/// which of the two is drawn; a line that is nothing is then no hearing at all. Any other input is refused.
+fn jellyfish(asked: &Jellyfish) -> Result<String, Failure> {
+    let bytes = input(&asked.file, jellymoon_core::HEAR_LINE_MAX as u64 + 1)?;
+    let no_line = || Failure::Run("the input is not one line of `jellymoon hear`".to_string());
+    let read = || jellymoon_core::Jelly::read(&bytes).ok_or_else(no_line);
+    let shown = match &asked.day {
+        Some((home, day)) => {
+            let line = if bytes.trim_ascii().is_empty() { None } else { Some(read()?) };
+            let drawn = jellymoon_core::jellyfish(line.as_ref(), home, Some(day));
+            drawn.map_err(|why| Failure::Run(one_line(&why.to_string())))?
+        }
+        None => read()?,
+    };
+    Ok(jelly::lines(&shown.drawn(), &asked.theme, asked.screen))
 }
 
 /// Opens the window on the first scene there is. A day is then read off the window's thread, and what that gives
@@ -117,7 +153,8 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let text = |parser: &mut lexopt::Parser| parser.value().and_then(|v| v.string()).map_err(usage);
     let (mut layout, mut first, mut waiting) = (false, true, false);
-    let (mut page, mut theme, mut size) = (None, String::from("sticker"), DEFAULT_SIZE);
+    let (mut page, mut theme, mut size) = (None, String::from("sticker"), None);
+    let (mut line, mut screen) = (None, None);
     let mut asked = Asked::default();
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
@@ -134,15 +171,29 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Long("theme") => theme = text(&mut parser)?,
             Long("size") => {
                 let given = text(&mut parser)?;
-                size = viewport(&given).ok_or_else(|| {
+                size = Some(viewport(&given).ok_or_else(|| {
                     Failure::Usage(format!(
                         "--size must be <W>x<H> in pixels, from 960x640 to 16384x16384, not {given:?}"
                     ))
-                })?;
+                })?);
+            }
+            Long("jelly") => line = Some(text(&mut parser)?),
+            Long("screen") => {
+                let given = text(&mut parser)?;
+                let wrong = || format!("--screen must be <W>x<H> in pixels, each side from 1 to 16384, not {given:?}");
+                screen = Some(jelly::screen(&given).ok_or_else(|| Failure::Usage(wrong()))?);
             }
             other => return Err(usage(other.unexpected())),
         }
         first = false;
+    }
+    if line.is_some() || screen.is_some() {
+        let alone = layout && page.is_none() && !waiting && size.is_none() && asked.only_a_date();
+        let (Some(file), Some(screen), true) = (line, screen, alone) else {
+            return Err(Failure::Usage(JELLY_ALONE.to_string()));
+        };
+        let day = asked.date.map(|date| day_read(&date)).transpose()?;
+        return Ok(Command::Jelly(Box::new(Jellyfish { file, screen, theme: named(&theme)?, day })));
     }
     let page = match page {
         Some(file) => Source::File(file),
@@ -152,8 +203,16 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         }
         None => Source::Day(Box::new(Today::from_env(asked).map_err(Failure::Usage)?)),
     };
-    let options = Options { page, theme: named(&theme)?, size };
+    let options = Options { page, theme: named(&theme)?, size: size.unwrap_or(DEFAULT_SIZE) };
     Ok(if layout { Command::Layout(options) } else { Command::Window(options) })
+}
+
+/// The day `--date` names for a jellyfish, with the home its made wishes are read in.
+fn day_read(date: &str) -> Result<(PathBuf, String), Failure> {
+    let day =
+        today::date(Some(date)).ok_or_else(|| Failure::Usage("--date must be a day as YYYY-MM-DD".to_string()))?;
+    let home = jellymoon_core::own_folder().map_err(|why| Failure::Usage(why.to_string()))?;
+    Ok((home.ok_or_else(|| Failure::Usage("no home directory: set JELLYMOON_HOME".to_string()))?, day))
 }
 
 /// The most ignored keys of a theme file that are said, one a line; the rest are counted.
@@ -191,7 +250,12 @@ fn viewport(given: &str) -> Option<Viewport> {
 /// The page the file holds, or what is on stdin when the file is `-`.
 fn page(file: &str) -> Result<read::Page, Failure> {
     // One byte more than a page may be is enough to know it is too large, however much there is to read.
-    let most = read::MAX_PAGE_BYTES as u64 + 1;
+    let bytes = input(file, read::MAX_PAGE_BYTES as u64 + 1)?;
+    read::bytes(bytes).map_err(|why| Failure::Run(format!("the file is not page data: {why}")))
+}
+
+/// At most `most` bytes of the file, or of stdin when the file is `-`.
+fn input(file: &str, most: u64) -> Result<Vec<u8>, Failure> {
     let mut bytes = Vec::new();
     let got = if file == "-" {
         io::stdin().take(most).read_to_end(&mut bytes)
@@ -199,5 +263,5 @@ fn page(file: &str) -> Result<read::Page, Failure> {
         fs::File::open(file).and_then(|file| file.take(most).read_to_end(&mut bytes))
     };
     got.map_err(|e| Failure::Run(format!("reading {}: {e}", if file == "-" { "stdin" } else { file })))?;
-    read::bytes(bytes).map_err(|why| Failure::Run(format!("the file is not page data: {why}")))
+    Ok(bytes)
 }

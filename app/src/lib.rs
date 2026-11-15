@@ -37,6 +37,7 @@ pub fn file_part(text: &str) -> String {
     one_line(text).rsplit(['/', '\\', ':']).next().unwrap_or_default().to_string()
 }
 
+pub mod jelly;
 pub mod lines;
 pub mod read;
 pub mod scene;

@@ -12,7 +12,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::end::{held, of_another, recorded};
-use super::obeyed::named;
+use super::obeyed::{named, plain};
 use super::record::Record;
 use super::{RunOptions, RunOutcome, cut, cut_late, finished, no_wish, place, record, refused};
 use crate::copy::{self, Done, Entry, LISTED, TEXT_MAX, Unread, WorkFile};
@@ -249,20 +249,20 @@ pub fn show_run(home: &Path, options: &RunOptions) -> Result<Shown, Error> {
 
 /// [`show_run`], and every file of the whole work the person's tools obey, by its name as it is printed, in git's
 /// order: the files past the list are judged by the rule the listed ones are (`obeyed.rs`). And whether each of
-/// those names is printed as git keeps it, byte for byte: cleaning changed none of it.
+/// those names is one a person reads as git keeps it (`obeyed.rs`, `plain`).
 pub(super) fn whole(home: &Path, options: &RunOptions) -> Result<(Shown, Vec<String>, bool), Error> {
     let work = work(home, options, None)?;
     let files = work.files.iter().enumerate().map(|(at, file)| entry(at + 1, file)).collect();
-    let (mut obeyed, mut plain) = (Vec::new(), true);
+    let (mut obeyed, mut read) = (Vec::new(), true);
     for path in work.files.iter().map(|file| &file.path).chain(&work.past) {
         let (name, obeys) = named(path);
         if obeys {
-            plain &= name.as_bytes() == &path[..];
+            read &= plain(path, &name);
             obeyed.push(name);
         }
     }
     let (run, wish, more) = (work.run, options.wish.clone(), work.past.len());
-    Ok((Shown { run, wish, work: work.state, files, more, most: LISTED }, obeyed, plain))
+    Ok((Shown { run, wish, work: work.state, files, more, most: LISTED }, obeyed, read))
 }
 
 /// File `n` of that list as its text. Refused in fixed words, with no byte of the file: a number that names no

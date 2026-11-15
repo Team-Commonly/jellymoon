@@ -385,7 +385,24 @@ The whole account, with every sentence and what is not closed, is `docs/developm
      must be those names as a set, all of them and no other. The names read again at the tap are not what is
      kept.
    What a person may still not see is a name's own shape: one that reads like a count, and one with a character
-   that joins without being seen. These are open.
+   that joins without being seen. These were open, and (9) closes them.
+9. **Found by the third gate on F47: a name printed whole that a person still does not read.** The gate kept
+   `.claude/<U+3164>` and `<U+3164>/CLAUDE.md` by a tap: every byte of each name was drawn, and what was drawn
+   was a blank. The same holds of a joiner between two letters, which makes a name that looks like another, and
+   of a name that reads `+5 more`, which is what the kit draws for names it did not draw. So "printed as git
+   keeps it" was not the rule. The rule: a name is plain only when a person reads it as git keeps it
+   (`obeyed.rs`, `plain`), and work with a name that is not has no yes on a page. What makes a name not plain is
+   listed in `show.md`; it is a list of letters, not a proof, since a font can draw nothing for a letter the
+   list does not know. Three more things, of the same finding:
+   - the kit drew a title cut at its second line over placed options. It now promises one thing: options are
+     placed only under a title and a body both drawn whole;
+   - after (6) core compared the note's words with what it would say now and then handed the keep the names. The
+     comparison proved the names it read to be the names the tap carried, so a core that handed over the ones it
+     read passed every test. The comparison is removed: the keep is given the carried names and its check under
+     the lock is the only one, so a yes to other names now reaches it, and the tests of such a yes are tests of
+     the keep;
+   - a count of the shape `more` is refused wherever it stands in a name, and so is a name like `7 morels`. Such
+     work is kept from the command line. Narrower would be a guess at how a note wraps.
 
 ## What comes after
 

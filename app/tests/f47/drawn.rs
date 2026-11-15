@@ -42,7 +42,7 @@ fn keep(w: &World, repo: &Path, more: &[&str]) -> Value {
 }
 
 /// What `run keep --ask` names of the work: every file of it the person's tools obey.
-fn asked(w: &World, repo: &Path) -> Vec<String> {
+pub fn asked(w: &World, repo: &Path) -> Vec<String> {
     let asked = keep(w, repo, &["--ask"]);
     asked["settings"].as_array().unwrap().iter().map(|name| name.as_str().unwrap().to_string()).collect()
 }
@@ -110,13 +110,21 @@ fn work_of_more_such_files_than_a_note_names_or_of_a_name_not_printed_as_it_is_h
     // The last such file of each work. `masked` has one, in a name with the shape of a credential: it is printed
     // as another word, so a yes under it would be a yes to a file the person was not told of.
     let masked = format!(".claude/AK{}{}.md", "IA", "Q7".repeat(8));
-    for (script, count, last) in
-        [("seven", 7, "r6/CLAUDE.md"), ("eight", 8, "r7/CLAUDE.md"), ("masked", 1, masked.as_str())]
-    {
+    // The others are printed whole, and a person does not read them as they are: `blank` has a letter that
+    // draws as a blank in each of its two, `joined` a joiner between two letters, `counted` reads like a count.
+    let works = [
+        ("seven", 7, "r6/CLAUDE.md"),
+        ("eight", 8, "r7/CLAUDE.md"),
+        ("masked", 1, masked.as_str()),
+        ("blank", 2, "\u{3164}/CLAUDE.md"),
+        ("joined", 2, "CLAUDE.md"),
+        ("counted", 2, ".claude/+5 more"),
+    ];
+    for (script, count, last) in works {
         let (w, repo) = finished(script);
         let names = asked(&w, &repo);
-        assert_eq!((names.len(), names[count - 1] == last), (count, count > 1), "{names:?}");
-        assert!(count > 1 || names[0].contains("[redacted]"), "{names:?}");
+        assert_eq!((names.len(), names[count - 1] == last), (count, script != "masked"), "{names:?}");
+        assert!(script != "masked" || names[0].contains("[redacted]"), "{names:?}");
         let before = w.everything(&repo);
         // The note says so and has no keep. A page left on show with one, by whatever made it: a tap on `Keep
         // it`, and on the yes under words that name every file and under the note's own, is answered alike.
@@ -156,7 +164,6 @@ fn work_of_more_such_files_than_a_note_names_or_of_a_name_not_printed_as_it_is_h
         assert!(of("note").all(|note| bare(&note.said()).ends_with(&bare(OVER))) && of("note").count() == 1);
         // From the command line the work is kept, with the word for those files.
         assert_eq!(keep(&w, &repo, &["--with-settings"])["settings"].as_array().unwrap().len(), count);
-        let (folder, file) = last.split_once('/').unwrap();
-        assert_eq!(holds(&repo.join(folder), file), Some("rules from the run\n".into()));
+        assert_eq!(holds(&repo, last), Some("rules from the run\n".into()));
     }
 }

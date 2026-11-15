@@ -105,11 +105,8 @@ fn a_key_core_does_not_know_is_refused_in_one_line_that_names_it() {
     // A key or a language that holds what cannot be seen would be named back as one that reads right: it is not named.
     // So is a joiner, a letter that draws as a blank, any space but a plain one, and a plain space nobody sees.
     let right = "Control+Shift+Space";
-    let ends = [
-        "\u{200b}", "\t", " ", "\u{a0}", "\u{2028}", "\u{200c}", "\u{200d}", "\u{34f}", "\u{fe0f}", "\u{3164}",
-        "\u{2800}",
-    ];
-    let unseen = ends.iter().flat_map(|end| [format!("{right}{end}"), format!("{end}{right}")]);
+    let ends = "\u{200b}\t \u{a0}\u{2028}\u{200c}\u{200d}\u{34f}\u{fe0f}\u{3164}\u{2800}\u{16fe4}\u{1d159}\u{fffc}\u{e000}\u{378}";
+    let unseen = ends.chars().flat_map(|end| [format!("{right}{end}"), format!("{end}{right}")]);
     for unseen in
         unseen.chain(["Con\u{2065}trol+Space", "Control+\u{1b}[31mSpace", "Control+Shift  Space"].map(String::from))
     {

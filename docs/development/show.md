@@ -291,9 +291,20 @@ and writes nothing:
   names as `run show` cleans them, and how many more there are. When the list stopped at 200 files, `why` ends
   ` of its first 200`. `obeyed` is not of the list: it names every file of the whole work the person's tools
   obey, the ones past the 200 too, by the rule a look and a keep judge a file by (`obeyed.rs`,
-  `named`). Of the files past the list only the paths are read. `plain` says whether each of those names is
-  printed as git keeps it, byte for byte: `false` when cleaning changed one, as it prints a name that looks like
-  a credential as `[redacted]`.
+  `named`). Of the files past the list only the paths are read. `plain` says whether each of those names is one
+  a person reads as git keeps it (`obeyed.rs`, `plain`). It is `false` when:
+  - cleaning changed a name, as it prints one that looks like a credential as `[redacted]`;
+  - a name holds a letter that draws as nothing or as a blank: a code point Unicode calls ignorable by default
+    (the joiners U+200C and U+200D, the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0, the variation
+    selectors), any space but the plain one, the Braille blank U+2800, U+16FE4, U+1D159, the object
+    replacement character U+FFFC, or any code point that is private or not assigned (a system font draws
+    `.claude/settings`, U+F860, `.json` as `.claude/settings.json`). It is the one list core has of what is
+    not read in a printed text (`redact.rs`, `holds_unseen`), the same a refused `voice.toml` value is held to;
+  - a plain space stands where none is seen: at an end of the name or of a folder's, or after another;
+  - a name reads like the line a note counts with, a digit and then `more` (`+5 more`, `and 12 more`).
+
+  The names are printed whole all the same. The list of letters is a list and not a proof: a font can draw a
+  letter it does not know as nothing.
 - **A repo that is not found** (or any other refusal of `run show`) still lists the wish, with `read: false`, no
   counts, no name, and `why` holding that refusal. A page then offers no choice.
 - **The choices and their words** are core's too: `Waits::title`, `lines`, `choices` and `asks`, `ShownFile::title`
@@ -308,20 +319,24 @@ and writes nothing:
   - `Keep it` of work with such a file, anywhere in the whole work, changes nothing and gives the names back:
     `Waits::asks` gives each name as a text of its own, and counts none.
   - Work with more than six of them (`NAMED`: what a note has room for in the smallest window, a line a name) has
-    no yes on a page. Nor has work with one whose name is not printed as it is (`plain` is `false`): the word
-    drawn would not be the file's name, and two files can be printed as one word. `Waits::lines`, `asks` and
+    no yes on a page. Nor has work with one whose name is not read as it is (`plain` is `false`): the word
+    drawn would not be the file's name, two files can be printed as one word, a blank is no name to say yes to,
+    and a name that reads `+5 more` reads as the kit's own count of names it did not draw. `Waits::lines`, `asks` and
     `choices` say so in one sentence and offer `Show me` and `Toss it`; any keep tapped all the same is answered
     with that note. The sentence says only that such work is kept from the command line, with `jellymoon run
     keep`.
   - A tap is made of what was drawn (`WorkTap::of`: the option's words and its note's texts), and the tap on
-    `Keep it, with those files` carries that note's texts: the names, and the note's last sentence. The keep is
-    done only when `asks` would say the same texts of the work as it is now; else it is refused, with nothing
-    changed.
+    `Keep it, with those files` carries that note's texts: the names, and the note's last sentence. Core gives
+    the keep those names, and nothing it read at the tap stands in for them: there is one check of them, the
+    keep's own, under its lock.
   - The keep is `run keep` with one difference (`keep.rs`, `keep_named`, `judge`): it is given the names the tap
     carried, held as a set, and under the keep's lock the work's files the person's tools obey must be those
     names, all of them and no other; what one new commit would land must be among them. A keep that was not
-    asked once more carries none. So work whose merge would bring such a file that no note named is refused
-    whole, in a page's words and not `--with-settings`.
+    asked once more carries none. So a yes to a note that names other files than the work's (one fewer, one
+    more, another in one's place) is refused there, and so is work whose merge would bring such a file that no
+    note named: whole, in a page's words and not `--with-settings`. One yes to other names is not refused:
+    where the person's branch holds the run's commit already, by their own merge, nothing is landed whatever
+    the note named, no name is asked, and the run is written down as kept (`run keep` says the same there).
   - The line of the work's own note still counts (`a.txt, b.txt, and 4 more`), and is at most 320 characters of
     names: nothing is kept on the word of it. `Toss it` is `run toss`, with its own checks.
 

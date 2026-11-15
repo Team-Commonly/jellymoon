@@ -305,18 +305,22 @@ that fit and counts the rest in a last line, `+N more`.
   - The first `Keep it` changes nothing and shows `sure-<wish>`. It names every such file of the whole work,
     past the 200 files a list of the work holds too, each name a text of its own, and counts none. It offers
     `Keep it, with those files`.
-  - The kit places a text note's options only under a body drawn whole (`layout/text_note.rs`): every text, each
-    to its last character. Where the names do not fit the window, or one is cut, no option is placed, and a tap
+  - The kit places a text note's options only under a title and a body both drawn whole
+    (`layout/text_note.rs`): the title within its two lines, and every text, each to its last character. Where
+    the title is cut, the names do not fit the window, or one is cut, no option is placed, and a tap
     finds only a placed option. A text note with options is planned with the room of its whole body, before the
     notes after it, so on a crowded page it is those notes that are counted.
-  - Work with more than six such files has no yes on a page, and neither has work with one whose name is not
-    printed whole and as it is (a name that looks like a credential is drawn as `[redacted]`). Core says so on
+  - Work with more than six such files has no yes on a page, and neither has work with one whose name a person
+    does not read whole and as it is: a name that looks like a credential is drawn as `[redacted]`, and one
+    with a letter that draws as a blank, with a joiner, or that reads like a count (`+5 more`) is drawn whole
+    and is still not the name ([show.md](show.md#work-that-waits-jellymoon-run-waiting), `plain`). Core says so on
     the work's own note and on `sure-<wish>`, in one sentence of its words, and offers `Show me` and `Toss it`
     only: such work is kept from the command line, with `jellymoon run keep`.
-  - The tap carries the note's texts to core. Core keeps the work only when it would draw the same texts of the
-    work as it is now, and gives the keep the names the tap carried: under its lock the keep lands the work only
-    when those are the files of it the person's tools obey, all of them and no other. A yes to a note that names
-    other files is refused, with nothing changed. A `Keep it` that was not asked once more carries no name, so
+  - The tap carries the note's texts to core, and core gives the keep the names the tap carried: under its lock
+    the keep lands the work only when those are the files of it the person's tools obey, all of them and no
+    other. A yes to a note that names other files is refused there, with nothing changed, but where the
+    person's branch holds the run's commit already: nothing is landed then, and the run is said kept. A `Keep it` that was
+    not asked once more carries no name, so
     where only the merge would bring such a file (the person renamed a file the work edits to a name their tools
     obey), it is refused, with nothing changed.
 - **The repo is not named by the app.** Core finds it as the run did: the folder of the wish's project typed in

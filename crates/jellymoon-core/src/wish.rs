@@ -70,6 +70,10 @@ pub struct MadeWish {
     /// page shows it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer: Option<String>,
+    /// The wish a follow-up follows (F53; ADR 0018, decision 8): the id of a made wish of the same day, made
+    /// before it. Left out of every wish that follows none, and no page shows it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
 }
 
 /// The made wishes of one day, `pages/<day>.wishes.json`.
@@ -166,7 +170,8 @@ fn own(at: usize, wish: MadeWish) -> Option<MadeWish> {
         && wish.question.as_deref().is_none_or(|question| {
             run::kept_question(question) && wish.state == WishState::NeedsYou && wish.run.is_some()
         })
-        && wish.answer.as_deref().is_none_or(|answer| run::kept_answer(answer) && wish.run.is_some());
+        && wish.answer.as_deref().is_none_or(|answer| run::kept_answer(answer) && wish.run.is_some())
+        && wish.after.as_deref().is_none_or(|after| (1..=at).any(|before| after == format!("m{before}")));
     own.then_some(MadeWish { said, ..wish })
 }
 
@@ -188,7 +193,25 @@ fn kept(home: &Path, day: &str) -> Result<Vec<MadeWish>, String> {
 /// is started. A refusal has written nothing: words that are empty once cleaned or over 200 characters, a project
 /// that is not one folder's name, a day that has its eight, made wishes that cannot be used, a day that is locked.
 pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Result<Wished, Error> {
-    let day = day_of(day)?;
+    let (day, said) = (day_of(day)?, words(typed)?);
+    if !named(project) {
+        let no = "no path, nothing that cannot be seen and nothing shaped like a credential";
+        return Err(refused(format!("--project takes one folder's name of at most {PROJECT_MAX} characters: {no}")));
+    }
+    keep(home, &day, said, project.to_string(), None)
+}
+
+/// Keeps a follow-up (F53): a wish the person made of the work of the wish `after`, a made wish of `day`. It
+/// is a made wish as [`wish`] keeps one, for the followed wish's project, and names the wish it follows. A
+/// refusal has written nothing: every one of [`wish`]'s, and a wish that cannot be followed (`run/follow.rs`).
+pub fn wish_after(home: &Path, day: Option<&str>, typed: &str, after: &str) -> Result<Wished, Error> {
+    let (day, said) = (day_of(day)?, words(typed)?);
+    let project = run::followed(home, &day, after)?;
+    keep(home, &day, said, project, Some(after.to_string()))
+}
+
+/// A wish's words as they are kept, or why they are not.
+fn words(typed: &str) -> Result<String, Error> {
     let said = cleaned(typed).map_err(|why| match why {
         Unkept::Long => refused(LONG),
         Unkept::Changing => refused(CHANGING),
@@ -199,12 +222,12 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
     if marks_only(&said) {
         return Err(refused(MARKS));
     }
-    if !named(project) {
-        let no = "no path, nothing that cannot be seen and nothing shaped like a credential";
-        return Err(refused(format!("--project takes one folder's name of at most {PROJECT_MAX} characters: {no}")));
-    }
+    Ok(said)
+}
+
+fn keep(home: &Path, day: &str, said: String, project: String, after: Option<String>) -> Result<Wished, Error> {
     // Looked at once before the lock, so a refusal makes no folder, and once behind it, where it cannot change.
-    let room = || match kept(home, &day) {
+    let room = || match kept(home, day) {
         Ok(wishes) if wishes.len() >= MADE_MAX => {
             Err(refused(format!("the page of {day} has its {MADE_MAX} made wishes already, so this one was not kept")))
         }
@@ -212,13 +235,12 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
         Err(why) => Err(refused(format!("the made wishes of {day} are not used: {why}; this wish was not kept"))),
     };
     room()?;
-    let _lock = behind(home, &day, Duration::ZERO, "this wish was not kept")?;
+    let _lock = behind(home, day, Duration::ZERO, "this wish was not kept")?;
     let mut wishes = room()?;
-    let (id, project) = (format!("m{}", wishes.len() + 1), project.to_string());
-    let (state, stars) = (WishState::Working, Vec::new());
-    let wish = MadeWish { id, said, project, state, stars, run: None, why: None, question: None, answer: None };
+    let (id, state, stars) = (format!("m{}", wishes.len() + 1), WishState::Working, Vec::new());
+    let wish = MadeWish { id, said, project, state, stars, run: None, why: None, question: None, answer: None, after };
     wishes.push(wish.clone());
-    write(home, &day, wishes)?;
+    write(home, day, wishes)?;
     Ok(Wished { wish, run: None, why: WHY.to_string() })
 }
 

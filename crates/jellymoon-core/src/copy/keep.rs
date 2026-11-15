@@ -83,6 +83,9 @@ pub(crate) struct Keep<'a> {
     pub was: Option<(&'a str, &'a str)>,
     /// Only say what a keep would do.
     pub ask: bool,
+    /// Of a follow-up's work whose start is the followed work's own commit, when that work was kept as another
+    /// commit: that commit. The branch's history holds it and not the start, and the merge is told the start.
+    pub held: Option<&'a str>,
 }
 
 /// What the steps of one keep share.
@@ -321,7 +324,7 @@ fn land(
     judge(&work)?;
     let joined = tip != start;
     let (target, who, files) = if joined {
-        if !reaches(at, start, &tip)? {
+        if !reaches(at, of.held.unwrap_or(start), &tip)? {
             return Err(Unkept::History);
         }
         let tree = made::merged(at, &tip)?;

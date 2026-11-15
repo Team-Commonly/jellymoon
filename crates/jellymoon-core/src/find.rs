@@ -18,6 +18,7 @@ const USER: &[&[&str]] = &[&[".local", "bin"], &[".claude", "local"]];
 const SYSTEM: &[&str] = if cfg!(unix) { &["/opt/homebrew/bin", "/usr/local/bin"] } else { &[] };
 
 /// The harness, and the `PATH` it is started with when that is not this process's own.
+#[derive(Clone)]
 pub(crate) struct Found {
     pub program: PathBuf,
     pub path: Option<OsString>,

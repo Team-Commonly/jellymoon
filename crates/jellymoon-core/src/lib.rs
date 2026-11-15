@@ -51,6 +51,6 @@ pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, Reade
 pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};
 pub use uninstall::{UninstallOptions, Uninstalled, uninstall};
 pub use wish::{
-    MADE_MAX, MADE_SAID_MAX, MadeWish, Wished, going, made, wish, wish_offered, wish_start, wishable, with_made,
-    with_made_said,
+    MADE_MAX, MADE_SAID_MAX, MadeWish, Wished, going, made, wish, wish_after, wish_offered, wish_start, wishable,
+    with_made, with_made_said,
 };

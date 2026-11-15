@@ -88,6 +88,11 @@ typed in on the day, from `--logs`, or else the folder listed under the project'
 wrote down (`project.md`). So a run's work is shown, kept and tossed on a later day with no `--repo`. It must be the top of a checkout. Of a folder read from a log nothing git says
 is repeated; here nothing git says is repeated of any folder.
 
+**A follow-up's work** ([run.md](run.md), "A follow-up's run") is shown as any run's: its record's `start` is
+the commit of the work it follows while that work waited, so the list and each file's `change` are what the
+follow-up adds to that work, and a file only the followed work touched is not listed. A file's `text` is the
+file whole, as always, with the followed work in it. Nothing is asked of the followed run.
+
 ## What the record names, and how far it is trusted
 
 The record names the run's repo, the commit the run started from and the commit it ended as (F48; `run.md`, "What

@@ -84,6 +84,12 @@ fn what_a_made_wish_prints_round_trips_byte_for_byte() {
         (wished.wish.state, answer, question),
         (WishState::Working, Some("the old one, in src/upload.rs"), None)
     );
+    // A follow-up names the wish it follows, last of all; no other wish has the name.
+    let example = fixture("wished-after.json");
+    let wished: Wished = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{wished}\n"), example);
+    assert_eq!((wished.wish.id.as_str(), wished.wish.after.as_deref()), ("m2", Some("m1")));
+    assert!(!fixture("wished.json").contains("after"));
 }
 
 #[test]

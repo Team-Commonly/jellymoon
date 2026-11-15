@@ -6,6 +6,8 @@
 //! that is not kept; and `f53/order.rs` the order followed work and its follow-up are kept and tossed in.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f53/gate.rs"]
+mod gate;
 #[path = "f45/made.rs"]
 mod kept;
 #[path = "f53/order.rs"]

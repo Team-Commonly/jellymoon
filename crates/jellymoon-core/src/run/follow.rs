@@ -18,6 +18,7 @@ use super::child::{self, Ended};
 use super::keep::{BUSY, NO_LOCK, intent};
 use super::record::{self, Record};
 use super::show::{Asked, found, not_cores};
+use super::words::unchanged_on;
 use super::{RunOptions, RunOutcome, Session, WorkState, asks, bury, finished, lined, refused, stop};
 use crate::call::harness_of;
 use crate::copy::{self, Base, Unkept};
@@ -33,8 +34,9 @@ struct Followed {
     run: String,
     repo: PathBuf,
     end: String,
-    /// Whether the work waits. It was kept when it does not.
+    /// Whether the work waits. It was kept when it does not, as the commit `kept`.
     waits: bool,
+    kept: Option<String>,
     /// The id the harness keeps the run's session under, when the record names one of core's.
     session: Option<String>,
 }
@@ -61,11 +63,12 @@ fn followed(home: &Path, day: &str, after: &str) -> Result<Followed, Error> {
     let (repo, end) = (named.repo.to_path_buf(), named.end.to_string());
     // Work the record says was kept names where: a record that does not is not core's.
     let kept = intent(&found.record.kept, &found.record.onto).map_err(|()| not_cores(&run))?;
+    let kept = kept.filter(|_| state == WorkState::Kept).map(|(commit, _)| commit.to_string());
     if state == WorkState::Kept && kept.is_none() {
         return Err(not_cores(&run));
     }
     let session = found.record.session.clone().filter(|session| asks::is_session(session));
-    Ok(Followed { project: found.made.project, run, repo, end, waits: state == WorkState::Waits, session })
+    Ok(Followed { project: found.made.project, run, repo, end, waits: state == WorkState::Waits, kept, session })
 }
 
 /// The project of a follow-up of the wish `after`: the followed wish's own. Err: that wish cannot be followed.
@@ -91,10 +94,10 @@ pub(super) fn on(home: &Path, day: &str, wish: &MadeWish) -> Result<Option<On>, 
 
 impl On {
     /// Where the follow-up's copy is made: at the followed work's commit while that work waits, and where the
-    /// person's checkout stands once it was kept.
+    /// person's checkout stands once it was kept, when that checkout holds the commit it was kept as.
     pub(super) fn base(&self) -> Base<'_> {
         let at = self.followed.waits.then_some(self.followed.end.as_str());
-        Base { repo: &self.followed.repo, run: &self.followed.run, at }
+        Base { repo: &self.followed.repo, run: &self.followed.run, at, kept: self.followed.kept.as_deref() }
     }
 
     /// The run that is followed, and whether its session is forked.
@@ -112,8 +115,9 @@ impl On {
 pub(super) struct Go<'a> {
     pub home: &'a Path,
     pub run: &'a str,
-    /// The copy's folder.
+    /// The copy's folder, and the commit it was made at.
     pub folder: &'a str,
+    pub start: &'a str,
     /// The harness's whole input.
     pub said: String,
     pub limit: Duration,
@@ -131,11 +135,16 @@ impl Go<'_> {
     /// Starts a run's harness under `session`, as a fork of the session `fork` when there is one. A harness
     /// that says it keeps no session of that id (`asks::LOST_SIGN`) is started once more, as any run is, under a
     /// new session of core's: the record names that one, and says the session is no fork, before that start.
+    /// Only in a copy that is as it was made (`copy::as_made`): a start that worked in it before it said so has
+    /// failed (`asks::WORKED`), and no second start is given what it left.
     pub(super) fn started(&self, harness: find::Found, session: String, fork: Option<&str>) -> io::Result<Ended> {
         let Some(fork) = fork else { return self.once(harness_of(harness)?, session, Session::New) };
         let ended = self.once(harness_of(harness.clone())?, session, Session::Fork(fork))?;
         if !ended.lost {
             return Ok(ended);
+        }
+        if !copy::as_made(self.home, self.run, self.start) {
+            return Ok(Ended { worked: true, ..ended });
         }
         let session = asks::fresh();
         if let Some(record) = record::kept(self.home, self.run) {
@@ -144,6 +153,16 @@ impl Go<'_> {
             record::write(self.home, self.run, &anew).map_err(|e| io::Error::other(e.to_string()))?;
         }
         self.once(harness_of(harness)?, session, Session::New)
+    }
+}
+
+/// The line of a run that finished: a run's own, and of a follow-up that changed nothing in a copy made at the
+/// commit the work it follows ended as, that its branch is there.
+pub(super) fn ended_as(home: &Path, run: &str, start: &str, changed: bool) -> String {
+    let followed = || record::kept(home, &record::kept(home, run)?.follows?);
+    match followed().filter(|_| !changed) {
+        Some(followed) if followed.end.as_deref() == Some(start) => unchanged_on(run),
+        _ => finished(run, changed),
     }
 }
 

@@ -307,7 +307,13 @@ max_file_lines = 400
 # joined keep 14 (`copy/keep.rs`, `fits.rs`, `made.rs`); the example round-tripped 6; two cases of F52's gate in
 # `still.rs` 4; `toss.rs`, `answer.rs` and `find.rs` 7. Two files were split to stay under the file limit and
 # hold 46 lines more between them: a run's fixed lines are `run/words.rs`, a keep's `done` is `run/keep/done.rs`.
-"crates/jellymoon-core" = 14096
+# The fixes after F53's gate raised core by 82: `run/follow.rs` 19 (a lost fork started again only in a copy
+# that is as it was made, kept work looked for in the checkout's history, and the line of a follow-up that
+# changed nothing at followed work); `copy.rs` 15 (the base's refusals are a run's, and the one for kept work);
+# `copy/clean.rs` 12 (`as_made`); `run/child.rs` 10 and `run/asks.rs` 2 (an eighth kind of a failed end);
+# `run/words.rs` 7; `run/keep.rs` 5, `copy/keep/made.rs` 4 and `why.rs` 2 (no keep on a joined keep by a git
+# that cannot be told a base); `run/end.rs` 4 and `run.rs` 2.
+"crates/jellymoon-core" = 14178
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -460,7 +466,10 @@ max_file_lines = 400
 # F53 raised it by 915: its tests at the binary are 802 (`tests/f53.rs` 197 and `tests/f53/`: `order.rs` 196,
 # `refused.rs` 202, `session.rs` 207), the made-up agent's fork scripts 90 (`fake_agent/follow.rs` and 5 in
 # `fake_agent.rs`), and `wish --after` and its parsing 23.
-"crates/jellymoon" = 24003
+# The fixes after F53's gate raised it by 269, all tests: `tests/f53/gate.rs` 254, a case for each finding;
+# 9 more in `tests/f53.rs`, `f53/order.rs` and `f53/refused.rs`; 5 in `fake_agent/follow.rs` (a fork that works
+# before it says its session is lost); 1 in `tests/f46/refused.rs`.
+"crates/jellymoon" = 24272
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

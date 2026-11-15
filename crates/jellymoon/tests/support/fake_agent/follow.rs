@@ -67,8 +67,13 @@ pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
         }
         // A harness that keeps the followed session no more. Told to fork, it says so and has done nothing;
         // started again under a new session, 0 does the work, 1 fails, and 2 says once more that it keeps no
-        // such session, which nothing asked it for.
-        ("unkept", _) if given(rec) => lost(),
+        // such session, which nothing asked it for. 3 worked in the copy before it said so.
+        ("unkept", _) if given(rec) => {
+            if number == 3 {
+                more();
+            }
+            lost()
+        }
         ("unkept", 2) => lost(),
         ("unkept", _) => {
             starts();

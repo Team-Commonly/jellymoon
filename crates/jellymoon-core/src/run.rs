@@ -218,7 +218,8 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     // Every check a run makes of a repo is passed: it is a project Jellymoon knows from now on (`project.rs`).
     project::used(home, &repo, &wish.project, &day);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
-    let go = follow::Go { home, run: &copy.run, folder: &copy.folder, said: format!("{}\n", wish.said), limit };
+    let said = format!("{}\n", wish.said);
+    let go = follow::Go { home, run: &copy.run, folder: &copy.folder, start: &began_at, said, limit };
     let ended = go.started(harness, session, fork.as_deref());
     let never = match &ended {
         Err(_) => Some(never::UNSTARTABLE.to_string()),
@@ -341,10 +342,11 @@ mod tests {
     fn every_word_a_run_keeps_with_a_wish_is_what_cleaning_leaves() {
         let run = "r0123456789abcdef";
         let long = failed(run, "it did not start with the tools, servers and permission mode of a run");
-        let texts = [going(run), cut(run), long, finished(run, true), finished(run, false), STAR.to_string()];
+        let unchanged = [finished(run, false), words::unchanged_on(run)];
+        let texts = [going(run), cut(run), long, finished(run, true), STAR.to_string()].into_iter().chain(unchanged);
         let never = [never::UNSTARTABLE.to_string(), never::UNTOLD.to_string(), never::old("--json-schema")];
         let last = asks::KINDS.map(|kind| failed(run, kind)).into_iter().chain([asking(run)]);
-        for text in texts.into_iter().chain([cancelled(run), cut_late(run)]).chain(never).chain(last) {
+        for text in texts.chain([cancelled(run), cut_late(run)]).chain(never).chain(last) {
             assert_eq!(line(&text, 200), text);
             assert!(copy::is_run_id(run) && text.chars().count() <= 200);
         }

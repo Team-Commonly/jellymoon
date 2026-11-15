@@ -69,6 +69,8 @@ made with `--after <id>` in place of `--project`:
   ([show.md](show.md)), with `followed` where a look says `shown`.
 - **With `--run`** the follow-up is kept and its run started apart, as for any made wish. What a follow-up's
   run does differently is in [run.md](run.md), "A follow-up's run".
+- **Not closed.** A follow-up that was made and not run, whose followed work is then tossed, is refused on
+  every run and cannot be let go: it stays `working` on the page and holds one of the day's eight.
 - **On the page** a follow-up is a made wish like any other. `after` is not part of a page.
 
 ## What is kept

@@ -156,7 +156,10 @@ fn the_work_is_not_tossed_between_a_follow_up_s_look_at_it_and_the_wish_naming_i
     let going = w.going(&vars, &["run", "--wish", &wish, "--date", super::DAY, "--repo", made.repo.to_str().unwrap()]);
     wait_for(&there);
     assert_eq!((w.kept(&wish)["run"].as_str(), w.copies().len()), (None, 1));
-    let busy = format!("another keep or toss is at work in this home: nothing of run {} was tossed", made.run);
+    let busy = format!(
+        "a keep, a toss or the start of a follow-up's run is at work in this home: nothing of run {} was tossed",
+        made.run
+    );
     let ran = made.toss_in(&made.repo, &[("JELLYMOON_TEST_KEEP_WAIT_MS", "200".into())]);
     assert_eq!(super::refused(&ran), super::said(&busy));
     fs::write(&go, "").unwrap();

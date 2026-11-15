@@ -14,8 +14,12 @@ pub(super) fn merged(at: &At, tip: &str) -> Result<String, Unkept> {
     }
     // A follow-up's work on followed work that was kept as a new commit: the two have the followed work's own
     // commit as the base to merge from, which no history of the branch holds. A git from before 2.40 cannot be
-    // told a base, and merges from the one it finds.
-    let base = at.of.held.filter(|_| fits::at_least(&said, 40)).map(|_| format!("--merge-base={}", at.of.named.start));
+    // told a base, and merges from the one it finds: that brings back whatever of the followed work the person
+    // has taken out since, so it is not asked.
+    if at.of.held.is_some() && !fits::at_least(&said, 40) {
+        return Err(Unkept::NoBase);
+    }
+    let base = at.of.held.map(|_| format!("--merge-base={}", at.of.named.start));
     let mut merge = vec!["merge-tree", "--write-tree", "--no-messages"];
     merge.extend(base.as_deref());
     merge.extend([tip, at.of.named.end]);

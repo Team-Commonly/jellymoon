@@ -548,11 +548,18 @@ branch and no record, and the wish can be run again once what refused it is mend
 | The followed work | The copy is made at | Checked first |
 |---|---|---|
 | waits | the commit the followed run's record names as its `end` | the followed run's branch is at that commit in the repo |
-| was kept | the commit the person's checkout stands on, as any run's | nothing more |
+| was kept | the commit the person's checkout stands on, as any run's | the checkout's history holds the commit the followed run's record names as `kept` |
 
-In both the repo `--repo` is a checkout of must be the one the followed run's record names. The commit is the
-follow-up's `start`, so `run show`, `run keep` and `run toss` of a follow-up compare its work with the work it
-follows and never with what was there before both.
+In both, the folder the run would start in must be a checkout of the repo the followed run's record names. The
+commit is the follow-up's `start`, so `run show`, `run keep` and `run toss` of a follow-up compare its work with
+the work it follows and never with what was there before both.
+
+Kept work is in one branch's history. A second worktree on a branch without it, or the person's own branch put
+back behind the kept commit, would give the follow-up a copy of the old files under a fork of a session that
+has seen the new ones: the run is refused, and runs once the checkout holds the work again.
+
+These three checks are a run's refusals and none of the folder: each is said in its own sentence and nothing
+before it, whether the folder was named with `--repo`, typed in on the day or found on the list of projects.
 
 **Its session.** The harness is started with a run's arguments and, where `--session-id <id>` stands,
 `--resume <followed session> --fork-session --session-id <id>`: a fork of the session the followed run's record
@@ -571,26 +578,39 @@ record is then written again with a new session id and `forked: false`, and the 
 in the same copy, with a run's own arguments and no fork. How that start ends is how the run ends. It is never
 started a third time.
 
+It is started that second time only in a copy that is as it was made: the run's branch still names the
+copy's `start`, and git finds no changed, new or ignored file in the folder (`git status --porcelain --ignored
+--untracked-files=all`, hooks and filters off as for every git a run starts). A fork that worked before it said
+its session is lost has failed, `Claude Code said it keeps no session to fork after it had worked in the copy`:
+its copy is kept as a failed run's is, the record still says `forked: true`, and no second start is given what
+the first left. So one commit never holds two starts' changes under `forked: false`.
+
+**A follow-up that changed nothing** in a copy made at the commit the followed work ended as says `run <id>
+finished and changed nothing: the branch jellymoon/run-<id> is where the work it follows ended`. One whose copy
+was made at any other commit, where the checkout stood after the work was kept, says a run's own words, `is
+where the checkout was`. Which it is, is read from the two records: the follow-up's `start` is the followed
+run's `end`.
+
 A harness that does not know `--fork-session` starts no run, in the words of "A run that was never started"
 with that option named, and the follow-up can be run again. A follow-up that asks is answered under its own
 session, never the followed one. The session the harness keeps of a follow-up's copy is left out by the reader
 as every copy's is ([reader.md](reader.md)).
 
-`tests/f53.rs` and `tests/f53/session.rs`, `refused.rs` and `order.rs` hold all of it with a made-up agent that
-records each command line it was started with and what its copy held.
+`tests/f53.rs` and `tests/f53/session.rs`, `refused.rs`, `order.rs` and `gate.rs` hold all of it with a made-up
+agent that records each command line it was started with and what its copy held.
 
 Not closed:
 
 - **The fork was not tried on a real harness in this build.** ADR 0018 measured `--resume <id> --fork-session
   --session-id <uuid>` by hand; core's whole command line with it was not run.
-- **A fork that reports a lost session is taken to have changed nothing** in the copy before the second start.
-- **A follow-up of kept work is made where the checkout stands**, and nothing checks that the checkout still
-  holds that work: the person may have moved to a branch without it.
-- **A follow-up that changed nothing** says so in a run's words, `where the checkout was`, also when its copy
-  was made at the followed work.
-- **A follow-up that was made and not yet run, whose followed work is then tossed**, cannot be run, and nothing
-  lets a wish with no run go: it stays `working` on the page.
-- With no `--repo`, the two refusals that name a repo say `--repo` of a folder that was found from the logs.
+- **A fork that committed in its copy, or left only an ignored file, before it said its session is lost** is
+  not started again by the rule above, and no test plays either: the made-up agent starts no git.
+- **A follow-up that was made and not yet run, whose followed work is then tossed**, is refused on every run.
+  `run toss` says it has had no run, `run stop` that no run is going, the page keeps it `working`, and it
+  holds one of the day's eight: nothing lets a wish with no run go.
+- **The order of a toss is read from the day's made wishes.** With `after` taken out of the kept wish by hand,
+  the followed work was tossed while the follow-up's work waited. The follow-up's keep was then refused, its
+  start being in no branch's history, so nothing landed wrongly.
 
 ## What is kept
 
@@ -1138,9 +1158,10 @@ empty `runs/no-hooks`), and they stay.
 | No `--repo`, and the one folder, typed in or listed, is inside a repo, or is no repo | that it is not one a run can copy, and `copy make`'s reason, with fixed words where git's own would be |
 | A folder that is not a checkout git can copy | `copy make`'s own line ([copy.md](copy.md)) |
 | A follow-up whose followed wish cannot be followed by now | the sentence a follow-up is not made with ([wish.md](wish.md), "A follow-up") |
-| A follow-up, and a keep or a toss holds the lock for ten seconds, or the lock's file cannot be made | `another keep or toss is at work in this home: nothing was started`, or `the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home: nothing was started` |
-| A follow-up, and the checkout is of another repo than the followed run's record names | `--repo is not a checkout of the repo the followed work is in` |
-| A follow-up of work that waits, and the followed run's branch is not at the commit its record names | `the branch of the work this wish follows is not at the commit its record names, so no copy was made of it` |
+| A follow-up, and a keep, a toss or another follow-up's start holds the lock for ten seconds, or the lock's file cannot be made | `a keep, a toss or the start of a follow-up's run is at work in this home: nothing was started`, or `the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home: nothing was started` |
+| A follow-up, and the folder, named, typed in or listed, is a checkout of another repo than the followed run's record names | `the folder this wish would run in is not a checkout of the repo the work it follows is in` |
+| A follow-up of work that waits, and the followed run's branch is not at the commit its record names, however the folder was found | `the branch of the work this wish follows is not at the commit its record names, so no copy was made of it` |
+| A follow-up of work that was kept, and the checkout's history does not hold the commit it was kept as | `the checkout's history does not hold the commit the work this wish follows was kept as, so no copy was made of it` |
 
 ## Not covered
 

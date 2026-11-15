@@ -21,8 +21,9 @@ use crate::Error;
 use crate::copy::{self, Keep, LISTED, Named, Note, Touched, Unkept};
 use crate::still::statement;
 
-/// Why a keep or a toss did not have the lock both hold (`runs/keep.lock`): another holds it, or it is not to be had.
-pub(super) const BUSY: &str = "another keep or toss is at work in this home";
+/// Why a keep, a toss or the start of a follow-up's run (`follow.rs`) did not have the lock all three hold
+/// (`runs/keep.lock`): one of them holds it, or it is not to be had.
+pub(super) const BUSY: &str = "a keep, a toss or the start of a follow-up's run is at work in this home";
 pub(super) const NO_LOCK: &str =
     "the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home";
 const KEPT: Asked = Asked { to: "keep", done: "kept", going: "is going: its work can be kept once it has finished" };
@@ -312,6 +313,10 @@ fn words(run: &str, unkept: Unkept) -> String {
         Unkept::Old => format!(
             "the branch has commits since run {run} started, and this git is too old to merge them with the work in \
              the store (it is from before 2.38): {unchanged}"
+        ),
+        Unkept::NoBase => format!(
+            "the work run {run} follows was kept as a new commit, and this git is too old to keep a follow-up's \
+             work on top of one (it is from before 2.40): {unchanged}"
         ),
         Unkept::Clash => format!(
             "the branch's commits since run {run} started and the run's work changed the same lines, or the same \

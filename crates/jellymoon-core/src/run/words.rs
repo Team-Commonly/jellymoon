@@ -72,3 +72,10 @@ pub(super) fn finished(run: &str, changed: bool) -> String {
         format!("run {run} finished and changed nothing: the branch {branch} is where the checkout was")
     }
 }
+
+/// The line of a follow-up that finished and changed nothing in a copy made at the commit the work it follows
+/// ended as (F53): its branch is there, where the person's checkout may never have been.
+pub(super) fn unchanged_on(run: &str) -> String {
+    let branch = copy::branch(run);
+    format!("run {run} finished and changed nothing: the branch {branch} is where the work it follows ended")
+}

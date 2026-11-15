@@ -224,7 +224,24 @@ empty logs, on a wish that cannot be done without one answer:
   a follow-up whose run failed, was stopped or changed nothing, which holds nothing of the work.
 - **Followed work kept as a new commit** leaves the follow-up's branch on the run's commit, not the kept one.
   The keep of the follow-up counts the kept commit as the run's start and names the real start to git as the
-  merge's base (git 2.40 and later; keep.md, "A follow-up's work").
+  merge's base (keep.md, "A follow-up's work").
+- **That keep is refused on a git from before 2.40**, which cannot be told a base. Merged from the base git
+  finds, the keep brought back followed work the person had since taken out, under `fits: true`: a refusal in
+  one sentence is the smaller harm. The kept commit stands for the start only of a follow-up whose copy was
+  made at the followed work; one made after the keep is held to its own start.
+- **A refusal of the work a follow-up runs on is a run's, not the folder's.** Another repo, a moved branch and
+  kept work the checkout does not hold are each said alone, the same for a folder named, typed in or listed.
+- **Kept work must be in the checkout's history** for a follow-up of it to run: the commit the followed record
+  names as `kept` is an ancestor of the checkout's `HEAD`. Without it a second worktree, or a branch put back,
+  gave the fork the old files.
+- **A lost fork is started again only in a copy that is as it was made**: branch at `start`, nothing changed,
+  new or ignored. A fork that worked first has failed, in its own kind of a failed end, and its copy is kept.
+- **A follow-up that changed nothing says where its branch is**: where the work it follows ended when its copy
+  was made at that commit, and a run's own words otherwise.
+- **The busy lock names all three holders**: a keep, a toss and the start of a follow-up's run.
+- **Stays open:** a follow-up made and not run whose followed work is tossed cannot be run or let go; and the
+  order of a toss is read from the day's made wishes, so a hand that takes `after` out lets the followed work be
+  tossed under a waiting follow-up (its keep is then refused, and nothing lands wrongly).
 - **The reader leaves out a follow-up's copy** as every copy: the fork's session file is under the copy's
   folder name in the harness's store, and no turn of it is a turn of the day.
 - **Not measured in the build:** the fork on a real harness with core's command line.

@@ -158,14 +158,18 @@ fn a_follow_up_s_run_is_refused_when_the_work_it_follows_was_tossed_or_moved_or_
     made.unchanged(
         &w.run_with(&wait, &named),
         &before,
-        "another keep or toss is at work in this home: nothing was started",
+        "a keep, a toss or the start of a follow-up's run is at work in this home: nothing was started",
     );
     drop(lock);
     // Another repo of the project's name is not the repo the followed work is in.
     let other = w.repo("elsewhere/alpha");
     let before = made.all();
     let ran = w.run(&["run", "--wish", &wish, "--date", DAY, "--repo", other.to_str().unwrap()]);
-    made.unchanged(&ran, &before, "--repo is not a checkout of the repo the followed work is in");
+    made.unchanged(
+        &ran,
+        &before,
+        "the folder this wish would run in is not a checkout of the repo the work it follows is in",
+    );
     assert!(w.branches(&other).is_empty());
     // The followed run's branch is not at the commit its record names: moved by hand, or gone.
     let (name, end) = (made.branch(), made.end());

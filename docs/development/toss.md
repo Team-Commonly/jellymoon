@@ -71,7 +71,8 @@ given its end first, as a stop and a page give it. The repo is found as a run fi
 is the project, or the logs, or the list of projects), and the git folder its checkouts share must be the one the record names, compared
 and never resolved.
 
-One keep or toss of a home runs at a time, behind the lock a keep holds (`runs/keep.lock`), taken before the
+One keep or toss of a home runs at a time, and no follow-up's run starts beside one, behind the lock a keep
+holds (`runs/keep.lock`), taken before the
 record is read; the copy is removed behind the lock every clean holds (`runs/clean.lock`), always in that order.
 A lock file left by a command that was killed is nobody's lock.
 
@@ -124,7 +125,12 @@ this wish in `after`, and each one's run. A follow-up's run stands on the work w
 and is not tossed, and while it finished with work that is not tossed: its branch is built on this one. The toss is refused and names the follow-up to toss first. A follow-up with no run yet, one
 whose run failed, was cancelled, was cut off or was never started, and one that finished and changed nothing
 hold nothing of the work, and the toss goes on. Such a follow-up that has no run can then not be run: its
-followed work is tossed (`tests/f53/order.rs`).
+followed work is tossed (`tests/f53/order.rs`). It is refused on every run, `run toss` says it has had no run,
+the page keeps it `working`, and it holds one of the day's eight: not closed.
+
+Which wishes follow this one is read from the day's made wishes and nowhere else. With `after` taken out of a
+kept wish by hand, the work it followed is tossed while its own waits; a keep of that follow-up is then
+refused, its start being in no branch's history. Not closed either.
 
 ## A run that did not finish
 
@@ -178,7 +184,7 @@ Each ends the command with exit 1, one line on stderr, and nothing changed, but 
 | the run is another wish's | `wish <id> names run <run>, which is another wish's run: nothing was tossed` |
 | the run is going, or it asks and another command holds its lock | `run <id> is going: it is stopped first, and nothing was tossed` |
 | the wish is working or the record has no outcome | `run <id> has no end written down yet: nothing was tossed` |
-| a keep or a toss holds the lock for ten seconds | `another keep or toss is at work in this home: nothing of run <id> was tossed` |
+| a keep, a toss or the start of a follow-up's run holds the lock for ten seconds | `a keep, a toss or the start of a follow-up's run is at work in this home: nothing of run <id> was tossed` |
 | the lock's file could not be made or asked about | `the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home: nothing of run <id> was tossed` |
 | the record's words and names do not agree, it says tossed at another commit than it names, it says tossed and still holds a keep's `kept` and `onto` (a toss takes them out as it writes `tossed`), or it holds half a keep that a run that did not finish cannot have | `the record of run <id> is not one Jellymoon wrote for this wish` |
 | the record's `work` says kept, whatever branch, or none, it names beside | `the work of run <id> was kept, so it is not tossed: nothing was changed` |

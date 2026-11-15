@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 
 pub(crate) use back::{remove_ours, take_back, take_back_left};
 pub use clean::clean_copy;
-pub(crate) use clean::{drop_copy, end_copy, moved};
+pub(crate) use clean::{as_made, drop_copy, end_copy, moved};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
 pub(crate) use keep::{
@@ -64,27 +64,42 @@ pub(crate) struct MadeFrom {
 }
 
 /// What a follow-up's copy is made on (F53; ADR 0018, decision 8): the repo the followed run's record names,
-/// that run, and the commit its work is at while it waits. None of a commit: the work was kept, and the copy is
-/// made where the person's checkout stands, as any run's is.
+/// that run, and the commit its work is at while it waits. None of a commit: the work was kept, as the commit
+/// `kept`, and the copy is made where the person's checkout stands, as any run's is.
 pub(crate) struct Base<'a> {
     pub repo: &'a Path,
     pub run: &'a str,
     pub at: Option<&'a str>,
+    pub kept: Option<&'a str>,
 }
 
 impl Base<'_> {
     /// The commit the copy is made at, when it is not the checkout's. Refused: a checkout of another repo than
-    /// the record names, and a followed run's branch that is not at the commit the record names for it.
+    /// the record names, a followed run's branch that is not at the commit the record names for it, and a
+    /// checkout whose history does not hold the commit the work was kept as. Each is a run's refusal and none a
+    /// copy's: it says nothing of the folder, which is one a run can copy, however it was found (`run/place.rs`).
     fn commit(&self, person: &Repo, shared: &Path) -> Result<Option<String>, Error> {
+        let refused = |why: &str| Err(Error::Run(why.to_string()));
         if !work::same(self.repo, shared) {
-            return Err(refused("--repo is not a checkout of the repo the followed work is in"));
+            return refused(
+                "the folder this wish would run in is not a checkout of the repo the work it follows is in",
+            );
         }
-        let Some(at) = self.at else { return Ok(None) };
+        let Some(at) = self.at else {
+            let within = |kept: &str| person.ask(None, &[], &["merge-base", "--is-ancestor", kept, "HEAD"]);
+            return match self.kept.map(within) {
+                None | Some(Ok(Some(_))) => Ok(None),
+                Some(_) => refused(
+                    "the checkout's history does not hold the commit the work this wish follows was kept as, so no \
+                     copy was made of it",
+                ),
+            };
+        };
         if work::tip(person, self.run).ok().as_deref() != Some(at) {
-            return Err(refused(
+            return refused(
                 "the branch of the work this wish follows is not at the commit its record names, so no copy was \
                  made of it",
-            ));
+            );
         }
         Ok(Some(at.to_string()))
     }

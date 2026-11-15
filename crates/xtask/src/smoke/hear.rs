@@ -17,7 +17,7 @@ pub fn hear(world: &World) -> Result<String, String> {
     write(&logs.join("-work-heard").join("s.jsonl"), &format!("{typed}\n"))?;
     let said = json!({"said": "final", "words": SAY});
     let events = format!(
-        "{{\"tick\":0}}\n{{\"key\":\"down\"}}\n{{\"tick\":1000}}\n{{\"key\":\"up\"}}\n{said}\n{{\"tick\":5000}}\n"
+        "{{\"tick\":0}}\n{{\"key\":\"down\"}}\n{{\"tick\":1000}}\n{{\"key\":\"up\"}}\n{said}\n{{\"tick\":1000}}\n{{\"tick\":5000}}\n"
     );
     let args = ["hear", "--date", DAY, "--logs", &text(&logs)].map(str::to_string);
     let ran = world.fed("jellymoon", &args, &events)?;

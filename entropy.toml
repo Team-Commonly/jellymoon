@@ -275,7 +275,11 @@ max_file_lines = 400
 # `hear/voice.rs` (the reader of `voice.toml`) 122, `hear/day.rs` (the project, the making, the day's runs) 106 and
 # the contract's test `tests/hear.rs` 123; the rest is the names a made wish's project may be offered under
 # (`wish.rs`), whether a run's work waits (`run/record.rs`), the new error and the exports.
-"crates/jellymoon-core" = 12589
+# The fix after F55's gate raised core by 50: `hear.rs` 26 (a span an event begins is counted from the first tick
+# at or after it), `hear/voice.rs` 18 (a key held with Shift alone, a value that holds what cannot be seen),
+# `redact.rs` 5 and `hear/day.rs` 1. Its own gate raised core by 7 more (`redact.rs` 6: what is not read in a
+# quoted value; `hear/day.rs` 1) and the binary by 11, the values of `voice.toml` that were still named back.
+"crates/jellymoon-core" = 12646
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -398,7 +402,10 @@ max_file_lines = 400
 # it 904 (`heard.rs`, the shared events and world; `events.rs`; `project.rs`; `started.rs`, a hearing fed a line
 # at a time; `voice.rs`), and `tests/f30.rs`, F30's three steps through `jellymoon hear`, is 76. The command
 # itself is `parse_hear` and 13 lines of `main.rs`.
-"crates/jellymoon" = 20919
+# The fix after F55's gate raised the binary by 126, all of it tests under `tests/f55`: the window, a refusal's
+# time and the ear's wait from the first tick after their event; a project switched off inside the window; a run
+# that ended at once; a last line with no line break; the two new refusals of `voice.toml`.
+"crates/jellymoon" = 21056
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

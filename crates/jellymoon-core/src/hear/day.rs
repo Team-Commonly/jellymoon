@@ -79,7 +79,9 @@ pub(super) fn make(
     let Some((program, options)) = apart else { return Ok((made, None)) };
     let options = RunOptions { wish: made.clone(), day: read.date.clone(), ..options.clone() };
     let unstarted = match run_apart(home, program, &options) {
-        Ok(started) => started.run.is_none().then_some(started.why),
+        // A run that was named and has ended already, needing the person, is said as it ended, as `jellymoon
+        // wish --run` prints it. One that finished is not a thing that could not be done: the day's rest shows it.
+        Ok(started) => (started.run.is_none() || started.state == WishState::NeedsYou).then_some(started.why),
         Err(e) => Some(e.to_string()),
     };
     Ok((made, unstarted))

@@ -31,7 +31,7 @@ fn the_first_tick_starts_the_clock_whatever_its_number_and_no_tick_at_all_is_no_
     let w = alpha_world();
     let from = 1_741_600_000_000_u64;
     let mut events = vec![tick(from), DOWN.to_string(), tick(from + 300), UP.to_string(), fin(SAID)];
-    events.extend([tick(from + 4299), tick(from + 4300)]);
+    events.extend([tick(from + 300), tick(from + 4299), tick(from + 4300)]);
     let want = [
         quiet(),
         listening(""),
@@ -79,7 +79,7 @@ fn a_line_that_is_no_event_is_passed_over_and_counted_and_none_of_it_is_said() {
         events.push(event);
     }
     let ran = w.hear_ran(&[], &events);
-    assert_eq!((ran.code, ran.stderr.as_str()), (0, passed_over(odd.len() * 5).as_str()), "{}", ran.stdout);
+    assert_eq!((ran.code, ran.stderr.as_str()), (0, passed_over(odd.len() * 6).as_str()), "{}", ran.stdout);
     let printed: Vec<serde_json::Value> = ran.stdout.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
     assert_eq!(printed, [quiet(), listening(""), heard(SAID, "alpha", 4000)]);
     assert!(!ran.stdout.contains("zebra") && !ran.stderr.contains("zebra"));
@@ -105,6 +105,41 @@ fn a_line_of_64_kib_is_an_event_and_a_longer_one_is_read_past() {
     assert_eq!((ran.code, ran.stderr.as_str()), (0, passed_over(2).as_str()));
     let quiet = "{\"state\":\"quiet\",\"says\":\"\",\"words\":\"\",\"project\":\"\",\"left\":0}\n";
     assert_eq!(ran.stdout, quiet, "a line read past pressed no key");
+    // The input's last line with no line break is held to the same length: it has one byte fewer to be an event in.
+    let ran = w.hear_fed(&[], &format!("{}\n{most}", tick(0)));
+    assert_eq!(lines(&ran), [super::quiet(), listening("")]);
+    let ran = w.hear_fed(&[], &format!("{}\n{most} ", tick(0)));
+    assert_eq!((ran.code, ran.stderr.as_str(), ran.stdout.as_str()), (0, passed_over(1).as_str(), quiet));
+}
+
+// What is refused by an event is said for six seconds of ticks from the first tick at or after it, and the ear's
+// final words are waited for five seconds from the first tick at or after the key went up.
+#[test]
+fn a_refusal_s_six_seconds_and_the_ear_s_five_start_at_the_first_tick_at_or_after_them() {
+    let w = alpha_world();
+    let failed = cannot("nothing was heard: the recognizer failed");
+    let refused = |ticks: &[u64]| {
+        let events = [vec![tick(0), ear_cannot("failed")], ticks.iter().map(|at| tick(*at)).collect()].concat();
+        w.hear(&[], &events)
+    };
+    assert_eq!(refused(&[7000, 12_999]), [quiet(), failed.clone()]);
+    assert_eq!(refused(&[7000, 13_000]), [quiet(), failed.clone(), quiet()]);
+    assert_eq!(refused(&[0, 5999]), [quiet(), failed.clone()]);
+    assert_eq!(refused(&[0, 6000]), [quiet(), failed, quiet()]);
+    // Words the door refuses are refused by an event too.
+    let long = [tick(0), DOWN.to_string(), tick(1000), UP.to_string(), fin(&"word ".repeat(41)), tick(7000)];
+    let then = |at: u64| w.hear(&[], &[&long[..], &[tick(at)]].concat());
+    assert_eq!(then(12_999), [quiet(), listening(""), cannot(LONG)]);
+    assert_eq!(then(13_000), [quiet(), listening(""), cannot(LONG), quiet()]);
+
+    let waited = |ticks: &[u64]| {
+        let events =
+            [vec![tick(0), DOWN.to_string(), tick(1000), UP.to_string()], ticks.iter().map(|at| tick(*at)).collect()];
+        w.hear(&[], &events.concat())
+    };
+    assert_eq!(waited(&[9000, 13_999]), [quiet(), listening("")]);
+    assert_eq!(waited(&[9000, 14_000]), [quiet(), listening(""), cannot(EAR_SILENT)]);
+    assert!(!w.at("jm").exists());
 }
 
 #[test]
@@ -144,7 +179,8 @@ fn what_is_refused_is_said_for_six_seconds() {
 #[test]
 fn an_ear_that_does_not_answer_in_five_seconds_is_said_and_the_hold_is_over() {
     let w = alpha_world();
-    let mut events = vec![tick(0), DOWN.to_string(), partial("make"), tick(1000), UP.to_string(), tick(5999)];
+    let mut events =
+        vec![tick(0), DOWN.to_string(), partial("make"), tick(1000), UP.to_string(), tick(1000), tick(5999)];
     assert_eq!(w.hear(&[], &events), [quiet(), listening(""), listening("make")]);
     events.extend([tick(6000), fin(SAID), tick(11_999)]);
     assert_eq!(w.hear(&[], &events), [quiet(), listening(""), listening("make"), cannot(EAR_SILENT)]);
@@ -192,7 +228,7 @@ fn each_thing_the_ear_cannot_do_is_said_in_core_s_own_sentence_and_ends_the_hold
 fn what_the_ear_refuses_while_a_heard_wish_is_shown_leaves_the_wish_and_is_said_after_it() {
     let w = alpha_world();
     let mut events = hold(0, SAID);
-    events.extend([tick(2000), ear_cannot("failed"), tick(5000), tick(7999), tick(8000)]);
+    events.extend([tick(2000), ear_cannot("failed"), tick(2000), tick(5000), tick(7999), tick(8000)]);
     let failed = "nothing was heard: the recognizer failed";
     let want = [
         quiet(),

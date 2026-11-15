@@ -30,7 +30,19 @@ say which projects a wish can be made for. `--run` starts a made wish's run, as 
 | `{"tick":1200}` | the time: milliseconds on any clock that does not go back |
 
 The first `tick` starts the clock, whatever its number: nothing has passed at it. Until one comes no time passes,
-so every hold is a slip and no heard wish is made. A tick that is not later than the last changes nothing.
+so every hold is a slip and no heard wish is made. A tick earlier than the last changes nothing.
+
+**A span that an event begins is counted from the first tick at or after that event**, never from the tick
+before it: the four seconds a heard wish is shown, the six seconds a refusal is said, and the five seconds the
+ear's final words are waited for. The tick before an event may be long past, and a span counted from it would
+be shorter than what the person saw. So after a `heard` line 4000 ms of ticks always pass before a wish is
+made, however seldom the sender ticks. A tick at the time of the last one is at or after the event, and
+starts the span; one that goes back does not. What a tick itself begins (a refusal at the end of the four
+seconds, the wait after a hold that ended at 60 000 ms) is counted from that tick.
+
+**A hold's length is the one span between two events:** it is the time between the tick before the key went
+down and the tick before it went up. A sender that ticks with each key event measures it rightly; one that
+does not can only make a hold a slip or a slip a hold, and a heard wish still has its whole four seconds.
 
 An example, `crates/jellymoon-core/tests/fixtures/hear-events.jsonl`:
 
@@ -41,17 +53,20 @@ An example, `crates/jellymoon-core/tests/fixtures/hear-events.jsonl`:
 {"tick":1200}
 {"key":"up"}
 {"said":"final","words":"make the uploader retry twice"}
-{"tick":3200}
-{"tick":5200}
+{"tick":1250}
+{"tick":3250}
+{"tick":5250}
 {"key":"down"}
 {"tick":5300}
 {"said":"cannot","why":"microphone_refused"}
-{"tick":11300}
+{"tick":5350}
+{"tick":11350}
 ```
 
 **A line that is no event** is passed over and counted, and nothing of it is printed: text that is not JSON, a
 `key`, `said` or `why` this build does not know, a name it does not know beside one it does, a number where
-words belong, a `tick` that is negative or not whole, and a line over 64 KiB, which is read past. When the input
+words belong, a `tick` that is negative or not whole, and a line over 64 KiB with its line break, which is read
+past: the input's last line with no line break has one byte fewer, 65 535, to be an event in. When the input
 ends, one line on stderr says how many, and the exit is still 0:
 
 ```
@@ -102,8 +117,10 @@ And what the day's runs give, `tests/fixtures/hear-runs.jsonl`:
 {"state":"waits","says":"a run's work waits for you on the page","words":"","project":"","left":0}
 ```
 
-A line is printed only when it differs from the last. While a heard wish is shown, `left` changes with each
-tick, so each tick prints a line: whoever sends the ticks sets how often the ring is drawn.
+A line is printed only when it differs from the last. `left` is 4000 on the first `heard` line and still 4000
+at the first tick at or after the final words, which starts the four seconds and so prints nothing. In the
+example that is the tick at 1250: the wish is made at 5250. After it `left` changes with each tick, so each
+tick prints a line: whoever sends the ticks sets how often the ring is drawn.
 
 **When more than one state holds**, the first of these is shown: `listening`, `heard`, `cannot`, `asks`,
 `working`, `waits`, `quiet`. So what the ear refuses while a heard wish is shown is said once the wish is made
@@ -117,12 +134,14 @@ or taken back, if its six seconds are not over by then.
    nothing unseen, credential shapes replaced by `[redacted]`, cut to 200 characters. They are only ever shown.
 3. **The key goes up.** A hold under 300 ms is a slip of the hand: nothing is heard, and the final words that
    may follow are passed over. Otherwise the state stays `listening` while the ear's final words are waited
-   for, 5000 ms at most. A hold ends by itself at 60 000 ms, as if the key had been let go then.
+   for, 5000 ms of ticks at most. A hold ends by itself at 60 000 ms, as if the key had been let go then.
 4. **The final words pass the door a typed wish passes** ([wish.md](wish.md), "What is kept"): cleaned until
    cleaning changes nothing, at most 200 characters, never cut. Words that are empty once cleaned make no wish
-   and no line of their own: the jellyfish shows what it showed before. Words the door refuses are refused in
-   a made wish's own sentence, below.
-5. **The project is picked** (below), and the heard wish is shown with it: `heard`, for 4000 ms.
+   and are not said to be refused: the hold is over, so one line is printed, of what the jellyfish showed
+   before the hold (`quiet`, when nothing else holds). Words the door refuses are refused in a made wish's own
+   sentence, below.
+5. **The project is picked** (below), and the heard wish is shown with it: `heard`, for 4000 ms of ticks from
+   the first tick at or after the final words.
 6. **At 4000 ms the wish is made**, by the call the page's entry uses (`wish_offered`): once, in the working
    state. The next line carries its id in `made`. With `--run` its run is then started by `run_apart`, with
    this same `jellymoon` program, the logs and the names switched off that `hear` was given, and the harness
@@ -176,8 +195,8 @@ which is when its wish is told ([run.md](run.md), "A run that was cut off").
 | `waits` | `a run's work waits for you on the page` |
 | `quiet`, `listening`, `working` | empty |
 
-`cannot` is said for 6000 ms from when it was refused, and then the jellyfish shows what else holds. A later
-refusal replaces an earlier one.
+`cannot` is said for 6000 ms of ticks, from the first tick at or after the event that was refused, or from the
+tick that refused it; then the jellyfish shows what else holds. A later refusal replaces an earlier one.
 
 | Refused | `says` |
 |---|---|
@@ -205,7 +224,7 @@ What core refuses of the wish itself is said in the sentence a typed wish is ref
 | the day is locked, after the lock's own 3 seconds | `another change to the page of <day> has not finished, so this wish was not kept` | at 4000 ms |
 | the day's made wishes cannot be used | `the made wishes of <day> are not used: <why>; this wish was not kept` | at 4000 ms |
 | the project is no longer offered | `no folder of that project that is switched on was typed in on <day>, so this wish was not kept` | at 4000 ms |
-| with `--run`, no run was started | the wish is kept, `made` names it, and `says` is the reason `jellymoon wish --run` prints as `why` | at 4000 ms |
+| with `--run`, no run was started, or the run had ended by the time its start was answered | the wish is kept, `made` names it, and `says` is what `jellymoon wish --run` prints as `why`: why none was started, or how the run ended | at 4000 ms |
 
 In each row but the last nothing is kept.
 
@@ -230,19 +249,25 @@ language = "en-US"
   most, each on a line of its own. No TOML library reads it: a table, a comment after a value, single quotes,
   an escape, any other name and a name twice each refuse the whole file.
 - **A key** is one or more of `Control`, `Shift`, `Option` and `Command`, each once, and then one of `A` to `Z`,
-  `0` to `9`, `F1` to `F12` or `Space`, joined by `+`. Core checks the shape; whether the system lets the key be
-  registered is the shell's to find out (F58).
+  `0` to `9`, `F1` to `F12` or `Space`, joined by `+`. A key held with `Shift` alone (`Shift+A`, `Shift+Space`)
+  is refused: it is how capitals and signs are typed, and the system would take them from every program. Core
+  checks the shape; whether the system lets the key be registered is the shell's to find out (F58).
 - **A language** is `default`, the system's own, or a tag: two or three small letters, then a script and then a
   region if there is one (`en`, `en-US`, `zh-Hans`, `zh-Hans-CN`, `es-419`). Whether the Mac recognizes it is
   the ear's to say (`no_such_language`).
 
 A file that is not used is refused in one line, exit 1, and nothing is printed or written. The line names the
-value, cleaned and cut to 40 characters as any text core prints, or the number of the line:
+value, cleaned and cut to 40 characters as any text core prints, or the number of the line. A value that holds
+a character that cannot be seen is not named: cleaned, it would read as a value that is right. That is a
+control or format character, a letter that draws as nothing or as a blank (a joiner, a filler, a variation
+selector), any space but the plain one, and a plain space at an end of the value or beside another.
 
 | The file | The line, after `jellymoon: voice.toml is not used: ` |
 |---|---|
 | a key that is not one | `the key "Hyper+Space" is not one or more of Control, Shift, Option and Command, each once, and then one of A to Z, 0 to 9, F1 to F12 or Space, joined by +` |
 | a language that is not one | `the language "English" is not `default` or a tag such as en-US` |
+| a key held with Shift alone | `the key is held with Shift alone, which typing uses: add Control, Option or Command to it` |
+| a key or a language that holds a character that cannot be seen | `the key holds a character that cannot be seen`, `the language holds a character that cannot be seen` |
 | a line that is neither name | ``line 3 is not `key = "..."` or `language = "..."` `` |
 | a name twice | `line 3 names key a second time` |
 | over 4096 bytes | `it is too large` |
@@ -258,12 +283,12 @@ say what the file means.
 | Bound | Value | Where |
 |---|---|---|
 | A slip of the hand | under 300 ms | `SLIP_MS`, `hear.rs` |
-| A heard wish is shown | 4000 ms | `WINDOW_MS` |
-| A refusal is said | 6000 ms | `CANNOT_MS` |
+| A heard wish is shown | 4000 ms of ticks, from the first tick at or after the final words | `WINDOW_MS` |
+| A refusal is said | 6000 ms of ticks, from the first tick at or after it | `CANNOT_MS` |
 | A hold ends by itself | 60 000 ms | `HOLD_MS` |
-| The ear's final words are waited for | 5000 ms | `EAR_MS` |
+| The ear's final words are waited for | 5000 ms of ticks, from the first tick at or after the key went up | `EAR_MS` |
 | A look at the day's made wishes | once for each 1000 ms of ticks | `LOOK_MS` |
-| One line of events | 64 KiB with its line break | `HEAR_LINE_MAX` |
+| One line of events | 64 KiB with its line break, 65 535 bytes without one | `HEAR_LINE_MAX` |
 | Changes of the words so far in one hold | 4096 | `SAID_SO_FAR_MAX` |
 | The words so far, as shown | 200 characters, cut | `MADE_SAID_MAX`, `wish.rs` |
 | A heard wish's words | 200 characters, 4096 bytes as heard, never cut | `MADE_SAID_MAX`; `LOOKED`, `still.rs` |
@@ -285,7 +310,18 @@ Nothing here grows with the input: a hearing holds one hold's words, one refusal
 - **The run is started by the program that runs `hear`**, as `wish --run` does, not by the installed command.
   The app starts runs with the installed command (F42), and F58 does the same through `Hearing`.
 - **The four seconds are counted by whoever sends the ticks.** A sender that stops sending them stops the
-  window: the wish is neither made nor dropped until a tick or the end of the input.
+  window: the wish is neither made nor dropped until a tick or the end of the input. They are never shorter
+  than 4000 ms of ticks after the words were printed; they are longer by the time to the first tick.
+- **A hold's length is counted from the ticks before its key events**, as above: a sender that does not tick
+  with a key event can make a slip of a hold. Key events carry no time of their own.
+- **A tick below the first one counts as the first.** Until a later tick has come, such a tick is at the time
+  the clock stands at, and starts a refusal's six seconds. It cannot start a heard wish's four or the ear's
+  five, which need a hold of 300 ms on the clock first.
+- **An ear that keeps refusing keeps `cannot` shown.** Each refusal replaces the last and starts its six
+  seconds anew. F58 does not send a refusal that stands a second time.
+- **A run that finished before its start was answered** prints no line of its own: the hearing goes `quiet`
+  with the wish it made, and the day's rest shows the work that waits. Read, not run: no test can make that
+  order come.
 - **A wish is made on the day the hearing began.** One that goes on past midnight keeps that day.
 - **A project needs a folder typed in that day** (ADR 0019, "Risks left open", 1).
 - **Answering a run that asks by voice** waits on F52, F54 and F61.

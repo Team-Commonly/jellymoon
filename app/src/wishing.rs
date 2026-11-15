@@ -1,6 +1,6 @@
-//! A wish typed in the window (F42). The rules are core's: `jellymoon_core::wishable` says which projects a wish
+//! A wish typed in the window (F42). The rules are core's: `jellymoon_core::offered` says which projects a wish
 //! can be made for (a folder of that name was typed in that day and is not switched off, asked of the reader as a
-//! run asks it), `wish_offered` says which words are a wish and keeps them for such a project, `installed_command`
+//! run asks it, or the name is on the list of projects Jellymoon knows), `wish_offered` says which words are a wish and keeps them for such a project, `installed_command`
 //! says whether the installed `jellymoon` may be started, and `run_apart` starts it as `jellymoon run`, a process
 //! of its own. Nothing of a run is in this process: the app asks, and then only looks.
 //!
@@ -12,7 +12,6 @@
 //! [`OnShow::seen`]) opens no file.
 
 use jellymoon_core::{DayOptions, MADE_SAID_MAX, RunOptions, Started};
-use sticker_kit::entry::MAX_ENTRY_OPTIONS;
 use sticker_kit::{Entry, Note, Scene};
 
 use crate::read::Page;
@@ -172,20 +171,18 @@ pub fn entry_of(options: Vec<String>) -> Option<Entry> {
 
 impl Today {
     /// The day's session logs as core reads them for this day, with the names switched off.
-    fn read(&self) -> DayOptions {
+    pub(crate) fn read(&self) -> DayOptions {
         let (logs, skip) = (self.logs.clone(), self.skip.clone());
         DayOptions { logs, date: Some(self.date.clone()), skip, home: Some(self.home.clone()) }
     }
 
-    /// The entry of a day's page: one option for each of the page's projects core says a wish can be made for
-    /// today (`jellymoon_core::wishable`), the first six, which are the ones the kit offers, and core's own cap on
-    /// a wish's length. None for a day with no page, or a page with no such project: the app names none of its
+    /// The entry of a day's page: one option for each project core says a wish can be made for on the day
+    /// (`jellymoon_core::offered`: a folder of its name was typed in that day, or it is on the list of projects
+    /// Jellymoon knows), whatever the page read, and core's own cap on a wish's length. The kit offers the first
+    /// six and counts the rest. None for a day with no page, or with no such project: the app names none of its
     /// own. It reads the day's session logs, so the window never calls it on its own thread.
     pub fn entry(&self, page: Option<&Page>) -> Option<Entry> {
-        let read = page.map(|page| page.data.read.projects.as_slice()).unwrap_or_default();
-        let mut offered = jellymoon_core::wishable(&self.read(), read);
-        offered.truncate(MAX_ENTRY_OPTIONS);
-        entry_of(offered)
+        page.and_then(|_| entry_of(jellymoon_core::offered(&self.read())))
     }
 
     /// A step of the reading with the entry of the page it gives, as work for another thread.

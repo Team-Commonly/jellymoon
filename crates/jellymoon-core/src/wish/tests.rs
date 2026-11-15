@@ -6,7 +6,7 @@ use crate::PageRead;
 fn a_page_merged_twice_holds_each_made_wish_once() -> Result<(), Box<dyn std::error::Error>> {
     let home = tempfile::tempdir()?;
     wish(home.path(), Some("2026-03-10"), "ship the changelog", "alpha")?;
-    let read = PageRead { turns: 0, projects: Vec::new() };
+    let read = PageRead { turns: 0, projects: Vec::new(), no_logs: false };
     let page = PageData { day: "2026-03-10".to_string(), wishes: Vec::new(), clashes: Vec::new(), read };
     let once = with_made(home.path(), page);
     assert_eq!(once.wishes.iter().map(|wish| wish.id.as_str()).collect::<Vec<_>>(), ["m1"]);

@@ -43,7 +43,16 @@ claude -p --model <name> --tools "" --strict-mcp-config --disable-slash-commands
 A command line that is wrong exits 2 with the reason and the usage; a run that fails exits 1. Both print nothing on
 stdout and start the stderr line with `jellymoon: `.
 
-A day with no turns prints an empty page and makes no call.
+A day with no turns prints an empty page and makes no call. Its made wishes are on it as on any page, in their
+states (`crates/jellymoon/tests/f63.rs`).
+
+A day with no session logs at all has a page too, when it has a made wish or a project on offer
+([project.md](project.md)): the same empty page, with `"no_logs": true` in `read`, and no call
+(`jellymoon_core::page_with_no_logs`; example `page-no-logs.json`). So `read.turns` 0 says nothing was typed, and
+`read.no_logs` says nothing was read. The field is left out when it is false, so every other page prints as it
+did. With nothing made and no project on offer the command exits 1 with the reader's line, as before. The model's
+name is checked first in both cases. `jellymoon page` keeps nothing, so a later call prints the same bytes; the
+app keeps the page it draws ([app.md](app.md)).
 
 ## Where the harness is looked for
 

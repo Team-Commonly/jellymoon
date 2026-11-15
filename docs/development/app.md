@@ -59,6 +59,14 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   other count, no kept page, or `--fresh`: one reading call, and the new page is kept. The count is the whole test,
   so a day whose turns changed but not their number (a folder switched off and one more turn typed) keeps its page
   until `--fresh`. A day with nothing typed makes no call.
+- **A day with no session logs** (F63). The reader's answer is "no session logs", and the app then asks core for
+  the day's page all the same (`jellymoon_core::page_with_no_logs`). Core has one when the day has a made wish or
+  a project on offer: an empty page that says so (`read.no_logs`), made with no call. It is kept and shown as a
+  reading's page is, with the made wishes on it, the entry and its chips; its footer is "No Claude Code session
+  logs were found, so nothing was read." Core has none for a day with nothing made and no project on offer, and
+  that day is the plain note it was. A kept page that read something is never replaced by it: that page stays,
+  under "This page is from an earlier reading." A kept page that says no logs were found is read again once
+  there are logs, whatever its count.
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
   no command line. Core reads the file (`reader.md`), for the app and for `jellymoon day` and `page` alike, so the
   three leave out the same folders. A name matches exactly, and case matters, and a `--skip` name with a character
@@ -126,7 +134,7 @@ the clashes, so on a page too full for all its notes it is a clash that falls in
 ## A wish in the window (`app/src/wishing.rs`)
 
 A day's page has one entry (the kit's, `crates/sticker-kit/README.md`): a field to type a wish in, and under it a
-chip for each project of the page's reading (`read.projects`) a wish can be made for, of which one is always
+chip for each project a wish can be made for that day, whatever the page read, of which one is always
 chosen. It stands in the left column, under the title "what I wished for today", where the wishes are listed. The chips
 stand in one row when their names fit it and in two when they do not; the hint is "Type a wish: Tab for its project,
 Enter". It is whole in both themes from the smallest page (960x640) up as `layout` measures it, by the advances of
@@ -137,13 +145,14 @@ smallest page: one whose every character advances by 0.56 of its size, as the ki
 `jellymoon wish` and `jellymoon wish --run`. The app carries the words and a project's name to core, and draws
 what core keeps.
 
-- **When there is an entry.** On a day's page whose reading names a project a wish can be made for. A day with no
-  page (still being read, or not readable), a page with no such project, the waiting page and a `--page` file
+- **When there is an entry.** On a day's page, when a project is on offer that day: a day nothing was typed on
+  has one for a listed project (F63). A day with no page (still being read, or not readable), a day with no such
+  project, the waiting page and a `--page` file
   have none: a wish needs a project, and the app names none of its own. The window opens with no entry, and has
   one as soon as core has said which projects have a chip. The entry takes at most 200 characters,
   core's cap on a wish (`jellymoon_core::MADE_SAID_MAX`). `layout` prints the field as one `entry` piece, its
   hint as text, and a `chip` piece for each option, after the scene's pieces.
-- **Which projects have a chip.** Core says (`jellymoon_core::wishable`): a name `jellymoon wish --project`
+- **Which projects have a chip.** Core says (`jellymoon_core::offered`): a name `jellymoon wish --project`
   takes (one folder's name of at most 100 characters, no path, nothing unseen) that is the name of a folder
   something was typed in that day, with the folders switched off left out, or that is on the list of projects
   Jellymoon knows with a folder that stands ([project.md](project.md)). That is asked of the reader, with
@@ -152,7 +161,12 @@ what core keeps.
   of an earlier reading, so a project of a kept page with no folder typed in today, and no line in the list,
   has no chip either. A
   `skip.txt` or a logs folder that cannot be read offers nothing. Whether the folder is there, and is a repo, is
-  the run's to say. The first six of these are offered, which are the chips the kit draws.
+  the run's to say. The names come in core's order: those typed in that day, as the reader lists them, then
+  the list's. The app hands the kit every one. The kit draws the first six as chips and counts the rest in words
+  after the last chip, "+94 more" for a list of 100 (`layout` prints it as one `more` piece, its `index` the
+  count); the count is no chip, and no click or Tab chooses it. A name is drawn as text: markup, the shape of a
+  link or a character that cannot be seen changes nothing but the chip's words, and a name too long for its chip
+  is cut in the middle by the kit's measure (`app/tests/f63/chips.rs`).
 - **What the chips cost.** Every session log of the day is read once more for them, off the window's thread:
   when the window opens and when a reading ends, and once more for each Enter. Measured on a Mac with a release build, as one `jellymoon day` (one read, and more than a lookup does, since it also prints the day): 300 made-up logs of 1000 lines each, 137 MB, with 10,000 turns typed on the day, took 0.9 seconds, and 2.4 the first time, before the system had the files. A day of a few logs is a few milliseconds.
 - **Keys.** A click on the field gives it the keys; Escape, or a click elsewhere, gives them back. Tab chooses
@@ -244,7 +258,10 @@ holds what is asked), the one-second timer, the order of the reading's steps, wh
 `entry_focused`. A person's walk at a real window is still owed for it.
 
 Not covered: a wish for a project past the sixth, or for one neither typed in today nor listed, is made with
-`jellymoon wish`. What only a person at a window can see is not tested: the input method's candidate window,
+`jellymoon wish`. A made wish's question is not drawn on a page (it never was): that a day nothing was typed on
+prints it as any day does is proved at `jellymoon page` (`crates/jellymoon/tests/f63.rs`). A day whose logs
+were read and hold no turn of it still says "Read from 0 things you typed. This is the model's reading,
+unedited." though no model read it. What only a person at a window can see is not tested: the input method's candidate window,
 the caret, the pale words of an entry that waits, and which piece has the keys.
 
 ## A tap that stops a run (`app/src/stopping.rs`)

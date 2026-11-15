@@ -138,24 +138,40 @@ fn settle(date: &str, clash: usize, option: usize) -> Result<String, Failure> {
     Ok(format!("{settled}\n"))
 }
 
+/// `page`: the day's page data, with its made wishes. With no session logs at all the reader's line is the
+/// answer, unless the day has a made wish or a project on offer: then core gives its page, with no call (F63).
+fn page(read: &DayOptions, model: String) -> Result<String, Failure> {
+    let failed = |e: Error| Failure::Run(e.to_string());
+    let options = |home: PathBuf| {
+        let harness = named("JELLYMOON_CLAUDE");
+        PageOptions { model, dir: home.join("reading"), limit: READING_LIMIT, harness }
+    };
+    let page = match day(read) {
+        Ok(day) => jellymoon_core::page(&day, &options(home()?)).map_err(failed)?,
+        Err(unread) => {
+            let Ok(home) = home() else { return Err(unread) };
+            match jellymoon_core::page_with_no_logs(read, &options(home)) {
+                Ok(Some(page)) => page,
+                Ok(None) => return Err(unread),
+                Err(e) => return Err(failed(e)),
+            }
+        }
+    };
+    let (page, said) = jellymoon_core::with_made_said(&home()?, page);
+    // A copy a killed command left that is given up is said once, here, and is no failure of the look.
+    for said in said {
+        let _ = io::stderr().write_all(format!("jellymoon: {said}\n").as_bytes());
+    }
+    Ok(format!("{page}\n"))
+}
+
 /// Runs the command and returns what it prints.
 fn run() -> Result<String, Failure> {
     let failed = |e: jellymoon_core::Error| Failure::Run(e.to_string());
     match parse(lexopt::Parser::from_env())? {
         Command::Help => Ok(USAGE.to_string()),
         Command::Day(options) => Ok(format!("{}\n", day(&options)?)),
-        Command::Page(options, model) => {
-            let day = day(&options)?;
-            let harness = named("JELLYMOON_CLAUDE");
-            let options = PageOptions { model, dir: home()?.join("reading"), limit: READING_LIMIT, harness };
-            let page = jellymoon_core::page(&day, &options).map_err(failed)?;
-            let (page, said) = jellymoon_core::with_made_said(&home()?, page);
-            // A copy a killed command left that is given up is said once, here, and is no failure of the look.
-            for said in said {
-                let _ = io::stderr().write_all(format!("jellymoon: {said}\n").as_bytes());
-            }
-            Ok(format!("{page}\n"))
-        }
+        Command::Page(options, model) => page(&options, model),
         Command::Uninstall => uninstall(),
         Command::Rule { stands, over } => {
             Ok(format!("{}\n", jellymoon_core::rule(&home()?, &stands, &over).map_err(failed)?))

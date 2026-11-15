@@ -190,8 +190,12 @@ fn date_label(day: &str) -> String {
     }
 }
 
-/// What the page was made from, and whose reading it is.
+/// What the page was made from, and whose reading it is. A page made with no session logs to read
+/// (`jellymoon_core::page_with_no_logs`) says that, and nothing of a reading.
 fn footer(read: &PageRead) -> String {
+    if read.no_logs {
+        return "No Claude Code session logs were found, so nothing was read.".to_string();
+    }
     let count = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
     let projects = match read.projects.len() {
         0 => String::new(),
@@ -220,7 +224,7 @@ mod tests {
     }
 
     fn page(wishes: Vec<Wish>, clashes: Vec<Clash>) -> Page {
-        let read = PageRead { turns: 5, projects: vec!["alpha".to_string(), "beta".to_string()] };
+        let read = PageRead { turns: 5, projects: vec!["alpha".to_string(), "beta".to_string()], no_logs: false };
         let data = PageData { day: "2026-03-10".to_string(), wishes, clashes, read };
         Page { data, unknown: Vec::new(), left_out: LeftOut::default() }
     }
@@ -318,7 +322,7 @@ mod tests {
     #[test]
     fn a_page_with_nothing_on_it_says_so() {
         let mut empty = page(vec![], vec![]);
-        empty.data.read = PageRead { turns: 0, projects: vec![] };
+        empty.data.read = PageRead { turns: 0, projects: vec![], no_logs: false };
         let scene = scene(&empty);
         assert!(matches!(&scene.notes[..], [Note::Plain { title, .. }] if title == "Nothing wished for yet today."));
         assert_eq!(scene.characters, []);
@@ -327,8 +331,15 @@ mod tests {
 
     #[test]
     fn the_footer_counts_in_words_that_agree() {
-        let read =
-            |turns, projects: &[&str]| PageRead { turns, projects: projects.iter().map(|p| p.to_string()).collect() };
+        let read = |turns, projects: &[&str]| {
+            let projects = projects.iter().map(|p| p.to_string()).collect();
+            PageRead { turns, projects, no_logs: false }
+        };
+        // No logs to read is said, and nothing of a reading or of things typed.
+        assert_eq!(
+            footer(&PageRead { no_logs: true, ..read(0, &[]) }),
+            "No Claude Code session logs were found, so nothing was read."
+        );
         assert_eq!(
             footer(&read(75, &["alpha", "beta"])),
             "Read from 75 things you typed in 2 projects (alpha, beta). This is the model's reading, unedited."

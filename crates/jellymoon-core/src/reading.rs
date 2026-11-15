@@ -50,7 +50,7 @@ struct Reading {
 /// Returns the day's page data. A day with no turns is an empty page and makes no call. A reading that is not page data
 /// is an error: there is no page to print.
 pub fn page(day: &ReaderDay, options: &PageOptions) -> Result<PageData, Error> {
-    let read = PageRead { turns: day.turns.len(), projects: projects(day) };
+    let read = PageRead { turns: day.turns.len(), projects: projects(day), no_logs: false };
     let mut page = PageData { day: day.day.clone(), wishes: Vec::new(), clashes: Vec::new(), read };
     if !is_model_name(&options.model) {
         return Err(Error::Model);
@@ -182,7 +182,7 @@ mod tests {
     }
 
     fn kept(day: &ReaderDay, reading: Reading) -> PageData {
-        let read = PageRead { turns: day.turns.len(), projects: projects(day) };
+        let read = PageRead { turns: day.turns.len(), projects: projects(day), no_logs: false };
         let mut page = PageData { day: day.day.clone(), wishes: Vec::new(), clashes: Vec::new(), read };
         keep(day, reading, &mut page);
         page

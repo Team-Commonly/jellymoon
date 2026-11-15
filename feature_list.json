@@ -596,7 +596,7 @@
         "`jellymoon-app layout` on that day places the made wishes, the entry and a chip for each project on offer"
       ],
       "test": "cargo test -p jellymoon-app --test f63",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F62"
       ]

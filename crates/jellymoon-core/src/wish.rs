@@ -129,8 +129,9 @@ pub fn wishable(read: &DayOptions, projects: &[String]) -> Vec<String> {
 
 /// Every project a wish can be made for on `read`'s day, each once, in the order its folders were typed in and
 /// then in the list's: the names [`wishable`] would offer. A folder's name is a session log's text: one that is
-/// no folder's name as [`wish`] takes it is never offered. None at all when the day cannot be read.
-pub(crate) fn offered(read: &DayOptions) -> Vec<String> {
+/// no folder's name as [`wish`] takes it is never offered. None at all when the day cannot be read. No logs is
+/// a day nothing was typed on, so the names are the list's: these are the chips of a page's entry (F63).
+pub fn offered(read: &DayOptions) -> Vec<String> {
     Offer::of(read, reader::typed_in(read)).map(|offer| offer.names()).unwrap_or_default()
 }
 
@@ -255,6 +256,11 @@ pub(crate) fn was_locked(refusal: &Error) -> bool {
 fn write(home: &Path, day: &str, wishes: Vec<MadeWish>) -> Result<(), Error> {
     let text = serde_json::to_string(&Made { day: day.to_string(), wishes }).map_err(io::Error::from);
     text.and_then(|text| put(&file(home, day), &format!("{text}\n"), false)).map_err(Error::Store)
+}
+
+/// Whether the day has a made wish that can be used. Nothing is written, and no run is looked at.
+pub(crate) fn any_made(home: &Path, day: &str) -> bool {
+    kept(home, day).is_ok_and(|wishes| !wishes.is_empty())
 }
 
 /// The day's made wishes as they are kept, for a run to find its wish in. Nothing is written.

@@ -82,13 +82,18 @@ fn only_a_project_with_a_folder_typed_in_that_day_is_offered() {
     let world = read();
     let mut on = on_show(&world);
     let long = "p".repeat(150);
-    // Names of a kept page: no folder of the day has any of these names but the last.
+    // Names of a kept page: no folder of the day has any of these names but the last. What is offered is what
+    // was typed in that day, whatever the kept page names (F63).
     on.page.as_mut().unwrap().data.read.projects = projects(&["..", ".", "new\nline", &long, "a/b", "beta", "alpha"]);
-    assert_eq!((on.offering())().unwrap().options, ["alpha"]);
+    assert_eq!((on.offering())().unwrap().options, ["alpha", "private-notes"]);
     assert_eq!(drawn(&on.wished(SAID, Some("alpha")).0, "m1").map(|drawn| drawn.0), Some(State::Busy));
     assert_eq!(kept_wishes(&world).unwrap()[0]["project"], "alpha");
     on.page.as_mut().unwrap().data.read.projects = projects(&["..", "new\nline", "beta"]);
-    assert!((on.offering())().is_none(), "no name is left to offer");
+    assert_eq!((on.offering())().unwrap().options, ["alpha", "private-notes"], "the page's names offer nothing");
+    for gone in ["..", "new\nline", "beta"] {
+        assert!(on.wished(SAID, Some(gone)).1.is_none(), "{gone:?} was taken for a project");
+    }
+    assert_eq!(kept_wishes(&world).unwrap().as_array().map(Vec::len), Some(1));
 }
 
 // The chips change while the words are typed: the wish is for the name that was on the chosen chip, and core is
@@ -99,11 +104,13 @@ fn a_wish_is_for_the_name_on_its_chip_and_core_refuses_a_name_it_no_longer_offer
     let mut on = on_show(&world);
     typed_in(&world, &["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"]);
     on.page.as_mut().unwrap().data.read.projects = projects(&["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"]);
-    assert_eq!((on.offering())().unwrap().options, ["p1", "p2", "p3", "p4", "p5", "p6"], "the kit offers six");
+    // Every name on offer is handed to the kit, in core's order; the kit draws six chips and counts the rest.
+    let all = ["alpha", "private-notes", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"];
+    assert_eq!((on.offering())().unwrap().options, all);
 
-    // `p2` was the second chip. The first is switched off before Enter: the wish is still for `p2`.
+    // `p2` was the chip after `p1`. `p1` is switched off before Enter: the wish is still for `p2`.
     fs::write(world.home.join("skip.txt"), "p1\n").unwrap();
-    assert_eq!((on.offering())().unwrap().options[0], "p2");
+    assert_eq!((on.offering())().unwrap().options[2], "p2");
     on.wished(SAID, Some("p2"));
     assert_eq!(kept_wishes(&world).unwrap()[0]["project"], "p2");
 

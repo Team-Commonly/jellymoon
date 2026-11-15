@@ -24,7 +24,7 @@ pub struct Entry {
     pub id: String,
     /// Shown while nothing is typed.
     pub hint: String,
-    /// The first [`crate::entry::MAX_ENTRY_OPTIONS`] are offered, each on a chip.
+    /// The first [`crate::entry::MAX_ENTRY_OPTIONS`] are offered, each on a chip; the rest are counted.
     pub options: Vec<String>,
     /// The most characters the entry takes: at most [`crate::entry::MAX_ENTRY_CHARS`], which 0 also means.
     pub most: usize,

@@ -11,8 +11,9 @@ use crate::text::{Measure, Role, fit_middle};
 use crate::theme::Theme;
 
 /// Where the pieces of an entry go: the field (`Entry`, with the hint as its text), then a `Chip` for each of the
-/// first [`MAX_ENTRY_OPTIONS`] options, its `index` the option's. Nothing for a theme [`Theme::check`] refuses, or
-/// one whose own sizes leave no room left of its big character.
+/// first [`MAX_ENTRY_OPTIONS`] options, its `index` the option's, then one `More` that counts the options past
+/// those, when there are any. Nothing for a theme [`Theme::check`] refuses, or one whose own sizes leave no room
+/// left of its big character.
 pub fn layout_entry(entry: &Entry, theme: &Theme, viewport: Viewport, measure: &dyn Measure) -> Vec<Placed> {
     if theme.check().is_err() {
         return Vec::new();
@@ -67,6 +68,9 @@ const LEAST: f32 = 1.5;
 /// them all, else in two. A row too narrow for its names gives the short ones their width and shares what is left
 /// between the long ones ([`widest`]), which are cut in the middle with an ellipsis. So every option is there to be
 /// chosen, no name is cut while its row has room, and two names that begin alike are told apart by their ends.
+/// The options past the first [`MAX_ENTRY_OPTIONS`] are counted, as the rows of a list past its room are: `+N
+/// more`, whole, at the end of the last row, whose chips share what it leaves. It is left out only where that row
+/// could not then hold its chips at their least width.
 fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
     let count = entry.options.len().min(MAX_ENTRY_OPTIONS);
     let size = cx.size(Role::Legend);
@@ -74,7 +78,12 @@ fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
     let names: Vec<String> = entry.options.iter().take(count).map(|name| cx.clean(name)).collect();
     let asks = |name: &String| (cx.measure.width(name, Role::Legend, size) + 2.0 * pad).max(LEAST * height);
     let asked: Vec<f32> = names.iter().map(asks).collect();
-    let all = asked.iter().sum::<f32>() + gap * count.saturating_sub(1) as f32;
+    let rest = entry.options.len() - count;
+    let more = format!("+{rest} more");
+    let aside = cx.measure.width(&more, Role::Legend, size) + gap;
+    let least = count.div_ceil(2) as f32 * (LEAST * height + gap);
+    let aside = if rest > 0 && least + aside <= field.w { aside } else { 0.0 };
+    let all = asked.iter().sum::<f32>() + gap * count.saturating_sub(1) as f32 + aside;
     let (one, two) = asked.split_at(if all <= field.w { count } else { count.div_ceil(2) });
     let (mut left, mut top) = (field.x, field.bottom() + gap);
     for (index, name) in names.iter().enumerate() {
@@ -82,7 +91,10 @@ fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
         if index == one.len() {
             (left, top) = (field.x, top + height + gap);
         }
-        let width = asked[index].min(widest(row, field.w - gap * (row.len() - 1) as f32));
+        // The count stands in the last row, so that row's chips have the room it leaves.
+        let last = two.is_empty() || index >= one.len();
+        let room = field.w - gap * (row.len() - 1) as f32 - if last { aside } else { 0.0 };
+        let width = asked[index].min(widest(row, room));
         let rect = Rect::new(left, top, width, height);
         // A chip as wide as its name asks holds it whole, whatever taking the padding off again rounds to.
         let (name, text) = fit_middle(name, rect.w - 2.0 * pad + 0.01, Role::Legend, size, cx.measure);
@@ -92,6 +104,12 @@ fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
         }
         out.push(chip);
         left = rect.right() + gap;
+    }
+    if aside > 0.0 {
+        let rect = Rect::new(left, top, aside - gap, height);
+        let mut counted = piece(PieceKind::More, &entry.id, rest, rect);
+        counted.text.push(run(more, Role::Legend, rect.x, rect.center().1, rect.w, size));
+        out.push(counted);
     }
 }
 

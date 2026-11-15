@@ -100,6 +100,8 @@ fn the_hint_and_the_options_are_cut_to_their_room_and_the_options_counted() {
             assert!(chips[i + 1..row + 3].iter().all(|next| chip.rect.right() <= next.rect.x), "{chip:?}");
         }
         assert!(chips[2].rect.bottom() <= chips[3].rect.y && chips[3].rect.x == field.rect.x);
+        // The count of the options past the sixth stands in the second row: the first keeps the field's width.
+        assert!(chips[2].rect.right() >= field.rect.right() - 0.5, "{:?} ends short of {field:?}", chips[2]);
         // Short names stand in one row, each as wide as its name asks.
         let short = layout_entry(&self::entry(3, 80), &Theme::sticker(), viewport, &MEASURE);
         let chips = of(&short, PieceKind::Chip);
@@ -138,6 +140,59 @@ fn a_chip_is_never_wider_than_its_share_of_a_narrow_row() {
     }
     narrow.metrics.hero_x -= 20.0;
     assert_eq!((narrow.check(), layout_entry(&entry(6, 80), &narrow, SIZES[0], &MEASURE)), (Ok(()), Vec::new()));
+}
+
+// The options past the sixth are counted, as the rows of a list past its room are: `+N more`, in words, after the
+// last chip. It is no option, and it never costs a chip its place.
+#[test]
+fn the_options_past_the_sixth_are_counted_in_words_after_the_last_chip() {
+    for viewport in SIZES {
+        for (options, said) in [(7, "+1 more"), (20, "+14 more"), (100, "+94 more")] {
+            let mut entry = entry(options, 80);
+            entry.options[4] = "a-project-with-a-very-long-name-indeed".repeat(20);
+            let placed = layout_entry(&entry, &Theme::sticker(), viewport, &MEASURE);
+            let (field, chips) = (of(&placed, PieceKind::Entry)[0].rect, of(&placed, PieceKind::Chip));
+            let [more] = of(&placed, PieceKind::More)[..] else { panic!("one count: {placed:?}") };
+            assert_eq!((more.text[0].text.as_str(), more.index, more.id.as_str()), (said, options - 6, "wish"));
+            assert_eq!(placed.last().map(|last| last.piece), Some(PieceKind::More), "it is placed after the chips");
+            assert!(more.text[0].rect.inside(&more.rect.grown(0.5)), "{more:?}");
+            assert!(more.rect.right() <= field.right() + 0.5, "{more:?} ends where the field ends");
+            assert!(more.rect.y == chips[5].rect.y && chips[5].rect.right() <= more.rect.x, "{more:?}");
+            assert_eq!(chips.len(), MAX_ENTRY_OPTIONS);
+            assert!(chips[4].text[0].text.contains('…') && chips[3].rect.y > chips[2].rect.y, "{chips:?}");
+            assert!(chips.iter().all(|chip| chip.rect.w >= chip.rect.h * 1.5 - 0.01), "{chips:?}");
+        }
+        // Names and a count that fit one row stand in one row, and no name is cut for the count.
+        let short =
+            layout_entry(&named(&["a", "b", "c", "d", "e", "f", "g", "h"]), &Theme::plain(), viewport, &MEASURE);
+        let (chips, more) = (of(&short, PieceKind::Chip), of(&short, PieceKind::More));
+        assert_eq!(more[0].text[0].text, "+2 more");
+        assert!(chips.iter().all(|chip| chip.rect.y == more[0].rect.y && chip.text[0].text.chars().count() == 1));
+        // Six options are six chips, and nothing is counted.
+        let six = layout_entry(&entry(6, 80), &Theme::sticker(), viewport, &MEASURE);
+        assert!(of(&six, PieceKind::More).is_empty());
+    }
+    // Where the last row could not hold its chips at their least width beside the count, there is no count:
+    // the six options stay there to be chosen.
+    let mut narrow = Theme::sticker();
+    narrow.metrics.hero_x = narrow.metrics.content_left + 170.0 + 24.0 + narrow.metrics.hero_size / 2.0;
+    for viewport in SIZES {
+        let placed = layout_entry(&entry(9, 80), &narrow, viewport, &MEASURE);
+        assert_eq!((of(&placed, PieceKind::Chip).len(), of(&placed, PieceKind::More).len()), (6, 0), "{viewport:?}");
+    }
+}
+
+// A name is drawn as text: what would be markup or a link elsewhere is the chip's words, and a character that
+// cannot be seen is not drawn.
+#[test]
+fn an_option_is_words_and_nothing_else() {
+    let odd = named(&["<b>bold</b>", "[x](javascript:y)", "bell\u{7}rung", "line\nbreak"]);
+    let placed = layout_entry(&odd, &Theme::sticker(), SIZES[0], &MEASURE);
+    let said = said(&placed);
+    assert_eq!(said[..2], ["<b>bold</b>", "[x](javascript:y)"]);
+    assert!(said.iter().all(|name| !name.chars().any(char::is_control)), "{said:?}");
+    assert!(said[2].starts_with("bell") && said[2].ends_with("rung") && said[3].starts_with("line"), "{said:?}");
+    assert_eq!(placed.len(), 5, "the field and four chips: {placed:?}");
 }
 
 fn named(names: &[&str]) -> Entry {

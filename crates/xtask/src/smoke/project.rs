@@ -1,13 +1,14 @@
 //! The `project` step (F62): a repo the chain makes in the system's temporary folder, listed with `jellymoon
 //! project add`. Nothing is typed in it: `jellymoon wish --run`, over logs that are not there, finds the repo by
-//! the list and starts the run. `project list` names the project and no folder, and `project forget` takes it
-//! off. The step removes the repo when it ends.
+//! the list and starts the run. `jellymoon page` over a logs folder that is not there at all then prints the
+//! day's page all the same, with the wish done, and says that no logs were found (F63). `project list` names the project and no folder,
+//! and `project forget` takes it off. The step removes the repo when it ends.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
 use std::{env, fs, process, thread};
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::copy::in_repo;
 use super::{DAY, World, text, write};
@@ -55,7 +56,7 @@ fn in_folder(world: &World, repo: &Path) -> Result<String, String> {
     };
     let on_list = listed(&mut named)?;
     let say = "add a file named HELLO.txt that holds the one word hello";
-    let none = text(&world.at("no-logs"));
+    let (none, absent) = (text(&world.at("no-logs")), text(&world.at("no-logs-here")));
     let (made, _) = jellymoon(&["wish", "--date", DAY, "--say", say, "--project", "listed", "--run", "--logs", &none])?;
     let run = made["run"].as_str().ok_or_else(|| format!("no run was started: {}", made["why"]))?;
     // The run goes on after the command that asked: its command ends by itself, with its work on its branch.
@@ -66,19 +67,30 @@ fn in_folder(world: &World, repo: &Path) -> Result<String, String> {
         thread::sleep(Duration::from_millis(50));
     }
     let commits = git(&["rev-list", "--count", &branch])?;
+    let (state, unread) = on_page(&jellymoon(&["page", "--date", DAY, "--logs", &absent])?.0, &made["wish"]["id"]);
     let (forgot, _) = jellymoon(&["project", "forget", "listed"])?;
     let left = listed(&mut named)?;
     let yes = |so: bool| if so { "yes" } else { "no" };
     let found = format!(
-        "added as {}, on the list {}, commits on the run's branch {commits}, the run's command ended {}, forgot {}, \
-         on the list after {}, a folder named {}",
+        "added as {}, on the list {}, commits on the run's branch {commits}, the run's command ended {}, the wish \
+         on the page of a day with no logs {state}, which says no logs were found {}, forgot {}, on the list after {}, a folder named {}",
         added["name"].as_str().unwrap_or("?"),
         yes(on_list),
         yes(!lock.exists()),
+        yes(unread),
         forgot["name"].as_str().unwrap_or("?"),
         yes(left),
         yes(named)
     );
     let fine = added["name"] == "listed" && on_list && commits == "1" && !lock.exists() && forgot["name"] == "listed";
-    if fine && !left && !named { Ok(found) } else { Err(found) }
+    if fine && state == "done" && unread && !left && !named { Ok(found) } else { Err(found) }
+}
+
+/// A day with no logs has a page for its made wishes (F63): the state of the wish `id` on `page`, and whether
+/// the page says that no logs were found and nothing was read. It is asked over `no-logs-here`, which is no
+/// folder at all: the chain's `no-logs` is a folder that holds nothing.
+fn on_page(page: &Value, id: &Value) -> (String, bool) {
+    let wish = page["wishes"].as_array().and_then(|all| all.iter().find(|one| one["id"] == *id));
+    let state = wish.and_then(|wish| wish["state"].as_str()).unwrap_or("is not there");
+    (state.to_string(), page["read"] == json!({"turns": 0, "projects": [], "no_logs": true}))
 }

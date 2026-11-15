@@ -303,7 +303,7 @@ fn next(home: &Path, options: &RunOptions, shown: &Shown, after: usize) -> Resul
 /// the keep the names the tap carried, and nothing read here stands in for them: under its lock the keep lands
 /// the work only when they are the files of it the person's tools obey, all of them and no other
 /// (`keep_named`). So a yes to other names is refused there, and a keep that was never asked once more lands
-/// none.
+/// none. Where the person's branch holds the run's commit already nothing is landed and no name is asked.
 pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone {
     let undone = tap.undone();
     let no = |why: String| WorkDone::Said(undone, format!("{why}."));

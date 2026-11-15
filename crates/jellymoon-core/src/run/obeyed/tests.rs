@@ -227,8 +227,9 @@ fn a_name_is_plain_only_when_a_person_reads_in_it_every_letter_git_keeps() {
     }
     assert!(!plain(b".claude/x.md", ".claude/y.md"), "a name that is not printed as git keeps it");
     // Letters that draw as nothing or as a blank: the gate's U+3164 and its kin, the joiners, selectors, spaces.
+    // And the next gate's: the object replacement character, and code points that are private or not assigned.
     let blanks = "\u{3164}\u{115f}\u{1160}\u{ffa0}\u{2800}\u{200c}\u{200d}\u{34f}\u{17b4}\u{180b}\u{fe0f}\u{e0100}\
-                  \u{a0}\u{2003}\u{3000}\u{16fe4}\u{1d159}";
+                  \u{a0}\u{2003}\u{3000}\u{16fe4}\u{1d159}\u{fffc}\u{f860}\u{e000}\u{e00}\u{181a}\u{fb0f}\u{10ffff}";
     for c in blanks.chars() {
         for name in [format!(".claude/{c}"), format!("{c}/CLAUDE.md"), format!(".claude/a{c}b.md")] {
             assert!(!is(&name), "{c:?} is not seen in {name:?}");

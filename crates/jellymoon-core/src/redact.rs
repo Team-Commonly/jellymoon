@@ -74,13 +74,21 @@ static UNSEEN: LazyLock<Regex> = LazyLock::new(|| {
     ))
 });
 
-/// What a value named back in quotes would not be read with: a control or format character, a letter that draws
-/// as nothing or as a blank, any space but the plain one, and a plain space at an end or beside another.
+/// What a person does not read in a text that is printed whole, a value named back in quotes or a file's name.
+/// A control or format character. A letter that draws as nothing or as a blank: the code points Unicode says
+/// are ignorable by default (the joiners, the Hangul fillers, the variation selectors), the Braille blank, two
+/// fillers and the object replacement character, which are in no such list, and every code point that is
+/// private or not assigned, which a system font draws as nothing as often as a box. Any space but the plain
+/// one, and a plain space at an end or beside another. A list and not a proof: a font may draw a letter this
+/// does not know as nothing.
 static UNREAD: LazyLock<Regex> = LazyLock::new(|| {
-    pattern(r"\p{Default_Ignorable_Code_Point}|[\p{White_Space}--[ ]]|[\p{Cc}\p{Cf}\u{2800}]|^ | $|  ")
+    pattern(concat!(
+        r"\p{Default_Ignorable_Code_Point}|[\p{White_Space}--[ ]]|[\p{Cc}\p{Cf}\p{Co}\p{Cn}]",
+        r"|[\u{2800}\u{16fe4}\u{1d159}\u{fffc}]|^ | $|  ",
+    ))
 });
 
-/// Whether a text holds something that is [`UNREAD`]: named back, it would read as a text it is not.
+/// Whether a text holds something that is [`UNREAD`]: printed, it would read as a text it is not.
 pub(crate) fn holds_unseen(text: &str) -> bool {
     UNREAD.is_match(text)
 }

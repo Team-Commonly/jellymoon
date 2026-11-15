@@ -261,7 +261,9 @@ A file that is not used is refused in one line, exit 1, and nothing is printed o
 value, cleaned and cut to 40 characters as any text core prints, or the number of the line. A value that holds
 a character that cannot be seen is not named: cleaned, it would read as a value that is right. That is a
 control or format character, a letter that draws as nothing or as a blank (a joiner, a filler, a variation
-selector), any space but the plain one, and a plain space at an end of the value or beside another.
+selector, the object replacement character, a code point that is private or not assigned), any space but
+the plain one, and a plain space at an end of the value or beside another. It is the list a file's name is
+held to before a page gives it a yes ([show.md](show.md), `plain`).
 
 | The file | The line, after `jellymoon: voice.toml is not used: ` |
 |---|---|

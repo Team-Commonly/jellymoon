@@ -295,7 +295,9 @@ max_file_lines = 400
 # The follow-up to F47's third gate raised core by 49: `run/obeyed.rs` is 24 (a name is plain only when a person
 # reads it as git keeps it: no letter that draws as nothing, no unseen space, no shape of a count) and its test 27;
 # `run/waits.rs` lost 2 (the comparison before a page's keep is gone: the keep's own check is the one).
-"crates/jellymoon-core" = 13292
+# Its gate raised core by 2: the one list of what is not read in a printed text is `redact.rs`'s now (10 more
+# there, 9 fewer in `run/obeyed.rs`), with private and unassigned code points and U+FFFC; its test is 1 more.
+"crates/jellymoon-core" = 13294
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -434,7 +436,8 @@ max_file_lines = 400
 # answer may leave (`tests/f52/words.rs`, `refused.rs`).
 # The follow-up to F47's third gate raised it by 28: the made-up agent's three scripts for names printed whole that
 # a person does not read, 8, and the test of `run waiting` that says them not plain, 20.
-"crates/jellymoon" = 22106
+# Its gate took 3 from it: the unseen ends of `tests/f55/voice.rs` are one text.
+"crates/jellymoon" = 22103
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -593,7 +596,9 @@ max_file_lines = 400
 # F55 raised the app by 1: the arm for core's new error where it puts an error into words.
 # The follow-up to F47's third gate raised the app by 10: `tests/f47/drawn.rs` 7 (three works whose names are
 # printed whole and not read) and `tests/f47/named.rs` 3 (a yes to other names is refused by the keep itself).
-"app" = 7091
+# Its gate raised the app by 9: `tests/f47/named.rs`, the one yes to other names that is not refused (the
+# person's branch holds the run's commit already, and nothing is landed).
+"app" = 7100
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

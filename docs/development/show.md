@@ -296,7 +296,10 @@ and writes nothing:
   - cleaning changed a name, as it prints one that looks like a credential as `[redacted]`;
   - a name holds a letter that draws as nothing or as a blank: a code point Unicode calls ignorable by default
     (the joiners U+200C and U+200D, the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0, the variation
-    selectors), any space but the plain one, the Braille blank U+2800, U+16FE4 or U+1D159;
+    selectors), any space but the plain one, the Braille blank U+2800, U+16FE4, U+1D159, the object
+    replacement character U+FFFC, or any code point that is private or not assigned (a system font draws
+    `.claude/settings`, U+F860, `.json` as `.claude/settings.json`). It is the one list core has of what is
+    not read in a printed text (`redact.rs`, `holds_unseen`), the same a refused `voice.toml` value is held to;
   - a plain space stands where none is seen: at an end of the name or of a folder's, or after another;
   - a name reads like the line a note counts with, a digit and then `more` (`+5 more`, `and 12 more`).
 
@@ -331,7 +334,9 @@ and writes nothing:
     names, all of them and no other; what one new commit would land must be among them. A keep that was not
     asked once more carries none. So a yes to a note that names other files than the work's (one fewer, one
     more, another in one's place) is refused there, and so is work whose merge would bring such a file that no
-    note named: whole, in a page's words and not `--with-settings`.
+    note named: whole, in a page's words and not `--with-settings`. One yes to other names is not refused:
+    where the person's branch holds the run's commit already, by their own merge, nothing is landed whatever
+    the note named, no name is asked, and the run is written down as kept (`run keep` says the same there).
   - The line of the work's own note still counts (`a.txt, b.txt, and 4 more`), and is at most 320 characters of
     names: nothing is kept on the word of it. `Toss it` is `run toss`, with its own checks.
 

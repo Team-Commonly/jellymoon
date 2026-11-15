@@ -318,7 +318,8 @@ that fit and counts the rest in a last line, `+N more`.
     only: such work is kept from the command line, with `jellymoon run keep`.
   - The tap carries the note's texts to core, and core gives the keep the names the tap carried: under its lock
     the keep lands the work only when those are the files of it the person's tools obey, all of them and no
-    other. A yes to a note that names other files is refused there, with nothing changed. A `Keep it` that was
+    other. A yes to a note that names other files is refused there, with nothing changed, but where the
+    person's branch holds the run's commit already: nothing is landed then, and the run is said kept. A `Keep it` that was
     not asked once more carries no name, so
     where only the merge would bring such a file (the person renamed a file the work edits to a name their tools
     obey), it is refused, with nothing changed.

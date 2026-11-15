@@ -167,7 +167,7 @@ fn obeyed(script: &str) -> i32 {
         "six" => (0..6).map(|n| rules(Path::new(""), n)).collect(),
         "seven" => (0..7).map(|n| rules(Path::new(""), n)).collect(),
         "masked" => vec![Path::new(".claude").join(format!("AK{}{}.md", "IA", "Q7".repeat(8)))],
-        "blank" => vec![Path::new(".claude").join("\u{3164}"), Path::new("\u{3164}").join("CLAUDE.md")],
+        "blank" => vec![Path::new(".claude").join("\u{fffc}"), Path::new("\u{3164}").join("CLAUDE.md")],
         "joined" => vec![Path::new(".claude").join("a\u{200d}b.md"), PathBuf::from("CLAUDE.md")],
         "counted" => vec![Path::new(".cargo").join("config.toml"), Path::new(".claude").join("+5 more")],
         _ => (0..8).map(|n| rules(Path::new(""), n)).collect(),

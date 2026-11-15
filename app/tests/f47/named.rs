@@ -116,6 +116,15 @@ fn a_yes_to_a_note_that_names_other_files_than_the_work_s_is_refused_and_nothing
     let showed = w.taps("logs", &[&left(&w, &texts_of(&all)), "choose:sure-m1:1", "run"]).showed();
     assert_eq!(texts(showed[1].as_ref().unwrap())[0].1, "That work was kept.");
     assert!(repo.join("CLAUDE.md").is_file());
+    // The one yes to other names that is not refused: the person's branch holds the run's commit already, by
+    // their own merge. Nothing is landed, whatever the note named, and the run is written down as kept.
+    let (w, repo) = finished("many");
+    w.told(&repo, &["merge", "-q", "--ff-only", &format!("jellymoon/run-{}", run(&w))]);
+    let files = persons(&w, &repo).0;
+    let showed = w.taps("logs", &[&left(&w, &texts_of(&all[..1])), "choose:sure-m1:1", "run"]).showed();
+    let held = format!("run {} was kept: the branch held the run's work already, and nothing was landed.", run(&w));
+    assert_eq!(texts(showed[1].as_ref().unwrap()), [("said-m1", "That work was kept.", vec![held.as_str()], vec![])]);
+    assert!(persons(&w, &repo).0 == files, "a keep of work the branch held changed a file");
 }
 
 #[test]

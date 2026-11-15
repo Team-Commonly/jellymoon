@@ -15,6 +15,7 @@ use super::*;
 
 const MOVED: &str = "the new project's folder was replaced while it was being made, so nothing was listed, and \
                      what is there now was left as it is";
+#[cfg(unix)]
 const NOT_OWN: &str = "Jellymoon's folder is not a folder of your own, and a project is listed only in a folder of \
                        your own, so nothing was made";
 #[cfg(unix)]

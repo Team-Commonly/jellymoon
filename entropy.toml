@@ -477,7 +477,7 @@ max_file_lines = 400
 # F65 raised it by 755: its tests are 726 (`tests/f65.rs` 237, `f65/refused.rs` 221, `f65/half.rs` 188,
 # `f65/wished.rs` 80); `tests/f62.rs` 19 (an argument that is not text, a missing value, and `new` in the fixed
 # line); `main.rs` and `parse.rs` 10 (`project new`, and the project commands as one variant).
-# F65's gate raised it by 271: `tests/f65/alone.rs` 198 (a making met by a command or a hand, and the gate's
+# F65's gate raised it by 272: `tests/f65/alone.rs` 199 (a making met by a command or a hand, and the gate's
 # survivors), `tests/f65.rs` 29, `f65/refused.rs` 28, `f65/half.rs` 9, `tests/f62.rs` 6 and `f62/refused.rs` 1.
 # F63 raised the binary by 217: its test at `jellymoon page` (`tests/f63.rs`, 201) and `page` in `main.rs`,
 # which asks core for the page of a day with no logs.
@@ -487,7 +487,7 @@ max_file_lines = 400
 # The fixes after F53's gate raised it by 269, all tests: `tests/f53/gate.rs` 254, a case for each finding;
 # 9 more in `tests/f53.rs`, `f53/order.rs` and `f53/refused.rs`; 5 in `fake_agent/follow.rs` (a fork that works
 # before it says its session is lost); 1 in `tests/f46/refused.rs`.
-"crates/jellymoon" = 25515
+"crates/jellymoon" = 25516
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -228,3 +228,21 @@ fn project_is_add_list_or_forget_and_anything_else_is_no_command() {
     assert_eq!(refused(&w.run(&["project", "forget", "alpha"])), none);
     assert!(!w.at("jm").exists());
 }
+
+#[test]
+fn a_stray_argument_to_project_is_answered_in_a_fixed_line_and_never_said_back() {
+    let w = heard_world();
+    let folder = w.at("work").join("strayfolder");
+    let (folder, key) = (folder.to_str().unwrap(), support::hub_key());
+    let line = "jellymoon: project is `project add --repo <folder>`, `project list` or `project forget <name>`\n";
+    for stray in [folder, key.as_str(), "--strayoption"] {
+        for before in [&["project", "add"][..], &["project", "list"], &["project", "forget", "x"]] {
+            let ran = w.run(&[before, &[stray]].concat());
+            assert_eq!((ran.code, ran.stdout.as_str()), (2, ""), "{before:?}: {}", ran.stderr);
+            assert!(ran.stderr.starts_with(line), "{before:?}: {}", ran.stderr);
+            let said = |part: &str| ran.stderr.contains(part);
+            assert!(!said(stray) && !said("stray") && !said(&key[4..]), "{before:?}: {}", ran.stderr);
+        }
+    }
+    assert!(!w.at("jm").exists(), "a command that is not one makes nothing");
+}

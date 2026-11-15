@@ -87,3 +87,16 @@ fn a_run_on_a_later_day_moves_the_day_the_project_was_last_used() {
     let ran = w.run(&["run", "--wish", "m2", "--date", LATER]);
     assert!(refused(&ran).starts_with("jellymoon: no Claude Code session logs were found"), "{}", ran.stderr);
 }
+
+#[test]
+fn a_run_refused_at_its_copy_lists_nothing_since_the_list_is_written_after_every_check() {
+    let w = heard_world();
+    // A repo with no commit passes every look at the folder, and is refused when the copy asks git.
+    let empty = w.at("work").join("alpha");
+    fs::create_dir_all(&empty).unwrap();
+    w.git(&empty, &["init", "-q", "-b", "main"]);
+    let wish = w.wish("alpha");
+    let ran = w.start(&wish, &empty);
+    assert_eq!(refused(&ran), "jellymoon: --repo has no commit yet, so there is nothing to copy\n");
+    assert!(!w.list_file().exists(), "a run that was refused listed its folder");
+}

@@ -68,7 +68,7 @@ prints that line with the outcome the record has.
 
 The run is found as a stop finds it: the wish's one run, which must have ended. A run nothing holds any more is
 given its end first, as a stop and a page give it. The repo is found as a run finds it (`--repo`, whose last name
-is the project, or the logs), and the git folder its checkouts share must be the one the record names, compared
+is the project, or the logs, or the list of projects), and the git folder its checkouts share must be the one the record names, compared
 and never resolved.
 
 One keep or toss of a home runs at a time, behind the lock a keep holds (`runs/keep.lock`), taken before the

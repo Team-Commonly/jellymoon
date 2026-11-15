@@ -109,7 +109,8 @@ Voice (F55 to F61) needs none of them to be built, and needs F62 and F63 before 
 
 1. **A listed folder is a path in one more file.** It is in Jellymoon's own folder, beside the runs' records that
    already name it.
-2. **A repo moved or renamed** is not offered and is not found again. The person adds it again.
+2. **A repo moved or renamed** is not offered and is not found again. The person forgets the name with
+   `project forget`, then adds the repo again: a second folder under a listed name is refused.
 3. **An empty repo and a first wish.** What an agent builds from nothing, with no instructions in the repo, is
    not known. It is the first thing a new person sees, so it is tried by a person before "Start something new" is
    announced.

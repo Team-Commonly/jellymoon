@@ -330,27 +330,32 @@ fn parse_copy(mut parser: lexopt::Parser) -> Result<Command, Failure> {
 }
 
 /// `project add`, `project list` and `project forget`. What a name may be is core's rule: any text is taken.
+/// Whatever is wrong with the command line is answered in one fixed line: an argument that is not expected may
+/// be a folder with `--repo` forgotten, or a credential, and lexopt's own words would say it back.
 fn parse_project(mut parser: lexopt::Parser) -> Result<Command, Failure> {
-    let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
+    let usage = || {
+        let is = "project is `project add --repo <folder>`, `project list` or `project forget <name>`";
+        Failure::Usage(is.to_string())
+    };
     let (mut action, mut repo, mut date, mut names) = (String::new(), None, None, Vec::new());
-    while let Some(arg) = parser.next().map_err(usage)? {
+    while let Some(arg) = parser.next().map_err(|_| usage())? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(word) if action.is_empty() && ["add", "list", "forget"].iter().any(|known| word == *known) => {
-                action = word.string().map_err(usage)?
+                action = word.string().map_err(|_| usage())?
             }
-            Value(name) if action == "forget" => names.push(name.string().map_err(usage)?),
-            Long("repo") if action == "add" => repo = Some(PathBuf::from(parser.value().map_err(usage)?)),
-            Long("date") if action == "add" => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
-            other => return Err(usage(other.unexpected())),
+            Value(name) if action == "forget" => names.push(name.string().map_err(|_| usage())?),
+            Long("repo") if action == "add" => repo = Some(PathBuf::from(parser.value().map_err(|_| usage())?)),
+            Long("date") if action == "add" => {
+                date = Some(parser.value().and_then(|v| v.string()).map_err(|_| usage())?)
+            }
+            _ => return Err(usage()),
         }
     }
     match (action.as_str(), repo, names.len()) {
         ("add", Some(repo), _) => Ok(Command::AddProject { repo, date }),
         ("list", ..) => Ok(Command::ListProjects),
         ("forget", _, 1) => Ok(Command::ForgetProject { name: names.remove(0) }),
-        _ => Err(Failure::Usage(
-            "project is `project add --repo <folder>`, `project list` or `project forget <name>`".to_string(),
-        )),
+        _ => Err(usage()),
     }
 }

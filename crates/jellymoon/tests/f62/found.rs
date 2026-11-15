@@ -150,3 +150,21 @@ fn a_listed_folder_git_cannot_copy_is_refused_when_the_run_copies_it_in_fixed_wo
     names_no_path(&w, &ran);
     assert_eq!((w.copies(), w.starts()), (vec![], 0));
 }
+
+#[test]
+fn with_two_projects_on_offer_a_wish_said_aloud_is_for_the_one_of_the_day_s_last_made_wish_or_for_none() {
+    let w = heard_world();
+    for name in ["alpha", "beta"] {
+        printed(&w.add(&w.repo(name)));
+    }
+    // No wish was made that day: neither is the only one on offer, so nothing is kept.
+    let mut events = hold(0, SAID);
+    events.push(tick(6000));
+    assert_eq!(w.hear(&[], &events).last(), Some(&cannot(NO_PROJECT)));
+    assert_eq!(w.made_wishes(), None);
+    // After a wish made on the page for one of them, a wish said aloud is for that one.
+    assert_eq!(w.wish("beta"), "m1");
+    assert_eq!(w.heard_for(&[]), heard(SAID, "beta", 1));
+    assert_eq!(w.hear(&[], &events).last(), Some(&with(quiet(), "made", json!("m2"))));
+    assert_eq!(w.made_wishes().unwrap()[1]["project"], "beta");
+}

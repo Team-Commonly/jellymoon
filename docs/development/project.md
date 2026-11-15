@@ -11,7 +11,9 @@ jellymoon project list
 jellymoon project forget <name>
 ```
 
-Each prints one line of JSON and exits 0. No line any of them prints, and no refusal, names a folder.
+Each prints one line of JSON and exits 0. No line any of them prints, and no refusal, names a folder. A command
+line that is wrong is answered in one fixed line with the usage, and the argument that was not expected is never
+said back: it may be a folder with `--repo` forgotten, or a credential.
 
 ```json
 {"name":"alpha","used":"2026-03-10"}
@@ -51,7 +53,8 @@ Once `jellymoon run` (and so `wish --run`, the app and a heard wish) has found i
 its lock, the repo is on the list, used on the wish's day ([run.md](run.md), "The order", step 4). So a repo
 typed in once, or named once with `--repo`, is known from then on. This write never fails a run. It is left out
 when the folder's real last name is not the wish's project, when the folder is not the person's own, when
-another folder is listed under the name, when the list is full, and when the list cannot be used.
+another folder is listed under the name, when the list is full, when the list cannot be used, and when the
+list's lock is held: the run goes on after the 3 seconds and lists nothing.
 
 ## What is offered, and where a run starts
 
@@ -99,6 +102,7 @@ is exit 2 with the usage.
 | it is someone else's | `--repo is not a folder of your own` |
 | another folder has the name | ``another folder is listed under the name <name>, and a name has one folder, so nothing was changed; let the listed one go with `jellymoon project forget <name>`, then add this one`` |
 | the list is full | ``the list has its 100 projects already, so this one was not added; let one go with `jellymoon project forget` `` |
+| the command line is wrong | ``project is `project add --repo <folder>`, `project list` or `project forget <name>` ``, exit 2, with the usage |
 | `forget` is given no project's name | ``project forget takes a project's name, as `jellymoon project list` prints it`` |
 | the name is not listed | `no project of that name is on the list, so nothing was changed` |
 | the lock stays for 3 seconds | `another change to the list of projects has not finished, so nothing was changed` |
@@ -121,6 +125,8 @@ What a run says, where `<way out>` is ``name one with --repo, or let it go with 
 {"projects":[{"name":"alpha","folder":"/work/alpha","used":"2026-03-10"},{"name":"beta","folder":"/work/deep/beta","used":"2026-03-11"}]}
 ```
 
+- **The folder.** Jellymoon's home is the person's alone (0700) only when Jellymoon makes it. A home that was
+  there is left as it is; the file is 0600 either way.
 - **The write.** Whole, into a new file beside its place that is then moved there, 0600, behind
   `projects.lock` in the same folder: a file only one command can make, removed when the change is done, waited
   for 3 seconds, and taken over when it is 30 seconds old (the tap's lock, [delivery.md](delivery.md)). A change
@@ -153,8 +159,14 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
 - **`.git` is looked for, git is not asked**, by `add` and by the look that offers a project. A folder with a
   `.git` that is no repo is listed and offered, and is refused when the run's copy asks git. Asking git needs
   the empty folder a run keeps for it, and a look writes nothing.
-- **A run that was never started** (a harness too old for runs) has listed its repo by then: the checks were
-  passed.
+  A `.git` that is a link, or a file that holds `gitdir:`, is accepted too. So a worktree of a repo is listed,
+  and its run's branch is in the main repo, as it is for a worktree typed in or named with `--repo`.
+- **A run that was never started** has listed its repo by then: the checks were passed. That is so for a
+  harness too old for runs and for one that cannot be started at all.
+- **A run named `--repo` in a folder that is switched off is listed.** `--repo` is the person's own word, and
+  the run goes. The next run with no `--repo` is refused: `it is switched off`.
+- **A repo that was moved and is typed in at its new place is refused** until `project forget`: the name has
+  a typed-in folder and another one listed. The line of the old place is never dropped by itself.
 - **One folder under two spellings.** A name is compared letter for letter. Where the file system takes
   `Alpha` and `alpha` for one folder, a folder typed in as `Alpha` and listed as `alpha` are two names.
 - **A wish said aloud picks a project less often.** A hearing picks the project of the day's last made wish
@@ -172,7 +184,8 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
 ## Tests
 
 `crates/jellymoon/tests/f62.rs` and `f62/`: `add`, `list` and `forget`; every refusal with the home's tree
-compared; eight changes at once and a lock that stays; the list a run's start writes; a listed project found by
+compared; a stray folder or credential after each command, never said back; a run refused at its copy, which
+lists nothing; a wish said aloud with two projects on offer; eight changes at once and a lock that stays; the list a run's start writes; a listed project found by
 `run`, `wish --run` and `hear`; a folder that is gone, no repo's top, a link, switched off or someone else's; a
 name typed in and listed; and lists written by hand. The examples round-trip in core's `tests/shapes.rs` and
 `project.rs`.

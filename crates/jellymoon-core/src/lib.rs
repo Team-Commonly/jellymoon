@@ -15,6 +15,7 @@ mod error;
 mod find;
 mod hear;
 mod hook;
+mod project;
 mod reader;
 mod reading;
 mod redact;
@@ -36,6 +37,7 @@ pub use hear::{
     LOOK_MS, SAID_SO_FAR_MAX, SLIP_MS, Said, Voice, WINDOW_MS, hear, voice,
 };
 pub use hook::{hook_installed, install_hook, remove_hook};
+pub use project::{Known, PROJECTS_MAX, Projects, add_project, forget_project, projects};
 pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};

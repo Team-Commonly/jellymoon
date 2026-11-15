@@ -45,15 +45,21 @@ fn read(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<Reader
     Ok(ReaderDay { day: date.to_string(), turns: turns.into_iter().map(|(_, turn, _)| turn).collect() })
 }
 
-/// The folders of one name that something was typed in on the day, for a run to find its wish's repo (F39). They are
-/// the log's own text: what is done with one is up to the caller, and none is ever printed.
-pub(crate) fn folders(options: &DayOptions, name: &str) -> Result<Vec<PathBuf>, Error> {
-    Ok(typed_in(options)?.into_iter().filter(|folder| is_named(folder, name)).collect())
-}
-
 /// Whether a folder's last name is `name`: the one way a folder is matched to a project's name.
 pub(crate) fn is_named(folder: &Path, name: &str) -> bool {
     folder.file_name().is_some_and(|last| last == name)
+}
+
+/// The names that switch a folder off for `options`: the ones given, and the home's `skip.txt`.
+pub(crate) fn switched_off_for(options: &DayOptions) -> Result<Vec<String>, Error> {
+    let home = options.home.as_deref().map(|home| if home.is_absolute() { Ok(home) } else { Err(Error::Home) });
+    let listed = home.transpose()?.map_or(Ok(Vec::new()), switched_off).map_err(Error::Skip)?;
+    Ok(options.skip.iter().cloned().chain(listed).collect())
+}
+
+/// Whether one of the names switches a folder off, as the reader switches off the folder of a session.
+pub(crate) fn is_off(folder: &Path, names: &[String]) -> bool {
+    session::skipped(&folder.to_string_lossy(), names)
 }
 
 /// Every folder something was typed in on the day, each once: the ones no name switches off, as the reader
@@ -322,7 +328,6 @@ mod tests {
         let date = Some("2026-03-10".to_string());
         let read = DayOptions { logs, date, skip: Vec::new(), home: Some(home) };
         assert_eq!(typed_in(&read).unwrap(), [typed[0].clone(), typed[3].clone()]);
-        assert_eq!(folders(&read, "beta").unwrap(), [typed[3].clone()]);
         let names = ["alpha", "r1", "beta", "r2"].map(str::to_string);
         assert_eq!(crate::wishable(&read, &names), ["alpha", "beta"]);
         // With no home there are no copies to know of.

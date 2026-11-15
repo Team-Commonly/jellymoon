@@ -69,6 +69,9 @@ pub enum Error {
     /// A hearing could not begin or go on, or `voice.toml` is not used. It holds why, in one line with no word
     /// that was heard.
     Hear(String),
+    /// A change to the list of projects was refused, or the list is not used. It holds why, in one line with no
+    /// folder in it.
+    Project(String),
 }
 
 impl fmt::Display for Error {
@@ -114,9 +117,12 @@ impl fmt::Display for Error {
             Error::Changed => {
                 write!(f, "the installed hook entry cannot be taken out safely; remove it by hand. Nothing was changed")
             }
-            Error::Tap(why) | Error::Copy(why) | Error::Wish(why) | Error::Run(why) | Error::Hear(why) => {
-                write!(f, "{why}")
-            }
+            Error::Tap(why)
+            | Error::Copy(why)
+            | Error::Wish(why)
+            | Error::Run(why)
+            | Error::Hear(why)
+            | Error::Project(why) => write!(f, "{why}"),
             Error::Command(why) => write!(f, "the installed jellymoon command is not used: {why}"),
         }
     }

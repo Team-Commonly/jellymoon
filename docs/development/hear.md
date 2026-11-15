@@ -161,7 +161,9 @@ Asked once for each heard wish, when its final words come:
 3. else none: nothing is kept, and the jellyfish says so.
 
 A wish can be made for a project when a folder of that name was typed in on the day, in the logs `hear` reads,
-and is not switched off, which is what `wishable` offers the page's entry. A folder's name is a session log's
+and is not switched off, or when the name is on the list of projects Jellymoon knows and its folder stands
+([project.md](project.md)), which is what `wishable` offers the page's entry. The typed-in names come first,
+in their order, then the list's. A folder's name is a session log's
 text: one that could not be a made wish's project (a path, something unseen, a credential's shape, over 100
 characters) is never offered and never printed. The made wish is checked again when it is made
 (`wish_offered`), so a project switched off in those four seconds makes no wish.
@@ -326,7 +328,8 @@ Nothing here grows with the input: a hearing holds one hold's words, one refusal
   with the wish it made, and the day's rest shows the work that waits. Read, not run: no test can make that
   order come.
 - **A wish is made on the day the hearing began.** One that goes on past midnight keeps that day.
-- **A project needs a folder typed in that day** (ADR 0019, "Risks left open", 1).
+- **A project needs a folder typed in that day, or a line in the list of projects** (ADR 0019, "Risks left
+  open", 1; ADR 0020). A person who has never typed into a harness and has listed nothing still has none.
 - **Answering a run that asks by voice** waits on F52, F54 and F61.
 
 ## Tests

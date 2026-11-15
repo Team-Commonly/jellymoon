@@ -25,10 +25,11 @@ With `--run` (F41, [run.md](run.md), "A run started apart") the line names the r
 ```
 
 The repo is the one folder of the project's name that something was typed in that day, found in the session
-logs (`--logs`, or Claude Code's own) with the folders named by `--skip` left out; `wish` takes no `--repo`, and
+logs (`--logs`, or Claude Code's own) with the folders named by `--skip` left out, or else the folder listed
+under that name in the list of projects Jellymoon knows ([project.md](project.md)); `wish` takes no `--repo`, and
 takes `--logs` and `--skip` only with `--run`. A run that was not started leaves `run` null and says why in
-`why`, in core's own line: no harness, no folder or two of the name, a folder that is no repo's top or not the
-person's own, three runs going. The wish is kept in each case and the exit is 0; `jellymoon run --wish <id>`
+`why`, in core's own line: no harness, no folder or two of the name, a name typed in and listed with two
+folders, a folder that is gone, no repo's top, switched off or not the person's own, three runs going. The wish is kept in each case and the exit is 0; `jellymoon run --wish <id>`
 can start it later. Words core refuses are refused as without `--run`, and nothing is started.
 
 ## What is kept
@@ -140,8 +141,8 @@ own words. The kept page itself never holds a made wish. A made wish's `question
 
 - A made wish cannot be taken back or changed. Its state moves only with its one run ([run.md](run.md)),
   and with a toss of what that run left, which lets the wish go ([toss.md](toss.md)).
-- `jellymoon wish` does not check that the project is a folder on this computer. `jellymoon run` does, and
-  refuses a name two folders share.
+- `jellymoon wish` does not check that the project is a folder on this computer, or one Jellymoon knows.
+  `jellymoon run` does, and refuses a name two folders share.
 - The same words made twice are two wishes.
 - With eight wishes read and eight made, a page holds sixteen. How many of them the kit shows is the kit's layout.
 - A made wish's little one carries a short label, cut. Its words are in the note "wished here today", whole or

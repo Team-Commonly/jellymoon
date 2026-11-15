@@ -21,14 +21,29 @@ impl World {
     /// `rule` and a tap on either statement, each refused in the one line, with nothing written: of a clash whose
     /// first statement it is, and of one whose second it is.
     fn unmade(&self, typed: &str) {
+        self.unruled(typed, UNMADE);
+    }
+
+    /// The same, in the line `says`.
+    fn unruled(&self, typed: &str, says: &str) {
         self.keep(&[(typed, B), (B, typed)]);
         let before = tree(self.dir.path());
         let taps =
             [("1", "1"), ("1", "2"), ("2", "1"), ("2", "2")].map(|(clash, option)| self.settle(DAY, clash, option));
         for ran in [self.rule(typed, B), self.rule(B, typed)].into_iter().chain(taps) {
-            assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (1, "", UNMADE));
+            assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (1, "", says));
         }
         assert!(tree(self.dir.path()) == before && self.told("s-1").is_empty(), "no ruling is kept or told");
+    }
+}
+
+// A ruling of such a statement would tell a session only that the mark stands.
+#[test]
+fn a_statement_of_which_cleaning_leaves_only_marks_is_ruled_on_by_neither_a_tap_nor_rule() {
+    let marks = "jellymoon: nothing is left of these words but the mark of what cleaning replaced, so nothing was \
+                 made of them\n";
+    for typed in [map_key("kLmNo"), format!("{0} {0}", map_key("pQrSt")), format!("{}\nx", key_header(" "))] {
+        world().unruled(&typed, marks);
     }
 }
 

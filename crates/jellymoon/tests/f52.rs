@@ -61,6 +61,12 @@ pub fn failed(made: &Made, kind: &str) -> Value {
     json!({"run": made.run, "wish": made.wish, "outcome": "failed", "star": null, "denied": 0, "why": why})
 }
 
+/// Whether anything holds the lock of the run. Its file stays when the lock is let go of, with the run's folder.
+pub fn held(made: &Made) -> bool {
+    let lock = fs::File::open(made.w.jm("runs").join(&made.run).join("run.lock")).unwrap();
+    lock.try_lock().is_err()
+}
+
 /// Waits for `done`, half a minute at most.
 pub fn until(why: &str, mut done: impl FnMut() -> bool) {
     let from = Instant::now();
@@ -174,7 +180,7 @@ fn an_answer_goes_on_with_the_run_in_its_copy_under_its_session_and_the_run_fini
     assert_eq!(w.kept(&made.wish), wish);
     let on_page = w.on_page(&made.wish);
     assert_eq!((&on_page["state"], on_page.get("question"), on_page.get("answer")), (&json!("done"), None, None));
-    assert!(!w.jm("runs").join(run).join("run.lock").exists(), "the answer left the run's lock");
+    assert!(!held(&made), "the answer left the run's lock held");
     assert!(person == w.persons(&made.repo), "nothing of the person's was changed");
     // Its work is kept as any finished run's is.
     let kept = printed(&made.keep(&[]));
@@ -202,7 +208,7 @@ fn an_answered_run_that_asks_again_keeps_the_new_question_and_takes_a_second_ans
     assert_eq!(w.kept(&made.wish), wish);
     assert_eq!(w.on_page(&made.wish)["question"], SECOND);
     assert!(made.keeps(QUESTION).is_none(), "the first question is kept nowhere any more");
-    assert!(!made.copy_failed() && w.copies() == [run.clone()] && !w.jm("runs").join(run).join("run.lock").exists());
+    assert!(!made.copy_failed() && w.copies() == [run.clone()] && !held(&made));
     assert_eq!(w.commit(&made.repo, &made.branch()), w.commit(&made.repo, "main"), "nothing was committed");
     // The second answer goes on with the same session, and takes the first one's place with the wish.
     w.play("edits", 0);

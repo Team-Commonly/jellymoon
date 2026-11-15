@@ -20,7 +20,7 @@ use crate::hook::put;
 use crate::reader::{self, parse};
 use crate::reading::{LABEL_MAX, STAR_MAX, STARS_MAX};
 use crate::redact::line;
-use crate::still::{Unkept, statement, still};
+use crate::still::{MARKS, Unkept, marks_only, statement, still};
 use crate::tap::{Lock, locked, plain};
 use crate::{DayOptions, Error, PageData, Wish, WishState, copy, run};
 
@@ -201,6 +201,9 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
     })?;
     if said.is_empty() {
         return Err(refused("a wish needs words, and nothing is left of these once cleaned"));
+    }
+    if marks_only(&said) {
+        return Err(refused(MARKS));
     }
     if !named(project) {
         let no = "no path, nothing that cannot be seen and nothing shaped like a credential";

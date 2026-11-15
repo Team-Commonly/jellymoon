@@ -299,9 +299,17 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     // The start lock goes first: while the run's own is held, nothing takes this run for one left behind.
     drop(held);
     let _ = fs::remove_file(copy::start_lock(home, &copy.run));
-    drop(lock);
-    let _ = fs::remove_file(lock_file(home, &copy.run));
+    let_go(home, &copy.run, lock);
     ran
+}
+
+/// Lets go of a run's own lock at the end of its command. The lock's file goes with it, but for a run that asks:
+/// an answer or a toss takes that lock next, and its file stays with the run's folder (`asks::Held`).
+fn let_go(home: &Path, run: &str, lock: File) {
+    drop(lock);
+    if record::kept(home, run).is_none_or(|record| record.outcome != Some(RunOutcome::Asks)) {
+        let _ = fs::remove_file(lock_file(home, run));
+    }
 }
 
 /// Gives the harness a run's whole command line, in the copy's folder, and returns what its stream must then say.

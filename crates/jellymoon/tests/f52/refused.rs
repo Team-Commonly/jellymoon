@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::process::Stdio;
 
 use serde_json::{Value, json};
@@ -99,11 +100,12 @@ fn an_answer_is_refused_while_another_command_holds_the_run_or_three_runs_go() {
     held.lock().unwrap();
     made.unanswered(ANSWER, HELD);
     drop(held);
-    fs::remove_file(&lock).unwrap();
     // Something that is no plain file at the lock's name is no lock, and is not opened.
+    fs::remove_file(&lock).unwrap();
     fs::create_dir(&lock).unwrap();
     made.unanswered(ANSWER, "the lock of run {run} could not be made or taken: nothing was started");
     fs::remove_dir(&lock).unwrap();
+    fs::write(&lock, "").unwrap();
     // Three runs go: their locks are held, here by the test. An answered run would be a fourth.
     let others: Vec<fs::File> = (1..=3)
         .map(|n| {
@@ -117,7 +119,7 @@ fn an_answer_is_refused_while_another_command_holds_the_run_or_three_runs_go() {
     let full = "nothing was started: 3 runs are going, and no more than 3 go at once; answer again when one has ended";
     made.unanswered(ANSWER, full);
     drop(others);
-    assert!(!lock.exists(), "an answer that was refused left the run's lock");
+    assert!(!super::held(&made), "an answer that was refused left the run's lock held");
     made.w.play("nothing", 0);
     assert_eq!(printed(&made.answer(ANSWER))["outcome"], "completed");
 }
@@ -238,7 +240,7 @@ fn an_answer_reads_the_record_and_the_wish_again_once_it_holds_the_run_s_lock() 
     fs::write(&go, "").unwrap();
     let why = format!("the wish no longer asks for run {}: nothing was started", made.run);
     assert_eq!(refused(&ended(going)), said(&why));
-    assert!(before == (made.home(), made.w.starts()) && !made.w.jm("runs").join(&made.run).join("run.lock").exists());
+    assert!(before == (made.home(), made.w.starts()) && !super::held(&made));
 }
 
 // The input is read one byte past what the door looks at and no further: an answer that never ends is refused
@@ -256,4 +258,30 @@ fn an_answer_that_never_ends_is_refused_as_too_long_without_being_read_to_its_en
     assert_eq!(said_why, said(LONG));
     drop(input);
     assert_eq!(made.w.starts(), 1);
+}
+
+/// A link to a folder, as each system makes one. False where the account may not make links (Windows).
+fn linked(to: &Path, link: &Path) -> bool {
+    #[cfg(unix)]
+    let made = std::os::unix::fs::symlink(to, link);
+    #[cfg(windows)]
+    let made = std::os::windows::fs::symlink_dir(to, link);
+    made.is_ok()
+}
+
+// The copy is asked for as itself, never through a link: a copy's name that is a link to a folder, and a
+// `copies` that is one, lead wherever whoever made the link chose, and no agent is started there.
+#[test]
+fn an_answer_for_a_copy_that_is_a_link_or_stands_in_a_linked_copies_is_refused_and_no_agent_is_started() {
+    for whole in [false, true] {
+        let made = asking();
+        let at = if whole { made.w.jm("copies") } else { made.copy() };
+        let moved = made.w.at("elsewhere");
+        fs::rename(&at, &moved).unwrap();
+        if !linked(&moved, &at) {
+            return;
+        }
+        assert!(made.copy().is_dir(), "the link leads to the copy");
+        made.unanswered(ANSWER, NO_COPY);
+    }
 }

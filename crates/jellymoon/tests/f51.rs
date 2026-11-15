@@ -126,9 +126,10 @@ fn a_run_that_asks_keeps_its_question_leaves_its_copy_as_it_is_and_commits_nothi
     // It is not one of the failed copies, and nothing holds the run: both its locks are gone.
     let kept = fs::read_to_string(w.jm("runs").join(run).join("copy.json")).unwrap();
     assert!(!serde_json::from_str::<Value>(&kept).unwrap()["failed"].is_u64(), "{kept}");
-    for lock in ["run.lock", "start.lock"] {
-        assert!(!w.jm("runs").join(run).join(lock).exists(), "{lock}");
-    }
+    // The run's own lock is let go of and its file stays, for the answer or the toss that takes it next (F52).
+    assert!(!w.jm("runs").join(run).join("start.lock").exists());
+    let lock = fs::File::open(w.jm("runs").join(run).join("run.lock"));
+    assert!(lock.is_ok_and(|lock| lock.try_lock().is_ok()), "the command left its run's lock held");
     assert!(person == w.persons(&made.repo), "nothing of the person's was changed");
     assert_eq!(w.starts(), 1);
 }

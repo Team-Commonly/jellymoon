@@ -48,9 +48,24 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   kept as `[redacted]` there, and a file written before that holds one is drawn so. The stretch is whole: a
   key alone on its line takes the word that ends the line before and the word that starts the line after with
   it, and two long names on two lines with no space (two file paths, say) that together have a credential's
-  shape are one `[redacted]`. Not closed: a break with a
-  space or a tab beside it (an indented second line) keeps the two sides apart, and a session log's turn is
-  not read this way.
+  shape are one `[redacted]`. The words on the lines around them go with them: `fix these`, two such paths and
+  `please`, each on its own line, are kept as `fix [redacted]`, and `these` and `please` are not kept.
+- **The reading across a break is added, never put in place.** The words are cleaned both ways, as they stand
+  with each break a space and with the stretches above replaced, and a word is kept only where both readings
+  keep it, in their order; whatever lies between two kept words is one `[redacted]`. So nothing the reading
+  without the rule replaced is kept by the reading with it. It was not so at first: a word of 30 letters and
+  digits on the line before a private key's first line took that line with it as one stretch, the key was no
+  longer found, and its body, set in on the lines after, was kept.
+- **Only marks is nothing.** Words of which cleaning leaves nothing but `[redacted]` (and the `…` of a cut)
+  say nothing a person typed, so nothing is made of them: `wish`, a heard wish, `run answer`, `rule` and a tap
+  that settles a clash refuse them in one sentence, `nothing is left of these words but the mark of what
+  cleaning replaced, so nothing was made of them`. Nothing is kept and no harness is given them. `rename`, two
+  long names and `now`, each on its own line, are such words. A file written before this that holds a wish of
+  only the mark is still read, and an agent's question of only marks is still kept, as the mark.
+- **Not closed.** A break with a space or a tab beside it (an indented second line) keeps the two sides apart.
+  So does a break beside a terminal escape sequence that holds a space: the sequence goes, the space in it has
+  already kept the two sides apart, and a key split there is kept in two pieces. A session log's turn is not
+  read this way.
 - **Cleaned until nothing changes.** Cleaning once is not always cleaning twice: a private key's first line with a
   tab in it is one only once it is on one line, and a key straight after another is found only once the first is
   `[redacted]`. So the words are cleaned again until a cleaning changes nothing, and that is what is kept
@@ -84,6 +99,7 @@ Each is one line on stderr, exit 1, and nothing is written.
 | Refused | Why |
 |---|---|
 | Words that are empty once cleaned | There is nothing to draw |
+| Words of which cleaning leaves only `[redacted]` | They say nothing the person typed ("Only marks is nothing") |
 | Words over 200 characters once cleaned to the end, or over 4096 bytes as typed | A wish is never cut: cut words would not be the person's |
 | Words a ninth cleaning still changes, for example nine keys of letters alone with nothing between them | They would be kept half cleaned |
 | A ninth made wish for one day | A day holds eight |

@@ -285,7 +285,12 @@ max_file_lines = 400
 # door reads across a line break), `run/cap.rs` 15 (a claim behind the count for an answer), `run/stream.rs` and
 # `child.rs` 15 (a session that is not kept), `copy.rs` and `copy/keep.rs` 16 (the copy of a run that asks; a
 # branch left unasked), 22 in seven more files of `run/` and `wish.rs`, and 9 in `tests/shapes.rs`.
-"crates/jellymoon-core" = 13067
+# The fix after F52's gate raised core by 131: `still.rs` is 108 of it (the words both readings of a text with a
+# line break keep, 32; what tells a text of only marks, 10; their tests, a private key under a long word and 4000
+# made-up texts, the rest), `run.rs` and `run/stream.rs` 8 each (the lock's file of a run that asks left where it
+# is; a lost session read in a result's `errors`), and 7 over `wish.rs`, `hear.rs`, `ruling.rs` and
+# `run/answer.rs` (only marks refused); `run/asks.rs` lost 2 (a lock that removed its file).
+"crates/jellymoon-core" = 13198
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -415,7 +420,12 @@ max_file_lines = 400
 # what F51's gate left), the made-up agent's scripts 24 (a session that is not kept, three more last words,
 # `--resume`), the command's parse, usage and input 17, and 4 in two older tests the door's new rule changes.
 # And 3 for the lost session whose stream did not start as a run's (CI on Windows): a fifth script and its test.
-"crates/jellymoon" = 21890
+# The fix after F52's gate raised it by 169, all of it tests: `tests/f52/gate.rs` 57 (a private key under a long
+# word, and words of only marks, in a wish, an answer and a ruling), `ends.rs` 39 (an answer that opened the run's
+# lock while the one before let go; the harness's words in an agent's own prose), `refused.rs` 28 (a copy that is
+# a link, and a linked `copies`), `tests/f35/still.rs` 15 (a tap on a statement of only marks), the made-up
+# agent's three scripts 13, `tests/f55/` 9, `tests/f52.rs` 6 and `tests/f51` 2 (a lock asked, not looked for).
+"crates/jellymoon" = 22059
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

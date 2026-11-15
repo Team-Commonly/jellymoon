@@ -219,6 +219,7 @@ What core refuses of the wish itself is said in the sentence a typed wish is ref
 | Refused | `says` | When |
 |---|---|---|
 | words over 200 characters once cleaned, or over 4096 bytes as heard | `a wish is at most 200 characters, and this one is longer` | as the final words come |
+| words of which cleaning leaves only `[redacted]` | `nothing is left of these words but the mark of what cleaning replaced, so nothing was made of them` | as the final words come |
 | words that cleaning still changes after 8 times | `a wish is kept as cleaning leaves it, and cleaning was not done with these words after 8 times` | as the final words come |
 | the day has its eight made wishes | `the page of <day> has its 8 made wishes already, so this one was not kept` | at 4000 ms |
 | the day is locked, after the lock's own 3 seconds | `another change to the page of <day> has not finished, so this wish was not kept` | at 4000 ms |

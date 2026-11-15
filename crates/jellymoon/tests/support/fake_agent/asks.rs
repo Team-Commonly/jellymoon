@@ -109,10 +109,23 @@ fn init(tools: &str, session: &str) {
 /// A harness that no longer keeps the session it is told to resume (F52; ADR 0018, "Measured"): it says so on
 /// stderr and in a result that is an error, and exits with 1. 0 is both, 1 stderr alone with no line printed, 2 a
 /// first line as a run's and then that result alone, 3 both with an exit of 0, 4 that after a first line as a run's.
+/// 5 and 6 are a harness that keeps the session and an agent that writes those words itself, and then fails: 5 in
+/// an assistant line and the prose of its result, 6 in a result whose `errors` is that text and no list. 7 is a
+/// result that is a success and no error with the words in its `errors`, and an exit of 1.
 fn lost(number: usize) -> i32 {
     let said = format!("No conversation found with session ID: {}", TOLD.get().map_or("", |told| &told.0));
-    if number == 2 || number == 4 {
+    if number == 2 || number >= 4 {
         starts();
+    }
+    if number >= 5 {
+        let errors = [String::new(), format!(r#","errors":"{said}""#), format!(r#","errors":["{said}"]"#)];
+        let (kind, errors) = (["error_during_execution", "success"][usize::from(number == 7)], &errors[number - 5]);
+        line(&format!(r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"{said}"}}]}}}}"#));
+        line(&format!(
+            r#"{{"type":"result","subtype":"{kind}","is_error":{},"result":"{said}"{errors}}}"#,
+            number != 7
+        ));
+        return 1;
     }
     if number != 2 {
         eprintln!("{said}");

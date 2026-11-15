@@ -30,7 +30,9 @@ allows depends on their shapes and on where the cut falls (wish.md has the examp
 Because the cut comes last, a statement can hold words from past the first 200 characters of what was typed, when
 a later cleaning made the text before them shorter; those words are ones the cleaning leaves as they are. A statement a ninth cleaning still changes, or
 of over 4096 bytes (4096 are cleaned), cannot be ruled on: `jellymoon rule` and a tap refuse it in one line, exit 1,
-with nothing kept, since its ruling would tell a session only that `[redacted]` stands. A page still draws such a
+with nothing kept, since its ruling would tell a session only that `[redacted]` stands. So is a statement of which
+cleaning leaves nothing but `[redacted]`, in the sentence a wish of only marks is refused with
+([wish.md](wish.md), "Only marks is nothing"). A page still draws such a
 statement, as `[redacted]` and nothing else, and so does the hook for a ruling file that holds one; a tap on it in
 the app says "That tap did nothing." and why. A ruling without both statements is refused. The file is written under another name
 and then renamed, so a hook never reads half of one. The `rulings` folder is set to the person alone (0700) each

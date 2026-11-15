@@ -58,8 +58,8 @@ pub(super) struct Stream {
     pub other: bool,
     /// The first result's last word.
     pub last: Last,
-    /// A harness told to go on with a session gave a result that is an error and says the session is not kept
-    /// (`asks::LOST_SIGN`), wherever in the stream it came.
+    /// A harness told to go on with a session gave a result that is an error and says in its `errors` that the
+    /// session is not kept (`asks::LOST_SIGN`), wherever in the stream it came.
     pub lost: bool,
 }
 
@@ -76,6 +76,16 @@ struct Line {
     permission_denials: Vec<IgnoredAny>,
     /// The last word. It is read whatever its shape, so a result with an odd one is still the stream's result.
     structured_output: Option<asks::Word>,
+    /// What the harness says went wrong, in a result that is an error: a list of texts. Any other shape is none.
+    errors: Option<Value>,
+}
+
+/// Whether a line is a result that is an error and says, in its `errors`, that the session is not kept. Its
+/// other parts are not asked: `result` is the agent's own prose, and so is every line that is no result.
+fn lost(line: &Line) -> bool {
+    let said = |error: &Value| error.as_str().is_some_and(|error| error.contains(asks::LOST_SIGN));
+    let errors = line.errors.as_ref().and_then(Value::as_array);
+    line.kind == "result" && line.is_error == Some(true) && errors.is_some_and(|errors| errors.iter().any(said))
 }
 
 /// The four parts of the `system`/`init` line that are compared. Every other part of it is passed over.
@@ -115,9 +125,7 @@ impl Stream {
         let read = line(raw);
         let system = read.as_ref().is_some_and(|line| line.kind == "system");
         let init = system && read.as_ref().is_some_and(|line| line.subtype.as_deref() == Some("init"));
-        let error = |line: &Line| line.kind == "result" && line.is_error == Some(true);
-        let sign = asks::LOST_SIGN.as_bytes();
-        self.lost |= expect.resumed && read.as_ref().is_some_and(error) && raw.windows(sign.len()).any(|at| at == sign);
+        self.lost |= expect.resumed && read.as_ref().is_some_and(lost);
         if init || (self.start.is_none() && !system) {
             let (fits, same) = if init { measured(raw, expect) } else { (false, true) };
             self.other |= fits && !same;

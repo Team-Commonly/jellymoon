@@ -368,7 +368,8 @@ seventh name, and exits 0.
 **What is read back.** Anyone who can write the home can write a record or a wish, so a question is believed
 only as core would have written it. A record asks when its outcome is `asks`, its `why` is the fixed line with
 its own run's id, its `session` is an id of the shape core makes, and its `question` is one the door leaves
-unchanged; any other record that says `asks` has no end core wrote, and a look takes its run for cut off. Made
+unchanged. The shape is all that is asked of the session: a record written by hand, which takes write access
+to the home, can name any other session of that shape, and an answer would go on with it; any other record that says `asks` has no end core wrote, and a look takes its run for cut off. Made
 wishes are refused as not that day's when a wish has a `question` the door would change, or one on a wish that
 is not `needs_you` or names no run. A page's `question` that the door would change is dropped when the page is
 put together.
@@ -432,11 +433,13 @@ A stop asked while the answered run goes stops it as it stops a run. The time li
 the answer.
 
 **A session that is not kept.** A harness that was told to go on with a session, did not exit with 0, and said
-`No conversation found with session ID`, in a result line that is an error or in the start of what it wrote on
-stderr, has failed the run in these words, whatever else its stream held: `run <id> did not finish (Claude Code
+`No conversation found with session ID`, in the `errors` of a result line that is an error (a list of texts)
+or in the start of what it wrote on stderr, has failed the run in these words, whatever else its stream held: `run <id> did not finish (Claude Code
 no longer keeps the session it asked in): its copy is kept and no star was added`. The copy is kept, marked
 failed, with what the agent had edited in it. The words are looked for only in an answered run, and only with a
-failing exit. A harness whose stream did not start as a run's counts as one: Jellymoon ends it at once, so
+failing exit. They are the harness's only in those two places: in an assistant's line, in a result's own
+`result`, or in an `errors` that is no list they are the agent's prose, and such a run fails as any run whose
+result is an error. A harness whose stream did not start as a run's counts as one: Jellymoon ends it at once, so
 whether it had exited by then, and with what, is chance, and is not asked (found on Windows, where it had not).
 
 **A harness that cannot take the answer.** When the harness cannot be started, or answers the command line
@@ -452,6 +455,7 @@ is refused. The run still asks.
 | input that cannot be read | `the answer could not be read from this command's input: <kind>`, where the kind is the system's name for the error |
 | input that is not text | `an answer is text, and these bytes are not` |
 | nothing left once cleaned | `an answer needs words, and nothing is left of these once cleaned` |
+| only `[redacted]` left once cleaned | `nothing is left of these words but the mark of what cleaning replaced, so nothing was made of them` ([wish.md](wish.md), "Only marks is nothing") |
 | over 600 characters once cleaned, or over 4096 bytes as typed | `an answer is at most 600 characters, and this one is longer` |
 | words a ninth cleaning still changes | `an answer is kept as cleaning leaves it, and cleaning was not done with these words after 8 times` |
 | no made wish of that id on that day | the line `jellymoon run` has for it |
@@ -474,6 +478,20 @@ is refused. The run still asks.
 Of two answers started at once one holds the run's lock and goes on; the other is told that the run is going
 or that another command holds it, and neither its words nor anything else of it is kept.
 
+**The run's lock is a file that stays.** `runs/<id>/run.lock` of a run that asks is not removed when the run
+ends asking, nor when an answer or a toss lets go of it: it goes with the run's folder, as `runs/keep.lock` and
+`runs/going.lock` are never removed. Removed with the lock, it could be held under no name by a command that
+had opened it just before and locked it just after; a look asks the file at the lock's name, would find the
+run held by nothing, and would write a run that is going down as cut off. A run that ends in any other way
+removes the file as before, since nothing takes that run up again.
+
+**A look and a toss, at the same instant.** A look asks whether a run is held by taking its lock for a moment
+and letting go. An answer that asks for the lock in that moment is refused with `another command holds run
+<run>: nothing was started`, though no command is at work on the run; nothing was written, and the answer can
+be given again. A toss of a run that asks holds the run's lock while it works, and a run whose lock is held
+counts as going: such a toss is one of the three, and an answer or a run started meanwhile with two others
+going is refused as a fourth.
+
 **Where the answer's words are.** In two places: the harness's input, and the wish's `answer` in
 `pages/<day>.wishes.json`. They are on no command line, in no record, on no page, in no line a command prints
 and in no refusal (`tests/f52/words.rs` reads every file of the home and every argument). The harness keeps
@@ -491,8 +509,10 @@ a cut-off run's is.
   `--resume` with the rest of a run's command line names the same session in its init line, and the harness's
   exact words, exit code and stream for a session it no longer keeps, are the coordinator's earlier
   measurements, proved here on the made-up agent only.
-- A harness that says the session is not kept in other words fails the run as any failed run, in the words of
-  what its stream lacked.
+- A harness that says the session is not kept in other words, or in another part of its result than `errors`,
+  fails the run as any failed run, in the words of what its stream lacked. That the real result carries the
+  words in `errors`, as a list of texts, is read from the harness's output format and was not measured here;
+  stderr carries them too, and is read as before.
 - An answer killed after the wish was told and before the record was written leaves the stop file of step 2 in
   place when one was there; the next answer removes it.
 - Whether the harness, resumed, obeys an answer that tells it to do something the fixed prompt forbids was not

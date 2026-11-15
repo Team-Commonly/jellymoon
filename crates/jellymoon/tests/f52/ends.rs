@@ -5,7 +5,7 @@ use std::fs;
 
 use serde_json::json;
 
-use super::{ANSWER, ASKS, QUESTION, asking, ended, failed, printed, refused, said, until};
+use super::{ANSWER, ASKS, QUESTION, SECOND, asking, ended, failed, printed, refused, said, until};
 
 const LOST: &str = "Claude Code no longer keeps the session it asked in";
 const CUT: &str = "run {run} was cut off before it ended: its copy is kept and no star was added";
@@ -39,6 +39,16 @@ fn a_harness_that_no_longer_keeps_the_session_fails_the_run_in_fixed_words_with_
     made.w.play("no-session", 4);
     let ran = printed(&made.answer(ANSWER));
     assert!(ran["outcome"] == "failed" && !ran["why"].as_str().unwrap().contains(LOST), "{ran}");
+    // Written by the agent itself they are not the harness's: in an assistant line and its result's prose (5),
+    // and in a result whose `errors` is no list (6). The run failed as any run whose result is an error. In the
+    // `errors` of a result that is none (7) they are not asked for: that run failed by its exit.
+    let exited = "Claude Code exited with a failure after its result";
+    for (number, kind) in [(5, "its result was not a success"), (6, "its result was not a success"), (7, exited)] {
+        let made = asking();
+        made.w.play("no-session", number);
+        let ran = printed(&made.answer(ANSWER));
+        assert_eq!(ran, failed(&made, kind), "no-session {number}");
+    }
     // Said by a first start, which was told to go on with nothing, they are a failed run's too.
     let w = super::world();
     w.play("no-session", 0);
@@ -135,4 +145,33 @@ fn an_answer_killed_after_its_record_was_written_is_a_run_that_was_cut_off() {
     assert_eq!(made.w.kept(&made.wish)["why"], CUT.replace("{run}", &made.run));
     assert!(made.copy_failed() && made.w.starts() == 1);
     made.unanswered(ANSWER, NOT_ASKING);
+}
+
+// The first answer ends its run asking again and waits, in a test's build, with the run's lock still held. The
+// second has the lock's file open by then, and asks for the lock once the first has let go. Were the file
+// removed with the lock, the second would hold a file of no name: a look would find the run held by nothing,
+// and write a run that is going down as cut off.
+#[test]
+fn an_answer_that_opened_the_run_s_lock_while_the_one_before_let_go_of_it_holds_the_run_for_every_look() {
+    let made = asking();
+    let rec = made.w.at("rec");
+    let hold =
+        |variable: &'static str, go: &str| [(variable, "60000".into()), ("JELLYMOON_TEST_GO", rec.join(go).into())];
+    made.w.play("asks", 11);
+    let first = made.answering(&hold("JELLYMOON_TEST_ANSWERED_WAIT_MS", "one.step"), ANSWER);
+    until("the first answer never ended its run", || rec.join("one.at").exists());
+    assert_eq!(made.record()["question"], SECOND);
+    made.w.play("slow", 0);
+    let second = made.answering(&hold("JELLYMOON_TEST_RUN_LOCK_WAIT_MS", "two.step"), "the new one");
+    until("the second answer never came to the run's lock", || rec.join("two.at").exists());
+    fs::write(rec.join("one.step"), "").unwrap();
+    assert_eq!(printed(&ended(first))["outcome"], "asks");
+    fs::write(rec.join("two.step"), "").unwrap();
+    until("the second answer never started its agent", || made.w.starts() == 3 && made.record()["pid"].is_u64());
+    // Every look finds the run held: the page draws it as going, and a third answer is told that it is.
+    assert!(super::held(&made), "nothing holds the lock at the run's own name");
+    assert_eq!(made.w.on_page(&made.wish)["state"], "working");
+    assert!(made.record()["outcome"].is_null(), "a look wrote the run down while it was going");
+    made.w.let_end("go");
+    assert_eq!(printed(&ended(second))["outcome"], "completed");
 }

@@ -20,7 +20,7 @@ use super::{LIMIT, Ran, RunOptions, RunOutcome, asks, cap, child, going, lined, 
 use crate::busy::{self, or_test};
 use crate::call::harness_of;
 use crate::copy::{self, RunCopy};
-use crate::still::{LOOKED, Unkept, still};
+use crate::still::{LOOKED, MARKS, Unkept, marks_only, still};
 use crate::wish::{self, MadeWish};
 use crate::{Error, WishState, find};
 
@@ -37,6 +37,7 @@ fn cleaned(typed: &[u8]) -> Result<String, Error> {
     let text = str::from_utf8(typed).map_err(|_| refused("an answer is text, and these bytes are not"))?;
     match still(text, ANSWER_MAX, false) {
         Ok(kept) if kept.is_empty() => Err(refused("an answer needs words, and nothing is left of these once cleaned")),
+        Ok(kept) if marks_only(&kept) => Err(refused(MARKS)),
         Ok(kept) => Ok(kept),
         Err(Unkept::Long) => Err(long()),
         Err(Unkept::Changing) => Err(refused(
@@ -100,6 +101,8 @@ pub fn answer_run(home: &Path, options: &RunOptions, typed: &[u8]) -> Result<Ran
             Err(refused(format!("{}; run {run} still asks its question", never.unwrap_or_default())))
         }
     };
+    // A test's build can wait here, with the answered run ended and its lock still held.
+    busy::pause("JELLYMOON_TEST_ANSWERED_WAIT_MS");
     drop(held);
     ran
 }

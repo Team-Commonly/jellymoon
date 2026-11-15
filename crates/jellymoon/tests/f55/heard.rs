@@ -142,7 +142,9 @@ impl World {
             let record = fs::read_to_string(folder.join("run.json")).unwrap_or_default();
             !serde_json::from_str::<Value>(&record).unwrap_or_default()["outcome"].is_null()
         };
-        while !ended() || folder.join("run.lock").exists() {
+        // The lock's file of a run that asks stays when its command has gone: gone is a lock nothing holds.
+        let held = || fs::File::open(folder.join("run.lock")).is_ok_and(|lock| lock.try_lock().is_err());
+        while !ended() || held() {
             assert!(from.elapsed() < Duration::from_secs(30), "run {run} never ended");
             thread::sleep(Duration::from_millis(10));
         }

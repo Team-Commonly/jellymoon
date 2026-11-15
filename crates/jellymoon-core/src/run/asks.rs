@@ -7,7 +7,7 @@ use std::collections::hash_map::RandomState;
 use std::fmt;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::hash::{BuildHasher, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
 use serde::de::{Deserializer, IgnoredAny, MapAccess, Visitor};
@@ -101,7 +101,8 @@ pub(super) const OTHER: &str = "it did not start under the session id it was giv
 /// And why a run that was answered (F52, `answer.rs`) did not go on: the harness has the session no more.
 pub(super) const LOST: &str = "Claude Code no longer keeps the session it asked in";
 /// What Claude Code says of a session id it is told to go on with and does not have: on stderr, and in the
-/// `errors` of a result that is an error. It is looked for only in a run that was answered, and never kept.
+/// `errors` of a result that is an error. It is looked for there only, never in the agent's own words, and only
+/// in a run that was answered, and it is never kept.
 pub(super) const LOST_SIGN: &str = "No conversation found with session ID";
 /// Every one of them: a record's end is one core wrote only in these words (`end::recorded`).
 pub(super) const KINDS: [&str; 7] = [NO_WORD, UNFIT, LONG, EMPTY, CHANGING, OTHER, LOST];
@@ -158,15 +159,10 @@ pub(super) fn is_session(id: &str) -> bool {
 }
 
 /// The lock of a run that asks, held by a toss of it or an answer to it for as long as that is at work, so that
-/// nothing else takes the run up meanwhile. Its file goes with it, as a run's own does when the run ends.
-pub(super) struct Held(File, PathBuf);
-
-impl Drop for Held {
-    fn drop(&mut self) {
-        let _ = self.0.unlock();
-        let _ = fs::remove_file(&self.1);
-    }
-}
+/// nothing else takes the run up meanwhile. Its file is never removed, as the keeps' lock's and the one runs are
+/// counted behind are not: it goes with the run's folder. Removed when the lock is let go of, it could be held
+/// under no name by a command that opened it just before, and the run would be held by two, or seem held by none.
+pub(super) type Held = File;
 
 /// Takes the lock of a run that asks. Err(true): a command holds the run. Err(false): there is no lock to be
 /// had, as it cannot be made or asked about, or its name holds something other than a plain file, which is
@@ -177,8 +173,10 @@ pub(super) fn take(home: &Path, run: &str) -> Result<Held, bool> {
         return Err(false);
     }
     let file = OpenOptions::new().write(true).create(true).truncate(false).open(&lock).map_err(|_| false)?;
+    // A test's build can wait here, with the lock's file open and the lock not yet asked for.
+    busy::pause("JELLYMOON_TEST_RUN_LOCK_WAIT_MS");
     match file.try_lock() {
-        Ok(()) => Ok(Held(file, lock)),
+        Ok(()) => Ok(file),
         Err(e) => Err(matches!(e, TryLockError::WouldBlock)),
     }
 }

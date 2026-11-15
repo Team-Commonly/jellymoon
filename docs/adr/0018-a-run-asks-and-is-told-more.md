@@ -123,7 +123,9 @@ empty logs:
 - **The stated length is 300 characters**, cut with `…`; a question of more than 4096 bytes, the most the door
   looks at, is a failed run and is not cut.
 - **The session is checked.** An init line that names another session than the one given, or none, stops the
-  child and fails the run, in its own words. The record names only ids core made.
+  child and fails the run, in its own words. The record a run that asks is believed by names a session id of
+  the shape core makes. Only the shape is checked: whoever can write the home can write a record by hand that
+  names another session of that shape, and an answer would go on with that one.
 - **The tool list is exact.** With a schema the init line lists `StructuredOutput` beside the five, once.
 - **A copy that asks is never marked failed**, so it is not one of the five kept and nothing prunes it. Only a
   toss removes it until F52.
@@ -157,6 +159,14 @@ empty logs:
   door now also reads a stretch with the break taken out, and keeps the stretch as `[redacted]` when that
   reading cleans differently. It holds for every text the door keeps.
 - **A last word that names a part twice is a failed run**, whatever the two values are.
+- **The gate failed F52 on the door, and the fix is one commit after it.** The reading across a break had taken
+  the place of the older reading, and kept a private key's body when a long word stood on the line before its
+  first line. Both readings are now made and a word is kept only where both keep it: nothing the older reading
+  replaced is kept. Words of which only marks are left are refused wherever something is made through the door.
+- **The run's lock is a file that stays**, as the keeps' lock and the one runs are counted behind do. Removed
+  when it was let go of, it could be held under no name by a command that had opened it just before.
+- **The harness's words for a lost session are read in a result's `errors` and on stderr**, not in the whole
+  line: an agent that writes them in its own prose has not lost its session.
 - **Not measured in the build:** the resume itself on a real harness with core's command line. The coordinator
   measured it afterwards, below.
 

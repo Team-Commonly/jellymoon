@@ -141,6 +141,8 @@ fn work_that_touches_files_the_person_s_tools_obey_names_them_and_is_kept_only_a
 fn work_whose_repo_is_not_found_says_so_in_core_s_words_offers_no_choice_and_core_changes_nothing() {
     let (w, repo) = finished("edits");
     fs::create_dir(w.at("no-logs")).unwrap();
+    // The run's start listed its repo (F62). Forgotten, the project is one Jellymoon no longer knows.
+    w.jellymoon(&["project", "forget", "alpha"]);
     let before = w.everything(&repo);
     // The window is opened on logs that hold no session: the wish's folder was typed in nowhere.
     let acts =

@@ -610,7 +610,8 @@ max_file_lines = 400
 # Its gate raised the app by 9: `tests/f47/named.rs`, the one yes to other names that is not refused (the
 # person's branch holds the run's commit already, and nothing is landed).
 # F62 raised the app by 1: the arm for core's new error where it puts an error into words.
-"app" = 7101
+# Its CI raised the app by 2: `tests/f47/asked.rs` forgets the project a run listed before its repo is not found.
+"app" = 7103
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

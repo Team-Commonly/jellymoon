@@ -159,3 +159,51 @@ What the build settled, and where it is not this note's words. The detail is
   the run's record alone (`tests/f48.rs`) now names the two.
 - **Not built here:** the app's refusal still says "typed in", and git's words for a listed folder are replaced
   by the words written for a folder read from a session log.
+
+## Found while building F65
+
+What the build settled for decision 3, and where it is not this note's words. The detail is
+[project.md](../development/project.md), "A new project".
+
+- **The folder is `projects` in Jellymoon's own folder**, so a made project is `projects/<name>` there, and not
+  `~/Jellymoon` or a folder under Documents. That folder is already the one place Jellymoon writes; it is the
+  person's alone; `JELLYMOON_HOME` moves it for a test with no second variable; and on a Mac a folder under
+  Documents is behind a permission the binary would have to ask for. The cost: it is inside a folder whose
+  name starts with a dot, which the Finder does not show. The app's entry (F66) is where a person meets a made
+  project, and "Friends" (risk 4) is where its place may have to change.
+- **It is made only when the first project is**, for the person alone (0700), as `copies`, `runs` and `pages`
+  are. It must be a real folder: a link or a file at its name is refused, and is never followed or replaced.
+- **A name is one folder's name on every system.** It is F62's check of a project's name, and on top of it:
+  no dot, dash or space at its start (a hidden folder, an option), no dot or space at its end (Windows cuts
+  them), no colon (a drive, a stream) and no name a system keeps for a device (`NUL`, `COM1`). Refused in one
+  sentence that never says the name back.
+- **Taken is a name on the list, whatever its folder, or anything at the name in `projects`**: a folder, a file
+  or a link, which is never followed. Both are asked with the case of letters set aside, on every system, so a
+  home copied to a disk that folds case holds no two projects in one folder. Two Unicode forms of one name are
+  left to the file system: where it takes them for one, the second is something that is there; where it keeps
+  them apart, they are two projects. A file system that stores a name in other letters than it was given is
+  refused after the fact, and what was made is taken back.
+- **The order.** The name, the list, the folder and git on `PATH` are looked at first, and a refusal there has
+  written nothing at all. Then `projects/<name>` is made by a call that fails when anything is at the name:
+  that is the claim, and of two commands of one name at once one makes it and the other is told something is
+  there. Then the repo, then the list, behind the list's own lock, where a name listed meanwhile is found.
+- **A step that fails after the folder is made takes the folder back and lists nothing**: git, the list's
+  lock held for its 3 seconds, a list that filled or was written over meanwhile. `projects` goes too when
+  this command made it. What stays is Jellymoon's folder and the empty folder git is started in
+  (`runs/no-hooks`), as after a run's copy that was refused.
+- **A command killed between its steps leaves the folder, unlisted.** Nothing is kept that would say a making
+  is under way, so the next `project new` of that name says only that something is there, and names the two
+  ways out: list it with `project add --repo` when the repo was whole, or remove it and ask again. A folder
+  with a `.git` and no commit is listed by `project add` and refused by a run's copy, as F62 found.
+- **git is run as a run's copy runs it**: the program found in the full folders of `PATH`, started in the empty
+  folder, with the copy's own short list of variables and its settings, so no hook, signing program or monitor
+  of the person's config is started. `git init` is given an empty template, so the repo holds no hook and no
+  sample. The branch is `main`, set after `init`, whatever the config names for a new repo. The commit is made
+  with git's plumbing, as a run's is: no file, no parent, the message `Jellymoon project <name>`, by the
+  person as the new repo's config reads them, or by `Jellymoon <jellymoon@localhost>` when either the name or
+  the address is missing. No step of it is one git does upkeep after.
+- **What git says is never repeated**, as for a folder read from a session log: it names the folder.
+- **`project forget` of a made project forgets the line and keeps the folder**, as for any project. The name
+  is then taken by the folder: `project add --repo` lists it again.
+- **Not built here:** the app's "Start something new" (F66); a remote; a `.gitignore` or any first file; a
+  way to make a project anywhere else; and `project new` on Windows and Linux, which nobody has run.

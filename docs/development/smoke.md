@@ -76,14 +76,15 @@ run's id, by a third run that had opened the old lock file before it was unlinke
 | `hear` | the projects the chain's runs listed are forgotten, so one project is on offer; then a made-up log of something typed in one folder, and `jellymoon hear` fed a hold of a second, final words, the tick that starts their four seconds and one four seconds later: the words are shown as a heard wish for 4000 ms with a project, the last line names the wish that was made, and `jellymoon page` shows that wish working in the same words. No key, no sound and no run |
 | `jelly` | the line the `hear` step printed for the heard wish, given to `jellymoon-app layout --jelly --screen 1440x900`: it prints the jellyfish's window with the jellyfish holding the wish up, and the bubble's window with the wish's words and a full ring. No window is opened |
 | `project` | a repo the chain makes in the system's temporary folder, in which nothing is typed: `jellymoon project add` lists it under its last name, `jellymoon project list` names it, `jellymoon wish --run` over logs that are not there finds the repo by the list and starts the run through `fake-agent`, the run's command ends by itself with one commit on the run's branch, `jellymoon project forget` takes the project off the list, and nothing these print names the repo's folder. The step removes the repo |
+| `new` | `jellymoon project new` makes a project in the temporary home, a repo with one commit, on a day of its own (`2026-03-12`: the chain's day has its eight made wishes by now); nothing is typed in it and no folder is named: `jellymoon wish --run` over logs that are not there finds it by the list and starts the run through `fake-agent`, the run's command ends by itself with one commit on the run's branch, `jellymoon project forget` takes the project off the list and its folder is still there, and nothing these print names the home |
 | `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty; the hook is out and the settings are as they were |
 | `window` (with `--window`) | `jellymoon-app --page` opens a window and, with `JELLYMOON_QUIT_AFTER=3`, exits 0 within 30 seconds with no panic |
 
 A made-up run starts each program with no variable of the caller's: a scratch `HOME`, `CLAUDE_CONFIG_DIR`,
 `JELLYMOON_HOME`, `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` in the temporary home, and `JELLYMOON_CLAUDE` naming the copy of
 `fake-claude` there. It never runs Claude Code and never reads a real log. The `copy`, `run`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`,
-`wish-run` and `project` steps alone are given the caller's `PATH`, to find git, with an empty global git config and the system's switched off.
-The `run`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `wish-run` and `project` steps name their harness, a copy of `fake-agent`, with
+`wish-run`, `project` and `new` steps alone are given the caller's `PATH`, to find git, with an empty global git config and the system's switched off.
+The `run`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `wish-run`, `project` and `new` steps name their harness, a copy of `fake-agent`, with
 `JELLYMOON_CLAUDE`, so no harness on
 that `PATH` is looked for.
 
@@ -94,7 +95,7 @@ that `PATH` is looked for.
   it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
   logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`,
-  `no-logs`, the delivery steps, `wish`, `copy`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `wish-run`, `hear`, `jelly`, `project` and `uninstall` are
+  `no-logs`, the delivery steps, `wish`, `copy`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `wish-run`, `hear`, `jelly`, `project`, `new` and `uninstall` are
   left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what. Its sixth step is `run`

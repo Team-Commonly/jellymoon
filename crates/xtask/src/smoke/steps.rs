@@ -61,6 +61,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "jelly", only: Only::Synthetic, run: super::hear::jelly },
     // A project Jellymoon knows (F62): a repo listed by hand, and a run found by the list. Not with --real, as `wish`.
     Step { name: "project", only: Only::Synthetic, run: super::project::project },
+    // A project Jellymoon makes (F65), in the temporary home, and a run found in it by the list. Not with --real.
+    Step { name: "new", only: Only::Synthetic, run: super::new::new },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
     Step { name: "window", only: Only::Window, run: window },
 ];

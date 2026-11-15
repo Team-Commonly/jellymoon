@@ -13,6 +13,7 @@ mod build;
 mod copy;
 mod hear;
 mod keep;
+mod new;
 mod off_path;
 mod project;
 mod run;

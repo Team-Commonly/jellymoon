@@ -10,6 +10,7 @@
 
 mod back;
 mod clean;
+mod fresh;
 mod git;
 mod gone;
 mod hold;
@@ -28,6 +29,7 @@ use std::path::{Path, PathBuf};
 pub(crate) use back::{remove_ours, take_back, take_back_left};
 pub use clean::clean_copy;
 pub(crate) use clean::{drop_copy, end_copy, moved};
+pub(crate) use fresh::{fresh_repo, git_on_path};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
 pub(crate) use keep::{

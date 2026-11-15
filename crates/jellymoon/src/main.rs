@@ -14,7 +14,7 @@ use std::time::Duration;
 use std::{env, io};
 
 use jellymoon_core::{DayOptions, Error, PageOptions, ReaderDay, RunOptions, UninstallOptions, user_home};
-use parse::{Command, parse};
+use parse::{Command, Listing, parse};
 
 const USAGE: &str = "usage:
   jellymoon day [--date <YYYY-MM-DD>] [--logs <Claude Code projects dir>] [--skip <folder names, comma separated>]
@@ -39,10 +39,23 @@ const USAGE: &str = "usage:
   jellymoon copy make --repo <folder> [--run <id>]   (a run's own copy of a repo: a git worktree on a branch of its own)
   jellymoon copy clean --run <id> --outcome <completed|failed>   (completed: committed on its branch, the folder removed; failed: kept)
   jellymoon project add --repo <folder> [--date <YYYY-MM-DD>]   (lists a repo's top folder as a project Jellymoon knows, under the folder's last name: a wish can be made for it on a day nothing was typed in it)
+  jellymoon project new <name> [--date <YYYY-MM-DD>]   (makes a new project: a folder of that name in projects in Jellymoon's folder, a git repo with one empty first commit, listed like any other)
   jellymoon project list   (the projects Jellymoon knows: each name and the day it was last used, never a folder)
   jellymoon project forget <name>   (takes that project off the list, and touches nothing else)
   jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay)
 ";
+
+/// A `project` command: what core printed of the list, or of the one project that was added, made or forgotten.
+fn project(listing: Listing) -> Result<String, Failure> {
+    let (home, failed) = (home()?, |e: jellymoon_core::Error| Failure::Run(e.to_string()));
+    let known = match listing {
+        Listing::List => return Ok(format!("{}\n", jellymoon_core::projects(&home).map_err(failed)?)),
+        Listing::Add { repo, date } => jellymoon_core::add_project(&home, &repo, date.as_deref()),
+        Listing::New { name, date } => jellymoon_core::new_project(&home, &name, date.as_deref()),
+        Listing::Forget { name } => jellymoon_core::forget_project(&home, &name),
+    };
+    Ok(format!("{}\n", known.map_err(failed)?))
+}
 
 /// How long the reading call may take. One measured day took 9 seconds.
 const READING_LIMIT: Duration = Duration::from_secs(180);
@@ -187,13 +200,7 @@ fn run() -> Result<String, Failure> {
         Command::MakeCopy { repo, run } => {
             Ok(format!("{}\n", jellymoon_core::make_copy(&home()?, &repo, run.as_deref()).map_err(failed)?))
         }
-        Command::AddProject { repo, date } => {
-            Ok(format!("{}\n", jellymoon_core::add_project(&home()?, &repo, date.as_deref()).map_err(failed)?))
-        }
-        Command::ListProjects => Ok(format!("{}\n", jellymoon_core::projects(&home()?).map_err(failed)?)),
-        Command::ForgetProject { name } => {
-            Ok(format!("{}\n", jellymoon_core::forget_project(&home()?, &name).map_err(failed)?))
-        }
+        Command::Project(listing) => project(listing),
         Command::CleanCopy { run, outcome } => {
             Ok(format!("{}\n", jellymoon_core::clean_copy(&home()?, &run, outcome).map_err(failed)?))
         }

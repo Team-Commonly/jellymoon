@@ -1,7 +1,8 @@
 //! The projects Jellymoon knows (F62, ADR 0020; `docs/development/project.md`): one file in Jellymoon's own
 //! folder, `projects.json`, with a line for each project: its name, its folder and the day it was last used. A
-//! project gets on it when the person names its folder ([`add_project`]) and when a run starts in it ([`used`]),
-//! and leaves by [`forget_project`]. A name has one folder.
+//! project gets on it when the person names its folder ([`add_project`]), when a run starts in it ([`used`])
+//! and when Jellymoon makes it ([`new_project`], `new.rs`), and leaves by [`forget_project`]. A name has one
+//! folder.
 //!
 //! The file is written whole, beside its place and moved there, behind a lock of its own, and read back as
 //! untrusted: it is used only when it is a plain file nobody else can write to and every line of it is one
@@ -9,12 +10,14 @@
 //! there is asked again each time it is used (`offer.rs`). No folder is ever printed: a project is named by its
 //! name, which is what cleaning leaves of itself.
 
+mod new;
 mod offer;
 
 use std::fmt;
 use std::io::{self, ErrorKind};
 use std::path::{Component, Path, PathBuf};
 
+pub use new::new_project;
 pub(crate) use offer::{Led, Offer};
 use serde::{Deserialize, Serialize};
 

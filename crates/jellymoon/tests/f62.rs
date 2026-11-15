@@ -203,9 +203,9 @@ fn forget_removes_the_line_and_touches_nothing_else() {
 }
 
 #[test]
-fn project_is_add_list_or_forget_and_anything_else_is_no_command() {
+fn project_is_add_new_list_or_forget_and_anything_else_is_no_command() {
     let w = heard_world();
-    let cases: [&[&str]; 8] = [
+    let cases: [&[&str]; 9] = [
         &["project"],
         &["project", "add"],
         &["project", "add", "--date", DAY],
@@ -213,7 +213,8 @@ fn project_is_add_list_or_forget_and_anything_else_is_no_command() {
         &["project", "forget", "alpha", "beta"],
         &["project", "list", "alpha"],
         &["project", "list", "--repo", "x"],
-        &["project", "new", "alpha"],
+        &["project", "new"],
+        &["project", "make", "alpha"],
     ];
     for args in cases {
         let ran = w.run(args);
@@ -234,7 +235,8 @@ fn a_stray_argument_to_project_is_answered_in_a_fixed_line_and_never_said_back()
     let w = heard_world();
     let folder = w.at("work").join("strayfolder");
     let (folder, key) = (folder.to_str().unwrap(), support::hub_key());
-    let line = "jellymoon: project is `project add --repo <folder>`, `project list` or `project forget <name>`\n";
+    let line = "jellymoon: project is `project add --repo <folder>`, `project new <name>`, `project list` or \
+                `project forget <name>`\n";
     for stray in [folder, key.as_str(), "--strayoption"] {
         for before in [&["project", "add"][..], &["project", "list"], &["project", "forget", "x"]] {
             let ran = w.run(&[before, &[stray]].concat());
@@ -243,6 +245,23 @@ fn a_stray_argument_to_project_is_answered_in_a_fixed_line_and_never_said_back()
             let said = |part: &str| ran.stderr.contains(part);
             assert!(!said(stray) && !said("stray") && !said(&key[4..]), "{before:?}: {}", ran.stderr);
         }
+    }
+    // An option whose value is missing gets the same line.
+    for missing in [&["project", "add", "--repo"][..], &["project", "add", "--repo", "x", "--date"]] {
+        let ran = w.run(missing);
+        assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.starts_with(line)), (2, "", true), "{}", ran.stderr);
+    }
+    // And so does an argument that is not text, as a stray one and as the name to forget.
+    #[cfg(unix)]
+    for before in [&["project", "list"][..], &["project", "add"], &["project", "forget"], &["project", "forget", "x"]] {
+        use std::os::unix::ffi::OsStrExt;
+        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_jellymoon"));
+        command.args(before).arg(std::ffi::OsStr::from_bytes(b"stray\xff\xfename"));
+        command.current_dir(w.dir.path()).env_clear().envs(w.vars.iter().map(|(name, value)| (name, value)));
+        let ran = command.output().unwrap();
+        let said = String::from_utf8_lossy(&ran.stderr);
+        assert_eq!((ran.status.code(), ran.stdout.len()), (Some(2), 0), "{before:?}: {said}");
+        assert!(said.starts_with(line) && !said.contains("stray"), "{before:?}: {said}");
     }
     assert!(!w.at("jm").exists(), "a command that is not one makes nothing");
 }

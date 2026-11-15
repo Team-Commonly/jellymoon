@@ -303,7 +303,11 @@ max_file_lines = 400
 # and `reader.rs` 13; `run.rs` and `wish.rs` lost 12, their own lookups gone.
 # F56 raised core by 264: what is drawn of a hearing's line, the door a line passes and the one state of a line
 # and a day (`hear/drawn.rs`, 194 lines), and their contract tests in `tests/hear.rs`.
-"crates/jellymoon-core" = 14003
+# F65, a new project, raised core by 239: `project/new.rs`, the name, what is taken, the order and what a failure
+# takes back, is 170; `copy/fresh.rs`, the new repo and its empty first commit, 43; `copy/git.rs` 11 (`init`, and
+# the look for the program on `PATH` by itself); `copy/clean.rs` 10 (who a commit is by, shared with a run's);
+# `copy.rs` and `project.rs` 5.
+"crates/jellymoon-core" = 14242
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -453,7 +457,10 @@ max_file_lines = 400
 # 18 (a wish said aloud with two on offer) and `f62/started.rs` 13 (a run refused at its copy lists nothing).
 # Its CI raised it by 2: `tests/f39/world.rs` runs the tests' git with its own upkeep off, which wrote into a
 # repo a test had just read (macOS).
-"crates/jellymoon" = 23088
+# F65 raised it by 755: its tests are 726 (`tests/f65.rs` 237, `f65/refused.rs` 221, `f65/half.rs` 188,
+# `f65/wished.rs` 80); `tests/f62.rs` 19 (an argument that is not text, a missing value, and `new` in the fixed
+# line); `main.rs` and `parse.rs` 10 (`project new`, and the project commands as one variant).
+"crates/jellymoon" = 23843
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -490,7 +497,8 @@ max_file_lines = 400
 # F62's step, `project` (`smoke/project.rs`, 84 lines), raised it by 93: 6 of them in `smoke/hear.rs`, which
 # forgets the projects the chain's runs listed, so that one project is on offer when it hears.
 # F56's step, `jelly` (in `smoke/hear.rs`), raised it by 33.
-"crates/xtask" = 2304
+# F65's step, `new` (`smoke/new.rs`, 69 lines), raised it by 72.
+"crates/xtask" = 2376
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

@@ -449,7 +449,9 @@ max_file_lines = 400
 # The fixes after F62's gate raised it by 54: `parse.rs` 5 (a wrong `project` command line answered in one fixed
 # line, so no argument is said back), and tests: `tests/f62.rs` 18 (a stray folder or credential), `f62/found.rs`
 # 18 (a wish said aloud with two on offer) and `f62/started.rs` 13 (a run refused at its copy lists nothing).
-"crates/jellymoon" = 23086
+# Its CI raised it by 2: `tests/f39/world.rs` runs the tests' git with its own upkeep off, which wrote into a
+# repo a test had just read (macOS).
+"crates/jellymoon" = 23088
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

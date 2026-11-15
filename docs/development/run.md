@@ -111,6 +111,9 @@ The arguments, in this order, and nothing else:
 
 Since F51 there is no `--no-session-persistence`: the harness keeps the run's session, in its own store.
 
+A follow-up's run has three arguments more, where `--session-id <id>` stands: `--resume <followed session>
+--fork-session --session-id <id>` ("A follow-up's run").
+
 The fixed words are these, and nothing of a wish or a repo is in them: "You are working in a copy of a repo that
 was made for this one wish. You can read and edit files in this folder only. You cannot run commands. Make the
 change the wish asks for, then stop with the state `done`. If you cannot make it without an answer that only the
@@ -528,6 +531,67 @@ a cut-off run's is.
 - Whether the harness, resumed, obeys an answer that tells it to do something the fixed prompt forbids was not
   looked at: the list of what it may do is the same at every start.
 
+## A follow-up's run
+
+A made wish that names the wish it follows ([wish.md](wish.md), "A follow-up") is run by the same command, and
+differs in four things (F53; ADR 0018, decisions 8 and 9, "Found while building F53").
+
+**What it reads first.** Before a copy is made, the run takes the lock a keep and a toss hold (`runs/keep.lock`,
+waited for as a keep waits) and reads the followed wish and its run's record as a look reads them. It holds the
+lock until its own wish names its run, so no keep or toss of the followed work happens in between. Everything
+a follow-up is not made for is refused here again, in the same sentences, since the followed work may have been
+tossed after the follow-up was made; three more refusals are in "What is refused". A refusal leaves no copy, no
+branch and no record, and the wish can be run again once what refused it is mended.
+
+**Where its copy is made.**
+
+| The followed work | The copy is made at | Checked first |
+|---|---|---|
+| waits | the commit the followed run's record names as its `end` | the followed run's branch is at that commit in the repo |
+| was kept | the commit the person's checkout stands on, as any run's | nothing more |
+
+In both the repo `--repo` is a checkout of must be the one the followed run's record names. The commit is the
+follow-up's `start`, so `run show`, `run keep` and `run toss` of a follow-up compare its work with the work it
+follows and never with what was there before both.
+
+**Its session.** The harness is started with a run's arguments and, where `--session-id <id>` stands,
+`--resume <followed session> --fork-session --session-id <id>`: a fork of the session the followed run's record
+names, kept under an id core made for this run. The first line of the stream must name that new id, as any
+run's must; a fork that starts under another id, the followed one too, is stopped and the run has failed (`it
+did not start under the session id it was given`). The follow-up's words are the harness's whole input. The
+followed wish's words are not passed again: the session holds them.
+
+The record says what was asked: `follows`, the followed run's id, and `forked`, true when a fork was asked for
+(example `run-record-follows.json`). A followed record that names no session, or one that is not of the shape
+core makes, is not forked: the run starts as any run does and the record says `forked: false`.
+
+**A session the harness keeps no more** is told as an answer tells it ("An answer"): the harness's own words,
+`No conversation found with session ID`, in an error result's `errors` or on stderr, with a failing exit. The
+record is then written again with a new session id and `forked: false`, and the harness is started once more,
+in the same copy, with a run's own arguments and no fork. How that start ends is how the run ends. It is never
+started a third time.
+
+A harness that does not know `--fork-session` starts no run, in the words of "A run that was never started"
+with that option named, and the follow-up can be run again. A follow-up that asks is answered under its own
+session, never the followed one. The session the harness keeps of a follow-up's copy is left out by the reader
+as every copy's is ([reader.md](reader.md)).
+
+`tests/f53.rs` and `tests/f53/session.rs`, `refused.rs` and `order.rs` hold all of it with a made-up agent that
+records each command line it was started with and what its copy held.
+
+Not closed:
+
+- **The fork was not tried on a real harness in this build.** ADR 0018 measured `--resume <id> --fork-session
+  --session-id <uuid>` by hand; core's whole command line with it was not run.
+- **A fork that reports a lost session is taken to have changed nothing** in the copy before the second start.
+- **A follow-up of kept work is made where the checkout stands**, and nothing checks that the checkout still
+  holds that work: the person may have moved to a branch without it.
+- **A follow-up that changed nothing** says so in a run's words, `where the checkout was`, also when its copy
+  was made at the followed work.
+- **A follow-up that was made and not yet run, whose followed work is then tossed**, cannot be run, and nothing
+  lets a wish with no run go: it stays `working` on the page.
+- With no `--repo`, the two refusals that name a repo say `--repo` of a folder that was found from the logs.
+
 ## What is kept
 
 - **The wish**, in `pages/<day>.wishes.json`, behind the day's lock: `run`, the run's id, and `why`, how it
@@ -538,6 +602,7 @@ a cut-off run's is.
   `outcome` and `why` being null while the run goes (example `crates/jellymoon-core/tests/fixtures/run-record.json`).
   `session` is in the record from its first writing and `question` only in that of a run that asks (example
   `run-record-asks.json`); each is left out when there is none, and a record from before F51 has neither.
+  `follows` and `forked` come last and only in the record of a follow-up's run ("A follow-up's run").
   `pid` is the harness child and `mark` is when that process started, as the system says it. It is written as the tap's files are, and read as one (a plain file
   that only the person can write to).
 - **What the record names of the repo** (F48): `repo`, the git folder the repo's checkouts share, as the system
@@ -1072,6 +1137,10 @@ empty `runs/no-hooks`), and they stay.
 | A `PATH` with no folder named by its full path | nothing was started, and why |
 | No `--repo`, and the one folder, typed in or listed, is inside a repo, or is no repo | that it is not one a run can copy, and `copy make`'s reason, with fixed words where git's own would be |
 | A folder that is not a checkout git can copy | `copy make`'s own line ([copy.md](copy.md)) |
+| A follow-up whose followed wish cannot be followed by now | the sentence a follow-up is not made with ([wish.md](wish.md), "A follow-up") |
+| A follow-up, and a keep or a toss holds the lock for ten seconds, or the lock's file cannot be made | `another keep or toss is at work in this home: nothing was started`, or `the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home: nothing was started` |
+| A follow-up, and the checkout is of another repo than the followed run's record names | `--repo is not a checkout of the repo the followed work is in` |
+| A follow-up of work that waits, and the followed run's branch is not at the commit its record names | `the branch of the work this wish follows is not at the commit its record names, so no copy was made of it` |
 
 ## Not covered
 

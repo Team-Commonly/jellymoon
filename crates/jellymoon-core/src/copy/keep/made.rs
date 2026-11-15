@@ -12,7 +12,13 @@ pub(super) fn merged(at: &At, tip: &str) -> Result<String, Unkept> {
     if !fits::new_enough(&said) {
         return Err(Unkept::Old);
     }
-    let merge = ["merge-tree", "--write-tree", "--no-messages", tip, at.of.named.end];
+    // A follow-up's work on followed work that was kept as a new commit: the two have the followed work's own
+    // commit as the base to merge from, which no history of the branch holds. A git from before 2.40 cannot be
+    // told a base, and merges from the one it finds.
+    let base = at.of.held.filter(|_| fits::at_least(&said, 40)).map(|_| format!("--merge-base={}", at.of.named.start));
+    let mut merge = vec!["merge-tree", "--write-tree", "--no-messages"];
+    merge.extend(base.as_deref());
+    merge.extend([tip, at.of.named.end]);
     let (code, printed) = at.repo.answer(None, &[], &merge, &[], SAID_MAX).ok_or(Unread::Repo)?;
     let tree = printed.split(|byte| *byte == b'\n').next().and_then(|tree| std::str::from_utf8(tree).ok());
     match (code, tree) {

@@ -72,6 +72,7 @@ run's id, by a third run that had opened the old lock file before it was unlinke
 | `toss` | `jellymoon run toss` on the wish whose run the `stop` step cancelled: it says tossed at the commit the run started from, the kept copy and the run's branch are gone and `main` is the one ref left, where it was, the page shows the wish let go, the checkout has no changed file, and a second toss changes nothing |
 | `asks` | a third wish in that repo and a run whose `fake-agent` edits a file and then ends with a question: `jellymoon run` prints `asks` with the question and no star, the page shows the wish needing the person with the same question and no star, the copy is kept with the agent's new file and nothing committed on the run's branch, the checkout has no changed file, and `jellymoon run toss` removes the copy and the branch, leaving `main` the one ref |
 | `answer` | a fourth wish in that repo and a run whose `fake-agent` ends with a question, then `jellymoon run answer` with the answer on its input: `fake-agent` is started again in the run's copy, told to go on with the session (`--resume`), with the answer as its whole input and on no command line, and does its work; the same run prints `completed`, the page shows the wish done with one star and no question, the run's branch holds one commit, the checkout has no changed file, and `jellymoon run toss` removes the branch, leaving `main` the one ref |
+| `follow` | a wish in that repo, on the day after the chain's (a day holds eight made wishes), whose run finishes with one commit, then `jellymoon wish --after` it and a run of the follow-up: the follow-up names the wish and takes its project, `fake-agent` is told to fork the first run's session under a new id (`--resume`, `--fork-session`, `--session-id`), the follow-up's record names the first run and starts at its commit, its branch holds one commit on top of the first's, `run keep` of the follow-up is refused while the first work waits and `run toss` of the first while the follow-up's waits, the checkout has no changed file, and the two are tossed in their order, leaving `main` the one ref |
 | `wish-run` | a repo the chain makes in the system's temporary folder, and a made-up log of something typed in it: `jellymoon wish --run` finds the repo by its name, starts the run through `fake-agent` and exits; `jellymoon page` then shows the wish done with one star, the run's command ends by itself with one commit on the run's branch, and the checkout has no changed file. The step removes the repo |
 | `hear` | the projects the chain's runs listed are forgotten, so one project is on offer; then a made-up log of something typed in one folder, and `jellymoon hear` fed a hold of a second, final words, the tick that starts their four seconds and one four seconds later: the words are shown as a heard wish for 4000 ms with a project, the last line names the wish that was made, and `jellymoon page` shows that wish working in the same words. No key, no sound and no run |
 | `project` | a repo the chain makes in the system's temporary folder, in which nothing is typed: `jellymoon project add` lists it under its last name, `jellymoon project list` names it, `jellymoon wish --run` over logs that are not there finds the repo by the list and starts the run through `fake-agent`, the run's command ends by itself with one commit on the run's branch, `jellymoon project forget` takes the project off the list, and nothing these print names the repo's folder. The step removes the repo |
@@ -80,9 +81,9 @@ run's id, by a third run that had opened the old lock file before it was unlinke
 
 A made-up run starts each program with no variable of the caller's: a scratch `HOME`, `CLAUDE_CONFIG_DIR`,
 `JELLYMOON_HOME`, `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` in the temporary home, and `JELLYMOON_CLAUDE` naming the copy of
-`fake-claude` there. It never runs Claude Code and never reads a real log. The `copy`, `run`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`,
+`fake-claude` there. It never runs Claude Code and never reads a real log. The `copy`, `run`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `follow`,
 `wish-run` and `project` steps alone are given the caller's `PATH`, to find git, with an empty global git config and the system's switched off.
-The `run`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `wish-run` and `project` steps name their harness, a copy of `fake-agent`, with
+The `run`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `follow`, `wish-run` and `project` steps name their harness, a copy of `fake-agent`, with
 `JELLYMOON_CLAUDE`, so no harness on
 that `PATH` is looked for.
 
@@ -93,7 +94,7 @@ that `PATH` is looked for.
   it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
   logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`,
-  `no-logs`, the delivery steps, `wish`, `copy`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `wish-run`, `hear`, `project` and `uninstall` are
+  `no-logs`, the delivery steps, `wish`, `copy`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `follow`, `wish-run`, `hear`, `project` and `uninstall` are
   left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states
   and exit codes only: a failed run says how many bytes a program printed, never what. Its sixth step is `run`

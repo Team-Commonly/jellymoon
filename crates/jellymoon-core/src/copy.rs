@@ -63,6 +63,33 @@ pub(crate) struct MadeFrom {
     pub commit: String,
 }
 
+/// What a follow-up's copy is made on (F53; ADR 0018, decision 8): the repo the followed run's record names,
+/// that run, and the commit its work is at while it waits. None of a commit: the work was kept, and the copy is
+/// made where the person's checkout stands, as any run's is.
+pub(crate) struct Base<'a> {
+    pub repo: &'a Path,
+    pub run: &'a str,
+    pub at: Option<&'a str>,
+}
+
+impl Base<'_> {
+    /// The commit the copy is made at, when it is not the checkout's. Refused: a checkout of another repo than
+    /// the record names, and a followed run's branch that is not at the commit the record names for it.
+    fn commit(&self, person: &Repo, shared: &Path) -> Result<Option<String>, Error> {
+        if !work::same(self.repo, shared) {
+            return Err(refused("--repo is not a checkout of the repo the followed work is in"));
+        }
+        let Some(at) = self.at else { return Ok(None) };
+        if work::tip(person, self.run).ok().as_deref() != Some(at) {
+            return Err(refused(
+                "the branch of the work this wish follows is not at the commit its record names, so no copy was \
+                 made of it",
+            ));
+        }
+        Ok(Some(at.to_string()))
+    }
+}
+
 /// How a run ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -156,7 +183,7 @@ fn claim(runs: &Path, given: Option<&str>) -> Result<String, Error> {
 /// Makes a copy of the repo at `repo` for a run: a worktree of the commit the person's checkout is on, on the new
 /// branch `jellymoon/run-<id>`. Nothing of the person's checkout, index or `HEAD` is written.
 pub fn make_copy(home: &Path, repo: &Path, run: Option<&str>) -> Result<RunCopy, Error> {
-    make(home, repo, run, false, false).map(|(copy, ..)| copy)
+    make(home, repo, run, false, false, None).map(|(copy, ..)| copy)
 }
 
 /// [`make_copy`] for a run. A folder that was not `typed` by the person was read from a session log: no refusal,
@@ -164,8 +191,14 @@ pub fn make_copy(home: &Path, repo: &Path, run: Option<&str>) -> Result<RunCopy,
 /// comes the system's lock on `runs/<id>/start.lock`, taken before anything of the copy was made: the command
 /// holds it for as long as it lives, so what a command that was killed left is known from what one still at
 /// work has (`hold.rs`, `run/left.rs`). And with it comes what the copy was made from, as git said it just now.
-pub(crate) fn copy_of(home: &Path, repo: &Path, typed: bool) -> Result<(RunCopy, File, MadeFrom), Error> {
-    let (copy, held, from) = make(home, repo, None, !typed, true)?;
+/// A follow-up's copy is made `on` the work it follows.
+pub(crate) fn copy_of(
+    home: &Path,
+    repo: &Path,
+    typed: bool,
+    on: Option<Base>,
+) -> Result<(RunCopy, File, MadeFrom), Error> {
+    let (copy, held, from) = make(home, repo, None, !typed, true, on)?;
     held.map(|held| (copy, held, from)).ok_or_else(|| refused("the copy's own lock was not taken"))
 }
 
@@ -175,6 +208,7 @@ fn make(
     run: Option<&str>,
     found: bool,
     of_run: bool,
+    on: Option<Base>,
 ) -> Result<(RunCopy, Option<File>, MadeFrom), Error> {
     if !repo.is_absolute() {
         return Err(refused("--repo must be a full path, from the root"));
@@ -197,8 +231,14 @@ fn make(
         return Err(refused("--repo is not the top of a git repo: by its real path it is a folder inside one"));
     }
     let person = git.open(Path::new(own)).map_err(refused)?;
-    let base = person.ask(None, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).map_err(refused)?;
-    let base = base.ok_or_else(|| refused("--repo has no commit yet, so there is nothing to copy"))?;
+    let base = match on.map(|on| on.commit(&person, Path::new(shared))).transpose()?.flatten() {
+        Some(followed) => followed,
+        None => {
+            let head =
+                person.ask(None, &[], &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]).map_err(refused)?;
+            head.ok_or_else(|| refused("--repo has no commit yet, so there is nothing to copy"))?
+        }
+    };
     // git reads every worktree of a repo while it adds one, and fails on one half made or half removed (`hold.rs`).
     let _held = hold::held(&at.lock(), true, None).map_err(Error::Store)?;
     let run = claim(&at.runs, run)?;

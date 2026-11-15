@@ -9,13 +9,16 @@ use std::collections::HashSet;
 use std::fmt;
 use std::path::Path;
 
+mod done;
+
+use done::done;
 use serde::{Deserialize, Serialize};
 
 use super::obeyed::{modules, named};
 use super::show::{Asked, NAME_MAX, found, not_cores, unread_words};
-use super::{RunOptions, WorkState, finished, place, record, refused};
+use super::{RunOptions, WorkState, finished, follow, place, record, refused};
 use crate::Error;
-use crate::copy::{self, How, Keep, LISTED, Named, Note, Touched, Unkept};
+use crate::copy::{self, Keep, LISTED, Named, Note, Touched, Unkept};
 use crate::still::statement;
 
 /// Why a keep or a toss did not have the lock both hold (`runs/keep.lock`): another holds it, or it is not to be had.
@@ -114,9 +117,15 @@ fn keep(home: &Path, options: &RunOptions, ask: bool, yes: Yes) -> Result<Kept, 
         Err(busy) if ask => return Ok(unfit(run, wish, busy, Vec::new())),
         Err(busy) => return Err(refused(words(&run, busy))),
     };
+    // A follow-up is kept after the work it follows (ADR 0018, decision 9).
+    let held = match follow::keep_first(home, &found.made, &run, &found.record) {
+        Ok(held) => held,
+        Err(why) if ask => return Ok(Kept { why, ..unfit(run, wish, Unkept::Busy, Vec::new()) }),
+        Err(why) => return Err(refused(why)),
+    };
     let named = Named { repo: &repo, start: &start, end: &end };
     let was = was.as_ref().map(|was| (was.0.as_str(), was.1.as_str()));
-    let of = |folder| Keep { home, folder, run: &run, named: &named, was, ask };
+    let of = |folder| Keep { home, folder, run: &run, named: &named, was, ask, held: held.as_deref() };
     if state == WorkState::Kept {
         let Some((commit, onto)) = was else { return Err(not_cores(&run)) };
         // A keep that was cut off after the record said kept left the run's branch: it goes now, unless the
@@ -250,49 +259,6 @@ fn judge(files: &[Touched], yes: Yes, works: bool, settings: &mut Vec<String>) -
     }
     let other = works && matches!(yes, Yes::To(_)) && asked.iter().any(|name| !found.contains(*name));
     if unasked || other { Err(Unkept::Settings) } else { Ok(()) }
-}
-
-/// What a keep did, or would do. `own` is whether what landed is the run's own commit.
-fn done(run: &str, how: How, ask: bool, own: bool) -> String {
-    match (how, ask) {
-        (How::Forward, false) => format!("run {run} was kept: the branch was moved forward to the run's commit"),
-        (How::Forward, true) => format!("a keep of run {run} would move the branch forward to the run's commit"),
-        (How::Joined, false) => {
-            format!("run {run} was kept: one new commit on top of the branch's own holds its work and the run's")
-        }
-        (How::Joined, true) => format!(
-            "a keep of run {run} would land one new commit on top of the branch's own, holding its work and the run's"
-        ),
-        (How::Held, false) => {
-            format!("run {run} was kept: the branch held the run's work already, and nothing was landed")
-        }
-        (How::Held, true) => {
-            format!("a keep of run {run} would land nothing: the branch holds the run's work already")
-        }
-        (How::Finished, false) => {
-            format!("run {run} was kept: a keep that was cut off had landed its work, and this one finished it")
-        }
-        (How::Finished, true) => {
-            format!("a keep of run {run} would finish one that was cut off after it had landed the work")
-        }
-        // Only a keep that took the step finds the checkout moved: nothing is asked that would.
-        (How::Elsewhere, _) => format!(
-            "run {run} was kept, on another branch than the keep began on: the checkout was moved to the branch \
-             that `onto` names while the keep was at work, and git landed the work there"
-        ),
-        (How::Loose, _) => format!(
-            "run {run} was kept, on no branch that is named here: while the keep was at work the checkout's HEAD \
-             was detached, or moved to a branch whose name Jellymoon does not write down or the repo does not \
-             list under that spelling, and git landed the work there; the run's branch is left and still holds \
-             the run's own commit, {}: `kept` is its id",
-            if own {
-                "which is the commit git landed"
-            } else {
-                "and the new commit the keep made to join the work with the person's commits is named by nothing \
-                 of Jellymoon's"
-            }
-        ),
-    }
 }
 
 /// The words of the refusals of the home, the config, the branch's name and a file's name: no run's id in them.

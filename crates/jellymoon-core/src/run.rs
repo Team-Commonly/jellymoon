@@ -21,6 +21,7 @@ mod cap;
 mod child;
 mod dead;
 mod end;
+mod follow;
 mod keep;
 mod left;
 mod never;
@@ -32,6 +33,7 @@ mod stop;
 mod stream;
 mod toss;
 mod waits;
+mod words;
 
 use std::fmt;
 use std::fs::{self, File};
@@ -45,6 +47,7 @@ pub use apart::{Started, run_apart};
 pub(crate) use asks::kept as kept_question;
 pub(crate) use end::bury;
 use end::{lock_file, settle};
+pub(crate) use follow::project as followed;
 pub use keep::{KeepOptions, Kept, keep_run};
 pub(crate) use left::tidy;
 pub(crate) use place::{plain, theirs};
@@ -55,6 +58,7 @@ pub use show::{FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, sh
 pub use stop::stop_run;
 pub use toss::{Tossed, toss_run};
 pub use waits::{Waiting, Waits, WorkDone, WorkTap, stands, waiting, waits, work_tapped};
+use words::{asking, by_now, cancelled, cut, cut_late, failed, finished, going, had, no_wish};
 
 use crate::busy::{self, or_test};
 use crate::call::harness_of;
@@ -156,73 +160,6 @@ fn refused(why: impl Into<String>) -> Error {
     Error::Run(why.into())
 }
 
-fn had(wish: &str, run: &str) -> Error {
-    refused(format!("wish {wish} has had its run, {run}: a made wish gets one run"))
-}
-
-fn going(run: &str) -> String {
-    format!("run {run} is going, in a copy of the repo")
-}
-
-/// How the line of a run that did not finish ends when it is written, and how it ends when it is printed after
-/// the copy has gone: a failed copy past the newest five is removed, and so is the copy of a run that was tossed.
-const COPY_KEPT: &str = ": its copy is kept and no star was added";
-const COPY_GONE: &str = ": its copy is no longer kept, and no star was added";
-
-/// A run's line as it holds now: of a copy whose folder is not standing it is not said that it is kept.
-fn by_now(home: &Path, run: &str, why: String) -> String {
-    match why.strip_suffix(COPY_KEPT).filter(|_| copy::no_folder(home, run)) {
-        Some(head) => format!("{head}{COPY_GONE}"),
-        None => why,
-    }
-}
-
-fn failed(run: &str, kind: &str) -> String {
-    format!("run {run} did not finish ({kind}){COPY_KEPT}")
-}
-
-fn cancelled(run: &str) -> String {
-    format!("run {run} was cancelled by a stop{COPY_KEPT}")
-}
-
-/// The line of a run that asks. It says what holds of its copy and its branch for as long as it asks.
-fn asking(run: &str) -> String {
-    format!("run {run} asks a question: its copy is kept as it is, and nothing was committed")
-}
-
-fn no_wish(day: &str) -> Error {
-    refused(format!("the page of {day} has no made wish of that id; a made wish's id is m1 to m8"))
-}
-
-fn cut(run: &str) -> String {
-    format!("run {run} was cut off before it ended{COPY_KEPT}")
-}
-
-/// The line of a run that was cut off with its copy gone: after it was committed and before the end was in the
-/// record, or removed by hand, with nothing committed. It says no more than holds for both, and of the branch
-/// only where the work was put: a branch can be removed by hand, and a look asks git nothing.
-fn cut_late(run: &str) -> String {
-    let branch = copy::branch(run);
-    format!(
-        "run {run} was cut off before it ended: no copy of it is kept, what was committed of it was on the branch \
-         {branch}, and no star was added"
-    )
-}
-
-/// The line of a run that finished. Both forms say what git was last asked as the run ended (`end::settle`,
-/// `copy/clean.rs`): the branch took the run's one commit, or was looked at once more, only while it still named
-/// the commit the copy was made from, which is where the person's checkout was when the run started. Neither says
-/// where the branch is after that check: until the copy's folder is removed, and ever after, a hand can move it,
-/// and a look goes by what the repo says then (`show.rs`).
-fn finished(run: &str, changed: bool) -> String {
-    let branch = copy::branch(run);
-    if changed {
-        format!("run {run} finished: its work is one commit on the branch {branch}")
-    } else {
-        format!("run {run} finished and changed nothing: the branch {branch} is where the checkout was")
-    }
-}
-
 /// Starts the one run of a made wish and waits for it to end. Refused, with no copy made and the wish as it was: a
 /// wish that is not there or has had its run, a `PATH` with no full path in it, no one folder for the wish, a
 /// folder that is not a checkout git can copy. With no harness, or one too old, nothing is started either.
@@ -248,7 +185,7 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
         Err(e) => return Err(e),
     };
     // Before anything is made: a harness that would look for its programs in the copy is not started.
-    let mut command = harness_of(harness).map_err(|e| refused(format!("nothing was started: {e}")))?;
+    harness_of(harness.clone()).map_err(|e| refused(format!("nothing was started: {e}")))?;
     // First what killed commands left: their agents are ended before the runs going are counted, so none is at
     // work beside this run's own, and a copy no wish names is taken back (`left.rs`). It is done before the
     // folder is looked up, so none of its waits stands between that lookup and git opening the folder.
@@ -257,14 +194,19 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     // A test's build can wait here, with the folder looked up and nothing yet asked of git.
     busy::pause("JELLYMOON_TEST_PLACE_WAIT_MS");
     cap::room(home, cap::AGAIN)?;
-    let made = copy::copy_of(home, &repo, options.repo.is_some()).map_err(|e| from.uncopied(e, &day))?;
+    // A follow-up: the work it follows is read behind the lock a keep and a toss hold, which is held until the
+    // wish names its run, so that work is neither kept nor tossed between this look and the copy made at it.
+    let on = follow::on(home, &day, &wish)?;
+    let base = on.as_ref().map(follow::On::base);
+    let made = copy::copy_of(home, &repo, options.repo.is_some(), base).map_err(|e| from.uncopied(e, &day))?;
     // The copy's start lock is held until this command ends: what a killed command left is known by it.
     let (copy, held, from) = made;
     // Where the run started, kept as git said it: the run's branch must still be there at the run's end. And
     // the session's id, which is core's: made here, and written in the record before the harness is started.
     let (began_at, session) = (from.commit.clone(), asks::fresh());
     // The lock is taken before the wish names the run, so a wish never names a run that nothing holds.
-    let taken = start(home, (&day, &wish.id), &copy.run, from, &session);
+    let taken = start(home, (&day, &wish.id), &copy.run, from, (&session, on.as_ref().map(follow::On::named)));
+    let fork = on.and_then(follow::On::session);
     let lock = match taken {
         Ok(lock) => lock,
         Err(e) => {
@@ -275,11 +217,9 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     };
     // Every check a run makes of a repo is passed: it is a project Jellymoon knows from now on (`project.rs`).
     project::used(home, &repo, &wish.project, &day);
-    let expect = lined(&mut command, &copy.folder, session, false);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
-    let (told, stop) = (|pid| record::child(home, &copy.run, pid), || stop::asked(home, &copy.run));
-    let began = || record::began(home, &copy.run);
-    let ended = child::run(command, format!("{}\n", wish.said), limit, expect, told, began, stop);
+    let go = follow::Go { home, run: &copy.run, folder: &copy.folder, said: format!("{}\n", wish.said), limit };
+    let ended = go.started(harness, session, fork.as_deref());
     let never = match &ended {
         Err(_) => Some(never::UNSTARTABLE.to_string()),
         Ok(ended) => ended.old.map(never::old),
@@ -308,32 +248,50 @@ fn let_go(home: &Path, run: &str, lock: File) {
     }
 }
 
-/// Gives the harness a run's whole command line, in the copy's folder, and returns what its stream must then say.
-/// A run that is answered has the same one, with `--resume` where `--session-id` stands: the harness goes on
-/// with the session it kept under that id (`answer.rs`).
-fn lined(command: &mut Command, folder: &str, session: String, resumed: bool) -> stream::Expect {
-    let under = if resumed { "--resume" } else { "--session-id" };
-    command.current_dir(folder).args(ARGS).args([under, &session, "--json-schema", asks::SCHEMA]);
-    command.args(AFTER).arg(PROMPT);
-    stream::Expect { session, schema: true, resumed }
+/// The session a harness is started with: a new one, the one it kept under the run's id, which an answer goes
+/// on with (`answer.rs`), or a fork of the session another run's harness kept, under the run's own new id.
+#[derive(Clone, Copy)]
+enum Session<'a> {
+    New,
+    Kept,
+    Fork(&'a str),
 }
+
+/// Gives the harness a run's whole command line, in the copy's folder, and returns what its stream must then say.
+/// A run that is answered has the same one, with `--resume` where `--session-id` stands; a follow-up's has
+/// `--resume` with the followed run's session and `--fork-session` before its own `--session-id` (`follow.rs`).
+fn lined(command: &mut Command, folder: &str, session: String, from: Session) -> stream::Expect {
+    command.current_dir(folder).args(ARGS);
+    match from {
+        Session::New => command.args(["--session-id", &session]),
+        Session::Kept => command.args(["--resume", &session]),
+        Session::Fork(of) => command.args(["--resume", of, "--fork-session", "--session-id", &session]),
+    };
+    command.args(["--json-schema", asks::SCHEMA]).args(AFTER).arg(PROMPT);
+    stream::Expect { session, schema: true, resumed: !matches!(from, Session::New) }
+}
+
+/// The session a run is started under, and of a follow-up the run it follows and whether it forks its session.
+type Under<'a> = (&'a str, Option<(&'a str, bool)>);
 
 /// Takes the run's lock, when fewer than three runs go, writes its record, and has the wish name the run, behind
 /// the day's lock: all of it behind the lock the runs are counted behind (`cap.rs`). A wish that names a run
 /// already has had its run: this one is refused, and before it is counted as a run.
-fn start(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, session: &str) -> Result<File, Error> {
+fn start(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, under: Under) -> Result<File, Error> {
     let free = || match wish::kept_of(home, day)?.into_iter().find(|kept| kept.id == wish).and_then(|kept| kept.run) {
         Some(first) => Err(had(wish, &first)),
         None => Ok(()),
     };
-    cap::claim(home, run, free, || name(home, (day, wish), run, from, session))
+    cap::claim(home, run, free, || name(home, (day, wish), run, from, under))
 }
 
 /// Writes the run's record and has the wish name the run, with the run's lock held. The record names the repo and
 /// the commit the copy was made from, from its first writing: before the harness is started, and so long before
 /// the copy's own record, which names the repo too, is removed with a finished run's copy. And it names the
-/// session the harness is then started under (ADR 0018, decision 6).
-fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, session: &str) -> Result<(), Error> {
+/// session the harness is then started under (ADR 0018, decision 6), and of a follow-up the run it follows and
+/// whether that session is a fork of that run's (decision 8).
+fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, under: Under) -> Result<(), Error> {
+    let (session, follows) = under;
     let started = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
     let record = Record {
         wish: wish.to_string(),
@@ -355,6 +313,8 @@ fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, sessi
         tossed: None,
         session: Some(session.to_string()),
         question: None,
+        follows: follows.map(|(followed, _)| followed.to_string()),
+        forked: follows.map(|(_, forked)| forked),
     };
     record::write(home, run, &record)?;
     wish::change(home, day, wish, Duration::ZERO, |wish| match &wish.run {

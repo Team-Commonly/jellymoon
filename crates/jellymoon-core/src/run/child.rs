@@ -51,7 +51,7 @@ pub(super) struct Ended {
 }
 
 /// The options of a run's command line that a Claude Code can be too old for, in the order they are looked for.
-const NEWER: [&str; 4] = ["--restricted", "--json-schema", "--session-id", "--resume"];
+const NEWER: [&str; 5] = ["--restricted", "--json-schema", "--session-id", "--resume", "--fork-session"];
 
 /// Starts the command with `said` as its whole input, and waits for it to end, `limit` at most. Its stream is
 /// read against `expect`. `started` is told

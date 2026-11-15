@@ -462,6 +462,24 @@ When the branch is still where the run started, what lands is the run's own comm
 author is who the run's copy found the person to be when the run ended, or Jellymoon's fallback name when the
 repo named nobody then ([copy.md](copy.md)).
 
+## A follow-up's work
+
+A follow-up's branch stands on the work it follows ([run.md](run.md), "A follow-up's run"), so the two are kept
+in order (ADR 0018, decision 9). With the keeps' lock held, before anything of the repo is asked, a keep of a
+follow-up reads the record of the run it follows (`follows` in its own record): while that work waits the keep
+is refused and names the wish to keep first. `--ask` answers `fits: false` with the same sentence in `why`.
+Nothing is written either way. Once the followed work was kept, or when the follow-up was made after it was
+kept, the follow-up is kept as any work is.
+
+**Followed work that was kept as a new commit.** When the person's branch had moved on, a keep joins the work
+in a commit of its own, and the follow-up's branch still holds the followed work under the run's commit. The
+keep of the follow-up then takes the commit the followed work was kept as for the run's start when it asks
+whether the person's branch holds that start, and gives git the run's real start as the base of the merge
+(`merge-tree --merge-base`, git 2.40 and later), so only what the follow-up adds is joined. On a git from 2.38
+to before 2.40 git finds the base itself, which is the commit before the followed work: a follow-up that
+changed a line the followed work changed is then refused as not fitting. `tests/f53/order.rs` keeps a follow-up
+both ways and reads the files the last commit changed.
+
 ## Every refusal
 
 Each ends the command with exit 1 and one line on stderr. With `--ask`, the ones marked are printed in `why`
@@ -474,6 +492,7 @@ instead. `<unchanged>` stands for `the work of run <id> was not kept, and nothin
 | the run made no commit | `run <id> changed nothing: there is no work of it to keep` | refused |
 | the record names no commits | `the record of run <id> is from before a run's record named its commits: its work is shown, and is not kept by Jellymoon` | refused |
 | the record's `kept` and `onto` are not an id and a branch's whole name, or `work` says kept with neither | `the record of run <id> is not one Jellymoon wrote for this wish` | refused |
+| the work follows work that still waits ("A follow-up's work") | `the work of run <id> follows the work of wish <wish>, which still waits: keep wish <wish> first, and nothing was changed` | printed |
 | another keep, or a toss ([toss.md](toss.md)), holds the lock | `another keep or toss is at work in this home: <unchanged>` | printed |
 | the lock could not be made or taken | `the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home: <unchanged>` | printed |
 | the config names what cannot be switched off | ``the repo's git config names a filter, a merge driver or a transport that cannot be switched off on git's command line: there are too many of them, or one has `=` in its name: <unchanged>`` | printed |

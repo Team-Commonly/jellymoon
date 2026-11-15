@@ -53,6 +53,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "asks", only: Only::Synthetic, run: super::asks::asks },
     // A run that asks, answered (F52): a fourth in that repo, which then finishes, and a toss of its work.
     Step { name: "answer", only: Only::Synthetic, run: super::answer::answer },
+    // A follow-up (F53): a wish in that repo, one made after it and run on its work, and both tossed.
+    Step { name: "follow", only: Only::Synthetic, run: super::follow::follow },
     // A run started apart (F41), in a repo found by its name in a made-up log. Not with --real, as `wish`.
     Step { name: "wish-run", only: Only::Synthetic, run: super::apart::wish_run },
     // A wish said aloud (F55), as events on a command's input. Not with --real, as `wish`.

@@ -13,7 +13,9 @@ use crate::color::Color;
 
 pub use bounds::{MAX_THEME_BYTES, RANGES};
 pub use load::{Loaded, ThemeError};
-pub use own::{CARET_FLOOR, CHIP_INK_FLOOR, CHOSEN_FILL_FLOOR, CHOSEN_INK_FLOOR, HINT_FLOOR, RING_FLOOR, TYPED_FLOOR};
+pub use own::{
+    CARET_FLOOR, CHIP_INK_FLOOR, CHOSEN_FILL_FLOOR, CHOSEN_INK_FLOOR, HINT_FLOOR, QUOTED_FLOOR, RING_FLOOR, TYPED_FLOOR,
+};
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Theme {
@@ -63,6 +65,8 @@ pub struct Palette {
     pub cheek: Color,
     pub bubble: Color,
     pub bubble_ring: Color,
+    /// Someone else's words in a bubble: an ink of their own, so they are never read as the scene's.
+    pub quoted: Color,
     pub tag: Color,
     pub dimmed: Hue,
     pub tape_date: Stripe,

@@ -499,7 +499,7 @@
         "once a second the jellyfish is drawn again from what core keeps, off the window's thread, as the page's look is"
       ],
       "test": "cargo test -p jellymoon-app --test f57",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F56"
       ]

@@ -122,8 +122,9 @@ fn without_run_no_harness_is_started_and_with_no_harness_the_wish_is_kept_and_th
     w.vars.push(("PATH", w.at("empty").into()));
     let mut events = hold(0, SAID);
     events.push(tick(5000));
-    let why = "finding Claude Code: no `claude` program in PATH, ~/.local/bin, ~/.claude/local; install Claude \
-               Code, or name the program with JELLYMOON_CLAUDE";
+    // A sentence of the hearing's own, short enough for the bubble: where the program was looked for is what
+    // `jellymoon wish --run` says.
+    let why = "the wish is kept, but no run was started: no `claude` program was found (JELLYMOON_CLAUDE names one)";
     let printed = w.hear(&["--run"], &events);
     assert_eq!(printed[3..], [with(cannot(why), "made", json!("m1"))]);
     assert_eq!(w.made_wishes(), Some(json!([made("m1", SAID, "alpha")])), "the wish is kept as it was made");

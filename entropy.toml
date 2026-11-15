@@ -317,7 +317,10 @@ max_file_lines = 400
 # and a day (`hear/drawn.rs`, 194 lines), and their contract tests in `tests/hear.rs`.
 # F63 raised core by 49: the page of a day with no session logs (`no_logs.rs`, 26), `read.no_logs` and its
 # example's round trip (`shapes.rs`, `tests/shapes.rs`), and `any_made` in `wish.rs`.
-"crates/jellymoon-core" = 14491
+# F57 raised core by 72: a line's words and project held to what a person sees, a hearing's own refusals as a
+# list with the short sentence for no harness, and their tests in `tests/hear.rs`; the order of states written
+# once took lines away.
+"crates/jellymoon-core" = 14563
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -475,7 +478,8 @@ max_file_lines = 400
 # The fixes after F53's gate raised it by 269, all tests: `tests/f53/gate.rs` 254, a case for each finding;
 # 9 more in `tests/f53.rs`, `f53/order.rs` and `f53/refused.rs`; 5 in `fake_agent/follow.rs` (a fork that works
 # before it says its session is lost); 1 in `tests/f46/refused.rs`.
-"crates/jellymoon" = 24489
+# F57 raised it by 1: the comment on the short sentence for no harness in `tests/f55/started.rs`.
+"crates/jellymoon" = 24490
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -514,7 +518,8 @@ max_file_lines = 400
 # F53's step, `follow` (`smoke/follow.rs`, 99 lines), raised it by 102.
 # F56's step, `jelly` (in `smoke/hear.rs`), raised it by 33.
 # F63 raised it by 12: the `project` step asks `jellymoon page` over logs that are not there.
-"crates/xtask" = 2418
+# F57 raised it by 8: the `jelly` step also holds what each window is asked for.
+"crates/xtask" = 2426
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -586,7 +591,11 @@ max_file_lines = 400
 # (`layout/edge.rs`, 153), their tests (`tests/edge.rs`, 255), and the `quoted` role.
 # F63 raised the kit by 76: the options of an entry past the sixth are counted, `+N more` (`layout/entry.rs`
 # and `PieceKind::More`, 21), and its tests 55 (`tests/entry_layout.rs`).
-"crates/sticker-kit" = 8439
+# F57 raised the kit by 723: the view that paints an edge scene's window (`draw/edge.rs`), the character's seven
+# poses in `art.rs`, `place_pair`, the range an edge text is drawn in, the `quoted` ink and its floor, a box
+# clipped to another, an entry answered with its window closed, and their tests (`tests/edge_draw.rs`,
+# `tests/edge_parts.rs`, and more of `tests/edge.rs` and `tests/text.rs`).
+"crates/sticker-kit" = 9162
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -653,7 +662,10 @@ max_file_lines = 400
 # F63 raised the app by 423: its tests are 394 (`tests/f63.rs`, `tests/f63/`, a world with nothing typed in
 # `tests/support/wished.rs`, and what `tests/f37.rs` and `tests/f42/notes.rs` now expect); the page of a day with no logs in `today.rs` and its footer in `scene.rs` 32;
 # `wishing.rs` lost 3, the entry's names now core's own.
-"app" = 8437
+# F57 raised the app by 967: the options of the two windows as data (`popup.rs`), the two windows opened
+# (`jellyfish.rs`), the app's windows as one thing (`shell.rs`), the page's view kept past its window in
+# `window.rs`, one reader of a size in `lib.rs`, and their tests (`tests/f57.rs`, `tests/f57/window.rs`).
+"app" = 9404
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

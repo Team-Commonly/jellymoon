@@ -70,14 +70,22 @@ pub fn jelly(world: &World) -> Result<String, String> {
         runs.filter(|run| run["role"] == "row_main").filter_map(|run| run["text"].as_str()).collect();
     let said = words.join(" ") == SAY;
     let full = of("ring").any(|ring| ring["ring"] == 1.0);
+    // What each window is asked for (F57): a pop-up one sees through that never has the keys.
+    let asked = |window: &serde_json::Value| {
+        let opens = &window["opens"];
+        opens["kind"] == "pop_up" && opens["focus"] == false && opens["see_through"] == true
+    };
+    let pop_ups = of("window").all(asked);
     let yes = |so: bool| if so { "yes" } else { "no" };
     let found = format!(
-        "{} lines, windows {}, the jellyfish holds the wish up {}, the bubble says its words {}, a full ring {}",
+        "{} lines, windows {}, each asked as a pop-up that takes no keys {}, the jellyfish holds the wish up {}, \
+         the bubble says its words {}, a full ring {}",
         pieces.len(),
         windows.join(" and "),
+        yes(pop_ups),
         yes(holds),
         yes(said),
         yes(full)
     );
-    if windows == ["jelly", "bubble"] && holds && said && full { Ok(found) } else { Err(found) }
+    if windows == ["jelly", "bubble"] && pop_ups && holds && said && full { Ok(found) } else { Err(found) }
 }

@@ -27,7 +27,7 @@ pub mod theme;
 pub mod draw;
 
 pub use color::Color;
-pub use edge::{Corner, EDGE_GAP, EDGE_MARGIN, Edge, EdgeMood, Said, Tone, place_beside, place_corner};
+pub use edge::{Corner, EDGE_GAP, EDGE_MARGIN, Edge, EdgeMood, EdgeText, Tone, place_beside, place_corner, place_pair};
 pub use fonts::BundledMeasure;
 pub use geom::{Rect, Viewport};
 pub use layout::{

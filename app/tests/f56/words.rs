@@ -137,3 +137,19 @@ fn every_sentence_of_core_s_for_the_ear_is_drawn_whole() {
         assert_eq!(shown.roles(), ["body"]);
     }
 }
+
+// F56's review, note 6: every sentence a hearing has of its own to refuse with, the ear's among them, is held
+// whole by the bubble in each built-in theme. One that grows past it fails here, and is shortened in core.
+#[test]
+fn every_sentence_a_hearing_refuses_with_is_drawn_whole() {
+    let sentences = jellymoon_core::Hearing::refusals();
+    assert!(sentences.len() >= EarCannot::ALL.len() + 6, "{sentences:?}");
+    assert!(EarCannot::ALL.iter().all(|why| sentences.contains(&why.says())), "the ear's are among them");
+    for sentence in sentences {
+        for theme in ["sticker", "plain"] {
+            let shown = crate::jelly::drawn_in(&cannot(sentence), theme);
+            assert_eq!(shown.text("body"), sentence, "{theme}");
+            assert!(!shown.text("body").contains('…'), "{theme}: {sentence}");
+        }
+    }
+}

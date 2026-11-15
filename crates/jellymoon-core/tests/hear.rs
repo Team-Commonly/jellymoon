@@ -90,6 +90,12 @@ fn the_doc_shows_every_line_of_the_fixtures_and_every_sentence() {
         let name = serde_json::to_string(&why).unwrap();
         assert!(doc.contains(why.says()) && doc.contains(name.trim_matches('"')), "{name}");
     }
+    // Every sentence of a hearing's own, the ear's among them, each once in the list.
+    let own = jellymoon_core::Hearing::refusals();
+    assert_eq!(own.len(), EarCannot::ALL.len() + 6);
+    for (at, sentence) in own.iter().enumerate() {
+        assert!(doc.contains(sentence) && !own[..at].contains(sentence), "{sentence}");
+    }
 }
 
 #[test]
@@ -176,6 +182,30 @@ fn only_a_line_a_hearing_prints_is_read_as_one() {
     );
     assert!(!read(&heard("make it", "alpha", 9).replace("heard", "listening")), "a project while listening");
     assert!(!read(&heard("make it", "alpha", 9).replace("heard", "cannot")), "words with a refusal");
+    let worded = line("cannot", "no", "").replace(r#""words":"""#, r#""words":"make it""#);
+    assert!(worded.contains("make it") && !read(&worded), "words with a refusal, and nothing else that is not its");
+}
+
+// F56's review, notes 5 and 9: what the door asks of words and a project, and a line's one line.
+#[test]
+fn a_heard_wish_is_of_words_and_a_project_a_person_sees_and_a_line_has_no_line_s_end_inside() {
+    let quiet = Jelly::quiet().to_string();
+    let read = |line: &str| Jelly::read(line.as_bytes()).is_some();
+    let heard = |words: &str, project: &str, left: u64| {
+        let says = "press the key again to take it back";
+        format!(r#"{{"state":"heard","says":"{says}","words":"{words}","project":"{project}","left":{left}}}"#)
+    };
+    for unseen in ["\u{200b}", "\u{2800}\u{200d}", " ", "\u{feff}\u{3164}"] {
+        assert!(!read(&heard(unseen, "alpha", 9)), "words nobody sees: {}", unseen.escape_unicode());
+        assert!(!read(&heard("make it", unseen, 9)), "a project nobody sees: {}", unseen.escape_unicode());
+    }
+    assert!(read(&heard("e\u{301}", "\u{645}\u{200c}\u{6cc}", 9)), "a mark and a joiner on a letter are seen");
+    // One object on one line: no character that ends a line stands inside it, and none before it.
+    for end in ["\r", "\u{c}", "\n"] {
+        assert!(!read(&quiet.replace(",\"", &format!(",{end}\""))), "{} inside", end.escape_unicode());
+        assert!(!read(&format!("{end}{quiet}")), "{} before", end.escape_unicode());
+    }
+    assert!(read(&format!("{quiet}\n")) && !read(&format!("{quiet}\n\n")) && !read(&format!("{quiet}\r\r\n")));
 }
 
 #[test]

@@ -4,11 +4,15 @@
 use std::path::{Path, PathBuf};
 
 use super::{Jelly, JellyState};
-use crate::{DayOptions, RunOptions, WishState, run, run_apart, wish, wish_offered};
+use crate::{DayOptions, Error, RunOptions, WishState, find, run, run_apart, wish, wish_offered};
 
 /// What is said when no project can be picked for a heard wish.
 pub(super) const NO_PROJECT: &str = "nothing was kept: make the day's first wish on the page, so that Jellymoon knows \
                                      which project a wish said aloud is for";
+/// What is said when a run was asked for and no harness is there to run it. Where it was looked for is what
+/// `jellymoon wish --run` says: this is short enough for the bubble.
+pub(super) const NO_HARNESS: &str =
+    "the wish is kept, but no run was started: no `claude` program was found (JELLYMOON_CLAUDE names one)";
 pub(super) const ASKS: &str = "a run asks, and waits for your answer on the page";
 pub(super) const WAITS: &str = "a run's work waits for you on the page";
 
@@ -22,17 +26,25 @@ pub(super) struct Runs {
 }
 
 impl Runs {
-    /// What the jellyfish shows when nothing is heard: a run that asks, then runs going, then work that waits.
+    /// What the jellyfish shows when nothing is heard: the first state of [`JellyState::ORDER`] the day's runs
+    /// are in.
     pub(super) fn drawn(&self) -> Jelly {
+        JellyState::ORDER.into_iter().find_map(|state| self.in_state(state)).unwrap_or_else(Jelly::quiet)
+    }
+
+    /// What is shown in `state`, when the day's runs are in it: a run that asks, runs going, work that waits.
+    /// None for a state only a hearing knows.
+    pub(super) fn in_state(&self, state: JellyState) -> Option<Jelly> {
         let blank = Jelly::quiet();
-        match (&self.question, self.going, self.waits) {
-            (Some(question), ..) => {
-                let (says, question) = (ASKS.to_string(), Some(question.clone()));
-                Jelly { state: JellyState::Asks, says, question, ..blank }
+        match state {
+            JellyState::Asks => {
+                let question = Some(self.question.clone()?);
+                Some(Jelly { state, says: ASKS.to_string(), question, ..blank })
             }
-            (None, going @ 1.., _) => Jelly { state: JellyState::Working, going: Some(going), ..blank },
-            (None, 0, true) => Jelly { state: JellyState::Waits, says: WAITS.to_string(), ..blank },
-            (None, 0, false) => blank,
+            JellyState::Working => (self.going > 0).then_some(Jelly { state, going: Some(self.going), ..blank }),
+            JellyState::Waits => self.waits.then(|| Jelly { state, says: WAITS.to_string(), ..blank }),
+            JellyState::Quiet => Some(blank),
+            JellyState::Listening | JellyState::Heard | JellyState::Cannot => None,
         }
     }
 }
@@ -81,10 +93,16 @@ pub(super) fn make(
     let unstarted = match run_apart(home, program, &options) {
         // A run that was named and has ended already, needing the person, is said as it ended, as `jellymoon
         // wish --run` prints it. One that finished is not a thing that could not be done: the day's rest shows it.
+        Ok(started) if started.run.is_none() && no_harness(&options) => Some(NO_HARNESS.to_string()),
         Ok(started) => (started.run.is_none() || started.state == WishState::NeedsYou).then_some(started.why),
         Err(e) => Some(e.to_string()),
     };
     Ok((made, unstarted))
+}
+
+/// Whether no run was started because there is no harness: asked as `run_apart` asks it.
+fn no_harness(options: &RunOptions) -> bool {
+    matches!(find::named_or_found(options.harness.as_deref()), Err(Error::NoHarness(_)))
 }
 
 #[cfg(test)]

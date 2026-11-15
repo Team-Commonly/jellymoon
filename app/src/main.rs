@@ -2,7 +2,8 @@
 //! each; without, it opens the page in a window. With `--page` both draw the page data they are given and nothing
 //! else happens. With no `--page` the page is the day's own (`today.rs`): kept in the user's folder, and read through
 //! core when the day has moved on. A tap in the window goes to core through `taps.rs`. `layout --jelly` prints the
-//! jellyfish for one line of `jellymoon hear` (`jelly.rs`).
+//! jellyfish for one line of `jellymoon hear` (`jelly.rs`); the open app shows it in two windows of its own
+//! (`shell.rs`), drawn once a second from what core keeps of the day.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ use std::process::ExitCode;
 use std::{fs, io};
 
 use jellymoon_app::today::{self, Asked, Today};
-use jellymoon_app::{jelly, lines, one_line, read, scene};
+use jellymoon_app::{echoed, file_part, jelly, lines, one_line, read, scene, sides};
 use lexopt::prelude::*;
 use sticker_kit::{Theme, Viewport};
 
@@ -124,23 +125,33 @@ fn jellyfish(asked: &Jellyfish) -> Result<String, Failure> {
     Ok(jelly::lines(&shown.drawn(), &asked.theme, asked.screen))
 }
 
-/// Opens the window on the first scene there is. A day is then read off the window's thread, and what that gives
-/// replaces the scene. `JELLYMOON_QUIT_AFTER=<seconds>` closes the window by itself, for checks.
+/// Opens the page's window on the first scene there is, and the jellyfish. A day is then read off the window's
+/// thread, and what that gives replaces the scene; once a second core is asked what the jellyfish shows of that
+/// day. A page that is no day has a quiet jellyfish. `JELLYMOON_QUIT_AFTER=<seconds>` ends the app by itself, for
+/// checks.
 #[cfg(feature = "window")]
 fn window(options: Options) -> Result<(), Failure> {
-    use jellymoon_app::{taps::OnShow, window::open};
-    let (scene, day) = match options.page {
-        Source::File(file) => (scene::scene(&page(&file)?), None),
-        Source::Waiting(date) => (today::waiting(&date), None),
+    use jellymoon_app::shell::{Asked, JellyLook};
+    use jellymoon_app::taps::OnShow;
+    let (scene, day, jelly) = match options.page {
+        Source::File(file) => (scene::scene(&page(&file)?), None, None),
+        Source::Waiting(date) => (today::waiting(&date), None, None),
         Source::Day(day) => {
             let (first, kept) = day.first();
+            let (home, date) = (day.home.clone(), day.date.clone());
+            // What core keeps for the jellyfish: the day's made wishes and their runs. A look that fails is quiet.
+            let look: JellyLook = std::sync::Arc::new(move || {
+                let seen = jellymoon_core::jellyfish(None, &home, Some(&date));
+                seen.unwrap_or_else(|_| jellymoon_core::Jelly::quiet()).drawn()
+            });
             let shown = OnShow { today: (*day).clone(), page: kept.clone(), scene: first.clone() };
-            (first, Some((shown, day.later(kept))))
+            (first, Some((shown, day.later(kept))), Some(look))
         }
     };
     let seconds = std::env::var("JELLYMOON_QUIT_AFTER").ok().and_then(|seconds| seconds.parse::<f32>().ok());
     let quit_after = seconds.and_then(|seconds| std::time::Duration::try_from_secs_f32(seconds).ok());
-    open(scene, options.theme, options.size, quit_after, day);
+    let (theme, viewport) = (options.theme, options.size);
+    jellymoon_app::window::open(Asked { scene, theme, viewport, day, jelly, quit_after });
     Ok(())
 }
 
@@ -171,17 +182,20 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Long("theme") => theme = text(&mut parser)?,
             Long("size") => {
                 let given = text(&mut parser)?;
-                size = Some(viewport(&given).ok_or_else(|| {
-                    Failure::Usage(format!(
-                        "--size must be <W>x<H> in pixels, from 960x640 to 16384x16384, not {given:?}"
-                    ))
-                })?);
+                let wrong = || {
+                    let said = echoed(&given);
+                    format!("--size must be <W>x<H> in pixels, from 960x640 to 16384x16384, not {said:?}")
+                };
+                size = Some(sides(&given, jellymoon_app::SMALLEST).ok_or_else(|| Failure::Usage(wrong()))?);
             }
             Long("jelly") => line = Some(text(&mut parser)?),
             Long("screen") => {
                 let given = text(&mut parser)?;
-                let wrong = || format!("--screen must be <W>x<H> in pixels, each side from 1 to 16384, not {given:?}");
-                screen = Some(jelly::screen(&given).ok_or_else(|| Failure::Usage(wrong()))?);
+                let wrong = || {
+                    let said = echoed(&given);
+                    format!("--screen must be <W>x<H> in pixels, each side from 1 to 16384, not {said:?}")
+                };
+                screen = Some(sides(&given, Viewport { w: 1.0, h: 1.0 }).ok_or_else(|| Failure::Usage(wrong()))?);
             }
             other => return Err(usage(other.unexpected())),
         }
@@ -237,16 +251,6 @@ fn named(theme: &str) -> Result<Theme, Failure> {
     Ok(loaded.theme)
 }
 
-/// `960x640` as a viewport. Each side is a whole number of pixels, from the smallest size a page is drawn at to
-/// [`jellymoon_app::LARGEST_SIDE`].
-fn viewport(given: &str) -> Option<Viewport> {
-    let (w, h) = given.split_once('x')?;
-    let side = |text: &str, least: f32| {
-        text.parse::<u16>().ok().map(f32::from).filter(|side| (least..=jellymoon_app::LARGEST_SIDE).contains(side))
-    };
-    Some(Viewport { w: side(w, jellymoon_app::SMALLEST.w)?, h: side(h, jellymoon_app::SMALLEST.h)? })
-}
-
 /// The page the file holds, or what is on stdin when the file is `-`.
 fn page(file: &str) -> Result<read::Page, Failure> {
     // One byte more than a page may be is enough to know it is too large, however much there is to read.
@@ -262,6 +266,11 @@ fn input(file: &str, most: u64) -> Result<Vec<u8>, Failure> {
     } else {
         fs::File::open(file).and_then(|file| file.take(most).read_to_end(&mut bytes))
     };
-    got.map_err(|e| Failure::Run(format!("reading {}: {e}", if file == "-" { "stdin" } else { file })))?;
+    // In fixed words, with the file's last name on one line: no folder a person typed, and no word of the system's.
+    got.map_err(|_| {
+        let name = if file == "-" { String::new() } else { file_part(file).trim().to_string() };
+        let what = if file == "-" { "the input cannot be read" } else { "the file cannot be read" };
+        Failure::Run(if name.is_empty() { what.to_string() } else { format!("{what}: {name}") })
+    })?;
     Ok(bytes)
 }

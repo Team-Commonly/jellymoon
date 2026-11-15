@@ -281,24 +281,37 @@ impl Hearing {
         (self.runs, self.looked) = (day::look(&self.home, &self.day), self.now);
     }
 
-    /// What is shown, by the order of ADR 0019, decision 4: listening, heard, cannot, then what the day's runs give.
+    /// What is shown: the first state of [`JellyState::ORDER`] that holds (ADR 0019, decision 4).
     fn drawn(&self) -> Jelly {
+        JellyState::ORDER.into_iter().find_map(|state| self.in_state(state)).unwrap_or_else(Jelly::quiet)
+    }
+
+    /// What is shown in `state`, when the hearing, or the day's runs, are in it.
+    fn in_state(&self, state: JellyState) -> Option<Jelly> {
         let blank = Jelly::quiet();
-        match (&self.hold, &self.cannot) {
-            (Hold::Held { so_far, .. } | Hold::Over { so_far, .. }, _) => {
-                Jelly { state: JellyState::Listening, words: so_far.clone(), ..blank }
+        match (state, &self.hold, &self.cannot) {
+            (JellyState::Listening, Hold::Held { so_far, .. } | Hold::Over { so_far, .. }, _) => {
+                Some(Jelly { state, words: so_far.clone(), ..blank })
             }
-            (Hold::Heard { words, project, since }, _) => Jelly {
-                state: JellyState::Heard,
+            (JellyState::Heard, Hold::Heard { words, project, since }, _) => Some(Jelly {
+                state,
                 says: TAKE_BACK.to_string(),
                 words: words.clone(),
                 project: project.clone(),
                 left: WINDOW_MS.saturating_sub(since.map_or(0, |since| self.now - since)),
                 ..blank
-            },
-            (Hold::None, Some((why, _))) => Jelly { state: JellyState::Cannot, says: why.clone(), ..blank },
-            (Hold::None, None) => self.runs.drawn(),
+            }),
+            (JellyState::Cannot, _, Some((why, _))) => Some(Jelly { state, says: why.clone(), ..blank }),
+            (JellyState::Listening | JellyState::Heard | JellyState::Cannot, ..) => None,
+            _ => self.runs.in_state(state),
         }
+    }
+
+    /// Every sentence of a hearing's own that it refuses with: the ear's, and its own for words that came to
+    /// nothing. A refusal of a wish or of a run that is passed on in that command's words is not among them.
+    pub fn refusals() -> Vec<&'static str> {
+        let own = [EAR_SILENT, MARKS, day::NO_PROJECT, day::NO_HARNESS, wish::LONG, wish::CHANGING];
+        EarCannot::ALL.iter().map(|why| why.says()).chain(own).collect()
     }
 }
 

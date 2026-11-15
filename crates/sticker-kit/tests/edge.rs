@@ -2,9 +2,9 @@
 //! numbers, and what a bubble is drawn with. No display, no clock and no word of any app.
 
 use sticker_kit::{
-    Corner, EDGE_GAP, EDGE_MARGIN, Edge, EdgeKind, EdgeMood, EdgePlaced, FixedAdvance, MAX_BUBBLE_LINES,
-    MAX_BUBBLE_TEXTS, Rect, Role, Said, TextRun, Theme, Tone, Viewport, edge_windows, layout_edge, place_beside,
-    place_corner,
+    Corner, EDGE_GAP, EDGE_MARGIN, Edge, EdgeKind, EdgeMood, EdgePlaced, EdgeText, FixedAdvance, MAX_BUBBLE_LINES,
+    MAX_BUBBLE_TEXTS, Rect, Role, TextRun, Theme, Tone, Viewport, edge_windows, layout_edge, place_beside,
+    place_corner, place_pair,
 };
 
 const SCREEN: Viewport = Viewport { w: 1440.0, h: 900.0 };
@@ -21,15 +21,15 @@ fn inside(inner: Rect, outer: Rect) -> bool {
     inner.x >= outer.x && inner.y >= outer.y && inner.right() <= outer.right() && inner.bottom() <= outer.bottom()
 }
 
-fn said(text: &str, tone: Tone) -> Said {
-    Said { text: text.to_string(), tone }
+fn said(text: &str, tone: Tone) -> EdgeText {
+    EdgeText { text: text.to_string(), tone }
 }
 
 fn placed(edge: &Edge) -> EdgePlaced {
     layout_edge(edge, &Theme::sticker(), Corner::BottomRight, &FixedAdvance(0.5))
 }
 
-fn bubble(texts: &[Said]) -> Vec<TextRun> {
+fn bubble(texts: &[EdgeText]) -> Vec<TextRun> {
     let edge = Edge { bubble: texts.to_vec(), ..Edge::default() };
     placed(&edge).bubble.map(|window| window.pieces[0].text.clone()).unwrap_or_default()
 }
@@ -149,6 +149,12 @@ fn a_mood_a_count_and_a_ring_change_no_window_and_a_bubble_with_nothing_to_see_i
     let unseen = [said("", Tone::Plain), said("  \u{200b}\n", Tone::Strong), said("\u{1b}", Tone::Quoted)];
     let empty = placed(&Edge { bubble: unseen.to_vec(), ring: Some(0.5), ..Edge::default() });
     assert_eq!((empty.bubble, empty.ring), (None, None));
+    // A text of blanks only, a blank braille pattern or a joiner with nothing to join, takes no place either.
+    for blank in ["\u{2800}", "\u{200d}", " \u{2800}\u{200d}\u{3164} "] {
+        let shown = placed(&Edge { bubble: vec![said(blank, Tone::Strong)], ring: Some(0.5), ..Edge::default() });
+        assert_eq!((shown.bubble, shown.ring), (None, None), "{}", blank.escape_unicode());
+        assert_eq!(bubble(&[said(blank, Tone::Plain), said("seen", Tone::Plain)]).len(), 1);
+    }
     // A theme the kit refuses gets no piece.
     let mut broken = Theme::sticker();
     broken.metrics.width = f32::NAN;
@@ -252,4 +258,86 @@ fn a_ring_is_from_full_to_empty_and_a_number_that_is_none_is_empty() {
     // How full it is moves nothing.
     let at = |ring| placed(&Edge { bubble: vec![said("hi", Tone::Plain)], ring: Some(ring), ..Edge::default() }).bubble;
     assert_eq!(at(1.0), at(0.1));
+}
+
+// A size, a margin or a gap below nothing is nothing: no window is placed by a negative number.
+#[test]
+fn a_negative_size_margin_or_gap_is_none() {
+    let odd = Viewport { w: -96.0, h: 96.0 };
+    assert_eq!(at(place_corner(SCREEN, WHOLE, odd, Corner::BottomRight, EDGE_MARGIN)), [1424.0, 788.0, 0.0, 96.0]);
+    assert_eq!(at(place_corner(SCREEN, WHOLE, SMALL, Corner::BottomRight, -16.0)), [1344.0, 804.0, 96.0, 96.0]);
+    assert_eq!(at(place_corner(SCREEN, WHOLE, SMALL, Corner::TopLeft, -16.0)), [0.0, 0.0, 96.0, 96.0]);
+    let anchor = place_corner(SCREEN, WHOLE, SMALL, Corner::BottomRight, EDGE_MARGIN);
+    let beside = |size, gap| at(place_beside(SCREEN, WHOLE, anchor, size, Corner::BottomRight, gap));
+    assert_eq!(beside(WIDE, -8.0), [1028.0, 684.0, 300.0, 200.0], "a gap below nothing is no gap");
+    assert_eq!(beside(Viewport { w: -300.0, h: -200.0 }, 8.0), [1320.0, 884.0, 0.0, 0.0]);
+}
+
+fn apart(a: Rect, b: Rect) -> bool {
+    a.right() <= b.x || b.right() <= a.x || a.bottom() <= b.y || b.bottom() <= a.y
+}
+
+// The first window's margin gives way before the second is laid over it.
+#[test]
+fn two_windows_stand_apart_in_every_room_that_holds_both_and_the_margin_gives_way_first() {
+    let tall = Viewport { w: 300.0, h: 218.0 };
+    let pair = |screen: Viewport, corner| {
+        let room = Rect::new(0.0, 0.0, screen.w, screen.h);
+        place_pair(screen, room, SMALL, tall, corner, EDGE_MARGIN, EDGE_GAP)
+    };
+    // The two screens of a review, where the second covered the first.
+    for (w, h) in [(320.0, 322.0), (419.0, 240.0)] {
+        let (first, second) = pair(Viewport { w, h }, Corner::BottomRight);
+        assert!(apart(first, second), "{w}x{h}: {first:?} {second:?}");
+    }
+    assert_eq!(at(pair(Viewport { w: 320.0, h: 322.0 }, Corner::BottomRight).0), [224.0, 226.0, 96.0, 96.0]);
+    assert_eq!(at(pair(Viewport { w: 419.0, h: 240.0 }, Corner::BottomRight).0), [308.0, 129.0, 96.0, 96.0]);
+    // As much of the margin as the room leaves is kept: all of it where both fit with it.
+    assert_eq!(at(pair(Viewport { w: 320.0, h: 330.0 }, Corner::BottomRight).0), [216.0, 226.0, 96.0, 96.0]);
+    assert_eq!(pair(SCREEN, Corner::BottomRight).0, place_corner(SCREEN, WHOLE, SMALL, Corner::BottomRight, 16.0));
+    for corner in CORNERS {
+        for w in (60..460).step_by(7) {
+            for h in (60..380).step_by(7) {
+                let screen = Viewport { w: w as f32, h: h as f32 };
+                let (first, second) = pair(screen, corner);
+                let whole = Rect::new(0.0, 0.0, screen.w, screen.h);
+                let holds = screen.w >= 96.0 + 8.0 + 300.0 || screen.h >= 96.0 + 8.0 + 218.0;
+                let fits = screen.w >= 300.0 && screen.h >= 218.0;
+                assert!(!holds || apart(first, second), "{corner:?} {w}x{h}: {first:?} {second:?}");
+                assert!(!(holds && fits) || (inside(first, whole) && inside(second, whole)), "{corner:?} {w}x{h}");
+                assert_eq!(second, place_beside(screen, whole, first, tall, corner, EDGE_GAP), "{corner:?} {w}x{h}");
+                assert_eq!((first.w, first.h, second.w, second.h), (96.0, 96.0, 300.0, 218.0));
+            }
+        }
+    }
+    // A margin that is no number, or below nothing, is none.
+    assert_eq!(at(place_pair(SCREEN, WHOLE, SMALL, tall, Corner::BottomRight, f32::NAN, 8.0).0)[..2], [1344.0, 804.0]);
+}
+
+// A theme's text sizes are held to the edge scene's own range, whatever the theme's door lets through.
+#[test]
+fn no_text_size_of_a_theme_puts_a_piece_out_of_its_window_or_makes_a_window_huge() {
+    let long = "words and more words ".repeat(40);
+    let texts = vec![said("make it so", Tone::Strong), said(&long, Tone::Small), said(&long, Tone::Quoted)];
+    let edge = Edge { count: 100, bubble: texts, ring: Some(0.5), ..Edge::default() };
+    for (body, small) in [(15.0, 60.0), (15.0, 10_000.0), (0.0, 13.0), (300.0, 13.0), (0.0, 0.0), (1e4, 1e4)] {
+        let mut theme = Theme::sticker();
+        (theme.metrics.body_size, theme.metrics.small_size) = (body, small);
+        let (character, window) = edge_windows(&theme);
+        assert!((character.w, window.w) == (96.0, 300.0) && (120.0..=400.0).contains(&window.h), "{window:?}");
+        let shown = layout_edge(&edge, &theme, Corner::BottomRight, &FixedAdvance(0.5));
+        let bubble = shown.bubble.unwrap();
+        for (pieces, size) in [(&shown.character.pieces, character), (&bubble.pieces, window)] {
+            for piece in pieces {
+                assert!(inside(piece.rect, Rect::new(0.0, 0.0, size.w, size.h)), "{body} {small}: {piece:?}");
+                for run in &piece.text {
+                    assert!(inside(run.rect, piece.rect) && run.rect.w > 0.0 && run.rect.h > 0.0, "{run:?}");
+                    assert!((9.0..=22.0).contains(&run.size), "{body} {small}: {run:?}");
+                }
+            }
+        }
+        let texts: Vec<&str> = bubble.pieces[0].text.iter().map(|run| run.text.as_str()).collect();
+        assert_eq!(texts[0], "make it so", "{body} {small}");
+        assert!(texts[1].ends_with('…') && texts[1].len() > 4, "a name cut to its line keeps its ellipsis: {texts:?}");
+    }
 }

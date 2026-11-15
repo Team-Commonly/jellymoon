@@ -144,6 +144,13 @@ impl Page {
         self.entry_changed(window, cx);
     }
 
+    /// As [`Page::answer_entry`], for a page whose window was closed since Enter: there is no text input of the
+    /// platform's to tell, and the page that is shown again does not wait.
+    pub fn answer_entry_closed(&mut self, kept: bool, cx: &mut Context<Self>) {
+        self.entry.state.answer(kept);
+        self.entry_settled(cx);
+    }
+
     /// What is typed in the entry now.
     pub fn entry(&self) -> &EntryState {
         &self.entry.state
@@ -272,14 +279,18 @@ impl Page {
     }
 
     /// Tells the platform's text input that the text or the caret is no longer what it last saw, and draws again.
-    /// An entry that was taken away while it held words goes here, once it holds none.
     fn entry_changed(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if let Some(focus) = &self.entry.focus {
+            window.notify_text_input_changed(focus);
+        }
+        self.entry_settled(cx);
+    }
+
+    /// Draws again. An entry that was taken away while it held words goes here, once it holds none.
+    fn entry_settled(&mut self, cx: &mut Context<Self>) {
         if self.entry.leaving && !self.entry.state.holds() {
             (self.entry.what, self.entry.state, self.entry.leaving) = (None, EntryState::default(), false);
             self.stale = Stale::Spring;
-        }
-        if let Some(focus) = &self.entry.focus {
-            window.notify_text_input_changed(focus);
         }
         cx.notify();
     }

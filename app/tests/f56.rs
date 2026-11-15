@@ -224,10 +224,10 @@ fn a_line_that_is_no_line_of_hear_is_refused_in_one_sentence_and_nothing_is_draw
         let shown: String = input.chars().take(120).collect();
         assert_eq!(said(&app(&input, SCREEN, &[], &[])), (Some(1), String::new(), NO_LINE.to_string()), "{shown}");
     }
-    // A file that is not there is said as a page's is, and is no line either.
+    // A file that is not there is said as a page's is, in fixed words (`f57.rs`), and is no line either.
     let (code, out, err) = said(&run(&["layout", "--jelly", "no-such-file.json", "--screen", SCREEN], None));
     assert_eq!((code, out.as_str()), (Some(1), ""), "{err}");
-    assert!(err.starts_with("jellymoon-app: reading no-such-file.json: ") && err.lines().count() == 1, "{err}");
+    assert_eq!(err, "jellymoon-app: the file cannot be read: no-such-file.json\n");
 }
 
 #[test]
@@ -244,7 +244,10 @@ fn a_screen_that_is_no_width_by_height_is_a_wrong_command_line_and_no_window_is_
     assert_eq!(placed(&app(&line, "1x1", &[], &[])).window("jelly"), Some([0.0, 0.0, 96.0, 96.0]));
     assert!(placed(&app(&line, "16384x16384", &[], &[])).window("jelly").is_some());
     // `--jelly` is `layout`'s alone and needs a screen; a screen is of a jellyfish alone; a page is another command.
-    let wrong: [&[&str]; 7] = [
+    let wrong: [&[&str]; 10] = [
+        &["layout", "--jelly", "-", "--screen", SCREEN, "--fresh"],
+        &["layout", "--jelly", "-", "--screen", SCREEN, "--skip", "alpha"],
+        &["layout", "--jelly", "-", "--screen", SCREEN, "--model", "some"],
         &["--jelly", "-", "--screen", SCREEN],
         &["layout", "--jelly", "-"],
         &["layout", "--screen", SCREEN],

@@ -66,8 +66,8 @@ fn a_wish_said_aloud_while_no_harness_is_installed_stays_on_the_page_and_the_lin
     let mut w = repo_world();
     fs::create_dir(w.at("empty")).unwrap();
     w.vars.push(("PATH", w.at("empty").into()));
-    let why = "finding Claude Code: no `claude` program in PATH, ~/.local/bin, ~/.claude/local; install Claude \
-               Code, or name the program with JELLYMOON_CLAUDE";
+    let why = "the wish is kept, but no run was started: no `claude` program was found (JELLYMOON_CLAUDE names \
+               one)";
     let printed = w.hear(&["--run"], &said_and_waited());
     assert_eq!(printed.last(), Some(&with(cannot(why), "made", json!("m1"))));
     let on_page = w.on_page("m1");

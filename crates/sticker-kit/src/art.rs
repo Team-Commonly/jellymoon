@@ -5,6 +5,7 @@
 use std::f32::consts::PI;
 
 use crate::color::Color;
+use crate::edge::EdgeMood;
 use crate::scene::Mood;
 use crate::theme::{Hue, Palette};
 
@@ -60,8 +61,8 @@ fn feet() -> String {
         .concat()
 }
 
-fn face(mood: Mood, ink: &str) -> String {
-    let eyes: String = [-36, 36]
+fn eyes(ink: &str) -> String {
+    [-36, 36]
         .map(|x| {
             format!(
                 "<circle cx=\"{x}\" cy=\"70\" r=\"11.5\" fill=\"{ink}\"/>\
@@ -71,7 +72,11 @@ fn face(mood: Mood, ink: &str) -> String {
                 x + 4
             )
         })
-        .concat();
+        .concat()
+}
+
+fn face(mood: Mood, ink: &str) -> String {
+    let eyes = eyes(ink);
     let mouth = match mood {
         Mood::Happy => format!(
             "<path d=\"M-9 85 Q-4.5 93 0 85 Q4.5 93 9 85\" fill=\"none\" stroke=\"{ink}\" \
@@ -88,24 +93,57 @@ stroke-width=\"3.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
 /// A character whose body is `width` pixels wide. The image is larger than
 /// the body by `pad(rim)` on every side.
 pub fn character(palette: &Palette, hue: Hue, mood: Mood, dimmed: bool, width: f32, rim: f32) -> String {
+    let opacity = if dimmed { "0.6" } else { "1" };
+    figure(palette, hue, &face(mood, &palette.ink.hex_rgb()), (opacity, 0.0, ""), width, rim)
+}
+
+/// How large the image of a character is whose body is `width` pixels wide.
+pub fn character_size(width: f32, rim: f32) -> (f32, f32) {
+    (width + 2.0 * pad(rim), 168.0 * width / 200.0 + 2.0 * pad(rim))
+}
+
+/// The body with a `face` on it, turned by `pose.1` degrees, with `pose.2` drawn behind it.
+fn figure(palette: &Palette, hue: Hue, face: &str, pose: (&str, f32, &str), width: f32, rim: f32) -> String {
     let unit = width / 200.0;
     let pad = pad(rim);
+    let (opacity, turn, behind) = pose;
     let (base, dark, light) = (hue.base.hex_rgb(), hue.dark.hex_rgb(), hue.light.hex_rgb());
-    let outline = format!("{}<path d=\"{BODY}\"/>", feet());
+    let outline = format!("<g transform=\"rotate({turn:.1} 0 70)\">{}<path d=\"{BODY}\"/></g>", feet());
     let cheeks: String = [-66, 66]
         .map(|x| format!("<ellipse cx=\"{x}\" cy=\"88\" rx=\"13\" ry=\"7.5\" {}/>", fill(palette.cheek)))
         .concat();
     let art = format!(
-        "<g opacity=\"{opacity}\"><g fill=\"{dark}\">{feet}</g><path d=\"{BODY}\" fill=\"{dark}\"/>\
+        "<g opacity=\"{opacity}\" transform=\"rotate({turn:.1} 0 70)\">{behind}<g fill=\"{dark}\">{feet}</g>\
+<path d=\"{BODY}\" fill=\"{dark}\"/>\
 <path d=\"{BODY}\" fill=\"{base}\" transform=\"translate(0 -5) scale(.94 .93)\"/>\
 <ellipse cx=\"-46\" cy=\"18\" rx=\"24\" ry=\"12\" fill=\"{light}\" transform=\"rotate(-30 -46 18)\"/>\
 <circle cx=\"-74\" cy=\"46\" r=\"5.5\" fill=\"{light}\"/>{cheeks}{face}</g>",
-        opacity = if dimmed { "0.6" } else { "1" },
         feet = feet(),
-        face = face(mood, &palette.ink.hex_rgb()),
     );
-    let size = (width + 2.0 * pad, 168.0 * unit + 2.0 * pad);
-    sticker(size, (pad + 100.0 * unit, pad + 14.0 * unit), unit, rim, palette, &outline, &art)
+    sticker(character_size(width, rim), (pad + 100.0 * unit, pad + 14.0 * unit), unit, rim, palette, &outline, &art)
+}
+
+/// The edge scene's character in one of its moods: the same body as [`character`], with a face, a turn and
+/// what the mood adds behind it. A mood changes how it is drawn and never how large its image is.
+pub fn edge_character(palette: &Palette, hue: Hue, mood: EdgeMood, width: f32, rim: f32) -> String {
+    let (ink, dark) = (palette.ink.hex_rgb(), hue.dark.hex_rgb());
+    let line = |d: &str, colour: &str, wide: u8| {
+        format!("<path d=\"{d}\" fill=\"none\" stroke=\"{colour}\" stroke-width=\"{wide}\" stroke-linecap=\"round\"/>")
+    };
+    let smile = line("M-9 85 Q-4.5 93 0 85 Q4.5 93 9 85", &ink, 4);
+    let open = format!("<ellipse cx=\"0\" cy=\"89\" rx=\"5\" ry=\"6\" fill=\"{ink}\"/>");
+    let (mouth, turn, behind) = match mood {
+        EdgeMood::Floats => (smile, 0.0, String::new()),
+        EdgeMood::LeansIn => (open, -10.0, String::new()),
+        EdgeMood::HoldsUp => (smile, 0.0, line("M-90 44 L-108 2 M90 44 L108 2", &dark, 18)),
+        EdgeMood::Swims => (smile, 12.0, String::new()),
+        EdgeMood::Waves => (open, 0.0, line("M90 44 L112 0", &dark, 18)),
+        EdgeMood::Glows => (smile, 0.0, format!("<circle cx=\"0\" cy=\"70\" r=\"116\" {}/>", fill(palette.star_shine))),
+        EdgeMood::Droops => {
+            (line("M-9 91 Q0 83 9 91", &ink, 4) + &line("M-49 56 L-27 50 M49 56 L27 50", &ink, 4), 0.0, String::new())
+        }
+    };
+    figure(palette, hue, &(eyes(&ink) + &mouth), ("1", turn, &behind), width, rim)
 }
 
 /// A piece drawn inside a circle of `radius` pixels, centred in its image.

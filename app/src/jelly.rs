@@ -5,14 +5,15 @@
 use jellymoon_core::{JellyDrawn, JellyState, Whose};
 use serde::Serialize;
 use sticker_kit::{
-    BundledMeasure, Corner, EDGE_GAP, EDGE_MARGIN, Edge, EdgeKind, EdgeMood, EdgePiece, EdgeWindow, Rect, Said, Theme,
-    Tone, Viewport, layout_edge, place_beside, place_corner,
+    BundledMeasure, Corner, EDGE_GAP, EDGE_MARGIN, Edge, EdgeKind, EdgeMood, EdgePiece, EdgeText, EdgeWindow, Rect,
+    Theme, Tone, Viewport, edge_windows, layout_edge, place_pair,
 };
 
 use crate::lines::{At, Run, at, run};
+use crate::popup::{self, Opens};
 
 /// The corner the jellyfish lives in (ADR 0019, decision 4).
-const CORNER: Corner = Corner::BottomRight;
+pub(crate) const CORNER: Corner = Corner::BottomRight;
 
 /// One printed line: a window, where it stands on the screen, or a piece, from its own window's top left.
 #[derive(Serialize)]
@@ -22,6 +23,9 @@ struct Line<'a> {
     id: &'static str,
     #[serde(flatten)]
     at: At,
+    /// A window only: what it is asked for when it is opened.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    opens: Option<Opens>,
     /// The jellyfish only: core's state, and the mood it is drawn in.
     #[serde(skip_serializing_if = "Option::is_none")]
     state: Option<JellyState>,
@@ -62,7 +66,7 @@ pub fn edge(drawn: &JellyDrawn) -> Edge {
         Whose::Run => Tone::Quoted,
         Whose::Jellymoon => Tone::Plain,
     };
-    let bubble = drawn.bubble.iter().map(|said| Said { text: said.text.clone(), tone: tone(said.whose) });
+    let bubble = drawn.bubble.iter().map(|said| EdgeText { text: said.text.clone(), tone: tone(said.whose) });
     Edge {
         mood,
         count: drawn.count.unwrap_or(0),
@@ -71,38 +75,37 @@ pub fn edge(drawn: &JellyDrawn) -> Edge {
     }
 }
 
-/// `1440x900` as a screen: each side a whole number of pixels, from 1 to [`crate::LARGEST_SIDE`].
-pub fn screen(given: &str) -> Option<Viewport> {
-    let (w, h) = given.split_once('x')?;
-    let side =
-        |text: &str| text.parse::<u16>().ok().map(f32::from).filter(|side| (1.0..=crate::LARGEST_SIDE).contains(side));
-    Some(Viewport { w: side(w)?, h: side(h)? })
+/// Where the jellyfish's window and the bubble's stand on a screen, in the room `left` that the system leaves on
+/// it: the kit's placing, with the kit's margin and gap. The bubble's place is the same whether it is open or not.
+pub fn stands(theme: &Theme, screen: Viewport, left: Rect) -> (Rect, Rect) {
+    let (character, bubble) = edge_windows(theme);
+    place_pair(screen, left, character, bubble, CORNER, EDGE_MARGIN, EDGE_GAP)
 }
 
 /// The jellyfish's window and its pieces, then the bubble's when there is one, each as one line of JSON. The room
-/// windows stand in is the whole screen here: the room a system leaves is given by whoever opens them.
+/// windows stand in is the whole screen here: the room a system leaves is asked by the app that opens them
+/// (`jellyfish.rs`), and given to the same function.
 pub fn lines(drawn: &JellyDrawn, theme: &Theme, screen: Viewport) -> String {
     let scene = edge(drawn);
     let placed = layout_edge(&scene, theme, CORNER, &BundledMeasure::new(theme));
-    let room = Rect::new(0.0, 0.0, screen.w, screen.h);
-    let jelly = place_corner(screen, room, placed.character.size, CORNER, EDGE_MARGIN);
-    let mut out = window("jelly", jelly, &placed.character, drawn.state, &scene, None);
+    let (jelly, beside) = stands(theme, screen, Rect::new(0.0, 0.0, screen.w, screen.h));
+    let mut out = window(("jelly", popup::JELLY), jelly, &placed.character, drawn.state, &scene, None);
     if let Some(bubble) = &placed.bubble {
-        let beside = place_beside(screen, room, jelly, bubble.size, CORNER, EDGE_GAP);
-        out.extend(window("bubble", beside, bubble, drawn.state, &scene, placed.ring));
+        out.extend(window(("bubble", popup::BUBBLE), beside, bubble, drawn.state, &scene, placed.ring));
     }
     out.iter().filter_map(|line| Some(format!("{}\n", serde_json::to_string(line).ok()?))).collect()
 }
 
 fn window<'a>(
-    id: &'static str,
+    (id, opens): (&'static str, Opens),
     stands: Rect,
     window: &'a EdgeWindow,
     state: JellyState,
     scene: &Edge,
     ring: Option<f32>,
 ) -> Vec<Line<'a>> {
-    let bare = |kind, rect| Line { kind, id, at: at(rect), state: None, mood: None, ring: None, text: None };
+    let bare =
+        |kind, rect| Line { kind, id, at: at(rect), opens: None, state: None, mood: None, ring: None, text: None };
     let piece = |piece: &'a EdgePiece| {
         let kind = match piece.kind {
             EdgeKind::Character => Kind::Character,
@@ -119,5 +122,6 @@ fn window<'a>(
             ..bare(kind, piece.rect)
         }
     };
-    std::iter::once(bare(Kind::Window, stands)).chain(window.pieces.iter().map(piece)).collect()
+    let opened = Line { opens: Some(opens), ..bare(Kind::Window, stands) };
+    std::iter::once(opened).chain(window.pieces.iter().map(piece)).collect()
 }

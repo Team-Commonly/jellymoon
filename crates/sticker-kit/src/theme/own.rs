@@ -31,6 +31,10 @@ pub const CARET_FLOOR: f32 = 3.0;
 /// and is told by its fill, so the floor is just under that.
 pub const CHOSEN_FILL_FLOOR: f32 = 1.2;
 
+/// The least contrast of someone else's words in a bubble, the palette's `quoted`, on the bubble: what WCAG 2 asks
+/// of text.
+pub const QUOTED_FLOOR: f32 = 4.5;
+
 /// One colour of a pair of the entry, to be settled against the pair's other colour, which is settled.
 struct Side<'a> {
     key: &'a str,
@@ -146,6 +150,12 @@ impl Palette {
         let ring = Side { under: desk, ..side("entry_ring", ("paper", self.paper), false, RING_FLOOR) };
         self.entry_ring = ring.settle(self.entry_ring, caret, &[self.caret, self.accent_dark, self.ink], warnings);
         self.chips(set, under, warnings);
+        // Someone else's words on the bubble. A bubble one sees through is laid on white, as the desk is: the kit
+        // does not know what a window of an edge scene has under it.
+        let quoted =
+            Side { under: Color::rgb(0xFFFFFF), ..side("quoted", ("bubble", self.bubble), false, QUOTED_FLOOR) };
+        let spare = [self.accent_dark, self.soft, self.ink];
+        self.quoted = quoted.settle(self.quoted, own("accent_dark", self.accent_dark), &spare, warnings);
     }
 
     /// The chips' colours, for [`Palette::own`].

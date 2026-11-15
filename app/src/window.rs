@@ -1,74 +1,80 @@
-//! The window: the kit's view of one scene, and of the scene that replaces it when a day has been read. `t` switches
-//! between the two built-in themes. A tap is written to stderr as one line: the piece's id, and the option when it
-//! was one, never a word of the page. A tap on an option of a day's page then goes to `taps.rs`, and the page it
-//! gives is shown. Enter in a day's entry goes to `wishing.rs`, and a tap on a wish's character or on the choice to
-//! stop its run to `stopping.rs`: core is asked off this thread, and the page is shown as soon as it has answered.
-//! Once a second the day is looked at again, so a run's end is drawn with no tap.
+//! The page's window: the kit's view of one scene, and of the scene that replaces it when a day has been read. `t`
+//! switches between the two built-in themes. A tap is written to stderr as one line: the piece's id, and the option
+//! when it was one, never a word of the page. A tap on an option of a day's page then goes to `taps.rs`, and the
+//! page it gives is shown. Enter in a day's entry goes to `wishing.rs`, and a tap on a wish's character or on the
+//! choice to stop its run to `stopping.rs`: core is asked off this thread, and the page is shown as soon as it has
+//! answered. Once a second the day is looked at again, so a run's end is drawn with no tap.
 //!
 //! This file is wiring. What each act does is `showing.rs`, which a test calls with no window: here its work is
-//! run off the window's thread, and each scene it gives is handed to the kit's view. No test opens this window on
-//! a screen: `tests/f43/window.rs` opens [`page`] on GPUI's test platform and presses Enter in it.
+//! run off the window's thread, and each scene it gives is handed to the kit's view. The view outlives its window
+//! (`shell.rs`): what is done here is done to the view, so a page that is closed and shown again is the page it
+//! was. No test opens this window on a screen: `tests/f43/window.rs` opens [`page`] on GPUI's test platform and
+//! presses Enter in it, and `tests/f57/window.rs` opens all of `shell.rs` there.
 //!
 //! The view measures text with GPUI's shaped glyphs, not with the bundled advances the `layout` command uses: shaping
 //! kerns, and the plain theme draws in the system's font (`docs/development/app.md` has the measured gap).
 
+use std::cell::OnceCell;
 use std::io::Write;
+use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{App, Bounds, Pixels, TitlebarOptions, WindowBounds, WindowHandle, WindowOptions, prelude::*, px, size};
+use gpui::{
+    App, Bounds, Entity, KeyBinding, Menu, MenuItem, Pixels, QuitMode, TitlebarOptions, WeakEntity, WindowBounds,
+    WindowHandle, WindowOptions, actions, prelude::*, px, size,
+};
 use gpui_platform::application;
 use sticker_kit::draw::{EntryMade, Page, Tap, load_fonts};
 use sticker_kit::{Scene, Theme, Viewport};
 
+use crate::jellyfish::Room;
+use crate::shell::{Asked, Opened, wire};
 use crate::showing::{Entered, Showing, entry_line, other_theme, switches_theme, tap_line};
-use crate::taps::OnShow;
 use crate::today::Later;
 
-/// How often a day on show is looked at again.
-const LOOK_EVERY: Duration = Duration::from_secs(1);
+actions!(jellymoon, [Quit]);
 
-/// Opens the window on `scene` and runs until it is closed, or until `quit_after` has passed. A day's `later` is
-/// started at once, off the window's thread; each scene it gives replaces the one shown, and the work after it
+/// How often a day on show is looked at again, and what core keeps for the jellyfish.
+pub(crate) const LOOK_EVERY: Duration = Duration::from_secs(1);
+
+/// Opens the page's window and the jellyfish, and runs until Quit, or until `asked.quit_after` has passed. Closing
+/// the page's window ends nothing: opening the app again shows it, as a tap on the jellyfish does. A day's `later`
+/// is started at once, off the window's thread; each scene it gives replaces the one shown, and the work after it
 /// starts. A page-data file has no day: it is drawn, and a tap on it does nothing.
-pub fn open(
-    scene: Scene,
-    theme: Theme,
-    viewport: Viewport,
-    quit_after: Option<Duration>,
-    day: Option<(OnShow, Later)>,
-) {
-    application().run(move |cx: &mut App| {
+pub fn open(asked: Asked) {
+    // What is opened is known once the app runs; opening the app again may be told before or after.
+    let slot: Rc<OnceCell<Opened>> = Rc::default();
+    let (again, app) = (slot.clone(), application());
+    app.on_reopen(move |cx| {
+        if let Some(opened) = again.get() {
+            opened.show_page(cx);
+        }
+    });
+    app.run(move |cx: &mut App| {
         if let Err(error) = load_fonts(cx) {
             say(&format!("the bundled fonts did not load: {error}"));
         }
-        let (shown, later) = day.unzip();
-        let shown = Showing::of(shown);
-        let window = match page(scene, theme, viewport, shown.clone(), cx) {
-            Ok(window) => window,
+        let opened = match wire(asked, Room::primary(cx), cx) {
+            Ok(opened) => opened,
             Err(error) => {
                 say(&format!("no window: {error}"));
                 std::process::exit(1);
             }
         };
-        cx.on_window_closed(|cx, _| cx.quit()).detach();
-        cx.observe_keystrokes(move |event, _, cx| key(&event.keystroke.key, window, cx)).detach();
-        let reading = shown.clone();
-        cx.spawn(async move |cx| reads(reading, later, window, cx).await).detach();
-        cx.spawn(async move |cx| looks(shown, window, cx).await).detach();
-        if let Some(limit) = quit_after {
-            cx.spawn(async move |cx| {
-                cx.background_executor().timer(limit).await;
-                cx.update(|cx| cx.quit());
-            })
-            .detach();
-        }
+        let _ = slot.set(opened.clone());
+        cx.set_quit_mode(QuitMode::Explicit);
+        cx.on_action(move |_: &Quit, cx| opened.quit(cx));
+        cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+        let items = vec![MenuItem::action("Quit Jellymoon", Quit)];
+        cx.set_menus(vec![Menu { name: "Jellymoon".into(), items, disabled: false }]);
         cx.activate(true);
     });
 }
 
-/// A key pressed anywhere in the window: the one that switches the theme does.
-fn key(key: &str, window: WindowHandle<Page>, cx: &mut App) {
-    let _ = window.update(cx, |page, window, cx| {
+/// A key pressed in a window: in the page's, the one that switches the theme does.
+pub(crate) fn key(key: &str, window: &mut gpui::Window, cx: &mut App) {
+    let Some(Some(page)) = window.root::<Page>() else { return };
+    page.update(cx, |page, cx| {
         if switches_theme(key, page.entry_focused(window)) {
             page.set_theme(other_theme(&page.theme().name), cx);
         }
@@ -78,15 +84,15 @@ fn key(key: &str, window: WindowHandle<Page>, cx: &mut App) {
 /// The entry of the first page, then each scene the day's reading gives with the entry of its page. Which
 /// projects have a chip is asked of the session logs, so all of it is off the window's thread: the first page has
 /// no entry until core has answered.
-async fn reads(shown: Showing, later: Option<Later>, window: WindowHandle<Page>, cx: &mut gpui::AsyncApp) {
+pub(crate) async fn reads(shown: Showing, later: Option<Later>, page: WeakEntity<Page>, cx: &mut gpui::AsyncApp) {
     let Some(first) = shown.offering() else { return };
     let entry = cx.background_executor().spawn(async move { first() }).await;
-    let _ = window.update(cx, |page, _, cx| page.set_entry(entry, cx));
+    let _ = page.update(cx, |page, cx| page.set_entry(entry, cx));
     let mut later = later;
     while let Some(work) = later.take().and_then(|step| shown.reading(step)) {
         let Some((next, entry)) = cx.background_executor().spawn(async move { work() }).await else { break };
         let Some(scene) = shown.read(&next) else { return };
-        let _ = window.update(cx, |page, _, cx| {
+        let _ = page.update(cx, |page, cx| {
             page.set_entry(entry, cx);
             page.set_scene(scene, cx);
         });
@@ -95,15 +101,15 @@ async fn reads(shown: Showing, later: Option<Later>, window: WindowHandle<Page>,
 }
 
 /// Looks at the day on show once a second, off the window's thread, and shows what a look gives when it differs
-/// from what is shown: a run that ended, a wish made in a terminal. It ends with the window, or at once for a page
-/// with no day.
-async fn looks(shown: Showing, window: WindowHandle<Page>, cx: &mut gpui::AsyncApp) {
+/// from what is shown: a run that ended, a wish made in a terminal. It goes on while the page's window is closed,
+/// and ends with the app, or at once for a page with no day.
+pub(crate) async fn looks(shown: Showing, page: WeakEntity<Page>, cx: &mut gpui::AsyncApp) {
     loop {
         cx.background_executor().timer(LOOK_EVERY).await;
         let Some(look) = shown.look() else { return };
         let Some(seen) = cx.background_executor().spawn(async move { look() }).await else { continue };
         let Some(scene) = shown.seen(seen) else { continue };
-        if window.update(cx, |page, _, cx| page.set_scene(scene, cx)).is_err() {
+        if page.update(cx, |page, cx| page.set_scene(scene, cx)).is_err() {
             return;
         }
     }
@@ -112,7 +118,7 @@ async fn looks(shown: Showing, window: WindowHandle<Page>, cx: &mut gpui::AsyncA
 /// Enter in the entry. The entry keeps its words and waits while core is asked off the window's thread; then it is
 /// answered and the page shown. Then the asking for the wish's run is run, off the window's thread too, and what
 /// it has to say is shown when it ends.
-fn entered(made: &EntryMade, shown: &Showing, window: WindowHandle<Page>, cx: &mut App) {
+fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     say(&entry_line(&made.id, &made.text));
     let (wishing, shown) = (shown.wishing(&made.text, made.option.as_deref()), shown.clone());
     cx.spawn(async move |cx| {
@@ -121,50 +127,92 @@ fn entered(made: &EntryMade, shown: &Showing, window: WindowHandle<Page>, cx: &m
             None => None,
         };
         let Entered { kept, scene, asking } = shown.answered(answer);
-        let _ = window.update(cx, |page, window, cx| {
-            page.answer_entry(kept, window, cx);
-            if let Some(scene) = scene {
-                page.set_scene(scene, cx);
-            }
-        });
+        let answered = page.clone();
+        cx.update(|cx| answer_entry(&answered, kept, scene, cx));
         let Some(asking) = asking else { return };
         let said = cx.background_executor().spawn(async move { asking() }).await;
         let Some(scene) = shown.asked(said) else { return };
-        let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
+        let _ = page.update(cx, |page, cx| page.set_scene(scene, cx));
     })
     .detach();
 }
 
+/// The entry is answered in the page's window, which the platform's text input is told in; with the window
+/// closed since Enter it is answered all the same, so the page shown again does not wait for ever.
+fn answer_entry(page: &WeakEntity<Page>, kept: bool, scene: Option<Scene>, cx: &mut App) {
+    let Some(page) = page.upgrade() else { return };
+    match page_window(cx) {
+        Some(open) => {
+            let _ = open.update(cx, |page, window, cx| page.answer_entry(kept, window, cx));
+        }
+        None => page.update(cx, |page, cx| page.answer_entry_closed(kept, cx)),
+    }
+    if let Some(scene) = scene {
+        page.update(cx, |page, cx| page.set_scene(scene, cx));
+    }
+}
+
 /// A tap on a character: core is asked off the window's thread, and what it gives is shown.
-fn poked(id: &str, shown: &Showing, window: WindowHandle<Page>, cx: &mut App) {
+fn poked(id: &str, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     let (Some(look), shown) = (shown.poked(id), shown.clone()) else { return };
     cx.spawn(async move |cx| {
         let Some(seen) = cx.background_executor().spawn(async move { look() }).await else { return };
         let Some(scene) = shown.seen(seen) else { return };
-        let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
+        let _ = page.update(cx, |page, cx| page.set_scene(scene, cx));
     })
     .detach();
 }
 
 /// A tap on an option: its scene is shown at once, and what it left to do (a stop, which waits for the run to
 /// end, or a show, a keep or a toss of work that waits) is run off the window's thread.
-fn chose(note: &str, index: usize, shown: &Showing, window: WindowHandle<Page>, cx: &mut App) {
+fn chose(note: &str, index: usize, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     let Some((after, left)) = shown.chose(note, index) else { return };
     // The view is in the middle of handling the tap: it takes the new scene once that is done.
+    let now = page.clone();
     cx.defer(move |cx| {
-        let _ = window.update(cx, |page, _, cx| page.set_scene(after, cx));
+        let _ = now.update(cx, |page, cx| page.set_scene(after, cx));
     });
     let (Some(left), shown) = (left, shown.clone()) else { return };
     cx.spawn(async move |cx| {
         let ended = cx.background_executor().spawn(async move { left.run() }).await;
         let Some(scene) = shown.ended(ended) else { return };
-        let _ = window.update(cx, |page, _, cx| page.set_scene(scene, cx));
+        let _ = page.update(cx, |page, cx| page.set_scene(scene, cx));
     })
     .detach();
 }
 
-/// The window of one page, its taps and its Enter wired to `shown`. [`open`] opens it on the screen; a test opens
-/// it on GPUI's test platform, where there is no screen.
+/// The view of one page, its taps and its Enter wired to `shown`. It is its window's root, and outlives it.
+pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> Entity<Page> {
+    cx.new(|cx| {
+        let (page, on_show) = (cx.weak_entity(), shown.clone());
+        let entry_of = page.clone();
+        let tapped = move |tap: &Tap, _: &mut gpui::Window, cx: &mut App| {
+            let (id, option) = match tap {
+                Tap::Character { id } => (id, None),
+                Tap::Option { note_id, index } => (note_id, Some(*index)),
+            };
+            say(&tap_line(id, option));
+            match option {
+                None => poked(id, &on_show, page.clone(), cx),
+                Some(index) => chose(id, index, &on_show, page.clone(), cx),
+            }
+        };
+        let made = move |made: &EntryMade, _: &mut gpui::Window, cx: &mut App| {
+            entered(made, &shown, entry_of.clone(), cx);
+        };
+        // The entry comes with the first answer of `reads`.
+        Page::new(scene, theme).on_tap(tapped).on_entry(made)
+    })
+}
+
+/// Opens a window on `view`, in the middle of the screen.
+pub(crate) fn show(view: Entity<Page>, viewport: Viewport, cx: &mut App) -> gpui::Result<WindowHandle<Page>> {
+    let bounds = Bounds::centered(None, size(px(viewport.w), px(viewport.h)), cx);
+    cx.open_window(options(bounds), move |_, _| view)
+}
+
+/// The window of one page, its taps and its Enter wired to `shown`. A test opens it on GPUI's test platform,
+/// where there is no screen.
 pub fn page(
     scene: Scene,
     theme: Theme,
@@ -172,32 +220,13 @@ pub fn page(
     shown: Showing,
     cx: &mut App,
 ) -> gpui::Result<WindowHandle<Page>> {
-    let bounds = Bounds::centered(None, size(px(viewport.w), px(viewport.h)), cx);
-    let on_show = shown.clone();
-    let tapped = move |tap: &Tap, window: &mut gpui::Window, cx: &mut App| {
-        let (id, option) = match tap {
-            Tap::Character { id } => (id, None),
-            Tap::Option { note_id, index } => (note_id, Some(*index)),
-        };
-        say(&tap_line(id, option));
-        match option {
-            None => poked(id, &on_show, own(window), cx),
-            Some(index) => chose(id, index, &on_show, own(window), cx),
-        }
-    };
-    let made = move |made: &EntryMade, window: &mut gpui::Window, cx: &mut App| {
-        entered(made, &shown, own(window), cx);
-    };
-    // The entry comes with the first answer of `reads`.
-    let view =
-        move |_: &mut gpui::Window, cx: &mut App| cx.new(|_| Page::new(scene, theme).on_tap(tapped).on_entry(made));
-    cx.open_window(options(bounds), view)
+    let view = view(scene, theme, shown, cx);
+    show(view, viewport, cx)
 }
 
-/// The handle of the window a handler of the page was called in. The page is that window's root view, and a
-/// handler is given its window: there is no handle to wait for or to miss, so an Enter is always answered.
-fn own(window: &gpui::Window) -> WindowHandle<Page> {
-    WindowHandle::new(window.window_handle().window_id())
+/// The page's window, while one is open.
+pub(crate) fn page_window(cx: &App) -> Option<WindowHandle<Page>> {
+    cx.windows().into_iter().find_map(|window| window.downcast::<Page>())
 }
 
 /// What the window is asked for: its first place, a title, and never to be smaller than a page is drawn at.
@@ -210,7 +239,7 @@ fn options(bounds: Bounds<Pixels>) -> WindowOptions {
     }
 }
 
-fn say(line: &str) {
+pub(crate) fn say(line: &str) {
     let _ = std::io::stderr().write_all(format!("jellymoon-app: {line}\n").as_bytes());
 }
 

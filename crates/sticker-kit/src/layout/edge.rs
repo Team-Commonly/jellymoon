@@ -24,6 +24,9 @@ const PAD: f32 = 14.0;
 const BETWEEN: f32 = 6.0;
 const APART: f32 = 10.0;
 const RING: f32 = 26.0;
+/// The range an edge scene's text is drawn in, whatever a theme asks: its windows are small and never resized, so
+/// a larger text would leave them and a smaller one could not be read.
+const TEXT_SIZES: (f32, f32) = (9.0, 22.0);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -70,6 +73,11 @@ impl Tone {
         }
     }
 
+    /// The size its text is drawn at in `theme`, held to [`TEXT_SIZES`]. A size that is no number is the least.
+    fn size(self, theme: &Theme) -> f32 {
+        sized(self.role(), theme)
+    }
+
     /// The most lines one text of this tone takes.
     fn lines(self) -> usize {
         match self {
@@ -80,11 +88,23 @@ impl Tone {
     }
 }
 
+/// The size a text of `role` is drawn at in an edge scene.
+fn sized(role: Role, theme: &Theme) -> f32 {
+    let size = role.size(theme, 1.0);
+    if size.is_finite() { size.clamp(TEXT_SIZES.0, TEXT_SIZES.1) } else { TEXT_SIZES.0 }
+}
+
+impl Edge {
+    /// Whether the bubble holds something a person sees: whether there is a bubble, and a second window.
+    pub fn speaks(&self) -> bool {
+        self.bubble.iter().any(|said| has_visible(&clean(&said.text, MAX_TEXT_CHARS)))
+    }
+}
+
 /// The sizes of the two windows of an edge scene in `theme`: the character's, and the bubble's, which is as
 /// tall as its most lines in the theme's largest bubble text. Neither depends on what is said.
 pub fn edge_windows(theme: &Theme) -> (Viewport, Viewport) {
-    let tallest =
-        [Tone::Plain, Tone::Strong, Tone::Small, Tone::Quoted].map(|tone| line_height(tone.role().size(theme, 1.0)));
+    let tallest = [Tone::Plain, Tone::Strong, Tone::Small, Tone::Quoted].map(|tone| line_height(tone.size(theme)));
     let line = tallest.into_iter().fold(0.0, f32::max);
     let gaps = (MAX_BUBBLE_TEXTS - 1) as f32 * APART;
     let bubble = Viewport { w: BUBBLE_WIDTH, h: 2.0 * PAD + MAX_BUBBLE_LINES as f32 * line + gaps };
@@ -102,7 +122,7 @@ pub fn layout_edge(edge: &Edge, theme: &Theme, corner: Corner, measure: &dyn Mea
     let piece = |kind, rect| EdgePiece { kind, rect, text: Vec::new() };
     let mut pieces = vec![piece(EdgeKind::Character, Rect::new(8.0, 8.0, CHARACTER - 16.0, CHARACTER - 16.0))];
     if edge.count > 0 {
-        let (role, size) = (Role::RowSub, Role::RowSub.size(theme, 1.0));
+        let (role, size) = (Role::RowSub, sized(Role::RowSub, theme));
         let text = if edge.count > 99 { "99+".to_string() } else { edge.count.to_string() };
         let (width, height) = (measure.width(&text, role, size), line_height(size));
         let rect = Rect::new(CHARACTER - 4.0 - (width + 12.0), 4.0, width + 12.0, height + 4.0);
@@ -127,7 +147,7 @@ fn spoken(edge: &Edge, theme: &Theme, corner: Corner, window: Viewport, measure:
     for (at, (tone, text)) in texts.iter().enumerate() {
         // Every text still to come keeps one line, so none is left out for the length of an earlier one.
         let most = tone.lines().min(left - (texts.len() - at - 1));
-        let (role, size) = (tone.role(), tone.role().size(theme, 1.0));
+        let (role, size) = (tone.role(), tone.size(theme));
         if let Some(before) = before {
             cursor += if *tone == Tone::Quoted || before == Tone::Quoted { APART } else { BETWEEN };
         }

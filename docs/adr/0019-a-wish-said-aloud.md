@@ -471,6 +471,59 @@ the bubble's shape are F57's, with the two windows; the room the Dock and the me
 The kit's drawing half paints no piece of the edge scene yet, so no theme has a colour for one: F57 gives
 the `quoted` role its ink.
 
+## Found while building F57 (2026-11-15)
+
+F57 opens the jellyfish and its bubble as two windows of the app. The account is
+[app.md](../development/app.md), "The jellyfish's two windows". Decision 4 stands as written. Where this note
+was silent, this was decided:
+
+1. **What a window is asked for is data in one place.** `popup::JELLY` and `popup::BUBBLE` say it (a pop-up,
+   no focus, see-through, not moved, not resized, and what a tap does), `layout --jelly` prints it as `opens`,
+   and `popup::options` alone turns it into GPUI's options. Whatever the third thing to try first (below)
+   overturns is changed there.
+2. **The third thing to try first was not tried.** No window was opened on a screen while F57 was built. Three
+   observations stay open for a person: whether a pop-up brings the app to the front, whether the system draws
+   a shadow or a frame round a see-through window, and whether the part one sees through takes clicks.
+3. **The room is the primary display's**: its whole bounds as the screen, and the bounds the system calls
+   visible, less the menu bar and the Dock, as the room, both given to the kit's placing as numbers from the
+   display's own top left. The room is asked once, when the jellyfish is opened: a Dock that is moved after is
+   not followed, since no window is moved.
+4. **The margin gives way before the bubble covers the jellyfish.** `place_pair` places both: in a room that
+   holds the two apart only with less than 16 pixels at the edge, the jellyfish stands nearer the edge by as
+   much as it must. Only a room that cannot hold both apart at all has one over the other.
+5. **The page's view outlives its window.** Closing the page's window removes the window and keeps the view:
+   its scene, its theme and the words in its entry. A day's reading and its look once a second go on. Shown
+   again, by a tap on the jellyfish or by opening the app again, it is the same view in a new window. An entry
+   that was waiting for core when its window closed is answered all the same.
+6. **Quit is the menu's and Cmd-Q's**, and the app is told to end only when asked: closing the last page
+   window ends nothing. One case ends it: the jellyfish could not be opened and the page is closed, since
+   nothing is left to show the page from.
+7. **What core keeps for the jellyfish is the day's made wishes.** Once a second the app asks
+   `jellymoon_core::jellyfish` with no line: no file of a new kind, and nothing the app works out. So the open
+   app shows `working`, `asks`, `waits` and `quiet`. The three states of a hearing (`listening`, `heard`,
+   `cannot`) are drawn when a line of one is given, which the test platform does; no hearing runs in the app
+   until the key and the ear are there (F58 and after).
+8. **A page with no day has a quiet jellyfish** (`--page`, `--waiting`): nothing is looked at.
+9. **The jellyfish keeps the theme the app was opened with.** `t` switches the page.
+10. **The `quoted` ink** is a key of the palette, held to 4.5 to 1 on the bubble. A theme file without it gets
+    its own `accent_dark` where that reads, else the first of its colours that does.
+11. **An edge scene's text is 9 to 22 pixels**, whatever a theme's sizes are: the windows have one size and a
+    text may not leave them.
+12. **What F56's review found** is closed here: a line's words and project are something a person sees; a
+    carriage return or a form feed inside a line is no line; `cannot` carries no words; a file that cannot be
+    read is refused in fixed words with its last name only; a wrong `--screen` or `--size` is said back cut at
+    40 characters, and both are read by one function, digits only; the kit's `clean` takes U+2028, U+2029,
+    U+0085 and U+000B as a line's end and keeps at most 8 marks on one character; a run is clipped to its piece
+    when painted; the order of states is written once, as `JellyState::ORDER`; every sentence of a hearing's
+    own is drawn whole (`Hearing::refusals`), for which the sentence for no harness was made shorter in a
+    hearing: "the wish is kept, but no run was started: no `claude` program was found (JELLYMOON_CLAUDE names
+    one)". `jellymoon wish --run` says the longer one, with where it looked, as before.
+
+**Not closed by F57:** the three observations of point 2. That Quit ends the process, the menu, Cmd-Q and
+opening the app again are not run by any test. A refusal that carries a day or another command's words is cut
+with an ellipsis where it is longer than the bubble. A theme file's `quoted` is measured on a bubble laid on
+white, and the bubble's window is see-through.
+
 ## New dependencies
 
 | Package | For | Licence | Size | Rejected |

@@ -93,6 +93,12 @@ pub(crate) fn holds_unseen(text: &str) -> bool {
     UNREAD.is_match(text)
 }
 
+/// Whether a text holds something a person sees: something is left of it without what is [`UNREAD`]. A wish
+/// and a project's name are made of no less.
+pub(crate) fn seen(text: &str) -> bool {
+    !UNREAD.replace_all(text, "").is_empty()
+}
+
 /// Strips what is [`UNSEEN`] and shortens every token to its prefix and an ellipsis. The stripping goes first, so a
 /// colour code before a key, or a character planted inside one, cannot hide it.
 fn string(text: &str) -> String {

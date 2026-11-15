@@ -253,7 +253,13 @@ fn a_stray_argument_to_project_is_answered_in_a_fixed_line_and_never_said_back()
     }
     // And so does an argument that is not text, as a stray one and as the name to forget.
     #[cfg(unix)]
-    for before in [&["project", "list"][..], &["project", "add"], &["project", "forget"], &["project", "forget", "x"]] {
+    for before in [
+        &["project", "list"][..],
+        &["project", "add"],
+        &["project", "forget"],
+        &["project", "forget", "x"],
+        &["project", "new"],
+    ] {
         use std::os::unix::ffi::OsStrExt;
         let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_jellymoon"));
         command.args(before).arg(std::ffi::OsStr::from_bytes(b"stray\xff\xfename"));

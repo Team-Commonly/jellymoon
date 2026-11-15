@@ -1,7 +1,8 @@
-//! A making that does not get to its end. A step that fails (git, the list's lock, a list that changed under
-//! it) takes back the folder that was made and lists nothing. A command that is killed between its steps
-//! leaves the folder, unlisted: the next `project new` of that name says what is there, and the person mends
-//! it. And two at once of one name make one project. The made-up `fake-git` fails a git step
+//! A making that does not get to its end. A step that fails (git, a list written over by hand under it) takes
+//! back the folder that was made and lists nothing; a lock that is held is waited for, and nothing is made. A
+//! command that is killed between its steps leaves the folder, unlisted: once its lock is nobody's, the next
+//! `project new` of that name says what is there, and the person mends it. And two at once of one name make
+//! one project. The made-up `fake-git` fails a git step
 //! (`support/fake_git.rs`); the command is held just before it writes the list by a test build's own wait.
 
 use std::env;
@@ -18,11 +19,12 @@ use crate::support::{plant, tree};
 
 const GIT_FAILED: &str = "git could not make the new project's repo (what git said is not repeated, as it names the \
                           folder), so what was made was taken back and nothing was listed";
-const LOCKED: &str = "another change to the list of projects has not finished, so nothing was changed";
+pub const BUSY: &str = "another change to the list of projects, or the making of a new project, has not finished, \
+                        so nothing was changed; if it was cut off, ask again in half a minute";
 
 /// The variables that put the made-up git first on `PATH`, told to end with 3 at the step that has `step`
 /// among its words and to take no other step amiss.
-fn failing_at(w: &World, step: &str) -> Vec<(&'static str, OsString)> {
+pub fn failing_at(w: &World, step: &str) -> Vec<(&'static str, OsString)> {
     let (folder, name) = (w.at("fake"), format!("git{EXE_SUFFIX}"));
     if !folder.exists() {
         fs::create_dir(&folder).unwrap();
@@ -38,12 +40,12 @@ fn failing_at(w: &World, step: &str) -> Vec<(&'static str, OsString)> {
 }
 
 /// The whole test folder but the made-up git's own.
-fn world_of(w: &World) -> Vec<(PathBuf, Vec<u8>)> {
+pub fn world_of(w: &World) -> Vec<(PathBuf, Vec<u8>)> {
     w.all().into_iter().filter(|(path, _)| !path.starts_with(w.at("fake"))).collect()
 }
 
 /// `project new` of a name, held just before it writes the list: the command, and the file that lets it go.
-fn held_before_the_list(w: &World, name: &str) -> (Going, PathBuf) {
+pub fn held_before_the_list(w: &World, name: &str) -> (Going, PathBuf) {
     let go = w.at("rec").join(format!("go-{name}"));
     for left in [go.clone(), go.with_extension("at")] {
         let _ = fs::remove_file(left);
@@ -84,12 +86,12 @@ fn a_git_step_that_fails_takes_back_what_was_made_and_lists_nothing() {
 }
 
 #[test]
-fn a_list_whose_lock_is_held_takes_back_what_was_made() {
+fn a_list_whose_lock_is_held_is_waited_for_and_nothing_is_made() {
     let w = heard_world();
     printed(&w.new_project("beta"));
     // A folder at the lock's name is never taken for stale: the wait ends with the lock still held.
     fs::create_dir(w.jm("projects.lock")).unwrap();
-    new_refused(&w, "alpha", LOCKED);
+    new_refused(&w, "alpha", BUSY);
     assert_eq!(w.names_in("projects"), ["beta"]);
     fs::remove_dir(w.jm("projects.lock")).unwrap();
     assert_eq!(printed(&w.new_project("alpha"))["name"], "alpha");
@@ -98,16 +100,16 @@ fn a_list_whose_lock_is_held_takes_back_what_was_made() {
 #[test]
 fn a_list_that_changed_while_the_project_was_made_takes_back_what_was_made() {
     let w = heard_world();
-    let elsewhere = w.repo("alpha");
     printed(&w.new_project("beta"));
     let (root, sep) = (w.real(&w.at("work")), std::path::MAIN_SEPARATOR);
     let line = |n: usize| json!({"name": format!("p{n}"), "folder": format!("{root}{sep}p{n}"), "used": DAY});
     let full = json!({ "projects": (0..100).map(line).collect::<Vec<_>>() }).to_string();
     let was = fs::read(w.list_file()).unwrap();
-    // While the command stands before the list: the name is listed for another folder, the list is filled, and
-    // the list is written over by hand.
+    let named = json!({ "projects": [{"name": "Alpha", "folder": format!("{root}{sep}Alpha"), "used": DAY}] });
+    // While the command stands before the list, the list is written over by hand, as no command can change it
+    // then: with the name for another folder, with a full list, and with no list at all.
     let changes: [(&dyn Fn(), &str); 3] = [
-        (&|| drop(printed(&w.run(&["project", "add", "--repo", elsewhere.to_str().unwrap(), "--date", DAY]))), LISTED),
+        (&|| w.write_list(format!("{named}\n").as_bytes()), LISTED),
         (
             &|| w.write_list(full.as_bytes()),
             "the list has its 100 projects already, so this one was not added; let one go with `jellymoon project \
@@ -142,7 +144,15 @@ fn a_making_that_is_killed_leaves_a_folder_the_next_one_says_is_there_and_the_pe
         let (going, _go) = held_before_the_list(&w, name);
         drop(going); // killed, as a power cut would end it
         assert!(w.made(name).join(".git").is_dir() && !w.list_file().exists());
-        new_refused(&w, name, THERE);
+        // Its lock is left, and is nobody's half a minute on.
+        let aged = std::time::SystemTime::now() - std::time::Duration::from_secs(40);
+        fs::File::options().write(true).open(w.jm("projects.lock")).unwrap().set_modified(aged).unwrap();
+        // The next one takes that lock over, looks behind it, and leaves it to nobody.
+        let before = w.all();
+        let ran = w.new_project(name);
+        assert_eq!(refused(&ran), format!("jellymoon: {THERE}\n"));
+        let lock = w.jm("projects.lock");
+        assert!(!lock.exists() && w.all() == before.into_iter().filter(|(path, _)| *path != lock).collect::<Vec<_>>());
     }
     // Mended by listing what is there: the repo was whole, and a run starts in it.
     let real = w.real(&w.made("alpha"));
@@ -157,10 +167,9 @@ fn a_making_that_is_killed_leaves_a_folder_the_next_one_says_is_there_and_the_pe
 #[test]
 fn two_at_once_of_one_name_make_one_project() {
     let w = heard_world();
-    // The first stands with its folder made and nothing listed: the second finds the folder there.
+    // The first stands with its folder made and nothing listed: the second waits for it, and makes nothing.
     let (first, go) = held_before_the_list(&w, "alpha");
-    new_refused(&w, "alpha", THERE);
-    new_refused(&w, "Alpha", THERE);
+    new_refused(&w, "Alpha", BUSY);
     fs::write(&go, "").unwrap();
     assert_eq!(printed(&ended(first)), json!({"name": "alpha", "used": DAY}));
 

@@ -3,9 +3,12 @@
 //! (`f39/world.rs`), each world in the system's own temporary folder, with the made-up `fake-agent` as the
 //! harness and the real git. This file holds what `project new` makes; `f65/refused.rs` what it refuses, with
 //! the whole test folder compared; `f65/half.rs` a making that fails or is cut off half way, and two at once;
+//! `f65/alone.rs` a making met by another command or another hand, and what it takes back;
 //! `f65/wished.rs` a wish for the new project, its run and its keep, and a made project that is forgotten.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f65/alone.rs"]
+mod alone;
 #[path = "f65/half.rs"]
 mod half;
 #[path = "f55/heard.rs"]
@@ -204,6 +207,32 @@ fn the_first_commit_is_by_the_person_when_their_git_config_names_them_and_obeys_
     // The commit is not signed, and no signing program was asked for.
     let raw = w.git(&w.made("alpha"), &["cat-file", "commit", "main"]);
     assert!(!raw.contains("gpgsig"), "{raw}");
+}
+
+#[test]
+fn the_person_s_git_config_does_not_choose_the_new_repo_s_format_or_who_may_read_it() {
+    let w = heard_world();
+    let settings = [
+        "[init]\n\tdefaultObjectFormat = sha256\n",
+        "[init]\n\tdefaultRefFormat = reftable\n",
+        "[core]\n\tsharedRepository = world\n",
+    ];
+    for (at, setting) in settings.into_iter().enumerate() {
+        fs::write(w.at("gitconfig"), setting).unwrap();
+        let name = format!("p{at}");
+        printed(&w.new_project(&name));
+        let git = w.made(&name).join(".git");
+        assert_eq!(w.commit(&w.made(&name), "main").len(), 40, "{setting}");
+        assert!(git.join("refs").join("heads").join("main").is_file() && !git.join("reftable").exists(), "{setting}");
+        let config = fs::read_to_string(git.join("config")).unwrap().to_lowercase();
+        assert!(!config.contains("sha256") && !config.contains("reftable"), "{config}");
+        #[cfg(unix)]
+        for inside in [git.clone(), git.join("objects"), git.join("HEAD")] {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&inside).unwrap().permissions().mode();
+            assert_eq!(mode & 0o7022, 0, "{setting}: {} is {mode:o}", inside.display());
+        }
+    }
 }
 
 #[test]

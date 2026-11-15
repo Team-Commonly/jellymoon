@@ -173,10 +173,10 @@ What the build settled for decision 3, and where it is not this note's words. Th
   project, and "Friends" (risk 4) is where its place may have to change.
 - **It is made only when the first project is**, for the person alone (0700), as `copies`, `runs` and `pages`
   are. It must be a real folder: a link or a file at its name is refused, and is never followed or replaced.
-- **A name is one folder's name on every system.** It is F62's check of a project's name, and on top of it:
-  no dot, dash or space at its start (a hidden folder, an option), no dot or space at its end (Windows cuts
-  them), no colon (a drive, a stream) and no name a system keeps for a device (`NUL`, `COM1`). Refused in one
-  sentence that never says the name back.
+- **A name is one folder's name on macOS, Linux and Windows.** It is F62's check of a project's name, and on
+  top of it: no dot, dash or space at its start (a hidden folder, an option), no dot or space at its end
+  (Windows cuts them), no colon (a drive, a stream) and no name a system keeps for a device (`NUL`, `COM1`);
+  and, since the gate, what is listed below. Refused in one sentence that never says the name back.
 - **Taken is a name on the list, whatever its folder, or anything at the name in `projects`**: a folder, a file
   or a link, which is never followed. Both are asked with the case of letters set aside, on every system, so a
   home copied to a disk that folds case holds no two projects in one folder. Two Unicode forms of one name are
@@ -184,15 +184,14 @@ What the build settled for decision 3, and where it is not this note's words. Th
   them apart, they are two projects. A file system that stores a name in other letters than it was given is
   refused after the fact, and what was made is taken back.
 - **The order.** The name, the list, the folder and git on `PATH` are looked at first, and a refusal there has
-  written nothing at all. Then `projects/<name>` is made by a call that fails when anything is at the name:
-  that is the claim, and of two commands of one name at once one makes it and the other is told something is
-  there. Then the repo, then the list, behind the list's own lock, where a name listed meanwhile is found.
-- **A step that fails after the folder is made takes the folder back and lists nothing**: git, the list's
-  lock held for its 3 seconds, a list that filled or was written over meanwhile. `projects` goes too when
-  this command made it. What stays is Jellymoon's folder and the empty folder git is started in
+  written nothing at all. Then, behind the list's own lock (see what the gate found, below), every look is
+  taken again, `projects/<name>` is made by a call that fails when anything is at the name, then the repo,
+  then the line on the list.
+- **A step that fails after the folder is made takes the folder back and lists nothing**: git, a list that
+  filled or was written over by hand meanwhile. `projects` goes too when this command made it. What stays is Jellymoon's folder and the empty folder git is started in
   (`runs/no-hooks`), as after a run's copy that was refused.
-- **A command killed between its steps leaves the folder, unlisted.** Nothing is kept that would say a making
-  is under way, so the next `project new` of that name says only that something is there, and names the two
+- **A command killed between its steps leaves the folder, unlisted.** Once its lock is nobody's, the next
+  `project new` of that name says that something is there, and names the two
   ways out: list it with `project add --repo` when the repo was whole, or remove it and ask again. A folder
   with a `.git` and no commit is listed by `project add` and refused by a run's copy, as F62 found.
 - **git is run as a run's copy runs it**: the program found in the full folders of `PATH`, started in the empty
@@ -205,5 +204,25 @@ What the build settled for decision 3, and where it is not this note's words. Th
 - **What git says is never repeated**, as for a folder read from a session log: it names the folder.
 - **`project forget` of a made project forgets the line and keeps the folder**, as for any project. The name
   is then taken by the folder: `project add --repo` lists it again.
+- **What F65's gate found, and what was decided.**
+  - *One making at a time.* The whole of a making, from its second look to its line on the list, is behind
+    the list's lock. Before, a making held between its folder and the list could be met: its name's folder
+    removed and made again by another command, and then taken back by name with the person's file in it. No
+    `project new`, `add` or `forget` meets a making now; each waits 3 seconds and is told one has not finished.
+  - *What is taken back is the folder this command made*, known by the system's number for it and its time of
+    making, compared before it is removed and before it is listed; never a folder the list names; and
+    `projects` only when this command made it and it is empty. A folder put at the name by another hand is
+    left and not listed.
+  - *Something at the name is asked again behind the lock*, so a second `project new` of a name under making
+    waits, and is not told to remove or list a folder that is being made.
+  - *A killed making leaves its lock* for the 30 seconds any lock of the list is left; the sentence of the
+    lock says to ask again in half a minute.
+  - *The name's rule is wider*: none of `* ? | < > "`, no tilde at the start, no joiner, and the device forms
+    `COM¹`, `CONIN$` and `CONOUT$`. It is a name a folder can have on macOS, Linux and Windows.
+  - *The sentence of a file system that changed the name is said only when the kept name differs.* Whose
+    Jellymoon's folder is, and whether its path is text, are asked before anything is made, in their own
+    sentences; what `project add` says of a folder is passed on when it is said of the made one.
+  - *The person's config chooses nothing of the repo but who its commit is by*: `init` is told the object
+    format, the ref format and that no file is opened to others, and the last is written to the repo's config.
 - **Not built here:** the app's "Start something new" (F66); a remote; a `.gitignore` or any first file; a
   way to make a project anywhere else; and `project new` on Windows and Linux, which nobody has run.

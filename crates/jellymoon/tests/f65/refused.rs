@@ -12,9 +12,9 @@ use super::*;
 use crate::support::{hub_key, shows, skipped};
 
 pub const NAME: &str = "project new takes a name for the new project: one folder's name of at most 100 characters, \
-                        with no dot, dash or space at its start, no dot or space at its end, no colon, no name a \
-                        system keeps for a device, nothing that cannot be seen and nothing shaped like a credential; \
-                        nothing was made";
+                        with no dot, dash, tilde or space at its start, no dot or space at its end, no two spaces \
+                        together, none of : * ? | < > \" in it, no name a system keeps for a device, nothing that \
+                        cannot be seen and nothing shaped like a credential; nothing was made";
 pub const LISTED: &str = "a project of that name is on the list already, so nothing was made; pick another name, or \
                           let the listed one go with `jellymoon project forget`";
 pub const THERE: &str = "something is already there under that name in the folder Jellymoon makes projects in \
@@ -25,6 +25,26 @@ pub const NO_FOLDER: &str = "the folder Jellymoon makes projects in (projects in
                              Jellymoon made: a link or a file is at its name; nothing was made";
 pub const NO_GIT: &str = "no `git` program was found on PATH, and a new project is a git repo, so nothing was made";
 
+/// Names Windows takes for no folder or keeps for a device, one a shell reads as the person's home, one with a
+/// joiner that is not seen between two letters, and one with two spaces together.
+const NO_NAME: [&str; 15] = [
+    "a*b",
+    "a?b",
+    "a|b",
+    "a<b",
+    "a>b",
+    "a\"b",
+    "COM\u{b9}",
+    "lpt\u{b2}.txt",
+    "CONIN$",
+    "conout$.log",
+    "~",
+    "~alpha",
+    "al\u{200d}pha",
+    "al\u{200c}pha",
+    "al  pha",
+];
+
 /// A link at `at` that leads to `to`. False where this system makes none for this user.
 pub fn link(to: &Path, at: &Path) -> bool {
     #[cfg(unix)]
@@ -32,6 +52,13 @@ pub fn link(to: &Path, at: &Path) -> bool {
     #[cfg(windows)]
     let linked = std::os::windows::fs::symlink_dir(to, at);
     linked.is_ok()
+}
+
+/// Removes a link [`link`] made. Windows removes a link to a folder as a folder, and any other as a file.
+pub fn unlink(at: &Path) {
+    if fs::remove_file(at).is_err() {
+        fs::remove_dir(at).unwrap();
+    }
 }
 
 /// `project new` of the name is refused in that line, which says nothing of the name, and nothing is changed.
@@ -80,7 +107,7 @@ fn a_name_that_is_a_path_or_is_no_project_s_name_is_refused_and_nothing_is_made(
         key.as_str(),
     ];
     let long = "a".repeat(101);
-    for name in odd.into_iter().chain([long.as_str()]) {
+    for name in odd.into_iter().chain(NO_NAME).chain([long.as_str()]) {
         new_refused(&w, name, NAME);
         let ran = w.new_project(name);
         assert!(name.len() < 8 || !shows(&ran.stderr, name), "the name was said back: {}", ran.stderr);
@@ -91,7 +118,8 @@ fn a_name_that_is_a_path_or_is_no_project_s_name_is_refused_and_nothing_is_made(
     for name in [full.as_str(), up.as_str(), "..", ".hidden", "-alpha", "C:alpha"] {
         new_refused(&w, name, NAME);
     }
-    // The longest name a project has is made.
+    // Four letters that start as a device's do and are none are a name; and the longest name a project has is made.
+    assert_eq!(printed(&w.new_project("COMA"))["name"], "COMA");
     assert_eq!(printed(&w.new_project(&"a".repeat(100)))["name"], "a".repeat(100));
 }
 
@@ -174,7 +202,7 @@ fn a_link_or_a_file_where_the_folder_of_projects_would_be_is_refused_and_nothing
         }
         new_refused(&w, "alpha", NO_FOLDER);
         assert_eq!(fs::read_link(w.jm("projects")).unwrap(), to, "the link was replaced");
-        fs::remove_file(w.jm("projects")).unwrap();
+        unlink(&w.jm("projects"));
     }
     assert_eq!(fs::read_dir(&outside).unwrap().count(), 0, "something was made where the link leads");
     assert!(!w.at("work").join("nowhere").exists() && !w.jm("runs").exists());

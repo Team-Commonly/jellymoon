@@ -147,23 +147,36 @@ pub fn projects(home: &Path) -> Result<Projects, Error> {
     Ok(Projects { projects: listed(home)?.iter().map(Line::known).collect() })
 }
 
-/// Changes the list behind its lock, `projects.lock` in the home. The change is tried once on the list as it is
-/// before the lock is asked for, so a change that is refused makes no folder and no file; and once behind the
-/// lock, where the list cannot change under it. The file is written whole.
+/// What is said to a command that waited for the list's lock and did not get it. The holder is a change to the
+/// list or a making (`new.rs`); a lock whose holder was cut off is taken over when it is 30 seconds old.
+const BUSY: &str = "another change to the list of projects, or the making of a new project, has not finished, so \
+                    nothing was changed; if it was cut off, ask again in half a minute";
+
+/// Takes the list's lock, `projects.lock` in the home, which is made when it is not there. Every change to the
+/// list is behind it, and the whole of a making.
+fn hold(home: &Path) -> Result<Lock, Error> {
+    private_dir(home).map_err(Error::Store)?;
+    Lock::take(home.join("projects.lock")).map_err(|e| match e.kind() {
+        ErrorKind::TimedOut => refused(BUSY),
+        _ => Error::Store(e),
+    })
+}
+
+/// Writes the list whole. Only behind its lock ([`hold`]).
+fn write(home: &Path, lines: Vec<Line>) -> Result<(), Error> {
+    let text = serde_json::to_string(&List { projects: lines }).map_err(io::Error::from);
+    text.and_then(|text| put(&file(home), &format!("{text}\n"), false)).map_err(Error::Store)
+}
+
+/// Changes the list behind its lock. The change is tried once on the list as it is before the lock is asked
+/// for, so a change that is refused makes no folder and no file; and once behind the lock, where the list
+/// cannot change under it.
 fn change<T>(home: &Path, change: impl Fn(&mut Vec<Line>) -> Result<T, Error>) -> Result<T, Error> {
     change(&mut listed(home)?)?;
-    private_dir(home).map_err(Error::Store)?;
-    let _lock = Lock::take(home.join("projects.lock")).map_err(|e| match e.kind() {
-        ErrorKind::TimedOut => {
-            refused("another change to the list of projects has not finished, so nothing was changed")
-        }
-        _ => Error::Store(e),
-    })?;
+    let _lock = hold(home)?;
     let mut lines = listed(home)?;
     let done = change(&mut lines)?;
-    let text = serde_json::to_string(&List { projects: lines }).map_err(io::Error::from);
-    text.and_then(|text| put(&file(home), &format!("{text}\n"), false)).map_err(Error::Store)?;
-    Ok(done)
+    write(home, lines).map(|()| done)
 }
 
 /// The name and the real folder a project is listed by, when `repo` is a folder a project can be: there, the

@@ -34,6 +34,8 @@ pub(crate) fn fresh_repo(home: &Path, folder: &Path, message: &str) -> Result<()
 fn first_commit(git: &Git, folder: &Path, message: &str) -> Result<(), String> {
     git.init(folder)?;
     let repo = git.open(&folder.join(".git"))?;
+    // Every later git reads the person's config again: the repo's own says its files are the person's alone.
+    repo.run(None, &[], &["config", "core.sharedRepository", "umask"])?;
     repo.run(None, &[], &["symbolic-ref", "HEAD", BRANCH])?;
     let tree = repo.run(None, &[], &["write-tree"])?;
     let (name_is, address) = who(&repo)?;

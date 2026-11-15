@@ -147,7 +147,8 @@ fn changes_made_at_once_are_all_kept_and_a_lock_that_stays_refuses_the_change() 
     let late = w.repo("late");
     fs::write(w.jm("projects.lock"), "").unwrap();
     let before = w.all();
-    let held = "jellymoon: another change to the list of projects has not finished, so nothing was changed\n";
+    let held = "jellymoon: another change to the list of projects, or the making of a new project, has not finished, \
+                so nothing was changed; if it was cut off, ask again in half a minute\n";
     assert_eq!(refused(&w.run(&["project", "forget", "p0"])), held);
     assert_eq!(refused(&w.add(&late)), held);
     assert!(w.all() == before);

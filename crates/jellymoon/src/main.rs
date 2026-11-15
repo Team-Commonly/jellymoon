@@ -42,7 +42,7 @@ const USAGE: &str = "usage:
   jellymoon project new <name> [--date <YYYY-MM-DD>]   (makes a new project: a folder of that name in projects in Jellymoon's folder, a git repo with one empty first commit, listed like any other)
   jellymoon project list   (the projects Jellymoon knows: each name and the day it was last used, never a folder)
   jellymoon project forget <name>   (takes that project off the list, and touches nothing else)
-  jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay)
+  jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay, and the projects made with `project new` are among them)
 ";
 
 /// A `project` command: what core printed of the list, or of the one project that was added, made or forgotten.

@@ -307,7 +307,10 @@ max_file_lines = 400
 # takes back, is 171; `copy/fresh.rs`, the new repo and its empty first commit, 43; `copy/git.rs` 11 (`init`, and
 # the look for the program on `PATH` by itself); `copy/clean.rs` 10 (who a commit is by, shared with a run's);
 # `copy.rs` and `project.rs` 5.
-"crates/jellymoon-core" = 14243
+# F65's gate raised core by 197: `project/new.rs` 175 (the making behind the list's lock, the folder known as it
+# was made, a home asked before anything is made, the wider rule of a name, and their unit tests), `project.rs`
+# 13 (the lock and the write as two calls), `copy/git.rs` 7 and `copy/fresh.rs` 2 (what a new repo is made as).
+"crates/jellymoon-core" = 14440
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -460,7 +463,9 @@ max_file_lines = 400
 # F65 raised it by 755: its tests are 726 (`tests/f65.rs` 237, `f65/refused.rs` 221, `f65/half.rs` 188,
 # `f65/wished.rs` 80); `tests/f62.rs` 19 (an argument that is not text, a missing value, and `new` in the fixed
 # line); `main.rs` and `parse.rs` 10 (`project new`, and the project commands as one variant).
-"crates/jellymoon" = 23843
+# F65's gate raised it by 271: `tests/f65/alone.rs` 198 (a making met by a command or a hand, and the gate's
+# survivors), `tests/f65.rs` 29, `f65/refused.rs` 28, `f65/half.rs` 9, `tests/f62.rs` 6 and `f62/refused.rs` 1.
+"crates/jellymoon" = 24114
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

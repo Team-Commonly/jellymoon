@@ -55,6 +55,10 @@ const OFF: &[&str] = &[
 /// `JELLYMOON_TEST_GIT_LIMIT_FROM` names is there, if it names one.
 const LIMIT: Duration = Duration::from_secs(300);
 
+/// What a new repo is made as (`init`), whatever the person's config names for one: git's own object format
+/// and ref format, and files only as open to others as the person's umask leaves them.
+const PLAIN: &[&str] = &["init.defaultObjectFormat=sha1", "init.defaultRefFormat=files", "core.sharedRepository=umask"];
+
 /// What stands where git's own words would, for a repo whose folder was read from a session log.
 const UNSAID: &str = "what git said of a folder read from a session log is not repeated";
 
@@ -97,9 +101,12 @@ impl Git {
         }
     }
 
-    /// Makes a folder that is there a repo, with nothing of a template in it (`fresh.rs`).
+    /// Makes a folder that is there a repo, with nothing of a template in it (`fresh.rs`), and in the format and
+    /// for the readers git itself would choose, whatever the person's config names for a new repo. A git too
+    /// old to know one of the three settings takes no note of it.
     pub fn init(&self, folder: &Path) -> Result<(), String> {
         let mut command = self.command();
+        command.args(PLAIN.iter().flat_map(|plain| ["-c", plain]));
         command.args(["init", "--quiet", "--template="]).arg(folder);
         printed(command, self, false)?.map(|_| ()).ok_or_else(|| UNSAID.to_string())
     }

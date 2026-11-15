@@ -150,7 +150,7 @@ fn a_follow_up_s_run_is_refused_when_the_work_it_follows_was_tossed_or_moved_or_
     let (w, wish) = (&made.w, followed(&made.w, "m1"));
     w.play("follow", 0);
     // A keep or a toss is at work: the follow-up's run waits for it as a keep does, and is then refused.
-    let lock = fs::File::options().create(true).append(true).open(w.jm("runs").join("keep.lock")).unwrap();
+    let lock = fs::File::create(w.jm("runs").join("keep.lock")).unwrap();
     lock.lock().unwrap();
     let before = made.all();
     let wait = [("JELLYMOON_TEST_KEEP_WAIT_MS", "200".into())];

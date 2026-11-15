@@ -42,7 +42,12 @@ that is: cleaned, on one line, 300 characters at most ("A run that asks"). Every
    with no folder named by its full path is refused here, before any copy ("What the harness is started with").
 3. **The repo.** `--repo`, a full path whose last name is the wish's project. Without it, the one folder of that
    name that something was typed in that day: core reads the day's session logs for the folders, as the reader
-   reads them. A folder that is a harness worktree is not a project of its own: what was typed in
+   reads them. With no folder of the name typed in, it is the folder listed under the name in the list of
+   projects Jellymoon knows, when that folder stands: it is there by the path that was listed and through no
+   link, holds a `.git`, is the person's own and is not switched off. A name typed in and listed with two
+   folders that are not one starts nothing ([project.md](project.md), "What is offered, and where a run
+   starts"). A listed folder is the list's word as a typed-in one is a log's: it is never printed, and nothing
+   git says of it is repeated. A folder that is a harness worktree is not a project of its own: what was typed in
    `<repo>/.claude/worktrees/<name>` counts as typed in `<repo>`, so the folder a run finds for it is the repo
    itself, by the repo's name, and never the worktree. A switched-off folder is not read (one named with `--skip`
    or in `skip.txt`), and neither is a run's copy ([reader.md](reader.md)). `--logs` names the logs, in place of Claude Code's own. A folder found so is
@@ -76,7 +81,10 @@ that is: cleaned, on one line, 300 characters at most ("A run that asks"). Every
    children, until the worktree is added. Whoever can rename the folder, or a folder above it, in that span
    can have the copy made of another repo: the agent's commit then lands on a `jellymoon/run-<id>` branch
    there, and no checkout is written. That is someone who can write the folder's parent, usually the person.
-4. **The copy.** `make_copy`, as `jellymoon copy make` does it. The harness is started in the copy.
+4. **The copy.** `make_copy`, as `jellymoon copy make` does it. The harness is started in the copy. Once the
+   copy is made and the run's lock is taken, the repo is written on the list of projects, used on the wish's
+   day, so a run finds it from then on with nothing typed. The write never fails a run
+   ([project.md](project.md), "A run's start writes the list").
 5. **The run.** Below.
 6. **The end.** Finished: `clean_copy` as completed, so the work is one commit on `jellymoon/run-<id>` and the
    folder is gone; the wish is `done` with one more star. A run that changed nothing has still finished, and says
@@ -540,8 +548,9 @@ a cut-off run's is.
   one writing of the run's end, and only for a run that finished: the commit made of its work, or, when it
   changed nothing, `start` itself. Each is left out when it is not known, never written as null,
   and a record from before F48 has none of them (example `run-record-before.json`) and is read as it always was.
-  The repo's folder is a path of the person's machine: it is in this one file, and is not printed, not in page
-  data and not in what is sent to the model. Only `run show` reads the three, and it trusts none of them
+  The repo's folder is a path of the person's machine: it is in this file and, once the run has started, in the
+  list of projects ([project.md](project.md)), and is not printed, not in page data and not in what is sent to
+  the model. Only `run show` reads the three, and it trusts none of them
   ([show.md](show.md)).
 
   | A run that | writes `repo`, `start` | writes `end` |
@@ -1050,7 +1059,10 @@ empty `runs/no-hooks`), and they stay.
 | No made wish of that id on that day | the page has no made wish of that id |
 | A wish that names a run | the wish has had its run, and which |
 | `--repo` that is not a full path, or whose last name is not the wish's project | which of the two |
-| No `--repo`, and no folder of the name typed in that day, or two of them | how many, and to name one with `--repo` |
+| No `--repo`, and no folder of the name typed in that day or listed, or two typed in | how many, and to name one with `--repo` |
+| No `--repo`, and a folder of the name typed in that day and another one listed | that the name has both, and to name one with `--repo` or let the listed one go with `jellymoon project forget` |
+| No `--repo`, none typed in, and the listed folder is gone or reached through a link, holds no `.git`, is not the person's own or is switched off | which of the four, and the same two ways out |
+| No `--repo`, none typed in, and a list of projects that cannot be used | that none was typed in, why the list is not used, and to name the folder with `--repo` |
 | No `--repo`, and no session logs | the reader's own line |
 | No `--repo`, and the one folder is not owned by the person (Unix) | that it is not a folder of their own, and to name the folder with `--repo` |
 | No `--repo`, and the one folder is a link that leads to a folder of another name | that it leads to a folder of another name, and to name the folder with `--repo` |
@@ -1058,7 +1070,7 @@ empty `runs/no-hooks`), and they stay.
 | Something other than a plain file at `runs/going.lock` | nothing was started: the lock runs are counted behind is not a plain file |
 | Three runs going | that three are going and no more go at once ("Three runs at once") |
 | A `PATH` with no folder named by its full path | nothing was started, and why |
-| No `--repo`, and the one folder is inside a repo, or is no repo | that it is not one a run can copy, and `copy make`'s reason, with fixed words where git's own would be |
+| No `--repo`, and the one folder, typed in or listed, is inside a repo, or is no repo | that it is not one a run can copy, and `copy make`'s reason, with fixed words where git's own would be |
 | A folder that is not a checkout git can copy | `copy make`'s own line ([copy.md](copy.md)) |
 
 ## Not covered

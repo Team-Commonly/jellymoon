@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::hook::put;
+use crate::project::Offer;
 use crate::reader::{self, parse};
 use crate::reading::{LABEL_MAX, STAR_MAX, STARS_MAX};
 use crate::redact::line;
@@ -109,35 +110,28 @@ pub(crate) fn cleaned(typed: &str) -> Result<String, Unkept> {
 }
 
 /// Whether a project is one folder's name: no path, and nothing that cleaning would change.
-fn named(project: &str) -> bool {
+pub(crate) fn named(project: &str) -> bool {
     let path = project.contains(['/', '\\']) || project == "." || project == "..";
     !project.is_empty() && !path && project.chars().count() <= PROJECT_MAX && line(project, PROJECT_MAX) == project
 }
 
 /// The projects of `projects` a wish can be made for from a page, in their order: each is one folder's name as
-/// [`wish`] takes it, and a folder of that name was typed in on `read`'s day and is not switched off. That is
-/// asked of the reader, with the lookup a run finds its repo by (`reader::folders`), so the names switched off
-/// (`read.skip`, and `skip.txt` in `read.home`) are matched against the folder's whole path and never against the
-/// project's name alone. Every session log of the day is read. None at all when the day cannot be read: no logs,
-/// or a `skip.txt` that cannot be used, never puts a folder on offer.
+/// [`wish`] takes it, and a folder of that name was typed in on `read`'s day and is not switched off, or is
+/// listed under that name in `read.home` and stands (F62). That is asked of the lookup a run finds its repo by
+/// (`project/offer.rs`), so the names switched off (`read.skip`, and `skip.txt` in `read.home`) are matched
+/// against the folder's whole path and never against the project's name alone, and a name typed in and listed
+/// with two folders is not offered. Every session log of the day is read. No logs is a day nothing was typed
+/// on. None at all when a `skip.txt` cannot be used, or the logs cannot be read.
 pub fn wishable(read: &DayOptions, projects: &[String]) -> Vec<String> {
-    let Ok(typed) = reader::typed_in(read) else { return Vec::new() };
-    let found = |project: &String| named(project) && typed.iter().any(|folder| reader::is_named(folder, project));
-    projects.iter().filter(|project| found(project)).cloned().collect()
+    let Ok(offer) = Offer::of(read, reader::typed_in(read)) else { return Vec::new() };
+    projects.iter().filter(|project| named(project) && offer.offers(project)).cloned().collect()
 }
 
-/// Every project a wish can be made for on `read`'s day, each once, in the order its folders were typed in: the
-/// names [`wishable`] would offer. A folder's name is a session log's text: one that is no folder's name as
-/// [`wish`] takes it is never offered. None at all when the day cannot be read.
+/// Every project a wish can be made for on `read`'s day, each once, in the order its folders were typed in and
+/// then in the list's: the names [`wishable`] would offer. A folder's name is a session log's text: one that is
+/// no folder's name as [`wish`] takes it is never offered. None at all when the day cannot be read.
 pub(crate) fn offered(read: &DayOptions) -> Vec<String> {
-    let mut offered: Vec<String> = Vec::new();
-    for folder in reader::typed_in(read).unwrap_or_default() {
-        let name = folder.file_name().and_then(|name| name.to_str()).filter(|name| named(name));
-        if let Some(name) = name.filter(|name| !offered.iter().any(|known| known == name)) {
-            offered.push(name.to_string());
-        }
-    }
-    offered
+    Offer::of(read, reader::typed_in(read)).map(|offer| offer.names()).unwrap_or_default()
 }
 
 /// [`wish`] for a project chosen on a page: kept only when [`wishable`] offers that project now, on `read`'s day

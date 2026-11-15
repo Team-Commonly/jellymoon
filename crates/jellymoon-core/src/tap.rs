@@ -257,7 +257,7 @@ impl Lock {
     /// folder at the name is never removed: the tap is refused after the same wait. On Windows a name another
     /// process is removing, or looking at, cannot be made for that moment and says "denied": that is a lock in the
     /// way like any other (`busy.rs`). Only when the wait ends with no lock there is the error itself the answer.
-    fn take(path: PathBuf) -> io::Result<Lock> {
+    pub(crate) fn take(path: PathBuf) -> io::Result<Lock> {
         let started = Instant::now();
         loop {
             let taken = OpenOptions::new().write(true).create_new(true).open(&path);

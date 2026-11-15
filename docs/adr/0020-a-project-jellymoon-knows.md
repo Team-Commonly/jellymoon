@@ -109,7 +109,8 @@ Voice (F55 to F61) needs none of them to be built, and needs F62 and F63 before 
 
 1. **A listed folder is a path in one more file.** It is in Jellymoon's own folder, beside the runs' records that
    already name it.
-2. **A repo moved or renamed** is not offered and is not found again. The person adds it again.
+2. **A repo moved or renamed** is not offered and is not found again. The person forgets the name with
+   `project forget`, then adds the repo again: a second folder under a listed name is refused.
 3. **An empty repo and a first wish.** What an agent builds from nothing, with no instructions in the repo, is
    not known. It is the first thing a new person sees, so it is tried by a person before "Start something new" is
    announced.
@@ -125,3 +126,36 @@ Voice (F55 to F61) needs none of them to be built, and needs F62 and F63 before 
 - `docs/GLOSSARY.md` gains **project** (a repo's top folder, called by its last name) and **known project** (one on
   Jellymoon's list), in this note's PR.
 - `docs/INDEX.md`: the row of ADR 0019 said "Proposed" after the note was accepted. The word is removed.
+
+## Found while building F62
+
+What the build settled, and where it is not this note's words. The detail is
+[project.md](../development/project.md).
+
+- **A repo's top is a folder that holds `.git`, when a project is listed and when it is offered.** Decision 2
+  says a listed folder passes "the checks a run makes". The run's own check of a repo's top asks git, and git is
+  started in an empty folder a run makes in Jellymoon's home. `project add` and the look that offers a project
+  write nothing, so they look for `.git` and do not start git. The run's copy still asks git before anything
+  is made, and refuses in fixed words. So a folder with a `.git` that is no repo is offered and then refused,
+  where the decision reads as not offered.
+- **The list is all or nothing.** A file with one line `project add` could not have written is not used at all,
+  as a day's made wishes are. Passing over the one line would leave the person a list that silently lost a
+  project.
+- **A listed path is used only as the real path it was listed by.** It is resolved when it is listed, and each
+  time it is used it must still resolve to itself. A link put where a listed folder was, or a line written by
+  hand that names a link or holds a `..`, leads nowhere.
+- **A run's start writes the list after the copy is made and the run's lock is taken**, which is after every
+  check. A harness too old for runs is found out later, so that repo is listed though no run went.
+- **A run named a folder with `--repo` under a name another folder is listed for goes, and the list stays.**
+  Decision 1 refuses the second folder at `project add`. At a run's start there is nobody to refuse to.
+- **`run show`, `run keep` and `run toss` find the repo by the same lookup**, so the work of a run found by the
+  list is shown, kept and tossed with no `--repo`.
+- **Two typed-in folders of one name are offered and then refused by the run, as they were.** Decision 2 keeps
+  the typed-in names "as now". Only the new case, a name typed in and listed, is taken off offer.
+- **A wish said aloud picks a project less often.** ADR 0019 picks the only project offered. With a list,
+  every listed project that stands is offered every day, so there is less often an only one. The rule is
+  ADR 0019's and is unchanged; what it should be with a list is F63's or voice's to settle.
+- **A repo's path is in a second file of the home**, as "Risks left open", 1, says: the test that held it to
+  the run's record alone (`tests/f48.rs`) now names the two.
+- **Not built here:** the app's refusal still says "typed in", and git's words for a listed folder are replaced
+  by the words written for a folder read from a session log.

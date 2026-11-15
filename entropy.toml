@@ -297,7 +297,11 @@ max_file_lines = 400
 # `run/waits.rs` lost 2 (the comparison before a page's keep is gone: the keep's own check is the one).
 # Its gate raised core by 2: the one list of what is not read in a printed text is `redact.rs`'s now (10 more
 # there, 9 fewer in `run/obeyed.rs`), with private and unassigned code points and U+FFFC; its test is 1 more.
-"crates/jellymoon-core" = 13294
+# F62, the list of projects, raised core by 445: `project.rs`, the list, its file and what `project add` and
+# `forget` refuse, is 267; `project/offer.rs`, the one lookup from a name to its folder, 117; `run/place.rs` 44
+# (where a folder came from, and what a run says of a listed one); `tests/shapes.rs` 16; `error.rs`, `lib.rs`
+# and `reader.rs` 13; `run.rs` and `wish.rs` lost 12, their own lookups gone.
+"crates/jellymoon-core" = 13739
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -437,7 +441,17 @@ max_file_lines = 400
 # The follow-up to F47's third gate raised it by 28: the made-up agent's three scripts for names printed whole that
 # a person does not read, 8, and the test of `run waiting` that says them not plain, 20.
 # Its gate took 3 from it: the unseen ends of `tests/f55/voice.rs` are one text.
-"crates/jellymoon" = 22103
+# F62 raised it by 929: the three `project` commands 50 (`parse.rs` 36; `main.rs` 14, `settle` now a function of
+# its own to keep `run` under 60 lines), and the rest tests:
+# `tests/f62.rs` 230, `tests/f62/` 646 (`hand.rs` 167, `refused.rs` 156, `found.rs` 152, `started.rs` 89,
+# `clash.rs` 82), 2 in `tests/f47.rs` (a project forgotten before its repo is not found) and 1 in `tests/f48.rs`
+# (the list is the second file of the home that holds a repo's path).
+# The fixes after F62's gate raised it by 54: `parse.rs` 5 (a wrong `project` command line answered in one fixed
+# line, so no argument is said back), and tests: `tests/f62.rs` 18 (a stray folder or credential), `f62/found.rs`
+# 18 (a wish said aloud with two on offer) and `f62/started.rs` 13 (a run refused at its copy lists nothing).
+# Its CI raised it by 2: `tests/f39/world.rs` runs the tests' git with its own upkeep off, which wrote into a
+# repo a test had just read (macOS).
+"crates/jellymoon" = 23088
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -471,7 +485,9 @@ max_file_lines = 400
 # F47 raised it by 5: the `show` step asks `run waiting` too.
 # F55's step, `hear` (`smoke/hear.rs`, 46 lines), raised it by 49.
 # F52's step, `answer` (`smoke/answer.rs`, 73 lines), raised it by 76.
-"crates/xtask" = 2178
+# F62's step, `project` (`smoke/project.rs`, 84 lines), raised it by 93: 6 of them in `smoke/hear.rs`, which
+# forgets the projects the chain's runs listed, so that one project is on offer when it hears.
+"crates/xtask" = 2271
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -598,7 +614,9 @@ max_file_lines = 400
 # printed whole and not read) and `tests/f47/named.rs` 3 (a yes to other names is refused by the keep itself).
 # Its gate raised the app by 9: `tests/f47/named.rs`, the one yes to other names that is not refused (the
 # person's branch holds the run's commit already, and nothing is landed).
-"app" = 7100
+# F62 raised the app by 1: the arm for core's new error where it puts an error into words.
+# Its CI raised the app by 2: `tests/f47/asked.rs` forgets the project a run listed before its repo is not found.
+"app" = 7103
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

@@ -143,10 +143,12 @@ what core keeps.
   hint as text, and a `chip` piece for each option, after the scene's pieces.
 - **Which projects have a chip.** Core says (`jellymoon_core::wishable`): a name `jellymoon wish --project`
   takes (one folder's name of at most 100 characters, no path, nothing unseen) that is the name of a folder
-  something was typed in that day, with the folders switched off left out. That is asked of the reader, with
+  something was typed in that day, with the folders switched off left out, or that is on the list of projects
+  Jellymoon knows with a folder that stands ([project.md](project.md)). That is asked of the reader, with
   the lookup a run finds its repo by, so `--skip` and `skip.txt` are matched against the folder's whole path: a
   folder switched off by a name above it has no chip. This holds from the first scene, which is the kept page
-  of an earlier reading, so a project of a kept page with no folder typed in today has no chip either. A
+  of an earlier reading, so a project of a kept page with no folder typed in today, and no line in the list,
+  has no chip either. A
   `skip.txt` or a logs folder that cannot be read offers nothing. Whether the folder is there, and is a repo, is
   the run's to say. The first six of these are offered, which are the chips the kit draws.
 - **What the chips cost.** Every session log of the day is read once more for them, off the window's thread:
@@ -239,7 +241,7 @@ holds what is asked), the one-second timer, the order of the reading's steps, wh
 `defer` that lets the view finish a tap before it takes a new scene, and the calls `set_theme` and
 `entry_focused`. A person's walk at a real window is still owed for it.
 
-Not covered: a wish for a project past the sixth, or for one nothing was typed in today, is made with
+Not covered: a wish for a project past the sixth, or for one neither typed in today nor listed, is made with
 `jellymoon wish`. What only a person at a window can see is not tested: the input method's candidate window,
 the caret, the pale words of an entry that waits, and which piece has the keys.
 
@@ -324,7 +326,8 @@ that fit and counts the rest in a last line, `+N more`.
     where only the merge would bring such a file (the person renamed a file the work edits to a name their tools
     obey), it is refused, with nothing changed.
 - **The repo is not named by the app.** Core finds it as the run did: the folder of the wish's project typed in
-  the day's logs, with the folders switched off left out, and checked against the run's record. When it is not
+  the day's logs, with the folders switched off left out, or else the one listed under its name
+  ([project.md](project.md)), and checked against the run's record. When it is not
   found the note says so in core's words and has no choice.
 
 `app/tests/f47.rs`, `f47/asked.rs`, `f47/named.rs` and `f47/drawn.rs` follow all of it through `Showing`, in a

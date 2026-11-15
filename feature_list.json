@@ -584,7 +584,7 @@
         "a name both typed in that day and listed, with two folders that are not one repo, is not offered and starts nothing, in words that name `--repo` and `project forget`; a second folder under a listed name is refused"
       ],
       "test": "cargo test -p jellymoon --test f62",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {

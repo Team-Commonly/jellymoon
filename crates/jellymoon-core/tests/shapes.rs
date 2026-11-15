@@ -253,3 +253,19 @@ fn the_note_that_asks_names_each_file_in_a_text_of_its_own_and_past_six_a_page_h
     let line = long.lines().pop().unwrap();
     assert_eq!((line.chars().count(), line.ends_with("x, and 5 more")), (320 + 12, true), "{line}");
 }
+
+// What `jellymoon project add` and `forget` print, and `project list`: names and days, and no name for a folder.
+#[test]
+fn a_known_project_and_the_list_of_them_round_trip_byte_for_byte_and_hold_no_folder() {
+    let example = fixture("project.json");
+    let known: jellymoon_core::Known = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{known}\n"), example);
+    assert_eq!((known.name.as_str(), known.used.as_str()), ("alpha", "2026-03-10"));
+    let example = fixture("projects.json");
+    let listed: jellymoon_core::Projects = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{listed}\n"), example);
+    assert_eq!(listed.projects.len(), 2);
+    // The file kept on disk has the folder, and is not what is printed: read as that, it is refused.
+    let kept = fixture("projects-kept.json");
+    assert!(serde_json::from_str::<jellymoon_core::Projects>(&kept).is_err());
+}

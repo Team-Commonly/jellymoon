@@ -169,6 +169,8 @@ impl World {
     /// The same, whatever git's exit: for a command that is meant to stop half way.
     pub fn git_ran(&self, folder: &Path, args: &[&str]) -> std::process::Output {
         let mut git = Command::new("git");
+        // git's own upkeep goes on after a commit returns, and would write into a folder a test has just read.
+        git.args(["-c", "gc.auto=0", "-c", "maintenance.auto=false"]);
         git.args(args).current_dir(folder).env_clear().envs(self.vars.iter().map(|(name, value)| (name, value)));
         git.env("GIT_CEILING_DIRECTORIES", self.dir.path());
         for who in ["AUTHOR", "COMMITTER"] {

@@ -81,6 +81,8 @@ fn work_whose_repo_is_not_found_is_listed_with_core_s_reason_and_no_file() {
     let w = world();
     let repo = w.repo("alpha");
     let (wish, run) = ran_as(&w, &repo, "edits");
+    // The run's start listed its repo (F62). Forgotten, the project is one Jellymoon no longer knows.
+    printed(&w.run(&["project", "forget", "alpha"]));
     let before = (w.persons(&repo), w.branches(&repo), w.record(&run), w.copies());
     // No folder is named, and the logs hold no session: the repo is not found.
     let logs = w.at("logs");

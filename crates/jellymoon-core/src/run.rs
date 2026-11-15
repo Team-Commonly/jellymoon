@@ -47,6 +47,7 @@ pub(crate) use end::bury;
 use end::{lock_file, settle};
 pub use keep::{KeepOptions, Kept, keep_run};
 pub(crate) use left::tidy;
+pub(crate) use place::{plain, theirs};
 use record::Record;
 pub(crate) use record::work_waits;
 use serde::{Deserialize, Serialize};
@@ -58,8 +59,7 @@ pub use waits::{Waiting, Waits, WorkDone, WorkTap, stands, waiting, waits, work_
 use crate::busy::{self, or_test};
 use crate::call::harness_of;
 use crate::copy::{self, MadeFrom};
-use crate::wish;
-use crate::{Error, WishState, find};
+use crate::{Error, WishState, find, project, wish};
 
 /// The command line of a run, as measured on Claude Code 2.1.322 (ADR 0014, "Measured") and 2.1.323 (ADR 0018,
 /// "Measured"): no shell, no web, no MCP server, no permission asked, edits inside the folder it is started in.
@@ -253,19 +253,11 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     // work beside this run's own, and a copy no wish names is taken back (`left.rs`). It is done before the
     // folder is looked up, so none of its waits stands between that lookup and git opening the folder.
     tidy(home, &wish::kept_of(home, &day)?);
-    let repo = place::folder(home, &day, &wish, options)?;
+    let (repo, from) = place::found(home, &day, &wish, options)?;
     // A test's build can wait here, with the folder looked up and nothing yet asked of git.
     busy::pause("JELLYMOON_TEST_PLACE_WAIT_MS");
     cap::room(home, cap::AGAIN)?;
-    // A folder read from the logs that is not a repo's top is refused with copy's own reason, in fixed words: no
-    // folder above it is tried, and nothing git says of it is repeated.
-    let made = copy::copy_of(home, &repo, options.repo.is_some()).map_err(|e| match (e, &options.repo) {
-        (Error::Copy(why), None) => {
-            let why = why.replacen("--repo", "it", 1);
-            refused(format!("the folder of that name typed in on {day} is not one a run can copy: {why}"))
-        }
-        (e, _) => e,
-    })?;
+    let made = copy::copy_of(home, &repo, options.repo.is_some()).map_err(|e| from.uncopied(e, &day))?;
     // The copy's start lock is held until this command ends: what a killed command left is known by it.
     let (copy, held, from) = made;
     // Where the run started, kept as git said it: the run's branch must still be there at the run's end. And
@@ -281,6 +273,8 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
             return Err(e);
         }
     };
+    // Every check a run makes of a repo is passed: it is a project Jellymoon knows from now on (`project.rs`).
+    project::used(home, &repo, &wish.project, &day);
     let expect = lined(&mut command, &copy.folder, session, false);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
     let (told, stop) = (|pid| record::child(home, &copy.run, pid), || stop::asked(home, &copy.run));

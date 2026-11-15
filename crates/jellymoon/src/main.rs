@@ -38,6 +38,9 @@ const USAGE: &str = "usage:
   jellymoon hook status                          (whether the hook is in the settings now; changes nothing)
   jellymoon copy make --repo <folder> [--run <id>]   (a run's own copy of a repo: a git worktree on a branch of its own)
   jellymoon copy clean --run <id> --outcome <completed|failed>   (completed: committed on its branch, the folder removed; failed: kept)
+  jellymoon project add --repo <folder> [--date <YYYY-MM-DD>]   (lists a repo's top folder as a project Jellymoon knows, under the folder's last name: a wish can be made for it on a day nothing was typed in it)
+  jellymoon project list   (the projects Jellymoon knows: each name and the day it was last used, never a folder)
+  jellymoon project forget <name>   (takes that project off the list, and touches nothing else)
   jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay)
 ";
 
@@ -119,6 +122,18 @@ fn answer(options: &RunOptions) -> Result<String, Failure> {
     Ok(format!("{}\n", ran.map_err(|e| Failure::Run(e.to_string()))?))
 }
 
+/// `settle`, the tap: the ruling, and a line when the page could not keep it.
+fn settle(date: &str, clash: usize, option: usize) -> Result<String, Failure> {
+    let settled =
+        jellymoon_core::settle_kept(&home()?, date, clash, option).map_err(|e| Failure::Run(e.to_string()))?;
+    if let Some(why) = &settled.unkept {
+        // The ruling was made, so this is not a failure: the line says what the page will not show.
+        let line = format!("jellymoon: the ruling was made, but the page could not keep it: {why}\n");
+        let _ = io::stderr().write_all(line.as_bytes());
+    }
+    Ok(format!("{settled}\n"))
+}
+
 /// Runs the command and returns what it prints.
 fn run() -> Result<String, Failure> {
     let failed = |e: jellymoon_core::Error| Failure::Run(e.to_string());
@@ -149,15 +164,7 @@ fn run() -> Result<String, Failure> {
             Ok(told.map(|told| told + "\n").unwrap_or_default())
         }
         Command::InstallHook { settings, installed } => Ok(format!("{}\n", install_hook(settings, installed)?)),
-        Command::Settle { date, clash, option } => {
-            let settled = jellymoon_core::settle_kept(&home()?, &date, clash, option).map_err(failed)?;
-            if let Some(why) = &settled.unkept {
-                // The ruling was made, so this is not a failure: the line says what the page will not show.
-                let line = format!("jellymoon: the ruling was made, but the page could not keep it: {why}\n");
-                let _ = io::stderr().write_all(line.as_bytes());
-            }
-            Ok(format!("{settled}\n"))
-        }
+        Command::Settle { date, clash, option } => settle(&date, clash, option),
         Command::Wish { date, say, project, apart } => wish(date, &say, &project, apart),
         Command::Hear(options) => hear(options),
         Command::Voice => Ok(format!("{}\n", jellymoon_core::voice(&home()?).map_err(failed)?)),
@@ -179,6 +186,13 @@ fn run() -> Result<String, Failure> {
         Command::RemoveHook => Ok(format!("{}\n", jellymoon_core::remove_hook(&home()?).map_err(failed)?)),
         Command::MakeCopy { repo, run } => {
             Ok(format!("{}\n", jellymoon_core::make_copy(&home()?, &repo, run.as_deref()).map_err(failed)?))
+        }
+        Command::AddProject { repo, date } => {
+            Ok(format!("{}\n", jellymoon_core::add_project(&home()?, &repo, date.as_deref()).map_err(failed)?))
+        }
+        Command::ListProjects => Ok(format!("{}\n", jellymoon_core::projects(&home()?).map_err(failed)?)),
+        Command::ForgetProject { name } => {
+            Ok(format!("{}\n", jellymoon_core::forget_project(&home()?, &name).map_err(failed)?))
         }
         Command::CleanCopy { run, outcome } => {
             Ok(format!("{}\n", jellymoon_core::clean_copy(&home()?, &run, outcome).map_err(failed)?))

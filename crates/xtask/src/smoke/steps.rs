@@ -57,6 +57,8 @@ pub const STEPS: &[Step] = &[
     Step { name: "wish-run", only: Only::Synthetic, run: super::apart::wish_run },
     // A wish said aloud (F55), as events on a command's input. Not with --real, as `wish`.
     Step { name: "hear", only: Only::Synthetic, run: super::hear::hear },
+    // A project Jellymoon knows (F62): a repo listed by hand, and a run found by the list. Not with --real, as `wish`.
+    Step { name: "project", only: Only::Synthetic, run: super::project::project },
     Step { name: "uninstall", only: Only::Synthetic, run: uninstall },
     Step { name: "window", only: Only::Window, run: window },
 ];

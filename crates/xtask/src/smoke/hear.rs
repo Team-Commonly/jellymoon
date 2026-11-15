@@ -15,6 +15,12 @@ pub fn hear(world: &World) -> Result<String, String> {
     let typed = json!({"type": "user", "timestamp": format!("{DAY}T16:00:00.000Z"), "cwd": text(&world.at("heard")),
         "sessionId": "s", "origin": {"kind": "human"}, "message": {"role": "user", "content": "look at the notes"}});
     write(&logs.join("-work-heard").join("s.jsonl"), &format!("{typed}\n"))?;
+    // The chain's runs listed their repos (F62). They are forgotten, so the one folder typed in is the one on offer.
+    let listed = world.json("jellymoon", &["project", "list"].map(str::to_string))?;
+    for known in listed["projects"].as_array().into_iter().flatten() {
+        let name = known["name"].as_str().unwrap_or_default();
+        world.json("jellymoon", &["project", "forget", name].map(str::to_string))?;
+    }
     let said = json!({"said": "final", "words": SAY});
     let events = format!(
         "{{\"tick\":0}}\n{{\"key\":\"down\"}}\n{{\"tick\":1000}}\n{{\"key\":\"up\"}}\n{said}\n{{\"tick\":1000}}\n{{\"tick\":5000}}\n"

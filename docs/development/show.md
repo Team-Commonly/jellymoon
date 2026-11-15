@@ -84,7 +84,8 @@ The wish's run is read as a stop reads it (`run.md`, "A stop the person asks for
 day, its words are core's, and its copy is gone. Whether it made a commit is read from those words.
 
 The repo is found as a run finds it (`run.md`, "The order"): `--repo`, or the one folder of the wish's project
-typed in on the day, from `--logs`. It must be the top of a checkout. Of a folder read from a log nothing git says
+typed in on the day, from `--logs`, or else the folder listed under the project's name, which the run's start
+wrote down (`project.md`). So a run's work is shown, kept and tossed on a later day with no `--repo`. It must be the top of a checkout. Of a folder read from a log nothing git says
 is repeated; here nothing git says is repeated of any folder.
 
 ## What the record names, and how far it is trusted

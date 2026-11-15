@@ -184,6 +184,7 @@ fn nothing_else_a_run_writes_changes_and_no_step_of_a_run_in_the_persons_repo_do
         "copies".to_string(),
         "pages".to_string(),
         format!("pages/{DAY}.wishes.json"),
+        "projects.json".to_string(),
         "runs".to_string(),
         "runs/clean.lock".to_string(),
         "runs/going.lock".to_string(),
@@ -253,7 +254,7 @@ fn the_repos_path_is_in_the_runs_record_and_in_nothing_else_a_run_or_a_page_writ
     let record = w.jm("runs").join(&made.run).join("run.json");
     let held: Vec<PathBuf> =
         tree(&w.at("jm")).into_iter().filter(|(_, bytes)| holds(bytes)).map(|(path, _)| path).collect();
-    assert_eq!(held, [record], "the one file of the home that holds the repo's path");
+    assert_eq!(held, [w.jm("projects.json"), record], "the two files of the home that hold the repo's path");
     for (path, bytes) in tree(&w.at("reader")) {
         let given = path.file_name().is_some_and(|name| name != "env" && name != "cwd" && name != "ls");
         assert!(!given || !holds(&bytes), "the reading call was given the repo's path in {}", path.display());

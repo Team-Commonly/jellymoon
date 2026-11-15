@@ -375,6 +375,8 @@ F55 is core's hearing at `jellymoon hear`, with `voice.toml` and F30's test file
 15. **(The same.) A key held with Shift alone is refused** (`Shift+A`, `Shift+Space`): registered with the
     system it would take capitals and signs from every program. A refused key or language that holds a
     character that cannot be seen is not named back, since the cleaned value would read as one that is right.
+    The second gate named values that still were: a tab or a space at the end, a joiner, a letter that draws
+    as a blank. The list is now of what is not read in a quoted value, not of what prose is cleaned of.
 16. **(The same.) `hear --run` says how a run ended** when it had ended by the time its start was answered,
     as `wish --run` prints it; and the input's last line with no line break is held to 65 535 bytes, the
     length a line of 64 KiB has without its break.

@@ -74,9 +74,15 @@ static UNSEEN: LazyLock<Regex> = LazyLock::new(|| {
     ))
 });
 
-/// Whether a text holds something that is [`UNSEEN`]: shown cleaned, it would read as a text it is not.
+/// What a value named back in quotes would not be read with: a control or format character, a letter that draws
+/// as nothing or as a blank, any space but the plain one, and a plain space at an end or beside another.
+static UNREAD: LazyLock<Regex> = LazyLock::new(|| {
+    pattern(r"\p{Default_Ignorable_Code_Point}|[\p{White_Space}--[ ]]|[\p{Cc}\p{Cf}\u{2800}]|^ | $|  ")
+});
+
+/// Whether a text holds something that is [`UNREAD`]: named back, it would read as a text it is not.
 pub(crate) fn holds_unseen(text: &str) -> bool {
-    UNSEEN.is_match(text)
+    UNREAD.is_match(text)
 }
 
 /// Strips what is [`UNSEEN`] and shortens every token to its prefix and an ellipsis. The stripping goes first, so a

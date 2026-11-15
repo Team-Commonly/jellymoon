@@ -103,12 +103,23 @@ fn a_key_core_does_not_know_is_refused_in_one_line_that_names_it() {
     let line = w.unused(&format!("key = \"Control+{secret}\"\n"));
     assert!(!shows(&line, &secret) && line.starts_with("the key \"Control+"), "{line}");
     // A key or a language that holds what cannot be seen would be named back as one that reads right: it is not named.
-    for unseen in ["Control+Shift+Space\u{200b}", "Con\u{2065}trol+Space", "Control+\u{1b}[31mSpace"] {
+    // So is a joiner, a letter that draws as a blank, any space but a plain one, and a plain space nobody sees.
+    let right = "Control+Shift+Space";
+    let ends = [
+        "\u{200b}", "\t", " ", "\u{a0}", "\u{2028}", "\u{200c}", "\u{200d}", "\u{34f}", "\u{fe0f}", "\u{3164}",
+        "\u{2800}",
+    ];
+    let unseen = ends.iter().flat_map(|end| [format!("{right}{end}"), format!("{end}{right}")]);
+    for unseen in
+        unseen.chain(["Con\u{2065}trol+Space", "Control+\u{1b}[31mSpace", "Control+Shift  Space"].map(String::from))
+    {
         let line = w.unused(&format!("key = \"{unseen}\"\n"));
         assert_eq!(line, "the key holds a character that cannot be seen", "{unseen:?}");
     }
-    let line = w.unused("language = \"en\u{feff}-US\"\n");
-    assert_eq!(line, "the language holds a character that cannot be seen");
+    for unseen in ["en\u{feff}-US", "en-US\t", "en-US ", "en-US\u{a0}", "en\u{200d}-US"] {
+        let line = w.unused(&format!("language = \"{unseen}\"\n"));
+        assert_eq!(line, "the language holds a character that cannot be seen", "{unseen:?}");
+    }
     // Shift alone is how capitals and signs are typed: such a key would take them from every program.
     for typing in ["Shift+A", "Shift+Space", "Shift+7", "Shift+F5"] {
         let line = w.unused(&format!("key = \"{typing}\"\n"));

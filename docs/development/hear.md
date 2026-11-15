@@ -258,7 +258,9 @@ language = "en-US"
 
 A file that is not used is refused in one line, exit 1, and nothing is printed or written. The line names the
 value, cleaned and cut to 40 characters as any text core prints, or the number of the line. A value that holds
-a character that cannot be seen is not named: cleaned, it would read as a value that is right.
+a character that cannot be seen is not named: cleaned, it would read as a value that is right. That is a
+control or format character, a letter that draws as nothing or as a blank (a joiner, a filler, a variation
+selector), any space but the plain one, and a plain space at an end of the value or beside another.
 
 | The file | The line, after `jellymoon: voice.toml is not used: ` |
 |---|---|
@@ -312,6 +314,14 @@ Nothing here grows with the input: a hearing holds one hold's words, one refusal
   than 4000 ms of ticks after the words were printed; they are longer by the time to the first tick.
 - **A hold's length is counted from the ticks before its key events**, as above: a sender that does not tick
   with a key event can make a slip of a hold. Key events carry no time of their own.
+- **A tick below the first one counts as the first.** Until a later tick has come, such a tick is at the time
+  the clock stands at, and starts a refusal's six seconds. It cannot start a heard wish's four or the ear's
+  five, which need a hold of 300 ms on the clock first.
+- **An ear that keeps refusing keeps `cannot` shown.** Each refusal replaces the last and starts its six
+  seconds anew. F58 does not send a refusal that stands a second time.
+- **A run that finished before its start was answered** prints no line of its own: the hearing goes `quiet`
+  with the wish it made, and the day's rest shows the work that waits. Read, not run: no test can make that
+  order come.
 - **A wish is made on the day the hearing began.** One that goes on past midnight keeps that day.
 - **A project needs a folder typed in that day** (ADR 0019, "Risks left open", 1).
 - **Answering a run that asks by voice** waits on F52, F54 and F61.

@@ -160,6 +160,44 @@ What the build settled, and where it is not this note's words. The detail is
 - **Not built here:** the app's refusal still says "typed in", and git's words for a listed folder are replaced
   by the words written for a folder read from a session log.
 
+## Found while building F63
+
+What the build settled of decision 5, and where it is not this note's words. The detail is
+[page.md](../development/page.md) and [app.md](../development/app.md).
+
+- **Two days are "nothing typed", and only one needed building.** A day whose logs are there and hold no turn
+  of it already had an empty page with no call, and its made wishes were already put on it. What had no page
+  was a day with no session logs at all: the reader's answer is an error. Core now gives that day a page
+  (`page_with_no_logs`) when it has a made wish that can be used or a project on offer, and only then.
+- **The page says which of the two it is.** `read.turns` 0 says nothing was typed. `read.no_logs`, true only on
+  the page of a day with no logs, says nothing was read. It is left out when false, so every page there was
+  prints the bytes it did. The shell reads the field and decides nothing: its footer for it is one fixed line.
+- **The made wishes are put on it by the door every page uses**, so their states, stars, questions and shown
+  work are a typed day's. No wish, no clash and no finished thing is made up: the page's own lists are empty.
+- **Nothing made and nothing on offer stays the answer it was**: the reader's one line, and the app's plain
+  note. A day with nothing to draw has no use for an empty page, and a new person who has not used Claude Code
+  still reads why.
+- **No call is made, and the model's name is still checked.** The page is made by the function every page is
+  made by, given a day of no turns, so a `--model` that is no name is refused on this day as on any.
+- **The chips are every name on offer, whatever the page read.** They were the page's projects that are on
+  offer, so a listed project nothing was typed in had no chip on any day. Core's `offered` is the one answer
+  now: the names typed in that day, in the reader's order, then the list's.
+- **Six chips, and the rest counted.** The kit drew the first six options and said nothing of the rest. It now
+  counts them as a list counts its rows past its room: "+94 more" after the last chip, in words, which nothing
+  chooses. A project past the sixth is wished for with `jellymoon wish`, as before. Which six come first is
+  core's order; the app picks none.
+- **`jellymoon page` keeps nothing, so a later call is the same bytes.** The app keeps this page as it keeps a
+  reading's. A kept page that read something is not replaced by it, and a kept page that says no logs were
+  found is read again once there are logs.
+- **Delivery and the hook are unchanged**: a page is no ruling, and a step of a session on such a day is told
+  nothing.
+- **The smoke chain** asks it in the `project` step, which already has a wish run in a project nothing
+  was typed in: `jellymoon page` over a logs folder that is not there prints that wish done, with `read.no_logs`.
+  The folder the chain calls `no-logs` is there and holds nothing, so the step names another.
+- **Not built here:** a made wish's question is not drawn on a page, on this day or any; a day whose logs hold
+  no turn still has the footer "Read from 0 things you typed. This is the model's reading, unedited.", which
+  names a model that read nothing; and which six of many projects come first is not the person's to choose.
+
 ## Found while building F65
 
 What the build settled for decision 3, and where it is not this note's words. The detail is

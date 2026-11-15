@@ -111,8 +111,9 @@ list's lock is held: the run goes on after the 3 seconds and lists nothing.
 
 ## What is offered, and where a run starts
 
-One lookup answers both (`project/offer.rs`), so what is offered is what starts. `wishable` (the page's entry
-and a wish said aloud) and a run with no `--repo` ask it for a name:
+One lookup answers both (`project/offer.rs`), so what is offered is what starts. `offered` (the chips of the
+page's entry), `wishable` (a wish entered there, and a wish said aloud) and a run with no `--repo` ask it for a
+name:
 
 | The name has | It leads to | Offered |
 |---|---|---|
@@ -277,7 +278,8 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
 - **`project new` was run on a Mac, and by CI on Linux and Windows.** The device names, the characters Windows
   takes in no name and the cut dots and spaces are refused on every system; that Windows refuses them was read,
   not seen.
-- A folder dropped on the window and a page for a day nothing was typed are F63, F64 and F66.
+- A folder dropped on the window is F64 and F66. The page of a day nothing was typed on is built (F63):
+  [page.md](page.md) and [app.md](app.md) say what it holds.
 
 ## Tests
 

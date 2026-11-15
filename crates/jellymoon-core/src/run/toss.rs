@@ -14,7 +14,7 @@ use super::end::{self, bury, held, of_another, recorded, soon};
 use super::keep::{BUSY, NO_LOCK, intent};
 use super::record::Record;
 use super::show::{Asked, not_cores, unread_words};
-use super::{RunOptions, RunOutcome, WorkState, asks, finished, no_wish, place, record, refused};
+use super::{RunOptions, RunOutcome, WorkState, asks, finished, follow, no_wish, place, record, refused};
 use crate::busy::cut;
 use crate::copy::{self, Branch, Keep, Left, Named, Unkept, Untossed};
 use crate::wish::{self, MadeWish};
@@ -100,6 +100,10 @@ pub fn toss_run(home: &Path, options: &RunOptions) -> Result<Tossed, Error> {
         return Err(refused(format!("the work of run {run} was kept, so it is not tossed: nothing was changed")));
     }
     let (first, told) = (state == WorkState::Waits, on.made.state == WishState::LetGo);
+    // Work a follow-up's run stands on is tossed after that run (ADR 0018, decision 9).
+    if first {
+        follow::toss_first(home, &on.day, &id, &run)?;
+    }
     let (day, done, work) = (on.day.clone(), on.done, on.work);
     let did = act(home, options, on, first)?;
     cut(CUT, 4);
@@ -244,7 +248,7 @@ fn act(home: &Path, options: &RunOptions, on: Ended, first: bool) -> Result<Did,
         Some(((repo, start, at), Ok(folder))) => {
             let named = Named { repo, start, end: at };
             let was = was.as_ref().map(|was| (was.0.as_str(), was.1.as_str()));
-            let of = Keep { home, folder: &folder, run: &run, named: &named, was, ask: false };
+            let of = Keep { home, folder: &folder, run: &run, named: &named, was, ask: false, held: None };
             match copy::toss(&of, strict, &mut write) {
                 Ok(branch) => branch,
                 Err(untossed) if strict => return Err(refused(untossed_words(&run, untossed))),

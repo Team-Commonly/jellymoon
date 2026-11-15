@@ -48,10 +48,13 @@ pub(super) struct Ended {
     /// It was told to go on with a session, did not exit with 0 after a stream that started as a run's, and said
     /// that it keeps that session no more: in a result of its stream, or on stderr (`asks::LOST_SIGN`).
     pub lost: bool,
+    /// It was told to fork a session, said that it keeps it no more, and had by then changed the run's copy: it
+    /// is not started again (`follow.rs`).
+    pub worked: bool,
 }
 
 /// The options of a run's command line that a Claude Code can be too old for, in the order they are looked for.
-const NEWER: [&str; 4] = ["--restricted", "--json-schema", "--session-id", "--resume"];
+const NEWER: [&str; 5] = ["--restricted", "--json-schema", "--session-id", "--resume", "--fork-session"];
 
 /// Starts the command with `said` as its whole input, and waits for it to end, `limit` at most. Its stream is
 /// read against `expect`. `started` is told
@@ -69,7 +72,14 @@ pub(super) fn run(
     stop: impl Fn() -> bool,
 ) -> io::Result<Ended> {
     if stop() {
-        return Ok(Ended { end: End::Stopped, exit_0: false, read: Stream::default(), old: None, lost: false });
+        return Ok(Ended {
+            end: End::Stopped,
+            exit_0: false,
+            read: Stream::default(),
+            old: None,
+            lost: false,
+            worked: false,
+        });
     }
     let resumed = expect.resumed;
     #[cfg(unix)]
@@ -116,7 +126,7 @@ pub(super) fn run(
     let end = if read.over && end != End::Stopped { End::Over } else { end };
     // A stream that did not start as a run's had its child ended at once: its own exit is chance, and is not asked.
     let lost = resumed && (!exit_0 || read.start == Some(false)) && (read.lost || head.contains(asks::LOST_SIGN));
-    Ok(Ended { end, exit_0, read, old, lost })
+    Ok(Ended { end, exit_0, read, old, lost, worked: false })
 }
 
 /// The start of what the child said on stderr, as text; the rest is read and dropped, so the child never waits.

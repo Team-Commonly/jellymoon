@@ -45,9 +45,14 @@ pub(super) fn touched(repo: &Repo, from: &str, to: &str) -> Result<Vec<Touched>,
 
 /// Whether git's own line of its version names 2.38 or later, the first that merges in the store.
 pub(super) fn new_enough(said: &str) -> bool {
+    at_least(said, 38)
+}
+
+/// Whether git's own line of its version names 2.`minor` or later.
+pub(super) fn at_least(said: &str, minor: u32) -> bool {
     let mut numbers = said.strip_prefix("git version ").unwrap_or("").split(['.', ' ']).map(str::parse::<u32>);
     match (numbers.next(), numbers.next()) {
-        (Some(Ok(major)), Some(Ok(minor))) => (major, minor) >= (2, 38),
+        (Some(Ok(major)), Some(Ok(found))) => (major, found) >= (2, minor),
         _ => false,
     }
 }

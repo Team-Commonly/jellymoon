@@ -9,6 +9,7 @@ own that goes on after this command has exited.
 ```
 jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]
 jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --run [--logs <dir>] [--skip <names>]
+jellymoon wish --say <your words> --after <id> [--date <YYYY-MM-DD>] [--run [--logs <dir>] [--skip <names>]]
 ```
 
 It prints one line of JSON and exits 0. With no `--date` the day is today in the computer's time zone, which `TZ`
@@ -32,6 +33,46 @@ takes `--logs` and `--skip` only with `--run`. A run that was not started leaves
 folders, a folder that is gone, no repo's top, switched off or not the person's own, three runs going. The wish is kept in each case and the exit is 0; `jellymoon run --wish <id>`
 can start it later. Words core refuses are refused as without `--run`, and nothing is started.
 
+## A follow-up
+
+A follow-up is a made wish that names the wish it follows (F53,
+[ADR 0018](../adr/0018-a-run-asks-and-is-told-more.md), decisions 8 and 9, "Found while building F53"). It is
+made with `--after <id>` in place of `--project`:
+
+```json
+{"wish":{"id":"m2","said":"and log each retry","project":"alpha","state":"working","stars":[],"after":"m1"},"run":null,"why":"nothing was started: `jellymoon wish` keeps a wish and starts no run"}
+```
+
+- **What it names.** `after` is the id of a made wish of the same day, made before it. The follow-up is a made
+  wish in every other way: one of the day's eight, with its own words through the same door, its own one run,
+  copy, branch and record. Its project is the followed wish's, so `--project` beside `--after` is refused as a
+  wrong command line (exit 2), and so is neither.
+- **A wish of another day** is followed on that day: `--date` names the day the followed wish was made on, and
+  the follow-up is kept there and counts in that day's eight. Today's file never names a wish of another day.
+- **What can be followed.** A wish whose run finished with work that waits or was kept. A follow-up is
+  followed in its turn. Each of these is refused in one sentence, with nothing kept:
+
+  | The followed wish | The sentence |
+  |---|---|
+  | is not a made wish of the day | `the page of <day> has no made wish of that id; a made wish's id is m1 to m8` |
+  | has had no run | `wish <id> has had no run, so there is no work to follow` |
+  | names a run that is going | `run <run> is going: its work can be followed once it has finished` |
+  | names a run that asks | `run <run> asks a question: there is no work of it to follow` |
+  | names a run that was stopped | `run <run> was cancelled by a stop: there is no work of it to follow` |
+  | names a run that was cut off | `run <run> was cut off before it ended: there is no work of it to follow` |
+  | names a run that failed | `run <run> did not finish: there is no work of it to follow` |
+  | names a run that changed nothing | `run <run> changed nothing: there is no work of it to follow` |
+  | had its work tossed | `the work of run <run> was tossed, so it cannot be followed` |
+  | has a record from before F48 | `the record of run <run> is from before a run's record named its commits: its work is not followed by Jellymoon` |
+
+  A record that cannot be read, is another wish's or is not one core wrote is refused in a look's words
+  ([show.md](show.md)), with `followed` where a look says `shown`.
+- **With `--run`** the follow-up is kept and its run started apart, as for any made wish. What a follow-up's
+  run does differently is in [run.md](run.md), "A follow-up's run".
+- **Not closed.** A follow-up that was made and not run, whose followed work is then tossed, is refused on
+  every run and cannot be let go: it stays `working` on the page and holds one of the day's eight.
+- **On the page** a follow-up is a made wish like any other. `after` is not part of a page.
+
 ## What is kept
 
 - **Where.** `pages/<day>.wishes.json` in Jellymoon's own folder: `{day, wishes}`, each wish as printed. It is not in
@@ -46,7 +87,8 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   would hide. The breaks taken out are all of the stretch's, and those between every two to eight lines in a
   row with the lines around them left apart. The second is for a word that touches a split key across one
   more break (`the id is`, a break, half a key id, a break, its other half): joined to the key it takes the
-  word's edge a key id is found by, and the reading that joins the whole stretch does not find it. Words on two lines that are no credential either way are kept as before, as two words. This is
+  word's edge a key id is found by, and the reading that joins the whole stretch does not find it. Words on
+  two lines that are no credential either way are kept as before, as two words. This is
   the door's rule, so it holds for a made wish, a clash's statement, a run's question and an answer alike.
   What these now keep differently: a wish or statement with such a stretch was kept in its own words and is
   kept as `[redacted]` there, and a file written before that holds one is drawn so. The stretch is whole: a
@@ -61,7 +103,7 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   digits on the line before a private key's first line took that line with it as one stretch, the key was no
   longer found, and its body, set in on the lines after, was kept.
 - **Only marks is nothing.** Words of which cleaning leaves `[redacted]` and no letter or digit beside it
-  (the `…` of a cut, and the quotes, brackets and stops a key was typed in, are neither) say nothing a person
+  (the `…` of a cut, and the quotes, brackets and stops a key was typed in, or any other sign, are neither) say nothing a person
   typed, so nothing is made of them: `wish`, a heard wish, `run answer`, `rule` and a tap
   that settles a clash refuse them in one sentence, `nothing is left of these words but the mark of what
   cleaning replaced, so nothing was made of them`. Nothing is kept and no harness is given them. `rename`, two
@@ -70,7 +112,8 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
 - **Not closed.** A break with a space or a tab beside it (an indented second line) keeps the two sides apart.
   So does a break beside a terminal escape sequence that holds a space: the sequence goes, the space in it has
   already kept the two sides apart, and a key split there is kept in two pieces. A key split over more than
-  eight lines is found only when no word touches it across a further break. A shape that spans spaces, a
+  eight lines may not be found when a word touches it across a further break: a shape that needs no word edge
+  at its end is still found. A shape that spans spaces, a
   private key's first line, is not found when a break splits one of its words (`BEG`, a break, `IN`): a
   stretch is read by itself, and that line is several. Its body is still replaced where its lines are long
   enough to be a credential's shape themselves. A session log's turn is not read this way.
@@ -95,6 +138,9 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   `wished-answered.json`). It is the one place Jellymoon keeps an answer. It stays when the run ends, a later
   answer takes its place, and no page shows it. Made wishes are refused as not that day's when a wish has an
   answer the door would change, an empty one, one over 600 characters, or one on a wish that names no run.
+- **The wish it follows.** A follow-up carries `after`, the id of the wish it follows (above; example
+  `wished-after.json`). No other wish has the name. Made wishes are refused as not that day's when a wish's
+  `after` is not the id of a wish before it in the file.
 - **The write.** Behind the day's lock, `pages/<day>.ruled.lock`, which is the tap's
   ([delivery.md](delivery.md), "A tap on a clash"): one change to a day at a time. The file is written beside its
   place and moved there, 0600 in a folder set to 0700. What Windows does differently when two changes meet is in
@@ -110,7 +156,8 @@ Each is one line on stderr, exit 1, and nothing is written.
 | Words of which cleaning leaves only `[redacted]` | They say nothing the person typed ("Only marks is nothing") |
 | Words over 200 characters once cleaned to the end, or over 4096 bytes as typed | A wish is never cut: cut words would not be the person's |
 | Words a ninth cleaning still changes, for example nine keys of letters alone with nothing between them | They would be kept half cleaned |
-| A ninth made wish for one day | A day holds eight |
+| A ninth made wish for one day, a follow-up too | A day holds eight |
+| `--after` a wish that cannot be followed ("A follow-up") | There is no work to follow |
 | A project that is not one folder's name: empty, over 100 characters, a path, `.` or `..`, or anything cleaning would change (a line break, a character that cannot be seen, a credential shape, which a name of 40 letters and digits with no break is) | F39 finds the folder by this name |
 | Made wishes that cannot be used (below) | They are never written over |
 | A day whose lock is held for 3 seconds | Another change has not finished |
@@ -144,6 +191,8 @@ own words. The kept page itself never holds a made wish. A made wish's `question
 - `jellymoon wish` does not check that the project is a folder on this computer, or one Jellymoon knows.
   `jellymoon run` does, and refuses a name two folders share.
 - The same words made twice are two wishes.
+- A follow-up that has had no run, of work that was then tossed, cannot be run and cannot be let go: it stays
+  as it was made.
 - With eight wishes read and eight made, a page holds sixteen. How many of them the kit shows is the kit's layout.
 - A made wish's little one carries a short label, cut. Its words are in the note "wished here today", whole or
   counted (`+N more`). `layout` prints the note's lines and one `mark` piece a wish drawn.

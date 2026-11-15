@@ -29,11 +29,21 @@ fn a_reader_day_round_trips_byte_for_byte() {
 
 #[test]
 fn page_data_round_trips_byte_for_byte() {
-    for name in ["page.json", "page-empty.json", "page-asks.json"] {
+    for name in ["page.json", "page-empty.json", "page-asks.json", "page-no-logs.json"] {
         let example = fixture(name);
         let page: PageData = serde_json::from_str(&example).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(format!("{page}\n"), example, "{name}");
     }
+    // Only the page of a day with no logs says so: a page whose logs were read has no such name, and one that
+    // says it in any other way than `true` or `false` is no page.
+    let quiet: PageData = serde_json::from_str(&fixture("page-no-logs.json")).unwrap();
+    let read: PageData = serde_json::from_str(&fixture("page-empty.json")).unwrap();
+    assert_eq!((quiet.read.no_logs, read.read.no_logs, quiet.read.turns, quiet.wishes.len()), (true, false, 0, 0));
+    assert!(!fixture("page-empty.json").contains("no_logs") && !fixture("page.json").contains("no_logs"));
+    let spelled = fixture("page-no-logs.json").replace("\"no_logs\":true", "\"no_logs\":false");
+    assert_eq!(serde_json::from_str::<PageData>(&spelled).unwrap().read, read.read, "false is as left out");
+    let odd = fixture("page-no-logs.json").replace("\"no_logs\":true", "\"no_logs\":\"yes\"");
+    assert!(serde_json::from_str::<PageData>(&odd).is_err(), "whether there were logs is yes or no");
     // The wish of a run that asks carries the question, and no other wish has the name at all.
     let asks: PageData = serde_json::from_str(&fixture("page-asks.json")).unwrap();
     assert_eq!(asks.wishes[0].question.as_deref(), Some("Which of the two uploaders did you mean?"));
@@ -84,6 +94,12 @@ fn what_a_made_wish_prints_round_trips_byte_for_byte() {
         (wished.wish.state, answer, question),
         (WishState::Working, Some("the old one, in src/upload.rs"), None)
     );
+    // A follow-up names the wish it follows, last of all; no other wish has the name.
+    let example = fixture("wished-after.json");
+    let wished: Wished = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{wished}\n"), example);
+    assert_eq!((wished.wish.id.as_str(), wished.wish.after.as_deref()), ("m2", Some("m1")));
+    assert!(!fixture("wished.json").contains("after"));
 }
 
 #[test]

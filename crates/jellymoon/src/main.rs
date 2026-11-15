@@ -14,7 +14,7 @@ use std::time::Duration;
 use std::{env, io};
 
 use jellymoon_core::{DayOptions, Error, PageOptions, ReaderDay, RunOptions, UninstallOptions, user_home};
-use parse::{Command, Listing, parse};
+use parse::{Command, Listing, WishOf, parse};
 
 const USAGE: &str = "usage:
   jellymoon day [--date <YYYY-MM-DD>] [--logs <Claude Code projects dir>] [--skip <folder names, comma separated>]
@@ -24,6 +24,7 @@ const USAGE: &str = "usage:
   jellymoon settle --date <YYYY-MM-DD> --clash <n> --option <1|2>   (a tap on a clash of the kept page: that statement stands)
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]   (keeps a wish you make on the day's page; starts nothing)
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --run [--logs <dir>] [--skip <names>]   (keeps the wish and starts its run, which goes on after this command)
+  jellymoon wish --say <your words> --after <id> [--date <YYYY-MM-DD>] [--run [--logs <dir>] [--skip <names>]]   (a follow-up: a wish made of the work of that made wish)
   jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
   jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]   (stops that run: its copy is kept, and no star is added)
   jellymoon run answer --wish <id> [--date <YYYY-MM-DD>]   (takes your answer on its input, and goes on with a run that asks, in its copy, and waits)
@@ -103,10 +104,13 @@ fn install_hook(settings: Option<PathBuf>, installed: bool) -> Result<jellymoon_
 /// `wish`: keeps the wish, and with `--run` starts its run as a `jellymoon run` of this same program, which goes
 /// on when this command has printed and ended. The wish is kept whatever comes of its run: a run that was not
 /// started is said in `why`, in core's words, and is no failure of this command.
-fn wish(date: Option<String>, say: &str, project: &str, apart: Option<RunOptions>) -> Result<String, Failure> {
+fn wish(date: Option<String>, say: &str, of: &WishOf, apart: Option<RunOptions>) -> Result<String, Failure> {
     let home = home()?;
-    let mut wished =
-        jellymoon_core::wish(&home, date.as_deref(), say, project).map_err(|e| Failure::Run(e.to_string()))?;
+    let made = match of {
+        WishOf::Project(project) => jellymoon_core::wish(&home, date.as_deref(), say, project),
+        WishOf::After(after) => jellymoon_core::wish_after(&home, date.as_deref(), say, after),
+    };
+    let mut wished = made.map_err(|e| Failure::Run(e.to_string()))?;
     if let Some(options) = apart {
         let options = RunOptions { wish: wished.wish.id.clone(), day: date, ..options };
         let started = match env::current_exe() {
@@ -147,24 +151,40 @@ fn settle(date: &str, clash: usize, option: usize) -> Result<String, Failure> {
     Ok(format!("{settled}\n"))
 }
 
+/// `page`: the day's page data, with its made wishes. With no session logs at all the reader's line is the
+/// answer, unless the day has a made wish or a project on offer: then core gives its page, with no call (F63).
+fn page(read: &DayOptions, model: String) -> Result<String, Failure> {
+    let failed = |e: Error| Failure::Run(e.to_string());
+    let options = |home: PathBuf| {
+        let harness = named("JELLYMOON_CLAUDE");
+        PageOptions { model, dir: home.join("reading"), limit: READING_LIMIT, harness }
+    };
+    let page = match day(read) {
+        Ok(day) => jellymoon_core::page(&day, &options(home()?)).map_err(failed)?,
+        Err(unread) => {
+            let Ok(home) = home() else { return Err(unread) };
+            match jellymoon_core::page_with_no_logs(read, &options(home)) {
+                Ok(Some(page)) => page,
+                Ok(None) => return Err(unread),
+                Err(e) => return Err(failed(e)),
+            }
+        }
+    };
+    let (page, said) = jellymoon_core::with_made_said(&home()?, page);
+    // A copy a killed command left that is given up is said once, here, and is no failure of the look.
+    for said in said {
+        let _ = io::stderr().write_all(format!("jellymoon: {said}\n").as_bytes());
+    }
+    Ok(format!("{page}\n"))
+}
+
 /// Runs the command and returns what it prints.
 fn run() -> Result<String, Failure> {
     let failed = |e: jellymoon_core::Error| Failure::Run(e.to_string());
     match parse(lexopt::Parser::from_env())? {
         Command::Help => Ok(USAGE.to_string()),
         Command::Day(options) => Ok(format!("{}\n", day(&options)?)),
-        Command::Page(options, model) => {
-            let day = day(&options)?;
-            let harness = named("JELLYMOON_CLAUDE");
-            let options = PageOptions { model, dir: home()?.join("reading"), limit: READING_LIMIT, harness };
-            let page = jellymoon_core::page(&day, &options).map_err(failed)?;
-            let (page, said) = jellymoon_core::with_made_said(&home()?, page);
-            // A copy a killed command left that is given up is said once, here, and is no failure of the look.
-            for said in said {
-                let _ = io::stderr().write_all(format!("jellymoon: {said}\n").as_bytes());
-            }
-            Ok(format!("{page}\n"))
-        }
+        Command::Page(options, model) => page(&options, model),
         Command::Uninstall => uninstall(),
         Command::Rule { stands, over } => {
             Ok(format!("{}\n", jellymoon_core::rule(&home()?, &stands, &over).map_err(failed)?))
@@ -178,7 +198,7 @@ fn run() -> Result<String, Failure> {
         }
         Command::InstallHook { settings, installed } => Ok(format!("{}\n", install_hook(settings, installed)?)),
         Command::Settle { date, clash, option } => settle(&date, clash, option),
-        Command::Wish { date, say, project, apart } => wish(date, &say, &project, apart),
+        Command::Wish { date, say, of, apart } => wish(date, &say, &of, apart),
         Command::Hear(options) => hear(options),
         Command::Voice => Ok(format!("{}\n", jellymoon_core::voice(&home()?).map_err(failed)?)),
         Command::Run(options) => Ok(format!("{}\n", jellymoon_core::run(&home()?, &options).map_err(failed)?)),

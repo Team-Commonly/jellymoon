@@ -78,6 +78,13 @@ pub(super) struct Record {
     /// The question of a run that asks, as the door left it (`asks.rs`). Written with an `outcome` of `asks`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
+    /// The run whose work a follow-up's run was started on (F53; ADR 0018, decision 8). None of every other run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follows: Option<String>,
+    /// Of a follow-up's run: whether its session is a fork of the followed run's. False: the harness kept that
+    /// session no more, or the followed record named none, and the run has a new session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forked: Option<bool>,
 }
 
 pub(super) fn file(home: &Path, run: &str) -> PathBuf {
@@ -188,6 +195,7 @@ mod tests {
     const KEPT: &str = include_str!("../../tests/fixtures/run-record-kept.json");
     const TOSSED: &str = include_str!("../../tests/fixtures/run-record-tossed.json");
     const ASKS: &str = include_str!("../../tests/fixtures/run-record-asks.json");
+    const FOLLOWS: &str = include_str!("../../tests/fixtures/run-record-follows.json");
 
     // The contract is the type and its example: one changed without the other fails here.
     #[test]
@@ -218,10 +226,26 @@ mod tests {
         assert_eq!(TOSSED.split(",\"work\":").next(), EXAMPLE.strip_suffix("}\n"));
         // What is named is text, or the record is not read: nothing is made of a number or a list.
         let named = ["\"repo\":7", "\"start\":[\"main\"]", "\"end\":{}", "\"kept\":1", "\"onto\":[]", "\"tossed\":1"];
-        for odd in named.into_iter().chain(["\"session\":7", "\"question\":[\"which?\"]", "\"question\":{}"]) {
+        let last = ["\"session\":7", "\"question\":[\"which?\"]", "\"question\":{}", "\"follows\":7"];
+        for odd in named.into_iter().chain(last).chain(["\"forked\":\"yes\""]) {
             let changed = BEFORE.replace("\"began\":true", &format!("\"began\":true,{odd}"));
             assert!(serde_json::from_str::<Record>(&changed).is_err(), "{odd}");
         }
+    }
+
+    // A follow-up's record names the run it follows and says whether its session is a fork, last of all; no
+    // other record has either, and one written again gains neither.
+    #[test]
+    fn the_record_of_a_follow_up_s_run_round_trips_and_names_the_run_it_follows() {
+        let written = |record: &Record| serde_json::to_string(record).map(|line| format!("{line}\n")).unwrap();
+        let record: Record = serde_json::from_str(FOLLOWS).unwrap();
+        assert_eq!(written(&record), FOLLOWS);
+        assert_eq!((record.follows.as_deref(), record.forked), (Some("r0123456789abcdef"), Some(true)));
+        let first: Record = serde_json::from_str(EXAMPLE).unwrap();
+        assert_eq!((&first.follows, first.forked, written(&first).as_str()), (&None, None, EXAMPLE));
+        assert_eq!(record.start, first.end, "the example follows work that waits: it starts at that work's end");
+        let unforked: Record = serde_json::from_str(&FOLLOWS.replace(":true}", ":false}")).unwrap();
+        assert_eq!(unforked.forked, Some(false));
     }
 
     // What core writes of a run that asks, core reads back; and it believes a question of no other record.

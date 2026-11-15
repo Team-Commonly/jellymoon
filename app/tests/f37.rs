@@ -41,7 +41,7 @@ fn a_made_wish_is_drawn_with_the_reading_s_wishes_and_a_new_reading_does_not_los
     assert!(!called(&world));
 }
 
-// The window's first scene, before a log is opened, and the scene of a day that could not be read.
+// The window's first scene, before a log is opened, and the scene of a day with no logs to read.
 #[test]
 fn a_made_wish_is_drawn_working_before_the_day_is_read_and_when_it_cannot_be() {
     let world = world();
@@ -68,7 +68,8 @@ fn a_made_wish_is_drawn_working_before_the_day_is_read_and_when_it_cannot_be() {
     let nowhere = world.dir.path().join("nowhere");
     let placed = shown(&world, &["--logs", nowhere.to_str().unwrap()]);
     assert_eq!(labels(&placed), [MADE]);
-    assert!(notes(&placed)[0].starts_with("Today could not be read."), "{:?}", notes(&placed));
+    // No logs and a made wish: the day has its page all the same (F63), and is not said to be unreadable.
+    assert!(notes(&placed).iter().all(|note| !note.contains("could not be read")), "{:?}", notes(&placed));
     assert!(!called(&world));
 }
 
@@ -92,7 +93,10 @@ fn the_footer_says_which_wishes_are_the_model_s_reading_and_which_the_person_s_o
     let nowhere = world.dir.path().join("nowhere");
     fs::remove_file(kept(&world)).unwrap();
     let unread = footer(&shown(&world, &["--logs", nowhere.to_str().unwrap()]));
-    assert_eq!(unread, "2 made wishes are in your own words.");
+    assert_eq!(
+        unread,
+        "No Claude Code session logs were found, so nothing was read. 2 made wishes are in your own words."
+    );
 }
 
 // The one page a made wish moves a clash on: a page whose reading holds a clash and no wish. It says "Nothing wished

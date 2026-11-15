@@ -11,7 +11,7 @@ use super::{MARKER, MODE, TOOLS, edits, held, line, says, starts, waits_held, wo
 /// The session id this program was started with, and whether it was given a schema.
 static TOLD: OnceLock<(String, bool)> = OnceLock::new();
 
-fn option(name: &str) -> Option<String> {
+pub fn option(name: &str) -> Option<String> {
     let mut args = env::args();
     args.find(|arg| arg == name)?;
     args.next()
@@ -101,7 +101,7 @@ const WORDS: [&str; 13] = [
 ];
 
 /// A first line with its tools and its session written out, for the starts that are not a run's.
-fn init(tools: &str, session: &str) {
+pub fn init(tools: &str, session: &str) {
     let parts = format!(r#""tools":{tools},"mcp_servers":[],"permissionMode":{MODE}"#);
     line(&format!(r#"{{"type":"system","subtype":"init","cwd":"{MARKER}",{session}{parts}}}"#));
 }
@@ -202,7 +202,7 @@ pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
         }
         // A harness too old for a run's command line, by the option it does not know. `old` is F39's.
         "old" | "old-option" => {
-            let option = ["--json-schema", "--session-id", "--verbose", "--resume"][number];
+            let option = ["--json-schema", "--session-id", "--verbose", "--resume", "--fork-session"][number];
             eprintln!("error: unknown option '{}'", if script == "old" { "--restricted" } else { option });
             1
         }

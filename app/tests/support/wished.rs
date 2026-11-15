@@ -34,6 +34,23 @@ fn copied(built: &str, program: &Path) {
 }
 
 pub fn world() -> World {
+    let world = bare();
+    let repo = world.at("work").join("alpha");
+    let typed = |folder: &Path| [said(&noon(0), folder.to_str().unwrap(), "look at the uploader")];
+    write_log(&world.day, "-work-alpha/s1.jsonl", &typed(&repo));
+    write_log(&world.day, "-work-beta/s2.jsonl", &typed(&world.at("work").join("beta")));
+    shown(&world.day, &[]);
+    assert!(called(&world.day), "the day was to be read once, before any wish");
+    world
+}
+
+/// The world of a day nothing was typed on (F63): the repo `alpha`, logs that hold nothing, and a harness that
+/// would answer a reading, so a call that is made is seen.
+pub fn quiet() -> World {
+    bare()
+}
+
+fn bare() -> World {
     let dir = tempfile::tempdir().unwrap();
     let at = |name: &str| dir.path().join(name);
     for folder in ["user", "rec", "tmp", "git", "work", "logs"] {
@@ -72,13 +89,8 @@ pub fn world() -> World {
         ("JELLYMOON_SYSTEM_BIN", OsString::new()),
     ]);
     let world = World { day: day::World { home: at("jm"), rec: at("read"), vars: reading_vars, dir }, vars };
-    let repo = world.repo("alpha");
-    let typed = |folder: &Path| [said(&noon(0), folder.to_str().unwrap(), "look at the uploader")];
-    write_log(&world.day, "-work-alpha/s1.jsonl", &typed(&repo));
-    write_log(&world.day, "-work-beta/s2.jsonl", &typed(&world.at("work").join("beta")));
+    world.repo("alpha");
     answer(&world.day, &result(&reading()), 0);
-    shown(&world.day, &[]);
-    assert!(called(&world.day), "the day was to be read once, before any wish");
     world.play("edits");
     world
 }

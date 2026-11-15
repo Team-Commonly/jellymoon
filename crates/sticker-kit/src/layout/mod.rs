@@ -38,6 +38,9 @@ pub enum PieceKind {
     Entry,
     /// An option of an entry: `id` is the entry's, `index` the option.
     Chip,
+    /// What stands for the options of an entry past the ones offered, `+N more`: `id` is the entry's, `index`
+    /// how many they are. It is words and no option: nothing chooses it.
+    More,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -176,7 +179,7 @@ impl PieceKind {
             PieceKind::Paper => 0,
             PieceKind::Hole => 1,
             PieceKind::Title | PieceKind::Legend | PieceKind::Footer => 3,
-            PieceKind::Entry | PieceKind::Chip => 4,
+            PieceKind::Entry | PieceKind::Chip | PieceKind::More => 4,
             PieceKind::Label => 10,
             PieceKind::Hero | PieceKind::Character => 11,
             PieceKind::Star => 12,

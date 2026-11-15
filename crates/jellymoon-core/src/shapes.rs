@@ -104,6 +104,11 @@ pub struct PageRead {
     pub turns: usize,
     /// The projects those turns ran in, each once, in the order first typed in.
     pub projects: Vec<String>,
+    /// No session logs were found, so nothing was read: the page of a day that has one all the same, for its
+    /// made wishes or a project on offer (`no_logs.rs`). Left out when the logs were read, where `turns: 0`
+    /// says that nothing was typed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_logs: bool,
 }
 
 /// The person's choice on a clash, as it is kept and as `jellymoon rule` prints it.

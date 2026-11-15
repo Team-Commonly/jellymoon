@@ -37,8 +37,12 @@ The end never begins with a mark that is drawn onto the character before it
 Every page keeps that band free, whether or not it has an entry (a page
 with no big character begins its small ones under it), so an entry that comes
 or goes moves no piece. `layout_entry(entry, theme, viewport, &measure)` places
-the field (`PieceKind::Entry`) and a chip for each option (`PieceKind::Chip`),
-and nothing for a theme whose big character leaves the field under 160 design
+the field (`PieceKind::Entry`) and a chip for each of the first six options
+(`PieceKind::Chip`). The options past those are counted, as the rows of a list
+past its room are: `+N more` (`PieceKind::More`), in words, after the last
+chip, whose row keeps its width free. It is no option: no click chooses it. It
+is left out only where that row could not hold its chips at their least width
+beside it. It places nothing for a theme whose big character leaves the field under 160 design
 pixels.
 
 Three things about an entry are told apart by more than a shade, and each is
@@ -243,7 +247,7 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | rows of a whole list | the first 12 are laid out, the rest only counted | |
 | any text | 400 characters, a label `labels.max_chars`; cut with an ellipsis | `layout::MAX_TEXT_CHARS` |
 | pieces a layout returns | 5000; what would come after is dropped | `MAX_PIECES` |
-| options of an entry | the first 6 are offered | `entry::MAX_ENTRY_OPTIONS` |
+| options of an entry | the first 6 are offered; the rest are counted, `+N more` | `entry::MAX_ENTRY_OPTIONS` |
 | text in an entry | one line of the entry's `most` characters, 400 at most (and for a `most` of 0); a line break or a tab is a space, a control or unseen character is dropped; what is over is not taken, typed or pasted | `entry::MAX_ENTRY_CHARS` |
 
 `Theme::load("theme.toml")`, a bare name, reads from the folder the program

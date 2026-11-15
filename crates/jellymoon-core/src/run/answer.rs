@@ -16,7 +16,9 @@ use super::end::{self, bury, of_another, recorded, settle};
 use super::keep::{BUSY, NO_LOCK};
 use super::record::{self, Record};
 use super::show::not_cores;
-use super::{LIMIT, Ran, RunOptions, RunOutcome, asks, cap, child, going, lined, never, no_wish, refused, stop};
+use super::{
+    LIMIT, Ran, RunOptions, RunOutcome, Session, asks, cap, child, going, lined, never, no_wish, refused, stop,
+};
 use crate::busy::{self, or_test};
 use crate::call::harness_of;
 use crate::copy::{self, RunCopy};
@@ -84,7 +86,7 @@ pub fn answer_run(home: &Path, options: &RunOptions, typed: &[u8]) -> Result<Ran
     let Taken { held, copy, record, wish } = take(home, on, &answer)?;
     // Both are there, and core's: the record was believed as one of a run that asks (`asked`).
     let (session, start) = (record.session.clone().unwrap_or_default(), record.start.clone().unwrap_or_default());
-    let expect = lined(&mut command, &copy.folder, session, true);
+    let expect = lined(&mut command, &copy.folder, session, Session::Kept);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
     let (told, stop) = (|pid| record::child(home, &run, pid), || stop::asked(home, &run));
     let ended = child::run(command, format!("{answer}\n"), limit, expect, told, || record::began(home, &run), stop);

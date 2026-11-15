@@ -15,6 +15,7 @@ mod error;
 mod find;
 mod hear;
 mod hook;
+mod no_logs;
 mod project;
 mod reader;
 mod reading;
@@ -38,6 +39,7 @@ pub use hear::{
     voice,
 };
 pub use hook::{hook_installed, install_hook, remove_hook};
+pub use no_logs::page_with_no_logs;
 pub use project::{Known, PROJECTS_MAX, Projects, add_project, forget_project, new_project, projects};
 pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
@@ -51,6 +53,6 @@ pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, Reade
 pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};
 pub use uninstall::{UninstallOptions, Uninstalled, uninstall};
 pub use wish::{
-    MADE_MAX, MADE_SAID_MAX, MadeWish, Wished, going, made, wish, wish_offered, wish_start, wishable, with_made,
-    with_made_said,
+    MADE_MAX, MADE_SAID_MAX, MadeWish, Wished, going, made, offered, wish, wish_after, wish_offered, wish_start,
+    wishable, with_made, with_made_said,
 };

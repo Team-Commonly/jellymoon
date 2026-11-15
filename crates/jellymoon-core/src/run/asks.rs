@@ -104,8 +104,10 @@ pub(super) const LOST: &str = "Claude Code no longer keeps the session it asked 
 /// `errors` of a result that is an error. It is looked for there only, never in the agent's own words, and only
 /// in a run that was answered, and it is never kept.
 pub(super) const LOST_SIGN: &str = "No conversation found with session ID";
+/// And why a follow-up's fork that said so was not started again under a new session (F53, `follow.rs`).
+pub(super) const WORKED: &str = "Claude Code said it keeps no session to fork after it had worked in the copy";
 /// Every one of them: a record's end is one core wrote only in these words (`end::recorded`).
-pub(super) const KINDS: [&str; 7] = [NO_WORD, UNFIT, LONG, EMPTY, CHANGING, OTHER, LOST];
+pub(super) const KINDS: [&str; 8] = [NO_WORD, UNFIT, LONG, EMPTY, CHANGING, OTHER, LOST, WORKED];
 
 /// What the last word of a run that would else have finished makes of it: None, it is done; a question, as it
 /// is kept, it asks. Err is why it has failed.
@@ -285,7 +287,7 @@ mod tests {
         assert_eq!((word(&Last::None), word(&Last::Long), word(&Last::Unfit)), (Err(NO_WORD), Err(LONG), Err(UNFIT)));
         let mut kinds = KINDS.to_vec();
         kinds.dedup();
-        assert_eq!(kinds.len(), 7, "each way to fail has words of its own");
+        assert_eq!(kinds.len(), 8, "each way to fail has words of its own");
     }
 
     #[test]

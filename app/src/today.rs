@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{env, io};
 
-use jellymoon_core::{DayOptions, Error, PageData, PageOptions, PageRead, ReaderDay};
+use jellymoon_core::{Error, PageData, PageOptions, PageRead, ReaderDay};
 use sticker_kit::{Note, Scene};
 
 use crate::read::{self, LeftOut, Page};
@@ -163,13 +163,13 @@ impl Today {
     }
 
     fn count(self, kept: Option<Page>) -> Option<Next> {
-        let (skip, home) = (self.skip.clone(), Some(self.home.clone()));
-        let day = DayOptions { logs: self.logs.clone(), date: Some(self.date.clone()), skip, home };
-        let day = match jellymoon_core::day(&day) {
+        let day = match jellymoon_core::day(&self.read()) {
             Ok(day) => day,
-            Err(error) => return Some(self.stopped(kept, &words(&error))),
+            Err(error) => return self.without_logs(kept, &error),
         };
-        if !self.fresh && kept.as_ref().is_some_and(|kept| kept.data.read.turns == day.turns.len()) {
+        // A kept page that says no logs were found is read again once there are logs.
+        let saw = |kept: &Page| kept.data.read.turns == day.turns.len() && !kept.data.read.no_logs;
+        if !self.fresh && kept.as_ref().is_some_and(saw) {
             return None;
         }
         let scene = match &kept {
@@ -188,17 +188,38 @@ impl Today {
         Next { scene: self.failed(kept.as_ref(), why), page: kept, later: None }
     }
 
-    fn call(&self, day: &ReaderDay, kept: Option<Page>) -> Next {
-        let options = PageOptions {
+    /// What is shown when the day could not be read. With no session logs at all core is asked for the day's
+    /// page all the same (F63): it has one when the day has a made wish or a project on offer, made with no
+    /// call. That page is kept and shown as a reading's is, in place of none or of a kept page that read
+    /// nothing; a kept page that read something is the earlier reading, and stays under its note.
+    fn without_logs(&self, kept: Option<Page>, error: &Error) -> Option<Next> {
+        let seen = kept.as_ref().map(|kept| &kept.data);
+        match jellymoon_core::page_with_no_logs(&self.read(), &self.reading()) {
+            Ok(Some(data)) if seen.is_none_or(|seen| seen.read.turns == 0) => {
+                (seen != Some(&data)).then(|| self.read_as(data))
+            }
+            _ => Some(self.stopped(kept, &words(error))),
+        }
+    }
+
+    fn reading(&self) -> PageOptions {
+        PageOptions {
             model: self.model.clone(),
             dir: self.home.join("reading"),
             limit: READING_LIMIT,
             harness: self.harness.clone(),
-        };
-        let data = match jellymoon_core::page(day, &options) {
-            Ok(data) => data,
-            Err(error) => return self.stopped(kept, &words(&error)),
-        };
+        }
+    }
+
+    fn call(&self, day: &ReaderDay, kept: Option<Page>) -> Next {
+        match jellymoon_core::page(day, &self.reading()) {
+            Ok(data) => self.read_as(data),
+            Err(error) => self.stopped(kept, &words(&error)),
+        }
+    }
+
+    /// The page core gave for the day, kept and shown.
+    fn read_as(&self, data: PageData) -> Next {
         let unkept = self.keep(&data).err();
         let page = Page { data, unknown: Vec::new(), left_out: LeftOut::default() };
         let mut shown = self.draw(&page);
@@ -235,7 +256,7 @@ impl Today {
         if wishes.is_empty() {
             return bare(&self.date, Vec::new());
         }
-        let read = PageRead { turns: 0, projects: Vec::new() };
+        let read = PageRead { turns: 0, projects: Vec::new(), no_logs: false };
         let made = wishes.len();
         let data = PageData { day: self.date.clone(), wishes, clashes: Vec::new(), read };
         let shown = ruled(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() }, &[], made);

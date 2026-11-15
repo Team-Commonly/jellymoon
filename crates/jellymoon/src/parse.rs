@@ -8,6 +8,12 @@ use lexopt::prelude::*;
 
 use crate::{Failure, harness_folder, named, own_folder};
 
+/// What a wish is made of: a project, or with `--after` the work of a made wish (a follow-up).
+pub enum WishOf {
+    Project(String),
+    After(String),
+}
+
 pub enum Command {
     Help,
     Day(DayOptions),
@@ -30,7 +36,7 @@ pub enum Command {
     Wish {
         date: Option<String>,
         say: String,
-        project: String,
+        of: WishOf,
         apart: Option<RunOptions>,
     },
     Hear(HearOptions),
@@ -161,9 +167,11 @@ fn parse_settle(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     }
 }
 
+const NEITHER: &str = "wish takes --say and --project or --after";
+
 fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
-    let (mut date, mut say, mut project) = (None, None, None);
+    let (mut date, mut say, mut project, mut after) = (None, None, None, None);
     let (mut run, mut logs, mut skip) = (false, None, None);
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
@@ -171,6 +179,7 @@ fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Long("date") => date = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("say") => say = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("project") => project = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
+            Long("after") => after = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("run") => run = true,
             Long("logs") => logs = Some(PathBuf::from(parser.value().map_err(usage)?)),
             Long("skip") => skip = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
@@ -181,9 +190,19 @@ fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         return Err(Failure::Usage("wish takes --logs and --skip only with --run".to_string()));
     }
     let apart = if run { Some(found(logs, &skip.unwrap_or_default())?) } else { None };
-    match (say, project) {
-        (Some(say), Some(project)) => Ok(Command::Wish { date, say, project, apart }),
-        _ => Err(Failure::Usage("wish takes --say and --project".to_string())),
+    let of = match (project, after) {
+        (Some(project), None) => WishOf::Project(project),
+        (None, Some(after)) => WishOf::After(after),
+        (Some(_), Some(_)) => {
+            let both =
+                "wish takes --project or --after, not both: a follow-up is for the project of the wish it follows";
+            return Err(Failure::Usage(both.to_string()));
+        }
+        (None, None) => return Err(Failure::Usage(NEITHER.to_string())),
+    };
+    match say {
+        Some(say) => Ok(Command::Wish { date, say, of, apart }),
+        None => Err(Failure::Usage(NEITHER.to_string())),
     }
 }
 

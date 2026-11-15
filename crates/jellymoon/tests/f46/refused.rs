@@ -166,7 +166,8 @@ fn a_toss_is_refused_while_a_keep_or_another_toss_holds_the_home() {
     let lock = fs::File::create(made.w.jm("runs").join("keep.lock")).unwrap();
     lock.lock().unwrap();
     let wait = [("JELLYMOON_TEST_KEEP_WAIT_MS", "200".into())];
-    let busy = "another keep or toss is at work in this home: nothing of run {run} was tossed";
+    let busy =
+        "a keep, a toss or the start of a follow-up's run is at work in this home: nothing of run {run} was tossed";
     made.refuses(&made.toss_in(&made.repo, &wait), &before, busy);
     drop(lock);
     // A lock that cannot be made is not another command at work, and is said in its own words.

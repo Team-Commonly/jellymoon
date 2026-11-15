@@ -1,6 +1,7 @@
 //! Where every piece goes. A pure function of the scene, the theme, the
 //! viewport and a text measurer; nothing here draws.
 
+mod edge;
 mod entry;
 mod grid;
 mod notes;
@@ -64,6 +65,9 @@ pub struct Placed {
     pub text: Vec<TextRun>,
 }
 
+pub use edge::{
+    EdgeKind, EdgePiece, EdgePlaced, EdgeWindow, MAX_BUBBLE_LINES, MAX_BUBBLE_TEXTS, edge_windows, layout_edge,
+};
 pub use entry::layout_entry;
 pub use notes::{MAX_NOTES, MORE_NOTES_ID};
 pub use text_note::MAX_TEXT_LINES;

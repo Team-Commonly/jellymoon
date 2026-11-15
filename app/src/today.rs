@@ -64,6 +64,13 @@ pub struct Asked {
     pub fresh: bool,
 }
 
+impl Asked {
+    /// Whether nothing was asked but, at most, a day.
+    pub fn only_a_date(&self) -> bool {
+        self.logs.is_none() && self.skip.is_empty() && self.model.is_none() && !self.fresh
+    }
+}
+
 /// The day written exactly YYYY-MM-DD, or today in the computer's time zone, which `TZ` overrides. It names a file,
 /// so nothing but a real day passes.
 pub fn date(asked: Option<&str>) -> Option<String> {

@@ -8,10 +8,12 @@ jellymoon-app [layout] [--date <YYYY-MM-DD>] [--fresh] [--logs <dir>] [--skip <n
               [--theme <theme>] [--size <W>x<H>]
 jellymoon-app [layout] --waiting [--date <YYYY-MM-DD>] [--theme <theme>] [--size <W>x<H>]
 jellymoon-app [layout] --page <file, or - for stdin> [--theme <theme>] [--size <W>x<H>]
+jellymoon-app layout --jelly <file, or - for stdin> --screen <W>x<H> [--theme <theme>] [--date <YYYY-MM-DD>]
 ```
 
 These are all the flags, with `--help`. `--logs`, `--skip` and `--model` are `jellymoon page`'s; `--waiting` shows
-the waiting page and reads nothing; with `--page` the flags of a day are taken and do nothing.
+the waiting page and reads nothing; with `--page` the flags of a day are taken and do nothing. `--jelly` and
+`--screen` are the jellyfish's, and print it as data ("The jellyfish", below).
 
 `--theme` is `sticker` (the default), `plain`, or the path of a theme file; the two names win over a file called the
 same. A theme changes how the page looks and never which pieces are on it. A theme file is TOML in which every key
@@ -338,6 +340,64 @@ carries a tap only on an option that is placed, as the kit's view gives a tap on
 repo: a choice of work that waits no more, and a carried call that panics.
 Not tested: the tap itself, on a real window. Not done: a file's text is not scrolled, so of a long file the
 first lines are drawn and the rest counted.
+
+## The jellyfish (`app/src/jelly.rs`)
+
+`layout --jelly` prints what the jellyfish draws for one line of `jellymoon hear` ([hear.md](hear.md)), and where
+its two windows stand on a screen of the size given. It opens no window, holds no key and hears nothing (ADR 0019,
+"Found while building F56").
+
+```sh
+jellymoon hear ... | head -1 | jellymoon-app layout --jelly - --screen 1440x900
+```
+
+Core decides everything: `Jelly::read` says whether the input is a line, `jellyfish` which state is drawn when a day
+is read too, and `Jelly::drawn` what the bubble holds. `jelly.rs` turns that into the kit's edge scene, one name
+for one name, and prints what the kit placed.
+
+| State | `mood` | The bubble | `ring` |
+|---|---|---|---|
+| `quiet` | `floats` | none | |
+| `listening` | `leans_in` | the words so far (`row_main`); none until there are words | |
+| `heard` | `holds_up` | the words (`row_main`), the project (`row_sub`), how to take it back (`body`) | `left` of 4000 |
+| `working` | `swims` | none; a `count` piece on the jellyfish when more than one run goes | |
+| `asks` | `waves` | core's sentence that a run asks (`body`), then the question (`quoted`) | |
+| `waits` | `glows` | none | |
+| `cannot` | `droops` | core's sentence for what was refused (`body`) | |
+
+**The lines.** One JSON object a line. A `window` line has `id` (`jelly` or `bubble`) and where the window stands on
+the screen. The lines after it are that window's pieces, with the same `id`, placed from the window's own top left:
+`character` (with `state` and `mood`) and `count` in `jelly`; `bubble` and `ring` (with `ring`, from 1, full, to 0)
+in `bubble`. `text` is a list of runs as in the page's output. With no bubble, the `bubble` window is not printed.
+
+```json
+{"kind":"window","id":"jelly","x":1328.0,"y":788.0,"w":96.0,"h":96.0}
+{"kind":"character","id":"jelly","x":8.0,"y":8.0,"w":80.0,"h":80.0,"state":"quiet","mood":"floats","text":[]}
+```
+
+**Where the windows stand.** The jellyfish's window is 96 by 96, 16 pixels from the right and the lower edge of the
+screen. The bubble's is 300 wide, one height for a theme whatever is said, 8 pixels left of the jellyfish with their
+lower edges level; on a screen too narrow for both it stands over the jellyfish. A window larger than the screen
+keeps its size and starts at the screen's top left. Here the room is the whole screen: the room a Dock and a menu
+bar leave is given to the same two functions of the kit by the window that F57 opens.
+
+**Text.** A person's words take at most 3 lines, a project's name 1, a sentence of Jellymoon's 4 and a question 3,
+each cut with an ellipsis between two characters a reader sees. A question is a run's own words: it has the role
+`quoted` and stands apart from Jellymoon's sentence. Markup, a link's shape, an escape or a control character in
+any of them changes the letters drawn and nothing else.
+
+**`--date <YYYY-MM-DD>`** also reads that day's made wishes in Jellymoon's home, through core, and writes nothing.
+A line in `listening`, `heard` or `cannot` is still drawn as it is; any other gives way to what the day gives now.
+With `--date` an input of nothing is no hearing at all, and the day alone is drawn. Without `--date` nothing but the
+input is read.
+
+**Refused.** An input that is not one line of `jellymoon hear` exits 1 with
+`jellymoon-app: the input is not one line of `jellymoon hear`` and prints nothing. A `--screen` that is not `<W>x<H>`
+with each side a whole number from 1 to 16384, `--jelly` without `layout` or without `--screen`, and either with a
+page's flags (`--page`, `--waiting`, `--size`, `--logs`, `--skip`, `--model`, `--fresh`) exit 2 with the usage.
+
+Tests: `app/tests/f56.rs` with `f56/jelly.rs`, `words.rs` and `day.rs`; the kit's half is
+`crates/sticker-kit/tests/edge.rs`. The smoke chain's `jelly` step draws the line its `hear` step printed.
 
 ## From page data to pieces (`app/src/scene.rs`)
 

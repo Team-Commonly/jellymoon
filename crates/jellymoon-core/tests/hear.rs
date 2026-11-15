@@ -7,7 +7,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use jellymoon_core::{
-    DayOptions, EarCannot, Error, HearEvent, HearOptions, Hearing, Jelly, JellyState, KeyMove, Said, Voice,
+    DayOptions, EarCannot, Error, HEAR_LINE_MAX, HearEvent, HearOptions, Hearing, Jelly, JellyDrawn, JellyState,
+    KeyMove, Said, Voice, jellyfish,
 };
 
 fn read(path: &str) -> String {
@@ -80,7 +81,7 @@ fn the_settings_of_voice_round_trip_byte_for_byte() {
 #[test]
 fn the_doc_shows_every_line_of_the_fixtures_and_every_sentence() {
     let doc = read("../../docs/development/hear.md");
-    for name in ["hear-events.jsonl", "hear-lines.jsonl", "hear-runs.jsonl", "voice.json"] {
+    for name in ["hear-events.jsonl", "hear-lines.jsonl", "hear-runs.jsonl", "jelly-drawn.jsonl", "voice.json"] {
         for line in fixture(name).lines() {
             assert!(doc.contains(line), "docs/development/hear.md lacks this line of {name}: {line}");
         }
@@ -120,4 +121,70 @@ fn a_hearing_begins_only_with_a_home_that_is_a_full_path_and_a_day_that_is_one()
     assert_eq!((hearing.line(b"not an event\n"), hearing.line(b" \r\n"), hearing.skipped()), (None, None, 1));
     assert_eq!(hearing.shows(), &listening);
     assert_eq!(fs::read_dir(home.path()).unwrap().count(), 0, "a hearing wrote to its home");
+}
+
+// F56: what is drawn of each line of the two examples is the line of `jelly-drawn.jsonl` at its place.
+#[test]
+fn what_is_drawn_of_every_example_line_round_trips_byte_for_byte() {
+    let example = fixture("jelly-drawn.jsonl");
+    let drawn: Vec<JellyDrawn> = example.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+    let written: String = drawn.iter().map(|drawn| serde_json::to_string(drawn).unwrap() + "\n").collect();
+    assert_eq!(written, example);
+    let lines = fixture("hear-lines.jsonl") + &fixture("hear-runs.jsonl");
+    let of_lines: Vec<JellyDrawn> = lines.lines().map(|line| Jelly::read(line.as_bytes()).unwrap().drawn()).collect();
+    assert_eq!(of_lines, drawn);
+    assert!(serde_json::from_str::<JellyDrawn>(r#"{"state":"quiet","bubble":[],"mood":"floats"}"#).is_err());
+}
+
+#[test]
+fn only_a_line_a_hearing_prints_is_read_as_one() {
+    let quiet = Jelly::quiet().to_string();
+    let read = |line: &str| Jelly::read(line.as_bytes()).is_some();
+    assert!(read(&quiet) && read(&format!(" {quiet}\r\n")));
+    assert!(!read("") && !read("{}") && !read(&format!("{quiet}\n{quiet}")) && !read(&quiet.replace(",\"", ",\n\"")));
+    // The longest line a hearing reads is the longest one that is read here.
+    let long = |bytes: usize| quiet.replace("\"words\":\"\"", &format!("\"words\":\"{}\"", "a".repeat(bytes)));
+    let listening = |bytes: usize| long(bytes).replace("quiet", "listening");
+    let most = HEAR_LINE_MAX - quiet.len() - 4;
+    assert!(read(&listening(most)) && !read(&listening(most + 1)), "{}", listening(most).len());
+    // In each state only what that state carries.
+    let line = |state: &str, says: &str, more: &str| {
+        format!(r#"{{"state":"{state}","says":"{says}","words":"","project":"","left":0{more}}}"#)
+    };
+    let (asks, waits) = ("a run asks, and waits for your answer on the page", "a run's work waits for you on the page");
+    let question = r#","question":"Which one?""#;
+    for (state, says, more) in [("working", "", r#","going":1"#), ("asks", asks, question), ("waits", waits, "")] {
+        assert!(read(&line(state, says, more)), "{state}");
+        assert!(!read(&line(state, "another sentence", more)), "{state}: a sentence that is not its own");
+        assert!(!read(&line("quiet", says, more)) && !read(&line("listening", says, more)), "{state}'s, when quiet");
+        assert!(!read(&line(state, says, &format!("{more},\"going\":0"))), "{state}: no run going, counted");
+    }
+    assert!(read(&line("cannot", "anything core says", "")) && !read(&line("cannot", "", "")));
+    assert!(!read(&line("cannot", "no", question)) && !read(&line("cannot", "no", r#","going":2"#)));
+    assert!(!read(&line("working", "", r#","going":0"#)), "no run going, counted as going");
+    assert!(
+        !read(&line("working", "", "")) && !read(&line("asks", asks, "")) && !read(&line("waits", waits, question))
+    );
+    assert!(!read(&line("quiet", "", "").replace("\"left\":0", "\"left\":1")));
+    let heard = |words: &str, project: &str, left: u64| {
+        let says = "press the key again to take it back";
+        format!(r#"{{"state":"heard","says":"{says}","words":"{words}","project":"{project}","left":{left}}}"#)
+    };
+    assert!(read(&heard("make it", "alpha", 4000)) && read(&heard("make it", "alpha", 0)));
+    assert!(
+        !read(&heard("make it", "alpha", 4001)) && !read(&heard("", "alpha", 9)) && !read(&heard("make it", "", 9))
+    );
+    assert!(!read(&heard("make it", "alpha", 9).replace("heard", "listening")), "a project while listening");
+    assert!(!read(&heard("make it", "alpha", 9).replace("heard", "cannot")), "words with a refusal");
+}
+
+#[test]
+fn the_jellyfish_of_a_day_is_asked_with_a_home_that_is_a_full_path_and_a_day_that_is_one() {
+    let home = tempfile::tempdir().unwrap();
+    let listening = Jelly { state: JellyState::Listening, ..Jelly::quiet() };
+    assert!(matches!(jellyfish(None, &PathBuf::from("jm"), Some("2026-03-10")), Err(Error::Home)));
+    assert!(matches!(jellyfish(None, home.path(), Some("2026-3-10")), Err(Error::Date)));
+    assert_eq!(jellyfish(None, home.path(), Some("2026-03-10")).unwrap(), Jelly::quiet());
+    assert_eq!(jellyfish(Some(&listening), home.path(), None).unwrap(), listening);
+    assert_eq!(fs::read_dir(home.path()).unwrap().count(), 0, "a look at the day wrote to its home");
 }

@@ -306,8 +306,10 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
 /// Lets go of a run's own lock at the end of its command. The lock's file goes with it, but for a run that asks:
 /// an answer or a toss takes that lock next, and its file stays with the run's folder (`asks::Held`).
 fn let_go(home: &Path, run: &str, lock: File) {
+    // Read while the lock is held: an answer that took it next could write the run as going behind this read.
+    let asks = record::kept(home, run).is_some_and(|record| record.outcome == Some(RunOutcome::Asks));
     drop(lock);
-    if record::kept(home, run).is_none_or(|record| record.outcome != Some(RunOutcome::Asks)) {
+    if !asks {
         let _ = fs::remove_file(lock_file(home, run));
     }
 }

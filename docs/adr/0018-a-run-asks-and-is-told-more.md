@@ -167,6 +167,14 @@ empty logs:
   when it was let go of, it could be held under no name by a command that had opened it just before.
 - **The harness's words for a lost session are read in a result's `errors` and on stderr**, not in the whole
   line: an agent that writes them in its own prose has not lost its session.
+- **The gate failed that fix on the door once more.** A stretch was read joined whole or not at all, so a word
+  that touched a split key id across one more break (`the id is`, a break, half the id, a break, the rest)
+  took the word's edge the id is found by, and both halves were kept and given to the harness. A stretch is
+  now also read with every two to eight lines in a row joined and the lines around them apart. What is left
+  open is in wish.md, "Not closed": a key over more than eight lines with a word touching it, and a private
+  key's first line split inside a word.
+- **A refused answer may leave the run's own lock file**, empty, where an older build had taken it away: the
+  answer holds the run before it reads anything again. run.md said only `runs/keep.lock` was written.
 - **Not measured in the build:** the resume itself on a real harness with core's command line. The coordinator
   measured it afterwards, below.
 

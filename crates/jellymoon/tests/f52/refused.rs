@@ -164,6 +164,17 @@ fn an_answer_for_a_record_a_wish_or_a_copy_that_is_not_as_a_run_that_asks_leaves
     copy["failed"] = json!(7);
     fs::write(&file, format!("{copy}\n")).unwrap();
     made.unanswered(ANSWER, NO_COPY);
+    // A run that asked under a build that took its lock's file away has none. The answer makes it to hold the
+    // run while it reads the rest again: refused, it leaves that file, empty, and nothing else.
+    let made = asking();
+    fs::remove_file(made.w.jm("runs").join(&made.run).join("run.lock")).unwrap();
+    fs::remove_dir_all(made.copy()).unwrap();
+    let (before, starts) = (made.home(), made.w.starts());
+    assert_eq!(refused(&made.answer(ANSWER)), said(&NO_COPY.replace("{run}", &made.run)));
+    let after = made.home();
+    let left: Vec<_> = after.iter().filter(|file| !before.contains(file)).collect();
+    assert!(matches!(&left[..], [(path, bytes)] if path.ends_with("run.lock") && bytes.is_empty()), "{left:?}");
+    assert!(before.iter().all(|file| after.contains(file)) && made.w.starts() == starts);
 }
 
 #[test]

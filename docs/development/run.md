@@ -447,8 +447,10 @@ with an unknown option that names `--resume` (or one of a run's three), nothing 
 written back as it was, then the wish, with its question and the answer it had before, if any, and the command
 is refused. The run still asks.
 
-**What is refused.** One line on stderr, exit 1. Nothing is started, and nothing is written but the empty file
-`runs/keep.lock` the first answer, keep or toss makes.
+**What is refused.** One line on stderr, exit 1. Nothing is started, and nothing is written but two empty
+files: `runs/keep.lock`, which the first answer, keep or toss makes, and the run's own `runs/<id>/run.lock`
+where it was not there. A run that asks leaves that file; one that asked under a build before this one took it
+away, and an answer makes it again to hold the run while it reads the record, the wish and the copy once more.
 
 | Refused | The line |
 |---|---|

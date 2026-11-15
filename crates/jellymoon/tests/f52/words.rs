@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde_json::json;
 
 use super::{DAY, Made, asking, printed};
-use crate::support::{Ran, map_key, shows, tree};
+use crate::support::{Ran, key_id, map_key, shows, tree};
 
 /// Words no other text of a test holds, so they can be looked for in every file.
 const WORDS: &str = "walnut-meridian";
@@ -62,21 +62,29 @@ fn an_answer_s_words_are_in_the_harness_s_input_and_the_wish_s_own_file_and_nowh
     }
 }
 
-// A credential that a line break splits is one once the answer is on one line: the door finds it there.
+// A credential that a line break splits is one once the answer is on one line: the door finds it there. A word
+// that touches it across one more break does not hide it (the second gate's texts, with a key id).
 #[test]
 fn a_credential_split_by_a_line_break_in_an_answer_never_reaches_the_harness() {
-    let key = map_key("kLmNo");
-    let (head, tail) = key.split_at(17);
-    for split in ["\n", "\r\n", "\r", "\u{2028}"] {
+    let (key, id) = (map_key("kLmNo"), key_id());
+    let ((head, tail), (first, last)) = (key.split_at(17), id.split_at(10));
+    let split = ["\n", "\r\n", "\r", "\u{2028}"].map(|split| {
+        (format!("the key is {head}{split}{tail} and no other"), "the key is [redacted] and no other", [head, tail])
+    });
+    let touched = [
+        (format!("the id is\n{first}\n{last} for the upload"), "the id [redacted] for the upload", [first, last]),
+        (format!("{first}\r\n{last}\r\nis the key id"), "[redacted] the key id", [first, last]),
+        (format!("use {first}\u{2028}{last}\u{2028}please"), "use [redacted]", [first, last]),
+    ];
+    for (typed, kept, parts) in split.into_iter().chain(touched) {
         let made = asking();
         made.w.play("nothing", 0);
-        let ran = made.answer(&format!("the key is {head}{split}{tail} and no other"));
-        assert_eq!(printed(&ran)["outcome"], "completed", "{split:?}");
-        assert_eq!(made.w.rec("stdin").unwrap(), "the key is [redacted] and no other\n", "{split:?}");
-        for part in [head, tail] {
+        assert_eq!(printed(&made.answer(&typed))["outcome"], "completed", "{typed:?}");
+        assert_eq!(made.w.rec("stdin").unwrap(), format!("{kept}\n"), "{typed:?}");
+        for part in parts {
             let held =
                 tree(made.w.dir.path()).into_iter().find(|(_, bytes)| shows(&String::from_utf8_lossy(bytes), part));
-            assert!(held.is_none(), "{split:?}: {:?}", held.map(|held| held.0));
+            assert!(held.is_none(), "{typed:?}: {:?}", held.map(|held| held.0));
         }
     }
 }

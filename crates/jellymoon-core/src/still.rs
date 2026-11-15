@@ -24,26 +24,39 @@ const MARK: &str = "[redacted]";
 pub(crate) const MARKS: &str =
     "nothing is left of these words but the mark of what cleaning replaced, so nothing was made of them";
 
-/// Whether a made text is nothing but marks, with the spaces between them and the sign of a cut.
+/// Whether a made text is nothing but marks: no letter and no digit is left of it beside them, only the spaces
+/// between them, the sign of a cut, and the quotes, brackets and stops a mark was typed in.
 pub(crate) fn marks_only(made: &str) -> bool {
-    made.contains(MARK) && made.replace(MARK, "").chars().all(|left| left.is_whitespace() || left == '…')
+    made.contains(MARK) && !made.replace(MARK, "").chars().any(char::is_alphanumeric)
 }
 
 /// The characters that end a line. A making reads each as a space between two words, or takes it out.
 const BREAKS: [char; 7] = ['\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}'];
+/// The most lines in a row that are read as one beside the lines around them ([`mended`]).
+const JOINED: usize = 8;
 
-/// `text` with every run of it that has a line break and no other space in it read twice: as a making reads
-/// it, the break a space, and with the break taken out. A run the two readings clean alike is left as it is.
-/// One they clean differently holds a credential's shape in one reading that the other does not find (a key
-/// with a break in it; a key id that the next line's capitals would hide), and the whole run is the mark: no
-/// part of either reading is kept. That can take a part of a shape that spans spaces with it, a private key's
-/// first line, which is why this reading is never used alone ([`both`]).
+/// `text` with every run of it that has a line break and no other space in it read more than once: as a making
+/// reads it, each break a space, and with breaks taken out. Taken out are all of them, and those between every
+/// two to [`JOINED`] lines in a row with the lines around those left apart: a word that touches a split key
+/// across one more break hides the key from the reading that joins the whole run. A run every reading cleans
+/// alike is left as it is. One that two clean differently holds a credential's shape in one reading that
+/// another does not find (a key with a break in it; a key id that the next line's capitals would hide), and
+/// the whole run is the mark: no part of any reading is kept. That can take a part of a shape that spans
+/// spaces with it, a private key's first line, which is why this reading is never used alone ([`both`]).
 fn mended(text: &str) -> String {
     let near = |c: char| c.is_whitespace() && !BREAKS.contains(&c);
     let read = |run: &str| {
-        let joined: String = run.chars().filter(|c| !BREAKS.contains(c)).collect();
-        let alike = joined.len() == run.len() || line(&joined, ROOM) == line(run, ROOM).replace(' ', "");
-        if alike { run.to_string() } else { MARK.to_string() }
+        let lines: Vec<&str> = run.split(BREAKS).filter(|line| !line.is_empty()).collect();
+        let apart = line(run, ROOM).replace(' ', "");
+        let alike = |joined: String| line(&joined, ROOM).replace(' ', "") == apart;
+        // Lines in a row, `size` at a time from the line `first`, are each one word: every such row is one.
+        let rows = |size: usize, first: usize| {
+            let (head, rest) = lines.split_at(first);
+            [head].into_iter().chain(rest.chunks(size)).map(<[&str]>::concat).collect::<Vec<_>>().join(" ")
+        };
+        let whole = lines.len() < 2 || alike(lines.concat());
+        let each = (2..=lines.len().min(JOINED)).all(|size| (0..size).all(|first| alike(rows(size, first))));
+        if whole && each { run.to_string() } else { MARK.to_string() }
     };
     text.split(near).map(read).collect::<Vec<_>>().join(" ")
 }
@@ -269,6 +282,36 @@ mod tests {
         // A space of another kind beside the break keeps the two sides apart, as before: the door does not join them.
         let apart = format!("use {}\n {} here", &key[..17], &key[17..]);
         assert_eq!(still(&apart, 200, false), Ok(format!("use {} {} here", &key[..17], &key[17..])));
+    }
+
+    // A word that touches a split key across one more break hides it from the reading that joins all three: a
+    // key id needs a word's edge at each end. The lines are read joined two and more at a time as well.
+    #[test]
+    fn a_split_credential_that_a_word_touches_across_another_break_is_the_mark() {
+        let (key, id) = (format!("AI{}{}", "za", "kLmNo".repeat(7)), format!("AK{}{}", "IA", "Q7".repeat(8)));
+        for split in ["\n", "\r\n", "\u{2028}"] {
+            let (head, tail) = (&id[..10], &id[10..]);
+            // The id in seven lines, a word at each end: as many lines as are read as one, and one less.
+            let thirds = [&id[..3], &id[3..6], &id[6..9], &id[9..12], &id[12..15], &id[15..18], &id[18..]].join(split);
+            let cases = [
+                (
+                    format!("the id is{split}{head}{split}{tail} for the upload"),
+                    format!("the id {MARK} for the upload"),
+                ),
+                (format!("{head}{split}{tail}{split}is the key id"), format!("{MARK} the key id")),
+                (format!("use {head}{split}{tail}{split}please"), format!("use {MARK}")),
+                (format!("use{split}{}{split}{} here", &key[..17], &key[17..]), format!("{MARK} here")),
+                (format!("is{split}{thirds}{split}now"), MARK.to_string()),
+            ];
+            for (text, kept) in cases {
+                assert_eq!(still(&text, 200, false), Ok(kept), "{text:?}");
+            }
+            // Lines that are no credential however they are joined stay words, as many as a text can hold.
+            let list = vec!["ab"; 800].join(split);
+            assert_eq!(still(&list, ROOM, false), Ok(list.replace(split, " ")));
+        }
+        assert!(marks_only(&format!("'{MARK}'.")) && marks_only(&format!("({MARK}), {MARK}!")));
+        assert!(!marks_only(&format!("{MARK} 7")) && !marks_only("'.'"));
     }
 
     /// A private key's block as it is typed: its first line, two lines of its body set in, and its last.

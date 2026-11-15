@@ -39,10 +39,13 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   spaces made one, nothing that cannot be seen, credential shapes replaced by `[redacted]`, each `"` made `'`.
 - **A credential split by a line break.** A line break is read as a space, so a key typed on two lines was two
   words, neither a credential's shape, and both were kept. The door now reads each stretch of the words that
-  holds a line break and no other space twice, as it stands with the break a space and with the break taken
-  out, and when the two readings clean differently the whole stretch is kept as `[redacted]`. Either reading
+  holds a line break and no other space more than once, as it stands with each break a space and with breaks
+  taken out, and when two readings clean differently the whole stretch is kept as `[redacted]`. Any reading
   may be the one that holds the shape: a key with a break in it, or a key id that the next line's capitals
-  would hide. Words on two lines that are no credential either way are kept as before, as two words. This is
+  would hide. The breaks taken out are all of the stretch's, and those between every two to eight lines in a
+  row with the lines around them left apart. The second is for a word that touches a split key across one
+  more break (`the id is`, a break, half a key id, a break, its other half): joined to the key it takes the
+  word's edge a key id is found by, and the reading that joins the whole stretch does not find it. Words on two lines that are no credential either way are kept as before, as two words. This is
   the door's rule, so it holds for a made wish, a clash's statement, a run's question and an answer alike.
   What these now keep differently: a wish or statement with such a stretch was kept in its own words and is
   kept as `[redacted]` there, and a file written before that holds one is drawn so. The stretch is whole: a
@@ -56,16 +59,20 @@ can start it later. Words core refuses are refused as without `--run`, and nothi
   without the rule replaced is kept by the reading with it. It was not so at first: a word of 30 letters and
   digits on the line before a private key's first line took that line with it as one stretch, the key was no
   longer found, and its body, set in on the lines after, was kept.
-- **Only marks is nothing.** Words of which cleaning leaves nothing but `[redacted]` (and the `…` of a cut)
-  say nothing a person typed, so nothing is made of them: `wish`, a heard wish, `run answer`, `rule` and a tap
+- **Only marks is nothing.** Words of which cleaning leaves `[redacted]` and no letter or digit beside it
+  (the `…` of a cut, and the quotes, brackets and stops a key was typed in, are neither) say nothing a person
+  typed, so nothing is made of them: `wish`, a heard wish, `run answer`, `rule` and a tap
   that settles a clash refuse them in one sentence, `nothing is left of these words but the mark of what
   cleaning replaced, so nothing was made of them`. Nothing is kept and no harness is given them. `rename`, two
   long names and `now`, each on its own line, are such words. A file written before this that holds a wish of
   only the mark is still read, and an agent's question of only marks is still kept, as the mark.
 - **Not closed.** A break with a space or a tab beside it (an indented second line) keeps the two sides apart.
   So does a break beside a terminal escape sequence that holds a space: the sequence goes, the space in it has
-  already kept the two sides apart, and a key split there is kept in two pieces. A session log's turn is not
-  read this way.
+  already kept the two sides apart, and a key split there is kept in two pieces. A key split over more than
+  eight lines is found only when no word touches it across a further break. A shape that spans spaces, a
+  private key's first line, is not found when a break splits one of its words (`BEG`, a break, `IN`): a
+  stretch is read by itself, and that line is several. Its body is still replaced where its lines are long
+  enough to be a credential's shape themselves. A session log's turn is not read this way.
 - **Cleaned until nothing changes.** Cleaning once is not always cleaning twice: a private key's first line with a
   tab in it is one only once it is on one line, and a key straight after another is found only once the first is
   `[redacted]`. So the words are cleaned again until a cleaning changes nothing, and that is what is kept

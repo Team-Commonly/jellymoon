@@ -221,7 +221,7 @@ fn a_locked_index_and_another_keep_at_work_are_refused() {
     let lock = fs::File::create(made.w.jm("runs").join("keep.lock")).unwrap();
     lock.lock().unwrap();
     let wait = [("JELLYMOON_TEST_KEEP_WAIT_MS", "200".into())];
-    let busy = format!("another keep or toss is at work in this home: {UNCHANGED}");
+    let busy = format!("a keep, a toss or the start of a follow-up's run is at work in this home: {UNCHANGED}");
     made.refuses(&made.keep_in(&made.repo, &[], &wait), &before, &busy);
     assert_eq!(printed(&made.keep_in(&made.repo, &["--ask"], &wait))["fits"], json!(false));
     drop(lock);

@@ -15,6 +15,8 @@ use std::{env, fs, io, process, thread};
 
 #[path = "fake_agent/asks.rs"]
 mod asks;
+#[path = "fake_agent/follow.rs"]
+mod follow;
 #[path = "fake_agent/gate.rs"]
 mod gate;
 
@@ -387,7 +389,10 @@ fn main() {
         "forever" | "deaf" | "slow" => waits(script == "slow", rec),
         "obeys" | "floods" => obeys(script == "obeys" && number == 0, rec),
         "scribble" => scribbles(rec),
-        other => asks::play(other, number, rec).unwrap_or_else(|| gate::play(other, number, rec)),
+        other => {
+            let known = asks::play(other, number, rec).or_else(|| follow::play(other, number, rec));
+            known.unwrap_or_else(|| gate::play(other, number, rec))
+        }
     };
     process::exit(code);
 }

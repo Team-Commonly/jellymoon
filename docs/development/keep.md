@@ -77,10 +77,12 @@ worktree named with `--repo`, and no other checkout's files, index or `HEAD` is 
 names a name for a branch to the branch itself, as it does when it says where a checkout stands, and that branch
 is the one the work lands on.
 
-One keep or toss of a home runs at a time: a keep holds the system's lock on `runs/keep.lock` from before it
+One keep or toss of a home runs at a time, and no follow-up's run starts beside one: a keep holds the system's lock on `runs/keep.lock` from before it
 reads the run's record until it ends, and one that waits ten seconds for it is refused. So of two keeps started
 together, the second reads what the first wrote and says the work was kept before. A lock that cannot be made or
-taken for any other reason is said as that, and not as another keep or toss; a toss says both in the same words.
+taken for any other reason is said as that, and not as a holder at work; a toss says both in the same words.
+The start of a follow-up's run holds the same lock ([run.md](run.md), "A follow-up's run"), so the sentence
+of a busy lock names all three.
 
 ## Asked first
 
@@ -462,6 +464,36 @@ When the branch is still where the run started, what lands is the run's own comm
 author is who the run's copy found the person to be when the run ended, or Jellymoon's fallback name when the
 repo named nobody then ([copy.md](copy.md)).
 
+## A follow-up's work
+
+A follow-up's branch stands on the work it follows ([run.md](run.md), "A follow-up's run"), so the two are kept
+in order (ADR 0018, decision 9). With the keeps' lock held, before anything of the repo is asked, a keep of a
+follow-up reads the record of the run it follows (`follows` in its own record): while that work waits the keep
+is refused and names the wish to keep first. `--ask` answers `fits: false` with the same sentence in `why`.
+Nothing is written either way. Once the followed work was kept, or when the follow-up was made after it was
+kept, the follow-up is kept as any work is.
+
+**Followed work that was kept as a new commit.** When the person's branch had moved on, a keep joins the work
+in a commit of its own, and the follow-up's branch still holds the followed work under the run's commit. The
+keep of the follow-up then takes the commit the followed work was kept as for the run's start when it asks
+whether the person's branch holds that start, and gives git the run's real start as the base of the merge
+(`merge-tree --merge-base`, git 2.40 and later), so only what the follow-up adds is joined.
+
+A git from before 2.40 cannot be told a base and finds its own, the commit before the followed work. Merged
+from there, the follow-up's side holds all of the followed work, and whatever of it the person has taken out
+since comes back: with `n.txt` removed again and `b.txt` restored by a commit of theirs, such a keep showed one
+file, said `fits: true`, and landed `D b.txt`, `A n.txt` beside it. So that keep is refused on such a git, and
+`--ask` says `fits: false` in the same sentence: `the work run <id> follows was kept as a new commit, and this
+git is too old to keep a follow-up's work on top of one (it is from before 2.40)`. Nothing is changed. A
+follow-up whose followed work was kept by moving the branch forward, and one made after the keep, need no base
+and are kept by any git a keep takes.
+
+The kept commit stands for the start only of a follow-up whose copy was made at the followed work. One made
+after the keep started where the checkout stood, and is held to that commit as any run's work is.
+`tests/f53/order.rs` keeps a follow-up both ways and reads the files the last commit changed; `tests/f53/gate.rs`
+plays the git that cannot be told a base, the commit that takes part of the followed work back, on the real
+git when it is 2.40 or later, and the follow-up made after the keep.
+
 ## Every refusal
 
 Each ends the command with exit 1 and one line on stderr. With `--ask`, the ones marked are printed in `why`
@@ -474,7 +506,8 @@ instead. `<unchanged>` stands for `the work of run <id> was not kept, and nothin
 | the run made no commit | `run <id> changed nothing: there is no work of it to keep` | refused |
 | the record names no commits | `the record of run <id> is from before a run's record named its commits: its work is shown, and is not kept by Jellymoon` | refused |
 | the record's `kept` and `onto` are not an id and a branch's whole name, or `work` says kept with neither | `the record of run <id> is not one Jellymoon wrote for this wish` | refused |
-| another keep, or a toss ([toss.md](toss.md)), holds the lock | `another keep or toss is at work in this home: <unchanged>` | printed |
+| the work follows work that still waits ("A follow-up's work") | `the work of run <id> follows the work of wish <wish>, which still waits: keep wish <wish> first, and nothing was changed` | printed |
+| another keep, a toss ([toss.md](toss.md)) or the start of a follow-up's run holds the lock | `a keep, a toss or the start of a follow-up's run is at work in this home: <unchanged>` | printed |
 | the lock could not be made or taken | `the lock a keep or a toss holds (runs/keep.lock) could not be made or taken in this home: <unchanged>` | printed |
 | the config names what cannot be switched off | ``the repo's git config names a filter, a merge driver or a transport that cannot be switched off on git's command line: there are too many of them, or one has `=` in its name: <unchanged>`` | printed |
 | no git, or the empty folder is not empty | `the work of run <id> could not be read: no `git` program was found on PATH, or the folder Jellymoon keeps empty for git (runs/no-hooks) is not an empty folder` | printed |
@@ -491,6 +524,7 @@ instead. `<unchanged>` stands for `the work of run <id> was not kept, and nothin
 | something is going on | `a merge, a cherry-pick, a revert, a rebase or a bisect is going on in the checkout: <unchanged>` | printed |
 | the history does not hold the start, or the branch has no commit | `the branch's history does not hold the commit run <id> started from: <unchanged>` | printed |
 | `HEAD` names a branch under a spelling the repo does not list (`git checkout Main` for `main`, on a disk that takes both) | ``the checkout's HEAD names a branch the repo does not list under that name: on a disk that takes two spellings for one name it is another spelling of a branch's name, and `git checkout` with the name as `git branch` prints it stands on the branch itself: <unchanged>`` | printed |
+| the run follows work kept as a new commit, and git is from before 2.40 ("A follow-up's work") | `the work run <id> follows was kept as a new commit, and this git is too old to keep a follow-up's work on top of one (it is from before 2.40): <unchanged>` | printed |
 | git is too old | `the branch has commits since run <id> started, and this git is too old to merge them with the work in the store (it is from before 2.38): <unchanged>` | printed |
 | both changed the same | `the branch's commits since run <id> started and the run's work changed the same lines, or the same file in a way git does not merge: <unchanged>` | printed |
 | git ended the merge in the store with an error | `git could not merge the work of run <id> with the branch's commits since in the repo's store: the store takes no new object (the merge writes one tree there, asked or not), or git did not answer: <unchanged>` | printed |

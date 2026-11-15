@@ -104,6 +104,18 @@ pub(crate) fn end_copy(
     Ok((at.printed(run, false), made, end))
 }
 
+/// Whether a run's copy is as it was made: its branch names `start`, and git finds no file in its folder that
+/// is changed, new or ignored. Anything that cannot be asked is a copy that is not.
+pub(crate) fn as_made(home: &Path, run: &str, start: &str) -> bool {
+    let at = Places::of(home);
+    let Ok(Some(record)) = read(&at.record(run)) else { return false };
+    let Ok(git) = Git::find(&at.runs, record.found) else { return false };
+    let Ok(repo) = git.open(&record.own) else { return false };
+    let status = ["status", "--porcelain", "--ignored", "--untracked-files=all"];
+    let clean = repo.run(Some(&at.root.join(run)), &[], &status).is_ok_and(|said| said.is_empty());
+    clean && at_start(&repo, run, Some(start)).is_ok()
+}
+
 /// Removes what a git stopped at its limit, or a child of it, wrote after its copy was taken back: a real folder in
 /// `copies` under a run id that has no folder in `runs`. A copy being made has one from before its folder is there.
 fn sweep(at: &Places) {

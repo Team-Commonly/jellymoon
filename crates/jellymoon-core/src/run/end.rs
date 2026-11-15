@@ -13,7 +13,8 @@ use std::time::{Duration, Instant};
 use super::child::{End, Ended};
 use super::record::Record;
 use super::{
-    Ran, RunOutcome, STAR, asking, asks, cancelled, cut, cut_late, dead, failed, finished, left, never, record, refused,
+    Ran, RunOutcome, STAR, asking, asks, cancelled, cut, cut_late, dead, failed, finished, follow, left, never, record,
+    refused, words,
 };
 use crate::busy::{self, or_test};
 use crate::copy::{self, Outcome, RunCopy};
@@ -86,7 +87,9 @@ pub(super) fn recorded(home: &Path, day: &str, wish: &str, run: &str, record: &R
         return None;
     }
     let ours: Vec<String> = match outcome {
-        RunOutcome::Completed if copy::is_gone(home, run) => vec![finished(run, true), finished(run, false)],
+        RunOutcome::Completed if copy::is_gone(home, run) => {
+            vec![finished(run, true), finished(run, false), words::unchanged_on(run)]
+        }
         RunOutcome::Failed => {
             let seconds = said.split(" seconds)").next().and_then(|to| to.rsplit(' ').next()?.parse::<u64>().ok());
             let limit = seconds.map(|seconds| failed(run, &at_limit(Duration::from_secs(seconds))));
@@ -221,6 +224,7 @@ fn word(ended: &Ended, limit: Duration) -> Result<Option<String>, String> {
         (End::Stopped, ..) => "",
         (End::Limit, ..) => return Err(at_limit(limit)),
         (End::Over, ..) => KINDS[0],
+        _ if ended.worked => asks::WORKED,
         _ if ended.lost => asks::LOST,
         (End::Exited, ..) if read.lines == 0 => KINDS[1],
         _ if read.other => asks::OTHER,
@@ -261,7 +265,7 @@ pub(super) fn settle(
     };
     let question = word.as_ref().ok().cloned().flatten();
     let (outcome, why, end) = match committed {
-        Ok((_, changed, end)) => (RunOutcome::Completed, finished(run, changed), end),
+        Ok((_, changed, end)) => (RunOutcome::Completed, follow::ended_as(home, run, start, changed), end),
         Err(_) if question.is_some() => (RunOutcome::Asks, asking(run), None),
         Err(_) if ended.end == End::Stopped => (RunOutcome::Cancelled, cancelled(run), None),
         Err(kind) => (RunOutcome::Failed, failed(run, kind), None),

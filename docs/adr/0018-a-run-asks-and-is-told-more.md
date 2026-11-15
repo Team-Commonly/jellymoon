@@ -189,6 +189,63 @@ empty logs, on a wish that cannot be done without one answer:
   failed in the fixed words (`Claude Code no longer keeps the session it asked in`), and its copy was kept.
 - **Still not measured:** a harness too old to know `--resume`.
 
+## Found while building F53
+
+- **The kept wish gains one name**, `after`, last: the id of the wish it follows. It is left out of every other
+  wish, so a file from before reads and writes as it was. A day's file in which a wish names itself, a later
+  wish or anything that is no made wish's id is not used, in the words for a file that is not that day's.
+- **Work can be followed when its run finished with a commit and the work waits or was kept.** No run, a run
+  that is going, asks, failed, was stopped, was cut off or changed nothing, tossed work and a record from
+  before F48 are each refused in one fixed sentence (wish.md, "A follow-up"), and nothing is kept.
+- **A follow-up is followed in its turn**, by the same rule. Three in a row are kept first to last.
+- **A wish of another day is followed on that day.** `--date` names it, the follow-up is kept in that day's
+  file and counts in that day's eight. A day's file never names a wish of another day.
+- **It is one of the day's eight**, refused in a ninth wish's words.
+- **Its project is the followed wish's.** `--project` beside `--after` is a wrong command line (exit 2), not a
+  refusal: two names for one thing cannot disagree if only one is taken.
+- **`wish --after <id> --run`** keeps the follow-up and starts its run apart, as `wish --run` does.
+- **The fork is asked with three arguments** where a run's `--session-id <id>` stands: `--resume <followed
+  session> --fork-session --session-id <id>`. The init line must name the new id; under any other, the followed
+  one too, the child is stopped and the run has failed. A harness that does not know `--fork-session` starts no
+  run.
+- **A session that is not kept is told by the same words as for an answer**, and the run then starts once more
+  with a new session and no fork, in the same copy. The record names the new session and says `forked: false`
+  before that start. A followed record with no session of core's shape is not forked at all. The record's
+  `follows` names the followed run in every case.
+- **The copy's start is the followed work's commit while it waits**, checked against the followed run's branch
+  in the repo, **and the checkout's commit once it was kept.** `run show`, `run keep` and `run toss` compare a
+  follow-up's work with that start, so each shows, lands or drops only what the follow-up adds.
+- **The order is read under the keeps' lock.** A follow-up's run holds that lock from before it reads the
+  followed record until its wish names its run; a keep and a toss read the other run's record with it held. A
+  refusal writes nothing: the tests compare the whole home, the repo's refs and checkout, and the harness's
+  store.
+- **A toss is refused for more than a waiting follow-up**, which is where this departs from decision 9's
+  words: also while the follow-up's run goes or asks, since its copy stands on the work. It is not refused for
+  a follow-up whose run failed, was stopped or changed nothing, which holds nothing of the work.
+- **Followed work kept as a new commit** leaves the follow-up's branch on the run's commit, not the kept one.
+  The keep of the follow-up counts the kept commit as the run's start and names the real start to git as the
+  merge's base (keep.md, "A follow-up's work").
+- **That keep is refused on a git from before 2.40**, which cannot be told a base. Merged from the base git
+  finds, the keep brought back followed work the person had since taken out, under `fits: true`: a refusal in
+  one sentence is the smaller harm. The kept commit stands for the start only of a follow-up whose copy was
+  made at the followed work; one made after the keep is held to its own start.
+- **A refusal of the work a follow-up runs on is a run's, not the folder's.** Another repo, a moved branch and
+  kept work the checkout does not hold are each said alone, the same for a folder named, typed in or listed.
+- **Kept work must be in the checkout's history** for a follow-up of it to run: the commit the followed record
+  names as `kept` is an ancestor of the checkout's `HEAD`. Without it a second worktree, or a branch put back,
+  gave the fork the old files.
+- **A lost fork is started again only in a copy that is as it was made**: branch at `start`, nothing changed,
+  new or ignored. A fork that worked first has failed, in its own kind of a failed end, and its copy is kept.
+- **A follow-up that changed nothing says where its branch is**: where the work it follows ended when its copy
+  was made at that commit, and a run's own words otherwise.
+- **The busy lock names all three holders**: a keep, a toss and the start of a follow-up's run.
+- **Stays open:** a follow-up made and not run whose followed work is tossed cannot be run or let go; and the
+  order of a toss is read from the day's made wishes, so a hand that takes `after` out lets the followed work be
+  tossed under a waiting follow-up (its keep is then refused, and nothing lands wrongly).
+- **The reader leaves out a follow-up's copy** as every copy: the fork's session file is under the copy's
+  folder name in the harness's store, and no turn of it is a turn of the day.
+- **Not measured in the build:** the fork on a real harness with core's command line.
+
 ## Read, not measured
 
 - Claude Code's hooks page, read 2026-11-12, for "Not chosen": `defer` "requires non-interactive mode", is ignored

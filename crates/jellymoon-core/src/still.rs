@@ -293,6 +293,8 @@ mod tests {
             let (head, tail) = (&id[..10], &id[10..]);
             // The id in seven lines, a word at each end: as many lines as are read as one, and one less.
             let thirds = [&id[..3], &id[3..6], &id[6..9], &id[9..12], &id[12..15], &id[15..18], &id[18..]].join(split);
+            // And in ten, more than are read as one: between spaces, the reading of the whole stretch finds it.
+            let tenths = (0..10).map(|at| &id[at * 2..at * 2 + 2]).collect::<Vec<_>>().join(split);
             let cases = [
                 (
                     format!("the id is{split}{head}{split}{tail} for the upload"),
@@ -302,6 +304,8 @@ mod tests {
                 (format!("use {head}{split}{tail}{split}please"), format!("use {MARK}")),
                 (format!("use{split}{}{split}{} here", &key[..17], &key[17..]), format!("{MARK} here")),
                 (format!("is{split}{thirds}{split}now"), MARK.to_string()),
+                (format!("is{split}{head}{split}{tail}{split}now"), MARK.to_string()),
+                (format!("use {tenths} here"), format!("use {MARK} here")),
             ];
             for (text, kept) in cases {
                 assert_eq!(still(&text, 200, false), Ok(kept), "{text:?}");

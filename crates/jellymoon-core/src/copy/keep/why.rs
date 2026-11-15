@@ -28,6 +28,8 @@ pub(crate) enum Unkept {
     History,
     /// The work and the person's commits must be merged, and this git cannot do that in the store.
     Old,
+    /// The run follows work that was kept as a new commit, and this git cannot be told the base to merge from.
+    NoBase,
     /// Both changed the same lines, or the same file in ways git does not merge.
     Clash,
     /// git ended the merge in the store with an error: the store takes no new object, or git did not answer.

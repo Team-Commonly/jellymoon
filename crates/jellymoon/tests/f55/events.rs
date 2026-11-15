@@ -5,6 +5,8 @@ use serde_json::json;
 use super::*;
 
 const LONG: &str = "a wish is at most 200 characters, and this one is longer";
+const MARKS: &str =
+    "nothing is left of these words but the mark of what cleaning replaced, so nothing was made of them";
 const EAR_SILENT: &str = "nothing was heard: the ear did not say what it heard";
 /// What `jellymoon hear` says, once, of the lines it passed over.
 fn passed_over(lines: usize) -> String {
@@ -174,6 +176,11 @@ fn what_is_refused_is_said_for_six_seconds() {
     let ran = w.hear_ran(&[], &hold(0, &format!("zebra{}", " ".repeat(4096))));
     assert_eq!(lines(&ran).last(), Some(&cannot(LONG)));
     assert!(!ran.stdout.contains("zebra") && !w.at("jm").exists());
+    // Words of which cleaning leaves only the mark say nothing: no wish is made of them, a window later either.
+    let mut events = hold(0, &crate::support::map_key("kLmNo"));
+    events.push(tick(6999));
+    assert_eq!(w.hear(&[], &events), [quiet(), listening(""), cannot(MARKS)]);
+    assert!(!w.at("jm").exists());
 }
 
 #[test]

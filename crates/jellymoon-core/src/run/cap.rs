@@ -21,10 +21,12 @@ use crate::{Error, copy};
 /// The most runs that go at once.
 pub(super) const MOST: usize = 3;
 
-fn full() -> Error {
+/// What a run is told to do `again` when one has ended.
+pub(super) const AGAIN: &str = "run the wish again";
+
+fn full(again: &str) -> Error {
     refused(format!(
-        "nothing was started: {MOST} runs are going, and no more than {MOST} go at once; run the wish again when one \
-         has ended"
+        "nothing was started: {MOST} runs are going, and no more than {MOST} go at once; {again} when one has ended"
     ))
 }
 
@@ -37,21 +39,13 @@ fn count(home: &Path) -> usize {
 
 /// Refuses when [`MOST`] runs go already: asked before a copy is made, so a run that is one too many makes none.
 /// It is asked again, and for good, at the claim.
-pub(super) fn room(home: &Path) -> Result<(), Error> {
-    if count(home) >= MOST { Err(full()) } else { Ok(()) }
+pub(super) fn room(home: &Path, again: &str) -> Result<(), Error> {
+    if count(home) >= MOST { Err(full(again)) } else { Ok(()) }
 }
 
-/// Takes the run's own lock, which no run has yet, when fewer than [`MOST`] runs go. The count and the taking are
-/// behind the system's lock on `runs/going.lock`, held for no longer than that: it is waited for as the day's lock
-/// is, and never opened when something other than a plain file is at its name. `free` is asked before the count,
-/// and refuses for a wish that has a run. `name` is called with the lock taken, and has the wish name the run:
-/// when it fails the lock is let go of before the next command counts.
-pub(super) fn claim(
-    home: &Path,
-    run: &str,
-    free: impl FnOnce() -> Result<(), Error>,
-    name: impl FnOnce() -> Result<(), Error>,
-) -> Result<File, Error> {
+/// The system's lock on `runs/going.lock`, taken: it is waited for as the day's lock is, and never opened when
+/// something other than a plain file is at its name.
+fn door(home: &Path) -> Result<File, Error> {
     let door = home.join("runs").join("going.lock");
     if fs::symlink_metadata(&door).is_ok_and(|meta| !meta.is_file()) {
         return Err(refused("nothing was started: the lock runs are counted behind is not a plain file"));
@@ -60,7 +54,7 @@ pub(super) fn claim(
     let (from, wait) = (Instant::now(), or_test(busy::WAIT, "JELLYMOON_TEST_DOOR_WAIT_MS"));
     loop {
         match door.try_lock() {
-            Ok(()) => break,
+            Ok(()) => return Ok(door),
             Err(TryLockError::WouldBlock) if from.elapsed() < wait => thread::sleep(Duration::from_millis(10)),
             Err(TryLockError::WouldBlock) => {
                 return Err(refused("nothing was started: the lock runs are counted behind stayed held"));
@@ -68,8 +62,29 @@ pub(super) fn claim(
             Err(TryLockError::Error(e)) => return Err(Error::Store(e)),
         }
     }
+}
+
+/// Does `then` behind that lock, when fewer than [`MOST`] runs go: an answer takes the lock of a run that asks
+/// there (`answer.rs`), so a run that goes on is counted and claimed in one step, as a new run is.
+pub(super) fn behind<T>(home: &Path, again: &str, then: impl FnOnce() -> Result<T, Error>) -> Result<T, Error> {
+    let _door = door(home)?;
+    room(home, again)?;
+    then()
+}
+
+/// Takes the run's own lock, which no run has yet, when fewer than [`MOST`] runs go. The count and the taking are
+/// behind the system's lock on `runs/going.lock` ([`door`]), held for no longer than that. `free` is asked before the count,
+/// and refuses for a wish that has a run. `name` is called with the lock taken, and has the wish name the run:
+/// when it fails the lock is let go of before the next command counts.
+pub(super) fn claim(
+    home: &Path,
+    run: &str,
+    free: impl FnOnce() -> Result<(), Error>,
+    name: impl FnOnce() -> Result<(), Error>,
+) -> Result<File, Error> {
+    let _door = door(home)?;
     free()?;
-    room(home)?;
+    room(home, AGAIN)?;
     // A test's build can wait here, counted and not yet holding, which is where a second count would be wrong.
     busy::pause("JELLYMOON_TEST_CLAIM_WAIT_MS");
     let lock = OpenOptions::new().write(true).create_new(true).open(lock_file(home, run)).map_err(Error::Store)?;

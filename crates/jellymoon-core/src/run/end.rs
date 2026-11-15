@@ -221,6 +221,7 @@ fn word(ended: &Ended, limit: Duration) -> Result<Option<String>, String> {
         (End::Stopped, ..) => "",
         (End::Limit, ..) => return Err(at_limit(limit)),
         (End::Over, ..) => KINDS[0],
+        _ if ended.lost => asks::LOST,
         (End::Exited, ..) if read.lines == 0 => KINDS[1],
         _ if read.other => asks::OTHER,
         _ if read.start != Some(true) => KINDS[2],

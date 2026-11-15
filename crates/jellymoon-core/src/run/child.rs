@@ -11,6 +11,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use super::asks;
 use super::stream::{self, Expect, Stream};
 use crate::busy::{or_test, test_file};
 
@@ -44,10 +45,13 @@ pub(super) struct Ended {
     /// It printed no line at all and refused its command line as one with an option it does not know: a harness
     /// too old for runs. The option is the first of a run's it named ([`NEWER`]).
     pub old: Option<&'static str>,
+    /// It was told to go on with a session, did not exit with 0 after a stream that started as a run's, and said
+    /// that it keeps that session no more: in a result of its stream, or on stderr (`asks::LOST_SIGN`).
+    pub lost: bool,
 }
 
 /// The options of a run's command line that a Claude Code can be too old for, in the order they are looked for.
-const NEWER: [&str; 3] = ["--restricted", "--json-schema", "--session-id"];
+const NEWER: [&str; 4] = ["--restricted", "--json-schema", "--session-id", "--resume"];
 
 /// Starts the command with `said` as its whole input, and waits for it to end, `limit` at most. Its stream is
 /// read against `expect`. `started` is told
@@ -65,8 +69,9 @@ pub(super) fn run(
     stop: impl Fn() -> bool,
 ) -> io::Result<Ended> {
     if stop() {
-        return Ok(Ended { end: End::Stopped, exit_0: false, read: Stream::default(), old: None });
+        return Ok(Ended { end: End::Stopped, exit_0: false, read: Stream::default(), old: None, lost: false });
     }
+    let resumed = expect.resumed;
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
     let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
@@ -109,7 +114,9 @@ pub(super) fn run(
     let old = unknown.filter(|_| end == End::Exited && !exit_0 && drained && read.lines == 0);
     // A child the person stopped was stopped, whatever it printed while it was being ended.
     let end = if read.over && end != End::Stopped { End::Over } else { end };
-    Ok(Ended { end, exit_0, read, old })
+    // A stream that did not start as a run's had its child ended at once: its own exit is chance, and is not asked.
+    let lost = resumed && (!exit_0 || read.start == Some(false)) && (read.lost || head.contains(asks::LOST_SIGN));
+    Ok(Ended { end, exit_0, read, old, lost })
 }
 
 /// The start of what the child said on stderr, as text; the rest is read and dropped, so the child never waits.

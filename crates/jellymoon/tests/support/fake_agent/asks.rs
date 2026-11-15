@@ -17,10 +17,11 @@ fn option(name: &str) -> Option<String> {
     args.next()
 }
 
-/// Reads what the command line says of a session and a schema. A program started a second time, below something
+/// Reads what the command line says of a session and a schema: the session it is started under, or the one it
+/// is told to resume (F52), which its stream then names. A program started a second time, below something
 /// that minds a signal, has no command line of a run's, and reads what the first start left in `told`.
 pub fn told(rec: &Path) {
-    let told = match option("--session-id") {
+    let told = match option("--session-id").or_else(|| option("--resume")) {
         Some(id) => {
             let schema = option("--json-schema").is_some();
             fs::write(rec.join("told"), format!("{id}\n{schema}\n")).unwrap();
@@ -82,7 +83,7 @@ fn question(number: usize) -> String {
 }
 
 /// A last word that is neither of the two a run ends with, by its number. 0 is none at all, 1 is nothing.
-const WORDS: [&str; 10] = [
+const WORDS: [&str; 13] = [
     "",
     "null",
     r#"{"state":"paused"}"#,
@@ -93,6 +94,10 @@ const WORDS: [&str; 10] = [
     r#"{"state":"asks","question":7}"#,
     r#"{"state":"done","more":"Which of the two uploaders did you mean?"}"#,
     r#"[{"state":"asks","question":"Which of the two uploaders did you mean?"}]"#,
+    // A name written twice: a reader that keeps the last of the two would read `done`.
+    r#"{"state":"asks","state":"done"}"#,
+    r#"{"state":"done","state":"done"}"#,
+    r#"{"state":"asks","question":"Which of the two uploaders did you mean?","question":"Which of the two uploaders did you mean?"}"#,
 ];
 
 /// A first line with its tools and its session written out, for the starts that are not a run's.
@@ -101,7 +106,39 @@ fn init(tools: &str, session: &str) {
     line(&format!(r#"{{"type":"system","subtype":"init","cwd":"{MARKER}",{session}{parts}}}"#));
 }
 
-/// The scripts of F51. None: the script is not one of them.
+/// A harness that no longer keeps the session it is told to resume (F52; ADR 0018, "Measured"): it says so on
+/// stderr and in a result that is an error, and exits with 1. 0 is both, 1 stderr alone with no line printed, 2 a
+/// first line as a run's and then that result alone, 3 both with an exit of 0, 4 that after a first line as a run's.
+/// 5 and 6 are a harness that keeps the session and an agent that writes those words itself, and then fails: 5 in
+/// an assistant line and the prose of its result, 6 in a result whose `errors` is that text and no list. 7 is a
+/// result that is a success and no error with the words in its `errors`, and an exit of 1.
+fn lost(number: usize) -> i32 {
+    let said = format!("No conversation found with session ID: {}", TOLD.get().map_or("", |told| &told.0));
+    if number == 2 || number >= 4 {
+        starts();
+    }
+    if number >= 5 {
+        let errors = [String::new(), format!(r#","errors":"{said}""#), format!(r#","errors":["{said}"]"#)];
+        let (kind, errors) = (["error_during_execution", "success"][usize::from(number == 7)], &errors[number - 5]);
+        line(&format!(r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"{said}"}}]}}}}"#));
+        line(&format!(
+            r#"{{"type":"result","subtype":"{kind}","is_error":{},"result":"{said}"{errors}}}"#,
+            number != 7
+        ));
+        return 1;
+    }
+    if number != 2 {
+        eprintln!("{said}");
+    }
+    if number != 1 {
+        line(&format!(
+            r#"{{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["{said}"],"result":"{MARKER}"}}"#
+        ));
+    }
+    i32::from(number < 3)
+}
+
+/// The scripts of F51, and of F52 the one of a session that is not kept. None: the script is not one of them.
 pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
     let plain = asks(QUESTION);
     let code = match script {
@@ -165,10 +202,11 @@ pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
         }
         // A harness too old for a run's command line, by the option it does not know. `old` is F39's.
         "old" | "old-option" => {
-            let option = ["--json-schema", "--session-id", "--verbose"][number];
+            let option = ["--json-schema", "--session-id", "--verbose", "--resume"][number];
             eprintln!("error: unknown option '{}'", if script == "old" { "--restricted" } else { option });
             1
         }
+        "no-session" => lost(number),
         _ => return None,
     };
     Some(code)

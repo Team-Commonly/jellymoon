@@ -113,7 +113,9 @@ fn a_typed_wish_is_kept_in_the_working_state_and_says_why_nothing_was_started() 
 fn a_wish_is_kept_as_it_is_drawn_and_never_holds_a_credential() {
     let w = world();
     let raw = format!("  deploy  with {}\nfr\u{2065}om \"now\" on ", hub_key());
-    let clean = "deploy with [redacted] from 'now' on";
+    // The word after the key's line break goes with the key: with the break out the two are one run, which
+    // the door cannot tell from a key whose end is on the next line (`still.rs`, `mended`; F52).
+    let clean = "deploy with [redacted] 'now' on";
     assert_eq!(w.wish(&raw, "alpha")["wish"]["said"], clean);
     let text = fs::read_to_string(w.wishes()).unwrap();
     assert!(!text.contains(&hub_key()) && !text.contains('\u{2065}'), "{text}");

@@ -27,10 +27,13 @@ const MODE: &str = "acceptEdits";
 
 /// What a run's stream must say of how the harness was started, by what core passed it.
 pub(super) struct Expect {
-    /// The session id passed with `--session-id`: the init line names it, or the stream is not this run's.
+    /// The session id passed with `--session-id`, or with `--resume` to a run that is answered: the init line
+    /// names it, or the stream is not this run's.
     pub session: String,
     /// Whether a schema for the last word was passed. Only then does the init line list the tool for one.
     pub schema: bool,
+    /// Whether the harness was told to go on with that session (F52): only then can it say it has it no more.
+    pub resumed: bool,
 }
 
 /// What the reader of the stream has, when it stops reading.
@@ -55,6 +58,9 @@ pub(super) struct Stream {
     pub other: bool,
     /// The first result's last word.
     pub last: Last,
+    /// A harness told to go on with a session gave a result that is an error and says in its `errors` that the
+    /// session is not kept (`asks::LOST_SIGN`), wherever in the stream it came.
+    pub lost: bool,
 }
 
 /// The parts of a line of the stream that are looked at. A line that is not an object with a `type` that is text,
@@ -69,7 +75,17 @@ struct Line {
     #[serde(default)]
     permission_denials: Vec<IgnoredAny>,
     /// The last word. It is read whatever its shape, so a result with an odd one is still the stream's result.
-    structured_output: Option<Value>,
+    structured_output: Option<asks::Word>,
+    /// What the harness says went wrong, in a result that is an error: a list of texts. Any other shape is none.
+    errors: Option<Value>,
+}
+
+/// Whether a line is a result that is an error and says, in its `errors`, that the session is not kept. Its
+/// other parts are not asked: `result` is the agent's own prose, and so is every line that is no result.
+fn lost(line: &Line) -> bool {
+    let said = |error: &Value| error.as_str().is_some_and(|error| error.contains(asks::LOST_SIGN));
+    let errors = line.errors.as_ref().and_then(Value::as_array);
+    line.kind == "result" && line.is_error == Some(true) && errors.is_some_and(|errors| errors.iter().any(said))
 }
 
 /// The four parts of the `system`/`init` line that are compared. Every other part of it is passed over.
@@ -109,6 +125,7 @@ impl Stream {
         let read = line(raw);
         let system = read.as_ref().is_some_and(|line| line.kind == "system");
         let init = system && read.as_ref().is_some_and(|line| line.subtype.as_deref() == Some("init"));
+        self.lost |= expect.resumed && read.as_ref().is_some_and(lost);
         if init || (self.start.is_none() && !system) {
             let (fits, same) = if init { measured(raw, expect) } else { (false, true) };
             self.other |= fits && !same;
@@ -177,7 +194,7 @@ mod tests {
     fn start(tools: &str, session: &str, schema: bool) -> (Option<bool>, bool, bool) {
         let parts = format!(r#""tools":{tools},"mcp_servers":[],"permissionMode":"acceptEdits"{session}"#);
         let mut stream = Stream::default();
-        let expect = Expect { session: ID.to_string(), schema };
+        let expect = Expect { session: ID.to_string(), schema, resumed: false };
         let more = stream.take(format!(r#"{{"type":"system","subtype":"init",{parts}}}"#).as_bytes(), &expect);
         (stream.start, stream.other, more)
     }
@@ -206,7 +223,7 @@ mod tests {
 
     #[test]
     fn the_last_word_is_the_first_result_s_and_no_other_line_s() {
-        let expect = Expect { session: ID.to_string(), schema: true };
+        let expect = Expect { session: ID.to_string(), schema: true, resumed: false };
         let asks = r#""structured_output":{"state":"asks","question":"which?"}"#;
         let result = |word: &str| format!(r#"{{"type":"result","subtype":"success","is_error":false,{word}}}"#);
         let mut stream = Stream::default();

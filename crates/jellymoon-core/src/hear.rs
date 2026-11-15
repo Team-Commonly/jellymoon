@@ -20,7 +20,7 @@ use std::path::PathBuf;
 pub use shapes::{EarCannot, HearEvent, Jelly, JellyState, KeyMove, Said};
 pub use voice::{Voice, voice};
 
-use crate::still::{Unkept, statement};
+use crate::still::{MARKS, Unkept, marks_only, statement};
 use crate::{DayOptions, Error, MADE_SAID_MAX, RunOptions, session, wish};
 
 /// A hold shorter than this is a slip of the hand: nothing is heard.
@@ -241,6 +241,7 @@ impl Hearing {
     fn heard(&mut self, words: &str) {
         let refused = match wish::cleaned(words) {
             Ok(words) if words.is_empty() => return,
+            Ok(words) if marks_only(&words) => MARKS,
             Ok(words) => match day::project(&self.read, &self.home, &self.day) {
                 Some(project) => {
                     self.hold = Hold::Heard { words, project, since: None };

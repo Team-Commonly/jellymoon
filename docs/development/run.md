@@ -1,11 +1,11 @@
-# A run: `jellymoon run` and `jellymoon run stop`
+# A run: `jellymoon run`, `jellymoon run stop` and `jellymoon run answer`
 
 A run is the person's own Claude Code, started headless on one made wish, in a copy of the wish's repo (F39,
 [ADR 0014](../adr/0014-a-run-is-started-headless.md)). The rules are core's, in `crates/jellymoon-core/src/run.rs`
 and `run/` (`child.rs` the child, `stream.rs` what is read, `end.rs` how an end is written down, `dead.rs` the
 stop sequence, `stop.rs` a stop the person asks for, `place.rs` the folder, `never.rs` a run never started,
 `left.rs` what a killed command left, `apart.rs` and `cap.rs` F41, `asks.rs` a run's session id, its last word
-and its question). The copy is [copy.md](copy.md)'s, and the wish is
+and its question, `answer.rs` an answer to it). The copy is [copy.md](copy.md)'s, and the wish is
 [wish.md](wish.md)'s. What a finished run made is shown by `jellymoon run show`, which is [show.md](show.md)'s, and landed on the
 person's branch by `jellymoon run keep`, which is [keep.md](keep.md)'s and adds `work`, `kept` and `onto` to the
 run's record. What a run left is refused with `jellymoon run toss`, which is [toss.md](toss.md)'s and adds `work`
@@ -14,10 +14,12 @@ and `tossed`.
 ```
 jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]
 jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]
+jellymoon run answer --wish <id> [--date <YYYY-MM-DD>]     (the answer is the command's input)
 ```
 
 `run` waits until the run has ended, prints one line of JSON and exits 0. `run stop` stops a run that is going
-and prints the same line ("A stop the person asks for"). (One end exits 1 with a line on stderr: the
+and prints the same line ("A stop the person asks for"). `run answer` goes on with a run that asks, waits as
+`run` does and prints the same line ("An answer"). (One end exits 1 with a line on stderr: the
 run ended, and the day stayed locked. See "The end is written in the record first".) With no `--date` the day is today.
 
 ```json
@@ -40,8 +42,10 @@ that is: cleaned, on one line, 300 characters at most ("A run that asks"). Every
    with no folder named by its full path is refused here, before any copy ("What the harness is started with").
 3. **The repo.** `--repo`, a full path whose last name is the wish's project. Without it, the one folder of that
    name that something was typed in that day: core reads the day's session logs for the folders, as the reader
-   reads them (a harness worktree counts as the repo it is of, and a switched-off folder is not read: one named
-   with `--skip` or in `skip.txt`, and neither is a run's copy: [reader.md](reader.md)). `--logs` names the logs, in place of Claude Code's own. A folder found so is
+   reads them. A folder that is a harness worktree is not a project of its own: what was typed in
+   `<repo>/.claude/worktrees/<name>` counts as typed in `<repo>`, so the folder a run finds for it is the repo
+   itself, by the repo's name, and never the worktree. A switched-off folder is not read (one named with `--skip`
+   or in `skip.txt`), and neither is a run's copy ([reader.md](reader.md)). `--logs` names the logs, in place of Claude Code's own. A folder found so is
    a log's word, and a log is untrusted, so it must be the person's own: on Unix its owner must be the owner of
    the person's home folder, and one that is not is refused and never copied. A `--repo` is not asked. The folders
    are never printed and never reach page data. Of the one chosen, the run's record keeps the git folder of its
@@ -324,28 +328,30 @@ record whose end is not believed can have been written by hand too.
 
 ## A run that asks
 
-A run can end with a question for the person instead of work (F51, ADR 0018, decisions 2, 3, 4 and 6). This build
-makes a run that asks and keeps it; the answer (`jellymoon run answer`) is F52, and until then a run that asks
-can only be tossed.
+A run can end with a question for the person instead of work (F51, ADR 0018, decisions 2, 3, 4 and 6). A run
+that asks is kept until the person answers it with `jellymoon run answer` ("An answer", F52) or tosses it.
 
 **The session.** Before the harness is started core makes a session id: a random UUID, version 4, in small
 letters, from two outputs of the standard library's keyed hasher (the keys come from the system's random source).
 It is in the record's first writing, as `session`, and the harness is started with `--session-id <id>`. The
 harness keeps the session in its own store, where the person's own sessions lie; Jellymoon never reads, writes or
 removes anything there. The reader leaves a run's copy out of every day ([reader.md](reader.md)), so a kept
-session is not read back as something the person typed. A harness whose init line names another session than the
+session is not read back as something the person typed. Which spellings of a copy's folder the reader does not
+know, and so still reads, is the list under "Not closed" in reader.md, "What is read". A harness whose init line names another session than the
 one it was given is stopped at once and has failed.
 
 **The last word is data.** The harness is given a schema, and the first result line's `structured_output` is read
 in two shapes only: exactly `{"state":"done"}`, and exactly `{"state":"asks","question":<text>}`. Any other
 value (another state, `done` with a question, `asks` without one, a question that is not text, any part more, a
-list, a text) is a failed run, and so is none at all. The last word is asked only of a stream that is a success
+part named twice, a list, a text) is a failed run, and so is none at all. A part named twice is refused whatever
+the two values are: `{"state":"asks","state":"done"}` is not `done`, and two questions are not the second one. The last word is asked only of a stream that is a success
 in every other part, from a harness that exited with 0: a question in a result that is not a success, that came
 twice, or before a failing exit is not a question. Nothing is read from the agent's prose.
 
 **The question passes the door.** It is cleaned at the door every kept text is cleaned at (`still.rs`): at most
 4096 bytes are looked at, and a longer question is a failed run; credential shapes are replaced with
-`[redacted]`; control characters and terminal sequences go; line breaks become spaces, so it is one line; it is
+`[redacted]`; control characters and terminal sequences go; line breaks become spaces, so it is one line, and a
+credential that a line break split is replaced too ([wish.md](wish.md), "What is kept"); it is
 cut at 300 characters, with `…` for its last when it was cut. A question of which nothing is left, or which
 eight cleanings still change, is a failed run. Of a last word that failed no word is kept or printed: not in the
 record, the wish, the page, or what `jellymoon run` prints.
@@ -362,7 +368,8 @@ seventh name, and exits 0.
 **What is read back.** Anyone who can write the home can write a record or a wish, so a question is believed
 only as core would have written it. A record asks when its outcome is `asks`, its `why` is the fixed line with
 its own run's id, its `session` is an id of the shape core makes, and its `question` is one the door leaves
-unchanged; any other record that says `asks` has no end core wrote, and a look takes its run for cut off. Made
+unchanged. The shape is all that is asked of the session: a record written by hand, which takes write access
+to the home, can name any other session of that shape, and an answer would go on with it; any other record that says `asks` has no end core wrote, and a look takes its run for cut off. Made
 wishes are refused as not that day's when a wish has a `question` the door would change, or one on a wish that
 is not `needs_you` or names no run. A page's `question` that the door would change is dropped when the page is
 put together.
@@ -376,7 +383,142 @@ put together.
 | `jellymoon run stop` | refused, exit 1: `run <id> asks a question and is not going, so nothing was stopped` |
 | `jellymoon run show` | refused: `run <id> asks a question: there is no work of it to show` |
 | `jellymoon run keep` | refused: `run <id> asks a question: there is no work of it to keep` |
-| `jellymoon run toss` | tossed as a run that did not finish ([toss.md](toss.md)), with the run's own lock held while it works |
+| `jellymoon run toss` | tossed as a run that did not finish ([toss.md](toss.md)), with the run's own lock held while it works. The record is read again once that lock is held, and the toss goes by that reading: a run an answer took up and ended in between is tossed as what it is by then |
+| `jellymoon run answer` | the run goes on ("An answer") |
+
+## An answer
+
+`jellymoon run answer --wish <id> [--date <YYYY-MM-DD>]` gives a run that asks the person's answer and starts
+the harness again (F52, ADR 0018, decisions 1, 4, 5 and 10; `run/answer.rs`). It takes no `--repo`, `--logs` or
+`--skip`: it reads the Jellymoon home alone. It waits until the run has ended again, prints the line `jellymoon
+run` prints, and exits 0.
+
+**The answer is the command's input.** It is never an argument. At most 4097 bytes of the input are read, one
+more than the door looks at, so an answer that is too long is known for that and the rest is not read. The
+bytes must be text. They pass the door a made wish passes (`still.rs`): credential shapes are replaced with
+`[redacted]`, control characters and terminal sequences go, each `"` is made `'`, and line breaks become
+spaces, so it is one line. An answer is never cut: one over 600 characters once cleaned is refused. All of this
+is done before the wish is read and before any harness is looked for.
+
+**The order.** The wish is read, and a run of it that nothing holds is given its end first, as a stop gives
+it. The record must be core's record of a run that asks ("What is read back"), with no keep and no toss in it.
+The harness is found as a run finds it. Then, in this order, the command takes the keeps' lock
+(`runs/keep.lock`, waited for as a keep waits), the lock runs are counted behind (`runs/going.lock`), where
+three runs going refuse it, and the run's own lock (`runs/<id>/run.lock`), which it holds until the run has ended
+again; the day's lock is taken last, inside these, for each change to the wish. With the run's lock held the
+record is read again and must still ask, and the copy must be kept as a run that asks leaves it: its record on
+the books and not marked failed, its folder a real one directly inside a real `copies`. Then, and only then,
+something is written:
+
+1. the wish, behind the day's lock: `working`, with the line `run <id> is going, in a copy of the repo`, no
+   `question`, and the cleaned answer as `answer` ([wish.md](wish.md));
+2. a stop left for the run before it asked, which nothing read, is removed (`runs/<id>/stop`): it was not a
+   stop of what the answer starts;
+3. the record: no outcome, no `why`, no `question`, no child, counts at 0. Its `wish`, `day`, `started`, `repo`,
+   `start` and `session` stay. The answer is not in it.
+
+The two locks before the run's own are let go, and the harness is started.
+
+**What the harness is started with.** The command line of a run ("What the harness is started with"), in the
+run's own copy, with one word changed: `--resume <session>` stands where `--session-id <session>` stood. The
+session is the record's. The list of what a run may do, the settings, the schema of the last word and the fixed
+prompt are the same, and so are the variables. The harness's whole input is the cleaned answer and one line
+break. The stream is read as a run's is, and the init line must name the session that was given.
+
+**How it ends.** As any run ends (`end.rs`): finished with one commit on the run's branch and a star, failed or
+cancelled with the copy kept and marked failed, or asking again, with the new question in the record and on the
+wish and the copy kept as it is. A run may ask again any number of times; each answer takes the place of the one
+before it with the wish. It is the same run throughout: one id, one branch, one record, one copy, one session.
+A stop asked while the answered run goes stops it as it stops a run. The time limit is a run's, counted from
+the answer.
+
+**A session that is not kept.** A harness that was told to go on with a session, did not exit with 0, and said
+`No conversation found with session ID`, in the `errors` of a result line that is an error (a list of texts)
+or in the start of what it wrote on stderr, has failed the run in these words, whatever else its stream held: `run <id> did not finish (Claude Code
+no longer keeps the session it asked in): its copy is kept and no star was added`. The copy is kept, marked
+failed, with what the agent had edited in it. The words are looked for only in an answered run, and only with a
+failing exit. They are the harness's only in those two places: in an assistant's line, in a result's own
+`result`, or in an `errors` that is no list they are the agent's prose, and such a run fails as any run whose
+result is an error. A harness whose stream did not start as a run's counts as one: Jellymoon ends it at once, so
+whether it had exited by then, and with what, is chance, and is not asked (found on Windows, where it had not).
+
+**A harness that cannot take the answer.** When the harness cannot be started, or answers the command line
+with an unknown option that names `--resume` (or one of a run's three), nothing has gone on: the record is
+written back as it was, then the wish, with its question and the answer it had before, if any, and the command
+is refused. The run still asks.
+
+**What is refused.** One line on stderr, exit 1. Nothing is started, and nothing is written but two empty
+files: `runs/keep.lock`, which the first answer, keep or toss makes, and the run's own `runs/<id>/run.lock`
+where it was not there. A run that asks leaves that file; one that asked under a build before this one took it
+away, and an answer makes it again to hold the run while it reads the record, the wish and the copy once more.
+
+| Refused | The line |
+|---|---|
+| input that cannot be read | `the answer could not be read from this command's input: <kind>`, where the kind is the system's name for the error |
+| input that is not text | `an answer is text, and these bytes are not` |
+| nothing left once cleaned | `an answer needs words, and nothing is left of these once cleaned` |
+| only `[redacted]` left once cleaned | `nothing is left of these words but the mark of what cleaning replaced, so nothing was made of them` ([wish.md](wish.md), "Only marks is nothing") |
+| over 600 characters once cleaned, or over 4096 bytes as typed | `an answer is at most 600 characters, and this one is longer` |
+| words a ninth cleaning still changes | `an answer is kept as cleaning leaves it, and cleaning was not done with these words after 8 times` |
+| no made wish of that id on that day | the line `jellymoon run` has for it |
+| a wish that names no run | `wish <id> has had no run, so there is nothing to answer` |
+| a record that cannot be read | `the record of run <run> cannot be read, so nothing was started` |
+| a record that names another wish or day | `wish <id> names run <run>, which is another wish's run: nothing was started` |
+| a run that is going, an answered one too | `run <run> is going and asks nothing by now: nothing was started` |
+| a run that finished, failed or was cancelled, or whose work was kept or tossed | `run <run> does not ask a question, so there is nothing to answer` |
+| a record that says `asks` and is not as core writes it | the line `run show` has for a record that is not core's |
+| no harness | the line `jellymoon run` has for it, as a refusal |
+| the keeps' lock held for 3 seconds, or not to be had | a keep's line for it, and `: nothing of run <run> was answered` |
+| three runs going | `nothing was started: 3 runs are going, and no more than 3 go at once; answer again when one has ended` |
+| another command holds the run's lock (a second answer, a toss) | `another command holds run <run>: nothing was started` |
+| the run's lock cannot be made or taken | `the lock of run <run> could not be made or taken: nothing was started` |
+| a copy that is gone, marked failed, or not a real folder in a real `copies` | ``the copy of run <run> is not kept as a run that asks leaves it, so it cannot be answered: `run toss` lets the wish go`` |
+| a wish that no longer asks for the run once the day's lock is held | `the wish no longer asks for run <run>: nothing was started` |
+| a harness that could not be started | `nothing was started: Claude Code could not be started: <why>; run <run> still asks its question` |
+| a harness too old | `nothing was started: this Claude Code is too old to take an answer, as it does not know <option>; run <run> still asks its question` |
+
+Of two answers started at once one holds the run's lock and goes on; the other is told that the run is going
+or that another command holds it, and neither its words nor anything else of it is kept.
+
+**The run's lock is a file that stays.** `runs/<id>/run.lock` of a run that asks is not removed when the run
+ends asking, nor when an answer or a toss lets go of it: it goes with the run's folder, as `runs/keep.lock` and
+`runs/going.lock` are never removed. Removed with the lock, it could be held under no name by a command that
+had opened it just before and locked it just after; a look asks the file at the lock's name, would find the
+run held by nothing, and would write a run that is going down as cut off. A run that ends in any other way
+removes the file as before, since nothing takes that run up again.
+
+**A look and a toss, at the same instant.** A look asks whether a run is held by taking its lock for a moment
+and letting go. An answer that asks for the lock in that moment is refused with `another command holds run
+<run>: nothing was started`, though no command is at work on the run; nothing was written, and the answer can
+be given again. A toss of a run that asks holds the run's lock while it works, and a run whose lock is held
+counts as going: such a toss is one of the three, and an answer or a run started meanwhile with two others
+going is refused as a fourth.
+
+**Where the answer's words are.** In two places: the harness's input, and the wish's `answer` in
+`pages/<day>.wishes.json`. They are on no command line, in no record, on no page, in no line a command prints
+and in no refusal (`tests/f52/words.rs` reads every file of the home and every argument). The harness keeps
+them in its own session, as it keeps the wish.
+
+**A command that is killed.** The wish is told before the record is written. An answer killed between the two
+leaves a wish that says `working` and a record that still asks: the next look gives the question back to the
+wish from the record, and the run can be answered again; the wish keeps the answer that was given. One killed
+after the record was written is a run that was cut off ("A run that was cut off"), and its harness is ended as
+a cut-off run's is.
+
+**Not closed.**
+
+- The resume was not tried on a real harness in this build (ADR 0018, "Found while building F52"): that
+  `--resume` with the rest of a run's command line names the same session in its init line, and the harness's
+  exact words, exit code and stream for a session it no longer keeps, are the coordinator's earlier
+  measurements, proved here on the made-up agent only.
+- A harness that says the session is not kept in other words, or in another part of its result than `errors`,
+  fails the run as any failed run, in the words of what its stream lacked. That the real result carries the
+  words in `errors`, as a list of texts, is read from the harness's output format and was not measured here;
+  stderr carries them too, and is read as before.
+- An answer killed after the wish was told and before the record was written leaves the stop file of step 2 in
+  place when one was there; the next answer removes it.
+- Whether the harness, resumed, obeys an answer that tells it to do something the fixed prompt forbids was not
+  looked at: the list of what it may do is the same at every start.
 
 ## What is kept
 
@@ -937,8 +1079,8 @@ empty `runs/no-hooks`), and they stay.
   and `.` are dropped.
 - A harness whose init line names more than the four compared parts differently (a new field, say) still passes:
   only tools, MCP servers, permission mode and the session id are compared.
-- A run that asks waits for an answer no command gives yet (F52). Until then it can be tossed, and nothing ages
-  it: its copy stays, and is not one of the five failed copies.
+- A run that asks waits for an answer or a toss, and nothing ages it: its copy stays, and is not one of the five
+  failed copies. What an answer leaves open is under "An answer", "Not closed".
 - The fixed words that tell the agent to end with `done` or `asks` were not tried on a real harness in this
   build, and neither was a real harness's answer to a last word that does not fit the schema, to `asks` with no
   question, or its exact words for an unknown `--json-schema` or `--session-id` (ADR 0018, "Not measured").

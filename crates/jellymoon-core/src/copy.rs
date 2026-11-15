@@ -269,6 +269,14 @@ pub(crate) fn no_folder(home: &Path, run: &str) -> bool {
     known(run).is_ok() && fs::symlink_metadata(Places::of(home).root.join(run)).is_err()
 }
 
+/// The copy of a run that asks, when it is kept as that run left it: its record is on the books and does not
+/// say failed, and its folder is a real one directly inside a real `copies`. None of any other.
+pub(crate) fn left_asking(home: &Path, run: &str) -> Option<RunCopy> {
+    let at = Places::of(home);
+    let kept = known(run).is_ok() && matches!(record::read(&at.record(run)), Ok(Some(Record { failed: None, .. })));
+    (kept && matches!(standing(&at.root, &at.root.join(run)), Ok(true))).then(|| at.printed(run, true))
+}
+
 /// Whether the run's folder is there to be removed: a real folder directly inside a real `copies`. A link under that
 /// name, or anything else, is refused and left as it is: removing through it, or committing what it leads to, would
 /// reach outside the root.

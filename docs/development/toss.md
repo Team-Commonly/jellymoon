@@ -140,8 +140,9 @@ let go and loses its `question`. The record keeps its outcome `asks` and its que
 `run stop` afterwards prints the outcome `asks` with the line of a tossed run and no question, and `run show`
 says the run did not finish. Nothing holds a run that asks, so a toss, which holds the lock a keep and a toss share
 (`runs/keep.lock`) as every toss does, then takes the run's own lock,
-`runs/<id>/run.lock`, before it reads the record again and holds it until it is done, then removes the file:
-no other command can take the run up meanwhile. When another command holds that lock the toss is refused as of a
+`runs/<id>/run.lock`, before it reads the record again and holds it until it is done:
+no other command can take the run up meanwhile. The lock's file is not removed when the toss lets go of it
+([run.md](run.md), "An answer", "The run's lock is a file that stays"); it goes with the run's folder. When another command holds that lock the toss is refused as of a
 run that is going. A toss of any other run takes no lock of the run's. No
 keep writes in the record of a run that asks: `run keep` refuses it before the record is touched, and a record
 that asks and holds a keep's `kept` all the same is not one Jellymoon wrote. While a toss holds it, the run counts as

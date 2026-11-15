@@ -141,8 +141,8 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, yes: Yes) -> Resu
     let (run, mut settings, mut stayed, mut pointed) = (of.run.to_string(), Vec::new(), Vec::new(), "");
     let mut note = |note: Note| {
         let (commit, onto, done) = match note {
-            Note::Pointed => {
-                pointed = POINTED;
+            Note::Pointed | Note::Unasked => {
+                pointed = if matches!(note, Note::Pointed) { POINTED } else { UNASKED };
                 return true;
             }
             Note::Intent(commit, onto) => (commit, onto, false),
@@ -194,6 +194,8 @@ const STAYED: &str = "; not every `.gitattributes` the work removes is gone: eac
 const MORE: &str = ", and more of them are still there than `stayed` names";
 /// What `why` ends with when the run's branch was not deleted because a name of the person's is a name for it.
 const POINTED: &str = "; the run's branch is left, as a name of the person's points at it";
+/// And when the repo did not say what stands on the branch or points at it: a toss's words for a branch it leaves.
+const UNASKED: &str = "; the run's branch is left, as the repo could not be found or asked";
 
 /// Whether a record's `onto` is a branch a keep writes there: by the rule the keep itself writes a name by
 /// (`copy::nameable`), and no run's branch, where no work is ever kept (`copy::runs`).
@@ -293,8 +295,7 @@ fn done(run: &str, how: How, ask: bool, own: bool) -> String {
     }
 }
 
-/// The words of the refusals that are of the home, the config, the branch's name and a file's name, with no
-/// run's id in them.
+/// The words of the refusals of the home, the config, the branch's name and a file's name: no run's id in them.
 fn before_the_work(unkept: &Unkept) -> &'static str {
     match unkept {
         Unkept::Spelled => {

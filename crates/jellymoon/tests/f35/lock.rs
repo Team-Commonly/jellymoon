@@ -54,7 +54,9 @@ fn the_settlement_holds_the_cleaned_statements_and_never_a_credential() {
     let raw = format!("deploy  with {}\nfr\u{2065}om \"now\" on", hub_key());
     w.keep(&[(&raw, B)]);
     let said = w.tap("1", "1");
-    let clean = "deploy with [redacted] from 'now' on";
+    // The word after the key's line break goes with the key: with the break out the two are one run, which
+    // the door cannot tell from a key whose end is on the next line (`still.rs`, `mended`; F52).
+    let clean = "deploy with [redacted] 'now' on";
     assert_eq!(said["ruling"]["stands"], clean);
     let text = fs::read_to_string(w.ruled()).unwrap();
     assert!(!text.contains(&hub_key()), "the key is not kept");

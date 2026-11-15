@@ -105,6 +105,16 @@ built:
 - **Every line names its folder.** Every `user` and `assistant` line of both kept session files carried a working
   directory.
 
+The coordinator tried the whole of F51 once on the real harness, in a scratch repo, with a scratch home and
+empty logs:
+
+- **A wish that can be done** ended `completed` with one commit.
+- **A wish that needs the person** ended `asks` with one plain question of 217 characters. The copy was kept
+  and nothing was committed.
+- **A toss of the run that asked.** `run toss` without `--repo` removed the copy, let the wish go and left the
+  branch; with `--repo` it deleted the branch.
+- **The resume was not yet measured** with core's own command line.
+
 ## Found while building F51
 
 - **The last word is read strictly.** Exactly `{"state":"done"}` or `{"state":"asks","question":<text>}`. `done`
@@ -113,7 +123,9 @@ built:
 - **The stated length is 300 characters**, cut with `…`; a question of more than 4096 bytes, the most the door
   looks at, is a failed run and is not cut.
 - **The session is checked.** An init line that names another session than the one given, or none, stops the
-  child and fails the run, in its own words. The record names only ids core made.
+  child and fails the run, in its own words. The record a run that asks is believed by names a session id of
+  the shape core makes. Only the shape is checked: whoever can write the home can write a record by hand that
+  names another session of that shape, and an answer would go on with that one.
 - **The tool list is exact.** With a schema the init line lists `StructuredOutput` beside the five, once.
 - **A copy that asks is never marked failed**, so it is not one of the five kept and nothing prunes it. Only a
   toss removes it until F52.
@@ -123,6 +135,59 @@ built:
   the line names the one it did not know.
 - **A toss holds the run's lock** for a run that asks, since nothing else holds such a run and F52's answer will
   take the same lock.
+
+## Found while building F52
+
+- **An answer is 600 characters at most, and never cut.** A question is cut because it is an agent's; an answer
+  is the person's, and cut words would not be theirs.
+- **The answer is kept with the wish**, as `answer`, and nowhere else Jellymoon writes: not in the run's record,
+  which other commands print from. Only the last answer is kept.
+- **The command line is a run's with one word changed**: `--resume` where `--session-id` stood. The schema, the
+  list of what a run may do and the fixed prompt are passed again (decision 10).
+- **An answer holds three locks in one order**: the keeps', the one runs are counted behind, the run's own. So an
+  answered run is counted among the three, of two answers one goes on, and a toss and an answer never meet.
+- **The wish is told before the record.** An answer killed between the two leaves a record that still asks, and
+  a look gives the question back.
+- **A harness that cannot take the answer leaves the run asking.** Too old for `--resume`, or not startable:
+  the record and the wish are put back, and the copy is not marked failed.
+- **A session that is not kept is told by the harness's own words**, `No conversation found with session ID`, in
+  an error result or on stderr, with a failing exit, and only in an answered run. The run fails in fixed words.
+  A stream that did not start as a run's counts as a failing exit: its harness is ended at once, so its own
+  exit is chance (CI on Windows found it still going, where macOS and Linux had found it gone).
+- **A stop left before the question is not a stop of the answered run.** The answer removes it.
+- **The door reads across a line break.** A credential typed on two lines was two words that each passed. The
+  door now also reads a stretch with the break taken out, and keeps the stretch as `[redacted]` when that
+  reading cleans differently. It holds for every text the door keeps.
+- **A last word that names a part twice is a failed run**, whatever the two values are.
+- **The gate failed F52 on the door, and the fix is one commit after it.** The reading across a break had taken
+  the place of the older reading, and kept a private key's body when a long word stood on the line before its
+  first line. Both readings are now made and a word is kept only where both keep it: nothing the older reading
+  replaced is kept. Words of which only marks are left are refused wherever something is made through the door.
+- **The run's lock is a file that stays**, as the keeps' lock and the one runs are counted behind do. Removed
+  when it was let go of, it could be held under no name by a command that had opened it just before.
+- **The harness's words for a lost session are read in a result's `errors` and on stderr**, not in the whole
+  line: an agent that writes them in its own prose has not lost its session.
+- **The gate failed that fix on the door once more.** A stretch was read joined whole or not at all, so a word
+  that touched a split key id across one more break (`the id is`, a break, half the id, a break, the rest)
+  took the word's edge the id is found by, and both halves were kept and given to the harness. A stretch is
+  now also read with every two to eight lines in a row joined and the lines around them apart. What is left
+  open is in wish.md, "Not closed": a key over more than eight lines with a word touching it, and a private
+  key's first line split inside a word.
+- **A refused answer may leave the run's own lock file**, empty, where an older build had taken it away: the
+  answer holds the run before it reads anything again. run.md said only `runs/keep.lock` was written.
+- **Not measured in the build:** the resume itself on a real harness with core's command line. The coordinator
+  measured it afterwards, below.
+
+The coordinator tried F52 on the real harness (Claude Code 2.1.325), in a scratch repo, with a scratch home and
+empty logs, on a wish that cannot be done without one answer:
+
+- **The answer went on with the run.** The run ended `asks`; `run answer` with the answer on its input ended the
+  same run `completed`, with one commit on its branch that holds the answer's edit. The record names the same
+  session before and after, and the harness's store holds one session file for the run's copy, not two. So
+  `--resume` took the schema, the list and the prompt again, and the init line named the session core gave.
+- **A session that is not kept.** With the run's session file removed from the store before the answer, the run
+  failed in the fixed words (`Claude Code no longer keeps the session it asked in`), and its copy was kept.
+- **Still not measured:** a harness too old to know `--resume`.
 
 ## Read, not measured
 

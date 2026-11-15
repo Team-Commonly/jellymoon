@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::still::{statement, still};
+use crate::still::{MARKS, marks_only, statement, still};
 use crate::{Error, Ruling};
 
 /// The most characters of a statement kept: what a quote on a page may hold.
@@ -51,9 +51,11 @@ pub(crate) fn words(text: &str) -> String {
 const UNMADE: &str =
     "a statement of over 4096 bytes, or one that cleaning still changes after 8 times, cannot be ruled on";
 
-/// [`words`] for a statement a ruling is made of: one that cannot be cleaned is refused, never ruled on as the mark.
+/// [`words`] for a statement a ruling is made of: one that cannot be cleaned is refused, never ruled on as the
+/// mark, and so is one of which cleaning leaves nothing but marks.
 pub(crate) fn ruled_on(text: &str) -> Result<String, Error> {
-    still(text, WORDS_MAX, true).map_err(|_| Error::Tap(UNMADE.to_string()))
+    let made = still(text, WORDS_MAX, true).map_err(|_| Error::Tap(UNMADE.to_string()))?;
+    if marks_only(&made) { Err(Error::Tap(MARKS.to_string())) } else { Ok(made) }
 }
 
 /// Makes a folder of Jellymoon's own, and the folders above it that are missing, for the person alone (0700) where

@@ -228,7 +228,8 @@ fn a_toss_of_a_run_that_asks_removes_its_copy_and_its_branch_and_lets_the_wish_g
     let line = json!(LET_GO.replace("{run}", &made.run));
     assert_eq!((&wish["state"], &wish["why"], wish.get("question")), (&json!("let_go"), &line, None));
     assert_eq!(made.w.on_page(&made.wish).get("question"), None);
-    assert!(!made.w.jm("runs").join(&made.run).join("run.lock").exists(), "the toss left the run's lock");
+    let lock = fs::File::open(made.w.jm("runs").join(&made.run).join("run.lock"));
+    assert!(lock.is_ok_and(|lock| lock.try_lock().is_ok()), "the toss left the run's lock held");
     // Tossed, it no longer asks: a look at its work says it did not finish, and a second toss changes nothing.
     made.refuses_all(&["run", "show"], "run {run} did not finish: there is no work of it to show");
     let stopped = printed(&made.asked(&["run", "stop"]));
@@ -264,7 +265,7 @@ fn a_toss_holds_the_lock_of_a_run_that_asks_and_is_refused_while_another_command
         tossed["why"].as_str().unwrap().split(':').next(),
         Some(&*format!("the record of run {} said it was tossed, and this toss did what was left to do", made.run))
     );
-    assert!(!lock.exists(), "a toss that ended left the run's lock");
+    assert!(lock.is_file() && free(), "a toss that ended left the run's lock held, or took its file away");
     // The control: a toss of a run that failed takes no lock of the run's, at the same place.
     let (failed, _) = played("exit-3", 0);
     let lock = failed.w.jm("runs").join(&failed.run).join("run.lock");

@@ -417,7 +417,7 @@
         "the answer's words are in the harness's input and in nothing Jellymoon writes but the made wish's own file"
       ],
       "test": "cargo test -p jellymoon --test f52",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F51"
       ]

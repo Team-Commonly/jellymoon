@@ -14,6 +14,7 @@
 //! no end, was cut off. The next `jellymoon run` or page that finds it kills the harness child it left, if that is
 //! still the same process, and writes the run down as failed ([`bury`]).
 
+mod answer;
 mod apart;
 mod asks;
 mod cap;
@@ -38,6 +39,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+pub(crate) use answer::kept as kept_answer;
+pub use answer::{ANSWER_READ, answer_run};
 pub use apart::{Started, run_apart};
 pub(crate) use asks::kept as kept_question;
 pub(crate) use end::bury;
@@ -253,7 +256,7 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     let repo = place::folder(home, &day, &wish, options)?;
     // A test's build can wait here, with the folder looked up and nothing yet asked of git.
     busy::pause("JELLYMOON_TEST_PLACE_WAIT_MS");
-    cap::room(home)?;
+    cap::room(home, cap::AGAIN)?;
     // A folder read from the logs that is not a repo's top is refused with copy's own reason, in fixed words: no
     // folder above it is tried, and nothing git says of it is repeated.
     let made = copy::copy_of(home, &repo, options.repo.is_some()).map_err(|e| match (e, &options.repo) {
@@ -278,7 +281,7 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
             return Err(e);
         }
     };
-    let expect = lined(&mut command, &copy.folder, session);
+    let expect = lined(&mut command, &copy.folder, session, false);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
     let (told, stop) = (|pid| record::child(home, &copy.run, pid), || stop::asked(home, &copy.run));
     let began = || record::began(home, &copy.run);
@@ -296,16 +299,29 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     // The start lock goes first: while the run's own is held, nothing takes this run for one left behind.
     drop(held);
     let _ = fs::remove_file(copy::start_lock(home, &copy.run));
-    drop(lock);
-    let _ = fs::remove_file(lock_file(home, &copy.run));
+    let_go(home, &copy.run, lock);
     ran
 }
 
+/// Lets go of a run's own lock at the end of its command. The lock's file goes with it, but for a run that asks:
+/// an answer or a toss takes that lock next, and its file stays with the run's folder (`asks::Held`).
+fn let_go(home: &Path, run: &str, lock: File) {
+    // Read while the lock is held: an answer that took it next could write the run as going behind this read.
+    let asks = record::kept(home, run).is_some_and(|record| record.outcome == Some(RunOutcome::Asks));
+    drop(lock);
+    if !asks {
+        let _ = fs::remove_file(lock_file(home, run));
+    }
+}
+
 /// Gives the harness a run's whole command line, in the copy's folder, and returns what its stream must then say.
-fn lined(command: &mut Command, folder: &str, session: String) -> stream::Expect {
-    command.current_dir(folder).args(ARGS).args(["--session-id", &session, "--json-schema", asks::SCHEMA]);
+/// A run that is answered has the same one, with `--resume` where `--session-id` stands: the harness goes on
+/// with the session it kept under that id (`answer.rs`).
+fn lined(command: &mut Command, folder: &str, session: String, resumed: bool) -> stream::Expect {
+    let under = if resumed { "--resume" } else { "--session-id" };
+    command.current_dir(folder).args(ARGS).args([under, &session, "--json-schema", asks::SCHEMA]);
     command.args(AFTER).arg(PROMPT);
-    stream::Expect { session, schema: true }
+    stream::Expect { session, schema: true, resumed }
 }
 
 /// Takes the run's lock, when fewer than three runs go, writes its record, and has the wish name the run, behind

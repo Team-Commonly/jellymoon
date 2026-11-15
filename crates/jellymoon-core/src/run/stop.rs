@@ -33,6 +33,12 @@ pub(super) fn asked(home: &Path, run: &str) -> bool {
     fs::symlink_metadata(file(home, run)).is_ok()
 }
 
+/// Takes away a request left for the run's first turn that nothing read: an answer starts the run again, and
+/// a stop asked before the question was asked is not a stop of what the answer starts (`answer.rs`).
+pub(super) fn forget(home: &Path, run: &str) {
+    let _ = fs::remove_file(file(home, run));
+}
+
 /// Leaves the request, for the person alone to write. It is made only as a new file in the run's folder, which is
 /// never made here: a run whose folder is gone was never started, and stays so. A request that is there already
 /// is the same request.

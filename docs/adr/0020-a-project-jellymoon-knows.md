@@ -235,7 +235,7 @@ What the build settled for decision 3, and where it is not this note's words. Th
   then the line on the list.
 - **A step that fails after the folder is made takes the folder back and lists nothing**: git, a list that
   filled or was written over by hand meanwhile. `projects` goes too when this command made it. What stays is the empty folder git is started in, with Jellymoon's folder around it
-  (`runs/no-hooks`), as after a run's copy that was refused.
+  (`runs/no-hooks`), and `take-over.lock` beside it, as after a run's copy that was refused.
 - **A command killed between its steps leaves the folder, unlisted.** Once its lock is nobody's, the next
   `project new` of that name says that something is there, and names the two
   ways out: list it with `project add --repo` when the repo was whole, or remove it and ask again. A folder
@@ -272,8 +272,9 @@ What the build settled for decision 3, and where it is not this note's words. Th
     folder put in place does not hold the file. It is removed once the project is listed, and from a made
     folder the list names. Left open: the look and the act are still two steps; a hand that copies the file
     into its own folder passes on Windows; a killed making leaves the file with the folder.
-  - *"Nothing was made" is true of Jellymoon's folder too*: made to hold the lock and left empty by a
-    refusal, it is removed. A refusal after the folder was made says that it was taken back, and the
+  - *Jellymoon's folder, made to hold the lock, stays after a refusal behind it* (amended by the lock notes,
+    delivery.md "The lock"): it holds `take-over.lock`, which is never removed, so it is no longer taken
+    back, and "nothing was made" is said of the project, the list and every other file. A refusal after the folder was made says that it was taken back, and the
     sentence of a folder that is not the made one says "removed, replaced or changed", as it may simply be
     gone, or be the made folder with the making's file taken out. A folder that could not be taken back is
     said to have been left.

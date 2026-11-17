@@ -10,6 +10,7 @@ use std::sync::atomic::AtomicUsize;
 use super::*;
 
 mod corners;
+mod denied;
 
 const MINUTE: Duration = Duration::from_secs(60);
 
@@ -300,12 +301,13 @@ fn a_holder_waits_three_seconds_for_the_system_s_lock_and_then_removes_its_own_f
     assert!(!path.exists(), "a fresh lock was left");
 }
 
-// What Windows says of the take-over's file while another process opens, removes or locks it is that caller at
-// work, never a file that cannot be locked: only the second is told to a person as a lock to remove.
+// What Windows says of the take-over's file while another process has it open or locked is that caller at
+// work, never a file that cannot be locked. "Denied" there is an answer of its own (`tests/denied.rs`).
 #[test]
 fn on_windows_a_take_over_s_file_in_use_is_another_caller_at_work_and_elsewhere_an_error_is_what_it_says() {
     let cases = [
-        ("access is denied", ErrorKind::PermissionDenied, Some(5), NotHad::Busy),
+        ("access is denied", ErrorKind::PermissionDenied, Some(5), NotHad::Denied),
+        ("a sharing violation that reads as denied", ErrorKind::PermissionDenied, Some(32), NotHad::Busy),
         ("a sharing violation", ErrorKind::Other, Some(32), NotHad::Busy),
         ("a lock violation", ErrorKind::Other, Some(33), NotHad::Busy),
         ("the path is not found", ErrorKind::NotFound, Some(3), NotHad::Never),

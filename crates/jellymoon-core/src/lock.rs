@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::busy::{busy, in_use, retried};
+use crate::busy::{SHARING_VIOLATION, busy, in_use, retried};
 
 /// How long a caller waits for the lock, and a holder for the system's lock when it lets go; and how far from now
 /// a lock was last written before it is taken for one left by a command that was killed.
@@ -45,13 +45,44 @@ pub(crate) struct Lock {
     mark: String,
 }
 
-/// Why the system's lock on [`OVER`] was not had: another caller holds it at this moment, or it is not to be had
-/// here at all (its file cannot be made or opened, something that is no plain file is at its name, the system
-/// gives no locks there).
-#[derive(Debug, PartialEq)]
+/// Why the system's lock on [`OVER`] was not had: another caller holds it at this moment; or its file said
+/// "denied" on Windows, which a file being removed says for a moment and a file that may not be written says
+/// for good; or it is not to be had here at all (its file cannot be made or opened, something that is no plain
+/// file is at its name, the system gives no locks there).
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum NotHad {
     Busy,
+    Denied,
     Never,
+}
+
+/// What the passes of one wait for a lock have come to, each pass a look at the lock and, when it was left
+/// behind, a take-over. The wait ends on a lock nobody can take over ([`stuck`]) when its last pass found the
+/// system's lock not to be had at all, or when every pass was denied: a caller at work holds the file for
+/// moments, so no caller is behind a "denied" that lasts the whole wait. One pass that was not denied (a lock
+/// that is not left behind, a take-over done, another caller behind the system's lock) and the lock is held.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Wait {
+    Start,
+    Held,
+    Denied,
+    Unowned,
+}
+
+impl Wait {
+    /// The wait after one more pass: what its take-over was not had for, or none where it took over or found
+    /// nothing to take over.
+    fn then(self, pass: Option<NotHad>) -> Wait {
+        match (self, pass) {
+            (_, Some(NotHad::Never)) => Wait::Unowned,
+            (Wait::Start | Wait::Denied, Some(NotHad::Denied)) => Wait::Denied,
+            _ => Wait::Held,
+        }
+    }
+
+    fn nobody_s(self) -> bool {
+        matches!(self, Wait::Denied | Wait::Unowned)
+    }
 }
 
 /// Windows's code for a part of a file that another handle holds locked, and each system's codes for a
@@ -60,17 +91,28 @@ const LOCK_VIOLATION: i32 = 33;
 const NO_HANDLE_WINDOWS: i32 = 4;
 const NO_HANDLE_UNIX: [i32; 2] = [23, 24];
 
-/// What an error from opening [`OVER`], or from asking for its lock, says. On Windows "denied", a sharing
-/// violation and a lock violation are what a file gives while another process opens, removes or locks it, so
-/// there they are another caller at work and never "not to be had at all": a caller is told to remove a lock
-/// only where no caller can be at work on it. A file that may truly not be written says "denied" there too, and
-/// so reads as in use for good. On every system a process with no file handle left has one again in a moment,
-/// which is no word on the file either. Any other error is what it says.
+/// What an error from opening [`OVER`], or from asking for its lock, says. On Windows a sharing violation and a
+/// lock violation are what a file gives while another process has it open or locked, so there they are another
+/// caller at work and never "not to be had at all": a caller is told to remove a lock only where no caller can
+/// be at work on it. "Denied" there is what a file being removed says, and a file that may truly not be written
+/// too: it is its own answer, and [`Wait`] tells the two apart by how long it lasts. On every system a process
+/// with no file handle left has one again in a moment, which is no word on the file either. Any other error is
+/// what it says.
 fn not_had(kind: ErrorKind, raw: Option<i32>, windows: bool) -> NotHad {
-    let held = busy(kind, raw, windows) || (windows && raw == Some(LOCK_VIOLATION));
+    let at_work = windows && matches!(raw, Some(SHARING_VIOLATION | LOCK_VIOLATION));
     let none_left =
         raw.is_some_and(|raw| if windows { raw == NO_HANDLE_WINDOWS } else { NO_HANDLE_UNIX.contains(&raw) });
-    if held || none_left { NotHad::Busy } else { NotHad::Never }
+    match busy(kind, raw, windows) {
+        _ if at_work || none_left => NotHad::Busy,
+        true => NotHad::Denied,
+        false => NotHad::Never,
+    }
+}
+
+/// Whether what a look found at [`OVER`]'s name can be opened and locked at all: a plain file, and on Windows
+/// one without the read-only attribute, which the open there refuses as "denied", the word of a file in use.
+fn lockable(found: &fs::Metadata, windows: bool) -> bool {
+    found.is_file() && !(windows && found.permissions().readonly())
 }
 
 /// Whether a lock last written at `written` is left behind at `now`: the two are more than [`LOCK_STALE`] apart,
@@ -109,9 +151,10 @@ fn open_over(over: &Path) -> io::Result<File> {
 /// for once and never waited for here.
 fn over(path: &Path) -> Result<File, NotHad> {
     let over = path.with_file_name(OVER);
-    // On Unix the open itself refuses a folder, a link and a pipe. On Windows a folder says "denied" to it, which
-    // there is a file in use, and a link is opened as itself: so this look is what tells those two apart.
-    if fs::symlink_metadata(&over).is_ok_and(|meta| !meta.is_file()) {
+    // On Unix the open itself refuses a folder, a link, a pipe and a file that may not be written. On Windows a
+    // folder and a read-only file say "denied" to it, which there a file being removed says too, and a link is
+    // opened as itself: so this look is what tells those apart.
+    if fs::symlink_metadata(&over).is_ok_and(|found| !lockable(&found, cfg!(windows))) {
         return Err(NotHad::Never);
     }
     let why = |e: io::Error| not_had(e.kind(), e.raw_os_error(), cfg!(windows));
@@ -153,9 +196,9 @@ impl Lock {
     /// refused after the same wait. On Windows a name another process is removing, or looking at, cannot be
     /// made for that moment and says "denied": that is a lock in the way like any other (`busy.rs`). Only when
     /// the wait ends with no lock there is the error itself the answer; and when it ends on a lock left behind
-    /// that could not be taken over, the answer says so ([`stuck`]).
+    /// that could not be taken over ([`Wait`]), the answer says so ([`stuck`]).
     pub(crate) fn take(path: PathBuf) -> io::Result<Lock> {
-        let (started, mut unowned) = (Instant::now(), false);
+        let (started, mut told) = (Instant::now(), Wait::Start);
         loop {
             let e = match OpenOptions::new().write(true).create_new(true).open(&path) {
                 Ok(made) => return Lock::marked(made, path),
@@ -171,14 +214,15 @@ impl Lock {
             if started.elapsed() >= LOCK_WAIT {
                 let none = matches!(&there, Err(gone) if gone.kind() == ErrorKind::NotFound);
                 let held = io::Error::new(ErrorKind::TimedOut, "another tap on this day has not finished");
-                let kept = if unowned { stuck(&path) } else { held };
+                let kept = if told.nobody_s() { stuck(&path) } else { held };
                 return Err(if used && none { e } else { kept });
             }
-            unowned = left(&there) && {
+            let pass = left(&there).then(|| {
                 #[cfg(test)]
                 seam(1);
-                matches!(take_over(&path), Err(NotHad::Never))
-            };
+                take_over(&path).err()
+            });
+            told = told.then(pass.flatten());
             thread::sleep(Duration::from_millis(10));
         }
     }
@@ -211,14 +255,17 @@ impl Lock {
     }
 }
 
-/// [`over`] for a holder that lets go: while another caller holds the system's lock it is asked for again, every
-/// millisecond for [`LOCK_WAIT`]. A caller holds it for a look and a removal, so the wait ends long before that.
+/// [`over`] for a holder that lets go: while another caller holds the system's lock, or its file is denied, it
+/// is asked for again, every millisecond for [`LOCK_WAIT`]. A caller holds it for a look and a removal, so the
+/// wait ends long before that.
 fn over_waited(path: &Path) -> Option<File> {
     let started = Instant::now();
     loop {
         match over(path) {
             Ok(held) => return Some(held),
-            Err(NotHad::Busy) if started.elapsed() < LOCK_WAIT => thread::sleep(Duration::from_millis(1)),
+            Err(NotHad::Busy | NotHad::Denied) if started.elapsed() < LOCK_WAIT => {
+                thread::sleep(Duration::from_millis(1));
+            }
             Err(_) => return None,
         }
     }

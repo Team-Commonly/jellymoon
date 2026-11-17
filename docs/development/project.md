@@ -84,8 +84,10 @@ run there, with no `--repo` and no session log.
   one a project can be listed in (the person's own, by a path that is text and short enough) are looked at
   first; a refusal there has written nothing, not even Jellymoon's folder. Something at the name is the one
   refusal that is asked again behind the lock, as it may be a making under way. Jellymoon's folder, when it
-  was not there, is made to hold the lock; a refusal behind the lock that leaves it empty removes it again,
-  so "nothing was made" is true of it too.
+  was not there, is made to hold the lock, and a refusal behind the lock leaves it there, holding
+  `take-over.lock`, empty, which no command removes ([delivery.md](delivery.md), "The lock"), and what the
+  making had already left (`runs/no-hooks` after a git step): "nothing was made" is said of the project, the
+  list and every other file.
 - **One making at a time.** The whole of a making is behind the list's lock (`projects.lock`): every look
   again, the folder, made by a call that fails when anything is at its name, the repo, and the line on the
   list. So no `project new`, `add` or `forget` meets a making under way: it waits its 3 seconds and is told
@@ -329,9 +331,6 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
 - **A typed-in folder whose last name holds an unseen character** (an emoji written with U+FE0F, say) is not
   offered, and a new wish for it is refused as no project's name, unless the list holds the name already
   ("A name that comes in, and a name that was kept").
-- **Jellymoon's folder is removed after the lock is let go.** Another command that has just made the folder
-  for its own lock, and has not yet put the lock in it, can have it removed underneath. Only an empty folder
-  goes, so nothing is lost; that command fails with `jellymoon's own files: …` and is asked again.
 - **A sentence that says "what was made was taken back"** (git failed, the name was kept in other letters)
   and the folder could not be removed: the words that it was left are added after it, and the two stand
   together.

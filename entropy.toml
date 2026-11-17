@@ -358,7 +358,11 @@ max_file_lines = 400
 # and a process with no file handle left, are a caller at work; the mark's read is tried again; a lock whose mark was
 # not written is removed; the open that never waits), `lock/tests.rs` 79 (the mapping's test, the lock with no mark,
 # the pipe, a lock made fresh for Windows, and a caller in the test of many that asks again).
-"crates/jellymoon-core" = 16118
+# The lock notes joined with F65 raised core by 115: `lock.rs` 47 ("denied" on Windows as an answer of its own, the
+# wait that tells a file being removed from one that may not be written, the read-only attribute at the look),
+# `lock/tests/denied.rs`, those rules as values and on Windows, is 68, `lock/tests.rs` 2; `project/new.rs` lost 2
+# (the take-back of Jellymoon's folder, which `take-over.lock` in it made dead).
+"crates/jellymoon-core" = 16233
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -541,7 +545,9 @@ max_file_lines = 400
 # F77 raised it by 220, all a test: `tests/f77.rs`, what a made-up harness is started with at each of the six starts.
 # The lock notes raised it by 60, all tests: a lock nobody can take over, for a day (`tests/f35/lock.rs`, 25) and
 # for the list (`tests/f62/refused.rs`, 30), and `take-over.lock` where a folder's files are listed (5).
-"crates/jellymoon" = 27002
+# The join with F65 raised it by 28, all in F65's tests: `take-over.lock` named where a whole folder is compared
+# (`tests/f65/alone.rs` 21, with the helper that names it; `half.rs` 2, `mark.rs` 2, `refused.rs` 3).
+"crates/jellymoon" = 27030
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -121,10 +121,13 @@ This is the only way text gets from a page into a running session, so what is ch
     be taken over, as take-over.lock beside it could not be locked; remove both, then try again`. The way out is
     what it says: remove the two files (or whatever stands at `take-over.lock`) from `pages`, or from the home for
     `projects.lock`. While another caller holds the system's lock, the refusal is the usual one: that caller
-    is at work. On Windows "denied", a sharing violation and a lock violation are what `take-over.lock` gives
-    while another process opens or locks it, so there they too are a caller at work and get the usual refusal,
-    never this one; a `take-over.lock` that may truly not be written says "denied" as well, so on Windows a lock
-    left behind beside one is refused in the usual words, and letting go there takes its 3 seconds each time. A
+    is at work. On Windows a sharing violation and a lock violation are what `take-over.lock` gives
+    while another process has it open or locked, so there they too are a caller at work and get the usual
+    refusal, never this one. "Denied" is said there by a file that is being removed, for a moment, and by a file
+    that may not be written, for good: a caller that is denied on every pass of its 3 seconds gets this refusal,
+    since no caller at work lasts that long, and one that on any pass is not denied gets the usual one. A
+    `take-over.lock` with the read-only attribute is not to be had at all there, by a look made before it is
+    opened. A holder letting go beside a `take-over.lock` that is denied waits its 3 seconds each time. A
     process with no file handle left is the same on every system: that passes, and says nothing of the file.
     On unix the open of `take-over.lock` never waits, so a pipe at its name is refused as a folder is.
   - **Letting go.** A holder asks for the system's lock, waits up to 3 seconds for it while another caller
@@ -136,7 +139,8 @@ This is the only way text gets from a page into a running session, so what is ch
     then stays, for a take-over.
   - **How long a caller waits.** For the lock, 3 seconds, and it is then refused; a made wish asks again up to
     its own wait ([wish.md](wish.md)). A take-over never waits: it asks for the system's lock once. Letting go
-    waits at most 3 seconds for the system's lock and, on Windows only, 3 more for a lock in use at that moment.
+    waits at most 3 seconds for the system's lock and, on Windows only, up to 3 more to read a lock in use at
+    that moment and 3 more to remove it: 9 seconds at most there.
     Nothing waits for ever.
   - **What a crash leaves.** A command killed while it holds the lock leaves the lock's file. For 30 seconds
     every change to that day, or to the list, is refused after its 3 seconds; then the next caller takes the lock

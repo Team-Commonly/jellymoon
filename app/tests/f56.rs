@@ -169,7 +169,7 @@ fn the_ring_is_as_full_as_the_heard_wish_s_four_seconds_are_left() {
 
 #[test]
 fn a_line_is_read_from_a_file_as_from_stdin_and_a_theme_changes_no_piece() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = support::scratch();
     let file = dir.path().join("line.json");
     let line = heard(SAID, "alpha", 2000);
     // With its line break, with none, and as Windows ends a line.

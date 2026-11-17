@@ -32,15 +32,14 @@ fn install_under(mac: &Mac, umask: &str, release: &Path) -> Output {
     let piped = mac.root.path().join("piped.sh");
     let script = fs::read_to_string(repo().join("install.sh")).unwrap();
     fs::write(&piped, format!("umask {umask}\n{script}")).unwrap();
-    let mut sh = mac.command(Path::new("/bin/sh"), "/usr/bin:/bin:/usr/sbin");
-    sh.env("JELLYMOON_RELEASE_URL", format!("file://{}", release.display()));
+    let mut sh = mac.command(Path::new("/bin/sh"), "/usr/bin:/bin:/usr/sbin", &[], Some(release));
     sh.stdin(fs::File::open(piped).unwrap()).output().unwrap()
 }
 
 /// `jellymoon hook install --installed` by the installed command, in the made-up home.
 fn turn_on(mac: &Mac) -> Output {
     fs::create_dir_all(mac.home().join(".claude")).unwrap();
-    mac.command(&mac.binary(), "").args(["hook", "install", "--installed"]).output().unwrap()
+    mac.command(&mac.binary(), "", &["hook", "install", "--installed"], None).output().unwrap()
 }
 
 const NOT_OFFERED: &str = "the app will not offer to turn delivery on";

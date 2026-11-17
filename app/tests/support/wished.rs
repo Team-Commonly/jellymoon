@@ -3,9 +3,9 @@
 //! where `install.sh` puts it, and that starts the made-up agent of F39's tests in place of Claude Code. The repo
 //! is found by its name in a session log typed here, so the world is in the system's own temporary folder.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 use std::{env, fs, thread};
 
@@ -15,6 +15,7 @@ use serde_json::Value;
 use sticker_kit::Scene;
 
 use super::day::{self, DAY, answer, called, noon, reading, result, said, shown, write_log, zone};
+use super::door;
 
 /// The words every made-up window enters.
 pub const SAID: &str = "make the uploader retry twice";
@@ -47,7 +48,7 @@ pub fn world() -> World {
 /// The world of a day nothing was typed on (F63): the repo `alpha`, logs that hold nothing, and a harness that
 /// would answer a reading, so a call that is made is seen.
 pub fn quiet() -> World {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = super::system_scratch();
     let at = |name: &str| dir.path().join(name);
     for folder in ["user", "rec", "tmp", "git", "work", "logs"] {
         fs::create_dir(at(folder)).unwrap();
@@ -97,9 +98,8 @@ impl World {
     }
 
     fn git(&self, folder: &Path, args: &[&str]) {
-        let mut git = Command::new("git");
-        git.args(args).current_dir(folder).env_clear().envs(self.vars.iter().map(|(name, value)| (name, value)));
-        git.env("GIT_CEILING_DIRECTORIES", self.day.dir.path());
+        let mut git = door::command("git", self.vars.iter().map(|(name, value)| (name, value)), args);
+        git.current_dir(folder).env("GIT_CEILING_DIRECTORIES", self.day.dir.path());
         for who in ["AUTHOR", "COMMITTER"] {
             git.env(format!("GIT_{who}_NAME"), "Test Setup").env(format!("GIT_{who}_EMAIL"), "setup@example.test");
         }
@@ -137,7 +137,7 @@ impl World {
     /// Puts the `jellymoon` command where `install.sh` puts it, in folders for their owner alone to write.
     pub fn install(&self) -> PathBuf {
         let command = self.bin().join(format!("jellymoon{}", env::consts::EXE_SUFFIX));
-        copied(env!("CARGO_BIN_EXE_f42-jellymoon"), &command);
+        copied(door::built_jellymoon(), &command);
         #[cfg(unix)]
         for folder in self.bin().ancestors().take(4) {
             fs::set_permissions(folder, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
@@ -156,10 +156,12 @@ impl World {
     pub fn enters_with(&self, project: &str, then: &str, skip: &str) -> Window {
         let said = self.at("tmp").join(format!("window-{}", fs::read_dir(self.at("tmp")).unwrap().count()));
         let file = |name: &str| fs::File::create(said.with_extension(name)).unwrap();
-        let mut window = Command::new(env!("CARGO_BIN_EXE_f42-wisher"));
-        window.arg(self.at("jm")).arg(self.at("logs")).arg(self.bin()).arg(self.at("agent").join("claude"));
-        window.args([DAY, project, SAID, then, skip]).current_dir(self.day.dir.path());
-        window.env_clear().envs(self.vars.iter().map(|(name, value)| (name, value)));
+        let paths = [self.at("jm"), self.at("logs"), self.bin(), self.at("agent").join("claude")];
+        let words = [DAY, project, SAID, then, skip].map(OsStr::new);
+        let args: Vec<&OsStr> = paths.iter().map(|path| path.as_os_str()).chain(words).collect();
+        let vars = self.vars.iter().map(|(name, value)| (name, value));
+        let mut window = door::window(false, vars, &args);
+        window.current_dir(self.day.dir.path());
         window.stdin(Stdio::null()).stdout(file("out")).stderr(file("err"));
         Window { child: window.spawn().unwrap(), said }
     }

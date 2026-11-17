@@ -2,7 +2,7 @@
 //! layout --jelly` run on one, and what it printed. Nothing here opens a window or starts another program.
 
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
+use std::process::{Output, Stdio};
 
 use serde_json::{Value, json};
 
@@ -54,12 +54,9 @@ pub fn cannot(says: &str) -> Value {
 /// `jellymoon-app layout --jelly - --screen <screen>` with `input` typed into it and `more` after it, with no
 /// variable but `vars`.
 pub fn app(input: &str, screen: &str, more: &[&str], vars: &[(&str, &Path)]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon-app"));
-    cmd.args(["layout", "--jelly", "-", "--screen", screen]).args(more).env_clear();
-    cmd.envs(vars.iter().copied()).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-        cmd.env("SystemRoot", root); // a Windows program needs it to start
-    }
+    let args = [&["layout", "--jelly", "-", "--screen", screen], more].concat();
+    let mut cmd = crate::support::door::app(vars.iter().copied(), &args);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().unwrap();
     let _ = std::io::Write::write_all(&mut child.stdin.take().unwrap(), input.as_bytes());
     child.wait_with_output().unwrap()

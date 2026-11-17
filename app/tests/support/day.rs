@@ -1,15 +1,15 @@
 //! What the F34 tests share: one made-up day in session logs, a jellymoon home, and the made-up harness of F27's
 //! tests on PATH as `claude`, which records what it was given and prints the reply the test chose.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Output, Stdio};
 use std::{env, fs};
 
 use serde_json::json;
 use tempfile::TempDir;
 
-use super::Piece;
+use super::{Piece, door};
 
 pub const DAY: &str = "2026-03-10";
 pub const FIRST: &str = "add a retry to the uploader";
@@ -76,7 +76,7 @@ pub fn reading() -> String {
 
 /// A day of two things typed in `alpha` and one in `private-notes`, and a harness on PATH that answers [`reading`].
 pub fn world() -> World {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = super::scratch();
     let at = |name: &str| dir.path().join(name);
     let bin = at("bin");
     fs::create_dir_all(&bin).unwrap();
@@ -102,20 +102,24 @@ pub fn world() -> World {
     world
 }
 
+impl World {
+    /// The made-up harness by its path, for a test that holds the day in its own process: no `PATH` is the world's
+    /// there, so the harness is named and never looked for.
+    pub fn claude(&self) -> PathBuf {
+        self.rec.join(format!("claude{}", env::consts::EXE_SUFFIX))
+    }
+}
+
 pub fn answer(world: &World, reply: &str, exit: i32) {
     fs::write(world.rec.join("reply"), reply).unwrap();
     fs::write(world.rec.join("exit"), exit.to_string()).unwrap();
 }
 
-/// Runs `jellymoon-app` with the world's variables, and `more` over them.
+/// Runs `jellymoon-app` with the world's variables, and `more` over them, through the door.
 pub fn app(world: &World, args: &[&str], more: &[(&str, &str)]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon-app"));
-    cmd.args(args).env_clear().envs(world.vars.iter().map(|(name, value)| (name, value))).stdin(Stdio::null());
-    cmd.envs(more.iter().copied());
-    if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-        cmd.env("SystemRoot", root);
-    }
-    cmd.output().unwrap()
+    let vars = world.vars.iter().map(|(name, value)| (*name, value.as_os_str()));
+    let more = more.iter().map(|(name, value)| (*name, OsStr::new(value)));
+    door::app(vars.chain(more), args).stdin(Stdio::null()).output().unwrap()
 }
 
 /// Runs `jellymoon-app layout` on the day with the world's logs.

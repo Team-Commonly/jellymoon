@@ -4,15 +4,17 @@
 //! started as a program, by its own first line: the test names no shell, and no other system could start it.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod support;
+
 #[cfg(target_os = "macos")]
 #[test]
 fn a_minimum_macos_that_is_not_a_whole_release_is_refused_before_anything_is_made() {
+    use std::ffi::OsStr;
+    use std::fs;
     use std::path::Path;
-    use std::process::Command;
-    use std::{env, fs};
 
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = support::scratch();
     let script = dir.path().join("app").join("macos").join("bundle.sh");
     fs::create_dir_all(script.parent().unwrap()).unwrap();
     fs::copy(repo.join("app").join("macos").join("bundle.sh"), &script).unwrap();
@@ -20,9 +22,10 @@ fn a_minimum_macos_that_is_not_a_whole_release_is_refused_before_anything_is_mad
     fs::write(&file, "").unwrap();
     let bundle = |least: &str| {
         fs::write(dir.path().join("install.sh"), format!("MIN_MACOS={least}\n")).unwrap();
-        let mut bundle = Command::new(&script);
-        bundle.args([&file, &file]).args(["1.0", "arm64"]).arg(&out);
-        let ran = bundle.env("TMPDIR", dir.path()).output().unwrap();
+        // The script's own tools are the system's, and it is given no home at all.
+        let args = [file.as_os_str(), file.as_os_str(), OsStr::new("1.0"), OsStr::new("arm64"), out.as_os_str()];
+        let vars = [("TMPDIR", dir.path().as_os_str()), ("PATH", OsStr::new("/usr/bin:/bin:/usr/sbin"))];
+        let ran = support::door::command(&script, vars, &args).output().unwrap();
         (ran.status.code(), String::from_utf8_lossy(&ran.stderr).into_owned())
     };
     for least in ["12.3", "11.0.1", "11.5.0", "11."] {

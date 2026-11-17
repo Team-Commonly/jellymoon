@@ -2,7 +2,7 @@
 //! line says its own limits.
 
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use serde_json::{Value, json};
 
@@ -59,11 +59,8 @@ fn the_size_s_error_line_states_both_ends() {
 
 #[test]
 fn stdin_is_read_only_to_its_cap_however_much_is_piped_in() {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon-app"));
-    cmd.args(["layout", "--page", "-"]).env_clear().stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-        cmd.env("SystemRoot", root);
-    }
+    let mut cmd = support::door::app(support::door::BARE, &["layout", "--page", "-"]);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().unwrap();
     let mut pipe = child.stdin.take().unwrap();
     // 64 MiB are offered. A reader that stops at its cap closes the pipe after 1 MiB and a little; the rest is refused.

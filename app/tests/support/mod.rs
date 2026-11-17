@@ -1,13 +1,15 @@
 //! What the F28 tests share: made-up page data, running the built `jellymoon-app`, and reading the pieces it prints.
+//! A test starts a program, and takes the folder its world is in, here and nowhere else (`door.rs`).
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
 pub mod day;
+pub mod door;
 pub mod wished;
 pub mod worked;
 
 use std::fs;
 use std::io::Write;
-use std::process::{Command, Output, Stdio};
+use std::process::{Output, Stdio};
 
 use serde_json::{Value, json};
 
@@ -52,13 +54,21 @@ pub fn open_above(path: &std::path::Path) -> Option<std::path::PathBuf> {
     }
 }
 
-/// Runs `jellymoon-app` with nothing in its environment, `stdin` typed into it.
+/// A folder that is removed when the test ends, for a test's world or its files. It is under the folder Cargo
+/// gives tests.
+pub fn scratch() -> tempfile::TempDir {
+    tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap()
+}
+
+/// The same under the system's temporary folder, for a world that must not be under Cargo's.
+pub fn system_scratch() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap()
+}
+
+/// Runs `jellymoon-app` with nothing in its environment, `stdin` typed into it, through the door ([`door::app`]).
 pub fn run(args: &[&str], stdin: Option<&str>) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon-app"));
-    cmd.args(args).env_clear().stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-        cmd.env("SystemRoot", root); // a Windows program needs it to start
-    }
+    let mut cmd = door::app(door::BARE, args);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().unwrap();
     let mut pipe = child.stdin.take().unwrap();
     // A run that fails on its command line never reads the pipe, so a refused write is not the test's failure.
@@ -69,7 +79,7 @@ pub fn run(args: &[&str], stdin: Option<&str>) -> Output {
 
 /// Runs `jellymoon-app layout` on a file holding `text`.
 pub fn layout(text: &str, args: &[&str]) -> Output {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = scratch();
     let file = dir.path().join("page.json");
     fs::write(&file, text).unwrap();
     let mut all = vec!["layout", "--page", file.to_str().unwrap()];

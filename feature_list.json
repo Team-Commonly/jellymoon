@@ -772,7 +772,7 @@
         "on macOS, Linux and Windows; with F74 this row replaces F73"
       ],
       "test": "cargo test -p jellymoon-app --test f75",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F74"
       ]

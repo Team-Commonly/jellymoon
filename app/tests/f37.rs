@@ -52,7 +52,7 @@ fn a_made_wish_is_drawn_working_before_the_day_is_read_and_on_a_day_with_no_logs
         skip: Vec::new(),
         model: "sonnet".to_string(),
         home: world.home.clone(),
-        harness: None,
+        harness: Some(world.claude()),
         fresh: false,
         settings: None,
         bin: None,

@@ -176,17 +176,19 @@ mod mac {
             self.home().join(".local/bin/jellymoon")
         }
         /// Every variable is set here: the real home, the real `PATH` and the real release address are never seen.
-        pub fn command(&self, program: &Path, path: &str) -> Command {
+        /// The door is given every argument too, and the address of the release where there is one.
+        pub fn command(&self, program: &Path, path: &str, args: &[&str], release: Option<&Path>) -> Command {
             let (home, tmp) = (self.home(), self.root.path().join("tmp"));
-            let vars = [("HOME", home.as_os_str()), ("TMPDIR", tmp.as_os_str()), ("PATH", std::ffi::OsStr::new(path))];
-            door::command(program, vars, &[] as &[&str])
+            let from = release.map(|release| ("JELLYMOON_RELEASE_URL", format!("file://{}", release.display()).into()));
+            let vars = [("HOME", home.into_os_string()), ("TMPDIR", tmp.into()), ("PATH", path.into())];
+            door::command(program, vars.into_iter().chain(from), args)
         }
         fn install(&self, release: &Path) -> Output {
             self.install_on(release, "/usr/bin:/bin:/usr/sbin")
         }
         fn install_on(&self, release: &Path, path: &str) -> Output {
-            let mut sh = self.command(Path::new("/bin/sh"), path);
-            run(sh.arg(repo().join("install.sh")).env("JELLYMOON_RELEASE_URL", format!("file://{}", release.display())))
+            let script = repo().join("install.sh");
+            run(&mut self.command(Path::new("/bin/sh"), path, &[script.to_str().unwrap()], Some(release)))
         }
         /// Installs with a program of this name first on the script's `PATH`, standing in for the system's.
         fn install_with(&self, release: &Path, name: &str, body: &str) -> Output {
@@ -234,15 +236,15 @@ mod mac {
         ok(Command::new("codesign").args(["--verify", "--strict"]).arg(mac.app()));
         ok(Command::new("codesign").args(["--verify", "--strict"]).arg(mac.binary()));
         // The installed command starts.
-        assert!(ok(mac.command(&mac.binary(), "").arg("--help")).contains("jellymoon uninstall"));
+        assert!(ok(&mut mac.command(&mac.binary(), "", &["--help"], None)).contains("jellymoon uninstall"));
 
         let said = text(&ran.stdout);
         let bin = mac.home().join(".local/bin");
         assert!(said.contains("Jellymoon is installed."), "{said}");
         assert_eq!(said.lines().filter(|line| line.contains("is not on your PATH")).count(), 1, "{said}");
         // With the folder on PATH there is no such line. Read from stdin, as `curl ... | sh` runs it.
-        let mut sh = mac.command(Path::new("/bin/sh"), &format!("/usr/bin:/bin:/usr/sbin:{}", bin.display()));
-        sh.env("JELLYMOON_RELEASE_URL", format!("file://{}", mac.root.path().join("release").display()));
+        let (path, release) = (format!("/usr/bin:/bin:/usr/sbin:{}", bin.display()), mac.root.path().join("release"));
+        let mut sh = mac.command(Path::new("/bin/sh"), &path, &[], Some(&release));
         let piped = sh.stdin(fs::File::open(repo().join("install.sh")).unwrap()).output().unwrap();
         assert!(piped.status.success() && !text(&piped.stdout).contains("PATH"), "{}", text(&piped.stdout));
     }
@@ -361,7 +363,7 @@ mod mac {
         let mac = Mac::new();
         assert!(mac.install(&release(mac.root.path(), "release", "1.0.0")).status.success());
 
-        let said: Value = serde_json::from_str(&ok(mac.command(&mac.binary(), "").arg("uninstall"))).unwrap();
+        let said: Value = serde_json::from_str(&ok(&mut mac.command(&mac.binary(), "", &["uninstall"], None))).unwrap();
         let removed = [mac.app().display().to_string(), mac.binary().display().to_string()];
         assert_eq!(said, json!({"hook": false, "hook_by_hand": false, "removed": removed}));
         assert_eq!(mac.names("home/Applications"), Vec::<String>::new());

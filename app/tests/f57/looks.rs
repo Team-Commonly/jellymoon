@@ -31,7 +31,7 @@ fn page_of(home: &Path, date: &str) -> Today {
         skip: Vec::new(),
         model: "sonnet".to_string(),
         home: home.to_path_buf(),
-        harness: None,
+        harness: Some(home.join("claude")),
         fresh: false,
         settings: None,
         bin: None,
@@ -86,7 +86,7 @@ fn shown(opened: &Opened, cx: &mut TestAppContext) -> (EdgeMood, Option<String>)
 
 #[test]
 fn once_a_second_the_jellyfish_is_looked_at_off_the_window_s_thread_and_drawn_again() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = crate::support::scratch();
     let home = dir.path().join("jm");
     made(&home, DAY, "working", json!({}));
     let _run = held(&home);
@@ -128,7 +128,7 @@ fn once_a_second_the_jellyfish_is_looked_at_off_the_window_s_thread_and_drawn_ag
 // review of its notes, finding 2: the look is built in `wire`, from the page's day and whether it was named.
 #[test]
 fn past_midnight_the_jellyfish_shows_the_new_day_s_runs_and_a_day_that_was_named_stays() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = crate::support::scratch();
     let home = dir.path().join("jm");
     made(&home, NEXT, "working", json!({}));
     let (today, hand) = clock(DAY);
@@ -179,7 +179,7 @@ fn past_midnight_a_wish_made_on_the_page_is_shown_by_the_jellyfish_when_its_run_
 
 #[test]
 fn past_midnight_a_run_begun_on_the_page_s_day_is_still_shown_and_still_asks() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = crate::support::scratch();
     let home = dir.path().join("jm");
     asking(&home, DAY);
     let (today, hand) = clock(DAY);
@@ -209,7 +209,7 @@ fn of_the_page_s_day_and_today_the_first_in_core_s_order_is_shown() {
         (nothing, nothing, EdgeMood::Floats),
     ];
     for (at, (on_the_page_s_day, today, drawn)) in cases.into_iter().enumerate() {
-        let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+        let dir = crate::support::scratch();
         let home = dir.path().join("jm");
         on_the_page_s_day(&home, DAY);
         today(&home, NEXT);
@@ -220,7 +220,7 @@ fn of_the_page_s_day_and_today_the_first_in_core_s_order_is_shown() {
         assert_eq!(opened.bubble().is_some(), drawn == EdgeMood::Waves, "case {at}");
     }
     // Of two days in one state the page's day's is shown: the page beside the jellyfish is where it is answered.
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = crate::support::scratch();
     let home = dir.path().join("jm");
     asking(&home, DAY);
     made(&home, NEXT, "needs_you", json!({"question": "Which other?"}));

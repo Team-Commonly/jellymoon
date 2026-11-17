@@ -129,19 +129,25 @@ fn a_made_wish_alone_gives_the_day_its_page() {
 const NOT_A_FOLDER: &str = "reading the session logs: they are looked for in a folder, and what is there is not one";
 
 // A logs path that is no folder, or a folder that cannot be listed, is not a day nothing was typed on: nothing
-// was read. `page` and `day` refuse it in fixed words that name no path, print nothing and write nothing, though
-// the day has a made wish and a project on offer, which a day with no logs at all has its page for.
+// was read. `page`, `day` and `run` with no `--repo` refuse it in fixed words that name no path, print nothing
+// and write nothing, though the day has a made wish and a project on offer, which a day with no logs at all has
+// its page for, and by which a run finds its folder on such a day.
 #[test]
 fn a_logs_path_that_is_a_file_or_a_folder_that_cannot_be_listed_is_refused_and_is_no_day_with_nothing_typed() {
     let (w, _) = listed();
-    w.wish("alpha");
+    let wish = w.wish("alpha");
     let file = w.at("logs-file");
     fs::write(&file, "").unwrap();
-    // The closed folder is a case on Unix only, so elsewhere nothing is added to the list.
+    // The link and the closed folder are cases on Unix only, so elsewhere nothing is added to the list. Windows
+    // has the rule too and no case of it: making a link there needs a privilege a test does not have.
     #[cfg_attr(not(unix), allow(unused_mut))]
     let mut cases = vec![("a file", file, format!("jellymoon: {NOT_A_FOLDER}\n"))];
     #[cfg(unix)]
     {
+        // A link that leads nowhere is something that is there and is no folder: it is not "no logs at all".
+        let link = w.at("logs-link");
+        std::os::unix::fs::symlink(w.at("nowhere"), &link).unwrap();
+        cases.push(("a link to nothing", link, format!("jellymoon: {NOT_A_FOLDER}\n")));
         let closed = logs(&w, Logs::OtherDay);
         fs::set_permissions(&closed, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
         // Whoever may list every folder (root) is not refused, and has nothing to show here.
@@ -152,17 +158,17 @@ fn a_logs_path_that_is_a_file_or_a_folder_that_cannot_be_listed_is_refused_and_i
     }
     let before = w.home();
     for (case, logs, line) in &cases {
-        for command in ["page", "day"] {
-            let ran = w.run(&[command, "--date", DAY, "--logs", logs.to_str().unwrap()]);
+        for command in [&["page"][..], &["day"], &["run", "--wish", &wish]] {
+            let ran = w.run(&[command, &["--date", DAY, "--logs", logs.to_str().unwrap()]].concat());
             let printed = (ran.code, ran.stdout.as_str(), ran.stderr.as_str());
-            assert_eq!(printed, (1, "", line.as_str()), "{case}: {command}");
+            assert_eq!(printed, (1, "", line.as_str()), "{case}: {command:?}");
         }
     }
-    assert_eq!((w.home(), w.starts()), (before, 0), "a refusal wrote into the home, or a reading call was made");
+    assert_eq!((w.home(), w.starts()), (before, 0), "a refusal wrote into the home, or the agent was started");
+    // A logs path with nothing at all under its name stays a day with no logs, which has its page.
+    assert_eq!(printed(&page(&w, &w.at("nowhere")))["read"]["no_logs"], true);
     #[cfg(unix)]
-    for (_, logs, _) in cases.iter().skip(1) {
-        fs::set_permissions(logs, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
-    }
+    fs::set_permissions(w.at("logs"), std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
 }
 
 /// Makes a wish for `alpha` with the agent playing `script`, runs it over `logs` when an outcome is given, and

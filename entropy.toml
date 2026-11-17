@@ -351,7 +351,10 @@ max_file_lines = 400
 # The jellyfish notes raised core by 66: what a hearing says of a run that was not started as one function of
 # what `run_apart`'s own search missed, with its test (`hear/day.rs`), that search's answer handed on
 # (`run/apart.rs`, `run.rs`) and the one question asked of it (`find.rs`).
-"crates/jellymoon-core" = 15731
+# F76 raised core by 52: the headless rule, `Line::headless`, its field and its one yes or no in `session.rs`
+# (16), its test from inside in `session/tests.rs` (33), and a link that leads nowhere refused as no folder in
+# `reader.rs` (3).
+"crates/jellymoon-core" = 15783
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -532,7 +535,10 @@ max_file_lines = 400
 # F74, the door, raised it by 349, all tests and their support: `tests/f74.rs` 225, `tests/support/door.rs` 144,
 # 9 in `tests/support/mod.rs` (the two other folders a world is made in); the tests moved through the door lost 29.
 # F77 raised it by 220, all a test: `tests/f77.rs`, what a made-up harness is started with at each of the six starts.
-"crates/jellymoon" = 26942
+# F76 raised the binary by 305, all tests: `tests/f76.rs`
+# is 299 (the headless rule at `day`, `page`, `run` and `hear`), and `tests/f63.rs` grew by 6 (`run` with no
+# `--repo` among the commands that refuse logs that are no folder, and the link that leads nowhere).
+"crates/jellymoon" = 27247
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

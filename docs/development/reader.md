@@ -84,16 +84,19 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
   the one nobody named, the line adds what to do. A directory that is there with no session in it is a day with no
   turns. A `--logs` that is empty or only spaces is an argument error. In the line, a character
   of the folder's name that cannot be seen is shown as a space.
-- **Logs that cannot be read.** A projects directory that is a file, or anything else that is no folder, is
-  refused in one fixed line, `reading the session logs: they are looked for in a folder, and what is there is not
-  one`. A folder that cannot be listed is refused in the system's own words, on a Mac `reading the session logs:
-  Permission denied (os error 13)`. Either is exit 1 with nothing printed and nothing written, and the line names
-  no path. Such a day is not one with nothing typed and not one with no logs: `jellymoon page` prints no page for
-  it, though the day has a made wish or a project on offer, and `jellymoon run` given such `--logs` is refused in
-  the same line and starts nothing. The app shows it as its note "Your Claude Code session logs could not be
-  read" with the line in brackets (`app/src/today.rs`, `words`), over the kept page when there is one. Before
-  this both printed the day as one with no turns. A folder inside the projects directory that cannot be listed
-  is still passed over.
+- **Logs that cannot be read.** A projects directory that is a file, a link that leads nowhere, or anything else
+  that is no folder, is refused in one fixed line, `reading the session logs: they are looked for in a folder,
+  and what is there is not one`. Only a path with nothing at all under its name is "no session logs". A folder
+  that cannot be listed is refused in the system's own words, on a Mac `reading the session logs: Permission
+  denied (os error 13)`. Either is exit 1 with nothing printed and nothing written, and the line names no path.
+  Such a day is not one with nothing typed and not one with no logs: `jellymoon page` prints no page for it,
+  though the day has a made wish or a project on offer, and `jellymoon run` with no `--repo`, given such
+  `--logs`, is refused in the same line and starts nothing. With `--repo` a run never reads the logs, so it
+  refuses nothing of them. The app shows it as its note "Your Claude Code session logs could not be read" with
+  the line in brackets (`app/src/today.rs`, `words`), over the kept page when there is one; a kept page that
+  says no logs were found is no earlier reading, and is not shown under the note. Before this `page` and `day`
+  printed the day as one with no turns. A folder inside the projects directory that cannot be listed is still
+  passed over.
 
 Only a regular `.jsonl` file in a real folder of the projects directory is opened. A link is never followed, to a file or to a
 folder, and a pipe or anything else that is not a file is left alone.
@@ -101,9 +104,32 @@ folder, and a pipe or anything else that is not a file is left alone.
 ## What counts as typed by a person
 
 Measured on Claude Code 2.1 logs. A line starts a turn only when all of these hold: `type` is `user`, `origin.kind` is `human`,
-`message.content` is a string or a list with no `tool_result` part, and `isMeta`, `isSidechain` and `isCompactSummary` are not true. That leaves out tool results
-(a list, no origin), task notices (`origin.kind` `task-notification`), messages from other sessions (`peer`), compaction
-summaries and prompts another program sent (no `origin`).
+`message.content` is a string or a list with no `tool_result` part, `isMeta`, `isSidechain` and `isCompactSummary` are not
+true, and `entrypoint` is not `sdk-cli`. That leaves out tool results (a list, no origin), task notices (`origin.kind`
+`task-notification`), messages from other sessions (`peer`), compaction summaries, lines that name no `origin`, and what
+another program sent to a headless Claude Code (`entrypoint` `sdk-cli`).
+
+**A headless line** (ADR 0021, decision 4; F76). What a program hands to a headless Claude Code is logged as a `user` line
+with `origin.kind` `human`, as a person's own prompt is, so the origin does not tell the two apart. Its `entrypoint` does:
+measured on one machine, every typed line carried one, `cli` from a terminal and `sdk-cli` from a headless start. A line
+whose `entrypoint` is `sdk-cli` is no turn and no reply.
+
+- It is decided for each line, never for a file: a resume writes into the same file, so one file can hold both kinds, and
+  gives its `cli` turns only.
+- A left-out line that looks typed still ends the turn before it, as a line of a switched-off folder or of a run's copy
+  does. A left-out line the agent said is no reply and ends nothing.
+- Its `uuid` is not held: a person's own typed line with the same `uuid`, in a file read later, is still a turn.
+- The value is compared whole and exactly. A line with no `entrypoint`, or with any other value (`cli`, a value never
+  seen, another case, something that is no string), is read as before. So the rule never keeps more than was kept.
+- It is one function (`session.rs`, `Line::headless`), asked once for each decoded line beside the rule for a run's
+  copy; nothing else reads a session log's lines. It holds for `day` and `page`, and wherever a folder that was typed in
+  is looked for: a project that is not on the list of projects and whose sessions that day are all headless is not found
+  by `jellymoon run` with no `--repo`, which says what it says of a day nothing was typed, and is not offered for a wish.
+  A listed project is found and offered as before.
+- Not covered: a person's own headless typing (`claude -p` typed by hand, or an app the person types into that drives a
+  headless harness) is left out as another program's words are, and nothing says so. No flag turns the rule off.
+- Not confirmed: whether a line a resume copies keeps its first `entrypoint`. No file with both kinds was seen, so the
+  test's file of both (`crates/jellymoon/tests/f76.rs`) is typed from the rule.
 
 Of what is left, a slash command (text starting `<command-name>`, `<command-message>` or `<local-command`) is dropped. The
 blocks the harness adds inside a prompt are cut out: `<system-reminder>`, `<artifact-view-context>`, the
@@ -113,8 +139,9 @@ kind of block, each taking time in step with the prompt's length.
 
 The reply is the text parts of the last assistant line before the person's next prompt, on any day; thinking and tool calls are
 not text. A dropped prompt still ends the turn before it. So does a prompt nobody typed: a message from another session
-(`peer`) or a prompt another program sent. What the agent says next answers that, not the person. A task notice does not end
-the turn, and neither does a line the harness wrote itself (`isMeta`, `isCompactSummary`).
+(`peer`), a prompt that names no `origin`, or a headless line that looks typed. What the agent says next answers that, not
+the person. A task notice does not end the turn, and neither does a line the harness wrote itself (`isMeta`,
+`isCompactSummary`).
 
 A resumed or forked session repeats earlier lines in a new file under the same `uuid`. A typed line whose `uuid` was already
 read is dropped with its replies, so the prompt is printed once, from the file read first (files are read in name order).

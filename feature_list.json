@@ -625,7 +625,7 @@
         "a wish for the new project starts a run in it"
       ],
       "test": "cargo test -p jellymoon --test f65",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F62"
       ]

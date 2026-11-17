@@ -57,7 +57,9 @@ jellymoon uninstall
 It prints `{"removed":[...],"hook":false,"hook_by_hand":false}`: the paths it removed, whether it took the delivery
 hook out of the harness's settings, and whether it left a hook entry the person had edited, which they then remove
 by hand. It reads the same `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR`, removes `Jellymoon.app` and `jellymoon` from
-them and nothing else, and takes no arguments. The journal's own files (`~/.jellymoon`) stay. It is a command and not
+them and nothing else, and takes no arguments. The journal's own files (`~/.jellymoon`) stay, and
+the projects made with `jellymoon project new` are in that folder, in `projects`: clearing it as journal data
+removes them. It is a command and not
 a flag of the script because the hook lives in the harness's settings, which only core reads and writes, and because
 the command is already on the machine and needs no network. The hook goes first, as `jellymoon hook uninstall`
 removes it ([delivery.md](delivery.md)).

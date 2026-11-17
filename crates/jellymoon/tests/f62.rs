@@ -5,11 +5,13 @@
 //! add`, `list` and `forget`; `f62/refused.rs` what `add` refuses and two changes at once; `f62/started.rs` the
 //! list a run's start writes; `f62/found.rs` a listed project found on a day nothing was typed, and one that is
 //! gone, no repo's top, not the person's own or switched off; `f62/clash.rs` a name both typed in and listed;
-//! `f62/hand.rs` a list written by hand.
+//! `f62/hand.rs` a list written by hand; `f62/earlier.rs` a list and a day's wishes an earlier build kept.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f62/clash.rs"]
 mod clash;
+#[path = "f62/earlier.rs"]
+mod earlier;
 #[path = "f62/found.rs"]
 mod found;
 #[path = "f62/hand.rs"]
@@ -203,9 +205,9 @@ fn forget_removes_the_line_and_touches_nothing_else() {
 }
 
 #[test]
-fn project_is_add_list_or_forget_and_anything_else_is_no_command() {
+fn project_is_add_new_list_or_forget_and_anything_else_is_no_command() {
     let w = heard_world();
-    let cases: [&[&str]; 8] = [
+    let cases: [&[&str]; 9] = [
         &["project"],
         &["project", "add"],
         &["project", "add", "--date", DAY],
@@ -213,7 +215,8 @@ fn project_is_add_list_or_forget_and_anything_else_is_no_command() {
         &["project", "forget", "alpha", "beta"],
         &["project", "list", "alpha"],
         &["project", "list", "--repo", "x"],
-        &["project", "new", "alpha"],
+        &["project", "new"],
+        &["project", "make", "alpha"],
     ];
     for args in cases {
         let ran = w.run(args);
@@ -234,7 +237,8 @@ fn a_stray_argument_to_project_is_answered_in_a_fixed_line_and_never_said_back()
     let w = heard_world();
     let folder = w.at("work").join("strayfolder");
     let (folder, key) = (folder.to_str().unwrap(), support::hub_key());
-    let line = "jellymoon: project is `project add --repo <folder>`, `project list` or `project forget <name>`\n";
+    let line = "jellymoon: project is `project add --repo <folder>`, `project new <name>`, `project list` or \
+                `project forget <name>`\n";
     for stray in [folder, key.as_str(), "--strayoption"] {
         for before in [&["project", "add"][..], &["project", "list"], &["project", "forget", "x"]] {
             let ran = w.run(&[before, &[stray]].concat());
@@ -243,6 +247,30 @@ fn a_stray_argument_to_project_is_answered_in_a_fixed_line_and_never_said_back()
             let said = |part: &str| ran.stderr.contains(part);
             assert!(!said(stray) && !said("stray") && !said(&key[4..]), "{before:?}: {}", ran.stderr);
         }
+    }
+    // An option whose value is missing gets the same line.
+    for missing in [&["project", "add", "--repo"][..], &["project", "add", "--repo", "x", "--date"]] {
+        let ran = w.run(missing);
+        assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.starts_with(line)), (2, "", true), "{}", ran.stderr);
+    }
+    // And so does an argument that is not text, as a stray one and as the name to forget.
+    #[cfg(unix)]
+    for before in [
+        &["project", "list"][..],
+        &["project", "add"],
+        &["project", "forget"],
+        &["project", "forget", "x"],
+        &["project", "new"],
+    ] {
+        use std::os::unix::ffi::OsStrExt;
+        let stray = std::ffi::OsStr::from_bytes(b"stray\xff\xfename");
+        let args: Vec<&std::ffi::OsStr> = before.iter().map(std::ffi::OsStr::new).chain([stray]).collect();
+        let mut command = support::door::jellymoon(w.vars.iter().map(|(name, value)| (name, value)), &args);
+        command.current_dir(w.dir.path());
+        let ran = command.output().unwrap();
+        let said = String::from_utf8_lossy(&ran.stderr);
+        assert_eq!((ran.status.code(), ran.stdout.len()), (Some(2), 0), "{before:?}: {said}");
+        assert!(said.starts_with(line) && !said.contains("stray"), "{before:?}: {said}");
     }
     assert!(!w.at("jm").exists(), "a command that is not one makes nothing");
 }

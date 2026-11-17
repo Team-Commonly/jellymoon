@@ -57,7 +57,9 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   It is read back through the same door as any page file, and first through core's door for a kept page
   (`jellymoon_core::kept_page`), so a kept file that is not page data, is over 1 MiB, is of another day, is a link,
   or can be written to by its group or by others is not drawn: the day is read again.
-- **What is shown first.** The kept page, when there is one. Otherwise a waiting page: the date, the hero and one
+- **What is shown first.** The kept page, when there is one that read something or whose logs were read. A kept
+  page that says no logs were found is not drawn first: it may be stale by now, so the waiting page is shown, and
+  the count step draws it again when there are still no logs. Otherwise a waiting page: the date, the hero and one
   note, "Reading your day…". The window opens on it at once, before a log is opened: reading the logs alone can take
   seconds. The rest runs off the window's thread in two steps, each of which may give the next page to show
   (`today::Next`): the count of the day's turns, then the reading call. While a kept page is read again it stays on
@@ -76,13 +78,16 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   not named on this page: core's page does not carry it. Core has none for a day with nothing made and no project
   on offer, and that day is the plain note it was. A refusal of core's own (a `--model` that is no name) is the
   note, in core's words. A kept page that read something is never replaced by it: that page stays, under "This
-  page is from an earlier reading." A kept page of 0 turns is replaced by it when the logs folder goes. A kept
-  page that says no logs were found is no earlier reading: once there are logs the day is read as for the first
-  time, behind the waiting page, and when it cannot be read the note is "Today could not be read." The field
+  page is from an earlier reading." A kept page that holds nothing a reading gives is replaced by it when the
+  logs folder goes; one of 0 turns that holds a wish, a clash or a project read stays, as an earlier reading. A
+  kept page that says no logs were found is no earlier reading: once there are logs the day is read as for the
+  first time, behind the waiting page, and when there is no page the note is the one of a day with none kept
+  ("When the reading cannot run"). The same page as the one kept is drawn and not written again. The field
   counts only on a page that holds nothing a reading gives (no turn, no project, no clash, no wish of its own);
   on any other page it is not looked at, and the footer is the reading's.
-- **A day whose logs hold no turn of it** makes no call, and its footer is "Nothing was typed on this day, so no
-  model read it."
+- **A day whose logs hold no turn of it** makes no call, and its footer is "Nothing typed on this day was read, so
+  no model read it." It says what was read, not what was typed: turns typed in a folder switched off or in a
+  run's copy are left out, and a made wish was typed in the window.
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
   no command line. Core reads the file (`reader.md`), for the app and for `jellymoon day` and `page` alike, so the
   three leave out the same folders. A name matches exactly, and case matters, and a `--skip` name with a character
@@ -90,10 +95,12 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   read. No `skip.txt` is no names. Anything else under that name that is not a whole, plain list (`reader.md` lists
   what is refused) stops the reading with a plain note and no call, so a folder switched off never reaches the call
   because its list was damaged. A byte order mark at its start is dropped.
-- **When the reading cannot run** the page is one plain note, "Today could not be read.", that says why: Claude Code
-  was not found, no session logs (the note names the folder looked for, as the command's line does), the call failed
-  or took too long (core's own line follows), or the model's answer was not a page. With a kept page, that page
-  stays and the note is its first, "This page is from an earlier reading." A page that could not be written to its
+- **When the reading cannot run** the page is one plain note that says why. Where no reading call was made its
+  title is "There is no page for this day yet.": Claude Code was not found, no session logs (the note names the
+  folder looked for, as the command's line does), logs or a `skip.txt` that could not be read, a `--model` that
+  is no name. Where a call was made and gave no page it is "Today could not be read.": the call failed or took
+  too long (core's own line follows), or the model's answer was not a page. With a kept page that read
+  something, that page stays and the note is its first, "This page is from an earlier reading." A page that could not be written to its
   file is shown with a first note that says so. `layout` prints these pages and exits 0: they are what the window
   shows.
 
@@ -275,9 +282,9 @@ holds what is asked), the one-second timer, the order of the reading's steps, wh
 
 Not covered: a wish for a project past the sixth, or for one neither typed in today nor listed, is made with
 `jellymoon wish`. A made wish's question is drawn on its wish's note ("A question answered, and more like
-this", below): that a day nothing was typed on
-prints it as any day does is proved at `jellymoon page` (`crates/jellymoon/tests/f63.rs`). What only a person at a window can see is not tested: the input method's candidate window,
-the caret, the pale words of an entry that waits, and which piece has the keys.
+this", below): that a day nothing was typed on prints it as any day does is proved at `jellymoon page`
+(`crates/jellymoon/tests/f63.rs`). What only a person at a window can see is not tested: the input method's
+candidate window, the caret, the pale words of an entry that waits, and which piece has the keys.
 
 ## A tap that stops a run (`app/src/stopping.rs`)
 

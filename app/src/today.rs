@@ -135,9 +135,10 @@ impl Today {
     }
 
     /// What the window shows at once, before a log is opened: the kept page, or the waiting scene. The kept page goes
-    /// on to [`Today::later`].
+    /// on to [`Today::later`]. A kept page that says no logs were found is not shown: logs may have come since, so
+    /// the waiting scene is, and the count draws that page again when there are still none.
     pub fn first(&self) -> (Scene, Option<Page>) {
-        match self.kept() {
+        match self.kept().filter(|kept| !no_logs(kept)) {
             Some(page) => (self.draw(&page), Some(page)),
             None => (self.unread(WAITING.0, WAITING.1), None),
         }
@@ -184,9 +185,9 @@ impl Today {
         Some(Next { scene, page, later: Some(call) })
     }
 
-    /// What is shown when the day could not be read: the kept page stays, and can still be tapped.
-    fn stopped(&self, kept: Option<Page>, why: &str) -> Next {
-        Next { scene: self.failed(kept.as_ref(), why), page: kept, later: None }
+    /// What is shown when the day has no new page: the kept page stays, and can still be tapped.
+    fn stopped(&self, kept: Option<Page>, error: &Error) -> Next {
+        Next { scene: self.failed(kept.as_ref(), error), page: kept, later: None }
     }
 
     /// What is shown when the day could not be read. With no session logs at all core is asked for the day's
@@ -194,16 +195,17 @@ impl Today {
     /// call. That page is kept and shown as a reading's is, in place of none or of a kept page that read
     /// nothing; a kept page that read something is the earlier reading, and stays under its note. A kept page
     /// that says no logs were found is no earlier reading. What core refuses the page for is said in its words.
+    /// The same page as the one kept is drawn, since the waiting scene was shown first, and is not written again.
     fn without_logs(&self, kept: Option<Page>, error: &Error) -> Option<Next> {
         let earlier = kept.clone().filter(|kept| !no_logs(kept));
-        let seen = kept.as_ref().map(|kept| &kept.data);
-        match jellymoon_core::page_with_no_logs(&self.read(), &self.reading()) {
-            Ok(Some(data)) if earlier.as_ref().is_none_or(|earlier| earlier.data.read.turns == 0) => {
-                (seen != Some(&data)).then(|| self.read_as(data))
+        Some(match jellymoon_core::page_with_no_logs(&self.read(), &self.reading()) {
+            Ok(Some(data)) if earlier.as_ref().is_none_or(|earlier| read_nothing(&earlier.data, 0)) => {
+                let same = kept.or_else(|| self.kept()).is_some_and(|kept| kept.data == data);
+                if same { self.shown(data, None) } else { self.read_as(data) }
             }
-            Ok(_) => Some(self.stopped(earlier, &words(error))),
-            Err(refused) => Some(self.stopped(earlier, &words(&refused))),
-        }
+            Ok(_) => self.stopped(earlier, error),
+            Err(refused) => self.stopped(earlier, &refused),
+        })
     }
 
     fn reading(&self) -> PageOptions {
@@ -218,13 +220,18 @@ impl Today {
     fn call(&self, day: &ReaderDay, kept: Option<Page>) -> Next {
         match jellymoon_core::page(day, &self.reading()) {
             Ok(data) => self.read_as(data),
-            Err(error) => self.stopped(kept, &words(&error)),
+            Err(error) => self.stopped(kept, &error),
         }
     }
 
     /// The page core gave for the day, kept and shown.
     fn read_as(&self, data: PageData) -> Next {
         let unkept = self.keep(&data).err();
+        self.shown(data, unkept)
+    }
+
+    /// The page drawn, under a note that it could not be kept when it could not.
+    fn shown(&self, data: PageData, unkept: Option<io::Error>) -> Next {
         let page = Page { data, unknown: Vec::new(), left_out: LeftOut::default() };
         let mut shown = self.draw(&page);
         if let Some(error) = unkept {
@@ -241,11 +248,14 @@ impl Today {
         jellymoon_core::keep_private(&self.file(), &format!("{data}\n"))
     }
 
-    /// The page when the day could not be read: one plain note that says why, on the kept page when there is one.
-    fn failed(&self, kept: Option<&Page>, why: &str) -> Scene {
+    /// The page when the day has no new one: one plain note that says why, on the kept page when there is one.
+    /// With none kept the title says whether a reading was tried.
+    fn failed(&self, kept: Option<&Page>, error: &Error) -> Scene {
+        let why = words(error);
         match kept {
-            Some(page) => noted(self.draw(page), "This page is from an earlier reading.", why),
-            None => self.unread("Today could not be read.", why),
+            Some(page) => noted(self.draw(page), "This page is from an earlier reading.", &why),
+            None if tried(error) => self.unread("Today could not be read.", &why),
+            None => self.unread("There is no page for this day yet.", &why),
         }
     }
 
@@ -272,6 +282,13 @@ impl Today {
 /// Whether a kept page is the page of a day with no session logs: it says so, and holds nothing a reading gives.
 fn no_logs(kept: &Page) -> bool {
     kept.data.read.no_logs && read_nothing(&kept.data, 0)
+}
+
+/// Whether a reading call was made and gave no page. Any other error stopped the day before a call: no logs, a
+/// list or a model's name that was refused, no Claude Code to call.
+fn tried(error: &Error) -> bool {
+    use Error::{Call, Failed, Harness, NotAResult, NotPageData, TooLong};
+    matches!(error, Call(_) | TooLong(_) | Failed { .. } | NotAResult | Harness(_) | NotPageData { .. })
 }
 
 /// The scene with one plain note before its own.
@@ -321,6 +338,26 @@ fn words(error: &Error) -> String {
         | Error::Hear(_)
         | Error::Project(_) => {
             format!("{error}.")
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_reading_was_tried_only_where_a_call_was_made() {
+        let (system, text) = (|| io::Error::other("made up"), String::new);
+        let failed = Error::Failed { status: text(), said: text() };
+        let no_page = Error::NotPageData { line: 1, column: 1 };
+        let called = [Error::Call(system()), Error::TooLong(Duration::ZERO), failed, Error::NotAResult, no_page];
+        for error in called.into_iter().chain([Error::Harness(text())]) {
+            assert!(tried(&error), "{error:?}");
+        }
+        let before = [Error::NoLogs(text()), Error::Logs(system()), Error::Skip(text()), Error::NoHarness(text())];
+        for error in before.into_iter().chain([Error::Date, Error::Model, Error::Home]) {
+            assert!(!tried(&error), "{error:?}");
         }
     }
 }

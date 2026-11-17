@@ -111,6 +111,11 @@ The arguments, in this order, and nothing else:
 
 Since F51 there is no `--no-session-persistence`: the harness keeps the run's session, in its own store.
 
+There is no `--bare`, and nothing that turns it off. A run is a `-p` call that rests on the person's own sign-in,
+and Claude Code's own headless page (<https://code.claude.com/docs/en/headless>, read 2026-11-17) says `--bare`
+"will become the default for `-p` in a future release", and that bare mode does not use the subscription sign-in.
+When that default changes a run needs a flag that keeps the sign-in ("Not covered").
+
 A follow-up's run has three arguments more, where `--session-id <id>` stands: `--resume <followed session>
 --fork-session --session-id <id>` ("A follow-up's run").
 
@@ -1200,6 +1205,9 @@ empty `runs/no-hooks`), and they stay.
   tossed run's session stays there too.
 - What the real harness does with the command line is measured once, on a Mac (ADR 0014, "Measured"). A repo with
   its own `CLAUDE.md`, settings or hooks, Windows, and an older Claude Code's exact words were not measured.
+- A run rests on the person's own sign-in, and `--bare`, which does not use it, "will become the default for
+  `-p` in a future release" (<https://code.claude.com/docs/en/headless>, read 2026-11-17). Nothing is built for
+  that day: the command line has no flag that keeps the sign-in.
 - A run does not follow a project's own rules: on the measured Claude Code the restricted command line does not
   run a repo's own hooks and does not read its `CLAUDE.md`. Measured on one version only (2.1.322).
 - Whether Claude Code, started headless, ends its work cleanly at `SIGINT` was not measured, nor whether its

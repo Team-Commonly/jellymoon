@@ -107,6 +107,7 @@ is exit 2 with the usage.
 | `forget` is given no project's name | ``project forget takes a project's name, as `jellymoon project list` prints it`` |
 | the name is not listed | `no project of that name is on the list, so nothing was changed` |
 | the lock stays for 3 seconds | `another change to the list of projects has not finished, so nothing was changed` |
+| the lock was left behind and cannot be taken over ([delivery.md](delivery.md), "The lock") | `jellymoon's own files: projects.lock is a lock that was left behind, and it could not be taken over, as take-over.lock beside it could not be locked; remove both, then try again` |
 | the list cannot be used | `the list of projects (projects.json in Jellymoon's folder) is not used: <why>; move the file away and add your projects again` |
 
 What a run says, where `<way out>` is ``name one with --repo, or let it go with `jellymoon project forget` ``:
@@ -130,7 +131,7 @@ What a run says, where `<way out>` is ``name one with --repo, or let it go with 
   there is left as it is; the file is 0600 either way.
 - **The write.** Whole, into a new file beside its place that is then moved there, 0600, behind
   `projects.lock` in the same folder: a file only one command can make, removed when the change is done, waited
-  for 3 seconds, and taken over when it was left behind, which can leave `take-over.lock` beside it (the tap's
+  for 3 seconds, and taken over when it was left behind; a change leaves `take-over.lock` beside it (the tap's
   lock, [delivery.md](delivery.md), "The lock"). A change
   is tried on the list before the lock is asked for, so a refusal makes no folder and no file, and again
   behind the lock. Reading takes no lock: a reader sees the old file or the new one.

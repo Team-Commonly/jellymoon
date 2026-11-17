@@ -491,10 +491,10 @@ max_file_lines = 400
 # `tests/f53/notes.rs` 145 (a fork that worked before it said lost, a keep by an old git), 28 in
 # `fake_agent/follow.rs` (the fork's four ways of working), 9 in `f46.rs`, `f46/refused.rs`, `f47.rs`, `f53.rs`.
 # The notes on F63 raised it by 7: made wishes that cannot be used are no made wish (`tests/f63.rs`).
-# The core notes raised it by 84, all tests: `tests/f63.rs` 38 (logs that are a file, or cannot be listed),
+# The core notes raised it by 86, all tests: `tests/f63.rs` 40 (logs that are a file, or cannot be listed),
 # `tests/f46/unrun.rs` 25 (the mode of the `runs` folder a toss makes, a let-go that waits for the day),
 # `tests/f53/notes.rs` 17 (a copy git cannot answer for), `tests/f46.rs` 4 (which refusal a wish let go gets).
-"crates/jellymoon" = 24938
+"crates/jellymoon" = 24940
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

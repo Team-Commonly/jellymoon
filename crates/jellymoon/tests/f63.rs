@@ -137,6 +137,8 @@ fn a_logs_path_that_is_a_file_or_a_folder_that_cannot_be_listed_is_refused_and_i
     w.wish("alpha");
     let file = w.at("logs-file");
     fs::write(&file, "").unwrap();
+    // The closed folder is a case on Unix only, so elsewhere nothing is added to the list.
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut cases = vec![("a file", file, format!("jellymoon: {NOT_A_FOLDER}\n"))];
     #[cfg(unix)]
     {

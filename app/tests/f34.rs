@@ -68,7 +68,10 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
         let plain: Vec<&Piece> = placed.iter().filter(|piece| piece.kind() == "note").collect();
         assert_eq!(plain.len(), 1, "{args:?}");
         let roles = plain[0].roles();
-        assert!(roles[0] == "note_title" && roles[1..].iter().all(|role| role == "body"), "a plain note: {roles:?}");
+        // The title of a day with no page is two lines at this size; the one of a failed reading is one.
+        let titles = roles.iter().take_while(|role| *role == "note_title").count();
+        assert!((1..=2).contains(&titles), "a plain note: {roles:?}");
+        assert!(roles[titles..].iter().all(|role| role == "body"), "a plain note: {roles:?}");
         assert!(labels(&placed).is_empty() && !kept(world).exists(), "no page is shown and none is kept");
         plain[0].said()
     };
@@ -80,6 +83,9 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
         ),
         "{failed}"
     );
+    answer(&world, "not a result", 0);
+    let odd = one(&world, &[]);
+    assert!(odd.starts_with("Today could not be read. Claude Code could not do the reading."), "{odd}");
     answer(&world, &result("Sorry, I cannot help with that."), 0);
     assert_eq!(
         one(&world, &[]),
@@ -88,13 +94,16 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
     let nowhere = world.dir.path().join("nowhere");
     let none = one(&world, &["--logs", nowhere.to_str().unwrap()]);
     assert!(
-        none.starts_with("Today could not be read. No Claude Code session logs were found on this computer"),
+        none.starts_with("There is no page for this day yet. No Claude Code session logs were found on this computer"),
         "{none}"
     );
 
     fs::remove_file(world.rec.join(format!("claude{}", env::consts::EXE_SUFFIX))).unwrap();
     let missing = one(&world, &[]);
-    assert!(missing.starts_with("Today could not be read. Claude Code was not found on this computer."), "{missing}");
+    assert!(
+        missing.starts_with("There is no page for this day yet. Claude Code was not found on this computer."),
+        "{missing}"
+    );
     assert!(missing.ends_with("It was looked for in PATH, ~/.local/bin, ~/.claude/local."), "{missing}");
 }
 
@@ -144,7 +153,10 @@ fn a_skip_file_that_cannot_be_read_stops_the_reading_and_one_with_a_byte_order_m
     fs::write(world.home.join("skip.txt"), [b'p', 0xff, 0xfe, b'\n']).unwrap();
     let said = notes(&shown(&world, &[]));
     assert_eq!(said.len(), 1);
-    assert!(said[0].starts_with("Today could not be read. The list of folders you switched off (skip.txt"), "{said:?}");
+    assert!(
+        said[0].starts_with("There is no page for this day yet. The list of folders you switched off (skip.txt"),
+        "{said:?}"
+    );
     assert!(said[0].ends_with("it is not UTF-8 text."), "{said:?}");
     assert!(!called(&world) && !kept(&world).exists(), "no call and no kept page");
 

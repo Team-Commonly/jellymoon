@@ -182,6 +182,8 @@ fn the_options_past_the_sixth_are_counted_in_words_after_the_last_chip() {
         let (field, chips) = (of(&placed, PieceKind::Entry)[0].rect, of(&placed, PieceKind::Chip));
         let [more] = of(&placed, PieceKind::More)[..] else { panic!("{viewport:?}: one count: {placed:?}") };
         assert_eq!((chips.len(), more.text[0].text.as_str()), (6, "+3 more"), "{viewport:?}");
+        // 1.5 is the layout's private `LEAST` (`src/layout/entry.rs`), a chip's least width in chip heights: a
+        // change to that constant changes this number with it.
         let (least, aside) = (chips[0].rect.h * 1.5, more.rect.w);
         assert!(6.0 * least + aside > field.w, "{viewport:?}: the field was to be too narrow for six: {field:?}");
         assert!(more.rect.right() <= field.right() + 0.5 && chips[5].rect.right() <= more.rect.x, "{more:?}");

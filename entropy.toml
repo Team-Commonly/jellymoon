@@ -631,7 +631,9 @@ max_file_lines = 400
 # The notes after F57 raised the kit by 56: what a frame painted of each run, its ink and its clipped box, with
 # the clip's own test (`draw/edge.rs`, 37, with `set_theme` gone), and the paint asserted in `tests/edge_draw.rs`
 # (21); `edge.rs` and `tests/text.rs` 1 each, and `tests/edge.rs` lost 4 (its copy of `apart`).
-"crates/sticker-kit" = 9854
+# The app notes raised the kit by 2: a comment that names the layout's `LEAST` where a test writes its number
+# (`tests/entry_layout.rs`).
+"crates/sticker-kit" = 9856
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -714,7 +716,12 @@ max_file_lines = 400
 # `tests/f32.rs` (21). The rest: the bubble opened again and a failed open said once (`jellyfish.rs`, 30, 13 of
 # them its test), the look that asks the day (`shell.rs`, 11), `--theme`'s refusal and the day's naming
 # (`main.rs`, 14); `popup.rs` lost 2 (the one-variant `Kind`).
-"app" = 10601
+# The app notes raised the app by 115, of which 97 are tests: a kept page of 0 turns that holds a wish, a clash or
+# a project, the waiting scene before a kept no-logs page, and the two titles in `tests/f63/kept.rs` (63),
+# `tests/f34.rs` (12), `tests/f63.rs` (2) and the unit test of which errors are a tried reading (`today.rs`, 20).
+# The rest: that rule, the same page drawn and not written again, and the first scene (`today.rs`, 17), and the
+# footer's comment (`scene.rs`, 1).
+"app" = 10716
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

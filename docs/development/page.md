@@ -48,11 +48,12 @@ states (`crates/jellymoon/tests/f63.rs`).
 
 A day with no session logs at all has a page too, when it has a made wish or a project on offer
 ([project.md](project.md)): the same empty page, with `"no_logs": true` in `read`, and no call
-(`jellymoon_core::page_with_no_logs`; example `page-no-logs.json`). So `read.turns` 0 says nothing was typed, and
-`read.no_logs` says nothing was read. The field is left out when it is false, so every other page prints as it
-did. With nothing made and no project on offer the command exits 1 with the reader's line, as before. Logs
-that are a file, or a folder that cannot be listed, were not read and have no page either way: the reader's
-refusal stands ([reader.md](reader.md), "Logs that cannot be read"). The model's
+(`jellymoon_core::page_with_no_logs`; example `page-no-logs.json`). So `read.turns` 0 says the logs were read and
+no turn of the day was taken from them, and `read.no_logs` says nothing was read. The field is left out when it
+is false, so every other page prints as it did. With nothing made and no project on offer the command exits 1
+with the reader's line, as before. Logs that are a file, or a folder that cannot be listed, were not read and
+have no page either way: the reader's refusal stands ([reader.md](reader.md), "Logs that cannot be read"). The
+model's
 name is checked first wherever a page is printed. `jellymoon page` keeps nothing, so a later call prints the same bytes; the
 app keeps the page it draws ([app.md](app.md)).
 
@@ -173,6 +174,11 @@ A harness that is neither on `PATH` nor in a well-known place (a shell alias, an
 not found; `JELLYMOON_CLAUDE` is the way round. With a home whose files are made group-writable by default (a umask
 of 002), a harness in a well-known place is passed over.
 Codex is not read.
+
+The reading call is a `-p` call that rests on the person's own sign-in to Claude Code. Claude Code's own headless
+page (<https://code.claude.com/docs/en/headless>, read 2026-11-17) says `--bare` "will become the default for `-p`
+in a future release", and that bare mode does not use the subscription sign-in. When that default changes the call
+needs a flag that keeps the sign-in; nothing is built for it now.
 
 Windows has been run in CI only, against a made-up `.exe` harness, never by a person against Claude Code. Three things
 are known to be open there. A `claude.cmd` shim may refuse the prompt's line breaks. Stopping a call that ran too long

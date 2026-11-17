@@ -209,7 +209,8 @@ A log for an app with no terminal was read in Magpie's `internal/applog/applog.g
   `CLAUDE_CONFIG_DIR` when it is a full path, else the home's `.claude`. One that is not a full path is as none,
   which is what the started harness is given. The binary's own working-out goes, and the app's with it. The
   rule's pin rides in F69, as a test at `jellymoon day` and one at `jellymoon-app layout`: with a
-  `CLAUDE_CONFIG_DIR` that is not a full path, both read the home's store.
+  `CLAUDE_CONFIG_DIR` that is not a full path, both read the home's store. The second is a test of the app,
+  run beside the row's `test` command, which is the binary's.
 - **A look by id before "lost".** When the harness says it keeps no session of that id, core looks for a file
   named for the id in every folder of the store. It reads names only. It opens no file and works out no
   folder's name. `run answer` learns the store's place from that one function and takes no flag for it.
@@ -266,8 +267,9 @@ Fixtures are typed by hand from what was measured. None is copied from a real lo
   are now.
 - It can leave out a person's own words, with nothing said: see "Not covered".
 - A project is found through the same reader. A first start with no `--repo` (`run/place.rs`, `found`) and the
-  projects on offer read the day's turns, so a project whose sessions that day are all headless is no longer
-  found and no longer offered.
+  projects on offer read the day's turns, so a project that is not on the list of projects and whose sessions
+  that day are all headless is no longer found and no longer offered. A listed project is found and offered as
+  before.
 - Jellymoon's own lines change nothing. The reading call keeps no session, and a run's lines are in a copy,
   which the reader already leaves out.
 
@@ -381,7 +383,8 @@ Asking before a kill, and a job on Windows, were read in Magpie's `internal/proc
   `CLAUDE_CONFIG_DIR`, or as the value of `--logs`, `--settings` or `--repo`: one fixed sentence, and nothing is
   started. With no home, a full-path `CLAUDE_CONFIG_DIR` is where `jellymoon day` reads and
   `jellymoon hook install` writes (`crates/jellymoon/src/main.rs`, `harness_folder`).
-- **Links are resolved first.** The door compares link-resolved paths on both sides: a home under a temporary
+- **Links are resolved first.** The door compares link-resolved paths on both sides, resolved as far as the
+  path exists (a refused `--repo` or `--logs` may name a folder that is not there): a home under a temporary
   folder that is a link out of it is refused, and on a Mac the system's temporary folder is itself reached
   through a link.
 - **What it lets through.** No home, an empty one, and one that is not a full path. Core reaches nothing with
@@ -578,6 +581,6 @@ The amendment was read before it merged and failed on one fault, with nine notes
 8. **Dead rows.** The list names them under `dead`, the scoreboard prints it, and the start-of-session step
    skips them and takes this note's table for the order.
 9. **The headless rule's effects** are said: it never keeps more, it can leave out a person's own headless
-   typing, and a project with headless sessions only is not found.
+   typing, and a project with headless sessions only that is not on the list of projects is not found.
 10. **Small text.** The commit this was read at; the glossary's **login shell**; no lock file for the log, with
     the race at the cap under "Not covered".

@@ -751,7 +751,7 @@
       "category": "journal",
       "description": "No test of `jellymoon` can start it in a real home, or ask a real login shell",
       "steps": [
-        "the binary's test support refuses to start `jellymoon` when the home, Jellymoon's folder, `CLAUDE_CONFIG_DIR`, or the value of `--logs`, `--settings` or `--repo` is a full path outside the system's temporary folder and the one Cargo gives tests, with links resolved on both sides: one fixed sentence, and nothing is started; with no home, an empty one or one that is not a full path it starts, as before",
+        "the binary's test support refuses to start `jellymoon` when the home, Jellymoon's folder, `CLAUDE_CONFIG_DIR`, or the value of `--logs`, `--settings` or `--repo` is a full path outside the system's temporary folder and the one Cargo gives tests, with links resolved on both sides as far as the path exists: one fixed sentence, and nothing is started; with no home, an empty one or one that is not a full path it starts, as before",
         "it sets `JELLYMOON_SHELL` to nothing in every world it starts, and refuses a world that names a login shell outside those two folders; the smoke chain's world sets it to nothing too",
         "the tests that start `jellymoon` through another program (the hook's entry in `f29.rs`, the installer in `f33.rs`, a copy under another name in `f35/delivery.rs`, a made-up asker in `f41/apart.rs`) give that program a world the door has passed",
         "`cargo xtask check` refuses a test file under the binary's tests that starts the program, or builds a home, outside the support, and a test in core that calls the harness's look with the process's own environment; it names the file and its line, and the rule's own test is xtask's",
@@ -766,7 +766,7 @@
       "category": "journal",
       "description": "No test of `jellymoon-app` can start it in a real home, or ask a real login shell",
       "steps": [
-        "the app's test support refuses to start `jellymoon-app` when the home, Jellymoon's folder, `CLAUDE_CONFIG_DIR`, or the value of `--logs` is a full path outside the system's temporary folder and the one Cargo gives tests, with links resolved on both sides: one fixed sentence, and nothing is started; `jellymoon-app layout` with no home still starts",
+        "the app's test support refuses to start `jellymoon-app` when the home, Jellymoon's folder, `CLAUDE_CONFIG_DIR`, or the value of `--logs` is a full path outside the system's temporary folder and the one Cargo gives tests, with links resolved on both sides as far as the path exists: one fixed sentence, and nothing is started; `jellymoon-app layout` with no home still starts",
         "it sets `JELLYMOON_SHELL` to nothing in every world it starts",
         "`cargo xtask check` refuses a test file under the app's tests that starts the program, or builds a home, outside the support, and a test in the app that calls the harness's look with the process's own environment; the rule's own test is xtask's",
         "on macOS, Linux and Windows; with F74 this row replaces F73"
@@ -785,7 +785,7 @@
         "`jellymoon day` over a session whose typed-looking lines carry `entrypoint` `sdk-cli` prints no turn and no reply of them; lines with `entrypoint` `cli`, with another value or with none are read as before",
         "it is decided for each line: one file with both kinds gives the `cli` turns only, and a left-out line still ends the turn before it",
         "a left-out line's `uuid` is not held: a person's own typed line with the same `uuid`, in a file read after it, is still a turn",
-        "a compaction summary is still no turn, a fork's or a resume's copies of a typed line are still counted once, and `jellymoon page` hands the reading call the same turns `jellymoon day` prints; a project whose sessions that day are all headless is not found by `jellymoon run` with no `--repo`, which says so as it does for a day nothing was typed",
+        "a compaction summary is still no turn, a fork's or a resume's copies of a typed line are still counted once, and `jellymoon page` hands the reading call the same turns `jellymoon day` prints; a project that is not on the list of projects and whose sessions that day are all headless is not found by `jellymoon run` with no `--repo`, which says so as it does for a day nothing was typed",
         "on macOS, Linux and Windows; this row replaces the headless half of F70, which is never built"
       ],
       "test": "cargo test -p jellymoon --test f76",
@@ -842,7 +842,7 @@
     {
       "id": "F80",
       "category": "journal",
-      "description": "The app's failures are in the same log, and a failure that repeats is there once",
+      "description": "The app's failures are in the same log, one line for a code",
       "steps": [
         "`jellymoon-app layout` on a day whose page cannot be read leaves one line in `app.log`: a code, its fixed sentence and numbers, with no name and no word of the page",
         "`jellymoon-app layout --jelly` over a look that fails leaves one line for its code, with no name and no word of a wish",

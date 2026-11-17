@@ -72,7 +72,8 @@ awk -F'"' '
   # false, or words that name no feature at all.
   # A row named under the key "dead" is never built: other rows stand in for it.
   /^ *"dead":/ { indead = 1; next }
-  indead { if ($2 ~ /^F[0-9]+$/) { dead[$2] = 1; gone++ } next }
+  # Only an id that is a key counts, so the rows that stand in are not dead however the key is laid out.
+  indead { if ($2 ~ /^F[0-9]+$/ && $3 ~ /^: *\[/) { dead[$2] = 1; gone++ } next }
   /^ *"id":/ { n++; id[n] = $4; inby = 0 }
   /^ *"description":/ { desc[n] = $4 }
   /^ *"passes": *true/ { pass[id[n]] = 1; passing++ }

@@ -106,7 +106,7 @@ pub struct PageRead {
     pub projects: Vec<String>,
     /// No session logs were found, so nothing was read: the page of a day that has one all the same, for its
     /// made wishes or a project on offer (`no_logs.rs`). Left out when the logs were read, where `turns: 0`
-    /// says that nothing was typed.
+    /// says that no turn of the day was taken from them.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_logs: bool,
 }

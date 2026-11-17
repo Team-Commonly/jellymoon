@@ -1,7 +1,8 @@
 //! The projects Jellymoon knows (F62, ADR 0020; `docs/development/project.md`): one file in Jellymoon's own
 //! folder, `projects.json`, with a line for each project: its name, its folder and the day it was last used. A
-//! project gets on it when the person names its folder ([`add_project`]) and when a run starts in it ([`used`]),
-//! and leaves by [`forget_project`]. A name has one folder.
+//! project gets on it when the person names its folder ([`add_project`]), when a run starts in it ([`used`])
+//! and when Jellymoon makes it ([`new_project`], `new.rs`), and leaves by [`forget_project`]. A name has one
+//! folder.
 //!
 //! The file is written whole, beside its place and moved there, behind a lock of its own, and read back as
 //! untrusted: it is used only when it is a plain file nobody else can write to and every line of it is one
@@ -9,12 +10,14 @@
 //! there is asked again each time it is used (`offer.rs`). No folder is ever printed: a project is named by its
 //! name, which is what cleaning leaves of itself.
 
+mod new;
 mod offer;
 
 use std::fmt;
 use std::io::{self, ErrorKind};
 use std::path::{Component, Path, PathBuf};
 
+pub use new::new_project;
 pub(crate) use offer::{Led, Offer};
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +29,7 @@ use crate::ruling::private_dir;
 use crate::run::{plain as as_git_takes, theirs};
 use crate::session::FOLDER_MAX;
 use crate::tap::plain;
-use crate::wish::{day_of, named};
+use crate::wish::{day_of, kept_name, named};
 
 /// The most projects the list holds.
 pub const PROJECTS_MAX: usize = 100;
@@ -88,7 +91,7 @@ impl Line {
         let parts = || folder.components();
         let straight = parts().all(|part| !matches!(part, Component::CurDir | Component::ParentDir))
             && parts().collect::<PathBuf>().as_os_str() == folder.as_os_str();
-        named(&self.name)
+        kept_name(&self.name)
             && folder.is_absolute()
             && straight
             && self.folder.len() <= FOLDER_MAX
@@ -145,23 +148,36 @@ pub fn projects(home: &Path) -> Result<Projects, Error> {
     Ok(Projects { projects: listed(home)?.iter().map(Line::known).collect() })
 }
 
-/// Changes the list behind its lock, `projects.lock` in the home. The change is tried once on the list as it is
-/// before the lock is asked for, so a change that is refused makes no folder and no file; and once behind the
-/// lock, where the list cannot change under it. The file is written whole.
+/// What is said to a command that waited for the list's lock and did not get it. The holder is a change to the
+/// list or a making (`new.rs`); a lock whose holder was cut off is taken over when it is 30 seconds old.
+const BUSY: &str = "another change to the list of projects, or the making of a new project, has not finished, so \
+                    nothing was changed; if it was cut off, ask again in half a minute";
+
+/// Takes the list's lock, `projects.lock` in the home, which is made when it is not there. Every change to the
+/// list is behind it, and the whole of a making.
+fn hold(home: &Path) -> Result<Lock, Error> {
+    private_dir(home).map_err(Error::Store)?;
+    Lock::take(home.join("projects.lock")).map_err(|e| match e.kind() {
+        ErrorKind::TimedOut => refused(BUSY),
+        _ => Error::Store(e),
+    })
+}
+
+/// Writes the list whole. Only behind its lock ([`hold`]).
+fn write(home: &Path, lines: Vec<Line>) -> Result<(), Error> {
+    let text = serde_json::to_string(&List { projects: lines }).map_err(io::Error::from);
+    text.and_then(|text| put(&file(home), &format!("{text}\n"), false)).map_err(Error::Store)
+}
+
+/// Changes the list behind its lock. The change is tried once on the list as it is before the lock is asked
+/// for, so a change that is refused makes no folder and no file; and once behind the lock, where the list
+/// cannot change under it.
 fn change<T>(home: &Path, change: impl Fn(&mut Vec<Line>) -> Result<T, Error>) -> Result<T, Error> {
     change(&mut listed(home)?)?;
-    private_dir(home).map_err(Error::Store)?;
-    let _lock = Lock::take(home.join("projects.lock")).map_err(|e| match e.kind() {
-        ErrorKind::TimedOut => {
-            refused("another change to the list of projects has not finished, so nothing was changed")
-        }
-        _ => Error::Store(e),
-    })?;
+    let _lock = hold(home)?;
     let mut lines = listed(home)?;
     let done = change(&mut lines)?;
-    let text = serde_json::to_string(&List { projects: lines }).map_err(io::Error::from);
-    text.and_then(|text| put(&file(home), &format!("{text}\n"), false)).map_err(Error::Store)?;
-    Ok(done)
+    write(home, lines).map(|()| done)
 }
 
 /// The name and the real folder a project is listed by, when `repo` is a folder a project can be: there, the
@@ -223,12 +239,21 @@ fn put_on(lines: &mut Vec<Line>, name: &str, folder: &str, day: &str) -> Result<
 pub fn add_project(home: &Path, repo: &Path, day: Option<&str>) -> Result<Known, Error> {
     let day = day_of(day)?;
     let (name, folder) = stands_as(repo)?;
-    change(home, |lines| put_on(lines, &name, &folder, &day))
+    let known = change(home, |lines| put_on(lines, &name, &folder, &day))?;
+    // A folder a `project new` that was cut off left holds that making's file: listed, it does not keep it.
+    new::tidy(home, &folder);
+    Ok(known)
+}
+
+/// Whether the list holds a line of exactly that name. False when the list cannot be used.
+pub(crate) fn lists(home: &Path, name: &str) -> bool {
+    listed(home).is_ok_and(|lines| lines.iter().any(|line| line.name == name))
 }
 
 /// Takes the line of that name off the list, and touches nothing else: not the folder, not a wish, not a run.
+/// The name is one a line can have, so a line an earlier build wrote can be taken off.
 pub fn forget_project(home: &Path, name: &str) -> Result<Known, Error> {
-    if !named(name) {
+    if !kept_name(name) {
         return Err(refused("project forget takes a project's name, as `jellymoon project list` prints it"));
     }
     change(home, |lines| {

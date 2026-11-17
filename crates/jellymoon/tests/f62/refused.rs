@@ -50,7 +50,9 @@ fn add_refuses_a_folder_that_is_not_there_is_no_repo_s_top_or_is_not_named_as_a_
     // A last name cleaning would change is no project's name, and is not said back.
     let name = "--repo is not a folder a project can be named after: its last name must be one folder's name of at \
                 most 100 characters, with nothing that cannot be seen and nothing shaped like a credential";
-    for odd in [hub_key(), "al\u{200b}pha".to_string(), "a".repeat(101)] {
+    let unseen = ["200b", "34f", "115f", "3164", "2800", "fe0f"].map(|code| u32::from_str_radix(code, 16).unwrap());
+    let unseen = unseen.map(|code| format!("al{}pha", char::from_u32(code).unwrap()));
+    for odd in [hub_key(), "a".repeat(101)].into_iter().chain(unseen) {
         // Not every file system takes every name: one it refuses is no case here.
         if fs::create_dir_all(w.at("work").join(&odd)).is_err() {
             skipped("this file system does not take one of the names");
@@ -140,7 +142,8 @@ fn changes_made_at_once_are_all_kept_and_a_lock_that_stays_refuses_the_change() 
     let late = w.repo("late");
     fs::write(w.jm("projects.lock"), "").unwrap();
     let before = w.all();
-    let held = "jellymoon: another change to the list of projects has not finished, so nothing was changed\n";
+    let held = "jellymoon: another change to the list of projects, or the making of a new project, has not finished, \
+                so nothing was changed; if it was cut off, ask again in half a minute\n";
     assert_eq!(refused(&w.run(&["project", "forget", "p0"])), held);
     assert_eq!(refused(&w.add(&late)), held);
     assert!(w.all() == before);

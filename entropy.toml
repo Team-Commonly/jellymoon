@@ -315,15 +315,28 @@ max_file_lines = 400
 # that cannot be told a base); `run/end.rs` 4 and `run.rs` 2.
 # F56 raised core by 264: what is drawn of a hearing's line, the door a line passes and the one state of a line
 # and a day (`hear/drawn.rs`, 194 lines), and their contract tests in `tests/hear.rs`.
+# F65, a new project, raised core by 240: `project/new.rs`, the name, what is taken, the order and what a failure
+# takes back, is 171; `copy/fresh.rs`, the new repo and its empty first commit, 43; `copy/git.rs` 11 (`init`, and
+# the look for the program on `PATH` by itself); `copy/clean.rs` 10 (who a commit is by, shared with a run's);
+# `copy.rs` and `project.rs` 5.
+# F65's gate raised core by 197: `project/new.rs` 175 (the making behind the list's lock, the folder known as it
+# was made, a home asked before anything is made, the wider rule of a name, and their unit tests), `project.rs`
+# 13 (the lock and the write as two calls), `copy/git.rs` 7 and `copy/fresh.rs` 2 (what a new repo is made as).
 # F63 raised core by 49: the page of a day with no session logs (`no_logs.rs`, 26), `read.no_logs` and its
 # example's round trip (`shapes.rs`, `tests/shapes.rs`), and `any_made` in `wish.rs`.
 # F57 raised core by 72: a line's words and project held to what a person sees, a hearing's own refusals as a
 # list with the short sentence for no harness, and their tests in `tests/hear.rs`; the order of states written
 # once took lines away.
+# F65's mark raised core by 114: the file of a making that tells the made folder from one put in its place
+# (Windows has nothing else), Jellymoon's folder taken back, the take-back said, five unseen characters in a
+# name, and their unit tests, moved to `project/new/tests.rs`.
 # The notes after F53 raised core by 69: a toss that lets go a wish with no run (`run/unrun.rs`, 56), the
 # refusal of a let-go wish in `run.rs` (5), the copy's `HEAD` asked in `copy/clean.rs` (4), and the example's
 # round trip in `tests/shapes.rs` (4).
 # The notes on F63 raised it by 2: why `page_with_no_logs` asks for the logs a second time (`no_logs.rs`).
+# F65's third gate raised core by 151: a name that was kept told from one that comes in (`wish.rs` 9,
+# `project.rs` 9), the making's file made 0600, taken out by `project add`, and a folder that was left said so
+# (`project/new.rs`, 43), and their unit tests (`project/new/tests.rs` 72, `wish/tests.rs` 18).
 # The core notes raised it by 259: `lock.rs`, the lock of the day and of the list of projects with its take-over
 # behind the system's lock, is 130, and `tap.rs` is 51 shorter for it; `lock/tests.rs`, its faults shown from many
 # threads and its rules one by one, 163; the reader's refusal of logs that are no folder, or cannot be listed, 14;
@@ -338,7 +351,7 @@ max_file_lines = 400
 # The jellyfish notes raised core by 66: what a hearing says of a run that was not started as one function of
 # what `run_apart`'s own search missed, with its test (`hear/day.rs`), that search's answer handed on
 # (`run/apart.rs`, `run.rs`) and the one question asked of it (`find.rs`).
-"crates/jellymoon-core" = 15029
+"crates/jellymoon-core" = 15731
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -488,6 +501,11 @@ max_file_lines = 400
 # 18 (a wish said aloud with two on offer) and `f62/started.rs` 13 (a run refused at its copy lists nothing).
 # Its CI raised it by 2: `tests/f39/world.rs` runs the tests' git with its own upkeep off, which wrote into a
 # repo a test had just read (macOS).
+# F65 raised it by 755: its tests are 726 (`tests/f65.rs` 237, `f65/refused.rs` 221, `f65/half.rs` 188,
+# `f65/wished.rs` 80); `tests/f62.rs` 19 (an argument that is not text, a missing value, and `new` in the fixed
+# line); `main.rs` and `parse.rs` 10 (`project new`, and the project commands as one variant).
+# F65's gate raised it by 272: `tests/f65/alone.rs` 199 (a making met by a command or a hand, and the gate's
+# survivors), `tests/f65.rs` 29, `f65/refused.rs` 28, `f65/half.rs` 9, `tests/f62.rs` 6 and `f62/refused.rs` 1.
 # F63 raised the binary by 217: its test at `jellymoon page` (`tests/f63.rs`, 201) and `page` in `main.rs`,
 # which asks core for the page of a day with no logs.
 # F53 raised it by 915: its tests at the binary are 802 (`tests/f53.rs` 197 and `tests/f53/`: `order.rs` 196,
@@ -497,10 +515,15 @@ max_file_lines = 400
 # 9 more in `tests/f53.rs`, `f53/order.rs` and `f53/refused.rs`; 5 in `fake_agent/follow.rs` (a fork that works
 # before it says its session is lost); 1 in `tests/f46/refused.rs`.
 # F57 raised it by 1: the comment on the short sentence for no harness in `tests/f55/started.rs`.
+# F65's mark raised it by 111: in `tests/f65/alone.rs`, a folder removed during a making, a line a hand wrote
+# for the folder being made, a list that cannot be written, and a home made for the lock; the unseen names in
+# `f65/refused.rs` and `f62/refused.rs`.
 # The notes after F53 raised it by 357, all tests: `tests/f46/unrun.rs` 175 (a wish with no run let go),
 # `tests/f53/notes.rs` 145 (a fork that worked before it said lost, a keep by an old git), 28 in
 # `fake_agent/follow.rs` (the fork's four ways of working), 9 in `f46.rs`, `f46/refused.rs`, `f47.rs`, `f53.rs`.
 # The notes on F63 raised it by 7: made wishes that cannot be used are no made wish (`tests/f63.rs`).
+# F65's third gate raised it by 152, all tests: `tests/f62/earlier.rs` 75 (a list and a day an earlier build
+# kept), `tests/f65/mark.rs` 73 (the making's file), 4 in `f62.rs` and `f65.rs`.
 # The core notes raised it by 86, all tests: `tests/f63.rs` 40 (logs that are a file, or cannot be listed),
 # `tests/f46/unrun.rs` 25 (the mode of the `runs` folder a toss makes, a let-go that waits for the day),
 # `tests/f53/notes.rs` 17 (a copy git cannot answer for), `tests/f46.rs` 4 (which refusal a wish let go gets).
@@ -509,7 +532,7 @@ max_file_lines = 400
 # F74, the door, raised it by 349, all tests and their support: `tests/f74.rs` 225, `tests/support/door.rs` 144,
 # 9 in `tests/support/mod.rs` (the two other folders a world is made in); the tests moved through the door lost 29.
 # F77 raised it by 220, all a test: `tests/f77.rs`, what a made-up harness is started with at each of the six starts.
-"crates/jellymoon" = 25652
+"crates/jellymoon" = 26942
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -547,11 +570,12 @@ max_file_lines = 400
 # forgets the projects the chain's runs listed, so that one project is on offer when it hears.
 # F53's step, `follow` (`smoke/follow.rs`, 99 lines), raised it by 102.
 # F56's step, `jelly` (in `smoke/hear.rs`), raised it by 33.
+# F65's step, `new` (`smoke/new.rs`, 69 lines), raised it by 72.
 # F63 raised it by 12: the `project` step asks `jellymoon page` over logs that are not there.
 # F57 raised it by 8: the `jelly` step also holds what each window is asked for.
 # F74 raised it by 165: the rule that holds tests to the door (`rules/door.rs`, 148, 97 of them its tests), 3 in
 # `rules.rs`, and 14 in the smoke chain, whose made-up world sets `JELLYMOON_SHELL` to nothing (`smoke.rs`).
-"crates/xtask" = 2591
+"crates/xtask" = 2663
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

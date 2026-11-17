@@ -41,7 +41,7 @@ pub use hear::{
 };
 pub use hook::{hook_installed, install_hook, remove_hook};
 pub use no_logs::page_with_no_logs;
-pub use project::{Known, PROJECTS_MAX, Projects, add_project, forget_project, projects};
+pub use project::{Known, PROJECTS_MAX, Projects, add_project, forget_project, new_project, projects};
 pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};

@@ -159,20 +159,30 @@ fn commit(repo: &Repo, folder: &Path, run: &str, start: Option<&str>) -> Result<
     if git(None, &[], &["rev-parse", "--verify", &format!("{tip}^{{tree}}")])? == tree {
         return put(&tip).map(|_| (tip.clone(), false));
     }
-    // The person's own name and address, as git reads them for this repo; Jellymoon's when either is missing.
-    let own = |key: &str| repo.ask(None, &[], &["config", "--get", key]).map_err(failed);
-    let (name_is, address) = match (own("user.name")?, own("user.email")?) {
-        (Some(name_is), Some(address)) if !name_is.is_empty() && !address.is_empty() => (name_is, address),
-        _ => (JELLYMOON.0.to_string(), JELLYMOON.1.to_string()),
-    };
-    let who = [
-        ("GIT_AUTHOR_NAME", name_is.as_str()),
-        ("GIT_AUTHOR_EMAIL", address.as_str()),
-        ("GIT_COMMITTER_NAME", name_is.as_str()),
-        ("GIT_COMMITTER_EMAIL", address.as_str()),
-    ];
+    let (name_is, address) = who(repo).map_err(failed)?;
+    let who = by(&name_is, &address);
     let made = git(None, &who, &["commit-tree", "-p", &tip, "-m", &format!("Jellymoon run {run}"), &tree])?;
     put(&made).map(|_| (made, true))
+}
+
+/// Who a commit of Jellymoon's is by: the person's own name and address, as git reads them for this repo;
+/// Jellymoon's when either is missing.
+pub(super) fn who(repo: &Repo) -> Result<(String, String), String> {
+    let own = |key: &str| repo.ask(None, &[], &["config", "--get", key]);
+    Ok(match (own("user.name")?, own("user.email")?) {
+        (Some(name_is), Some(address)) if !name_is.is_empty() && !address.is_empty() => (name_is, address),
+        _ => (JELLYMOON.0.to_string(), JELLYMOON.1.to_string()),
+    })
+}
+
+/// The variables that tell git who a commit is by: its author and its committer are one.
+pub(super) fn by<'a>(name_is: &'a str, address: &'a str) -> [(&'static str, &'a str); 4] {
+    [
+        ("GIT_AUTHOR_NAME", name_is),
+        ("GIT_AUTHOR_EMAIL", address),
+        ("GIT_COMMITTER_NAME", name_is),
+        ("GIT_COMMITTER_EMAIL", address),
+    ]
 }
 
 /// The commit a run's branch names, which for a run must be `start`, the commit the run's copy was made from. The

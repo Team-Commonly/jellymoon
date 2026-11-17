@@ -579,25 +579,42 @@ so, and closing the page then ends the app, since nothing is left to show it fro
 the day's home, which is that day's made wishes and their runs (`working` with its count, `asks` with the
 question, `waits`, else `quiet`). The reading is off the window's thread, as the page's look is, and what it gives
 is drawn. A look that fails draws `quiet`. A day named with `--date` is the one day looked at. With no day named
-the jellyfish looks at two: the page's day, which is the day the app was opened on, and today, asked at each look.
-While they are one day that is one reading. Past midnight they are two, and of what each gives the first in core's
-order is drawn (`JellyState::ORDER`: `asks`, `working`, `waits`, `quiet`), the page's day's when both give the
-same state. So a wish made on the page past midnight is shown while its run goes, a run begun before midnight is
-still shown and still asks, and a run of the new day, started from a terminal, is shown too. Runs that go on both
-days are not counted together: the count is one day's. The page itself is not moved on to the new day, and that
-stays open: it shows the day the app was opened on, and files what is made on it under that day, until the app is
-opened again. With `--page` or `--waiting` there is no day: the jellyfish is quiet
-and nothing is looked at. The jellyfish keeps the theme the app was opened with; `t` switches the page only.
+the jellyfish looks at the page's day, which is the day the app was opened on, and asks at each look which day it
+is. While that is the page's day there is one reading. Past midnight there are two, and the new day is read for
+one thing only: a run at work. It is drawn when the page's day has no question and no run at work of its own,
+which come first in core's order (`JellyState::ORDER`: `asks`, `working`, `waits`, `quiet`). So a wish made on the page past midnight is shown
+while its run goes, a run begun before midnight is still shown and still asks, and a run of the new day, started
+from a terminal, is shown while it works. A day before the page's, which a clock set back or a move west gives,
+is not read. The days are compared as text.
+
+What the jellyfish does not show past midnight:
+
+- **A question, or finished work, of the new day.** It is on that day's page, which the app shows when it is
+  opened again. The page does not move on to the new day by itself: that is not built. It shows the day the app
+  was opened on, and files what is made on it under that day. So the jellyfish never says that something of the
+  new day asks, or waits, "on the page".
+- **A run at work on the new day while that day also has a question.** Core gives one state for a day, the
+  question first, and the question is not shown.
+- **That a run of the new day was cut off.** Core's look for the jellyfish writes nothing and takes the made
+  wish's word that its run goes. Only the page's own look, which is of the page's day, finds that nothing holds
+  a run and writes it down as cut off. So a run of the new day that was killed still swims until the app is
+  opened again. Core's question for this (`run::held`) is not public.
+- **One count for both days.** Runs that go on both days are not counted together: the count is one day's.
+
+With `--page` or `--waiting` there is no day: the jellyfish is quiet and nothing is looked at. The jellyfish keeps
+the theme the app was opened with; `t` switches the page only.
 
 Tests: `app/tests/f57/window.rs` opens all of it on GPUI's test platform, on the Mac, where there is no screen:
 both windows placed, each of the seven states drawn, the bubble opened and removed with nothing moved, the page
 closed and shown again by a tap and by opening again, Quit, the end by itself, a display that is not at the top
 left of the displays, the room of the primary display, and a bubble removed from outside. `app/tests/f57/looks.rs`
 opens it there on a day's page, with a clock of the test's own: the look once a second off the window's thread,
-and past midnight a wish made by the page's own call, a run that still asks, the new day's run, which of two days
-is drawn, and a named day that stays. `popup.rs` holds the options asked in a unit test, and `jellyfish.rs` that a
-failed open of the bubble is said once for a row of the same failure, and again when the reason changes or after
-a draw with no failure, a quiet one too: no open fails on the test platform.
+with work that waits read from a run's record; and past midnight a wish made by the page's own call, a run that
+still asks, each of the sixteen pairs of what the page's day and the new day hold, the new day's question beside
+its run at work, the count, a day before the page's, and a named day that stays. `popup.rs` holds the options
+asked in a unit test, and `jellyfish.rs` that a failed open of the bubble is said once for a row of the same
+failure, and again when the reason changes or after a draw with no failure, a quiet one too: no open fails on the
+test platform.
 
 **Not tested, and not seen**: nothing here was opened on a screen. Four things are for a person at one to check.
 

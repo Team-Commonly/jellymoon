@@ -246,6 +246,38 @@ empty logs, on a wish that cannot be done without one answer:
   folder name in the harness's store, and no turn of it is a turn of the day.
 - **Not measured in the build:** the fork on a real harness with core's command line.
 
+## Found after F53
+
+Two reviews after the merge left these, each fixed with its case seen failing first.
+
+- **A copy that is as it was made stands on the run's branch.** A fork that left the branch (`checkout
+  --detach`), edited and committed there, and then said its session is lost, was started again: the branch was
+  at `start` and git found no changed file. The second start's commit then held both starts' changes under
+  `forked: false`. `copy::as_made` also asks that the copy's `HEAD` names the run's branch, so that fork has
+  failed in the words of one that worked, and is not started again.
+- **The other two conditions are played.** The made-up agent is lent the real git by the test, and a fork that
+  committed on the run's own branch, and one that left only a file an exclude names, are each not started
+  again. Without the branch's check, or without `--ignored`, one of the two is.
+- **A toss lets go a made wish that has had no run.** This closes the open row above: a follow-up made and not
+  run, whose followed work was then tossed, could be neither run nor let go. The smallest change that is true
+  for it is true for every made wish with no run, so it is not a rule of follow-ups: `run toss` of such a wish
+  writes `let_go` and one fixed line in the kept wish, behind the day's lock, and touches no record, copy,
+  branch or repo. It prints a toss's five names with `run` and `commit` both `null`.
+  - It takes the lock of keeps and tosses, so it is refused in that lock's sentence, and never lets a
+    follow-up go while its run is being started behind that lock. A home no run was started in has no `runs`
+    folder for that lock's file, so the toss makes it.
+  - A run's start writes its name behind the day's lock, and refuses a wish that was let go. So of a toss and a
+    start of the same wish one is done: the one that had the day's lock first.
+  - `jellymoon run` refuses a wish that was let go before it looks for a harness or a folder.
+  - Decision 9's order asks nothing of it: a wish with no run has no work, so nothing follows it, and as a
+    follow-up it holds nothing of the work it follows.
+  - **Not changed:** a wish that was let go is one of the day's eight still, as a wish let go with its tossed
+    run always was. A day's ids are a wish's place in the day's file, so taking one out would give its id to
+    the next wish made. Whether a day should hold eight wishes that are not let go is not decided here.
+- **A follow-up that needs no base is kept by a git that cannot be told one.** keep.md said so and no test had
+  seen it. It is played on the made-up git that says 2.39.5, for followed work kept by moving the branch
+  forward and for a follow-up made after a joined keep: both are kept.
+
 ## Read, not measured
 
 - Claude Code's hooks page, read 2026-11-12, for "Not chosen": `defer` "requires non-interactive mode", is ignored

@@ -14,7 +14,7 @@ use super::end::{self, bury, held, of_another, recorded, soon};
 use super::keep::{BUSY, NO_LOCK, intent};
 use super::record::Record;
 use super::show::{Asked, not_cores, unread_words};
-use super::{RunOptions, RunOutcome, WorkState, asks, finished, follow, no_wish, place, record, refused};
+use super::{RunOptions, RunOutcome, WorkState, asks, finished, follow, no_wish, place, record, refused, unrun};
 use crate::busy::cut;
 use crate::copy::{self, Branch, Keep, Left, Named, Unkept, Untossed};
 use crate::wish::{self, MadeWish};
@@ -31,7 +31,8 @@ const CUT: &str = "JELLYMOON_TEST_TOSS_CUT";
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tossed {
-    pub run: String,
+    /// The run that was tossed. None: the wish had no run, and was let go (`unrun.rs`).
+    pub run: Option<String>,
     pub wish: String,
     /// Whether this command changed anything. False only of a run that was tossed before, with nothing left to do.
     pub tossed: bool,
@@ -76,14 +77,15 @@ fn let_go(run: &str) -> String {
     format!("run {run} was tossed, and the wish was let go")
 }
 
-/// Tosses what the wish's run left. Refused, with nothing changed: a wish that is not there, one with no run or
-/// another wish's, a run that is going or has no end yet, a record that is not core's, work that was kept or that
-/// a keep landed, and for work that waits every state of its branch but the run's own name at the record's
+/// Tosses what the wish's run left. Refused, with nothing changed: a wish that is not there, one with
+/// another wish's run, a run that is going or has no end yet, a record that is not core's, work that was kept or
+/// that a keep landed, and for work that waits every state of its branch but the run's own name at the record's
 /// commit with no checkout on it, or no such branch at all. A run tossed before is finished or left as it is.
+/// A wish that has had no run is let go, and that is all (`unrun.rs`).
 pub fn toss_run(home: &Path, options: &RunOptions) -> Result<Tossed, Error> {
     // Before the record is read: what a keep or a toss that ended a moment ago wrote is what this one goes by.
     let alone = copy::alone(home);
-    let (on, _held) = ended(home, options)?;
+    let Some((on, _held)) = ended(home, options)? else { return unrun::let_go(home, options, alone) };
     let (run, id) = (on.run.clone(), options.wish.clone());
     let _alone = alone.map_err(|unkept| unheld(&run, unkept))?;
     let state = on.record.work.unwrap_or(WorkState::Waits);
@@ -132,7 +134,7 @@ pub fn toss_run(home: &Path, options: &RunOptions) -> Result<Tossed, Error> {
         (_, false, _) => format!("run {run}, which did not finish, was tossed"),
     };
     let why = words(&head, changed, &did);
-    Ok(Tossed { run, wish: id, tossed: changed, commit, why })
+    Ok(Tossed { run: Some(run), wish: id, tossed: changed, commit, why })
 }
 
 /// Why the lock was not had, in a keep's words for it: another command holds it, or it could not be made or taken.
@@ -172,15 +174,13 @@ fn copy_words(did: &Did) -> &'static str {
 
 /// Finds the wish's run, which must have ended, and reads what its record names. A run that nothing holds is
 /// given its end first, as a stop and a page give it (`end::bury`). The record of a run that asks is read behind
-/// the run's own lock, which is returned held (`asks::for_toss`).
-fn ended(home: &Path, options: &RunOptions) -> Result<(Ended, Option<asks::Held>), Error> {
+/// the run's own lock, which is returned held (`asks::for_toss`). None: the wish names no run.
+fn ended(home: &Path, options: &RunOptions) -> Result<Option<(Ended, Option<asks::Held>)>, Error> {
     let day = wish::day_of(options.day.as_deref())?;
     let id = options.wish.as_str();
     let made = wish::kept_of(home, &day)?.into_iter().find(|made| made.id == id).ok_or_else(|| no_wish(&day))?;
     let made = bury(home, &day, made);
-    let Some(run) = made.run.clone() else {
-        return Err(refused(format!("wish {id} has had no run, so there is nothing to toss")));
-    };
+    let Some(run) = made.run.clone() else { return Ok(None) };
     let no = |why: &str| refused(format!("run {run} {why}"));
     let Some((record, lock)) = asks::for_toss(home, &run).map_err(|()| no(TOSSED.going))? else {
         return Err(refused(format!("the record of run {run} cannot be read, so nothing was tossed")));
@@ -203,7 +203,7 @@ fn ended(home: &Path, options: &RunOptions) -> Result<(Ended, Option<asks::Held>
     let kept = record.work == Some(WorkState::Kept);
     let was = if kept { None } else { intent(&record.kept, &record.onto).map_err(|()| not_cores(&run))? };
     let was = was.map(|(kept, onto)| (kept.to_string(), onto.to_string()));
-    Ok((Ended { day, made, run, record, done, work, named, was }, lock))
+    Ok(Some((Ended { day, made, run, record, done, work, named, was }, lock)))
 }
 
 /// The record's part and the repo's. Work that waits with a commit named for it is checked whole before the

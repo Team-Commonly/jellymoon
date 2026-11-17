@@ -68,9 +68,8 @@ pub fn play(script: &str, number: usize, rec: &Path) -> i32 {
         }
         "rules" => rules(),
         "many" | "past" | "walls" | "wall8" => beside(script),
-        "crowd" | "long" | "longs" | "six" | "seven" | "eight" | "masked" | "blank" | "joined" | "counted" => {
-            obeyed(script)
-        }
+        "crowd" | "long" | "longs" | "six" | "seven" | "eight" | "masked" | "blank" | "object" | "joined"
+        | "counted" => obeyed(script),
         other => round_2(other, number, rec),
     }
 }
@@ -148,9 +147,9 @@ fn beside(script: &str) -> i32 {
 /// F47, after its second gate. The work, and beside it files the person's tools obey and no other: `crowd`,
 /// three of them; `long`, three whose names are long, and `longs`, six; `six`, `seven` and `eight`, that many;
 /// `masked`, one, whose name has the shape of a credential and is not printed. And names printed whole that a
-/// person does not read: `blank`, two with a letter that draws as a blank; `joined`, one with a joiner between
-/// two letters, before one that is read; `counted`, one that reads like the line a note counts with, after one
-/// that is read.
+/// person does not read: `blank`, two with a letter that draws as a blank; `object`, one with the object
+/// replacement character, before one that is read; `joined`, one with a joiner between two letters, before one
+/// that is read; `counted`, one that reads like the line a note counts with, after one that is read.
 fn obeyed(script: &str) -> i32 {
     edits();
     let deep = Path::new("a folder with a long name of plain words").join("and a second one as long as the first");
@@ -168,6 +167,7 @@ fn obeyed(script: &str) -> i32 {
         "seven" => (0..7).map(|n| rules(Path::new(""), n)).collect(),
         "masked" => vec![Path::new(".claude").join(format!("AK{}{}.md", "IA", "Q7".repeat(8)))],
         "blank" => vec![Path::new(".claude").join("\u{fffc}"), Path::new("\u{3164}").join("CLAUDE.md")],
+        "object" => vec![Path::new(".claude").join("\u{fffc}"), PathBuf::from("CLAUDE.md")],
         "joined" => vec![Path::new(".claude").join("a\u{200d}b.md"), PathBuf::from("CLAUDE.md")],
         "counted" => vec![Path::new(".cargo").join("config.toml"), Path::new(".claude").join("+5 more")],
         _ => (0..8).map(|n| rules(Path::new(""), n)).collect(),

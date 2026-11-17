@@ -69,8 +69,9 @@ made with `--after <id>` in place of `--project`:
   ([show.md](show.md)), with `followed` where a look says `shown`.
 - **With `--run`** the follow-up is kept and its run started apart, as for any made wish. What a follow-up's
   run does differently is in [run.md](run.md), "A follow-up's run".
-- **Not closed.** A follow-up that was made and not run, whose followed work is then tossed, is refused on
-  every run and cannot be let go: it stays `working` on the page and holds one of the day's eight.
+- **A follow-up that was made and not run, whose followed work is then tossed,** is refused on every run. `run
+  toss` of it lets it go, as it lets go any made wish that has had no run ([toss.md](toss.md), "A wish that
+  has had no run"). It is one of the day's eight still.
 - **On the page** a follow-up is a made wish like any other. `after` is not part of a page.
 
 ## What is kept
@@ -187,12 +188,11 @@ own words. The kept page itself never holds a made wish. A made wish's `question
 ## Not covered yet
 
 - A made wish cannot be taken back or changed. Its state moves only with its one run ([run.md](run.md)),
-  and with a toss of what that run left, which lets the wish go ([toss.md](toss.md)).
+  and with a toss, which lets the wish go: of what that run left, or of the wish alone when it has had no run
+  ([toss.md](toss.md)). A wish that was let go stays one of the day's eight, and no run is started for it.
 - `jellymoon wish` does not check that the project is a folder on this computer, or one Jellymoon knows.
   `jellymoon run` does, and refuses a name two folders share.
 - The same words made twice are two wishes.
-- A follow-up that has had no run, of work that was then tossed, cannot be run and cannot be let go: it stays
-  as it was made.
 - With eight wishes read and eight made, a page holds sixteen. How many of them the kit shows is the kit's layout.
 - A made wish's little one carries a short label, cut. Its words are in the note "wished here today", whole or
   counted (`+N more`). `layout` prints the note's lines and one `mark` piece a wish drawn.

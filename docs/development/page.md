@@ -50,7 +50,9 @@ A day with no session logs at all has a page too, when it has a made wish or a p
 ([project.md](project.md)): the same empty page, with `"no_logs": true` in `read`, and no call
 (`jellymoon_core::page_with_no_logs`; example `page-no-logs.json`). So `read.turns` 0 says nothing was typed, and
 `read.no_logs` says nothing was read. The field is left out when it is false, so every other page prints as it
-did. With nothing made and no project on offer the command exits 1 with the reader's line, as before. The model's
+did. With nothing made and no project on offer the command exits 1 with the reader's line, as before. Logs
+that are a file, or a folder that cannot be listed, were not read and have no page either way: the reader's
+refusal stands ([reader.md](reader.md), "Logs that cannot be read"). The model's
 name is checked first wherever a page is printed. `jellymoon page` keeps nothing, so a later call prints the same bytes; the
 app keeps the page it draws ([app.md](app.md)).
 

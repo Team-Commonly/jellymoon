@@ -15,6 +15,7 @@ mod error;
 mod find;
 mod hear;
 mod hook;
+mod lock;
 mod no_logs;
 mod project;
 mod reader;

@@ -1151,7 +1151,7 @@ empty `runs/no-hooks`), and they stay.
 | Refused | The line says |
 |---|---|
 | No made wish of that id on that day | the page has no made wish of that id |
-| A wish that names a run | the wish has had its run, and which |
+| A wish that names a run, also one a toss of that run let go | the wish has had its run, and which. That it was let go is not said: this refusal comes first |
 | A wish with no run that a toss let go ([toss.md](toss.md), "A wish that has had no run") | `wish <id> was let go, so no run is started for it` |
 | `--repo` that is not a full path, or whose last name is not the wish's project | which of the two |
 | No `--repo`, and no folder of the name typed in that day or listed, or two typed in | how many, and to name one with `--repo` |

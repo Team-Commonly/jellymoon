@@ -84,6 +84,16 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
   the one nobody named, the line adds what to do. A directory that is there with no session in it is a day with no
   turns. A `--logs` that is empty or only spaces is an argument error. In the line, a character
   of the folder's name that cannot be seen is shown as a space.
+- **Logs that cannot be read.** A projects directory that is a file, or anything else that is no folder, is
+  refused in one fixed line, `reading the session logs: they are looked for in a folder, and what is there is not
+  one`. A folder that cannot be listed is refused in the system's own words, on a Mac `reading the session logs:
+  Permission denied (os error 13)`. Either is exit 1 with nothing printed and nothing written, and the line names
+  no path. Such a day is not one with nothing typed and not one with no logs: `jellymoon page` prints no page for
+  it, though the day has a made wish or a project on offer, and `jellymoon run` given such `--logs` is refused in
+  the same line and starts nothing. The app shows it as its note "Your Claude Code session logs could not be
+  read" with the line in brackets (`app/src/today.rs`, `words`), over the kept page when there is one. Before
+  this both printed the day as one with no turns. A folder inside the projects directory that cannot be listed
+  is still passed over.
 
 Only a regular `.jsonl` file in a real folder of the projects directory is opened. A link is never followed, to a file or to a
 folder, and a pipe or anything else that is not a file is left alone.

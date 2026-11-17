@@ -146,7 +146,7 @@ made with `--after <id>` in place of `--project`:
   `wished-after.json`). No other wish has the name. Made wishes are refused as not that day's when a wish's
   `after` is not the id of a wish before it in the file.
 - **The write.** Behind the day's lock, `pages/<day>.ruled.lock`, which is the tap's
-  ([delivery.md](delivery.md), "A tap on a clash"): one change to a day at a time. The file is written beside its
+  ([delivery.md](delivery.md), "A tap on a clash" and "The lock"): one change to a day at a time. The file is written beside its
   place and moved there, 0600 in a folder set to 0700. What Windows does differently when two changes meet is in
   delivery.md, "On Windows".
 

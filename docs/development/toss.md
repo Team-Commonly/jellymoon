@@ -208,7 +208,10 @@ no commit for it". This holds for a finished run of such a record too.
 
 ## What is refused
 
-Each ends the command with exit 1, one line on stderr, and nothing changed, but for the last three.
+Each ends the command with exit 1, one line on stderr, and nothing changed, but for the last three. One thing
+may be made by a refusal: a toss of a wish that has had no run, in a home no run was started in, makes the
+`runs` folder for its lock (for the person alone) and `runs/keep.lock` in it before it asks for the day's lock,
+and they stay when it is then refused. No wish, repo, copy or branch is touched by that.
 
 | When | Words |
 |---|---|

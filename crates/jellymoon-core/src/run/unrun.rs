@@ -29,9 +29,9 @@ pub(super) fn open(wish: &MadeWish) -> Result<(), Error> {
 /// nothing changed: that lock not had, and a wish that names a run by the time the day's lock is had.
 pub(super) fn let_go(home: &Path, options: &RunOptions, alone: Result<File, Unkept>) -> Result<Tossed, Error> {
     let (day, id) = (wish::day_of(options.day.as_deref())?, options.wish.as_str());
-    // A home no run was started in has no `runs` folder for the lock: it is made, and the lock is asked for again.
+    // A home no run was started in has no `runs` folder for the lock: it is made, the person's alone, and the lock is asked for again.
     let alone = alone.or_else(|unkept| match unkept {
-        Unkept::NoLock if std::fs::create_dir_all(home.join("runs")).is_ok() => copy::alone(home),
+        Unkept::NoLock if crate::ruling::private_dir(&home.join("runs")).is_ok() => copy::alone(home),
         unkept => Err(unkept),
     });
     let _alone = alone.map_err(|unkept| {

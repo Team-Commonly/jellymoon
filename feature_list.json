@@ -803,7 +803,7 @@
         "this row replaces the last step of F67, which is never built"
       ],
       "test": "cargo test -p jellymoon --test f77",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {

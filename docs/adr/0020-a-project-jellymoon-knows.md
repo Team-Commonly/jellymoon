@@ -200,7 +200,8 @@ What the build settled of decision 5, and where it is not this note's words. The
   The folder the chain calls `no-logs` is there and holds nothing, so the step names another.
 - **A day whose logs hold no turn says so** (after the review of F63): its footer was "Read from 0 things you
   typed. This is the model's reading, unedited.", which named a model that read nothing. It is one fixed line
-  now, "Nothing was typed on this day, so no model read it."
+  now, "Nothing typed on this day was read, so no model read it." (Its first wording spoke of what was typed, until
+  the review of the notes: turns left out by a switched-off folder, and a made wish, were typed.)
 - **Not built here:** a made wish's question is not drawn on a page, on this day or any; the page of a day
   with no logs does not name the folder looked in; and which six of many projects come first is not the
   person's to choose.

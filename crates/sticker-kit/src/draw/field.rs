@@ -1,35 +1,48 @@
 //! The field of a text note in the view: one line a person types in under the note, held and typed in as the
 //! entry is (`entry.rs`), by the same code. A page has one for each note of its scene that has a field, found by
-//! the note's id. What was typed stays while the note keeps its field, whatever else of the scene changes; a field
-//! goes with its note, and with the note's field.
+//! the note's id. What was typed stays while a note of the scene has the field, whatever else of the scene
+//! changes. A field is the same field while its key, or with no key its note's id, and its offer are the same:
+//! an offer that changes is another field, and the words typed for the first are not words for it.
+//!
+//! A field no note has any more goes, with two exceptions that are kept apart, not drawn and with no keys: one
+//! that waits for its answer, so a refusal has the words to leave when the note has its field again, and one
+//! with a key that holds words, so a note that takes another's place for a while costs nobody what they typed.
 
 use gpui::{Context, Window};
 
 use super::Page;
 use super::entry::EntryView;
 use crate::entry::EntryState;
-use crate::scene::{Entry, Note, Scene};
+use crate::scene::{Entry, Field, Note, Scene};
 
 /// Which of a page's lines is meant: the entry, or the field of a note by its place among the fields.
 pub(super) type Which = Option<usize>;
 
-/// The fields of a scene's notes, in the notes' order. One that `was` there keeps what was typed in it, held to
-/// the most its note now says.
-pub(super) fn fit(scene: &Scene, mut was: Vec<EntryView>) -> Vec<EntryView> {
-    let wanted = scene.notes.iter().filter_map(|note| match note {
-        Note::Text { id, field: Some(field), .. } => {
-            Some(Entry { id: id.clone(), hint: field.hint.clone(), options: Vec::new(), most: field.most })
-        }
-        _ => None,
-    });
-    let held = wanted.map(|entry| {
-        let at = was.iter().position(|view| view.names(&entry.id));
-        let mut view = at.map(|at| was.swap_remove(at)).unwrap_or_default();
+/// The most fields that are kept apart from a scene at once. The ones that wait are kept first.
+pub const MAX_KEPT_FIELDS: usize = 8;
+
+/// The fields of a scene's notes, in the notes' order, and the fields kept apart from it. One that `was` there,
+/// on the scene or apart, keeps what was typed in it, held to the most its note now says.
+pub(super) fn fit(scene: &Scene, mut was: Vec<EntryView>) -> (Vec<EntryView>, Vec<EntryView>) {
+    let told_by = |id: &str, key: &str| if key.is_empty() { id.to_string() } else { key.to_string() };
+    let same = |view: &EntryView, id: &str, field: &Field| {
+        let told = view.what.as_ref().map(|what| told_by(&what.id, &view.key));
+        view.offer == field.offer && told == Some(told_by(id, &field.key))
+    };
+    let mut held = Vec::new();
+    for note in &scene.notes {
+        let Note::Text { id, field: Some(field), .. } = note else { continue };
+        let entry = Entry { id: id.clone(), hint: field.hint.clone(), options: Vec::new(), most: field.most };
+        let at = was.iter().position(|view| same(view, id, field));
+        let mut view = at.map(|at| was.remove(at)).unwrap_or_default();
         view.state.fit(&entry);
-        view.what = Some(entry);
-        view
-    });
-    held.collect()
+        (view.what, view.key, view.offer) = (Some(entry), field.key.clone(), field.offer.clone());
+        held.push(view);
+    }
+    was.retain(|view| view.state.waiting() || !view.key.is_empty() && view.state.holds());
+    was.sort_by_key(|view| !view.state.waiting());
+    was.truncate(MAX_KEPT_FIELDS);
+    (held, was)
 }
 
 impl Page {
@@ -52,21 +65,24 @@ impl Page {
         self.fields.iter().find(|view| view.names(id)).map(|view| &view.state)
     }
 
-    /// The answer to what Enter gave in the field of the note `id`, as [`Page::answer_entry`] is the entry's:
-    /// kept, and the field is empty again; not kept, and its words stay. Nothing for a note whose field is gone.
+    /// The answer to what Enter gave with the note's id `id`, as [`Page::answer_entry`] is the entry's: kept,
+    /// and the field is empty again; not kept, and its words stay. The field is found by that id wherever it
+    /// is now: under its note, under a note that took its place, or kept apart. Nothing when none waits so.
     pub fn answer_field(&mut self, id: &str, kept: bool, window: &Window, cx: &mut Context<Self>) {
-        if let Some(view) = self.fields.iter_mut().find(|view| view.names(id)) {
-            view.state.answer(kept);
-        }
+        self.field_answered(id, kept);
         self.entry_changed(window, cx);
     }
 
     /// As [`Page::answer_field`], for a page whose window was closed since Enter: there is no text input of the
     /// platform's to tell, and the page that is shown again has a field that does not wait.
     pub fn answer_field_closed(&mut self, id: &str, kept: bool, cx: &mut Context<Self>) {
-        if let Some(view) = self.fields.iter_mut().find(|view| view.names(id)) {
+        self.field_answered(id, kept);
+        self.entry_settled(cx);
+    }
+
+    fn field_answered(&mut self, id: &str, kept: bool) {
+        if let Some(view) = self.fields.iter_mut().chain(&mut self.apart).find(|view| view.asked(id)) {
             view.state.answer(kept);
         }
-        self.entry_settled(cx);
     }
 }

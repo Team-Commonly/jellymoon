@@ -296,8 +296,9 @@ Two reviews after the merge left these, each fixed with its case seen failing fi
 - **An answered run lives in the app's process.** A typed wish's run is a process of its own, started through
   the installed command. An answer has one call in core, `answer_run`, which waits for the run's end, and an
   "answer apart" would be a new rule of a run, which this slice may not add. So the app holds the call on a
-  thread of its own, the field waits until the run ends, and a window closed meanwhile leaves a run that was
-  cut off. Open: a `run answer` started apart, as `wish --run` starts a run.
+  thread of its own. The wish's note says the wish is being worked on until the run ends (the notes on F54:
+  it has no field then, and no key is held). A window closed meanwhile ends nothing, since the app lives on;
+  Quit leaves a run that was cut off. Open: a `run answer` started apart, as `wish --run` starts a run.
 - **A field holds 400 characters.** The kit's cap on a line is 400 and core's bound on an answer 600. An answer
   of 401 to 600 characters is given with `jellymoon run answer`. Open: raise the kit's cap, or name the bound.
 - **A refusal is drawn under an app title.** "That answer was not taken." is the app's, as "That wish was not

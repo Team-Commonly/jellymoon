@@ -31,8 +31,14 @@ claude -p --model <name> --tools "" --strict-mcp-config --disable-slash-commands
 - The prompt is one fixed text compiled into core. It tells the model that the
   day is data and that an instruction inside it is not to be followed.
 - The environment is `PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM` and `CLAUDE_CONFIG_DIR`, when set: enough for
-  the harness to find its own sign-in. On Windows the list is the system's equivalents (`USERPROFILE`, `APPDATA`,
-  `SystemRoot` and the like). Jellymoon passes no credential of its own or anyone else's. `PATH` is this process's own,
+  the harness to find its own sign-in. On Windows the list is `PATH`, `PATHEXT`, `SystemRoot`, `SystemDrive`,
+  `ComSpec`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `USERNAME` and
+  `CLAUDE_CONFIG_DIR`. Nothing else of this process's environment is passed on, so
+  no `CLAUDECODE` and no `CLAUDE_CODE_*` variable reaches the harness: one started from inside a Claude Code
+  session is not told it is that session's child, and a sign-in that is only in such a variable does not reach
+  it either. The lists are held to this page and to run.md by a test in core, and what a made-up harness is
+  started with is held to them in `crates/jellymoon/tests/f77.rs`: a variable is added to the code, the test and
+  both pages together. Jellymoon passes no credential of its own or anyone else's. `PATH` is this process's own,
   made longer only when the harness was found in a well-known place (below). Only full paths are passed on, as for a
   run ([run.md](run.md), "What the harness is started with"): of `PATH` the folders named by a full path, and with
   none the call does not run and one line says so; a `HOME`, `TMPDIR` or `CLAUDE_CONFIG_DIR` that is not one is dropped.
@@ -48,11 +54,12 @@ states (`crates/jellymoon/tests/f63.rs`).
 
 A day with no session logs at all has a page too, when it has a made wish or a project on offer
 ([project.md](project.md)): the same empty page, with `"no_logs": true` in `read`, and no call
-(`jellymoon_core::page_with_no_logs`; example `page-no-logs.json`). So `read.turns` 0 says nothing was typed, and
-`read.no_logs` says nothing was read. The field is left out when it is false, so every other page prints as it
-did. With nothing made and no project on offer the command exits 1 with the reader's line, as before. Logs
-that are a file, or a folder that cannot be listed, were not read and have no page either way: the reader's
-refusal stands ([reader.md](reader.md), "Logs that cannot be read"). The model's
+(`jellymoon_core::page_with_no_logs`; example `page-no-logs.json`). So `read.turns` 0 says the logs were read and
+no turn of the day was taken from them, and `read.no_logs` says nothing was read. The field is left out when it
+is false, so every other page prints as it did. With nothing made and no project on offer the command exits 1
+with the reader's line, as before. Logs that are a file, or a folder that cannot be listed, were not read and
+have no page either way: the reader's refusal stands ([reader.md](reader.md), "Logs that cannot be read"). The
+model's
 name is checked first wherever a page is printed. `jellymoon page` keeps nothing, so a later call prints the same bytes; the
 app keeps the page it draws ([app.md](app.md)).
 
@@ -173,6 +180,11 @@ A harness that is neither on `PATH` nor in a well-known place (a shell alias, an
 not found; `JELLYMOON_CLAUDE` is the way round. With a home whose files are made group-writable by default (a umask
 of 002), a harness in a well-known place is passed over.
 Codex is not read.
+
+The reading call is a `-p` call that rests on the person's own sign-in to Claude Code. Claude Code's own headless
+page (<https://code.claude.com/docs/en/headless>, read 2026-11-17) says `--bare` "will become the default for `-p`
+in a future release", and that bare mode does not use the subscription sign-in. When that default changes the call
+needs a flag that keeps the sign-in; nothing is built for it now.
 
 Windows has been run in CI only, against a made-up `.exe` harness, never by a person against Claude Code. Three things
 are known to be open there. A `claude.cmd` shim may refuse the prompt's line breaks. Stopping a call that ran too long

@@ -21,9 +21,18 @@ struct Seen {
 }
 
 impl Seen {
-    /// Takes the lock, holds it for `hold` and lets go.
+    /// Takes the lock, holds it for `hold` and lets go. Nothing makes the callers take turns, so one can be
+    /// passed over for the lock's whole wait: it asks again, as a made wish does, and that is no fault. A lock
+    /// wrongly left at its name is one: it is there 30 seconds, and a caller here gives up well before that.
     fn held(&self, path: &Path, hold: Duration) {
-        let lock = Lock::take(path.to_path_buf()).unwrap();
+        let started = Instant::now();
+        let lock = loop {
+            match Lock::take(path.to_path_buf()) {
+                Ok(lock) => break lock,
+                Err(e) if e.kind() == ErrorKind::TimedOut && started.elapsed() < LOCK_STALE / 2 => {}
+                Err(e) => panic!("the lock was not to be had: {e}"),
+            }
+        };
         let alone = self.inside.fetch_add(1, Ordering::SeqCst) == 0;
         thread::sleep(hold);
         let mine = fs::symlink_metadata(path).is_ok();
@@ -99,9 +108,11 @@ fn taken_over(rounds: usize, slow: fn(u64) -> [u64; 4]) -> usize {
 // "removes" it; by then it is the next caller's. Unslowed it shows rarely, which is how it got through.
 #[test]
 fn a_lock_that_is_held_is_never_removed_by_a_caller_that_waits_for_it() {
+    // Eight callers take the lock with no turns kept, so one can wait for all the rest: a round is short, and
+    // a caller refused after its 3 seconds asks again (`Seen::held`).
     for slow in [[0, 0, 0, 0], [1, 0, 1, 0], [1, 0, 0, 1]] {
-        let (faults, left) = churned(150, slow);
-        assert_eq!(faults, 0, "of 1200 takes, each caller slowed by {slow:?}");
+        let (faults, left) = churned(60, slow);
+        assert_eq!(faults, 0, "of 480 takes, each caller slowed by {slow:?}");
         assert_eq!(left, [OVER], "a lock was left, or something that is no lock: {left:?}");
     }
 }
@@ -233,7 +244,7 @@ fn a_lock_left_behind_while_another_caller_holds_the_take_over_s_lock_is_another
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("day.lock");
     leave(&path);
-    let _behind = over(&path).ok().expect("the system's lock");
+    let _behind = over(&path).expect("the system's lock");
     let refused = Lock::take(path.clone()).map(drop).map_err(|e| e.kind());
     assert_eq!(refused, Err(ErrorKind::TimedOut));
     assert!(path.exists(), "the lock was removed");
@@ -250,7 +261,9 @@ fn a_lock_that_is_fresh_when_the_wait_ends_is_another_change_at_work_whatever_wa
     let refused = thread::scope(|scope| {
         scope.spawn(|| {
             thread::sleep(LOCK_WAIT - Duration::from_millis(500));
-            fs::write(&path, "").unwrap();
+            // Written and dated: on Windows a file that was empty and is written empty keeps its time.
+            fs::write(&path, "another caller's mark").unwrap();
+            date(&path, SystemTime::now());
         });
         Lock::take(path.clone()).map(drop).map_err(|e| e.kind())
     });
@@ -279,10 +292,76 @@ fn a_holder_waits_three_seconds_for_the_system_s_lock_and_then_removes_its_own_f
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("day.lock");
     let lock = Lock::take(path.clone()).unwrap();
-    let _behind = over(&path).ok().expect("the system's lock");
+    let _behind = over(&path).expect("the system's lock");
     let started = Instant::now();
     drop(lock);
     let waited = started.elapsed();
     assert!(waited >= LOCK_WAIT && waited < 2 * LOCK_WAIT, "waited {waited:?}");
     assert!(!path.exists(), "a fresh lock was left");
+}
+
+// What Windows says of the take-over's file while another process opens, removes or locks it is that caller at
+// work, never a file that cannot be locked: only the second is told to a person as a lock to remove.
+#[test]
+fn on_windows_a_take_over_s_file_in_use_is_another_caller_at_work_and_elsewhere_an_error_is_what_it_says() {
+    let cases = [
+        ("access is denied", ErrorKind::PermissionDenied, Some(5), NotHad::Busy),
+        ("a sharing violation", ErrorKind::Other, Some(32), NotHad::Busy),
+        ("a lock violation", ErrorKind::Other, Some(33), NotHad::Busy),
+        ("the path is not found", ErrorKind::NotFound, Some(3), NotHad::Never),
+        ("not supported", ErrorKind::Unsupported, Some(50), NotHad::Never),
+        ("an invalid function, as a disk with no locks says", ErrorKind::Other, Some(1), NotHad::Never),
+        ("too many open files", ErrorKind::Other, Some(4), NotHad::Busy),
+    ];
+    for (case, kind, raw, on_windows) in cases {
+        assert_eq!(not_had(kind, raw, true), on_windows, "{case}, on Windows");
+        assert_eq!(not_had(kind, raw, false), NotHad::Never, "{case}, elsewhere");
+    }
+    // A process, or the system, with no file handle left, as Unix numbers them; 4 there is a call cut short.
+    for raw in [23, 24] {
+        assert_eq!(not_had(ErrorKind::Other, Some(raw), false), NotHad::Busy, "{raw} on Unix");
+        assert_eq!(not_had(ErrorKind::Other, Some(raw), true), NotHad::Never, "{raw} on Windows");
+    }
+    // What this system says of a folder and of a link at the name is never a caller at work.
+    #[cfg(unix)]
+    for raw in [21, 62, 40, 6] {
+        assert_eq!(not_had(ErrorKind::Other, Some(raw), false), NotHad::Never, "{raw}");
+    }
+}
+
+// The file a lock is made as is the caller's for a moment before its mark is in it. A mark that cannot be
+// written, as on a full disk, leaves no lock: here the file is handed over opened for reading only.
+#[test]
+fn a_lock_whose_mark_cannot_be_written_is_removed_and_refuses_nobody() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("day.lock");
+    fs::write(&path, "").unwrap();
+    let refused = Lock::marked(File::open(&path).unwrap(), path.clone()).map(drop);
+    assert!(refused.is_err(), "a mark was written through a file opened for reading");
+    assert!(!path.exists(), "the file of a lock that was never one was left");
+    let started = Instant::now();
+    drop(Lock::take(path.clone()).unwrap());
+    assert!(started.elapsed() < LOCK_WAIT, "the next caller waited");
+}
+
+// A pipe at the take-over's name: an open for writing waits until someone reads it, which may be never.
+#[cfg(unix)]
+#[test]
+fn the_open_of_the_take_over_s_file_never_waits_on_a_pipe() {
+    let dir = tempfile::tempdir().unwrap();
+    let pipe = dir.path().join(OVER);
+    let made = std::process::Command::new("mkfifo").arg(&pipe).status();
+    if !made.is_ok_and(|status| status.success()) {
+        return; // No `mkfifo` here: nothing to show.
+    }
+    let (opened, done) = std::sync::mpsc::channel();
+    thread::scope(|scope| {
+        scope.spawn(|| opened.send(open_over(&pipe).is_err()));
+        let failed = done.recv_timeout(Duration::from_secs(2));
+        // A reader lets a writer that waits go on, so the test ends; with no writer the reader would wait.
+        if failed.is_err() {
+            drop(File::open(&pipe));
+        }
+        assert_eq!(failed, Ok(true), "the open waited on the pipe, or opened it");
+    });
 }

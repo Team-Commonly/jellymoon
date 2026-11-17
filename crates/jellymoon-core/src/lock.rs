@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::busy::{in_use, retried};
+use crate::busy::{busy, in_use, retried};
 
 /// How long a caller waits for the lock, and a holder for the system's lock when it lets go; and how far from now
 /// a lock was last written before it is taken for one left by a command that was killed.
@@ -48,9 +48,29 @@ pub(crate) struct Lock {
 /// Why the system's lock on [`OVER`] was not had: another caller holds it at this moment, or it is not to be had
 /// here at all (its file cannot be made or opened, something that is no plain file is at its name, the system
 /// gives no locks there).
+#[derive(Debug, PartialEq)]
 enum NotHad {
     Busy,
     Never,
+}
+
+/// Windows's code for a part of a file that another handle holds locked, and each system's codes for a
+/// process, or the system, that has no file handle left to give.
+const LOCK_VIOLATION: i32 = 33;
+const NO_HANDLE_WINDOWS: i32 = 4;
+const NO_HANDLE_UNIX: [i32; 2] = [23, 24];
+
+/// What an error from opening [`OVER`], or from asking for its lock, says. On Windows "denied", a sharing
+/// violation and a lock violation are what a file gives while another process opens, removes or locks it, so
+/// there they are another caller at work and never "not to be had at all": a caller is told to remove a lock
+/// only where no caller can be at work on it. A file that may truly not be written says "denied" there too, and
+/// so reads as in use for good. On every system a process with no file handle left has one again in a moment,
+/// which is no word on the file either. Any other error is what it says.
+fn not_had(kind: ErrorKind, raw: Option<i32>, windows: bool) -> NotHad {
+    let held = busy(kind, raw, windows) || (windows && raw == Some(LOCK_VIOLATION));
+    let none_left =
+        raw.is_some_and(|raw| if windows { raw == NO_HANDLE_WINDOWS } else { NO_HANDLE_UNIX.contains(&raw) });
+    if held || none_left { NotHad::Busy } else { NotHad::Never }
 }
 
 /// Whether a lock last written at `written` is left behind at `now`: the two are more than [`LOCK_STALE`] apart,
@@ -67,11 +87,12 @@ fn left(there: &io::Result<fs::Metadata>) -> bool {
 }
 
 /// Opens [`OVER`] at `over`, made for the person alone when it is not there. A link at the name is not followed:
-/// on Unix the open fails, and on Windows it is the link itself that is opened.
+/// on Unix the open fails, and on Windows it is the link itself that is opened. On Unix the open never waits: a
+/// pipe at the name, which an open for writing would wait on until someone reads it, fails at once.
 #[cfg(unix)]
 fn open_over(over: &Path) -> io::Result<File> {
     use rustix::fs::{Mode, OFlags, open};
-    let flags = OFlags::WRONLY | OFlags::CREATE | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+    let flags = OFlags::WRONLY | OFlags::CREATE | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
     Ok(File::from(open(over, flags, Mode::RUSR | Mode::WUSR)?))
 }
 
@@ -88,14 +109,17 @@ fn open_over(over: &Path) -> io::Result<File> {
 /// for once and never waited for here.
 fn over(path: &Path) -> Result<File, NotHad> {
     let over = path.with_file_name(OVER);
+    // On Unix the open itself refuses a folder, a link and a pipe. On Windows a folder says "denied" to it, which
+    // there is a file in use, and a link is opened as itself: so this look is what tells those two apart.
     if fs::symlink_metadata(&over).is_ok_and(|meta| !meta.is_file()) {
         return Err(NotHad::Never);
     }
-    let over = open_over(&over).map_err(|_| NotHad::Never)?;
+    let why = |e: io::Error| not_had(e.kind(), e.raw_os_error(), cfg!(windows));
+    let over = open_over(&over).map_err(why)?;
     match over.try_lock() {
         Ok(()) => Ok(over),
         Err(TryLockError::WouldBlock) => Err(NotHad::Busy),
-        Err(TryLockError::Error(_)) => Err(NotHad::Never),
+        Err(TryLockError::Error(e)) => Err(why(e)),
     }
 }
 
@@ -160,24 +184,30 @@ impl Lock {
     }
 
     /// The lock just made, with its mark written into it: this process, this moment and a count, so that no two
-    /// locks hold one mark. A lock whose mark could not be written is no lock: its file stays as a command that
-    /// was killed would have left it, and the caller has the error.
+    /// locks hold one mark. A lock whose mark could not be written is no lock: its file, made a moment ago and
+    /// so left behind to nobody, is removed, and the caller has the error.
     fn marked(mut made: File, path: PathBuf) -> io::Result<Lock> {
         static MADE: AtomicU64 = AtomicU64::new(0);
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_nanos());
         let count = MADE.fetch_add(1, Ordering::Relaxed);
         let lock = Lock { path, mark: format!("{} {nanos} {count}\n", std::process::id()) };
-        made.write_all(lock.mark.as_bytes())?;
-        Ok(lock)
+        let written = made.write_all(lock.mark.as_bytes());
+        if written.is_err() {
+            let _ = retried(|| fs::remove_file(&lock.path));
+        }
+        written.map(|()| lock)
     }
 
-    /// Whether what a look found at the lock's name is this lock: a plain file that holds its mark.
+    /// Whether what a look found at the lock's name is this lock: a plain file that holds its mark. On Windows
+    /// a read that finds the file in use at that moment is tried again (`busy.rs`): a lock that could not be read
+    /// would be left at its name, and every caller refused until it counted as left behind.
     fn mine(&self, there: &io::Result<fs::Metadata>) -> bool {
-        let mut held = Vec::new();
-        let read = |file: File| file.take(self.mark.len() as u64 + 1).read_to_end(&mut held);
-        there.as_ref().is_ok_and(fs::Metadata::is_file)
-            && File::open(&self.path).and_then(read).is_ok()
-            && held == self.mark.as_bytes()
+        let read = || -> io::Result<Vec<u8>> {
+            let mut held = Vec::new();
+            File::open(&self.path)?.take(self.mark.len() as u64 + 1).read_to_end(&mut held)?;
+            Ok(held)
+        };
+        there.as_ref().is_ok_and(fs::Metadata::is_file) && retried(read).is_ok_and(|held| held == self.mark.as_bytes())
     }
 }
 

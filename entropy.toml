@@ -351,7 +351,11 @@ max_file_lines = 400
 # The lock notes raised core by 278: `lock.rs` grew by 85 (a lock's mark, the system's lock had or not had and
 # waited for by a holder, the open that follows no link, the refusal of a lock nobody can take over), its tests in
 # `lock/tests.rs` by 125, and `lock/tests/corners.rs`, a holder that lets go during a take-over, is 68.
-"crates/jellymoon-core" = 15943
+# What CI and the gate found on the lock notes raised core by 109: `lock.rs` 30 (what Windows says of a file in use,
+# and a process with no file handle left, are a caller at work; the mark's read is tried again; a lock whose mark was
+# not written is removed; the open that never waits), `lock/tests.rs` 79 (the mapping's test, the lock with no mark,
+# the pipe, a lock made fresh for Windows, and a caller in the test of many that asks again).
+"crates/jellymoon-core" = 16052
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).

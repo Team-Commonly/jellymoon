@@ -782,7 +782,10 @@ max_file_lines = 400
 # started, played at `layout`, and the title's lines stated case by case), `scene.rs` 1 (the footer's comment);
 # `today.rs` lost 2 (the unit test of a tried reading cut to the one kind that cannot be played, less the words
 # of a call not started and the comments).
-"app" = 11415
+# The third notes on F54 raised the app by 42, of which 27 are tests: the order of the refusal and the
+# asking note, and a closed wish that is not opened again (`tests/f54/answered.rs`). The rest: which note has
+# a field to answer in (`answering.rs`), and the place under the notes of wishes (`wishing.rs`).
+"app" = 11457
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

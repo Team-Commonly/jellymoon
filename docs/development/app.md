@@ -421,10 +421,11 @@ where core says, carries what is typed to core off the window's thread, and draw
   wish stands. In every other case, not known among them, the answer is held not to have been given: the
   page's first note is "That answer was not taken.", with core's reason (the run asks no question, having
   ended or been answered meanwhile; the answer is over 600 characters; nothing is left of it once cleaned).
-  Then the note is back with its question and its field, which keeps what was typed and takes keys again; it
-  is put first when no note of the wish is on show any more, as after a tap on another little one during the
-  wait. Only where the run is known not to wait on that question any more is the question not put back: the
-  wish's note is then as core says the wish stands.
+  Then the note is back with its question and its field, which keeps what was typed and takes keys again;
+  it is put directly under that first note when no note of the wish is on show any more, as after a tap on
+  another little one during the wait. Only where the run is known not to wait on that question any more is
+  the question not put back: the wish's note is then as core says the wish stands, and when no note of the
+  wish is on show any more none is put back, so a wish the person closed is not opened again.
 - **More like this.** Core says which made wishes a follow-up may be made of
   (`jellymoon_core::followable`, printed as `follows` by `jellymoon run waiting`: work that waits, and work
   that was kept). Under the note of such a wish, and of no other, is the offer `More like this` over a field
@@ -467,6 +468,9 @@ Not done, and not tested at a real window:
   the run, answered elsewhere, now asks another gives its words to the new question.
 - Whether an answer was given is told by the question's words. A run that asks the very same words again
   after an answer that then failed reads as not given: "That answer was not taken.", and the words stay.
+- Not known may be an answer the run did get. The person is then told "That answer was not taken." of an
+  answer that was given. A second Enter is refused by core in its own words, so nothing is sent twice. The
+  note stays until the next tap or Enter.
 - Two cases only core can tell apart read as given, with the field emptied, though no harness got the answer:
   another answer (from a terminal) took the run between the app's first look and core's own lock, and core
   cleared the wish's question and then failed to write the run's record. Until core says whether it started

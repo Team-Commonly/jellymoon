@@ -367,7 +367,9 @@ max_file_lines = 400
 # The notes on F65 raised core by 44: `project/new.rs` 29 (a making whose folder another command listed says so
 # as a made project; a folder that was left is not said to have been taken back), `project.rs` 7 (the sentence
 # for a folder's name only an earlier build kept), `project/new/tests.rs` 7 and `wish.rs` 1.
-"crates/jellymoon-core" = 16329
+# The F76 notes raised core by 28: a logs path's end separators dropped before a link is looked at
+# (`unended` in `reader.rs`), its test of a root that stays whole, and a clause of a comment.
+"crates/jellymoon-core" = 16357
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -559,7 +561,9 @@ max_file_lines = 400
 # `src/main.rs`; the rest is tests: `tests/f65/mark.rs` 68 (that making, with
 # `take-over.lock` named where it is left, and a git that fails in a folder that cannot be taken back), `tests/f62/earlier.rs` 25 (a wish for a kept name with a list that cannot be used) and
 # `tests/f62/refused.rs` 7 (the sentence for a name only an earlier build kept).
-"crates/jellymoon" = 27443
+# The F76 notes raised the binary by 12, all in `tests/f63.rs`: a link to nothing written with a separator,
+# and a folder and a link to one written so, which are read.
+"crates/jellymoon" = 27455
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

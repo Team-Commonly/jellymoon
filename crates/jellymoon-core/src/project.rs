@@ -180,6 +180,14 @@ fn change<T>(home: &Path, change: impl Fn(&mut Vec<Line>) -> Result<T, Error>) -
     write(home, lines).map(|()| done)
 }
 
+/// What refuses a folder whose last name is no project's name.
+const NO_NAME: &str = "--repo is not a folder a project can be named after: its last name must be one folder's name \
+                       of at most 100 characters, with nothing that cannot be seen and nothing shaped like a credential";
+/// What refuses one whose last name is a name as it is kept ([`kept_name`]) that holds something unseen.
+const EARLIER: &str = "--repo is not a folder a project can be named after: its last name holds a character that \
+                       cannot be seen; only an earlier build of Jellymoon kept such a name, and one taken off the \
+                       list is not listed again, so rename the folder, then add it";
+
 /// The name and the real folder a project is listed by, when `repo` is a folder a project can be: there, the
 /// top of a repo, the person's own, and named by one folder's name. Each refusal is fixed words: none names the
 /// folder, or its last name.
@@ -189,12 +197,11 @@ fn stands_as(repo: &Path) -> Result<(String, String), Error> {
     }
     let real = std::fs::canonicalize(repo).ok().filter(|real| real.is_dir()).map(as_git_takes);
     let real = real.ok_or_else(|| refused("--repo is not a folder that is there"))?;
-    let name = real.file_name().and_then(|last| last.to_str()).filter(|last| named(last));
-    let name = name.ok_or_else(|| {
-        refused(
-            "--repo is not a folder a project can be named after: its last name must be one folder's name of at \
-             most 100 characters, with nothing that cannot be seen and nothing shaped like a credential",
-        )
+    let last = real.file_name().and_then(|last| last.to_str());
+    // A name as it was kept once and comes in no more is told so: a line of it that was forgotten is not added.
+    let name = last.filter(|last| named(last)).ok_or_else(|| match last {
+        Some(last) if kept_name(last) => refused(EARLIER),
+        _ => refused(NO_NAME),
     })?;
     let folder = real.to_str().filter(|folder| folder.len() <= FOLDER_MAX);
     let folder = folder.ok_or_else(|| {
@@ -245,9 +252,9 @@ pub fn add_project(home: &Path, repo: &Path, day: Option<&str>) -> Result<Known,
     Ok(known)
 }
 
-/// Whether the list holds a line of exactly that name. False when the list cannot be used.
-pub(crate) fn lists(home: &Path, name: &str) -> bool {
-    listed(home).is_ok_and(|lines| lines.iter().any(|line| line.name == name))
+/// Whether the list holds a line of exactly that name. A list that cannot be used is refused in its own sentence.
+pub(crate) fn lists(home: &Path, name: &str) -> Result<bool, Error> {
+    Ok(listed(home)?.iter().any(|line| line.name == name))
 }
 
 /// Takes the line of that name off the list, and touches nothing else: not the folder, not a wish, not a run.

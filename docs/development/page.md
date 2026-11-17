@@ -35,8 +35,9 @@ claude -p --model <name> --tools "" --strict-mcp-config --disable-slash-commands
   `ComSpec`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `USERNAME` and
   `CLAUDE_CONFIG_DIR`. Nothing else of this process's environment is passed on, so
   no `CLAUDECODE` and no `CLAUDE_CODE_*` variable reaches the harness: one started from inside a Claude Code
-  session is not told it is that session's child, and a sign-in that is only in such a variable does not reach
-  it either. The lists are held to this page and to run.md by a test in core, and what a made-up harness is
+  session is not told it is that session's child, and a sign-in that is only in such a variable
+  (`CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`) does not reach it either. Nor does one that is only in
+  `ANTHROPIC_API_KEY`, which is on neither list. The lists are held to this page and to run.md by a test in core, and what a made-up harness is
   started with is held to them in `crates/jellymoon/tests/f77.rs`: a variable is added to the code, the test and
   both pages together. Jellymoon passes no credential of its own or anyone else's. `PATH` is this process's own,
   made longer only when the harness was found in a well-known place (below). Only full paths are passed on, as for a

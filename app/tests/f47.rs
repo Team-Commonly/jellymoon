@@ -38,7 +38,7 @@ pub fn texts(scene: &Scene) -> Vec<Text<'_>> {
     }
     fn text(note: &Note) -> Option<Text<'_>> {
         match note {
-            Note::Text { id, title, body, options } => Some((id, title, strs(body), strs(options))),
+            Note::Text { id, title, body, options, .. } => Some((id, title, strs(body), strs(options))),
             _ => None,
         }
     }

@@ -1,6 +1,6 @@
 //! A made-up window for the F47 tests: what `window.rs` does with a tap, with no window. It is a program of its
 //! own so that the git core starts has a test's variables and none of the caller's. Arguments: Jellymoon's home,
-//! the logs, the harness, the day, and then the acts, done in their order. Each act but `hold`, `left` and `size`
+//! the logs, the harness, the day, and then the acts, done in their order. Each act but `hold`, `left`, `bin` and `size`
 //! prints one line of JSON on stdout: the scene the window would show, or `null` when it would show nothing.
 //!
 //! - `poke:<id>`: a tap on a character. The look is made on another thread, as the window makes it.
@@ -15,6 +15,13 @@
 //! - `hold:<file>`: waits until the test leaves that file, half a minute at most.
 //! - `left:<file>`, as the first act only: the note in that file, as JSON, is on show from the start, as a page
 //!   left open would have it. It prints no line.
+//! - `bin:<folder>`, as the first act only: the folder the installed `jellymoon` command is in. It prints no
+//!   line. Without it there is none, as for a person who has not installed it.
+//! - `type:<note>:<words>`: Enter in the field of a note, with those words in it (F54). The kit gives an Enter
+//!   only from a field it placed, so the scene is laid out as for `choose`, and a note whose field is not placed
+//!   prints `null`. Core is asked on another thread. The line is `{"kept":…,"scene":…}`: what the field is
+//!   told, and the scene shown. The asking for a run it left is kept for `start`.
+//! - `start`: the oldest asking a `type` left, on another thread, and the scene it shows, or `null`.
 //! - `core:<wish>:<index>`: no window at all: core's own answer to a tap on that choice of the wish's work, as
 //!   `[title, body]`, or `null` when it is no sentence.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -25,12 +32,12 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{env, fs, io, thread};
 
-use jellymoon_app::showing::{After, Showing};
+use jellymoon_app::showing::{After, Entered, Showing};
 use jellymoon_app::taps::OnShow;
 use jellymoon_app::today::Today;
 use jellymoon_core::{RunOptions, WorkDone, WorkTap};
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use sticker_kit::{Scene, Theme, Viewport};
 
 /// The pieces `layout` places of a scene: what `jellymoon-app layout` prints of it, a piece a line.
@@ -86,9 +93,13 @@ fn core(today: &Today, wish: &str, index: usize) -> Option<(String, String)> {
     }
 }
 
-fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
-    let [home, logs, harness, day, acts @ ..] = &args[..] else { panic!("four arguments, and the acts") };
+/// The day the window opens on, the scene on show at its start, and the acts that are left to do.
+fn opened(args: &[String]) -> (Today, Scene, Showing, &[String]) {
+    let [home, logs, harness, day, acts @ ..] = args else { panic!("four arguments, and the acts") };
+    let (bin, acts) = match acts.split_first() {
+        Some((first, rest)) if first.starts_with("bin:") => (Some(PathBuf::from(&first[4..])), rest),
+        _ => (None, acts),
+    };
     let today = Today {
         date: day.clone(),
         logs: PathBuf::from(logs),
@@ -98,7 +109,7 @@ fn main() {
         harness: Some(PathBuf::from(harness)),
         fresh: false,
         settings: None,
-        bin: None,
+        bin,
     };
     let (mut scene, page) = today.first();
     let acts = match acts.split_first() {
@@ -110,13 +121,31 @@ fn main() {
         _ => acts,
     };
     let showing = Showing::of(Some(OnShow { today: today.clone(), page, scene: scene.clone() }));
+    (today, scene, showing, acts)
+}
+
+/// Enter in the field of `note`, when `layout` places one: what it printed, the scene then on show, and the
+/// asking for a run it left.
+fn entered(showing: &Showing, now: &Scene, size: Viewport, note: &str, typed: &str) -> Option<Entered> {
+    let is = |piece: &Value| piece["kind"] == "field" && piece["id"] == note;
+    let typing = placed(now, size).iter().any(is).then(|| showing.typing(note, typed)).flatten()?;
+    Some(showing.answered(Some(elsewhere(typing))))
+}
+
+fn main() {
+    let args: Vec<String> = env::args().skip(1).collect();
+    let (today, scene, showing, acts) = opened(&args);
     let mut left: VecDeque<After> = VecDeque::new();
+    let mut asked = VecDeque::new();
     // The scene on show, as the view has it, and the window's size.
     let (mut now, mut size) = (scene, Viewport { w: 1440.0, h: 900.0 });
     for act in acts {
         // A file's name can hold a colon of its own, so only `hold` keeps the rest whole.
-        let parts: Vec<&str> =
-            if act.starts_with("hold:") { act.splitn(2, ':').collect() } else { act.split(':').collect() };
+        let parts: Vec<&str> = match act.split_once(':').map(|(name, _)| name) {
+            Some("hold") => act.splitn(2, ':').collect(),
+            Some("type") => act.splitn(3, ':').collect(),
+            _ => act.split(':').collect(),
+        };
         match parts[..] {
             ["poke", id] => {
                 let look = showing.poked(id).unwrap();
@@ -136,6 +165,19 @@ fn main() {
             ["size", given] => {
                 let (w, h) = given.split_once('x').unwrap();
                 size = Viewport { w: w.parse().unwrap(), h: h.parse().unwrap() };
+            }
+            ["type", note, typed] => {
+                let Some(Entered { kept, scene, asking }) = entered(&showing, &now, size, note, typed) else {
+                    show(&Value::Null);
+                    continue;
+                };
+                show(&json!({ "kept": kept, "scene": scene }));
+                asked.extend(asking);
+                now = scene.unwrap_or(now);
+            }
+            ["start"] => {
+                let asking = asked.pop_front().expect("a follow-up left an asking");
+                shown(&mut now, showing.asked(elsewhere(asking)));
             }
             ["placed"] => show(&placed(&now, size)),
             ["hold", file] => {

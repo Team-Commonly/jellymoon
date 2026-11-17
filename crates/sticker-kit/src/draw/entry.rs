@@ -1,15 +1,16 @@
 //! The entry in the view: the keys and the platform's input method wired to [`EntryState`], which holds every rule.
 //! Here are only the focus, the text with its caret and its composition underlined, and what takes the clicks.
 //! The field and the chips themselves are flat shapes (`shapes.rs`), and the hint is laid-out text like any other.
-
-use std::ops::Range;
+//! The field of a note (`field.rs`) is typed in the same way, by the same code: every method here that takes a
+//! [`Which`] is the entry's and a field's alike.
 
 use gpui::{
-    AnyElement, App, Bounds, Context, CursorStyle, ElementInputHandler, Entity, EntityInputHandler, FocusHandle,
-    KeyDownEvent, MouseButton, MouseDownEvent, Pixels, Point, ShapedLine, TextAlign, TextRun, UTF16Selection,
-    UnderlineStyle, Window, canvas, div, fill, point, prelude::*, px, size,
+    AnyElement, App, Bounds, Context, CursorStyle, ElementId, ElementInputHandler, Entity, FocusHandle, KeyDownEvent,
+    MouseButton, MouseDownEvent, Pixels, ShapedLine, TextAlign, TextRun, UnderlineStyle, Window, canvas, div, fill,
+    point, prelude::*, px, size,
 };
 
+use super::field::Which;
 use super::measure::{font_for, hsla};
 use super::{Page, Stale};
 use crate::entry::EntryState;
@@ -36,17 +37,26 @@ pub(super) struct EntryView {
     on_made: Option<EntryHandler>,
     /// The entry was taken away while it held words: it goes as soon as it holds none.
     leaving: bool,
-    focus: Option<FocusHandle>,
+    pub focus: Option<FocusHandle>,
     /// Whether the entry had the keys when the frame was built.
     pub lit: bool,
     /// The text as it was last painted, where, and how far left it was moved to keep the caret in the field. The
     /// input method asks where a character is, and a click asks which character is there.
-    line: Option<ShapedLine>,
-    at: Bounds<Pixels>,
-    scroll: Pixels,
+    pub line: Option<ShapedLine>,
+    pub at: Bounds<Pixels>,
+    pub scroll: Pixels,
 }
 
 impl EntryView {
+    pub fn focused(&self, window: &Window) -> bool {
+        self.focus.as_ref().is_some_and(|focus| focus.is_focused(window))
+    }
+
+    /// Whether this is the field of the note `id`.
+    pub fn names(&self, id: &str) -> bool {
+        self.what.as_ref().is_some_and(|what| what.id == id)
+    }
+
     /// Shapes what is typed, the composition underlined. Returns the line, the caret's place in it and its height.
     fn shape(
         &mut self,
@@ -82,13 +92,21 @@ impl EntryView {
     }
 }
 
-/// Paints the typed line and the caret, and gives the window this entry as what the platform's text input talks to.
-fn paint(at: Bounds<Pixels>, page: &Entity<Page>, focus: &FocusHandle, window: &mut Window, cx: &mut App) {
+/// Paints the typed line and the caret, and gives the window this page as what the platform's text input talks
+/// to: the window takes it from the one that has the keys.
+fn paint(
+    at: Bounds<Pixels>,
+    (page, which): (&Entity<Page>, Which),
+    focus: &FocusHandle,
+    window: &mut Window,
+    cx: &mut App,
+) {
     window.handle_input(focus, ElementInputHandler::new(at, page.clone()), cx);
     let ((line, caret, height), scroll, colour, waiting) = page.update(cx, |page, _| {
-        let Page { entry, theme, viewport, .. } = page;
-        let shaped = entry.shape(theme, page_scale(theme, *viewport), at, window);
-        (shaped, entry.scroll, hsla(theme.palette.caret), entry.state.waiting())
+        let Page { entry, fields, theme, viewport, .. } = page;
+        let view = which.and_then(|at| fields.get_mut(at)).unwrap_or(entry);
+        let shaped = view.shape(theme, page_scale(theme, *viewport), at, window);
+        (shaped, view.scroll, hsla(theme.palette.caret), view.state.waiting())
     });
     let origin = point(at.left() - scroll, at.top() + (at.size.height - px(height)) / 2.0);
     if let Some(line) = line {
@@ -156,52 +174,70 @@ impl Page {
         &self.entry.state
     }
 
-    /// Whether the entry has the keys. While it does, a letter key is text for it: a window that acts on plain
-    /// keys of its own (a `t` to switch theme) asks this first and leaves the key alone.
+    /// Whether the entry has the keys, or the field of a note. While one does, a letter key is text for it: a
+    /// window that acts on plain keys of its own (a `t` to switch theme) asks this first and leaves the key alone.
     pub fn entry_focused(&self, window: &Window) -> bool {
-        self.entry.what.is_some() && self.entry.focus.as_ref().is_some_and(|focus| focus.is_focused(window))
+        (self.entry.what.is_some() && self.entry.focused(window)) || self.keyed(window).is_some()
     }
 
     /// Gives the entry the keys, as a click on it does. Escape gives them back.
     pub fn focus_entry(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let focus = self.entry.focus.get_or_insert_with(|| cx.focus_handle()).clone();
+        self.focus_view(None, window, cx);
+    }
+
+    pub(super) fn focus_view(&mut self, which: Which, window: &mut Window, cx: &mut Context<Self>) {
+        let focus = self.view_mut(which).focus.get_or_insert_with(|| cx.focus_handle()).clone();
         window.focus(&focus, cx);
     }
 
-    /// The entry's own elements, over everything else: the typed line in the field, and what takes the clicks on
-    /// the field and on each chip. None for a page with no entry.
+    /// The elements of the entry and of each note's field, over everything else: the typed line in the field,
+    /// and what takes the clicks on the field, on each chip and on a field's offer. None for a page with neither.
     pub(super) fn entry_layer(&mut self, window: &Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        if self.entry.what.is_none() {
-            return Vec::new();
+        for view in std::iter::once(&mut self.entry).chain(&mut self.fields) {
+            view.lit = view.focus.get_or_insert_with(|| cx.focus_handle()).is_focused(window);
         }
-        let focus = self.entry.focus.get_or_insert_with(|| cx.focus_handle()).clone();
-        self.entry.lit = focus.is_focused(window);
         let pad = px(14.0 * page_scale(&self.theme, self.viewport));
-        let ours = self.placed.iter().filter(|piece| matches!(piece.piece, PieceKind::Entry | PieceKind::Chip));
-        ours.map(|piece| {
-            let (rect, index) = (piece.rect, piece.index);
-            let at = div().absolute().left(px(rect.x)).top(px(rect.y)).w(px(rect.w)).h(px(rect.h));
-            if piece.piece == PieceKind::Chip {
-                let chosen = cx.listener(move |page, _, window, cx| {
-                    page.entry.state.choose(index);
-                    page.focus_entry(window, cx);
-                    cx.notify();
-                });
-                return at.id(("chip", index)).cursor_pointer().on_click(chosen).into_any_element();
-            }
-            let (page, focus) = (cx.entity(), focus.clone());
-            at.id("entry")
-                .debug_selector(|| "Entry".into())
-                .track_focus(&focus)
-                .cursor(CursorStyle::IBeam)
-                .overflow_hidden()
-                .px(pad)
-                .on_mouse_down(MouseButton::Left, cx.listener(Self::entry_pressed))
-                .on_key_down(cx.listener(Self::entry_key))
-                .child(canvas(|_, _, _| (), move |at, (), window, cx| paint(at, &page, &focus, window, cx)).size_full())
-                .into_any_element()
-        })
-        .collect()
+        let typed = |piece: &&Placed| {
+            matches!(piece.piece, PieceKind::Entry | PieceKind::Chip | PieceKind::Field | PieceKind::Offer)
+        };
+        self.placed
+            .iter()
+            .filter(typed)
+            .filter_map(|piece| {
+                // A field's pieces are its note's: the entry's are nobody's but the entry's.
+                let which = match piece.piece {
+                    PieceKind::Field | PieceKind::Offer => {
+                        Some(self.fields.iter().position(|view| view.names(&piece.id))?)
+                    }
+                    _ => None,
+                };
+                let (rect, index) = (piece.rect, piece.index);
+                let at = div().absolute().left(px(rect.x)).top(px(rect.y)).w(px(rect.w)).h(px(rect.h));
+                if matches!(piece.piece, PieceKind::Chip | PieceKind::Offer) {
+                    let chosen = cx.listener(move |page, _, window, cx| {
+                        if which.is_none() {
+                            page.entry.state.choose(index);
+                        }
+                        page.focus_view(which, window, cx);
+                        cx.notify();
+                    });
+                    let id: ElementId = which.map_or(("chip", index).into(), |field| ("offer", field).into());
+                    return Some(at.id(id).cursor_pointer().on_click(chosen).into_any_element());
+                }
+                let (page, focus) = (cx.entity(), self.view(which).focus.clone()?);
+                let (id, name): (ElementId, String) = match which {
+                    Some(field) => (("field", field).into(), format!("Field:{}", piece.id)),
+                    None => ("entry".into(), "Entry".into()),
+                };
+                let pressed = cx.listener(move |page, event, _, cx| page.entry_pressed(which, event, cx));
+                let field = at.id(id).debug_selector(move || name).track_focus(&focus);
+                let drawn =
+                    move |at, (), window: &mut Window, cx: &mut App| paint(at, (&page, which), &focus, window, cx);
+                let field = field.cursor(CursorStyle::IBeam).overflow_hidden().px(pad);
+                let field = field.on_mouse_down(MouseButton::Left, pressed).on_key_down(cx.listener(Self::entry_key));
+                Some(field.child(canvas(|_, _, _| (), drawn).size_full()).into_any_element())
+            })
+            .collect()
     }
 
     /// A press anywhere else on the page gives the keys back.
@@ -209,7 +245,7 @@ impl Page {
         let (x, y) = (f32::from(event.position.x), f32::from(event.position.y));
         let on = |piece: &Placed| {
             let r = piece.rect;
-            matches!(piece.piece, PieceKind::Entry | PieceKind::Chip)
+            matches!(piece.piece, PieceKind::Entry | PieceKind::Chip | PieceKind::Field | PieceKind::Offer)
                 && r.x <= x
                 && x < r.right()
                 && r.y <= y
@@ -221,8 +257,8 @@ impl Page {
     }
 
     /// The press itself gives the field the keys: GPUI does that for an element that tracks a focus handle.
-    fn entry_pressed(&mut self, event: &MouseDownEvent, _: &mut Window, cx: &mut Context<Self>) {
-        let view = &mut self.entry;
+    fn entry_pressed(&mut self, which: Which, event: &MouseDownEvent, cx: &mut Context<Self>) {
+        let view = self.view_mut(which);
         if let Some(line) = &view.line {
             view.state.set_caret(line.closest_index_for_x(event.position.x - view.at.left() + view.scroll));
         }
@@ -234,8 +270,8 @@ impl Page {
     /// piece of a page takes the keys, so there is nowhere for it to move on to.
     fn entry_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let (key, held) = (event.keystroke.key.as_str(), event.keystroke.modifiers);
-        let command = held.secondary(cx);
-        let state = &mut self.entry.state;
+        let (command, which) = (held.secondary(cx), self.keyed(window));
+        let state = &mut self.view_mut(which).state;
         // An entry that waits takes no key at all: Escape too, so the keys stay the entry's and none is the window's.
         if state.waiting() {
             return;
@@ -251,7 +287,7 @@ impl Page {
             "right" => state.right(),
             "tab" if held.shift => state.previous_option(),
             "tab" => state.next_option(),
-            "enter" => self.entry_entered(window, cx),
+            "enter" => self.entry_entered(which, window, cx),
             "escape" => window.blur(cx),
             "v" if command => {
                 let pasted = cx.read_from_clipboard().and_then(|item| item.text());
@@ -263,123 +299,37 @@ impl Page {
         self.entry_changed(window, cx);
     }
 
-    fn entry_entered(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(made) = self.entry.state.enter() else {
+    /// Enter where the keys are. What a note's field gives carries the note's id, and goes to the entry's handler.
+    fn entry_entered(&mut self, which: Which, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(made) = self.view_mut(which).state.enter() else {
             return;
         };
         cx.notify();
-        match (&self.entry.on_made, &self.entry.what) {
+        match (&self.entry.on_made, &self.view(which).what) {
             (Some(handler), Some(entry)) => {
                 let option = made.option.and_then(|at| entry.options.get(at).cloned());
                 handler(&EntryMade { id: entry.id.clone(), text: made.text, option }, window, cx);
             }
             // Nobody was given the words, so nobody will answer: they are taken as kept.
-            _ => self.entry.state.answer(true),
+            _ => self.view_mut(which).state.answer(true),
         }
     }
 
     /// Tells the platform's text input that the text or the caret is no longer what it last saw, and draws again.
-    fn entry_changed(&mut self, window: &Window, cx: &mut Context<Self>) {
-        if let Some(focus) = &self.entry.focus {
+    /// The line told of is the one with the keys: the entry, or the field of a note.
+    pub(super) fn entry_changed(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if let Some(focus) = &self.view(self.keyed(window)).focus {
             window.notify_text_input_changed(focus);
         }
         self.entry_settled(cx);
     }
 
     /// Draws again. An entry that was taken away while it held words goes here, once it holds none.
-    fn entry_settled(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn entry_settled(&mut self, cx: &mut Context<Self>) {
         if self.entry.leaving && !self.entry.state.holds() {
             (self.entry.what, self.entry.state, self.entry.leaving) = (None, EntryState::default(), false);
             self.stale = Stale::Spring;
         }
         cx.notify();
-    }
-}
-
-/// What the platform's text input asks of the entry and does to it. It counts in UTF-16; [`EntryState`] converts.
-impl EntityInputHandler for Page {
-    fn text_for_range(
-        &mut self,
-        range_utf16: Range<usize>,
-        adjusted: &mut Option<Range<usize>>,
-        _: &mut Window,
-        _: &mut Context<Self>,
-    ) -> Option<String> {
-        let state = &self.entry.state;
-        let range = state.from_utf16(range_utf16);
-        adjusted.replace(state.to_utf16(range.clone()));
-        Some(state.text()[range].to_string())
-    }
-
-    fn selected_text_range(&mut self, _: bool, _: &mut Window, _: &mut Context<Self>) -> Option<UTF16Selection> {
-        let state = &self.entry.state;
-        Some(UTF16Selection { range: state.to_utf16(state.caret()..state.caret()), reversed: false })
-    }
-
-    fn marked_text_range(&self, _: &mut Window, _: &mut Context<Self>) -> Option<Range<usize>> {
-        self.entry.state.marked().map(|marked| self.entry.state.to_utf16(marked))
-    }
-
-    fn unmark_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.entry.state.unmark();
-        self.entry_changed(window, cx);
-    }
-
-    fn replace_text_in_range(
-        &mut self,
-        range_utf16: Option<Range<usize>>,
-        text: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.entry.state.replace(range_utf16, text);
-        self.entry_changed(window, cx);
-    }
-
-    fn replace_and_mark_text_in_range(
-        &mut self,
-        range_utf16: Option<Range<usize>>,
-        new_text: &str,
-        new_selected_range_utf16: Option<Range<usize>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.entry.state.mark(range_utf16, new_text, new_selected_range_utf16);
-        self.entry_changed(window, cx);
-    }
-
-    fn bounds_for_range(
-        &mut self,
-        range_utf16: Range<usize>,
-        field: Bounds<Pixels>,
-        _: &mut Window,
-        _: &mut Context<Self>,
-    ) -> Option<Bounds<Pixels>> {
-        let view = &self.entry;
-        let range = view.state.from_utf16(range_utf16);
-        let x =
-            |at: usize| field.left() - view.scroll + view.line.as_ref().map_or(px(0.0), |line| line.x_for_index(at));
-        Some(Bounds::from_corners(point(x(range.start), field.top()), point(x(range.end), field.bottom())))
-    }
-
-    fn character_index_for_point(&mut self, at: Point<Pixels>, _: &mut Window, _: &mut Context<Self>) -> Option<usize> {
-        let view = &self.entry;
-        let index = view.line.as_ref()?.closest_index_for_x(at.x - view.at.left() + view.scroll);
-        Some(view.state.to_utf16(index..index).start)
-    }
-
-    fn set_selected_text_range(&mut self, range_utf16: Range<usize>, window: &mut Window, cx: &mut Context<Self>) {
-        let to = self.entry.state.from_utf16(range_utf16).end;
-        self.entry.state.set_caret(to);
-        self.entry_changed(window, cx);
-    }
-
-    fn text_length_utf16(&mut self, _: &mut Window, _: &mut Context<Self>) -> Option<usize> {
-        Some(self.entry.state.len_utf16())
-    }
-
-    /// Not while the entry waits for its answer: no composition can begin then.
-    fn accepts_text_input(&self, _: &mut Window, _: &mut Context<Self>) -> bool {
-        self.entry.what.is_some() && !self.entry.state.waiting()
     }
 }

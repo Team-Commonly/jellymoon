@@ -138,13 +138,45 @@ fn every_sentence_of_core_s_for_the_ear_is_drawn_whole() {
     }
 }
 
-// F56's review, note 6: every sentence a hearing has of its own to refuse with, the ear's among them, is held
-// whole by the bubble in each built-in theme. One that grows past it fails here, and is shortened in core.
+/// Every sentence a hearing refuses with in words of its own, typed here as `docs/development/hear.md` has them:
+/// the ear's eight, the ear that stayed silent, no project, the three for no harness, and the three that come
+/// with the final words.
+const REFUSALS: [&str; 16] = [
+    "voice does not work on this system yet: type the wish on the page",
+    "nothing was heard: no microphone was found",
+    "nothing was heard: Jellymoon may not use the microphone; allow it in System Settings, Privacy & Security, \
+     Microphone",
+    "nothing was heard: Jellymoon may not recognize speech; allow it in System Settings, Privacy & Security, \
+     Speech Recognition",
+    "nothing was heard: this Mac cannot recognize that language on the device, and Jellymoon sends no sound \
+     anywhere",
+    "nothing was heard: the language in voice.toml is not one this Mac recognizes",
+    "nothing was heard: voice works only in Jellymoon.app, started as an app",
+    "nothing was heard: the recognizer failed",
+    "nothing was heard: the ear did not say what it heard",
+    "nothing was kept: make the day's first wish on the page, so that Jellymoon knows which project a wish said \
+     aloud is for",
+    "the wish is kept, but no run was started: no `claude` program was found (JELLYMOON_CLAUDE names one)",
+    "the wish is kept, but no run was started: a `claude` program was found but is not used, as others can write \
+     to it or its folder",
+    "the wish is kept, but no run was started: no `claude` program was found, and there is no home directory to \
+     look in",
+    "a wish is at most 200 characters, and this one is longer",
+    "nothing is left of these words but the mark of what cleaning replaced, so nothing was made of them",
+    "a wish is kept as cleaning leaves it, and cleaning was not done with these words after 8 times",
+];
+
+// F56's review, note 6, and F57's, finding 6: every sentence a hearing has of its own to refuse with is held
+// whole by the bubble in each built-in theme. The list is exactly these: one that is dropped from it, or said
+// twice in another's place, fails here, and so does one that grows past the bubble, which is shortened in core.
 #[test]
 fn every_sentence_a_hearing_refuses_with_is_drawn_whole() {
     let sentences = jellymoon_core::Hearing::refusals();
-    assert!(sentences.len() >= EarCannot::ALL.len() + 6, "{sentences:?}");
-    assert!(EarCannot::ALL.iter().all(|why| sentences.contains(&why.says())), "the ear's are among them");
+    let sorted = |mut list: Vec<&'static str>| {
+        list.sort_unstable();
+        list
+    };
+    assert_eq!(sorted(sentences.clone()), sorted(REFUSALS.to_vec()));
     for sentence in sentences {
         for theme in ["sticker", "plain"] {
             let shown = crate::jelly::drawn_in(&cannot(sentence), theme);

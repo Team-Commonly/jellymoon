@@ -310,7 +310,8 @@ impl Hearing {
     /// Every sentence of a hearing's own that it refuses with: the ear's, and its own for words that came to
     /// nothing. A refusal of a wish or of a run that is passed on in that command's words is not among them.
     pub fn refusals() -> Vec<&'static str> {
-        let own = [EAR_SILENT, MARKS, day::NO_PROJECT, day::NO_HARNESS, wish::LONG, wish::CHANGING];
+        let no_harness = [day::NO_HARNESS, day::PASSED_OVER, day::NO_HOME];
+        let own = [EAR_SILENT, MARKS, day::NO_PROJECT, wish::LONG, wish::CHANGING].into_iter().chain(no_harness);
         EarCannot::ALL.iter().map(|why| why.says()).chain(own).collect()
     }
 }

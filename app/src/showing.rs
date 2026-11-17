@@ -91,12 +91,18 @@ impl Showing {
         self.with(|on| on.wishing(typed, project))
     }
 
-    /// Core's answer to an Enter, or none when there was no day to ask. The entry is always answered, so it never
-    /// waits for ever, and it is told its words were kept only when core kept the wish.
+    /// Enter in the field of the note `note`, as work for another thread: an answer to a run that asks, or a
+    /// follow-up. None when that note has no field on show, and then nothing is asked of core.
+    pub fn typing(&self, note: &str, typed: &str) -> Option<Wishing> {
+        self.with(|on| on.typing(note, typed)).flatten()
+    }
+
+    /// Core's answer to an Enter, or none when there was no day to ask. The entry, or the field, is always
+    /// answered, so it never waits for ever, and it is told its words were kept only when core took them.
     pub fn answered(&self, answer: Option<Answer>) -> Entered {
+        let kept = answer.as_ref().is_some_and(Answer::kept);
         let (scene, asking) = answer.and_then(|answer| self.with(|on| on.answered(answer))).unzip();
-        let asking = asking.flatten();
-        Entered { kept: asking.is_some(), scene, asking }
+        Entered { kept, scene, asking: asking.flatten() }
     }
 
     /// What the asking for a wish's run had to say: the scene to show, when it said something.

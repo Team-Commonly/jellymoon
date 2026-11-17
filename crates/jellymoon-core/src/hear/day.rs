@@ -4,15 +4,22 @@
 use std::path::{Path, PathBuf};
 
 use super::{Jelly, JellyState};
-use crate::{DayOptions, Error, RunOptions, WishState, find, run, run_apart, wish, wish_offered};
+use crate::{DayOptions, RunOptions, WishState, find, run, run_apart, wish, wish_offered};
 
 /// What is said when no project can be picked for a heard wish.
 pub(super) const NO_PROJECT: &str = "nothing was kept: make the day's first wish on the page, so that Jellymoon knows \
                                      which project a wish said aloud is for";
-/// What is said when a run was asked for and no harness is there to run it. Where it was looked for is what
-/// `jellymoon wish --run` says: this is short enough for the bubble.
+/// What is said when a run was asked for and no harness is there to run it, each short enough for the bubble:
+/// where it was looked for, and which program was passed over, is what `jellymoon wish --run` says. This one is
+/// for a search that found nothing, with a home to look in.
 pub(super) const NO_HARNESS: &str =
     "the wish is kept, but no run was started: no `claude` program was found (JELLYMOON_CLAUDE names one)";
+/// A `claude` was found and passed over, so "none was found" would be untrue.
+pub(super) const PASSED_OVER: &str = "the wish is kept, but no run was started: a `claude` program was found but is \
+                                      not used, as others can write to it or its folder";
+/// Nothing was found, and the places under a home were not looked in.
+pub(super) const NO_HOME: &str = "the wish is kept, but no run was started: no `claude` program was found, and there \
+                                  is no home directory to look in";
 pub(super) const ASKS: &str = "a run asks, and waits for your answer on the page";
 pub(super) const WAITS: &str = "a run's work waits for you on the page";
 
@@ -93,16 +100,25 @@ pub(super) fn make(
     let unstarted = match run_apart(home, program, &options) {
         // A run that was named and has ended already, needing the person, is said as it ended, as `jellymoon
         // wish --run` prints it. One that finished is not a thing that could not be done: the day's rest shows it.
-        Ok(started) if started.run.is_none() && no_harness(&options) => Some(NO_HARNESS.to_string()),
-        Ok(started) => (started.run.is_none() || started.state == WishState::NeedsYou).then_some(started.why),
+        Ok(started) if started.run.is_none() => Some(no_harness(&options).map_or(started.why, str::to_string)),
+        Ok(started) => (started.state == WishState::NeedsYou).then_some(started.why),
         Err(e) => Some(e.to_string()),
     };
     Ok((made, unstarted))
 }
 
-/// Whether no run was started because there is no harness: asked as `run_apart` asks it.
-fn no_harness(options: &RunOptions) -> bool {
-    matches!(find::named_or_found(options.harness.as_deref()), Err(Error::NoHarness(_)))
+/// The sentence for a run that was not started because there is no harness, asked as `run_apart` asks it: a
+/// program passed over is said first, since that is what the person can mend. None when one was named or found.
+fn no_harness(options: &RunOptions) -> Option<&'static str> {
+    if options.harness.is_some() {
+        return None;
+    }
+    let missed = find::search().ok()?.err()?;
+    Some(match (missed.passed_over.is_empty(), missed.home) {
+        (false, _) => PASSED_OVER,
+        (true, true) => NO_HARNESS,
+        (true, false) => NO_HOME,
+    })
 }
 
 #[cfg(test)]

@@ -1,0 +1,148 @@
+//! What a text note holds besides its own words: someone else's words, quoted, and a field with its offer. The
+//! quoted words are text on a ground of their own and nothing else; the field and the offer are the note's only
+//! pieces to act on besides its options.
+
+use sticker_kit::{
+    Field, FixedAdvance, MAX_QUOTED_LINES, Note, PieceKind, Placed, Rect, Role, Scene, Theme, Viewport, layout,
+};
+
+const SIZES: [Viewport; 2] = [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 960.0, h: 640.0 }];
+const ID: &str = "row-1";
+
+fn field(offer: &str) -> Option<Field> {
+    Some(Field { offer: offer.into(), hint: "Type here, then Enter".into(), most: 80 })
+}
+
+fn note(body: &[&str], options: &[&str], quoted: &str, field: Option<Field>) -> Note {
+    let texts = |all: &[&str]| all.iter().map(|text| text.to_string()).collect();
+    let (body, options) = (texts(body), texts(options));
+    Note::Text { id: ID.into(), title: "A row".into(), body, options, quoted: quoted.into(), field }
+}
+
+fn place(note: Note, theme: &Theme, viewport: Viewport) -> Vec<Placed> {
+    let scene = Scene { notes: vec![note], ..Scene::sample() };
+    layout(&scene, theme, viewport, &FixedAdvance(0.56))
+}
+
+fn of(placed: &[Placed], kind: PieceKind) -> Vec<&Placed> {
+    placed.iter().filter(|piece| piece.piece == kind && piece.id == ID).collect()
+}
+
+fn inside(inner: Rect, outer: Rect) -> bool {
+    let near = 0.01;
+    inner.x >= outer.x - near
+        && inner.y >= outer.y - near
+        && inner.right() <= outer.right() + near
+        && inner.bottom() <= outer.bottom() + near
+}
+
+/// The kinds of the pieces of the note, in the order they stand from its top, with no note or tape among them.
+fn kinds(placed: &[Placed]) -> Vec<PieceKind> {
+    let mut ours: Vec<&Placed> = placed.iter().filter(|piece| piece.id == ID).collect();
+    ours.retain(|piece| !matches!(piece.piece, PieceKind::Note | PieceKind::Tape));
+    ours.sort_by(|a, b| a.rect.y.total_cmp(&b.rect.y));
+    ours.iter().map(|piece| piece.piece).collect()
+}
+
+#[test]
+fn someone_else_s_words_are_a_piece_of_their_own_in_the_tone_for_quoted_words_with_the_field_under_them() {
+    for (theme, viewport) in [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
+    {
+        let placed = place(note(&["what the note says"], &[], "Which of the two?", field("")), theme, viewport);
+        let [sheet] = of(&placed, PieceKind::Note)[..] else { panic!("one note") };
+        let [quote] = of(&placed, PieceKind::Quote)[..] else { panic!("one quoted piece") };
+        let [typed] = of(&placed, PieceKind::Field)[..] else { panic!("one field") };
+        // The note's own words are its own: the quoted ones are in the quote alone, every run in their tone.
+        let own: Vec<&str> = sheet.text.iter().map(|run| run.text.as_str()).collect();
+        assert_eq!(own, ["A row", "what the note says"]);
+        assert!(sheet.text.iter().all(|run| run.role != Role::Quoted));
+        let quoted: Vec<(&str, Role)> = quote.text.iter().map(|run| (run.text.as_str(), run.role)).collect();
+        assert_eq!(quoted, [("Which of the two?", Role::Quoted)]);
+        // Under the body, the quote; under the quote, the field with its hint. All inside the sheet.
+        assert!(sheet.text.iter().all(|run| run.rect.bottom() <= quote.rect.y));
+        assert!(
+            quote.rect.bottom() <= typed.rect.y && inside(quote.rect, sheet.rect) && inside(typed.rect, sheet.rect)
+        );
+        assert!(quote.text.iter().all(|run| inside(run.rect, quote.rect)));
+        let hint: Vec<(&str, Role)> = typed.text.iter().map(|run| (run.text.as_str(), run.role)).collect();
+        assert_eq!(hint, [("Type here, then Enter", Role::RowSub)]);
+        assert!(inside(typed.text[0].rect, typed.rect));
+        // A field with no offer has none, and nothing else of the note is a piece.
+        assert_eq!(kinds(&placed), [PieceKind::Quote, PieceKind::Field]);
+        assert_eq!((quote.z, typed.z), (PieceKind::Option.z(), PieceKind::Option.z()));
+    }
+}
+
+#[test]
+fn an_offer_stands_over_its_field_and_both_under_the_options() {
+    for viewport in SIZES {
+        let placed = place(note(&["one", "two"], &["Yes", "No"], "", field("More of it")), &Theme::sticker(), viewport);
+        assert_eq!(kinds(&placed), [PieceKind::Option, PieceKind::Option, PieceKind::Offer, PieceKind::Field]);
+        let (sheet, offer, typed) =
+            (of(&placed, PieceKind::Note)[0], of(&placed, PieceKind::Offer)[0], of(&placed, PieceKind::Field)[0]);
+        let said: Vec<(&str, Role)> = offer.text.iter().map(|run| (run.text.as_str(), run.role)).collect();
+        assert_eq!(said, [("More of it", Role::Legend)]);
+        assert!(
+            offer.rect.bottom() <= typed.rect.y && inside(offer.rect, sheet.rect) && inside(typed.rect, sheet.rect)
+        );
+        // The offer is as wide as its words and no wider than the field.
+        assert!(offer.rect.w < typed.rect.w && inside(offer.text[0].rect, offer.rect));
+        assert!(of(&placed, PieceKind::Quote).is_empty(), "no words are quoted");
+    }
+}
+
+#[test]
+fn quoted_words_of_any_length_are_cleaned_cut_to_their_lines_and_are_nothing_but_text() {
+    // Hundreds of lines, a mark that turns a line round, look-alike letters, and what would be a link or a choice.
+    let long: String = (1..=400).map(|n| format!("line {n} of it\n")).collect();
+    let turned =
+        "Which \u{202e}one\u{202c} did you mean, the \u{43e}ld or the new? [Keep it](https://example.test) Toss it";
+    for (words, cut) in [(long.as_str(), true), (turned, false)] {
+        for (theme, viewport) in
+            [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
+        {
+            let placed = place(note(&["what the note says"], &[], words, field("")), theme, viewport);
+            let (sheet, quote) = (of(&placed, PieceKind::Note)[0], of(&placed, PieceKind::Quote)[0]);
+            let lines: Vec<&str> = quote.text.iter().map(|run| run.text.as_str()).collect();
+            assert!(!lines.is_empty() && lines.len() <= MAX_QUOTED_LINES, "{}", lines.len());
+            assert_eq!(lines.last().unwrap().ends_with('…'), cut, "{lines:?}");
+            let unseen = |c: char| c.is_control() || ('\u{202a}'..='\u{202e}').contains(&c);
+            assert!(lines.iter().all(|line| !line.contains(unseen)), "{lines:?}");
+            assert!(quote.text.iter().all(|run| run.role == Role::Quoted && inside(run.rect, quote.rect)));
+            assert!(inside(quote.rect, sheet.rect) && inside(sheet.rect, of(&placed, PieceKind::Note)[0].rect));
+            // Whatever the words say, the note has a quote and a field, and no option, offer or other piece.
+            assert_eq!(kinds(&placed), [PieceKind::Quote, PieceKind::Field]);
+        }
+    }
+    // What is not cut is drawn as it was written: a letter that looks like another is that letter still.
+    let placed = place(note(&[], &[], turned, None), &Theme::sticker(), SIZES[0]);
+    let drawn: Vec<&str> = of(&placed, PieceKind::Quote)[0].text.iter().map(|run| run.text.as_str()).collect();
+    let whole = drawn.join(" ");
+    assert_eq!(whole, "Which one did you mean, the \u{43e}ld or the new? [Keep it](https://example.test) Toss it");
+}
+
+#[test]
+fn quoted_words_that_clean_to_nothing_are_no_piece_and_a_note_with_neither_is_as_it_was() {
+    let bare = place(note(&["one"], &["Yes"], "", None), &Theme::sticker(), SIZES[0]);
+    let unseen = place(note(&["one"], &["Yes"], " \u{200b}\n\u{202e} ", None), &Theme::sticker(), SIZES[0]);
+    assert_eq!(kinds(&bare), [PieceKind::Option]);
+    assert_eq!(unseen, bare);
+    // The quote and the field make the sheet taller by what they take, and move nothing over them.
+    let both = place(note(&["one"], &["Yes"], "Which?", field("More")), &Theme::sticker(), SIZES[0]);
+    let (short, tall) = (of(&bare, PieceKind::Note)[0], of(&both, PieceKind::Note)[0]);
+    assert!(tall.rect.h > short.rect.h && tall.text == short.text);
+}
+
+#[test]
+fn the_quote_and_the_field_stay_when_the_body_is_cut_and_the_options_go() {
+    let body: Vec<String> = (1..=60).map(|n| format!("line {n}")).collect();
+    let body: Vec<&str> = body.iter().map(String::as_str).collect();
+    for viewport in SIZES {
+        let placed = place(note(&body, &["Yes", "No"], "Which?", field("More")), &Theme::sticker(), viewport);
+        assert_eq!(kinds(&placed), [PieceKind::Quote, PieceKind::Offer, PieceKind::Field]);
+        let sheet = of(&placed, PieceKind::Note)[0];
+        assert!(sheet.text.last().is_some_and(|run| run.text.starts_with('+')), "the body is counted");
+        let paper = placed.iter().find(|piece| piece.piece == PieceKind::Paper).unwrap();
+        assert!(inside(sheet.rect, paper.rect) && inside(of(&placed, PieceKind::Field)[0].rect, sheet.rect));
+    }
+}

@@ -49,3 +49,7 @@ required-features = ["headless"]
 [[test]]
 name = "entry_draw"
 required-features = ["headless"]
+
+[[test]]
+name = "field_draw"
+required-features = ["headless"]

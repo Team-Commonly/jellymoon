@@ -225,6 +225,9 @@ fn what_run_waiting_prints_round_trips_byte_for_byte() {
     // Work that was not read names no file and has no choice: a tap on its note has nothing to change.
     assert_eq!((unread.read, unread.lines().len(), unread.choices(false).len()), (false, 2, 0));
     assert!(serde_json::from_str::<Waiting>(&example.replace("\"day\"", "\"date\"")).is_err());
+    // The wishes a follow-up may be made of are named, and a line without them is not this shape.
+    assert_eq!(waiting.follows, ["m1", "m2"]);
+    assert!(serde_json::from_str::<Waiting>(&example.replace(",\"follows\":[\"m1\",\"m2\"]", "")).is_err());
 }
 
 #[test]

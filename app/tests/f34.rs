@@ -63,20 +63,25 @@ fn a_kept_page_is_shown_without_a_call_until_the_day_has_turns_it_did_not_see() 
 #[test]
 fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
     let world = world();
-    let one = |world: &World, args: &[&str]| {
-        let placed = shown(world, args);
+    // The one note of the page, whose title is `lines` lines at this size: "Today could not be read." is one,
+    // "There is no page for this day yet." is two.
+    let one_with = |world: &World, args: &[&str], more: &[(&str, &str)], lines: usize| {
+        let out = run(world, args, more);
+        assert!(out.status.success() && out.stderr.is_empty(), "layout {args:?}");
+        let placed = String::from_utf8(out.stdout).unwrap();
+        let placed: Vec<Piece> = placed.lines().map(|line| Piece(serde_json::from_str(line).unwrap())).collect();
         let plain: Vec<&Piece> = placed.iter().filter(|piece| piece.kind() == "note").collect();
         assert_eq!(plain.len(), 1, "{args:?}");
         let roles = plain[0].roles();
-        // The title of a day with no page is two lines at this size; the one of a failed reading is one.
         let titles = roles.iter().take_while(|role| *role == "note_title").count();
-        assert!((1..=2).contains(&titles), "a plain note: {roles:?}");
+        assert_eq!(titles, lines, "the title's lines: {roles:?}");
         assert!(roles[titles..].iter().all(|role| role == "body"), "a plain note: {roles:?}");
         assert!(labels(&placed).is_empty() && !kept(world).exists(), "no page is shown and none is kept");
         plain[0].said()
     };
+    let one = |world: &World, args: &[&str], lines: usize| one_with(world, args, &[], lines);
     answer(&world, "", 1);
-    let failed = one(&world, &[]);
+    let failed = one(&world, &[], 1);
     assert!(
         failed.starts_with(
             "Today could not be read. Claude Code could not do the reading. Check that `claude` answers in a terminal"
@@ -84,22 +89,33 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
         "{failed}"
     );
     answer(&world, "not a result", 0);
-    let odd = one(&world, &[]);
+    let odd = one(&world, &[], 1);
     assert!(odd.starts_with("Today could not be read. Claude Code could not do the reading."), "{odd}");
+    // The harness's own result says the call was an error.
+    answer(&world, &json!({"type": "result", "is_error": true, "result": "made-up trouble"}).to_string(), 0);
+    let harness = one(&world, &[], 1);
+    assert!(harness.starts_with("Today could not be read. Claude Code could not do the reading."), "{harness}");
+    assert!(called(&world), "the call was made");
+    // A program named that is not there: nothing is started, as with no `claude` found at all.
+    let gone = world.dir.path().join("gone").join("claude");
+    let unstarted = one_with(&world, &[], &[("JELLYMOON_CLAUDE", gone.to_str().unwrap())], 2);
+    let no_start = "There is no page for this day yet. Claude Code could not be started, so nothing was read.";
+    assert!(unstarted.starts_with(no_start), "{unstarted}");
+    assert!(!called(&world), "nothing was called");
     answer(&world, &result("Sorry, I cannot help with that."), 0);
     assert_eq!(
-        one(&world, &[]),
+        one(&world, &[], 1),
         "Today could not be read. The model's answer was not a page, so nothing from it is shown. Open Jellymoon again to try once more."
     );
     let nowhere = world.dir.path().join("nowhere");
-    let none = one(&world, &["--logs", nowhere.to_str().unwrap()]);
+    let none = one(&world, &["--logs", nowhere.to_str().unwrap()], 2);
     assert!(
         none.starts_with("There is no page for this day yet. No Claude Code session logs were found on this computer"),
         "{none}"
     );
 
     fs::remove_file(world.rec.join(format!("claude{}", env::consts::EXE_SUFFIX))).unwrap();
-    let missing = one(&world, &[]);
+    let missing = one(&world, &[], 2);
     assert!(
         missing.starts_with("There is no page for this day yet. Claude Code was not found on this computer."),
         "{missing}"

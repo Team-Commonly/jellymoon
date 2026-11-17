@@ -273,10 +273,6 @@ fn a_negative_size_margin_or_gap_is_none() {
     assert_eq!(beside(Viewport { w: -300.0, h: -200.0 }, 8.0), [1320.0, 884.0, 0.0, 0.0]);
 }
 
-fn apart(a: Rect, b: Rect) -> bool {
-    a.right() <= b.x || b.right() <= a.x || a.bottom() <= b.y || b.bottom() <= a.y
-}
-
 // The first window's margin gives way before the second is laid over it.
 #[test]
 fn two_windows_stand_apart_in_every_room_that_holds_both_and_the_margin_gives_way_first() {
@@ -288,7 +284,7 @@ fn two_windows_stand_apart_in_every_room_that_holds_both_and_the_margin_gives_wa
     // The two screens of a review, where the second covered the first.
     for (w, h) in [(320.0, 322.0), (419.0, 240.0)] {
         let (first, second) = pair(Viewport { w, h }, Corner::BottomRight);
-        assert!(apart(first, second), "{w}x{h}: {first:?} {second:?}");
+        assert!(!first.overlaps(&second), "{w}x{h}: {first:?} {second:?}");
     }
     assert_eq!(at(pair(Viewport { w: 320.0, h: 322.0 }, Corner::BottomRight).0), [224.0, 226.0, 96.0, 96.0]);
     assert_eq!(at(pair(Viewport { w: 419.0, h: 240.0 }, Corner::BottomRight).0), [308.0, 129.0, 96.0, 96.0]);
@@ -303,7 +299,7 @@ fn two_windows_stand_apart_in_every_room_that_holds_both_and_the_margin_gives_wa
                 let whole = Rect::new(0.0, 0.0, screen.w, screen.h);
                 let holds = screen.w >= 96.0 + 8.0 + 300.0 || screen.h >= 96.0 + 8.0 + 218.0;
                 let fits = screen.w >= 300.0 && screen.h >= 218.0;
-                assert!(!holds || apart(first, second), "{corner:?} {w}x{h}: {first:?} {second:?}");
+                assert!(!(holds && first.overlaps(&second)), "{corner:?} {w}x{h}: {first:?} {second:?}");
                 assert!(!(holds && fits) || (inside(first, whole) && inside(second, whole)), "{corner:?} {w}x{h}");
                 assert_eq!(second, place_beside(screen, whole, first, tall, corner, EDGE_GAP), "{corner:?} {w}x{h}");
                 assert_eq!((first.w, first.h, second.w, second.h), (96.0, 96.0, 300.0, 218.0));
@@ -338,6 +334,6 @@ fn no_text_size_of_a_theme_puts_a_piece_out_of_its_window_or_makes_a_window_huge
         }
         let texts: Vec<&str> = bubble.pieces[0].text.iter().map(|run| run.text.as_str()).collect();
         assert_eq!(texts[0], "make it so", "{body} {small}");
-        assert!(texts[1].ends_with('…') && texts[1].len() > 4, "a name cut to its line keeps its ellipsis: {texts:?}");
+        assert!(texts[1].ends_with('…') && texts[1].len() > 4, "a name cut to its line keeps the mark: {texts:?}");
     }
 }

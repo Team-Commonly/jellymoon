@@ -223,8 +223,8 @@ gives both sizes, which never depend on what is said: a window is opened and rem
   lower anchor and under an upper one.
 
 - `place_pair(screen, room, first, second, corner, margin, gap)` places both. In a room that holds the two apart
-  only with less than the margin, the first window's margin gives way, as far as it must, before the second is
-  laid over the first. A size, a margin or a gap below nothing, or that is no number, is nothing.
+  only with less than the margin, the first window's margin gives way before the second is laid over the first.
+  The margin is one number, so it is made smaller at both of the corner's edges, though one would do. A size, a margin or a gap below nothing, or that is no number, is nothing.
 - A text of the edge scene is drawn at its role's size held to 9 to 22 pixels, whatever a theme asks, so a window
   of the size `edge_windows` gives always holds its texts.
 - `Edge::speaks()` says whether there is a bubble, and so a second window.
@@ -234,8 +234,23 @@ gives both sizes, which never depend on what is said: a window is opened and rem
 it, and a view with no `on_tap` takes none. The character is the theme's art in one of seven poses, one a mood,
 with the count on a pill; the bubble is a rounded shape with the ring as an arc that empties. Every run of text is
 clipped to its piece, and is text and nothing else. A `quoted` run is drawn in the palette's `quoted` ink
-(`edge_ink`), the others in `ink` and `soft`. A theme file's `quoted` falls back to its `accent_dark` where that
+(`edge_ink`), the others in `ink`, `soft` and `quiet`, and the count in `bubble` on its pill; `painted()` gives
+the ink and the clipped box of every run of the last frame, beside `placed()`. A theme file's `quoted` falls back to its `accent_dark` where that
 reads on its `bubble`, and is held to its floor like the pairs above, on a bubble laid on white.
+
+**Open: the bubble's other inks have no floor.** Only `quoted` is measured on `bubble`, and only on white.
+Nothing is built for it while nobody has a theme file of their own. What was measured with theme files:
+
+| A theme file's `bubble` | What it gives | Said |
+|---|---|---|
+| `#808080` | `quoted` 5.32, but `ink` 3.64, `soft` 1.69 and `quiet` 1.28 | nothing |
+| `#202020` | the scene's own sentence, in `ink`, at 1.13 | nothing |
+| `#E8B0A0` | `quoted` falls back to exactly `ink`: someone else's words and the scene's own share ink, size, family and weight, with the 10 pixels between them | nothing |
+| `#FFFFFF20` | `quoted` 6.14 on white, and 2.21 over a dark desktop | nothing |
+
+In the two built-in themes `quiet`, the small line under a heard text, is 3.10 and 3.04 on the bubble. What
+would close it: a floor for `ink` and `soft` on `bubble` as for `quoted`, a fallback that is never `ink` or
+`soft`, and a bubble one sees through settled against black as well as white.
 
 ## Run it
 

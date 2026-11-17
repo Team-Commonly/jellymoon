@@ -28,6 +28,8 @@ pub struct Loaded {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ThemeError {
+    /// The path names no file that can be opened: it is not there, is not a regular file, or may not be read.
+    NoFile,
     Read(String),
     Parse(String),
     /// The number at `key` is not finite or is outside `low` to `high`.
@@ -42,6 +44,7 @@ pub enum ThemeError {
 impl fmt::Display for ThemeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ThemeError::NoFile => write!(f, "cannot read the theme: it is not a file that can be opened"),
             ThemeError::Read(why) => write!(f, "cannot read the theme: {why}"),
             ThemeError::Parse(why) => write!(f, "cannot parse the theme: {why}"),
             ThemeError::OutOfRange { key, value, low, high } => {
@@ -73,7 +76,7 @@ impl Theme {
 
     /// Reads a theme file, and no other file.
     pub fn load(path: &Path) -> Result<Loaded, ThemeError> {
-        let text = read_capped(path, MAX_THEME_BYTES).map_err(ThemeError::Read)?;
+        let text = read_capped(path, MAX_THEME_BYTES)?;
         let mut loaded = Theme::from_toml(&text)?;
         if loaded.theme.name.is_empty()
             && let Some(stem) = path.file_stem()
@@ -136,16 +139,13 @@ fn over(max: u64) -> String {
 }
 
 /// The text of a regular file of at most `max` bytes. A folder, a pipe or a device is not read at all.
-fn read_capped(path: &Path, max: u64) -> Result<String, String> {
-    let meta = fs::metadata(path).map_err(|e| e.to_string())?;
-    if !meta.is_file() {
-        return Err("it is not a regular file".into());
-    }
+fn read_capped(path: &Path, max: u64) -> Result<String, ThemeError> {
+    let meta = fs::metadata(path).ok().filter(fs::Metadata::is_file).ok_or(ThemeError::NoFile)?;
     let mut text = String::new();
-    let file = fs::File::open(path).map_err(|e| e.to_string())?;
-    file.take(max + 1).read_to_string(&mut text).map_err(|_| "it is not text".to_string())?;
+    let file = fs::File::open(path).map_err(|_| ThemeError::NoFile)?;
+    file.take(max + 1).read_to_string(&mut text).map_err(|_| ThemeError::Read("it is not text".to_string()))?;
     if meta.len() > max || text.len() as u64 > max {
-        return Err(over(max));
+        return Err(ThemeError::Read(over(max)));
     }
     Ok(text)
 }

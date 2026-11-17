@@ -7,6 +7,7 @@
 //! platform, where there is none.
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,6 +25,21 @@ use crate::window::{self, LOOK_EVERY, say};
 
 /// A look at what core keeps for the jellyfish. It reads files, so it is run off the window's thread.
 pub type JellyLook = Arc<dyn Fn() -> JellyDrawn + Send + Sync>;
+
+/// The look at what core keeps for the jellyfish in `home`: the made wishes of `day` and their runs. With no
+/// day named it is the day `today` gives, asked at each look, so an app left open past midnight shows the new
+/// day's runs. A look that fails is quiet.
+pub fn jelly_look(
+    home: PathBuf,
+    day: Option<String>,
+    today: impl Fn() -> Option<String> + Send + Sync + 'static,
+) -> JellyLook {
+    Arc::new(move || {
+        let day = day.clone().or_else(&today);
+        let seen = jellymoon_core::jellyfish(None, &home, day.as_deref());
+        seen.unwrap_or_else(|_| jellymoon_core::Jelly::quiet()).drawn()
+    })
+}
 
 /// What the app is asked to open.
 pub struct Asked {
@@ -91,11 +107,6 @@ pub fn wire(asked: Asked, room: Room, cx: &mut App) -> gpui::Result<Opened> {
 }
 
 impl Opened {
-    /// The page's window. None while it is closed.
-    pub fn page(&self, cx: &App) -> Option<WindowHandle<Page>> {
-        window::page_window(cx)
-    }
-
     /// The jellyfish's window, and where it and its bubble stand on the display.
     pub fn jelly(&self) -> Option<(WindowHandle<EdgeView>, (Rect, Rect))> {
         self.0.borrow().jellyfish.as_ref().map(|jellyfish| (jellyfish.character(), jellyfish.stands()))

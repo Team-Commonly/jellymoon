@@ -13,7 +13,7 @@ use std::{fs, io};
 use jellymoon_app::today::{self, Asked, Today};
 use jellymoon_app::{echoed, file_part, jelly, lines, one_line, read, scene, sides};
 use lexopt::prelude::*;
-use sticker_kit::{Theme, Viewport};
+use sticker_kit::{Theme, ThemeError, Viewport};
 
 const USAGE: &str = "usage:
   jellymoon-app [layout] [--theme <theme>] [--size <W>x<H>] <which page>
@@ -69,7 +69,8 @@ struct Jellyfish {
 /// Which page: a page-data file, a day, or the scene shown while a day is read.
 enum Source {
     File(String),
-    Day(Box<Today>),
+    /// A day, and whether it was named with `--date`: one that was not is today, which moves on.
+    Day(Box<Today>, bool),
     Waiting(String),
 }
 
@@ -95,7 +96,7 @@ fn run() -> Result<String, Failure> {
         Command::Layout(options) => {
             let (scene, entry) = match &options.page {
                 Source::File(file) => (scene::scene(&page(file)?), None),
-                Source::Day(day) => {
+                Source::Day(day, _) => {
                     let (scene, page) = day.last();
                     (day.with_work(day.with_stops(scene)), day.entry(page.as_ref()))
                 }
@@ -131,19 +132,15 @@ fn jellyfish(asked: &Jellyfish) -> Result<String, Failure> {
 /// checks.
 #[cfg(feature = "window")]
 fn window(options: Options) -> Result<(), Failure> {
-    use jellymoon_app::shell::{Asked, JellyLook};
+    use jellymoon_app::shell::{Asked, jelly_look};
     use jellymoon_app::taps::OnShow;
     let (scene, day, jelly) = match options.page {
         Source::File(file) => (scene::scene(&page(&file)?), None, None),
         Source::Waiting(date) => (today::waiting(&date), None, None),
-        Source::Day(day) => {
+        Source::Day(day, named) => {
             let (first, kept) = day.first();
-            let (home, date) = (day.home.clone(), day.date.clone());
-            // What core keeps for the jellyfish: the day's made wishes and their runs. A look that fails is quiet.
-            let look: JellyLook = std::sync::Arc::new(move || {
-                let seen = jellymoon_core::jellyfish(None, &home, Some(&date));
-                seen.unwrap_or_else(|_| jellymoon_core::Jelly::quiet()).drawn()
-            });
+            // What core keeps for the jellyfish: of the day that was named, or else of today, asked at each look.
+            let look = jelly_look(day.home.clone(), named.then(|| day.date.clone()), || today::date(None));
             let shown = OnShow { today: (*day).clone(), page: kept.clone(), scene: first.clone() };
             (first, Some((shown, day.later(kept))), Some(look))
         }
@@ -215,10 +212,16 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             let date = today::date(asked.date.as_deref());
             Source::Waiting(date.ok_or_else(|| Failure::Usage("--date must be a day as YYYY-MM-DD".to_string()))?)
         }
-        None => Source::Day(Box::new(Today::from_env(asked).map_err(Failure::Usage)?)),
+        None => day_open(asked)?,
     };
     let options = Options { page, theme: named(&theme)?, size: size.unwrap_or(DEFAULT_SIZE) };
     Ok(if layout { Command::Layout(options) } else { Command::Window(options) })
+}
+
+/// The day the app opens on, and whether `--date` named it.
+fn day_open(asked: today::Asked) -> Result<Source, Failure> {
+    let named = asked.date.is_some();
+    Ok(Source::Day(Box::new(Today::from_env(asked).map_err(Failure::Usage)?), named))
 }
 
 /// The day `--date` names for a jellyfish, with the home its made wishes are read in.
@@ -237,9 +240,16 @@ fn named(theme: &str) -> Result<Theme, Failure> {
     if let Some(built_in) = Theme::builtin(theme) {
         return Ok(built_in);
     }
+    // A file is named by its last name, as any file that cannot be read is. A name that is no file may be a
+    // theme's name mistyped, so what `--theme` takes is said before the words of `--page` and `--jelly`.
     let loaded = Theme::load(Path::new(theme)).map_err(|why| {
-        let why = one_line(&why.to_string());
-        Failure::Run(format!("--theme {theme:?} is not sticker, plain or a theme file the kit takes: {why}"))
+        Failure::Run(match why {
+            ThemeError::NoFile => format!("--theme is sticker, plain or a theme file: {}", unread(theme)),
+            why => {
+                let (name, why) = (file_part(theme), one_line(&why.to_string()));
+                format!("--theme {:?} is not sticker, plain or a theme file the kit takes: {why}", name.trim())
+            }
+        })
     })?;
     let mut said: Vec<String> = loaded.warnings.iter().take(MOST_WARNINGS).map(|warning| one_line(warning)).collect();
     if loaded.warnings.len() > MOST_WARNINGS {
@@ -266,11 +276,15 @@ fn input(file: &str, most: u64) -> Result<Vec<u8>, Failure> {
     } else {
         fs::File::open(file).and_then(|file| file.take(most).read_to_end(&mut bytes))
     };
-    // In fixed words, with the file's last name on one line: no folder a person typed, and no word of the system's.
-    got.map_err(|_| {
-        let name = if file == "-" { String::new() } else { file_part(file).trim().to_string() };
-        let what = if file == "-" { "the input cannot be read" } else { "the file cannot be read" };
-        Failure::Run(if name.is_empty() { what.to_string() } else { format!("{what}: {name}") })
-    })?;
+    let unread = |_| if file == "-" { "the input cannot be read".to_string() } else { unread(file) };
+    got.map_err(|error| Failure::Run(unread(error)))?;
     Ok(bytes)
+}
+
+/// What is said of a file that cannot be read, in fixed words, with the file's last name on one line when it has
+/// one: no folder a person typed, and no word of the system's.
+fn unread(file: &str) -> String {
+    let name = file_part(file);
+    let name = name.trim();
+    if name.is_empty() { "the file cannot be read".to_string() } else { format!("the file cannot be read: {name}") }
 }

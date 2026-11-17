@@ -19,8 +19,9 @@ the waiting page and reads nothing; with `--page` the flags of a day are taken a
 same. A theme changes how the page looks and never which pieces are on it. A theme file is TOML in which every key
 is optional (the kit's README has the keys and the bounds it is held to). A key the kit does not know falls
 back to the sticker theme's, and `art` is not read, whatever it holds (a theme file names no pictures, the kit's own art
-is drawn, and no file is refused for what its `art` names), each said in one `jellymoon-app: theme: ` line on stderr, the first 8 of them; a line is cut at 300 characters (`LONGEST_LINE`), with an ellipsis. A theme file that cannot be read or that the kit refuses (a number out of its
-range) exits 1 with one line that names the key and the reason.
+is drawn, and no file is refused for what its `art` names), each said in one `jellymoon-app: theme: ` line on stderr, the first 8 of them; a line is cut at 300 characters (`LONGEST_LINE`), with an ellipsis. A theme file that the kit refuses (a number out of its
+range) exits 1 with one line that names the file by its last name, the key and the reason: `jellymoon-app: --theme
+"<name>" is not sticker, plain or a theme file the kit takes: <why>`.
 
 With `layout` it prints where every piece goes. Without, it opens the page's window (default 1440x900) and the
 jellyfish ("The jellyfish's two windows", below); `t` switches the page between the two built-in themes, and
@@ -33,7 +34,9 @@ nothing on stdout. A wrong `--size` or `--screen` is said back cleaned and cut a
 A file that cannot be read, for `--page` or for `--jelly`, exits 1 with `jellymoon-app: the file cannot be read:
 <name>`, where the name is the file's last name on one line: no folder that was typed, and no word of the
 system's. With no name left it is `jellymoon-app: the file cannot be read`; for stdin it is
-`jellymoon-app: the input cannot be read`.
+`jellymoon-app: the input cannot be read`. A `--theme` that is neither of the two names nor a file that can be
+opened may be a name mistyped, so the same words come after what it takes: `jellymoon-app: --theme is sticker,
+plain or a theme file: the file cannot be read: <name>`.
 
 ## Today's page (`app/src/today.rs`)
 
@@ -457,15 +460,16 @@ the screen, and `opens`: what the window is asked for when the app opens it (nex
 in `bubble`. `text` is a list of runs as in the page's output. With no bubble, the `bubble` window is not printed.
 
 ```json
-{"kind":"window","id":"jelly","x":1328.0,"y":788.0,"w":96.0,"h":96.0,"opens":{"kind":"pop_up","focus":false,"see_through":true,"moves":false,"resizes":false,"tap":"page"}}
+{"kind":"window","id":"jelly","x":1328.0,"y":788.0,"w":96.0,"h":96.0,"opens":{"focus":false,"see_through":true,"moves":false,"resizes":false,"tap":"page"}}
 {"kind":"character","id":"jelly","x":8.0,"y":8.0,"w":80.0,"h":80.0,"state":"quiet","mood":"floats","text":[]}
 ```
 
 **Where the windows stand.** The jellyfish's window is 96 by 96, 16 pixels from the right and the lower edge of the
 screen. The bubble's is 300 wide, one height for a theme whatever is said, 8 pixels left of the jellyfish with their
 lower edges level; on a screen too narrow for both it stands over the jellyfish. On a screen that holds the two
-apart only with less than 16 pixels at the edge, the jellyfish's margin gives way first, as far as it must, so the
-bubble is never laid over the jellyfish while there is room for both (`place_pair`). A window larger than the
+apart only with less than 16 pixels at the edge, the jellyfish's margin gives way first, at its right and its
+lower edge alike though one of them would do, so the bubble is never laid over the jellyfish while there is room
+for both (`place_pair`). A window larger than the
 screen keeps its size and starts at the screen's top left. Here the room is the whole screen: the open app gives
 the same function the room a Dock and a menu bar leave. A theme's text sizes are held to 9 to 22 pixels in the
 edge scene, so no theme file makes a window that a text leaves.
@@ -499,18 +503,20 @@ The open app shows the jellyfish in a window of its own, and its bubble in a sec
 **What each window is asked for** is data, `popup::JELLY` and `popup::BUBBLE`, printed as `opens` by
 `layout --jelly`. `popup::options` is the one place that turns it into what GPUI is asked.
 
-| | `kind` | `focus` | `see_through` | `moves` | `resizes` | `tap` |
-|---|---|---|---|---|---|---|
-| the jellyfish | `pop_up` | no | yes | no | no | `page` |
-| the bubble | `pop_up` | no | yes | no | no | `none` |
+| | `focus` | `see_through` | `moves` | `resizes` | `tap` |
+|---|---|---|---|---|---|
+| the jellyfish | no | yes | no | no | `page` |
+| the bubble | no | yes | no | no | `none` |
 
-Both are opened without a title bar, on the primary display, at the place and the size `jelly::stands` gives, which
+Both are opened as pop-ups (above other windows, on every space) without a title bar, on the primary display, at the place and the size `jelly::stands` gives, which
 is the kit's `place_pair` in the room the system says the menu bar and the Dock leave (`Room::primary`). Neither is
 ever asked for the focus, and neither has a key: a key pressed anywhere goes to the page's window or nowhere.
 
 **The bubble** is opened when core's state has words a person sees, and removed when it has none. No window is
 moved or resized: the bubble's place is fixed when the jellyfish is opened, and what changes inside either window
-is drawn in it.
+is drawn in it. A bubble that something else removed is opened again at the next words. A bubble that cannot be
+opened is said in one line on stderr (`jellymoon-app: no bubble: <why>`), once for as long as it goes on failing,
+and is tried again at the next look.
 
 **A tap on the jellyfish shows the page and does nothing else**: the page's window is brought to the front, or
 opened again when it was closed. A tap on the bubble does nothing. A text in the bubble is drawn as text: a run's
@@ -519,26 +525,43 @@ question keeps its own role and its own ink (the palette's `quoted`), below Jell
 **Closing the page's window ends nothing.** The app and the jellyfish stay; the page is the same view in a new
 window when it is shown again, with its scene, its theme and what was typed in its entry. A day goes on being read
 and looked at while its window is closed, and an answer to a wish entered just before is taken. Opening the app
-again (its icon in the Dock) shows the page as a tap does. **Quit** (the menu, or Cmd-Q) removes all three windows
+again (its icon in the Dock) is wired to show the page as a tap does, and whether the system ever asks is not
+known: GPUI passes that on only when the system says the app has no window to be seen, and the jellyfish always
+stands (the list for a person, below). **Quit** (the menu, or Cmd-Q) removes all three windows
 and ends the app; so does `JELLYMOON_QUIT_AFTER`. If the jellyfish could not be opened, one line on stderr says
 so, and closing the page then ends the app, since nothing is left to show it from.
 
 **Once a second** what core keeps for the jellyfish is read again: `jellymoon_core::jellyfish` with no line, in
 the day's home, which is that day's made wishes and their runs (`working` with its count, `asks` with the
 question, `waits`, else `quiet`). The reading is off the window's thread, as the page's look is, and what it gives
-is drawn. A look that fails draws `quiet`. With `--page` or `--waiting` there is no day: the jellyfish is quiet
+is drawn. A look that fails draws `quiet`. Which day it is is asked at each look, so an app left open past
+midnight shows the new day's runs; a day named with `--date` stays that day. The page is not moved on with it: it
+shows the day the app was opened on until the app is opened again. With `--page` or `--waiting` there is no day: the jellyfish is quiet
 and nothing is looked at. The jellyfish keeps the theme the app was opened with; `t` switches the page only.
 
 Tests: `app/tests/f57/window.rs` opens all of it on GPUI's test platform, on the Mac, where there is no screen:
 both windows placed, each of the seven states drawn, the bubble opened and removed with nothing moved, the page
-closed and shown again by a tap and by opening again, Quit, the end by itself, and the look once a second off the
-window's thread. `popup.rs` holds the options asked in a unit test.
+closed and shown again by a tap and by opening again, Quit, the end by itself, the look once a second off the
+window's thread, a display that is not at the top left of the displays, the room of the primary display, a bubble
+removed from outside, and a clock the test moves past midnight. `popup.rs` holds the options asked in a unit
+test, and `jellyfish.rs` that a failed open is said once: no open fails on the test platform.
 
-**Not tested, and not seen**: nothing here was opened on a screen. Whether a pop-up brings the app to the front
-when it is opened or tapped, whether the system draws a shadow or a frame round a window one sees through, and
-whether the part one sees through takes clicks are for a person to check; all three are answered in
-`popup::options` and nowhere else. That Quit ends the process, the menu, Cmd-Q and opening the app again are the
-system's and are not run by a test: a test sees the windows removed and nothing opened after.
+**Not tested, and not seen**: nothing here was opened on a screen. Four things are for a person at one to check.
+
+1. Whether a pop-up brings the app to the front when it is opened or tapped. The app asks to come to the front
+   on a tap in `shell.rs` (`cx.activate(true)` in `show_page`).
+2. Whether the system draws a shadow or a frame round a window one sees through. GPUI's window options have
+   nothing for a shadow, so if one is drawn the answer is not in `popup::options`.
+3. Whether the part one sees through takes clicks. What the app takes a tap in is the kit's 80 by 80 box for
+   the character (`draw/edge.rs`), given a tap in `jellyfish.rs`; `tap` in `popup.rs` is only what is printed.
+4. Whether a click on the app's icon in the Dock, with the page closed, shows the page. If the system counts the
+   jellyfish's window as one to be seen, GPUI is never told and the click does nothing; a tap on the jellyfish
+   still shows the page.
+
+No test sees that Quit ends the process (`cx.quit()`) or that a tap brings the app to the front
+(`cx.activate(true)`): the test platform does nothing for either, so with either call taken out every test stays
+green, and these lines are their only guard. A test sees the windows removed and nothing opened after. The menu
+and Cmd-Q are the system's and are not run by a test.
 
 ## From page data to pieces (`app/src/scene.rs`)
 

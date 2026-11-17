@@ -10,9 +10,12 @@
 mod chips;
 #[path = "f63/made.rs"]
 mod made;
+#[path = "f63/kept.rs"]
+mod no_logs_kept;
 mod support;
 
 use std::fs;
+use std::time::{Duration, SystemTime};
 
 use support::Piece;
 use support::day::{DAY, called, kept, notes, said, write_log};
@@ -21,13 +24,13 @@ use support::wished::{World, quiet};
 /// What `jellymoon page` prints of a day with logs, nothing typed and nothing made: the page kept of it.
 const EMPTY: &str = "{\"day\":\"2026-03-10\",\"wishes\":[],\"clashes\":[],\"read\":{\"turns\":0,\"projects\":[]}}\n";
 /// The same of a day with no logs at all, which has a page since something is made or on offer.
-const NO_LOGS: &str =
+pub const NO_LOGS: &str =
     "{\"day\":\"2026-03-10\",\"wishes\":[],\"clashes\":[],\"read\":{\"turns\":0,\"projects\":[],\"no_logs\":true}}\n";
 pub const NOTHING: &str = "Nothing wished for yet today.";
-const UNREAD: &str = "Today could not be read.";
+pub const UNREAD: &str = "Today could not be read.";
 pub const HINT: &str = "Type a wish: Tab for its project, Enter";
-const READ_NOTHING: &str = "Read from 0 things you typed. This is the model's reading, unedited.";
-const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
+pub const READ_NOTHING: &str = "Nothing was typed on this day, so no model read it.";
+pub const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
 /// What the day's session logs are.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -118,9 +121,12 @@ fn a_project_on_offer_gives_the_day_an_entry_and_its_chip_and_no_wish() {
         let (page, footer) = if logs == Logs::Absent { (NO_LOGS, FOUND_NO_LOGS) } else { (EMPTY, READ_NOTHING) };
         assert_eq!(words(&placed, "footer"), [footer], "{logs:?}");
         assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), page, "{logs:?}");
-        // The same day again: the same pieces from the same kept page.
+        // The same day again: the same pieces from the same kept page, which is not written a second time.
+        let long_ago = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000_000);
+        fs::File::options().write(true).open(kept(&w.day)).unwrap().set_modified(long_ago).unwrap();
         assert_eq!(values(&w.placed()), values(&placed), "{logs:?}");
         assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), page, "{logs:?}");
+        assert_eq!(fs::metadata(kept(&w.day)).unwrap().modified().unwrap(), long_ago, "{logs:?}: kept again");
         assert!(!called(&w.day), "{logs:?}: a reading call was made");
     }
 }

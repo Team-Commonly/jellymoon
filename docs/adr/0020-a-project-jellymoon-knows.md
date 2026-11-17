@@ -171,7 +171,11 @@ What the build settled of decision 5, and where it is not this note's words. The
   (`page_with_no_logs`) when it has a made wish that can be used or a project on offer, and only then.
 - **The page says which of the two it is.** `read.turns` 0 says nothing was typed. `read.no_logs`, true only on
   the page of a day with no logs, says nothing was read. It is left out when false, so every page there was
-  prints the bytes it did. The shell reads the field and decides nothing: its footer for it is one fixed line.
+  prints the bytes it did. The shell reads the field in two places. Its footer for such a page is one fixed
+  line, and with a made wish that line and the count every page has ("1 made wish is in your own words."). And
+  its rule for a kept page (`app/src/today.rs`) takes a kept page that says so for no earlier reading: the day
+  is read as if nothing were kept. Core has no check of a whole page, so the shell asks both things of the
+  field: it counts only on a page with no turn, no project, no clash and no wish of its own.
 - **The made wishes are put on it by the door every page uses**, so their states, stars, questions and shown
   work are a typed day's. No wish, no clash and no finished thing is made up: the page's own lists are empty.
 - **Nothing made and nothing on offer stays the answer it was**: the reader's one line, and the app's plain
@@ -194,6 +198,9 @@ What the build settled of decision 5, and where it is not this note's words. The
 - **The smoke chain** asks it in the `project` step, which already has a wish run in a project nothing
   was typed in: `jellymoon page` over a logs folder that is not there prints that wish done, with `read.no_logs`.
   The folder the chain calls `no-logs` is there and holds nothing, so the step names another.
-- **Not built here:** a made wish's question is not drawn on a page, on this day or any; a day whose logs hold
-  no turn still has the footer "Read from 0 things you typed. This is the model's reading, unedited.", which
-  names a model that read nothing; and which six of many projects come first is not the person's to choose.
+- **A day whose logs hold no turn says so** (after the review of F63): its footer was "Read from 0 things you
+  typed. This is the model's reading, unedited.", which named a model that read nothing. It is one fixed line
+  now, "Nothing was typed on this day, so no model read it."
+- **Not built here:** a made wish's question is not drawn on a page, on this day or any; the page of a day
+  with no logs does not name the folder looked in; and which six of many projects come first is not the
+  person's to choose.

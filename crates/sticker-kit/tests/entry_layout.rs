@@ -172,6 +172,21 @@ fn the_options_past_the_sixth_are_counted_in_words_after_the_last_chip() {
         let six = layout_entry(&entry(6, 80), &Theme::sticker(), viewport, &MEASURE);
         assert!(of(&six, PieceKind::More).is_empty());
     }
+    // The count is beside the second row only, so it needs room for that row's three chips at their least width,
+    // not for all six: a field of 240 design pixels holds three and the count, and would not hold six.
+    let mut between = Theme::sticker();
+    between.metrics.hero_x = between.metrics.content_left + 240.0 + 24.0 + between.metrics.hero_size / 2.0;
+    assert_eq!(between.check(), Ok(()));
+    for viewport in SIZES {
+        let placed = layout_entry(&entry(9, 80), &between, viewport, &MEASURE);
+        let (field, chips) = (of(&placed, PieceKind::Entry)[0].rect, of(&placed, PieceKind::Chip));
+        let [more] = of(&placed, PieceKind::More)[..] else { panic!("{viewport:?}: one count: {placed:?}") };
+        assert_eq!((chips.len(), more.text[0].text.as_str()), (6, "+3 more"), "{viewport:?}");
+        let (least, aside) = (chips[0].rect.h * 1.5, more.rect.w);
+        assert!(6.0 * least + aside > field.w, "{viewport:?}: the field was to be too narrow for six: {field:?}");
+        assert!(more.rect.right() <= field.right() + 0.5 && chips[5].rect.right() <= more.rect.x, "{more:?}");
+        assert!(chips.iter().all(|chip| chip.rect.w >= least - 0.01), "{viewport:?}: {chips:?}");
+    }
     // Where the last row could not hold its chips at their least width beside the count, there is no count:
     // the six options stay there to be chosen.
     let mut narrow = Theme::sticker();

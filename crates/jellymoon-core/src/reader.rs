@@ -329,7 +329,7 @@ mod tests {
         let read = DayOptions { logs, date, skip: Vec::new(), home: Some(home) };
         assert_eq!(typed_in(&read).unwrap(), [typed[0].clone(), typed[3].clone()]);
         let names = ["alpha", "r1", "beta", "r2"].map(str::to_string);
-        assert_eq!(crate::wishable(&read, &names), ["alpha", "beta"]);
+        assert_eq!(crate::wish::wishable(&read, &names), ["alpha", "beta"]);
         // With no home there are no copies to know of.
         assert_eq!(typed_in(&DayOptions { home: None, ..read }).unwrap().len(), 4);
     }

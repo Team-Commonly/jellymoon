@@ -79,10 +79,13 @@ fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
     let asks = |name: &String| (cx.measure.width(name, Role::Legend, size) + 2.0 * pad).max(LEAST * height);
     let asked: Vec<f32> = names.iter().map(asks).collect();
     let rest = entry.options.len() - count;
-    let more = format!("+{rest} more");
-    let aside = cx.measure.width(&more, Role::Legend, size) + gap;
-    let least = count.div_ceil(2) as f32 * (LEAST * height + gap);
-    let aside = if rest > 0 && least + aside <= field.w { aside } else { 0.0 };
+    // The count, and the room it takes with its gap: only when there is a rest, and the last row can hold both.
+    let counted = (rest > 0).then(|| format!("+{rest} more")).and_then(|more| {
+        let aside = cx.measure.width(&more, Role::Legend, size) + gap;
+        let least = count.div_ceil(2) as f32 * (LEAST * height + gap);
+        (least + aside <= field.w).then_some((more, aside))
+    });
+    let aside = counted.as_ref().map_or(0.0, |(_, aside)| *aside);
     let all = asked.iter().sum::<f32>() + gap * count.saturating_sub(1) as f32 + aside;
     let (one, two) = asked.split_at(if all <= field.w { count } else { count.div_ceil(2) });
     let (mut left, mut top) = (field.x, field.bottom() + gap);
@@ -105,7 +108,7 @@ fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
         out.push(chip);
         left = rect.right() + gap;
     }
-    if aside > 0.0 {
+    if let Some((more, aside)) = counted {
         let rect = Rect::new(left, top, aside - gap, height);
         let mut counted = piece(PieceKind::More, &entry.id, rest, rect);
         counted.text.push(run(more, Role::Legend, rect.x, rect.center().1, rect.w, size));

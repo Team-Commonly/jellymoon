@@ -20,11 +20,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::hook::put;
+use crate::lock::Lock;
 use crate::reader::parse;
 use crate::ruling::private_dir;
 use crate::run::{plain as as_git_takes, theirs};
 use crate::session::FOLDER_MAX;
-use crate::tap::{Lock, plain};
+use crate::tap::plain;
 use crate::wish::{day_of, named};
 
 /// The most projects the list holds.

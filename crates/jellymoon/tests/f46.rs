@@ -105,6 +105,10 @@ fn work_that_waits_is_tossed_its_branch_alone_is_deleted_and_the_wish_is_let_go(
         (&stopped["outcome"], &stopped["why"], &stopped["star"]),
         (&json!("completed"), &json!(LET_GO.replace("{run}", &made.run)), &json!(STAR))
     );
+    // A run asked for it is refused as for any wish that names a run: of the two sentences that are true of a
+    // wish let go with its tossed run, this is the one said.
+    let had = format!("wish {} has had its run, {}: a made wish gets one run", made.wish, made.run);
+    assert_eq!(refused(&made.w.start(&made.wish, &made.repo)), said(&had));
     assert!(before == made.held());
 }
 

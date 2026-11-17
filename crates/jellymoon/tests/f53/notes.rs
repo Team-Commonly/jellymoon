@@ -86,6 +86,23 @@ fn a_fork_that_committed_on_the_run_s_branch_or_left_an_ignored_file_before_it_s
     assert_eq!(fs::read_to_string(copy.join("left.ignored")).unwrap(), "left by the fork\n");
 }
 
+// The fork did nothing at all, and the copy's `HEAD` is asked of a git that cannot answer: a copy that cannot
+// be asked about is not one that is as it was made, so the fork is not started again.
+#[test]
+fn a_fork_whose_copy_git_cannot_answer_for_is_not_started_again() {
+    let made = finished();
+    let fake = made.w.fake_git();
+    for (file, holds) in [("on", "symbolic-ref"), ("fails", "128")] {
+        fs::write(made.w.at("fake").join(file), holds).unwrap();
+    }
+    let wish = followed(&made.w, &made.wish);
+    made.w.play("unkept", 0);
+    let asked = ["run", "--wish", &wish, "--date", DAY, "--repo", made.repo.to_str().unwrap()];
+    let said = printed(&made.w.run_with(&fake, &asked));
+    let why = json!(WORKED.replace("{own}", &run_of(&said)));
+    assert_eq!((&said["outcome"], &said["why"], made.w.starts()), (&json!("failed"), &why, 2), "{said}");
+}
+
 #[test]
 fn a_follow_up_that_needs_no_base_is_kept_by_a_git_that_cannot_be_told_one() {
     // Its followed work was kept by moving the branch forward: the follow-up's own start is in the branch.

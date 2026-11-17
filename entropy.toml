@@ -324,7 +324,11 @@ max_file_lines = 400
 # refusal of a let-go wish in `run.rs` (5), the copy's `HEAD` asked in `copy/clean.rs` (4), and the example's
 # round trip in `tests/shapes.rs` (4).
 # The notes on F63 raised it by 2: why `page_with_no_logs` asks for the logs a second time (`no_logs.rs`).
-"crates/jellymoon-core" = 14634
+# The core notes raised it by 259: `lock.rs`, the lock of the day and of the list of projects with its take-over
+# behind the system's lock, is 130, and `tap.rs` is 51 shorter for it; `lock/tests.rs`, its faults shown from many
+# threads and its rules one by one, 163; the reader's refusal of logs that are no folder, or cannot be listed, 14;
+# 3 are imports and the module's line.
+"crates/jellymoon-core" = 14893
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -487,7 +491,10 @@ max_file_lines = 400
 # `tests/f53/notes.rs` 145 (a fork that worked before it said lost, a keep by an old git), 28 in
 # `fake_agent/follow.rs` (the fork's four ways of working), 9 in `f46.rs`, `f46/refused.rs`, `f47.rs`, `f53.rs`.
 # The notes on F63 raised it by 7: made wishes that cannot be used are no made wish (`tests/f63.rs`).
-"crates/jellymoon" = 24854
+# The core notes raised it by 84, all tests: `tests/f63.rs` 38 (logs that are a file, or cannot be listed),
+# `tests/f46/unrun.rs` 25 (the mode of the `runs` folder a toss makes, a let-go that waits for the day),
+# `tests/f53/notes.rs` 17 (a copy git cannot answer for), `tests/f46.rs` 4 (which refusal a wish let go gets).
+"crates/jellymoon" = 24938
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -76,6 +76,9 @@ pub(crate) fn typed_in(options: &DayOptions) -> Result<Vec<PathBuf>, Error> {
 }
 
 /// The day, and every turn typed on it, oldest first.
+/// What is said of logs that are not a folder. It names no path.
+const NO_FOLDER: &str = "they are looked for in a folder, and what is there is not one";
+
 fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(Date, Vec<session::Typed>), Error> {
     let date = match &options.date {
         Some(date) => parse(date)?,
@@ -95,11 +98,15 @@ fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(D
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             return Err(Error::NoLogs(options.logs.display().to_string().replace(unseen, " ")));
         }
+        // What is there and is no folder holds no logs to read: that is not a day nothing was typed on.
+        Ok(found) if !found.is_dir() => {
+            return Err(Error::Logs(io::Error::new(io::ErrorKind::NotADirectory, NO_FOLDER)));
+        }
         found => found.map_err(Error::Logs)?,
     };
     let mut seen = HashSet::new();
     let mut turns = Vec::new();
-    for file in session_files(&options.logs, start) {
+    for file in session_files(&options.logs, start).map_err(Error::Logs)? {
         for (typed, mut turn, folder) in session::turns(&file, &left, &mut seen, line_max) {
             if let Some(at) = typed.filter(|at| (start..end).contains(at)) {
                 turn.at = at.to_zoned(zone.clone()).strftime("%H:%M").to_string();
@@ -204,10 +211,13 @@ pub(crate) fn parse(date: &str) -> Result<Date, Error> {
 
 /// Lists the session logs, in name order: regular `.jsonl` files in real folders of `logs`, last written on or after the
 /// day began (an older file holds none of it). Nothing is followed or opened that is not one: a link could lead out of
-/// the logs, and a pipe would never end. An entry's type is read as it is, without following it.
-fn session_files(logs: &Path, start: Timestamp) -> Vec<PathBuf> {
+/// the logs, and a pipe would never end. An entry's type is read as it is, without following it. That `logs` itself
+/// cannot be listed is an error, as nothing was read; a folder in it that cannot be is passed over.
+fn session_files(logs: &Path, start: Timestamp) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
-    for folder in entries(logs) {
+    let mut folders: Vec<fs::DirEntry> = fs::read_dir(logs)?.flatten().collect();
+    folders.sort_by_key(fs::DirEntry::file_name);
+    for folder in folders {
         if !folder.file_type().is_ok_and(|kind| kind.is_dir()) {
             continue;
         }
@@ -221,7 +231,7 @@ fn session_files(logs: &Path, start: Timestamp) -> Vec<PathBuf> {
             }
         }
     }
-    files
+    Ok(files)
 }
 
 /// A folder's entries in name order; none when it cannot be listed.

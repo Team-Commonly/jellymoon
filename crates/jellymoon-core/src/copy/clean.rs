@@ -104,8 +104,10 @@ pub(crate) fn end_copy(
     Ok((at.printed(run, false), made, end))
 }
 
-/// Whether a run's copy is as it was made: its branch names `start`, and git finds no file in its folder that
-/// is changed, new or ignored. Anything that cannot be asked is a copy that is not.
+/// Whether a run's copy is as it was made: its `HEAD` names the run's branch, that branch names `start`, and
+/// git finds no file in its folder that is changed, new or ignored. A copy that stands on no branch, or on
+/// another, can hold a commit that neither of the other two shows. Anything that cannot be asked is a copy
+/// that is not.
 pub(crate) fn as_made(home: &Path, run: &str, start: &str) -> bool {
     let at = Places::of(home);
     let Ok(Some(record)) = read(&at.record(run)) else { return false };
@@ -113,7 +115,9 @@ pub(crate) fn as_made(home: &Path, run: &str, start: &str) -> bool {
     let Ok(repo) = git.open(&record.own) else { return false };
     let status = ["status", "--porcelain", "--ignored", "--untracked-files=all"];
     let clean = repo.run(Some(&at.root.join(run)), &[], &status).is_ok_and(|said| said.is_empty());
-    clean && at_start(&repo, run, Some(start)).is_ok()
+    let on = repo.ask(None, &[], &["symbolic-ref", "--quiet", "HEAD"]);
+    let on = on.is_ok_and(|head| head == Some(format!("refs/heads/{}", branch(run))));
+    clean && on && at_start(&repo, run, Some(start)).is_ok()
 }
 
 /// Removes what a git stopped at its limit, or a child of it, wrote after its copy was taken back: a real folder in

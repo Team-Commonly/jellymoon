@@ -25,9 +25,9 @@ One line of JSON (`Tossed`; the example `crates/jellymoon-core/tests/fixtures/to
 
 | Name | What it is |
 |---|---|
-| `run`, `wish` | the run's id and the wish's |
-| `tossed` | whether this command changed anything. `false` only of a run that was tossed before with nothing left to do |
-| `commit` | the commit the record names for the toss: a finished run's `end`, the `start` of a run that did not finish. `null` when the record names no commit |
+| `run`, `wish` | the run's id and the wish's. `run` is `null` when the wish has had no run ("A wish that has had no run"; the example `tossed-unrun.json`) |
+| `tossed` | whether this command changed anything. `false` only of a run that was tossed before with nothing left to do, and of a wish with no run that was let go before |
+| `commit` | the commit the record names for the toss: a finished run's `end`, the `start` of a run that did not finish. `null` when the record names no commit, and for a wish with no run |
 | `why` | what was done, in core's fixed words |
 
 `why` is a head, then what became of the copy and the branch:
@@ -125,12 +125,46 @@ this wish in `after`, and each one's run. A follow-up's run stands on the work w
 and is not tossed, and while it finished with work that is not tossed: its branch is built on this one. The toss is refused and names the follow-up to toss first. A follow-up with no run yet, one
 whose run failed, was cancelled, was cut off or was never started, and one that finished and changed nothing
 hold nothing of the work, and the toss goes on. Such a follow-up that has no run can then not be run: its
-followed work is tossed (`tests/f53/order.rs`). It is refused on every run, `run toss` says it has had no run,
-the page keeps it `working`, and it holds one of the day's eight: not closed.
+followed work is tossed (`tests/f53/refused.rs`). It is refused on every run, and `run toss` of it lets it go,
+as it lets go any made wish that has had no run (next section; `tests/f53/notes.rs`).
 
 Which wishes follow this one is read from the day's made wishes and nowhere else. With `after` taken out of a
 kept wish by hand, the work it followed is tossed while its own waits; a keep of that follow-up is then
 refused, its start being in no branch's history. Not closed either.
+
+## A wish that has had no run
+
+`run toss` of a made wish that names no run lets the wish go, and that is all it does (found after F53; ADR
+0018, "Found after F53"). It holds for every made wish with no run: one that was never run, one whose run was
+never started ([run.md](run.md), "A run that was never started"), and a follow-up whose followed work was
+tossed before it ran. `--repo` and `--logs` are not read: no repo is asked anything.
+
+- **What is written.** Behind the day's lock, the kept wish takes the state `let_go` and the line `the wish had
+  no run, and was let go`. Nothing else of it changes: it names no run, keeps `after` if it had one, and is
+  one of the day's eight still, as a wish let go with its tossed run is. No record, no copy, no branch and no
+  file of any repo is read or written. A page shows the wish let go.
+- **What is printed.** A toss's five names, with `run` and `commit` both `null`: `wish <id> had no run and was
+  let go: nothing of a repo or a copy was touched`. Asked again, `tossed` is `false` and the line is `wish <id>
+  was let go before, and nothing was changed`.
+- **The locks.** The toss holds the lock of keeps and tosses (`runs/keep.lock`) as every toss does, and is
+  refused in that lock's sentence when it is not had, ending `wish <id> was not let go`. In a home no run was
+  started in, the `runs` folder is made for that lock's file: with the kept wish, the only thing the toss
+  writes. A follow-up's run
+  holds that lock from before it reads the followed work until its wish names its run, so a toss never lets a
+  follow-up go in the middle of its start.
+- **A run that is being started.** Whether the wish names a run is read once more behind the day's lock, where
+  a run's start writes its name. A run that named itself first is left alone: the toss is refused, `wish <id>
+  has a run by now, <run>: nothing was changed, and `run toss` is asked again`, and asked again it is a toss
+  of that run. A toss that was first lets the wish go, and the run is refused when it comes to name itself,
+  with its copy and its branch taken back.
+- **Afterwards.** `jellymoon run` of the wish is refused before a harness or a folder is looked for: `wish <id>
+  was let go, so no run is started for it`. `run show`, `run keep` and `wish --after` say that it has had no
+  run, and `run stop` that it has no run going, as they did before the toss.
+- **The order of tosses** (previous section) asks nothing here. A wish that has had no run has no work, so no
+  follow-up can be made of it, and as a follow-up it holds nothing of the work it follows.
+
+`tests/f46/unrun.rs` plays all of it, the two orders of a run's start and a toss with each command held at a
+fixed place.
 
 ## A run that did not finish
 
@@ -179,7 +213,8 @@ Each ends the command with exit 1, one line on stderr, and nothing changed, but 
 | When | Words |
 |---|---|
 | the wish is not there | the words of a stop |
-| the wish has had no run | `wish <id> has had no run, so there is nothing to toss` |
+| the wish has had no run, and a keep, a toss or the start of a follow-up's run holds the lock for ten seconds, or the lock's file could not be made | the two sentences of the lock below, ending `wish <id> was not let go` |
+| the wish had no run when the toss began, and names one by the time the day's lock is had | ``wish <id> has a run by now, <run>: nothing was changed, and `run toss` is asked again`` |
 | the record is not there or not JSON | `the record of run <id> cannot be read, so nothing was tossed` |
 | the run is another wish's | `wish <id> names run <run>, which is another wish's run: nothing was tossed` |
 | the run is going, or it asks and another command holds its lock | `run <id> is going: it is stopped first, and nothing was tossed` |

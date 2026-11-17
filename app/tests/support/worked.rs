@@ -92,6 +92,11 @@ impl World {
 
     /// What `jellymoon-app layout` places for the day, with git where core finds it.
     pub fn placed(&self) -> Vec<Piece> {
+        self.placed_with(&[])
+    }
+
+    /// [`World::placed`] with more arguments after the day and its logs: a later `--logs` is the one used.
+    pub fn placed_with(&self, args: &[&str]) -> Vec<Piece> {
         let path = self.typed("read").into_iter().find(|(name, _)| *name == "PATH").unwrap().1;
         let config = self.at("gitconfig");
         let more = [
@@ -100,9 +105,9 @@ impl World {
             ("GIT_CONFIG_NOSYSTEM", "1"),
             ("GIT_CEILING_DIRECTORIES", self.day.dir.path().to_str().unwrap()),
         ];
-        let out = day::run(&self.day, &[], &more);
+        let out = day::run(&self.day, args, &more);
         let said = String::from_utf8_lossy(&out.stderr);
-        assert!(out.status.success() && said.is_empty(), "layout: {said}");
+        assert!(out.status.success() && said.is_empty(), "layout {args:?}: {said}");
         let lines = String::from_utf8(out.stdout).unwrap();
         lines.lines().map(|line| Piece(serde_json::from_str(line).expect(line))).collect()
     }

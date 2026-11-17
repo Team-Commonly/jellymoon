@@ -330,7 +330,11 @@ max_file_lines = 400
 # F65's mark raised core by 114: the file of a making that tells the made folder from one put in its place
 # (Windows has nothing else), Jellymoon's folder taken back, the take-back said, five unseen characters in a
 # name, and their unit tests, moved to `project/new/tests.rs`.
-"crates/jellymoon-core" = 15114
+# The notes after F53 raised core by 69: a toss that lets go a wish with no run (`run/unrun.rs`, 56), the
+# refusal of a let-go wish in `run.rs` (5), the copy's `HEAD` asked in `copy/clean.rs` (4), and the example's
+# round trip in `tests/shapes.rs` (4).
+# The notes on F63 raised it by 2: why `page_with_no_logs` asks for the logs a second time (`no_logs.rs`).
+"crates/jellymoon-core" = 15185
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -497,7 +501,11 @@ max_file_lines = 400
 # F65's mark raised it by 111: in `tests/f65/alone.rs`, a folder removed during a making, a line a hand wrote
 # for the folder being made, a list that cannot be written, and a home made for the lock; the unseen names in
 # `f65/refused.rs` and `f62/refused.rs`.
-"crates/jellymoon" = 25628
+# The notes after F53 raised it by 357, all tests: `tests/f46/unrun.rs` 175 (a wish with no run let go),
+# `tests/f53/notes.rs` 145 (a fork that worked before it said lost, a keep by an old git), 28 in
+# `fake_agent/follow.rs` (the fork's four ways of working), 9 in `f46.rs`, `f46/refused.rs`, `f47.rs`, `f53.rs`.
+# The notes on F63 raised it by 7: made wishes that cannot be used are no made wish (`tests/f63.rs`).
+"crates/jellymoon" = 25992
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -614,7 +622,9 @@ max_file_lines = 400
 # poses in `art.rs`, `place_pair`, the range an edge text is drawn in, the `quoted` ink and its floor, a box
 # clipped to another, an entry answered with its window closed, and their tests (`tests/edge_draw.rs`,
 # `tests/edge_parts.rs`, and more of `tests/edge.rs` and `tests/text.rs`).
-"crates/sticker-kit" = 9162
+# The notes on F63 raised the kit by 18: the count worked out only when there is a rest (`layout/entry.rs`, 3),
+# and a width between the two forms of the least width (`tests/entry_layout.rs`, 15).
+"crates/sticker-kit" = 9180
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -684,7 +694,10 @@ max_file_lines = 400
 # F57 raised the app by 967: the options of the two windows as data (`popup.rs`), the two windows opened
 # (`jellyfish.rs`), the app's windows as one thing (`shell.rs`), the page's view kept past its window in
 # `window.rs`, one reader of a size in `lib.rs`, and their tests (`tests/f57.rs`, `tests/f57/window.rs`).
-"app" = 9404
+# The notes on F63 raised the app by 130: its tests are 102 (`tests/f63/kept.rs`, 95); a kept page that says no
+# logs is no earlier reading, and core's refusal is the note (`today.rs`, 9); the footer of a page that holds
+# nothing a reading gives (`scene.rs`, 18); `wishing.rs` 1, a line wrapped.
+"app" = 9534
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

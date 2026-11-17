@@ -208,6 +208,10 @@ fn what_a_toss_prints_round_trips_byte_for_byte() {
     let tossed: Tossed = serde_json::from_str(&unnamed).unwrap();
     assert_eq!((format!("{tossed}\n"), tossed.commit), (unnamed.clone(), None));
     assert!(serde_json::from_str::<Tossed>(&unnamed.replace("\"commit\"", "\"branch\"")).is_err());
+    // A wish that has had no run is let go with no run and no commit, and both names are printed still.
+    let example = fixture("tossed-unrun.json");
+    let tossed: Tossed = serde_json::from_str(&example).unwrap();
+    assert_eq!((format!("{tossed}\n"), tossed.run, tossed.commit), (example, None, None));
 }
 
 #[test]

@@ -133,20 +133,20 @@ pub(crate) fn named(project: &str) -> bool {
 /// against the folder's whole path and never against the project's name alone, and a name typed in and listed
 /// with two folders is not offered. Every session log of the day is read. No logs is a day nothing was typed
 /// on. None at all when a `skip.txt` cannot be used, or the logs cannot be read.
-pub fn wishable(read: &DayOptions, projects: &[String]) -> Vec<String> {
+pub(crate) fn wishable(read: &DayOptions, projects: &[String]) -> Vec<String> {
     let Ok(offer) = Offer::of(read, reader::typed_in(read)) else { return Vec::new() };
     projects.iter().filter(|project| named(project) && offer.offers(project)).cloned().collect()
 }
 
 /// Every project a wish can be made for on `read`'s day, each once, in the order its folders were typed in and
-/// then in the list's: the names [`wishable`] would offer. A folder's name is a session log's text: one that is
+/// then in the list's: the names `wishable` would offer. A folder's name is a session log's text: one that is
 /// no folder's name as [`wish`] takes it is never offered. None at all when the day cannot be read. No logs is
 /// a day nothing was typed on, so the names are the list's: these are the chips of a page's entry (F63).
 pub fn offered(read: &DayOptions) -> Vec<String> {
     Offer::of(read, reader::typed_in(read)).map(|offer| offer.names()).unwrap_or_default()
 }
 
-/// [`wish`] for a project chosen on a page: kept only when [`wishable`] offers that project now, on `read`'s day
+/// [`wish`] for a project chosen on a page: kept only when `wishable` offers that project now, on `read`'s day
 /// and in `read.home`. A refusal has written nothing.
 pub fn wish_offered(read: &DayOptions, typed: &str, project: &str) -> Result<Wished, Error> {
     let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };

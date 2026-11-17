@@ -123,13 +123,14 @@ fn a_toss_asked_of_a_repo_the_record_does_not_name_is_refused_and_nothing_is_del
 }
 
 #[test]
-fn a_wish_with_no_run_a_run_that_is_going_and_work_that_was_kept_are_refused() {
+fn a_wish_that_is_not_there_a_run_that_is_going_and_work_that_was_kept_are_refused() {
     let w = world();
     w.play("forever", 0);
     let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
     let toss = |wish: &str| w.run(&["run", "toss", "--wish", wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
-    assert_eq!(refused(&toss(&wish)), said(&format!("wish {wish} has had no run, so there is nothing to toss")));
-    assert_eq!(toss("m7").code, 1);
+    // A wish that has had no run is let go by a toss (`unrun.rs`); one that is not there is refused.
+    let none = format!("the page of {DAY} has no made wish of that id; a made wish's id is m1 to m8");
+    assert_eq!(refused(&toss("m7")), said(&none));
     let going = w.start_going(&wish, &repo);
     wait_for(&w.at("rec").join("started"));
     let run = w.kept(&wish)["run"].as_str().unwrap().to_string();

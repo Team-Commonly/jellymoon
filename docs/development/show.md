@@ -304,13 +304,20 @@ and writes nothing:
     (the joiners U+200C and U+200D, the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0, the variation
     selectors), any space but the plain one, the Braille blank U+2800, U+16FE4, U+1D159, the object
     replacement character U+FFFC, or any code point that is private or not assigned (a system font draws
-    `.claude/settings`, U+F860, `.json` as `.claude/settings.json`). It is the one list core has of what is
+    `.claude/settings`, U+F860, `.json` as `.claude/settings.json`). "Not assigned" is by the tables of the
+    `regex` crate, Unicode 16, so a name with a letter Unicode gave out later has no yes on a page: it fails
+    closed. It is the one list core has of what is
     not read in a printed text (`redact.rs`, `holds_unseen`), the same a refused `voice.toml` value is held to;
   - a plain space stands where none is seen: at an end of the name or of a folder's, or after another;
   - a name reads like the line a note counts with, a digit and then `more` (`+5 more`, `and 12 more`).
 
   The names are printed whole all the same. The list of letters is a list and not a proof: a font can draw a
-  letter it does not know as nothing.
+  letter it does not know as nothing. Not closed:
+  - the shape of a count is a decimal digit, then spaces or none, then `more`. A name is plain when its number
+    is no decimal digit (`+⑤ more`, `+Ⅴ more`), when it is in words (`+five more`), and when what stands
+    between the number and `more` is not a space (`+5·more`);
+  - a letter Unicode gave out after version 16 is refused as one that is not assigned, until the `regex`
+    crate's tables know it.
 - **A repo that is not found** (or any other refusal of `run show`) still lists the wish, with `read: false`, no
   counts, no name, and `why` holding that refusal. A page then offers no choice.
 - **The choices and their words** are core's too: `Waits::title`, `lines`, `choices` and `asks`, `ShownFile::title`
@@ -341,8 +348,9 @@ and writes nothing:
     asked once more carries none. So a yes to a note that names other files than the work's (one fewer, one
     more, another in one's place) is refused there, and so is work whose merge would bring such a file that no
     note named: whole, in a page's words and not `--with-settings`. One yes to other names is not refused:
-    where the person's branch holds the run's commit already, by their own merge, nothing is landed whatever
-    the note named, no name is asked, and the run is written down as kept (`run keep` says the same there).
+    where the person's branch holds the run's commit already, in its history, nothing is landed whatever
+    the note named, the keep compares no name, and the run is written down as kept (`run keep` says the same
+    there).
   - The line of the work's own note still counts (`a.txt, b.txt, and 4 more`), and is at most 320 characters of
     names: nothing is kept on the word of it. `Toss it` is `run toss`, with its own checks.
 

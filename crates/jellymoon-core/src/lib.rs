@@ -54,5 +54,5 @@ pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, set
 pub use uninstall::{UninstallOptions, Uninstalled, uninstall};
 pub use wish::{
     MADE_MAX, MADE_SAID_MAX, MadeWish, Wished, going, made, offered, wish, wish_after, wish_offered, wish_start,
-    wishable, with_made, with_made_said,
+    with_made, with_made_said,
 };

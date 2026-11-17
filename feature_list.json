@@ -644,6 +644,107 @@
         "F63",
         "F65"
       ]
+    },
+    {
+      "id": "F67",
+      "category": "journal",
+      "description": "Claude Code is found when the app is opened from the Finder, and `jellymoon harness` says how",
+      "steps": [
+        "with no harness on `PATH` or in a fixed place, and `JELLYMOON_CLAUDE` not set, `jellymoon page` and `jellymoon run` start the harness found in a folder the login shell's `PATH` names; the shell is the one `JELLYMOON_SHELL` names, it is asked once, and what it prints outside the two marks changes nothing",
+        "a shell that is not a full path, is not on core's list, prints no line between the marks or is still going at its cap starts no harness: the error is today's, with the shell among the places looked in, and the shell and what it started are gone when the command returns; with `JELLYMOON_SHELL` set to nothing no shell is started",
+        "a harness found there that others can write to is passed over; a shim that names its program by a path is taken as that program without being run, and one that names none is passed over and said",
+        "`jellymoon harness` prints one line of JSON: whether a harness was found, how, from a closed list, and one fixed sentence, with no folder of the shell's `PATH` in it; on Windows it says the shell is not asked",
+        "with `CLAUDECODE` and `CLAUDE_CODE_*` variables set on `jellymoon`, none reaches the harness of a reading call, a run, an answer or a follow-up, on every system"
+      ],
+      "test": "cargo test -p jellymoon --test f67",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F68",
+      "category": "journal",
+      "description": "A person whose Jellymoon misbehaves has a log to send, with nothing of theirs in it",
+      "steps": [
+        "a `jellymoon` command that fails and a run that ends each leave a line in `app.log` in Jellymoon's folder: a time, a code from a closed list, that code's fixed sentence and counts; `jellymoon-app layout` on a day that cannot be read leaves one too",
+        "a typed word, a wish, a question, an answer, an agent's text, a path beyond a last name and each credential shape are fed through every logging call and through the commands that log, and none is in `app.log` or in the older file",
+        "at its size cap `app.log` becomes the one older file, in place of the one there was: there are never more than two files, and neither is over the cap",
+        "the file is the person's alone where the system has modes, and a log that cannot be written fails no command: it prints and exits as it would have"
+      ],
+      "test": "cargo test -p jellymoon --test f68",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F69",
+      "category": "journal",
+      "description": "A run whose session Claude Code did not find says whether the session is still kept",
+      "steps": [
+        "`jellymoon run answer` on a run whose harness says it keeps no session of that id, with no file of that id anywhere in the session store, fails in the words it fails in today",
+        "with a file named for that id in the store, under the folder for the copy's link-resolved path, under the one for its unresolved path, or under any other folder, the run fails in other fixed words, which say Claude Code keeps the session and did not find it from the copy",
+        "the harness's own words are the one signal: a harness that fails without them has not lost its session, whatever the store holds, and the words in an agent's prose are not the signal",
+        "the store is byte for byte as it was: no session file is opened, written or moved, and a link in the store is not followed"
+      ],
+      "test": "cargo test -p jellymoon --test f69",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F70",
+      "category": "journal",
+      "description": "The reader counts a moved session's turns once, and leaves out a headless session another program started",
+      "steps": [
+        "`jellymoon day` over a session with a line that marks it as moved prints each typed turn once, under the project its own line names, and the marking line is no turn",
+        "a session whose lines say the harness was started headless contributes no turn and no reply, and a typed-looking line of it still ends the turn before it; a person's own session beside it is read as before",
+        "a compaction summary is still no turn, and a fork's or a resume's copies of a typed line are still counted once",
+        "`jellymoon page` hands the reading call the same turns `jellymoon day` prints"
+      ],
+      "test": "cargo test -p jellymoon --test f70",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F71",
+      "category": "journal",
+      "description": "Jellymoon's hook goes into and out of a settings file that starts with a byte-order mark, and leaves it as found",
+      "steps": [
+        "`jellymoon hook install --settings <file>` on a file that starts with a byte-order mark adds the entry after the mark: the mark is still the file's first bytes and every other byte is as it was, Windows line ends too",
+        "`jellymoon hook uninstall` then leaves the file byte for byte as it was before the install; a file that install made is given no mark",
+        "an entry the person edited is left where it is, and `jellymoon uninstall` prints `hook_by_hand` as true, in a file with a mark as in one without",
+        "a write that fails leaves the old file whole, and no temporary file beside it"
+      ],
+      "test": "cargo test -p jellymoon --test f71",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F72",
+      "category": "journal",
+      "description": "On Windows everything a run's harness started ends with the run",
+      "steps": [
+        "on Windows a program the made-up harness started is gone when `jellymoon run` returns, whether the run finished, failed, reached its time limit or was stopped with `jellymoon run stop`",
+        "on Windows a harness that ended by itself and left a program going leaves none once the run's end is written",
+        "on a Mac and on Linux a stop still interrupts the harness's group, then signals it, then kills it, with the fixed wait after each, and the time limit still signals and then kills",
+        "the run's record and the wish name the same end on every system"
+      ],
+      "test": "cargo test -p jellymoon --test f72",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F73",
+      "category": "journal",
+      "description": "No test can start Jellymoon in a real home",
+      "steps": [
+        "the test support refuses to start `jellymoon` or `jellymoon-app` with no home, with a home or a Jellymoon's folder that is not a full path, or with either outside the system's temporary folder and the one Cargo gives tests: one fixed sentence, and nothing is started",
+        "it refuses a world in which `JELLYMOON_SHELL` is not set, so no test asks a real login shell",
+        "`cargo xtask check` refuses a test file that starts either program, or builds a home, outside the support, and names the file and its line",
+        "every test there was starts its programs through that door and asserts what it asserted"
+      ],
+      "test": "cargo test -p jellymoon --test f73",
+      "passes": false,
+      "blockedBy": [
+        "F67"
+      ]
     }
   ]
 }

@@ -3,8 +3,8 @@
 //! `fake-agent` ended in F39's test folder (`f39/world.rs`), in repos made with the real `git`. This file holds
 //! what a toss does to work that waits; `f46/refused.rs` what is refused with nothing changed, `f46/unfinished.rs`
 //! a run that did not finish and a record that names no commit, `f46/cut.rs` a toss and a keep cut off after
-//! each step, `f46/landed.rs` a cut-off keep whose work landed elsewhere than it meant, and `f46/races.rs` a
-//! branch changed between the toss's question and its delete.
+//! each step, `f46/landed.rs` a cut-off keep whose work landed elsewhere than it meant, `f46/races.rs` a
+//! branch changed between the toss's question and its delete, and `f46/unrun.rs` a wish that has had no run.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[path = "f46/cut.rs"]
@@ -20,6 +20,8 @@ mod refused;
 mod support;
 #[path = "f46/unfinished.rs"]
 mod unfinished;
+#[path = "f46/unrun.rs"]
+mod unrun;
 #[path = "f39/world.rs"]
 mod world;
 

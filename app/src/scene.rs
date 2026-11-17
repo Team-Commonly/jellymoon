@@ -2,7 +2,7 @@
 //! goes and how it looks are the kit's layout and the theme. Every text is handed over as it is, and the kit shows it
 //! as text only.
 
-use jellymoon_core::{Clash, PageRead, Side, Standing, Wish, WishState};
+use jellymoon_core::{Clash, PageData, Side, Standing, Wish, WishState};
 use sticker_kit::text::clean;
 use sticker_kit::{Character, LegendItem, Mark, Mood, Note, Scene, State};
 
@@ -19,6 +19,12 @@ pub fn order(stands: Option<Side>) -> [Side; 2] {
 
 /// The title of the note that holds the day's made wishes, each in the person's exact words.
 pub const MADE: &str = "wished here today";
+
+/// The footer of a day with no session logs at all.
+const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
+
+/// The footer of a day whose session logs hold no turn of it.
+const TYPED_NOTHING: &str = "Nothing was typed on this day, so no model read it.";
 
 /// The title of the one note of a page with no wish on it.
 pub const NOTHING: &str = "Nothing wished for yet today.";
@@ -70,7 +76,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
-        footer: [footer(&data.read), own(made.len())].join(" ").trim_end().to_string(),
+        footer: [footer(data, made.len()), own(made.len())].join(" ").trim_end().to_string(),
         ..bare(&data.day, notes)
     }
 }
@@ -190,11 +196,18 @@ fn date_label(day: &str) -> String {
     }
 }
 
-/// What the page was made from, and whose reading it is. A page made with no session logs to read
-/// (`jellymoon_core::page_with_no_logs`) says that, and nothing of a reading.
-fn footer(read: &PageRead) -> String {
-    if read.no_logs {
-        return "No Claude Code session logs were found, so nothing was read.".to_string();
+/// Whether the page holds nothing a reading gives: no turn, no project, no clash, and no wish but its last `made`.
+/// Core has no check of a whole page, so `read.no_logs` is asked together with this, here and in `today.rs`.
+pub(crate) fn read_nothing(data: &PageData, made: usize) -> bool {
+    data.read.turns == 0 && data.read.projects.is_empty() && data.clashes.is_empty() && data.wishes.len() <= made
+}
+
+/// What the page was made from, and whose reading it is. A page that holds nothing a reading gives names no
+/// model: it says that no session logs were found (`jellymoon_core::page_with_no_logs`), or that nothing was typed.
+fn footer(data: &PageData, made: usize) -> String {
+    let read = &data.read;
+    if read_nothing(data, made) {
+        return if read.no_logs { FOUND_NO_LOGS } else { TYPED_NOTHING }.to_string();
     }
     let count = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
     let projects = match read.projects.len() {
@@ -206,7 +219,7 @@ fn footer(read: &PageRead) -> String {
 
 #[cfg(test)]
 mod tests {
-    use jellymoon_core::PageData;
+    use jellymoon_core::PageRead;
 
     use super::*;
     use crate::read::Unknown;
@@ -326,28 +339,33 @@ mod tests {
         let scene = scene(&empty);
         assert!(matches!(&scene.notes[..], [Note::Plain { title, .. }] if title == "Nothing wished for yet today."));
         assert_eq!(scene.characters, []);
-        assert_eq!(scene.footer, "Read from 0 things you typed. This is the model's reading, unedited.");
+        assert_eq!(scene.footer, "Nothing was typed on this day, so no model read it.");
     }
 
     #[test]
     fn the_footer_counts_in_words_that_agree() {
-        let read = |turns, projects: &[&str]| {
-            let projects = projects.iter().map(|p| p.to_string()).collect();
-            PageRead { turns, projects, no_logs: false }
+        let read = |turns, projects: &[&str], no_logs| {
+            let mut page = page(vec![], vec![]);
+            page.data.read = PageRead { turns, projects: projects.iter().map(|p| p.to_string()).collect(), no_logs };
+            page.data
         };
         // No logs to read is said, and nothing of a reading or of things typed.
+        let found_none = "No Claude Code session logs were found, so nothing was read.";
+        assert_eq!(footer(&read(0, &[], true), 0), found_none);
         assert_eq!(
-            footer(&PageRead { no_logs: true, ..read(0, &[]) }),
-            "No Claude Code session logs were found, so nothing was read."
-        );
-        assert_eq!(
-            footer(&read(75, &["alpha", "beta"])),
+            footer(&read(75, &["alpha", "beta"], false), 0),
             "Read from 75 things you typed in 2 projects (alpha, beta). This is the model's reading, unedited."
         );
-        assert_eq!(
-            footer(&read(1, &["alpha"])),
-            "Read from 1 thing you typed in 1 project (alpha). This is the model's reading, unedited."
-        );
+        let one = "Read from 1 thing you typed in 1 project (alpha). This is the model's reading, unedited.";
+        assert_eq!(footer(&read(1, &["alpha"], false), 0), one);
+        // A page that says no logs were found and holds a turn, or a wish of its own, is a reading's page.
+        assert_eq!(footer(&read(1, &["alpha"], true), 0), one);
+        let typed = "Read from 1 thing you typed. This is the model's reading, unedited.";
+        assert_eq!(footer(&read(1, &[], true), 0), typed);
+        let mut own = read(0, &[], true);
+        own.wishes = vec![wish("w1", WishState::Working, &[])];
+        assert_eq!(footer(&own, 0), "Read from 0 things you typed. This is the model's reading, unedited.");
+        assert_eq!(footer(&own, 1), found_none);
     }
 
     #[test]

@@ -492,7 +492,9 @@ The kept commit stands for the start only of a follow-up whose copy was made at 
 after the keep started where the checkout stood, and is held to that commit as any run's work is.
 `tests/f53/order.rs` keeps a follow-up both ways and reads the files the last commit changed; `tests/f53/gate.rs`
 plays the git that cannot be told a base, the commit that takes part of the followed work back, on the real
-git when it is 2.40 or later, and the follow-up made after the keep.
+git when it is 2.40 or later, and the follow-up made after the keep. `tests/f53/notes.rs` keeps the two that
+need no base under a git that says it is 2.39.5: `--ask` says `fits: true`, and the branch is moved forward to
+the follow-up's commit.
 
 ## Every refusal
 

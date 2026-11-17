@@ -84,6 +84,13 @@ fn a_day_with_nothing_typed_nothing_made_and_no_project_on_offer_answers_as_it_d
         assert!(why.ends_with("or name its projects folder with --logs\n"), "{why}");
         assert_eq!(w.starts(), 0);
     }
+    // Made wishes that cannot be used are no made wish: with no project on offer the answer is the reader's.
+    let w = heard_world();
+    fs::create_dir_all(w.jm("pages")).unwrap();
+    fs::write(w.jm("pages").join(format!("{DAY}.wishes.json")), "not the made wishes of any day\n").unwrap();
+    let ran = page(&w, &logs(&w, Logs::Absent));
+    let why = refused(&ran);
+    assert!(why.starts_with("jellymoon: no Claude Code session logs were found: there is no folder "), "{why}");
 }
 
 #[test]

@@ -32,6 +32,7 @@ mod show;
 mod stop;
 mod stream;
 mod toss;
+mod unrun;
 mod waits;
 mod words;
 
@@ -175,6 +176,7 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     if let Some(run) = wish.run.as_ref().or(named.as_ref()) {
         return Err(had(&wish.id, run));
     }
+    unrun::open(&wish)?;
     let not_started = |why: String| {
         let (run, outcome) = (None, RunOutcome::NotStarted);
         Ok(Ran { run, wish: wish.id.clone(), outcome, star: None, denied: 0, why, question: None })
@@ -321,6 +323,8 @@ fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, under
     wish::change(home, day, wish, Duration::ZERO, |wish| match &wish.run {
         Some(first) => Err(had(&wish.id, first)),
         None => {
+            // A toss that had the day's lock first let the wish go: no run is its run (`unrun.rs`).
+            unrun::open(wish)?;
             (wish.run, wish.why, wish.question) = (Some(run.to_string()), Some(going(run)), None);
             // A wish that an earlier run was never started for needed the person (`never.rs`): it is at work now.
             if wish.state == WishState::NeedsYou {
@@ -345,6 +349,7 @@ mod tests {
         let unchanged = [finished(run, false), words::unchanged_on(run)];
         let texts = [going(run), cut(run), long, finished(run, true), STAR.to_string()].into_iter().chain(unchanged);
         let never = [never::UNSTARTABLE.to_string(), never::UNTOLD.to_string(), never::old("--json-schema")];
+        let never = never.into_iter().chain([unrun::LET_GO.to_string()]);
         let last = asks::KINDS.map(|kind| failed(run, kind)).into_iter().chain([asking(run)]);
         for text in texts.chain([cancelled(run), cut_late(run)]).chain(never).chain(last) {
             assert_eq!(line(&text, 200), text);

@@ -51,9 +51,23 @@ struct Line {
     is_meta: Option<bool>,
     is_sidechain: Option<bool>,
     is_compact_summary: Option<bool>,
+    /// How the harness that wrote the line was started. Any JSON value: one that is no string is another value.
+    entrypoint: Option<serde_json::Value>,
     uuid: Option<String>,
     origin: Option<Origin>,
     message: Option<Message>,
+}
+
+/// The `entrypoint` of a line in a session another program started headless (ADR 0021, decision 4).
+const HEADLESS: &str = "sdk-cli";
+
+impl Line {
+    /// Whether the line is one of a headless session: what a program sent, or what the agent said to it, and so
+    /// none of it a person's words. The one place the rule is, asked of each line by itself and never of a file.
+    /// The value is compared whole and exactly: a line with no `entrypoint`, or with any other value, is not one.
+    fn headless(&self) -> bool {
+        self.entrypoint.as_ref().and_then(serde_json::Value::as_str) == Some(HEADLESS)
+    }
 }
 
 #[derive(Deserialize)]
@@ -92,8 +106,8 @@ enum Prompt {
     /// A person typed it. The text is empty for a slash command and for a prompt that was only harness blocks: such a
     /// line makes no turn and still ends the one before it.
     Typed(String),
-    /// Nobody typed it: a message from another session, or one another program sent. The agent's next reply answers
-    /// that, not the person, so it ends the turn before it and starts none.
+    /// Nobody typed it: a message from another session, or a line that names no origin. The agent's next reply
+    /// answers that, not the person, so it ends the turn before it and starts none.
     Ends,
     /// Not a prompt at all: a tool result, a task notice, a line the harness wrote itself. The agent goes on with what
     /// the person asked, so the turn stays open.
@@ -131,7 +145,8 @@ pub(crate) fn turns(file: &Path, left: &Left, seen: &mut HashSet<String>, line_m
 /// is the name of the log's own folder. A line whose folder is a run's copy, or in one, is no turn and no reply; a
 /// typed one still ends the turn before it, as a line of a switched-off folder does, but its uuid is not held: a
 /// line that is left out hides no other. For this rule alone a line with no folder is judged as the last line
-/// decoded before it that had one was, and of that line one yes or no is kept, never its folder.
+/// decoded before it that had one was, and of that line one yes or no is kept, never its folder. A line of a
+/// headless session ([`Line::headless`]) is left out in the same way and by the same yes or no, each line by itself.
 fn read(
     log: impl Read,
     len: u64,
@@ -153,15 +168,16 @@ fn read(
         let cwd = line.cwd.as_deref().unwrap_or_default();
         let copy = if cwd.is_empty() { last } else { left.copies.hold(cwd) };
         last = copy;
+        let out = copy || line.headless();
         match prompt(&line) {
             Prompt::Typed(_) if !uuid.is_empty() && seen.contains(uuid) => open = false,
             Prompt::Ends => open = false,
             Prompt::Typed(said) => {
-                if !copy {
+                if !out {
                     seen.insert(uuid.to_string());
                 }
                 // A line with no folder is skipped by its session's folder name.
-                open = !said.is_empty() && !copy && !skipped(if cwd.is_empty() { folder } else { cwd }, &left.skip);
+                open = !said.is_empty() && !out && !skipped(if cwd.is_empty() { folder } else { cwd }, &left.skip);
                 if open {
                     // A folder's name is the log's text too: it is printed, and the model reads it.
                     let (project, folder) = place(cwd);
@@ -177,7 +193,7 @@ fn read(
                 }
             }
             Prompt::Neither => {
-                if let (true, Some(text), Some((_, turn, _))) = (open && !copy, reply(&line), turns.last_mut()) {
+                if let (true, Some(text), Some((_, turn, _))) = (open && !out, reply(&line), turns.last_mut()) {
                     turn.reply = shown(&text, REPLY_MAX);
                 }
             }

@@ -61,6 +61,12 @@ impl Showing {
         self.0.borrow_mut().as_mut().map(act)
     }
 
+    /// The scene on show, when there is a day. The window gives its view every scene it is given here, and the
+    /// kit's view gives none out, so a test of the window reads what is on show from this.
+    pub fn scene(&self) -> Option<Scene> {
+        self.with(|on| on.scene.clone())
+    }
+
     /// The entry of the first page, as work for another thread.
     pub fn offering(&self) -> Option<Offering> {
         self.with(|on| on.offering())

@@ -789,7 +789,7 @@
         "on macOS, Linux and Windows; this row replaces the headless half of F70, which is never built"
       ],
       "test": "cargo test -p jellymoon --test f76",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {

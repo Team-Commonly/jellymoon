@@ -138,3 +138,36 @@ fn a_reply_in_a_copy_is_no_reply_and_a_typed_line_in_a_copy_ends_the_turn_before
     let said: Vec<_> = turns.iter().map(|(_, turn, _)| (turn.said.as_str(), turn.reply.as_str())).collect();
     assert_eq!(said, [("zero", ""), ("one", "one done"), ("two", ""), ("three", "three done")]);
 }
+
+// ADR 0021, decision 4, from inside: one rule for a headless line, whatever else the line is. At the binary it is
+// `tests/f76.rs`.
+#[test]
+fn a_headless_line_is_no_turn_and_no_reply_ends_the_turn_before_it_when_it_looks_typed_and_holds_no_uuid() {
+    let line = |kind: &str, entry: &str, uuid: &str, text: &str| {
+        let origin = if kind == "user" { r#""origin":{"kind":"human"},"# } else { "" };
+        let said = format!(r#""message":{{"content":[{{"type":"text","text":"{text}"}}]}}"#);
+        format!(r#"{{"type":"{kind}","cwd":"/work/alpha","uuid":"{uuid}",{entry}{origin}{said}}}"#) + "\n"
+    };
+    let (sdk, cli) = (r#""entrypoint":"sdk-cli","#, r#""entrypoint":"cli","#);
+    let first = [
+        line("user", cli, "a", "one"),
+        line("assistant", sdk, "", "LEFT said headless"),
+        line("assistant", cli, "", "one done"),
+        line("user", sdk, "b", "LEFT sent by a program"),
+        line("assistant", cli, "", "LEFT said to the program"),
+        line("user", r#""entrypoint":"sdk-cli-2","#, "c", "two"),
+        line("user", r#""entrypoint":7,"#, "d", "three"),
+        line("user", "", "e", "four"),
+    ]
+    .concat();
+    // Read after it: the person's own line under the uuid of the line left out, and copies of a line that was read.
+    let second = [line("user", cli, "b", "five"), line("user", sdk, "a", "LEFT"), line("user", cli, "a", "LEFT")];
+    let mut seen = HashSet::new();
+    let mut said = Vec::new();
+    for log in [first, second.concat()] {
+        let turns = read(log.as_bytes(), log.len() as u64, "-work-alpha", &Left::default(), &mut seen, 1 << 20);
+        said.extend(turns.into_iter().map(|(_, turn, _)| (turn.said, turn.reply)));
+    }
+    let wanted = [("one", "one done"), ("two", ""), ("three", ""), ("four", ""), ("five", "")];
+    assert_eq!(said, wanted.map(|(said, reply)| (said.to_string(), reply.to_string())));
+}

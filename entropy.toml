@@ -351,6 +351,9 @@ max_file_lines = 400
 # The jellyfish notes raised core by 66: what a hearing says of a run that was not started as one function of
 # what `run_apart`'s own search missed, with its test (`hear/day.rs`), that search's answer handed on
 # (`run/apart.rs`, `run.rs`) and the one question asked of it (`find.rs`).
+# F76 raised core by 52: the headless rule, `Line::headless`, its field and its one yes or no in `session.rs`
+# (16), its test from inside in `session/tests.rs` (33), and a link that leads nowhere refused as no folder in
+# `reader.rs` (3).
 # The lock notes raised core by 278: `lock.rs` grew by 85 (a lock's mark, the system's lock had or not had and
 # waited for by a holder, the open that follows no link, the refusal of a lock nobody can take over), its tests in
 # `lock/tests.rs` by 125, and `lock/tests/corners.rs`, a holder that lets go during a take-over, is 68.
@@ -362,7 +365,7 @@ max_file_lines = 400
 # wait that tells a file being removed from one that may not be written, the read-only attribute at the look),
 # `lock/tests/denied.rs`, those rules as values and on Windows, is 68, `lock/tests.rs` 2; `project/new.rs` lost 2
 # (the take-back of Jellymoon's folder, which `take-over.lock` in it made dead).
-"crates/jellymoon-core" = 16233
+"crates/jellymoon-core" = 16285
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -543,11 +546,14 @@ max_file_lines = 400
 # F74, the door, raised it by 349, all tests and their support: `tests/f74.rs` 225, `tests/support/door.rs` 144,
 # 9 in `tests/support/mod.rs` (the two other folders a world is made in); the tests moved through the door lost 29.
 # F77 raised it by 220, all a test: `tests/f77.rs`, what a made-up harness is started with at each of the six starts.
+# F76 raised the binary by 305, all tests: `tests/f76.rs`
+# is 299 (the headless rule at `day`, `page`, `run` and `hear`), and `tests/f63.rs` grew by 6 (`run` with no
+# `--repo` among the commands that refuse logs that are no folder, and the link that leads nowhere).
 # The lock notes raised it by 60, all tests: a lock nobody can take over, for a day (`tests/f35/lock.rs`, 25) and
 # for the list (`tests/f62/refused.rs`, 30), and `take-over.lock` where a folder's files are listed (5).
 # The join with F65 raised it by 28, all in F65's tests: `take-over.lock` named where a whole folder is compared
 # (`tests/f65/alone.rs` 21, with the helper that names it; `half.rs` 2, `mark.rs` 2, `refused.rs` 3).
-"crates/jellymoon" = 27030
+"crates/jellymoon" = 27335
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -682,7 +688,8 @@ max_file_lines = 400
 # (`draw/field.rs`, 16; `draw/entry.rs`, 12; `scene.rs`, 6; `draw/mod.rs`, 5).
 # The app notes raised the kit by 2: a comment that names the layout's `LEAST` where a test writes its number
 # (`tests/entry_layout.rs`).
-"crates/sticker-kit" = 10034
+# The second notes on F54 raised the kit by 1: a line of `draw/field.rs`'s own doc.
+"crates/sticker-kit" = 10035
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -780,7 +787,13 @@ max_file_lines = 400
 # test's own clock, holds the two tests moved out of `tests/f57/window.rs` and four new ones (a wish made past
 # midnight, a run that still asks, core's order between two days, the page's day first in a tie); the look at
 # two days and the clock in `shell.rs`; a failure of another reason said in `jellyfish.rs`, with its test.
-"app" = 11267
+# The second notes on F54 raised the app by 133, of which 115 are tests: a refusal after the wish's note went, a
+# look that cannot read the day and the keys of the answer's field (`tests/f54/answered.rs`, 75), `enter` and
+# `answer` as two acts of the made-up window (`tests/support/tapper.rs`, 25), core's reason read at the window
+# (`tests/f54/window.rs`, 10) and the key's helper (`tests/f54.rs`, 5). The rest: a look that is not known, the
+# answer field's key and the scene on show given out (`answering.rs`, 6; `showing.rs`, 6; `working.rs`, 4;
+# `wishing.rs`, 2).
+"app" = 11400
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

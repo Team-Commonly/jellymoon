@@ -22,6 +22,9 @@
 //!   prints `null`. Core is asked on another thread. The line is `{"kept":…,"scene":…,"at_once":…}`: what the
 //!   field is told, the scene shown, and the scene shown at once, before core was asked, or `null` when
 //!   nothing was. The asking for a run it left is kept for `start`.
+//! - `enter:<note>:<words>` and `answer`: a `type` in two acts, so that a test can act between Enter and core's
+//!   answer. `enter` prints the scene shown at once, or `null`, and keeps what is to be asked of core; `answer`
+//!   asks it on another thread and prints `{"kept":…,"scene":…}`.
 //! - `start`: the oldest asking a `type` left, on another thread, and the scene it shows, or `null`.
 //! - `core:<wish>:<index>`: no window at all: core's own answer to a tap on that choice of the wish's work, as
 //!   `[title, body]`, or `null` when it is no sentence.
@@ -36,6 +39,7 @@ use std::{env, fs, io, thread};
 use jellymoon_app::showing::{After, Entered, Showing};
 use jellymoon_app::taps::OnShow;
 use jellymoon_app::today::Today;
+use jellymoon_app::wishing::{Asking, Wishing};
 use jellymoon_core::{RunOptions, WorkDone, WorkTap};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -125,32 +129,55 @@ fn opened(args: &[String]) -> (Today, Scene, Showing, &[String]) {
     (today, scene, showing, acts)
 }
 
-/// Enter in the field of `note`, when `layout` places one: the scene shown at once, and what core's answer
-/// gave: what the field is told, the scene then on show, and the asking for a run it left.
+/// Enter in the field of `note`, when `layout` places one: the scene shown at once, and what is to be asked of
+/// core.
 fn entered(
     showing: &Showing,
     now: &Scene,
     size: Viewport,
     note: &str,
     typed: &str,
-) -> Option<(Option<Scene>, Entered)> {
+) -> Option<(Option<Scene>, Wishing)> {
     let is = |piece: &Value| piece["kind"] == "field" && piece["id"] == note;
-    let (at_once, typing) = placed(now, size).iter().any(is).then(|| showing.typing(note, typed)).flatten()?;
-    Some((at_once, showing.answered(Some(elsewhere(typing)))))
+    placed(now, size).iter().any(is).then(|| showing.typing(note, typed)).flatten()
+}
+
+/// Core's answer to an Enter, asked for on another thread: the line of what the field is told and the scene
+/// then on show, with the scene shown at once when the Enter's own act did not print it. The asking for a run
+/// it left is given back.
+fn answered(showing: &Showing, typing: Wishing, at_once: Option<Option<Scene>>, now: &mut Scene) -> Option<Asking> {
+    let Entered { kept, scene, asking } = showing.answered(Some(elsewhere(typing)));
+    let mut line = json!({ "kept": kept, "scene": scene });
+    if let Some(at_once) = at_once {
+        line["at_once"] = json!(at_once);
+    }
+    show(&line);
+    if let Some(scene) = scene {
+        *now = scene;
+    }
+    asking
+}
+
+/// Waits until the test leaves that file, half a minute at most.
+fn held(file: &str) {
+    let until = Instant::now() + Duration::from_secs(30);
+    while !Path::new(file).exists() && Instant::now() < until {
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     let (today, scene, showing, acts) = opened(&args);
     let mut left: VecDeque<After> = VecDeque::new();
-    let mut asked = VecDeque::new();
+    let (mut asked, mut entering) = (VecDeque::new(), VecDeque::new());
     // The scene on show, as the view has it, and the window's size.
     let (mut now, mut size) = (scene, Viewport { w: 1440.0, h: 900.0 });
     for act in acts {
         // A file's name can hold a colon of its own, so only `hold` keeps the rest whole.
         let parts: Vec<&str> = match act.split_once(':').map(|(name, _)| name) {
             Some("hold") => act.splitn(2, ':').collect(),
-            Some("type") => act.splitn(3, ':').collect(),
+            Some("type" | "enter") => act.splitn(3, ':').collect(),
             _ => act.split(':').collect(),
         };
         match parts[..] {
@@ -173,27 +200,25 @@ fn main() {
                 let (w, h) = given.split_once('x').unwrap();
                 size = Viewport { w: w.parse().unwrap(), h: h.parse().unwrap() };
             }
-            ["type", note, typed] => {
-                let Some((at_once, entered)) = entered(&showing, &now, size, note, typed) else {
-                    show(&Value::Null);
-                    continue;
-                };
-                let Entered { kept, scene, asking } = entered;
-                show(&json!({ "kept": kept, "scene": scene, "at_once": at_once }));
-                asked.extend(asking);
-                now = scene.unwrap_or(now);
+            ["type", note, typed] => match entered(&showing, &now, size, note, typed) {
+                Some((at_once, typing)) => asked.extend(answered(&showing, typing, Some(at_once), &mut now)),
+                None => show(&Value::Null),
+            },
+            ["enter", note, typed] => {
+                let (at_once, typing) = entered(&showing, &now, size, note, typed).expect("a field on show");
+                shown(&mut now, at_once);
+                entering.push_back(typing);
+            }
+            ["answer"] => {
+                let typing = entering.pop_front().expect("an Enter left an answer to ask for");
+                asked.extend(answered(&showing, typing, None, &mut now));
             }
             ["start"] => {
                 let asking = asked.pop_front().expect("a follow-up left an asking");
                 shown(&mut now, showing.asked(elsewhere(asking)));
             }
             ["placed"] => show(&placed(&now, size)),
-            ["hold", file] => {
-                let until = Instant::now() + Duration::from_secs(30);
-                while !Path::new(file).exists() && Instant::now() < until {
-                    thread::sleep(Duration::from_millis(10));
-                }
-            }
+            ["hold", file] => held(file),
             ["core", wish, index] => show(&core(&today, wish, index.parse().unwrap())),
             _ => panic!("no act {act:?}"),
         }

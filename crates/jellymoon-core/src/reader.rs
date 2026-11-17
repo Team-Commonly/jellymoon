@@ -75,10 +75,10 @@ pub(crate) fn typed_in(options: &DayOptions) -> Result<Vec<PathBuf>, Error> {
     Ok(found)
 }
 
-/// The day, and every turn typed on it, oldest first.
 /// What is said of logs that are not a folder. It names no path.
 const NO_FOLDER: &str = "they are looked for in a folder, and what is there is not one";
 
+/// The day, and every turn typed on it, oldest first.
 fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(Date, Vec<session::Typed>), Error> {
     let date = match &options.date {
         Some(date) => parse(date)?,
@@ -94,14 +94,17 @@ fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(D
         left.skip.extend(switched_off(home).map_err(Error::Skip)?);
         left.copies = session::Copies::of(home);
     }
+    // What is there and is no folder holds no logs to read: that is not a day nothing was typed on.
+    let no_folder = || Error::Logs(io::Error::new(io::ErrorKind::NotADirectory, NO_FOLDER));
     match fs::metadata(&options.logs) {
+        // A link that leads nowhere is there, looked at without following it: only nothing at all is no logs.
+        Err(e) if e.kind() == io::ErrorKind::NotFound && fs::symlink_metadata(&options.logs).is_ok() => {
+            return Err(no_folder());
+        }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             return Err(Error::NoLogs(options.logs.display().to_string().replace(unseen, " ")));
         }
-        // What is there and is no folder holds no logs to read: that is not a day nothing was typed on.
-        Ok(found) if !found.is_dir() => {
-            return Err(Error::Logs(io::Error::new(io::ErrorKind::NotADirectory, NO_FOLDER)));
-        }
+        Ok(found) if !found.is_dir() => return Err(no_folder()),
         found => found.map_err(Error::Logs)?,
     };
     let mut seen = HashSet::new();

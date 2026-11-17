@@ -87,12 +87,15 @@ pub(crate) fn typed_under(id: &str) -> Option<&str> {
     wish_of(id).or_else(|| id.strip_prefix(BUSY))
 }
 
-/// `note` in place of the note of `wish` that is its work or how it stands, when one is on show.
-pub(crate) fn reopen(scene: &mut Scene, wish: &str, note: Note) {
+/// `note` in place of the note of `wish` that is its work or how it stands, when one is on show. When none is,
+/// the scene is left as it is and the note is given back.
+pub(crate) fn reopen(scene: &mut Scene, wish: &str, note: Note) -> Option<Note> {
     let is = |one: &Note| id_of(one).and_then(wish_of) == Some(wish);
-    if let Some(at) = scene.notes.iter().position(is) {
-        scene.notes[at] = note;
+    match scene.notes.iter().position(is) {
+        Some(at) => scene.notes[at] = note,
+        None => return Some(note),
     }
+    None
 }
 
 /// How a wish with no work waiting stands, in core's words, with the question its run asks when the wish is a
@@ -100,8 +103,9 @@ pub(crate) fn reopen(scene: &mut Scene, wish: &str, note: Note) {
 /// drawn, and gets no field.
 fn standing(wish: &Wish, made: bool) -> Note {
     let (title, body) = jellymoon_core::stands(wish);
-    let note = text(format!("{WISH}{}", crate::scene::drawn_id(&wish.id)), title, body, Vec::new());
-    with_question(note, wish.question.as_deref().filter(|_| made))
+    let id = crate::scene::drawn_id(&wish.id);
+    let note = text(format!("{WISH}{id}"), title, body, Vec::new());
+    with_question(note, &id, wish.question.as_deref().filter(|_| made))
 }
 
 /// The note of a wish whose run goes on with an answer, in the place of `asked`, the note the answer was typed
@@ -238,8 +242,8 @@ impl Today {
 impl OnShow {
     /// A tap on option `index` (from 0) of the note `note`, when that is a choice of work that waits on show: the
     /// scene to show at once, which says what is being done in the note's place, over the field the note had, and
-    /// the tap itself as work for another thread. None for any other note and for an option that is not drawn. While core is at work for a
-    /// wish its choices are not on show, so a second tap does nothing.
+    /// the tap itself as work for another thread. None for any other note and for an option that is not drawn.
+    /// While core is at work for a wish its choices are not on show, so a second tap does nothing.
     pub fn working(&mut self, note: &str, index: usize) -> Option<(Scene, Working)> {
         self.carrying(note, index, |today, wish, tap| {
             jellymoon_core::work_tapped(&today.home, &today.run_of(wish), tap)

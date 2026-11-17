@@ -146,14 +146,16 @@ impl OnShow {
     /// What a [`Wishing`] gave: the scene to show, and the asking for the wish's run when core kept the wish. With
     /// none the words were not kept, and the entry keeps them. When the scene on show changed while core was asked,
     /// only the note is put on it here, and the next look draws the wish. The same for what [`OnShow::typing`]
-    /// gave, the words typed under a made wish.
+    /// gave, the words typed under a made wish; the note of an answer that was not given is put first when no
+    /// note of its wish is on show any more, so its field and the words in it are.
     pub fn answered(&mut self, answer: Answer) -> (Scene, Option<Asking>) {
         if self.scene == answer.seen.from {
             self.scene = answer.seen.now;
         } else {
             newest(&mut self.scene, answer.said);
-            if let Some((wish, note)) = answer.opened {
-                working::reopen(&mut self.scene, &wish, note);
+            let unplaced = answer.opened.and_then(|(wish, note)| working::reopen(&mut self.scene, &wish, note));
+            if let Some(note) = unplaced.filter(|_| !answer.kept) {
+                self.scene.notes.insert(0, note);
             }
         }
         (self.scene.clone(), answer.asking)

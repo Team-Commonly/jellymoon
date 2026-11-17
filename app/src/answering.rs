@@ -45,14 +45,14 @@ fn fielded(note: Note, quoted: &str, field: Field) -> Note {
     }
 }
 
-/// A wish's note with the question its run asks, when core keeps one with the wish, and a field to answer in.
-/// The kit holds the field to its own most characters, which is under core's bound on an answer.
-pub(crate) fn with_question(note: Note, question: Option<&str>) -> Note {
-    let field = Field { offer: String::new(), hint: ANSWER_HINT.to_string(), most: 0, key: String::new() };
-    match question {
-        Some(question) => fielded(note, question, field),
-        None => note,
-    }
+/// The note of the wish `wish` with the question its run asks, when core keeps one with the wish, and a field to
+/// answer in. The kit holds the field to its own most characters, which is under core's bound on an answer.
+/// The field's key is the wish's and the question's: what is typed in it is the kit's to keep while the note is
+/// not on show, and is there when the wish is opened again; another question is another field, with no words.
+pub(crate) fn with_question(note: Note, wish: &str, question: Option<&str>) -> Note {
+    let Some(question) = question else { return note };
+    let key = format!("answer-{wish}-{question}");
+    fielded(note, question, Field { offer: String::new(), hint: ANSWER_HINT.to_string(), most: 0, key })
 }
 
 /// A note of the wish `wish` with the offer of a follow-up and its field, when core says one may be made of the
@@ -95,18 +95,23 @@ impl Today {
     }
 
     /// Whether the run of the made wish `wish` waits on `question` now: core keeps a question with a wish only
-    /// while its run asks it.
-    fn waits_on(&self, wish: &str, question: &str) -> bool {
+    /// while its run asks it. None when that is not known: the wish is not among the day's made wishes, which
+    /// is also what core gives of a day it cannot read.
+    fn waits_on(&self, wish: &str, question: &str) -> Option<bool> {
         let made = jellymoon_core::made(&self.home, &self.date);
-        made.iter().any(|one| crate::scene::drawn_id(&one.id) == wish && one.question.as_deref() == Some(question))
+        let found = made.iter().find(|one| crate::scene::drawn_id(&one.id) == wish)?;
+        Some(found.question.as_deref() == Some(question))
     }
 
     /// An answer to the run of the made wish `wish`, by core's `answer_run`, which waits for the run to end.
     /// `asked` is the note the answer was typed under. An answer that was given leaves the wish's note as core
     /// says the wish stands then. Core says of every failure only why, so whether the answer was given is
     /// looked at: the run waited on the note's question before the call and does not after it. Then it was
-    /// handed over, and what core says failed came after. An answer that was not given leaves `asked` as it
-    /// was, with its field, under core's reason.
+    /// handed over, and what core says failed came after. A look that cannot tell is no proof, and the answer
+    /// is then held not to have been given. An answer that was not given leaves `asked` as it was, with its
+    /// field, under core's reason ([`OnShow::answered`] puts it first when the wish's note went meanwhile). But
+    /// where the run is known to wait on that question no more, the wish's note is as core says the wish
+    /// stands, since `asked` would show a question nobody asks.
     fn answering(&self, page: Option<&Page>, from: Scene, typed: &str, (wish, asked): (&str, Note)) -> Answer {
         let question = match &asked {
             Note::Text { quoted, .. } => quoted.clone(),
@@ -114,9 +119,10 @@ impl Today {
         };
         let waited = self.waits_on(wish, &question);
         let taken = jellymoon_core::answer_run(&self.home, &self.run_of(wish), typed.as_bytes());
-        let given = taken.is_ok() || waited && !self.waits_on(wish, &question);
+        let waits = self.waits_on(wish, &question);
+        let given = taken.is_ok() || waited == Some(true) && waits == Some(false);
         let said = taken.err().map(|why| (if given { UNSETTLED } else { UNANSWERED }, format!("{why}.")));
-        let note = if given { self.note_of(page, wish) } else { Some(asked) };
+        let note = if given || waits == Some(false) { self.note_of(page, wish) } else { Some(asked) };
         let mut now = self.again(page, &from);
         wishing::newest(&mut now, said.clone());
         let opened = note.map(|note| (wish.to_string(), note));

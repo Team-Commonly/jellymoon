@@ -19,7 +19,7 @@ fn waiting(w: &World, repo: Option<&Path>, more: &[&str]) -> Vec<Value> {
     let ran = w
         .run(&[&["run", "waiting", "--date", DAY][..], repo.as_ref().map_or(&[][..], |repo| &repo[..]), more].concat());
     let said = printed(&ran);
-    assert_eq!((said.as_object().unwrap().len(), &said["day"]), (2, &json!(DAY)), "{said}");
+    assert_eq!((said.as_object().unwrap().len(), &said["day"]), (3, &json!(DAY)), "{said}");
     w.never_says_the_agent(&ran);
     said["waits"].as_array().unwrap().clone()
 }

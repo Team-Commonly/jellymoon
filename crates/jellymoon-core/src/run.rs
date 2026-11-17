@@ -48,6 +48,7 @@ pub use apart::{Started, run_apart};
 pub(crate) use asks::kept as kept_question;
 pub(crate) use end::bury;
 use end::{lock_file, settle};
+pub use follow::followable;
 pub(crate) use follow::project as followed;
 pub use keep::{KeepOptions, Kept, keep_run};
 pub(crate) use left::tidy;

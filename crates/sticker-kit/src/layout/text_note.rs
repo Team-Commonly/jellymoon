@@ -5,10 +5,12 @@
 //! An option is an answer to what the note says, so it is drawn only under a title and a body that were both
 //! drawn whole: the title and every text of the body, each to its last character. Under a title cut at its
 //! second line, a body with a text cut short, or texts the count stands for, no option is placed, and a tap
-//! finds none.
+//! finds none. What it holds besides (`typed.rs`: someone else's words, quoted, and a field) is under the body
+//! and stays, with or without the options.
 
 use super::notes::{MAX_OPTIONS, Sheet, choice_option, close, heading, open};
-use super::{Ctx, line_height, run};
+use super::{Ctx, line_height, run, typed};
+use crate::scene::Field;
 use crate::text::{Role, clean, wrap};
 
 /// The most lines of its body a text note is drawn with.
@@ -17,21 +19,30 @@ pub const MAX_TEXT_LINES: usize = 24;
 /// The fewest lines of body a text note is planned with: one of its own and the line that counts the rest.
 pub(super) const LEAST_TEXT_LINES: usize = 2;
 
+/// What a text note holds under its title.
+#[derive(Clone, Copy)]
+pub(super) struct Parts<'a> {
+    pub body: &'a [String],
+    pub options: &'a [String],
+    pub quoted: &'a str,
+    pub field: Option<&'a Field>,
+}
+
 /// The sheet of a text note at `top`, with at most `most` lines of `body` and never taller than `room`: with its
 /// options when the body is drawn whole in the room they leave, and else with none. None when its body does not
 /// fit and there is no room for one text of it and the count.
 pub(super) fn text(
     cx: &Ctx,
     (id, title): (&str, &str),
-    (body, options): (&[String], &[String]),
+    parts: Parts,
     top: f32,
     (room, most): (f32, usize),
     option_lines: usize,
 ) -> Option<Sheet> {
-    let with = |options: &[String]| written(cx, (id, title), (body, options), top, (room, most), option_lines);
-    match with(options) {
+    let with = |options| written(cx, (id, title), Parts { options, ..parts }, top, (room, most), option_lines);
+    match with(parts.options) {
         // With its options there may be no room for one text and the count: without them there may be.
-        Some((_, false)) | None if !options.is_empty() => with(&[]).map(|(sheet, _)| sheet),
+        Some((_, false)) | None if !parts.options.is_empty() => with(&[]).map(|(sheet, _)| sheet),
         written => written.map(|(sheet, _)| sheet),
     }
 }
@@ -46,7 +57,7 @@ fn titled(cx: &Ctx, sheet: &Sheet, title: &str) -> bool {
 fn written(
     cx: &Ctx,
     (id, title): (&str, &str),
-    (body, options): (&[String], &[String]),
+    Parts { body, options, quoted, field }: Parts,
     top: f32,
     (room, most): (f32, usize),
     option_lines: usize,
@@ -56,9 +67,15 @@ fn written(
         heading(cx, &mut sheet, title, Role::NoteTitle);
         sheet
     };
+    // Under the body: the quoted words, the options, and the field. The quoted words and the field stay when
+    // the options do not.
     let end = |sheet: &mut Sheet| {
+        typed::quoted(cx, sheet, id, quoted);
         for (index, option) in options.iter().take(MAX_OPTIONS).enumerate() {
             choice_option(cx, sheet, (id, index), option, Role::Option, (option_lines, 1.0));
+        }
+        if let Some(field) = field {
+            typed::field(cx, sheet, id, field);
         }
     };
     let (role, size) = (Role::Body, cx.size(Role::Body));

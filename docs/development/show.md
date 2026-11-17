@@ -287,9 +287,15 @@ A page asks which made wishes have work for the person to look at, and what to s
 and writes nothing:
 
 ```json
-{"day":"2026-03-10","waits":[{"wish":"m1","run":"r0123456789abcdef","said":"make the uploader retry twice","read":true,"made":1,"changed":1,"removed":1,"names":["CLAUDE.md","a.txt","b.txt"],"more":0,"obeyed":["CLAUDE.md"],"plain":true,"why":"the work of run r0123456789abcdef waits: files made 1, changed 1, removed 1"},{"wish":"m3","run":"rfedcba9876543210","said":"tidy the notes","read":false,"made":0,"changed":0,"removed":0,"names":[],"more":0,"obeyed":[],"plain":true,"why":"no folder of the name the wish gives was typed in on 2026-03-10; name the folder with --repo"}]}
+{"day":"2026-03-10","waits":[{"wish":"m1","run":"r0123456789abcdef","said":"make the uploader retry twice","read":true,"made":1,"changed":1,"removed":1,"names":["CLAUDE.md","a.txt","b.txt"],"more":0,"obeyed":["CLAUDE.md"],"plain":true,"why":"the work of run r0123456789abcdef waits: files made 1, changed 1, removed 1"},{"wish":"m3","run":"rfedcba9876543210","said":"tidy the notes","read":false,"made":0,"changed":0,"removed":0,"names":[],"more":0,"obeyed":[],"plain":true,"why":"no folder of the name the wish gives was typed in on 2026-03-10; name the folder with --repo"}],"follows":["m1","m2"]}
 ```
 
+- **`follows`.** The ids of the day's made wishes a follow-up may be made of now, in the day's order (F54,
+  `run/follow.rs`, `followable`): the wishes `jellymoon wish --after` would not refuse for the wish they name
+  ([wish.md](wish.md), "A follow-up"), which is work that waits and work that was kept. It is read from the
+  home alone, whatever `--repo` and `--logs` say, and the app offers `More like this` under these wishes and
+  no other ([app.md](app.md#a-question-answered-and-more-like-this-appsrcansweringrs)). The day's eight are
+  not counted here: a ninth wish is refused when it is made.
 - **Which wishes.** A made wish of the day whose run finished with its one commit, whose record names that
   commit, and whose work is neither kept nor tossed. That is asked of the home alone. A wish with no run, a run
   that changed nothing, failed, was cancelled or asks, and a record from before F48 are not listed.

@@ -3,7 +3,7 @@
 //! and a last small sheet says how many: no note goes without a word. A whole list is the one exception to the
 //! order: it comes below every other note and takes only the room they leave, so it never moves or shrinks one.
 
-use super::text_note::{LEAST_TEXT_LINES, MAX_TEXT_LINES, text};
+use super::text_note::{LEAST_TEXT_LINES, MAX_TEXT_LINES, Parts, text};
 use super::{Ctx, PieceKind, Placed, TextRun, line_height, piece, run};
 use crate::geom::Rect;
 use crate::scene::{Mark, Note, Scene};
@@ -169,9 +169,11 @@ fn height_needed(cx: &Ctx, note: &Note, index: usize, way: Way, room: f32) -> f3
     let least = match note {
         Note::List { title, rows } => list(cx, title, &rows[..rows.len().min(2)], 0.0, f32::INFINITY),
         // A text with options needs its whole body, where `room` has that: its options are drawn under no less.
-        Note::Text { id, title, body, options } => {
-            let sized = |room, most| text(cx, (id, title), (body, options), 0.0, (room, most), way.0);
-            let whole = sized(room, MAX_TEXT_LINES).filter(|sheet| !sheet.options.is_empty());
+        Note::Text { id, title, body, options, quoted, field } => {
+            let parts = Parts { body, options, quoted, field: field.as_ref() };
+            let sized = |room, most| text(cx, (id, title), parts, 0.0, (room, most), way.0);
+            let chosen = |sheet: &Sheet| sheet.options.iter().any(|placed| placed.piece == PieceKind::Option);
+            let whole = sized(room, MAX_TEXT_LINES).filter(chosen);
             whole.or_else(|| sized(f32::INFINITY, LEAST_TEXT_LINES))
         }
         _ => fill(cx, note, index, 0.0, f32::INFINITY, way).map(|(sheet, ..)| sheet),
@@ -198,8 +200,9 @@ fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32, way: Way) -> O
             paragraph(cx, &mut sheet, footer, Role::ChoiceFooter, 1);
             close(cx, sheet, 18.0, room).map(|sheet| (sheet, id.clone(), tilt.choice_note))
         }
-        Note::Text { id, title, body, options } => {
-            let sheet = text(cx, (id, title), (body, options), top, (room, MAX_TEXT_LINES), way.0)?;
+        Note::Text { id, title, body, options, quoted, field } => {
+            let parts = Parts { body, options, quoted, field: field.as_ref() };
+            let sheet = text(cx, (id, title), parts, top, (room, MAX_TEXT_LINES), way.0)?;
             Some((sheet, if id.is_empty() { fallback } else { id.clone() }, tilt.list_note))
         }
         // A whole list is not one of the planned notes: `notes` gives it the room they leave.

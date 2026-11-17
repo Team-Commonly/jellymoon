@@ -33,7 +33,17 @@ fn left_on_show() -> (World, OnShow) {
     let (scene, page) = today.first();
     let mut on = OnShow { today, page, scene };
     let options = CHOICES.map(str::to_string).to_vec();
-    on.scene.notes.insert(0, Note::Text { id: "work-m1".into(), title: WORK.into(), body: Vec::new(), options });
+    on.scene.notes.insert(
+        0,
+        Note::Text {
+            id: "work-m1".into(),
+            title: WORK.into(),
+            body: Vec::new(),
+            options,
+            quoted: String::new(),
+            field: None,
+        },
+    );
     (world, on)
 }
 
@@ -59,7 +69,14 @@ fn a_choice_of_work_that_waits_no_more_changes_nothing_and_its_answer_goes_on_th
     // The scene on show changes while core is at work: the answer's note is put on that scene, and nothing of
     // it is taken away, a file's note of another wish's work neither.
     let meanwhile = Note::Plain { title: "meanwhile".into(), body: String::new() };
-    let other = Note::Text { id: "file-3-m2".into(), title: "theirs".into(), body: Vec::new(), options: Vec::new() };
+    let other = Note::Text {
+        id: "file-3-m2".into(),
+        title: "theirs".into(),
+        body: Vec::new(),
+        options: Vec::new(),
+        quoted: String::new(),
+        field: None,
+    };
     on.scene.notes.insert(1, other);
     on.scene.notes.push(meanwhile.clone());
     let scene = on.worked(work());

@@ -85,6 +85,10 @@ pub enum Note {
     /// A text and the choices under it. Each of `body` starts on a line of its own and is wrapped, as many lines
     /// as the page has room for and at most [`crate::layout::MAX_TEXT_LINES`]; a last line counts the ones of `body`
     /// that are not drawn to their end. A tap on an option is the note's `id` and the option's place, as a choice's.
+    ///
+    /// `quoted` is someone else's words: drawn under the body on a ground of their own, in the tone for quoted
+    /// words, cut to at most [`crate::layout::MAX_QUOTED_LINES`] lines, and never anything but text. `field` is
+    /// one line a person types in under the note; what Enter gives carries the note's `id`.
     Text {
         id: String,
         title: String,
@@ -92,6 +96,10 @@ pub enum Note {
         body: Vec<String>,
         #[serde(default)]
         options: Vec<String>,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        quoted: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        field: Option<Field>,
     },
     /// A list of texts no word of which may be hidden. Each row is drawn after its mark to its last word, on as many
     /// lines as that takes, or it is left out; a last line, `+N more`, counts the rows left out. No row is cut short.
@@ -99,6 +107,17 @@ pub enum Note {
         title: String,
         rows: Vec<(Mark, String)>,
     },
+}
+
+/// One line a person types in under a text note. `offer` is the few words over it that say what it is for, and
+/// a tap on them gives the field the keys; a field with no `offer` has none. `hint` is shown while the field is
+/// empty, and `most` is the most characters it takes.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Field {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub offer: String,
+    pub hint: String,
+    pub most: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

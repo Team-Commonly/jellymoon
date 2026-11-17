@@ -25,7 +25,14 @@ fn run(w: &World) -> String {
 /// A file that holds the note that asks once more, with `body` as its texts: a page left on show.
 pub fn left(w: &World, body: &[String]) -> String {
     let options = AGAIN.map(str::to_string).to_vec();
-    let note = Note::Text { id: "sure-m1".into(), title: ASKS.into(), body: body.to_vec(), options };
+    let note = Note::Text {
+        id: "sure-m1".into(),
+        title: ASKS.into(),
+        body: body.to_vec(),
+        options,
+        quoted: String::new(),
+        field: None,
+    };
     let file = w.at("left.json");
     fs::write(&file, serde_json::to_string(&note).unwrap()).unwrap();
     format!("left:{}", file.display())

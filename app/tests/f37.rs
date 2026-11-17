@@ -43,7 +43,7 @@ fn a_made_wish_is_drawn_with_the_reading_s_wishes_and_a_new_reading_does_not_los
 
 // The window's first scene, before a log is opened, and the scene of a day with no logs to read.
 #[test]
-fn a_made_wish_is_drawn_working_before_the_day_is_read_and_when_it_cannot_be() {
+fn a_made_wish_is_drawn_working_before_the_day_is_read_and_on_a_day_with_no_logs() {
     let world = world();
     make(&world);
     let today = Today {

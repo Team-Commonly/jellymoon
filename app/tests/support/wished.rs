@@ -34,7 +34,7 @@ fn copied(built: &str, program: &Path) {
 }
 
 pub fn world() -> World {
-    let world = bare();
+    let world = quiet();
     let repo = world.at("work").join("alpha");
     let typed = |folder: &Path| [said(&noon(0), folder.to_str().unwrap(), "look at the uploader")];
     write_log(&world.day, "-work-alpha/s1.jsonl", &typed(&repo));
@@ -47,10 +47,6 @@ pub fn world() -> World {
 /// The world of a day nothing was typed on (F63): the repo `alpha`, logs that hold nothing, and a harness that
 /// would answer a reading, so a call that is made is seen.
 pub fn quiet() -> World {
-    bare()
-}
-
-fn bare() -> World {
     let dir = tempfile::tempdir().unwrap();
     let at = |name: &str| dir.path().join(name);
     for folder in ["user", "rec", "tmp", "git", "work", "logs"] {

@@ -10,7 +10,9 @@ use crate::{DayOptions, Error, PageData, PageOptions, ReaderDay, reader, reading
 /// made with no call to a model, since nothing was typed that one could read. The model's name is checked as it
 /// is for any page. None when the reader's answer is anything but "no logs", or when the day has no made wish
 /// that can be used and no project is on offer: there is nothing to draw, and the reader's answer stands, as it
-/// did before a day could have a page without logs. Nothing is written.
+/// did before a day could have a page without logs. Nothing is written. The logs are asked for a second time
+/// here, on purpose: the caller's answer was an error it may have put into words already, and asking again
+/// keeps this one function whole, true by itself whatever the caller saw.
 pub fn page_with_no_logs(read: &DayOptions, options: &PageOptions) -> Result<Option<PageData>, Error> {
     if !matches!(reader::day(read), Err(Error::NoLogs(_))) {
         return Ok(None);

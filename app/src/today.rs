@@ -15,7 +15,7 @@ use jellymoon_core::{Error, PageData, PageOptions, PageRead, ReaderDay};
 use sticker_kit::{Note, Scene};
 
 use crate::read::{self, LeftOut, Page};
-use crate::scene::{bare, own, ruled};
+use crate::scene::{bare, own, read_nothing, ruled};
 
 /// How long the reading call may take: the `jellymoon` command's own limit.
 const READING_LIMIT: Duration = Duration::from_secs(180);
@@ -167,8 +167,9 @@ impl Today {
             Ok(day) => day,
             Err(error) => return self.without_logs(kept, &error),
         };
-        // A kept page that says no logs were found is read again once there are logs.
-        let saw = |kept: &Page| kept.data.read.turns == day.turns.len() && !kept.data.read.no_logs;
+        // A kept page that says no logs were found is no earlier reading: the day is read as for the first time.
+        let kept = kept.filter(|kept| !no_logs(kept));
+        let saw = |kept: &Page| kept.data.read.turns == day.turns.len();
         if !self.fresh && kept.as_ref().is_some_and(saw) {
             return None;
         }
@@ -191,14 +192,17 @@ impl Today {
     /// What is shown when the day could not be read. With no session logs at all core is asked for the day's
     /// page all the same (F63): it has one when the day has a made wish or a project on offer, made with no
     /// call. That page is kept and shown as a reading's is, in place of none or of a kept page that read
-    /// nothing; a kept page that read something is the earlier reading, and stays under its note.
+    /// nothing; a kept page that read something is the earlier reading, and stays under its note. A kept page
+    /// that says no logs were found is no earlier reading. What core refuses the page for is said in its words.
     fn without_logs(&self, kept: Option<Page>, error: &Error) -> Option<Next> {
+        let earlier = kept.clone().filter(|kept| !no_logs(kept));
         let seen = kept.as_ref().map(|kept| &kept.data);
         match jellymoon_core::page_with_no_logs(&self.read(), &self.reading()) {
-            Ok(Some(data)) if seen.is_none_or(|seen| seen.read.turns == 0) => {
+            Ok(Some(data)) if earlier.as_ref().is_none_or(|earlier| earlier.data.read.turns == 0) => {
                 (seen != Some(&data)).then(|| self.read_as(data))
             }
-            _ => Some(self.stopped(kept, &words(error))),
+            Ok(_) => Some(self.stopped(earlier, &words(error))),
+            Err(refused) => Some(self.stopped(earlier, &words(&refused))),
         }
     }
 
@@ -263,6 +267,11 @@ impl Today {
         // Nothing was read, so the footer says nothing of a reading: only whose words the made wishes are.
         Scene { footer: own(made), ..shown }
     }
+}
+
+/// Whether a kept page is the page of a day with no session logs: it says so, and holds nothing a reading gives.
+fn no_logs(kept: &Page) -> bool {
+    kept.data.read.no_logs && read_nothing(&kept.data, 0)
 }
 
 /// The scene with one plain note before its own.

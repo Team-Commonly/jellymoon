@@ -69,10 +69,17 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   the day's page all the same (`jellymoon_core::page_with_no_logs`). Core has one when the day has a made wish or
   a project on offer: an empty page that says so (`read.no_logs`), made with no call. It is kept and shown as a
   reading's page is, with the made wishes on it, the entry and its chips; its footer is "No Claude Code session
-  logs were found, so nothing was read." Core has none for a day with nothing made and no project on offer, and
-  that day is the plain note it was. A kept page that read something is never replaced by it: that page stays,
-  under "This page is from an earlier reading." A kept page that says no logs were found is read again once
-  there are logs, whatever its count.
+  logs were found, so nothing was read.", then the count of made wishes as on any page. The folder looked in is
+  not named on this page: core's page does not carry it. Core has none for a day with nothing made and no project
+  on offer, and that day is the plain note it was. A refusal of core's own (a `--model` that is no name) is the
+  note, in core's words. A kept page that read something is never replaced by it: that page stays, under "This
+  page is from an earlier reading." A kept page of 0 turns is replaced by it when the logs folder goes. A kept
+  page that says no logs were found is no earlier reading: once there are logs the day is read as for the first
+  time, behind the waiting page, and when it cannot be read the note is "Today could not be read." The field
+  counts only on a page that holds nothing a reading gives (no turn, no project, no clash, no wish of its own);
+  on any other page it is not looked at, and the footer is the reading's.
+- **A day whose logs hold no turn of it** makes no call, and its footer is "Nothing was typed on this day, so no
+  model read it."
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
   no command line. Core reads the file (`reader.md`), for the app and for `jellymoon day` and `page` alike, so the
   three leave out the same folders. A name matches exactly, and case matters, and a `--skip` name with a character
@@ -265,9 +272,7 @@ holds what is asked), the one-second timer, the order of the reading's steps, wh
 
 Not covered: a wish for a project past the sixth, or for one neither typed in today nor listed, is made with
 `jellymoon wish`. A made wish's question is not drawn on a page (it never was): that a day nothing was typed on
-prints it as any day does is proved at `jellymoon page` (`crates/jellymoon/tests/f63.rs`). A day whose logs
-were read and hold no turn of it still says "Read from 0 things you typed. This is the model's reading,
-unedited." though no model read it. What only a person at a window can see is not tested: the input method's candidate window,
+prints it as any day does is proved at `jellymoon page` (`crates/jellymoon/tests/f63.rs`). What only a person at a window can see is not tested: the input method's candidate window,
 the caret, the pale words of an entry that waits, and which piece has the keys.
 
 ## A tap that stops a run (`app/src/stopping.rs`)

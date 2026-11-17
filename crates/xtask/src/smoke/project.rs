@@ -1,8 +1,8 @@
 //! The `project` step (F62): a repo the chain makes in the system's temporary folder, listed with `jellymoon
-//! project add`. Nothing is typed in it: `jellymoon wish --run`, over logs that are not there, finds the repo by
+//! project add`. Nothing is typed in it: `jellymoon wish --run`, over logs that hold nothing, finds the repo by
 //! the list and starts the run. `jellymoon page` over a logs folder that is not there at all then prints the
-//! day's page all the same, with the wish done, and says that no logs were found (F63). `project list` names the project and no folder,
-//! and `project forget` takes it off. The step removes the repo when it ends.
+//! day's page all the same, with the wish done, and says that no logs were found (F63). `project list` names
+//! the project and no folder, and `project forget` takes it off. The step removes the repo when it ends.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -68,12 +68,12 @@ fn in_folder(world: &World, repo: &Path) -> Result<String, String> {
     }
     let commits = git(&["rev-list", "--count", &branch])?;
     let (state, unread) = on_page(&jellymoon(&["page", "--date", DAY, "--logs", &absent])?.0, &made["wish"]["id"]);
-    let (forgot, _) = jellymoon(&["project", "forget", "listed"])?;
-    let left = listed(&mut named)?;
+    let (forgot, left) = (jellymoon(&["project", "forget", "listed"])?.0, listed(&mut named)?);
     let yes = |so: bool| if so { "yes" } else { "no" };
     let found = format!(
         "added as {}, on the list {}, commits on the run's branch {commits}, the run's command ended {}, the wish \
-         on the page of a day with no logs {state}, which says no logs were found {}, forgot {}, on the list after {}, a folder named {}",
+         on the page of a day with no logs {state}, which says no logs were found {}, forgot {}, on the list \
+         after {}, a folder named {}",
         added["name"].as_str().unwrap_or("?"),
         yes(on_list),
         yes(!lock.exists()),

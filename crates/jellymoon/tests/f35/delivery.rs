@@ -8,7 +8,7 @@ use std::{env, fs};
 use serde_json::{Value, json};
 
 use super::{World, tree, world};
-use crate::support::{door, jellymoon_in, open_above, skipped};
+use crate::support::{door, jellymoon_in, open_above};
 
 const TAKEN: &str = "{\"installed\":true,\"changed\":true}\n";
 
@@ -182,7 +182,7 @@ fn a_command_that_is_a_link_or_cannot_be_run_or_that_others_can_change_is_never_
         ];
         w.refused(&more, &format!("{NOT_USED}it is not a file of your own"), "a home of another owner");
     } else {
-        skipped("a home of another owner: every temporary folder here is the test's own");
+        crate::support::skipped("a home of another owner: every temporary folder here is the test's own");
     }
     // With no home there is no one the command could belong to: never is it taken for the person's own. A home
     // that is not set, is empty or is not a full path is no home.

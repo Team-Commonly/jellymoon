@@ -30,7 +30,7 @@ pub const NOTHING: &str = "Nothing wished for yet today.";
 pub const UNREAD: &str = "Today could not be read.";
 pub const NO_PAGE: &str = "There is no page for this day yet.";
 pub const HINT: &str = "Type a wish: Tab for its project, Enter";
-pub const READ_NOTHING: &str = "Nothing typed on this day was read, so no model read it.";
+pub const READ_NOTHING: &str = "Nothing typed on this day was read, so there is no reading.";
 pub const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
 /// What the day's session logs are.

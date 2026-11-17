@@ -59,9 +59,11 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   or can be written to by its group or by others is not drawn: the day is read again.
 - **What is shown first.** The kept page, when there is one that read something or whose logs were read. A kept
   page that says no logs were found is not drawn first: it may be stale by now, so the waiting page is shown, and
-  the count step draws it again when there are still no logs. Otherwise a waiting page: the date, the hero and one
-  note, "Reading your day…". The window opens on it at once, before a log is opened: reading the logs alone can take
-  seconds. The rest runs off the window's thread in two steps, each of which may give the next page to show
+  the count step draws it again when there are still no logs. That is asked in one place, where the first page
+  is chosen (`Today::first`): the steps after it are handed what it chose, so they are never handed such a page.
+  On a day with no logs the kept file is read a second time, to see that core's page is the one kept. Otherwise
+  a waiting page: the date, the hero and one note, "Reading your day…". The window opens on it at once, before a
+  log is opened: reading the logs alone can take seconds. The rest runs off the window's thread in two steps, each of which may give the next page to show
   (`today::Next`): the count of the day's turns, then the reading call. While a kept page is read again it stays on
   show under one note, "Reading your day again…", and never gives way to the waiting page. `layout --waiting` prints
   the waiting page; `layout` alone runs the same steps and prints what the window ends on.
@@ -86,8 +88,9 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   counts only on a page that holds nothing a reading gives (no turn, no project, no clash, no wish of its own);
   on any other page it is not looked at, and the footer is the reading's.
 - **A day whose logs hold no turn of it** makes no call, and its footer is "Nothing typed on this day was read, so
-  no model read it." It says what was read, not what was typed: turns typed in a folder switched off or in a
-  run's copy are left out, and a made wish was typed in the window.
+  there is no reading." It says what was read, not what was typed: turns typed in a folder switched off or in a
+  run's copy are left out, and a made wish was typed in the window. It ends at the reading and says nothing of
+  a model: a made wish on that page may have had a run, whose agent was given the wish's words.
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
   no command line. Core reads the file (`reader.md`), for the app and for `jellymoon day` and `page` alike, so the
   three leave out the same folders. A name matches exactly, and case matters, and a `--skip` name with a character
@@ -98,11 +101,14 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
 - **When the reading cannot run** the page is one plain note that says why. Where no reading call was made its
   title is "There is no page for this day yet.": Claude Code was not found, no session logs (the note names the
   folder looked for, as the command's line does), logs or a `skip.txt` that could not be read, a `--model` that
-  is no name. Where a call was made and gave no page it is "Today could not be read.": the call failed or took
-  too long (core's own line follows), or the model's answer was not a page. With a kept page that read
-  something, that page stays and the note is its first, "This page is from an earlier reading." A page that could not be written to its
-  file is shown with a first note that says so. `layout` prints these pages and exits 0: they are what the window
-  shows.
+  is no name, or a call that could not be started (a `JELLYMOON_CLAUDE` that names no program, a folder for the
+  call that could not be made; core's own line follows). Where a call was made and gave no page it is "Today
+  could not be read.": the call failed, its result says it was an error or is no result, it took too long
+  (core's own line follows), or the model's answer was not a page. One case is on the wrong side: core gives a
+  wait on a started call that itself fails the same error as a call never started, so it is said as not
+  started. With a kept page that read something, that page stays and the note is its first, "This page is from
+  an earlier reading." A page that could not be written to its file is shown with a first note that says so.
+  `layout` prints these pages and exits 0: they are what the window shows.
 
 The window makes no second reading while it is open, and closing it while a call runs leaves that call to end by
 itself. It does look again at what core keeps of the day's made wishes ("A wish in the window").

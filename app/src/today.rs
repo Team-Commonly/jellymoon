@@ -1,5 +1,6 @@
 //! A day's page for the app that was opened with no page file. The page is kept per day in the user's own folder,
-//! shown from there at once, and read again through core when the day has turns the kept page did not see. No GPUI:
+//! shown from there at once unless it says no logs were found (the waiting scene is shown then, until the logs
+//! have been looked for), and read again through core when the day has turns the kept page did not see. No GPUI:
 //! the window only shows the scenes this hands it, each when the work before it is done ([`Next`]).
 //!
 //! Only core's `day` and `page` are called, with the folders and the harness the `jellymoon` command would use, so
@@ -136,7 +137,8 @@ impl Today {
 
     /// What the window shows at once, before a log is opened: the kept page, or the waiting scene. The kept page goes
     /// on to [`Today::later`]. A kept page that says no logs were found is not shown: logs may have come since, so
-    /// the waiting scene is, and the count draws that page again when there are still none.
+    /// the waiting scene is, and the count draws that page again when there are still none. Here is the one place
+    /// that is asked: such a page is no earlier reading, and it is never handed on.
     pub fn first(&self) -> (Scene, Option<Page>) {
         match self.kept().filter(|kept| !no_logs(kept)) {
             Some(page) => (self.draw(&page), Some(page)),
@@ -158,7 +160,7 @@ impl Today {
     /// The work after the first scene, in two steps. The first counts the day's turns: none when the kept page saw
     /// every one and nobody asked for a new reading, so what is shown stays. Otherwise it gives the kept page with a
     /// note that it is being read again (or the waiting scene), and the second step: the reading call, which gives
-    /// the new page, now kept, or why there is none.
+    /// the new page, now kept, or why there is none. `kept` is the page [`Today::first`] gave.
     pub fn later(self, kept: Option<Page>) -> Later {
         Box::new(move || self.count(kept))
     }
@@ -168,8 +170,6 @@ impl Today {
             Ok(day) => day,
             Err(error) => return self.without_logs(kept, &error),
         };
-        // A kept page that says no logs were found is no earlier reading: the day is read as for the first time.
-        let kept = kept.filter(|kept| !no_logs(kept));
         let saw = |kept: &Page| kept.data.read.turns == day.turns.len();
         if !self.fresh && kept.as_ref().is_some_and(saw) {
             return None;
@@ -193,14 +193,14 @@ impl Today {
     /// What is shown when the day could not be read. With no session logs at all core is asked for the day's
     /// page all the same (F63): it has one when the day has a made wish or a project on offer, made with no
     /// call. That page is kept and shown as a reading's is, in place of none or of a kept page that read
-    /// nothing; a kept page that read something is the earlier reading, and stays under its note. A kept page
-    /// that says no logs were found is no earlier reading. What core refuses the page for is said in its words.
-    /// The same page as the one kept is drawn, since the waiting scene was shown first, and is not written again.
-    fn without_logs(&self, kept: Option<Page>, error: &Error) -> Option<Next> {
-        let earlier = kept.clone().filter(|kept| !no_logs(kept));
+    /// nothing; a kept page that read something is the earlier reading, and stays under its note. What core
+    /// refuses the page for is said in its words. With no earlier page handed on, the kept file may hold the
+    /// page of a day with no logs, which [`Today::first`] did not show: it is read once more, and the same page
+    /// as the one kept is drawn and not written again.
+    fn without_logs(&self, earlier: Option<Page>, error: &Error) -> Option<Next> {
         Some(match jellymoon_core::page_with_no_logs(&self.read(), &self.reading()) {
             Ok(Some(data)) if earlier.as_ref().is_none_or(|earlier| read_nothing(&earlier.data, 0)) => {
-                let same = kept.or_else(|| self.kept()).is_some_and(|kept| kept.data == data);
+                let same = earlier.is_none() && self.kept().is_some_and(|kept| kept.data == data);
                 if same { self.shown(data, None) } else { self.read_as(data) }
             }
             Ok(_) => self.stopped(earlier, error),
@@ -285,10 +285,12 @@ fn no_logs(kept: &Page) -> bool {
 }
 
 /// Whether a reading call was made and gave no page. Any other error stopped the day before a call: no logs, a
-/// list or a model's name that was refused, no Claude Code to call.
+/// list or a model's name that was refused, no Claude Code to call, or a call that could not be started
+/// (`Error::Call`: its folder could not be made, the program named is not there). Core gives that same error
+/// when the wait on a started call itself fails, the one case said here as not tried that was.
 fn tried(error: &Error) -> bool {
-    use Error::{Call, Failed, Harness, NotAResult, NotPageData, TooLong};
-    matches!(error, Call(_) | TooLong(_) | Failed { .. } | NotAResult | Harness(_) | NotPageData { .. })
+    use Error::{Failed, Harness, NotAResult, NotPageData, TooLong};
+    matches!(error, TooLong(_) | Failed { .. } | NotAResult | Harness(_) | NotPageData { .. })
 }
 
 /// The scene with one plain note before its own.
@@ -318,7 +320,11 @@ fn words(error: &Error) -> String {
         Error::NotPageData { .. } => {
             format!("The model's answer was not a page, so nothing from it is shown. {again}")
         }
-        Error::Call(_) | Error::Failed { .. } | Error::NotAResult | Error::Harness(_) => format!(
+        Error::Call(_) => format!(
+            "Claude Code could not be started, so nothing was read. Check that `claude` answers in a terminal. \
+             {again} What happened: {error}."
+        ),
+        Error::Failed { .. } | Error::NotAResult | Error::Harness(_) => format!(
             "Claude Code could not do the reading. Check that `claude` answers in a terminal. {again} What happened: \
              {error}."
         ),
@@ -346,18 +352,10 @@ fn words(error: &Error) -> String {
 mod tests {
     use super::*;
 
+    // The one kind `layout` cannot be made to play: the limit is three minutes, and fixed (`tests/f34.rs` has
+    // the others).
     #[test]
-    fn a_reading_was_tried_only_where_a_call_was_made() {
-        let (system, text) = (|| io::Error::other("made up"), String::new);
-        let failed = Error::Failed { status: text(), said: text() };
-        let no_page = Error::NotPageData { line: 1, column: 1 };
-        let called = [Error::Call(system()), Error::TooLong(Duration::ZERO), failed, Error::NotAResult, no_page];
-        for error in called.into_iter().chain([Error::Harness(text())]) {
-            assert!(tried(&error), "{error:?}");
-        }
-        let before = [Error::NoLogs(text()), Error::Logs(system()), Error::Skip(text()), Error::NoHarness(text())];
-        for error in before.into_iter().chain([Error::Date, Error::Model, Error::Home]) {
-            assert!(!tried(&error), "{error:?}");
-        }
+    fn a_call_that_took_too_long_was_a_reading_tried() {
+        assert!(tried(&Error::TooLong(READING_LIMIT)));
     }
 }

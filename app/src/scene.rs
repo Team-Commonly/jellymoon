@@ -24,8 +24,9 @@ pub const MADE: &str = "wished here today";
 const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
 /// The footer of a day whose session logs gave no turn of it. It says what was read, not what was typed: a turn
-/// typed in a folder switched off or in a run's copy is left out, and a made wish was typed in the window.
-const READ_NO_TURN: &str = "Nothing typed on this day was read, so no model read it.";
+/// typed in a folder switched off or in a run's copy is left out, and a made wish was typed in the window. It
+/// ends at the reading and names no model: a made wish on the page may have had a run.
+const READ_NO_TURN: &str = "Nothing typed on this day was read, so there is no reading.";
 
 /// The title of the one note of a page with no wish on it.
 pub const NOTHING: &str = "Nothing wished for yet today.";
@@ -340,7 +341,7 @@ mod tests {
         let scene = scene(&empty);
         assert!(matches!(&scene.notes[..], [Note::Plain { title, .. }] if title == "Nothing wished for yet today."));
         assert_eq!(scene.characters, []);
-        assert_eq!(scene.footer, "Nothing typed on this day was read, so no model read it.");
+        assert_eq!(scene.footer, "Nothing typed on this day was read, so there is no reading.");
     }
 
     #[test]

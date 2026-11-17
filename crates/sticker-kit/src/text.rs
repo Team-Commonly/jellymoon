@@ -83,10 +83,10 @@ impl Measure for FixedAdvance {
 
 const ELLIPSIS: char = '…';
 
-/// What nobody sees: the line and paragraph separators (a space in [`clean`]), and every format character (Unicode category Cf: direction
-/// marks, zero-width space, soft hyphen, word joiner, byte-order mark, tag characters and the rest) other than the
-/// joiners U+200C and U+200D, which emoji and several scripts are written with. The list is written out because the
-/// kit carries no Unicode tables.
+/// What nobody sees: the line and paragraph separators (a space in [`clean`]), and every format character
+/// (Unicode category Cf: direction marks, zero-width space, soft hyphen, word joiner, byte-order mark, tag
+/// characters and the rest) other than the joiners U+200C and U+200D, which emoji and several scripts are written
+/// with. The list is written out because the kit carries no Unicode tables.
 pub(crate) fn is_unseen(c: char) -> bool {
     matches!(
         c as u32,

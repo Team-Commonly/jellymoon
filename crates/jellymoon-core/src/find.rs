@@ -4,7 +4,7 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::{env, fs, io, path};
+use std::{env, fmt, fs, io, path};
 
 use crate::Error;
 
@@ -32,27 +32,51 @@ pub(crate) fn named_or_found(named: Option<&Path>) -> Result<Found, Error> {
     }
 }
 
-/// Finds `claude` in the folders of `PATH`, then in the well-known places. A program there that someone other than
-/// its owner can write to, or whose folder everyone can write to, is passed over; the error names it when no later
-/// place has one.
+/// A search that found no harness: where it looked, each program it passed over with why, and whether there was a
+/// home to look in.
+pub(crate) struct Missed {
+    looked: Vec<String>,
+    pub passed_over: Vec<String>,
+    pub home: bool,
+}
+
+impl fmt::Display for Missed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.looked.join(", "))?;
+        if !self.home {
+            f.write_str("; ~/.local/bin and ~/.claude/local were not looked in, as there is no home directory")?;
+        }
+        if self.passed_over.is_empty() { Ok(()) } else { write!(f, " (passed over {})", self.passed_over.join(", ")) }
+    }
+}
+
+/// Finds `claude` as [`search`] does; the error says where it was looked for, and names what was passed over.
 pub(crate) fn harness() -> Result<Found, Error> {
+    search()?.map_err(|missed| Error::NoHarness(missed.to_string()))
+}
+
+/// Looks for `claude` in the folders of `PATH`, then in the well-known places. A program there that someone other
+/// than its owner can write to, or whose folder everyone can write to, is passed over, and is named in what was
+/// missed when no later place has one.
+pub(crate) fn search() -> Result<Result<Found, Missed>, Error> {
     let own = env::var_os("PATH").unwrap_or_default();
     let on_path: Vec<PathBuf> = env::split_paths(&own).filter(|folder| !folder.as_os_str().is_empty()).collect();
     // The child starts in another folder, so a relative entry of PATH must not be read from there.
     let whole = |program: PathBuf| path::absolute(program).map_err(Error::Call);
     if let Some((program, _)) = on_path.iter().flat_map(|folder| programs(folder)).next() {
-        return Ok(Found { program: whole(program)?, path: None });
+        return Ok(Ok(Found { program: whole(program)?, path: None }));
     }
     let home = user_home();
     let places = places(home.as_deref());
     let mut looked = vec!["PATH".to_string()];
-    let mut skipped = Vec::new();
+    let mut passed_over = Vec::new();
     for (folder, name) in &places {
         let open = fs::metadata(folder).is_ok_and(|meta| mode(&meta) & 0o002 != 0);
         for (program, mode) in programs(folder) {
             if open || mode & 0o022 != 0 {
                 let why = if open { "everyone can write to its folder" } else { "others can write to it" };
-                skipped.push(format!("{name}/{}: {why}", program.file_name().unwrap_or_default().to_string_lossy()));
+                passed_over
+                    .push(format!("{name}/{}: {why}", program.file_name().unwrap_or_default().to_string_lossy()));
                 continue;
             }
             // A script that starts `env node` finds node beside itself or in the same places. A folder whose name
@@ -61,18 +85,11 @@ pub(crate) fn harness() -> Result<Found, Error> {
             let after = after.filter(|folder| env::join_paths([folder]).is_ok()).map(Path::to_path_buf);
             let longer = env::join_paths(on_path.into_iter().chain(after));
             let longer = longer.map_err(|e| Error::Call(io::Error::new(io::ErrorKind::InvalidInput, e)))?;
-            return Ok(Found { program: whole(program)?, path: Some(longer) });
+            return Ok(Ok(Found { program: whole(program)?, path: Some(longer) }));
         }
         looked.push(name.clone());
     }
-    let mut said = looked.join(", ");
-    if home.is_none() {
-        said += "; ~/.local/bin and ~/.claude/local were not looked in, as there is no home directory";
-    }
-    if !skipped.is_empty() {
-        said = format!("{said} (passed over {})", skipped.join(", "));
-    }
-    Err(Error::NoHarness(said))
+    Ok(Err(Missed { looked, passed_over, home: home.is_some() }))
 }
 
 /// The person's home: `HOME` (`USERPROFILE` on Windows) and nothing else, and only when it names a full path, since

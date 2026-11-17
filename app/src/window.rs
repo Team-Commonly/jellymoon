@@ -236,7 +236,7 @@ pub fn page(
 }
 
 /// The page's window, while one is open.
-pub(crate) fn page_window(cx: &App) -> Option<WindowHandle<Page>> {
+pub fn page_window(cx: &App) -> Option<WindowHandle<Page>> {
     cx.windows().into_iter().find_map(|window| window.downcast::<Page>())
 }
 

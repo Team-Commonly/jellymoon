@@ -42,7 +42,15 @@ pub struct EdgeView {
     corner: Corner,
     on_tap: Option<TapHandler>,
     placed: Vec<EdgePiece>,
+    painted: Vec<EdgePainted>,
     art: HashMap<EdgeMood, Arc<Image>>,
+}
+
+/// One run of text as a frame painted it: its ink, and the box it is clipped to, from its window's top left.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EdgePainted {
+    pub ink: Color,
+    pub seen: Rect,
 }
 
 /// The ink a bubble's text of `role` is painted in: the scene's own three, and `quoted` for someone else's words.
@@ -57,7 +65,8 @@ pub fn edge_ink(palette: &Palette, role: Role) -> Color {
 
 impl EdgeView {
     pub fn new(part: EdgePart, edge: Edge, theme: Theme, corner: Corner) -> Self {
-        Self { part, edge, theme, corner, on_tap: None, placed: Vec::new(), art: HashMap::new() }
+        let (placed, painted) = (Vec::new(), Vec::new());
+        Self { part, edge, theme, corner, on_tap: None, placed, painted, art: HashMap::new() }
     }
 
     /// Called when the character is tapped. The bubble, the count and the part of the window one sees through
@@ -74,14 +83,6 @@ impl EdgeView {
         }
     }
 
-    pub fn set_theme(&mut self, theme: Theme, cx: &mut Context<Self>) {
-        for image in self.art.drain().map(|entry| entry.1) {
-            image.remove_asset(cx);
-        }
-        self.theme = theme;
-        cx.notify();
-    }
-
     pub fn edge(&self) -> &Edge {
         &self.edge
     }
@@ -89,6 +90,11 @@ impl EdgeView {
     /// The pieces of this view's window that the last frame painted.
     pub fn placed(&self) -> &[EdgePiece] {
         &self.placed
+    }
+
+    /// Every run of text the last frame painted, in the order of [`EdgeView::placed`]'s pieces and their runs.
+    pub fn painted(&self) -> &[EdgePainted] {
+        &self.painted
     }
 
     fn image(&mut self) -> Arc<Image> {
@@ -121,21 +127,24 @@ impl EdgeView {
         let own = self.theme.clone();
         let (theme, rect) = (&own, piece.rect);
         let p = &theme.palette;
-        let runs = |ink: Option<Color>| -> Vec<AnyElement> {
-            let line = |(n, run): (usize, &TextRun)| text(theme, run, n, rect, ink.unwrap_or(edge_ink(p, run.role)));
-            piece.text.iter().enumerate().map(line).collect()
+        // The count is written in the bubble's colour on its pill; a bubble's text in each role's own ink.
+        let ink = (piece.kind == EdgeKind::Count).then_some(p.bubble);
+        let how: Vec<EdgePainted> = piece.text.iter().map(|run| painted(p, run, rect, ink)).collect();
+        let runs = || -> Vec<AnyElement> {
+            let line = |(n, (run, how)): (usize, (&TextRun, &EdgePainted))| text(theme, run, n, rect, *how);
+            piece.text.iter().zip(&how).enumerate().map(line).collect()
         };
+        self.painted.extend(&how);
         match piece.kind {
             EdgeKind::Character => vec![self.character(rect, cx)],
             EdgeKind::Count => {
                 let pill =
                     at(rect).debug_selector(|| "edge:count".to_string()).rounded(px(rect.h / 2.0)).bg(hsla(p.ink));
-                vec![pill.overflow_hidden().children(runs(Some(p.bubble))).into_any_element()]
+                vec![pill.overflow_hidden().children(runs()).into_any_element()]
             }
             EdgeKind::Bubble => {
                 let ground = at(rect).rounded(px(14.0)).bg(hsla(p.bubble)).border_1().border_color(hsla(p.bubble_ring));
-                let texts =
-                    at(rect).debug_selector(|| "edge:bubble".to_string()).overflow_hidden().children(runs(None));
+                let texts = at(rect).debug_selector(|| "edge:bubble".to_string()).overflow_hidden().children(runs());
                 vec![ground.into_any_element(), texts.into_any_element()]
             }
             EdgeKind::Ring => {
@@ -159,9 +168,17 @@ fn at(rect: Rect) -> Div {
     div().absolute().left(px(rect.x)).top(px(rect.y)).w(px(rect.w)).h(px(rect.h))
 }
 
-/// One line of text inside the piece at `within`, clipped to it: nothing is painted past a bubble's edge.
-fn text(theme: &Theme, run: &TextRun, n: usize, within: Rect, ink: Color) -> AnyElement {
+/// How `run` is painted in the piece at `within`: in `ink`, or else in its role's own ([`edge_ink`]), and clipped
+/// to the piece, so nothing is painted past a bubble's edge. A pixel is added to its width for the rounding of
+/// its shaped letters.
+fn painted(palette: &Palette, run: &TextRun, within: Rect, ink: Option<Color>) -> EdgePainted {
     let seen = Rect::new(run.rect.x, run.rect.y, run.rect.w + 1.0, run.rect.h).clipped(&within);
+    EdgePainted { ink: ink.unwrap_or(edge_ink(palette, run.role)), seen }
+}
+
+/// One line of text inside the piece at `within`, in the ink and the box [`painted`] gave it.
+fn text(theme: &Theme, run: &TextRun, n: usize, within: Rect, how: EdgePainted) -> AnyElement {
+    let (seen, ink) = (how.seen, how.ink);
     div()
         .debug_selector(move || format!("edge:text:{n}"))
         .absolute()
@@ -205,15 +222,35 @@ impl Render for EdgeView {
             EdgePart::Character => placed.character.pieces,
             EdgePart::Bubble => placed.bubble.map(|window| window.pieces).unwrap_or_default(),
         };
-        let painted: Vec<AnyElement> = pieces.iter().flat_map(|piece| self.piece(piece, share, cx)).collect();
+        self.painted.clear();
+        let elements: Vec<AnyElement> = pieces.iter().flat_map(|piece| self.piece(piece, share, cx)).collect();
         self.placed = pieces;
-        div().size_full().relative().children(painted)
+        div().size_full().relative().children(elements)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{RING_STEPS, arc};
+    use super::{EdgePainted, RING_STEPS, arc, painted};
+    use crate::geom::Rect;
+    use crate::layout::TextRun;
+    use crate::text::Role;
+    use crate::theme::Theme;
+
+    // The layout cuts a text to its lines, so no run it places reaches past its piece: the clip is held here,
+    // with a run no layout gives.
+    #[test]
+    fn a_run_is_painted_in_its_role_s_ink_or_the_one_given_and_never_past_its_piece() {
+        let theme = Theme::sticker();
+        let (p, within) = (&theme.palette, Rect::new(0.0, 100.0, 300.0, 60.0));
+        let run =
+            |x, w| TextRun { rect: Rect::new(x, 110.0, w, 18.0), text: "words".into(), role: Role::Quoted, size: 13.0 };
+        let whole = painted(p, &run(14.0, 100.0), within, None);
+        assert_eq!(whole, EdgePainted { ink: p.quoted, seen: Rect::new(14.0, 110.0, 101.0, 18.0) });
+        assert_eq!(painted(p, &run(14.0, 400.0), within, None).seen, Rect::new(14.0, 110.0, 286.0, 18.0));
+        assert_eq!(painted(p, &run(-20.0, 100.0), within, None).seen, Rect::new(0.0, 110.0, 81.0, 18.0));
+        assert_eq!(painted(p, &run(14.0, 100.0), within, Some(p.bubble)).ink, p.bubble);
+    }
 
     #[test]
     fn a_ring_is_painted_from_the_top_as_far_as_its_share_and_no_further() {

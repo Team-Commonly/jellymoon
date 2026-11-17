@@ -92,7 +92,7 @@ fn the_doc_shows_every_line_of_the_fixtures_and_every_sentence() {
     }
     // Every sentence of a hearing's own, the ear's among them, each once in the list.
     let own = jellymoon_core::Hearing::refusals();
-    assert_eq!(own.len(), EarCannot::ALL.len() + 6);
+    assert_eq!(own.len(), EarCannot::ALL.len() + 8);
     for (at, sentence) in own.iter().enumerate() {
         assert!(doc.contains(sentence) && !own[..at].contains(sentence), "{sentence}");
     }

@@ -26,7 +26,7 @@ use crate::scene::Scene;
 use crate::text::Role;
 use crate::theme::Theme;
 
-pub use edge::{EdgePart, EdgeView, edge_ink};
+pub use edge::{EdgePainted, EdgePart, EdgeView, edge_ink};
 pub use entry::EntryMade;
 use entry::EntryView;
 pub use measure::{GlyphMeasure, load_fonts};

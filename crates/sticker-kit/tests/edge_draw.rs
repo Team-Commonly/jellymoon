@@ -8,7 +8,7 @@ use std::rc::Rc;
 use gpui::{Entity, Modifiers, TestAppContext, TestDispatcher, VisualTestContext, point, px, size};
 use sticker_kit::draw::headless::text_system;
 use sticker_kit::draw::{EdgePart, EdgeView, edge_ink, load_fonts};
-use sticker_kit::{Corner, Edge, EdgeKind, EdgeMood, EdgePiece, EdgeText, Role, Theme, Tone, edge_windows};
+use sticker_kit::{Color, Corner, Edge, EdgeKind, EdgeMood, EdgePiece, EdgeText, Role, Theme, Tone, edge_windows};
 
 const MOODS: [EdgeMood; 7] = [
     EdgeMood::Floats,
@@ -141,6 +141,27 @@ fn each_tone_is_painted_in_an_ink_of_its_own_and_someone_else_s_words_in_the_the
         let p = &theme.palette;
         let inks = [Role::RowMain, Role::Body, Role::RowSub, Role::Quoted].map(|role| edge_ink(p, role));
         assert_eq!(inks, [p.ink, p.soft, p.quiet, p.quoted], "{}", theme.name);
+        // What a frame painted, run by run: the review of F57, finding 4. A text of each tone, in the bubble.
+        let mut cx = context();
+        let tones = [Tone::Strong, Tone::Small, Tone::Plain, Tone::Quoted];
+        let texts = tones.map(|tone| said("make it so", tone)).to_vec();
+        let (view, cx, _) = open(&mut cx, EdgePart::Bubble, Edge { bubble: texts, ..Edge::default() }, theme.clone());
+        let (pieces, painted) = view.read_with(cx, |view, _| (view.placed().to_vec(), view.painted().to_vec()));
+        let roles: Vec<Role> = pieces[0].text.iter().map(|run| run.role).collect();
+        assert_eq!(roles, [Role::RowMain, Role::RowSub, Role::Body, Role::Quoted], "{}", theme.name);
+        let painted_in: Vec<Color> = painted.iter().map(|run| run.ink).collect();
+        assert_eq!(painted_in, [p.ink, p.quiet, p.soft, p.quoted], "{}", theme.name);
+        for (run, how) in pieces[0].text.iter().zip(&painted) {
+            assert!(how.seen.inside(&pieces[0].rect) && how.seen.w >= run.rect.w, "{run:?} painted as {how:?}");
+        }
+        // The count is written on its pill in the bubble's colour, and a frame with no text painted none.
+        let mut cx = context();
+        let (view, cx, _) = open(&mut cx, EdgePart::Character, Edge { count: 3, ..Edge::default() }, theme.clone());
+        let count: Vec<Color> = view.read_with(cx, |view, _| view.painted().iter().map(|run| run.ink).collect());
+        assert_eq!(count, [p.bubble], "{}", theme.name);
+        view.update(cx, |view, cx| view.set_edge(Edge::default(), cx));
+        cx.run_until_parked();
+        assert!(view.read_with(cx, |view, _| view.painted().is_empty()));
         // Told apart from the scene's own three inks, and read on the bubble as text is.
         assert!(inks[..3].iter().all(|own| *own != p.quoted), "{}", theme.name);
         assert!(p.quoted.contrast(p.bubble) >= 4.5, "{}: {}", theme.name, p.quoted.contrast(p.bubble));

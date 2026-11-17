@@ -11,6 +11,7 @@ use jellymoon_core::JellyDrawn;
 use sticker_kit::draw::{EdgePart, EdgeView};
 use sticker_kit::{Edge, Rect, Theme, Viewport};
 
+use crate::window::say;
 use crate::{jelly, popup};
 
 /// The primary display as the system says it is: its size, the room the menu bar and the Dock leave on it, from
@@ -58,6 +59,15 @@ pub struct Jellyfish {
     room: Room,
     /// Where each window stands on the display, the bubble's whether it is open or not.
     stands: (Rect, Rect),
+    /// Whether the bubble's last open failed.
+    failing: bool,
+}
+
+/// Whether an open that failed is to be said: the first of a row of them, since the look draws every second. An
+/// open that worked ends the row.
+fn first_failure(failing: &mut bool, opened: bool) -> bool {
+    let before = std::mem::replace(failing, !opened);
+    !opened && !before
 }
 
 impl Jellyfish {
@@ -69,33 +79,39 @@ impl Jellyfish {
             let view = EdgeView::new(EdgePart::Character, Edge::default(), quiet, jelly::CORNER);
             cx.new(|_| view.on_tap(move |_, cx| tapped(cx)))
         })?;
-        Ok(Jellyfish { character, bubble: None, theme, room, stands })
+        Ok(Jellyfish { character, bubble: None, theme, room, stands, failing: false })
     }
 
     /// Draws what core says: the jellyfish in its state, and the bubble opened, drawn again or removed.
     pub fn draw(&mut self, drawn: &JellyDrawn, cx: &mut App) {
         let edge = jelly::edge(drawn);
-        let words = edge.speaks();
         let for_character = edge.clone();
         let _ = self.character.update(cx, |view, _, cx| view.set_edge(for_character, cx));
-        match (self.bubble, words) {
-            (Some(open), true) => {
-                let _ = open.update(cx, |view, _, cx| view.set_edge(edge, cx));
-            }
-            (Some(open), false) => {
+        let open = self.bubble.take();
+        if !edge.speaks() {
+            if let Some(open) = open {
                 let _ = open.update(cx, |_, window, _| window.remove_window());
-                self.bubble = None;
             }
-            (None, true) => self.bubble = self.speak(edge, cx).ok(),
-            (None, false) => {}
+            return;
         }
+        // A bubble that something else removed cannot be drawn in: it is opened again, as for the first words.
+        let again = edge.clone();
+        let open = open.filter(|open| open.update(cx, |view, _, cx| view.set_edge(again, cx)).is_ok());
+        self.bubble = open.or_else(|| self.speak(edge, cx));
     }
 
-    fn speak(&self, edge: Edge, cx: &mut App) -> gpui::Result<WindowHandle<EdgeView>> {
+    /// Opens the bubble. An open that fails is said on stderr, once for a row of them, and tried at the next draw.
+    fn speak(&mut self, edge: Edge, cx: &mut App) -> Option<WindowHandle<EdgeView>> {
         let (at, theme) = (self.room.bounds(self.stands.1), self.theme.clone());
-        cx.open_window(popup::options(popup::BUBBLE, at, self.room.display), move |_, cx| {
+        let opened = cx.open_window(popup::options(popup::BUBBLE, at, self.room.display), move |_, cx| {
             cx.new(|_| EdgeView::new(EdgePart::Bubble, edge, theme, jelly::CORNER))
-        })
+        });
+        if first_failure(&mut self.failing, opened.is_ok())
+            && let Err(error) = &opened
+        {
+            say(&format!("no bubble: {error}"));
+        }
+        opened.ok()
     }
 
     /// Removes both windows.
@@ -117,5 +133,19 @@ impl Jellyfish {
     /// Where the jellyfish stands on its display, and where the bubble stands whenever it is open.
     pub fn stands(&self) -> (Rect, Rect) {
         self.stands
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::first_failure;
+
+    // No open fails on GPUI's test platform, so the rule is held here: the review of F57, finding 8.
+    #[test]
+    fn a_failed_open_is_said_once_for_a_row_of_them_and_again_after_one_that_worked() {
+        let mut failing = false;
+        let opens = [false, false, false, true, true, false, false];
+        let said = opens.map(|opened| first_failure(&mut failing, opened));
+        assert_eq!(said, [true, false, false, false, false, true, false]);
     }
 }

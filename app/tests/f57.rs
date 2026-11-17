@@ -23,6 +23,8 @@ use serde_json::{Value, json};
 use support::run;
 
 const SAID: &str = "make the uploader retry twice";
+/// What `--theme` says before a file that cannot be read.
+const THEME_LEAD: &str = "--theme is sticker, plain or a theme file: ";
 
 /// What a window line says the window is asked for.
 fn opens(shown: &jelly::Drawn, id: &str) -> Value {
@@ -30,13 +32,14 @@ fn opens(shown: &jelly::Drawn, id: &str) -> Value {
     windows.iter().find(|window| window.id() == id).map(|window| window.0["opens"].clone()).unwrap_or(Value::Null)
 }
 
-fn apart(a: [f64; 4], b: [f64; 4]) -> bool {
-    a[0] + a[2] <= b[0] || b[0] + b[2] <= a[0] || a[1] + a[3] <= b[1] || b[1] + b[3] <= a[1]
+/// A printed box as the kit's rectangle, which says whether two overlap.
+fn boxed(at: [f64; 4]) -> sticker_kit::Rect {
+    sticker_kit::Rect::new(at[0] as f32, at[1] as f32, at[2] as f32, at[3] as f32)
 }
 
 #[test]
 fn each_window_is_asked_as_a_pop_up_one_sees_through_that_never_has_the_keys_and_only_the_jellyfish_is_tapped() {
-    let asked = |tap: &str| json!({"kind": "pop_up", "focus": false, "see_through": true, "moves": false, "resizes": false, "tap": tap});
+    let asked = |tap: &str| json!({"focus": false, "see_through": true, "moves": false, "resizes": false, "tap": tap});
     let lines = [
         quiet(),
         listening("make"),
@@ -64,7 +67,7 @@ fn on_a_screen_that_holds_both_windows_the_bubble_never_covers_the_jellyfish() {
         let (jelly, bubble) = (shown.window("jelly").unwrap(), shown.window("bubble").unwrap());
         let (w, h) = screen.split_once('x').unwrap();
         let whole = [0.0, 0.0, w.parse().unwrap(), h.parse().unwrap()];
-        assert!(apart(jelly, bubble), "{screen}: {jelly:?} under {bubble:?}");
+        assert!(!boxed(jelly).overlaps(&boxed(bubble)), "{screen}: {jelly:?} under {bubble:?}");
         assert!(inside(jelly, whole) && inside(bubble, whole), "{screen}: {jelly:?} {bubble:?}");
         // The jellyfish stands where it stands with no bubble: a window is never moved for another.
         assert_eq!(drawn_on(&quiet(), screen).window("jelly"), Some(jelly), "{screen}");
@@ -115,14 +118,25 @@ fn a_file_that_cannot_be_read_is_refused_in_fixed_words_with_its_last_name_on_on
         (turned.to_str().unwrap().to_string(), "the file cannot be read: bc.json"),
         (dir.path().to_str().unwrap().to_string() + "/", "the file cannot be read"),
     ];
+    // A theme file the kit refuses is named by its last name too, with the kit's reason.
+    let wide = dir.path().join("wi\u{202e}de.toml");
+    fs::write(&wide, "[metrics]\nrim = 41\n").unwrap();
+    let (code, out, err) = said(&run(&["layout", "--waiting", "--theme", wide.to_str().unwrap()], None));
+    let want = "jellymoon-app: --theme \"wide.toml\" is not sticker, plain or a theme file the kit takes: \
+                metrics.rim = 41 is not a number from 0 to 40\n";
+    assert_eq!((code, out.as_str(), err.as_str()), (Some(1), "", want));
     for (file, why) in cases {
-        for flag in ["--jelly", "--page"] {
+        // The review of F57, finding 7: `--theme` says a file that is not there in the same words, after what
+        // it takes, since a name that is no file may be a theme's name mistyped.
+        for (flag, lead) in [("--jelly", ""), ("--page", ""), ("--theme", THEME_LEAD)] {
             let args: Vec<&str> = match flag {
                 "--jelly" => vec!["layout", flag, &file, "--screen", SCREEN],
+                "--theme" => vec!["layout", "--waiting", flag, &file],
                 _ => vec!["layout", flag, &file],
             };
             let (code, out, err) = said(&run(&args, None));
-            assert_eq!((code, out.as_str(), err.as_str()), (Some(1), "", format!("jellymoon-app: {why}\n").as_str()));
+            let want = format!("jellymoon-app: {lead}{why}\n");
+            assert_eq!((code, out.as_str(), err.as_str()), (Some(1), "", want.as_str()), "{flag}");
         }
     }
 }
@@ -150,7 +164,8 @@ fn a_wrong_screen_is_echoed_cut_short_and_a_signed_side_is_refused() {
     let (code, _, err) = said(&run(&["layout", "--waiting", "--size", "+1440x900"], None));
     assert!(code == Some(2) && err.starts_with("jellymoon-app: --size must be <W>x<H>"), "{err}");
     let (code, _, err) = said(&run(&["layout", "--waiting", "--size", &format!("{long}x900")], None));
-    assert!(code == Some(2) && err.lines().next().unwrap().ends_with(&format!("not \"{}…\"", "9".repeat(40))), "{err}");
+    let first = err.lines().next().unwrap();
+    assert!(code == Some(2) && first.ends_with(&format!("not \"{}…\"", "9".repeat(40))), "{err}");
 }
 
 // Note 5: a heard wish whose words or project nobody sees, and a line with a second line's break in it.

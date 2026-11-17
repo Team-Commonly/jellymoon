@@ -139,6 +139,51 @@ fn without_run_no_harness_is_started_and_with_no_harness_the_wish_is_kept_and_th
     assert_eq!((said_at(10_999), said_at(11_000)), (vec![], vec![quiet()]));
 }
 
+/// What `hear --run` says of a wish it kept and started no run for, in a world with no `claude` on its `PATH`.
+fn kept_with_no_run(mut w: World) -> Value {
+    fs::create_dir(w.at("empty")).unwrap();
+    w.vars.push(("PATH", w.at("empty").into()));
+    let mut events = hold(0, SAID);
+    events.push(tick(5000));
+    let printed = w.hear(&["--run"], &events);
+    assert_eq!((printed.len(), &printed[3]["made"], &printed[3]["state"]), (4, &json!("m1"), &json!("cannot")));
+    assert!(w.starts() == 0 && w.made_wishes() == Some(json!([made("m1", SAID, "alpha")])), "the wish is kept");
+    printed[3]["says"].clone()
+}
+
+// F57's review, finding 1: "no `claude` program was found" is said only when none was found. One that was found
+// and passed over is said to be found, in a fixed sentence with no path in it.
+#[cfg(unix)]
+#[test]
+fn with_no_harness_a_claude_that_was_found_and_passed_over_is_not_said_to_be_missing() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = heard_world().with_repo();
+    let bin = w.at("user").join(".local").join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    // Typed here and never run: a program anyone can write to.
+    fs::write(bin.join("claude"), "#!/bin/sh\n").unwrap();
+    fs::set_permissions(bin.join("claude"), fs::Permissions::from_mode(0o777)).unwrap();
+    let says = kept_with_no_run(w);
+    assert_eq!(
+        says,
+        "the wish is kept, but no run was started: a `claude` program was found but is not used, as others can \
+         write to it or its folder"
+    );
+}
+
+// The same finding: with no home directory the places under it were not looked in, and the sentence says so.
+#[test]
+fn with_no_harness_and_no_home_directory_the_line_says_that_there_was_no_home_to_look_in() {
+    let mut w = heard_world().with_repo();
+    w.vars.retain(|(name, _)| !["HOME", "USERPROFILE"].contains(name));
+    let says = kept_with_no_run(w);
+    assert_eq!(
+        says,
+        "the wish is kept, but no run was started: no `claude` program was found, and there is no home directory \
+         to look in"
+    );
+}
+
 // A run that was named and had ended by the time its asker was answered is said as `jellymoon wish --run` says
 // it: the wish is kept, and the line carries how its run ended. A run is said to be going once its harness began
 // (`run/apart.rs`), so the made-up agent's stream here does not start as a run's: it never began, and it is ended.

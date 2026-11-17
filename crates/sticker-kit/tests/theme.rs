@@ -180,7 +180,7 @@ fn a_theme_file_over_its_size_or_not_a_regular_file_is_refused() {
     let folder = Folder::new("sizes");
     let path = folder.write("big.toml", &big);
     assert!(matches!(Theme::load(&path), Err(ThemeError::Read(why)) if why == "it is over 256 KiB"));
-    assert!(matches!(Theme::load(&folder.0), Err(ThemeError::Read(why)) if why == "it is not a regular file"));
+    assert_eq!(Theme::load(&folder.0), Err(ThemeError::NoFile));
 }
 
 #[test]

@@ -265,12 +265,18 @@ What core refuses of the wish itself is said in the sentence a typed wish is ref
 | the day is locked, after the lock's own 3 seconds | `another change to the page of <day> has not finished, so this wish was not kept` | at 4000 ms |
 | the day's made wishes cannot be used | `the made wishes of <day> are not used: <why>; this wish was not kept` | at 4000 ms |
 | the project is no longer offered | `no folder of that project that is switched on was typed in on <day>, so this wish was not kept` | at 4000 ms |
-| with `--run`, no harness was found | the wish is kept, `made` names it: `the wish is kept, but no run was started: no `claude` program was found (JELLYMOON_CLAUDE names one)` | at 4000 ms |
+| with `--run`, no harness was found where there was a home to look in | the wish is kept, `made` names it: `the wish is kept, but no run was started: no `claude` program was found (JELLYMOON_CLAUDE names one)` | at 4000 ms |
+| with `--run`, a `claude` was found and passed over, with a home or with none | the wish is kept, `made` names it: `the wish is kept, but no run was started: a `claude` program was found but is not used, as others can write to it or its folder` | at 4000 ms |
+| with `--run`, no harness was found and there is no home directory | the wish is kept, `made` names it: `the wish is kept, but no run was started: no `claude` program was found, and there is no home directory to look in` | at 4000 ms |
 | with `--run`, no run was started for another reason, or the run had ended by the time its start was answered | the wish is kept, `made` names it, and `says` is what `jellymoon wish --run` prints as `why`: why none was started, or how the run ended | at 4000 ms |
 
-In each row but the last two nothing is kept. `Hearing::refusals()` lists every sentence of the first two tables,
-and of this one the three that come with the final words and the one for no harness; a test draws each whole in
-the bubble, in both built-in themes (`app/tests/f56/words.rs`). The other rows carry a day or another command's
+In each row but the last four nothing is kept. The three for no harness name no path and no program of a
+person's: which program was passed over, and where it was looked for, is what `jellymoon wish --run` says.
+
+`Hearing::refusals()` lists sixteen sentences, the ones that are fixed words with nothing of a day or of another
+command in them: the eight of the ear and the one for an ear that says nothing, the one for no project, and of
+this table the three that come with the final words and the three for no harness. A test holds that list to
+exactly those sixteen and draws each whole in the bubble, in both built-in themes (`app/tests/f56/words.rs`). The other rows carry a day or another command's
 words, and are cut with an ellipsis where they are longer than the bubble's four lines.
 
 ## The settings: `voice.toml`

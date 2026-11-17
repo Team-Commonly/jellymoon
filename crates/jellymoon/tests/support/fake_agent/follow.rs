@@ -4,7 +4,7 @@
 //! held, which is how a test knows the commit a follow-up's copy was made at. Every line is typed here.
 
 use std::path::Path;
-use std::{env, fs};
+use std::{env, fs, process};
 
 use super::asks::{init, listed, option};
 use super::{MARKER, TOOLS, held, line, says, starts, success, waits_held};
@@ -38,6 +38,36 @@ fn lost() -> i32 {
     1
 }
 
+/// Starts the program the test lent it (`rec/git`) in the folder it stands in, as an agent with a shell could.
+/// What that program prints goes nowhere: this program's own output is the stream.
+fn git(rec: &Path, args: &[&str]) {
+    let mut git = process::Command::new(fs::read_to_string(rec.join("git")).unwrap());
+    git.args(["-c", "user.name=Made Up", "-c", "user.email=made-up@example.test"]).args(args);
+    git.env("GIT_CONFIG_NOSYSTEM", "1").stdout(process::Stdio::null()).stderr(process::Stdio::null());
+    assert!(git.status().unwrap().success(), "the lent program failed: {args:?}");
+}
+
+/// What a fork did in its copy before it said its session is lost. 3 edited. 4 edited, and committed that on
+/// the run's branch itself. 5 left one file, of a name an exclude of the repo names. 6 and 7 left the run's
+/// branch, edited, and committed that: 6 on no branch, 7 on one it made. Any other number did nothing.
+fn worked(number: usize, rec: &Path) {
+    match number {
+        3 => more(),
+        4 | 6 | 7 => {
+            match number {
+                6 => git(rec, &["checkout", "-q", "--detach"]),
+                7 => git(rec, &["checkout", "-q", "-b", "made-by-the-fork"]),
+                _ => {}
+            }
+            more();
+            git(rec, &["add", "-A"]);
+            git(rec, &["commit", "-q", "-m", "committed by the fork itself"]);
+        }
+        5 => fs::write("left.ignored", "left by the fork\n").unwrap(),
+        _ => {}
+    }
+}
+
 /// The scripts of F53. None: the script is not one of them.
 pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
     let code = match (script, number) {
@@ -67,11 +97,9 @@ pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
         }
         // A harness that keeps the followed session no more. Told to fork, it says so and has done nothing;
         // started again under a new session, 0 does the work, 1 fails, and 2 says once more that it keeps no
-        // such session, which nothing asked it for. 3 worked in the copy before it said so.
+        // such session, which nothing asked it for. 3 to 7 worked in the copy before they said so (`worked`).
         ("unkept", _) if given(rec) => {
-            if number == 3 {
-                more();
-            }
+            worked(number, rec);
             lost()
         }
         ("unkept", 2) => lost(),

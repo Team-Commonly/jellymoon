@@ -578,9 +578,11 @@ record is then written again with a new session id and `forked: false`, and the 
 in the same copy, with a run's own arguments and no fork. How that start ends is how the run ends. It is never
 started a third time.
 
-It is started that second time only in a copy that is as it was made: the run's branch still names the
-copy's `start`, and git finds no changed, new or ignored file in the folder (`git status --porcelain --ignored
---untracked-files=all`, hooks and filters off as for every git a run starts). A fork that worked before it said
+It is started that second time only in a copy that is as it was made: the copy's `HEAD` names the run's
+branch (`git symbolic-ref --quiet HEAD`), that branch still names the copy's `start`, and git finds no changed,
+new or ignored file in the folder (`git status --porcelain --ignored --untracked-files=all`, hooks and filters
+off as for every git a run starts). A copy that stands on no branch, or on another, can hold a commit of the
+fork's that neither of the other two shows. A fork that worked before it said
 its session is lost has failed, `Claude Code said it keeps no session to fork after it had worked in the copy`:
 its copy is kept as a failed run's is, the record still says `forked: true`, and no second start is given what
 the first left. So one commit never holds two starts' changes under `forked: false`.
@@ -596,18 +598,19 @@ with that option named, and the follow-up can be run again. A follow-up that ask
 session, never the followed one. The session the harness keeps of a follow-up's copy is left out by the reader
 as every copy's is ([reader.md](reader.md)).
 
-`tests/f53.rs` and `tests/f53/session.rs`, `refused.rs`, `order.rs` and `gate.rs` hold all of it with a made-up
-agent that records each command line it was started with and what its copy held.
+`tests/f53.rs` and `tests/f53/session.rs`, `refused.rs`, `order.rs`, `gate.rs` and `notes.rs` hold all of it
+with a made-up agent that records each command line it was started with and what its copy held. In `notes.rs`
+the test lends that agent the real git, and a fork then edits and commits on the run's branch, edits and
+commits on no branch, or leaves one file an exclude of the repo names, before it says its session is lost:
+each has failed, and none is started again.
 
 Not closed:
 
 - **The fork was not tried on a real harness in this build.** ADR 0018 measured `--resume <id> --fork-session
   --session-id <uuid>` by hand; core's whole command line with it was not run.
-- **A fork that committed in its copy, or left only an ignored file, before it said its session is lost** is
-  not started again by the rule above, and no test plays either: the made-up agent starts no git.
 - **A follow-up that was made and not yet run, whose followed work is then tossed**, is refused on every run.
-  `run toss` says it has had no run, `run stop` that no run is going, the page keeps it `working`, and it
-  holds one of the day's eight: nothing lets a wish with no run go.
+  `run toss` lets it go, as any made wish that has had no run ([toss.md](toss.md), "A wish that has had no
+  run"). It holds one of the day's eight still.
 - **The order of a toss is read from the day's made wishes.** With `after` taken out of the kept wish by hand,
   the followed work was tossed while the follow-up's work waited. The follow-up's keep was then refused, its
   start being in no branch's history, so nothing landed wrongly.
@@ -1143,6 +1146,7 @@ empty `runs/no-hooks`), and they stay.
 |---|---|
 | No made wish of that id on that day | the page has no made wish of that id |
 | A wish that names a run | the wish has had its run, and which |
+| A wish with no run that a toss let go ([toss.md](toss.md), "A wish that has had no run") | `wish <id> was let go, so no run is started for it` |
 | `--repo` that is not a full path, or whose last name is not the wish's project | which of the two |
 | No `--repo`, and no folder of the name typed in that day or listed, or two typed in | how many, and to name one with `--repo` |
 | No `--repo`, and a folder of the name typed in that day and another one listed | that the name has both, and to name one with `--repo` or let the listed one go with `jellymoon project forget` |

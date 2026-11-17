@@ -320,7 +320,10 @@ max_file_lines = 400
 # F57 raised core by 72: a line's words and project held to what a person sees, a hearing's own refusals as a
 # list with the short sentence for no harness, and their tests in `tests/hear.rs`; the order of states written
 # once took lines away.
-"crates/jellymoon-core" = 14563
+# The notes after F53 raised core by 69: a toss that lets go a wish with no run (`run/unrun.rs`, 56), the
+# refusal of a let-go wish in `run.rs` (5), the copy's `HEAD` asked in `copy/clean.rs` (4), and the example's
+# round trip in `tests/shapes.rs` (4).
+"crates/jellymoon-core" = 14632
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -479,7 +482,10 @@ max_file_lines = 400
 # 9 more in `tests/f53.rs`, `f53/order.rs` and `f53/refused.rs`; 5 in `fake_agent/follow.rs` (a fork that works
 # before it says its session is lost); 1 in `tests/f46/refused.rs`.
 # F57 raised it by 1: the comment on the short sentence for no harness in `tests/f55/started.rs`.
-"crates/jellymoon" = 24490
+# The notes after F53 raised it by 357, all tests: `tests/f46/unrun.rs` 175 (a wish with no run let go),
+# `tests/f53/notes.rs` 145 (a fork that worked before it said lost, a keep by an old git), 28 in
+# `fake_agent/follow.rs` (the fork's four ways of working), 9 in `f46.rs`, `f46/refused.rs`, `f47.rs`, `f53.rs`.
+"crates/jellymoon" = 24847
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

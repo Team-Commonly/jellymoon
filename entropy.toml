@@ -348,6 +348,9 @@ max_file_lines = 400
 # F77 raised core by 20, all in `call.rs`: the test that holds both systems' lists of a harness's variables to
 # `page.md` and `run.md` is 17, and 3 are the two lists built on every system, with why. Its tests at the binary,
 # `tests/f77.rs` (220 lines), are within the binary's budget as it stood.
+# The jellyfish notes raised core by 66: what a hearing says of a run that was not started as one function of
+# what `run_apart`'s own search missed, with its test (`hear/day.rs`), that search's answer handed on
+# (`run/apart.rs`, `run.rs`) and the one question asked of it (`find.rs`).
 # The lock notes raised core by 278: `lock.rs` grew by 85 (a lock's mark, the system's lock had or not had and
 # waited for by a holder, the open that follows no link, the refusal of a lock nobody can take over), its tests in
 # `lock/tests.rs` by 125, and `lock/tests/corners.rs`, a holder that lets go during a take-over, is 68.
@@ -355,7 +358,7 @@ max_file_lines = 400
 # and a process with no file handle left, are a caller at work; the mark's read is tried again; a lock whose mark was
 # not written is removed; the open that never waits), `lock/tests.rs` 79 (the mapping's test, the lock with no mark,
 # the pipe, a lock made fresh for Windows, and a caller in the test of many that asks again).
-"crates/jellymoon-core" = 16052
+"crates/jellymoon-core" = 16118
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -767,7 +770,11 @@ max_file_lines = 400
 # `tests/f34.rs` (12), `tests/f63.rs` (2) and the unit test of which errors are a tried reading (`today.rs`, 20).
 # The rest: that rule, the same page drawn and not written again, and the first scene (`today.rs`, 17), and the
 # footer's comment (`scene.rs`, 1).
-"app" = 11055
+# The jellyfish notes raised the app by 212: `tests/f57/looks.rs`, the jellyfish's look on a day's page with the
+# test's own clock, holds the two tests moved out of `tests/f57/window.rs` and four new ones (a wish made past
+# midnight, a run that still asks, core's order between two days, the page's day first in a tie); the look at
+# two days and the clock in `shell.rs`; a failure of another reason said in `jellyfish.rs`, with its test.
+"app" = 11267
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

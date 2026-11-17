@@ -2,13 +2,16 @@
 //! second, each asked for by options that are data. At the binary's boundary, here: `layout --jelly` prints what
 //! each window is asked for and where it stands, and what F56's review found in what that command reads and
 //! refuses. `f57/window.rs` opens both windows on GPUI's test platform, on the Mac only, with no window on a
-//! screen: the states drawn, the bubble opened and removed, the page closed and shown again, Quit, and the look
-//! once a second.
+//! screen: the states drawn, the bubble opened and removed, the page closed and shown again, and Quit.
+//! `f57/looks.rs` opens them on a day: the look once a second, and which day's runs it shows past midnight.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 #[allow(dead_code)]
 #[path = "f56/jelly.rs"]
 mod jelly;
+#[cfg(all(target_os = "macos", feature = "window"))]
+#[path = "f57/looks.rs"]
+mod looks;
 mod support;
 #[cfg(all(target_os = "macos", feature = "window"))]
 #[path = "f57/window.rs"]

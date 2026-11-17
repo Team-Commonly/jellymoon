@@ -4,7 +4,9 @@
 use std::path::{Path, PathBuf};
 
 use super::{Jelly, JellyState};
-use crate::{DayOptions, RunOptions, WishState, find, run, run_apart, wish, wish_offered};
+use crate::find::Missed;
+use crate::run::{self, Started, asked_apart};
+use crate::{DayOptions, RunOptions, WishState, wish, wish_offered};
 
 /// What is said when no project can be picked for a heard wish.
 pub(super) const NO_PROJECT: &str = "nothing was kept: make the day's first wish on the page, so that Jellymoon knows \
@@ -97,28 +99,34 @@ pub(super) fn make(
     let made = wish_offered(read, words, project).map_err(|e| e.to_string())?.wish.id;
     let Some((program, options)) = apart else { return Ok((made, None)) };
     let options = RunOptions { wish: made.clone(), day: read.date.clone(), ..options.clone() };
-    let unstarted = match run_apart(home, program, &options) {
-        // A run that was named and has ended already, needing the person, is said as it ended, as `jellymoon
-        // wish --run` prints it. One that finished is not a thing that could not be done: the day's rest shows it.
-        Ok(started) if started.run.is_none() => Some(no_harness(&options).map_or(started.why, str::to_string)),
-        Ok(started) => (started.state == WishState::NeedsYou).then_some(started.why),
+    let unstarted = match asked_apart(home, program, &options) {
+        Ok((started, missed)) => unstarted(started, missed.as_ref()),
         Err(e) => Some(e.to_string()),
     };
     Ok((made, unstarted))
 }
 
-/// The sentence for a run that was not started because there is no harness, asked as `run_apart` asks it: a
-/// program passed over is said first, since that is what the person can mend. None when one was named or found.
-fn no_harness(options: &RunOptions) -> Option<&'static str> {
-    if options.harness.is_some() {
-        return None;
+/// What is said of a run that was asked for, when something is. `missed` is what the one search for a harness
+/// missed, when that is why none was started: its sentence is then said in place of `started.why`, the long line
+/// that names the folders looked in. A run that was not started for another reason is said as it is. One that
+/// was named and has ended already, needing the person, is said as it ended, as `jellymoon wish --run` prints
+/// it; one that finished is not a thing that could not be done: the day's rest shows it.
+fn unstarted(started: Started, missed: Option<&Missed>) -> Option<String> {
+    match missed {
+        _ if started.run.is_some() => (started.state == WishState::NeedsYou).then_some(started.why),
+        Some(missed) => Some(no_harness(missed).to_string()),
+        None => Some(started.why),
     }
-    let missed = find::search().ok()?.err()?;
-    Some(match (missed.passed_over.is_empty(), missed.home) {
+}
+
+/// The sentence for what a search for a harness missed: a program passed over is said first, since that is
+/// what the person can mend.
+fn no_harness(missed: &Missed) -> &'static str {
+    match (missed.passed_over.is_empty(), missed.home) {
         (false, _) => PASSED_OVER,
         (true, true) => NO_HARNESS,
         (true, false) => NO_HOME,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -138,5 +146,35 @@ mod tests {
         assert_eq!(drawn(2, None, true), (JellyState::Working, Some(2), None, none));
         let asked = Some("Which one?".to_string());
         assert_eq!(drawn(2, Some("Which one?"), true), (JellyState::Asks, None, asked, ASKS.to_string()));
+    }
+
+    // The review of the F57 notes, finding 4: the sentence is of what the one search missed, which `run_apart`'s
+    // answer comes from too. Each of the three is given here, and the machine a test runs on can be in one of
+    // them at most, so a second search that could disagree with the first says another sentence here, or the
+    // long line.
+    #[test]
+    fn what_is_said_of_no_harness_is_of_what_the_one_search_missed_and_never_the_line_that_names_folders() {
+        let long = "finding Claude Code: no `claude` program in PATH, ~/.local/bin, /opt/homebrew/bin".to_string();
+        let none = Started { run: None, why: long.clone(), state: WishState::NeedsYou };
+        let said = |passed_over: &[&str], home| {
+            let passed_over = passed_over.iter().map(|one| one.to_string()).collect();
+            let missed = Missed { looked: vec!["PATH".to_string()], passed_over, home };
+            unstarted(none.clone(), Some(&missed))
+        };
+        let over = ["~/.local/bin/claude: others can write to it"];
+        assert_eq!(said(&[], true).as_deref(), Some(NO_HARNESS));
+        assert_eq!(said(&[], false).as_deref(), Some(NO_HOME));
+        assert_eq!(
+            (said(&over, true).as_deref(), said(&over, false).as_deref()),
+            (Some(PASSED_OVER), Some(PASSED_OVER))
+        );
+        // A run that was not started for another reason is said in `run_apart`'s words, one that ended needing
+        // the person as it ended, and one that goes is not said at all.
+        assert_eq!(unstarted(none.clone(), None), Some(long.clone()));
+        let run = Some("r1111111111111111".to_string());
+        let going = Started { run: run.clone(), why: long.clone(), state: WishState::Working };
+        assert_eq!(unstarted(going, None), None);
+        let ended = Started { run, why: long.clone(), state: WishState::NeedsYou };
+        assert_eq!(unstarted(ended, None), Some(long));
     }
 }

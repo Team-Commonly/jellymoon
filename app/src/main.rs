@@ -70,7 +70,10 @@ struct Jellyfish {
 enum Source {
     File(String),
     /// A day, and whether it was named with `--date`: one that was not is today, which moves on.
-    Day(Box<Today>, bool),
+    Day {
+        day: Box<Today>,
+        named: bool,
+    },
     Waiting(String),
 }
 
@@ -96,7 +99,7 @@ fn run() -> Result<String, Failure> {
         Command::Layout(options) => {
             let (scene, entry) = match &options.page {
                 Source::File(file) => (scene::scene(&page(file)?), None),
-                Source::Day(day, _) => {
+                Source::Day { day, .. } => {
                     let (scene, page) = day.last();
                     (day.with_work(day.with_stops(scene)), day.entry(page.as_ref()))
                 }
@@ -128,27 +131,27 @@ fn jellyfish(asked: &Jellyfish) -> Result<String, Failure> {
 
 /// Opens the page's window on the first scene there is, and the jellyfish. A day is then read off the window's
 /// thread, and what that gives replaces the scene; once a second core is asked what the jellyfish shows of that
-/// day. A page that is no day has a quiet jellyfish. `JELLYMOON_QUIT_AFTER=<seconds>` ends the app by itself, for
+/// day, and of today when the day was not named. A page that is no day has a quiet jellyfish. `JELLYMOON_QUIT_AFTER=<seconds>` ends the app by itself, for
 /// checks.
 #[cfg(feature = "window")]
 fn window(options: Options) -> Result<(), Failure> {
-    use jellymoon_app::shell::{Asked, jelly_look};
+    use jellymoon_app::shell::Asked;
     use jellymoon_app::taps::OnShow;
-    let (scene, day, jelly) = match options.page {
-        Source::File(file) => (scene::scene(&page(&file)?), None, None),
-        Source::Waiting(date) => (today::waiting(&date), None, None),
-        Source::Day(day, named) => {
+    let (scene, day, named) = match options.page {
+        Source::File(file) => (scene::scene(&page(&file)?), None, false),
+        Source::Waiting(date) => (today::waiting(&date), None, false),
+        Source::Day { day, named } => {
             let (first, kept) = day.first();
-            // What core keeps for the jellyfish: of the day that was named, or else of today, asked at each look.
-            let look = jelly_look(day.home.clone(), named.then(|| day.date.clone()), || today::date(None));
             let shown = OnShow { today: (*day).clone(), page: kept.clone(), scene: first.clone() };
-            (first, Some((shown, day.later(kept))), Some(look))
+            (first, Some((shown, day.later(kept))), named)
         }
     };
     let seconds = std::env::var("JELLYMOON_QUIT_AFTER").ok().and_then(|seconds| seconds.parse::<f32>().ok());
     let quit_after = seconds.and_then(|seconds| std::time::Duration::try_from_secs_f32(seconds).ok());
     let (theme, viewport) = (options.theme, options.size);
-    jellymoon_app::window::open(Asked { scene, theme, viewport, day, jelly, quit_after });
+    // The jellyfish asks which day it is at each look (`shell.rs`).
+    let today = std::sync::Arc::new(|| today::date(None));
+    jellymoon_app::window::open(Asked { scene, theme, viewport, day, named, today, quit_after });
     Ok(())
 }
 
@@ -221,7 +224,7 @@ fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
 /// The day the app opens on, and whether `--date` named it.
 fn day_open(asked: today::Asked) -> Result<Source, Failure> {
     let named = asked.date.is_some();
-    Ok(Source::Day(Box::new(Today::from_env(asked).map_err(Failure::Usage)?), named))
+    Ok(Source::Day { day: Box::new(Today::from_env(asked).map_err(Failure::Usage)?), named })
 }
 
 /// The day `--date` names for a jellyfish, with the home its made wishes are read in.
@@ -276,8 +279,8 @@ fn input(file: &str, most: u64) -> Result<Vec<u8>, Failure> {
     } else {
         fs::File::open(file).and_then(|file| file.take(most).read_to_end(&mut bytes))
     };
-    let unread = |_| if file == "-" { "the input cannot be read".to_string() } else { unread(file) };
-    got.map_err(|error| Failure::Run(unread(error)))?;
+    let why = |_| if file == "-" { "the input cannot be read".to_string() } else { unread(file) };
+    got.map_err(|error| Failure::Run(why(error)))?;
     Ok(bytes)
 }
 

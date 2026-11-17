@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{App, AsyncApp, Entity, WindowHandle};
-use jellymoon_core::JellyDrawn;
+use jellymoon_core::{Jelly, JellyDrawn, JellyState};
 use sticker_kit::draw::{EdgeView, Page};
 use sticker_kit::{Rect, Scene, Theme, Viewport};
 
@@ -26,18 +26,20 @@ use crate::window::{self, LOOK_EVERY, say};
 /// A look at what core keeps for the jellyfish. It reads files, so it is run off the window's thread.
 pub type JellyLook = Arc<dyn Fn() -> JellyDrawn + Send + Sync>;
 
-/// The look at what core keeps for the jellyfish in `home`: the made wishes of `day` and their runs. With no
-/// day named it is the day `today` gives, asked at each look, so an app left open past midnight shows the new
-/// day's runs. A look that fails is quiet.
-pub fn jelly_look(
-    home: PathBuf,
-    day: Option<String>,
-    today: impl Fn() -> Option<String> + Send + Sync + 'static,
-) -> JellyLook {
+/// Which day it is now, as YYYY-MM-DD. It is asked at each look, and a test gives a clock of its own.
+pub type Clock = Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
+/// The look at what core keeps for the jellyfish in `home`: a day's made wishes and their runs. A day that was
+/// `named` is the one day looked at. Otherwise the page's day and the day `today` gives are both looked at, as
+/// the page files what it writes under the day it was opened on, and the first of the two in core's order is
+/// shown: of two in one state, the page's day's. A look that fails is quiet.
+fn jelly_look(home: PathBuf, page: String, named: bool, today: Clock) -> JellyLook {
     Arc::new(move || {
-        let day = day.clone().or_else(&today);
-        let seen = jellymoon_core::jellyfish(None, &home, day.as_deref());
-        seen.unwrap_or_else(|_| jellymoon_core::Jelly::quiet()).drawn()
+        let of = |day: &str| jellymoon_core::jellyfish(None, &home, Some(day)).unwrap_or_else(|_| Jelly::quiet());
+        let at = |shown: &Jelly| JellyState::ORDER.iter().position(|state| *state == shown.state);
+        let now = if named { None } else { today().filter(|now| *now != page) };
+        let (page, now) = (of(&page), now.map(|now| of(&now)));
+        now.filter(|now| at(now) < at(&page)).unwrap_or(page).drawn()
     })
 }
 
@@ -46,9 +48,12 @@ pub struct Asked {
     pub scene: Scene,
     pub theme: Theme,
     pub viewport: Viewport,
-    pub day: Option<(OnShow, Later)>,
     /// None for a page with no day: its jellyfish is quiet, and looks at nothing.
-    pub jelly: Option<JellyLook>,
+    pub day: Option<(OnShow, Later)>,
+    /// Whether the day was named with `--date`: the jellyfish then looks at that day and at no other.
+    pub named: bool,
+    /// Which day it is now, for the jellyfish's look at a day that was not named.
+    pub today: Clock,
     /// How long until the app ends by itself, for checks.
     pub quit_after: Option<Duration>,
 }
@@ -68,8 +73,10 @@ pub struct Opened(Rc<RefCell<State>>);
 /// Opens the page's window and the jellyfish in `room`, and starts what goes on by itself: a day's reading, the
 /// look at the day and the look for the jellyfish, each once a second, and the end after `quit_after`.
 pub fn wire(asked: Asked, room: Room, cx: &mut App) -> gpui::Result<Opened> {
-    let Asked { scene, theme, viewport, day, jelly, quit_after } = asked;
+    let Asked { scene, theme, viewport, day, named, today, quit_after } = asked;
     let (shown, later) = day.unzip();
+    let page = shown.as_ref().map(|shown: &OnShow| &shown.today);
+    let jelly = page.map(|page| jelly_look(page.home.clone(), page.date.clone(), named, today));
     let shown = Showing::of(shown);
     let view = window::view(scene, theme.clone(), shown.clone(), cx);
     window::show(view.clone(), viewport, cx)?;

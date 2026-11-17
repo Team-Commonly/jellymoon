@@ -541,17 +541,26 @@ so, and closing the page then ends the app, since nothing is left to show it fro
 **Once a second** what core keeps for the jellyfish is read again: `jellymoon_core::jellyfish` with no line, in
 the day's home, which is that day's made wishes and their runs (`working` with its count, `asks` with the
 question, `waits`, else `quiet`). The reading is off the window's thread, as the page's look is, and what it gives
-is drawn. A look that fails draws `quiet`. Which day it is is asked at each look, so an app left open past
-midnight shows the new day's runs; a day named with `--date` stays that day. The page is not moved on with it: it
-shows the day the app was opened on until the app is opened again. With `--page` or `--waiting` there is no day: the jellyfish is quiet
+is drawn. A look that fails draws `quiet`. A day named with `--date` is the one day looked at. With no day named
+the jellyfish looks at two: the page's day, which is the day the app was opened on, and today, asked at each look.
+While they are one day that is one reading. Past midnight they are two, and of what each gives the first in core's
+order is drawn (`JellyState::ORDER`: `asks`, `working`, `waits`, `quiet`), the page's day's when both give the
+same state. So a wish made on the page past midnight is shown while its run goes, a run begun before midnight is
+still shown and still asks, and a run of the new day, started from a terminal, is shown too. Runs that go on both
+days are not counted together: the count is one day's. The page itself is not moved on to the new day, and that
+stays open: it shows the day the app was opened on, and files what is made on it under that day, until the app is
+opened again. With `--page` or `--waiting` there is no day: the jellyfish is quiet
 and nothing is looked at. The jellyfish keeps the theme the app was opened with; `t` switches the page only.
 
 Tests: `app/tests/f57/window.rs` opens all of it on GPUI's test platform, on the Mac, where there is no screen:
 both windows placed, each of the seven states drawn, the bubble opened and removed with nothing moved, the page
-closed and shown again by a tap and by opening again, Quit, the end by itself, the look once a second off the
-window's thread, a display that is not at the top left of the displays, the room of the primary display, a bubble
-removed from outside, and a clock the test moves past midnight. `popup.rs` holds the options asked in a unit
-test, and `jellyfish.rs` that a failed open is said once: no open fails on the test platform.
+closed and shown again by a tap and by opening again, Quit, the end by itself, a display that is not at the top
+left of the displays, the room of the primary display, and a bubble removed from outside. `app/tests/f57/looks.rs`
+opens it there on a day's page, with a clock of the test's own: the look once a second off the window's thread,
+and past midnight a wish made by the page's own call, a run that still asks, the new day's run, which of two days
+is drawn, and a named day that stays. `popup.rs` holds the options asked in a unit test, and `jellyfish.rs` that a
+failed open of the bubble is said once for a row of the same failure, and again when the reason changes or after
+a draw with no failure, a quiet one too: no open fails on the test platform.
 
 **Not tested, and not seen**: nothing here was opened on a screen. Four things are for a person at one to check.
 

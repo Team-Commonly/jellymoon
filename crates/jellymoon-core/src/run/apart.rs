@@ -52,6 +52,17 @@ pub struct Started {
 /// Refused with nothing started: a program not named by a full path, a day that is none, a wish that is not there
 /// or has had its run. With no harness nothing is started either, and the answer says where one was looked for.
 pub fn run_apart(home: &Path, program: &Path, options: &RunOptions) -> Result<Started, Error> {
+    asked_apart(home, program, options).map(|(started, _)| started)
+}
+
+/// [`run_apart`], and with its answer what the search for a harness missed, when that is why no run was
+/// started. The search is made once, here: a caller with words of its own for no harness (a hearing) is given
+/// what it missed, so no second search can disagree with the answer.
+pub(crate) fn asked_apart(
+    home: &Path,
+    program: &Path,
+    options: &RunOptions,
+) -> Result<(Started, Option<find::Missed>), Error> {
     let day = wish::day_of(options.day.as_deref())?;
     if !program.is_absolute() {
         return Err(refused("nothing was started: the jellymoon command is not named by a full path"));
@@ -61,14 +72,21 @@ pub fn run_apart(home: &Path, program: &Path, options: &RunOptions) -> Result<St
         return Err(had(&wish.id, run));
     }
     // Asked here as the command asks it, so that its reason is core's own line and no command is started for it.
-    if let Err(e @ Error::NoHarness(_)) = find::named_or_found(options.harness.as_deref()) {
-        return Ok(Started { run: None, why: e.to_string(), state: wish.state });
+    if let Some(missed) = find::missed(options.harness.as_deref()) {
+        let why = Error::NoHarness(missed.to_string()).to_string();
+        return Ok((Started { run: None, why, state: wish.state }, Some(missed)));
     }
-    let child = command(home, program, &day, &wish.id, options).spawn();
+    Ok((begun(home, program, &day, &wish, options)?, None))
+}
+
+/// Starts the command for a wish that has had no run, where there is a harness, and answers as [`run_apart`]
+/// says.
+fn begun(home: &Path, program: &Path, day: &str, wish: &MadeWish, options: &RunOptions) -> Result<Started, Error> {
+    let child = command(home, program, day, &wish.id, options).spawn();
     let mut child = child.map_err(|e| refused(format!("nothing was started: jellymoon could not be started: {e}")))?;
     let said = stderr_head(child.stderr.take());
     let deadline = Instant::now() + or_test(WAIT, "JELLYMOON_TEST_APART_WAIT_MS");
-    let kept = || named(home, &day, &wish.id).ok().flatten();
+    let kept = || named(home, day, &wish.id).ok().flatten();
     let run_of = || kept().filter(|wish| wish.run.is_some());
     let (quiet, mut since) = (or_test(QUIET, "JELLYMOON_TEST_APART_QUIET_MS"), None);
     loop {
@@ -95,7 +113,7 @@ pub fn run_apart(home: &Path, program: &Path, options: &RunOptions) -> Result<St
                 // The command may have named the run, and even ended it, since the wish was last read.
                 let fine = matches!(ended, Ok(Some(status)) if status.success());
                 let Some(now) = kept().filter(|now| now.run.is_none()) else {
-                    return Ok(run_of().map_or_else(|| unsaid(&wish, fine), started));
+                    return Ok(run_of().map_or_else(|| unsaid(wish, fine), started));
                 };
                 // What the wish was told of a run that was never started is what the caller is told. A line it
                 // had before this command is an earlier command's, unless this one said nothing of its own.

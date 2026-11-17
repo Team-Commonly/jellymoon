@@ -175,7 +175,7 @@ fn a_follow_up_started_again_under_a_new_session_is_started_with_them_too() {
 // started with the list all the same.
 #[test]
 fn a_run_started_apart_is_started_with_the_listed_variables_and_no_other() {
-    let mut w = inside_a_session(world_in(tempfile::tempdir().unwrap()));
+    let mut w = inside_a_session(world_in(support::system_scratch()));
     w.vars.push(("JELLYMOON_TEST_APART_QUIET_MS", "60000".into()));
     let folder = w.repo("alpha");
     let typed = said("2026-03-10T16:00:00.000Z", folder.to_str().unwrap(), "look at the uploader");

@@ -31,8 +31,14 @@ claude -p --model <name> --tools "" --strict-mcp-config --disable-slash-commands
 - The prompt is one fixed text compiled into core. It tells the model that the
   day is data and that an instruction inside it is not to be followed.
 - The environment is `PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM` and `CLAUDE_CONFIG_DIR`, when set: enough for
-  the harness to find its own sign-in. On Windows the list is the system's equivalents (`USERPROFILE`, `APPDATA`,
-  `SystemRoot` and the like). Jellymoon passes no credential of its own or anyone else's. `PATH` is this process's own,
+  the harness to find its own sign-in. On Windows the list is `PATH`, `PATHEXT`, `SystemRoot`, `SystemDrive`,
+  `ComSpec`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `USERNAME` and
+  `CLAUDE_CONFIG_DIR`. Nothing else of this process's environment is passed on, so
+  no `CLAUDECODE` and no `CLAUDE_CODE_*` variable reaches the harness: one started from inside a Claude Code
+  session is not told it is that session's child, and a sign-in that is only in such a variable does not reach
+  it either. The lists are held to this page and to run.md by a test in core, and what a made-up harness is
+  started with is held to them in `crates/jellymoon/tests/f77.rs`: a variable is added to the code, the test and
+  both pages together. Jellymoon passes no credential of its own or anyone else's. `PATH` is this process's own,
   made longer only when the harness was found in a well-known place (below). Only full paths are passed on, as for a
   run ([run.md](run.md), "What the harness is started with"): of `PATH` the folders named by a full path, and with
   none the call does not run and one line says so; a `HOME`, `TMPDIR` or `CLAUDE_CONFIG_DIR` that is not one is dropped.

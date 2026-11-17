@@ -57,7 +57,9 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   It is read back through the same door as any page file, and first through core's door for a kept page
   (`jellymoon_core::kept_page`), so a kept file that is not page data, is over 1 MiB, is of another day, is a link,
   or can be written to by its group or by others is not drawn: the day is read again.
-- **What is shown first.** The kept page, when there is one. Otherwise a waiting page: the date, the hero and one
+- **What is shown first.** The kept page, when there is one that read something or whose logs were read. A kept
+  page that says no logs were found is not drawn first: it may be stale by now, so the waiting page is shown, and
+  the count step draws it again when there are still no logs. Otherwise a waiting page: the date, the hero and one
   note, "Reading your day…". The window opens on it at once, before a log is opened: reading the logs alone can take
   seconds. The rest runs off the window's thread in two steps, each of which may give the next page to show
   (`today::Next`): the count of the day's turns, then the reading call. While a kept page is read again it stays on
@@ -76,13 +78,16 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   not named on this page: core's page does not carry it. Core has none for a day with nothing made and no project
   on offer, and that day is the plain note it was. A refusal of core's own (a `--model` that is no name) is the
   note, in core's words. A kept page that read something is never replaced by it: that page stays, under "This
-  page is from an earlier reading." A kept page of 0 turns is replaced by it when the logs folder goes. A kept
-  page that says no logs were found is no earlier reading: once there are logs the day is read as for the first
-  time, behind the waiting page, and when it cannot be read the note is "Today could not be read." The field
+  page is from an earlier reading." A kept page that holds nothing a reading gives is replaced by it when the
+  logs folder goes; one of 0 turns that holds a wish, a clash or a project read stays, as an earlier reading. A
+  kept page that says no logs were found is no earlier reading: once there are logs the day is read as for the
+  first time, behind the waiting page, and when there is no page the note is the one of a day with none kept
+  ("When the reading cannot run"). The same page as the one kept is drawn and not written again. The field
   counts only on a page that holds nothing a reading gives (no turn, no project, no clash, no wish of its own);
   on any other page it is not looked at, and the footer is the reading's.
-- **A day whose logs hold no turn of it** makes no call, and its footer is "Nothing was typed on this day, so no
-  model read it."
+- **A day whose logs hold no turn of it** makes no call, and its footer is "Nothing typed on this day was read, so
+  no model read it." It says what was read, not what was typed: turns typed in a folder switched off or in a
+  run's copy are left out, and a made wish was typed in the window.
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
   no command line. Core reads the file (`reader.md`), for the app and for `jellymoon day` and `page` alike, so the
   three leave out the same folders. A name matches exactly, and case matters, and a `--skip` name with a character
@@ -90,10 +95,12 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   read. No `skip.txt` is no names. Anything else under that name that is not a whole, plain list (`reader.md` lists
   what is refused) stops the reading with a plain note and no call, so a folder switched off never reaches the call
   because its list was damaged. A byte order mark at its start is dropped.
-- **When the reading cannot run** the page is one plain note, "Today could not be read.", that says why: Claude Code
-  was not found, no session logs (the note names the folder looked for, as the command's line does), the call failed
-  or took too long (core's own line follows), or the model's answer was not a page. With a kept page, that page
-  stays and the note is its first, "This page is from an earlier reading." A page that could not be written to its
+- **When the reading cannot run** the page is one plain note that says why. Where no reading call was made its
+  title is "There is no page for this day yet.": Claude Code was not found, no session logs (the note names the
+  folder looked for, as the command's line does), logs or a `skip.txt` that could not be read, a `--model` that
+  is no name. Where a call was made and gave no page it is "Today could not be read.": the call failed or took
+  too long (core's own line follows), or the model's answer was not a page. With a kept page that read
+  something, that page stays and the note is its first, "This page is from an earlier reading." A page that could not be written to its
   file is shown with a first note that says so. `layout` prints these pages and exits 0: they are what the window
   shows.
 
@@ -275,9 +282,9 @@ holds what is asked), the one-second timer, the order of the reading's steps, wh
 
 Not covered: a wish for a project past the sixth, or for one neither typed in today nor listed, is made with
 `jellymoon wish`. A made wish's question is drawn on its wish's note ("A question answered, and more like
-this", below): that a day nothing was typed on
-prints it as any day does is proved at `jellymoon page` (`crates/jellymoon/tests/f63.rs`). What only a person at a window can see is not tested: the input method's candidate window,
-the caret, the pale words of an entry that waits, and which piece has the keys.
+this", below): that a day nothing was typed on prints it as any day does is proved at `jellymoon page`
+(`crates/jellymoon/tests/f63.rs`). What only a person at a window can see is not tested: the input method's
+candidate window, the caret, the pale words of an entry that waits, and which piece has the keys.
 
 ## A tap that stops a run (`app/src/stopping.rs`)
 
@@ -377,13 +384,15 @@ first lines are drawn and the rest counted.
 
 ## A question answered, and more like this (`app/src/answering.rs`)
 
-A made wish's note can have a field under it (F54, ADR 0018). The rules and every sentence but two titles and
+A made wish's note can have a field under it (F54, ADR 0018). The rules and every sentence but three titles and
 two hints are core's ([run.md](run.md), "An answer"; [wish.md](wish.md), "A follow-up"). The app puts the field
 where core says, carries what is typed to core off the window's thread, and draws what core answers.
 
 - **A wish that asks.** Core keeps the run's question with the wish (`Wish.question`, there only while the run
   asks). The wish's note, `wish-<wish>`, has core's words for how it stands, the question under them, and a
-  field with the hint "Type your answer, then Enter". The app does not look at the wish's state for it.
+  field with the hint "Type your answer, then Enter". The app does not look at the wish's state for it. Only
+  a made wish (`jellymoon_core::made`) is drawn so: a question a kept page file gives a wish of the reading is
+  not drawn, and that wish gets no field.
 - **The question is a run's text.** It is the note's `quoted` words: the kit places it as one `quote` piece, on a
   ground of its own, every run in the `quoted` role, so it is told apart from Jellymoon's sentences. The kit
   cleans it and cuts it to eight lines. It is text: nothing in it is a link, an option or a field, and nothing
@@ -391,17 +400,27 @@ where core says, carries what is typed to core off the window's thread, and draw
   ([run.md](run.md), "A run that asks").
 - **An answer.** Enter in that field gives the words to `jellymoon_core::answer_run`, the call `jellymoon run
   answer` makes, off the window's thread (`OnShow::typing`). The answer is in no note and no line the app
-  prints. Core's call waits until the run has ended again, so the field waits that long: its words drawn pale,
-  no key taken, no second Enter. Then the wish's note is as core says the wish stands: work that waits, with
-  its choices; another question, with a field; or how it failed.
-- **An answer core does not take** changes nothing. The page's first note is "That answer was not taken.", with
-  core's reason: the run asks no question (it ended, or was answered, meanwhile), the answer is over 600
-  characters, or nothing is left of it once cleaned. The field keeps what was typed and takes keys again.
+  prints. Core's call waits until the run has ended again. From Enter until then the wish's note says what
+  core says of a wish at work ("This wish is being worked on."), with no question and no field, so the note is
+  true for as long as the run goes on and no key is held for it. Then the wish's note is as core says the wish
+  stands: work that waits, with its choices; another question, with a field; or how it failed.
+- **An answer core gives an error for.** Core's error says why and not whether the run was given the answer, so
+  the app looks again: did the run wait on the note's question before the call, and does it after? Where it
+  still waits on it, or never did, the answer was not given: the page's first note is "That answer was not
+  taken.", with core's reason (the run asks no question, having ended or been answered meanwhile; the answer
+  is over 600 characters; nothing is left of it once cleaned), and the note is back with its question and its
+  field, which keeps what was typed and takes keys again. Where it waited and no longer does, the answer was
+  given and what failed came after: the first note is "The answer was given, but what came after it failed.",
+  with core's sentence, the field is emptied so the same answer is not sent twice, and the wish's note is as
+  core says the wish stands.
 - **More like this.** Core says which made wishes a follow-up may be made of
   (`jellymoon_core::followable`, printed as `follows` by `jellymoon run waiting`: work that waits, and work
   that was kept). Under the note of such a wish, and of no other, is the offer `More like this` over a field
   with the hint "Type what to do next, then Enter". Under work that waits it stands below the three choices,
-  and a tap on a choice leaves it there. The app does not work it out from the wish's state.
+  and a tap on a choice leaves it there: the note that says what is being done carries the same field, and
+  Enter under it is carried as under the work. The field is the wish's, not the note's (the kit's `Field.key`,
+  `more-<wish>`), so what was typed in it is still there when the work's note is back, also after a note that
+  asks once more and has no field. The app does not work it out from the wish's state.
 - **A follow-up.** Enter in that field gives the words and the wish's id to `jellymoon_core::wish_after`, the
   call `jellymoon wish --after` makes. A follow-up core keeps is drawn where core keeps it, and its run is
   asked for as a typed wish's is, a process of its own ("The run", above). The field is emptied, and the note
@@ -411,24 +430,30 @@ where core says, carries what is typed to core off the window's thread, and draw
   tossed meanwhile. The field keeps what was typed.
 - **Which call an Enter is.** The kit gives the note's id with the words. The field on show under that note
   says the rest: one under the offer is a follow-up, any other an answer. An Enter for a note with no field on
-  show is nothing.
+  show is nothing. A field's words go when its offer changes: what was typed as an answer is never there to be
+  sent as a follow-up under the same note.
 - **A page closed and shown again.** The page's view outlives its window (F57), and a field's words are the
   view's: they are there when the page is shown again. A field answered while the window is closed is answered
   all the same (`window.rs`, `answer_entry`; the kit's `answer_field_closed`), so it does not wait for ever.
 - **What can be acted on.** Of all this only the `field` and `offer` pieces take a click, and a click on the
   offer only gives its field the keys. `layout` prints them, and the `quote` piece, with the note's id.
 
-`app/tests/f54.rs`, `f54/drawn.rs`, `f54/answered.rs` and `f54/more.rs` follow it: `drawn.rs` at `jellymoon-app
-layout`, the others in the made-up window of `tests/support/tapper.rs` (`type:<note>:<words>`, `start`), which
-gives an Enter only from a field `layout` places. `crates/jellymoon/tests/f54.rs` proves `follows` at the binary.
+`app/tests/f54.rs`, `f54/drawn.rs`, `f54/answered.rs`, `f54/more.rs` and `f54/window.rs` follow it: `drawn.rs`
+at `jellymoon-app layout`, `window.rs` at the page's window on GPUI's test platform (Enter in a field, and an
+answer that comes after the window was closed), the others in the made-up window of `tests/support/tapper.rs`
+(`type:<note>:<words>`, `start`), which gives an Enter only from a field `layout` places. `crates/jellymoon/tests/f54.rs` proves `follows` at the binary.
 
 Not done, and not tested at a real window:
-- An answered run lives in the app. Core has one call to answer, and it waits for the run's end; a window
-  closed meanwhile cuts the run off, and the next look ends it as any run that was cut off.
+- An answered run lives in the app. Core has one call to answer, and it waits for the run's end. Closing the
+  page's window ends nothing: the app lives on and so does the run. Quit meanwhile cuts the run off, and the
+  next look ends it as any run that was cut off.
 - A field takes at most 400 characters, the kit's cap on a line, where core takes an answer of 600.
 - One wish is open at a time in the window, so of two wishes that ask one is on show; `layout` prints both.
 - A note left on show while its wish changed elsewhere keeps its field until the wish is opened again. An Enter
-  there is refused by core, in its words.
+  there is refused by core, in its words. One case is not refused: a note left on show with one question while
+  the run, answered elsewhere, now asks another gives its words to the new question.
+- An answer started apart from the app's process, as `wish --run` starts a run, so that Quit would not cut the
+  run off: open (ADR 0018).
 
 ## The jellyfish (`app/src/jelly.rs`)
 

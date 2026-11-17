@@ -200,7 +200,105 @@ What the build settled of decision 5, and where it is not this note's words. The
   The folder the chain calls `no-logs` is there and holds nothing, so the step names another.
 - **A day whose logs hold no turn says so** (after the review of F63): its footer was "Read from 0 things you
   typed. This is the model's reading, unedited.", which named a model that read nothing. It is one fixed line
-  now, "Nothing was typed on this day, so no model read it."
+  now, "Nothing typed on this day was read, so no model read it." (Its first wording spoke of what was typed, until
+  the review of the notes: turns left out by a switched-off folder, and a made wish, were typed.)
 - **Not built here:** a made wish's question is not drawn on a page, on this day or any; the page of a day
   with no logs does not name the folder looked in; and which six of many projects come first is not the
   person's to choose.
+
+## Found while building F65
+
+What the build settled for decision 3, and where it is not this note's words. The detail is
+[project.md](../development/project.md), "A new project".
+
+- **The folder is `projects` in Jellymoon's own folder**, so a made project is `projects/<name>` there, and not
+  `~/Jellymoon` or a folder under Documents. That folder is already the one place Jellymoon writes; it is the
+  person's alone; `JELLYMOON_HOME` moves it for a test with no second variable; and on a Mac a folder under
+  Documents is behind a permission the binary would have to ask for. The cost: it is inside a folder whose
+  name starts with a dot, which the Finder does not show. The app's entry (F66) is where a person meets a made
+  project, and "Friends" (risk 4) is where its place may have to change.
+- **It is made only when the first project is**, for the person alone (0700), as `copies`, `runs` and `pages`
+  are. It must be a real folder: a link or a file at its name is refused, and is never followed or replaced.
+- **A name is one folder's name on macOS, Linux and Windows.** It is F62's check of a project's name, and on
+  top of it: no dot, dash or space at its start (a hidden folder, an option), no dot or space at its end
+  (Windows cuts them), no colon (a drive, a stream) and no name a system keeps for a device (`NUL`, `COM1`);
+  and, since the gate, what is listed below. Refused in one sentence that never says the name back.
+- **Taken is a name on the list, whatever its folder, or anything at the name in `projects`**: a folder, a file
+  or a link, which is never followed. Both are asked with the case of letters set aside, on every system, so a
+  home copied to a disk that folds case holds no two projects in one folder. Two Unicode forms of one name are
+  left to the file system: where it takes them for one, the second is something that is there; where it keeps
+  them apart, they are two projects. A file system that stores a name in other letters than it was given is
+  refused after the fact, and what was made is taken back.
+- **The order.** The name, the list, the folder and git on `PATH` are looked at first, and a refusal there has
+  written nothing at all. Then, behind the list's own lock (see what the gate found, below), every look is
+  taken again, `projects/<name>` is made by a call that fails when anything is at the name, then the repo,
+  then the line on the list.
+- **A step that fails after the folder is made takes the folder back and lists nothing**: git, a list that
+  filled or was written over by hand meanwhile. `projects` goes too when this command made it. What stays is the empty folder git is started in, with Jellymoon's folder around it
+  (`runs/no-hooks`), as after a run's copy that was refused.
+- **A command killed between its steps leaves the folder, unlisted.** Once its lock is nobody's, the next
+  `project new` of that name says that something is there, and names the two
+  ways out: list it with `project add --repo` when the repo was whole, or remove it and ask again. A folder
+  with a `.git` and no commit is listed by `project add` and refused by a run's copy, as F62 found.
+- **git is run as a run's copy runs it**: the program found in the full folders of `PATH`, started in the empty
+  folder, with the copy's own short list of variables and its settings, so no hook, signing program or monitor
+  of the person's config is started. `git init` is given an empty template, so the repo holds no hook and no
+  sample. The branch is `main`, set after `init`, whatever the config names for a new repo. The commit is made
+  with git's plumbing, as a run's is: no file, no parent, the message `Jellymoon project <name>`, by the
+  person as the new repo's config reads them, or by `Jellymoon <jellymoon@localhost>` when either the name or
+  the address is missing. No step of it is one git does upkeep after.
+- **What git says is never repeated**, as for a folder read from a session log: it names the folder.
+- **`project forget` of a made project forgets the line and keeps the folder**, as for any project. The name
+  is then taken by the folder: `project add --repo` lists it again.
+- **What F65's gate found, and what was decided.**
+  - *One making at a time.* The whole of a making, from its second look to its line on the list, is behind
+    the list's lock. Before, a making held between its folder and the list could be met: its name's folder
+    removed and made again by another command, and then taken back by name with the person's file in it. No
+    `project new`, `add` or `forget` meets a making now; each waits 3 seconds and is told one has not finished.
+  - *What is taken back is the folder this command made*, known by the system's number for it and its time of
+    making, compared before it is removed and before it is listed; never a folder the list names; and
+    `projects` only when this command made it and it is empty. A folder put at the name by another hand is
+    left and not listed.
+  - *On Windows that was not enough, and CI said so.* There the mark was the time of making alone, and
+    Windows gives a folder made again under a name within a few seconds the time of the one before: a folder
+    a hand put in place during a making was taken back with what it held. Stable Rust reads no number for a
+    folder on Windows (`file_index` and `volume_serial_number` are not stable), and no `unsafe` and no new
+    dependency were allowed. Two ways were weighed. Holding the folder open without leave to delete it stops
+    a hand's remove for the length of a making, but only on Windows, by code no machine here can run, and it
+    turns the swap the tests make into a refusal only Windows can show; the handle must be let go before the
+    take-back, which leaves the same window as before. The way taken is a file of the making's own in the
+    folder, `.jellymoon-making-<process>-<clock>-<count>`, written first and asked for beside the mark, on
+    every system: the same code runs on the three, so the Mac and Linux prove the rule Windows needs. A
+    folder put in place does not hold the file. It is removed once the project is listed, and from a made
+    folder the list names. Left open: the look and the act are still two steps; a hand that copies the file
+    into its own folder passes on Windows; a killed making leaves the file with the folder.
+  - *"Nothing was made" is true of Jellymoon's folder too*: made to hold the lock and left empty by a
+    refusal, it is removed. A refusal after the folder was made says that it was taken back, and the
+    sentence of a folder that is not the made one says "removed, replaced or changed", as it may simply be
+    gone, or be the made folder with the making's file taken out. A folder that could not be taken back is
+    said to have been left.
+  - *Characters nobody sees are refused where a name comes in, and read where a name was kept* (U+034F,
+    U+115F, U+3164, U+2800, U+FE0F, and with them U+1160, U+FFA0 and the other selectors U+FE00 to U+FE0E).
+    Refused: `project new`, `project add` (the folder's last name), a wish for a name the list does not
+    hold, and every offer. Read as before: a line of the list, a kept wish, the name `project forget`
+    takes, and a wish for a name the list holds already. One rule everywhere was tried first and was wrong:
+    an earlier build wrote such names, and a list or a day with one was refused whole, in words that said
+    Jellymoon had not written it (the third gate's blocker).
+  - *The making's file after the third gate*: it is the person's alone (0600) and empty; `project add` of a
+    folder directly in `projects` takes out a making's file a cut-off `project new` left, and only a plain,
+    empty file of that name's shape; a folder whose file could not be made is removed again.
+  - *Something at the name is asked again behind the lock*, so a second `project new` of a name under making
+    waits, and is not told to remove or list a folder that is being made.
+  - *A killed making leaves its lock* for the 30 seconds any lock of the list is left; the sentence of the
+    lock says to ask again in half a minute.
+  - *The name's rule is wider*: none of `* ? | < > "`, no tilde at the start, no joiner, and the device forms
+    `COM¹`, `CONIN$` and `CONOUT$`. It is a name a folder can have on macOS, Linux and Windows.
+  - *The sentence of a file system that changed the name is said only when the kept name differs.* Whose
+    Jellymoon's folder is, and whether its path is text, are asked before anything is made, in their own
+    sentences; what `project add` says of a folder is passed on when it is said of the made one.
+  - *The person's config chooses who its commit is by, and not the format, the branch or who may read it*:
+    `init` is told the object
+    format, the ref format and that no file is opened to others, and the last is written to the repo's config.
+- **Not built here:** the app's "Start something new" (F66); a remote; a `.gitignore` or any first file; a
+  way to make a project anywhere else. `project new` runs in CI on Linux and Windows; nobody has run it by
+  hand there.

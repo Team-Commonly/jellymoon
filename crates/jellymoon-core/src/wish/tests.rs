@@ -103,3 +103,21 @@ fn the_start_of_a_wish_s_words_is_cleaned_before_it_is_cut() {
     assert!(start.chars().count() <= 40, "{start}");
     assert_eq!(wish_start("x\u{1b}[31m\u{202e}evil ok", 40), "xevil ok");
 }
+
+// A name with a character nobody sees was a project's name before the check knew those characters. It is no
+// name that comes in, and it is still a name Jellymoon reads back from what it kept.
+#[test]
+fn a_name_with_a_character_nobody_sees_is_kept_as_it_was_read_and_does_not_come_in() {
+    for code in [0x34f, 0x115f, 0x1160, 0x3164, 0xffa0, 0x2800, 0xfe00, 0xfe0f] {
+        let name = format!("al{}pha", char::from_u32(code).unwrap_or(' '));
+        assert!(kept_name(&name) && !named(&name), "{code:x}");
+    }
+    assert!(kept_name("alpha") && named("alpha") && !kept_name("a/b") && !kept_name("al\u{200b}pha"));
+    // A folder of such a name that was typed in is not offered, and a wish for it is kept only when it is listed.
+    let dir = tempfile::tempdir().unwrap();
+    let old = "app \u{2764}\u{fe0f}";
+    let read = typed_in(dir.path(), &[dir.path().join("work").join(old), dir.path().join("work").join("alpha")], &[]);
+    assert_eq!(wishable(&read, &[old.to_string(), "alpha".to_string()]), ["alpha"]);
+    assert_eq!(offered(&read), ["alpha"]);
+    assert!(wish(&dir.path().join("jm"), Some("2026-03-10"), "ship the changelog", old).is_err());
+}

@@ -162,7 +162,7 @@ Each is one line on stderr, exit 1, and nothing is written.
 | Words a ninth cleaning still changes, for example nine keys of letters alone with nothing between them | They would be kept half cleaned |
 | A ninth made wish for one day, a follow-up too | A day holds eight |
 | `--after` a wish that cannot be followed ("A follow-up") | There is no work to follow |
-| A project that is not one folder's name: empty, over 100 characters, a path, `.` or `..`, or anything cleaning would change (a line break, a character that cannot be seen, a credential shape, which a name of 40 letters and digits with no break is) | F39 finds the folder by this name |
+| A project that is not one folder's name: empty, over 100 characters, a path, `.` or `..`, or anything cleaning would change (a line break, a character that cannot be seen, a credential shape, which a name of 40 letters and digits with no break is), or a character nobody sees that cleaning leaves, unless the list of projects holds that very name ([project.md](project.md), "A name that comes in, and a name that was kept") | F39 finds the folder by this name |
 | Made wishes that cannot be used (below) | They are never written over |
 | A day whose lock is held for 3 seconds | Another change has not finished |
 

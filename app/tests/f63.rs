@@ -28,8 +28,9 @@ pub const NO_LOGS: &str =
     "{\"day\":\"2026-03-10\",\"wishes\":[],\"clashes\":[],\"read\":{\"turns\":0,\"projects\":[],\"no_logs\":true}}\n";
 pub const NOTHING: &str = "Nothing wished for yet today.";
 pub const UNREAD: &str = "Today could not be read.";
+pub const NO_PAGE: &str = "There is no page for this day yet.";
 pub const HINT: &str = "Type a wish: Tab for its project, Enter";
-pub const READ_NOTHING: &str = "Nothing was typed on this day, so no model read it.";
+pub const READ_NOTHING: &str = "Nothing typed on this day was read, so no model read it.";
 pub const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
 /// What the day's session logs are.
@@ -94,14 +95,15 @@ fn a_day_with_nothing_typed_nothing_made_and_no_project_on_offer_is_drawn_as_it_
         assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), EMPTY, "{logs:?}");
         assert!(!called(&w.day), "{logs:?}: a reading call was made");
     }
-    // No logs at all, and nothing to draw: the day could not be read, as before, and no page is kept.
+    // No logs at all, and nothing to draw: the day has no page, and none is kept.
     let w = nothing_typed(Logs::Absent);
     let placed = w.placed();
     for kind in ["entry", "chip", "more", "character"] {
         assert!(of(&placed, kind).is_empty(), "a {kind} was placed");
     }
     let said = notes(&placed);
-    assert!(said.len() == 1 && said[0].contains(UNREAD) && said[0].contains("No Claude Code session logs"));
+    assert!(said.len() == 1 && said[0].contains(NO_PAGE) && said[0].contains("No Claude Code session logs"));
+    assert!(!said[0].contains(UNREAD), "{said:?}");
     assert!(!said[0].contains(NOTHING), "{said:?}");
     assert!(!kept(&w.day).exists() && !called(&w.day));
 }

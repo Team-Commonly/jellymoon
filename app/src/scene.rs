@@ -23,8 +23,9 @@ pub const MADE: &str = "wished here today";
 /// The footer of a day with no session logs at all.
 const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
-/// The footer of a day whose session logs hold no turn of it.
-const TYPED_NOTHING: &str = "Nothing was typed on this day, so no model read it.";
+/// The footer of a day whose session logs gave no turn of it. It says what was read, not what was typed: a turn
+/// typed in a folder switched off or in a run's copy is left out, and a made wish was typed in the window.
+const READ_NO_TURN: &str = "Nothing typed on this day was read, so no model read it.";
 
 /// The title of the one note of a page with no wish on it.
 pub const NOTHING: &str = "Nothing wished for yet today.";
@@ -203,11 +204,11 @@ pub(crate) fn read_nothing(data: &PageData, made: usize) -> bool {
 }
 
 /// What the page was made from, and whose reading it is. A page that holds nothing a reading gives names no
-/// model: it says that no session logs were found (`jellymoon_core::page_with_no_logs`), or that nothing was typed.
+/// model: it says that no session logs were found (`jellymoon_core::page_with_no_logs`), or that no turn was read.
 fn footer(data: &PageData, made: usize) -> String {
     let read = &data.read;
     if read_nothing(data, made) {
-        return if read.no_logs { FOUND_NO_LOGS } else { TYPED_NOTHING }.to_string();
+        return if read.no_logs { FOUND_NO_LOGS } else { READ_NO_TURN }.to_string();
     }
     let count = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
     let projects = match read.projects.len() {
@@ -339,7 +340,7 @@ mod tests {
         let scene = scene(&empty);
         assert!(matches!(&scene.notes[..], [Note::Plain { title, .. }] if title == "Nothing wished for yet today."));
         assert_eq!(scene.characters, []);
-        assert_eq!(scene.footer, "Nothing was typed on this day, so no model read it.");
+        assert_eq!(scene.footer, "Nothing typed on this day was read, so no model read it.");
     }
 
     #[test]

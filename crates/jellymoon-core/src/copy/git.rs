@@ -55,6 +55,10 @@ const OFF: &[&str] = &[
 /// `JELLYMOON_TEST_GIT_LIMIT_FROM` names is there, if it names one.
 const LIMIT: Duration = Duration::from_secs(300);
 
+/// What a new repo is made as (`init`), whatever the person's config names for one: git's own object format
+/// and ref format, and files only as open to others as the person's umask leaves them.
+const PLAIN: &[&str] = &["init.defaultObjectFormat=sha1", "init.defaultRefFormat=files", "core.sharedRepository=umask"];
+
 /// What stands where git's own words would, for a repo whose folder was read from a session log.
 const UNSAID: &str = "what git said of a folder read from a session log is not repeated";
 
@@ -75,15 +79,19 @@ pub(super) struct Repo<'a> {
     blanks: Vec<String>,
 }
 
+/// The `git` program in the first folder of `PATH` that is a full path and holds one.
+pub(super) fn on_path() -> Option<PathBuf> {
+    let name = format!("git{}", env::consts::EXE_SUFFIX);
+    let on_path = full_folders(&env::var_os("PATH").unwrap_or_default());
+    on_path.into_iter().map(|folder| folder.join(&name)).find(|program| program.is_file())
+}
+
 impl Git {
     /// Finds `git` in the folders of `PATH` that are full paths (a relative one would be read from the folder git
     /// starts in), and makes the empty folder, under `runs`. A folder there that holds anything is refused: a file
     /// in it could be run as a hook.
     pub fn find(runs: &Path, quiet: bool) -> Result<Git, String> {
-        let name = format!("git{}", env::consts::EXE_SUFFIX);
-        let on_path = full_folders(&env::var_os("PATH").unwrap_or_default());
-        let program = on_path.into_iter().map(|folder| folder.join(&name)).find(|program| program.is_file());
-        let program = program.ok_or("no `git` program was found on PATH; a run's copy is made with git")?;
+        let program = on_path().ok_or("no `git` program was found on PATH; a run's copy is made with git")?;
         let empty = runs.join("no-hooks");
         let held = fs::create_dir_all(&empty).and_then(|()| fs::read_dir(&empty)).map(|mut held| held.next().is_some());
         match held {
@@ -91,6 +99,16 @@ impl Git {
             Ok(true) => Err("the folder Jellymoon keeps empty for git (runs/no-hooks) holds something".to_string()),
             Err(e) => Err(format!("the folder Jellymoon keeps empty for git (runs/no-hooks): {e}")),
         }
+    }
+
+    /// Makes a folder that is there a repo, with nothing of a template in it (`fresh.rs`), and in the format and
+    /// for the readers git itself would choose, whatever the person's config names for a new repo. A git too
+    /// old to know one of the three settings takes no note of it.
+    pub fn init(&self, folder: &Path) -> Result<(), String> {
+        let mut command = self.command();
+        command.args(PLAIN.iter().flat_map(|plain| ["-c", plain]));
+        command.args(["init", "--quiet", "--template="]).arg(folder);
+        printed(command, self, false)?.map(|_| ()).ok_or_else(|| UNSAID.to_string())
     }
 
     /// A name from the repo's config as it goes in an error: not at all for a repo read from a session log.

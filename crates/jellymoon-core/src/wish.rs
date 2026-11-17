@@ -113,10 +113,17 @@ pub(crate) fn cleaned(typed: &str) -> Result<String, Unkept> {
     still(typed, MADE_SAID_MAX, false)
 }
 
-/// Whether a project is one folder's name: no path, and nothing that cleaning would change.
+/// Whether a character draws nothing, or draws as a space, and is one cleaning leaves: a joiner of marks, the
+/// Hangul fillers, the empty Braille pattern and the selectors of a glyph's form.
+fn unseen(c: char) -> bool {
+    matches!(c, '\u{34f}' | '\u{115f}' | '\u{1160}' | '\u{3164}' | '\u{ffa0}' | '\u{2800}' | '\u{fe00}'..='\u{fe0f}')
+}
+
+/// Whether a project is one folder's name: no path, nothing that cleaning would change, and nothing unseen.
 pub(crate) fn named(project: &str) -> bool {
     let path = project.contains(['/', '\\']) || project == "." || project == "..";
-    !project.is_empty() && !path && project.chars().count() <= PROJECT_MAX && line(project, PROJECT_MAX) == project
+    let plain = line(project, PROJECT_MAX) == project && !project.contains(unseen);
+    !project.is_empty() && !path && project.chars().count() <= PROJECT_MAX && plain
 }
 
 /// The projects of `projects` a wish can be made for from a page, in their order: each is one folder's name as

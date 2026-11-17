@@ -26,8 +26,9 @@ pub const NO_FOLDER: &str = "the folder Jellymoon makes projects in (projects in
 pub const NO_GIT: &str = "no `git` program was found on PATH, and a new project is a git repo, so nothing was made";
 
 /// Names Windows takes for no folder or keeps for a device, one a shell reads as the person's home, one with a
-/// joiner that is not seen between two letters, and one with two spaces together.
-const NO_NAME: [&str; 15] = [
+/// joiner that is not seen between two letters, one with two spaces together, and five that hold what draws
+/// nothing or draws as a space (F62's check of a name, which `project add` shares).
+const NO_NAME: [&str; 20] = [
     "a*b",
     "a?b",
     "a|b",
@@ -43,6 +44,11 @@ const NO_NAME: [&str; 15] = [
     "al\u{200d}pha",
     "al\u{200c}pha",
     "al  pha",
+    "al\u{34f}pha",
+    "al\u{115f}pha",
+    "al\u{3164}pha",
+    "al\u{2800}pha",
+    "al\u{fe0f}pha",
 ];
 
 /// A link at `at` that leads to `to`. False where this system makes none for this user.

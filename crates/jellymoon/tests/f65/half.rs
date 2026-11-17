@@ -128,7 +128,7 @@ fn a_list_that_changed_while_the_project_was_made_takes_back_what_was_made() {
         let list = fs::read(w.list_file()).unwrap();
         fs::write(&go, "").unwrap();
         let ran = ended(going);
-        assert_eq!(refused(&ran), format!("jellymoon: {why}\n"));
+        assert_eq!(refused(&ran), format!("jellymoon: {why}; the folder made for it meanwhile was taken back\n"));
         names_no_path(&w, &ran);
         assert_eq!(w.names_in("projects"), ["beta"], "what was made was not taken back: {why}");
         assert!(fs::read(w.list_file()).unwrap() == list, "the list was written: {why}");

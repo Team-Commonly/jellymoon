@@ -191,7 +191,7 @@ fn forget_removes_the_line_and_touches_nothing_else() {
     assert_eq!(refused(&w.run(&["project", "forget", "alpha"])), none);
     assert_eq!(refused(&w.run(&["project", "forget", "Beta"])), none);
     let key = support::hub_key();
-    for odd in ["", "al\u{2065}pha", "a/b", "..", key.as_str()] {
+    for odd in ["", "al\u{2065}pha", "al\u{3164}pha", "al\u{fe0f}pha", "a/b", "..", key.as_str()] {
         let ran = w.run(&["project", "forget", odd]);
         let takes = "jellymoon: project forget takes a project's name, as `jellymoon project list` prints it\n";
         assert_eq!(refused(&ran), takes, "{odd:?}");

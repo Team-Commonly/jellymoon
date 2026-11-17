@@ -327,7 +327,10 @@ max_file_lines = 400
 # F57 raised core by 72: a line's words and project held to what a person sees, a hearing's own refusals as a
 # list with the short sentence for no harness, and their tests in `tests/hear.rs`; the order of states written
 # once took lines away.
-"crates/jellymoon-core" = 15000
+# F65's mark raised core by 114: the file of a making that tells the made folder from one put in its place
+# (Windows has nothing else), Jellymoon's folder taken back, the take-back said, five unseen characters in a
+# name, and their unit tests, moved to `project/new/tests.rs`.
+"crates/jellymoon-core" = 15114
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -491,7 +494,10 @@ max_file_lines = 400
 # 9 more in `tests/f53.rs`, `f53/order.rs` and `f53/refused.rs`; 5 in `fake_agent/follow.rs` (a fork that works
 # before it says its session is lost); 1 in `tests/f46/refused.rs`.
 # F57 raised it by 1: the comment on the short sentence for no harness in `tests/f55/started.rs`.
-"crates/jellymoon" = 25517
+# F65's mark raised it by 111: in `tests/f65/alone.rs`, a folder removed during a making, a line a hand wrote
+# for the folder being made, a list that cannot be written, and a home made for the lock; the unseen names in
+# `f65/refused.rs` and `f62/refused.rs`.
+"crates/jellymoon" = 25628
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

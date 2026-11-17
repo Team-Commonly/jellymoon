@@ -226,7 +226,7 @@ What the build settled for decision 3, and where it is not this note's words. Th
   taken again, `projects/<name>` is made by a call that fails when anything is at the name, then the repo,
   then the line on the list.
 - **A step that fails after the folder is made takes the folder back and lists nothing**: git, a list that
-  filled or was written over by hand meanwhile. `projects` goes too when this command made it. What stays is Jellymoon's folder and the empty folder git is started in
+  filled or was written over by hand meanwhile. `projects` goes too when this command made it. What stays is the empty folder git is started in, with Jellymoon's folder around it
   (`runs/no-hooks`), as after a run's copy that was refused.
 - **A command killed between its steps leaves the folder, unlisted.** Once its lock is nobody's, the next
   `project new` of that name says that something is there, and names the two
@@ -251,6 +251,25 @@ What the build settled for decision 3, and where it is not this note's words. Th
     making, compared before it is removed and before it is listed; never a folder the list names; and
     `projects` only when this command made it and it is empty. A folder put at the name by another hand is
     left and not listed.
+  - *On Windows that was not enough, and CI said so.* There the mark was the time of making alone, and
+    Windows gives a folder made again under a name within a few seconds the time of the one before: a folder
+    a hand put in place during a making was taken back with what it held. Stable Rust reads no number for a
+    folder on Windows (`file_index` and `volume_serial_number` are not stable), and no `unsafe` and no new
+    dependency were allowed. Two ways were weighed. Holding the folder open without leave to delete it stops
+    a hand's remove for the length of a making, but only on Windows, by code no machine here can run, and it
+    turns the swap the tests make into a refusal only Windows can show; the handle must be let go before the
+    take-back, which leaves the same window as before. The way taken is a file of the making's own in the
+    folder, `.jellymoon-making-<process>-<clock>-<count>`, written first and asked for beside the mark, on
+    every system: the same code runs on the three, so the Mac and Linux prove the rule Windows needs. A
+    folder put in place does not hold the file. It is removed once the project is listed, and from a made
+    folder the list names. Left open: the look and the act are still two steps; a hand that copies the file
+    into its own folder passes on Windows; a killed making leaves the file with the folder.
+  - *"Nothing was made" is true of Jellymoon's folder too*: made to hold the lock and left empty by a
+    refusal, it is removed. A refusal after the folder was made says that it was taken back, and the
+    sentence of a folder that is not the made one says "removed or replaced", as it may simply be gone.
+  - *F62's check of a name refuses five more characters nobody sees* (U+034F, U+115F, U+3164, U+2800,
+    U+FE0F, and with them U+1160, U+FFA0 and the other selectors U+FE00 to U+FE0E), for `project add` and
+    `project new` alike. A folder whose last name holds one can no longer be added.
   - *Something at the name is asked again behind the lock*, so a second `project new` of a name under making
     waits, and is not told to remove or list a folder that is being made.
   - *A killed making leaves its lock* for the 30 seconds any lock of the list is left; the sentence of the
@@ -260,7 +279,9 @@ What the build settled for decision 3, and where it is not this note's words. Th
   - *The sentence of a file system that changed the name is said only when the kept name differs.* Whose
     Jellymoon's folder is, and whether its path is text, are asked before anything is made, in their own
     sentences; what `project add` says of a folder is passed on when it is said of the made one.
-  - *The person's config chooses nothing of the repo but who its commit is by*: `init` is told the object
+  - *The person's config chooses who its commit is by, and not the format, the branch or who may read it*:
+    `init` is told the object
     format, the ref format and that no file is opened to others, and the last is written to the repo's config.
 - **Not built here:** the app's "Start something new" (F66); a remote; a `.gitignore` or any first file; a
-  way to make a project anywhere else; and `project new` on Windows and Linux, which nobody has run.
+  way to make a project anywhere else. `project new` runs in CI on Linux and Windows; nobody has run it by
+  hand there.

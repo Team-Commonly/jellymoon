@@ -9,8 +9,8 @@ use serde_json::json;
 use super::support::day::DAY;
 use super::support::worked::tree;
 use super::{
-    ANSWER_HINT, AT_WORK, MORE, MORE_HINT, NEEDS, QUESTION, UNANSWERED, UNSETTLED, WORK, acted, at_once, plain, quoted,
-    ready, text, typed,
+    ANSWER_HINT, AT_WORK, MORE, MORE_HINT, NEEDS, QUESTION, UNANSWERED, UNSETTLED, WORK, acted, answer_key, at_once,
+    key, plain, quoted, ready, text, typed,
 };
 use crate::support::wished::{SAID, wait_until};
 
@@ -38,6 +38,9 @@ fn an_answer_typed_under_the_question_is_given_to_core_and_the_page_shows_what_c
     let printed = acted(&w, &[&format!("poke:{wish}"), &format!("type:{note}:{ANSWER}")]);
     let opened = super::scene(&printed[0]);
     assert_eq!(text(&opened, &note), Some(asks(QUESTION)));
+    // The review of F54's notes, note 6: the field is the wish's and the question's, by its key, so the kit
+    // keeps a half-typed answer while the note is not on show (`crates/sticker-kit/tests/field_draw.rs`).
+    assert_eq!(key(&opened, &note), Some(answer_key(&wish, QUESTION).as_str()));
     let (kept, shown) = typed(&printed[1]);
     assert!(kept, "core took the answer, so the field is emptied");
     // The review of F54, finding 5: from Enter the scene on show says the wish is being worked on.
@@ -86,6 +89,8 @@ fn a_run_that_asks_again_is_drawn_with_its_new_question_and_takes_a_second_answe
     let (kept, shown) = typed(&printed[1]);
     assert!(kept);
     assert_eq!(text(&shown, &note), Some(asks(again)));
+    // Another question is another field: what was typed for the first is not there for it.
+    assert_eq!(key(&shown, &note), Some(answer_key(&wish, again).as_str()));
     assert_eq!(w.wish(&wish)["question"], again);
     w.plays("edits", 0);
     let printed = acted(&w, &[&format!("poke:{wish}"), &format!("type:{note}:resume")]);
@@ -137,7 +142,9 @@ fn an_answer_to_a_run_that_ended_meanwhile_is_refused_in_core_s_words() {
     let (kept, shown) = typed(&printed[0]);
     let why = format!("run {run} does not ask a question, so there is nothing to answer.");
     assert_eq!((kept, plain(&shown).first()), (false, Some(&(UNANSWERED, why.as_str()))));
-    assert_eq!(text(&shown, &note), Some(asks(QUESTION)), "the field keeps its note, and so its words");
+    // The review of F54's notes, note 5: the run is known to ask nothing now, so the question is not put
+    // back. The wish's note is as core says the wish stands: its work waits.
+    assert_eq!((text(&shown, &note), text(&shown, &format!("work-{wish}")).map(|work| work.0)), (None, Some(WORK)));
     assert!(tree(&w.at("jm")) == before, "a refused answer wrote something");
 }
 
@@ -211,4 +218,72 @@ fn a_question_a_kept_page_file_gives_a_wish_of_the_reading_is_not_drawn_and_has_
     let placed = w.placed();
     assert_eq!((super::of(&placed, "field", &note).len(), super::of(&placed, "quote", &note).len()), (0, 0));
     assert!(tree(&w.at("jm")) == before, "an Enter under a wish of the reading reached core");
+}
+
+// The review of F54's notes, note 1: during the wait another little one is tapped, which takes the wish's note
+// off the page. A refusal then has no note to put the question back into, and puts it first.
+#[test]
+fn a_refused_answer_whose_wish_is_no_longer_open_is_put_first_with_its_question_and_its_field() {
+    let w = ready();
+    let wish = w.ran("asks", 0, "asks");
+    let other = w.wishes();
+    let note = format!("wish-{wish}");
+    let acts = [format!("poke:{wish}"), format!("enter:{note}:{}", "w".repeat(601)), format!("poke:{other}")];
+    let mut acts: Vec<&str> = acts.iter().map(String::as_str).collect();
+    acts.push("answer");
+    let printed = acted(&w, &acts);
+    let between = super::scene(&printed[2]);
+    assert!(text(&between, &note).is_none() && text(&between, &format!("wish-{other}")).is_some(), "{}", printed[2]);
+    let (kept, shown) = typed(&printed[3]);
+    assert_eq!((kept, plain(&shown).first().map(|said| said.0)), (false, Some(UNANSWERED)));
+    assert_eq!(text(&shown, &note), Some(asks(QUESTION)), "the words typed have no field to stay in");
+    assert_eq!(key(&shown, &note), Some(answer_key(&wish, QUESTION).as_str()));
+    let first = shown.notes.iter().find_map(|one| match one {
+        sticker_kit::Note::Text { id, .. } => Some(id.as_str()),
+        _ => None,
+    });
+    assert_eq!(first, Some(note.as_str()), "the question is not the first of the wishes' notes");
+    // An answer that was given has no words to keep: the wish that went off the page is left to the next look.
+    w.plays("edits", 0);
+    let acts = [format!("poke:{wish}"), format!("enter:{note}:{ANSWER}"), format!("poke:{other}")];
+    let mut acts: Vec<&str> = acts.iter().map(String::as_str).collect();
+    acts.push("answer");
+    let printed = acted(&w, &acts);
+    let (kept, shown) = typed(&printed[3]);
+    assert!(kept && text(&shown, &note).is_none() && text(&shown, &format!("work-{wish}")).is_none(), "{}", printed[3]);
+}
+
+// The review of F54's notes, note 2: the look after core's error cannot read the day. That is no proof the
+// answer was given, so the words stay. Here the run did get the answer; the next look says how it ended.
+#[cfg(unix)]
+#[test]
+fn an_answer_is_held_not_given_when_the_look_after_core_s_error_cannot_read_the_day() {
+    use std::os::unix::fs::PermissionsExt;
+    let w = ready();
+    let wish = w.ran("asks", 0, "asks");
+    w.plays("edits", 0);
+    let note = format!("wish-{wish}");
+    let (go, at) = (w.at("rec").join("go.step"), w.at("rec").join("go.at"));
+    let pages = w.at("jm").join("pages");
+    let (lock, made) = (pages.join(format!("{DAY}.ruled.lock")), pages.join(format!("{DAY}.wishes.json")));
+    let vars = [
+        ("JELLYMOON_TEST_NOTE_WAIT_MS", "60000".into()),
+        ("JELLYMOON_TEST_GO", go.clone().into()),
+        ("JELLYMOON_TEST_END_WAIT_MS", "300".into()),
+    ];
+    let mut window = w.taps_with("logs", &[&format!("poke:{wish}"), &format!("type:{note}:{ANSWER}")], &vars);
+    wait_until("the end of the answered run", || at.exists());
+    fs::write(&lock, "").unwrap();
+    // Core reads a kept file only when its owner alone can write to it: the day's made wishes are unreadable.
+    let mode = fs::metadata(&made).unwrap().permissions();
+    fs::set_permissions(&made, fs::Permissions::from_mode(0o666)).unwrap();
+    fs::write(&go, "").unwrap();
+    let printed = window.ended();
+    fs::set_permissions(&made, mode).unwrap();
+    fs::remove_file(&lock).unwrap();
+    let (kept, shown) = typed(&serde_json::from_str(&printed[1]).unwrap());
+    assert!(!kept, "nothing says the answer was given: the words stay");
+    assert_eq!(plain(&shown).first().map(|said| said.0), Some(UNANSWERED), "{:?}", plain(&shown));
+    assert_eq!(plain(&shown).iter().filter(|(title, _)| *title == UNSETTLED).count(), 0);
+    assert_eq!(text(&shown, &note), Some(asks(QUESTION)));
 }

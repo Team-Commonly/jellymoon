@@ -392,7 +392,9 @@ where core says, carries what is typed to core off the window's thread, and draw
   asks). The wish's note, `wish-<wish>`, has core's words for how it stands, the question under them, and a
   field with the hint "Type your answer, then Enter". The app does not look at the wish's state for it. Only
   a made wish (`jellymoon_core::made`) is drawn so: a question a kept page file gives a wish of the reading is
-  not drawn, and that wish gets no field.
+  not drawn, and that wish gets no field. The field is the wish's and the question's, not the note's (the
+  kit's `Field.key`, `answer-<wish>-<question>`): a half-typed answer is still there when the wish is opened
+  again after a tap elsewhere, and another question has a field of its own, with no words.
 - **The question is a run's text.** It is the note's `quoted` words: the kit places it as one `quote` piece, on a
   ground of its own, every run in the `quoted` role, so it is told apart from Jellymoon's sentences. The kit
   cleans it and cuts it to eight lines. It is text: nothing in it is a link, an option or a field, and nothing
@@ -405,14 +407,18 @@ where core says, carries what is typed to core off the window's thread, and draw
   true for as long as the run goes on and no key is held for it. Then the wish's note is as core says the wish
   stands: work that waits, with its choices; another question, with a field; or how it failed.
 - **An answer core gives an error for.** Core's error says why and not whether the run was given the answer, so
-  the app looks again: did the run wait on the note's question before the call, and does it after? Where it
-  still waits on it, or never did, the answer was not given: the page's first note is "That answer was not
-  taken.", with core's reason (the run asks no question, having ended or been answered meanwhile; the answer
-  is over 600 characters; nothing is left of it once cleaned), and the note is back with its question and its
-  field, which keeps what was typed and takes keys again. Where it waited and no longer does, the answer was
-  given and what failed came after: the first note is "The answer was given, but what came after it failed.",
-  with core's sentence, the field is emptied so the same answer is not sent twice, and the wish's note is as
-  core says the wish stands.
+  the app looks again: did the run wait on the note's question before the call, and does it after? A look
+  that does not find the wish among the day's made wishes, which is also what a day that cannot be read
+  gives, is "not known". Where the run waited and is known to wait no longer, the answer was given and what
+  failed came after: the first note is "The answer was given, but what came after it failed.", with core's
+  sentence, the field is emptied so the same answer is not sent twice, and the wish's note is as core says the
+  wish stands. In every other case, not known among them, the answer is held not to have been given: the
+  page's first note is "That answer was not taken.", with core's reason (the run asks no question, having
+  ended or been answered meanwhile; the answer is over 600 characters; nothing is left of it once cleaned).
+  Then the note is back with its question and its field, which keeps what was typed and takes keys again; it
+  is put first when no note of the wish is on show any more, as after a tap on another little one during the
+  wait. Only where the run is known not to wait on that question any more is the question not put back: the
+  wish's note is then as core says the wish stands.
 - **More like this.** Core says which made wishes a follow-up may be made of
   (`jellymoon_core::followable`, printed as `follows` by `jellymoon run waiting`: work that waits, and work
   that was kept). Under the note of such a wish, and of no other, is the offer `More like this` over a field
@@ -441,7 +447,8 @@ where core says, carries what is typed to core off the window's thread, and draw
 `app/tests/f54.rs`, `f54/drawn.rs`, `f54/answered.rs`, `f54/more.rs` and `f54/window.rs` follow it: `drawn.rs`
 at `jellymoon-app layout`, `window.rs` at the page's window on GPUI's test platform (Enter in a field, and an
 answer that comes after the window was closed), the others in the made-up window of `tests/support/tapper.rs`
-(`type:<note>:<words>`, `start`), which gives an Enter only from a field `layout` places. `crates/jellymoon/tests/f54.rs` proves `follows` at the binary.
+(`type:<note>:<words>`, or `enter:<note>:<words>` and `answer` with acts between them; `start`), which gives an
+Enter only from a field `layout` places. `crates/jellymoon/tests/f54.rs` proves `follows` at the binary.
 
 Not done, and not tested at a real window:
 - An answered run lives in the app. Core has one call to answer, and it waits for the run's end. Closing the
@@ -452,6 +459,12 @@ Not done, and not tested at a real window:
 - A note left on show while its wish changed elsewhere keeps its field until the wish is opened again. An Enter
   there is refused by core, in its words. One case is not refused: a note left on show with one question while
   the run, answered elsewhere, now asks another gives its words to the new question.
+- Whether an answer was given is told by the question's words. A run that asks the very same words again
+  after an answer that then failed reads as not given: "That answer was not taken.", and the words stay.
+- Two cases only core can tell apart read as given, with the field emptied, though no harness got the answer:
+  another answer (from a terminal) took the run between the app's first look and core's own lock, and core
+  cleared the wish's question and then failed to write the run's record. Until core says whether it started
+  a harness, the app cannot know.
 - An answer started apart from the app's process, as `wish --run` starts a run, so that Quit would not cut the
   run off: open (ADR 0018).
 

@@ -35,7 +35,7 @@ pub(crate) fn named_or_found(named: Option<&Path>) -> Result<Found, Error> {
 /// A search that found no harness: where it looked, each program it passed over with why, and whether there was a
 /// home to look in.
 pub(crate) struct Missed {
-    looked: Vec<String>,
+    pub looked: Vec<String>,
     pub passed_over: Vec<String>,
     pub home: bool,
 }
@@ -48,6 +48,15 @@ impl fmt::Display for Missed {
         }
         if self.passed_over.is_empty() { Ok(()) } else { write!(f, " (passed over {})", self.passed_over.join(", ")) }
     }
+}
+
+/// What the search for a harness missed, when none is named and none is found. It is one search: a caller with
+/// words of its own for no harness takes them from this, and asks no second time.
+pub(crate) fn missed(named: Option<&Path>) -> Option<Missed> {
+    if named.is_some() {
+        return None;
+    }
+    search().ok()?.err()
 }
 
 /// Finds `claude` as [`search`] does; the error says where it was looked for, and names what was passed over.

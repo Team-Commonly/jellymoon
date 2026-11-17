@@ -59,15 +59,19 @@ pub struct Jellyfish {
     room: Room,
     /// Where each window stands on the display, the bubble's whether it is open or not.
     stands: (Rect, Rect),
-    /// Whether the bubble's last open failed.
-    failing: bool,
+    /// Why the bubble could not be opened at the last draw, as it was said. None when it was opened, drawn in or
+    /// not wanted.
+    said: Option<String>,
 }
 
-/// Whether an open that failed is to be said: the first of a row of them, since the look draws every second. An
-/// open that worked ends the row.
-fn first_failure(failing: &mut bool, opened: bool) -> bool {
-    let before = std::mem::replace(failing, !opened);
-    !opened && !before
+/// Whether a draw's failure to open the bubble is to be said. `failure` is why it could not be opened, and none
+/// when it was opened, drawn in or not wanted. A failure is said when it is not the one last said: once for a
+/// row of the same failure, since the look draws every second, and again when the reason changes. A draw with
+/// none ends the row, a quiet one too.
+fn news(said: &mut Option<String>, failure: Option<String>) -> bool {
+    let new = failure.is_some() && *said != failure;
+    *said = failure;
+    new
 }
 
 impl Jellyfish {
@@ -79,7 +83,7 @@ impl Jellyfish {
             let view = EdgeView::new(EdgePart::Character, Edge::default(), quiet, jelly::CORNER);
             cx.new(|_| view.on_tap(move |_, cx| tapped(cx)))
         })?;
-        Ok(Jellyfish { character, bubble: None, theme, room, stands, failing: false })
+        Ok(Jellyfish { character, bubble: None, theme, room, stands, said: None })
     }
 
     /// Draws what core says: the jellyfish in its state, and the bubble opened, drawn again or removed.
@@ -88,30 +92,36 @@ impl Jellyfish {
         let for_character = edge.clone();
         let _ = self.character.update(cx, |view, _, cx| view.set_edge(for_character, cx));
         let open = self.bubble.take();
-        if !edge.speaks() {
+        let (bubble, failure) = if edge.speaks() {
+            // A bubble that something else removed cannot be drawn in: it is opened again, as for the first words.
+            let again = edge.clone();
+            let open = open.filter(|open| open.update(cx, |view, _, cx| view.set_edge(again, cx)).is_ok());
+            match open.map_or_else(|| self.speak(edge, cx), Ok) {
+                Ok(open) => (Some(open), None),
+                Err(why) => (None, Some(why)),
+            }
+        } else {
             if let Some(open) = open {
                 let _ = open.update(cx, |_, window, _| window.remove_window());
             }
-            return;
+            (None, None)
+        };
+        // An open that fails is said on stderr, and tried again at the next draw.
+        if news(&mut self.said, failure)
+            && let Some(why) = &self.said
+        {
+            say(&format!("no bubble: {why}"));
         }
-        // A bubble that something else removed cannot be drawn in: it is opened again, as for the first words.
-        let again = edge.clone();
-        let open = open.filter(|open| open.update(cx, |view, _, cx| view.set_edge(again, cx)).is_ok());
-        self.bubble = open.or_else(|| self.speak(edge, cx));
+        self.bubble = bubble;
     }
 
-    /// Opens the bubble. An open that fails is said on stderr, once for a row of them, and tried at the next draw.
-    fn speak(&mut self, edge: Edge, cx: &mut App) -> Option<WindowHandle<EdgeView>> {
+    /// Opens the bubble, or says why it could not be opened.
+    fn speak(&self, edge: Edge, cx: &mut App) -> Result<WindowHandle<EdgeView>, String> {
         let (at, theme) = (self.room.bounds(self.stands.1), self.theme.clone());
         let opened = cx.open_window(popup::options(popup::BUBBLE, at, self.room.display), move |_, cx| {
             cx.new(|_| EdgeView::new(EdgePart::Bubble, edge, theme, jelly::CORNER))
         });
-        if first_failure(&mut self.failing, opened.is_ok())
-            && let Err(error) = &opened
-        {
-            say(&format!("no bubble: {error}"));
-        }
-        opened.ok()
+        opened.map_err(|error| error.to_string())
     }
 
     /// Removes both windows.
@@ -138,14 +148,29 @@ impl Jellyfish {
 
 #[cfg(test)]
 mod tests {
-    use super::first_failure;
+    use super::news;
 
-    // No open fails on GPUI's test platform, so the rule is held here: the review of F57, finding 8.
+    // No open fails on GPUI's test platform, so the rule is held here: the review of F57, finding 8, and of its
+    // notes, finding 3. Every draw goes through it, a quiet one as a draw with no failure.
     #[test]
-    fn a_failed_open_is_said_once_for_a_row_of_them_and_again_after_one_that_worked() {
-        let mut failing = false;
-        let opens = [false, false, false, true, true, false, false];
-        let said = opens.map(|opened| first_failure(&mut failing, opened));
-        assert_eq!(said, [true, false, false, false, false, true, false]);
+    fn a_failed_open_is_said_once_for_a_row_of_the_same_failure_and_again_for_another_or_after_a_draw_with_none() {
+        let mut last = None;
+        let failed = |why: &str| Some(why.to_string());
+        let draws = [
+            (failed("no display"), true),
+            (failed("no display"), false),
+            (failed("no memory"), true),
+            (failed("no memory"), false),
+            (failed("no display"), true),
+            (None, false),
+            (failed("no display"), true),
+            (failed("no display"), false),
+            (None, false),
+            (None, false),
+            (failed("no memory"), true),
+        ];
+        let said: Vec<bool> = draws.iter().map(|(failure, _)| news(&mut last, failure.clone())).collect();
+        assert_eq!(said, draws.map(|(_, said)| said));
+        assert_eq!(last, failed("no memory"), "what was last said is kept, to tell the next failure from it");
     }
 }

@@ -477,10 +477,12 @@ F57 opens the jellyfish and its bubble as two windows of the app. The account is
 [app.md](../development/app.md), "The jellyfish's two windows". Decision 4 stands as written. Where this note
 was silent, this was decided:
 
-1. **What a window is asked for is data in one place.** `popup::JELLY` and `popup::BUBBLE` say it (a pop-up,
-   no focus, see-through, not moved, not resized, and what a tap does), `layout --jelly` prints it as `opens`,
-   and `popup::options` alone turns it into GPUI's options. Whatever the third thing to try first (below)
-   overturns is changed there.
+1. **What a window is asked for is data in one place.** `popup::JELLY` and `popup::BUBBLE` say it (no focus,
+   see-through, not moved, not resized, and what a tap does), `layout --jelly` prints it as `opens`, and
+   `popup::options` alone turns it into GPUI's options. That each is a pop-up is not in that data: it is fixed
+   in `popup::options`, for both. Not all that the third thing to try first (below) can overturn is changed
+   there: which view is given a tap is `jellyfish.rs`, the part of the window that takes it is the kit's
+   (`draw/edge.rs`), the app coming to the front is `shell.rs`, and GPUI's options have nothing for a shadow.
 2. **The third thing to try first was not tried.** No window was opened on a screen while F57 was built. Three
    observations stay open for a person: whether a pop-up brings the app to the front, whether the system draws
    a shadow or a frame round a see-through window, and whether the part one sees through takes clicks.

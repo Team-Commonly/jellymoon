@@ -44,6 +44,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub(crate) use answer::kept as kept_answer;
 pub use answer::{ANSWER_READ, answer_run};
+pub(crate) use apart::asked_apart;
 pub use apart::{Started, run_apart};
 pub(crate) use asks::kept as kept_question;
 pub(crate) use end::bury;

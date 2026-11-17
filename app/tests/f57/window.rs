@@ -1,17 +1,20 @@
 //! The app's windows with no window on a screen: GPUI's test platform opens what `shell.rs` wires, a click goes
 //! through GPUI's own dispatch, and the test's executor runs the looks and moves the clock. On the Mac only, as
-//! the kit's draw tests are. The page has no day, so nothing is read and nothing is kept.
+//! the kit's draw tests are. The page here has no day, so nothing is read and nothing is kept; `looks.rs` opens
+//! the same on a day.
 
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{Modifiers, PlatformDispatcher, TestAppContext, TestDispatcher, VisualTestContext, WindowHandle, point, px};
+use gpui::{Modifiers, TestAppContext, TestDispatcher, VisualTestContext, WindowHandle, point, px};
 use jellymoon_app::jellyfish::Room;
-use jellymoon_app::shell::{Asked, JellyLook, Opened, jelly_look, wire};
+use jellymoon_app::shell::{Asked, Clock, Opened, wire};
+use jellymoon_app::taps::OnShow;
+use jellymoon_app::today::{Later, Today};
 use jellymoon_app::window::page_window;
-use jellymoon_core::{Jelly, JellyDrawn, JellyState};
-use serde_json::{Value, json};
+use jellymoon_core::{Jelly, JellyDrawn};
+use serde_json::Value;
 use sticker_kit::draw::headless::text_system;
 use sticker_kit::draw::{EdgeView, load_fonts};
 use sticker_kit::{Corner, EDGE_GAP, EDGE_MARGIN, EdgeKind, EdgeMood, Rect, Scene, Theme, Viewport};
@@ -28,20 +31,33 @@ const ROOM: Room = Room {
 };
 const JELLY_AT: [f32; 4] = [1328.0, 718.0, 96.0, 96.0];
 const BUBBLE_AT: [f32; 4] = [1020.0, 596.0, 300.0, 218.0];
-const SECOND: Duration = Duration::from_secs(1);
+pub const SECOND: Duration = Duration::from_secs(1);
 
-fn context() -> TestAppContext {
+/// The day a page is opened on, whether `--date` named it, and the test's clock.
+pub type Day = (Today, bool, Clock);
+
+pub fn context() -> TestAppContext {
     TestAppContext::build_with_text_system(TestDispatcher::new(0), None, text_system())
 }
 
-fn opened(cx: &mut TestAppContext, jelly: Option<JellyLook>, quit_after: Option<Duration>) -> Opened {
-    opened_in(cx, ROOM, jelly, quit_after)
+pub fn opened(cx: &mut TestAppContext, day: Option<Day>, quit_after: Option<Duration>) -> Opened {
+    opened_in(cx, ROOM, day, quit_after)
 }
 
-fn opened_in(cx: &mut TestAppContext, room: Room, jelly: Option<JellyLook>, quit_after: Option<Duration>) -> Opened {
+fn opened_in(cx: &mut TestAppContext, room: Room, day: Option<Day>, quit_after: Option<Duration>) -> Opened {
     cx.update(|cx| load_fonts(cx)).expect("bundled fonts load");
     let viewport = Viewport { w: 1440.0, h: 900.0 };
-    let asked = Asked { scene: Scene::sample(), theme: Theme::sticker(), viewport, day: None, jelly, quit_after };
+    // A day's page as `main.rs` hands it over, with no reading after the first scene.
+    let (day, named, today) = match day {
+        Some((today, named, clock)) => {
+            let (scene, page) = today.first();
+            let nothing: Later = Box::new(|| None);
+            (Some((OnShow { today, page, scene }, nothing)), named, clock)
+        }
+        None => (None, false, Arc::new(|| None) as Clock),
+    };
+    let (scene, theme) = (Scene::sample(), Theme::sticker());
+    let asked = Asked { scene, theme, viewport, day, named, today, quit_after };
     let opened = cx.update(|cx| wire(asked, room, cx)).expect("the windows open");
     cx.run_until_parked();
     opened
@@ -66,11 +82,11 @@ fn jelly(opened: &Opened) -> WindowHandle<EdgeView> {
     opened.jelly().expect("the jellyfish is open").0
 }
 
-fn mood(opened: &Opened, cx: &mut TestAppContext) -> EdgeMood {
+pub fn mood(opened: &Opened, cx: &mut TestAppContext) -> EdgeMood {
     jelly(opened).update(cx, |view, _, _| view.edge().mood).expect("the jellyfish is open")
 }
 
-fn close_page(cx: &mut TestAppContext) {
+pub fn close_page(cx: &mut TestAppContext) {
     let page = cx.update(|cx| page_window(cx)).expect("the page is open");
     page.update(cx, |_, window, _| window.remove_window()).expect("the page is open");
     cx.run_until_parked();
@@ -277,76 +293,4 @@ fn the_time_asked_for_ends_the_app_by_itself_and_not_before() {
     cx.executor().advance_clock(Duration::from_millis(1));
     cx.run_until_parked();
     assert!(opened.ended() && cx.windows().is_empty());
-}
-
-#[test]
-fn once_a_second_the_jellyfish_is_looked_at_off_the_window_s_thread_and_drawn_again() {
-    let mut cx = context();
-    let lines = [working(2), asks("Which one?"), quiet(), waits()];
-    // Whether each look ran on the window's thread.
-    let looks = Arc::new(Mutex::new(Vec::new()));
-    let (seen, dispatcher) = (looks.clone(), cx.dispatcher.clone());
-    let look: JellyLook = Arc::new(move || {
-        let mut seen = seen.lock().unwrap();
-        seen.push(dispatcher.is_main_thread());
-        drawn(&lines[(seen.len() - 1).min(lines.len() - 1)])
-    });
-    let count = || looks.lock().unwrap().len();
-    let opened = opened(&mut cx, Some(look), None);
-    // The first look is at once: the jellyfish is not quiet for a second while a run goes.
-    assert_eq!((count(), mood(&opened, &mut cx), opened.bubble()), (1, EdgeMood::Swims, None));
-    cx.executor().advance_clock(Duration::from_millis(999));
-    cx.run_until_parked();
-    assert_eq!(count(), 1, "a look before a second had passed");
-    cx.executor().advance_clock(Duration::from_millis(1));
-    cx.run_until_parked();
-    assert_eq!((count(), mood(&opened, &mut cx), opened.bubble().is_some()), (2, EdgeMood::Waves, true));
-    cx.executor().advance_clock(SECOND);
-    cx.run_until_parked();
-    assert_eq!((count(), mood(&opened, &mut cx), opened.bubble()), (3, EdgeMood::Floats, None));
-    // It goes on with the page closed, and ends with the app.
-    close_page(&mut cx);
-    cx.executor().advance_clock(SECOND);
-    cx.run_until_parked();
-    assert_eq!((count(), mood(&opened, &mut cx)), (4, EdgeMood::Glows));
-    cx.update(|cx| opened.quit(cx));
-    cx.executor().advance_clock(5 * SECOND);
-    cx.run_until_parked();
-    assert_eq!(count(), 4, "a look after Quit");
-    assert_eq!(*looks.lock().unwrap(), [false; 4], "a look ran on the window's thread");
-}
-
-/// A day's made wishes in a home of the test's own, typed here as core keeps them.
-fn made(home: &std::path::Path, day: &str, state: &str, more: Value) {
-    let mut wish = json!({"id": "m1", "said": SAID, "project": "alpha", "state": state, "stars": []});
-    wish["run"] = json!("r1111111111111111");
-    more.as_object().unwrap().iter().for_each(|(name, value)| wish[name] = value.clone());
-    let file = home.join("pages").join(format!("{day}.wishes.json"));
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(&file, format!("{}\n", json!({"day": day, "wishes": [wish]}))).unwrap();
-    // Core reads a kept file only when its owner alone can write to it, whatever this process's umask is.
-    std::fs::set_permissions(&file, std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
-}
-
-// The review of F57, finding 9: the app lives for days, so the look asks which day it is at each look. The clock
-// is the test's own.
-#[test]
-fn past_midnight_the_jellyfish_shows_the_new_day_s_runs_and_a_day_that_was_named_stays() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
-    let home = dir.path().join("jm");
-    made(&home, "2026-03-10", "working", json!({}));
-    made(&home, "2026-03-11", "needs_you", json!({"question": "Which one?"}));
-    let today = Arc::new(Mutex::new("2026-03-10"));
-    let clock = today.clone();
-    let look = jelly_look(home.clone(), None, move || Some(clock.lock().unwrap().to_string()));
-    let mut cx = context();
-    let opened = opened(&mut cx, Some(look), None);
-    assert_eq!((mood(&opened, &mut cx), opened.bubble()), (EdgeMood::Swims, None));
-    *today.lock().unwrap() = "2026-03-11";
-    cx.executor().advance_clock(SECOND);
-    cx.run_until_parked();
-    assert_eq!((mood(&opened, &mut cx), opened.bubble().is_some()), (EdgeMood::Waves, true), "still yesterday's");
-    // A day named with `--date` is that day, whatever the clock says.
-    let named = jelly_look(home, Some("2026-03-10".to_string()), || Some("2026-03-11".to_string()));
-    assert_eq!(named().state, JellyState::Working);
 }

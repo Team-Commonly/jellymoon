@@ -114,11 +114,17 @@ impl World {
 
     /// Starts the made-up window of `tapper.rs` on the logs in the folder `logs`, with its acts.
     pub fn taps(&self, logs: &str, acts: &[&str]) -> Window {
+        self.taps_with(logs, acts, &[])
+    }
+
+    /// [`World::taps`] with more variables for the window: a test's build of core waits where they say.
+    pub fn taps_with(&self, logs: &str, acts: &[&str], more: &[(&str, OsString)]) -> Window {
         let said = self.at("tmp").join(format!("window-{}", fs::read_dir(self.at("tmp")).unwrap().count()));
         let file = |name: &str| fs::File::create(said.with_extension(name)).unwrap();
         let mut window = Command::new(env!("CARGO_BIN_EXE_f47-tapper"));
         window.arg(self.at("jm")).arg(self.at(logs)).arg(self.at("agent").join("claude")).arg(DAY).args(acts);
         window.current_dir(self.day.dir.path()).env_clear().envs(self.typed("git"));
+        window.envs(more.iter().map(|(name, value)| (name, value)));
         window.stdin(Stdio::null()).stdout(file("out")).stderr(file("err"));
         Window { child: window.spawn().unwrap(), said }
     }

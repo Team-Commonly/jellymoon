@@ -45,6 +45,11 @@ pub(super) struct EntryView {
     pub line: Option<ShapedLine>,
     pub at: Bounds<Pixels>,
     pub scroll: Pixels,
+    /// Of a note's field: its key and its offer, which it is told by when the scene changes (`field.rs`), and
+    /// the note's id Enter last gave its words with, which the answer names whatever note has the field then.
+    pub key: String,
+    pub offer: String,
+    pub asked_as: String,
 }
 
 impl EntryView {
@@ -55,6 +60,11 @@ impl EntryView {
     /// Whether this is the field of the note `id`.
     pub fn names(&self, id: &str) -> bool {
         self.what.as_ref().is_some_and(|what| what.id == id)
+    }
+
+    /// Whether this field waits for the answer to what Enter gave with the note's id `id`.
+    pub fn asked(&self, id: &str) -> bool {
+        self.state.waiting() && self.asked_as == id
     }
 
     /// Shapes what is typed, the composition underlined. Returns the line, the caret's place in it and its height.
@@ -301,9 +311,11 @@ impl Page {
 
     /// Enter where the keys are. What a note's field gives carries the note's id, and goes to the entry's handler.
     fn entry_entered(&mut self, which: Which, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(made) = self.view_mut(which).state.enter() else {
+        let view = self.view_mut(which);
+        let Some(made) = view.state.enter() else {
             return;
         };
+        view.asked_as = view.what.as_ref().map(|what| what.id.clone()).unwrap_or_default();
         cx.notify();
         match (&self.entry.on_made, &self.view(which).what) {
             (Some(handler), Some(entry)) => {

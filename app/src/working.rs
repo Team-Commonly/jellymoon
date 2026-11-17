@@ -10,10 +10,10 @@
 
 use std::panic::{self, AssertUnwindSafe};
 
-use jellymoon_core::{RunOptions, Waits, Wish, WorkDone, WorkTap};
+use jellymoon_core::{RunOptions, Waits, Wish, WishState, WorkDone, WorkTap};
 use sticker_kit::{Note, Scene};
 
-use crate::answering::{asking, offering};
+use crate::answering::{with_more, with_question};
 use crate::read::Page;
 use crate::taps::OnShow;
 use crate::today::Today;
@@ -82,6 +82,11 @@ pub(crate) fn wish_of(id: &str) -> Option<&str> {
     id.strip_prefix(WORK).or_else(|| id.strip_prefix(WISH))
 }
 
+/// The wish a note with a field can be of: its work, what is being done with that work, or how it stands.
+pub(crate) fn typed_under(id: &str) -> Option<&str> {
+    wish_of(id).or_else(|| id.strip_prefix(BUSY))
+}
+
 /// `note` in place of the note of `wish` that is its work or how it stands, when one is on show.
 pub(crate) fn reopen(scene: &mut Scene, wish: &str, note: Note) {
     let is = |one: &Note| id_of(one).and_then(wish_of) == Some(wish);
@@ -90,11 +95,24 @@ pub(crate) fn reopen(scene: &mut Scene, wish: &str, note: Note) {
     }
 }
 
-/// How a wish with no work waiting stands, in core's words, with the question its run asks.
-fn standing(wish: &Wish) -> Note {
+/// How a wish with no work waiting stands, in core's words, with the question its run asks when the wish is a
+/// made one. Only a made wish has a run to answer: a question a kept page file gives a wish of its own is not
+/// drawn, and gets no field.
+fn standing(wish: &Wish, made: bool) -> Note {
     let (title, body) = jellymoon_core::stands(wish);
     let note = text(format!("{WISH}{}", crate::scene::drawn_id(&wish.id)), title, body, Vec::new());
-    asking(note, wish.question.as_deref())
+    with_question(note, wish.question.as_deref().filter(|_| made))
+}
+
+/// The note of a wish whose run goes on with an answer, in the place of `asked`, the note the answer was typed
+/// under: what core says of a wish that is being worked on, over the wish's own words, which `asked` holds. It
+/// has no question and no field.
+pub(crate) fn at_work(asked: &Note) -> Note {
+    let Note::Text { id, body, .. } = asked else { return asked.clone() };
+    let (none, state) = (String::new, WishState::Working);
+    let wish =
+        Wish { id: none(), label: none(), said: none(), project: none(), state, stars: Vec::new(), question: None };
+    text(id.clone(), jellymoon_core::stands(&wish).0, body.clone(), Vec::new())
 }
 
 /// Whether core is at work for `wish`: one tap of a wish is carried at a time.
@@ -150,44 +168,55 @@ impl Today {
     /// or whose work was kept: the wishes a person may type to (`answering.rs`). `layout` prints these, as it has
     /// no tap: the window shows one after a tap on its wish's character.
     pub fn with_work(&self, mut shown: Scene) -> Scene {
-        let day = jellymoon_core::waiting(&self.home, &self.run_of("")).ok();
-        let (waits, follows) = day.map(|day| (day.waits, day.follows)).unwrap_or_default();
-        let follows = |wish: &str| follows.iter().any(|one| one == wish);
-        let work = waits.iter().map(|waits| offering(waiting(waits, false), follows(&waits.wish)));
-        let mut notes: Vec<Note> = work.collect();
+        let waits = jellymoon_core::waiting(&self.home, &self.run_of("")).map(|day| day.waits).unwrap_or_default();
+        let work = |waits: &Waits| with_more(waiting(waits, false), &waits.wish, self.follows(&waits.wish));
+        let mut notes: Vec<Note> = waits.iter().map(work).collect();
         let made = jellymoon_core::made(&self.home, &self.date);
-        let typed_to = |wish: &&Wish| {
-            (wish.question.is_some() || follows(&wish.id)) && !waits.iter().any(|waits| waits.wish == wish.id)
+        let stands = |wish: &Wish| {
+            let follows = self.follows(&wish.id);
+            let typed_to = (wish.question.is_some() || follows) && !waits.iter().any(|waits| waits.wish == wish.id);
+            typed_to.then(|| with_more(standing(wish, true), &wish.id, follows))
         };
-        notes.extend(made.iter().filter(typed_to).map(|wish| offering(standing(wish), follows(&wish.id))));
+        notes.extend(made.iter().filter_map(stands));
         shown.notes.splice(0..0, notes);
         shown
     }
 
+    /// Whether core says a follow-up may be made of the made wish `wish` (`jellymoon_core::followable`).
+    fn follows(&self, wish: &str) -> bool {
+        jellymoon_core::followable(&self.home, &self.date).iter().any(|one| one == wish)
+    }
+
     /// The note of the made wish `id` as core says the wish stands now: its work that waits with its choices,
-    /// or else its own words and how it stands, with the question its run asks. Under either, the offer of a
-    /// follow-up when core says one may be made of the wish. None for an id that is no wish.
+    /// or else its own words and how it stands, with the question its run asks when it is a made wish. Under
+    /// either, the offer of a follow-up when core says one may be made of the wish. None for an id that is no
+    /// wish.
     pub(crate) fn note_of(&self, page: Option<&Page>, id: &str) -> Option<Note> {
-        let follows = jellymoon_core::followable(&self.home, &self.date).iter().any(|wish| wish == id);
         let note = match jellymoon_core::waits(&self.home, &self.run_of(id)) {
             Some(waits) => waiting(&waits, false),
             None => {
-                let wishes = match page {
-                    Some(page) => jellymoon_core::with_made(&self.home, page.data.clone()).wishes,
-                    None => jellymoon_core::made(&self.home, &self.date),
+                // The day's made wishes stand after the page's own, as they are drawn (`taps.rs`).
+                let (wishes, read) = match page {
+                    Some(page) => {
+                        (jellymoon_core::with_made(&self.home, page.data.clone()).wishes, page.data.wishes.len())
+                    }
+                    None => (jellymoon_core::made(&self.home, &self.date), 0),
                 };
-                standing(wishes.iter().find(|wish| crate::scene::drawn_id(&wish.id) == id)?)
+                let at = wishes.iter().position(|wish| crate::scene::drawn_id(&wish.id) == id)?;
+                standing(&wishes[at], at >= read)
             }
         };
-        Some(offering(note, follows))
+        Some(with_more(note, id, self.follows(id)))
     }
 
     /// `notes` of `wish`, its work that waits among them with the offer of a follow-up when core says one may
-    /// be made of the wish: a tap on a choice leaves the offer where it was.
+    /// be made of the wish: a tap on a choice leaves the offer where it was. The note that says what is being
+    /// done carries the same field meanwhile ([`OnShow::carrying`]). One that asks once more has none: what
+    /// was typed is the kit's to keep by the field's key, and is there when the work's note is back.
     fn with_offer(&self, wish: &str, notes: Vec<Note>) -> Vec<Note> {
-        let follows = jellymoon_core::followable(&self.home, &self.date).iter().any(|one| one == wish);
+        let follows = self.follows(wish);
         let work = |note: &Note| id_of(note).is_some_and(|id| id.starts_with(WORK));
-        notes.into_iter().map(|note| if work(&note) { offering(note, follows) } else { note }).collect()
+        notes.into_iter().map(|note| if work(&note) { with_more(note, wish, follows) } else { note }).collect()
     }
 
     /// A tap on the character `id` that stops no run: the note of its wish over the scene `from`
@@ -208,8 +237,8 @@ impl Today {
 
 impl OnShow {
     /// A tap on option `index` (from 0) of the note `note`, when that is a choice of work that waits on show: the
-    /// scene to show at once, which says what is being done in the note's place, and the tap itself as work for
-    /// another thread. None for any other note and for an option that is not drawn. While core is at work for a
+    /// scene to show at once, which says what is being done in the note's place, over the field the note had, and
+    /// the tap itself as work for another thread. None for any other note and for an option that is not drawn. While core is at work for a
     /// wish its choices are not on show, so a second tap does nothing.
     pub fn working(&mut self, note: &str, index: usize) -> Option<(Scene, Working)> {
         self.carrying(note, index, |today, wish, tap| {
@@ -230,10 +259,15 @@ impl OnShow {
     pub fn carrying(&mut self, note: &str, index: usize, ask: impl Ask) -> Option<(Scene, Working)> {
         let wish = note.strip_prefix(WORK).or_else(|| note.strip_prefix(SURE))?.to_string();
         let at = self.scene.notes.iter().position(|one| id_of(one) == Some(note))?;
-        let Note::Text { body, options, .. } = &self.scene.notes[at] else { return None };
+        let Note::Text { body, options, field, .. } = &self.scene.notes[at] else { return None };
         let after = self.scene.notes.iter().find_map(|one| file_of(one, &wish)).unwrap_or(0);
         let tap = WorkTap::of(options.get(index)?, body, after)?;
-        self.scene.notes[at] = text(format!("{BUSY}{wish}"), tap.doing(), Vec::new(), Vec::new());
+        // The field of `More like this` is the wish's, by its key: the kit keeps what is typed in it.
+        let (field, mut doing) = (field.clone(), text(format!("{BUSY}{wish}"), tap.doing(), Vec::new(), Vec::new()));
+        if let Note::Text { field: under, .. } = &mut doing {
+            *under = field;
+        }
+        self.scene.notes[at] = doing;
         let (today, page, from) = (self.today.clone(), self.page.clone(), self.scene.clone());
         let work = move || {
             let failed = tap.failed();

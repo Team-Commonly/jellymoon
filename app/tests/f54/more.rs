@@ -8,7 +8,9 @@ use serde_json::json;
 
 use super::support::day::DAY;
 use super::support::worked::tree;
-use super::{DONE, MORE, MORE_HINT, UNKEPT, UNSTARTED, WORK, World, acted, plain, quoted, ready, scene, text, typed};
+use super::{
+    DONE, MORE, MORE_HINT, UNKEPT, UNSTARTED, WORK, World, acted, key, plain, quoted, ready, scene, text, typed,
+};
 use crate::support::wished::SAID;
 
 const NEXT: &str = "and the downloader too";
@@ -148,4 +150,33 @@ fn a_wish_whose_work_was_tossed_has_no_field_to_type_in() {
     let printed = acts(&w, &[format!("poke:{wish}"), format!("type:wish-{wish}:{NEXT}")]);
     assert_eq!(text(&scene(&printed[0]), &format!("wish-{wish}")).map(|note| note.4), Some(None));
     assert_eq!(printed[1], json!(null));
+}
+
+// The review of F54, finding 1: a tap on a choice of the work puts another note in the work's place while core
+// is asked. The field under it is the same field, by its key, so the kit keeps what was typed in it
+// (`crates/sticker-kit/tests/field_draw.rs`), and Enter under it is carried as under the work.
+#[test]
+fn the_note_that_says_what_is_being_done_carries_the_field_of_more_like_this() {
+    let w = ready();
+    let wish = w.ran("edits", 0, "completed");
+    let other = w.ran("edits", 0, "completed");
+    let (work, busy) = (format!("work-{wish}"), format!("busy-{wish}"));
+    let all = [format!("poke:{wish}"), format!("choose:{work}:0"), format!("type:{busy}:{NEXT}"), "run".into()];
+    let printed = acts(&w, &all);
+    let (opened, doing, back) = (scene(&printed[0]), scene(&printed[1]), scene(printed.last().unwrap()));
+    let field = Some((MORE, MORE_HINT));
+    let own = format!("more-{wish}");
+    assert_eq!((text(&opened, &work).and_then(|note| note.4), key(&opened, &work)), (field, Some(own.as_str())));
+    // While core is asked, the work's note is not on show, and the note in its place has that field.
+    assert_eq!((text(&doing, &work), text(&doing, &busy).and_then(|note| note.4)), (None, field));
+    assert_eq!(key(&doing, &busy), Some(own.as_str()));
+    // Enter under it is a follow-up to the wish, made by core.
+    let (kept, shown) = typed(&printed[2]);
+    assert!(kept && key(&shown, &busy) == Some(own.as_str()), "{}", printed[2]);
+    assert_eq!((&w.wish("m3")["said"], &w.wish("m3")["after"]), (&json!(NEXT), &json!(wish)));
+    // The work's note is back with the same field.
+    assert_eq!((text(&back, &busy), key(&back, &work)), (None, Some(own.as_str())));
+    // Another wish's field is another field.
+    let printed = acts(&w, &[format!("poke:{other}")]);
+    assert_eq!(key(&scene(&printed[0]), &format!("work-{other}")), Some(format!("more-{other}").as_str()));
 }

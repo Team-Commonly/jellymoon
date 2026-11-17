@@ -112,12 +112,18 @@ pub enum Note {
 /// One line a person types in under a text note. `offer` is the few words over it that say what it is for, and
 /// a tap on them gives the field the keys; a field with no `offer` has none. `hint` is shown while the field is
 /// empty, and `most` is the most characters it takes.
+///
+/// `key` names the field apart from its note: the fields of two notes that carry the same key and the same
+/// offer are one field, and what is typed in it is kept while no note of the scene carries it, and is there
+/// when one does again. A field with no key is its note's: it is told by the note's id, and goes with the note.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Field {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub offer: String,
     pub hint: String,
     pub most: usize,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub key: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -9,7 +9,8 @@
 //! run off the window's thread, and each scene it gives is handed to the kit's view. The view outlives its window
 //! (`shell.rs`): what is done here is done to the view, so a page that is closed and shown again is the page it
 //! was. No test opens this window on a screen: `tests/f43/window.rs` opens [`page`] on GPUI's test platform and
-//! presses Enter in it, and `tests/f57/window.rs` opens all of `shell.rs` there.
+//! presses Enter in it, `tests/f54/window.rs` presses Enter in a note's field and closes the window before core
+//! has answered, and `tests/f57/window.rs` opens all of `shell.rs` there.
 //!
 //! The view measures text with GPUI's shaped glyphs, not with the bundled advances the `layout` command uses: shaping
 //! kerns, and the plain theme draws in the system's font (`docs/development/app.md` has the measured gap).
@@ -115,17 +116,25 @@ pub(crate) async fn looks(shown: Showing, page: WeakEntity<Page>, cx: &mut gpui:
     }
 }
 
-/// Enter in the entry. The entry keeps its words and waits while core is asked off the window's thread; then it is
-/// answered and the page shown. Then the asking for the wish's run is run, off the window's thread too, and what
+/// Enter in the entry, or in a note's field. It keeps its words and waits while core is asked off the window's
+/// thread; then it is answered and the page shown. Then the asking for the wish's run is run, off the window's thread too, and what
 /// it has to say is shown when it ends.
 fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     say(&entry_line(&made.id, &made.text));
     // What is typed under a made wish (F54) is carried as a wish is, and answers the field it was typed in.
     let field = (made.id != crate::wishing::ENTRY).then(|| made.id.clone());
-    let wishing = match &field {
-        Some(note) => shown.typing(note, &made.text),
-        None => shown.wishing(&made.text, made.option.as_deref()),
+    let (at_once, wishing) = match &field {
+        Some(note) => shown.typing(note, &made.text).unzip(),
+        None => (None, shown.wishing(&made.text, made.option.as_deref())),
     };
+    // An answer's note changes at once (`answering.rs`). The view is in the middle of handling the key: it
+    // takes the scene once that is done.
+    if let Some(scene) = at_once.flatten() {
+        let now = page.clone();
+        cx.defer(move |cx| {
+            let _ = now.update(cx, |page, cx| page.set_scene(scene, cx));
+        });
+    }
     let shown = shown.clone();
     cx.spawn(async move |cx| {
         let answer = match wishing {

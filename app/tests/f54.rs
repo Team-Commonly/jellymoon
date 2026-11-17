@@ -14,6 +14,9 @@ mod drawn;
 #[path = "f54/more.rs"]
 mod more;
 mod support;
+#[cfg(all(target_os = "macos", feature = "window"))]
+#[path = "f54/window.rs"]
+mod window;
 
 use std::fs;
 
@@ -32,6 +35,8 @@ pub const MORE: &str = "More like this";
 pub const ANSWER_HINT: &str = "Type your answer, then Enter";
 pub const MORE_HINT: &str = "Type what to do next, then Enter";
 pub const UNANSWERED: &str = "That answer was not taken.";
+pub const UNSETTLED: &str = "The answer was given, but what came after it failed.";
+pub const AT_WORK: &str = "This wish is being worked on.";
 pub const UNKEPT: &str = "That wish was not kept.";
 pub const UNSTARTED: &str = "Your wish is kept, and no run was started for it.";
 
@@ -122,6 +127,19 @@ pub fn acted(w: &World, acts: &[&str]) -> Vec<Value> {
 /// A scene the made-up window printed.
 pub fn scene(printed: &Value) -> Scene {
     serde_json::from_value(printed.clone()).expect("a scene")
+}
+
+/// The scene a `type` act showed at once, before core was asked, when it showed one.
+pub fn at_once(printed: &Value) -> Option<Scene> {
+    serde_json::from_value(printed["at_once"].clone()).expect("a scene, or none")
+}
+
+/// The key of the field under the note with that id.
+pub fn key<'a>(scene: &'a Scene, id: &str) -> Option<&'a str> {
+    scene.notes.iter().find_map(|note| match note {
+        Note::Text { id: own, field: Some(field), .. } if own == id => Some(field.key.as_str()),
+        _ => None,
+    })
 }
 
 /// What a `type` act printed: whether the field was told its words were kept, and the scene shown.

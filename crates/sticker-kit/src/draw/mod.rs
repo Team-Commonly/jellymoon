@@ -29,6 +29,7 @@ use crate::theme::Theme;
 pub use edge::{EdgePainted, EdgePart, EdgeView, edge_ink};
 pub use entry::EntryMade;
 use entry::EntryView;
+pub use field::MAX_KEPT_FIELDS;
 pub use measure::{GlyphMeasure, load_fonts};
 use measure::{family, hsla, weight};
 use paint::Shape;
@@ -69,6 +70,8 @@ pub struct Page {
     entry: EntryView,
     /// The field of each note of the scene that has one, in the notes' order.
     fields: Vec<EntryView>,
+    /// The fields kept apart from the scene (`field.rs`): they are not drawn and take no key.
+    apart: Vec<EntryView>,
     placed: Vec<Placed>,
     viewport: Viewport,
     stale: Stale,
@@ -84,7 +87,7 @@ pub struct Page {
 impl Page {
     pub fn new(scene: Scene, theme: Theme) -> Self {
         let now = Instant::now();
-        let fields = field::fit(&scene, Vec::new());
+        let (fields, apart) = field::fit(&scene, Vec::new());
         Self {
             scene,
             theme,
@@ -92,6 +95,7 @@ impl Page {
             on_tap: None,
             entry: EntryView::default(),
             fields,
+            apart,
             placed: Vec::new(),
             viewport: Viewport::default(),
             stale: Stale::Spring,
@@ -118,7 +122,8 @@ impl Page {
     }
 
     pub fn set_scene(&mut self, scene: Scene, cx: &mut Context<Self>) {
-        self.fields = field::fit(&scene, std::mem::take(&mut self.fields));
+        let was = std::mem::take(&mut self.fields).into_iter().chain(std::mem::take(&mut self.apart));
+        (self.fields, self.apart) = field::fit(&scene, was.collect());
         self.scene = scene;
         self.stale = Stale::Spring;
         cx.notify();

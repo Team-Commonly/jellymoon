@@ -332,10 +332,13 @@ max_file_lines = 400
 # in what `run waiting` prints (`run/waits.rs`), and its line in `tests/shapes.rs`.
 # The notes after F57 raised core by 34: a search for the harness that says what it missed (`find.rs`, 17), and a
 # sentence each for a `claude` passed over and for no home (`hear/day.rs`, 16; `hear.rs`, 1).
+# F77 raised core by 20, all in `call.rs`: the test that holds both systems' lists of a harness's variables to
+# `page.md` and `run.md` is 17, and 3 are the two lists built on every system, with why. Its tests at the binary,
+# `tests/f77.rs` (220 lines), are within the binary's budget as it stood.
 # The jellyfish notes raised core by 66: what a hearing says of a run that was not started as one function of
 # what `run_apart`'s own search missed, with its test (`hear/day.rs`), that search's answer handed on
 # (`run/apart.rs`, `run.rs`) and the one question asked of it (`find.rs`).
-"crates/jellymoon-core" = 15009
+"crates/jellymoon-core" = 15029
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -505,7 +508,8 @@ max_file_lines = 400
 # The notes after F57 raised it by 45, all tests: the two new sentences at the binary, in `tests/f55/started.rs`.
 # F74, the door, raised it by 349, all tests and their support: `tests/f74.rs` 225, `tests/support/door.rs` 144,
 # 9 in `tests/support/mod.rs` (the two other folders a world is made in); the tests moved through the door lost 29.
-"crates/jellymoon" = 25432
+# F77 raised it by 220, all a test: `tests/f77.rs`, what a made-up harness is started with at each of the six starts.
+"crates/jellymoon" = 25652
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -634,9 +638,12 @@ max_file_lines = 400
 # The notes after F57 raised the kit by 56: what a frame painted of each run, its ink and its clipped box, with
 # the clip's own test (`draw/edge.rs`, 37, with `set_theme` gone), and the paint asserted in `tests/edge_draw.rs`
 # (21); `edge.rs` and `tests/text.rs` 1 each, and `tests/edge.rs` lost 4 (its copy of `apart`).
+# The notes on F54 raised the kit by 178, of which 139 are tests (`tests/field_draw.rs`): a field told by its key
+# and its offer, the fields kept apart from a scene and their cap, and an answer found by the id Enter gave
+# (`draw/field.rs`, 16; `draw/entry.rs`, 12; `scene.rs`, 6; `draw/mod.rs`, 5).
 # The app notes raised the kit by 2: a comment that names the layout's `LEAST` where a test writes its number
 # (`tests/entry_layout.rs`).
-"crates/sticker-kit" = 9856
+"crates/sticker-kit" = 10034
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -719,6 +726,12 @@ max_file_lines = 400
 # `tests/f32.rs` (21). The rest: the bubble opened again and a failed open said once (`jellyfish.rs`, 30, 13 of
 # them its test), the look that asks the day (`shell.rs`, 11), `--theme`'s refusal and the day's naming
 # (`main.rs`, 14); `popup.rs` lost 2 (the one-variant `Kind`).
+# The notes on F54 raised the app by 339, of which 252 are tests: Enter in a field at the page's window and an
+# answer after the window was closed (`tests/f54/window.rs`, 118), an answer given before core failed and a
+# question from a kept page file (`tests/f54/answered.rs`, 71), the field under the note that says what is being
+# done (`tests/f54/more.rs`, 31), and their helpers (`tests/f54.rs`, 18; `tests/support/`, 14). The rest: whether
+# an answer was given, and the note of a wish at work from Enter (`answering.rs`, 42; `working.rs`, 34;
+# `window.rs`, 9; `wishing.rs` and `showing.rs`, 1 each).
 # The app notes raised the app by 115, of which 97 are tests: a kept page of 0 turns that holds a wish, a clash or
 # a project, the waiting scene before a kept no-logs page, and the two titles in `tests/f63/kept.rs` (63),
 # `tests/f34.rs` (12), `tests/f63.rs` (2) and the unit test of which errors are a tried reading (`today.rs`, 20).
@@ -728,7 +741,7 @@ max_file_lines = 400
 # test's own clock, holds the two tests moved out of `tests/f57/window.rs` and four new ones (a wish made past
 # midnight, a run that still asks, core's order between two days, the page's day first in a tie); the look at
 # two days and the clock in `shell.rs`; a failure of another reason said in `jellyfish.rs`, with its test.
-"app" = 10928
+"app" = 11267
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

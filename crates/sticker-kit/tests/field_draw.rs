@@ -14,9 +14,34 @@ use sticker_kit::{Entry, Field, Note, PieceKind, Placed, Scene, Theme};
 type Seen<T> = Rc<RefCell<Vec<T>>>;
 
 fn note(id: &str, quoted: &str, offer: &str) -> Note {
-    let field = Some(Field { offer: offer.into(), hint: "Type here".into(), most: 12 });
+    let field = Some(Field { offer: offer.into(), hint: "Type here".into(), most: 12, key: String::new() });
     let (title, body) = ("A row".into(), vec!["what the note says".into()]);
     Note::Text { id: id.into(), title, body, options: Vec::new(), quoted: quoted.into(), field }
+}
+
+/// A note whose field has a key, and one with no field at all.
+fn keyed(id: &str, key: &str) -> Note {
+    let field = Some(Field { offer: "More of it".into(), hint: "Type here".into(), most: 12, key: key.into() });
+    Note::Text { id: id.into(), title: "A row".into(), body: vec![], options: vec![], quoted: String::new(), field }
+}
+
+fn bare(id: &str) -> Note {
+    let (title, quoted) = ("A row".into(), String::new());
+    Note::Text { id: id.into(), title, body: vec![], options: vec![], quoted, field: None }
+}
+
+fn show(page: &Entity<Page>, cx: &mut VisualTestContext, notes: Vec<Note>) {
+    page.update(cx, |page, cx| page.set_scene(scene(notes), cx));
+    cx.run_until_parked();
+}
+
+/// The words in the field of a note and whether it waits. None for a note with no field.
+fn field(page: &Entity<Page>, cx: &mut VisualTestContext, id: &str) -> Option<(String, bool)> {
+    page.read_with(cx, |page, _| page.field(id).map(|field| (field.text().to_string(), field.waiting())))
+}
+
+fn has(words: &str) -> Option<(String, bool)> {
+    Some((words.to_string(), false))
 }
 
 fn scene(notes: Vec<Note>) -> Scene {
@@ -195,4 +220,118 @@ fn a_field_answered_with_no_window_waits_no_more() {
     cx.run_until_parked();
     assert_eq!(typed(&page, cx), (String::new(), String::new(), String::new(), true));
     assert!(page.read_with(cx, |page, _| page.field("asks").is_some_and(|field| !field.waiting())));
+}
+
+// The review of F54, finding 6: one note's id can carry a field for one thing and then for another.
+#[test]
+fn a_field_s_words_are_dropped_when_its_offer_changes_and_stay_when_only_its_hint_does() {
+    let mut cx = context();
+    let (page, cx, _, _) = open(&mut cx);
+    press(&page, cx, PieceKind::Field, "asks");
+    keys(cx, "h a l f");
+    // The same note, the same field, another hint: the words are still the field's.
+    let mut hinted = both();
+    if let Note::Text { field: Some(field), .. } = &mut hinted[0] {
+        field.hint = "Type it here".into();
+    }
+    show(&page, cx, hinted);
+    assert_eq!(field(&page, cx, "asks"), has("half"));
+    // The same note with a field under another offer: what was typed for the first is not typed for this one.
+    show(&page, cx, vec![note("asks", "", "More of it"), note("more", "", "More of it")]);
+    assert_eq!((field(&page, cx, "asks"), field(&page, cx, "more")), (has(""), has("")));
+    keys(cx, "x");
+    assert_eq!(typed(&page, cx), (String::new(), String::new(), String::new(), false), "the new field has no keys");
+}
+
+// The review of F54, finding 1: a note that stands in another's place for a while has no field, and the words
+// typed under the first are there when it is back.
+#[test]
+fn a_keyed_field_keeps_its_words_while_no_note_has_it_and_under_another_note_with_its_key() {
+    let mut cx = context();
+    let (page, cx, entered, _) = open(&mut cx);
+    show(&page, cx, vec![keyed("work", "k")]);
+    press(&page, cx, PieceKind::Field, "work");
+    keys(cx, "n e x t");
+    // No note has the field: nothing is drawn of it, and no key is taken for it.
+    show(&page, cx, vec![bare("busy")]);
+    keys(cx, "x");
+    let fields = page.read_with(cx, |page, _| page.placed().iter().filter(|p| p.piece == PieceKind::Field).count());
+    assert_eq!((field(&page, cx, "work"), field(&page, cx, "busy"), fields), (None, None, 0));
+    assert!(!typed(&page, cx).3, "a field that is not drawn has the keys");
+    show(&page, cx, vec![keyed("work", "k")]);
+    assert_eq!(field(&page, cx, "work"), has("next"));
+    // Another note with the same key and offer has the same field; one with another key has its own.
+    show(&page, cx, vec![keyed("stands", "k"), keyed("other", "j")]);
+    assert_eq!((field(&page, cx, "stands"), field(&page, cx, "other")), (has("next"), has("")));
+    // An answer names the note Enter was pressed under, and finds the field under the note that has it now.
+    press(&page, cx, PieceKind::Field, "stands");
+    keys(cx, "enter");
+    assert_eq!(*entered.borrow(), [made("stands", "next")]);
+    show(&page, cx, vec![keyed("work", "k")]);
+    assert_eq!(field(&page, cx, "work"), Some(("next".to_string(), true)));
+    answer(&page, cx, "work", true);
+    assert_eq!(field(&page, cx, "work"), Some(("next".to_string(), true)), "an answer for another Enter was taken");
+    answer(&page, cx, "stands", true);
+    assert_eq!(field(&page, cx, "work"), has(""));
+    // A field with no key goes with its note, words and all, as before.
+    show(&page, cx, both());
+    press(&page, cx, PieceKind::Field, "more");
+    keys(cx, "g o n e");
+    show(&page, cx, vec![bare("busy")]);
+    show(&page, cx, both());
+    assert_eq!(field(&page, cx, "more"), has(""));
+}
+
+// The review of F54, finding 5: a note may lose its field while the field waits for its answer.
+#[test]
+fn a_field_that_waits_is_kept_apart_while_its_note_has_no_field_and_a_refusal_leaves_its_words() {
+    let mut cx = context();
+    let (page, cx, entered, _) = open(&mut cx);
+    press(&page, cx, PieceKind::Field, "asks");
+    keys(cx, "o l d enter");
+    show(&page, cx, vec![bare("asks")]);
+    keys(cx, "x enter");
+    assert_eq!((field(&page, cx, "asks"), entered.borrow().len()), (None, 1));
+    assert!(!typed(&page, cx).3, "the keys are free while the note has no field");
+    // Not kept: the words are there when the note has its field again, and the field takes keys.
+    answer(&page, cx, "asks", false);
+    show(&page, cx, both());
+    assert_eq!(field(&page, cx, "asks"), has("old"));
+    press(&page, cx, PieceKind::Field, "asks");
+    keys(cx, "! enter");
+    assert_eq!(entered.borrow().last(), Some(&made("asks", "old!")));
+    // Kept, with no window to tell: the field that comes back is empty and does not wait.
+    show(&page, cx, vec![bare("asks")]);
+    page.update(cx, |page, cx| page.answer_field_closed("asks", true, cx));
+    show(&page, cx, both());
+    assert_eq!(field(&page, cx, "asks"), has(""));
+    // Answered while it was apart and not shown again at the next scene, it is gone.
+    press(&page, cx, PieceKind::Field, "asks");
+    keys(cx, "l o s t enter");
+    show(&page, cx, vec![bare("asks")]);
+    answer(&page, cx, "asks", false);
+    show(&page, cx, vec![bare("asks")]);
+    show(&page, cx, both());
+    assert_eq!(field(&page, cx, "asks"), has(""));
+}
+
+#[test]
+fn at_most_eight_fields_are_kept_apart_and_the_oldest_goes_first() {
+    let mut cx = context();
+    let (page, cx, _, _) = open(&mut cx);
+    let count = sticker_kit::draw::MAX_KEPT_FIELDS + 1;
+    for n in 0..count {
+        show(&page, cx, vec![keyed("work", &format!("k{n}"))]);
+        press(&page, cx, PieceKind::Field, "work");
+        keys(cx, "w");
+    }
+    show(&page, cx, vec![bare("busy")]);
+    let kept = |n: usize, cx: &mut VisualTestContext| {
+        show(&page, cx, vec![keyed("work", &format!("k{n}"))]);
+        let words = field(&page, cx, "work");
+        show(&page, cx, vec![bare("busy")]);
+        words == has("w")
+    };
+    let kept: Vec<bool> = (0..count).map(|n| kept(n, cx)).collect();
+    assert_eq!(kept, [false, true, true, true, true, true, true, true, true]);
 }

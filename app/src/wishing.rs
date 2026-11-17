@@ -15,7 +15,7 @@
 use jellymoon_core::{DayOptions, MADE_SAID_MAX, RunOptions, Started};
 use sticker_kit::{Entry, Note, Scene};
 
-use crate::answering::UNANSWERED;
+use crate::answering::{UNANSWERED, UNSETTLED};
 use crate::read::Page;
 use crate::stopping;
 use crate::taps::{OnShow, UNTOLD};
@@ -67,7 +67,8 @@ pub struct Answer {
     asking: Option<Asking>,
     /// Whether core took what was typed: the field it was typed in is emptied only then.
     kept: bool,
-    /// After an answer core took (`answering.rs`): the wish, and its note as core says the wish stands then.
+    /// After an answer (`answering.rs`): the wish, and its note. As core says the wish stands then, when the
+    /// answer was given; the note it was typed under, with its field, when it was not.
     opened: Option<(String, Note)>,
 }
 
@@ -78,9 +79,9 @@ impl Answer {
         Answer { seen, said, asking, kept, opened: None }
     }
 
-    /// Core's answer to an answer: it was taken when core had nothing to say against it.
-    pub(crate) fn taken(seen: Seen, said: Option<Said>, opened: Option<(String, Note)>) -> Self {
-        let kept = said.is_none();
+    /// Core's answer to an answer. `kept` is whether the answer was given to the run: the field it was typed
+    /// in is emptied then, whatever core has to say of what came after.
+    pub(crate) fn taken(seen: Seen, said: Option<Said>, opened: Option<(String, Note)>, kept: bool) -> Self {
         Answer { seen, said, asking: None, kept, opened }
     }
 
@@ -101,7 +102,7 @@ pub(crate) fn of(words: &str, why: &str) -> String {
 }
 
 fn of_a_wish(note: &Note) -> bool {
-    matches!(note, Note::Plain { title, .. } if [UNKEPT, UNSTARTED, UNANSWERED].contains(&&**title))
+    matches!(note, Note::Plain { title, .. } if [UNKEPT, UNSTARTED, UNANSWERED, UNSETTLED].contains(&&**title))
 }
 
 /// The note of the wish just entered, when it left one, in place of the notes of the wishes before.

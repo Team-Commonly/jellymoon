@@ -125,7 +125,12 @@ change the wish asks for, then stop with the state `done`. If you cannot make it
 person can give, stop with the state `asks` and one question for them, in plain words."
 
 The wish's kept words go in on the harness's input, with a line break after them, and are in no argument. The variables are the reading call's list and nothing else, by the same function (`call::harness_of`):
-`PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM` and `CLAUDE_CONFIG_DIR`, or the Windows list.
+`PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM` and `CLAUDE_CONFIG_DIR`, and on Windows `PATH`,
+`PATHEXT`, `SystemRoot`, `SystemDrive`, `ComSpec`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`,
+`LOCALAPPDATA`, `TEMP`, `TMP`, `USERNAME` and `CLAUDE_CONFIG_DIR`. It is so for a run, for an answer, for a
+follow-up's fork and its second start, and for a run started apart, whose own command is started with all of its
+asker's variables. So no `CLAUDECODE` and no `CLAUDE_CODE_*` variable reaches a harness that was started from
+inside a Claude Code session, however Windows spells the name (`crates/jellymoon/tests/f77.rs`).
 
 **Only full paths are passed on.** The harness starts in the copy, which the agent writes, so a path that is not
 a full one would be looked up there. Of `PATH` only the folders named by a full path are kept, in their order;

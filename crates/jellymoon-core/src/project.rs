@@ -28,7 +28,7 @@ use crate::ruling::private_dir;
 use crate::run::{plain as as_git_takes, theirs};
 use crate::session::FOLDER_MAX;
 use crate::tap::{Lock, plain};
-use crate::wish::{day_of, named};
+use crate::wish::{day_of, kept_name, named};
 
 /// The most projects the list holds.
 pub const PROJECTS_MAX: usize = 100;
@@ -90,7 +90,7 @@ impl Line {
         let parts = || folder.components();
         let straight = parts().all(|part| !matches!(part, Component::CurDir | Component::ParentDir))
             && parts().collect::<PathBuf>().as_os_str() == folder.as_os_str();
-        named(&self.name)
+        kept_name(&self.name)
             && folder.is_absolute()
             && straight
             && self.folder.len() <= FOLDER_MAX
@@ -238,12 +238,21 @@ fn put_on(lines: &mut Vec<Line>, name: &str, folder: &str, day: &str) -> Result<
 pub fn add_project(home: &Path, repo: &Path, day: Option<&str>) -> Result<Known, Error> {
     let day = day_of(day)?;
     let (name, folder) = stands_as(repo)?;
-    change(home, |lines| put_on(lines, &name, &folder, &day))
+    let known = change(home, |lines| put_on(lines, &name, &folder, &day))?;
+    // A folder a `project new` that was cut off left holds that making's file: listed, it does not keep it.
+    new::tidy(home, &folder);
+    Ok(known)
+}
+
+/// Whether the list holds a line of exactly that name. False when the list cannot be used.
+pub(crate) fn lists(home: &Path, name: &str) -> bool {
+    listed(home).is_ok_and(|lines| lines.iter().any(|line| line.name == name))
 }
 
 /// Takes the line of that name off the list, and touches nothing else: not the folder, not a wish, not a run.
+/// The name is one a line can have, so a line an earlier build wrote can be taken off.
 pub fn forget_project(home: &Path, name: &str) -> Result<Known, Error> {
-    if !named(name) {
+    if !kept_name(name) {
         return Err(refused("project forget takes a project's name, as `jellymoon project list` prints it"));
     }
     change(home, |lines| {

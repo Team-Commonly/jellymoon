@@ -119,11 +119,19 @@ fn unseen(c: char) -> bool {
     matches!(c, '\u{34f}' | '\u{115f}' | '\u{1160}' | '\u{3164}' | '\u{ffa0}' | '\u{2800}' | '\u{fe00}'..='\u{fe0f}')
 }
 
-/// Whether a project is one folder's name: no path, nothing that cleaning would change, and nothing unseen.
-pub(crate) fn named(project: &str) -> bool {
+/// Whether a project Jellymoon reads back from its own files (a line of the list, a kept wish) is one folder's
+/// name: no path, and nothing that cleaning would change. It is the rule every kept name was written by.
+pub(crate) fn kept_name(project: &str) -> bool {
     let path = project.contains(['/', '\\']) || project == "." || project == "..";
-    let plain = line(project, PROJECT_MAX) == project && !project.contains(unseen);
+    let plain = line(project, PROJECT_MAX) == project;
     !project.is_empty() && !path && project.chars().count() <= PROJECT_MAX && plain
+}
+
+/// Whether a project's name is one that comes in (`project new`, `project add`, a wish, an offer): a name as it
+/// is kept, with nothing unseen. A name kept before the unseen characters were refused is read by
+/// [`kept_name`], so what an earlier build wrote is still used.
+pub(crate) fn named(project: &str) -> bool {
+    kept_name(project) && !project.contains(unseen)
 }
 
 /// The projects of `projects` a wish can be made for from a page, in their order: each is one folder's name as
@@ -170,7 +178,7 @@ fn own(at: usize, wish: MadeWish) -> Option<MadeWish> {
     let star = |star: &String| !star.is_empty() && line(star, STAR_MAX) == *star;
     let said = cleaned(&wish.said).ok().filter(|said| !said.is_empty())?;
     let own = wish.id == format!("m{}", at + 1)
-        && named(&wish.project)
+        && kept_name(&wish.project)
         && wish.stars.len() <= STARS_MAX
         && wish.stars.iter().all(star)
         && wish.run.as_deref().is_none_or(copy::is_run_id)
@@ -202,7 +210,8 @@ fn kept(home: &Path, day: &str) -> Result<Vec<MadeWish>, String> {
 /// that is not one folder's name, a day that has its eight, made wishes that cannot be used, a day that is locked.
 pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Result<Wished, Error> {
     let (day, said) = (day_of(day)?, words(typed)?);
-    if !named(project) {
+    // A name with something unseen comes in only as the name of a project the list holds already.
+    if !named(project) && !(kept_name(project) && crate::project::lists(home, project)) {
         let no = "no path, nothing that cannot be seen and nothing shaped like a credential";
         return Err(refused(format!("--project takes one folder's name of at most {PROJECT_MAX} characters: {no}")));
     }

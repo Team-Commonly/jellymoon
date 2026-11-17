@@ -37,11 +37,16 @@ const NOT_TEXT: &str = "the full path of Jellymoon's folder is not text, or a pr
                         bytes, so a new project could not be listed and nothing was made";
 const SPELLED: &str = "this file system does not keep the folder under the name it was given, so what was made was \
                        taken back and nothing was listed; pick a name of plain letters";
-const MOVED: &str = "the new project's folder was removed or replaced while it was being made, so nothing was listed, and \
+const MOVED: &str = "the new project's folder was removed, replaced or changed while it was being made, so nothing was listed, and \
                      what is there now was left as it is";
 
 /// What follows a refusal that came after the folder was made and taken back, when its words do not say so.
 const BACK: &str = "; the folder made for it meanwhile was taken back";
+
+/// What follows one when the folder was this command's to take back and could not be removed.
+const LEFT: &str = "; the folder made for it meanwhile could not be taken back and was left";
+/// How the name of a making's file begins: the process, the clock and a count follow, a dash before each.
+const MAKING: &str = ".jellymoon-making";
 
 /// Whether a name is one a folder can be made under on every system: a project's name as the list takes one
 /// ([`named`], which takes no space at either end and no two together), that no program reads as an option, a
@@ -150,7 +155,7 @@ impl Made {
         static COUNT: AtomicU32 = AtomicU32::new(0);
         let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_nanos());
         let (id, count) = (std::process::id(), COUNT.fetch_add(1, Ordering::Relaxed));
-        Made { projects: None, project: None, token: format!(".jellymoon-making-{id}-{now}-{count}") }
+        Made { projects: None, project: None, token: format!("{MAKING}-{id}-{now}-{count}") }
     }
 
     /// Whether the folder at the project's name is the one this command made: what the system says of it is
@@ -162,17 +167,18 @@ impl Made {
 
     /// Takes back what this command made, and nothing else: the project's folder when it is still the one that
     /// was made and no line of the list names it, and `projects` when this command made it and it is empty. A
-    /// made folder the list names stays, without this making's file. Whether the project's folder was removed.
-    fn take_back(&self, home: &Path, folder: &Path, project: &Path) -> bool {
+    /// made folder the list names stays, without this making's file. Whether the project's folder was removed,
+    /// when it was this command's to remove: none for a folder that is not the made one, or that is listed.
+    fn take_back(&self, home: &Path, folder: &Path, project: &Path) -> Option<bool> {
         let on_the_list = || {
             let real = fs::canonicalize(project).map(as_git_takes).unwrap_or_default();
             listed(home).is_ok_and(|lines| lines.iter().any(|line| Path::new(&line.folder) == real))
         };
-        let (ours, mut gone) = (self.ours(project), false);
+        let (ours, mut gone) = (self.ours(project), None);
         if ours && on_the_list() {
             let _ = fs::remove_file(project.join(&self.token));
         } else if ours {
-            gone = fs::remove_dir_all(project).is_ok();
+            gone = Some(fs::remove_dir_all(project).is_ok());
         }
         if self.projects.is_some() && mark(folder) == self.projects {
             let _ = fs::remove_dir(folder);
@@ -215,8 +221,11 @@ pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<Known, 
     let lock = hold(home)?;
     let (folder, mut made) = (home.join("projects"), Made::new());
     let project = folder.join(name);
-    let done = build(home, &project, name, &day, &mut made)
-        .map_err(|e| if made.take_back(home, &folder, &project) { after(e) } else { e });
+    let done =
+        build(home, &project, name, &day, &mut made).map_err(|e| match made.take_back(home, &folder, &project) {
+            Some(back) => after(e, back),
+            None => e,
+        });
     drop(lock);
     // Jellymoon's folder, made to hold the lock, goes too when the making left nothing in it.
     if done.is_err() && fresh {
@@ -225,11 +234,52 @@ pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<Known, 
     done
 }
 
-/// A refusal that came after the folder was made and taken back, saying so when its own words do not.
-fn after(e: Error) -> Error {
+/// A refusal that came after the folder was made, when that folder was this command's to take back: it says
+/// that the folder was taken back, when its own words do not, or that it could not be and was left.
+fn after(e: Error, back: bool) -> Error {
     match e.to_string() {
-        said if said.contains("taken back") => e,
-        said => refused(format!("{said}{BACK}")),
+        said if back && said.contains("taken back") => e,
+        said => refused(format!("{said}{}", if back { BACK } else { LEFT })),
+    }
+}
+
+/// Makes the project's folder with the file of its making in it, the person's alone (0600) and empty. What is
+/// at the folder's name already is said so. A folder whose file could not be made is removed again.
+fn begin(project: &Path, token: &str) -> Result<(), Error> {
+    make(project).map_err(|e| match e.kind() {
+        ErrorKind::AlreadyExists => refused(THERE),
+        _ => Error::Store(e),
+    })?;
+    let mut file = fs::OpenOptions::new();
+    file.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut file, 0o600);
+    file.open(project.join(token)).map(drop).map_err(|e| {
+        let _ = fs::remove_dir(project);
+        Error::Store(e)
+    })
+}
+
+/// Whether a name is the name of a making's file: three numbers after [`MAKING`], a dash before each.
+fn making(name: &str) -> bool {
+    let number = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    let numbers = name.strip_prefix(MAKING).and_then(|rest| rest.strip_prefix('-')).map(|rest| rest.split('-'));
+    numbers.is_some_and(|parts| parts.clone().count() == 3 && parts.clone().all(number))
+}
+
+/// Takes out what a `project new` that was cut off left in a folder now listed: each file of a making, when
+/// `folder` (a real path) is directly in `projects` and the file is plain and empty. A link, a folder, a file
+/// that holds something or has another name is not touched, and neither is a folder anywhere else.
+pub(super) fn tidy(home: &Path, folder: &str) {
+    let projects = fs::canonicalize(home.join("projects")).map(as_git_takes);
+    if !projects.is_ok_and(|projects| Path::new(folder).parent() == Some(projects.as_path())) {
+        return;
+    }
+    for entry in fs::read_dir(folder).into_iter().flatten().flatten() {
+        let empty = entry.metadata().is_ok_and(|meta| meta.is_file() && meta.len() == 0);
+        if empty && entry.file_name().to_str().is_some_and(making) {
+            let _ = fs::remove_file(entry.path());
+        }
     }
 }
 
@@ -250,15 +300,8 @@ fn build(home: &Path, project: &Path, name: &str, day: &str, made: &mut Made) ->
         make(folder).map_err(Error::Store)?;
         made.projects = mark(folder);
     }
-    make(project).map_err(|e| match e.kind() {
-        ErrorKind::AlreadyExists => refused(THERE),
-        _ => Error::Store(e),
-    })?;
     // This making's file goes in before anything else does: a folder without it is not the one made here.
-    if let Err(e) = fs::File::create_new(project.join(&made.token)) {
-        let _ = fs::remove_dir(project);
-        return Err(Error::Store(e));
-    }
+    begin(project, &made.token)?;
     made.project = mark(project);
     copy::fresh_repo(home, project, &format!("Jellymoon project {name}"))
         .map_err(|said| refused(format!("{said}, so what was made was taken back and nothing was listed")))?;

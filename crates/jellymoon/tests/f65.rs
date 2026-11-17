@@ -13,6 +13,8 @@ mod alone;
 mod half;
 #[path = "f55/heard.rs"]
 mod heard;
+#[path = "f65/mark.rs"]
+mod mark;
 #[path = "f65/refused.rs"]
 mod refused;
 mod support;

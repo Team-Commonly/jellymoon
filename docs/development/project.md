@@ -39,6 +39,10 @@ Lists the folder under its last name, used on `--date` (today when none is named
   above it is not listed in its place), and on Unix be owned by the owner of the person's home folder.
 - Its last name must be a name `jellymoon wish --project` takes: one folder's name of at most 100 characters,
   with nothing unseen and nothing shaped like a credential. A name that is not is never said back.
+- A folder directly in Jellymoon's `projects` that a `project new` that was cut off left is added as any
+  other, and then loses that making's file: each plain, empty file in it named `.jellymoon-making-` and three
+  numbers with a dash before each. A link, a folder, a file that holds something or has any other name is
+  not touched, and no folder anywhere else is looked into.
 - A project added again keeps its line and its place. Its day moves on to a later day and never back.
 - A name has one folder. A second folder under a listed name is refused, in words that say how to let the first
   go. The list holds 100 projects.
@@ -94,22 +98,48 @@ run there, with no `--repo` and no session log.
   when it was made), and a file of this making's own in it, `.jellymoon-making-` with the process, the clock
   and a count after it, written as the first thing in the folder. A folder another hand put at the name
   meanwhile does not hold that file: it is left, with what is in it, and is not listed (`the new project's
-  folder was removed or replaced…`, which is also what a folder that is simply gone is told). The file is
-  removed once the line is on the list, so a made project never keeps it; git does not commit it. A folder a
+  folder was removed, replaced or changed…`, which is also what a folder that is simply gone is told, and one
+  that is the made folder still but whose making's file a hand took out, by `git clean` say). The file is the
+  person's alone (0600 on Unix) and empty. It is removed once the line is on the list, when it can be: a
+  folder a hand closed to writing meanwhile is listed and keeps it. Git does not commit it. A folder a
   line of the list names is never removed: it loses the making's file and stays. `projects` goes only when
   this command made it and it is empty. A refusal that came after the folder was made, and whose own words
-  do not say so, ends `; the folder made for it meanwhile was taken back`.
+  do not say so, ends `; the folder made for it meanwhile was taken back`; when the folder was this command's to take back and
+  could not be removed, it ends `; the folder made for it meanwhile could not be taken back and was left`, and what is left may have lost part of
+  what was in it.
 - **A command that is killed** between making the folder and writing the list leaves the folder, unlisted,
   with the making's file in it beside the repo, and the lock. For half a minute every change to the list is told one has not finished; then the lock is taken
   over, and the next `project new` of that name says something is there. Mend it by `project add --repo` with
-  the folder, when the repo in it is whole, or by removing the folder and asking again.
+  the folder, when the repo in it is whole, which also takes the making's file out; or by removing the folder
+  and asking again.
 - **`project forget`** of a made project takes its line off the list and leaves the folder. The name is then
   taken by the folder, and `project add --repo` with the folder lists it again.
 
 ## `project forget`
 
 Takes the line of that name off the list and touches nothing else: not the folder, not a wish, not a run or its
-branch. The name is as `project list` prints it, letter for letter.
+branch. The name is as `project list` prints it, letter for letter. It is any name a line can have, so a line
+an earlier build wrote under a name that is refused today can be taken off.
+
+## A name that comes in, and a name that was kept
+
+The characters nobody sees that cleaning leaves (U+034F, the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0,
+the empty Braille pattern U+2800, the selectors U+FE00 to U+FE0F) were a project's name once: an earlier build
+listed `app` followed by a heart and U+FE0F, and kept wishes for it.
+
+| where the name is | such a name |
+|---|---|
+| `project new <name>` | refused |
+| `project add --repo`, the folder's last name | refused |
+| `wish --project` for a name the list does not hold | refused: `--project takes one folder's name…` |
+| `wish --project` for a name the list holds, letter for letter | kept, and its run starts in the listed folder |
+| the offers: a chip on a page, a wish said aloud, a wish made from a page | never offered |
+| a line of the list, read back | used: listed, found by a run, forgotten by `project forget` |
+| a kept wish, read back | used: the day's other wishes are, and its own run starts when its folder is listed, typed in that day or named with `--repo` |
+
+So nothing an earlier build wrote is refused, and no new name of that kind comes in. A typed-in folder of such
+a name that is on no list gets no new wish, and `project add` of it is refused: rename the
+folder. A run in a listed folder of such a name does not move the line's day on, as that is `add`'s look.
 
 ## A run's start writes the list
 
@@ -158,7 +188,8 @@ in a log, and nothing git says of a listed folder is repeated.
 say so, what was written is taken back. A `--repo` sentence from `new` is said of the folder it made, after
 that folder was taken back, and so is any other sentence that ends `; the folder made for it meanwhile was taken back`: a
 list that filled or was written over meanwhile, and `jellymoon's own files: …` for a list that could not be
-written. The list's own sentences (full, the lock, a list that cannot be used)
+written. One that ends `; the folder made for it meanwhile could not be taken back and was left` is said of a
+folder this command made and could not remove. The list's own sentences (full, the lock, a list that cannot be used)
 are `new`'s too. A command line that is no command
 is exit 2 with the usage.
 
@@ -182,7 +213,7 @@ is exit 2 with the usage.
 | `new`: the empty folder for git holds something | `the folder Jellymoon keeps empty for git (runs/no-hooks) holds something, so what was made was taken back and nothing was listed` |
 | `new`: Jellymoon's folder is someone else's, or the person has no home folder | `Jellymoon's folder is not a folder of your own, and a project is listed only in a folder of your own, so nothing was made` |
 | `new`: the path of Jellymoon's folder is not text, or too long | `the full path of Jellymoon's folder is not text, or a project's in it would be over 4096 bytes, so a new project could not be listed and nothing was made` |
-| `new`: no folder, or another folder, is at the name once the repo is made | `the new project's folder was removed or replaced while it was being made, so nothing was listed, and what is there now was left as it is` |
+| `new`: no folder, another folder, or the folder without the making's file is at the name once the repo is made | `the new project's folder was removed, replaced or changed while it was being made, so nothing was listed, and what is there now was left as it is` |
 | `new`: the folder is kept under another name than was asked | `this file system does not keep the folder under the name it was given, so what was made was taken back and nothing was listed; pick a name of plain letters` |
 | `forget` is given no project's name | ``project forget takes a project's name, as `jellymoon project list` prints it`` |
 | the name is not listed | `no project of that name is on the list, so nothing was changed` |
@@ -290,14 +321,21 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
   for a folder that stable Rust reads, and it hands a folder made again under a name within a few seconds
   its old time of making (CI on Windows showed it: a folder removed and made again had the mark of the first),
   so the time says nothing there. The folder is not held open against a hand for the length of a making: a
-  hand's `remove` goes through, and the making then says the folder was removed or replaced.
+  hand's `remove` goes through, and the making then says the folder was removed, replaced or changed.
 - **The making's file is in the folder while git works.** Git is told nothing of it and its commit has no
   file, so the file is never in the repo's history; a killed making leaves it, with the folder.
-- **The unseen characters a name may not hold** (U+034F, the Hangul fillers, U+2800, U+FE00 to U+FE0F) are
-  refused wherever a project's name is checked, not only by `add` and `new`: a typed-in folder whose last name
-  holds one (an emoji written with U+FE0F, say) is not offered, a wish for it is refused as no project's name,
-  and a list with a line of such a name, added before the check knew them, is not used at all until the line
-  is taken out by hand.
+- **A typed-in folder whose last name holds an unseen character** (an emoji written with U+FE0F, say) is not
+  offered, and a new wish for it is refused as no project's name, unless the list holds the name already
+  ("A name that comes in, and a name that was kept").
+- **Jellymoon's folder is removed after the lock is let go.** Another command that has just made the folder
+  for its own lock, and has not yet put the lock in it, can have it removed underneath. Only an empty folder
+  goes, so nothing is lost; that command fails with `jellymoon's own files: …` and is asked again.
+- **A sentence that says "what was made was taken back"** (git failed, the name was kept in other letters)
+  and the folder could not be removed: the words that it was left are added after it, and the two stand
+  together.
+- **`project add` takes the making's file out after the lock is let go**, and only then. A making whose lock
+  was taken over after 30 seconds, and whose folder is added meanwhile, finds its file gone and lists
+  nothing; the folder is listed by the `add`.
 - **Unicode forms.** Two forms of one name are two projects where the file system keeps them apart.
 - **A file system that stores another spelling** of the name is refused after the folder was made and taken
   back. That sentence has no test, and a change that never compares the two names passes every test: no disk
@@ -321,7 +359,9 @@ the list or by what is there, links, no git, each with the whole test folder com
 and a list written over meanwhile, each taken back; a lock that stays, with nothing made; a command killed
 half way, its lock, and both ways to mend it; six at once; `f65/alone.rs`: a folder put in place of the one
 being made, left and never listed, and one removed; a line a hand wrote for the folder being made; a list
-that cannot be written; a home made for the lock; a second `new`, an `add` and a `forget` that meet a making; the looks taken
+that cannot be written; a home made for the lock; `f65/mark.rs`: the making's file, its mode, a making whose
+file a hand removed, a cut-off making's folder added, and a folder that could not be taken back;
+`f62/earlier.rs`: a list and a day's wishes an earlier build kept under a name refused today; a second `new`, an `add` and a `forget` that meet a making; the looks taken
 again behind the lock; a home that is nobody's or whose path is not text; a branch that is there before the
 first commit; a wish, its run and its keep in a made project; and a made project forgotten. The examples round-trip in core's `tests/shapes.rs` and
 `project.rs`.

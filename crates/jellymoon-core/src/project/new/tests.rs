@@ -109,18 +109,18 @@ fn what_is_taken_back_is_the_folder_that_was_made_and_never_one_the_list_names()
     let real = as_git_takes(fs::canonicalize(&project).unwrap_or_default());
     let line = Line { name: "alpha".into(), folder: real.to_string_lossy().into(), used: "2026-03-10".into() };
     hold(home.path()).and_then(|_lock| write(home.path(), vec![line])).unwrap_or_else(|e| panic!("{e}"));
-    assert!(!first.take_back(home.path(), &folder, &project));
+    assert!(first.take_back(home.path(), &folder, &project).is_none());
     assert!(project.is_dir() && !project.join(&first.token).exists(), "a folder the list names was removed");
     fs::remove_file(home.path().join("projects.json")).unwrap_or_else(|e| panic!("{e}"));
-    assert!(made(&folder, &project, false).take_back(home.path(), &folder, &project));
+    assert_eq!(made(&folder, &project, false).take_back(home.path(), &folder, &project), Some(true));
     assert!(!project.exists() && folder.is_dir());
     // A folder put in its place is another folder; and `projects` goes when this command made it.
     let was = made(&folder, &project, true);
     fs::remove_dir_all(&project).and_then(|()| fs::create_dir(&project)).unwrap_or_else(|e| panic!("{e}"));
-    assert!(!was.take_back(home.path(), &folder, &project));
+    assert!(was.take_back(home.path(), &folder, &project).is_none());
     assert!(project.is_dir(), "a folder this command did not make was removed");
     fs::remove_dir(&project).unwrap_or_else(|e| panic!("{e}"));
-    assert!(made(&folder, &project, true).take_back(home.path(), &folder, &project));
+    assert_eq!(made(&folder, &project, true).take_back(home.path(), &folder, &project), Some(true));
     assert!(!folder.exists());
 }
 
@@ -136,7 +136,7 @@ fn a_folder_that_looks_like_the_made_one_from_outside_and_holds_no_file_of_the_m
     fs::write(project.join("mine.txt"), "the person's own\n").unwrap_or_else(|e| panic!("{e}"));
     was.project = mark(&project);
     assert!(was.project.is_some() && !was.ours(&project));
-    assert!(!was.take_back(home.path(), &folder, &project) && project.join("mine.txt").is_file());
+    assert!(was.take_back(home.path(), &folder, &project).is_none() && project.join("mine.txt").is_file());
     // The file of another making, or a folder under the file's name, is not this making's file either.
     fs::write(project.join(Made::new().token), "").unwrap_or_else(|e| panic!("{e}"));
     assert!(!was.ours(&project));
@@ -156,12 +156,84 @@ fn what_is_said_of_the_made_folder_is_passed_on_and_only_another_name_is_the_fil
 }
 
 #[test]
-fn a_refusal_after_the_folder_was_taken_back_says_so_once() {
-    let said = |e: Error| after(e).to_string();
-    assert_eq!(said(refused(LISTED)), format!("{LISTED}{BACK}"));
-    assert_eq!(said(refused(SPELLED)), SPELLED);
-    let store = said(Error::Store(io::Error::other("no room")));
+fn a_refusal_after_the_folder_was_taken_back_says_so_once_and_says_when_it_was_left() {
+    let said = |e: Error, back: bool| after(e, back).to_string();
+    assert_eq!(said(refused(LISTED), true), format!("{LISTED}{BACK}"));
+    assert_eq!(said(refused(LISTED), false), format!("{LISTED}{LEFT}"));
+    assert_eq!(said(refused(SPELLED), true), SPELLED);
+    let store = said(Error::Store(io::Error::other("no room")), true);
     assert_eq!(store, format!("jellymoon's own files: no room{BACK}"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_to_a_file_at_the_making_s_name_is_not_the_making_s_file() {
+    let home = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let (folder, project) = (home.path().join("projects"), home.path().join("projects").join("alpha"));
+    let was = made(&folder, &project, false);
+    let (file, neighbour) = (project.join(&was.token), home.path().join("neighbour"));
+    fs::remove_file(&file).and_then(|()| fs::write(&neighbour, "")).unwrap_or_else(|e| panic!("{e}"));
+    std::os::unix::fs::symlink(&neighbour, &file).unwrap_or_else(|e| panic!("{e}"));
+    assert!(!was.ours(&project) && was.take_back(home.path(), &folder, &project).is_none());
+    assert!(project.is_dir() && neighbour.is_file());
+}
+
+#[test]
+fn a_made_folder_holds_its_making_s_file_and_one_whose_file_could_not_be_made_is_removed_again() {
+    let home = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let project = home.path().join("alpha");
+    // No file can be made under a name with a folder that is not there in it.
+    let no_such = Path::new("no").join("such");
+    assert!(matches!(begin(&project, &no_such.to_string_lossy()), Err(Error::Store(_))));
+    assert!(!project.exists(), "a folder with no file of its making was left");
+    assert!(begin(&project, ".jellymoon-making-1-2-3").is_ok());
+    let meta = fs::metadata(project.join(".jellymoon-making-1-2-3")).unwrap_or_else(|e| panic!("{e}"));
+    assert!(meta.is_file() && meta.len() == 0);
+    #[cfg(unix)]
+    assert_eq!(std::os::unix::fs::PermissionsExt::mode(&meta.permissions()) & 0o777, 0o600);
+    // Something at the name is said so, and is left.
+    let there = begin(&project, ".jellymoon-making-4-5-6").map_or_else(|e| e.to_string(), |()| String::new());
+    assert!(there == THERE && project.join(".jellymoon-making-1-2-3").is_file());
+}
+
+/// The names in a folder, in order.
+fn names(folder: &Path) -> Vec<String> {
+    let names = fs::read_dir(folder).into_iter().flatten().flatten();
+    let mut names: Vec<String> = names.map(|entry| entry.file_name().to_string_lossy().into()).collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn only_a_plain_empty_file_of_a_making_s_name_directly_in_a_folder_under_projects_is_tidied() {
+    let home = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let project = home.path().join("projects").join("alpha");
+    let (below, elsewhere) = (project.join("below"), home.path().join("work").join("beta"));
+    let real = |folder: &Path| as_git_takes(fs::canonicalize(folder).unwrap_or_default()).to_string_lossy().to_string();
+    for folder in [&below, &elsewhere] {
+        fs::create_dir_all(folder).unwrap_or_else(|e| panic!("{e}"));
+        fs::write(folder.join(".jellymoon-making-1-2-3"), "").unwrap_or_else(|e| panic!("{e}"));
+        tidy(home.path(), &real(folder));
+        assert_eq!(names(folder), [".jellymoon-making-1-2-3"], "a folder not directly under projects was tidied");
+    }
+    // In the folder itself: the file of a making goes; one that holds something, a folder under such a name,
+    // every name of another shape, and the person's own file stay.
+    let stay = ["-1-2", "-1-2-3-4", "-a-2-3", "-1--3", "-1-2-3.txt"].map(|end| format!(".jellymoon-making{end}"));
+    for name in
+        stay.iter().map(String::as_str).chain(["x.jellymoon-making-1-2-3", "mine.txt", ".jellymoon-making-1-2-3"])
+    {
+        fs::write(project.join(name), "").unwrap_or_else(|e| panic!("{e}"));
+    }
+    fs::write(project.join(".jellymoon-making-4-5-6"), "kept\n").unwrap_or_else(|e| panic!("{e}"));
+    fs::create_dir(project.join(".jellymoon-making-7-8-9")).unwrap_or_else(|e| panic!("{e}"));
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(project.join("mine.txt"), project.join(".jellymoon-making-10-11-12"))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let before = names(&project);
+    tidy(home.path(), &real(&project));
+    let left: Vec<String> = before.into_iter().filter(|name| name != ".jellymoon-making-1-2-3").collect();
+    assert_eq!(names(&project), left);
+    assert_eq!(fs::read_to_string(project.join(".jellymoon-making-4-5-6")).unwrap_or_default(), "kept\n");
 }
 
 #[test]

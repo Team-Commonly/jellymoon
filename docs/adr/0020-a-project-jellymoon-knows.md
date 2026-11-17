@@ -273,10 +273,19 @@ What the build settled for decision 3, and where it is not this note's words. Th
     into its own folder passes on Windows; a killed making leaves the file with the folder.
   - *"Nothing was made" is true of Jellymoon's folder too*: made to hold the lock and left empty by a
     refusal, it is removed. A refusal after the folder was made says that it was taken back, and the
-    sentence of a folder that is not the made one says "removed or replaced", as it may simply be gone.
-  - *F62's check of a name refuses five more characters nobody sees* (U+034F, U+115F, U+3164, U+2800,
-    U+FE0F, and with them U+1160, U+FFA0 and the other selectors U+FE00 to U+FE0E), for `project add` and
-    `project new` alike. A folder whose last name holds one can no longer be added.
+    sentence of a folder that is not the made one says "removed, replaced or changed", as it may simply be
+    gone, or be the made folder with the making's file taken out. A folder that could not be taken back is
+    said to have been left.
+  - *Characters nobody sees are refused where a name comes in, and read where a name was kept* (U+034F,
+    U+115F, U+3164, U+2800, U+FE0F, and with them U+1160, U+FFA0 and the other selectors U+FE00 to U+FE0E).
+    Refused: `project new`, `project add` (the folder's last name), a wish for a name the list does not
+    hold, and every offer. Read as before: a line of the list, a kept wish, the name `project forget`
+    takes, and a wish for a name the list holds already. One rule everywhere was tried first and was wrong:
+    an earlier build wrote such names, and a list or a day with one was refused whole, in words that said
+    Jellymoon had not written it (the third gate's blocker).
+  - *The making's file after the third gate*: it is the person's alone (0600) and empty; `project add` of a
+    folder directly in `projects` takes out a making's file a cut-off `project new` left, and only a plain,
+    empty file of that name's shape; a folder whose file could not be made is removed again.
   - *Something at the name is asked again behind the lock*, so a second `project new` of a name under making
     waits, and is not told to remove or list a folder that is being made.
   - *A killed making leaves its lock* for the 30 seconds any lock of the list is left; the sentence of the

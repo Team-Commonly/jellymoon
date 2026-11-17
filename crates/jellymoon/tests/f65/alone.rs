@@ -15,7 +15,7 @@ use super::half::{BUSY, failing_at, held_before_the_list, world_of};
 use super::refused::{NO_FOLDER, NO_GIT, THERE, new_refused};
 use super::*;
 
-const MOVED: &str = "the new project's folder was removed or replaced while it was being made, so nothing was listed, and \
+pub const MOVED: &str = "the new project's folder was removed, replaced or changed while it was being made, so nothing was listed, and \
                      what is there now was left as it is";
 #[cfg(unix)]
 const NOT_OWN: &str = "Jellymoon's folder is not a folder of your own, and a project is listed only in a folder of \
@@ -29,7 +29,7 @@ const NOT_TEXT: &str = "the full path of Jellymoon's folder is not text, or a pr
 const BACK: &str = "; the folder made for it meanwhile was taken back";
 
 /// The names in a made project's folder, in order.
-fn inside(w: &World, name: &str) -> Vec<String> {
+pub fn inside(w: &World, name: &str) -> Vec<String> {
     let mut names: Vec<String> =
         fs::read_dir(w.made(name)).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
     names.sort();
@@ -53,7 +53,7 @@ fn closed(w: &World, closed: bool) -> bool {
 }
 
 /// The whole test folder but the list's lock, which a making under way holds.
-fn but_the_lock(w: &World) -> Vec<(PathBuf, Vec<u8>)> {
+pub fn but_the_lock(w: &World) -> Vec<(PathBuf, Vec<u8>)> {
     w.all().into_iter().filter(|(path, _)| *path != w.jm("projects.lock")).collect()
 }
 

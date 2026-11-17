@@ -50,6 +50,12 @@ fn asking(dir: &Path) -> (Showing, Scene) {
     (shown, scene)
 }
 
+/// The body of the first plain note on show: core's reason, after an answer it refused.
+fn reason(shown: &Showing) -> String {
+    let scene = shown.scene().expect("a day is on show");
+    super::plain(&scene).first().map(|(_, body)| body.to_string()).unwrap_or_default()
+}
+
 fn opened(cx: &mut TestAppContext, shown: Showing, scene: Scene) -> (Entity<Page>, &mut VisualTestContext) {
     cx.update(|cx| load_fonts(cx)).expect("bundled fonts load");
     let viewport = Viewport { w: 1440.0, h: 900.0 };
@@ -85,6 +91,7 @@ fn enter(cx: &mut VisualTestContext) {
 fn enter_in_a_note_s_field_is_carried_by_the_window_and_core_s_refusal_leaves_the_words() {
     let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
     let (shown, scene) = asking(dir.path());
+    let on_show = shown.clone();
     let mut cx = context();
     let (page, cx) = opened(&mut cx, shown, scene);
     pastes(&page, cx, ANSWER);
@@ -95,6 +102,9 @@ fn enter_in_a_note_s_field_is_carried_by_the_window_and_core_s_refusal_leaves_th
     cx.run_until_parked();
     // Core refused: the note has its field again, with the words, and it does not wait.
     assert_eq!(field(&page, cx), Some((ANSWER.to_string(), false)));
+    // The review of F54's notes, note 4: core was given the words. It says of no words that an answer needs
+    // some; of these it says what it found when it looked for the run.
+    assert_eq!(reason(&on_show), "the record of run r1111111111111111 cannot be read, so nothing was started.");
     // The field takes keys again, and a second Enter is carried and answered as the first.
     cx.simulate_keystrokes("! enter");
     assert_eq!(field(&page, cx), Some((format!("{ANSWER}!"), false)));

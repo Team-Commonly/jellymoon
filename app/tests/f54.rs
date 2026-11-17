@@ -34,6 +34,11 @@ pub const DONE: &str = "This wish is done.";
 pub const MORE: &str = "More like this";
 pub const ANSWER_HINT: &str = "Type your answer, then Enter";
 pub const MORE_HINT: &str = "Type what to do next, then Enter";
+/// The key of the field a wish's question is answered in.
+pub fn answer_key(wish: &str, question: &str) -> String {
+    format!("answer-{wish}-{question}")
+}
+
 pub const UNANSWERED: &str = "That answer was not taken.";
 pub const UNSETTLED: &str = "The answer was given, but what came after it failed.";
 pub const AT_WORK: &str = "This wish is being worked on.";

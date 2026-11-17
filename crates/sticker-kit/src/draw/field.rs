@@ -1,8 +1,9 @@
 //! The field of a text note in the view: one line a person types in under the note, held and typed in as the
 //! entry is (`entry.rs`), by the same code. A page has one for each note of its scene that has a field, found by
-//! the note's id. What was typed stays while a note of the scene has the field, whatever else of the scene
-//! changes. A field is the same field while its key, or with no key its note's id, and its offer are the same:
-//! an offer that changes is another field, and the words typed for the first are not words for it.
+//! the id of the note it is under now. What was typed stays while a note of the scene has the field, whatever
+//! else of the scene changes. A field is the same field while its key, or with no key its note's id, and its
+//! offer are the same: an offer that changes is another field, and the words typed for the first are not
+//! words for it.
 //!
 //! A field no note has any more goes, with two exceptions that are kept apart, not drawn and with no keys: one
 //! that waits for its answer, so a refusal has the words to leave when the note has its field again, and one

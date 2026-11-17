@@ -667,7 +667,8 @@ max_file_lines = 400
 # (`draw/field.rs`, 16; `draw/entry.rs`, 12; `scene.rs`, 6; `draw/mod.rs`, 5).
 # The app notes raised the kit by 2: a comment that names the layout's `LEAST` where a test writes its number
 # (`tests/entry_layout.rs`).
-"crates/sticker-kit" = 10034
+# The second notes on F54 raised the kit by 1: a line of `draw/field.rs`'s own doc.
+"crates/sticker-kit" = 10035
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -765,7 +766,13 @@ max_file_lines = 400
 # test's own clock, holds the two tests moved out of `tests/f57/window.rs` and four new ones (a wish made past
 # midnight, a run that still asks, core's order between two days, the page's day first in a tie); the look at
 # two days and the clock in `shell.rs`; a failure of another reason said in `jellyfish.rs`, with its test.
-"app" = 11267
+# The second notes on F54 raised the app by 133, of which 115 are tests: a refusal after the wish's note went, a
+# look that cannot read the day and the keys of the answer's field (`tests/f54/answered.rs`, 75), `enter` and
+# `answer` as two acts of the made-up window (`tests/support/tapper.rs`, 25), core's reason read at the window
+# (`tests/f54/window.rs`, 10) and the key's helper (`tests/f54.rs`, 5). The rest: a look that is not known, the
+# answer field's key and the scene on show given out (`answering.rs`, 6; `showing.rs`, 6; `working.rs`, 4;
+# `wishing.rs`, 2).
+"app" = 11400
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

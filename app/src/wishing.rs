@@ -1,8 +1,9 @@
 //! A wish typed in the window (F42). The rules are core's: `jellymoon_core::offered` says which projects a wish
 //! can be made for (a folder of that name was typed in that day and is not switched off, asked of the reader as a
-//! run asks it, or the name is on the list of projects Jellymoon knows), `wish_offered` says which words are a wish and keeps them for such a project, `installed_command`
-//! says whether the installed `jellymoon` may be started, and `run_apart` starts it as `jellymoon run`, a process
-//! of its own. Nothing of a run is in this process: the app asks, and then only looks.
+//! run asks it, or the name is on the list of projects Jellymoon knows), `wish_offered` says which words are a
+//! wish and keeps them for such a project, `installed_command` says whether the installed `jellymoon` may be
+//! started, and `run_apart` starts it as `jellymoon run`, a process of its own. Nothing of a run is in this
+//! process: the app asks, and then only looks.
 //!
 //! What is carried to core is the text of the entry and the name on the chip that was chosen: a name, never a
 //! path and never a place among the chips. The folder is found by `jellymoon run`, as it is for

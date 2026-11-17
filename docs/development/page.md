@@ -51,7 +51,7 @@ A day with no session logs at all has a page too, when it has a made wish or a p
 (`jellymoon_core::page_with_no_logs`; example `page-no-logs.json`). So `read.turns` 0 says nothing was typed, and
 `read.no_logs` says nothing was read. The field is left out when it is false, so every other page prints as it
 did. With nothing made and no project on offer the command exits 1 with the reader's line, as before. The model's
-name is checked first in both cases. `jellymoon page` keeps nothing, so a later call prints the same bytes; the
+name is checked first wherever a page is printed. `jellymoon page` keeps nothing, so a later call prints the same bytes; the
 app keeps the page it draws ([app.md](app.md)).
 
 ## Where the harness is looked for

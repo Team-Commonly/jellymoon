@@ -126,7 +126,7 @@ fn a_page_with_no_wishes_says_so() {
         placed.iter().any(|piece| piece.kind() == "note" && piece.said().contains("Nothing wished for yet today."))
     );
     let footer = placed.iter().find(|piece| piece.kind() == "footer").unwrap().said();
-    assert_eq!(footer, "Read from 0 things you typed. This is the model's reading, unedited.");
+    assert_eq!(footer, "Nothing was typed on this day, so no model read it.");
 }
 
 /// Eight labels as long as page data allows: 40 wide letters, 40 East Asian characters, and six sentences of 40.

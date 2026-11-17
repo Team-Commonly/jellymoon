@@ -181,7 +181,7 @@ impl World {
         command.stdin(fs::File::open(&given).map_err(|e| format!("{}: {e}", given.display()))?);
         command.args(args);
         if !self.real {
-            command.env_clear().env("TZ", ZONE).env("PATH", self.at("bin")).env("JELLYMOON_CLAUDE", self.harness());
+            alone(&mut command).env("TZ", ZONE).env("PATH", self.at("bin")).env("JELLYMOON_CLAUDE", self.harness());
             command.env("HOME", self.at("user")).env("USERPROFILE", self.at("user"));
             command.env("CLAUDE_CONFIG_DIR", self.at("harness")); // where the delivery hook's settings are
             command.env("JELLYMOON_SYSTEM_BIN", ""); // no folder of this machine is looked in for a harness
@@ -255,6 +255,12 @@ pub fn text(path: &Path) -> String {
     path.display().to_string()
 }
 
+/// Leaves a command no variable of this process, and no login shell to ask: `JELLYMOON_SHELL` is set to nothing,
+/// as the door of the binary's tests sets it (ADR 0021, decision 7).
+pub fn alone(command: &mut Command) -> &mut Command {
+    command.env_clear().env("JELLYMOON_SHELL", "")
+}
+
 /// Writes a file and the folders above it.
 pub fn write(path: &Path, text: &str) -> Result<(), String> {
     let wrote = path.parent().map_or(Ok(()), fs::create_dir_all).and_then(|()| fs::write(path, text));
@@ -311,7 +317,13 @@ mod tests {
         let host = said.lines().find_map(|line| line.strip_prefix("host: ")).unwrap();
         let file = |name: &str, text: &str| super::write(&root.join(name), text).unwrap();
         file("Cargo.toml", "[package]\nname = \"made-up\"\nversion = \"0.0.0\"\nedition = \"2021\"\n[workspace]\n");
-        file("src/main.rs", "fn main() {\n    println!(\"{{\\\"made\\\":1}}\");\n}\n");
+        let shell = "std::env::var(\"JELLYMOON_SHELL\").unwrap_or(\"not set\".into())";
+        file(
+            "src/main.rs",
+            &format!(
+                "fn main() {{\n    println!(\"{{{{\\\"made\\\":1,\\\"shell\\\":\\\"{{}}\\\"}}}}\", {shell});\n}}\n"
+            ),
+        );
         file(".cargo/config.toml", &format!("[build]\ntarget = \"{host}\"\n"));
         let name = format!("made-up{}", env::consts::EXE_SUFFIX);
         let target = build::target(&root, &[]).unwrap();
@@ -321,7 +333,9 @@ mod tests {
 
         let (made, held) = world(&root, &["made-up"], &["made-up"], &Options::default()).unwrap();
         assert_eq!(made.program("made-up"), target.join(host).join("debug").join(&name));
-        assert_eq!(made.json("made-up", &[]).unwrap()["made"], 1, "and it is the program that runs");
+        let said = made.json("made-up", &[]).unwrap();
+        assert_eq!(said["made"], 1, "and it is the program that runs");
+        assert_eq!(said["shell"], "", "with no login shell to ask, and no variable of this process");
         assert_eq!(made.program("other"), PathBuf::new(), "a program cargo never named is no path");
         let _ = fs::remove_dir_all(made.at(""));
         drop(held);

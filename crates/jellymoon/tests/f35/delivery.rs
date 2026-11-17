@@ -8,7 +8,7 @@ use std::{env, fs};
 use serde_json::{Value, json};
 
 use super::{World, tree, world};
-use crate::support::{jellymoon_in, open_above};
+use crate::support::{door, jellymoon_in, open_above, skipped};
 
 const TAKEN: &str = "{\"installed\":true,\"changed\":true}\n";
 
@@ -22,7 +22,7 @@ fn program(folder: &Path, name: &str) -> PathBuf {
     #[cfg(unix)]
     super::chmod(folder, 0o755);
     let program = folder.join(name);
-    fs::copy(env!("CARGO_BIN_EXE_jellymoon"), &program).unwrap();
+    fs::copy(door::built(), &program).unwrap();
     #[cfg(unix)]
     super::chmod(&program, 0o755);
     program
@@ -168,18 +168,21 @@ fn a_command_that_is_a_link_or_cannot_be_run_or_that_others_can_change_is_never_
     } else {
         eprintln!("left out: a setgid program, since this system did not keep the bit on {}", setgid.display());
     }
-    // The owner of the command is compared with the owner of the person's home. With the root folder as the home,
-    // a file of the test's own is someone else's (unless the tests run as the owner of the root folder).
+    // The owner of the command is compared with the owner of the person's home. With a temporary folder of the
+    // system's as the home, a file of the test's own is someone else's (unless the tests run as its owner). It was
+    // the root folder, which the door passes for no test (`support/door.rs`, `not_ours`).
     let w = world();
     program(&w.bin(), &name());
-    if fs::metadata("/").unwrap().uid() != fs::metadata(w.bin()).unwrap().uid() {
+    if let Some(theirs) = door::not_ours() {
         let (bin, config) = (w.bin(), w.settings().parent().unwrap().to_path_buf());
         let more = [
-            ("HOME", "/"),
+            ("HOME", theirs.to_str().unwrap()),
             ("JELLYMOON_BIN_DIR", bin.to_str().unwrap()),
             ("CLAUDE_CONFIG_DIR", config.to_str().unwrap()),
         ];
         w.refused(&more, &format!("{NOT_USED}it is not a file of your own"), "a home of another owner");
+    } else {
+        skipped("a home of another owner: every temporary folder here is the test's own");
     }
     // With no home there is no one the command could belong to: never is it taken for the person's own. A home
     // that is not set, is empty or is not a full path is no home.

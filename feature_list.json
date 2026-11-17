@@ -758,7 +758,7 @@
         "on macOS, Linux and Windows; F73 is replaced by this row and F75, and is never built"
       ],
       "test": "cargo test -p jellymoon --test f74",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {

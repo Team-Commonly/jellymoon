@@ -7,6 +7,8 @@ use std::path::Path;
 
 use toml::{Table, Value};
 
+mod door;
+
 /// Runs every rule with the numbers in `entropy.toml`.
 pub fn check(root: &Path, files: &[String]) -> Result<Vec<String>, String> {
     let config = fs::read_to_string(root.join("entropy.toml")).map_err(|e| format!("entropy.toml: {e}"))?;
@@ -21,6 +23,7 @@ pub fn check(root: &Path, files: &[String]) -> Result<Vec<String>, String> {
     found.extend(over_budget(root, files, &crates, &table("budget")));
     found.extend(local_paths(root, files));
     found.extend(wrong_dependencies(&crates, &table("depends"), &table("forbidden")));
+    found.extend(door::outside_the_door(root, files));
     Ok(found)
 }
 

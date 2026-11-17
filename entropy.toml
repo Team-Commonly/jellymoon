@@ -500,7 +500,9 @@ max_file_lines = 400
 # `tests/f53/notes.rs` 17 (a copy git cannot answer for), `tests/f46.rs` 4 (which refusal a wish let go gets).
 # F54 raised the binary by 98, all a test: `tests/f54.rs`, `follows` at `jellymoon run waiting`.
 # The notes after F57 raised it by 45, all tests: the two new sentences at the binary, in `tests/f55/started.rs`.
-"crates/jellymoon" = 25083
+# F74, the door, raised it by 349, all tests and their support: `tests/f74.rs` 225, `tests/support/door.rs` 144,
+# 9 in `tests/support/mod.rs` (the two other folders a world is made in); the tests moved through the door lost 29.
+"crates/jellymoon" = 25432
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -540,7 +542,9 @@ max_file_lines = 400
 # F56's step, `jelly` (in `smoke/hear.rs`), raised it by 33.
 # F63 raised it by 12: the `project` step asks `jellymoon page` over logs that are not there.
 # F57 raised it by 8: the `jelly` step also holds what each window is asked for.
-"crates/xtask" = 2426
+# F74 raised it by 165: the rule that holds tests to the door (`rules/door.rs`, 148, 97 of them its tests), 3 in
+# `rules.rs`, and 14 in the smoke chain, whose made-up world sets `JELLYMOON_SHELL` to nothing (`smoke.rs`).
+"crates/xtask" = 2591
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

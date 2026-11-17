@@ -263,9 +263,10 @@ fn a_stray_argument_to_project_is_answered_in_a_fixed_line_and_never_said_back()
         &["project", "new"],
     ] {
         use std::os::unix::ffi::OsStrExt;
-        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_jellymoon"));
-        command.args(before).arg(std::ffi::OsStr::from_bytes(b"stray\xff\xfename"));
-        command.current_dir(w.dir.path()).env_clear().envs(w.vars.iter().map(|(name, value)| (name, value)));
+        let stray = std::ffi::OsStr::from_bytes(b"stray\xff\xfename");
+        let args: Vec<&std::ffi::OsStr> = before.iter().map(std::ffi::OsStr::new).chain([stray]).collect();
+        let mut command = support::door::jellymoon(w.vars.iter().map(|(name, value)| (name, value)), &args);
+        command.current_dir(w.dir.path());
         let ran = command.output().unwrap();
         let said = String::from_utf8_lossy(&ran.stderr);
         assert_eq!((ran.status.code(), ran.stdout.len()), (Some(2), 0), "{before:?}: {said}");

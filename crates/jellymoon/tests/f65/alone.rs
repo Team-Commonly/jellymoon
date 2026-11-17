@@ -52,9 +52,10 @@ fn closed(w: &World, closed: bool) -> bool {
     !closed || fs::write(w.jm("probe"), "").is_err()
 }
 
-/// The whole test folder but the list's lock, which a making under way holds.
+/// The whole test folder but the list's lock, which a making under way holds, and the file a take-over is behind.
 pub fn but_the_lock(w: &World) -> Vec<(PathBuf, Vec<u8>)> {
-    w.all().into_iter().filter(|(path, _)| *path != w.jm("projects.lock")).collect()
+    let locks = [w.jm("projects.lock"), w.jm("take-over.lock")]; // the second is made by a take-over and stays
+    w.all().into_iter().filter(|(path, _)| !locks.contains(path)).collect()
 }
 
 #[test]
@@ -192,7 +193,7 @@ fn a_making_that_is_killed_is_waited_for_half_a_minute_and_then_its_folder_is_sa
     let before = but_the_lock(&w);
     let ran = w.new_project("alpha");
     assert_eq!(refused(&ran), format!("jellymoon: {THERE}\n"));
-    assert!(w.all() == before, "a refusal changed something but the lock nobody held");
+    assert!(but_the_lock(&w) == before, "a refusal changed something but the lock nobody held");
     assert_eq!(printed(&w.new_project("beta"))["name"], "beta");
 }
 
@@ -284,11 +285,10 @@ fn a_home_a_project_could_not_be_listed_in_is_refused_before_anything_is_made() 
     }
     // The person's own folder is someone else's, and Jellymoon's is not there: it is made to hold the lock,
     // found not to be the person's, and taken back.
-    use std::os::unix::fs::MetadataExt;
     fs::remove_dir(w.at("jm")).unwrap();
-    if fs::metadata("/").unwrap().uid() != fs::metadata(w.at("user")).unwrap().uid() {
+    if let Some(theirs) = crate::support::door::not_ours() {
         let before = w.all();
-        let ran = w.run_with(&[("HOME", "/".into())], &["project", "new", "alpha", "--date", DAY]);
+        let ran = w.run_with(&[("HOME", theirs.into())], &["project", "new", "alpha", "--date", DAY]);
         assert_eq!(refused(&ran), format!("jellymoon: {NOT_OWN}\n"));
         assert!(w.all() == before && !w.at("jm").exists(), "a refusal left Jellymoon's folder");
     }

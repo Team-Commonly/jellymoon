@@ -7,7 +7,7 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 ## The three data types
 
 - `Scene` (`src/scene.rs`): what is on the page. A date, a title, a hero,
-  characters, notes (`List`, `Choice`, `Plain`), a legend. Plain serde data.
+  characters, notes (`List`, `Choice`, `Plain`, `Text`), a legend. Plain serde data.
 - `Theme` (`src/theme/`): how it looks. Colours, font names, tilt angles,
   motion amounts and sizes. It names no pictures: the art is the kit's own.
   Two are built in: `Theme::sticker()` and `Theme::plain()`.
@@ -162,6 +162,43 @@ own dispatch to a headless page. The test platform has no input method, so a
 composition is started there by calling the handler, as a platform would; what
 a real input method does on a real window is checked by hand.
 
+## A text note's quoted words, field and offer
+
+A text note (`Note::Text`) can hold two things besides its title, body and
+options (`layout/typed.rs`, `draw/field.rs`).
+
+- **`quoted`: someone else's words.** They are placed as one piece
+  (`PieceKind::Quote`) under the body, on a ground of their own, every run in
+  `Role::Quoted`, so they are told apart from the note's own words. They are
+  cleaned as every text is, broken into at most `MAX_QUOTED_LINES` (8) lines
+  and cut there with an ellipsis. They are text and nothing else: the piece
+  takes no tap and no key, whatever the words say. Words that clean to nothing
+  place no piece.
+- **`field`: one line to type in** (`Field`: a `hint`, a cap `most`, and an
+  `offer`). It is placed under the options (`PieceKind::Field`), with the
+  hint in it. An `offer` that has words is a small pill over the field
+  (`PieceKind::Offer`); a click on it gives the field the keys and nothing
+  else.
+- **The body's room.** The quoted words and the field are placed whether the
+  body is drawn whole or counted; the options still go when it is counted.
+- **Typing.** A field is typed in as the entry is, by the same code and under
+  the same rules: a click gives it the keys, Escape or a press elsewhere takes
+  them, an input method composes in it, `most` caps it (0 is the kit's own
+  cap, `MAX_ENTRY_CHARS`). Each field and the entry hold their own words.
+- **Enter** calls the `on_entry` handler with the note's id as `made.id`,
+  the words, and no option. The field then waits as the entry does, for
+  `page.answer_field(id, kept, window, cx)`: kept, it is empty; not kept, its
+  words stay. `page.answer_field_closed(id, kept, cx)` is the same for a page whose window was closed since
+  Enter, as `answer_entry_closed` is the entry's. `page.field(id)` is what is typed in it now.
+- **A field lives with its note.** `set_scene` keeps what is typed in a field
+  whose note still has one, by the note's id, and drops the field of a note
+  that is gone or has none.
+
+`tests/typed.rs` places them; `tests/field_draw.rs` types in them through
+GPUI's dispatch on a headless page. Not done: a field's element stands where
+the layout placed it and does not follow its note while the note moves into
+place.
+
 ## The edge scene: a character at a corner of the screen
 
 `Edge` (`src/edge.rs`) is a second, smaller scene: one character with a `mood` (`floats`, `leans_in`, `holds_up`,
@@ -186,8 +223,8 @@ gives both sizes, which never depend on what is said: a window is opened and rem
   lower anchor and under an upper one.
 
 - `place_pair(screen, room, first, second, corner, margin, gap)` places both. In a room that holds the two apart
-  only with less than the margin, the first window's margin gives way, as far as it must, before the second is
-  laid over the first. A size, a margin or a gap below nothing, or that is no number, is nothing.
+  only with less than the margin, the first window's margin gives way before the second is laid over the first.
+  The margin is one number, so it is made smaller at both of the corner's edges, though one would do. A size, a margin or a gap below nothing, or that is no number, is nothing.
 - A text of the edge scene is drawn at its role's size held to 9 to 22 pixels, whatever a theme asks, so a window
   of the size `edge_windows` gives always holds its texts.
 - `Edge::speaks()` says whether there is a bubble, and so a second window.
@@ -197,8 +234,23 @@ gives both sizes, which never depend on what is said: a window is opened and rem
 it, and a view with no `on_tap` takes none. The character is the theme's art in one of seven poses, one a mood,
 with the count on a pill; the bubble is a rounded shape with the ring as an arc that empties. Every run of text is
 clipped to its piece, and is text and nothing else. A `quoted` run is drawn in the palette's `quoted` ink
-(`edge_ink`), the others in `ink` and `soft`. A theme file's `quoted` falls back to its `accent_dark` where that
+(`edge_ink`), the others in `ink`, `soft` and `quiet`, and the count in `bubble` on its pill; `painted()` gives
+the ink and the clipped box of every run of the last frame, beside `placed()`. A theme file's `quoted` falls back to its `accent_dark` where that
 reads on its `bubble`, and is held to its floor like the pairs above, on a bubble laid on white.
+
+**Open: the bubble's other inks have no floor.** Only `quoted` is measured on `bubble`, and only on white.
+Nothing is built for it while nobody has a theme file of their own. What was measured with theme files:
+
+| A theme file's `bubble` | What it gives | Said |
+|---|---|---|
+| `#808080` | `quoted` 5.32, but `ink` 3.64, `soft` 1.69 and `quiet` 1.28 | nothing |
+| `#202020` | the scene's own sentence, in `ink`, at 1.13 | nothing |
+| `#E8B0A0` | `quoted` falls back to exactly `ink`: someone else's words and the scene's own share ink, size, family and weight, with the 10 pixels between them | nothing |
+| `#FFFFFF20` | `quoted` 6.14 on white, and 2.21 over a dark desktop | nothing |
+
+In the two built-in themes `quiet`, the small line under a heard text, is 3.10 and 3.04 on the bubble. What
+would close it: a floor for `ink` and `soft` on `bubble` as for `quoted`, a fallback that is never `ink` or
+`soft`, and a bubble one sees through settled against black as well as white.
 
 ## Run it
 

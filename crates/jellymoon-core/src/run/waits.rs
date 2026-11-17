@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use super::keep::keep_named;
 use super::show::{self, FileChange, FileKind, Shown, ShownFile, show_file};
 use super::toss::toss_run;
-use super::{RunOptions, refused};
+use super::{RunOptions, followable, refused};
 use crate::{Error, Wish, WishState, wish};
 
 /// The most names of files that are said of a run's work, and the most files the person's tools obey that the
@@ -81,6 +81,9 @@ pub struct Waiting {
     pub day: String,
     /// The day's made wishes whose work waits, in their order.
     pub waits: Vec<Waits>,
+    /// The day's made wishes a follow-up may be made of, in their order (F54): those whose work waits or was
+    /// kept. A page offers one under these and under no other.
+    pub follows: Vec<String>,
 }
 
 impl fmt::Display for Waiting {
@@ -275,7 +278,8 @@ pub fn waiting(home: &Path, options: &RunOptions) -> Result<Waiting, Error> {
     let day = wish::day_of(options.day.as_deref())?;
     let made = wish::kept_of(home, &day)?;
     let one = |made: &wish::MadeWish| waits(home, &RunOptions { wish: made.id.clone(), ..options.clone() });
-    Ok(Waiting { waits: made.iter().filter_map(one).collect(), day })
+    let follows = followable(home, &day);
+    Ok(Waiting { waits: made.iter().filter_map(one).collect(), follows, day })
 }
 
 /// The first file after number `after` that `run show --file` prints, from the first again past the last.

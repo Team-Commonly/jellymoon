@@ -32,8 +32,9 @@ pub use fonts::BundledMeasure;
 pub use geom::{Rect, Viewport};
 pub use layout::{
     EdgeKind, EdgePiece, EdgePlaced, EdgeWindow, MAX_BUBBLE_LINES, MAX_BUBBLE_TEXTS, MAX_NOTES, MAX_PIECES,
-    MAX_TEXT_LINES, MORE_NOTES_ID, PieceKind, Placed, TextRun, edge_windows, layout, layout_edge, layout_entry,
+    MAX_QUOTED_LINES, MAX_TEXT_LINES, MORE_NOTES_ID, PieceKind, Placed, TextRun, edge_windows, layout, layout_edge,
+    layout_entry,
 };
-pub use scene::{Character, Entry, LegendItem, Mark, Mood, Note, Scene, State};
+pub use scene::{Character, Entry, Field, LegendItem, Mark, Mood, Note, Scene, State};
 pub use text::{FixedAdvance, Measure, Role};
 pub use theme::{Loaded, Theme, ThemeError};

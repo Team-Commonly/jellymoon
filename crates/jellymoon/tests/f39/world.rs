@@ -14,7 +14,7 @@ use std::{env, fs, thread};
 use serde_json::Value;
 use tempfile::TempDir;
 
-use crate::support::{LIMIT, Ran, ZONE, jellymoon_in, plant, scratch, tree};
+use crate::support::{LIMIT, Ran, ZONE, door, jellymoon_in, plant, scratch, tree};
 
 #[path = "guard.rs"]
 mod guard;
@@ -345,12 +345,9 @@ impl World {
     /// Starts `jellymoon` with `more` variables after the world's and returns at once. What it prints is kept for
     /// [`ended`]: one line, which never fills a pipe. Dropped while it still goes, the command is killed.
     pub fn going(&self, more: &[(&'static str, OsString)], args: &[&str]) -> Going {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
         let vars = self.vars.iter().chain(more).map(|(name, value)| (name, value));
-        command.args(args).current_dir(self.dir.path()).env_clear().envs(vars);
-        if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-            command.env("SystemRoot", root); // a Windows program needs it to start
-        }
+        let mut command = door::jellymoon(vars, args);
+        command.current_dir(self.dir.path());
         Going::new(command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap())
     }
 }

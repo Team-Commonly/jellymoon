@@ -70,6 +70,10 @@ echo "== features"
 awk -F'"' '
   # A feature is blocked only while something its blockedBy names does not pass: a feature that is still
   # false, or words that name no feature at all.
+  # A row named under the key "dead" is never built: other rows stand in for it.
+  /^ *"dead":/ { indead = 1; next }
+  # Only an id that is a key counts, so the rows that stand in are not dead however the key is laid out.
+  indead { if ($2 ~ /^F[0-9]+$/ && $3 ~ /^: *\[/) { dead[$2] = 1; gone++ } next }
   /^ *"id":/ { n++; id[n] = $4; inby = 0 }
   /^ *"description":/ { desc[n] = $4 }
   /^ *"passes": *true/ { pass[id[n]] = 1; passing++ }
@@ -81,8 +85,9 @@ awk -F'"' '
       blocked = 0
       k = split(by[f], names, "\"")
       for (i = 2; i <= k; i++) if (!pass[names[i]]) blocked = 1
-      printf "%s  %-7s  %s\n", id[f], (pass[id[f]] ? "pass" : blocked ? "blocked" : "todo"), desc[f]
+      state = pass[id[f]] ? "pass" : dead[id[f]] ? "dead" : blocked ? "blocked" : "todo"
+      printf "%s  %-7s  %s\n", id[f], state, desc[f]
     }
-    printf "\n%d/%d passing\n", passing, n
+    printf "\n%d/%d passing, %d dead\n", passing, n, gone
   }
 ' feature_list.json

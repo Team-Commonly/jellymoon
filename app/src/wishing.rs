@@ -15,6 +15,7 @@
 use jellymoon_core::{DayOptions, MADE_SAID_MAX, RunOptions, Started};
 use sticker_kit::{Entry, Note, Scene};
 
+use crate::answering::UNANSWERED;
 use crate::read::Page;
 use crate::stopping;
 use crate::taps::{OnShow, UNTOLD};
@@ -64,6 +65,29 @@ pub struct Answer {
     seen: Seen,
     said: Option<Said>,
     asking: Option<Asking>,
+    /// Whether core took what was typed: the field it was typed in is emptied only then.
+    kept: bool,
+    /// After an answer core took (`answering.rs`): the wish, and its note as core says the wish stands then.
+    opened: Option<(String, Note)>,
+}
+
+impl Answer {
+    /// Core's answer to words for a wish: they were kept when a run is asked for.
+    pub(crate) fn of(seen: Seen, said: Option<Said>, asking: Option<Asking>) -> Self {
+        let kept = asking.is_some();
+        Answer { seen, said, asking, kept, opened: None }
+    }
+
+    /// Core's answer to an answer: it was taken when core had nothing to say against it.
+    pub(crate) fn taken(seen: Seen, said: Option<Said>, opened: Option<(String, Note)>) -> Self {
+        let kept = said.is_none();
+        Answer { seen, said, asking: None, kept, opened }
+    }
+
+    /// Whether core took what was typed.
+    pub fn kept(&self) -> bool {
+        self.kept
+    }
 }
 
 /// An Enter carried to core: the window runs it off its own thread, so a day that is locked, a slow disk or many
@@ -72,16 +96,16 @@ pub type Wishing = Box<dyn FnOnce() -> Answer + Send>;
 
 /// The body of a wish's note: the start of the wish as core cleans it, so nothing a page would hide is shown, and
 /// why.
-fn of(words: &str, why: &str) -> String {
+pub(crate) fn of(words: &str, why: &str) -> String {
     format!("“{}”: {why}", jellymoon_core::wish_start(words, NAMED_MAX))
 }
 
 fn of_a_wish(note: &Note) -> bool {
-    matches!(note, Note::Plain { title, .. } if [UNKEPT, UNSTARTED].contains(&&**title))
+    matches!(note, Note::Plain { title, .. } if [UNKEPT, UNSTARTED, UNANSWERED].contains(&&**title))
 }
 
 /// The note of the wish just entered, when it left one, in place of the notes of the wishes before.
-fn newest(scene: &mut Scene, said: Option<Said>) {
+pub(crate) fn newest(scene: &mut Scene, said: Option<Said>) {
     scene.notes.retain(|note| !of_a_wish(note));
     if let Some((title, body)) = said {
         scene.notes.insert(0, Note::Plain { title: title.to_string(), body });
@@ -114,18 +138,22 @@ impl OnShow {
             };
             let mut now = today.again(page.as_ref(), &from);
             newest(&mut now, said.clone());
-            Answer { seen: Seen { from, now }, said, asking }
+            Answer::of(Seen { from, now }, said, asking)
         })
     }
 
     /// What a [`Wishing`] gave: the scene to show, and the asking for the wish's run when core kept the wish. With
     /// none the words were not kept, and the entry keeps them. When the scene on show changed while core was asked,
-    /// only the note is put on it here, and the next look draws the wish.
+    /// only the note is put on it here, and the next look draws the wish. The same for what [`OnShow::typing`]
+    /// gave, the words typed under a made wish.
     pub fn answered(&mut self, answer: Answer) -> (Scene, Option<Asking>) {
         if self.scene == answer.seen.from {
             self.scene = answer.seen.now;
         } else {
             newest(&mut self.scene, answer.said);
+            if let Some((wish, note)) = answer.opened {
+                working::reopen(&mut self.scene, &wish, note);
+            }
         }
         (self.scene.clone(), answer.asking)
     }

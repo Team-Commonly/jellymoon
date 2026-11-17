@@ -450,7 +450,7 @@
         "the shell decides nothing: every refusal drawn is core's, and a question is drawn as text and never as a link or a control"
       ],
       "test": "cargo test -p jellymoon-app --test f54",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F47",
         "F52"
@@ -745,6 +745,153 @@
       "blockedBy": [
         "F67"
       ]
+    },
+    {
+      "id": "F74",
+      "category": "journal",
+      "description": "No test of `jellymoon` can start it in a real home, or ask a real login shell",
+      "steps": [
+        "the binary's test support refuses to start `jellymoon` when the home, Jellymoon's folder, `CLAUDE_CONFIG_DIR`, or the value of `--logs`, `--settings` or `--repo` is a full path outside the system's temporary folder and the one Cargo gives tests, with links resolved on both sides as far as the path exists: one fixed sentence, and nothing is started; with no home, an empty one or one that is not a full path it starts, as before",
+        "it sets `JELLYMOON_SHELL` to nothing in every world it starts, and refuses a world that names a login shell outside those two folders; the smoke chain's world sets it to nothing too",
+        "the tests that start `jellymoon` through another program (the hook's entry in `f29.rs`, the installer in `f33.rs`, a copy under another name in `f35/delivery.rs`, a made-up asker in `f41/apart.rs`) give that program a world the door has passed",
+        "`cargo xtask check` refuses a test file under the binary's tests that starts the program, or builds a home, outside the support, and a test in core that calls the harness's look with the process's own environment; it names the file and its line, and the rule's own test is xtask's",
+        "on macOS, Linux and Windows; F73 is replaced by this row and F75, and is never built"
+      ],
+      "test": "cargo test -p jellymoon --test f74",
+      "passes": true,
+      "blockedBy": []
+    },
+    {
+      "id": "F75",
+      "category": "journal",
+      "description": "No test of `jellymoon-app` can start it in a real home, or ask a real login shell",
+      "steps": [
+        "the app's test support refuses to start `jellymoon-app` when the home, Jellymoon's folder, `CLAUDE_CONFIG_DIR`, or the value of `--logs` is a full path outside the system's temporary folder and the one Cargo gives tests, with links resolved on both sides as far as the path exists: one fixed sentence, and nothing is started; `jellymoon-app layout` with no home still starts",
+        "it sets `JELLYMOON_SHELL` to nothing in every world it starts",
+        "`cargo xtask check` refuses a test file under the app's tests that starts the program, or builds a home, outside the support, and a test in the app that calls the harness's look with the process's own environment; the rule's own test is xtask's",
+        "on macOS, Linux and Windows; with F74 this row replaces F73"
+      ],
+      "test": "cargo test -p jellymoon-app --test f75",
+      "passes": false,
+      "blockedBy": [
+        "F74"
+      ]
+    },
+    {
+      "id": "F76",
+      "category": "journal",
+      "description": "What another program sent to a headless Claude Code is not on a person's page as their words",
+      "steps": [
+        "`jellymoon day` over a session whose typed-looking lines carry `entrypoint` `sdk-cli` prints no turn and no reply of them; lines with `entrypoint` `cli`, with another value or with none are read as before",
+        "it is decided for each line: one file with both kinds gives the `cli` turns only, and a left-out line still ends the turn before it",
+        "a left-out line's `uuid` is not held: a person's own typed line with the same `uuid`, in a file read after it, is still a turn",
+        "a compaction summary is still no turn, a fork's or a resume's copies of a typed line are still counted once, and `jellymoon page` hands the reading call the same turns `jellymoon day` prints; a project that is not on the list of projects and whose sessions that day are all headless is not found by `jellymoon run` with no `--repo`, which says so as it does for a day nothing was typed",
+        "on macOS, Linux and Windows; this row replaces the headless half of F70, which is never built"
+      ],
+      "test": "cargo test -p jellymoon --test f76",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F77",
+      "category": "journal",
+      "description": "A harness Jellymoon starts from inside a Claude Code session is not told it is that session's child",
+      "steps": [
+        "with `CLAUDECODE` and several `CLAUDE_CODE_*` variables set on `jellymoon`, none reaches the harness of `jellymoon page`",
+        "none reaches the harness of `jellymoon run`, of `jellymoon run answer`, or of a follow-up's run",
+        "the variables a harness is started with are the listed ones and no other, on macOS, Linux and Windows",
+        "this row replaces the last step of F67, which is never built"
+      ],
+      "test": "cargo test -p jellymoon --test f77",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F78",
+      "category": "journal",
+      "description": "Claude Code is found when the app is opened from the Finder, and `jellymoon harness` says how",
+      "steps": [
+        "on macOS and Linux, with no harness on `PATH` or in a fixed place and `JELLYMOON_CLAUDE` not set, `jellymoon page` and `jellymoon run` start the harness found in a folder the login shell's `PATH` names; the login shell is the one `JELLYMOON_SHELL` names, and what it prints outside the two marks changes nothing",
+        "a login shell that is not a full path, that others can write to, that is not on core's list, that prints no pair of marks or more than one, or that has not answered in 5 seconds starts no harness: the error is today's, with the login shell among the places looked in, and a second command asks again; whether it answered or not, the login shell and what it left in its group are gone when the command returns",
+        "a harness found there is passed over when the group or everyone can write to it, or everyone can write to its folder or to the folder its link-resolved file is in; with `JELLYMOON_SHELL` set to nothing, or with a harness on `PATH` or in a fixed place, no login shell is started",
+        "`jellymoon harness` prints one line of JSON: whether a harness was found, how, from a closed list, and one fixed sentence, with no folder of the login shell's `PATH` in it; on Windows it says the login shell is not asked; it is a step of the smoke chain",
+        "this row replaces the first four steps of F67 but the shim, which is F81; F67 is never built"
+      ],
+      "test": "cargo test -p jellymoon --test f78",
+      "passes": false,
+      "blockedBy": [
+        "F74",
+        "F75"
+      ]
+    },
+    {
+      "id": "F79",
+      "category": "journal",
+      "description": "A person whose Jellymoon misbehaves has a log to send, with nothing of theirs in it",
+      "steps": [
+        "a run that ends, and a reading call that was started and failed, each leave one line in `app.log` in Jellymoon's folder: a time, a code from a closed list, that code's fixed sentence, numbers and at most a kind from a closed list, with no name of a file, a folder or a project",
+        "a refusal and a usage error leave Jellymoon's folder byte for byte as it was, and `jellymoon hook` writes no line at any step",
+        "after a run that ended and a reading call that failed, `app.log` and the older file hold no word of the wish, the question, the answer, the agent's text or the harness's output, and no path",
+        "a line that would take `app.log` over its cap makes it the one older file, in place of the one there was: there are never three files, several commands writing at once leave only whole lines, and a log that cannot be written or rotated fails no command",
+        "on macOS, Linux and Windows, and for the person alone where the system has modes; with F80 this row replaces F68, which is never built"
+      ],
+      "test": "cargo test -p jellymoon --test f79",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F80",
+      "category": "journal",
+      "description": "The app's failures are in the same log, one line for a code",
+      "steps": [
+        "`jellymoon-app layout` on a day whose page cannot be read leaves one line in `app.log`: a code, its fixed sentence and numbers, with no name and no word of the page",
+        "`jellymoon-app layout --jelly` over a look that fails leaves one line for its code, with no name and no word of a wish",
+        "`jellymoon-app layout` that is refused for its arguments leaves Jellymoon's folder byte for byte as it was",
+        "on macOS, Linux and Windows; with F79 this row replaces F68"
+      ],
+      "test": "cargo test -p jellymoon-app --test f80",
+      "passes": false,
+      "blockedBy": [
+        "F79"
+      ]
+    },
+    {
+      "id": "F81",
+      "category": "journal",
+      "description": "A Claude Code that a version manager's shim starts is run as the person's terminal runs it",
+      "steps": [
+        "on macOS and Linux, a harness found by the login shell is started with this process's `PATH`, then the folders the login shell named, in their order, then the fixed places: a made-up shim that starts its program by name from another of those folders runs it",
+        "a folder of the login shell's `PATH` that everyone can write to, that is not a full path or that is not there is not passed on, and this is looked at again at every start",
+        "a harness found on `PATH`, in a fixed place or by `JELLYMOON_CLAUDE` is started with what it is started with today",
+        "no shim is read to learn the program it names; this row replaces the shim step of F67, which is never built"
+      ],
+      "test": "cargo test -p jellymoon --test f81",
+      "passes": false,
+      "blockedBy": [
+        "F78"
+      ]
+    },
+    {
+      "id": "F82",
+      "category": "journal",
+      "description": "A session Claude Code marked as moved is counted once",
+      "steps": [
+        "`jellymoon day` over a session with a line that marks it as moved prints each typed turn once, under the project its own line names",
+        "the marking line is no turn and ends none",
+        "`jellymoon page` hands the reading call the same turns",
+        "on macOS, Linux and Windows; this row replaces the moved-session half of F70"
+      ],
+      "test": "cargo test -p jellymoon --test f82",
+      "passes": false,
+      "blockedBy": [
+        "a session log line that marks a moved session, to type the fixture from"
+      ]
     }
-  ]
+  ],
+  "dead": {
+    "F67": ["F77", "F78", "F81"],
+    "F68": ["F79", "F80"],
+    "F70": ["F76", "F82"],
+    "F73": ["F74", "F75"]
+  }
 }

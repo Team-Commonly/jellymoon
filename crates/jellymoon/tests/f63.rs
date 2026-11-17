@@ -125,6 +125,46 @@ fn a_made_wish_alone_gives_the_day_its_page() {
     assert_eq!(w.starts(), 0);
 }
 
+/// What is said of a logs path that is no folder.
+const NOT_A_FOLDER: &str = "reading the session logs: they are looked for in a folder, and what is there is not one";
+
+// A logs path that is no folder, or a folder that cannot be listed, is not a day nothing was typed on: nothing
+// was read. `page` and `day` refuse it in fixed words that name no path, print nothing and write nothing, though
+// the day has a made wish and a project on offer, which a day with no logs at all has its page for.
+#[test]
+fn a_logs_path_that_is_a_file_or_a_folder_that_cannot_be_listed_is_refused_and_is_no_day_with_nothing_typed() {
+    let (w, _) = listed();
+    w.wish("alpha");
+    let file = w.at("logs-file");
+    fs::write(&file, "").unwrap();
+    // The closed folder is a case on Unix only, so elsewhere nothing is added to the list.
+    #[cfg_attr(not(unix), allow(unused_mut))]
+    let mut cases = vec![("a file", file, format!("jellymoon: {NOT_A_FOLDER}\n"))];
+    #[cfg(unix)]
+    {
+        let closed = logs(&w, Logs::OtherDay);
+        fs::set_permissions(&closed, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+        // Whoever may list every folder (root) is not refused, and has nothing to show here.
+        if fs::read_dir(&closed).is_err() {
+            let denied = std::io::Error::from_raw_os_error(13);
+            cases.push(("a closed folder", closed, format!("jellymoon: reading the session logs: {denied}\n")));
+        }
+    }
+    let before = w.home();
+    for (case, logs, line) in &cases {
+        for command in ["page", "day"] {
+            let ran = w.run(&[command, "--date", DAY, "--logs", logs.to_str().unwrap()]);
+            let printed = (ran.code, ran.stdout.as_str(), ran.stderr.as_str());
+            assert_eq!(printed, (1, "", line.as_str()), "{case}: {command}");
+        }
+    }
+    assert_eq!((w.home(), w.starts()), (before, 0), "a refusal wrote into the home, or a reading call was made");
+    #[cfg(unix)]
+    for (_, logs, _) in cases.iter().skip(1) {
+        fs::set_permissions(logs, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    }
+}
+
 /// Makes a wish for `alpha` with the agent playing `script`, runs it over `logs` when an outcome is given, and
 /// returns its id.
 fn wished(w: &World, logs: &Path, script: &str, outcome: Option<&str>) -> String {

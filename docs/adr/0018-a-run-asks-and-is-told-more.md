@@ -278,6 +278,35 @@ Two reviews after the merge left these, each fixed with its case seen failing fi
   seen it. It is played on the made-up git that says 2.39.5, for followed work kept by moving the branch
   forward and for a follow-up made after a joined keep: both are kept.
 
+## Found while building F54
+
+- **Core gained one function and one key, and no rule of a run.** `followable(home, day)` lists the day's made
+  wishes `wish --after` would not refuse for the wish they name, by the check `wish --after` makes
+  (`run/follow.rs`, `followed`). `jellymoon run waiting` prints it as `follows`. The app offers `More like
+  this` from that list and never from a state's name. Nothing a run is given, or may do, changed.
+- **Where a wish asks is the wish's `question`.** Core leaves it out unless the run asks, so the app draws the
+  question and its field wherever a made wish has one, and reads no state for it.
+- **The offer stands over its field, not beside a row.** Decision 9 and the slice say "beside shown work". A
+  work note's three choices fill a row at the smallest window, so the kit places the offer on a line of its
+  own under them, with the field under it.
+- **The kit's text note gained quoted words and a field.** The kit names them so (`quoted`, `Field`, pieces
+  `quote`, `field`, `offer`) and knows nothing of a question or a follow-up. A field is the entry's own code
+  (`EntryState`, the same keys, focus and input method), one for each note that has a field, found by the
+  note's id; Enter reaches the entry's handler with that id.
+- **An answered run lives in the app's process.** A typed wish's run is a process of its own, started through
+  the installed command. An answer has one call in core, `answer_run`, which waits for the run's end, and an
+  "answer apart" would be a new rule of a run, which this slice may not add. So the app holds the call on a
+  thread of its own, the field waits until the run ends, and a window closed meanwhile leaves a run that was
+  cut off. Open: a `run answer` started apart, as `wish --run` starts a run.
+- **A field holds 400 characters.** The kit's cap on a line is 400 and core's bound on an answer 600. An answer
+  of 401 to 600 characters is given with `jellymoon run answer`. Open: raise the kit's cap, or name the bound.
+- **A refusal is drawn under an app title.** "That answer was not taken." is the app's, as "That wish was not
+  kept." is; the sentence under it is core's, whole, with a full stop.
+- **`layout` prints the note of every wish that can be typed to.** It has no tap, so the notes of wishes that
+  ask and of kept work are printed after those of work that waits. In the window one wish is open at a time.
+- **Not measured.** No real window, no real harness: the keys, the caret and an input method in a note's field
+  are proved on GPUI's test dispatch, and the answered run on the made-up agent.
+
 ## Read, not measured
 
 - Claude Code's hooks page, read 2026-11-12, for "Not chosen": `defer` "requires non-interactive mode", is ignored

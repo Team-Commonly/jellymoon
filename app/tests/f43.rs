@@ -200,6 +200,8 @@ fn a_tap_on_any_other_character_or_on_a_wish_with_no_run_going_stops_nothing_and
             title: title.into(),
             body: vec![format!("“{said}”")],
             options: vec![],
+            quoted: String::new(),
+            field: None,
         };
         assert_eq!((&scene.notes[0], &scene.notes[1..], stops(&scene).len()), (&want, &page.notes[..], 0));
         assert!(poke(&mut on, id).is_none(), "the note of {id:?} is shown once");

@@ -6,6 +6,7 @@
 //! - [`taps`]: what a tap on a day's page does: a ruling through core, or the delivery hook turned on.
 //! - [`wishing`]: a wish typed in the window: kept by core, its run asked of core, and the page looked at again.
 //! - [`working`]: a tap on a little one opens its wish, and work that waits is shown, kept or tossed through core.
+//! - [`answering`]: what is typed under a made wish: an answer to its run's question, or a follow-up, through core.
 //! - [`today`]: the day's page, kept in the user's own folder and read again through core when the day has moved on.
 //! - [`showing`]: what the window does with a key, a tap, Enter, a reading step and a look, with no window.
 //! - [`window`]: the kit's view of the scene in a window (feature `window`): wiring only.
@@ -59,6 +60,7 @@ pub fn echoed(given: &str) -> String {
     sticker_kit::text::clean(given, ECHOED)
 }
 
+pub mod answering;
 pub mod jelly;
 #[cfg(feature = "window")]
 pub mod jellyfish;

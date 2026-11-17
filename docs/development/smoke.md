@@ -81,7 +81,8 @@ run's id, by a third run that had opened the old lock file before it was unlinke
 | `uninstall` | `jellymoon uninstall` removes a stand-in app and command and leaves their folders empty; the hook is out and the settings are as they were |
 | `window` (with `--window`) | `jellymoon-app --page` opens a window and, with `JELLYMOON_QUIT_AFTER=3`, exits 0 within 30 seconds with no panic |
 
-A made-up run starts each program with no variable of the caller's: a scratch `HOME`, `CLAUDE_CONFIG_DIR`,
+A made-up run starts each program with no variable of the caller's and `JELLYMOON_SHELL` set to nothing, so no
+login shell is asked (ADR 0021, decision 7): a scratch `HOME`, `CLAUDE_CONFIG_DIR`,
 `JELLYMOON_HOME`, `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` in the temporary home, and `JELLYMOON_CLAUDE` naming the copy of
 `fake-claude` there. It never runs Claude Code and never reads a real log. The `copy`, `run`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `follow`,
 `wish-run`, `project` and `new` steps alone are given the caller's `PATH`, to find git, with an empty global git config and the system's switched off.

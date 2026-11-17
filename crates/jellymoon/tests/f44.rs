@@ -31,7 +31,7 @@ use std::process::{Command, Stdio};
 use std::{env, fs};
 
 use serde_json::{Value, json};
-use support::{Ran, tree};
+use support::{Ran, system_scratch, tree};
 pub use world::*;
 
 /// What every made-up file of a run's work holds somewhere: no file under a test's folder may hold it afterwards.
@@ -180,7 +180,7 @@ fn an_object_is_read_as_it_is_whatever_the_repo_names_to_stand_in_its_place() {
 #[test]
 fn the_repo_is_found_as_a_run_finds_it_by_the_wishs_project_in_the_days_logs() {
     // In the system's own temporary folder, as F39's test of the same lookup is (`f39/refused.rs`).
-    let made = finished_in(world_in(tempfile::tempdir().unwrap()));
+    let made = finished_in(world_in(system_scratch()));
     let logs = made.w.at("typed-logs");
     let show = || made.w.run(&["run", "show", "--wish", "m1", "--date", DAY, "--logs", logs.to_str().unwrap()]);
     let typed = support::said("2026-03-10T16:00:00.000Z", made.repo.to_str().unwrap(), "look at the uploader");

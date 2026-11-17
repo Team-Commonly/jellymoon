@@ -23,6 +23,8 @@ pub(crate) struct Brush<'a> {
     /// The entry's chosen option, and whether the entry has the keys.
     pub chosen: Option<usize>,
     pub lit: bool,
+    /// The note whose field has the keys.
+    pub keyed: Option<&'a str>,
 }
 
 impl Brush<'_> {
@@ -102,24 +104,40 @@ impl Brush<'_> {
                     self.mark(*mark, rect, out);
                 }
             }
-            // The three are told apart by more than a shade: the field with the keys has a ring, the chosen chip
-            // is filled, with a line round it when its fill is close to the other chips', and the hint is grey
-            // ([`Brush::ink`]).
-            PieceKind::Entry if self.lit => out.push(self.pill(rect, p.entry, p.entry_ring)),
-            PieceKind::Entry => out.push(self.pill(rect, p.entry, p.entry_edge)),
-            PieceKind::Chip if self.chosen == Some(piece.index) => {
-                out.push(self.pill(rect, p.chip_chosen, p.chosen_edge()));
-            }
-            PieceKind::Chip => out.push(self.pill(rect, p.chip, p.chip)),
-            _ => {}
+            _ => out.extend(self.typed(piece, rect)),
         }
+    }
+
+    /// The ground of a piece a person types in or chooses, and of someone else's words. The three of an entry
+    /// are told apart by more than a shade: the field with the keys has a ring, the chosen chip is filled, with
+    /// a line round it when its fill is close to the other chips', and the hint is grey ([`Brush::ink`]).
+    fn typed(&self, piece: &Placed, rect: Rect) -> Option<Shape> {
+        let p = &self.theme.palette;
+        Some(match piece.piece {
+            PieceKind::Entry if self.lit => self.pill(rect, p.entry, p.entry_ring),
+            PieceKind::Entry => self.pill(rect, p.entry, p.entry_edge),
+            PieceKind::Chip if self.chosen == Some(piece.index) => self.pill(rect, p.chip_chosen, p.chosen_edge()),
+            PieceKind::Chip | PieceKind::Offer => self.pill(rect, p.chip, p.chip),
+            // A note's field is drawn as the entry's is, and someone else's words on a ground no other text has.
+            PieceKind::Field if self.keyed == Some(piece.id.as_str()) => self.pill(rect, p.entry, p.entry_ring),
+            PieceKind::Field => self.pill(rect, p.entry, p.entry_edge),
+            PieceKind::Quote => Shape::Slab {
+                rect,
+                radius: (10.0 * self.k).min(rect.h / 2.0),
+                fill: p.bubble,
+                edge: Some((p.bubble_ring, self.k)),
+                shadow: None,
+                grid: None,
+            },
+            _ => return None,
+        })
     }
 
     /// The colour a piece's text is painted in.
     pub fn ink(&self, piece: &Placed, role: Role) -> Color {
         let p = &self.theme.palette;
         match (piece.piece, role) {
-            (PieceKind::Entry, _) => p.entry_hint,
+            (PieceKind::Entry | PieceKind::Field, _) => p.entry_hint,
             (PieceKind::Chip, _) if self.chosen == Some(piece.index) => p.chip_chosen_ink,
             (_, Role::LabelStruck | Role::Body | Role::Legend) => p.soft,
             (_, Role::RowSub | Role::OptionStruck | Role::Footer) => p.quiet,
@@ -187,7 +205,7 @@ mod tests {
     fn painted(theme: &Theme, lit: bool) -> Vec<(Color, Color, Color)> {
         let entry = Entry { id: "wish".into(), hint: "wish".into(), options: vec!["a".into(); 3], most: 0 };
         let placed = layout_entry(&entry, theme, Viewport { w: 1440.0, h: 900.0 }, &FixedAdvance(0.5));
-        let brush = Brush { theme, scene: &Scene::default(), k: 1.0, chosen: Some(1), lit };
+        let brush = Brush { theme, scene: &Scene::default(), k: 1.0, chosen: Some(1), lit, keyed: None };
         let colours = |piece: &Placed| {
             let mut out = Vec::new();
             brush.add(piece, REST, &mut out);

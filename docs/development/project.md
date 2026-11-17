@@ -241,7 +241,8 @@ What a run says, where `<way out>` is ``name one with --repo, or let it go with 
   there is left as it is; the file is 0600 either way.
 - **The write.** Whole, into a new file beside its place that is then moved there, 0600, behind
   `projects.lock` in the same folder: a file only one command can make, removed when the change is done, waited
-  for 3 seconds, and taken over when it is 30 seconds old (the tap's lock, [delivery.md](delivery.md)). A change
+  for 3 seconds, and taken over when it was left behind, which can leave `take-over.lock` beside it (the tap's
+  lock, [delivery.md](delivery.md), "The lock"). A change
   is tried on the list before the lock is asked for, so a refusal makes no folder and no file, and again
   behind the lock. A making (`project new`) holds the lock from its second look to its line on the list. Reading takes no lock: a reader sees the old file or the new one.
 - **The read.** The file is untrusted. It is used only when it is a plain file, never a link, that its group

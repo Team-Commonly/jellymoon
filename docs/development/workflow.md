@@ -25,6 +25,24 @@ One long-running builder session builds Jellymoon, with subagents for parallel p
 - **`HOME` is never empty or unset in a probe or a test.** The platform then finds the real account's home another
   way, and the run reads a real person's files. Ours reads the variable only, and only a full path
   (`jellymoon_core::user_home`); a run still gets a scratch home, `PATH` and `JELLYMOON_SYSTEM_BIN`.
+- **A test starts `jellymoon` through the door, and only there.** `crates/jellymoon/tests/support/door.rs` is the
+  one place that names the built program. It refuses, in one fixed sentence and before anything is started, a
+  world whose home (`HOME`, `USERPROFILE`), `JELLYMOON_HOME`, `CLAUDE_CONFIG_DIR`, or value of `--logs`,
+  `--settings` or `--repo` is a full path outside the system's temporary folder and the one Cargo gives tests,
+  with links resolved on both sides as far as the path is there. No home, an empty one and one that is not a full
+  path still start. It sets `JELLYMOON_SHELL` to nothing in every world, and a test may name only a made-up login
+  shell under a temporary folder. A program that starts `jellymoon` itself (the hook's entry, the installer, a
+  made-up asker) is started through `door::command`, with the same check. A test's folder comes from the support
+  too (`scratch`, `system_scratch`, `kept_scratch`).
+- **`cargo xtask check` holds tests to the door** (`crates/xtask/src/rules/door.rs`). It reads lines, not Rust. In a
+  file under `crates/jellymoon/tests` outside `support/` it refuses a line that names the built program
+  (`CARGO_BIN_EXE_jellymoon`) or makes a temporary folder (`tempdir`, `TempDir::new`, `temp_dir(`). In core's tests
+  (a file under `tests/`, a `tests.rs`, and what follows `#[cfg(test)]` in a file) it refuses the harness looked
+  for with the process's own environment (`harness()`, `named_or_found(None`, `harness: None`). It cannot see a
+  program started from a path a test read out of a file or took from `door::built()`, a home put in a variable by
+  hand and given to another program with `Command::new`, options built with `..Default::default()`, or the same
+  thing written across two lines. The ignored test of F29 that runs the real Claude Code starts it with the
+  person's own variables, by design, and is not covered.
 - **Builders on different trees never share one `CARGO_TARGET_DIR`.** The programs Cargo lifts to the folder's top,
   `xtask` among them, overwrite each other, and a test runs another tree's program. Take a copy-on-write copy of a
   warm folder and clear the workspace crates' builds in it.

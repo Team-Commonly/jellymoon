@@ -80,11 +80,10 @@ This is the only way text gets from a page into a running session, so what is ch
 - **The order of writes** is the lock, the ruling, the settlement. A lock file, `<day>.ruled.lock`, made with
   create-new, is held from reading what stands to the last write, so two taps at once on two clashes both keep
   theirs and two on one statement make one ruling. A tap waits 3 seconds by the clock for it, trying every 10 ms,
-  and is then refused in one line with nothing changed. A lock is one a crash left, and is removed and taken, when
-  it is older than 30 seconds, when it is dated ahead of now, or when its age cannot be read. A folder at the
+  and is then refused in one line with nothing changed. A folder at the
   lock's name is never removed: every tap on that day is refused after the same 3 seconds until it is taken away.
-  Two taps that both find a stale lock can each remove it and take it in turn; this was not seen in 80 rounds and
-  is not ruled out. `pages` is made the person's alone (0700) only once the lock is held. The settlement is written to a
+  What the lock promises, when one is taken over and what a crash leaves is "The lock" below.
+  `pages` is made the person's alone (0700) only once the lock is held. The settlement is written to a
   file of the process's own, made with create-new and 0600, and moved into place; a link waiting at either name is
   replaced, never followed, and a failed write removes its temporary file.
 - **On Windows** a file another process is using at that moment cannot be made, opened, removed or renamed over:
@@ -97,6 +96,42 @@ This is the only way text gets from a page into a running session, so what is ch
   words. Seen once in three CI runs before this, in eight wishes made at once; that test now runs 12 rounds and the
   taps' 24. A run's `runs/clean.lock` is not of this kind: it is the system's lock on a file that is never
   removed or renamed, and a copy's record is read only behind it.
+- **The lock** is the day's, and `projects.lock` of the list of projects is the same lock
+  (`crates/jellymoon-core/src/lock.rs`): a file only one caller can make, removed by that caller when its change is
+  done.
+  - **Promised.** While a caller holds the lock, and its change takes under 30 seconds, no other caller holds
+    it and nothing removes it. A caller that waits removes only a lock that was *left behind*: something at the
+    name that is no folder and was last written more than 30 seconds from now, before or after, since a clock
+    that was set back dates a lock ahead. Nothing at the name, a lock that cannot be looked at (on Windows, one
+    that is being removed), a lock whose time cannot be read and a lock dated up to 30 seconds ahead are waited
+    for, never removed.
+  - **A take-over.** A lock left behind is removed only behind the system's lock on `take-over.lock` beside it
+    (in `pages`; in the home for the list), and only when a second look, made there, finds it left behind still.
+    So of all the callers that found one lock left behind, one removes it, and none removes the lock the next
+    holder made. Each then asks for the name again, as any caller does, and one of them gets it. Where the
+    system's lock is not to be had (its file cannot be made, something that is no plain file is at its name, the
+    disk gives no such locks) nothing is removed, and the caller is refused after its 3 seconds.
+  - **Letting go.** A holder removes its lock when its change is done, unless the lock counts as left behind
+    by then, by the time the disk gave it when it was made. Such a lock may have been taken over, and what is at
+    the name is then another caller's: it stays, and the next caller takes it over.
+  - **What a crash leaves.** A command killed while it holds the lock leaves the lock's file. For 30 seconds
+    every change to that day, or to the list, is refused after its 3 seconds; then the next caller takes the lock
+    over. `take-over.lock` is an empty file for the person alone, made by the first take-over in its folder and
+    never removed. A command killed in the middle of a take-over leaves nothing more: the system drops its lock.
+  - **Not promised.** A change that takes over 30 seconds, as when the computer sleeps in the middle of one, is
+    not protected: its lock can be taken over while it is still at work, and two changes then write the day. A
+    folder on a disk whose clock is more than 30 seconds from the computer's gives no lock at all, as every lock
+    made there counts as left behind. A lock a crash left with a time that cannot be read, or dated less than 30
+    seconds ahead by a clock set back, stays until its time is 30 seconds past or the person removes the file. A
+    `jellymoon` built before this change still removes a lock as described next. On Windows nothing of this was
+    run by its builder: it rests on the tests there.
+  - **Before this change** a caller that waited removed whatever was at the name whenever its look at the lock
+    failed, for any reason. One reason is that the holder had just let go: by the removal the name could be the
+    next holder's, and two callers then wrote behind one lock. In one CI run on Windows that lost a made wish:
+    eight wishes were made at once, each command exited 0 with its line, and seven were kept. Two callers that
+    both found a lock left behind could also each remove it, the second removing the first's new lock. Both
+    are shown by `crates/jellymoon-core/src/lock/tests.rs`, which holds each of many threads between its look
+    and what it does about it; unslowed, the first showed in no take of 3600 on a Mac.
 - **When the settlement cannot be written** the ruling stands: exit 0, the ruling in the JSON, the reason in
   `unkept`, and one line on stderr, "the ruling was made, but the page could not keep it". The same holds after a
   crash between the two writes. For the 24 hours the ruling waits it says what stands, so the same tap again makes

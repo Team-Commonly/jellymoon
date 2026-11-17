@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use std::{env, fs, thread};
 
 use serde_json::{Value, json};
-use support::{Ran, hub_key, jellymoon_fed, scratch};
+use support::{Ran, door, hub_key, jellymoon_fed, scratch};
 use tempfile::TempDir;
 
 const STANDS: &str = "never retry uploads, fail fast";
@@ -88,7 +88,7 @@ fn context(ran: &Ran, event: &str) -> String {
 
 /// The entry `install` adds: this program, run with no shell, so the same entry works on Windows.
 fn entry() -> Value {
-    json!({"hooks": [{"type": "command", "command": env!("CARGO_BIN_EXE_jellymoon"), "args": ["hook"]}]})
+    json!({"hooks": [{"type": "command", "command": door::built(), "args": ["hook"]}]})
 }
 
 /// The command of the entry at the head of the `PostToolUse` list is this program, wherever a link to it points.
@@ -96,7 +96,7 @@ fn is_ours(group: &Value) {
     let mut group = group.clone();
     let command = group["hooks"][0]["command"].take();
     let same = |path: &str| Path::new(path).canonicalize().unwrap();
-    assert_eq!(same(command.as_str().unwrap()), same(env!("CARGO_BIN_EXE_jellymoon")));
+    assert_eq!(same(command.as_str().unwrap()), same(door::built()));
     let mut rest = entry();
     rest["hooks"][0]["command"].take();
     assert_eq!(group, rest);
@@ -257,11 +257,8 @@ fn the_installed_entry_run_with_no_shell_hands_the_ruling_over() {
     let args: Vec<&str> = handler["args"].as_array().unwrap().iter().map(|arg| arg.as_str().unwrap()).collect();
     let input = w.dir.path().join("input");
     fs::write(&input, step("s-1", "PostToolUse")).unwrap();
-    let mut command = Command::new(handler["command"].as_str().unwrap());
-    command.args(args).env_clear().envs(w.vars.iter().map(|(name, value)| (*name, value.as_os_str())));
-    if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-        command.env("SystemRoot", root);
-    }
+    let vars = w.vars.iter().map(|(name, value)| (*name, value.as_os_str()));
+    let mut command = door::command(handler["command"].as_str().unwrap(), vars, &args);
     let out = command.stdin(fs::File::open(&input).unwrap()).output().unwrap();
     assert!(out.status.success() && String::from_utf8(out.stdout).unwrap().contains(STANDS));
 }

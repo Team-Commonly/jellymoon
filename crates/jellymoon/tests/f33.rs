@@ -108,7 +108,7 @@ mod mac {
     use serde_json::{Value, json};
     use tempfile::TempDir;
 
-    use super::support::scratch;
+    use super::support::{door, scratch};
 
     const QUARANTINE: &str = "com.apple.quarantine";
 
@@ -144,7 +144,7 @@ mod mac {
         let release = root.join(name);
         let (this, other) = chips();
         for (chip, version) in [(this, version), (other, "9.9.9")] {
-            let built = env!("CARGO_BIN_EXE_jellymoon");
+            let built = door::built();
             ok(Command::new("sh")
                 .arg(repo().join("app/macos/bundle.sh"))
                 .args([built, built, version, chip])
@@ -177,9 +177,9 @@ mod mac {
         }
         /// Every variable is set here: the real home, the real `PATH` and the real release address are never seen.
         pub fn command(&self, program: &Path, path: &str) -> Command {
-            let mut command = Command::new(program);
-            command.env_clear().env("HOME", self.home()).env("TMPDIR", self.root.path().join("tmp")).env("PATH", path);
-            command
+            let (home, tmp) = (self.home(), self.root.path().join("tmp"));
+            let vars = [("HOME", home.as_os_str()), ("TMPDIR", tmp.as_os_str()), ("PATH", std::ffi::OsStr::new(path))];
+            door::command(program, vars, &[] as &[&str])
         }
         fn install(&self, release: &Path) -> Output {
             self.install_on(release, "/usr/bin:/bin:/usr/sbin")

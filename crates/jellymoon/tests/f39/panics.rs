@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use std::{env, fs, thread};
 
 use super::{DAY, alive, wait_for, world_in};
-use crate::support::scratch;
+use crate::support::{kept_scratch, scratch};
 
 /// Names the folder the panicking test makes its world in. Only the test that starts that one sets it.
 const INSIDE: &str = "JELLYMOON_TEST_PANICS_IN";
@@ -27,7 +27,7 @@ fn going(world: &Path) -> bool {
 fn a_test_panics_with_an_agent_that_never_ends_and_a_command_that_waits() {
     let Some(inside) = env::var_os(INSIDE) else { return };
     // Its folder is kept when the world is dropped, for the test that started this one to look in.
-    let w = world_in(tempfile::Builder::new().disable_cleanup(true).tempdir_in(inside).unwrap());
+    let w = world_in(kept_scratch(Path::new(&inside)));
     let (repo, wish, second) = (w.repo("alpha"), w.wish("alpha"), w.wish("alpha"));
     // The agent leaves a program of its own in another process group, and then neither ends by itself.
     w.play("holds", 2);

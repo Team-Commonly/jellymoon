@@ -20,7 +20,7 @@ pub fn in_repo(world: &World, repo: &Path, program: &Path, args: &[&str], alone:
     let mut command = Command::new(program);
     command.args(args).current_dir(repo);
     if alone {
-        command.env_clear().env("PATH", env::var_os("PATH").unwrap_or_default());
+        super::alone(&mut command).env("PATH", env::var_os("PATH").unwrap_or_default());
         command.env("HOME", world.at("user")).env("USERPROFILE", world.at("user"));
         if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
             command.env("SystemRoot", root); // a Windows program needs it to start

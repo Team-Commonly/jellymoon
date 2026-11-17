@@ -10,9 +10,10 @@
 
 use std::panic::{self, AssertUnwindSafe};
 
-use jellymoon_core::{RunOptions, Waits, WorkDone, WorkTap};
+use jellymoon_core::{RunOptions, Waits, Wish, WorkDone, WorkTap};
 use sticker_kit::{Note, Scene};
 
+use crate::answering::{asking, offering};
 use crate::read::Page;
 use crate::taps::OnShow;
 use crate::today::Today;
@@ -43,7 +44,8 @@ pub trait Ask: FnOnce(&Today, &str, WorkTap) -> WorkDone + Send + 'static {}
 impl<A: FnOnce(&Today, &str, WorkTap) -> WorkDone + Send + 'static> Ask for A {}
 
 fn text(id: String, title: &str, body: Vec<String>, options: Vec<&str>) -> Note {
-    Note::Text { id, title: title.to_string(), body, options: options.into_iter().map(str::to_string).collect() }
+    let options = options.into_iter().map(str::to_string).collect();
+    Note::Text { id, title: title.to_string(), body, options, quoted: String::new(), field: None }
 }
 
 fn id_of(note: &Note) -> Option<&str> {
@@ -73,6 +75,26 @@ fn file_of(note: &Note, wish: &str) -> Option<usize> {
 fn of(note: &Note, wish: &str) -> bool {
     let named = |start: &&str| id_of(note).and_then(|id| id.strip_prefix(*start)) == Some(wish);
     [WORK, SURE, BUSY, SAID].iter().any(named) || file_of(note, wish).is_some()
+}
+
+/// The wish a note of work that waits, or of how a wish stands, is of.
+pub(crate) fn wish_of(id: &str) -> Option<&str> {
+    id.strip_prefix(WORK).or_else(|| id.strip_prefix(WISH))
+}
+
+/// `note` in place of the note of `wish` that is its work or how it stands, when one is on show.
+pub(crate) fn reopen(scene: &mut Scene, wish: &str, note: Note) {
+    let is = |one: &Note| id_of(one).and_then(wish_of) == Some(wish);
+    if let Some(at) = scene.notes.iter().position(is) {
+        scene.notes[at] = note;
+    }
+}
+
+/// How a wish with no work waiting stands, in core's words, with the question its run asks.
+fn standing(wish: &Wish) -> Note {
+    let (title, body) = jellymoon_core::stands(wish);
+    let note = text(format!("{WISH}{}", crate::scene::drawn_id(&wish.id)), title, body, Vec::new());
+    asking(note, wish.question.as_deref())
 }
 
 /// Whether core is at work for `wish`: one tap of a wish is carried at a time.
@@ -113,7 +135,7 @@ fn put(scene: &mut Scene, wish: &str, notes: Vec<Note>) {
 
 impl Today {
     /// What core is asked of a made wish's run: the day, and the logs the repo is found in by the wish's project.
-    fn run_of(&self, wish: &str) -> RunOptions {
+    pub(crate) fn run_of(&self, wish: &str) -> RunOptions {
         RunOptions {
             wish: wish.to_string(),
             day: Some(self.date.clone()),
@@ -124,21 +146,29 @@ impl Today {
         }
     }
 
-    /// `shown` with the note of every made wish whose work waits, first. `layout` prints these, as it has no tap:
-    /// the window shows one after a tap on its wish's character.
+    /// `shown` with the note of every made wish whose work waits, first, and then of every one whose run asks
+    /// or whose work was kept: the wishes a person may type to (`answering.rs`). `layout` prints these, as it has
+    /// no tap: the window shows one after a tap on its wish's character.
     pub fn with_work(&self, mut shown: Scene) -> Scene {
-        let waiting = jellymoon_core::waiting(&self.home, &self.run_of("")).map(|day| day.waits).unwrap_or_default();
-        shown.notes.splice(0..0, waiting.iter().map(|waits| self::waiting(waits, false)));
+        let day = jellymoon_core::waiting(&self.home, &self.run_of("")).ok();
+        let (waits, follows) = day.map(|day| (day.waits, day.follows)).unwrap_or_default();
+        let follows = |wish: &str| follows.iter().any(|one| one == wish);
+        let work = waits.iter().map(|waits| offering(waiting(waits, false), follows(&waits.wish)));
+        let mut notes: Vec<Note> = work.collect();
+        let made = jellymoon_core::made(&self.home, &self.date);
+        let typed_to = |wish: &&Wish| {
+            (wish.question.is_some() || follows(&wish.id)) && !waits.iter().any(|waits| waits.wish == wish.id)
+        };
+        notes.extend(made.iter().filter(typed_to).map(|wish| offering(standing(wish), follows(&wish.id))));
+        shown.notes.splice(0..0, notes);
         shown
     }
 
-    /// A tap on the character `id` that stops no run: the note of its wish over the scene `from`, which is the
-    /// work that waits with its choices, or else the wish's own words and how it stands. One wish is open at a
-    /// time. None for a character that is no wish, for a wish core is at work for, and when the note is on show.
-    pub(crate) fn opened(&self, page: Option<&Page>, from: Scene, id: &str) -> Option<Seen> {
-        if busy(&from, id) {
-            return None;
-        }
+    /// The note of the made wish `id` as core says the wish stands now: its work that waits with its choices,
+    /// or else its own words and how it stands, with the question its run asks. Under either, the offer of a
+    /// follow-up when core says one may be made of the wish. None for an id that is no wish.
+    pub(crate) fn note_of(&self, page: Option<&Page>, id: &str) -> Option<Note> {
+        let follows = jellymoon_core::followable(&self.home, &self.date).iter().any(|wish| wish == id);
         let note = match jellymoon_core::waits(&self.home, &self.run_of(id)) {
             Some(waits) => waiting(&waits, false),
             None => {
@@ -146,11 +176,28 @@ impl Today {
                     Some(page) => jellymoon_core::with_made(&self.home, page.data.clone()).wishes,
                     None => jellymoon_core::made(&self.home, &self.date),
                 };
-                let wish = wishes.iter().find(|wish| crate::scene::drawn_id(&wish.id) == id)?;
-                let (title, body) = jellymoon_core::stands(wish);
-                text(format!("{WISH}{id}"), title, body, Vec::new())
+                standing(wishes.iter().find(|wish| crate::scene::drawn_id(&wish.id) == id)?)
             }
         };
+        Some(offering(note, follows))
+    }
+
+    /// `notes` of `wish`, its work that waits among them with the offer of a follow-up when core says one may
+    /// be made of the wish: a tap on a choice leaves the offer where it was.
+    fn with_offer(&self, wish: &str, notes: Vec<Note>) -> Vec<Note> {
+        let follows = jellymoon_core::followable(&self.home, &self.date).iter().any(|one| one == wish);
+        let work = |note: &Note| id_of(note).is_some_and(|id| id.starts_with(WORK));
+        notes.into_iter().map(|note| if work(&note) { offering(note, follows) } else { note }).collect()
+    }
+
+    /// A tap on the character `id` that stops no run: the note of its wish over the scene `from`
+    /// ([`Today::note_of`]). One wish is open at a
+    /// time. None for a character that is no wish, for a wish core is at work for, and when the note is on show.
+    pub(crate) fn opened(&self, page: Option<&Page>, from: Scene, id: &str) -> Option<Seen> {
+        if busy(&from, id) {
+            return None;
+        }
+        let note = self.note_of(page, id)?;
         let mut now = from.clone();
         // What core is at work on stays; every other note of an opened wish gives way to this one.
         now.notes.retain(|one| !ours(one) || id_of(one).is_some_and(|id| id.starts_with(BUSY)));
@@ -191,7 +238,7 @@ impl OnShow {
         let work = move || {
             let failed = tap.failed();
             let asked = || {
-                let notes = notes_of(&wish, ask(&today, &wish, tap));
+                let notes = today.with_offer(&wish, notes_of(&wish, ask(&today, &wish, tap)));
                 let mut now = today.again(page.as_ref(), &from);
                 put(&mut now, &wish, notes.clone());
                 (now, notes)

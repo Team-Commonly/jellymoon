@@ -50,7 +50,10 @@ made with `--after <id>` in place of `--project`:
 - **A wish of another day** is followed on that day: `--date` names the day the followed wish was made on, and
   the follow-up is kept there and counts in that day's eight. Today's file never names a wish of another day.
 - **What can be followed.** A wish whose run finished with work that waits or was kept. A follow-up is
-  followed in its turn. Each of these is refused in one sentence, with nothing kept:
+  followed in its turn. `jellymoon_core::followable` lists the day's wishes that can be, `jellymoon run
+  waiting` prints them as `follows`, and the app's window offers `More like this` under each and makes the
+  follow-up by this same call (F54, [app.md](app.md#a-question-answered-and-more-like-this-appsrcansweringrs)).
+  Each of these is refused in one sentence, with nothing kept:
 
   | The followed wish | The sentence |
   |---|---|
@@ -143,7 +146,7 @@ made with `--after <id>` in place of `--project`:
   `wished-after.json`). No other wish has the name. Made wishes are refused as not that day's when a wish's
   `after` is not the id of a wish before it in the file.
 - **The write.** Behind the day's lock, `pages/<day>.ruled.lock`, which is the tap's
-  ([delivery.md](delivery.md), "A tap on a clash"): one change to a day at a time. The file is written beside its
+  ([delivery.md](delivery.md), "A tap on a clash" and "The lock"): one change to a day at a time. The file is written beside its
   place and moved there, 0600 in a folder set to 0700. What Windows does differently when two changes meet is in
   delivery.md, "On Windows".
 

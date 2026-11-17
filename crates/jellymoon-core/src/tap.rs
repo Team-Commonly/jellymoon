@@ -8,16 +8,16 @@
 //! not be written is still a ruling, and [`Settled::unkept`] says so. Which side stands is read from the rulings that
 //! wait as well as from the settlement, so the same tap again makes no second ruling.
 
-use std::fs::{self, OpenOptions};
+use std::fmt;
+use std::fs;
 use std::io::{self, ErrorKind, Read};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
-use std::{fmt, thread};
 
 use serde::{Deserialize, Serialize};
 
-use crate::busy::{in_use, retried};
+use crate::busy::retried;
 use crate::hook::put;
+use crate::lock::Lock;
 use crate::reader::parse;
 use crate::ruling::{own_dir, private_dir, rule, ruled_on, waiting, words};
 use crate::{Clash, Error, Ruling};
@@ -28,10 +28,6 @@ const PAGE_MAX: usize = 1024 * 1024;
 const RULED_MAX: usize = 64 * 1024;
 /// The most clashes of a page that can be tapped: the first eight, which are the ones the app draws.
 pub const CLASHES_MAX: usize = 8;
-/// How long a tap waits for another tap on the same day, and how old a lock is before it is taken for one left by a
-/// run that was killed. A lock whose age cannot be read, or that is dated ahead of now, is taken for one too.
-const LOCK_WAIT: Duration = crate::busy::WAIT;
-const LOCK_STALE: Duration = Duration::from_secs(30);
 
 /// One of a clash's two statements: `a` is its `quote_a`, `b` its `quote_b`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -247,49 +243,6 @@ pub(crate) fn locked(home: &Path, day: &str) -> io::Result<Lock> {
     // Only behind the lock is the folder made the person's alone: a change refused for the lock changes nothing.
     own_dir(&pages)?;
     Ok(lock)
-}
-
-/// One change at a time on a day: a file only one caller can create, removed when the change is done.
-pub(crate) struct Lock(PathBuf);
-
-impl Lock {
-    /// Waits [`LOCK_WAIT`], by the clock, for the name to be free. A lock that is stale is removed and taken. A
-    /// folder at the name is never removed: the tap is refused after the same wait. On Windows a name another
-    /// process is removing, or looking at, cannot be made for that moment and says "denied": that is a lock in the
-    /// way like any other (`busy.rs`). Only when the wait ends with no lock there is the error itself the answer.
-    pub(crate) fn take(path: PathBuf) -> io::Result<Lock> {
-        let started = Instant::now();
-        loop {
-            let taken = OpenOptions::new().write(true).create_new(true).open(&path);
-            let Err(e) = taken else { return Ok(Lock(path)) };
-            let there = fs::symlink_metadata(&path);
-            let used = in_use(&e);
-            if e.kind() != ErrorKind::AlreadyExists && !there.as_ref().is_ok_and(fs::Metadata::is_dir) && !used {
-                return Err(e);
-            }
-            if started.elapsed() >= LOCK_WAIT {
-                let none = matches!(&there, Err(gone) if gone.kind() == ErrorKind::NotFound);
-                let held = || io::Error::new(ErrorKind::TimedOut, "another tap on this day has not finished");
-                return Err(if used && none { e } else { held() });
-            }
-            let age = |meta: fs::Metadata| meta.modified().ok().and_then(|at| at.elapsed().ok());
-            let stale = match there {
-                Ok(meta) if meta.is_dir() => false,
-                Ok(meta) => age(meta).is_none_or(|age| age > LOCK_STALE),
-                Err(_) => true,
-            };
-            if stale {
-                let _ = fs::remove_file(&path);
-            }
-            thread::sleep(Duration::from_millis(10));
-        }
-    }
-}
-
-impl Drop for Lock {
-    fn drop(&mut self) {
-        let _ = retried(|| fs::remove_file(&self.0));
-    }
 }
 
 #[cfg(test)]

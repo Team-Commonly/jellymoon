@@ -131,7 +131,7 @@ fn work_of_more_such_files_than_a_note_names_or_of_a_name_not_printed_as_it_is_h
         let forged: Vec<String> = names.iter().cloned().chain([TOLD.to_string()]).collect();
         let over = vec![OVER.to_string(), "Nothing was changed.".to_string()];
         let (id, options) = ("work-m1".to_string(), CHOICES.map(str::to_string).to_vec());
-        let stale = Note::Text { id, title: WORK.into(), body: vec![], options };
+        let stale = Note::Text { id, title: WORK.into(), body: vec![], options, quoted: String::new(), field: None };
         fs::write(w.at("stale.json"), serde_json::to_string(&stale).unwrap()).unwrap();
         let stale = format!("left:{}", w.at("stale.json").display());
         let taps: [(String, &[&str]); 4] = [

@@ -17,12 +17,13 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::hook::put;
+use crate::lock::Lock;
 use crate::project::Offer;
 use crate::reader::{self, parse};
 use crate::reading::{LABEL_MAX, STAR_MAX, STARS_MAX};
 use crate::redact::line;
 use crate::still::{MARKS, Unkept, marks_only, statement, still};
-use crate::tap::{Lock, locked, plain};
+use crate::tap::{locked, plain};
 use crate::{DayOptions, Error, PageData, Wish, WishState, copy, run};
 
 /// The most made wishes one day holds.

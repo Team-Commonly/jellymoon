@@ -3,7 +3,8 @@
 //! is started for it afterwards is refused, and one that named itself first is left to its own toss.
 
 use std::ffi::OsString;
-use std::fs;
+use std::time::Duration;
+use std::{fs, thread};
 
 use serde_json::{Value, json};
 
@@ -54,6 +55,12 @@ fn a_made_wish_that_has_had_no_run_is_let_go_by_a_toss_and_nothing_else_is_touch
     };
     let before = home();
     assert_eq!(printed(&toss(&w, &wish, &[])), let_go(&wish, true, LET_GO));
+    // The `runs` folder the toss made for its lock is the person's alone, as one a run makes is.
+    #[cfg(unix)]
+    {
+        let mode = std::os::unix::fs::PermissionsExt::mode(&fs::metadata(w.jm("runs")).unwrap().permissions());
+        assert_eq!(mode & 0o777, 0o700, "others can list the runs of this home");
+    }
     // The wish is as it was but for its state and its line, and names no run: a page shows it let go.
     let mut now = was.clone();
     (now["state"], now["why"]) = (json!("let_go"), json!(KEPT));
@@ -104,6 +111,24 @@ fn a_wish_with_no_run_is_not_let_go_while_a_keep_or_a_toss_holds_the_home() {
     assert_eq!(w.kept(&wish), was);
     fs::remove_dir(&file).unwrap();
     assert_eq!(printed(&toss(&w, &wish, &[])), let_go(&wish, true, LET_GO));
+}
+
+// Another change to the day that takes a while is waited for, past the three seconds the day's lock itself
+// waits: the let-go is done when that change has finished, and is not refused for it.
+#[test]
+fn a_let_go_waits_for_another_change_to_the_day_and_is_done_when_that_has_finished() {
+    let w = world();
+    let (_, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let lock = w.jm("pages").join(format!("{DAY}.ruled.lock"));
+    fs::write(&lock, "").unwrap();
+    let ran = thread::scope(|scope| {
+        let going = scope.spawn(|| toss(&w, &wish, &[]));
+        thread::sleep(Duration::from_secs(4));
+        fs::remove_file(&lock).unwrap();
+        going.join().unwrap()
+    });
+    assert_eq!(printed(&ran), let_go(&wish, true, LET_GO));
+    assert_eq!(w.kept(&wish)["state"], "let_go");
 }
 
 #[test]

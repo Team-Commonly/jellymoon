@@ -516,6 +516,12 @@ wish from the record, and the run can be answered again; the wish keeps the answ
 after the record was written is a run that was cut off ("A run that was cut off"), and its harness is ended as
 a cut-off run's is.
 
+**In the window.** The app's page draws the question under the wish's own note, with a field, and gives what
+is typed there to `answer_run`, the call this command makes, on a thread of the app's own (F54,
+[app.md](app.md#a-question-answered-and-more-like-this-appsrcansweringrs)). The run then lives in the app, as
+it lives in this command when a person types it: an app closed before the run's end leaves a run that was cut
+off.
+
 **Not closed.**
 
 - The resume was not tried on a real harness in this build (ADR 0018, "Found while building F52"): that
@@ -1145,7 +1151,7 @@ empty `runs/no-hooks`), and they stay.
 | Refused | The line says |
 |---|---|
 | No made wish of that id on that day | the page has no made wish of that id |
-| A wish that names a run | the wish has had its run, and which |
+| A wish that names a run, also one a toss of that run let go | the wish has had its run, and which. That it was let go is not said: this refusal comes first |
 | A wish with no run that a toss let go ([toss.md](toss.md), "A wish that has had no run") | `wish <id> was let go, so no run is started for it` |
 | `--repo` that is not a full path, or whose last name is not the wish's project | which of the two |
 | No `--repo`, and no folder of the name typed in that day or listed, or two typed in | how many, and to name one with `--repo` |

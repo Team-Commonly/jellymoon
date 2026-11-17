@@ -148,11 +148,10 @@ fn a_making_that_is_killed_leaves_a_folder_the_next_one_says_is_there_and_the_pe
         let aged = std::time::SystemTime::now() - std::time::Duration::from_secs(40);
         fs::File::options().write(true).open(w.jm("projects.lock")).unwrap().set_modified(aged).unwrap();
         // The next one takes that lock over, looks behind it, and leaves it to nobody.
-        let before = w.all();
+        let before = super::alone::but_the_lock(&w);
         let ran = w.new_project(name);
         assert_eq!(refused(&ran), format!("jellymoon: {THERE}\n"));
-        let lock = w.jm("projects.lock");
-        assert!(!lock.exists() && w.all() == before.into_iter().filter(|(path, _)| *path != lock).collect::<Vec<_>>());
+        assert!(!w.jm("projects.lock").exists() && super::alone::but_the_lock(&w) == before);
     }
     // Mended by listing what is there: the repo was whole, and a run starts in it.
     let real = w.real(&w.made("alpha"));

@@ -59,16 +59,22 @@ fn a_theme_file_changes_the_look_and_a_refused_one_stops_the_run_with_one_line()
     let refused = [
         (file("wide.toml", "[metrics]\nrim = 41\n"), "metrics.rim = 41 is not a number from 0 to 40"),
         (file("broken.toml", "[metrics\nrim = 4\n"), "cannot parse the theme: TOML parse error at line 1"),
-        ("neon".to_string(), "cannot read the theme: "),
     ];
     for (theme, why) in refused {
         let out = layout(&day.to_string(), &["--theme", &theme]);
         let said = String::from_utf8(out.stderr).unwrap();
         assert_eq!(out.status.code(), Some(1), "{theme}: {said}");
         assert!(out.stdout.is_empty(), "{theme}: a refused theme printed something");
+        // The file is named by its last name: no folder that was typed.
+        let name = std::path::Path::new(&theme).file_name().unwrap().to_str().unwrap();
         let start =
-            format!("jellymoon-app: --theme {theme:?} is not sticker, plain or a theme file the kit takes: {why}");
+            format!("jellymoon-app: --theme {name:?} is not sticker, plain or a theme file the kit takes: {why}");
         assert!(said.starts_with(&start), "{said}");
         assert_eq!(said.lines().count(), 1, "one line, and no usage: {said}");
     }
+    // A name that is no theme and no file: what `--theme` takes, and the words of any file that cannot be read.
+    let out = layout(&day.to_string(), &["--theme", "neon"]);
+    let said = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(said, "jellymoon-app: --theme is sticker, plain or a theme file: the file cannot be read: neon\n");
+    assert!(out.status.code() == Some(1) && out.stdout.is_empty());
 }

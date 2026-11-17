@@ -135,9 +135,10 @@ pub fn place_beside(screen: Viewport, left: Rect, anchor: Rect, size: Viewport, 
 
 /// Where two windows stand at a corner: the first as [`place_corner`] places it, the second beside it as
 /// [`place_beside`] does. In a room that holds both apart only with less than `margin`, the first window's
-/// margin gives way, as far as it must and no further, before the second is laid over the first: beside it when
-/// the room is wide enough for that, else over or under it. The first stands where this says with a second
-/// window or with none, so neither is ever moved for the other.
+/// margin gives way before the second is laid over the first: beside it when the room is wide enough for that,
+/// else over or under it. The margin is one number for both of the corner's edges, so it is made smaller at both,
+/// by what the tighter way of standing apart needs, though one edge alone would do. The first stands where this
+/// says with a second window or with none, so neither is ever moved for the other.
 pub fn place_pair(
     screen: Viewport,
     left: Rect,

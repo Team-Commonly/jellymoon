@@ -8,7 +8,7 @@ use std::path::Path;
 use serde_json::json;
 
 use super::*;
-use crate::support::{hub_key, shows, skipped};
+use crate::support::{door, hub_key, shows, skipped};
 
 /// A link at `at` that leads to the folder `to`. False where this system makes none for this user.
 pub fn link(to: &Path, at: &Path) -> bool {
@@ -20,17 +20,10 @@ pub fn link(to: &Path, at: &Path) -> bool {
 }
 
 /// A folder that is someone else's: the person is taken to be the owner of their home, so a home that is the
-/// system's makes every folder of the test someone else's. None where there are no owners, or the user is root.
+/// system's makes every folder of the test someone else's. It is a temporary folder of the system's, the only
+/// kind the door passes (`support/door.rs`, `not_ours`). None where there are no owners, or the user is root.
 pub fn someone_elses_home() -> Option<(&'static str, OsString)> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        let owner = |path: &str| fs::metadata(path).unwrap().uid();
-        let other = ["/", "/usr"].into_iter().find(|folder| owner(folder) != owner(env!("CARGO_MANIFEST_DIR")));
-        other.map(|other| ("HOME", OsString::from(other)))
-    }
-    #[cfg(not(unix))]
-    None
+    door::not_ours().map(|other| ("HOME", OsString::from(other)))
 }
 
 fn add_refused(w: &World, repo: &Path, why: &str) {

@@ -178,7 +178,8 @@ Finder has no stderr a person can see, so a person whose app misbehaves has noth
 
 **Not covered.** Sending the log anywhere: a person attaches it by hand. What the harness itself prints: a
 run's stream and stderr stay unkept, as today. Two writers at the cap at once: each renames, and the older file
-may be lost. No command fails for it, and no line is written over the cap.
+may be lost. Two writers just under the cap at once: each sees room and appends, so the file can end one line
+over its cap for each of them, and the next line renames it. No command fails for either.
 
 A log for an app with no terminal was read in Magpie's `internal/applog/applog.go`. Read, not copied.
 

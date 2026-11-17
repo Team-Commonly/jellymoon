@@ -332,7 +332,10 @@ max_file_lines = 400
 # in what `run waiting` prints (`run/waits.rs`), and its line in `tests/shapes.rs`.
 # The notes after F57 raised core by 34: a search for the harness that says what it missed (`find.rs`, 17), and a
 # sentence each for a `claude` passed over and for no home (`hear/day.rs`, 16; `hear.rs`, 1).
-"crates/jellymoon-core" = 14943
+# F77 raised core by 20, all in `call.rs`: the test that holds both systems' lists of a harness's variables to
+# `page.md` and `run.md` is 17, and 3 are the two lists built on every system, with why. Its tests at the binary,
+# `tests/f77.rs` (220 lines), are within the binary's budget as it stood.
+"crates/jellymoon-core" = 14963
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -502,7 +505,8 @@ max_file_lines = 400
 # The notes after F57 raised it by 45, all tests: the two new sentences at the binary, in `tests/f55/started.rs`.
 # F74, the door, raised it by 349, all tests and their support: `tests/f74.rs` 225, `tests/support/door.rs` 144,
 # 9 in `tests/support/mod.rs` (the two other folders a world is made in); the tests moved through the door lost 29.
-"crates/jellymoon" = 25432
+# F77 raised it by 220, all a test: `tests/f77.rs`, what a made-up harness is started with at each of the six starts.
+"crates/jellymoon" = 25652
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

@@ -21,10 +21,12 @@ use crate::{Error, PageOptions, ReaderDay};
 const PROMPT: &str = include_str!("prompt.md");
 
 /// What the harness may see of this process's environment: enough to find its own sign-in and to start at all.
-#[cfg(not(windows))]
-const ENVIRONMENT: &[&str] = &["PATH", "HOME", "TMPDIR", "USER", "LANG", "LC_ALL", "TERM", "CLAUDE_CONFIG_DIR"];
-#[cfg(windows)]
-const ENVIRONMENT: &[&str] = &[
+/// No `CLAUDECODE` and no `CLAUDE_CODE_*` variable is on either list, so a harness started from inside a Claude
+/// Code session is not told it is that session's child (F77). Both lists are built on every system, so that one
+/// test holds each to the docs wherever it runs.
+const ENVIRONMENT: &[&str] = if cfg!(windows) { WINDOWS } else { UNIX };
+const UNIX: &[&str] = &["PATH", "HOME", "TMPDIR", "USER", "LANG", "LC_ALL", "TERM", "CLAUDE_CONFIG_DIR"];
+const WINDOWS: &[&str] = &[
     "PATH",
     "PATHEXT",
     "SystemRoot",
@@ -246,6 +248,24 @@ mod tests {
     fn a_child_that_never_answers() {
         if env::var_os("JELLYMOON_TEST_NEVER_ANSWERS").is_some() {
             thread::sleep(Duration::from_secs(60));
+        }
+    }
+
+    // F77. A variable added to either list, or taken off one, fails here until `page.md` and `run.md` list it
+    // so; and none that tells a harness it is a Claude Code session's child is ever on one.
+    #[test]
+    fn the_variables_a_harness_is_started_with_are_the_ones_the_docs_list() {
+        let docs =
+            [include_str!("../../../docs/development/page.md"), include_str!("../../../docs/development/run.md")];
+        for doc in docs.map(|doc| doc.split_whitespace().collect::<Vec<_>>().join(" ")) {
+            for list in [UNIX, WINDOWS] {
+                let (last, rest) = list.split_last().unwrap();
+                let rest: Vec<String> = rest.iter().map(|name| format!("`{name}`")).collect();
+                let listed = format!("{} and `{last}`", rest.join(", "));
+                assert!(doc.contains(&listed), "a doc does not list {listed}");
+                let child = |name: &&&str| name.to_uppercase().replace('_', "").starts_with("CLAUDECODE");
+                assert_eq!(list.iter().find(child), None);
+            }
         }
     }
 

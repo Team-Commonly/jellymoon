@@ -7,7 +7,7 @@ use std::fs;
 use serde_json::{Value, json};
 
 use super::{DAY, SAID, World, found_world, made, printed};
-use crate::support::skipped;
+use crate::support::{door, skipped};
 
 const RUN: [&str; 8] = ["wish", "--date", DAY, "--say", SAID, "--project", "alpha", "--run"];
 
@@ -60,31 +60,24 @@ fn a_folder_that_is_no_repo_s_top_starts_no_run_and_the_repo_above_it_is_not_use
 }
 
 // The person is taken to be the owner of their own home folder. A home that is the system's makes every folder
-// here someone else's, which is the one way to have such a folder without being another user.
+// here someone else's, which is the one way to have such a folder without being another user. That home is a
+// temporary folder of the system's, since the door passes no other (`support/door.rs`, `not_ours`).
 #[test]
 fn a_folder_found_in_a_log_that_is_not_the_person_s_own_starts_no_run() {
-    #[cfg(unix)]
-    let other = {
-        use std::os::unix::fs::MetadataExt;
-        let owner = |path: &str| fs::metadata(path).unwrap().uid();
-        ["/", "/usr"].into_iter().find(|folder| owner(folder) != owner(env!("CARGO_MANIFEST_DIR")))
-    };
-    #[cfg(not(unix))]
-    let other: Option<&str> = None;
-    let Some(other) = other else {
+    let Some(other) = door::not_ours() else {
         return skipped("no folder here is known to be someone else's: the system has no owners, or the user is root");
     };
     let w = found_world();
     let repo = w.repo("alpha");
     w.typed_in("-work-alpha", &repo);
-    let said = printed(&w.run_with(&[("HOME", OsString::from(other))], &RUN));
+    let said = printed(&w.run_with(&[("HOME", OsString::from(&other))], &RUN));
     let why =
         format!("the folder of that name typed in on {DAY} is not a folder of your own; name the folder with --repo");
     kept_with_no_run(&w, &said, &why);
     assert!(w.branches(&repo).is_empty());
     // Named by the person, the same folder is run in: the word of a log is what was not taken.
     let ran = w.run_with(
-        &[("HOME", OsString::from(other))],
+        &[("HOME", OsString::from(&other))],
         &["run", "--wish", "m1", "--date", DAY, "--repo", repo.to_str().unwrap()],
     );
     assert_eq!(printed(&ran)["outcome"], "completed");

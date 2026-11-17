@@ -25,12 +25,12 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{Seek, Write};
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 pub use kept::said;
 use serde_json::{Value, json};
-use support::{Ran, started, tree};
+use support::{Ran, door, started, tree};
 pub use world::*;
 
 /// What the made-up agent asks when its question is a plain one, and the second question it can ask.
@@ -101,12 +101,9 @@ impl Made {
 
     /// The same, with its input from wherever `input` says.
     pub fn fed(&self, more: &[(&'static str, OsString)], input: Stdio) -> Child {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
         let vars = self.w.vars.iter().chain(more).map(|(name, value)| (name, value));
-        command.args(self.asked()).current_dir(self.w.dir.path()).env_clear().envs(vars);
-        if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-            command.env("SystemRoot", root); // a Windows program needs it to start
-        }
+        let mut command = door::jellymoon(vars, &self.asked());
+        command.current_dir(self.w.dir.path());
         command.stdin(input).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap()
     }
 

@@ -2,7 +2,7 @@
 //! at all. A hearing that goes on is fed an event at a time here, and each line is read as it is printed.
 
 use std::io::{BufRead, BufReader, Write};
-use std::process::{ChildStdin, Command, Stdio};
+use std::process::{ChildStdin, Stdio};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 use std::{fs, thread};
@@ -35,12 +35,9 @@ impl World {
 
     pub fn hearing(&self, more: &[&str]) -> Hearing {
         let logs = self.logs();
-        let mut command = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
-        command.args(["hear", "--date", DAY, "--logs", logs.to_str().unwrap()]).args(more);
-        command.current_dir(self.dir.path()).env_clear().envs(self.vars.iter().map(|(name, value)| (name, value)));
-        if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-            command.env("SystemRoot", root); // a Windows program needs it to start
-        }
+        let args = [&["hear", "--date", DAY, "--logs", logs.to_str().unwrap()][..], more].concat();
+        let mut command = crate::support::door::jellymoon(self.vars.iter().map(|(name, value)| (name, value)), &args);
+        command.current_dir(self.dir.path());
         let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
         let (events, lines) = (child.stdin.take(), BufReader::new(child.stdout.take().unwrap()));
         let (send, printed) = channel();

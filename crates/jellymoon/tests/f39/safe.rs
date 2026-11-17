@@ -10,7 +10,7 @@ use std::{env, fs, thread};
 use serde_json::{Value, json};
 
 use super::{DAY, SAID, STAR, UNTOLD, grows, never, printed, ran, refused, wait_for, world, world_in};
-use crate::support::{pay_key, shows, skipped, tree};
+use crate::support::{pay_key, shows, skipped, system_scratch, tree};
 
 /// In the name of every folder a session log names here. No output and no file of Jellymoon's may hold it.
 const FOLDER: &str = "walrus-nickel-in-a-folder-name";
@@ -18,7 +18,7 @@ const FOLDER: &str = "walrus-nickel-in-a-folder-name";
 #[test]
 fn a_folder_read_from_a_session_log_is_never_printed_or_kept_when_it_is_refused() {
     // In the system's own temporary folder, as the other test of folders read from the logs is.
-    let w = world_in(tempfile::tempdir().unwrap());
+    let w = world_in(system_scratch());
     let under = w.at("work").join(FOLDER);
     let top = w.repo(&format!("{FOLDER}/top"));
     fs::create_dir(top.join("sub")).unwrap();

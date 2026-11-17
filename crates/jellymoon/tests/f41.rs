@@ -44,7 +44,7 @@ use std::time::{Duration, Instant};
 use std::{fs, thread};
 
 use serde_json::{Value, json};
-use support::{said, write_log};
+use support::{said, system_scratch, write_log};
 pub use world::*;
 
 /// A world whose repos a session log can name. Whoever asks for a run apart there waits a minute for a harness
@@ -61,7 +61,7 @@ pub fn silent_world() -> World {
 }
 
 fn quiet_for(ms: &str) -> World {
-    let mut world = world_in(tempfile::tempdir().unwrap());
+    let mut world = world_in(system_scratch());
     world.vars.push(("JELLYMOON_TEST_APART_QUIET_MS", ms.into()));
     world
 }

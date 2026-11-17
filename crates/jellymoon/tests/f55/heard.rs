@@ -9,7 +9,7 @@ use std::{fs, thread};
 
 use serde_json::{Value, json};
 
-use crate::support::{Ran, said, started, tree, write_log};
+use crate::support::{Ran, said, started, system_scratch, tree, write_log};
 use crate::world::{DAY, World, world_in};
 
 pub const DOWN: &str = r#"{"key":"down"}"#;
@@ -71,7 +71,7 @@ pub fn hold(from: u64, words: &str) -> Vec<String> {
 
 /// A world in the system's temporary folder, where nothing was typed yet.
 pub fn heard_world() -> World {
-    let mut world = world_in(tempfile::tempdir().unwrap());
+    let mut world = world_in(system_scratch());
     // Whoever asks for a run apart is told that it goes after a tenth of a second of a harness's silence.
     world.vars.push(("JELLYMOON_TEST_APART_QUIET_MS", "100".into()));
     world

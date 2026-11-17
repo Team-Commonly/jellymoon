@@ -9,7 +9,7 @@ use std::process::Stdio;
 use serde_json::json;
 
 use super::{DAY, SAID, STAR, World, found_world, grows, made, printed, silent_world, wait_for};
-use crate::support::Ran;
+use crate::support::{Ran, door};
 
 impl World {
     /// Starts the run of a wish through `fake-asker` (`support/fake_asker.rs`): a program that calls core's
@@ -22,17 +22,11 @@ impl World {
     /// [`World::asked`], with more variables for the asker and the command it starts.
     pub(super) fn asked_with(&self, with: &[(&'static str, OsString)], wish: &str) -> Ran {
         let asker = OsString::from(env!("CARGO_BIN_EXE_fake-asker"));
-        let more = [
-            ("FAKE_ASKER_JELLYMOON", OsString::from(env!("CARGO_BIN_EXE_jellymoon"))),
-            ("FAKE_ASKER_REC", self.at("rec").into()),
-        ];
+        let more = [("FAKE_ASKER_JELLYMOON", OsString::from(door::built())), ("FAKE_ASKER_REC", self.at("rec").into())];
         let vars = self.vars.iter().chain(&more).chain(with).map(|(name, value)| (*name, value.as_os_str()));
         let logs = self.at("harness").join("projects");
-        let mut command = std::process::Command::new(asker);
-        command.args(["ask", wish, DAY]).arg(self.at("jm")).arg(logs).env_clear().envs(vars);
-        if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-            command.env("SystemRoot", root); // a Windows program needs it to start
-        }
+        let args = [OsString::from("ask"), wish.into(), DAY.into(), self.at("jm").into(), logs.into()];
+        let mut command = door::command(asker, vars, &args);
         // Its output goes to files. On Windows the run it starts inherits the handles the asker has open, and a
         // pipe's end would be waited for until the run itself had ended.
         let (mut out, mut err) = (tempfile::tempfile().unwrap(), tempfile::tempfile().unwrap());

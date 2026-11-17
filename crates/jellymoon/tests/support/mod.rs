@@ -5,12 +5,14 @@
 use std::ffi::OsStr;
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 use std::{fs, thread};
 
 use serde_json::{Value, json};
 use tempfile::TempDir;
+
+pub mod door;
 
 /// The tests' time zone: UTC-7 on the fixture day, 2026-03-10.
 pub const ZONE: &str = "America/Los_Angeles";
@@ -31,6 +33,16 @@ pub fn scratch() -> TempDir {
     tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap()
 }
 
+/// The same under the system's temporary folder, for a world that must not be under Cargo's.
+pub fn system_scratch() -> TempDir {
+    tempfile::tempdir().unwrap()
+}
+
+/// A folder in `inside` that stays when the test ends, for another test to look in.
+pub fn kept_scratch(inside: &Path) -> TempDir {
+    tempfile::Builder::new().disable_cleanup(true).tempdir_in(inside).unwrap()
+}
+
 /// Says why a test left a part out, where a person running the tests reads it: straight to stderr, which the test
 /// runner does not keep back as it does what a passing test prints.
 pub fn skipped(why: &str) {
@@ -44,7 +56,7 @@ pub fn skipped(why: &str) {
 /// this long, once for each test it hangs in.
 pub const LIMIT: Duration = Duration::from_secs(90);
 
-/// Runs `jellymoon` with only the variables given. A run still going after [`LIMIT`] (a reader stuck on a pipe would
+/// Runs `jellymoon` with only the variables given, through the door ([`door::jellymoon`]). A run still going after [`LIMIT`] (a reader stuck on a pipe would
 /// be) is stopped and fails the test. Output goes to files, so a full pipe can never be what holds it up.
 pub fn jellymoon(vars: &[(&str, &OsStr)], args: &[&str]) -> Ran {
     started(Path::new("."), vars, args, "")
@@ -66,12 +78,9 @@ pub fn started(folder: &Path, vars: &[(&str, &OsStr)], args: &[&str], input: &st
     let mut fed = tempfile::tempfile().unwrap();
     fed.write_all(input.as_bytes()).unwrap();
     fed.rewind().unwrap();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon"));
-    cmd.args(args).current_dir(folder).env_clear().envs(vars.iter().copied()).stdin(Stdio::from(fed));
+    let mut cmd = door::jellymoon(vars.iter().copied(), args);
+    cmd.current_dir(folder).stdin(Stdio::from(fed));
     cmd.stdout(out.try_clone().unwrap()).stderr(err.try_clone().unwrap());
-    if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-        cmd.env("SystemRoot", root); // a Windows program needs it to start
-    }
     let mut child = cmd.spawn().unwrap();
     let deadline = Instant::now() + LIMIT;
     let status = loop {

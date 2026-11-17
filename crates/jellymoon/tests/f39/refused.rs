@@ -9,7 +9,7 @@ use std::{fs, thread};
 use serde_json::json;
 
 use super::{DAY, OLD, STAR, UNTOLD, World, never, printed, ran, refused, wait_for, world, world_in};
-use crate::support::{said, skipped, tree, write_log};
+use crate::support::{said, skipped, system_scratch, tree, write_log};
 
 impl World {
     /// `jellymoon run` for a wish of the day, with no repo named: the folder is found in the day's session logs.
@@ -76,7 +76,7 @@ fn a_harness_too_old_to_know_restricted_starts_no_run_and_the_wish_can_be_run_ag
 fn a_wish_runs_in_the_one_folder_of_its_name_that_was_typed_in_that_day() {
     // In the system's own temporary folder: Cargo's may be inside a harness worktree of this repo, and a folder
     // there is named after the repo the worktree is of, which is the rule the fourth case here is about.
-    let w = world_in(tempfile::tempdir().unwrap());
+    let w = world_in(system_scratch());
     let (repo, other) = (w.repo("one/alpha"), w.repo("beta"));
     let (alpha, gamma) = (w.wish("alpha"), w.wish("gamma"));
     // No session logs at all, then logs that name no such folder.

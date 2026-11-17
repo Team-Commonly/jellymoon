@@ -17,7 +17,7 @@ use std::fs;
 use std::path::{MAIN_SEPARATOR, Path, PathBuf};
 
 use serde_json::{Value, json};
-use support::{A, B, G, Ran, ZONE, install, reply, said, scratch, tree, write_log};
+use support::{A, B, G, Ran, ZONE, install, reply, said, scratch, system_scratch, tree, write_log};
 use tempfile::TempDir;
 
 /// What every text of a copy's session holds.
@@ -337,7 +337,7 @@ fn nothing_of_a_copy_s_session_reaches_the_reading_call_or_the_page() {
 // has two spellings.
 #[test]
 fn a_run_never_finds_a_copy_as_the_folder_its_wish_s_project_was_typed_in() {
-    let w = world::world_in(tempfile::tempdir().unwrap());
+    let w = world::world_in(system_scratch());
     let repo = w.repo("alpha");
     let (alpha, zeta) = (w.wish("alpha"), w.wish("zeta"));
     let logs = w.at("harness").join("projects");

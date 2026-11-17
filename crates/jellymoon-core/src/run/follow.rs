@@ -76,6 +76,14 @@ pub(crate) fn project(home: &Path, day: &str, after: &str) -> Result<String, Err
     followed(home, day, after).map(|followed| followed.project)
 }
 
+/// The made wishes of `day` a follow-up may be made of, in their order (F54): each whose work [`followed`] finds,
+/// which waits or was kept. So `wish --after` refuses none of them for its work, and every other wish for it.
+/// Read from the home alone, as a look reads it: nothing of a repo is asked, and nothing is written.
+pub fn followable(home: &Path, day: &str) -> Vec<String> {
+    let made = wish::kept_of(home, day).unwrap_or_default();
+    made.into_iter().map(|made| made.id).filter(|id| followed(home, day, id).is_ok()).collect()
+}
+
 /// What a follow-up's run is started on, with the lock a keep and a toss hold.
 pub(super) struct On {
     followed: Followed,

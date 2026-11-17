@@ -6,8 +6,10 @@
 
 mod edge;
 mod entry;
+mod field;
 #[cfg(feature = "headless")]
 pub mod headless;
+mod input;
 mod measure;
 mod paint;
 mod shapes;
@@ -65,6 +67,8 @@ pub struct Page {
     reduce_motion: bool,
     on_tap: Option<TapHandler>,
     entry: EntryView,
+    /// The field of each note of the scene that has one, in the notes' order.
+    fields: Vec<EntryView>,
     placed: Vec<Placed>,
     viewport: Viewport,
     stale: Stale,
@@ -80,12 +84,14 @@ pub struct Page {
 impl Page {
     pub fn new(scene: Scene, theme: Theme) -> Self {
         let now = Instant::now();
+        let fields = field::fit(&scene, Vec::new());
         Self {
             scene,
             theme,
             reduce_motion: false,
             on_tap: None,
             entry: EntryView::default(),
+            fields,
             placed: Vec::new(),
             viewport: Viewport::default(),
             stale: Stale::Spring,
@@ -112,6 +118,7 @@ impl Page {
     }
 
     pub fn set_scene(&mut self, scene: Scene, cx: &mut Context<Self>) {
+        self.fields = field::fit(&scene, std::mem::take(&mut self.fields));
         self.scene = scene;
         self.stale = Stale::Spring;
         cx.notify();
@@ -220,8 +227,9 @@ impl Page {
         let k = page_scale(&self.theme, viewport);
         let rim = self.theme.metrics.rim * k;
         let typed = self.entry.state.holds();
-        let brush =
-            Brush { theme: &self.theme, scene: &self.scene, k, chosen: self.entry.state.chosen(), lit: self.entry.lit };
+        let keyed = self.fields.iter().find(|view| view.lit).and_then(|view| view.what.as_ref());
+        let (chosen, keyed) = (self.entry.state.chosen(), keyed.map(|field| field.id.as_str()));
+        let brush = Brush { theme: &self.theme, scene: &self.scene, k, chosen, lit: self.entry.lit, keyed };
         let mut order: Vec<usize> = (0..self.placed.len()).collect();
         order.sort_by_key(|&i| self.placed[i].z);
         let mut flat = Vec::new();
@@ -237,7 +245,11 @@ impl Page {
                 art.push(sticker.w(px(rect.w)).h(px(rect.h)).into_any_element());
             }
             // The hint gives way to words: not to spaces, or to other text nobody sees.
-            let hidden = typed && piece.piece == PieceKind::Entry;
+            let hidden = match piece.piece {
+                PieceKind::Entry => typed,
+                PieceKind::Field => self.field(&piece.id).is_some_and(|field| field.holds()),
+                _ => false,
+            };
             for (n, run) in piece.text.iter().enumerate().filter(|(_, r)| !r.text.is_empty() && !hidden) {
                 text.push(text_element(&brush, piece, n, run, pose));
             }

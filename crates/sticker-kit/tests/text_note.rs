@@ -15,7 +15,7 @@ fn place(notes: Vec<Note>, theme: &Theme, viewport: Viewport) -> Vec<Placed> {
 
 fn note(body: Vec<String>, options: &[&str]) -> Note {
     let options = options.iter().map(|option| option.to_string()).collect();
-    Note::Text { id: "file-1".into(), title: "A file".into(), body, options }
+    Note::Text { id: "file-1".into(), title: "A file".into(), body, options, quoted: String::new(), field: None }
 }
 
 /// The note's own texts, a run each, and its options' words.
@@ -112,7 +112,8 @@ fn a_title_that_is_cut_is_drawn_with_no_option_and_one_drawn_to_its_last_charact
     // A title over one text and one option: whether it was drawn whole, and the options.
     let under = |title: String, theme: &Theme, viewport: Viewport, advance: f32| {
         let (body, options) = (vec!["CLAUDE.md".to_string()], vec!["Yes".to_string()]);
-        let note = Note::Text { id: "file-1".into(), title: title.clone(), body, options };
+        let note =
+            Note::Text { id: "file-1".into(), title: title.clone(), body, options, quoted: String::new(), field: None };
         let scene = Scene { notes: vec![note], ..Scene::sample() };
         let (texts, options) = said(&layout(&scene, theme, viewport, &FixedAdvance(advance)));
         let [drawn @ .., text] = &texts[..] else { panic!("{texts:?}") };

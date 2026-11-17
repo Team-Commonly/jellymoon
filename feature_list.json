@@ -450,7 +450,7 @@
         "the shell decides nothing: every refusal drawn is core's, and a question is drawn as text and never as a link or a control"
       ],
       "test": "cargo test -p jellymoon-app --test f54",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F47",
         "F52"

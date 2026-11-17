@@ -7,6 +7,7 @@ mod grid;
 mod notes;
 mod page;
 mod text_note;
+mod typed;
 
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +42,12 @@ pub enum PieceKind {
     /// What stands for the options of an entry past the ones offered, `+N more`: `id` is the entry's, `index`
     /// how many they are. It is words and no option: nothing chooses it.
     More,
+    /// Someone else's words under a text note, on a ground of their own: `id` is the note's. Text and no more.
+    Quote,
+    /// The field of a text note, which a person types one line in: `id` is the note's; its text is the hint.
+    Field,
+    /// The words over a text note's field that say what it is for: `id` is the note's.
+    Offer,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -74,6 +81,7 @@ pub use edge::{
 pub use entry::layout_entry;
 pub use notes::{MAX_NOTES, MORE_NOTES_ID};
 pub use text_note::MAX_TEXT_LINES;
+pub use typed::MAX_QUOTED_LINES;
 
 /// Longest text the kit carries for anything that is not a label.
 pub const MAX_TEXT_CHARS: usize = 400;
@@ -185,7 +193,7 @@ impl PieceKind {
             PieceKind::Star => 12,
             PieceKind::Bubble | PieceKind::Badge => 13,
             PieceKind::Note => 20,
-            PieceKind::Option | PieceKind::Mark => 21,
+            PieceKind::Option | PieceKind::Mark | PieceKind::Quote | PieceKind::Field | PieceKind::Offer => 21,
             PieceKind::Tape => 22,
         }
     }

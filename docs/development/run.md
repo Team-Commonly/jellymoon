@@ -516,6 +516,12 @@ wish from the record, and the run can be answered again; the wish keeps the answ
 after the record was written is a run that was cut off ("A run that was cut off"), and its harness is ended as
 a cut-off run's is.
 
+**In the window.** The app's page draws the question under the wish's own note, with a field, and gives what
+is typed there to `answer_run`, the call this command makes, on a thread of the app's own (F54,
+[app.md](app.md#a-question-answered-and-more-like-this-appsrcansweringrs)). The run then lives in the app, as
+it lives in this command when a person types it: an app closed before the run's end leaves a run that was cut
+off.
+
 **Not closed.**
 
 - The resume was not tried on a real harness in this build (ADR 0018, "Found while building F52"): that

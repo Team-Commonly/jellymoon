@@ -120,7 +120,13 @@ pub(crate) async fn looks(shown: Showing, page: WeakEntity<Page>, cx: &mut gpui:
 /// it has to say is shown when it ends.
 fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     say(&entry_line(&made.id, &made.text));
-    let (wishing, shown) = (shown.wishing(&made.text, made.option.as_deref()), shown.clone());
+    // What is typed under a made wish (F54) is carried as a wish is, and answers the field it was typed in.
+    let field = (made.id != crate::wishing::ENTRY).then(|| made.id.clone());
+    let wishing = match &field {
+        Some(note) => shown.typing(note, &made.text),
+        None => shown.wishing(&made.text, made.option.as_deref()),
+    };
+    let shown = shown.clone();
     cx.spawn(async move |cx| {
         let answer = match wishing {
             Some(wishing) => Some(cx.background_executor().spawn(async move { wishing() }).await),
@@ -128,7 +134,7 @@ fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut A
         };
         let Entered { kept, scene, asking } = shown.answered(answer);
         let answered = page.clone();
-        cx.update(|cx| answer_entry(&answered, kept, scene, cx));
+        cx.update(|cx| answer_entry(&answered, field.as_deref(), kept, scene, cx));
         let Some(asking) = asking else { return };
         let said = cx.background_executor().spawn(async move { asking() }).await;
         let Some(scene) = shown.asked(said) else { return };
@@ -137,15 +143,20 @@ fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut A
     .detach();
 }
 
-/// The entry is answered in the page's window, which the platform's text input is told in; with the window
-/// closed since Enter it is answered all the same, so the page shown again does not wait for ever.
-fn answer_entry(page: &WeakEntity<Page>, kept: bool, scene: Option<Scene>, cx: &mut App) {
+/// The entry, or the field of the note `field` (F54), is answered in the page's window, which the platform's
+/// text input is told in; with the window closed since Enter it is answered all the same, so the page shown
+/// again does not wait for ever.
+fn answer_entry(page: &WeakEntity<Page>, field: Option<&str>, kept: bool, scene: Option<Scene>, cx: &mut App) {
     let Some(page) = page.upgrade() else { return };
-    match page_window(cx) {
-        Some(open) => {
+    match (page_window(cx), field) {
+        (Some(open), Some(note)) => {
+            let _ = open.update(cx, |page, window, cx| page.answer_field(note, kept, window, cx));
+        }
+        (Some(open), None) => {
             let _ = open.update(cx, |page, window, cx| page.answer_entry(kept, window, cx));
         }
-        None => page.update(cx, |page, cx| page.answer_entry_closed(kept, cx)),
+        (None, Some(note)) => page.update(cx, |page, cx| page.answer_field_closed(note, kept, cx)),
+        (None, None) => page.update(cx, |page, cx| page.answer_entry_closed(kept, cx)),
     }
     if let Some(scene) = scene {
         page.update(cx, |page, cx| page.set_scene(scene, cx));

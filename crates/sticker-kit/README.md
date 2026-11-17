@@ -7,7 +7,7 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 ## The three data types
 
 - `Scene` (`src/scene.rs`): what is on the page. A date, a title, a hero,
-  characters, notes (`List`, `Choice`, `Plain`), a legend. Plain serde data.
+  characters, notes (`List`, `Choice`, `Plain`, `Text`), a legend. Plain serde data.
 - `Theme` (`src/theme/`): how it looks. Colours, font names, tilt angles,
   motion amounts and sizes. It names no pictures: the art is the kit's own.
   Two are built in: `Theme::sticker()` and `Theme::plain()`.
@@ -161,6 +161,43 @@ The rules are `entry::EntryState`, plain data with no GPUI in it
 own dispatch to a headless page. The test platform has no input method, so a
 composition is started there by calling the handler, as a platform would; what
 a real input method does on a real window is checked by hand.
+
+## A text note's quoted words, field and offer
+
+A text note (`Note::Text`) can hold two things besides its title, body and
+options (`layout/typed.rs`, `draw/field.rs`).
+
+- **`quoted`: someone else's words.** They are placed as one piece
+  (`PieceKind::Quote`) under the body, on a ground of their own, every run in
+  `Role::Quoted`, so they are told apart from the note's own words. They are
+  cleaned as every text is, broken into at most `MAX_QUOTED_LINES` (8) lines
+  and cut there with an ellipsis. They are text and nothing else: the piece
+  takes no tap and no key, whatever the words say. Words that clean to nothing
+  place no piece.
+- **`field`: one line to type in** (`Field`: a `hint`, a cap `most`, and an
+  `offer`). It is placed under the options (`PieceKind::Field`), with the
+  hint in it. An `offer` that has words is a small pill over the field
+  (`PieceKind::Offer`); a click on it gives the field the keys and nothing
+  else.
+- **The body's room.** The quoted words and the field are placed whether the
+  body is drawn whole or counted; the options still go when it is counted.
+- **Typing.** A field is typed in as the entry is, by the same code and under
+  the same rules: a click gives it the keys, Escape or a press elsewhere takes
+  them, an input method composes in it, `most` caps it (0 is the kit's own
+  cap, `MAX_ENTRY_CHARS`). Each field and the entry hold their own words.
+- **Enter** calls the `on_entry` handler with the note's id as `made.id`,
+  the words, and no option. The field then waits as the entry does, for
+  `page.answer_field(id, kept, window, cx)`: kept, it is empty; not kept, its
+  words stay. `page.answer_field_closed(id, kept, cx)` is the same for a page whose window was closed since
+  Enter, as `answer_entry_closed` is the entry's. `page.field(id)` is what is typed in it now.
+- **A field lives with its note.** `set_scene` keeps what is typed in a field
+  whose note still has one, by the note's id, and drops the field of a note
+  that is gone or has none.
+
+`tests/typed.rs` places them; `tests/field_draw.rs` types in them through
+GPUI's dispatch on a headless page. Not done: a field's element stands where
+the layout placed it and does not follow its note while the note moves into
+place.
 
 ## The edge scene: a character at a corner of the screen
 

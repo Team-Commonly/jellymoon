@@ -1,9 +1,10 @@
 # 0021 · Living beside a person's own Claude Code
 
 Status: Written by a planner on the coordinator's decisions, 2026-11-15, and amended on 2026-11-17 after its
-review found six faults ("Amended after review", at the end). Nothing here was built. Every "today" below was
-read in the code at `02393d1`, and names its file. Two things were measured since and say so. What is neither
-read nor measured says "not confirmed", and the feature that builds it checks it first.
+review found six faults, and again before that amendment merged ("Amended after review", at the end). Nothing
+here was built. Every "today" below was read in the code at `02393d1`, names its file, and was read again at
+`bb2a384`, which the amendment sits on. Three things were measured since and say so. What is neither read nor
+measured says "not confirmed", and the feature that builds it checks it first.
 
 ## Why
 
@@ -67,8 +68,12 @@ person's login shell for its `PATH`, and looks in those folders. Unix only.
   nothing on its input, with the variables a harness is started with (`call.rs`, `ENVIRONMENT`). Interactive,
   because the file a version manager writes its line to is read only by an interactive one. Measured on one Mac:
   a login shell with no terminal named 14 folders and an interactive one named 16.
-- **How long.** Core waits 2 seconds for the line. At 5 seconds the login shell's whole group is killed, whether
-  or not the line came.
+- **How long.** Core waits 5 seconds for the line. The login shell's whole group is killed as soon as the line
+  is read or the wait ends, and always before the command returns. Measured on one Mac, an interactive login
+  shell with no terminal answered in 0.02 to 0.05 seconds; that Mac has no version manager in its profile, and
+  the slow case, which is the one the ask is for, is not measured.
+- **When it is asked.** Only when every other place gave no harness: a command that finds one on `PATH` or in a
+  fixed place starts no login shell.
 - **What is read.** The one line between the two marks, up to a stated size; the rest is dropped unread. Output
   that holds more than one pair of marks is refused. Of the line, only folders named by a full path are kept.
 - **The file checks.** A program found in one of those folders is held to what a fixed place is held to: a file
@@ -93,7 +98,8 @@ dropped. A grammar for "the program this script names" would have to follow ever
 guess starts the wrong program. A shim is what the person's terminal runs when they type `claude`, so it is
 started as any harness is. What a shim needs is its manager on `PATH`. So, in a row of its own: a harness found
 by the login shell is started with this process's `PATH`, then the folders the login shell named that pass the
-folder's check, in their order, then the fixed places.
+folder's check, in their order, then the fixed places. A folder that is not there is not passed on: one that
+is made later could be made by someone else. This is looked at again at every start, as the file checks are.
 
 **Refused, each in a fixed sentence.** A login shell that is not a full path, fails a file check, is not on the
 list, did not answer in time, or answered with no pair of marks or more than one: no harness comes from the
@@ -102,12 +108,17 @@ login shell, the look ends as it ends today, and the error names the login shell
 **Not covered.**
 - Windows keeps today's rule, and `jellymoon harness` says the login shell is not asked there.
 - An interactive login shell runs the person's profile, and a profile may do anything: start an agent for keys,
-  attach a terminal multiplexer, `exec` another command program. With no terminal most of these give up. What stays in the
-  group is killed at the cap. What moved itself out of the group is not reached, as in decision 6, and one such
+  attach a terminal multiplexer, `exec` another command program. With no terminal most of these give up. What
+  stays in the group is killed when the line is read or the wait ends. What moved itself out of the group is not reached, as in decision 6, and one such
   program can be left by each ask. The remedy is the person's: `JELLYMOON_CLAUDE`, or `JELLYMOON_SHELL` set to
   nothing.
 - Owners are not checked, and neither are the folders above the two that are. The checks are a second look at
   folders the person's own terminal already trusts, not a wall.
+- No test runs the way a real person takes. The door of decision 7 sets `JELLYMOON_SHELL` in every world, so
+  reading the system's record of the user is run by no test, and it is also the part that is not confirmed.
+  Before F78 passes a person checks it by hand, once, on a Mac whose `claude` is under a version manager: with
+  `JELLYMOON_SHELL` and `JELLYMOON_CLAUDE` not set and a `PATH` of the system's folders alone,
+  `jellymoon harness` says the harness was found by the login shell. F78's progress note says who did and when.
 
 **Not confirmed.** The record of the user is read through a call core cannot make without `unsafe`. The feature
 finds a way that needs none (a file of the system, or a system program started by its full path as `ps` is in
@@ -146,9 +157,9 @@ Finder has no stderr a person can see, so a person whose app misbehaves has noth
   only when the file is in Jellymoon's own crates; a panic inside a dependency names no place, since that place
   is a path of the machine that built it.
 - **One writer rule.** A line is one write, appended. When the line would take the file over its cap, the
-  writer takes a lock file in Jellymoon's folder, renames `app.log` to the one older file, and writes to a new
-  one. A rotation that fails, or whose lock another process holds, loses the line and never the command. So the
-  file is over its cap only by lines other writers appended while one rotated, and there are never three files.
+  writer renames `app.log` to the one older file, with one rename, and writes to a new one. There is no lock
+  file: nothing is left in Jellymoon's folder but the two logs. A rename that fails loses the line and never
+  the command. There are never three files.
 - **No flood.** The app looks once a second (`app/src/main.rs`). Of that look, one line is logged for a code,
   and no more until the look's code changes.
 - **Private.** For the person alone where the system has modes, as Jellymoon's other files are.
@@ -157,11 +168,17 @@ Finder has no stderr a person can see, so a person whose app misbehaves has noth
   leaves the tree as it was. `tree` keeps listing the log, so a refusal that logged would fail the tests there
   are. That no call can carry the person's text is held by the calls' types, and by a core test that rides in
   the row: it is a test of functions, not of a command.
+- **Two more tests of functions.** No command can be made to panic from outside, and no way to panic on purpose
+  is shipped. So the panic's line is proved by a test of the function that writes it, which rides in F79 for
+  core and the binary and in F80 for the app. The rule of one line for a code is memory of the open app, and
+  `layout` is a new process each time: it is proved by a test of the function that holds that memory, which
+  rides in F80. The steps of F79 and F80 name only what a command shows.
 
 **Refused.** A logging call that takes text. The calls take a code, numbers and a kind.
 
 **Not covered.** Sending the log anywhere: a person attaches it by hand. What the harness itself prints: a
-run's stream and stderr stay unkept, as today.
+run's stream and stderr stay unkept, as today. Two writers at the cap at once: each renames, and the older file
+may be lost. No command fails for it, and no line is written over the cap.
 
 A log for an app with no terminal was read in Magpie's `internal/applog/applog.go`. Read, not copied.
 
@@ -181,14 +198,17 @@ A log for an app with no terminal was read in Magpie's `internal/applog/applog.g
   start with no `--repo` does read it: it reads the day through the reader to find the wish's folder
   (`run/place.rs`, `found`). The reader needs no folder's name: it lists every folder of the store and reads
   each line's own working directory (`reader.rs`, `session_files`; `session.rs`, `read`).
-- **Two rules for the store's place.** The binary works it out (`crates/jellymoon/src/main.rs`,
-  `harness_folder`) and takes a `CLAUDE_CONFIG_DIR` that is not a full path. Core drops such a one before a
-  harness is started (`call.rs`, `passed_on`). So Jellymoon and the harness it starts can look in two places.
+- **Two rules for the store's place, in three places.** The binary works it out (`crates/jellymoon/src/main.rs`,
+  `harness_folder`) and so does the app (`app/src/today.rs`, `from_env`); both take a `CLAUDE_CONFIG_DIR` that
+  is not a full path. Core drops such a one before a harness is started (`call.rs`, `passed_on`). So Jellymoon
+  and the harness it starts can look in two places.
 
 **Decision.**
 - **One rule for the store's place, in core.** One function says where the session store is, for every caller:
   `CLAUDE_CONFIG_DIR` when it is a full path, else the home's `.claude`. One that is not a full path is as none,
-  which is what the started harness is given. The binary's own working-out goes.
+  which is what the started harness is given. The binary's own working-out goes, and the app's with it. The
+  rule's pin rides in F69, as a test at `jellymoon day` and one at `jellymoon-app layout`: with a
+  `CLAUDE_CONFIG_DIR` that is not a full path, both read the home's store.
 - **A look by id before "lost".** When the harness says it keeps no session of that id, core looks for a file
   named for the id in every folder of the store. It reads names only. It opens no file and works out no
   folder's name. `run answer` learns the store's place from that one function and takes no flag for it.
@@ -240,14 +260,27 @@ line carried `entrypoint`; its values were `cli` and `sdk-cli`; no file held bot
 
 Fixtures are typed by hand from what was measured. None is copied from a real log.
 
+**What the headless rule does and does not change.**
+- It never keeps more than today. Another program's words under another value of `entrypoint` are kept as they
+  are now.
+- It can leave out a person's own words, with nothing said: see "Not covered".
+- A project is found through the same reader. A first start with no `--repo` (`run/place.rs`, `found`) and the
+  projects on offer read the day's turns, so a project whose sessions that day are all headless is no longer
+  found and no longer offered.
+- Jellymoon's own lines change nothing. The reading call keeps no session, and a run's lines are in a copy,
+  which the reader already leaves out.
+
 **Refused.** Guessing from a session's id or from its words who wrote it.
 
-**Not covered.** A value of `entrypoint` other than the two seen: read as typed until one is measured. A
-program that drives the harness through a terminal, and a person who types `claude -p` themselves: both are
-under "Open".
+**Not covered.**
+- A value of `entrypoint` other than the two seen: read as typed until one is measured.
+- A person's own headless typing: `claude -p` typed by hand, and any app the person types into that drives a
+  headless harness. Its words are left out as another program's are.
+- A program that drives the harness through a terminal. It is under "Open".
 
-**Not confirmed.** That a line of type `relocated` exists, and its shape. It was read in the study and seen in
-no log here.
+**Not confirmed.** That a line of type `relocated` exists, and its shape: it was read in the study and seen in
+no log here. Whether a line a resume copies keeps its first `entrypoint`: no file with both kinds was seen, so
+F76's fixture of such a file is typed from the rule, not from a sample.
 
 The shapes were read in Magpie's `internal/sessions/claude.go` and `internal/sessions/cc_copies.go`. Read, not
 copied.
@@ -343,16 +376,26 @@ Asking before a kill, and a job on Windows, were read in Magpie's `internal/proc
 **Decision.**
 - **One door.** The test support is the one door a test starts `jellymoon` or `jellymoon-app` through. The
   binary's tests and the app's tests each have their support, so each has its door, with one rule.
-- **What it refuses.** A home, or a Jellymoon's folder, that is a full path outside the temporary folders: one
-  fixed sentence, and nothing is started.
+- **What it refuses.** A full path outside the temporary folders, given as the home, as Jellymoon's folder, as
+  `CLAUDE_CONFIG_DIR`, or as the value of `--logs`, `--settings` or `--repo`: one fixed sentence, and nothing is
+  started. With no home, a full-path `CLAUDE_CONFIG_DIR` is where `jellymoon day` reads and
+  `jellymoon hook install` writes (`crates/jellymoon/src/main.rs`, `harness_folder`).
+- **Links are resolved first.** The door compares link-resolved paths on both sides: a home under a temporary
+  folder that is a link out of it is refused, and on a Mac the system's temporary folder is itself reached
+  through a link.
 - **What it lets through.** No home, an empty one, and one that is not a full path. Core reaches nothing with
   any of them, and the tests that pin that stay as they are.
 - **The login shell.** The door sets `JELLYMOON_SHELL` to nothing in every world, itself, so no test can forget
   it. A test may name a made-up login shell by a full path under a temporary folder; any other value is refused.
   Until decision 1 is built nothing reads the variable, so the door can land first.
 - **Held by a check.** `cargo xtask check` refuses a test file that starts either program, or builds a home,
-  outside the support. That every earlier test still asserts what it asserted is no step of any test: it is
-  what the tests passing in preflight says.
+  outside the support. No test under either program's tests can see an xtask rule, so the rule's own test rides
+  in the row as a test of xtask, beside the row's `test` command. That every earlier test still asserts what it
+  asserted is no step of any test: it is what the tests passing in preflight says.
+- **Inside core.** Core reads its variables inside itself (`find.rs`, `harness`, `user_home`, `own_folder`).
+  Once decision 1 is built, a unit test that called the look with the process's own environment would ask the
+  builder's real login shell. No test in core or in the app calls it so: a test hands the look its variables.
+  `cargo xtask check` holds that too, in F74 and F75.
 
 **A temporary folder is the system's, or the one Cargo gives tests.** The decision was first worded as the
 system's alone. Most worlds today are under Cargo's (`support/mod.rs`, `scratch`), and a rule that refused them
@@ -360,8 +403,9 @@ would refuse nearly every test there is. So both count, and nothing else does.
 
 **Not covered.** Core's unit tests, which start no built program. The smoke chain, which builds its own world
 (`crates/xtask/src/smoke.rs`): it sets `JELLYMOON_SHELL` to nothing in the door's row. A test that starts
-`jellymoon` through another program gives that program a world the door has passed, and the feature lists each
-one.
+`jellymoon` through another program gives that program a world the door has passed. By reading there are four:
+the hook's entry (`f29.rs`), the installer (`f33.rs`), a copy of the program under another name
+(`f35/delivery.rs`) and a made-up asker (`f41/apart.rs`). F74 names them and any other its builder finds.
 
 A test world that refuses a real home was read in Magpie's `internal/testenv/testenv.go`. Read, not copied.
 
@@ -373,9 +417,13 @@ A gated feature waits for `GATE: PASS` on its exact head before it merges.
 **Four of the first seven rows are never built.** A row is never reworded, so F67, F68, F70 and F73 stay in
 the list byte for byte, with `passes: false` for good, and new rows stand in for them. The repo did this once
 for one step (F49's last step replaces F32's step 4). Each new row's last step names the row it stands in for.
-No builder is handed F67, F68, F70 or F73.
 
-The order to build in is the order of this table, not of the list.
+**The list itself says so.** `feature_list.json` has a key `dead` beside `features`: each dead row's id, with
+the ids that stand in for it. The scoreboard `init.sh` prints shows `dead` for them, and the start-of-session
+step in `AGENTS.md` takes the first row with `passes: false`, no `blockedBy` and not dead. Nothing but
+`init.sh` reads the list, so the new key breaks no other reader.
+
+The order to build in is the order of this table, not of the list. `AGENTS.md` says so in the same step.
 
 | Order | Feature | What | Systems | Waits on | Gated | Stands in for |
 |---|---|---|---|---|---|---|
@@ -418,9 +466,6 @@ F69, the summary and the copies in F76, the exact removal and the line ends in F
   confirmed. The owner measures it; this note asserts nothing.
 - **Owners, and the folders above, in the file checks.** Not checked for a fixed place today, and not added for
   the login shell's folders: it would be a new rule for every place, which is page.md's to make.
-- **How a dead row is kept from a builder by the list itself.** A session takes the first row with
-  `passes: false` and no `blockedBy`, and F67 is such a row. Today only this note and the progress note say it
-  is dead. A field or a rule for that is workflow.md's, and the coordinator's to decide.
 
 ## Open
 
@@ -511,3 +556,27 @@ The after-merge review failed this note with six faults. Each line is one change
     new file a killed write leaves is listed.
 15. **Order of the rest.** F69, F71 and F72 come last.
 16. **The gated column** was right and is kept; F79 and F80 stay gated as the safe reading.
+
+### Amended again, before the amendment merged
+
+The amendment was read before it merged and failed on one fault, with nine notes.
+
+1. **Steps no command can show.** F79's panic step and F80's last two steps are reworded to what a command
+   shows. The panic's line and the rule of one line for a code are tests of functions riding in their rows. No
+   way to panic on purpose is shipped.
+2. **An xtask rule's proof.** Its own test rides in the row as a test of xtask.
+3. **The store's place.** The app's copy of the rule is named, and the one rule is pinned at `jellymoon day`
+   and at `layout`, in F69.
+4. **The door.** It also refuses a full-path `CLAUDE_CONFIG_DIR`, `--logs`, `--settings` and `--repo` outside
+   the temporary folders, and compares link-resolved paths. The tests that start a program through another
+   program are listed. No test calls the look with the process's own environment.
+5. **The way a real person takes** is run by no test: said, with what a person checks by hand.
+6. **The wait.** 5 seconds, not 2; the group is killed as soon as the line is read or the wait ends, and always
+   before the command returns. The fast case was measured, the slow one was not.
+7. **A folder that is not there** is not passed on a started `PATH`.
+8. **Dead rows.** The list names them under `dead`, the scoreboard prints it, and the start-of-session step
+   skips them and takes this note's table for the order.
+9. **The headless rule's effects** are said: it never keeps more, it can leave out a person's own headless
+   typing, and a project with headless sessions only is not found.
+10. **Small text.** The commit this was read at; the glossary's **login shell**; no lock file for the log, with
+    the race at the cap under "Not covered".

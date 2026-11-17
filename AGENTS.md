@@ -7,7 +7,9 @@ first and Windows after. The design is `docs/adr/0011-the-journal-app.md`; terms
 ## Start every session here
 1. `./init.sh`: the pinned tools, the baseline (`make preflight`) and the feature scoreboard. A red baseline is fixed first.
 2. Read the newest files in `progress/` (`ls -r progress/ | head -5`) and `git log --oneline -15`.
-3. Take the first `feature_list.json` feature with `passes: false` and no `blockedBy`. One feature at a time.
+3. Take the first `feature_list.json` feature with `passes: false`, no `blockedBy` and not dead (the list's
+   `dead` key names the rows that are never built). One feature at a time. Among ADR 0021's rows, the ADR's
+   table gives the order.
 
 ## The loop: one skill per stage
 Read `.agents/skills/<name>/SKILL.md` before the stage. Detail: `docs/development/workflow.md`.

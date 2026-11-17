@@ -377,13 +377,15 @@ first lines are drawn and the rest counted.
 
 ## A question answered, and more like this (`app/src/answering.rs`)
 
-A made wish's note can have a field under it (F54, ADR 0018). The rules and every sentence but two titles and
+A made wish's note can have a field under it (F54, ADR 0018). The rules and every sentence but three titles and
 two hints are core's ([run.md](run.md), "An answer"; [wish.md](wish.md), "A follow-up"). The app puts the field
 where core says, carries what is typed to core off the window's thread, and draws what core answers.
 
 - **A wish that asks.** Core keeps the run's question with the wish (`Wish.question`, there only while the run
   asks). The wish's note, `wish-<wish>`, has core's words for how it stands, the question under them, and a
-  field with the hint "Type your answer, then Enter". The app does not look at the wish's state for it.
+  field with the hint "Type your answer, then Enter". The app does not look at the wish's state for it. Only
+  a made wish (`jellymoon_core::made`) is drawn so: a question a kept page file gives a wish of the reading is
+  not drawn, and that wish gets no field.
 - **The question is a run's text.** It is the note's `quoted` words: the kit places it as one `quote` piece, on a
   ground of its own, every run in the `quoted` role, so it is told apart from Jellymoon's sentences. The kit
   cleans it and cuts it to eight lines. It is text: nothing in it is a link, an option or a field, and nothing
@@ -391,17 +393,27 @@ where core says, carries what is typed to core off the window's thread, and draw
   ([run.md](run.md), "A run that asks").
 - **An answer.** Enter in that field gives the words to `jellymoon_core::answer_run`, the call `jellymoon run
   answer` makes, off the window's thread (`OnShow::typing`). The answer is in no note and no line the app
-  prints. Core's call waits until the run has ended again, so the field waits that long: its words drawn pale,
-  no key taken, no second Enter. Then the wish's note is as core says the wish stands: work that waits, with
-  its choices; another question, with a field; or how it failed.
-- **An answer core does not take** changes nothing. The page's first note is "That answer was not taken.", with
-  core's reason: the run asks no question (it ended, or was answered, meanwhile), the answer is over 600
-  characters, or nothing is left of it once cleaned. The field keeps what was typed and takes keys again.
+  prints. Core's call waits until the run has ended again. From Enter until then the wish's note says what
+  core says of a wish at work ("This wish is being worked on."), with no question and no field, so the note is
+  true for as long as the run goes on and no key is held for it. Then the wish's note is as core says the wish
+  stands: work that waits, with its choices; another question, with a field; or how it failed.
+- **An answer core gives an error for.** Core's error says why and not whether the run was given the answer, so
+  the app looks again: did the run wait on the note's question before the call, and does it after? Where it
+  still waits on it, or never did, the answer was not given: the page's first note is "That answer was not
+  taken.", with core's reason (the run asks no question, having ended or been answered meanwhile; the answer
+  is over 600 characters; nothing is left of it once cleaned), and the note is back with its question and its
+  field, which keeps what was typed and takes keys again. Where it waited and no longer does, the answer was
+  given and what failed came after: the first note is "The answer was given, but what came after it failed.",
+  with core's sentence, the field is emptied so the same answer is not sent twice, and the wish's note is as
+  core says the wish stands.
 - **More like this.** Core says which made wishes a follow-up may be made of
   (`jellymoon_core::followable`, printed as `follows` by `jellymoon run waiting`: work that waits, and work
   that was kept). Under the note of such a wish, and of no other, is the offer `More like this` over a field
   with the hint "Type what to do next, then Enter". Under work that waits it stands below the three choices,
-  and a tap on a choice leaves it there. The app does not work it out from the wish's state.
+  and a tap on a choice leaves it there: the note that says what is being done carries the same field, and
+  Enter under it is carried as under the work. The field is the wish's, not the note's (the kit's `Field.key`,
+  `more-<wish>`), so what was typed in it is still there when the work's note is back, also after a note that
+  asks once more and has no field. The app does not work it out from the wish's state.
 - **A follow-up.** Enter in that field gives the words and the wish's id to `jellymoon_core::wish_after`, the
   call `jellymoon wish --after` makes. A follow-up core keeps is drawn where core keeps it, and its run is
   asked for as a typed wish's is, a process of its own ("The run", above). The field is emptied, and the note
@@ -411,24 +423,30 @@ where core says, carries what is typed to core off the window's thread, and draw
   tossed meanwhile. The field keeps what was typed.
 - **Which call an Enter is.** The kit gives the note's id with the words. The field on show under that note
   says the rest: one under the offer is a follow-up, any other an answer. An Enter for a note with no field on
-  show is nothing.
+  show is nothing. A field's words go when its offer changes: what was typed as an answer is never there to be
+  sent as a follow-up under the same note.
 - **A page closed and shown again.** The page's view outlives its window (F57), and a field's words are the
   view's: they are there when the page is shown again. A field answered while the window is closed is answered
   all the same (`window.rs`, `answer_entry`; the kit's `answer_field_closed`), so it does not wait for ever.
 - **What can be acted on.** Of all this only the `field` and `offer` pieces take a click, and a click on the
   offer only gives its field the keys. `layout` prints them, and the `quote` piece, with the note's id.
 
-`app/tests/f54.rs`, `f54/drawn.rs`, `f54/answered.rs` and `f54/more.rs` follow it: `drawn.rs` at `jellymoon-app
-layout`, the others in the made-up window of `tests/support/tapper.rs` (`type:<note>:<words>`, `start`), which
-gives an Enter only from a field `layout` places. `crates/jellymoon/tests/f54.rs` proves `follows` at the binary.
+`app/tests/f54.rs`, `f54/drawn.rs`, `f54/answered.rs`, `f54/more.rs` and `f54/window.rs` follow it: `drawn.rs`
+at `jellymoon-app layout`, `window.rs` at the page's window on GPUI's test platform (Enter in a field, and an
+answer that comes after the window was closed), the others in the made-up window of `tests/support/tapper.rs`
+(`type:<note>:<words>`, `start`), which gives an Enter only from a field `layout` places. `crates/jellymoon/tests/f54.rs` proves `follows` at the binary.
 
 Not done, and not tested at a real window:
-- An answered run lives in the app. Core has one call to answer, and it waits for the run's end; a window
-  closed meanwhile cuts the run off, and the next look ends it as any run that was cut off.
+- An answered run lives in the app. Core has one call to answer, and it waits for the run's end. Closing the
+  page's window ends nothing: the app lives on and so does the run. Quit meanwhile cuts the run off, and the
+  next look ends it as any run that was cut off.
 - A field takes at most 400 characters, the kit's cap on a line, where core takes an answer of 600.
 - One wish is open at a time in the window, so of two wishes that ask one is on show; `layout` prints both.
 - A note left on show while its wish changed elsewhere keeps its field until the wish is opened again. An Enter
-  there is refused by core, in its words.
+  there is refused by core, in its words. One case is not refused: a note left on show with one question while
+  the run, answered elsewhere, now asks another gives its words to the new question.
+- An answer started apart from the app's process, as `wish --run` starts a run, so that Quit would not cut the
+  run off: open (ADR 0018).
 
 ## The jellyfish (`app/src/jelly.rs`)
 

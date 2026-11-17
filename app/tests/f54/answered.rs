@@ -6,13 +6,21 @@ use std::fs;
 
 use serde_json::json;
 
+use super::support::day::DAY;
 use super::support::worked::tree;
 use super::{
-    ANSWER_HINT, MORE, MORE_HINT, NEEDS, QUESTION, UNANSWERED, WORK, acted, plain, quoted, ready, text, typed,
+    ANSWER_HINT, AT_WORK, MORE, MORE_HINT, NEEDS, QUESTION, UNANSWERED, UNSETTLED, WORK, acted, at_once, plain, quoted,
+    ready, text, typed,
 };
 use crate::support::wished::{SAID, wait_until};
 
 const ANSWER: &str = "the newer one, please";
+
+/// The note of a wish from Enter in its answer's field until core has answered: core's words for a wish at
+/// work over the wish's own, with no question and no field.
+fn at_work() -> super::Text<'static> {
+    (AT_WORK, vec!["“make the uploader retry twice”"], "", vec![], None)
+}
 
 /// The note of a wish that asks `question`, as a tap on its character opens it.
 fn asks(question: &str) -> super::Text<'_> {
@@ -32,6 +40,8 @@ fn an_answer_typed_under_the_question_is_given_to_core_and_the_page_shows_what_c
     assert_eq!(text(&opened, &note), Some(asks(QUESTION)));
     let (kept, shown) = typed(&printed[1]);
     assert!(kept, "core took the answer, so the field is emptied");
+    // The review of F54, finding 5: from Enter the scene on show says the wish is being worked on.
+    assert_eq!(at_once(&printed[1]).as_ref().and_then(|scene| text(scene, &note)), Some(at_work()));
     assert_eq!(plain(&shown).iter().filter(|(title, _)| *title == UNANSWERED).count(), 0);
     // Core was given the words, the agent was started once more, and the run ended with its work.
     let made = w.wish(&wish);
@@ -98,6 +108,7 @@ fn an_answer_core_refuses_is_drawn_in_core_s_words_and_the_field_keeps_what_was_
         let printed = acted(&w, &[&format!("poke:{wish}"), &format!("type:{note}:{words}")]);
         let (kept, shown) = typed(&printed[1]);
         assert!(!kept, "a refused answer stays in its field: {why}");
+        assert_eq!(at_once(&printed[1]).as_ref().and_then(|scene| text(scene, &note)), Some(at_work()), "{why}");
         assert_eq!(plain(&shown).first(), Some(&(UNANSWERED, why)));
         // The question and the field are still there to answer in.
         assert_eq!(text(&shown, &note), Some(asks(QUESTION)), "{why}");
@@ -140,4 +151,64 @@ fn enter_is_carried_only_from_a_field_that_is_on_show() {
     let printed = acted(&w, &acts.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!((&printed[0], &printed[2]), (&json!(null), &json!(null)));
     assert!(tree(&w.at("jm")) == before, "an Enter from no field reached core");
+}
+
+// The review of F54, finding 2: core's `Err` does not say whether the harness was given the answer. Here it was:
+// the run went on and ended, and then the day was busy for longer than a run waits.
+#[test]
+fn an_answer_that_was_given_before_core_failed_empties_the_field_and_says_what_failed() {
+    let w = ready();
+    let wish = w.ran("asks", 0, "asks");
+    let run = w.wish(&wish)["run"].as_str().unwrap().to_string();
+    w.plays("edits", 0);
+    let (starts, note) = (w.starts(), format!("wish-{wish}"));
+    let (go, at) = (w.at("rec").join("go.step"), w.at("rec").join("go.at"));
+    let lock = w.at("jm").join("pages").join(format!("{DAY}.ruled.lock"));
+    // A test's build of core waits before the record takes the run's end, until the file is there.
+    let vars = [
+        ("JELLYMOON_TEST_NOTE_WAIT_MS", "60000".into()),
+        ("JELLYMOON_TEST_GO", go.clone().into()),
+        ("JELLYMOON_TEST_END_WAIT_MS", "300".into()),
+    ];
+    let mut window = w.taps_with("logs", &[&format!("poke:{wish}"), &format!("type:{note}:{ANSWER}")], &vars);
+    wait_until("the end of the answered run", || at.exists());
+    fs::write(&lock, "").unwrap(); // another change to the day, which does not finish in time
+    fs::write(&go, "").unwrap();
+    let printed = window.ended();
+    fs::remove_file(&lock).unwrap();
+    let (kept, shown) = typed(&serde_json::from_str(&printed[1]).unwrap());
+    assert!(kept, "the harness has the answer: the field is emptied, so Enter cannot give it twice");
+    let why = format!(
+        "run {run} has ended and its record says how; the page of {DAY} was busy, and shows it when it is next drawn."
+    );
+    assert_eq!(plain(&shown).first(), Some(&(UNSETTLED, why.as_str())));
+    assert_eq!(plain(&shown).iter().filter(|(title, _)| *title == UNANSWERED).count(), 0);
+    // The note is the wish's as core says it stands, by the run's record: its work waits, and nothing is asked.
+    let work = text(&shown, &format!("work-{wish}")).expect("the work that waits");
+    assert_eq!((text(&shown, &note), work.0, work.2), (None, WORK, ""));
+    assert_eq!((&w.wish(&wish)["answer"], w.starts()), (&json!(ANSWER), starts + 1));
+}
+
+// The review of F54, finding 7: only a made wish has a run to answer. A kept page file is a file anyone with
+// the folder can write, and a question it gives a wish of the reading is no question of a run.
+#[test]
+fn a_question_a_kept_page_file_gives_a_wish_of_the_reading_is_not_drawn_and_has_no_field() {
+    let w = ready();
+    let file = w.at("jm").join("pages").join(format!("{DAY}.json"));
+    let mut page: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    let read = "a".to_string();
+    let wish = json!({"id": read, "label": "The uploader", "said": "look at the uploader", "project": "alpha",
+        "state": "needs_you", "stars": [], "question": QUESTION});
+    page["wishes"].as_array_mut().expect("the page's wishes").push(wish);
+    fs::write(&file, page.to_string()).unwrap();
+    let before = tree(&w.at("jm"));
+    let note = format!("wish-{read}");
+    let printed = acted(&w, &[&format!("poke:{read}"), &format!("type:{note}:{ANSWER}")]);
+    let opened = super::scene(&printed[0]);
+    let opened = text(&opened, &note).expect("the wish's note");
+    assert_eq!((opened.2, opened.4), ("", None), "{}", printed[0]);
+    assert_eq!(printed[1], json!(null));
+    let placed = w.placed();
+    assert_eq!((super::of(&placed, "field", &note).len(), super::of(&placed, "quote", &note).len()), (0, 0));
+    assert!(tree(&w.at("jm")) == before, "an Enter under a wish of the reading reached core");
 }

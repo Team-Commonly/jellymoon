@@ -10,7 +10,7 @@ const SIZES: [Viewport; 2] = [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 96
 const ID: &str = "row-1";
 
 fn field(offer: &str) -> Option<Field> {
-    Some(Field { offer: offer.into(), hint: "Type here, then Enter".into(), most: 80 })
+    Some(Field { offer: offer.into(), hint: "Type here, then Enter".into(), most: 80, key: String::new() })
 }
 
 fn note(body: &[&str], options: &[&str], quoted: &str, field: Option<Field>) -> Note {

@@ -92,8 +92,9 @@ impl Showing {
     }
 
     /// Enter in the field of the note `note`, as work for another thread: an answer to a run that asks, or a
-    /// follow-up. None when that note has no field on show, and then nothing is asked of core.
-    pub fn typing(&self, note: &str, typed: &str) -> Option<Wishing> {
+    /// follow-up. With an answer comes the scene to show at once, in which the wish is at work. None when that
+    /// note has no field on show, and then nothing is asked of core.
+    pub fn typing(&self, note: &str, typed: &str) -> Option<(Option<Scene>, Wishing)> {
         self.with(|on| on.typing(note, typed)).flatten()
     }
 

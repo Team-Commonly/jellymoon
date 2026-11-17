@@ -631,7 +631,10 @@ max_file_lines = 400
 # The notes after F57 raised the kit by 56: what a frame painted of each run, its ink and its clipped box, with
 # the clip's own test (`draw/edge.rs`, 37, with `set_theme` gone), and the paint asserted in `tests/edge_draw.rs`
 # (21); `edge.rs` and `tests/text.rs` 1 each, and `tests/edge.rs` lost 4 (its copy of `apart`).
-"crates/sticker-kit" = 9854
+# The notes on F54 raised the kit by 178, of which 139 are tests (`tests/field_draw.rs`): a field told by its key
+# and its offer, the fields kept apart from a scene and their cap, and an answer found by the id Enter gave
+# (`draw/field.rs`, 16; `draw/entry.rs`, 12; `scene.rs`, 6; `draw/mod.rs`, 5).
+"crates/sticker-kit" = 10032
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -714,7 +717,13 @@ max_file_lines = 400
 # `tests/f32.rs` (21). The rest: the bubble opened again and a failed open said once (`jellyfish.rs`, 30, 13 of
 # them its test), the look that asks the day (`shell.rs`, 11), `--theme`'s refusal and the day's naming
 # (`main.rs`, 14); `popup.rs` lost 2 (the one-variant `Kind`).
-"app" = 10601
+# The notes on F54 raised the app by 339, of which 252 are tests: Enter in a field at the page's window and an
+# answer after the window was closed (`tests/f54/window.rs`, 118), an answer given before core failed and a
+# question from a kept page file (`tests/f54/answered.rs`, 71), the field under the note that says what is being
+# done (`tests/f54/more.rs`, 31), and their helpers (`tests/f54.rs`, 18; `tests/support/`, 14). The rest: whether
+# an answer was given, and the note of a wish at work from Enter (`answering.rs`, 42; `working.rs`, 34;
+# `window.rs`, 9; `wishing.rs` and `showing.rs`, 1 each).
+"app" = 10940
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

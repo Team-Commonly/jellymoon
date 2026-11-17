@@ -19,8 +19,9 @@
 //!   line. Without it there is none, as for a person who has not installed it.
 //! - `type:<note>:<words>`: Enter in the field of a note, with those words in it (F54). The kit gives an Enter
 //!   only from a field it placed, so the scene is laid out as for `choose`, and a note whose field is not placed
-//!   prints `null`. Core is asked on another thread. The line is `{"kept":…,"scene":…}`: what the field is
-//!   told, and the scene shown. The asking for a run it left is kept for `start`.
+//!   prints `null`. Core is asked on another thread. The line is `{"kept":…,"scene":…,"at_once":…}`: what the
+//!   field is told, the scene shown, and the scene shown at once, before core was asked, or `null` when
+//!   nothing was. The asking for a run it left is kept for `start`.
 //! - `start`: the oldest asking a `type` left, on another thread, and the scene it shows, or `null`.
 //! - `core:<wish>:<index>`: no window at all: core's own answer to a tap on that choice of the wish's work, as
 //!   `[title, body]`, or `null` when it is no sentence.
@@ -124,12 +125,18 @@ fn opened(args: &[String]) -> (Today, Scene, Showing, &[String]) {
     (today, scene, showing, acts)
 }
 
-/// Enter in the field of `note`, when `layout` places one: what it printed, the scene then on show, and the
-/// asking for a run it left.
-fn entered(showing: &Showing, now: &Scene, size: Viewport, note: &str, typed: &str) -> Option<Entered> {
+/// Enter in the field of `note`, when `layout` places one: the scene shown at once, and what core's answer
+/// gave: what the field is told, the scene then on show, and the asking for a run it left.
+fn entered(
+    showing: &Showing,
+    now: &Scene,
+    size: Viewport,
+    note: &str,
+    typed: &str,
+) -> Option<(Option<Scene>, Entered)> {
     let is = |piece: &Value| piece["kind"] == "field" && piece["id"] == note;
-    let typing = placed(now, size).iter().any(is).then(|| showing.typing(note, typed)).flatten()?;
-    Some(showing.answered(Some(elsewhere(typing))))
+    let (at_once, typing) = placed(now, size).iter().any(is).then(|| showing.typing(note, typed)).flatten()?;
+    Some((at_once, showing.answered(Some(elsewhere(typing)))))
 }
 
 fn main() {
@@ -167,11 +174,12 @@ fn main() {
                 size = Viewport { w: w.parse().unwrap(), h: h.parse().unwrap() };
             }
             ["type", note, typed] => {
-                let Some(Entered { kept, scene, asking }) = entered(&showing, &now, size, note, typed) else {
+                let Some((at_once, entered)) = entered(&showing, &now, size, note, typed) else {
                     show(&Value::Null);
                     continue;
                 };
-                show(&json!({ "kept": kept, "scene": scene }));
+                let Entered { kept, scene, asking } = entered;
+                show(&json!({ "kept": kept, "scene": scene, "at_once": at_once }));
                 asked.extend(asking);
                 now = scene.unwrap_or(now);
             }

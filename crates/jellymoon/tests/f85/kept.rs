@@ -102,11 +102,11 @@ fn a_result_is_kept_as_it_was_read_for_the_person_alone_and_the_run_prints_what_
 }
 
 #[test]
-fn a_result_beside_another_last_word_than_done_fails_the_run_as_before() {
+fn a_result_beside_an_unfit_last_word_fails_the_run_as_before() {
     let one = did("I made n.txt.").to_string();
     let unfit = "its last word was not `done` alone, or `asks` with one question";
+    // A result beside a question is no unfit word since F87: the run asks and the result is dropped (`f87.rs`).
     for word in [
-        format!(r#"{{"state":"asks","question":"Which one?","result":{{"pieces":[{one}]}}}}"#),
         format!(r#"{{"state":"done","result":{{"pieces":[{one}]}},"more":1}}"#),
         format!(r#"{{"state":"done","state":"done","result":{{"pieces":[{one}]}}}}"#),
         format!(r#"{{"result":{{"pieces":[{one}]}}}}"#),

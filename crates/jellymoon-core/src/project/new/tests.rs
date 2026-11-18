@@ -120,8 +120,10 @@ fn what_is_taken_back_is_the_folder_that_was_made_and_never_one_the_list_names()
     assert!(was.take_back(home.path(), &folder, &project).is_none());
     assert!(project.is_dir(), "a folder this command did not make was removed");
     fs::remove_dir(&project).unwrap_or_else(|e| panic!("{e}"));
+    // `projects` holds no file of a making, so it goes only where the system's word tells it: a mark that is whole.
+    let whole = mark(&folder).is_some_and(|(number, at)| number.is_some() && at.is_some());
     assert_eq!(made(&folder, &project, true).take_back(home.path(), &folder, &project), Some(true));
-    assert!(!folder.exists());
+    assert_eq!(folder.exists(), !whole, "whole: {whole}");
 }
 
 // Windows hands a folder made again under a name its old time of making, and has no number to tell two folders
@@ -146,22 +148,38 @@ fn a_folder_that_looks_like_the_made_one_from_outside_and_holds_no_file_of_the_m
     assert_ne!(Made::new().token, Made::new().token);
 }
 
-// A making that finds its file gone has only the system's word for the folder at its name. A mark with the
-// system's number in it is that word. A mark with none (Windows) is a time a folder put in place can share, and
-// is no word at all. Both sides are values here, so each system proves the side it does not run.
+// A making that finds its file gone has only the system's word for the folder at its name, and that word is a
+// mark with both the system's number and a time of making in it. A time alone (Windows) is what a folder put in
+// place can share; a number alone (a file system that keeps no time of making) is handed out again. Both sides
+// are values here, so each system proves the sides it does not run.
 #[test]
-fn a_folder_with_no_number_is_never_taken_for_the_made_one_by_its_mark_and_one_with_a_number_is() {
+fn a_folder_is_taken_for_the_made_one_by_its_mark_only_when_both_marks_hold_a_number_and_a_time_and_are_one() {
     let at = |seconds| Some(UNIX_EPOCH + std::time::Duration::from_secs(seconds));
-    let numbered = |number: u64, seconds| Some((Some((7, number)), at(seconds)));
-    assert!(made_still(numbered(40, 1), numbered(40, 1)));
-    assert!(!made_still(numbered(40, 1), numbered(41, 1)), "another number is another folder");
-    assert!(!made_still(numbered(40, 1), numbered(40, 2)), "another time is another folder");
-    // No number: the same time is what Windows hands a folder made again under the name.
-    assert!(!made_still(Some((None, at(1))), Some((None, at(1)))), "a time alone told two folders as one");
-    assert!(!made_still(Some((None, None)), Some((None, None))));
-    assert!(!made_still(numbered(40, 1), Some((None, at(1)))));
+    let whole = |number: u64, seconds| Some((Some((7, number)), at(seconds)));
+    // Every pair of what a mark can hold: both, the number alone, the time alone, neither.
+    let kinds = [whole(40, 1), Some((Some((7, 40)), None)), Some((None, at(1))), Some((None, None))];
+    for (made, was) in kinds.iter().enumerate() {
+        for (there, now) in kinds.iter().enumerate() {
+            assert_eq!(made_still(*was, *now), made == 0 && there == 0, "made: kind {made}, there: kind {there}");
+        }
+    }
+    assert!(!made_still(whole(40, 1), whole(41, 1)), "another number is another folder");
+    assert!(!made_still(whole(40, 1), whole(40, 2)), "another time is another folder");
     // No folder made, or none there now.
-    assert!(!made_still(None, None) && !made_still(None, numbered(40, 1)) && !made_still(numbered(40, 1), None));
+    assert!(!made_still(None, None) && !made_still(None, whole(40, 1)) && !made_still(whole(40, 1), None));
+}
+
+// `projects` never holds a file of a making, so the system's word is all that tells it: it is taken back by the
+// same question, and not by two marks that are merely one.
+#[test]
+fn the_folder_of_projects_is_this_command_s_to_take_back_only_by_a_mark_that_is_whole() {
+    let at = Some(UNIX_EPOCH + std::time::Duration::from_secs(1));
+    let whole = |number: u64| Some((Some((7, number)), at));
+    let made = |projects| Made { projects, ..Made::new() };
+    assert!(made(whole(40)).made_projects(whole(40)) && !made(whole(40)).made_projects(whole(41)));
+    for part in [Some((Some((7, 40)), None)), Some((None, at)), Some((None, None)), None] {
+        assert!(!made(part).made_projects(part), "projects was taken by a mark that is not whole: {part:?}");
+    }
 }
 
 #[test]

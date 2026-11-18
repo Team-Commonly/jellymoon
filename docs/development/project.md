@@ -108,7 +108,15 @@ run there, with no `--repo` and no session log.
   this command made it and it is empty. A refusal that came after the folder was made, and whose own words
   do not say so, ends `; the folder made for it meanwhile was taken back`; when the folder was this command's to take back and
   could not be removed, it ends `; the folder made for it meanwhile could not be taken back and was left`, and what is left may have lost part of
-  what was in it.
+  what was in it. A sentence that would have said `so what was made was taken back and nothing was listed`
+  (git failed, the name was kept in other letters) then says `so nothing was listed` before those words.
+- **A making whose folder another command listed meanwhile** is a made project. When the making finds its own
+  file gone from the folder it made, which is the made folder still, and the list holds its name for that very
+  folder, it prints the line the list holds, exits 0 and says on stderr `the new project's folder was listed
+  by another command while it was being made…`. It writes nothing and removes nothing: the day is the one the
+  other command listed it on. That is a making whose lock was taken over after 30 seconds and a `project add`
+  of its folder. With the name listed for another folder, or not at all, the file's loss is `removed, replaced
+  or changed…` as before.
 - **A command that is killed** between making the folder and writing the list leaves the folder, unlisted,
   with the making's file in it beside the repo, and the lock. For half a minute every change to the list is told one has not finished; then the lock is taken
   over, and the next `project new` of that name says something is there. Mend it by `project add --repo` with
@@ -121,7 +129,8 @@ run there, with no `--repo` and no session log.
 
 Takes the line of that name off the list and touches nothing else: not the folder, not a wish, not a run or its
 branch. The name is as `project list` prints it, letter for letter. It is any name a line can have, so a line
-an earlier build wrote under a name that is refused today can be taken off.
+an earlier build wrote under a name that is refused today can be taken off, and that cannot be undone:
+`project add --repo` of its folder is refused from then on, in a sentence that says to rename the folder.
 
 ## A name that comes in, and a name that was kept
 
@@ -132,8 +141,9 @@ listed `app` followed by a heart and U+FE0F, and kept wishes for it.
 | where the name is | such a name |
 |---|---|
 | `project new <name>` | refused |
-| `project add --repo`, the folder's last name | refused |
+| `project add --repo`, the folder's last name | refused: `…its last name holds a character that cannot be seen…` |
 | `wish --project` for a name the list does not hold | refused: `--project takes one folder's name…` |
+| `wish --project` when the list cannot be used | refused in the list's own sentence: `the list of projects (projects.json in Jellymoon's folder) is not used: …` |
 | `wish --project` for a name the list holds, letter for letter | kept, and its run starts in the listed folder |
 | the offers: a chip on a page, a wish said aloud, a wish made from a page | never offered |
 | a line of the list, read back | used: listed, found by a run, forgotten by `project forget` |
@@ -141,7 +151,8 @@ listed `app` followed by a heart and U+FE0F, and kept wishes for it.
 
 So nothing an earlier build wrote is refused, and no new name of that kind comes in. A typed-in folder of such
 a name that is on no list gets no new wish, and `project add` of it is refused: rename the
-folder. A run in a listed folder of such a name does not move the line's day on, as that is `add`'s look.
+folder. The refusal cannot know whether an earlier build listed this folder, so it says what it can see: the
+name holds such a character, only an earlier build kept one, and one taken off the list is not listed again. A run in a listed folder of such a name does not move the line's day on, as that is `add`'s look.
 
 ## A run's start writes the list
 
@@ -191,15 +202,18 @@ say so, what was written is taken back. A `--repo` sentence from `new` is said o
 that folder was taken back, and so is any other sentence that ends `; the folder made for it meanwhile was taken back`: a
 list that filled or was written over meanwhile, and `jellymoon's own files: …` for a list that could not be
 written. One that ends `; the folder made for it meanwhile could not be taken back and was left` is said of a
-folder this command made and could not remove. The list's own sentences (full, the lock, a list that cannot be used)
+folder this command made and could not remove, and has `so nothing was listed` where the sentence would have
+said `so what was made was taken back and nothing was listed`. The list's own sentences (full, the lock, a list that cannot be used)
 are `new`'s too. A command line that is no command
-is exit 2 with the usage.
+is exit 2 with the usage. One line of `new` is no refusal: it is on stderr beside the project's line on
+stdout, exit 0: `the new project's folder was listed by another command…`, in the table.
 
 | When | The line |
 |---|---|
 | `--repo` is no full path | `--repo must be a full path, from the root` |
 | nothing, or no folder, is there | `--repo is not a folder that is there` |
 | the last name is no project's name | `--repo is not a folder a project can be named after: its last name must be one folder's name of at most 100 characters, with nothing that cannot be seen and nothing shaped like a credential` |
+| the last name is one cleaning leaves, with a character in it that cannot be seen (U+034F, a Hangul filler, U+2800, U+FE00 to U+FE0F) | `--repo is not a folder a project can be named after: its last name holds a character that cannot be seen; only an earlier build of Jellymoon kept such a name, and one taken off the list is not listed again, so rename the folder, then add it` |
 | the real path is not text, or over 4096 bytes | `--repo is not a folder Jellymoon can list: its full path is not text, or is over 4096 bytes` |
 | it holds no `.git` | `--repo is not the top of a git repo` |
 | it is someone else's | `--repo is not a folder of your own` |
@@ -212,10 +226,12 @@ is exit 2 with the usage.
 | `new`: `projects` is a link or a file | `the folder Jellymoon makes projects in (projects in Jellymoon's folder) is not a folder Jellymoon made: a link or a file is at its name; nothing was made` |
 | `new`: no git | ``no `git` program was found on PATH, and a new project is a git repo, so nothing was made`` |
 | `new`: git fails | `git could not make the new project's repo (what git said is not repeated, as it names the folder), so what was made was taken back and nothing was listed` |
+| `new`: git fails, and the folder could not be removed | `git could not make the new project's repo (what git said is not repeated, as it names the folder), so nothing was listed; the folder made for it meanwhile could not be taken back and was left` |
 | `new`: the empty folder for git holds something | `the folder Jellymoon keeps empty for git (runs/no-hooks) holds something, so what was made was taken back and nothing was listed` |
 | `new`: Jellymoon's folder is someone else's, or the person has no home folder | `Jellymoon's folder is not a folder of your own, and a project is listed only in a folder of your own, so nothing was made` |
 | `new`: the path of Jellymoon's folder is not text, or too long | `the full path of Jellymoon's folder is not text, or a project's in it would be over 4096 bytes, so a new project could not be listed and nothing was made` |
 | `new`: no folder, another folder, or the folder without the making's file is at the name once the repo is made | `the new project's folder was removed, replaced or changed while it was being made, so nothing was listed, and what is there now was left as it is` |
+| `new`: the making's file is gone from the made folder, and the list holds the name for that folder (exit 0, beside the project's line) | `the new project's folder was listed by another command while it was being made, so the project is on the list as that command listed it, and this one changed nothing more` |
 | `new`: the folder is kept under another name than was asked | `this file system does not keep the folder under the name it was given, so what was made was taken back and nothing was listed; pick a name of plain letters` |
 | `forget` is given no project's name | ``project forget takes a project's name, as `jellymoon project list` prints it`` |
 | the name is not listed | `no project of that name is on the list, so nothing was changed` |
@@ -331,12 +347,13 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
 - **A typed-in folder whose last name holds an unseen character** (an emoji written with U+FE0F, say) is not
   offered, and a new wish for it is refused as no project's name, unless the list holds the name already
   ("A name that comes in, and a name that was kept").
-- **A sentence that says "what was made was taken back"** (git failed, the name was kept in other letters)
-  and the folder could not be removed: the words that it was left are added after it, and the two stand
-  together.
+- **A git that fails after the made folder was replaced by another hand** still says `so what was made was
+  taken back and nothing was listed`, though nothing of that other folder is taken back.
 - **`project add` takes the making's file out after the lock is let go**, and only then. A making whose lock
   was taken over after 30 seconds, and whose folder is added meanwhile, finds its file gone and lists
-  nothing; the folder is listed by the `add`.
+  nothing itself; the folder is listed by the `add`, and the making says so and ends as a made project does.
+  It says "another command" of a hand too: a line written by hand for the folder, with the file taken out by
+  hand, reads the same to it.
 - **Unicode forms.** Two forms of one name are two projects where the file system keeps them apart.
 - **A file system that stores another spelling** of the name is refused after the folder was made and taken
   back. That sentence has no test, and a change that never compares the two names passes every test: no disk
@@ -361,8 +378,9 @@ and a list written over meanwhile, each taken back; a lock that stays, with noth
 half way, its lock, and both ways to mend it; six at once; `f65/alone.rs`: a folder put in place of the one
 being made, left and never listed, and one removed; a line a hand wrote for the folder being made; a list
 that cannot be written; a home made for the lock; `f65/mark.rs`: the making's file, its mode, a making whose
-file a hand removed, a cut-off making's folder added, and a folder that could not be taken back;
-`f62/earlier.rs`: a list and a day's wishes an earlier build kept under a name refused today; a second `new`, an `add` and a `forget` that meet a making; the looks taken
+file a hand removed, a cut-off making's folder added, a making whose folder an `add` listed meanwhile, a git
+that fails in a folder that could not be taken back, and a folder that could not be taken back;
+`f62/earlier.rs`: a list and a day's wishes an earlier build kept under a name refused today, and a wish for such a name with a list that cannot be used; a second `new`, an `add` and a `forget` that meet a making; the looks taken
 again behind the lock; a home that is nobody's or whose path is not text; a branch that is there before the
 first commit; a wish, its run and its keep in a made project; and a made project forgotten. The examples round-trip in core's `tests/shapes.rs` and
 `project.rs`.

@@ -38,9 +38,34 @@ fn a_list_an_earlier_build_wrote_is_used_and_its_line_of_a_name_now_refused_can_
     assert_eq!(printed(&w.run(&["project", "forget", OLD]))["name"], OLD);
     assert_eq!(w.listed(), json!([{"name": "beta", "used": DAY}, {"name": "gamma", "used": DAY}]));
     let before = w.all();
-    assert!(refused(&w.add(&old)).starts_with("jellymoon: --repo is not a folder a project can be named after"));
+    assert_eq!(refused(&w.add(&old)), format!("jellymoon: {}\n", super::refused::EARLIER));
     assert_eq!(refused(&wish_for(&w, OLD, &[])), NO_NAME);
     assert!(w.all() == before, "a refusal wrote something");
+}
+
+#[test]
+fn a_wish_for_a_name_an_earlier_build_kept_is_told_of_a_list_that_cannot_be_used() {
+    let w = heard_world();
+    let old = w.repo(OLD);
+    // The list is why a name that worked yesterday is refused: a list that is no list, and one that is no file.
+    w.write_list(b"not a list\n");
+    let before = w.all();
+    assert_eq!(refused(&wish_for(&w, OLD, &[])), unused("it is not a list as Jellymoon writes one"));
+    // A name no build kept is refused as a name, whatever the list is: a path, and one cleaning would change.
+    for never in ["al/pha", "al\u{200b}pha"] {
+        assert_eq!(refused(&wish_for(&w, never, &[])), NO_NAME, "{never:?}");
+    }
+    assert!(w.all() == before, "a refusal wrote something");
+    fs::remove_file(w.list_file()).unwrap();
+    fs::create_dir(w.list_file()).unwrap();
+    assert_eq!(refused(&wish_for(&w, OLD, &[])), unused("it is not a plain file"));
+    // A list that can be used and does not hold the name: the name's own sentence, as before.
+    fs::remove_dir(w.list_file()).unwrap();
+    w.write_list(format!("{}\n", json!({"projects": [w.line("beta", &w.real(&w.repo("beta")))]})).as_bytes());
+    assert_eq!(refused(&wish_for(&w, OLD, &[])), NO_NAME);
+    // And one that holds it keeps the wish.
+    w.write_list(format!("{}\n", json!({"projects": [w.line(OLD, &w.real(&old))]})).as_bytes());
+    assert_eq!(printed(&wish_for(&w, OLD, &[]))["wish"]["project"], OLD);
 }
 
 #[test]

@@ -211,8 +211,9 @@ fn kept(home: &Path, day: &str) -> Result<Vec<MadeWish>, String> {
 /// that is not one folder's name, a day that has its eight, made wishes that cannot be used, a day that is locked.
 pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Result<Wished, Error> {
     let (day, said) = (day_of(day)?, words(typed)?);
-    // A name with something unseen comes in only as the name of a project the list holds already.
-    if !named(project) && !(kept_name(project) && crate::project::lists(home, project)) {
+    // A name with something unseen comes in only as the name of a project the list holds already; when the list
+    // cannot be used, that is why such a name is refused, and the list's own sentence is said.
+    if !named(project) && !(kept_name(project) && crate::project::lists(home, project)?) {
         let no = "no path, nothing that cannot be seen and nothing shaped like a credential";
         return Err(refused(format!("--project takes one folder's name of at most {PROJECT_MAX} characters: {no}")));
     }

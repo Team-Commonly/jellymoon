@@ -147,7 +147,10 @@ fn a_logs_path_that_is_a_file_or_a_folder_that_cannot_be_listed_is_refused_and_i
         // A link that leads nowhere is something that is there and is no folder: it is not "no logs at all".
         let link = w.at("logs-link");
         std::os::unix::fs::symlink(w.at("nowhere"), &link).unwrap();
+        // Written with a separator at its end it is the same link: it is looked at, not through.
+        let ended = PathBuf::from(format!("{}/", link.display()));
         cases.push(("a link to nothing", link, format!("jellymoon: {NOT_A_FOLDER}\n")));
+        cases.push(("a link to nothing, with a separator", ended, format!("jellymoon: {NOT_A_FOLDER}\n")));
         let closed = logs(&w, Logs::OtherDay);
         fs::set_permissions(&closed, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
         // Whoever may list every folder (root) is not refused, and has nothing to show here.
@@ -167,8 +170,17 @@ fn a_logs_path_that_is_a_file_or_a_folder_that_cannot_be_listed_is_refused_and_i
     assert_eq!((w.home(), w.starts()), (before, 0), "a refusal wrote into the home, or the agent was started");
     // A logs path with nothing at all under its name stays a day with no logs, which has its page.
     assert_eq!(printed(&page(&w, &w.at("nowhere")))["read"]["no_logs"], true);
+    // A folder written with a separator at its end is read, and so is a link to one.
+    let (real, empty) = (w.at("real-logs"), json!({"turns": 0, "projects": []}));
+    fs::create_dir(&real).unwrap();
+    let ended = |path: &Path| PathBuf::from(format!("{}{}", path.display(), std::path::MAIN_SEPARATOR));
+    assert_eq!(printed(&page(&w, &ended(&real)))["read"], empty);
     #[cfg(unix)]
-    fs::set_permissions(w.at("logs"), std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    {
+        std::os::unix::fs::symlink(&real, w.at("real-link")).unwrap();
+        assert_eq!(printed(&page(&w, &ended(&w.at("real-link"))))["read"], empty);
+        fs::set_permissions(w.at("logs"), std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    }
 }
 
 /// Makes a wish for `alpha` with the agent playing `script`, runs it over `logs` when an outcome is given, and

@@ -125,7 +125,8 @@ This is the only way text gets from a page into a running session, so what is ch
     while another process has it open or locked, so there they too are a caller at work and get the usual
     refusal, never this one. "Denied" is said there by a file that is being removed, for a moment, and by a file
     that may not be written, for good: a caller that is denied on every pass of its 3 seconds gets this refusal,
-    since no caller at work lasts that long, and one that on any pass is not denied gets the usual one. A
+    since no caller at work lasts that long, and one that on any pass is not denied gets the usual one,
+    unless its last pass finds what can never be locked. A
     `take-over.lock` with the read-only attribute is not to be had at all there, by a look made before it is
     opened. A holder letting go beside a `take-over.lock` that is denied waits its 3 seconds each time. A
     process with no file handle left is the same on every system: that passes, and says nothing of the file.

@@ -59,11 +59,12 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
     run's too. The line it is judged by is the last one the reader decoded, and the reader decodes only a
     prompt (a line that names an origin) and, while a turn is open, a reply or a user line that is no tool
     result: in a file that mixes a copy's lines with others, a line the reader passed over does not count. A
-    copy is read when it is spelled in a way no spelling covers: through a link neither the home's path nor
+    copy is read, unless its lines are headless (`entrypoint` `sdk-cli`, "A headless line" below), when it is
+    spelled in a way no spelling covers: through a link neither the home's path nor
     `copies` has, in another case or Unicode form than the disk keeps on a Mac, with a `..`, with a letter
     outside ASCII in another case on Windows, as a device path (`\\.\`) or as a shell there writes it (`/c/…`).
     A home that is gone has only the spelling it is given, and a home that was moved leaves its old copies'
-    sessions to be read. Windows' spellings are tested as text, on every system, in core; at the binary only the
+    sessions to be read, their headless lines excepted. Windows' spellings are tested as text, on every system, in core; at the binary only the
     spellings of the system the tests run on are.
 - **A list that is not a list stops the command**, with one line, exit 1, before a log is opened and before any
   reading call: a damaged list is never an empty list. Only nothing at all under the name `skip.txt` is no names.
@@ -86,9 +87,11 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
   of the folder's name that cannot be seen is shown as a space.
 - **Logs that cannot be read.** A projects directory that is a file, a link that leads nowhere, or anything else
   that is no folder, is refused in one fixed line, `reading the session logs: they are looked for in a folder,
-  and what is there is not one`. Only a path with nothing at all under its name is "no session logs". A folder
-  that cannot be listed is refused in the system's own words, on a Mac `reading the session logs: Permission
-  denied (os error 13)`. Either is exit 1 with nothing printed and nothing written, and the line names no path.
+  and what is there is not one`. Only a path with nothing at all under its name is "no session logs".
+  Separators at the path's end are dropped before the link is looked at, so `link/` is refused as `link` is; a
+  root (`/`, a Windows drive's `C:\`) stays whole. A folder that cannot be listed is refused in the system's own
+  words, on a Mac `reading the session logs: Permission denied (os error 13)`, and so is a link that loops, or
+  one whose target cannot be reached for rights. Each is exit 1 with nothing printed and nothing written, and the line names no path.
   Such a day is not one with nothing typed and not one with no logs: `jellymoon page` prints no page for it,
   though the day has a made wish or a project on offer, and `jellymoon run` with no `--repo`, given such
   `--logs`, is refused in the same line and starts nothing. With `--repo` a run never reads the logs, so it

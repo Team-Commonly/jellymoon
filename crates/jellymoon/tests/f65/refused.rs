@@ -68,12 +68,15 @@ pub fn unlink(at: &Path) {
 }
 
 /// `project new` of the name is refused in that line, which says nothing of the name, and nothing is changed.
+/// Something at the name is the one refusal said behind the list's lock, whose hold leaves `take-over.lock`,
+/// empty: that file is then the one thing more, and every other refusal leaves the test folder as it was.
 pub fn new_refused(w: &World, name: &str, why: &str) {
     let before = w.all();
     let ran = w.new_project(name);
     assert_eq!(refused(&ran), format!("jellymoon: {why}\n"), "{name:?}");
     names_no_path(w, &ran);
-    assert!(w.all() == before && w.starts() == 0, "a refusal wrote something: {name:?}");
+    let left = if why == THERE { super::alone::and_the_take_over(w, before) } else { before };
+    assert!(w.all() == left && w.starts() == 0, "a refusal wrote something: {name:?}");
 }
 
 #[test]

@@ -99,8 +99,10 @@ fn a_typed_wish_is_kept_in_the_working_state_and_says_why_nothing_was_started() 
     assert_eq!(second["wish"], made("m2", "and say so in the log", "beta"));
     let both = json!([made("m1", SAID, "alpha"), made("m2", "and say so in the log", "beta")]);
     assert_eq!(w.kept(), json!({"day": DAY, "wishes": both}));
-    let names: Vec<_> = fs::read_dir(w.pages()).unwrap().map(|entry| entry.unwrap().file_name()).collect();
-    assert_eq!(names, [format!("{DAY}.wishes.json").as_str()], "one file, and no lock is left");
+    let mut names: Vec<_> = fs::read_dir(w.pages()).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+    names.sort();
+    let made = format!("{DAY}.wishes.json");
+    assert_eq!(names, [made.as_str(), "take-over.lock"], "the made wishes and the file a lock is removed behind");
     #[cfg(unix)]
     {
         let mode = |path: &PathBuf| std::os::unix::fs::PermissionsExt::mode(&fs::metadata(path).unwrap().permissions());
@@ -127,9 +129,11 @@ fn a_wish_with_no_date_is_kept_for_today() {
     let w = world();
     let ran = w.run(&["wish", "--say", SAID, "--project", "alpha"]);
     assert_eq!((ran.code, ran.stderr.as_str()), (0, ""));
-    let names: Vec<String> =
+    let mut names: Vec<String> =
         fs::read_dir(w.pages()).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
-    let [name] = names.as_slice() else { panic!("one file is kept: {names:?}") };
+    names.sort();
+    let [name, _] = names.as_slice() else { panic!("one file is kept: {names:?}") };
+    assert_eq!(names[1], "take-over.lock", "and the file a lock is removed behind");
     let day = name.strip_suffix(".wishes.json").expect("the made wishes of one day");
     let shaped = day.len() == 10 && day.bytes().all(|byte| byte == b'-' || byte.is_ascii_digit());
     assert!(shaped && day > DAY, "today, not the fixture day: {day}");

@@ -133,3 +133,28 @@ fn a_tap_behind_a_lock_waits_three_seconds_and_is_refused_having_changed_nothing
         assert_eq!(super::mode(&w.home().join("pages")), 0o755, "{case}: the folder's mode is as it was");
     }
 }
+
+// A killed command's lock, where the lock a take-over is done behind cannot be had: nothing ever takes it over,
+// so the tap is told which two files to remove, and not that another tap is at work.
+#[test]
+fn a_lock_left_behind_that_cannot_be_taken_over_is_refused_with_the_names_of_the_files_to_remove() {
+    let w = world();
+    w.keep(&[(A, B)]);
+    w.leave_lock(SystemTime::now() - Duration::from_secs(60));
+    let over = w.home().join("pages").join("take-over.lock");
+    fs::create_dir(&over).unwrap();
+    let before = tree(w.dir.path());
+    let ran = w.settle(DAY, "1", "2");
+    let line = "jellymoon: jellymoon's own files: 2026-03-10.ruled.lock is a lock that was left behind, and it could \
+                not be taken over, as take-over.lock beside it could not be locked; remove both, then try again\n";
+    assert_eq!((ran.code, ran.stdout.as_str(), ran.stderr.as_str()), (1, "", line));
+    assert_eq!(tree(w.dir.path()), before, "nothing was written, and the lock is not removed");
+    // With the lock away the day can be tapped, even while nothing can be taken over there: a tap removes its
+    // own lock all the same, so none is left for the next.
+    fs::remove_file(w.lock()).unwrap();
+    assert_eq!(w.tap("1", "2")["ruling"]["stands"], B);
+    assert!(!w.lock().exists() && over.is_dir(), "the tap's own lock was left");
+    fs::remove_dir(&over).unwrap();
+    assert_eq!(w.tap("1", "1")["ruling"]["stands"], A);
+    assert!(!w.lock().exists() && over.is_file(), "the tap's own lock was left");
+}

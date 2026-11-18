@@ -30,7 +30,8 @@ pub struct DayOptions {
     pub skip: Vec<String>,
     /// Jellymoon's own folder. Its `skip.txt`, one folder name a line, names more folders switched off, and its
     /// `copies` holds every run's copy: a line whose working directory is in one is left out. None reads no such
-    /// file and knows no copy, so a run's own session is read back as a person's.
+    /// file and knows no copy, so a run's own session is read back as a person's, unless its lines are headless
+    /// (`session.rs`, `Line::headless`): those are left out with or without a home.
     pub home: Option<PathBuf>,
 }
 
@@ -75,6 +76,12 @@ pub(crate) fn typed_in(options: &DayOptions) -> Result<Vec<PathBuf>, Error> {
     Ok(found)
 }
 
+/// A logs path with the separators at its end dropped: written with one, a link is looked through and never at.
+/// A root (`/`, a Windows drive's `C:\`) stays whole, so no path becomes an empty one.
+fn unended(logs: &Path) -> PathBuf {
+    logs.components().collect()
+}
+
 /// What is said of logs that are not a folder. It names no path.
 const NO_FOLDER: &str = "they are looked for in a folder, and what is there is not one";
 
@@ -98,7 +105,7 @@ fn typed_on(options: &DayOptions, zone: &TimeZone, line_max: usize) -> Result<(D
     let no_folder = || Error::Logs(io::Error::new(io::ErrorKind::NotADirectory, NO_FOLDER));
     match fs::metadata(&options.logs) {
         // A link that leads nowhere is there, looked at without following it: only nothing at all is no logs.
-        Err(e) if e.kind() == io::ErrorKind::NotFound && fs::symlink_metadata(&options.logs).is_ok() => {
+        Err(e) if e.kind() == io::ErrorKind::NotFound && fs::symlink_metadata(unended(&options.logs)).is_ok() => {
             return Err(no_folder());
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -345,6 +352,27 @@ mod tests {
         assert_eq!(crate::wish::wishable(&read, &names), ["alpha", "beta"]);
         // With no home there are no copies to know of.
         assert_eq!(typed_in(&DayOptions { home: None, ..read }).unwrap().len(), 4);
+    }
+
+    #[test]
+    fn separators_at_the_end_of_a_logs_path_are_dropped_and_a_root_stays_whole() {
+        let s = std::path::MAIN_SEPARATOR;
+        let link = format!("{s}work{s}link");
+        let cases = [
+            (format!("{link}{s}"), link.clone()),
+            (format!("{link}{s}{s}"), link.clone()),
+            (link.clone(), link),
+            (format!("logs{s}"), "logs".to_string()),
+            (s.to_string(), s.to_string()),
+            (String::new(), String::new()),
+        ];
+        for (given, want) in cases {
+            assert_eq!(unended(Path::new(&given)).to_str(), Some(want.as_str()), "{given:?}");
+        }
+        // A drive's root is a root on Windows only; elsewhere it is one plain name with nothing at its end.
+        let drive = if cfg!(windows) { [r"C:\logs\", r"C:\logs"] } else { [r"C:\logs", r"C:\logs"] };
+        assert_eq!(unended(Path::new(drive[0])).to_str(), Some(drive[1]));
+        assert_eq!(unended(Path::new(r"C:\")).to_str(), Some(r"C:\"));
     }
 
     #[test]

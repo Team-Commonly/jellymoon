@@ -192,6 +192,7 @@ fn nothing_else_a_run_writes_changes_and_no_step_of_a_run_in_the_persons_repo_do
         format!("runs/{run}"),
         format!("runs/{run}/run.json"),
     ];
+    want.extend(["pages/take-over.lock", "take-over.lock"].map(String::from));
     want.sort();
     assert_eq!(left, want);
     let kept = w.kept(&made.wish);

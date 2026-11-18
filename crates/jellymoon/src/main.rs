@@ -52,7 +52,15 @@ fn project(listing: Listing) -> Result<String, Failure> {
     let known = match listing {
         Listing::List => return Ok(format!("{}\n", jellymoon_core::projects(&home).map_err(failed)?)),
         Listing::Add { repo, date } => jellymoon_core::add_project(&home, &repo, date.as_deref()),
-        Listing::New { name, date } => jellymoon_core::new_project(&home, &name, date.as_deref()),
+        Listing::New { name, date } => {
+            jellymoon_core::new_project(&home, &name, date.as_deref()).map(|(made, said)| {
+                // The project is made and listed, so this is no failure: the line says who listed it.
+                if let Some(said) = said {
+                    let _ = io::stderr().write_all(format!("jellymoon: {said}\n").as_bytes());
+                }
+                made
+            })
+        }
         Listing::Forget { name } => jellymoon_core::forget_project(&home, &name),
     };
     Ok(format!("{}\n", known.map_err(failed)?))

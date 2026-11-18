@@ -26,6 +26,11 @@ pub fn someone_elses_home() -> Option<(&'static str, OsString)> {
     door::not_ours().map(|other| ("HOME", OsString::from(other)))
 }
 
+/// What `add` says of a folder whose last name holds a character that cannot be seen and that cleaning leaves.
+pub const EARLIER: &str = "--repo is not a folder a project can be named after: its last name holds a character \
+                           that cannot be seen; only an earlier build of Jellymoon kept such a name, and one taken \
+                           off the list is not listed again, so rename the folder, then add it";
+
 fn add_refused(w: &World, repo: &Path, why: &str) {
     let before = w.all();
     let ran = w.add(repo);
@@ -50,16 +55,18 @@ fn add_refuses_a_folder_that_is_not_there_is_no_repo_s_top_or_is_not_named_as_a_
     // A last name cleaning would change is no project's name, and is not said back.
     let name = "--repo is not a folder a project can be named after: its last name must be one folder's name of at \
                 most 100 characters, with nothing that cannot be seen and nothing shaped like a credential";
+    // One that cleaning leaves and nobody sees whole is a name an earlier build kept, and is told so: U+200B is
+    // none of those, as cleaning takes it out.
     let unseen = ["200b", "34f", "115f", "3164", "2800", "fe0f"].map(|code| u32::from_str_radix(code, 16).unwrap());
     let unseen = unseen.map(|code| format!("al{}pha", char::from_u32(code).unwrap()));
-    for odd in [hub_key(), "a".repeat(101)].into_iter().chain(unseen) {
+    for (at, odd) in [hub_key(), "a".repeat(101)].into_iter().chain(unseen).enumerate() {
         // Not every file system takes every name: one it refuses is no case here.
         if fs::create_dir_all(w.at("work").join(&odd)).is_err() {
             skipped("this file system does not take one of the names");
             continue;
         }
         let ran = w.add(&w.repo(&odd));
-        assert_eq!(refused(&ran), format!("jellymoon: {name}\n"), "{odd:?}");
+        assert_eq!(refused(&ran), format!("jellymoon: {}\n", if at < 3 { name } else { EARLIER }), "{odd:?}");
         assert!(!shows(&ran.stderr, &odd) && !w.at("jm").exists());
     }
     assert!(!w.at("jm").exists(), "a refusal made Jellymoon's folder");
@@ -149,4 +156,33 @@ fn changes_made_at_once_are_all_kept_and_a_lock_that_stays_refuses_the_change() 
     assert!(w.all() == before);
     // Reading waits for no lock.
     assert_eq!(w.listed().as_array().unwrap().len(), 8);
+}
+
+// A killed command's lock, where the lock a take-over is done behind cannot be had: the change is told which
+// two files to remove, and not that another change is at work.
+#[test]
+fn a_lock_of_the_list_left_behind_that_cannot_be_taken_over_is_refused_with_the_names_of_the_files_to_remove() {
+    let w = heard_world();
+    assert_eq!(printed(&w.add(&w.repo("alpha")))["name"], "alpha");
+    let (lock, over) = (w.jm("projects.lock"), w.jm("take-over.lock"));
+    // The first change left the take-over's file there; a folder at its name can never be locked.
+    let _ = fs::remove_file(&over);
+    fs::create_dir(&over).unwrap();
+    fs::write(&lock, "").unwrap();
+    let a_minute_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    fs::File::options().write(true).open(&lock).unwrap().set_modified(a_minute_ago).unwrap();
+    let beta = w.repo("beta");
+    let before = w.all();
+    let ran = w.add(&beta);
+    let stuck = "jellymoon: jellymoon's own files: projects.lock is a lock that was left behind, and it could not be \
+                 taken over, as take-over.lock beside it could not be locked; remove both, then try again\n";
+    assert_eq!(refused(&ran), stuck);
+    names_no_path(&w, &ran);
+    assert_eq!(refused(&w.run(&["project", "forget", "alpha"])), stuck);
+    assert!(w.all() == before, "a refusal wrote something");
+    // The way out the line gives.
+    fs::remove_file(&lock).unwrap();
+    fs::remove_dir(&over).unwrap();
+    assert_eq!(printed(&w.add(&beta))["name"], "beta");
+    assert!(!lock.exists(), "the change's own lock was left");
 }

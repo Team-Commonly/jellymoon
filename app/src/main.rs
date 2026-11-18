@@ -131,8 +131,8 @@ fn jellyfish(asked: &Jellyfish) -> Result<String, Failure> {
 
 /// Opens the page's window on the first scene there is, and the jellyfish. A day is then read off the window's
 /// thread, and what that gives replaces the scene; once a second core is asked what the jellyfish shows of that
-/// day, and of today when the day was not named. A page that is no day has a quiet jellyfish. `JELLYMOON_QUIT_AFTER=<seconds>` ends the app by itself, for
-/// checks.
+/// day, and of a later today when the day was not named. A page that is no day has a quiet jellyfish.
+/// `JELLYMOON_QUIT_AFTER=<seconds>` ends the app by itself, for checks.
 #[cfg(feature = "window")]
 fn window(options: Options) -> Result<(), Failure> {
     use jellymoon_app::shell::Asked;

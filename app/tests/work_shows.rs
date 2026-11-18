@@ -16,6 +16,9 @@ use support::wished::{SAID, World, quiet, wait_until};
 
 const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
 const TOSSED: &str = "That work was tossed.";
+const KEPT: &str = "That work was kept.";
+/// The looks that show no work after a tap on an option or core's answer to it (`showing.rs`).
+const HOLD: usize = 3;
 
 /// A day nothing was typed on, so no clash is on its page, with `alpha` listed as a person lists it.
 fn day() -> World {
@@ -170,6 +173,12 @@ fn a_look_that_finds_a_run_ended_shows_its_work_as_a_tap_does_and_once() {
     // And a tap on the character of work on show does nothing, as before.
     let both = w.taps("logs", &["look", "poke:m1", "look"]).showed();
     assert!(both[0].is_some() && both[1].is_none() && both[2].is_none(), "{both:?}");
+    // The looks wrote nothing: the branch, the run's record and the run's copy are as the run left them.
+    let repo = w.at("work").join("alpha");
+    let was = w.everything(&repo);
+    let looked = w.taps("logs", &["look", "look", "look"]).showed();
+    assert_eq!(looked[0].as_ref().map(ids), Some(vec!["work-m1"]), "a look that reads the work");
+    assert_eq!(w.everything(&repo), was, "a look wrote something");
 }
 
 #[test]
@@ -203,15 +212,15 @@ fn work_is_not_opened_over_work_on_show_whose_options_and_field_stay_where_they_
     let mut lines = Vec::new();
     going(&w, &["m2"], |go| {
         let held = hold(&w, "ended");
-        let acts = ["poke:m1", "placed", &held, "look", "placed", "look", "choose:work-m1:2", "run", "look", "look"];
-        let mut window = w.taps("logs", &acts);
+        let acts = ["poke:m1", "placed", &held, "look", "placed", "look", "choose:work-m1:2", "run"];
+        let mut window = w.taps("logs", &[&acts[..], &["look"; HOLD + 2][..]].concat());
         window.printed(2);
         go();
         release(&w, "ended");
         lines = window.ended();
     });
-    let [poked, before, ended, after, again, at_once, tossed, turn, last] = &lines[..] else {
-        panic!("nine lines: {lines:#?}")
+    let [poked, before, ended, after, again, at_once, tossed, held @ .., turn, last] = &lines[..] else {
+        panic!("nine lines and the looks held: {lines:#?}")
     };
     assert_eq!(ids(&scene(poked).expect("a tap opens the wish")), ["work-m1"]);
     // The other wish's run ended: its star is drawn, and its work is not put over the work on show.
@@ -223,10 +232,13 @@ fn work_is_not_opened_over_work_on_show_whose_options_and_field_stay_where_they_
     assert!(taps.iter().any(|piece| piece["kind"] == "field" && piece["id"] == "work-m1"), "{before}");
     assert_eq!((taps, little), in_reach(after), "no option, field or character moved");
     assert!(no_work(again, "m2"), "{again}");
-    // The person decides on the work on show; then the other's turn comes, under what was said of the toss.
+    // The person decides on the work on show. What was said of the toss stands alone for the looks held back:
+    // no other work's `Keep it` and `Toss it` come where a second tap would land.
     assert_eq!(ids(&scene(at_once).expect("a tap on Toss it")), ["busy-m1"]);
     assert_eq!(ids(&scene(tossed).expect("core's answer")), ["said-m1"]);
-    let turn = scene(turn).expect("the look after the choice shows the work that waited its turn");
+    assert_eq!(held, ["null"; HOLD], "nothing is put over what was said of the toss");
+    // Then the other's turn comes, which was kept: its work, over what was said.
+    let turn = scene(turn).expect("the look after the hold shows the work that waited its turn");
     assert_eq!(ids(&turn), ["work-m2", "said-m1"]);
     assert_eq!(options(&turn, "work-m2"), CHOICES);
     assert_eq!(title(&turn, "said-m1"), TOSSED);
@@ -265,20 +277,30 @@ fn of_two_runs_that_ended_the_first_wishs_work_is_shown_and_the_other_waits_its_
     assert_eq!((wish(&w), wish(&w)), ("m1".to_string(), "m2".to_string()));
     let mut lines = Vec::new();
     going(&w, &["m1", "m2"], |go| {
-        let acts = ["look", &hold(&w, "ended"), "look", "look", "choose:work-m1:2", "run", "look", "look"];
-        let mut window = w.taps("logs", &acts);
+        // `Keep it`, and core's answer is long in coming: as many looks pass before it as are held back after.
+        let acts = ["look", &hold(&w, "ended"), "look", "look", "choose:work-m1:1"];
+        let after = ["run", "look", "look", "poke:m2", "look"];
+        let mut window = w.taps("logs", &[&acts[..], &["look"; HOLD][..], &after[..]].concat());
         window.printed(1);
         go();
         release(&w, "ended");
         lines = window.ended();
     });
-    let [_, ended, again, _, tossed, turn, last] = &lines[..] else { panic!("seven lines: {lines:#?}") };
+    let [_, ended, again, at_once, slow @ .., kept, first, second, poked, last] = &lines[..] else {
+        panic!("nine lines and the looks before the answer: {lines:#?}")
+    };
     let ended = scene(ended).expect("the look after both ends");
     assert_eq!((drawn(&ended, "m1"), drawn(&ended, "m2")), (Some((State::Idle, 1)), Some((State::Idle, 1))));
     assert_eq!(ids(&ended), ["work-m1"], "one work is shown: the first wish's, in core's order");
     assert_eq!(again, "null");
-    assert_eq!(ids(&scene(tossed).expect("core's answer")), ["said-m1"]);
-    assert_eq!(ids(&scene(turn).expect("the other's turn")), ["work-m2", "said-m1"]);
+    assert_eq!(ids(&scene(at_once).expect("a tap on Keep it")), ["busy-m1"]);
+    assert_eq!(slow, ["null"; HOLD], "nothing is put over a choice core has not answered");
+    let kept = scene(kept).expect("core's answer");
+    assert_eq!((ids(&kept), title(&kept, "said-m1")), (vec!["said-m1"], KEPT));
+    // The looks held back are counted from the answer: the other's work is not put under a second tap.
+    assert_eq!((first.as_str(), second.as_str()), ("null", "null"), "what was said of the keep stays, alone");
+    // A tap on the other's character is the person's own act: it opens that work at once, within the hold.
+    assert_eq!(ids(&scene(poked).expect("a tap opens the wish")), ["work-m2"]);
     assert_eq!(last, "null");
 }
 

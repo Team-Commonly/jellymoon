@@ -457,10 +457,24 @@ that fit and counts the rest in a last line, `+N more`.
     never when the person taps its character first. So a look moves no option and no field, and takes no
     typed word; the characters stand where they stood, since the page had notes before. A page with a clash's
     choice on it therefore opens no work by itself: a tap does.
+  - *Not right after the person chose.* After a tap on an option of any note (keep, toss, show me, the second
+    yes, a stop, a clash's or delivery's choice), an Enter (a question's answer among them), and core's answer to either, the
+    next three looks (`HOLD`) show no work, so about three seconds pass with the answer on the page. Without
+    it, another wish's `Keep it` and `Toss it` came, within a second, where the tapped ones stood, under a slow
+    second tap. The looks are counted again from core's answer, so a slow keep is held as long as a quick one.
+    A turn held back is kept. A tap on a character is the person's own act and opens its work at once. A look
+    in flight when the person chooses is dropped whole, its scene being gone, and made again after the hold.
+  - *Only wishes the page had.* A look puts on the page the work of a wish that was a made wish of the scene it
+    was made of. A wish made and ended elsewhere since has its turn at the next look, when its character is
+    drawn, so no look adds a first note and a new character at once.
+  - *What a look reads.* For each end of a run, once, a look now asks core whether work waits, and core reads
+    the run's record and then the repo through its git reads (the branch, the run's commit, what it changed):
+    the reads a tap on the character makes, where before this only a tap made them. Nothing is written, and a
+    look with no new end reads no repo.
   - *Several ends at once.* One is shown, the first in core's order; the others wait behind its choices.
   - *What stays.* The look's notes go before the others. What was said of work kept or tossed (`said-<wish>`)
     stays under them, where a tap on a character takes it away: a run's end does not take away the answer to
-    the person's own tap. Every other note of an opened wish gives way, as to a tap.
+    the person's own tap. The hold above is what makes that safe: the answer has stood alone for three looks. Every other note of an opened wish gives way, as to a tap.
 
   `app/tests/work_shows.rs` holds these with the made-up window's `look` act, and `app/src/showing/tests.rs`
   the turns alone. Not proved: the kit's keeping of the entry's words and keys under a new scene, which is the

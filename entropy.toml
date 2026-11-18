@@ -922,7 +922,9 @@ max_file_lines = 400
 # in `src/showing/tests.rs` 85), 138 `showing.rs` (whose turn it is, and the look that asks core), 39 `working.rs`
 # (a note in the person's hand, the work's notes over a scene), 12 `tests/walk.rs` (the loop with no tap on the
 # wish, and with one), 4 the made-up window's `look` act.
-"app" = 14472
+# The hold after a choice raised the app by 112: 84 are its tests (`src/showing/tests.rs` 62, `tests/work_shows.rs`
+# 22), 28 `showing.rs` (the looks held back after a tap on an option, and only the wishes the page had).
+"app" = 14584
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

@@ -83,3 +83,65 @@ fn the_first_look_asks_the_done_wishes_newest_first_and_a_note_in_hand_keeps_eve
     assert!(asked(&mut turns, &more, &more).is_some());
     assert_eq!(asked(&mut turns, &more, &more).map(|(_, whom)| whom), Some(vec!["m4".to_string()]));
 }
+
+#[test]
+fn no_look_shows_work_in_the_looks_after_an_act_of_the_person_and_the_turn_is_kept() {
+    let (going, ended) = (page(&[State::Busy], Vec::new()), page(&[State::Idle], Vec::new()));
+    let mut turns = Turns::default();
+    assert!(asked(&mut turns, &going, &going).is_some());
+    turns.acted();
+    for _ in 0..HOLD {
+        assert!(turns.asks(&ended).is_none(), "a look within the hold asks core of nothing");
+    }
+    assert_eq!(asked(&mut turns, &ended, &ended).map(|(_, whom)| whom), Some(vec!["m1".to_string()]));
+    // Core's answer counts the looks from the start again.
+    turns.acted();
+    assert!(turns.asks(&ended).is_none());
+    turns.acted();
+    for _ in 0..HOLD {
+        assert!(turns.asks(&ended).is_none());
+    }
+    assert!(turns.asks(&ended).is_some());
+}
+
+#[test]
+fn a_wish_that_was_not_on_the_scene_the_look_was_made_of_is_not_asked_of_by_that_look() {
+    let (one, two) = (page(&[State::Idle], Vec::new()), page(&[State::Idle, State::Idle], Vec::new()));
+    let mut turns = Turns::default();
+    // The first look, which asks the done wishes: a wish made and done elsewhere since is left to the next look,
+    // whose page has its character.
+    assert_eq!(asked(&mut turns, &one, &two).map(|(_, whom)| whom), Some(vec!["m1".to_string()]));
+    assert_eq!(asked(&mut turns, &two, &two).map(|(_, whom)| whom), Some(vec!["m2".to_string()]));
+}
+
+#[test]
+fn a_look_in_flight_when_the_person_taps_an_option_is_dropped_whole_and_its_turn_is_kept() {
+    let going = page(&[State::Busy, State::Busy], Vec::new());
+    let today = crate::today::Today {
+        date: "2026-03-10".to_string(),
+        logs: "none".into(),
+        skip: Vec::new(),
+        model: String::new(),
+        home: "none".into(),
+        harness: Some("none".into()),
+        fresh: false,
+        settings: None,
+        bin: None,
+    };
+    let shown = Showing::of(Some(OnShow { today, page: None, scene: going.clone() }));
+    // A look is made of a page with nothing in hand, and is in flight with another wish's work on its scene.
+    assert!(shown.look().is_some());
+    let mut late = going.clone();
+    late.notes.insert(0, text("work-m2", &["Show me", "Keep it", "Toss it"]));
+    // Meanwhile a tap on a character shows the choice to stop its run, and the person taps that choice.
+    let mut stop = going.clone();
+    let options = vec![crate::stopping::STOP.to_string()];
+    let (id, title, footer) = ("stop-m1".to_string(), String::new(), String::new());
+    stop.notes.insert(0, Note::Choice { id, title, options, footer, struck_first: false, whole: false });
+    assert!(shown.seen(Seen { from: going.clone(), now: stop }).is_some());
+    let (at_once, _) = shown.chose("stop-m1", 0).expect("the choice is on show");
+    assert!(shown.seen(Seen { from: going, now: late }).is_none(), "the stale look is dropped");
+    assert_eq!(shown.scene(), Some(at_once), "nothing of the look is on the page");
+    let turns = shown.2.borrow();
+    assert!(turns.turn.contains("m2") && turns.first == First::Due && turns.hold == HOLD);
+}

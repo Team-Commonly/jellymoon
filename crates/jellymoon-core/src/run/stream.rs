@@ -2,7 +2,8 @@
 //! is read up to [`LINE_MAX`] bytes and the whole stream up to [`STREAM_MAX`]. Of all of it this is taken: whether
 //! it starts as a run's stream does, how many result lines came, the first one's `subtype`, `is_error` and count of
 //! `permission_denials`, and whether a line that could not be read came after it; and its last word, which is data
-//! in one of two shapes (`asks.rs`). No text of the agent's is kept but a question, which then passes the door.
+//! in one of two shapes (`asks.rs`). No text of the agent's is kept but a question, which then passes the door,
+//! and what a run that is done says of its work, which is checked at every look (`told.rs`).
 
 use std::io::{BufReader, Read};
 use std::process::ChildStdout;
@@ -15,6 +16,7 @@ use serde::de::IgnoredAny;
 use serde_json::Value;
 
 use super::asks::{self, Last, WORD_TOOL};
+use super::told::{self, Said};
 use crate::session::next_line;
 
 /// The longest line of the stream that is read, with its line break. A longer one is counted and skipped.
@@ -58,6 +60,8 @@ pub(super) struct Stream {
     pub other: bool,
     /// The first result's last word.
     pub last: Last,
+    /// What that word says of the run's work, beside `done`, when it is the shape of a result (`told.rs`).
+    pub said: Option<Said>,
     /// A harness told to go on with a session gave a result that is an error and says in its `errors` that the
     /// session is not kept (`asks::LOST_SIGN`), wherever in the stream it came.
     pub lost: bool,
@@ -139,6 +143,7 @@ impl Stream {
                 if self.results == 0 {
                     self.fine = line.subtype.as_deref() == Some("success") && line.is_error == Some(false);
                     self.denied = line.permission_denials.len();
+                    self.said = line.structured_output.as_ref().and_then(asks::Word::result).and_then(told::said);
                     self.last = asks::last(line.structured_output);
                 }
                 self.results += 1;

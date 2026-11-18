@@ -6,8 +6,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use jellymoon_core::{
-    FileChange, FileKind, Harness, HookState, Kept, PageData, Ran, ReaderDay, Ruling, RunOutcome, Shown, ShownFile,
-    Tossed, Waiting, WishState, Wished, WorkState,
+    FileChange, FileKind, Harness, HookState, Kept, PageData, Piece, Ran, ReaderDay, Ruling, RunOutcome, Shown,
+    ShownFile, Tossed, Waiting, WishState, Wished, WorkState,
 };
 
 fn fixture(name: &str) -> String {
@@ -212,6 +212,35 @@ fn what_a_toss_prints_round_trips_byte_for_byte() {
     let example = fixture("tossed-unrun.json");
     let tossed: Tossed = serde_json::from_str(&example).unwrap();
     assert_eq!((format!("{tossed}\n"), tossed.run, tossed.commit), (example, None, None));
+}
+
+// F85: what a run says of its work is one more part of a list, and a list with none is the shape it was.
+#[test]
+fn what_a_run_says_of_its_work_round_trips_beside_the_files_and_is_left_out_when_there_is_none() {
+    let example = fixture("shown-told.json");
+    let shown: Shown = serde_json::from_str(&example).unwrap();
+    assert_eq!(format!("{shown}\n"), example);
+    let told = shown.result.as_ref().unwrap();
+    assert_eq!((told.pieces.len(), told.dropped), (4, 1));
+    assert!(matches!(&told.pieces[1], Piece::Change { n: 1, made: false, .. }), "{:?}", told.pieces[1]);
+    let bare: Shown = serde_json::from_str(&fixture("shown.json")).unwrap();
+    assert_eq!((bare.result.as_ref(), bare.to_string().contains("result")), (None, false));
+    for broken in [
+        example.replace("\"type\":\"unsure\"", "\"type\":\"checked\""),
+        example.replace("\"dropped\":1", "\"dropped\":1,\"sure\":true"),
+        example.replace("\"made\":false", "\"made\":false,\"file\":\"src/shipping.rs\""),
+        example.replace("\"type\":\"did\",\"text\"", "\"type\":\"did\",\"words\""),
+        example.replace(",\"dropped\":1", ""),
+    ] {
+        assert!(serde_json::from_str::<Shown>(&broken).is_err(), "{broken}");
+    }
+    // `run waiting` carries the same part for a wish, and leaves it out for a wish with none.
+    let told = &example[example.find("\"result\"").unwrap()..example.len() - 2];
+    let counts = "waits: files made 1, changed 1, removed 1\"";
+    let with = fixture("waiting.json").replacen(counts, &format!("{counts},{told}"), 1);
+    let read: Waiting = serde_json::from_str(&with).unwrap();
+    assert_eq!((read.waits[0].result.as_ref(), &read.waits[1].result), (shown.result.as_ref(), &None));
+    assert_eq!(format!("{read}\n"), with);
 }
 
 #[test]

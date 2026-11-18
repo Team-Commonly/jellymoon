@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use super::end::{held, of_another, recorded};
 use super::obeyed::{named, plain};
 use super::record::Record;
+use super::told::{self, Said, Told};
 use super::{RunOptions, RunOutcome, cut, cut_late, finished, no_wish, place, record, refused};
 use crate::copy::{self, Done, Entry, LISTED, TEXT_MAX, Unread, WorkFile};
 use crate::still::still_text;
@@ -79,6 +80,10 @@ pub struct Shown {
     /// How many files there are after those.
     pub more: usize,
     pub most: usize,
+    /// What the run says of its work, each piece checked against the work as it was read now (`told.rs`). Left
+    /// out when the run said nothing that is a result, and of work that is not listed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<Told>,
 }
 
 /// What `jellymoon run show --file <n>` prints.
@@ -120,6 +125,8 @@ struct Work {
     files: Vec<WorkFile>,
     /// The paths of the files after those, as git keeps them.
     past: Vec<Vec<u8>>,
+    /// What is kept as the run's result, for a list of work that waits. Nothing of it is checked yet.
+    said: Option<Said>,
 }
 
 /// The words of a refusal that differ between a look at a run's work and a keep of it (`keep.rs`).
@@ -208,13 +215,16 @@ fn work(home: &Path, options: &RunOptions, only: Option<usize>) -> Result<Work, 
     let run = found.run.clone();
     let state = found.record.work.unwrap_or(WorkState::Waits);
     if state != WorkState::Waits || found.why != finished(&run, true) {
-        return Ok(Work { run, state, files: Vec::new(), past: Vec::new() });
+        return Ok(Work { run, state, files: Vec::new(), past: Vec::new(), said: None });
     }
     // The repo is found as a run finds it, whatever the record names: the record's folder is only compared.
     let folder = place::folder(home, &found.day, &found.made, options)?;
-    let read = copy::work_of(home, &folder, &run, named.as_ref(), only);
+    // What the run said is read for the list alone. The files its changes name are read as they were, too.
+    let said = if only.is_none() { told::kept(home, &run) } else { None };
+    let before = said.as_ref().map(told::wanted).unwrap_or_default();
+    let read = copy::work_of(home, &folder, &run, named.as_ref(), only, &before);
     let (files, past) = read.map_err(|unread| refused(unread_words(&run, unread, &SHOWN)))?;
-    Ok(Work { run, state, files, past })
+    Ok(Work { run, state, files, past, said })
 }
 
 /// Why a run's work could not be read from its repo, for a look or for a keep.
@@ -261,8 +271,9 @@ pub(super) fn whole(home: &Path, options: &RunOptions) -> Result<(Shown, Vec<Str
             obeyed.push(name);
         }
     }
+    let result = work.said.as_ref().and_then(|said| told::checked(said, &work.files));
     let (run, wish, more) = (work.run, options.wish.clone(), work.past.len());
-    Ok((Shown { run, wish, work: work.state, files, more, most: LISTED }, obeyed, read))
+    Ok((Shown { run, wish, work: work.state, files, more, most: LISTED, result }, obeyed, read))
 }
 
 /// File `n` of that list as its text. Refused in fixed words, with no byte of the file: a number that names no
@@ -305,7 +316,7 @@ fn head(file: &WorkFile) -> Option<&str> {
     (file.entry == Entry::File && !text.contains('\0')).then_some(text)
 }
 
-fn entry(n: usize, file: &WorkFile) -> ShownEntry {
+pub(super) fn entry(n: usize, file: &WorkFile) -> ShownEntry {
     let (name, obeyed) = named(&file.path);
     let change = match file.done {
         Done::Made => FileChange::Made,

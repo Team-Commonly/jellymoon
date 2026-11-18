@@ -213,7 +213,10 @@ fn the_harness_is_claude_on_path_or_the_program_jellymoon_claude_names() {
     w.vars.push(("JELLYMOON_CLAUDE", w.dir.path().join("nowhere").into()));
     w.vars[path].1 = w.dir.path().join("bin").into();
     let ran = w.run(&result(r#"{"wishes":[],"clashes":[]}"#), 0, "page", DAY);
-    assert!(ran.code == 1 && ran.stdout.is_empty() && ran.stderr.starts_with("jellymoon: "), "{}", ran.stderr);
+    // The line names the variable and not the path it holds.
+    let named = "jellymoon: the reading call could not run: JELLYMOON_CLAUDE names no program that could be started: ";
+    assert!(ran.code == 1 && ran.stdout.is_empty() && ran.stderr.starts_with(named), "{}", ran.stderr);
+    assert!(!ran.stderr.contains("nowhere"), "{}", ran.stderr);
     // A command line that is wrong is not a failed run: it exits 2, with the usage, and no call is made.
     let ran = w.run("", 0, "page", &["--tools", "Bash"]);
     assert!(ran.code == 2 && ran.stdout.is_empty() && ran.stderr.contains("usage:"), "{} {}", ran.code, ran.stderr);

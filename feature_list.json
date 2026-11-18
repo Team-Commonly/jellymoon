@@ -920,6 +920,56 @@
       "blockedBy": [
         "F83"
       ]
+    },
+    {
+      "id": "F85",
+      "category": "journal",
+      "description": "What a finished run says of its own work is kept, checked against the work and printed as data",
+      "steps": [
+        "a made-up harness ends a run with `done` and a result of pieces: `jellymoon run show --wish <id>` prints `result` with each piece that passed, a `change` under the file's number and core's own name for it, and the list of files as before",
+        "a `change` is printed only when its file is a text file of the work and every quoted line is a whole line the work took from the file or put in it; a piece that names a file the work does not have, quotes a line that is not there, is over its length or holds a character that draws as nothing is not printed, and `dropped` counts it",
+        "a text with a credential's shape is printed with the mark in its place, and no text of a result is in `app.log`",
+        "a run that ends with `done` alone, with a `result` that is not the shape, or with one over its size has finished as before and `run show` prints no `result`; a `result.json` written by hand is checked the same and never trusted",
+        "`jellymoon run waiting` prints the same `result` with the work that waits, and every refusal of `run show` is as it was",
+        "on macOS, Linux and Windows; a line or a name of the work is never an argument to git"
+      ],
+      "test": "cargo test -p jellymoon --test f85",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F86",
+      "category": "journal",
+      "description": "A person sees what a run says it did over the choice to keep it or toss it, and the run's words are never Jellymoon's",
+      "steps": [
+        "`jellymoon-app layout` on a day with work that waits and a result prints a note `told-<wish>` before `work-<wish>`: Jellymoon's title and labels, and every text of the run as a quote piece and as nothing else",
+        "`work-<wish>` is byte for byte the note it is without a result, with `Show me`, `Keep it` and `Toss it` placed, at 1440x900 and at 960x640; rows of the result that do not fit are left out and counted, and none is cut",
+        "a tap on any text of `told-<wish>` in the made-up window finds no option; work that touches files the person's tools obey still asks once more, names each whole and keeps only on that yes",
+        "a result with a dropped piece ends with the sentence that something the run said could not be checked; work with no result, or with every piece dropped, shows no `told-<wish>`",
+        "every result note says that nothing was run; no file of the work is opened or run by the app"
+      ],
+      "test": "cargo test -p jellymoon-app --test f86",
+      "passes": false,
+      "blockedBy": [
+        "F85"
+      ]
+    },
+    {
+      "id": "F87",
+      "category": "journal",
+      "description": "A run is asked to end with its result, so a real run has one",
+      "steps": [
+        "a made-up harness that prints its command line shows the schema of the last word with `result` and its four kinds, and the fixed words that ask for it; nothing of the wish or the repo is in either",
+        "a made-up harness that answers under that schema ends a run whose `run show` prints the result; one that answers `done` alone finishes as before",
+        "a run that asks, one that is answered and a follow-up are started with the same schema, and an answered run that ends `done` with a result has it printed",
+        "a harness too old for the schema is refused in the words it is refused in today",
+        "`run.md` says what was measured by hand on a real Claude Code before this row closes: that the schema is taken, the size of a last word, and how many `change` pieces of ten real runs passed their check"
+      ],
+      "test": "cargo test -p jellymoon --test f87",
+      "passes": false,
+      "blockedBy": [
+        "F85"
+      ]
     }
   ],
   "dead": {

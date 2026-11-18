@@ -70,10 +70,13 @@ download() {
   archive=jellymoon-macos-$(chip).tar.gz
   say "Downloading Jellymoon for this Mac ($archive)..."
   fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS"
-  fetch "$base/$archive" "$tmp/$archive"
+  # A release is published for Apple-chip Macs first; the Intel archive is attached later, and only then named in
+  # SHA256SUMS. So the sums are read for this archive before it is asked for.
   want=$(awk -v name="$archive" '$2 == name || $2 == "*" name { print $1; exit }' "$tmp/SHA256SUMS")
+  case "$archive" in *x86_64*) mac="an Intel Mac" ;; *) mac="an Apple-chip Mac" ;; esac
+  [ "${#want}" -eq 64 ] || die "this release has no build for $mac yet; nothing was installed"
+  fetch "$base/$archive" "$tmp/$archive"
   got=$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')
-  [ "${#want}" -eq 64 ] || die "SHA256SUMS has no checksum for $archive; nothing was installed"
   [ "$want" = "$got" ] || die "the checksum of $archive does not match SHA256SUMS; nothing was installed"
   mkdir "$tmp/unpacked"
   tar -xzf "$tmp/$archive" -C "$tmp/unpacked" || die "could not unpack $archive; nothing was installed"

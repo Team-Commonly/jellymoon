@@ -103,6 +103,10 @@ mod modes;
 mod opens;
 
 #[cfg(target_os = "macos")]
+#[path = "f33/chips.rs"]
+mod chips;
+
+#[cfg(target_os = "macos")]
 mod mac {
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -207,13 +211,13 @@ mod mac {
             ok(Command::new("chmod").arg("755").arg(shims.join(name)));
             self.install_on(release, &format!("{}:/usr/bin:/bin:/usr/sbin", shims.display()))
         }
-        fn version(&self) -> String {
+        pub fn version(&self) -> String {
             let plist = fs::read_to_string(self.app().join("Contents/Info.plist")).unwrap();
             let after = plist.split("<key>CFBundleVersion</key><string>").nth(1).unwrap();
             after.split('<').next().unwrap().to_string()
         }
         /// The names in a folder under the made-up machine; empty when the folder was never made.
-        fn names(&self, folder: &str) -> Vec<String> {
+        pub fn names(&self, folder: &str) -> Vec<String> {
             let Ok(entries) = fs::read_dir(self.root.path().join(folder)) else { return Vec::new() };
             entries.map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect()
         }
@@ -277,7 +281,7 @@ mod mac {
         // A list of checksums that does not name the archive is no checksum.
         fs::write(release.join("SHA256SUMS"), sums.replace(chips().0, "other")).unwrap();
         let unlisted = mac.install(&release);
-        assert!(text(&unlisted.stderr).contains("no checksum for"), "{}", text(&unlisted.stderr));
+        assert!(text(&unlisted.stderr).contains("this release has no build for"), "{}", text(&unlisted.stderr));
         // And a release that is not there fails the same way.
         let missing = mac.install(&mac.root.path().join("no-release"));
         assert!(text(&missing.stderr).contains("could not download"), "{}", text(&missing.stderr));

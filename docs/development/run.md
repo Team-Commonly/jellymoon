@@ -211,7 +211,8 @@ is longer, that is not a JSON object, whose `type` is not text, or whose `subtyp
 is taken: how the stream starts, how many lines of `type` `result` came, the first one's `subtype`, `is_error` and
 how many entries its `permission_denials` lists (`denied`), its `structured_output` (the last word, "A run that
 asks"), and whether a skipped line came after it. Of the agent's text only a question that passed the door is kept
-or printed; none is put in the commit message, and nothing of what it said on stderr is kept.
+or printed, and a result that is kept as data and printed only by a look, checked ([show.md](show.md), "What the
+run says of its work"); none is put in the commit message, and nothing of what it said on stderr is kept.
 
 **The start is checked.** The stream's `system`/`init` line says what the harness really started with, and three
 parts of it are compared: `tools` is exactly `Edit`, `Glob`, `Grep`, `Read`, `Write` and `StructuredOutput`, each
@@ -227,7 +228,7 @@ child is killed at once, with no five seconds, nothing more is read, and the run
 
 **Finished** is all of: the start is a run's; exactly one result line came; its `subtype` is `success`; its
 `is_error` is there and is the literal `false`; no skipped line came after it; the harness exited with 0; and
-the result's last word is `done`. A run with denials can still have finished ("What is denied"). With the last
+the result's last word is `done`, alone or with a `result` beside it. A run with denials can still have finished ("What is denied"). With the last
 word `asks` and a question that passes the door, the same stream is a run that asks.
 
 The first row that fits is the one said:
@@ -245,7 +246,7 @@ The first row that fits is the one said:
 | With a skipped line after its result | a line that could not be read came after its result |
 | With a success, and an exit that is not 0 | Claude Code exited with a failure after its result |
 | With a success, exit 0, and no `structured_output` or a null one | its result did not say whether it is done or asks |
-| With a last word that is not exactly `{"state":"done"}` or `{"state":"asks","question":<text>}` | its last word was not `done` alone, or `asks` with one question |
+| With a last word that is not `{"state":"done"}`, alone or with a `result` beside it (F85), or exactly `{"state":"asks","question":<text>}` | its last word was not `done` alone, or `asks` with one question |
 | Asking, with a question of more than 4096 bytes | its question was longer than Jellymoon reads |
 | Asking, with a question of which cleaning leaves nothing | nothing was left of its question once it was cleaned |
 | Asking, with a question that eight cleanings still change | its question could not be cleaned |
@@ -362,8 +363,13 @@ know, and so still reads, is the list under "Not closed" in reader.md, "What is 
 one it was given is stopped at once and has failed.
 
 **The last word is data.** The harness is given a schema, and the first result line's `structured_output` is read
-in two shapes only: exactly `{"state":"done"}`, and exactly `{"state":"asks","question":<text>}`. Any other
-value (another state, `done` with a question, `asks` without one, a question that is not text, any part more, a
+in two shapes only: exactly `{"state":"done"}`, and exactly `{"state":"asks","question":<text>}`. Since F85
+`done` may have one part beside it, `result`, of any value: `{"state":"done","result":<anything>}` is `done`.
+A `result` beside `asks`, beside a question or beside any other part is a failed run as before. A `result`
+named twice is no result, whatever the two values are, and the word is `done`. Core takes a `result` from any
+harness: until F87 only the schema a harness is given, which lets no part stand beside `state` and `question`,
+keeps a real one from sending it, and one that came through all the same is kept and printed, checked.
+Any other value (another state, `done` with a question, `asks` without one, a question that is not text, any part more, a
 part named twice, a list, a text) is a failed run, and so is none at all. A part named twice is refused whatever
 the two values are: `{"state":"asks","state":"done"}` is not `done`, and two questions are not the second one. The last word is asked only of a stream that is a success
 in every other part, from a harness that exited with 0: a question in a result that is not a success, that came
@@ -722,6 +728,16 @@ Not closed:
   writes a record again in one case only, a look that writes a cut-off run down as failed, and the three are
   dropped from that record then: such a run has no work to show.
 - **A stop's request**, `runs/<id>/stop`: an empty file, there only when a stop was asked for.
+- **What the run said of its work**, `runs/<id>/result.json` (F85): written once, when a run has finished
+  and its last word held a `result` that is the shape and within its size. It is core's own writing
+  of what was read, on one line with a line break, never the run's bytes: `{"pieces":[...]}`, the first twelve
+  pieces, each as [show.md](show.md), "What the run says of its work", gives it. The size is that line's: 8,192
+  bytes with its line break at most. A `result` that is another shape, or longer, is not kept, and the run has
+  finished all the same: its record, its wish, its star and the line `jellymoon run` prints are what they are
+  for `done` alone. Nothing is checked when it is kept; a look checks it. The file is written as the records are
+  (`hook::put`), and a failure to write it is no failure of the run. A run that failed, was cancelled or
+  asks keeps none. A run that finished and changed nothing keeps one like any other, and no look reads it: it
+  has no work to list. The record does not name the file.
 - **One run for a wish.** The wish names its run before the harness is started, behind the day's lock, so of two
   `jellymoon run` at once one starts and the other takes its own copy back and is refused.
 
@@ -1143,6 +1159,7 @@ is opened: what is at the name is asked first, and then it is opened, as the pag
 | `runs/clean.lock` | no copy is ended or cleaned while it is so: a run that finishes then has failed, as its work could not be committed |
 | `runs/<id>/run.json`, the day's wishes, the day's page | not read, as before: a run with no record that can be used was cut off, and wishes that cannot be used are none |
 | `runs/<id>/stop` | never opened: only its being there is read |
+| `runs/<id>/result.json` | no result: the list is printed as it is with none |
 
 The question and the opening are two steps, so a file changed between them is not covered. `tests/f40/pipe.rs`
 puts a named pipe at each of these, and at the other files of the home, and gives `run stop` and `page` ten seconds.

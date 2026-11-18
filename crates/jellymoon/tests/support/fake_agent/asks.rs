@@ -138,6 +138,36 @@ fn lost(number: usize) -> i32 {
     i32::from(number < 3)
 }
 
+/// Every file under `from`, put under `to` in the same folders.
+fn put(from: &Path, to: &Path) {
+    for entry in fs::read_dir(from).into_iter().flatten() {
+        let (at, name) = (entry.as_ref().unwrap().path(), entry.unwrap().file_name());
+        if at.is_dir() {
+            fs::create_dir_all(to.join(&name)).unwrap();
+            put(&at, &to.join(&name));
+        } else {
+            fs::copy(&at, to.join(&name)).unwrap();
+        }
+    }
+}
+
+/// What a run can say of its work, typed by the test (F85, the script `told`): the files it left under `work`
+/// are put where the agent was started, the files `gone` lists are taken away, and the result is a success
+/// whose last word is the text in `word`. It exits with its number. None: the script is not `told`.
+fn says_of_its_work(script: &str, number: usize, rec: &Path) -> Option<i32> {
+    if script != "told" {
+        return None;
+    }
+    starts();
+    put(&rec.join("work"), Path::new("."));
+    for gone in fs::read_to_string(rec.join("gone")).unwrap_or_default().lines() {
+        fs::remove_file(gone).unwrap();
+    }
+    // The word is written as the test typed it, on the one line a stream's line is: its line breaks are left out.
+    line(&last("success", false, &fs::read_to_string(rec.join("word")).unwrap().replace('\n', "")));
+    i32::try_from(number).ok()
+}
+
 /// The scripts of F51, and of F52 the one of a session that is not kept. None: the script is not one of them.
 pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
     let plain = asks(QUESTION);
@@ -207,7 +237,7 @@ pub fn play(script: &str, number: usize, rec: &Path) -> Option<i32> {
             1
         }
         "no-session" => lost(number),
-        _ => return None,
+        _ => return says_of_its_work(script, number, rec),
     };
     Some(code)
 }

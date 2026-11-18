@@ -76,14 +76,29 @@ impl<'de> Deserialize<'de> for Parts {
     }
 }
 
-/// Reads a last word: exactly `{"state":"done"}`, or exactly `{"state":"asks","question":<text>}`. A word that
-/// names a part twice has one part too many, whatever the two say.
+impl Word {
+    /// What a run that is done says of its work (F85, `told.rs`): the one `result` beside `done`, in whatever
+    /// shape it was written. None of any other word, and of a word that writes `result` twice.
+    pub(super) fn result(&self) -> Option<&Value> {
+        let Word::Object(Parts(word)) = self else { return None };
+        let done = word.len() == 2 && word.iter().any(|part| part.0 == "state" && part.1 == "done");
+        word.iter().find(|part| done && part.0 == "result").map(|part| &part.1)
+    }
+}
+
+/// Reads a last word: `{"state":"done"}`, alone or with a `result` beside it, or exactly
+/// `{"state":"asks","question":<text>}`. A word that names a part twice has one part too many, whatever the two
+/// say. A `result` is the one part that is not counted: beside `done` it is of any shape and written any number
+/// of times, and the run is done, since what a run says of its work never fails it. Beside anything else it is
+/// a part too many.
 pub(super) fn last(word: Option<Word>) -> Last {
     let Some(word) = word else { return Last::None };
     let Word::Object(Parts(word)) = word else { return Last::Unfit };
     let part = |name: &str| word.iter().find(|part| part.0 == name).map(|part| &part.1);
-    match (part("state").and_then(Value::as_str), part("question"), word.len()) {
+    let results = word.iter().filter(|part| part.0 == "result").count();
+    match (part("state").and_then(Value::as_str), part("question"), word.len() - results) {
         (Some("done"), None, 1) => Last::Done,
+        _ if results > 0 => Last::Unfit,
         (Some("asks"), Some(Value::String(question)), 2) if question.len() > LOOKED => Last::Long,
         (Some("asks"), Some(Value::String(question)), 2) => Last::Asks(question.clone()),
         _ => Last::Unfit,
@@ -209,6 +224,33 @@ mod tests {
     /// A last word as the stream's reader reads it from a result line.
     fn read(word: &str) -> Last {
         last(serde_json::from_str::<Option<Word>>(word).unwrap())
+    }
+
+    #[test]
+    fn what_a_run_says_of_its_work_stands_beside_done_and_beside_nothing_else() {
+        let last = |word: Value| read(&word.to_string());
+        // What a run says of its work stands beside `done`, in any shape, and beside nothing else.
+        for said in [json!(7), json!(null), json!("it is done"), json!({"pieces": []}), json!({"state": "asks"})] {
+            assert_eq!(last(json!({"state": "done", "result": said})), Last::Done, "{said}");
+            let asks = json!({"state": "asks", "question": "which?", "result": said});
+            assert_eq!(last(asks), Last::Unfit, "{said}");
+            assert_eq!(last(json!({"result": said})), Last::Unfit, "{said}");
+            assert_eq!(last(json!({"state": "done", "result": said, "more": 1})), Last::Unfit, "{said}");
+        }
+        assert_eq!(read(r#"{"state":"done","result":1,"result":2}"#), Last::Done);
+        assert_eq!(read(r#"{"state":"done","state":"done","result":1}"#), Last::Unfit);
+        let result = |word: &str| serde_json::from_str::<Word>(word).unwrap().result().cloned();
+        assert_eq!(result(r#"{"result":[1],"state":"done"}"#), Some(json!([1])));
+        for none in [
+            r#"{"state":"done"}"#,
+            r#"{"state":"done","result":1,"result":2}"#,
+            r#"{"state":"asks","result":1}"#,
+            r#"{"state":"done","result":1,"more":1}"#,
+            r#"{"result":1,"result":2}"#,
+            r#"["state","done","result",1]"#,
+        ] {
+            assert_eq!(result(none), None, "{none}");
+        }
     }
 
     #[test]

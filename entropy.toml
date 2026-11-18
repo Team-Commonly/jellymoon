@@ -378,7 +378,14 @@ max_file_lines = 400
 # The third app notes raised core by 112: `call/wait.rs`, the wait on a started command, is 94 (39 of them its test
 # of a wait that fails, played with a stand-in for the command) and took 14 lines out of `call.rs`, which gained 11
 # (the folder and the program said apart); `error.rs` 21 (three answers of their own, with their sentences).
-"crates/jellymoon-core" = 16520
+# F85 raised core by 515: `run/told.rs` 251 (what a run says of its work: the shape it is read and kept in, the
+# door of a text and of a quoted line, the check of a change against both sides of its file), its unit tests
+# `run/told/tests.rs` 135, `run/asks.rs` 42 (`done` with a `result` beside it, and its test), `copy/work.rs` 22 (a
+# changed file as it was, by the id git printed), `tests/shapes.rs` 29 (the new part round trips), and the rest
+# where the result is carried: `show.rs` 11, `waits.rs` 7, `obeyed.rs` 7, `stream.rs` 5, `end.rs` 4, `run.rs` 2.
+# The gate of F85 raised core by 18: `run/told.rs` 8 (a text goes to the door as it was written, and a quoted line
+# is held to its side of the file cleaned whole), `run/told/tests.rs` 10 (a credential a line break splits).
+"crates/jellymoon-core" = 17053
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -582,7 +589,13 @@ max_file_lines = 400
 # whether the system says a time of making, asked of the system), `tests/f65/half.rs` 4 (an empty `projects`
 # left where it does not); `tests/f65/mark.rs` lost 2.
 # The third app notes raised the binary by 3: the line for a `JELLYMOON_CLAUDE` that names no program (`tests/f27.rs`).
-"crates/jellymoon" = 27709
+# F85 raised it by 743, all tests: `tests/f85.rs` 292 (the ADR's two worked examples as `run show` prints them,
+# the check at every look, where a result is kept, what git is asked), `tests/f85/checks.rs` 249 (each rule of a
+# check from both sides), `tests/f85/kept.rs` 172 (what is kept of a last word and what is no result), and the
+# made-up agent's script that ends a run with a typed result (`tests/support/fake_agent/asks.rs`, 30).
+# The gate of F85 raised it by 81, all tests: `tests/f85/held.rs` 69 (no line of a private key block is quoted; a
+# side that is a link or holds a zero byte is not quoted from), `tests/f85.rs` 7, `tests/f85/checks.rs` 5.
+"crates/jellymoon" = 28533
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

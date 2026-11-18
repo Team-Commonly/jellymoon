@@ -37,7 +37,7 @@ pub(crate) use keep::{
 };
 use record::{Record, write};
 use serde::Serialize;
-pub(crate) use work::{Done, Entry, LISTED, Named, TEXT_MAX, Unread, WorkFile, is_id, work_of};
+pub(crate) use work::{BEFORE, Done, Entry, LISTED, Named, TEXT_MAX, Unread, WorkFile, is_id, work_of};
 
 use crate::call::private_dir;
 use crate::{Error, busy};

@@ -970,6 +970,62 @@
       "blockedBy": [
         "F85"
       ]
+    },
+    {
+      "id": "F88",
+      "category": "journal",
+      "description": "A person names, sees and removes the one try command of a known project",
+      "steps": [
+        "`jellymoon project try <name> --with <program> [<argument>...]` on a listed project whose folder stands prints the project's line with `try` on stdout and, on stderr, the fixed words of ADR 0024 that say what naming it lets in; `project try <name>` and `project list` print it, and a project with none prints no `try`",
+        "naming again puts the new command in the old one's place; `project try <name> --never` removes it; `project forget` takes it with the line, and the same folder added again has none; a list with no command is byte for byte what it was",
+        "a command of more than 16 words or 200 characters, with a character outside the letters, digits and `_ - . / : = + , @`, with a full path, a `..` or an empty word is refused in one fixed line that says nothing back, and so is a name that is not on the list; nothing is changed",
+        "a list written by hand whose `try` is not what `project try` would write is not used at all, as a line with a wrong folder is not",
+        "naming a command starts no program: a made-up program of that name on `PATH` leaves no mark; `project.md` says what a line written by hand can now do",
+        "on macOS, Linux and Windows"
+      ],
+      "test": "cargo test -p jellymoon --test f88",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F89",
+      "category": "journal",
+      "description": "Core tries a run's work with the project's try command when the run ends, and keeps and prints how it came out",
+      "steps": [
+        "a made-up harness ends a run with work on a project whose try command names a made-up program that exits 0: `jellymoon run show --wish <id>` and `run waiting` print `tried` with the command as named, `passed` and the seconds; the program left a mark that it ran once, in the copy's folder, with nothing on its input, and its variables are the harness's list without `CLAUDE_CONFIG_DIR`",
+        "one that exits 3 is `failed` with code 3 and its last lines; one that prints for longer than the limit a test sets is `too_long`, and it and a child it started in its group are gone; a name no folder of `PATH` has is `not_started`; a `run stop` meanwhile is `stopped` and the run has still finished; the work waits and can be kept after each",
+        "a file the try wrote in the copy is not in the work: the work's commit and its list of files are what they are with no command named, and the copy's folder is gone",
+        "while the try goes the wish is `working` with the fixed line that its work is being tried; a `jellymoon run` killed then is a run cut off, whose try's child the next look ends, and whose work can be tossed",
+        "of what the try printed no more than 12 lines of 160 characters are kept; a credential's shape is printed with the mark in its place, a character that draws as nothing is not printed, and no line of it is in `app.log`; a `tried` written by hand into a record is cleaned the same, and one that is not the shape is not printed",
+        "a run that changed nothing, asks, failed or was cancelled, and any run on a project with no command, starts no program and prints no `tried`; an answered run and a follow-up that end with work are each tried",
+        "nothing of the wish, of the run's last word or of a file of the work is in the program's command line or variables; a program of the command's name inside the copy is not the one started; a `./` command starts the file of that path in the copy",
+        "on macOS, Linux and Windows; `run.md` says what a try leaves going on each"
+      ],
+      "test": "cargo test -p jellymoon --test f89",
+      "passes": false,
+      "blockedBy": [
+        "F88",
+        "F85"
+      ]
+    },
+    {
+      "id": "F90",
+      "category": "journal",
+      "description": "The window says in Jellymoon's own words how the try of a run's work came out, before the person keeps it",
+      "steps": [
+        "work that waits with a `tried` is drawn with a note `tried-<wish>` over the result's note and the work's note: its title and labels are the sentences of ADR 0024 for `passed`, `failed`, `too_long`, `not_started` and `stopped`, word for word, and the command stands between `“` and `”`",
+        "after `failed` and `too_long` the last lines are drawn as quoted pieces only, never as a title, a label or a choice; lines that do not fit are counted, and the note takes no tap",
+        "with a `tried`, the result's note has no line that nothing was run; with none, every note is as F86 draws it",
+        "the work's note has `Show me`, `Keep it` and `Toss it` after every end of a try; after `failed` or `too_long` a tap on `Keep it` changes nothing and shows the note that asks once more, in ADR 0024's words, with `Keep it anyway`; a tap on that keeps the work, or asks of the files the person's tools obey as before",
+        "after `passed`, `not_started` or `stopped` a tap on `Keep it` is what it was",
+        "a tap starts no program and no run, and the follow-up's field is empty after a failed try; proved on the GPUI test platform with records made up by hand"
+      ],
+      "test": "cargo test -p jellymoon-app --test f90",
+      "passes": false,
+      "blockedBy": [
+        "F89",
+        "F86"
+      ]
     }
   ],
   "dead": {

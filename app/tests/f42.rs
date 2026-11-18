@@ -146,7 +146,8 @@ fn a_day_with_no_project_read_prints_no_entry() {
     // A day with no project on offer has the entry a new project is named in (F66).
     let quiet = shown(&world, &["--date", "2026-03-11"]);
     let new = (entries(&quiet).iter().map(|entry| entry.said()).collect::<Vec<_>>(), chips(&quiet));
-    assert_eq!(new, (vec!["Type a name for a new project".to_string()], vec!["Start something new".to_string()]));
+    let hint = "Choose a folder below, or type a name for a new project".to_string();
+    assert_eq!(new, (vec![hint], vec!["Start something new".to_string()]));
     assert!(today(&world).entry(None).is_none());
 }
 

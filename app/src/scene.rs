@@ -77,8 +77,9 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
         notes.push(Note::Whole { title: MADE.to_string(), rows });
     }
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
-    // Nothing read and no wish: the legend has nothing to explain, and there is no reading to speak of.
-    let blank = read_nothing(data, 0);
+    // Nothing read and no wish, projects on offer or not: the legend has nothing to explain, and there is no
+    // reading to speak of.
+    let blank = data.read.turns == 0 && data.clashes.is_empty() && data.wishes.is_empty();
     let read = [footer(data, made.len()), own(made.len())].join(" ");
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),

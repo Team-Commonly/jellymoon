@@ -12,7 +12,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use jellymoon_app::{file_part, one_line, read, scene, wishing, working};
+use jellymoon_app::{file_part, one_line, read, scene, starting, wishing, working};
 use jellymoon_core::{Told, Waiting};
 use serde::Deserialize;
 use sticker_kit::draw::headless::{Typing, snapshot_typing};
@@ -82,6 +82,10 @@ fn main() -> ExitCode {
         }
     }
     let mut shown = scene::scene(&page);
+    // With no project the window's empty page says to choose a folder first: the same function says it here.
+    if page.data.read.projects.is_empty() {
+        starting::no_project(&mut shown);
+    }
     shown.notes.splice(0..0, notes);
     for theme in themes {
         // A theme file's `name` is the file's text: cleaned, and only a part of the picture's name, never a path.

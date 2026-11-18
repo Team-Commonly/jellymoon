@@ -186,7 +186,7 @@ stand in one row when their names fit it and in two when they do not, and after 
 (below, "A project given in the window"). The field is the page's main thing: its row runs from the content's left
 edge to the left column's right edge, over the big character, which stands under it, and "Start" ends the row: it
 does what Enter does, and with nothing typed it enters nothing and the note "Nothing to start yet." says what to
-type first (`starting::UNREADY`). The hint says what the chips are: "What do you want done in the project
+type first (`starting::UNREADY`); it goes before the notes standing, which stay. The hint says what the chips are: "What do you want done in the project
 below?", and with more than one chip "What do you want done? Choose its project below." (Tab still changes the
 chip). Each is whole in both themes from the smallest page (960x640) up as `layout` measures it, by the advances of
 the bundled Nunito at the size typed words are drawn (15 design pixels), which also stands in for the plain
@@ -283,7 +283,8 @@ ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project 
 ([project.md](project.md)). The app carries a folder or a name to core and draws what core says.
 
 - **Start something new (F66).** With no project on offer the entry's place holds one choice, "Start something
-  new", as its one chip, and a field for a name, whose hint is "Type a name for a new project". The chip is a
+  new", as its one chip, and a field for a name, whose hint is "Choose a folder below, or type a name for a new project", the folder first as the page's note
+  says it. The chip is a
   choice like any: a tap on it gives the field the keys. "Choose a folder" is the loud choice there, filled as a
   chosen chip is, and the words say to choose the folder first (below). The
   entry's id is `new` and it takes at most 100 characters. Enter carries the name to
@@ -320,7 +321,7 @@ ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project 
   the field at the top." (`Today::draw`). A day with no session logs says "You can start here: choose the folder
   you want to work in, or drop it on this window. Or type a name for a new project in the field." Words entered
   in the entry of a day with no project are a new project's name and never a wish (`starting::named`). A page
-  with nothing read and no wish has no legend and no footer: it has no mark to explain and no reading to speak
+  with nothing read and no wish, projects on offer or not, has no legend and no footer: it has no mark to explain and no reading to speak
   of (`app/tests/entry_first.rs`).
 
 `OnShow::listing` and `listed` need no window. `app/tests/f64.rs` and `f66.rs` carry a folder and a name through

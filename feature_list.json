@@ -818,7 +818,7 @@
         "this row replaces the first four steps of F67 but the shim, which is F81; F67 is never built"
       ],
       "test": "cargo test -p jellymoon --test f78",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F74",
         "F75"

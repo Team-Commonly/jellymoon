@@ -19,8 +19,15 @@ use super::record::{self, Record};
 use crate::busy;
 use crate::still::{LOOKED, Unkept, still};
 
-/// The schema of the harness's last word, passed with `--json-schema`: a state, and with `asks` one question.
-pub(super) const SCHEMA: &str = r#"{"type":"object","properties":{"state":{"type":"string","enum":["done","asks"]},"question":{"type":"string"}},"required":["state"],"additionalProperties":false}"#;
+/// The schema of the harness's last word, as its file holds it (F87, ADR 0023; `run.md`, "What the harness is
+/// started with"): a state, with `asks` one question, and with `done` a result. It is a format of its own, outside
+/// the code, versioned by its name.
+const SCHEMA: &str = include_str!("../../formats/last-word.v1.json");
+
+/// The schema as it is passed with `--json-schema`: the file without its last line break.
+pub(super) fn schema() -> &'static str {
+    SCHEMA.trim_end()
+}
 /// The tool the harness lists in its init line when it was given a schema, and only then (ADR 0018, "Measured").
 pub(super) const WORD_TOOL: &str = "StructuredOutput";
 /// The most characters of a question that are kept: it is cut there, once cleaning has changed all it will.
@@ -88,9 +95,9 @@ impl Word {
 
 /// Reads a last word: `{"state":"done"}`, alone or with a `result` beside it, or exactly
 /// `{"state":"asks","question":<text>}`. A word that names a part twice has one part too many, whatever the two
-/// say. A `result` is the one part that is not counted: beside `done` it is of any shape and written any number
-/// of times, and the run is done, since what a run says of its work never fails it. Beside anything else it is
-/// a part too many.
+/// say. A `result` is the one part that is not counted: beside `done` or beside `asks` and its question it is of
+/// any shape and written any number of times, since what a run says of its work never fails it, and a run that
+/// asks keeps none (`Word::result`). Beside anything else it is a part too many.
 pub(super) fn last(word: Option<Word>) -> Last {
     let Some(word) = word else { return Last::None };
     let Word::Object(Parts(word)) = word else { return Last::Unfit };
@@ -98,7 +105,6 @@ pub(super) fn last(word: Option<Word>) -> Last {
     let results = word.iter().filter(|part| part.0 == "result").count();
     match (part("state").and_then(Value::as_str), part("question"), word.len() - results) {
         (Some("done"), None, 1) => Last::Done,
-        _ if results > 0 => Last::Unfit,
         (Some("asks"), Some(Value::String(question)), 2) if question.len() > LOOKED => Last::Long,
         (Some("asks"), Some(Value::String(question)), 2) => Last::Asks(question.clone()),
         _ => Last::Unfit,
@@ -232,8 +238,11 @@ mod tests {
         // What a run says of its work stands beside `done`, in any shape, and beside nothing else.
         for said in [json!(7), json!(null), json!("it is done"), json!({"pieces": []}), json!({"state": "asks"})] {
             assert_eq!(last(json!({"state": "done", "result": said})), Last::Done, "{said}");
+            // Beside `asks` and its question it is left out: the run asks (F87's review).
             let asks = json!({"state": "asks", "question": "which?", "result": said});
-            assert_eq!(last(asks), Last::Unfit, "{said}");
+            assert_eq!(last(asks), Last::Asks("which?".into()), "{said}");
+            assert_eq!(last(json!({"state": "asks", "result": said})), Last::Unfit, "{said}");
+            assert_eq!(last(json!({"state": "done", "question": "which?", "result": said})), Last::Unfit, "{said}");
             assert_eq!(last(json!({"result": said})), Last::Unfit, "{said}");
             assert_eq!(last(json!({"state": "done", "result": said, "more": 1})), Last::Unfit, "{said}");
         }
@@ -245,6 +254,7 @@ mod tests {
             r#"{"state":"done"}"#,
             r#"{"state":"done","result":1,"result":2}"#,
             r#"{"state":"asks","result":1}"#,
+            r#"{"state":"asks","question":"which?","result":1}"#,
             r#"{"state":"done","result":1,"more":1}"#,
             r#"{"result":1,"result":2}"#,
             r#"["state","done","result",1]"#,

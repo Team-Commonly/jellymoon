@@ -143,3 +143,86 @@ fn a_quoted_line_is_printed_without_its_ends_or_not_at_all() {
         assert_eq!(line(none), None, "{none:?}");
     }
 }
+
+/// Whether a value fits a schema, for the few words the schema of a last word uses: a type, an enum, an
+/// object's properties, required parts and no other part, an array's items and most items, a text's most
+/// characters. Any other word of a schema fails it, so a word added to the file is added here too.
+fn fits(value: &Value, schema: &Value) -> bool {
+    let known = ["type", "enum", "properties", "required", "additionalProperties", "items", "maxItems", "maxLength"];
+    let schema = schema.as_object().unwrap();
+    assert!(schema.keys().all(|word| known.contains(&word.as_str())), "{schema:?}");
+    let most = |word: &str, n: usize| {
+        schema.get(word).and_then(Value::as_u64).is_none_or(|most| u64::try_from(n).is_ok_and(|n| n <= most))
+    };
+    let typed = match (schema["type"].as_str().unwrap(), value) {
+        ("string", Value::String(text)) => most("maxLength", text.chars().count()),
+        ("array", Value::Array(items)) => {
+            most("maxItems", items.len()) && items.iter().all(|i| fits(i, &schema["items"]))
+        }
+        ("object", Value::Object(parts)) => {
+            let named = &schema["properties"];
+            let required =
+                schema["required"].as_array().unwrap().iter().all(|part| parts.contains_key(part.as_str().unwrap()));
+            assert_eq!(schema["additionalProperties"], false, "every object of the schema is closed");
+            required && parts.iter().all(|(name, part)| named.get(name).is_some_and(|inner| fits(part, inner)))
+        }
+        _ => false,
+    };
+    typed && schema.get("enum").is_none_or(|one_of| one_of.as_array().unwrap().contains(value))
+}
+
+#[test]
+fn the_schema_file_is_json_its_bounds_are_core_s_and_both_worked_examples_fit_it_and_are_read_as_results() {
+    use super::super::asks::{Last, Word, last, schema};
+    let schema: Value = serde_json::from_str(schema()).unwrap();
+    let piece = &schema["properties"]["result"]["properties"]["pieces"];
+    let parts = &piece["items"]["properties"];
+    assert_eq!(piece["maxItems"], KEPT);
+    assert_eq!(
+        (&parts["text"]["maxLength"], &parts["before"]["maxItems"]),
+        (&json!(DID_MAX.max(SAYS_MAX)), &json!(LINES))
+    );
+    assert_eq!(
+        (&parts["before"], &parts["type"]["enum"]),
+        (&parts["after"], &json!(["did", "change", "decided", "unsure"]))
+    );
+    assert_eq!(parts["after"]["items"]["maxLength"], LINE_MAX);
+    // The fixed words (`run.rs`, `PROMPT`) quote these: one `did`, two `change`, three `decided` and `unsure`
+    // each, three lines a side of under 100 characters, 160 characters of a `decided` or an `unsure`.
+    assert_eq!((BEFORE, ORDER.map(|(_, most)| most), LINES, LINE_MAX, SAYS_MAX), (2, [1, 2, 3, 3], 3, 100, 160));
+    // The two worked examples of ADR 0023, typed by hand: each fits the schema, is `done`, and is a result of all
+    // its pieces as core reads one.
+    let shipping = json!({"state": "done", "result": {"pieces": [
+        {"type": "did", "text": "Shipping is now free from 50, not 100. The test tries 49 and 50."},
+        {"type": "change", "file": "src/shipping.rs", "before": ["    if total >= 100 { 0 } else { 8 }"],
+         "after": ["    if total >= 50 { 0 } else { 8 }"]},
+        {"type": "decided", "text": "An order of exactly 50 ships free."},
+        {"type": "unsure", "text": "I could not run the test."},
+        {"type": "change", "file": "README.md", "before": [], "after": ["Free shipping from 50."]},
+    ]}});
+    let page = json!({"state": "done", "result": {"pieces": [
+        {"type": "did", "text": "There is a new page, index.html, with a heading and one line about Saturdays."},
+        {"type": "change", "file": "index.html", "before": [],
+         "after": ["<h1>We bake on Saturdays</h1>", "<p>Come by from 8 in the morning.</p>"]},
+        {"type": "decided", "text": "I made up the opening time, 8 in the morning."},
+        {"type": "decided", "text": "The page has no colours or pictures yet."},
+    ]}});
+    for (word, pieces) in [(shipping, 5), (page, 4)] {
+        assert!(fits(&word, &schema), "{word}");
+        let read: Word = serde_json::from_value(word.clone()).unwrap();
+        assert_eq!(said(read.result().unwrap()).map(|said| said.pieces.len()), Some(pieces));
+        assert_eq!(last(Some(read)), Last::Done);
+    }
+    // And what does not fit it: a fifth kind, a part no kind has, a line over its length, `done` alone fits.
+    let one = |piece: Value| json!({"state": "done", "result": {"pieces": [piece]}});
+    assert!(fits(&json!({"state": "done"}), &schema) && fits(&json!({"state": "asks", "question": "which?"}), &schema));
+    for odd in [
+        one(json!({"type": "checked", "text": "it works"})),
+        one(json!({"type": "did", "text": "done", "how": "by hand"})),
+        one(json!({"type": "change", "file": "a.txt", "after": ["x".repeat(LINE_MAX + 1)]})),
+        json!({"state": "done", "result": {}}),
+        json!({"state": "done", "more": 1}),
+    ] {
+        assert!(!fits(&odd, &schema), "{odd}");
+    }
+}

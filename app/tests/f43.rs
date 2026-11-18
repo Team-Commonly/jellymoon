@@ -186,19 +186,24 @@ fn a_tap_on_any_other_character_or_on_a_wish_with_no_run_going_stops_nothing_and
         assert!(poke(&mut on, id).is_none(), "a tap on {id:?} showed something");
     }
     // A wish with no run going is opened (F47): its own words and how it stands, one wish at a time, and no
-    // choice to stop.
+    // choice to stop. A wish of the reading says what the reading took it for, where it was typed, and how to go
+    // on in `alpha`, which has a chip (open a wish).
     let page = on.scene.clone();
-    let stands = [
-        ("w1", "This wish was let go.", FIRST),
-        ("w2", "This wish is done.", SECOND),
-        ("m1", "This wish is being worked on.", SAID),
+    let read = [
+        "You typed this in Claude Code, in alpha. Jellymoon did not run it.",
+        "To go on with it here, type what you want next. It will start in alpha.",
     ];
-    for (id, title, said) in stands {
+    let stands = [
+        ("w1", "This looks like you let it go.", FIRST, &read[..]),
+        ("w2", "This looks done.", SECOND, &read[..]),
+        ("m1", "This wish is being worked on.", SAID, &[][..]),
+    ];
+    for (id, title, said, more) in stands {
         let scene = poke(&mut on, id).expect("the wish is opened");
         let want = Note::Text {
             id: format!("wish-{id}"),
             title: title.into(),
-            body: vec![format!("“{said}”")],
+            body: [format!("“{said}”")].into_iter().chain(more.iter().map(|line| line.to_string())).collect(),
             options: vec![],
             quoted: String::new(),
             field: None,

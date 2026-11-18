@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use super::keep::keep_named;
 use super::show::{self, FileChange, FileKind, Shown, ShownFile, show_file};
+use super::told::Told;
 use super::toss::toss_run;
 use super::{RunOptions, followable, refused};
 use crate::{Error, Wish, WishState, wish};
@@ -72,6 +73,9 @@ pub struct Waits {
     pub plain: bool,
     /// What waits, in core's fixed words, or why the work was not read: a refusal of `run show`.
     pub why: String,
+    /// What the run says of its work, as `run show` prints it, checked at this look. Left out when there is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<Told>,
 }
 
 /// What `jellymoon run waiting` prints.
@@ -252,7 +256,9 @@ fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
         Err(unread) => {
             let (names, obeyed, plain, why) = (Vec::new(), Vec::new(), true, unread.to_string());
             let (read, made, changed, removed, more) = (false, 0, 0, 0, 0);
-            let waits = Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why };
+            let result = None;
+            let waits =
+                Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why, result };
             return Some((waits, None));
         }
     };
@@ -262,8 +268,9 @@ fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
     let more = shown.files.len() - names.len() + shown.more;
     let first = if shown.more > 0 { format!(" of its first {}", shown.files.len()) } else { String::new() };
     let why = format!("the work of run {run} waits: files made {made}, changed {changed}, removed {removed}{first}");
-    let read = true;
-    Some((Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why }, Some(shown)))
+    let (read, result) = (true, shown.result.clone());
+    let waits = Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why, result };
+    Some((waits, Some(shown)))
 }
 
 /// The work of the wish's run, when it waits for the person: the run finished with its one commit, and its record

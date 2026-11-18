@@ -25,16 +25,23 @@ pub(super) fn named(path: &[u8]) -> (String, bool) {
 }
 
 /// What a person does not read in a file's name alone, though every byte of it is printed: a plain space at an
-/// end of a folder's name, and the shape of a count, a digit and then `more`. A note counts what it does not
-/// draw as `+5 more`, and a name that reads so would be read as that line.
-static UNREAD: LazyLock<Regex> = LazyLock::new(|| pattern(r" /|/ |(?i:\p{Nd} *more)"));
+/// end of a folder's name.
+static UNREAD: LazyLock<Regex> = LazyLock::new(|| pattern(r" /|/ "));
+/// The shape of a count, a digit and then `more`. A note counts what it does not draw as `+5 more`, and a name
+/// or a text that reads so would be read as that line.
+static COUNT: LazyLock<Regex> = LazyLock::new(|| pattern(r"(?i:\p{Nd} *more)"));
+
+/// Whether a text reads like a note's count: of a file's name, and of what a run says of its work (`told.rs`).
+pub(super) fn counted(text: &str) -> bool {
+    COUNT.is_match(text)
+}
 
 /// Whether a file's name is printed so that a person reads the name git keeps: byte for byte, so cleaning
 /// changed none of it, with nothing in it that no printed text is read with (`redact::holds_unseen`: a letter
-/// that draws as nothing or as a blank, a space nobody sees) and nothing that is [`UNREAD`]. A yes on a page
-/// is given only to such names.
+/// that draws as nothing or as a blank, a space nobody sees), nothing that is [`UNREAD`] and no [`COUNT`]. A yes
+/// on a page is given only to such names.
 pub(super) fn plain(path: &[u8], name: &str) -> bool {
-    name.as_bytes() == path && !holds_unseen(name) && !UNREAD.is_match(name)
+    name.as_bytes() == path && !holds_unseen(name) && !UNREAD.is_match(name) && !counted(name)
 }
 
 /// Names the person's tools obey, wherever they are in a path: the settings, rules, hooks and servers of coding

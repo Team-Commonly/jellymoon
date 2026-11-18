@@ -937,7 +937,10 @@ max_file_lines = 400
 # The plain work words raised the app by 24, all tests: the first sentence and the count pinned on the work's note,
 # the kept, held and tossed sentences, and a refusal's first sentence (`tests/f47.rs`, `tests/f47/`), and why the
 # work's note is measured to a tenth with and without a result (`tests/f86.rs`).
-"app" = 14718
+# The hold in hand raised the app by 47 (68 added, 21 removed): 44 are tests (`src/showing/tests.rs` 38, the taps
+# that hold the looks and the looks held after a note in hand; `tests/work_shows.rs` 6, the looks held after a stop's
+# choice went), 3 `showing.rs` (a look made while a note is in hand holds the looks after it).
+"app" = 14765
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

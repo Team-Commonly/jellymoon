@@ -72,6 +72,10 @@ fn the_first_look_asks_the_done_wishes_newest_first_and_a_note_in_hand_keeps_eve
     // A choice on show: nothing is asked, and the first look is still owed.
     let held = page(&[State::Idle, State::Dimmed, State::Idle], vec![text("work-m1", &["Show me"])]);
     assert!(turns.asks(&held).is_none() && turns.first == First::Due);
+    // The page left the hand: the looks held after a tap are held after that too.
+    for _ in 0..HOLD {
+        assert!(turns.asks(&done).is_none() && turns.first == First::Due);
+    }
     assert_eq!(asked(&mut turns, &done, &done).map(|(_, whom)| whom), Some(vec!["m3".to_string(), "m1".to_string()]));
     // A first look that was dropped with work in it is owed again; one that was shown is not.
     turns.saw(None, true);
@@ -114,21 +118,25 @@ fn a_wish_that_was_not_on_the_scene_the_look_was_made_of_is_not_asked_of_by_that
     assert_eq!(asked(&mut turns, &two, &two).map(|(_, whom)| whom), Some(vec!["m2".to_string()]));
 }
 
-#[test]
-fn a_look_in_flight_when_the_person_taps_an_option_is_dropped_whole_and_its_turn_is_kept() {
-    let going = page(&[State::Busy, State::Busy], Vec::new());
-    let today = crate::today::Today {
+/// A day of 2026-03-10 kept in `home`, which no harness reads.
+fn today(home: &std::path::Path) -> crate::today::Today {
+    crate::today::Today {
         date: "2026-03-10".to_string(),
-        logs: "none".into(),
+        logs: home.join("logs"),
         skip: Vec::new(),
         model: String::new(),
-        home: "none".into(),
-        harness: Some("none".into()),
+        home: home.to_path_buf(),
+        harness: Some(home.join("harness")),
         fresh: false,
         settings: None,
         bin: None,
-    };
-    let shown = Showing::of(Some(OnShow { today, page: None, scene: going.clone() }));
+    }
+}
+
+#[test]
+fn a_look_in_flight_when_the_person_taps_an_option_is_dropped_whole_and_its_turn_is_kept() {
+    let going = page(&[State::Busy, State::Busy], Vec::new());
+    let shown = Showing::of(Some(OnShow { today: today("none".as_ref()), page: None, scene: going.clone() }));
     // A look is made of a page with nothing in hand, and is in flight with another wish's work on its scene.
     assert!(shown.look().is_some());
     let mut late = going.clone();
@@ -144,4 +152,34 @@ fn a_look_in_flight_when_the_person_taps_an_option_is_dropped_whole_and_its_turn
     assert_eq!(shown.scene(), Some(at_once), "nothing of the look is on the page");
     let turns = shown.2.borrow();
     assert!(turns.turn.contains("m2") && turns.first == First::Due && turns.hold == HOLD);
+}
+
+#[test]
+fn an_enter_in_a_field_cores_answer_and_a_tap_on_a_clash_each_hold_the_looks() {
+    let home = tempfile::tempdir().unwrap();
+    let field = sticker_kit::Field { offer: String::new(), hint: String::new(), most: 0, key: String::new() };
+    let Note::Text { id, title, body, options, quoted, .. } = text("wish-m1", &[]) else { unreachable!() };
+    let asks = Note::Text { id, title, body, options, quoted, field: Some(field) };
+    let (id, options) = ("clash-1".to_string(), vec!["not a side".to_string()]);
+    let clash =
+        Note::Choice { id, title: String::new(), options, footer: String::new(), struck_first: false, whole: false };
+    let file = r#"{"day": "2026-03-10", "read": {"turns": 2, "projects": ["beta"]}, "wishes": [
+        {"id": "w1", "label": "a", "said": "a", "project": "beta", "state": "working", "stars": []},
+        {"id": "w2", "label": "b", "said": "b", "project": "beta", "state": "working", "stars": []}],
+        "clashes": [{"a": "w1", "b": "w2", "quote_a": "x", "quote_b": "y", "settled": false}]}"#;
+    let on = OnShow {
+        today: today(home.path()),
+        page: crate::read::page(file).ok(),
+        scene: page(&[State::Idle], vec![asks, clash]),
+    };
+    let shown = Showing::of(Some(on));
+    let hold = || std::mem::take(&mut shown.2.borrow_mut().hold);
+    // Each is taken back to none before the next, so each is what holds the looks.
+    assert!(shown.typing("wish-m1", "yes").is_some_and(|(at_once, _)| at_once.is_some()));
+    assert_eq!(hold(), HOLD, "an Enter in a field");
+    shown.answered(None);
+    assert_eq!(hold(), HOLD, "core's answer to it");
+    // The tapped words are no side core has, so nothing is ruled or written.
+    assert!(shown.chose("clash-1", 0).is_some_and(|(_, after)| after.is_none()));
+    assert_eq!(hold(), HOLD, "a tap on a clash");
 }

@@ -12,9 +12,12 @@ Before it downloads anything it refuses, with one line, a Mac older than macOS 1
 
 1. It picks the archive for the Mac's chip, `jellymoon-macos-arm64.tar.gz` or `jellymoon-macos-x86_64.tar.gz`. A
    shell running under Rosetta on an Apple chip still gets `arm64`.
-2. It downloads that archive and `SHA256SUMS` from the latest GitHub release, over https only, into a temp folder.
-3. It hashes the archive and compares. A mismatch, or a `SHA256SUMS` that does not list the archive, stops it with
-   nothing installed. Nothing downloaded is unpacked or run before this.
+2. It downloads `SHA256SUMS` from the latest GitHub release, over https only, into a temp folder. When it does not
+   list the archive, it stops with one line, "this release has no build for an Intel Mac yet; nothing was installed"
+   (or "an Apple-chip Mac"), before it downloads the archive: an Intel Mac reads this while a release has only the
+   Apple-chip archive (see Cutting a release).
+3. It downloads the archive, hashes it and compares. A mismatch stops it with nothing installed. Nothing downloaded is
+   unpacked or run before this.
 4. It copies `Jellymoon.app` next to where it goes in `~/Applications` and `jellymoon` next to where it goes in
    `~/.local/bin`. The command is renamed over the old one. The app takes three steps, since a folder cannot be
    renamed over a folder: the old bundle is moved aside as `.Jellymoon.app.old` in the same folder, the new one is
@@ -105,9 +108,15 @@ removes it ([delivery.md](delivery.md)).
 commit is on `main` and builds nothing when it is not, so a tag pushed from a branch publishes nothing (this step has
 not run on a tag yet). It builds `jellymoon` and `jellymoon-app` for
 both chips on a Mac runner, with no `target` folder restored from an earlier run, and runs `app/macos/bundle.sh` (the
-bundle, its `Info.plist`, the ad-hoc signatures, the archive). It then writes `SHA256SUMS`, creates the release as a
-draft with all three files attached, and only then publishes it. A tag with a dash in it (`v0.2.0-rc1`) is published
-as a pre-release. Run by hand from the Actions tab, from a branch or from a tag, it builds the same archives as
+bundle, its `Info.plist`, the ad-hoc signatures, the archive), one job per chip. As soon as the Apple-chip archive is
+built, a job writes `SHA256SUMS` with its one line, creates the release as a draft with both files attached, and only
+then publishes it: an Apple-chip release never waits for the Intel build. A tag with a dash in it (`v0.2.0-rc1`) is
+published as a pre-release. The Intel archive follows when it is built: a later job attaches it, and only then
+replaces `SHA256SUMS` with one that names both archives. Until then an Intel Mac's installer says the release has no
+build for it yet and installs nothing; while `SHA256SUMS` is being replaced, every installer says it could not
+download it and installs nothing. `SHA256SUMS` never names an archive that is not attached. If the Intel build fails,
+is cancelled or never gets a runner, the release stays Apple-chip only and the run's last job says so in a warning
+(none of this has run yet). Run by hand from the Actions tab, from a branch or from a tag, it builds the same archives as
 workflow artifacts and publishes nothing, which is the way to rehearse. `install.sh` reads `releases/latest`, which
 GitHub points at the newest release that is neither a draft nor a pre-release.
 

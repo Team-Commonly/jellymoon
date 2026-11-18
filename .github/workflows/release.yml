@@ -1,6 +1,7 @@
 name: Release
 # Builds what install.sh downloads: one archive per Mac chip, each holding Jellymoon.app and the `jellymoon` binary,
-# and a SHA256SUMS file (docs/development/install.md). Pushing a tag `v<version>` builds and publishes a release.
+# and a SHA256SUMS file (docs/development/install.md). Pushing a tag `v<version>` builds and publishes a release:
+# for Apple-chip Macs as soon as that archive is built, and the Intel archive joins it when, and if, it is built.
 # Running it by hand builds the same archives and keeps them as workflow artifacts only: a rehearsal, no release,
 # even when the run is started from a tag.
 
@@ -17,19 +18,17 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  # One job per chip, so a release waits for the Apple-chip archive only. Both build on the Apple-chip runner, the
+  # Intel one cross-compiled, as a Mac's own toolchain allows, with one list of steps written once (`&build`).
+  build-arm64:
     strategy:
-      fail-fast: false
       matrix:
         include:
           - target: aarch64-apple-darwin
             arch: arm64
-          - target: x86_64-apple-darwin
-            arch: x86_64
-    # Both chips build on the Apple-chip runner; the Intel one is cross-compiled, as a Mac's own toolchain allows.
     runs-on: macos-latest
     timeout-minutes: 60
-    steps:
+    steps: &build
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
@@ -99,10 +98,21 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # The only job that can write to the repo, and it runs no code from it: it sums the two archives and attaches them.
+  build-x86_64:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            arch: x86_64
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps: *build
+
+  # The two jobs that can write to the repo run no code from it. This one publishes the release for Apple-chip Macs
+  # as soon as that archive is built, and does not wait for the Intel one.
   release:
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: build
+    needs: build-arm64
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -110,9 +120,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
+          name: jellymoon-macos-arm64
           path: dist
-          merge-multiple: true
-      - name: SHA256SUMS, a draft release with every file, then publish
+      - name: SHA256SUMS of the Apple-chip archive, a draft release with both files, then publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -120,14 +130,66 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          sha256sum jellymoon-macos-arm64.tar.gz jellymoon-macos-x86_64.tar.gz > SHA256SUMS
+          sha256sum jellymoon-macos-arm64.tar.gz > SHA256SUMS
           cat SHA256SUMS
           # A version with a dash (v0.2.0-rc1) is a pre-release, which `releases/latest` never points at.
           kind=""
           case "$TAG" in *-*) kind=--prerelease ;; esac
-          # A draft first, with every file attached, and only then published: `releases/latest` never points at a
+          # A draft first, with both files attached, and only then published: `releases/latest` never points at a
           # release that has an archive and no SHA256SUMS.
           # shellcheck disable=SC2086
           gh release create "$TAG" --draft $kind --verify-tag --generate-notes --title "Jellymoon $TAG" \
-            jellymoon-macos-arm64.tar.gz jellymoon-macos-x86_64.tar.gz SHA256SUMS
+            jellymoon-macos-arm64.tar.gz SHA256SUMS
           gh release edit "$TAG" --draft=false
+
+  # The Intel archive joins the published release when, and only if, it was built.
+  release-intel:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [release, build-x86_64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: jellymoon-macos-x86_64
+          path: dist
+      - name: The Intel archive, then a SHA256SUMS that names both
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd dist
+          # The published line for the Apple-chip archive is kept as it is, and the Intel line added to it.
+          gh release download "$TAG" --pattern SHA256SUMS --output published-SHA256SUMS
+          { cat published-SHA256SUMS; sha256sum jellymoon-macos-x86_64.tar.gz; } > SHA256SUMS
+          cat SHA256SUMS
+          # The archive first: until SHA256SUMS names it, an Intel Mac's installer says the release has no build
+          # for it yet and installs nothing. Then the sums: `--clobber` deletes the old file before it attaches the
+          # new one, and in that moment every installer says it could not download SHA256SUMS and installs nothing.
+          # At no moment does SHA256SUMS name an archive that is not attached.
+          gh release upload "$TAG" jellymoon-macos-x86_64.tar.gz
+          gh release upload "$TAG" SHA256SUMS --clobber
+
+  # Says so, plainly, when the release went out for Apple-chip Macs only. It writes nothing.
+  apple-only:
+    if: >-
+      always() && github.event_name == 'push' && github.ref_type == 'tag' &&
+      needs.release.result == 'success' && needs.release-intel.result != 'success'
+    needs: [release, build-x86_64, release-intel]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The release has no Intel archive
+        env:
+          TAG: ${{ github.ref_name }}
+          BUILT: ${{ needs.build-x86_64.result }}
+          JOINED: ${{ needs.release-intel.result }}
+        run: |
+          line="$TAG is published for Apple-chip Macs only: the Intel build was $BUILT and its upload $JOINED, so"
+          line="$line the release has no Intel archive, and on an Intel Mac the installer refuses with nothing installed."
+          echo "::warning::$line"
+          echo "$line" >> "$GITHUB_STEP_SUMMARY"

@@ -625,7 +625,9 @@ max_file_lines = 400
 # (`tests/support/fake_agent/asks.rs`, 11) and the new schema and words in `tests/f39/line.rs` (8); the tightened words 2.
 # The review of F87 raised the binary by 18, all tests: a run that asks with a result (`tests/f87.rs`) and the
 # words in `tests/f39/line.rs`.
-"crates/jellymoon" = 29787
+# An Intel Mac told a release has no build for it yet raised the binary by 58, all tests: `tests/f33/chips.rs` 54
+# (made-up `sysctl` and `uname`, a release with no Intel line), 4 in `tests/f33.rs`.
+"crates/jellymoon" = 29845
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

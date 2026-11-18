@@ -37,8 +37,8 @@ const NOT_TEXT: &str = "the full path of Jellymoon's folder is not text, or a pr
                         bytes, so a new project could not be listed and nothing was made";
 const SPELLED: &str = "this file system does not keep the folder under the name it was given, so what was made was \
                        taken back and nothing was listed; pick a name of plain letters";
-const MOVED: &str = "the new project's folder was removed, replaced or changed while it was being made, so nothing was listed, and \
-                     what is there now was left as it is";
+const MOVED: &str = "the new project's folder was removed, replaced or changed while it was being made, so this \
+                     command listed nothing, and what is there now was left as it is";
 
 /// What a making says, and is no refusal, when it finds its own file gone from the folder it made and the list
 /// holding its name for that very folder: a making whose lock was taken over, and a `project add` of its folder.
@@ -138,9 +138,10 @@ fn make(folder: &Path) -> io::Result<()> {
 }
 
 /// What the system says of a folder: its number for it (the device's and the folder's own, on Unix; none on
-/// Windows, where stable Rust reads none), and when it was made. None for what is not a real folder. Without
-/// the number it does not tell a folder this command made from another put at its name: Windows hands a folder
-/// made again under a name its old time of making.
+/// Windows, where stable Rust reads none), and when it was made (none where the system says no such time, as
+/// Linux does of a file system that keeps none). None for what is not a real folder. Only with both does it
+/// tell a folder this command made from another put at its name: Windows hands a folder made again under a
+/// name its old time of making, and a file system with no such time may hand it the old number.
 type Mark = (Option<(u64, u64)>, Option<SystemTime>);
 
 fn mark(folder: &Path) -> Option<Mark> {
@@ -153,10 +154,11 @@ fn mark(folder: &Path) -> Option<Mark> {
 }
 
 /// Whether the folder now at the name (`there`) is the made one (`made`) on the system's word alone, as a
-/// making must take it whose own file is gone from the folder: the two marks are one, and carry the system's
-/// number. A mark with no number says nothing, so on Windows no folder is taken for the made one this way.
+/// making must take it whose own file is gone from the folder, and as `projects` is taken, which never holds
+/// such a file: the two marks are one, and carry the system's number and a time of making. A mark without
+/// either says nothing, so on Windows, and where no time of making is kept, no folder is taken this way.
 fn made_still(made: Option<Mark>, there: Option<Mark>) -> bool {
-    made.is_some_and(|(number, _)| number.is_some()) && there == made
+    made.is_some_and(|(number, at)| number.is_some() && at.is_some()) && there == made
 }
 
 /// The folders this command made, each as it was made, and the name of the file this making puts in the
@@ -183,6 +185,11 @@ impl Made {
         self.project.is_some() && mark(project) == self.project && file
     }
 
+    /// Whether `projects`, as the system now marks it (`there`), is the one this command made ([`made_still`]).
+    fn made_projects(&self, there: Option<Mark>) -> bool {
+        made_still(self.projects, there)
+    }
+
     /// Takes back what this command made, and nothing else: the project's folder when it is still the one that
     /// was made and no line of the list names it, and `projects` when this command made it and it is empty. A
     /// made folder the list names stays, without this making's file. Whether the project's folder was removed,
@@ -198,7 +205,7 @@ impl Made {
         } else if ours {
             gone = Some(fs::remove_dir_all(project).is_ok());
         }
-        if self.projects.is_some() && mark(folder) == self.projects {
+        if self.made_projects(mark(folder)) {
             let _ = fs::remove_dir(folder);
         }
         gone
@@ -206,7 +213,7 @@ impl Made {
 
     /// The line the list holds for this name and this very folder, when the folder is the made one still and
     /// only this making's file is gone from it: another command listed it, and took the file out ([`tidy`]).
-    /// None where the system has no number for a folder ([`made_still`]): the making then ends as [`MOVED`].
+    /// None where the system's word does not tell the folder ([`made_still`]): the making then ends as [`MOVED`].
     fn by_another(&self, home: &Path, project: &Path, name: &str, real: &str) -> Option<Known> {
         let lines = listed(home).ok().filter(|_| made_still(self.project, mark(project)))?;
         lines.iter().find(|line| line.name == name && line.folder == real).map(Line::known)

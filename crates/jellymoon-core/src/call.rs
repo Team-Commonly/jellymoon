@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{env, fs, io, thread};
 
 use serde::Deserialize;
@@ -16,6 +16,8 @@ use serde::Deserialize;
 use crate::find::{self, Found};
 use crate::redact::{WINDOW, line};
 use crate::{Error, PageOptions, ReaderDay};
+
+mod wait;
 
 /// The whole system prompt of the reading call: a fixed text, so nothing in a day can change it.
 const PROMPT: &str = include_str!("prompt.md");
@@ -92,8 +94,8 @@ pub(crate) struct Output {
 /// Makes the reading call and returns the model's text.
 pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, Error> {
     let harness = find::named_or_found(options.harness.as_deref())?;
-    private_dir(&options.dir).map_err(Error::Call)?;
-    let folder = tempfile::Builder::new().prefix("call-").tempdir_in(&options.dir).map_err(Error::Call)?;
+    private_dir(&options.dir).map_err(Error::Folder)?;
+    let folder = tempfile::Builder::new().prefix("call-").tempdir_in(&options.dir).map_err(Error::Folder)?;
     let mut command = harness_of(harness).map_err(Error::Call)?;
     command.current_dir(folder.path()).args([
         "-p",
@@ -113,7 +115,13 @@ pub(crate) fn reading(day: &ReaderDay, options: &PageOptions) -> Result<String, 
         "--system-prompt",
         PROMPT,
     ]);
-    let output = run(command, format!("{day}\n").into_bytes(), options.limit, None)?;
+    // The one thing `run` says as not started is the program: the harness a caller named, or the one found.
+    let named = options.harness.is_some();
+    let unstarted = |error: Error| match error {
+        Error::Call(why) => Error::Unstarted { named, why },
+        other => other,
+    };
+    let output = run(command, format!("{day}\n").into_bytes(), options.limit, None).map_err(unstarted)?;
     if !output.status.success() {
         return Err(Error::Failed {
             status: output.status.to_string(),
@@ -176,7 +184,8 @@ pub(crate) fn private_dir(dir: &Path) -> io::Result<()> {
 
 /// Runs the command with `input` on its stdin and returns what it printed, all of it, and the first
 /// [`SAID_KEPT`] bytes of what it said on stderr. One still running at `limit` is stopped. With `from`, a file of
-/// a test's (`busy::test_file`), the limit is counted from when that file is there.
+/// a test's (`busy::test_file`), the limit is counted from when that file is there. A command that could not be
+/// started is [`Error::Call`]; one that was, and could not be waited for, is [`Error::Wait`] (`call/wait.rs`).
 pub(crate) fn run(command: Command, input: Vec<u8>, limit: Duration, from: Option<&Path>) -> Result<Output, Error> {
     run_most(command, input, limit, from, usize::MAX)
 }
@@ -199,21 +208,7 @@ pub(crate) fn run_most(
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(&input)));
     let stdout = collect(child.stdout.take(), most, false);
     let stderr = collect(child.stderr.take(), most.min(SAID_KEPT), true);
-    let mut deadline = Instant::now() + limit;
-    let status = loop {
-        if let Some(status) = child.try_wait().map_err(Error::Call)? {
-            break status;
-        }
-        if from.is_some_and(|from| !from.exists()) {
-            deadline = Instant::now() + limit;
-        }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(Error::TooLong(limit));
-        }
-        thread::sleep(Duration::from_millis(10));
-    };
+    let status = wait::ended(&mut child, limit, from)?;
     let drained = |pipe: Receiver<Vec<u8>>| pipe.recv_timeout(DRAIN).unwrap_or_default();
     Ok(Output { status, stdout: drained(stdout), stderr: drained(stderr) })
 }
@@ -241,6 +236,8 @@ fn collect(pipe: Option<impl Read + Send + 'static>, most: usize, heard_out: boo
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use super::*;
 
     /// Not a test of its own: the child of the test below, which runs this test program again with the variable set.

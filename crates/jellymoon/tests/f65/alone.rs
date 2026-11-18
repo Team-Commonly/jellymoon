@@ -15,8 +15,10 @@ use super::half::{BUSY, failing_at, held_before_the_list, world_of};
 use super::refused::{NO_FOLDER, NO_GIT, THERE, new_refused};
 use super::*;
 
-pub const MOVED: &str = "the new project's folder was removed, replaced or changed while it was being made, so nothing was listed, and \
-                     what is there now was left as it is";
+pub const MOVED: &str = "the new project's folder was removed, replaced or changed while it was being made, so this \
+                         command listed nothing, and what is there now was left as it is";
+pub const BY_ANOTHER: &str = "the new project's folder was listed by another command while it was being made, so the \
+                              project is on the list as that command listed it, and this one changed nothing more";
 #[cfg(unix)]
 const NOT_OWN: &str = "Jellymoon's folder is not a folder of your own, and a project is listed only in a folder of \
                        your own, so nothing was made";
@@ -27,6 +29,13 @@ const NOT_TEXT: &str = "the full path of Jellymoon's folder is not text, or a pr
 /// What follows a refusal that came after the folder was made, when its own words do not say so.
 #[cfg(unix)]
 const BACK: &str = "; the folder made for it meanwhile was taken back";
+
+/// Whether the system's word tells one folder from another in this test's folder: it has a number for a folder
+/// (Unix) and says when one was made, which Linux does not on a file system that keeps no such time. Asked of
+/// the system here, not of the command.
+pub fn told_apart(w: &World) -> bool {
+    cfg!(unix) && fs::metadata(w.dir.path()).is_ok_and(|meta| meta.created().is_ok())
+}
 
 /// The names in a made project's folder, in order.
 pub fn inside(w: &World, name: &str) -> Vec<String> {

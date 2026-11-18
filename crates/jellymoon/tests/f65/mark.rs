@@ -6,14 +6,11 @@
 use std::fs;
 use std::time::{Duration, SystemTime};
 
-use super::alone::{MOVED, and_the_take_over, but_the_lock, inside};
+use super::alone::{BY_ANOTHER, MOVED, and_the_take_over, but_the_lock, inside, told_apart};
 #[cfg(unix)]
 use super::half::failing_at;
 use super::half::held_before_the_list;
 use super::*;
-
-const BY_ANOTHER: &str = "the new project's folder was listed by another command while it was being made, so the \
-                          project is on the list as that command listed it, and this one changed nothing more";
 
 #[test]
 fn a_making_whose_file_a_hand_removed_lists_nothing_and_leaves_the_folder_as_it_is() {
@@ -69,9 +66,10 @@ fn a_making_whose_folder_another_command_listed_meanwhile_says_so_as_a_made_proj
     fs::write(&go, "").unwrap();
     let ran = ended(going);
     // The project is made and listed: the line the list holds is printed, exit 0, and the sentence beside it.
-    // That is so where the system has a number for a folder. Where it has none (Windows) nothing but the file
-    // tells the made folder from one put in its place, so the making ends as one whose folder was replaced.
-    if cfg!(unix) {
+    // That is so where the system has a number for a folder and a time of its making. Where it lacks either
+    // (Windows, a Linux file system with no such time) nothing but the file tells the made folder from one put
+    // in its place, so the making ends as one whose folder was replaced.
+    if told_apart(&w) {
         let said = format!("jellymoon: {BY_ANOTHER}\n");
         assert_eq!((ran.code, ran.stderr.as_str()), (0, said.as_str()), "{}", ran.stdout);
         assert_eq!(serde_json::from_str::<serde_json::Value>(&ran.stdout).unwrap(), later);
@@ -83,7 +81,7 @@ fn a_making_whose_folder_another_command_listed_meanwhile_says_so_as_a_made_proj
     assert!(but_the_lock(&w) == before, "a making that found its project listed changed something");
     assert_eq!(w.names_in(""), ["projects", "projects.json", "projects.lock", "runs", "take-over.lock"]);
 
-    // A file a hand took out, with the name listed for another folder, is no such making: nothing was listed.
+    // A file a hand took out, with the name listed for another folder, is no such making: it lists nothing.
     fs::remove_file(w.made("beta").join(&inside(&w, "beta")[1])).unwrap();
     let elsewhere = serde_json::json!({"name": "beta", "folder": w.real(&w.repo("beta")), "used": DAY});
     w.write_list(format!("{}\n", serde_json::json!({ "projects": [elsewhere] })).as_bytes());

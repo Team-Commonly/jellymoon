@@ -104,11 +104,21 @@ The arguments, in this order, and nothing else:
 ```
 
 `<id>` is the session id core chose for this run and wrote in the run's record before the harness is started
-("A run that asks"). `<schema>` is the fixed schema of the harness's last word:
+("A run that asks"). `<schema>` is the fixed schema of the harness's last word, the same for a run, an answer and
+a follow-up's fork. Since F87 it lets a `result` stand beside `state` (ADR 0023, "The shape"):
 
 ```json
-{"type":"object","properties":{"state":{"type":"string","enum":["done","asks"]},"question":{"type":"string"}},"required":["state"],"additionalProperties":false}
+{"type":"object","properties":{"state":{"type":"string","enum":["done","asks"]},"question":{"type":"string"},"result":{"type":"object","properties":{"pieces":{"type":"array","maxItems":12,"items":{"type":"object","properties":{"type":{"type":"string","enum":["did","change","decided","unsure"]},"text":{"type":"string","maxLength":280},"file":{"type":"string"},"before":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":100}},"after":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":100}}},"required":["type"],"additionalProperties":false}}},"required":["pieces"],"additionalProperties":false}},"required":["state"],"additionalProperties":false}
 ```
+
+**The schema is one file, `crates/jellymoon-core/formats/last-word.v1.json`**, read by core when it is built
+(`include_str!`, in `run/asks.rs`) and passed as it is, its last line break aside. It stands in a folder of its own,
+apart from the code, and its version is in its name: it is a format, which another program can write to or read
+without Jellymoon, and a shape that changes is a new file beside it (`last-word.v2.json`), never an edit of this one.
+It holds only what a schema can say: the four kinds, which parts a piece may have, and the bounds core holds a
+result to (twelve pieces, three lines a side of 100 characters each, and 280 characters of a text, the most of any
+kind). Which parts go with which kind, the first-one and first-two rules and each kind's own length are core's check
+(`run/told.rs`); a last word over them is no result, and never a failed run. No `oneOf`: `type` is an enum.
 
 Since F51 there is no `--no-session-persistence`: the harness keeps the run's session, in its own store.
 
@@ -122,8 +132,23 @@ A follow-up's run has three arguments more, where `--session-id <id>` stands: `-
 
 The fixed words are these, and nothing of a wish or a repo is in them: "You are working in a copy of a repo that
 was made for this one wish. You can read and edit files in this folder only. You cannot run commands. Make the
-change the wish asks for, then stop with the state `done`. If you cannot make it without an answer that only the
-person can give, stop with the state `asks` and one question for them, in plain words."
+change the wish asks for, then stop with the state `done` and a `result` for the person who made the wish. If you
+cannot make it without an answer that only the person can give, stop with the state `asks` and one question for
+them, in plain words, and no `result`. A `result` is a short list of pieces. First one `did`: one or two plain
+sentences that a person who does not program can read, saying what changed for them, not how. Then, for the
+changed files that matter most, at most two `change` pieces: `file` is the file's path in this folder, `before`
+the lines as they were and `after` the lines as they are now, at most three on each side, each a whole line copied
+exactly as it is in the file, character for character, with nothing left out and no `...`. A new file has no
+`before`. Quote only lines of under 100 characters: a piece with a line that is not exact is dropped. Then a
+`decided` only for a choice the person might have made differently, and an `unsure` only for something the person
+should look at, each one short sentence, at most three of each. You ran nothing, so never say that anything was
+run or tested."
+
+The words ask for what core can check and the person can read. A `did` is written for someone who does not read
+code, since the person who made the wish may not. Two changes at most, since core looks at the first two. A quote is
+asked for whole and exact, since one that is not is dropped ([show.md](show.md), "What the run says of its work").
+`decided` and `unsure` are asked for only when they are worth the person's look, so a result stays short. And the
+run is told it ran nothing, since a result that says something was tested would be a claim no run can back.
 
 The wish's kept words go in on the harness's input, with a line break after them, and are in no argument. The variables are the reading call's list and nothing else, by the same function (`call::harness_of`):
 `PATH`, `HOME`, `TMPDIR`, `USER`, `LANG`, `LC_ALL`, `TERM` and `CLAUDE_CONFIG_DIR`, and on Windows `PATH`,
@@ -367,9 +392,9 @@ one it was given is stopped at once and has failed.
 in two shapes only: exactly `{"state":"done"}`, and exactly `{"state":"asks","question":<text>}`. Since F85
 `done` may have one part beside it, `result`, of any value: `{"state":"done","result":<anything>}` is `done`.
 A `result` beside `asks`, beside a question or beside any other part is a failed run as before. A `result`
-named twice is no result, whatever the two values are, and the word is `done`. Core takes a `result` from any
-harness: until F87 only the schema a harness is given, which lets no part stand beside `state` and `question`,
-keeps a real one from sending it, and one that came through all the same is kept and printed, checked.
+named twice is no result, whatever the two values are, and the word is `done`. Since F87 the schema a harness
+is given has room for a `result`, and the fixed words ask for one ("What the harness is started with"). A result
+never fails a run: `done` alone finishes as it did before F87, and so does a `result` that is not the shape.
 Any other value (another state, `done` with a question, `asks` without one, a question that is not text, any part more, a
 part named twice, a list, a text) is a failed run, and so is none at all. A part named twice is refused whatever
 the two values are: `{"state":"asks","state":"done"}` is not `done`, and two questions are not the second one. The last word is asked only of a stream that is a success
@@ -1201,6 +1226,19 @@ empty `runs/no-hooks`), and they stay.
 | A follow-up of work that waits, and the followed run's branch is not at the commit its record names, however the folder was found | `the branch of the work this wish follows is not at the commit its record names, so no copy was made of it` |
 | A follow-up of work that was kept, and the checkout's history does not hold the commit it was kept as | `the checkout's history does not hold the commit the work this wish follows was kept as, so no copy was made of it` |
 
+## Measured on a real Claude Code
+
+F87 stays open until these are measured by hand, on a real Claude Code, by the coordinator. No number is here yet.
+
+1. **That the schema is taken.** A run started with this command line is not refused for its schema (one with
+   `maxItems` and `maxLength` in it), its init line lists `StructuredOutput`, and its result line has a
+   `structured_output` that is the shape. If the bounds are refused, they come out of the file and core's check
+   stays the bound.
+2. **The size of a last word.** The bytes of `structured_output` as written, over ten runs, against the 8 KiB a
+   result may have before it is no result.
+3. **How many `change` pieces pass their check.** Of ten real runs, how many `change` pieces were written and how
+   many `run show` prints; `dropped` counts the rest. A low rate shows as results with no before and after.
+
 ## Not covered
 
 - A `jellymoon run` that is killed leaves its harness editing its copy until the next page or run ("A run that
@@ -1221,8 +1259,8 @@ empty `runs/no-hooks`), and they stay.
   only tools, MCP servers, permission mode and the session id are compared.
 - A run that asks waits for an answer or a toss, and nothing ages it: its copy stays, and is not one of the five
   failed copies. What an answer leaves open is under "An answer", "Not closed".
-- The fixed words that tell the agent to end with `done` or `asks` were not tried on a real harness in this
-  build, and neither was a real harness's answer to a last word that does not fit the schema, to `asks` with no
+- The fixed words that tell the agent to end with `done` or `asks`, and since F87 with a `result`, were not
+  tried on a real harness in this build ("Measured on a real Claude Code"), and neither was a real harness's answer to a last word that does not fit the schema, to `asks` with no
   question, or its exact words for an unknown `--json-schema` or `--session-id` (ADR 0018, "Not measured").
 - A kept session lies in the harness's store for as long as the harness keeps it. Jellymoon removes none, so a
   tossed run's session stays there too.

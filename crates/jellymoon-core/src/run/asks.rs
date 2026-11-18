@@ -19,8 +19,15 @@ use super::record::{self, Record};
 use crate::busy;
 use crate::still::{LOOKED, Unkept, still};
 
-/// The schema of the harness's last word, passed with `--json-schema`: a state, and with `asks` one question.
-pub(super) const SCHEMA: &str = r#"{"type":"object","properties":{"state":{"type":"string","enum":["done","asks"]},"question":{"type":"string"}},"required":["state"],"additionalProperties":false}"#;
+/// The schema of the harness's last word, as its file holds it (F87, ADR 0023; `run.md`, "What the harness is
+/// started with"): a state, with `asks` one question, and with `done` a result. It is a format of its own, outside
+/// the code, versioned by its name.
+const SCHEMA: &str = include_str!("../../formats/last-word.v1.json");
+
+/// The schema as it is passed with `--json-schema`: the file without its last line break.
+pub(super) fn schema() -> &'static str {
+    SCHEMA.trim_end()
+}
 /// The tool the harness lists in its init line when it was given a schema, and only then (ADR 0018, "Measured").
 pub(super) const WORD_TOOL: &str = "StructuredOutput";
 /// The most characters of a question that are kept: it is cut there, once cleaning has changed all it will.

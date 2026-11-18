@@ -151,11 +151,20 @@ fn put(from: &Path, to: &Path) {
     }
 }
 
+/// Whether the schema this program was given has room for a result of the four kinds: a harness that answers
+/// under its schema (F87, the script `under`) writes no part the schema has no room for.
+fn room() -> bool {
+    let schema = option("--json-schema").unwrap_or_default();
+    let kinds = r#"{"type":"string","enum":["did","change","decided","unsure"]}"#;
+    schema.contains(r#""result":{"type":"object","properties":{"pieces":"#) && schema.contains(kinds)
+}
+
 /// What a run can say of its work, typed by the test (F85, the script `told`): the files it left under `work`
 /// are put where the agent was started, the files `gone` lists are taken away, and the result is a success
-/// whose last word is the text in `word`. It exits with its number. None: the script is not `told`.
+/// whose last word is the text in `word`. It exits with its number. `under` (F87) is the same, but for a word
+/// it answers `done` alone when its schema has no room for a result. None: the script is neither.
 fn says_of_its_work(script: &str, number: usize, rec: &Path) -> Option<i32> {
-    if script != "told" {
+    if script != "told" && script != "under" {
         return None;
     }
     starts();
@@ -164,7 +173,9 @@ fn says_of_its_work(script: &str, number: usize, rec: &Path) -> Option<i32> {
         fs::remove_file(gone).unwrap();
     }
     // The word is written as the test typed it, on the one line a stream's line is: its line breaks are left out.
-    line(&last("success", false, &fs::read_to_string(rec.join("word")).unwrap().replace('\n', "")));
+    let word = fs::read_to_string(rec.join("word")).unwrap().replace('\n', "");
+    let under = script == "under" && !room();
+    line(&last("success", false, if under { r#"{"state":"done"}"# } else { &word }));
     i32::try_from(number).ok()
 }
 

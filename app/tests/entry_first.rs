@@ -35,7 +35,7 @@ const HINT_TAB: &str = "What do you want done? Choose its project below.";
 const FOLDER: &str = "choose the folder you want to work in";
 const NAME: &str = "type a name for a new project";
 const UNREADY: &str = "Nothing to start yet.";
-const MARKS: [&str; 4] = ["★ finished", "working on it", "needs you", "let go"];
+const MARKS: [&str; 5] = ["★ finished", "working on it", "needs you", "let go", "tap a jelly to open its wish"];
 
 fn of<'a>(placed: &'a [Piece], kind: &str) -> Vec<&'a Piece> {
     placed.iter().filter(|piece| piece.kind() == kind).collect()

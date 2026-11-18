@@ -60,7 +60,7 @@ fn one_character_per_wish_in_page_order_with_its_state_and_stars() {
     assert_eq!(scene.hero.map(|hero| (hero.id, hero.hue)), Some(("me".to_string(), 0)));
     assert_eq!(scene.title, "what I wished for today");
     assert_eq!(scene.date_label, "Tue · Mar 10");
-    assert_eq!(scene.legend.len(), 4);
+    assert_eq!(scene.legend.len(), 5);
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn a_day_of_made_wishes_with_nothing_read_has_the_legend_and_no_footer() {
     let mut own = page(vec![wish("m1", WishState::Working, &[])], vec![]);
     own.data.read = PageRead { turns: 0, projects: Vec::new(), no_logs: false };
     let shown = ruled(&own, &[], 1);
-    assert_eq!((shown.footer.as_str(), shown.legend.len()), ("", 4));
+    assert_eq!((shown.footer.as_str(), shown.legend.len()), ("", 5));
     own.data.read.no_logs = true;
     let found_none = "No Claude Code session logs were found, so nothing was read. 1 made wish is in your own words.";
     assert_eq!(ruled(&own, &[], 1).footer, found_none);

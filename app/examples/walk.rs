@@ -227,7 +227,11 @@ impl Walk {
                 let (what, seconds) = split(rest).ok_or("until:<name>:<seconds>")?;
                 self.until(&what, seconds.parse().map_err(|_| "until:<name>:<seconds>")?)?;
             }
-            "poke" => self.look(self.shown.poked(rest)),
+            "poke" => {
+                // A wish of the reading has its project's chip chosen, as the window's tap does.
+                self.chosen = self.shown.chip_of(rest).and_then(|name| self.at(&name)).unwrap_or(self.chosen);
+                self.look(self.shown.poked(rest));
+            }
             "tap" => {
                 let (note, option) = split(rest).ok_or("tap:<note>:<option>")?;
                 self.tap(&note, &option)?;

@@ -178,4 +178,6 @@ pub enum Mark {
     Busy,
     NeedsYou,
     Dimmed,
+    /// No mark: a legend line that says something of every little one.
+    Plain,
 }

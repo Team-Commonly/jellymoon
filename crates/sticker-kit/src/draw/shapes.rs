@@ -189,7 +189,7 @@ impl Brush<'_> {
         let (p, k) = (&self.theme.palette, self.k);
         let centre = (rect.x + 10.0 * k, rect.y + rect.h / 2.0);
         match mark {
-            Mark::Star => {}
+            Mark::Star | Mark::Plain => {}
             Mark::Busy => {
                 out.push(self.disc(centre, 10.0 * k, p.bubble, Some((p.bubble_ring, 2.0 * k))));
                 for dx in [-3.6, 0.0, 3.6] {

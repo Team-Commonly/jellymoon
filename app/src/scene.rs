@@ -88,7 +88,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
         footer: if blank { String::new() } else { read },
-        legend: if blank { Vec::new() } else { legend() },
+        legend: if blank { Vec::new() } else { legend(!data.wishes.is_empty()) },
         ..bare(&data.day, notes)
     }
 }
@@ -107,11 +107,34 @@ pub fn bare(day: &str, notes: Vec<Note>) -> Scene {
     }
 }
 
-/// The marks of the little ones, each with what it means.
-fn legend() -> Vec<LegendItem> {
+/// The marks of the little ones, each with what it means, and with a little one on the page, with no mark, that a
+/// tap on one opens its wish.
+fn legend(tap: bool) -> Vec<LegendItem> {
     [(Mark::Star, "finished"), (Mark::Busy, "working on it"), (Mark::NeedsYou, "needs you"), (Mark::Dimmed, "let go")]
+        .into_iter()
+        .chain(tap.then_some((Mark::Plain, TAP)))
         .map(|(mark, text)| LegendItem { mark, text: text.to_string() })
-        .to_vec()
+        .collect()
+}
+
+/// The last line of the legend, on a page with a wish.
+pub const TAP: &str = "tap a jelly to open its wish";
+
+/// What the note of a tapped wish of the reading says: what the reading took it for, never that a run goes; the
+/// person's words; where they typed them, and that Jellymoon ran nothing; and how to go on, when its project has
+/// a chip.
+pub(crate) fn read_said(wish: &Wish, chip: bool) -> (&'static str, Vec<String>) {
+    let title = match wish.state {
+        WishState::Working => "This looks unfinished.",
+        WishState::Done => "This looks done.",
+        WishState::NeedsYou => "This looks like it needs you.",
+        WishState::LetGo => "This looks like you let it go.",
+    };
+    let (project, said) = (&wish.project, format!("“{}”", wish.said));
+    let at = if project.is_empty() { String::new() } else { format!(", in {project}") };
+    let from = format!("You typed this in Claude Code{at}. Jellymoon did not run it.");
+    let next = format!("To go on with it here, type what you want next. It will start in {project}.");
+    (title, [said, from].into_iter().chain(chip.then_some(next)).collect())
 }
 
 /// The note that counts what the file held beyond what is drawn, when it held any.

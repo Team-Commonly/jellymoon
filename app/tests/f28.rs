@@ -44,7 +44,7 @@ fn every_placed_piece_is_printed_with_its_kind_position_and_size() {
         "Read from 5 things you typed in 2 projects (alpha, beta). This is the model's reading, unedited."
     );
     let legend: Vec<String> = placed.iter().filter(|piece| piece.kind() == "legend").map(Piece::said).collect();
-    assert_eq!(legend, ["★ finished", "working on it", "needs you", "let go"]);
+    assert_eq!(legend, ["★ finished", "working on it", "needs you", "let go", "tap a jelly to open its wish"]);
 }
 
 #[test]

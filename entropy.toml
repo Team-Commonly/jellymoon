@@ -801,7 +801,8 @@ max_file_lines = 400
 # test of a second work's note and a clash after a long result, and the sweep's third case after the work's note.
 # Typing goes to the entry raised the kit by 10: the entry is given the keys whenever nothing holds them (6 in
 # `draw/entry.rs`), and the pins of the old keys in `tests/entry_draw.rs` and `tests/field_draw.rs` (4).
-"crates/sticker-kit" = 11095
+# Open a wish raised the kit by 3: a legend line with no mark (`Mark::Plain`, its room and its empty drawing).
+"crates/sticker-kit" = 11098
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -960,7 +961,10 @@ max_file_lines = 400
 # and its look (`src/told.rs`, `src/working.rs`).
 # The told-alone gate fix raised the app by 132: 113 are its tests (`tests/told_alone.rs`), the rest a look
 # that asks on past a told-alone note and the hold after one (`src/showing.rs`, `src/working.rs`).
-"app" = 15219
+# Open a wish raised the app by 235 (252 added, 17 removed): 183 are its test (`tests/open_a_wish.rs` and
+# `open_a_wish/window.rs`); 52 net the legend's tap line and a read wish's note (`scene.rs`), its use and the
+# made-only `standing` (`working.rs`), the chip a tap chooses (`showing.rs`, `window.rs`, the walk's `poke`).
+"app" = 15454
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

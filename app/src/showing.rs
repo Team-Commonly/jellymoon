@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use sticker_kit::{Character, Note, Scene, State, Theme};
 
+use crate::scene::drawn_id;
 use crate::starting::{Given, Listed, Listing, Shown};
 use crate::stopping::{Chosen, Stopped, Stopping};
 use crate::taps::OnShow;
@@ -321,6 +322,16 @@ impl Showing {
     /// A tap on a character, as work for another thread. What it gives goes to [`Showing::seen`].
     pub fn poked(&self, id: &str) -> Option<Look> {
         self.with(|on| on.poked(id))
+    }
+
+    /// The project of the reading's wish `id`, whose chip a tap on its character chooses as a click on the chip
+    /// does (`window.rs`): the next wish typed goes on there. None of a made wish, which chooses no chip.
+    pub fn chip_of(&self, id: &str) -> Option<String> {
+        let project = |on: &mut OnShow| {
+            let read = &on.page.as_ref()?.data.wishes;
+            read.iter().find(|wish| drawn_id(&wish.id) == id).map(|wish| wish.project.clone())
+        };
+        self.with(project)?
     }
 
     /// A tap on an option: the scene to show at once, and, when it was the choice to stop a run or a choice of

@@ -396,7 +396,8 @@ cargo run -p jellymoon-app --example walk --features sticker-kit/headless -- <fo
 
 The steps are `type:<words>`, `chip:<name>`, `enter`, `start` (the tap on `Start`), `folder:<path>` (as
 `Choose a folder` gives it, with no picker), `look`, `until:<state or note>:<seconds>` (a look once a second, and a
-plain line and exit 1 past the bound), `poke:<wish id>`, `tap:<note title or id>:<option>` (only where the page
+plain line and exit 1 past the bound), `poke:<wish id>` (of a wish of the reading, it chooses the chip of its
+project too, as the window's tap does), `tap:<note title or id>:<option>` (only where the page
 places it) and `picture:<name>`. After each it prints one line: the step, its milliseconds, the titles of the notes
 and each wish's state; a typed step is counted, never shown. `app/tests/walk.rs` walks a whole loop with the made-up
 agent, with no tap on the wish: the look shows its work. A second walk there taps the wish as well (`until:done:30
@@ -447,7 +448,7 @@ that fit and counts the rest in a last line, `+N more`.
   it keeps its room (F86); then the wish's own words, the files as a person counts them ("1 file
   changed", "2 new files, 1 changed"), their names, and the choices `Show me`, `Keep it`, `Toss it`. No run's id is
   on it. Work that could not be read: "This change could not be read.", what the person can do next, the wish's
-  words and core's reason, and no choice. Any other wish: one note, `wish-<wish>`, with how
+  words and core's reason, and no choice. Any other made wish: one note, `wish-<wish>`, with how
   it stands and its own words, and no choice. Of a made wish whose run did not finish (its record says it
   failed), "This wish needs you." and its words are followed by two fixed sentences of core's (`stands`): "It
   did not finish, and nothing in your folder was changed." (true of every failed run, whether it stopped early
@@ -455,6 +456,17 @@ that fit and counts the rest in a last line, `+N more`.
   type it with what should be different." No run's id and no word of core's reason are on it. Either note can have a field under it ("A question answered, and
   more like this", below). One wish is open at a time. A tap on no wish, or on a wish whose
   note is on show, shows nothing. Nothing is written by any of it.
+- **A wish of the reading** (open a wish). Jellymoon ran nothing for it: it is the model's reading of what was
+  typed in Claude Code, and it is read-only, with no choice and no field. Its note, `wish-<wish>`, never says a
+  run's state; its title is the reading's take, by state: "This looks unfinished.", "This looks done.", "This
+  looks like it needs you.", "This looks like you let it go." (the app's words, `scene::read_said`; core's
+  `stands` is for made wishes only). Under the person's quoted words: "You typed this in Claude Code, in
+  <project>. Jellymoon did not run it." (with no project, "You typed this in Claude Code. Jellymoon did not run
+  it."), and, only when the entry offers that project a chip, "To go on with it here, type what you want next.
+  It will start in <project>." The tap also chooses that chip, as a click on the chip does (`Showing::chip_of`,
+  `window::poked`): what is typed stays, nothing starts, and the hold after a choice is not changed. A tap on a
+  made wish, or on a wish whose project has no chip, chooses nothing (`app/tests/open_a_wish.rs`). The page's
+  legend ends, on a page with a wish, in one line with no mark: "tap a jelly to open its wish".
 - **Work that waits shows itself** (`Showing::look`, `app/src/showing.rs`). A look that finds a wish's run ended
   puts the wish's work on the page with no tap: the notes a tap on its character gives (`told-<wish>` when there
   is one, and `work-<wish>` with its choices), from the calls to core a tap makes, off the window's thread, in

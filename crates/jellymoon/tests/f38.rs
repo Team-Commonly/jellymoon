@@ -16,7 +16,7 @@ use std::process::Command;
 use std::{env, fs};
 
 use serde_json::Value;
-use support::{Ran, jellymoon_in, scratch, tree};
+use support::{Ran, git_alone, jellymoon_in, scratch, tree};
 use tempfile::TempDir;
 
 /// One test's folder: `user` is the person's home, `jm` Jellymoon's, and the repos are beside them.
@@ -41,14 +41,16 @@ pub fn world() -> World {
     let dir = scratch();
     let at = |name: &str| dir.path().join(name);
     fs::create_dir(at("user")).unwrap();
+    fs::create_dir(at("git")).unwrap();
     fs::write(at("gitconfig"), "").unwrap();
+    // git alone is on `PATH`: the person's own would put their harness in reach of a command that looks for one.
     let vars = vec![
         ("HOME", at("user").into()),
         ("USERPROFILE", at("user").into()),
         ("JELLYMOON_HOME", at("jm").into()),
         ("GIT_CONFIG_GLOBAL", at("gitconfig").into()),
         ("GIT_CONFIG_NOSYSTEM", "1".into()),
-        ("PATH", env::var_os("PATH").unwrap()),
+        ("PATH", git_alone(&at("git")).into()),
     ];
     World { dir, vars }
 }

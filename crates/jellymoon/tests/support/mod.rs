@@ -124,6 +124,19 @@ pub fn plant(built: &str, program: &Path) {
     fs::set_permissions(program, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
 }
 
+/// A folder for a world's `PATH` that holds git and no harness: a link to the real git in `folder`, which is the
+/// test's own. Where links cannot be made it is the real git's own folder, and the door refuses the world when
+/// that holds a `claude`. The process's own `PATH` is read for where git is, and never handed to a world.
+pub fn git_alone(folder: &Path) -> PathBuf {
+    let name = format!("git{}", std::env::consts::EXE_SUFFIX);
+    let path = std::env::var_os("PATH").unwrap();
+    let mut on_path = std::env::split_paths(&path).map(|dir| dir.join(&name));
+    let real = on_path.find(|git| git.is_absolute() && git.is_file()).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&real, folder.join(&name)).unwrap();
+    if cfg!(unix) { folder.to_path_buf() } else { real.parent().unwrap().to_path_buf() }
+}
+
 /// Every folder and file under a folder, in name order, each file with its bytes: what a refusal must leave as it was.
 pub fn tree(folder: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     let mut paths: Vec<PathBuf> = fs::read_dir(folder).unwrap().map(|entry| entry.unwrap().path()).collect();

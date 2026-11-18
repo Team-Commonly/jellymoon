@@ -1,10 +1,14 @@
 //! The one door a test of the app starts `jellymoon-app` through, or `jellymoon`, or a program that starts either
 //! (ADR 0021, decision 7). The rule is the binary's own, one file taken as a module here
-//! (`crates/jellymoon/tests/support/door/world.rs`): a world whose home, Jellymoon's folder, `CLAUDE_CONFIG_DIR`
-//! or `--logs` is a full path outside the temporary folders is refused before anything is started, and every world
-//! that is started has `JELLYMOON_SHELL` set to nothing. The temporary folders are the system's and the one Cargo
-//! gives tests, and no other: no test of the app needs a home that is someone else's. `cargo xtask check` refuses a
-//! test file that names a program of this door anywhere else (`crates/xtask/src/rules/door.rs`).
+//! (`crates/jellymoon/tests/support/door/world.rs`): a world whose home (`HOME`, `USERPROFILE`), `JELLYMOON_HOME`,
+//! `JELLYMOON_APP_DIR`, `JELLYMOON_BIN_DIR`, `CLAUDE_CONFIG_DIR`, `TMPDIR`, `TEMP`, `TMP`, `XDG_CONFIG_HOME`,
+//! `APPDATA`, `LOCALAPPDATA`, `GIT_CONFIG_GLOBAL`, `JELLYMOON_CLAUDE`, login shell or `--logs` is a full path
+//! outside the temporary folders, or is no full path and leaves its folder, is refused before anything is started.
+//! So is one whose `PATH` or `JELLYMOON_SYSTEM_BIN` has a folder outside them that holds a `claude`. Every world
+//! that is started has `JELLYMOON_SHELL` and `JELLYMOON_SYSTEM_BIN` set to nothing unless it names its own. The
+//! temporary folders are the system's and the one Cargo gives tests, and no other: no test of the app needs a home
+//! that is someone else's. `cargo xtask check` refuses a test file that names a program of this door anywhere
+//! else (`crates/xtask/src/rules/door.rs`).
 
 use std::ffi::OsStr;
 use std::process::Command;
@@ -13,7 +17,7 @@ use std::process::Command;
 mod world;
 
 #[allow(unused_imports)] // each file of tests takes what it needs
-pub use world::{NO_ROOT, REFUSED, no_root, refusal, refusal_as, roots};
+pub use world::{NO_ROOT, REFUSED, no_root, reaches, refusal, refusal_as, roots};
 
 /// A world with no variable at all, as `jellymoon-app layout` is started on a page file.
 pub const BARE: [(&str, &str); 0] = [];

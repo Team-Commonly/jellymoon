@@ -1,9 +1,9 @@
-//! The one door a test starts `jellymoon` through, or a program that starts it (ADR 0021, decision 7). A world whose
-//! home, Jellymoon's folder, `CLAUDE_CONFIG_DIR`, login shell, `--logs`, `--settings` or `--repo` is a full path
-//! outside the temporary folders is refused before anything is started, and every world that is started has
-//! `JELLYMOON_SHELL` set to nothing unless the test named a made-up login shell under a temporary folder. The rule
-//! itself is `door/world.rs`, which the app's door takes too. `cargo xtask check` refuses a test file that names
-//! the built program anywhere else (`crates/xtask/src/rules/door.rs`).
+//! The one door a test starts `jellymoon` through, or a program that starts it (ADR 0021, decision 7). A world that
+//! names a folder, a file or a program of the person's outside the temporary folders is refused before anything is
+//! started, and every world that is started has `JELLYMOON_SHELL` set to nothing unless the test named a made-up
+//! login shell under a temporary folder. The rule itself, with the list of what it holds, is `door/world.rs`, which
+//! the app's door takes too. `cargo xtask check` refuses a test file that names the built program or the made-up
+//! asker anywhere else (`crates/xtask/src/rules/door.rs`).
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
@@ -12,7 +12,7 @@ use std::process::Command;
 mod world;
 
 #[allow(unused_imports)] // each file of tests takes what it needs
-pub use world::{NO_ROOT, REFUSED, no_root, refusal, refusal_as};
+pub use world::{NO_ROOT, REFUSED, no_root, reaches, refusal, refusal_as};
 
 /// The built `jellymoon`: for a test that copies it, compares a path with it or names it to a made-up program. To
 /// start it there is [`jellymoon`].
@@ -51,7 +51,16 @@ pub fn jellymoon<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
     command(built(), vars, args)
 }
 
-/// Any program that may start `jellymoon` (a hook's entry, the installer, a made-up asker), the same way. A world
+/// The made-up asker (`fake_asker.rs`), the same way: it starts the `jellymoon` it is told of with the variables
+/// it was started with itself.
+pub fn asker<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
+    vars: impl IntoIterator<Item = (K, V)>,
+    args: &[A],
+) -> Command {
+    command(env!("CARGO_BIN_EXE_fake-asker"), vars, args)
+}
+
+/// Any program that may start `jellymoon` (a hook's entry, the installer), the same way. A world
 /// that is refused panics, as the support's other failures do, and no program is started.
 pub fn command<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
     program: impl AsRef<OsStr>,

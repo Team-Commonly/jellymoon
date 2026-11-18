@@ -33,8 +33,13 @@ fn a_test_file_that_starts_the_program_outside_the_door_is_refused_by_file_and_l
     for file in ["crates/jellymoon/tests/support/mod.rs", "crates/jellymoon/tests/support/door/world.rs"] {
         assert_eq!(found(file, &starts(PROGRAM)), [format!("{file}:4: {NAMES}")]);
     }
-    // A made-up program of the tests is not the program.
+    // A made-up program of the tests is not the program. The made-up asker starts it with the variables it was
+    // started with itself, so it is the door's too (the review of F75, finding 8); the app builds none.
     assert_eq!(found("crates/jellymoon/tests/f99.rs", &starts("CARGO_BIN_EXE_fake-claude")), NOTHING);
+    let (asker, file) = (starts("CARGO_BIN_EXE_fake-asker"), "crates/jellymoon/tests/f41/apart.rs");
+    assert_eq!(found(file, &asker), [format!("{file}:4: {NAMES}")]);
+    assert_eq!(found("crates/jellymoon/tests/support/door.rs", &asker), NOTHING);
+    assert_eq!(found("app/tests/f99.rs", &asker), NOTHING);
     // Only a program's tests, only Rust, and never a comment.
     for file in ["crates/jellymoon/src/main.rs", "crates/xtask/src/smoke.rs", "crates/jellymoon/tests/f99.md"] {
         assert_eq!(found(file, &starts(PROGRAM)), NOTHING, "{file}");
@@ -69,6 +74,11 @@ fn a_test_file_that_builds_a_home_outside_the_support_is_refused_by_file_and_lin
         "let dir = tempfile::Builder::new().tempdir_in(folder).unwrap();",
         "let dir = TempDir::new().unwrap();",
         "let home = std::env::temp_dir().join(\"home\");",
+        // The review of F75, finding 8: a folder with a prefix, and either function under another name.
+        "let dir = TempDir::with_prefix(\"jm\").unwrap();",
+        "let dir = tempfile::TempDir::with_prefix_in(\"jm\", folder).unwrap();",
+        "use std::env::temp_dir as system;",
+        "use tempfile::{TempDir, tempdir as folder};",
     ];
     for line in made {
         let text = format!("fn world() {{\n    {line}\n}}\n");
@@ -94,6 +104,29 @@ fn a_test_file_that_builds_a_home_outside_the_support_is_refused_by_file_and_lin
     }
 }
 
+// The review of F75, finding 9: the word inside a longer name or a string makes no folder.
+#[test]
+fn a_longer_name_or_a_string_that_holds_the_word_builds_no_home() {
+    let rightful = [
+        "let tempdir_name = dir.path().join(\"name\");",
+        "let my_tempdir = scratch();",
+        "let dir = my_tempdir();",
+        "let dir = made.own_temp_dir();",
+        "let name = \"tempdir\";",
+        "assert!(said.contains(\"take tempdir() from the support\"), \"{said}\");",
+        "let kept = OwnTempDir::new();",
+    ];
+    for line in rightful {
+        let text = format!("fn world() {{\n    {line}\n}}\n");
+        for file in ["crates/jellymoon/tests/f99.rs", "app/tests/f99.rs"] {
+            assert_eq!(found(file, &text), NOTHING, "{line}");
+        }
+    }
+    // After a string that has ended, the word is code again.
+    let after = "fn world() {\n    let (name, dir) = (\"home\", tempfile::tempdir());\n}\n";
+    assert_eq!(found("app/tests/f99.rs", after), [format!("app/tests/f99.rs:2: {BUILDS}")]);
+}
+
 #[test]
 fn a_test_in_core_or_the_app_that_has_the_harness_looked_for_with_its_own_environment_is_refused() {
     let looks = [
@@ -101,6 +134,10 @@ fn a_test_in_core_or_the_app_that_has_the_harness_looked_for_with_its_own_enviro
         "None => harness(),",
         "named_or_found(None).unwrap();",
         "Options { harness: None, day }",
+        // The review of F75, finding 8: the look's other name, and the other call that names no harness.
+        "let found = find::search();",
+        "match search()? {",
+        "let missed = find::missed(None);",
     ];
     for look in looks {
         // In a file of tests, in a folder of tests, and in the tests a file holds itself.
@@ -130,7 +167,11 @@ fn a_test_in_core_or_the_app_that_has_the_harness_looked_for_with_its_own_enviro
 #[test]
 fn only_the_look_s_own_name_is_the_look_and_only_what_mod_tests_holds_is_a_file_s_tests() {
     // A method, a longer name and a function of the name are not the look.
-    for rightful in ["let h = w.harness();", "let h = made_up_harness();", "fn harness() -> PathBuf {"] {
+    let other =
+        ["let hit = index.search();", "let hit = deep_search();", "fn search() -> Hit {", "missed(Some(named))"];
+    for rightful in
+        ["let h = w.harness();", "let h = made_up_harness();", "fn harness() -> PathBuf {"].into_iter().chain(other)
+    {
         let text = format!("fn t() {{\n    {rightful}\n}}\n");
         assert_eq!(found("crates/jellymoon-core/tests/look.rs", &text), NOTHING, "{rightful}");
     }
